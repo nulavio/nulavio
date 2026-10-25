@@ -1,0 +1,19 @@
+[Desktop Entry]
+Type=Application
+Version=1.5
+Name=Nulavio Preview
+GenericName=Web Browser
+Comment=Private, calm browsing — preview running on the upstream Firefox engine
+Exec=@EXEC@ run %u
+Icon=nulavio-preview
+Terminal=false
+StartupNotify=true
+StartupWMClass=nulavio-preview
+Categories=Network;WebBrowser;
+Keywords=web;browser;internet;privacy;navegador;
+Actions=new-private-window;
+
+[Desktop Action new-private-window]
+Name=New Private Window
+Name[pt_BR]=Nova janela privativa
+Exec=@EXEC@ run --private

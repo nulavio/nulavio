@@ -1,0 +1,137 @@
+{
+  "schema": 1,
+  "comment": "Nulavio Guard (preview): detective checks run before every launch against the profile's effective user prefs (prefs.js + user.js). Findings are reported, never silently reverted: the user stays in control. A same-user process can edit these files, so this is detection of accidental or legacy weakening, not a defence against local malware.",
+  "rules": [
+    {
+      "pref": "security.sandbox.content.level",
+      "op": "lt",
+      "value": 4,
+      "severity": "critical",
+      "message": "Content process sandbox weakened below upstream defaults."
+    },
+    {
+      "pref": "security.sandbox.rdd.level",
+      "op": "lt",
+      "value": 1,
+      "severity": "critical",
+      "message": "Media decoder (RDD) sandbox weakened."
+    },
+    {
+      "pref": "security.sandbox.socket.process.level",
+      "op": "lt",
+      "value": 1,
+      "severity": "critical",
+      "message": "Socket process sandbox weakened."
+    },
+    {
+      "pref": "fission.autostart",
+      "op": "eq",
+      "value": false,
+      "severity": "critical",
+      "message": "Site isolation (Fission) disabled."
+    },
+    {
+      "pref": "xpinstall.signatures.required",
+      "op": "eq",
+      "value": false,
+      "severity": "critical",
+      "message": "Extension signature requirement disabled."
+    },
+    {
+      "pref": "extensions.webextensions.remote",
+      "op": "eq",
+      "value": false,
+      "severity": "critical",
+      "message": "Extensions would run in the parent process."
+    },
+    {
+      "pref": "extensions.autoDisableScopes",
+      "op": "lt",
+      "value": 15,
+      "severity": "warning",
+      "message": "Extensions dropped into the profile folder are enabled without your approval."
+    },
+    {
+      "pref": "security.tls.version.min",
+      "op": "lt",
+      "value": 3,
+      "severity": "critical",
+      "message": "TLS minimum below 1.2."
+    },
+    {
+      "pref": "security.cert_pinning.enforcement_level",
+      "op": "lt",
+      "value": 1,
+      "severity": "warning",
+      "message": "Certificate pinning enforcement disabled."
+    },
+    {
+      "pref": "browser.safebrowsing.phishing.enabled",
+      "op": "eq",
+      "value": false,
+      "severity": "warning",
+      "message": "Phishing protection disabled."
+    },
+    {
+      "pref": "browser.safebrowsing.malware.enabled",
+      "op": "eq",
+      "value": false,
+      "severity": "warning",
+      "message": "Malware protection disabled."
+    },
+    {
+      "pref": "browser.safebrowsing.downloads.enabled",
+      "op": "eq",
+      "value": false,
+      "severity": "warning",
+      "message": "Download protection disabled."
+    },
+    {
+      "pref": "extensions.update.enabled",
+      "op": "eq",
+      "value": false,
+      "severity": "warning",
+      "message": "Extension security updates disabled."
+    },
+    {
+      "pref": "devtools.debugger.remote-enabled",
+      "op": "eq",
+      "value": true,
+      "severity": "warning",
+      "message": "Remote debugging enabled for this profile."
+    },
+    {
+      "pref": "devtools.chrome.enabled",
+      "op": "eq",
+      "value": true,
+      "severity": "info",
+      "message": "Browser-chrome devtools enabled (privileged scratchpad)."
+    },
+    {
+      "pref": "dom.security.https_only_mode",
+      "op": "eq",
+      "value": false,
+      "severity": "info",
+      "message": "HTTPS-Only Mode is off for this profile."
+    },
+    {
+      "pref": "browser.contentblocking.category",
+      "op": "ne",
+      "value": "strict",
+      "severity": "info",
+      "message": "Tracking protection is not in Strict mode."
+    },
+    {
+      "pref": "remote.prefs.recommended",
+      "op": "present",
+      "severity": "critical",
+      "message": "Automation pref found in a user profile (test harness leak?)."
+    },
+    {
+      "pref": "marionette.port",
+      "op": "present",
+      "severity": "critical",
+      "message": "Marionette remote-control pref found in a user profile."
+    }
+  ]
+}

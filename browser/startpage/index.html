@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="{{T_LANG}}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- Local page: no scripts, no network. Generated per profile by the launcher. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'">
+  <meta name="referrer" content="no-referrer">
+  <title>{{T_TITLE}}</title>
+  <link rel="icon" href="nulavio-symbol.svg">
+  <link rel="stylesheet" href="tokens.css">
+  <link rel="stylesheet" href="startpage.css">
+</head>
+<body>
+  <main class="page">
+    <header class="hero">
+      <picture>
+        <source srcset="nulavio-symbol.svg" media="(prefers-color-scheme: dark)">
+        <img class="hero__symbol" src="nulavio-symbol-dark-on-light.svg" alt="" width="56" height="64">
+      </picture>
+      <h1 class="hero__headline">{{T_HEADLINE}}</h1>
+      <p class="hero__hint">{{T_HINT}} <kbd>Ctrl</kbd> <kbd>L</kbd></p>
+    </header>
+
+    <section class="grid" aria-label="{{T_PROFILE_HEADING}}">
+      <article class="card card--facts">
+        <h2 class="card__title">{{T_PROFILE_HEADING}}</h2>
+        <dl class="facts">
+          <div><dt>{{T_PROFILE}}</dt><dd><span class="mono">{{PROFILE}}</span><small>{{T_PROFILE_NOTE}}</small></dd></div>
+          <div><dt>{{T_ENGINE}}</dt><dd>{{ENGINE}}<small>{{T_ENGINE_NOTE}}</small></dd></div>
+          <div><dt>{{T_FILTER}}</dt><dd>{{FILTER}}</dd></div>
+          <div><dt>{{T_PASSWORDS}}</dt><dd>{{PROVIDER}}</dd></div>
+          <div><dt>{{T_DEFAULTS}}</dt><dd><span class="mono">{{BASELINE}}</span><small>{{T_DEFAULTS_NOTE}}</small></dd></div>
+        </dl>
+      </article>
+
+      <article class="card">
+        <h2 class="card__title">{{T_KEYS_HEADING}}</h2>
+        <ul class="keys">
+          <li><span>{{T_KEY_ADDRESS}}</span><span><kbd>Ctrl</kbd> <kbd>L</kbd></span></li>
+          <li><span>{{T_KEY_TAB}}</span><span><kbd>Ctrl</kbd> <kbd>T</kbd></span></li>
+          <li><span>{{T_KEY_PRIVATE}}</span><span><kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>P</kbd></span></li>
+          <li><span>{{T_KEY_DOWNLOADS}}</span><span><kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>Y</kbd></span></li>
+          <li><span>{{T_KEY_ADDONS}}</span><span><kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>A</kbd></span></li>
+        </ul>
+      </article>
+
+      <article class="card">
+        <h2 class="card__title">{{T_BROKEN_HEADING}}</h2>
+        <ol class="steps">
+          <li>{{T_BROKEN_1}}</li>
+          <li>{{T_BROKEN_2}}</li>
+          <li>{{T_BROKEN_3}}</li>
+        </ol>
+      </article>
+    </section>
+
+    <footer class="footer">
+      <p>{{T_FOOTER}}</p>
+      <p>{{T_FOOTER_LIMITS}}</p>
+    </footer>
+  </main>
+</body>
+</html>

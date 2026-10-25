@@ -1,0 +1,37 @@
+/* Nulavio Preview chrome theme (Track A, userChrome.css).
+ *
+ * Preview-only: it recolours the upstream chrome with Nulavio tokens using
+ * custom properties verified in Firefox 158 (browser-colors.css, toolbar.css,
+ * tokens-platform.css). Upstream renames these between releases, so the
+ * Nulavio build (Track B) ships a built-in theme instead.
+ *
+ * - Only applies with the default theme (steps aside for user-chosen themes).
+ * - Uses light-dark() so it follows the system colour scheme.
+ * - Does not change layout, hide security indicators or touch the urlbar
+ *   identity/permission icons.
+ * - Disable: `nulavio theme off`.
+ */
+:root:not([lwtheme]) {
+  --toolbox-background-color: light-dark(#E2EBEE, #0B1623) !important;
+  --toolbox-background-color-inactive: light-dark(#E9F0F1, #0E1C29) !important;
+  --toolbox-text-color: light-dark(#0B1623, #F1F7F5) !important;
+  --toolbox-text-color-inactive: light-dark(#3A6273, #BFD0D6) !important;
+
+  --toolbar-background-color: light-dark(#F1F7F5, #112432) !important;
+  --toolbar-text-color: light-dark(#0B1623, #F1F7F5) !important;
+
+  --toolbar-field-background-color: light-dark(#FFFFFF, #0B1623) !important;
+  --toolbar-field-text-color: light-dark(#0B1623, #F1F7F5) !important;
+  --toolbar-field-border-color: light-dark(#BFD0D6, #23495A) !important;
+  --toolbar-field-background-color-focus: light-dark(#FFFFFF, #070F18) !important;
+  --toolbar-field-text-color-focus: light-dark(#0B1623, #F1F7F5) !important;
+  --toolbar-field-border-color-focus: light-dark(#0F7A68, #6FE0C5) !important;
+
+  --tab-background-color-selected: light-dark(#FFFFFF, #183746) !important;
+  --tab-text-color-selected: light-dark(#0B1623, #F1F7F5) !important;
+
+  --panel-background-color: light-dark(#FFFFFF, #112432) !important;
+  --panel-text-color: light-dark(#0B1623, #F1F7F5) !important;
+
+  --focus-outline-color: light-dark(#0F7A68, #6FE0C5) !important;
+}

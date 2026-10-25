@@ -1,0 +1,98 @@
+/* Nulavio start page. Uses tokens.css (generated). Respects system light/dark,
+   reduced motion and user font scaling (rem/clamp, no fixed heights). */
+*, *::before, *::after { box-sizing: border-box; }
+
+html {
+  background: var(--nv-color-bg-canvas);
+  color: var(--nv-color-text-primary);
+  font-family: var(--nv-font-family-brand);
+  font-size: 100%;
+  line-height: var(--nv-font-lineHeight-normal);
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background:
+    radial-gradient(60rem 28rem at 50% -8rem, color-mix(in srgb, var(--nv-color-accent-default) 10%, transparent), transparent 70%),
+    var(--nv-color-bg-canvas);
+}
+
+.page {
+  max-width: 68rem;
+  margin: 0 auto;
+  padding: clamp(2rem, 8vh, 6rem) var(--nv-space-6) var(--nv-space-7);
+  display: flex;
+  flex-direction: column;
+  gap: var(--nv-space-8);
+}
+
+.hero { text-align: center; display: grid; justify-items: center; gap: var(--nv-space-4); }
+.hero__symbol { width: 3.5rem; height: auto; }
+.hero__headline {
+  margin: 0;
+  font-size: clamp(1.75rem, 1.2rem + 2vw, 2.75rem);
+  font-weight: var(--nv-font-weight-semibold);
+  letter-spacing: -0.02em;
+  line-height: var(--nv-font-lineHeight-tight);
+}
+.hero__hint { margin: 0; color: var(--nv-color-text-secondary); font-size: 1rem; }
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+  gap: var(--nv-space-5);
+}
+
+.card {
+  background: var(--nv-color-bg-surface);
+  border: 1px solid var(--nv-color-border-subtle);
+  border-radius: var(--nv-radius-lg);
+  padding: var(--nv-space-6);
+  box-shadow: var(--nv-elevation-1);
+}
+.card--facts { grid-row: span 2; }
+.card__title {
+  margin: 0 0 var(--nv-space-5);
+  font-size: 0.8125rem;
+  font-weight: var(--nv-font-weight-semibold);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--nv-color-text-muted);
+}
+
+.facts { margin: 0; display: grid; gap: var(--nv-space-5); }
+.facts div { display: grid; gap: var(--nv-space-1); }
+.facts dt { font-size: 0.8125rem; color: var(--nv-color-text-muted); }
+.facts dd { margin: 0; font-size: 1rem; font-weight: var(--nv-font-weight-medium); display: grid; }
+.facts small { font-size: 0.8125rem; font-weight: var(--nv-font-weight-regular); color: var(--nv-color-text-secondary); }
+.mono { font-family: var(--nv-font-family-mono); font-size: 0.9375rem; }
+
+.keys { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--nv-space-3); }
+.keys li { display: flex; justify-content: space-between; align-items: center; gap: var(--nv-space-4); font-size: 0.9375rem; }
+
+kbd {
+  display: inline-block;
+  min-width: 1.6em;
+  padding: 0.1em 0.45em;
+  border: 1px solid var(--nv-color-border-control);
+  border-bottom-width: 2px;
+  border-radius: var(--nv-radius-xs);
+  font-family: var(--nv-font-family-mono);
+  font-size: 0.75rem;
+  text-align: center;
+  color: var(--nv-color-text-secondary);
+  background: var(--nv-color-bg-sunken);
+}
+
+.steps { margin: 0; padding-left: 1.25rem; display: grid; gap: var(--nv-space-4); font-size: 0.9375rem; color: var(--nv-color-text-secondary); }
+.steps li::marker { color: var(--nv-color-accent-default); font-weight: var(--nv-font-weight-semibold); }
+
+.footer { text-align: center; font-size: 0.8125rem; color: var(--nv-color-text-muted); display: grid; gap: var(--nv-space-2); }
+.footer p { margin: 0; max-width: 52rem; justify-self: center; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .card { transition: border-color var(--nv-motion-duration-base) var(--nv-motion-easing-standard); }
+  .card:hover { border-color: var(--nv-color-border-control); }
+}

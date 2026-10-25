@@ -1,0 +1,150 @@
+"""Preference files and Nulavio Guard rules."""
+
+from __future__ import annotations
+
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "launcher"))
+
+from nulavio_launcher import guard, paths, prefs, profile  # noqa: E402
+
+# Prefs that weaken protections the project promises never to weaken
+# (sandbox, isolation, signatures, TLS/certs, Safe Browsing, updates).
+FORBIDDEN = {
+    "security.sandbox.content.level": lambda v: v < 4,
+    "security.sandbox.rdd.level": lambda v: True,
+    "security.sandbox.socket.process.level": lambda v: True,
+    "fission.autostart": lambda v: v is False,
+    "xpinstall.signatures.required": lambda v: v is False,
+    "extensions.webextensions.remote": lambda v: v is False,
+    "security.tls.version.min": lambda v: v < 3,
+    "security.cert_pinning.enforcement_level": lambda v: v < 1,
+    "security.OCSP.enabled": lambda v: v == 0,
+    "browser.safebrowsing.phishing.enabled": lambda v: v is False,
+    "browser.safebrowsing.malware.enabled": lambda v: v is False,
+    "browser.safebrowsing.downloads.enabled": lambda v: v is False,
+    "app.update.enabled": lambda v: True,
+    "extensions.update.enabled": lambda v: v is False,
+    "extensions.blocklist.enabled": lambda v: v is False,
+    "services.settings.server": lambda v: True,
+    "network.dns.disableIPv6": lambda v: True,
+}
+
+
+class BaselineTest(unittest.TestCase):
+    def setUp(self):
+        self.baseline = profile.baseline_prefs()
+
+    def test_every_pref_is_documented(self):
+        for pref in self.baseline + profile.theme_prefs():
+            with self.subTest(pref=pref.name):
+                self.assertIn(pref.mode, prefs.VALID_MODES)
+                self.assertTrue(pref.category, "missing @category")
+                self.assertGreater(len(pref.why), 20, "missing or too short @why")
+
+    def test_no_protection_is_weakened(self):
+        for pref in self.baseline + profile.theme_prefs():
+            check = FORBIDDEN.get(pref.name)
+            if check:
+                self.assertFalse(check(pref.value), f"{pref.name}={pref.value!r} weakens a protection")
+            self.assertFalse(pref.name.startswith(("security.sandbox.", "marionette.", "remote.", "devtools.debugger.remote")))
+
+    def test_no_remote_endpoints_are_introduced(self):
+        for pref in self.baseline:
+            if isinstance(pref.value, str):
+                self.assertFalse(pref.value.startswith(("http://", "https://")), f"{pref.name} points to a server")
+
+    def test_privacy_defaults_present(self):
+        names = {p.name: p.value for p in self.baseline}
+        self.assertIs(names["datareporting.healthreport.uploadEnabled"], False)
+        self.assertIs(names["dom.security.https_only_mode"], True)
+        self.assertEqual(names["browser.contentblocking.category"], "strict")
+        self.assertEqual(names["browser.startup.homepage"], "@STARTPAGE_URL@")
+
+    def test_parser_rejects_garbage_and_duplicates(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            bad = Path(tmp) / "bad.js"
+            bad.write_text('user_pref("a.b", true);\nuser_pref("a.b", false);\n')
+            with self.assertRaises(prefs.PrefFileError):
+                prefs.parse_annotated(bad)
+            bad.write_text("pref_without_call\n")
+            with self.assertRaises(prefs.PrefFileError):
+                prefs.parse_annotated(bad)
+            bad.write_text('// @mode sometimes\nuser_pref("a.b", true);\n')
+            with self.assertRaises(prefs.PrefFileError):
+                prefs.parse_annotated(bad)
+
+    def test_format_roundtrip_and_escaping(self):
+        line = prefs.format_pref("x.y", 'say "hi" \\ there')
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "p.js"
+            path.write_text(line + '\nuser_pref("n", 3);\nuser_pref("n", 4);\n')
+            values = prefs.read_user_prefs(path)
+        self.assertEqual(values["x.y"], 'say "hi" \\ there')
+        self.assertEqual(values["n"], 4, "last value must win, as in the engine")
+        with self.assertRaises(prefs.PrefFileError):
+            prefs.format_pref('bad"); evil("', True)
+
+
+class GuardTest(unittest.TestCase):
+    def audit(self, prefs_js: str = "", user_js: str = ""):
+        with tempfile.TemporaryDirectory() as tmp:
+            Path(tmp, "prefs.js").write_text(prefs_js)
+            Path(tmp, "user.js").write_text(user_js)
+            return guard.audit(Path(tmp))
+
+    def test_rules_file_is_valid(self):
+        rules = guard.load_rules()
+        self.assertGreaterEqual(len(rules), 10)
+
+    def test_clean_profile_has_no_findings(self):
+        self.assertEqual(self.audit(), [])
+
+    def test_detects_weakened_sandbox_and_automation(self):
+        findings = self.audit(
+            prefs_js='user_pref("security.sandbox.content.level", 0);\n',
+            user_js='user_pref("marionette.port", 2828);\n',
+        )
+        severities = {f.pref: f.severity for f in findings}
+        self.assertEqual(severities["security.sandbox.content.level"], "critical")
+        self.assertEqual(severities["marionette.port"], "critical")
+
+    def test_user_js_overrides_prefs_js(self):
+        findings = self.audit(
+            prefs_js='user_pref("xpinstall.signatures.required", false);\n',
+            user_js='user_pref("xpinstall.signatures.required", true);\n',
+        )
+        self.assertEqual(findings, [])
+
+    def test_user_choices_are_info_only(self):
+        findings = self.audit(prefs_js='user_pref("dom.security.https_only_mode", false);\n')
+        self.assertEqual([(f.pref, f.severity) for f in findings], [("dom.security.https_only_mode", "info")])
+
+
+class ConfigFilesTest(unittest.TestCase):
+    def test_providers_reference_locked_extensions(self):
+        from nulavio_launcher import extensions
+
+        lock = extensions.load_lock()
+        data = profile.load_providers()
+        self.assertIn(data["default"], data["providers"])
+        for key, provider in data["providers"].items():
+            with self.subTest(provider=key):
+                if provider["extension"]:
+                    self.assertIn(provider["extension"], lock)
+                self.assertIn("signon.rememberSignons", provider["prefs"])
+        self.assertTrue(data["providers"]["builtin"]["prefs"]["signon.rememberSignons"])
+        for key in ("proton-pass", "keepassxc", "bitwarden"):
+            self.assertFalse(data["providers"][key]["prefs"]["signon.rememberSignons"])
+
+    def test_config_dir_layout(self):
+        self.assertTrue((paths.config_dir() / "prefs" / "baseline.js").is_file())
+        self.assertTrue((paths.config_dir() / "guard-rules.json").is_file())
+
+
+if __name__ == "__main__":
+    unittest.main()

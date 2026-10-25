@@ -1,0 +1,89 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "17 6 * * 1" # weekly: catch engine / AMO / upstream drift
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: lint, unit tests, generated files, SBOM
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Lint (ruff, hash-pinned)
+        run: |
+          python3 -m venv .venv
+          .venv/bin/pip install --require-hashes -r requirements/dev.txt
+          .venv/bin/ruff check .
+          .venv/bin/ruff format --check .
+      - name: Shell
+        run: shellcheck bin/nulavio
+      - name: Generated tokens are current
+        run: python3 -I scripts/brand/build_tokens.py --check
+      - name: WCAG contrast of design tokens
+        run: python3 -I scripts/brand/contrast.py
+      - name: Unit tests
+        run: python3 -I tests/run.py unit
+      - name: SBOM (CycloneDX)
+        run: python3 -I scripts/release/sbom.py > sbom.cdx.json
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sbom
+          path: sbom.cdx.json
+
+  integration:
+    name: engine integration (${{ matrix.image }}, headless)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        # fedora-itest: distribution Firefox RPM + KeePassXC (provider spike).
+        # ubuntu-itest: Mozilla's own Firefox build from its APT repository.
+        image: [fedora-itest, ubuntu-itest]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build test image (packages installed inside the container only)
+        run: docker build -t nulavio-${{ matrix.image }} -f ci/containers/${{ matrix.image }}.Containerfile ci/containers
+      - name: Integration tests as an unprivileged user (incl. official password-manager extensions)
+        # Docker's default seccomp profile blocks the user namespaces that the
+        # browser's own content sandbox needs. Relaxing the *container* filter
+        # lets the *browser* sandbox run fully; test_04 then verifies it.
+        # (Rootless podman passes with its default profile; see ADR 0001 E15.)
+        run: |
+          mkdir -p artifacts && chmod 777 artifacts
+          docker run --rm --security-opt seccomp=unconfined \
+            -v "$GITHUB_WORKSPACE":/src:ro -v "$GITHUB_WORKSPACE/artifacts":/artifacts \
+            -e NULAVIO_NETWORK_TESTS=1 -e NULAVIO_TEST_ARTIFACTS=/artifacts \
+            nulavio-${{ matrix.image }} \
+            sh -c 'cp -r /src "$HOME/nulavio" && cd "$HOME/nulavio" && python3 -I tests/run.py integration'
+      - name: KeePassXC native messaging end to end (throwaway database)
+        if: matrix.image == 'fedora-itest'
+        run: |
+          docker run --rm --security-opt seccomp=unconfined -v "$GITHUB_WORKSPACE":/src:ro nulavio-${{ matrix.image }} \
+            sh -c 'cp -r /src "$HOME/nulavio" && cd "$HOME/nulavio" && python3 -I scripts/research/keepassxc_native_messaging_spike.py'
+      - name: Verify Mozilla release signature for the tested engine version
+        run: |
+          version=$(docker run --rm nulavio-${{ matrix.image }} sh -c 'firefox --version 2>/dev/null' | awk '{print $3}')
+          python3 -I scripts/upstream/verify_firefox_release.py "$version"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: integration-artifacts-${{ matrix.image }}
+          path: artifacts/
+          if-no-files-found: ignore

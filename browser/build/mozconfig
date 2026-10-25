@@ -1,0 +1,44 @@
+# Nulavio (Track B) build configuration. See docs/architecture/build.md.
+# Applied inside the build container; paths are relative to the source tree.
+
+ac_add_options --enable-application=browser
+ac_add_options --with-branding=browser/branding/nulavio
+
+# Identity: binary "nulavio" and own remoting name (Wayland app_id). The
+# vendor (profile location, application.ini) is set by browser/patches/0001-*
+# because configure only accepts it from the project file. The add-on
+# application ID stays Firefox's so AMO extensions remain compatible
+# (ADR 0001, open item 3).
+ac_add_options --with-app-basename=Nulavio
+ac_add_options --with-app-name=nulavio
+ac_add_options MOZ_APP_REMOTINGNAME=nulavio
+ac_add_options --enable-update-channel=release
+
+# Release-grade build.
+ac_add_options --enable-release
+ac_add_options --enable-optimize
+ac_add_options --disable-debug
+ac_add_options --disable-tests
+ac_add_options --enable-bootstrap
+
+# Extensions must be signed by Mozilla's AMO root (explicit even though the
+# release milestone already implies it; ESR would not).
+ac_add_options MOZ_REQUIRE_SIGNING=1
+
+# Updates come from the distribution package (RPM/DEB), not the in-app
+# updater. There is no Nulavio crash-report server, so the crash reporter is
+# not built (crash data is never sent anywhere).
+ac_add_options --disable-updater
+ac_add_options --disable-crashreporter
+
+# Google Safe Browsing needs an API key. WITHOUT IT, PHISHING/MALWARE LISTS ARE
+# INACTIVE (SafeBrowsing.sys.mjs skips Google providers). The key is never in
+# this repository: scripts/build/build_nulavio.sh mounts it read-only at
+# /run/secrets/ and refuses to build without it unless the developer opts out
+# explicitly (NULAVIO_ALLOW_NO_SAFEBROWSING_KEY=1, never for a release; see
+# docs/product/release-criteria.md).
+if [ -r /run/secrets/google-safebrowsing.key ]; then
+    ac_add_options --with-google-safebrowsing-api-keyfile=/run/secrets/google-safebrowsing.key
+fi
+
+mk_add_options MOZ_OBJDIR=@TOPSRCDIR@/obj-nulavio

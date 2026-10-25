@@ -1,0 +1,4 @@
+# Nulavio patch stack, applied in order with `patch -p1` by
+# scripts/build/apply_patches.py. Keep this list minimal: anything achievable
+# with prefs, policies, branding or built-in add-ons does not belong here.
+0001-branding-set-application-vendor.patch

@@ -1,0 +1,208 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.6",
+  "serialNumber": "urn:uuid:bfdc4a7f-c2ed-533b-a2ca-51c161b4110c",
+  "version": 1,
+  "metadata": {
+    "component": {
+      "type": "application",
+      "bom-ref": "nulavio-preview",
+      "name": "nulavio-preview",
+      "version": "0.1.0.dev0",
+      "licenses": [
+        {
+          "license": {
+            "id": "MPL-2.0"
+          }
+        }
+      ],
+      "properties": [
+        {
+          "name": "nulavio:git-revision",
+          "value": "uncommitted"
+        }
+      ]
+    }
+  },
+  "components": [
+    {
+      "type": "application",
+      "bom-ref": "engine:firefox",
+      "name": "firefox",
+      "supplier": {
+        "name": "Mozilla"
+      },
+      "version": ">=140 (distribution package, not redistributed in Track A)",
+      "licenses": [
+        {
+          "license": {
+            "id": "MPL-2.0"
+          }
+        }
+      ],
+      "scope": "required",
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://www.mozilla.org/firefox/"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "xpi:uBlock0@raymondhill.net",
+      "name": "uBlock Origin",
+      "version": "1.75.0",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "5b74415860456370644bd80f16125e865b0e6c356bb5dfcfb84069967eaa5287"
+        }
+      ],
+      "scope": "required",
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://addons.mozilla.org/firefox/downloads/file/5034826/ublock_origin-1.75.0.xpi"
+        },
+        {
+          "type": "website",
+          "url": "https://github.com/gorhill/uBlock"
+        }
+      ],
+      "properties": [
+        {
+          "name": "nulavio:role",
+          "value": "content-filter"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "GPL-3.0-only"
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "xpi:78272b6fa58f4a1abaac99321d503a20@proton.me",
+      "name": "Proton Pass",
+      "version": "1.41.1",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "f67c5836e5eff3f82ac38e03a7b27d30b84dbb5246f74bb21b8b5bb15d3cd936"
+        }
+      ],
+      "scope": "optional",
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://addons.mozilla.org/firefox/downloads/file/5055526/proton_pass-1.41.1.xpi"
+        },
+        {
+          "type": "website",
+          "url": "https://proton.me/pass"
+        }
+      ],
+      "properties": [
+        {
+          "name": "nulavio:role",
+          "value": "credential-provider"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "GPL-3.0-only"
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "xpi:keepassxc-browser@keepassxc.org",
+      "name": "KeePassXC-Browser",
+      "version": "1.10.4.1",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "ae41157a3f017b0773abba2097d5b0056241631d0a38ad36d68d0b24b1a409c1"
+        }
+      ],
+      "scope": "optional",
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://addons.mozilla.org/firefox/downloads/file/5078406/keepassxc_browser-1.10.4.1.xpi"
+        },
+        {
+          "type": "website",
+          "url": "https://github.com/keepassxreboot/keepassxc-browser"
+        }
+      ],
+      "properties": [
+        {
+          "name": "nulavio:role",
+          "value": "credential-provider"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "GPL-3.0-only"
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "xpi:{446900e4-71c2-419f-a6a7-df9c091e268b}",
+      "name": "Bitwarden Password Manager",
+      "version": "2026.10.0",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "a25e02e961f4ffcecda12584f32f1993102ad7509e9ca84582e5287109f5bd20"
+        }
+      ],
+      "scope": "optional",
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://addons.mozilla.org/firefox/downloads/file/5125667/bitwarden_password_manager-2026.10.0.xpi"
+        },
+        {
+          "type": "website",
+          "url": "https://github.com/bitwarden/clients"
+        }
+      ],
+      "properties": [
+        {
+          "name": "nulavio:role",
+          "value": "credential-provider"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "UNDECLARED on AMO; upstream repo mixes GPL-3.0 and the Bitwarden License (bitwarden_license/). Not redistributed by Nulavio; verify before any bundling."
+          }
+        }
+      ]
+    }
+  ],
+  "dependencies": [
+    {
+      "ref": "nulavio-preview",
+      "dependsOn": [
+        "engine:firefox",
+        "xpi:uBlock0@raymondhill.net",
+        "xpi:78272b6fa58f4a1abaac99321d503a20@proton.me",
+        "xpi:keepassxc-browser@keepassxc.org",
+        "xpi:{446900e4-71c2-419f-a6a7-df9c091e268b}"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,76 @@
+{
+  "date": "2026-10-24",
+  "environment": "rootless podman, Fedora 44 container (ci/containers/fedora-itest.Containerfile): firefox-158.0.1-2.fc44, keepassxc-2.8.0-2.fc44, Xvfb; Nulavio profile created by bin/nulavio setup --provider keepassxc --install-provider-extension",
+  "method": "scripts/research/keepassxc_native_messaging_spike.py (throwaway database and credentials; association dialog answered with xdotool)",
+  "steps": {
+    "database": {
+      "created": true,
+      "entry_added": true
+    },
+    "manifest": {
+      "name": "org.keepassxc.keepassxc_browser",
+      "description": "KeePassXC integration with native messaging support",
+      "path": "/usr/bin/keepassxc-proxy",
+      "type": "stdio",
+      "allowed_extensions": [
+        "keepassxc-browser@keepassxc.org"
+      ]
+    },
+    "keepassxc_running": true,
+    "extension": {
+      "popup": "moz-extension://3d364d53-2564-4813-b357-5dad507ca374/popups/popup.html",
+      "options": "moz-extension://3d364d53-2564-4813-b357-5dad507ca374/options/options.html",
+      "version": "1.10.4.1"
+    },
+    "popup_before_association": {
+      "text": "KeePassXC-Browser has not been configured. Click the connect button to pair with KeePassXC.\n\n Connect",
+      "buttons": [
+        {
+          "id": "options-button",
+          "text": ""
+        },
+        {
+          "id": "choose-custom-login-fields-button-moz",
+          "text": ""
+        },
+        {
+          "id": "connect-button",
+          "text": "Connect"
+        }
+      ]
+    },
+    "popup_after_association": {
+      "text": "KeePassXC-Browser is connected to KeePassXC and has been configured using the following identifier: nulavio-spike\n\n Redetect login fields",
+      "buttons": [
+        {
+          "id": "options-button",
+          "text": ""
+        },
+        {
+          "id": "choose-custom-login-fields-button-moz",
+          "text": ""
+        },
+        {
+          "id": "lock-database-button",
+          "text": ""
+        },
+        {
+          "id": "redetect-fields-button",
+          "text": "Redetect login fields"
+        }
+      ]
+    },
+    "autofill_single_entry_option": "autoFillSingleEntry",
+    "autofill": {
+      "username_filled": true,
+      "password_filled": true
+    }
+  },
+  "keepassxc_windows_seen": [
+    "KeePassXC - New key association request",
+    "spike.kdbx - KeePassXC"
+  ],
+  "dialog_actions": [
+    "association dialog 'KeePassXC - New key association request': named key and confirmed"
+  ]
+}

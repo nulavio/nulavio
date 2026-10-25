@@ -1,0 +1,4 @@
+# Development tools only (the launcher has no runtime dependencies).
+# Install with hash checking:  python3 -m pip install --require-hashes -r requirements/dev.txt
+ruff==0.17.2 \
+    --hash=sha256:c60f93fec7142dba5b8f487f94bf2f6231dae24dc11e4c48648347c8b0720004

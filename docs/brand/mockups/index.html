@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Nulavio — UI mockups</title>
+<link rel="stylesheet" href="mockups.css">
+</head>
+<body>
+<!-- Icon sprite: 20 px grid, 1.75 px stroke, round caps/joins (guidelines §7). -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="back" viewBox="0 0 20 20"><path d="M12 4 6 10l6 6"/></symbol>
+  <symbol id="fwd" viewBox="0 0 20 20"><path d="m8 4 6 6-6 6"/></symbol>
+  <symbol id="reload" viewBox="0 0 20 20"><path d="M16 10a6 6 0 1 1-1.8-4.3"/><path d="M16 4v3.6h-3.6"/></symbol>
+  <symbol id="tune" viewBox="0 0 20 20"><path d="M3 7h8M15 7h2M3 13h2M9 13h8"/><circle cx="13" cy="7" r="2"/><circle cx="7" cy="13" r="2"/></symbol>
+  <symbol id="route" viewBox="0 0 16 16"><path d="M4 8V3l8 10V3"/><circle cx="4" cy="12" r=".9" fill="currentColor"/></symbol>
+  <symbol id="menu" viewBox="0 0 20 20"><path d="M4 6h12M4 10h12M4 14h12"/></symbol>
+  <symbol id="star" viewBox="0 0 20 20"><path d="m10 3 2.1 4.4 4.8.6-3.5 3.3.9 4.7L10 13.8 5.7 16l.9-4.7L3.1 8l4.8-.6z"/></symbol>
+  <symbol id="down" viewBox="0 0 20 20"><path d="M10 3v10M6 9l4 4 4-4M4 16h12"/></symbol>
+  <symbol id="puzzle" viewBox="0 0 20 20"><path d="M8 4h4v2a1.5 1.5 0 1 0 3 0V4h1v5h-2a1.5 1.5 0 1 0 0 3h2v4H4v-4h2a1.5 1.5 0 1 0 0-3H4V4h4z"/></symbol>
+  <symbol id="key" viewBox="0 0 20 20"><circle cx="7" cy="10" r="3.5"/><path d="M10.5 10H17M14.5 10v3M17 10v2"/></symbol>
+  <symbol id="cam" viewBox="0 0 20 20"><rect x="3" y="6" width="10" height="8" rx="2"/><path d="m13 9 4-2v6l-4-2"/></symbol>
+  <symbol id="alert" viewBox="0 0 20 20"><path d="M10 3 2.5 16h15z"/><path d="M10 8v4M10 14.2v.1"/></symbol>
+  <symbol id="info" viewBox="0 0 20 20"><circle cx="10" cy="10" r="7"/><path d="M10 9v5M10 6.2v.1"/></symbol>
+  <symbol id="check" viewBox="0 0 20 20"><path d="m5 10.5 3.2 3L15 7"/></symbol>
+  <symbol id="file" viewBox="0 0 20 20"><path d="M6 3h6l3 3v11H6z"/><path d="M12 3v3h3"/></symbol>
+  <symbol id="folder" viewBox="0 0 20 20"><path d="M3 6h5l2 2h7v8H3z"/></symbol>
+  <symbol id="x" viewBox="0 0 20 20"><path d="m6 6 8 8M14 6l-8 8"/></symbol>
+</svg>
+
+<!-- 1. Main window + privacy quick panel (flows C, G) -->
+<section class="artboard" id="main-window" data-theme="dark">
+  <div class="chrome">
+    <div class="tabs">
+      <div class="tab active"><span class="ctx work"></span><span class="fav"></span><span class="t">Notícias do mundo — news.example</span><svg class="i" style="width:14px;height:14px"><use href="#x"/></svg></div>
+      <div class="tab"><span class="ctx work"></span><span class="fav"></span><span class="t">Painel — tickets.example</span></div>
+      <div class="tab"><span class="fav"></span><span class="t">Documentação</span></div>
+      <div class="btn-ic" style="height:30px"><span style="font-size:18px">+</span></div>
+      <div style="flex:1"></div>
+      <span class="profile-pill" style="margin-bottom:5px"><i></i>Trabalho</span>
+    </div>
+    <div class="toolbar">
+      <span class="btn-ic"><svg class="i"><use href="#back"/></svg></span>
+      <span class="btn-ic"><svg class="i"><use href="#fwd"/></svg></span>
+      <span class="btn-ic"><svg class="i"><use href="#reload"/></svg></span>
+      <div class="urlbar">
+        <span class="state"><svg class="i" style="width:16px;height:16px"><use href="#tune"/></svg></span>
+        <span><span class="host">news.example</span><span class="path">/mundo/hoje</span></span>
+        <span style="flex:1"></span><svg class="i" style="color:var(--nv-color-text-muted)"><use href="#star"/></svg>
+      </div>
+      <span class="btn-ic on" title="Proteções do site"><svg class="i" viewBox="0 0 16 16" style="width:20px;height:20px;stroke-width:1.6"><use href="#route"/></svg></span>
+      <span class="btn-ic"><svg class="i"><use href="#key"/></svg></span>
+      <span class="btn-ic"><svg class="i"><use href="#down"/></svg></span>
+      <span class="btn-ic"><svg class="i"><use href="#puzzle"/></svg></span>
+      <span class="btn-ic"><svg class="i"><use href="#menu"/></svg></span>
+    </div>
+  </div>
+  <div class="page">
+    <div class="skel" style="width:46%;height:26px"></div>
+    <div class="skel" style="width:72%"></div><div class="skel" style="width:68%"></div><div class="skel" style="width:70%"></div>
+    <div class="skel" style="width:40%;height:180px;margin-top:24px"></div>
+  </div>
+  <div class="panel" style="top:96px;right:96px;width:380px">
+    <h3>news.example</h3>
+    <div class="sub">Proteções neste site · números são dados de exemplo</div>
+    <div class="row"><div class="grow"><div class="t">Proteção contra rastreamento</div><div class="d">Estrita · 12 rastreadores bloqueados nesta página</div></div><span class="switch on"></span></div>
+    <div class="row"><div class="grow"><div class="t">Filtro de conteúdo</div><div class="d">uBlock Origin · ligado neste site</div></div><span class="switch on"></span></div>
+    <div class="row"><div class="grow"><div class="t">Conexão</div><div class="d">Criptografada (HTTPS) · certificado válido</div></div><span class="badge ok">Detalhes</span></div>
+    <div class="row"><div class="grow"><div class="t">Cookies</div><div class="d">Isolados por site (Total Cookie Protection)</div></div><span class="badge ok">Limpar</span></div>
+    <div class="row"><div class="grow"><div class="t">Câmera · Localização</div><div class="d">Perguntar · Bloqueada</div></div><span class="link">Revogar</span></div>
+    <div class="actions" style="justify-content:space-between"><span class="link">Algo quebrou neste site?</span><span class="b quiet">Configurações do site</span></div>
+  </div>
+  <span class="label">01 · Janela principal + painel de privacidade · perfil Trabalho</span>
+</section>
+
+<!-- 2. Onboarding, first run (flow A) -->
+<section class="artboard" id="onboarding" data-theme="dark">
+  <div class="center">
+    <div class="card" style="width:640px">
+      <div class="steps"><i class="on"></i><i></i><i></i><i></i></div>
+      <svg viewBox="20 16 56 64" width="40" height="46" aria-hidden="true"><g fill="none" stroke="#6FE0C5" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"><path d="M30 45 V26 L66 70 V26"/></g><g fill="#6FE0C5"><circle cx="30" cy="56.7" r="4.2"/><circle cx="30" cy="66.3" r="2.9"/><circle cx="30" cy="73.3" r="1.8"/></g></svg>
+      <h1 style="margin-top:14px">Bem-vindo ao Nulavio</h1>
+      <p class="lead">Já começamos protegendo você. Tudo abaixo pode ser mudado depois em Configurações. Nada aqui é definitivo.</p>
+      <div class="check"><span class="dot"><svg class="i" style="width:14px;height:14px"><use href="#check"/></svg></span><div><b>Rastreadores e anúncios bloqueados</b><div class="why">Proteção Estrita do motor + uBlock Origin. Se um site quebrar, desligue só para ele.</div></div></div>
+      <div class="check"><span class="dot"><svg class="i" style="width:14px;height:14px"><use href="#check"/></svg></span><div><b>Conexões somente em HTTPS</b><div class="why">Sites sem HTTPS pedem confirmação. A exceção vale por site e pode ser revogada.</div></div></div>
+      <div class="check"><span class="dot"><svg class="i" style="width:14px;height:14px"><use href="#check"/></svg></span><div><b>Nada é enviado ao Nulavio</b><div class="why">Não existe servidor Nulavio. Telemetria do motor desligada; relatórios de falha só com seu ok.</div></div></div>
+      <div class="note" style="margin-top:10px"><svg class="i ic"><use href="#info"/></svg><div>Limite honesto: um navegador não protege contra malware que já roda neste computador. <span class="link">Entenda o que fazemos e o que não fazemos</span></div></div>
+      <div class="actions"><span class="b quiet">Personalizar</span><span class="b primary focus">Continuar</span></div>
+    </div>
+  </div>
+  <span class="label">02 · Primeira execução (fluxo A)</span>
+</section>
+
+<!-- 3. Provider chooser (flow B) -->
+<section class="artboard" id="provider-chooser" data-theme="dark">
+  <div class="center">
+    <div class="card" style="width:760px">
+      <div class="steps"><i class="on"></i><i class="on"></i><i class="on"></i><i></i></div>
+      <h1>Onde ficam suas senhas?</h1>
+      <p class="lead">Escolha um gerenciador. Só ele vai oferecer para salvar e preencher, para não haver dois preenchimentos ao mesmo tempo.</p>
+      <div class="grid2">
+        <div class="opt sel"><div class="h"><span class="logo" style="background:#8B7CF6">P</span>Proton Pass<span style="flex:1"></span><span class="badge ok">Extensão oficial instalada</span></div><div class="d">Seu cofre fica na sua conta Proton. O Nulavio não lê o cofre.</div></div>
+        <div class="opt"><div class="h"><span class="logo" style="background:#6FCF5F">K</span>KeePassXC<span style="flex:1"></span><span class="badge warn">App não encontrado</span></div><div class="d">Requer o app KeePassXC com a integração de navegador ligada (native messaging). <span class="link">Como configurar</span></div></div>
+        <div class="opt"><div class="h"><span class="logo" style="background:#5B8DEF">B</span>Bitwarden<span style="flex:1"></span><span class="badge">Instalar extensão oficial</span></div><div class="d">Extensão oficial do Bitwarden. Desbloqueio por biometria via app desktop (opcional).</div></div>
+        <div class="opt"><div class="h"><span class="logo" style="background:#BFD0D6">M</span>Gerenciador do motor<span style="flex:1"></span><span class="badge">Local</span></div><div class="d">Senhas guardadas neste perfil. Recomendamos definir uma senha primária.</div></div>
+      </div>
+      <div class="note" style="margin-top:16px"><svg class="i ic"><use href="#info"/></svg><div>Ao usar o Proton Pass, os pedidos de "salvar senha" do motor serão desligados neste perfil. <b>Senhas já salvas continuam guardadas.</b> Você pode voltar quando quiser.</div></div>
+      <div class="actions"><span class="b quiet">Agora não</span><span class="b primary">Usar Proton Pass</span></div>
+    </div>
+  </div>
+  <span class="label">03 · Escolha do provedor de credenciais (fluxo B)</span>
+</section>
+
+<!-- 4. Suspicious login domain (flow D) -->
+<section class="artboard" id="suspicious-login" data-theme="light">
+  <div class="center">
+    <div style="width:640px">
+      <div style="width:48px;height:48px;border-radius:14px;display:grid;place-items:center;background:var(--nv-color-status-warningTint);color:var(--nv-color-status-warning);margin-bottom:18px"><svg class="i" style="width:26px;height:26px"><use href="#alert"/></svg></div>
+      <h1>Este pode não ser o site que você imagina</h1>
+      <p class="lead">Você vai entrar em <b style="font-family:var(--nv-font-family-mono)">paypa1-secure.example</b>. Suas senhas salvas são de <b style="font-family:var(--nv-font-family-mono)">paypal.example</b>. Os endereços são parecidos, mas não são iguais.</p>
+      <div class="section" style="padding:6px 18px">
+        <div class="row" style="border:0"><div class="grow"><div class="t">O que é diferente</div><div class="d">"1" (número um) no lugar de "l" · "-secure" adicionado ao nome</div></div></div>
+        <div class="row"><div class="grow"><div class="t">Como verificamos</div><div class="d">Neste computador, comparando com os sites onde você já tem senha. Nada é enviado.</div></div></div>
+      </div>
+      <div class="actions" style="justify-content:flex-start;margin-top:22px"><span class="b primary focus">Ir para paypal.example</span><span class="b">Continuar mesmo assim</span><span class="b quiet">Por que estou vendo isto?</span></div>
+      <p style="color:var(--nv-color-text-muted);font-size:12.5px;margin-top:18px">Se continuar, o preenchimento automático fica desligado nesta página. Você ainda pode digitar.</p>
+    </div>
+  </div>
+  <span class="label">04 · Login em domínio suspeito (fluxo D)</span>
+</section>
+
+<!-- 5. Dangerous download (flow E) -->
+<section class="artboard" id="download-warning" data-theme="dark">
+  <div class="chrome">
+    <div class="tabs"><div class="tab active"><span class="fav"></span><span class="t">Ferramentas — files.example.net</span></div></div>
+    <div class="toolbar">
+      <span class="btn-ic"><svg class="i"><use href="#back"/></svg></span><span class="btn-ic"><svg class="i"><use href="#fwd"/></svg></span><span class="btn-ic"><svg class="i"><use href="#reload"/></svg></span>
+      <div class="urlbar"><span class="state"><svg class="i" style="width:16px;height:16px"><use href="#tune"/></svg></span><span><span class="host">files.example.net</span><span class="path">/tools</span></span></div>
+      <span class="btn-ic"><svg class="i" viewBox="0 0 16 16" style="width:20px;height:20px;stroke-width:1.6"><use href="#route"/></svg></span>
+      <span class="btn-ic on"><svg class="i"><use href="#down"/></svg></span><span class="btn-ic"><svg class="i"><use href="#menu"/></svg></span>
+    </div>
+  </div>
+  <div class="page"><div class="skel" style="width:38%;height:26px"></div><div class="skel" style="width:60%"></div><div class="skel" style="width:52%"></div></div>
+  <div class="panel" style="top:96px;right:52px;width:420px">
+    <h3>Downloads</h3>
+    <div class="sub">Arquivos ficam na pasta Downloads, legíveis só pela sua conta</div>
+    <div class="row" style="align-items:flex-start"><svg class="i" style="color:var(--nv-color-status-warning)"><use href="#file"/></svg><div class="grow"><div class="t">setup-tool.AppImage</div><div class="d">48 MB · de files.example.net · concluído</div>
+      <div class="note warn" style="margin-top:10px"><svg class="i ic" style="color:var(--nv-color-status-warning)"><use href="#alert"/></svg><div>Este arquivo pode executar programas no seu computador. Abra só se você confia em quem o publicou.</div></div>
+      <div class="actions" style="justify-content:flex-start"><span class="b"><svg class="i" style="width:16px;height:16px;margin-right:6px"><use href="#folder"/></svg>Mostrar na pasta</span><span class="b quiet">Excluir</span></div></div></div>
+    <div class="row"><svg class="i"><use href="#file"/></svg><div class="grow"><div class="t">relatorio-trimestral.pdf</div><div class="d">2,1 MB · concluído</div></div><span class="link">Abrir</span></div>
+  </div>
+  <span class="label">05 · Download potencialmente perigoso (fluxo E)</span>
+</section>
+
+<!-- 6. Camera / microphone request (flow F) -->
+<section class="artboard" id="camera-permission" data-theme="dark">
+  <div class="chrome">
+    <div class="tabs"><div class="tab active"><span class="fav"></span><span class="t">Reunião — meet.example</span></div></div>
+    <div class="toolbar">
+      <span class="btn-ic"><svg class="i"><use href="#back"/></svg></span><span class="btn-ic"><svg class="i"><use href="#fwd"/></svg></span><span class="btn-ic"><svg class="i"><use href="#reload"/></svg></span>
+      <div class="urlbar"><span class="state warn"><svg class="i" style="width:16px;height:16px"><use href="#cam"/></svg>Pedindo câmera</span><span><span class="host">meet.example</span><span class="path">/sala/abc</span></span></div>
+      <span class="btn-ic"><svg class="i" viewBox="0 0 16 16" style="width:20px;height:20px;stroke-width:1.6"><use href="#route"/></svg></span><span class="btn-ic"><svg class="i"><use href="#menu"/></svg></span>
+    </div>
+  </div>
+  <div class="page"><div class="skel" style="width:100%;height:420px;border-radius:16px"></div></div>
+  <div class="panel" style="top:92px;left:140px;width:400px">
+    <h3>meet.example quer usar sua câmera e microfone</h3>
+    <div class="sub">Só durante esta visita, a menos que você marque "lembrar"</div>
+    <div class="row"><svg class="i"><use href="#cam"/></svg><div class="grow"><div class="t">Câmera integrada</div><div class="d">via PipeWire (portal do sistema)</div></div><span class="badge">Trocar</span></div>
+    <div class="row"><svg class="i"><use href="#info"/></svg><div class="grow"><div class="t">Microfone · Padrão do sistema</div></div><span class="badge">Trocar</span></div>
+    <div class="row"><span class="switch"></span><div class="grow d">Lembrar para meet.example</div></div>
+    <div class="actions"><span class="b">Bloquear</span><span class="b primary">Permitir</span></div>
+    <div class="why" style="margin-top:10px">Um indicador fica visível enquanto a câmera estiver em uso. Revogue a qualquer momento no painel do site.</div>
+  </div>
+  <span class="label">06 · Pedido de câmera ou microfone (fluxo F)</span>
+</section>
+
+<!-- 7. Settings: privacy (explained, reversible) -->
+<section class="artboard" id="settings-privacy" data-theme="light">
+  <div class="settings">
+    <nav class="nav"><a>Geral</a><a class="on">Privacidade</a><a>Senhas</a><a>Extensões</a><a>Perfis</a><a>Downloads</a><a>Sobre os limites</a></nav>
+    <div class="content">
+      <h1 style="font-size:24px">Privacidade</h1>
+      <p class="lead" style="font-size:14px;margin-bottom:16px">Cada opção diz o que faz e o que você perde. Valores marcados como <span class="badge ok">padrão Nulavio</span> vieram da instalação.</p>
+      <div class="section">
+        <div class="row"><div class="grow"><div class="t">Proteção contra rastreamento: Estrita <span class="badge ok">padrão Nulavio</span></div><div class="why">Bloqueia rastreadores, cookies entre sites, mineradores e fingerprinters. Pode quebrar alguns vídeos incorporados — desligue por site no painel.</div></div><span class="switch on"></span></div>
+        <div class="row"><div class="grow"><div class="t">Enviar sinal Global Privacy Control <span class="badge ok">padrão Nulavio</span></div><div class="why">Pede aos sites que não vendam nem compartilhem seus dados. Não há perda de função.</div></div><span class="switch on"></span></div>
+      </div>
+      <div class="section">
+        <div class="row"><div class="grow"><div class="t">Somente HTTPS <span class="badge ok">padrão Nulavio</span></div><div class="why">Sites sem criptografia pedem confirmação. Exceções ativas: 2 sites · <span class="link">Gerenciar</span></div></div><span class="switch on"></span></div>
+        <div class="row"><div class="grow"><div class="t">DNS</div><div class="why">Usando o resolvedor do sistema (padrão do Fedora). DNS sobre HTTPS esconde consultas da rede local, mas concentra no provedor escolhido.</div></div><span class="b">Escolher…</span></div>
+      </div>
+      <div class="section">
+        <div class="row"><div class="grow"><div class="t">Dados para a Mozilla (telemetria e estudos)</div><div class="why">Desligado. O Nulavio não tem servidor e não recebe nada.</div></div><span class="switch"></span></div>
+        <div class="row"><div class="grow"><div class="t">Relatórios de falha</div><div class="why">Nunca enviados automaticamente. Você decide a cada falha.</div></div><span class="badge">Perguntar</span></div>
+      </div>
+    </div>
+  </div>
+  <span class="label">07 · Configurações — privacidade explicada</span>
+</section>
+
+<!-- 8. Passwords settings with Secret Service missing (flows H, I) -->
+<section class="artboard" id="settings-passwords" data-theme="dark">
+  <div class="settings">
+    <nav class="nav"><a>Geral</a><a>Privacidade</a><a class="on">Senhas</a><a>Extensões</a><a>Perfis</a><a>Downloads</a><a>Sobre os limites</a></nav>
+    <div class="content">
+      <h1 style="font-size:24px">Senhas</h1>
+      <div class="section">
+        <div class="row"><span class="logo" style="width:32px;height:32px;border-radius:9px;display:grid;place-items:center;background:#8B7CF6;color:#0B1623;font-weight:700">P</span><div class="grow"><div class="t">Proton Pass · em uso</div><div class="why">Salvar e preencher feitos pela extensão oficial. Pedidos do motor desligados neste perfil.</div></div><span class="b">Trocar</span><span class="b quiet">Desativar integração</span></div>
+        <div class="row"><svg class="i"><use href="#key"/></svg><div class="grow"><div class="t">Senhas antigas do motor</div><div class="why">14 logins continuam guardados neste perfil (não foram apagados). <span class="link">Exportar</span> · <span class="link">Remover</span></div></div></div>
+      </div>
+      <div class="section">
+        <div class="row"><svg class="i" style="color:var(--nv-color-status-warning)"><use href="#info"/></svg><div class="grow"><div class="t">Cofre do sistema (Secret Service / KWallet) <span class="badge warn">não encontrado</span></div><div class="why">Tudo continua funcionando: o Nulavio não depende do cofre do sistema para suas senhas web. Ele guarda segredos locais de apps, mas não isola um app do outro.</div></div><span class="b">Verificar de novo</span></div>
+      </div>
+      <div class="note"><svg class="i ic"><use href="#info"/></svg><div>Desativar a integração devolve os pedidos de salvar senha ao motor. A extensão do Proton Pass não é removida e seu cofre não é tocado.</div></div>
+    </div>
+  </div>
+  <span class="label">08 · Senhas — trocar/desativar integração; Secret Service ausente (fluxos H, I)</span>
+</section>
+</body>
+</html>

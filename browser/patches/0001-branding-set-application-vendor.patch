@@ -1,0 +1,21 @@
+Subject: [PATCH] branding: set the application vendor to Nulavio
+
+MOZ_APP_VENDOR can only be implied by the project configure file, not set
+from a mozconfig. The vendor feeds application.ini "Vendor" and the default
+profile location, keeping Nulavio's data out of Mozilla-named directories.
+
+Owner: Nulavio maintainers
+Upstream: not applicable (branding choice); revisit if upstream exposes the
+option to mozconfig.
+---
+--- a/browser/moz.configure	2026-10-24 22:49:55.987097714 -0300
++++ b/browser/moz.configure	2026-10-24 22:49:55.990287245 -0300
+@@ -11,7 +11,7 @@
+ imply_option("MOZ_PROFILE_MIGRATOR", True)
+ 
+ 
+-imply_option("MOZ_APP_VENDOR", "Mozilla")
++imply_option("MOZ_APP_VENDOR", "Nulavio")
+ imply_option("MOZ_APP_ID", "{ec8030f7-c20a-464f-9b0e-13a3a9e97384}")
+ # Include the DevTools client, not just the server (which is the default)
+ imply_option("MOZ_DEVTOOLS", "all")

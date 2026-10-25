@@ -1,0 +1,135 @@
+/* Generated from docs/brand/tokens.json by scripts/brand/build_tokens.py. Do not edit. */
+
+:root {
+  color-scheme: light dark;
+  --nv-font-family-ui: system-ui, "Noto Sans", Cantarell, sans-serif;
+  --nv-font-family-brand: Inter, "Noto Sans", Cantarell, system-ui, sans-serif;
+  --nv-font-family-mono: "JetBrains Mono", "Noto Sans Mono", Hack, monospace;
+  --nv-font-size-xs: 12px;
+  --nv-font-size-sm: 13px;
+  --nv-font-size-md: 14px;
+  --nv-font-size-lg: 16px;
+  --nv-font-size-xl: 20px;
+  --nv-font-size-2xl: 24px;
+  --nv-font-size-3xl: 32px;
+  --nv-font-size-4xl: 44px;
+  --nv-font-weight-regular: 400;
+  --nv-font-weight-medium: 500;
+  --nv-font-weight-semibold: 600;
+  --nv-font-lineHeight-tight: 1.2;
+  --nv-font-lineHeight-normal: 1.5;
+  --nv-space-0: 0px;
+  --nv-space-1: 2px;
+  --nv-space-2: 4px;
+  --nv-space-3: 8px;
+  --nv-space-4: 12px;
+  --nv-space-5: 16px;
+  --nv-space-6: 24px;
+  --nv-space-7: 32px;
+  --nv-space-8: 48px;
+  --nv-space-9: 64px;
+  --nv-radius-xs: 4px;
+  --nv-radius-sm: 6px;
+  --nv-radius-md: 10px;
+  --nv-radius-lg: 14px;
+  --nv-radius-xl: 20px;
+  --nv-radius-pill: 999px;
+  --nv-radius-appIcon: 22.5%;
+  --nv-elevation-1: 0 1px 2px rgba(7, 15, 24, 0.24);
+  --nv-elevation-2: 0 4px 12px rgba(7, 15, 24, 0.28);
+  --nv-elevation-3: 0 12px 32px rgba(7, 15, 24, 0.36);
+  --nv-motion-duration-fast: 120ms;
+  --nv-motion-duration-base: 180ms;
+  --nv-motion-duration-slow: 280ms;
+  --nv-motion-easing-standard: cubic-bezier(0.2, 0, 0, 1);
+  --nv-state-hoverOverlay: 0.08;
+  --nv-state-pressedOverlay: 0.12;
+  --nv-state-disabledOpacity: 0.45;
+  --nv-state-focusRingWidth: 2px;
+  --nv-state-focusRingOffset: 2px;
+  --nv-icon-size-sm: 16px;
+  --nv-icon-size-md: 20px;
+  --nv-icon-size-lg: 24px;
+  --nv-icon-stroke: 1.75px;
+  --nv-color-bg-canvas: #F1F7F5;
+  --nv-color-bg-surface: #FFFFFF;
+  --nv-color-bg-raised: #FFFFFF;
+  --nv-color-bg-sunken: #E2EBEE;
+  --nv-color-text-primary: #0B1623;
+  --nv-color-text-secondary: #3A6273;
+  --nv-color-text-muted: #4F7383;
+  --nv-color-border-subtle: #BFD0D6;
+  --nv-color-border-control: #6B8794;
+  --nv-color-accent-default: #0F7A68;
+  --nv-color-accent-on: #FFFFFF;
+  --nv-color-accent-tint: #DDF8F0;
+  --nv-color-focus: #0F7A68;
+  --nv-color-status-secure: #3A6273;
+  --nv-color-status-warning: #8A5A10;
+  --nv-color-status-warningTint: #FBEBD3;
+  --nv-color-status-critical: #A8323A;
+  --nv-color-status-criticalTint: #F9DEDF;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --nv-color-bg-canvas: #0B1623;
+    --nv-color-bg-surface: #112432;
+    --nv-color-bg-raised: #183746;
+    --nv-color-bg-sunken: #070F18;
+    --nv-color-text-primary: #F1F7F5;
+    --nv-color-text-secondary: #BFD0D6;
+    --nv-color-text-muted: #8FAAB5;
+    --nv-color-border-subtle: #23495A;
+    --nv-color-border-control: #6E93A2;
+    --nv-color-accent-default: #6FE0C5;
+    --nv-color-accent-on: #0B1623;
+    --nv-color-focus: #6FE0C5;
+    --nv-color-status-secure: #BFD0D6;
+    --nv-color-status-warning: #E7AE61;
+    --nv-color-status-critical: #E26D70;
+    --nv-color-status-criticalText: #EE8A8C;
+  }
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+  --nv-color-bg-canvas: #0B1623;
+  --nv-color-bg-surface: #112432;
+  --nv-color-bg-raised: #183746;
+  --nv-color-bg-sunken: #070F18;
+  --nv-color-text-primary: #F1F7F5;
+  --nv-color-text-secondary: #BFD0D6;
+  --nv-color-text-muted: #8FAAB5;
+  --nv-color-border-subtle: #23495A;
+  --nv-color-border-control: #6E93A2;
+  --nv-color-accent-default: #6FE0C5;
+  --nv-color-accent-on: #0B1623;
+  --nv-color-focus: #6FE0C5;
+  --nv-color-status-secure: #BFD0D6;
+  --nv-color-status-warning: #E7AE61;
+  --nv-color-status-critical: #E26D70;
+  --nv-color-status-criticalText: #EE8A8C;
+}
+
+[data-theme="light"] {
+  color-scheme: light;
+  --nv-color-bg-canvas: #F1F7F5;
+  --nv-color-bg-surface: #FFFFFF;
+  --nv-color-bg-raised: #FFFFFF;
+  --nv-color-bg-sunken: #E2EBEE;
+  --nv-color-text-primary: #0B1623;
+  --nv-color-text-secondary: #3A6273;
+  --nv-color-text-muted: #4F7383;
+  --nv-color-border-subtle: #BFD0D6;
+  --nv-color-border-control: #6B8794;
+  --nv-color-accent-default: #0F7A68;
+  --nv-color-accent-on: #FFFFFF;
+  --nv-color-accent-tint: #DDF8F0;
+  --nv-color-focus: #0F7A68;
+  --nv-color-status-secure: #3A6273;
+  --nv-color-status-warning: #8A5A10;
+  --nv-color-status-warningTint: #FBEBD3;
+  --nv-color-status-critical: #A8323A;
+  --nv-color-status-criticalTint: #F9DEDF;
+}

@@ -1,0 +1,167 @@
+// Nulavio baseline preferences (Track A preview, engine: upstream Firefox).
+//
+// Format: Firefox `user_pref(name, value);` lines. Each pref is preceded by
+// annotations that the launcher and the tests read:
+//
+//   @mode      seed    -> written once into a *new* profile's prefs.js. The
+//                         user can change it later in Settings and the change
+//                         sticks (privacy by default, reversible by design).
+//              enforce -> re-written to user.js on every launch. Reserved for
+//                         settings the preview needs to function.
+//   @category  privacy | tracking | https | network | ui | theme
+//   @why       one-line rationale shown by `nulavio prefs explain`.
+//   @tradeoff  what the user gives up, if anything.
+//
+// Rules for contributors (enforced by tests/unit/test_prefs.py):
+//   * never weaken sandboxing, TLS, signature checks, Safe Browsing or updates;
+//   * every pref must exist in the supported engine (integration test);
+//   * no pref may send data to a Nulavio server (there is none).
+// Values like "@STARTPAGE_URL@" are substituted by the launcher.
+
+// --- Data collection: nothing leaves the machine unless the user opts in ---
+
+// @mode seed
+// @category privacy
+// @why Do not upload Firefox health/usage telemetry; Nulavio is opt-in only.
+// @tradeoff Mozilla loses usage signal from this install. Re-enable in Settings > Privacy.
+user_pref("datareporting.healthreport.uploadEnabled", false);
+
+// @mode seed
+// @category privacy
+// @why Master switch for data submission (same pref the DisableTelemetry policy sets).
+// @tradeoff None for browsing.
+user_pref("datareporting.policy.dataSubmissionEnabled", false);
+
+// @mode seed
+// @category privacy
+// @why Disable the separate daily "usage" ping introduced in Firefox 135+.
+// @tradeoff None for browsing.
+user_pref("datareporting.usage.uploadEnabled", false);
+
+// @mode seed
+// @category privacy
+// @why Do not keep a local archive of telemetry pings that are never sent.
+// @tradeoff None.
+user_pref("toolkit.telemetry.archive.enabled", false);
+
+// @mode seed
+// @category privacy
+// @why No remote studies/experiments change this browser's behaviour silently.
+// @tradeoff Mozilla experiments are not received. Security updates are unaffected (they ship via the engine package).
+user_pref("app.shield.optoutstudies.enabled", false);
+
+// @mode seed
+// @category privacy
+// @why Disable Normandy remote pref changes. Remote Settings (OneCRL, CRLite, add-on blocklist, Safe Browsing lists) stay ON.
+// @tradeoff Mozilla cannot flip prefs remotely on this profile; fixes arrive with engine updates instead.
+user_pref("app.normandy.enabled", false);
+
+// @mode seed
+// @category privacy
+// @why No personalised extension recommendations based on browsing.
+// @tradeoff None.
+user_pref("browser.discovery.enabled", false);
+
+// @mode seed
+// @category privacy
+// @why Crash reports are never submitted automatically; the user decides per crash.
+// @tradeoff Upstream gets fewer crash reports.
+user_pref("browser.crashReports.unsubmittedCheck.autoSubmit2", false);
+
+// @mode seed
+// @category privacy
+// @why Send the Global Privacy Control signal (legally meaningful in several jurisdictions).
+// @tradeoff None known; sites may treat it as an opt-out of sale/sharing.
+user_pref("privacy.globalprivacycontrol.enabled", true);
+
+// @mode seed
+// @category privacy
+// @why No sponsored shortcuts or stories if the user re-enables the Firefox new tab.
+// @tradeoff None.
+user_pref("browser.newtabpage.activity-stream.showSponsoredTopSites", false);
+
+// @mode seed
+// @category privacy
+// @why No sponsored content in the Firefox new tab.
+// @tradeoff None.
+user_pref("browser.newtabpage.activity-stream.showSponsored", false);
+
+// @mode seed
+// @category privacy
+// @why No sponsored suggestions in the address bar.
+// @tradeoff None.
+user_pref("browser.urlbar.suggest.quicksuggest.sponsored", false);
+
+// --- Tracking & fingerprinting ---
+
+// @mode seed
+// @category tracking
+// @why Enhanced Tracking Protection "Strict": blocks trackers, cross-site cookies, cryptominers and known/suspected fingerprinters in all windows.
+// @tradeoff Some embeds/logins may break; the shield icon in the address bar disables it per site, and Mozilla's compatibility exceptions stay enabled.
+user_pref("browser.contentblocking.category", "strict");
+
+// --- HTTPS ---
+
+// @mode seed
+// @category https
+// @why HTTPS-Only Mode: upgrade every connection; plain HTTP requires an explicit, per-site, revocable exception.
+// @tradeoff An interstitial appears for HTTP-only sites; "Continue to HTTP site" adds a site exception.
+user_pref("dom.security.https_only_mode", true);
+
+// --- Network leaks ---
+
+// @mode seed
+// @category network
+// @why Do not open speculative connections to hosts the user has not chosen to visit.
+// @tradeoff Slightly slower first byte on some navigations.
+user_pref("network.http.speculative-parallel-limit", 0);
+
+// @mode seed
+// @category network
+// @why Do not pre-connect to address-bar suggestions while typing.
+// @tradeoff Slightly slower navigation from suggestions.
+user_pref("browser.urlbar.speculativeConnect.enabled", false);
+
+// @mode seed
+// @category network
+// @why Do not pre-connect when hovering bookmarks/history entries.
+// @tradeoff Slightly slower navigation from bookmarks.
+user_pref("browser.places.speculativeConnect.enabled", false);
+
+// @mode seed
+// @category network
+// @why WebRTC only offers the default route's address, so local/VPN-side interfaces are not exposed to peers.
+// @tradeoff Rare peer-to-peer setups on multi-homed hosts may need a TURN relay.
+user_pref("media.peerconnection.ice.default_address_only", true);
+
+// --- Nulavio shell (preview) ---
+
+// @mode seed
+// @category ui
+// @why Open the Nulavio start page on launch (generated per profile, local file, no network).
+// @tradeoff None; changeable in Settings > Home.
+user_pref("browser.startup.homepage", "@STARTPAGE_URL@");
+
+// @mode seed
+// @category ui
+// @why Calm, empty new tab until the Nulavio built-in new tab ships (Track B).
+// @tradeoff No shortcuts grid on new tabs.
+user_pref("browser.newtabpage.enabled", false);
+
+// @mode seed
+// @category ui
+// @why Nulavio provides its own onboarding; avoid two competing first-run flows.
+// @tradeoff None.
+user_pref("browser.aboutwelcome.enabled", false);
+
+// @mode seed
+// @category ui
+// @why The preview must never ask to become the default browser (that would register the system Firefox).
+// @tradeoff None.
+user_pref("browser.shell.checkDefaultBrowser", false);
+
+// @mode seed
+// @category ui
+// @why Skip the upstream "what's new" tab so the Nulavio start page is shown.
+// @tradeoff Release notes are still reachable from Help > About.
+user_pref("browser.startup.homepage_override.mstone", "ignore");

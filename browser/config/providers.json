@@ -1,0 +1,60 @@
+{
+  "schema": 1,
+  "comment": "Credential provider profiles. Choosing an external provider turns OFF the engine's own save/fill prompts so only one manager offers to fill. Saved engine logins are never deleted. See docs/architecture/password-providers.md.",
+  "default": "builtin",
+  "providers": {
+    "builtin": {
+      "label": "Engine password manager (local, key4.db)",
+      "priority": "default",
+      "extension": null,
+      "native_messaging": null,
+      "prefs": {
+        "signon.rememberSignons": true,
+        "signon.autofillForms": true,
+        "signon.generation.enabled": true
+      }
+    },
+    "proton-pass": {
+      "label": "Proton Pass (official extension)",
+      "priority": "P0",
+      "extension": "proton-pass",
+      "native_messaging": null,
+      "prefs": {
+        "signon.rememberSignons": false,
+        "signon.autofillForms": false,
+        "signon.generation.enabled": false
+      }
+    },
+    "keepassxc": {
+      "label": "KeePassXC (KeePassXC-Browser + native messaging)",
+      "priority": "P0",
+      "extension": "keepassxc-browser",
+      "native_messaging": {
+        "name": "org.keepassxc.keepassxc_browser",
+        "allowed_extension": "keepassxc-browser@keepassxc.org",
+        "required": true
+      },
+      "prefs": {
+        "signon.rememberSignons": false,
+        "signon.autofillForms": false,
+        "signon.generation.enabled": false
+      }
+    },
+    "bitwarden": {
+      "label": "Bitwarden (official extension)",
+      "priority": "P1",
+      "extension": "bitwarden",
+      "native_messaging": {
+        "name": "com.8bit.bitwarden",
+        "allowed_extension": "{446900e4-71c2-419f-a6a7-df9c091e268b}",
+        "required": false,
+        "note": "Only for desktop-app biometric unlock; host name to be verified in Phase 4."
+      },
+      "prefs": {
+        "signon.rememberSignons": false,
+        "signon.autofillForms": false,
+        "signon.generation.enabled": false
+      }
+    }
+  }
+}

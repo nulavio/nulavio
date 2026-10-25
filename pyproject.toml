@@ -1,0 +1,28 @@
+[project]
+name = "nulavio-launcher"
+version = "0.1.0.dev0"
+description = "Nulavio Preview launcher: isolated, privacy-hardened profiles on the upstream Gecko engine"
+license = "MPL-2.0"
+requires-python = ">=3.11"
+dependencies = []
+
+[tool.ruff]
+line-length = 130
+target-version = "py311"
+extend-exclude = ["tests/artifacts"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "B", "UP", "S", "SIM", "RUF"]
+ignore = [
+  "S603",  # subprocess with argument lists: inputs are validated or fixed
+  "S607",  # partial executable paths for well-known tools (gpg, busctl, rpm, magick)
+  "SIM105",
+  "RUF001", "RUF002", "RUF003",  # typographic characters in user-facing text are intended
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "S103", "S108", "S310", "S105", "S106", "S314"]  # S314: parsing our own committed SVGs; S103: deliberate loose mode to test tightening
+"scripts/research/**" = ["S310"]
+"scripts/brand/build_logo.py" = ["E501"]  # long SVG path/markup strings read better unwrapped
+"scripts/upstream/**" = ["S310"]  # urlopen on fixed https:// Mozilla/AMO endpoints
+"launcher/nulavio_launcher/extensions.py" = ["S310"]  # scheme/host validated before urlopen

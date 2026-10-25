@@ -1,0 +1,9 @@
+#!/bin/sh
+# Nulavio Preview launcher entry point.
+# Runs Python in isolated mode (-I): ignores PYTHON* environment variables,
+# the user site-packages and the current directory, so nothing outside this
+# checkout can inject code into the launcher.
+set -eu
+self=$(readlink -f "$0")
+root=$(dirname "$(dirname "$self")")
+exec python3 -I -c 'import sys; sys.path.insert(0, sys.argv[1]); from nulavio_launcher.cli import main; sys.exit(main(sys.argv[2:]))' "$root/launcher" "$@"

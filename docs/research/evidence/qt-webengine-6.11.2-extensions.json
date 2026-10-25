@@ -1,0 +1,128 @@
+{
+  "date": "2026-10-24",
+  "host": "Fedora 44 KDE Plasma 6.7.5 Wayland, qt6-qtwebengine 6.11.2-2.fc44, python3-pyside6 6.11.2-1.fc44",
+  "qt_webengine_user_agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) QtWebEngine/6.11.2 Chrome/140.0.0.0 Safari/537.36",
+  "pyside6": "6.11.2",
+  "mode": "load-only (setExtensionEnabled segfaults, see ADR 0001)",
+  "source": "Chrome Web Store CRX3 via update2 endpoint, prodversion=134, unpacked locally",
+  "results": [
+    {
+      "name": "Proton Pass: Free Password Manager",
+      "version": "1.42.0",
+      "manifest_version": 3,
+      "loaded": true,
+      "error": "",
+      "id": "behihmfaidkeaeedienlkpbaloehlnaa",
+      "popup": "chrome-extension://behihmfaidkeaeedienlkpbaloehlnaa/popup.html",
+      "permissions": [
+        "activeTab",
+        "alarms",
+        "offscreen",
+        "scripting",
+        "storage",
+        "unlimitedStorage",
+        "webNavigation",
+        "webRequest"
+      ],
+      "optional_permissions": [
+        "privacy",
+        "webRequestAuthProvider",
+        "clipboardRead",
+        "clipboardWrite",
+        "nativeMessaging"
+      ]
+    },
+    {
+      "name": "KeePassXC-Browser",
+      "version": "1.10.4.1",
+      "manifest_version": 3,
+      "loaded": true,
+      "error": "",
+      "id": "mcilfkjhacghaimhpiojckkjpoinafgf",
+      "popup": "chrome-extension://mcilfkjhacghaimhpiojckkjpoinafgf/popups/popup.html",
+      "permissions": [
+        "activeTab",
+        "clipboardWrite",
+        "contextMenus",
+        "cookies",
+        "nativeMessaging",
+        "notifications",
+        "offscreen",
+        "storage",
+        "tabs",
+        "webNavigation",
+        "webRequest",
+        "webRequestAuthProvider"
+      ],
+      "optional_permissions": [
+        "privacy"
+      ]
+    },
+    {
+      "name": "__MSG_extName__",
+      "version": "2026.10.0",
+      "manifest_version": 3,
+      "loaded": true,
+      "error": "",
+      "id": "oacimcjiabdknccidoainbhhcihiomim",
+      "popup": "chrome-extension://oacimcjiabdknccidoainbhhcihiomim/popup/index.html",
+      "permissions": [
+        "activeTab",
+        "alarms",
+        "clipboardRead",
+        "clipboardWrite",
+        "contextMenus",
+        "idle",
+        "offscreen",
+        "scripting",
+        "sidePanel",
+        "storage",
+        "tabs",
+        "unlimitedStorage",
+        "webNavigation",
+        "webRequest",
+        "webRequestAuthProvider",
+        "notifications"
+      ],
+      "optional_permissions": [
+        "nativeMessaging",
+        "privacy"
+      ]
+    },
+    {
+      "name": "__MSG_extName__",
+      "version": "2026.1021.1354",
+      "manifest_version": 3,
+      "loaded": true,
+      "error": "",
+      "id": "kebgffpdnnflhllfmbmlhdakpknakmla",
+      "popup": "chrome-extension://kebgffpdnnflhllfmbmlhdakpknakmla/popup.html",
+      "permissions": [
+        "activeTab",
+        "alarms",
+        "declarativeNetRequest",
+        "offscreen",
+        "scripting",
+        "storage",
+        "unlimitedStorage",
+        "userScripts"
+      ],
+      "optional_permissions": []
+    }
+  ],
+  "enable_attempts": {
+    "api": "QWebEngineExtensionManager::setExtensionEnabled(info, true)",
+    "result": "SIGSEGV in libQt6WebEngineCore.so.6 for all 4 extensions",
+    "platforms_tried": [
+      "offscreen",
+      "wayland",
+      "xcb"
+    ],
+    "bindings_tried": [
+      "PySide6 widgets (direct and deferred via QTimer)",
+      "QML WebEngineProfile.extensionManager (crashed before logging; not isolated)"
+    ],
+    "isolated": false,
+    "next_step": "C++ reproducer + report to bugreports.qt.io if the ADR is ever revisited"
+  }
+}

@@ -1,0 +1,38 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+/* Nulavio about dialog: Deep Navy / Cloud White (docs/brand/tokens.json). */
+@media not ((prefers-contrast) and (prefers-color-scheme: light)) {
+  #aboutDialogContainer {
+    background-color: #0B1623;
+    color: #F1F7F5;
+    color-scheme: dark;
+  }
+
+  #bottomBox {
+    background-color: #183746;
+  }
+}
+
+#rightBox {
+  background-size: auto 44px;
+  margin-inline: 30px;
+  padding-top: 64px;
+}
+
+#bottomBox {
+  padding: 15px 10px;
+}
+
+/* Upstream's about dialog hard-codes Mozilla community, donation, terms and
+   privacy-notice links (browser/base/content/aboutDialog.xhtml). They do not
+   describe Nulavio, so they are hidden here instead of patching the markup.
+   Kept: version, distribution, "Licensing Information" (about:license, MPL)
+   and the trademark/non-affiliation line from brand.ftl. */
+#communityDesc,
+#communityExperimentalDesc,
+#contributeDesc,
+.bottom-link[href^="https://www.mozilla.org/"] {
+  display: none;
+}

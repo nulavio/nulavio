@@ -1,0 +1,41 @@
+# Update and security-patch policy
+
+## Principles
+
+- Security updates are never disabled to simplify development or testing.
+- No silent downgrades. The engine's profile-downgrade protection stays on (the launcher removes `MOZ_ALLOW_DOWNGRADE`).
+- Every artefact Nulavio pins has a verifiable identity: a GPG key fingerprint, or a SHA-256 plus a Mozilla signature.
+
+## Track A (preview)
+
+| Component | Channel | Who acts | Nulavio's job |
+|---|---|---|---|
+| Engine (Firefox) | Distribution package (`dnf upgrade` on Fedora) | Distribution maintainers | `doctor` shows the package; the launcher refuses engines below `MIN_ENGINE_MAJOR` (140) |
+| Language pack | Same package | Distribution | Launcher refreshes the profile copy on change |
+| Extensions | AMO auto-update (signed) | Extension authors / AMO | Lock pins only the first install; refresh with review |
+| Launcher | `git pull` | User | Signed releases in Phase 6 |
+
+## Track B (Nulavio build) — targets
+
+| Event | Target |
+|---|---|
+| Mozilla security release (critical/high MFSA) | Nulavio build published **≤ 72 h** after Mozilla's release (stretch: 24 h) |
+| Regular release (every 4 weeks) | ≤ 7 days |
+| Chemspill (out-of-band fix) | Same as critical |
+| Missed SLA twice in a row | Reversal criterion 2 in [ADR 0001](../adr/0001-engine-selection.md) |
+
+### Process
+
+1. Watch Mozilla security advisories (MFSA) and release tags.
+2. Verify the source release: `scripts/upstream/verify_firefox_release.py <version>` checks `SHA256SUMS` against the **pinned** Mozilla Software Releases key (`14F2 6682 D091 6CDD 81E3 7B6D 61B7 B526 D98F 0353`) and prints the tarball hash to pin.
+3. Apply the patch stack (`browser/patches/series`, applied idempotently by `scripts/build/apply_patches.py`). Each patch has an owner, a reason and an upstreaming plan; the unit tests enforce this and cap the stack at about 10 patches.
+4. Build in a clean container. Run unit and integration tests plus the provider certification smoke tests.
+5. Sign packages (RPM GPG; provenance attestation planned). Publish. Record in the security changelog.
+
+### Key rotation
+
+If Mozilla rotates the primary release key, update the pinned fingerprint only after confirming it through two independent channels (Mozilla's KEY file plus a Mozilla blog/announcement or keyserver history). Then record it in this file.
+
+## Base branch choice (open)
+
+Recommendation: follow **Release**. Re-evaluate in favour of ESR if the non-branding patch stack exceeds about 10 patches or a rebase takes more than one working day.

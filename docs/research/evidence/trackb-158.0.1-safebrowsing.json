@@ -1,0 +1,53 @@
+{
+  "date": "2026-10-25",
+  "subject": "Google Safe Browsing in the Nulavio Track B build (Firefox 158.0.1 source, not MOZILLA_OFFICIAL)",
+  "key": {
+    "google_cloud_project": "nulavio (dedicated, no billing account)",
+    "api_restriction": "Safe Browsing API only",
+    "application_restriction": "none (desktop browser; the key is embedded in the binary, as in every Gecko/Chromium build)",
+    "storage": "~/.config/nulavio-build/google-safebrowsing.key, mode 0600, outside the repository",
+    "value_recorded_here": false
+  },
+  "endpoint_checks": {
+    "note": "HTTP status codes only; requests sent with curl, key passed through a config on stdin",
+    "v4 threatLists (with key)": 200,
+    "v4 threatLists (no key)": 403,
+    "v5 hashes:search (with key)": 200,
+    "v5 hashLists:batchGet se-4b, mw-4b, uws-4b, pha-4b, gc-32b": 200,
+    "v5 hashLists:batchGet mwb-4b": 404,
+    "v5 hashLists:batchGet csdda-32b": 404,
+    "v5 hashLists:batchGet with all lists the stock engine requests": 404,
+    "clientreport/download (remote download check)": "403 SERVICE_DISABLED: safebrowsingdownloadprotection.googleapis.com, not listed in the public API library"
+  },
+  "v4_threat_lists_for_this_key": [
+    "CSD_DOWNLOAD_WHITELIST/CERT",
+    "CSD_DOWNLOAD_WHITELIST/URL",
+    "MALWARE/IP_RANGE",
+    "MALWARE/URL",
+    "POTENTIALLY_HARMFUL_APPLICATION/URL",
+    "SOCIAL_ENGINEERING/URL",
+    "UNWANTED_SOFTWARE/URL"
+  ],
+  "findings": [
+    "The engine requests all lists of a provider in one batch. With stock prefs the unavailable mwb-4b list failed the batch (404), the list manager backed off, and no Google list was ever downloaded although the key was present.",
+    "Non-MOZILLA_OFFICIAL builds name the phishing list googpub-phish-proto; with v5 it maps to the same se-4b list as official builds.",
+    "Non-MOZILLA_OFFICIAL builds default devtools.chrome.enabled and devtools.debugger.remote-enabled to true.",
+    "Newly started content processes are observed without seccomp for about 26-27 ms (3 of 9 processes sampled while opening tabs), then sandboxed; none stayed unsandboxed."
+  ],
+  "fix": {
+    "where": "browser/branding/nulavio/pref/firefox-branding.js",
+    "google5.lists": "goog-phish-proto,googpub-phish-proto,goog-malware-proto,goog-unwanted-proto,goog-harmful-proto,goog-globalcache-proto",
+    "google4.lists": "goog-phish-proto,googpub-phish-proto,goog-malware-proto,goog-unwanted-proto,goog-harmful-proto",
+    "urlclassifier.downloadBlockTable": "",
+    "urlclassifier.downloadAllowTable": "",
+    "browser.safebrowsing.downloads.remote.enabled": false,
+    "devtools defaults": "devtools.chrome.enabled, devtools.debugger.remote-enabled, browser.dom.window.dump.enabled, devtools.console.stdout.chrome = false"
+  },
+  "results_after_fix": {
+    "nulavio_build_host": "17/17 integration tests with NULAVIO_NETWORK_TESTS=1",
+    "fedora_firefox_host": "16/16 applicable (test_13 is Track B only)",
+    "fedora_44_container": "16/16 applicable",
+    "ubuntu_26.10_container_mozilla_apt": "16/16 applicable",
+    "test_14": "phishing and malware lists downloaded; https://testsafebrowsing.appspot.com/s/phishing.html replaced by about:blocked?e=deceptiveBlocked"
+  }
+}
