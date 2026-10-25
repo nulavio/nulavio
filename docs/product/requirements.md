@@ -15,9 +15,9 @@ Status legend: **Done** (implemented and verified by a test or recorded evidence
 | FR-07 | Nulavio identity: icon, app name in the desktop, start page | **Preview** (desktop entry, app_id, start page, chrome theme; engine UI still says Firefox) | `test_01`, ADR E3 |
 | FR-08 | New tab with Nulavio identity | **Planned** (needs a built-in add-on, Track B). Start page on launch and Home: Done | — |
 | FR-09 | Ad and tracker blocking on first run, reversible per site | **Done** (uBO + ETP Strict; per-site toggles are upstream UI) | `test_03`, `test_08` |
-| FR-10 | Proton Pass official extension works | **Preview**: install, signature, background and popup Done; login and autofill pending manual certification | `test_password_extensions` |
-| FR-11 | KeePassXC-Browser works with native messaging | **Done (container)**: association + autofill end to end with KeePassXC 2.8.0; pending on the maintainer's desktop and Ubuntu | `keepassxc_native_messaging_spike.py` |
-| FR-12 | Bitwarden official extension works | **Preview** (same as FR-10) | `test_password_extensions` |
+| FR-10 | Proton Pass official extension works | **Preview**: install, signature, background, popup Done; **login done on the maintainer's desktop** (2026-10-25); autofill confirmation pending | `test_password_extensions` |
+| FR-11 | KeePassXC-Browser works with native messaging | **Done (container)**: association + autofill end to end with KeePassXC 2.8.0, in CI. No manual desktop certification planned by the maintainer | `keepassxc_native_messaging_spike.py` |
+| FR-12 | Bitwarden official extension works | **Preview**: install, signature, background, popup Done; desktop-app host name verified in Bitwarden's source. No manual certification planned by the maintainer | `test_password_extensions` |
 | FR-13 | Choose the credential provider; only one autofills | **Preview** (CLI `provider set`) | provider unit tests |
 | FR-14 | User can install their own extensions | **Done** (engine/AMO) | E4 normal installs |
 | FR-15 | Settings essentials explained | **Preview** (`nulavio prefs explain`; engine settings UI) | — |

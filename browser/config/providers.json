@@ -48,7 +48,7 @@
         "name": "com.8bit.bitwarden",
         "allowed_extension": "{446900e4-71c2-419f-a6a7-df9c091e268b}",
         "required": false,
-        "note": "Only for desktop-app biometric unlock; host name to be verified in Phase 4."
+        "note": "Only for desktop-app biometric unlock. Host name and allowed extension verified in bitwarden/clients apps/desktop/src/main/native-messaging.main.ts (commit 6d198af9512e, 2026-10-16); the desktop app writes ~/.mozilla/native-messaging-hosts/com.8bit.bitwarden.json."
       },
       "prefs": {
         "signon.rememberSignons": false,

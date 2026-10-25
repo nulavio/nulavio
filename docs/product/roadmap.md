@@ -47,10 +47,12 @@ Each milestone has a definition of done (DoD). "Done" requires the DoD to be ver
 
 ## Phase 4 — Password integrations
 
-- [ ] Proton Pass manual certification (checklist in [password-providers](../architecture/password-providers.md))
+- [x] Proton Pass on the maintainer's real desktop: installed through the launcher, signed in, engine manager off (2026-10-25)
+- [ ] Proton Pass: autofill on a real site, restart, passkeys (checklist in [password-providers](../architecture/password-providers.md))
 - [x] KeePassXC association + autofill end to end (Fedora 44 container, KeePassXC 2.8.0)
-- [ ] KeePassXC on the maintainer's desktop and Ubuntu KDE; Flatpak KeePassXC evaluation
-- [ ] Bitwarden certification, biometrics via the desktop app
+- [ ] KeePassXC on Ubuntu KDE and Flatpak KeePassXC: community testers (the maintainer does not use KeePassXC; container E2E runs in CI)
+- [x] Bitwarden desktop-app native messaging host verified in Bitwarden's source
+- [ ] Bitwarden login/autofill: community testers (the maintainer does not use Bitwarden)
 - [ ] Provider chooser UI (flow B), suspicious-login interstitial (flow D)
 
 **DoD:** checklist passes for the P0 providers on both distributions, or a blocker is recorded with its technical cause.
