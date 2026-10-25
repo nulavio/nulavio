@@ -1,6 +1,6 @@
 # Release criteria
 
-## MVP definition of done — status on 2026-10-24
+## MVP definition of done — status on 2026-10-25
 
 | # | Criterion | Status | Evidence / gap |
 |---|---|---|---|
@@ -8,7 +8,7 @@
 | 2 | Starts on Fedora KDE without disabling the sandbox | ✅ Track A (real Wayland window) and Track B build (headless) | `test_04`; ADR E3, E17 |
 | 3 | Opens HTTP/HTTPS sites, tabs, downloads | ✅ | `test_05`, `test_06`, `test_07` |
 | 4 | Authenticates via Proton Pass using the official extension | ✅ **Signed in to a real account** on the maintainer's desktop (Fedora 44 KDE Wayland, 2026-10-25); extension active, engine password manager off. Autofill on a real site still to confirm | `test_password_extensions` |
-| 5 | KeePassXC integration demonstrated, or blocker recorded | ✅ **Demonstrated end to end** (association + autofill) in a Fedora 44 container with the distribution's KeePassXC 2.8.0. Pending: the maintainer's own desktop and Ubuntu | [evidence](../research/evidence/keepassxc-2.8.0-native-messaging.json) |
+| 5 | KeePassXC integration demonstrated, or blocker recorded | ✅ **Demonstrated end to end** (association + autofill) in a Fedora 44 container with the distribution's KeePassXC 2.8.0, re-run in GitHub CI on every push. Manual desktop tests: community testers (the maintainer does not use KeePassXC) | [evidence](../research/evidence/keepassxc-2.8.0-native-messaging.json) |
 | 6 | Blocks ads in a reproducible test | ✅ | `test_08` (EasyList first-party rule; control request; reversible) |
 | 7 | Profile directory isolated and permission-protected | ✅ | `test_09`, registry hash check |
 | 8 | Security documentation and out-of-scope threats | ✅ | [threat model](../security/threat-model.md), [residual risks](../security/residual-risks.md) |
