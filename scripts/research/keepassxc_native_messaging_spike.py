@@ -114,6 +114,55 @@ def popup_state(m, url: str, label: str, artifacts: Path) -> dict:
     return {"handle": handle, **state}
 
 
+def find_sockets(roots: list[Path]) -> list[Path]:
+    found = []
+    for root in roots:
+        if root.is_dir():
+            found += [p for p in root.rglob("*BrowserServer*") if p.is_socket()]
+    return sorted(set(found))
+
+
+def can_connect(path: Path) -> bool:
+    import socket
+
+    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
+        sock.settimeout(2)
+        try:
+            sock.connect(str(path))
+            return True
+        except OSError:
+            return False
+
+
+def diagnostics(runtime: Path, work: Path) -> dict:
+    """What the proxy needs: KeePassXC's socket, a running proxy, and their messages (no secrets)."""
+    sockets = find_sockets([runtime, Path(tempfile.gettempdir())])
+    proxies = []
+    for entry in Path("/proc").iterdir():
+        if entry.name.isdigit():
+            try:
+                if b"keepassxc-proxy" in (entry / "cmdline").read_bytes():
+                    proxies.append(int(entry.name))
+            except OSError:
+                continue
+
+    def tail(path: Path, pattern: str = "") -> list[str]:
+        if not path.exists():
+            return []
+        lines = path.read_text(errors="replace").splitlines()
+        if pattern:
+            lines = [line for line in lines if any(k in line.lower() for k in pattern.split("|"))]
+        return [line[:200] for line in lines[-15:]]
+
+    return {
+        "xdg_runtime_dir": os.environ.get("XDG_RUNTIME_DIR"),
+        "sockets": {str(s): can_connect(s) for s in sockets},
+        "proxy_pids": proxies,
+        "keepassxc_log": tail(work / "keepassxc.log"),
+        "engine_log": tail(work / "engine.log", "keepassxc|proxy|native|qlocalsocket|qstandardpaths"),
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--artifacts", type=Path, default=Path(tempfile.gettempdir()) / "kpx-artifacts")
@@ -121,6 +170,14 @@ def main() -> int:
     args.artifacts.mkdir(parents=True, exist_ok=True)
     report: dict = {"steps": {}}
     work = Path(tempfile.mkdtemp(prefix="nulavio-kpx-"))
+    # A desktop session always has XDG_RUNTIME_DIR (KeePassXC puts its browser
+    # socket there). Containers usually do not; give KeePassXC and the browser
+    # (hence keepassxc-proxy) the same private one so both resolve one path.
+    report["xdg_runtime_dir_preset"] = "XDG_RUNTIME_DIR" in os.environ
+    runtime = Path(os.environ.get("XDG_RUNTIME_DIR") or tempfile.mkdtemp(prefix="nulavio-xdg-runtime-"))
+    runtime.chmod(0o700)
+    os.environ["XDG_RUNTIME_DIR"] = str(runtime)
+    os.environ["NULAVIO_TEST_ENGINE_LOG"] = str(work / "engine.log")
     procs: list[subprocess.Popen] = []
     session = None
     watcher = None
@@ -163,14 +220,15 @@ def main() -> int:
             config.write_text(
                 "[General]\nConfigVersion=2\n[Browser]\nEnabled=true\n[GUI]\nCheckForUpdates=false\nCheckForUpdatesNextCheck=0\n"
             )
-            kpx = subprocess.Popen(
-                ["keepassxc", "--config", str(config), "--pw-stdin", str(db)],
-                stdin=subprocess.PIPE,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                env=env,
-                text=True,
-            )
+            with open(work / "keepassxc.log", "w") as kpx_log:  # the child keeps its own descriptor
+                kpx = subprocess.Popen(
+                    ["keepassxc", "--config", str(config), "--pw-stdin", str(db)],
+                    stdin=subprocess.PIPE,
+                    stdout=kpx_log,
+                    stderr=kpx_log,
+                    env=env,
+                    text=True,
+                )
             kpx.stdin.write(DB_PASSWORD + "\n")
             kpx.stdin.close()
             procs.append(kpx)
@@ -188,6 +246,7 @@ def main() -> int:
             # 5. popup before, connect + associate, popup after
             before = popup_state(m, info["popup"], "before", args.artifacts)
             report["steps"]["popup_before_association"] = {k: before[k] for k in ("text", "buttons")}
+            report["diagnostics_before_association"] = diagnostics(runtime, work)
             connect = next((b for b in before["buttons"] if "connect" in b["text"].lower()), None)
             if connect:
                 m.execute("document.getElementById(arguments[0]).click();", [connect["id"]])
@@ -239,7 +298,11 @@ def main() -> int:
                     proc.wait(timeout=10)
                 except subprocess.TimeoutExpired:
                     proc.kill()
+            if "autofill" not in report["steps"] or not all(report["steps"]["autofill"].values()):
+                report["diagnostics_at_end"] = diagnostics(runtime, work)
             shutil.rmtree(work, ignore_errors=True)
+            if not report["xdg_runtime_dir_preset"]:
+                shutil.rmtree(runtime, ignore_errors=True)
     (args.artifacts / "report.json").write_text(json.dumps(report, indent=2, ensure_ascii=False))
     print(json.dumps(report, indent=2, ensure_ascii=False))
     ok = report["steps"].get("autofill", {})
