@@ -82,12 +82,13 @@ Strikethrough marks phrases we never use (the docs test ignores text inside `~~â
 
 **Nulavio is a candidate name. It is not registered by this project, and nothing here should be read as clearance.** Before any public launch:
 
-| Item | Status (observed 2026-10-24) | Action |
+| Item | Status (observed 2026-10-24, updated 2026-10-25) | Action |
 |---|---|---|
 | INPI (Brazil), classes 9 and 42 | **Not searched** | Formal search by the maintainer/counsel |
 | USPTO / EUIPO / WIPO | **Not searched** | Formal search |
-| `nulavio.com` | **Registered on 2026-10-18** (RDAP: registrar lock, nameservers `*.share-dns.*`); registrant unknown, possibly the maintainer | Confirm ownership |
-| `nulavio.org`, `.dev`, `.app`, `.io`, `.com.br` | NXDOMAIN via public DNS (likely unregistered; `.org` RDAP 404) | Register the chosen ones |
-| GitHub `nulavio` | Not taken (API 404) | Reserve the org |
+| **`nulavio.net`** | **Chosen as the project domain (maintainer decision, 2026-10-25).** Not registered yet: Verisign RDAP 404, no DNS | **Register it** (maintainer), then use it for the website, security contact and app ID |
+| `nulavio.com` | Registered on 2026-10-18 by someone else as far as this project knows (RDAP: registrar lock, nameservers `*.share-dns.*`); not used by the project | Watch for confusion or abuse; consider `.com.br` as a defensive registration |
+| `nulavio.org`, `.dev`, `.app`, `.io`, `.com.br` | NXDOMAIN via public DNS (likely unregistered; `.org` RDAP 404) | Optional defensive registrations |
+| GitHub `nulavio` | Not taken (API 404, rechecked 2026-10-25). Code lives in the private repository `caiolombello/nulavio` | Reserve the org; move the repository there before going public |
 | Mastodon / Bluesky / X handles | Not checked | Reserve |
-| Reverse-DNS app ID (Flathub, D-Bus) | Needs a controlled domain; preview uses `nulavio-preview` | Decide after domain confirmation |
+| Reverse-DNS app ID (Flathub, D-Bus) | Planned `net.nulavio.Nulavio` once `nulavio.net` is registered; the preview keeps `nulavio-preview` | Switch when the domain is controlled |

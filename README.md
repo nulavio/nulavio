@@ -17,7 +17,7 @@ Verified on Fedora 44 KDE Plasma 6.7.5 (Wayland), Firefox 158.0.1. Each item has
 - Upstream sandbox active: seccomp-bpf plus user namespaces on every web-content process. Site isolation is on.
 - 23 documented privacy/security defaults (`nulavio prefs explain`): telemetry off, Enhanced Tracking Protection Strict, HTTPS-Only with revocable per-site exceptions, Global Privacy Control, no speculative connections. Every one of them can be undone.
 - Ad blocking with **uBlock Origin**, pinned by SHA-256. Blocking is tested and reversible.
-- Official **Proton Pass**, **KeePassXC-Browser** and **Bitwarden** extensions install, run and render their UI. **KeePassXC pairing and autofill work end to end** (tested in a Fedora 44 container with the distribution's KeePassXC). Proton Pass and Bitwarden login still need manual certification with real accounts (see [limits](docs/security/residual-risks.md)).
+- Official **Proton Pass**, **KeePassXC-Browser** and **Bitwarden** extensions install, run and render their UI. **Proton Pass signs in and autofills real sites** (verified on the maintainer's Fedora KDE desktop). **KeePassXC pairing and autofill work end to end** (automated, in CI). Bitwarden logins are not yet tested with a real account (see [limits](docs/security/residual-risks.md)).
 - One credential provider at a time (`nulavio provider set …`), reversible, never deleting saved logins.
 - **Nulavio Guard** audits the profile before every launch and refuses to start a profile with weakened sandbox, signature or TLS settings.
 - `nulavio doctor`: engine, sandbox prerequisites, Secret Service/KWallet, native messaging hosts, profile permissions, extension inventory.
@@ -80,7 +80,7 @@ A browser cannot protect you from malware that already runs on your computer as 
 
 ## Trademarks and licences
 
-Code: [MPL-2.0](LICENSE). Brand assets: see [LICENSES.md](LICENSES.md). "Nulavio" is a candidate name and is **not registered** ([status](docs/brand/strategy.md#trademark-and-availability-status)). Nulavio is not affiliated with Mozilla. Firefox is a trademark of the Mozilla Foundation.
+Code: [MPL-2.0](LICENSE). Brand assets: see [LICENSES.md](LICENSES.md). "Nulavio" is a candidate name and is **not registered**; the planned domain is `nulavio.net` ([status](docs/brand/strategy.md#trademark-and-availability-status)). Nulavio is not affiliated with Mozilla. Firefox is a trademark of the Mozilla Foundation.
 
 ---
 

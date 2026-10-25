@@ -7,7 +7,7 @@
 | 1 | Compiles in a supported environment | ✅ **Track B builds** from verified source in a Fedora 44 container (≈ 52 min); Track A needs no compilation | [build.md](../architecture/build.md) |
 | 2 | Starts on Fedora KDE without disabling the sandbox | ✅ Track A (real Wayland window) and Track B build (headless) | `test_04`; ADR E3, E17 |
 | 3 | Opens HTTP/HTTPS sites, tabs, downloads | ✅ | `test_05`, `test_06`, `test_07` |
-| 4 | Authenticates via Proton Pass using the official extension | ✅ **Signed in to a real account** on the maintainer's desktop (Fedora 44 KDE Wayland, 2026-10-25); extension active, engine password manager off. Autofill on a real site still to confirm | `test_password_extensions` |
+| 4 | Authenticates via Proton Pass using the official extension | ✅ **Signed in to a real account and autofilled a real site** on the maintainer's desktop (Fedora 44 KDE Wayland, 2026-10-25); extension active, engine password manager off | `test_password_extensions` |
 | 5 | KeePassXC integration demonstrated, or blocker recorded | ✅ **Demonstrated end to end** (association + autofill) in a Fedora 44 container with the distribution's KeePassXC 2.8.0, re-run in GitHub CI on every push. Manual desktop tests: community testers (the maintainer does not use KeePassXC) | [evidence](../research/evidence/keepassxc-2.8.0-native-messaging.json) |
 | 6 | Blocks ads in a reproducible test | ✅ | `test_08` (EasyList first-party rule; control request; reversible) |
 | 7 | Profile directory isolated and permission-protected | ✅ | `test_09`, registry hash check |
@@ -25,5 +25,5 @@
 4. Update SLA process rehearsed once end-to-end.
 5. Signed RPM in a signed repository; SBOM attached to the release.
 6. Security policy contact live; vulnerability intake tested.
-7. Trademark/domain search completed.
+7. Trademark/domain search completed. Domain decided: `nulavio.net` (to be registered); INPI/USPTO/EUIPO searches still open ([status](../brand/strategy.md#trademark-and-availability-status)).
 8. No critical Guard findings on a fresh install; integration suite green on CI.

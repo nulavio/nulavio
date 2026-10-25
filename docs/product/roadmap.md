@@ -21,7 +21,8 @@ Each milestone has a definition of done (DoD). "Done" requires the DoD to be ver
 - [x] CI on GitHub (private repository `caiolombello/nulavio`): green on 2026-10-25 for lint, unit tests and the Fedora/Ubuntu integration matrix, including the KeePassXC end-to-end test
 - [x] **Track B build spike in a container**: ≈ 52 min, 23 GB, branded binary passes 14/15 (Safe Browsing key pending) — [build.md](../architecture/build.md)
 - [x] Ubuntu userspace check (Mozilla APT Firefox): 15/15
-- [ ] Trademark/domain search (INPI, domains, handles), done by the maintainer or counsel
+- [x] Domain decided: `nulavio.net` (2026-10-25); registration by the maintainer pending
+- [ ] Trademark search (INPI, USPTO/EUIPO) and handles, by the maintainer or counsel
 
 **DoD:** CI green on a fresh clone; measured Track B build numbers recorded in the ADR.
 
@@ -47,8 +48,8 @@ Each milestone has a definition of done (DoD). "Done" requires the DoD to be ver
 
 ## Phase 4 — Password integrations
 
-- [x] Proton Pass on the maintainer's real desktop: installed through the launcher, signed in, engine manager off (2026-10-25)
-- [ ] Proton Pass: autofill on a real site, restart, passkeys (checklist in [password-providers](../architecture/password-providers.md))
+- [x] Proton Pass on the maintainer's real desktop: installed through the launcher, signed in, autofilled a real site, engine manager off (2026-10-25)
+- [ ] Proton Pass: unlock after restart, autosave, passkeys (checklist in [password-providers](../architecture/password-providers.md))
 - [x] KeePassXC association + autofill end to end (Fedora 44 container, KeePassXC 2.8.0)
 - [ ] KeePassXC on Ubuntu KDE and Flatpak KeePassXC: community testers (the maintainer does not use KeePassXC; container E2E runs in CI)
 - [x] Bitwarden desktop-app native messaging host verified in Bitwarden's source
