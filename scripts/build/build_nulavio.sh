@@ -19,6 +19,8 @@ repo=$(cd "$(dirname "$0")/../.." && pwd)
 work=${NULAVIO_BUILD_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/nulavio-build}
 src="$work/firefox-$version"
 image=localhost/nulavio-build:f44
+# Extra UI languages packaged with en-US (signed-off firefox-l10n revisions).
+read -r -a locales <<< "${NULAVIO_LOCALES:-pt-BR}"
 
 sb_key=${NULAVIO_SAFEBROWSING_KEYFILE:-${XDG_CONFIG_HOME:-$HOME/.config}/nulavio-build/google-safebrowsing.key}
 secret_mounts=()
@@ -40,6 +42,8 @@ fi
 
 mkdir -p "$work/mozbuild" "$work/logs"
 python3 -I "$repo/scripts/upstream/fetch_firefox_source.py" "$version" --dest "$work"
+python3 -I "$repo/scripts/upstream/fetch_firefox_l10n.py" --source "$src" \
+    --dest "$work/mozbuild/l10n-central" --git-dir "$work/l10n-git" "${locales[@]}"
 python3 -I "$repo/scripts/build/make_branding.py" --source "$src"
 python3 -I "$repo/scripts/build/apply_patches.py" --source "$src"
 cp "$repo/browser/build/mozconfig" "$src/mozconfig"
@@ -48,14 +52,18 @@ podman build -q -t "$image" -f "$repo/ci/containers/fedora-build.Containerfile" 
 log="$work/logs/build-$version-$(date +%Y%m%dT%H%M%S).log"
 start=$(date +%s)
 set +e
+# $NULAVIO_LOCALES is expanded (and word-split on purpose) inside the container.
+# shellcheck disable=SC2016
 podman run --rm --name "nulavio-build-$version" \
     -v "$src":/src:Z \
     -v "$work/mozbuild":/root/.mozbuild:Z \
     "${secret_mounts[@]}" \
     -e MOZCONFIG=/src/mozconfig \
     -e MOZBUILD_STATE_PATH=/root/.mozbuild \
+    -e NULAVIO_LOCALES="${locales[*]}" \
     "$image" \
-    bash -c 'set -e; cd /src; ./mach --no-interactive build; ./mach --no-interactive package' 2>&1 | tee "$log"
+    bash -c 'set -e; cd /src; ./mach --no-interactive build
+             ./mach --no-interactive package-multi-locale --locales en-US $NULAVIO_LOCALES' 2>&1 | tee "$log"
 status=${PIPESTATUS[0]}
 set -e
 end=$(date +%s)

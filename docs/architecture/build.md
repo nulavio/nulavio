@@ -8,11 +8,16 @@ Status: **development spike, first build succeeded on 2026-10-24.** Builds are n
 scripts/build/build_nulavio.sh <version>
  ├─ scripts/upstream/fetch_firefox_source.py   SHA256SUMS signature checked against the pinned Mozilla key,
  │                                              tarball hashed while streaming, extracted only on match
+ ├─ scripts/upstream/fetch_firefox_l10n.py     translations (default pt-BR) at the revision signed off in the
+ │                                              verified source's l10n-changesets.json + Nulavio's browser/l10n/
  ├─ scripts/build/make_branding.py             browser/branding/nulavio/ (text, reviewed in git)
  │                                              + generated icons/logos/wordmarks from docs/brand (no Mozilla art)
+ │                                              + the Nulavio Shell built-in add-on (make_shell.py)
+ ├─ scripts/build/apply_patches.py             browser/patches/series (2 patches)
  ├─ browser/build/mozconfig                    copied into the source tree
  └─ podman (rootless) localhost/nulavio-build:f44   ci/containers/fedora-build.Containerfile
-      ./mach build && ./mach package            toolchains fetched by --enable-bootstrap into a cached volume
+      ./mach build && ./mach package-multi-locale --locales en-US pt-BR
+                                                toolchains fetched by --enable-bootstrap into a cached volume
 ```
 
 Work directory (outside the repository): `${NULAVIO_BUILD_DIR:-~/.cache/nulavio-build}`, containing `downloads/`, `firefox-<v>/` (source and `obj-nulavio/`), `mozbuild/` (toolchains) and `logs/`. Deleting it removes everything the build created. Nothing is installed on the host.
@@ -76,6 +81,14 @@ Caveats:
 - **The key is not secret from users.** It is embedded in every binary, as in Firefox and Chromium builds. The API restriction limits misuse to Safe Browsing quota. Keep it out of git and logs anyway, and rotate it in the Cloud console if it is abused.
 - **Privacy.** Lists are downloaded and matched locally. On a local match the browser sends a short hash prefix (not the URL) to Google to confirm. Nothing goes to Nulavio.
 - Other maintainers build with **their own** key (same steps: project → enable "Safe Browsing API" → API key restricted to it → save it to the path above).
+
+## Languages
+
+The build packages **en-US and pt-BR** (`NULAVIO_LOCALES`, default `pt-BR`). `fetch_firefox_l10n.py` reads each locale's firefox-l10n revision from `browser/locales/l10n-changesets.json` inside the signature-verified source, fetches only that locale's directory (partial, sparse git fetch; about 3.5 MB and 2 s for pt-BR) and checks the checked-out commit. Nulavio's own translations in `browser/l10n/<locale>/` (today the brand names and the "not affiliated with Mozilla" line) are laid over it.
+
+- The branding strings are localizable (`%` entries in `browser/branding/nulavio/locales/jar.mn`). Firefox's l10n configuration only maps the official branding, so patch `0002` adds Nulavio's branding directory. Without it, packaging fails (`MissingJarSource`).
+- The build follows the desktop's language (`intl.locale.requested=""`, as Fedora's Firefox does); users can pick another one in Settings.
+- `test_15` checks that pt-BR is packaged, that "O Nulavio está atualizado" uses the Nulavio brand, that the legal line is translated and that no "Firefox" leaks into Portuguese UI strings.
 
 ## Nulavio Shell (built-in add-on)
 

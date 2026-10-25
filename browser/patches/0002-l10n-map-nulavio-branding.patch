@@ -1,0 +1,25 @@
+Subject: [PATCH] l10n: map the Nulavio branding directory for translations
+
+Firefox's l10n configuration only maps the official branding directory.
+Without this entry the multi-locale packaging step cannot find translated
+Nulavio brand strings (it fails with MissingJarSource), and the only
+alternative is shipping the brand's legal line in English to every locale.
+
+Owner: Nulavio maintainers
+Upstream: not applicable (Nulavio-specific branding directory).
+---
+--- a/browser/locales/l10n.toml
++++ b/browser/locales/l10n.toml
+@@ -133,6 +133,12 @@ locales = [
+     reference = "browser/branding/official/locales/en-US/**"
+     l10n = "{l}browser/branding/official/**"
+ 
++# Nulavio branding (translations ship in Nulavio's browser/l10n/, see
++# scripts/upstream/fetch_firefox_l10n.py).
++[[paths]]
++    reference = "browser/branding/nulavio/locales/en-US/**"
++    l10n = "{l}browser/branding/nulavio/**"
++
+ # This file was removed in bug 1948916. In order to keep this file in
+ # repositories, we need to preserve this entry until esr115 becomes
+ # unsupported.

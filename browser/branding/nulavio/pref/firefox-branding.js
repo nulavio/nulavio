@@ -44,3 +44,9 @@ pref("browser.safebrowsing.provider.google4.lists", "goog-phish-proto,googpub-ph
 pref("urlclassifier.downloadBlockTable", "");
 pref("urlclassifier.downloadAllowTable", "");
 pref("browser.safebrowsing.downloads.remote.enabled", false);
+
+// Follow the desktop's language among the locales packaged in the build
+// (en-US and pt-BR), as distribution Firefox does. An empty value means "use
+// the OS locales" (intl/locale/LocaleService.cpp); users can still pick a
+// language in Settings.
+pref("intl.locale.requested", "");

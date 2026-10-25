@@ -2,3 +2,4 @@
 # scripts/build/apply_patches.py. Keep this list minimal: anything achievable
 # with prefs, policies, branding or built-in add-ons does not belong here.
 0001-branding-set-application-vendor.patch
+0002-l10n-map-nulavio-branding.patch

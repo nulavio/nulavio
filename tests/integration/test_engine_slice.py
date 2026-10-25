@@ -406,6 +406,39 @@ class EngineSliceTest(unittest.TestCase):
         self.assertIn("e=deceptiveBlocked", uri)
         self.m.navigate("about:blank")
 
+    def test_15_nulavio_build_speaks_portuguese_with_its_own_brand(self):
+        if self.m.chrome("return Services.appinfo.name;") != "Nulavio":
+            self.skipTest("Track A engine (distribution Firefox)")
+        state = self.chrome_async(
+            """
+            const before = Services.locale.requestedLocales;
+            const available = Services.locale.availableLocales;
+            const followsOs = Services.prefs.getDefaultBranch("").getStringPref("intl.locale.requested", null) === "";
+            const strings = async () => {
+              const l10n = new Localization(["branding/brand.ftl", "browser/aboutDialog.ftl"]);
+              return {upToDate: await l10n.formatValue("update-noUpdatesFound"),
+                      trademark: await l10n.formatValue("trademarkInfo"),
+                      shortName: Services.strings.createBundle("chrome://branding/locale/brand.properties")
+                                   .GetStringFromName("brandShortName")};
+            };
+            Services.locale.requestedLocales = ["pt-BR"];
+            const pt = {app: Services.locale.appLocaleAsBCP47, ...(await strings())};
+            Services.locale.requestedLocales = before;
+            return {available, followsOs, pt};
+            """,
+            [],
+        )
+        self.assertIn("pt-BR", state["available"])
+        self.assertIn("en-US", state["available"])
+        self.assertTrue(state["followsOs"], "the build must follow the desktop language")
+        pt = state["pt"]
+        self.assertEqual(pt["app"], "pt-BR")
+        self.assertEqual(pt["upToDate"], "O Nulavio está atualizado")
+        self.assertEqual(pt["shortName"], "Nulavio")
+        self.assertIn("não é afiliado à Mozilla", pt["trademark"])
+        for value in pt.values():
+            self.assertNotIn("Firefox", value, "Mozilla brand leaked into the Portuguese UI")
+
     def test_11_record_environment(self):
         info = self.m.chrome(
             "return {version: Services.appinfo.version, buildID: Services.appinfo.appBuildID, os: Services.appinfo.OS,"

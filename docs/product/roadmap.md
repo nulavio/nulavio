@@ -30,7 +30,7 @@ Each milestone has a definition of done (DoD). "Done" requires the DoD to be ver
 ## Phase 2 — Browser vertical slice · **Track A done; Track B dev build done**
 
 - [x] Track A: launcher, isolated profile, start page, desktop identity, chrome theme
-- [x] Track B inputs: `browser/branding/nulavio/` + generated assets, `browser/build/mozconfig`, patch stack (`browser/patches/`, 1 patch), container build script
+- [x] Track B inputs: `browser/branding/nulavio/` + generated assets, `browser/build/mozconfig`, patch stack (`browser/patches/`, 2 patches: vendor name, l10n mapping of the branding), container build script
 - [x] `distribution/` generated from `browser/config/` (`distribution.ini` defaults + `policies.json`), verified active in the build (`test_13`)
 - [x] Google Safe Browsing API key from a secret: dedicated Google Cloud project, key restricted to the Safe Browsing API, build passes 17/17 incl. the end-to-end phishing test
 - [x] Nulavio Shell built-in add-on (`browser/shell/`), built from the branding directory with no Mozilla file patched
@@ -38,6 +38,7 @@ Each milestone has a definition of done (DoD). "Done" requires the DoD to be ver
 - [x] Flow E executable-download warning (compensates R15): Show in folder / Delete, no Open
 - [ ] Google's download-protection API for Track B (request access) (R15)
 - [ ] Flow E inside the engine's downloads panel (needs engine UI work; today a Nulavio page opens next to it)
+- [x] Track B in Portuguese: en-US + pt-BR packaged from signed-off firefox-l10n revisions, brand translated, follows the desktop language
 
 **DoD:** a branded Nulavio binary built from verified source opens a window on Fedora KDE Wayland with the sandbox verified by `test_04`, with no Mozilla marks in the UI.
 

@@ -3,10 +3,12 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+# "%" marks localized files: en-US/ in this directory for English, and
+# <L10NBASEDIR>/<locale>/browser/branding/nulavio/ for other locales
+# (Nulavio provides those in browser/l10n/, see fetch_firefox_l10n.py).
 [localization] @AB_CD@.jar:
-  branding                                          (en-US/**/*.ftl)
+  branding                                          (%*.ftl)
 
 @AB_CD@.jar:
 % locale branding @AB_CD@ %locale/branding/
-# Unofficial branding only exists in en-US
-  locale/branding/brand.properties (en-US/brand.properties)
+  locale/branding/brand.properties (%brand.properties)

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 import shutil
 import sys
@@ -11,8 +12,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts" / "build"))
+sys.path.insert(0, str(ROOT / "scripts" / "upstream"))
 
 import apply_patches  # noqa: E402
+import fetch_firefox_l10n  # noqa: E402
 import make_distribution  # noqa: E402
 
 MOZCONFIG = ROOT / "browser" / "build" / "mozconfig"
@@ -102,6 +105,56 @@ class BrandingPrefsTest(unittest.TestCase):
             self.assertIn(required, names)
         for unavailable in ("goog-badbinurl-proto", "goog-downloadwhite-proto"):
             self.assertNotIn(unavailable, names, "one unavailable list makes the whole batch update fail")
+
+
+class LocalizationTest(unittest.TestCase):
+    REV = "1e95d1c5f519c3fbde715345ae7beb56a2c79077"
+
+    def source(self, changesets: dict) -> Path:
+        tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, tmp, True)
+        (tmp / "browser" / "locales").mkdir(parents=True)
+        (tmp / "browser" / "locales" / "l10n-changesets.json").write_text(json.dumps(changesets))
+        return tmp
+
+    def test_revision_comes_from_the_verified_source(self):
+        src = self.source({"pt-BR": {"platforms": ["linux64"], "revision": self.REV}})
+        self.assertEqual(fetch_firefox_l10n.revisions(src, ["pt-BR"]), {"pt-BR": self.REV})
+
+    def test_rejects_unknown_unshipped_or_malformed_input(self):
+        src = self.source(
+            {
+                "pt-BR": {"platforms": ["win64"], "revision": self.REV},
+                "de": {"platforms": ["linux64"], "revision": "main"},
+            }
+        )
+        for locales in (["pt-BR"], ["de"], ["xx"], ["../etc"]):
+            with self.subTest(locales=locales), self.assertRaises(SystemExit):
+                fetch_firefox_l10n.revisions(src, locales)
+
+    def test_brand_translation_matches_english_ids_and_keeps_the_name(self):
+        def ids(path: Path) -> set[str]:
+            lines = path.read_text().splitlines()
+            return {line.split("=")[0].strip() for line in lines if "=" in line and not line.startswith("#")}
+
+        en = BRANDING / "locales" / "en-US"
+        pt = ROOT / "browser" / "l10n" / "pt-BR" / "browser" / "branding" / "nulavio"
+        self.assertEqual(ids(en / "brand.ftl"), ids(pt / "brand.ftl"))
+        self.assertEqual(ids(en / "brand.properties"), ids(pt / "brand.properties"))
+        for line in (pt / "brand.ftl").read_text().splitlines():
+            if line.startswith("-"):
+                self.assertTrue(line.endswith("= Nulavio"), line)
+
+    def test_branding_strings_are_localizable_and_follow_the_os(self):
+        jar = (BRANDING / "locales" / "jar.mn").read_text()
+        self.assertIn("(%*.ftl)", jar)
+        self.assertIn("(%brand.properties)", jar)
+        self.assertIn('pref("intl.locale.requested", "");', (BRANDING / "pref" / "firefox-branding.js").read_text())
+
+    def test_build_packages_the_locales(self):
+        script = (ROOT / "scripts" / "build" / "build_nulavio.sh").read_text()
+        self.assertIn("fetch_firefox_l10n.py", script)
+        self.assertIn("package-multi-locale --locales en-US", script)
 
 
 class PatchStackTest(unittest.TestCase):

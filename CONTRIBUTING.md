@@ -36,7 +36,7 @@ Tests never use your real profile: integration tests set `NULAVIO_HOME` to a tem
 scripts/build/build_nulavio.sh 158.0.1   # verified source -> branding -> patches -> container build
 ```
 
-Everything happens in rootless podman containers and in `~/.cache/nulavio-build` (about 23 GB). Nothing is installed on the host.
+Everything happens in rootless podman containers and in `~/.cache/nulavio-build` (about 23 GB). Nothing is installed on the host. See [docs/architecture/build.md](docs/architecture/build.md).
 
 The build needs **your own** Google Safe Browsing key; without it phishing and malware protection would be inactive, so the script stops. Create a Google Cloud project, enable "Safe Browsing API", create an API key restricted to that API, then save it without echoing it:
 
@@ -45,7 +45,11 @@ install -d -m 700 ~/.config/nulavio-build
 (umask 077; read -rs -p "Safe Browsing key: " k && printf '%s\n' "$k" > ~/.config/nulavio-build/google-safebrowsing.key; unset k; echo)
 ```
 
-Never commit it or paste it into issues or logs. For a local experiment only, `NULAVIO_ALLOW_NO_SAFEBROWSING_KEY=1` builds without it; such a build must never be shared. See [docs/architecture/build.md](docs/architecture/build.md). Patches go in `browser/patches/` with `Owner:` and `Upstream:` headers, listed in `series`. Prefer prefs, policies, branding or built-in add-ons over patches.
+Never commit it or paste it into issues or logs. For a local experiment only, `NULAVIO_ALLOW_NO_SAFEBROWSING_KEY=1` builds without it; such a build must never be shared.
+
+Languages: the build packages en-US plus `NULAVIO_LOCALES` (default `pt-BR`), fetched at the revision Mozilla signed off for the release. Nulavio's own strings for other languages go in `browser/l10n/<locale>/`.
+
+Patches go in `browser/patches/` with `Owner:` and `Upstream:` headers, listed in `series`. Prefer prefs, policies, branding or built-in add-ons over patches.
 
 ## Common changes
 
