@@ -80,7 +80,7 @@ A browser cannot protect you from malware that already runs on your computer as 
 
 ## Trademarks and licences
 
-Code: [MPL-2.0](LICENSE). Brand assets: see [LICENSES.md](LICENSES.md). "Nulavio" is a candidate name and is **not registered**; the planned domain is `nulavio.net` ([status](docs/brand/strategy.md#trademark-and-availability-status)). Nulavio is not affiliated with Mozilla. Firefox is a trademark of the Mozilla Foundation.
+Code: [MPL-2.0](LICENSE). Brand assets: see [LICENSES.md](LICENSES.md). "Nulavio" is a candidate name and is **not registered**; the project domain is `nulavio.net` ([status](docs/brand/strategy.md#trademark-and-availability-status)). Nulavio is not affiliated with Mozilla. Firefox is a trademark of the Mozilla Foundation.
 
 ---
 

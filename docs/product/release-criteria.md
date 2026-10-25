@@ -25,5 +25,5 @@
 4. Update SLA process rehearsed once end-to-end.
 5. Signed RPM in a signed repository; SBOM attached to the release.
 6. Security policy contact live; vulnerability intake tested.
-7. Trademark/domain search completed. Domain decided: `nulavio.net` (to be registered); INPI/USPTO/EUIPO searches still open ([status](../brand/strategy.md#trademark-and-availability-status)).
+7. Trademark/domain search completed. Domain `nulavio.net` registered (2026-10-25); INPI/USPTO/EUIPO searches still open ([status](../brand/strategy.md#trademark-and-availability-status)).
 8. No critical Guard findings on a fresh install; integration suite green on CI.

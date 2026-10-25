@@ -8,7 +8,7 @@ Nulavio has **no releases yet**. The `main` branch (Track A preview) is the only
 
 - **Do not open a public issue.**
 - Preferred channel once the repository is public: **GitHub private vulnerability reporting** ("Report a vulnerability" under the Security tab).
-- A dedicated security contact address will be published here before the first public release. *Pending: the project has no domain or mailbox yet.*
+- A dedicated security contact address will be published here before the first public release. *Pending: the domain `nulavio.net` is registered, but no mailbox exists yet. Do not send reports to any `@nulavio.net` address until it is listed here.*
 - Include affected commit or version, environment (distribution, desktop, engine version), reproduction steps and impact. Never include real credentials, cookies or personal data; use throwaway accounts.
 
 We aim to acknowledge within **3 working days**, give an assessment within **10 working days**, and coordinate disclosure within **90 days** (sooner if a fix ships earlier, later only by agreement).
