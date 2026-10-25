@@ -22,7 +22,7 @@ Each milestone has a definition of done (DoD). "Done" requires the DoD to be ver
 - [x] **Track B build spike in a container**: ≈ 52 min, 23 GB, branded binary passes 14/15 (Safe Browsing key pending) — [build.md](../architecture/build.md)
 - [x] Ubuntu userspace check (Mozilla APT Firefox): 15/15
 - [x] Domain `nulavio.net` registered by the maintainer (2026-10-25)
-- [ ] Domain hardening: DNSSEC, "no mail" records until a mailbox exists, then `security@nulavio.net`
+- [x] Domain live and hardened: https://nulavio.net (static site, no scripts or cookies), DNSSEC, TLS ≥ 1.2, DMARC `p=reject`, `security@nulavio.net` and `/.well-known/security.txt` (2026-10-25)
 - [ ] Trademark search (INPI, USPTO/EUIPO) and handles, by the maintainer or counsel
 
 **DoD:** CI green on a fresh clone; measured Track B build numbers recorded in the ADR.

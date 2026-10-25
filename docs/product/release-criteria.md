@@ -24,6 +24,6 @@
 3. P0 providers certified (or explicitly documented as not supported, with cause): Proton Pass manually by the maintainer (its only provider); KeePassXC by the automated end-to-end test in CI, with manual desktop reports from community testers.
 4. Update SLA process rehearsed once end-to-end.
 5. Signed RPM in a signed repository; SBOM attached to the release.
-6. Security policy contact live; vulnerability intake tested.
+6. Security policy contact live (✅ `security@nulavio.net`, `security.txt`, 2026-10-25); vulnerability intake tested (pending: a test report end to end).
 7. Trademark/domain search completed. Domain `nulavio.net` registered (2026-10-25); INPI/USPTO/EUIPO searches still open ([status](../brand/strategy.md#trademark-and-availability-status)).
 8. No critical Guard findings on a fresh install; integration suite green on CI.

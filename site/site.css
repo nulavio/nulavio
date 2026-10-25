@@ -1,0 +1,98 @@
+/* nulavio.net: static, no scripts. Uses the brand tokens (tokens.css), which
+   follow the system light/dark preference. */
+*, *::before, *::after { box-sizing: border-box; }
+
+html {
+  background: var(--nv-color-bg-canvas);
+  color: var(--nv-color-text-primary);
+  font-family: var(--nv-font-family-brand);
+  line-height: var(--nv-font-lineHeight-normal);
+  -webkit-font-smoothing: antialiased;
+}
+body {
+  margin: 0;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background:
+    radial-gradient(60rem 28rem at 50% -8rem, color-mix(in srgb, var(--nv-color-accent-default) 12%, transparent), transparent 70%),
+    var(--nv-color-bg-canvas);
+}
+a { color: var(--nv-color-text-primary); text-underline-offset: 0.2em; }
+a:focus-visible {
+  outline: var(--nv-state-focusRingWidth) solid var(--nv-color-focus);
+  outline-offset: var(--nv-state-focusRingOffset);
+  border-radius: var(--nv-radius-xs);
+}
+
+.top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  max-width: 68rem;
+  width: 100%;
+  margin: 0 auto;
+  padding: var(--nv-space-5) var(--nv-space-6);
+}
+.brand { display: inline-flex; align-items: center; gap: var(--nv-space-3); text-decoration: none; font-weight: var(--nv-font-weight-semibold); font-size: 1.125rem; }
+.brand img { display: block; width: 1.75rem; height: auto; }
+.lang { font-size: 0.9375rem; color: var(--nv-color-text-secondary); }
+
+.page {
+  flex: 1;
+  max-width: 68rem;
+  width: 100%;
+  margin: 0 auto;
+  padding: clamp(2rem, 8vh, 5rem) var(--nv-space-6) var(--nv-space-8);
+  display: flex;
+  flex-direction: column;
+  gap: var(--nv-space-8);
+}
+.page--narrow { max-width: 40rem; justify-content: center; }
+
+.hero { text-align: center; display: grid; justify-items: center; gap: var(--nv-space-4); }
+.hero h1 {
+  margin: 0;
+  font-size: clamp(2rem, 1.3rem + 3vw, 3.25rem);
+  font-weight: var(--nv-font-weight-semibold);
+  letter-spacing: -0.02em;
+  line-height: var(--nv-font-lineHeight-tight);
+}
+.lead { margin: 0; max-width: 42rem; font-size: 1.125rem; color: var(--nv-color-text-secondary); }
+.status {
+  margin: 0;
+  padding: var(--nv-space-1) var(--nv-space-4);
+  border: 1px solid var(--nv-color-border-control);
+  border-radius: var(--nv-radius-pill);
+  font-size: 0.875rem;
+  color: var(--nv-color-text-secondary);
+  background: var(--nv-color-bg-surface);
+}
+.status strong { color: var(--nv-color-text-primary); font-weight: var(--nv-font-weight-semibold); }
+
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: var(--nv-space-5); }
+.card {
+  background: var(--nv-color-bg-surface);
+  border: 1px solid var(--nv-color-border-subtle);
+  border-radius: var(--nv-radius-lg);
+  padding: var(--nv-space-6);
+  box-shadow: var(--nv-elevation-1);
+}
+.card h2, .limits h2 { margin: 0 0 var(--nv-space-3); font-size: 1.0625rem; font-weight: var(--nv-font-weight-semibold); }
+.card p, .limits p { margin: 0; color: var(--nv-color-text-secondary); font-size: 0.9375rem; }
+
+.limits {
+  border-left: 3px solid var(--nv-color-status-warning);
+  padding: var(--nv-space-2) 0 var(--nv-space-2) var(--nv-space-5);
+  max-width: 48rem;
+}
+
+.footer {
+  text-align: center;
+  font-size: 0.8125rem;
+  color: var(--nv-color-text-muted);
+  padding: var(--nv-space-6);
+  display: grid;
+  gap: var(--nv-space-2);
+}
+.footer p { margin: 0; }

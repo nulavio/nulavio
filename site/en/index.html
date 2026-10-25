@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Nulavio: a Linux browser private by default</title>
+  <meta name="description" content="Nulavio is an open-source Linux browser built on the Gecko engine, private by default, with ad blocking and password-manager integration. In development.">
+  <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+  <link rel="alternate" hreflang="pt-BR" href="https://nulavio.net/">
+  <link rel="alternate" hreflang="en" href="https://nulavio.net/en/">
+  <link rel="stylesheet" href="/assets/tokens.css">
+  <link rel="stylesheet" href="/assets/site.css">
+</head>
+<body>
+  <header class="top">
+    <a class="brand" href="/en/">
+      <picture>
+        <source srcset="/assets/nulavio-symbol.svg" media="(prefers-color-scheme: dark)">
+        <img src="/assets/nulavio-symbol-dark-on-light.svg" alt="" width="28" height="32">
+      </picture>
+      <span>Nulavio</span>
+    </a>
+    <a class="lang" href="/" hreflang="pt-BR" lang="pt-BR">Português</a>
+  </header>
+
+  <main class="page">
+    <section class="hero">
+      <p class="status"><strong>In development</strong> · no release to download yet</p>
+      <h1>The web is yours. So is your data.</h1>
+      <p class="lead">Nulavio is an open-source browser for Linux, built on Mozilla's Gecko engine. It comes private by default, blocks ads and trackers, and works with your password manager.</p>
+    </section>
+
+    <section class="grid" aria-label="What Nulavio does">
+      <article class="card">
+        <h2>Private by default</h2>
+        <p>Strict tracking protection, HTTPS-Only and the Global Privacy Control signal are on from the start. Nothing is sent to Nulavio: the project has no servers that receive your browsing data.</p>
+      </article>
+      <article class="card">
+        <h2>Ad blocking</h2>
+        <p>uBlock Origin is included, at a pinned version checked at install time. If a site breaks, turn it off for that site only.</p>
+      </article>
+      <article class="card">
+        <h2>Your passwords, in your manager</h2>
+        <p>Proton Pass and KeePassXC through their official extensions; Bitwarden in testing. Nulavio does not read your vault.</p>
+      </article>
+      <article class="card">
+        <h2>Engine protections kept</h2>
+        <p>Sandboxing, site isolation, certificate checks and phishing and malware protection stay on. Downloaded installers and scripts show a warning before you open them.</p>
+      </article>
+    </section>
+
+    <section class="limits">
+      <h2>What a browser cannot fix</h2>
+      <p>No browser protects against malware already running on your computer. We document the known limits and will publish them with the code.</p>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <p>Nulavio is built on Mozilla's Gecko engine. Nulavio is not affiliated with Mozilla. Firefox is a trademark of the Mozilla Foundation.</p>
+    <p>This site uses no scripts, cookies or visitor analytics.</p>
+  </footer>
+</body>
+</html>

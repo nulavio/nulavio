@@ -51,6 +51,17 @@ Languages: the build packages en-US plus `NULAVIO_LOCALES` (default `pt-BR`), fe
 
 Patches go in `browser/patches/` with `Owner:` and `Upstream:` headers, listed in `series`. Prefer prefs, policies, branding or built-in add-ons over patches.
 
+## Website (nulavio.net)
+
+The site is static (`site/`): no JavaScript, no third-party resources, no cookies, security headers in `site/_headers`. Build it with the brand assets and check it with the unit tests:
+
+```sh
+python3 -I scripts/site/build_site.py          # -> dist/site/
+python3 -I tests/run.py unit                   # tests/unit/test_site.py
+```
+
+It is hosted on Cloudflare Pages (project `nulavio`). Deployments are uploaded by the maintainer for now (Pages → Create deployment → the zip of `dist/site`). Keep email addresses out of the HTML: Cloudflare's email obfuscation would inject a script. Renew `site/.well-known/security.txt` before its `Expires` date (the unit test fails once it has passed).
+
 ## Common changes
 
 | Change | How |

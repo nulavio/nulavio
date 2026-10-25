@@ -4,3 +4,4 @@ __pycache__/
 tests/artifacts/
 /sbom.cdx.json
 .ruff_cache/
+/dist/

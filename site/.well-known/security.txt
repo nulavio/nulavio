@@ -1,0 +1,5 @@
+# Nulavio security contact (RFC 9116). Reports in Portuguese or English.
+Contact: mailto:security@nulavio.net
+Expires: 2027-10-25T00:00:00.000Z
+Preferred-Languages: pt, en
+Canonical: https://nulavio.net/.well-known/security.txt
