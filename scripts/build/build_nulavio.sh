@@ -27,7 +27,7 @@ if [[ -r $sb_key ]]; then
         echo "nulavio-build: $sb_key must be private (chmod 600)" >&2
         exit 2
     fi
-    secret_mounts=(-v "$sb_key":/run/secrets/google-safebrowsing.key:ro,Z)
+    secret_mounts=(-v "$sb_key:/run/secrets/google-safebrowsing.key:ro,Z")
     echo "nulavio-build: Google Safe Browsing key: present"
 elif [[ ${NULAVIO_ALLOW_NO_SAFEBROWSING_KEY:-} == 1 ]]; then
     echo "nulavio-build: WARNING: no Google Safe Browsing key; phishing/malware lists will be INACTIVE." \
