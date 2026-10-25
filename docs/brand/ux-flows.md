@@ -76,6 +76,7 @@ Address-bar security states: neutral site-info (HTTPS valid) · **"Not secure"**
 2. For executable or installer types (AppImage, `.sh`, `.run`, `.desktop`, `.deb`, `.rpm`, `.flatpakref`, archives containing them), the panel shows a warning with **Show in folder** and **Delete**. There is no "Open" button for them ([mockup](assets/mockups/download-warning.png)).
 3. Safe Browsing verdicts, when present, replace the generic text with the specific reason.
 
+- **Track B (implemented, Nulavio Shell):** when such a download completes, a Nulavio page opens next to it (in a private window for private downloads) with the file name, size and source, the warning, **Show in folder** and **Delete**, and "Why am I seeing this?". There is no Open action. The mockup's placement inside the engine's downloads panel needs engine UI changes and is a later step. Archives are not inspected.
 - **Track A today:** engine downloads panel; files saved privately; Safe Browsing on.
 
 ## F. Camera or microphone request

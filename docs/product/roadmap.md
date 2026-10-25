@@ -32,8 +32,11 @@ Each milestone has a definition of done (DoD). "Done" requires the DoD to be ver
 - [x] Track B inputs: `browser/branding/nulavio/` + generated assets, `browser/build/mozconfig`, patch stack (`browser/patches/`, 1 patch), container build script
 - [x] `distribution/` generated from `browser/config/` (`distribution.ini` defaults + `policies.json`), verified active in the build (`test_13`)
 - [x] Google Safe Browsing API key from a secret: dedicated Google Cloud project, key restricted to the Safe Browsing API, build passes 17/17 incl. the end-to-end phishing test
-- [ ] Download protection for Track B: request Google's download-protection API, or ship flow E (R15)
-- [ ] Built-in new tab add-on using the tokens
+- [x] Nulavio Shell built-in add-on (`browser/shell/`), built from the branding directory with no Mozilla file patched
+- [x] New tab (FR-08): search with the default engine, live protection status read from the browser settings
+- [x] Flow E executable-download warning (compensates R15): Show in folder / Delete, no Open
+- [ ] Google's download-protection API for Track B (request access) (R15)
+- [ ] Flow E inside the engine's downloads panel (needs engine UI work; today a Nulavio page opens next to it)
 
 **DoD:** a branded Nulavio binary built from verified source opens a window on Fedora KDE Wayland with the sandbox verified by `test_04`, with no Mozilla marks in the UI.
 

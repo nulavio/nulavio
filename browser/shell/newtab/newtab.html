@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title data-i18n="newtabTitle">New tab</title>
+  <link rel="icon" href="../shared/nulavio-symbol.svg">
+  <link rel="stylesheet" href="../shared/tokens.css">
+  <link rel="stylesheet" href="../shared/base.css">
+  <link rel="stylesheet" href="../shared/shell.css">
+  <script type="module" src="newtab.js"></script>
+</head>
+<body>
+  <main class="page">
+    <header class="hero">
+      <picture>
+        <source srcset="../shared/nulavio-symbol.svg" media="(prefers-color-scheme: dark)">
+        <img class="hero__symbol" src="../shared/nulavio-symbol-dark-on-light.svg" alt="" width="56" height="64">
+      </picture>
+      <h1 class="hero__headline" data-i18n="headline">The web is yours. So is your data.</h1>
+      <form class="search" id="search" role="search">
+        <label class="visually-hidden" for="search-input" data-i18n="searchLabel">Search the web</label>
+        <input class="search__input" id="search-input" type="search" name="q" autocomplete="off"
+               data-i18n-attr="placeholder:searchPlaceholder">
+        <button class="button button--primary" type="submit" data-i18n="searchButton">Search</button>
+      </form>
+      <p class="hero__hint"><span data-i18n="searchHint">or use the address bar</span> <kbd>Ctrl</kbd> <kbd>L</kbd></p>
+    </header>
+
+    <section class="grid">
+      <article class="card card--facts" aria-labelledby="status-heading">
+        <h2 class="card__title" id="status-heading" data-i18n="statusHeading">Protections right now</h2>
+        <dl class="facts" id="status" aria-live="polite">
+          <div><dt data-i18n="statusTracking">Tracking protection</dt><dd data-status="tracking">…</dd></div>
+          <div><dt data-i18n="statusHttps">HTTPS-Only</dt><dd data-status="https">…</dd></div>
+          <div><dt data-i18n="statusGpc">Global Privacy Control signal</dt><dd data-status="gpc">…</dd></div>
+          <div><dt data-i18n="statusFilter">Content filter</dt><dd data-status="filter">…</dd></div>
+          <div><dt data-i18n="statusPasswords">Passwords</dt><dd data-status="passwords">…</dd></div>
+        </dl>
+        <p class="card__note" data-i18n="statusNote">Read just now from the browser settings. Nothing is sent to Nulavio.</p>
+      </article>
+
+      <article class="card" aria-labelledby="keys-heading">
+        <h2 class="card__title" id="keys-heading" data-i18n="keysHeading">Shortcuts</h2>
+        <ul class="keys">
+          <li><span data-i18n="keyAddress">Address bar</span><span><kbd>Ctrl</kbd> <kbd>L</kbd></span></li>
+          <li><span data-i18n="keyTab">New tab</span><span><kbd>Ctrl</kbd> <kbd>T</kbd></span></li>
+          <li><span data-i18n="keyPrivate">Private window</span><span><kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>P</kbd></span></li>
+          <li><span data-i18n="keyDownloads">Downloads</span><span><kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>Y</kbd></span></li>
+          <li><span data-i18n="keyAddons">Add-ons</span><span><kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>A</kbd></span></li>
+        </ul>
+      </article>
+
+      <article class="card" aria-labelledby="broken-heading">
+        <h2 class="card__title" id="broken-heading" data-i18n="brokenHeading">If a site breaks</h2>
+        <ol class="steps">
+          <li data-i18n="broken1"></li>
+          <li data-i18n="broken2"></li>
+          <li data-i18n="broken3"></li>
+        </ol>
+      </article>
+    </section>
+
+    <footer class="footer">
+      <p data-i18n="footer"></p>
+      <p data-i18n="footerLimits"></p>
+    </footer>
+  </main>
+</body>
+</html>

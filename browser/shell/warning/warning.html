@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title data-i18n="warnTitle">File that can run programs</title>
+  <link rel="icon" href="../shared/nulavio-symbol.svg">
+  <link rel="stylesheet" href="../shared/tokens.css">
+  <link rel="stylesheet" href="../shared/base.css">
+  <link rel="stylesheet" href="../shared/shell.css">
+  <script type="module" src="warning.js"></script>
+</head>
+<body>
+  <main class="page page--narrow">
+    <article class="card warning" aria-labelledby="warn-headline">
+      <h1 class="warning__headline" id="warn-headline" data-i18n="warnHeadline">This download can run programs</h1>
+
+      <div class="file" id="file" hidden>
+        <svg class="file__icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2h8l4 4v16H6z M14 2v4h4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
+        <div>
+          <p class="file__name" id="file-name"></p>
+          <p class="file__meta" id="file-meta"></p>
+        </div>
+      </div>
+
+      <div class="callout callout--warning" id="callout" role="alert">
+        <svg class="callout__icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 2 21h20z M12 10v5 M12 18v.5" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <p id="callout-text" data-i18n="warnBody"></p>
+      </div>
+
+      <div class="actions" id="actions" hidden>
+        <button class="button button--secondary" type="button" id="show" data-i18n="warnShow">Show in folder</button>
+        <button class="button button--quiet" type="button" id="delete" data-i18n="warnDelete">Delete</button>
+      </div>
+      <p class="result" id="result" role="status" hidden></p>
+
+      <details class="why">
+        <summary data-i18n="warnWhy">Why am I seeing this?</summary>
+        <ul>
+          <li data-i18n="warnWhy1"></li>
+          <li data-i18n="warnWhy2"></li>
+          <li data-i18n="warnWhy3"></li>
+        </ul>
+      </details>
+    </article>
+  </main>
+</body>
+</html>

@@ -144,6 +144,13 @@ class FixtureServer:
                 "application/octet-stream",
                 {"Content-Disposition": 'attachment; filename="nulavio-fixture.bin"'},
             )
+        if path == "/download-exe":
+            # Harmless text named like an installer: exercises flow E, never executed.
+            return (
+                b"#!/bin/sh\necho 'nulavio flow E fixture; not a real installer'\n",
+                "application/octet-stream",
+                {"Content-Disposition": 'attachment; filename="nulavio-setup.AppImage"'},
+            )
         return None, html, {}
 
     def count(self, path: str) -> int:

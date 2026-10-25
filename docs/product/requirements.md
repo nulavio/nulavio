@@ -9,11 +9,11 @@ Status legend: **Done** (implemented and verified by a test or recorded evidence
 | FR-01 | Starts on Fedora KDE Wayland with upstream sandbox active | **Done** (Track A) | `test_04`; real-window check (ADR E3) |
 | FR-02 | Navigation, URL bar, search, back/forward/reload | **Done** (engine UI) | `test_05` |
 | FR-03 | Tabs | **Done** | `test_05` |
-| FR-04 | Downloads, saved privately, no auto-open | **Done** | `test_07` |
+| FR-04 | Downloads, saved privately, no auto-open | **Done**. Track B adds the executable-download warning (flow E) | `test_07`, `test_shell` 03–05 |
 | FR-05 | Isolated Nulavio profile, separate from Firefox profiles | **Done** | `test_09`, registry hashes, path unit tests |
 | FR-06 | Multiple profiles (work/personal) | **Preview** (CLI `--profile`) | profile unit tests |
 | FR-07 | Nulavio identity: icon, app name in the desktop, start page | **Preview** (desktop entry, app_id, start page, chrome theme; engine UI still says Firefox) | `test_01`, ADR E3 |
-| FR-08 | New tab with Nulavio identity | **Planned** (needs a built-in add-on, Track B). Start page on launch and Home: Done | — |
+| FR-08 | New tab with Nulavio identity | **Done (Track B)**: built-in Nulavio Shell new tab with search and live protection status. Track A: start page on launch and Home | `test_shell` 01–02 |
 | FR-09 | Ad and tracker blocking on first run, reversible per site | **Done** (uBO + ETP Strict; per-site toggles are upstream UI) | `test_03`, `test_08` |
 | FR-10 | Proton Pass official extension works | **Preview**: install, signature, background, popup Done; **login and autofill on a real site done on the maintainer's desktop** (2026-10-25) | `test_password_extensions` |
 | FR-11 | KeePassXC-Browser works with native messaging | **Done (container)**: association + autofill end to end with KeePassXC 2.8.0, in CI. No manual desktop certification planned by the maintainer | `keepassxc_native_messaging_spike.py` |

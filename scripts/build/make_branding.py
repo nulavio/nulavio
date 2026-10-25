@@ -21,8 +21,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts" / "brand"))
+sys.path.insert(0, str(ROOT / "scripts" / "build"))
 
 import build_logo as logo  # noqa: E402
+import make_shell  # noqa: E402
 
 TEMPLATES = ROOT / "browser" / "branding" / "nulavio"
 ICONS = ROOT / "docs" / "brand" / "assets" / "icons" / "hicolor"
@@ -106,6 +108,7 @@ def build(target: Path) -> None:
     (content / "firefox-wordmark.svg").write_text(wordmark, encoding="utf-8")  # path name is fixed upstream
     (content / "document_pdf.svg").write_text(document_pdf_svg(), encoding="utf-8")
     magick(*(str(target / f"default{s}.png") for s in (16, 32, 48, 256)), str(target / "document.ico"))
+    make_shell.install(target)  # built-in add-on, built from the branding dir (no Mozilla file patched)
     print(f"branding installed at {target}")
 
 
