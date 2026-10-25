@@ -27,6 +27,7 @@ Nulavio does **not** implement a password manager. It makes the user's chosen ma
 - Because Track A runs the Firefox engine, Nulavio profiles see the same manifests as your regular Firefox. Enabling "Firefox" in KeePassXC's browser integration settings is enough. Nulavio never writes these manifests itself.
 - KeePassXC as a Flatpak with a host browser needs the manifest to point at the exported Flatpak command. This is a known-fragile setup and will be tested before it is documented as supported.
 - Track B: verified in the 158.0.1 source that user manifests are always read from `~/.mozilla/native-messaging-hosts`, even for a rebranded build (`nsXREDirProvider.cpp`, "forcing the legacy path for compatibility"). KeePassXC and Bitwarden desktop integrations therefore need no Nulavio-specific setup.
+- If the browser starts before KeePassXC is ready, the extension's first key exchange fails and the popup shows "Cannot connect to KeePassXC" until **Reload** is pressed. Observed on the slower GitHub runner (one Reload needed); the end-to-end test waits for KeePassXC's socket and presses Reload like a user would. A future Nulavio hint for this state belongs in flow B ([ux-flows](../brand/ux-flows.md)).
 - In the container test the association prompt was answered automatically to simulate the user. In real use the prompt is the user's explicit consent: Nulavio never answers it.
 
 ## Secret Service and KWallet: what they are and are not
