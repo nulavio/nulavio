@@ -235,6 +235,10 @@ def main() -> int:
             watcher = DialogWatcher(env)
             main_window = harness.wait_until(lambda: any("KeePassXC" in n for n in watcher.windows().values()), timeout=30)
             report["steps"]["keepassxc_running"] = bool(main_window)
+            # The browser server is up once its socket accepts connections. Starting the
+            # browser earlier lets the extension's first key exchange fail on slow runners.
+            ready = harness.wait_until(lambda: any(can_connect(s) for s in find_sockets([runtime])), timeout=30)
+            report["steps"]["browser_socket_ready"] = bool(ready)
             watcher.start()
 
             # 4. Nulavio profile with provider keepassxc + official extension (pinned)
@@ -244,10 +248,23 @@ def main() -> int:
             report["steps"]["extension"] = info
 
             # 5. popup before, connect + associate, popup after
-            before = popup_state(m, info["popup"], "before", args.artifacts)
+            # If the extension's first attempt raced KeePassXC's startup, the popup shows
+            # "Cannot connect" with a Reload button: press it, as a user would.
+            reloads = 0
+            while True:
+                before = popup_state(m, info["popup"], "before", args.artifacts)
+                connect = next((b for b in before["buttons"] if "connect" in b["text"].lower()), None)
+                reload_button = next((b for b in before["buttons"] if b["id"] == "reload-status-button"), None)
+                if connect or "is connected" in before["text"] or not reload_button or reloads >= 4:
+                    break
+                m.execute("document.getElementById(arguments[0]).click();", [reload_button["id"]])
+                reloads += 1
+                time.sleep(4)
+                m.send("WebDriver:CloseWindow")
+                m.switch_to(m.window_handles()[0])
+            report["steps"]["popup_reloads"] = reloads
             report["steps"]["popup_before_association"] = {k: before[k] for k in ("text", "buttons")}
             report["diagnostics_before_association"] = diagnostics(runtime, work)
-            connect = next((b for b in before["buttons"] if "connect" in b["text"].lower()), None)
             if connect:
                 m.execute("document.getElementById(arguments[0]).click();", [connect["id"]])
                 time.sleep(6)
