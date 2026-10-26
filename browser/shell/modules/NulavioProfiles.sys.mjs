@@ -16,6 +16,7 @@
 const lazy = {};
 ChromeUtils.defineESModuleGetters(lazy, {
   NetUtil: "resource://gre/modules/NetUtil.sys.mjs",
+  profileLockState: "resource://builtin-addons/nulavio-shell/modules/NulavioVaultState.sys.mjs",
   SelectableProfileService: "resource:///modules/profiles/SelectableProfileService.sys.mjs",
 });
 
@@ -142,13 +143,16 @@ class NulavioProfilesClass {
 
   // -- reading ------------------------------------------------------------
 
-  #describe(profile, map, currentId) {
+  async #describe(profile, map, currentId) {
+    const lock = await lazy.profileLockState(profile.path).catch(() => "plain");
     return {
       id: profile.id,
       name: profile.name,
       avatar: profile.avatar,
       color: this.#colorFor(profile, map),
       isCurrent: profile.id === currentId,
+      encrypted: lock !== "plain",
+      locked: lock === "locked",
     };
   }
 
@@ -172,7 +176,7 @@ class NulavioProfilesClass {
       return { ...availability, profiles: [{ id: null, name, avatar: "default-favicon", color: COLORS[0], isCurrent: true }] };
     }
     const map = this.colors();
-    const profiles = (await service.getAllProfiles()).map(p => this.#describe(p, map, current.id));
+    const profiles = await Promise.all((await service.getAllProfiles()).map(p => this.#describe(p, map, current.id)));
     profiles.sort((a, b) => Number(b.isCurrent) - Number(a.isCurrent));
     return { ...availability, profiles };
   }
@@ -251,6 +255,9 @@ class NulavioProfilesClass {
     if (profile.id === this.#service.currentProfile?.id) {
       return { action: "current" };
     }
+    if ((await lazy.profileLockState(profile.path)) === "locked") {
+      fail("locked"); // its files are encrypted until the user unlocks it
+    }
     this.#service.launchInstance(profile, []);
     return { action: "launched" };
   }
@@ -264,6 +271,9 @@ class NulavioProfilesClass {
     const profile = await this.#profile(id);
     if (profile.id === this.#service.currentProfile?.id) {
       fail("is-current");
+    }
+    if ((await lazy.profileLockState(profile.path)) !== "plain") {
+      fail("encrypted"); // deleting needs the Vault too (S6); never leave a key file behind
     }
     try {
       await this.#service.deleteProfile(profile);

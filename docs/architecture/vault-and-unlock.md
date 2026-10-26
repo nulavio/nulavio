@@ -6,8 +6,9 @@ Decisions: [ADR 0005](../adr/0005-phone-profile-unlock.md) (phone), [ADR 0006](.
 
 | Component | Responsibility | Where |
 |---|---|---|
-| Nulavio Vault | Profile DEK, envelopes, metadata, lock/unlock, recovery, rotation | `launcher/nulavio_launcher/vault/` |
+| Nulavio Vault | Profile DEK, envelopes, metadata, lock/unlock, recovery, rotation | `launcher/nulavio_launcher/vault/` (`core.py`; storage in `storage.py`, profiles in `profiles.py`, CLI `nulavio vault` in `cli.py`) |
 | Unlock Coordinator | Which methods exist and are required, capability checks, state machine, timeouts, cancellation, no silent downgrade | same package (`coordinator.py`); UI in the Shell (S6) |
+| Encrypted storage | One gocryptfs volume per profile, keyed from the DEK; read-only mount point while locked; generation mirror | `vault/storage.py`; the Shell reads the lock state (`browser/shell/modules/NulavioVaultState.sys.mjs`) |
 | Platform Key Provider | Password (Argon2id), recovery code, OS keyring (Secret Service), TPM (optional), later Windows DPAPI/Hello | `vault/providers.py` |
 | Phone Unlock | Pairing, devices, protocol `nv1`, revocation | `vault/phone.py`; Android app (S11) |
 | Hardware Key Provider | FIDO2 `hmac-secret` | S10 |

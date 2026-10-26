@@ -53,6 +53,7 @@ function render(state, options) {
             },
             chip(profile, "md"),
             h("span", { class: "popup__name", text: profile.name }),
+            profile.locked ? h("span", { class: "badge", text: t("profilesLocked") }) : null,
             key ? h("kbd", { "aria-hidden": "true", text: key }) : null
           );
           button.addEventListener("click", () => act(() => profiles.switchTo(profile.id), t("profilesOpening", [profile.name])));

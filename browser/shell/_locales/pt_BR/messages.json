@@ -285,5 +285,9 @@
   "err_not_applied": {"message": "A mudança não teve efeito; o navegador padrão continua o mesmo."},
   "err_no_previous": {"message": "Não há navegador anterior para restaurar."},
   "err_path_unsupported": {"message": "O Nulavio está instalado numa pasta cujo nome não pode ser usado num atalho do sistema."},
-  "connect_plasma_browser_integration_not_read": {"message": "Instalada em $DIR$, uma pasta que esta build do Nulavio não lê. Builds para o Fedora leem essa pasta; esta foi feita para /usr/lib.", "placeholders": {"dir": {"content": "$1"}}}
+  "connect_plasma_browser_integration_not_read": {"message": "Instalada em $DIR$, uma pasta que esta build do Nulavio não lê. Builds para o Fedora leem essa pasta; esta foi feita para /usr/lib.", "placeholders": {"dir": {"content": "$1"}}},
+  "routingBlockedLocked": {"message": "Sua regra manda $HOST$ para o perfil $PROFILE$, que está bloqueado. Desbloqueie esse perfil e tente de novo.", "placeholders": {"host": {"content": "$1"}, "profile": {"content": "$2"}}},
+  "err_locked": {"message": "Esse perfil está bloqueado. Desbloqueie primeiro."},
+  "err_encrypted": {"message": "Perfis criptografados ainda não são excluídos por aqui; use as ferramentas de perfil do Nulavio."},
+  "profilesLocked": {"message": "Bloqueado"}
 }

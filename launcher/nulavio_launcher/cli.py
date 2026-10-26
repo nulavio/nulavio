@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import argparse
 import os
+import signal
+import subprocess
 import sys
 import textwrap
 from pathlib import Path
@@ -113,6 +115,36 @@ def cmd_run(args: argparse.Namespace) -> int:
     eng = engine_mod.find_engine()
     engine_mod.check_supported(eng)
     prof = profile.get(args.profile)
+    from .vault import profiles as vault_profiles
+
+    if vault_profiles.is_encrypted(prof) and not vault_profiles.container(prof).mounted():
+        return _run_encrypted(args, eng, prof)
+    return _run(args, eng, prof)
+
+
+def _run_encrypted(args: argparse.Namespace, eng, prof) -> int:
+    """Locked profile: unlock, run the engine as a child, lock again when it exits (ADR 0006: lock)."""
+    from .vault import cli as vault_cli
+    from .vault import profiles as vault_profiles
+    from .vault.core import VaultError
+    from .vault.storage import StorageError
+
+    try:
+        vault = vault_cli.unlock_for_run(prof, password_stdin=args.password_stdin)
+    except (VaultError, StorageError) as exc:
+        _err(vault_cli.MESSAGES.get(exc.code, str(exc)))
+        return 1
+    vault.lock()  # the DEK is not needed while the volume is mounted
+    try:
+        return _run(args, eng, prof, supervise=True)
+    finally:
+        try:
+            vault_profiles.lock(prof)
+        except Exception as exc:
+            _err(f"could not lock profile '{prof.name}': {exc}")
+
+
+def _run(args: argparse.Namespace, eng, prof, supervise: bool = False) -> int:
     if not prof.exists():
         _err(f"profile '{prof.name}' does not exist yet; run `nulavio setup` first")
         return 1
@@ -142,6 +174,19 @@ def cmd_run(args: argparse.Namespace) -> int:
         log.event("launch.forward", profile=prof.name, private=args.private, url_given=bool(args.url))
     if args.dry_run:
         _out(" ".join(command))
+        return 0
+    if supervise:
+        # The volume must stay mounted exactly as long as the engine runs.
+        output = None if args.engine_output else subprocess.DEVNULL
+        child = subprocess.Popen(command, env=engine_mod.launch_env(), stdout=output, stderr=output,
+                                 start_new_session=True)  # fmt: skip
+        previous = {sig: signal.signal(sig, lambda *_: child.terminate()) for sig in (signal.SIGINT, signal.SIGTERM)}
+        try:
+            child.wait()
+        finally:
+            for sig, handler in previous.items():
+                signal.signal(sig, handler)
+        log.event("engine.exit", profile=prof.name, code=child.returncode)
         return 0
     if not args.engine_output:
         devnull = os.open(os.devnull, os.O_WRONLY)
@@ -328,6 +373,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--allow-weakened", action="store_true", help="start even if Guard reports critical findings")
     p.add_argument("--engine-output", action="store_true", help="keep engine stdout/stderr (may include page console noise)")
     p.add_argument("--dry-run", action="store_true", help="prepare the profile and print the engine command")
+    p.add_argument("--password-stdin", action="store_true", help="encrypted profile: read its password from stdin")
     p.set_defaults(func=cmd_run)
 
     p = sub.add_parser("profile", help="manage profiles")
@@ -384,8 +430,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(func=cmd_desktop)
 
     from .ai import cli as ai_cli
+    from .vault import cli as vault_cli
 
     ai_cli.add_parser(sub)
+    vault_cli.add_parser(sub)
     return parser
 
 

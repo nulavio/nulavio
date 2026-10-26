@@ -140,9 +140,11 @@ def load_providers() -> dict[str, Any]:
     return json.loads((paths.config_dir() / "providers.json").read_text(encoding="utf-8"))
 
 
-def create(name: str, *, provider: str = "builtin", theme: bool = True) -> Profile:
+def create(name: str, *, provider: str = "builtin", theme: bool = True, inside_container: bool = False) -> Profile:
+    """A new profile. `inside_container`: the directory is an empty, freshly mounted encrypted volume."""
     profile = get(name)
-    if profile.path.exists():
+    fresh_volume = inside_container and profile.path.is_dir() and all(p.name == ".nulavio-vault" for p in profile.path.iterdir())
+    if profile.path.exists() and not fresh_volume:
         raise ProfileError(f"profile '{name}' already exists at {profile.path}")
     providers = load_providers()["providers"]
     if provider not in providers:

@@ -334,7 +334,8 @@ function profileRow(profile) {
         "p",
         { class: "row__title" },
         h("span", { text: profile.name }),
-        profile.isCurrent ? h("span", { class: "badge", text: t("profilesCurrent") }) : null
+        profile.isCurrent ? h("span", { class: "badge", text: t("profilesCurrent") }) : null,
+        profile.locked ? h("span", { class: "badge badge--quiet", text: t("profilesLocked") }) : null
       ),
       profile.id === null
         ? null

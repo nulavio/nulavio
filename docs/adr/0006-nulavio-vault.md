@@ -1,6 +1,6 @@
 # ADR 0006 — Nulavio Vault: profile keys, envelopes and lifecycle
 
-- **Status:** Accepted (2026-10-26). Key management prototype with artificial data **implemented (S3, see below)**; profile storage integration (S5).
+- **Status:** Accepted (2026-10-26). Key management **implemented (S3)**; encrypted profile storage **implemented (S5)**: launcher profiles end to end, browser-group profiles recognised as locked. Unlock UI: S6.
 - **Related:** [ADR 0005](0005-phone-profile-unlock.md), [architecture](../architecture/vault-and-unlock.md), [threat model for unlock](../security/threat-model-unlock.md).
 
 ## Decision
@@ -80,7 +80,19 @@ Package `launcher/nulavio_launcher/vault/` (standard-library Python plus the sys
 
 Tests: `tests/unit/test_vault.py` (60 tests, one class per mandatory test of the brief plus tampering, combined policy, keyring and logs), `tests/lib/phone_reference.py` (the phone side, the executable spec for S11), `tests/fixtures/vault-v1/` (a version-1 vault with artificial secrets that every later version must still open with password, recovery code and phone). CI installs `libsodium23` and fails rather than skips without it.
 
-Not yet: storage encryption and real lock (S5), UI (S6), DEK rotation (needs the storage, S5), security keys (S10), the phone app (S11).
+Not yet (after S3): storage encryption and real lock (done in S5, below), UI (S6), DEK rotation, security keys (S10), the phone app (S11).
+
+## Implementation (S5, 2026-10-26): encrypted profile storage
+
+- **Layout.** For a profile directory `P` (what the engine opens with `--profile`): `P` is the gocryptfs mount point and `P.vault/` holds `vault.json` and `cipher/` (gocryptfs, `-xchacha`: XChaCha20-Poly1305, file names encrypted). While locked, `P` is empty and **read-only (0500)**, so an engine started directly on it cannot write plaintext there (tested with the real engine); it becomes writable only for the instant of mounting, because `fusermount` requires it.
+- **Key.** The volume password is `KDF(DEK, "storage/gocryptfs", profile_id)` (64 hex characters, on gocryptfs's stdin, never argv or disk). gocryptfs wraps its own master key with it; its scrypt cost is low (`-scryptn 10`) because the input is already 256 bits of key material.
+- **Unlock = mount; lock = end the instance, then unmount.** `nulavio run` on a locked profile unlocks with the profile's own methods (the system keyring if the user chose it, otherwise the password from the terminal, a KDE dialog or `--password-stdin`), runs the engine as a child and locks when it exits; SIGTERM to the launcher ends the engine first. `nulavio vault unlock/lock` keep a profile open on purpose; `lock` refuses while the engine runs unless `--force`, which ends it gracefully.
+- **Checks on every mount.** A mount point that is not empty (plaintext appeared while locked) is refused. Inside the volume, `.nulavio-vault/state.json` records the profile id and the vault generation: a `vault.json` older than the volume (a rolled-back key file, U-T21) or from another profile is refused. A tampered `vault.json` (MAC) is refused as in S3.
+- **Crash.** If the launcher dies, the engine keeps running on the open volume; when it exits the volume stays open until `nulavio vault lock` (reported by `nulavio vault status` as "open (no engine running)"). An idle timer (`-idle`) is available for an auto-lock policy.
+- **Existing profiles.** `nulavio vault encrypt (NAME | --path DIR)` moves a closed profile into a new volume, verifies by mounting, restores the original on any failure, then deletes the plaintext originals (fragments can remain on SSDs and in backups; the command says so).
+- **Browser profiles (Track B).** The Shell reads two facts per profile (`NulavioVaultState.sys.mjs`): is there a `P.vault/vault.json`, and is the volume mounted. Locked profiles show "Locked" in the selector and Settings; switching, "Open link in profile" and deleting refuse with a plain message; routing a link or typed address to a locked profile shows an explanation instead of starting it. Unlocking from the browser is S6; until then `nulavio vault unlock --path DIR`.
+
+Tests: `tests/unit/test_vault_storage.py` (15, real FUSE mounts, a stand-in engine for supervision, SIGTERM and crash), `tests/integration/test_vault_profiles.py` (real engine: a visited address is in the profile while unlocked and nowhere readable after lock; a direct engine start writes nothing; Track B selector, switching and routing). CI installs `gocryptfs` and `fuse3` and requires these tests.
 
 ## Consequences
 

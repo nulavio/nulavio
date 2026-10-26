@@ -40,6 +40,7 @@ import {
 const lazy = {};
 ChromeUtils.defineESModuleGetters(lazy, {
   NulavioProfiles: "resource://builtin-addons/nulavio-shell/modules/NulavioProfiles.sys.mjs",
+  profileLockState: "resource://builtin-addons/nulavio-shell/modules/NulavioVaultState.sys.mjs",
   SelectableProfileService: "resource:///modules/profiles/SelectableProfileService.sys.mjs",
 });
 
@@ -189,6 +190,9 @@ class NulavioRoutingClass {
     const profile = await service.getProfile(profileId);
     if (!profile) {
       fail("invalid-profile");
+    }
+    if ((await lazy.profileLockState(profile.path)) === "locked") {
+      fail("locked");
     }
     return { action: this.#launchRouted(profile, spec) };
   }
@@ -358,6 +362,11 @@ class NulavioRoutingClass {
     const profile = await lazy.SelectableProfileService.getProfile(decision.profileId).catch(() => null);
     if (!profile) {
       await this.#openPage("routing/blocked.html", { u: url, r: decision.ruleId, why: "missing", src: source });
+      return;
+    }
+    if ((await lazy.profileLockState(profile.path)) === "locked") {
+      // Never start an engine on a locked profile: say so here, without loading the site.
+      await this.#openPage("routing/blocked.html", { u: url, r: decision.ruleId, why: "locked", src: source });
       return;
     }
     try {

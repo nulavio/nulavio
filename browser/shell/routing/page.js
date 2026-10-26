@@ -96,7 +96,9 @@ async function render() {
         ? t("routingBlockedMissing", [host])
         : why === "launch"
           ? t("routingBlockedLaunch", [host, name])
-          : t("routingBlockedError", [host]);
+          : why === "locked"
+            ? t("routingBlockedLocked", [host, name])
+            : t("routingBlockedError", [host]);
     if (rule && name) {
       actions.push(button(t("routingTryAgain", [name]), "button--primary", () => openThere(url, rule, false)));
     }

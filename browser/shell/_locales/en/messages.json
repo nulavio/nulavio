@@ -285,5 +285,9 @@
   "err_not_applied": {"message": "The change did not take effect; the default browser is unchanged."},
   "err_no_previous": {"message": "There is no previous browser to restore."},
   "err_path_unsupported": {"message": "Nulavio is installed in a folder whose name cannot be used in a desktop entry."},
-  "connect_plasma_browser_integration_not_read": {"message": "Installed in $DIR$, a folder this Nulavio build does not read. Builds for Fedora read it; this one was built for /usr/lib.", "placeholders": {"dir": {"content": "$1"}}}
+  "connect_plasma_browser_integration_not_read": {"message": "Installed in $DIR$, a folder this Nulavio build does not read. Builds for Fedora read it; this one was built for /usr/lib.", "placeholders": {"dir": {"content": "$1"}}},
+  "routingBlockedLocked": {"message": "Your rule sends $HOST$ to $PROFILE$, which is locked. Unlock that profile, then try again.", "placeholders": {"host": {"content": "$1"}, "profile": {"content": "$2"}}},
+  "err_locked": {"message": "That profile is locked. Unlock it first."},
+  "err_encrypted": {"message": "Encrypted profiles are deleted with Nulavio's profile tools, not from here yet."},
+  "profilesLocked": {"message": "Locked"}
 }
