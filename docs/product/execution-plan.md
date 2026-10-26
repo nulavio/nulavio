@@ -38,8 +38,8 @@ One slice per working session, in this order. Sizes are relative (S ≈ one sess
 | S6 | **Unlock UX** (W3: U9 first part) | Onboarding with three decisions (profile, protection, recovery), locked-profile screen, recovery setup and test, "use another method", device list; Horizon components; only real operations (password, recovery code, OS keyring) | Every screen state (`idle` … `error`) reachable in tests; contrast and keyboard checks | S3, S5 | M |
 | S7 | **AI Bridge autonomy** (W4: A5–A8) | Gecko adapter hardening; agent registry and sessions (identity, Unix-socket peer credentials + short-lived tokens); Restricted / Assisted / Autonomous / Full control; activity indicator, pause, revoke, emergency stop; audit log with retention | The A10 permission and autonomy tests pass, including "Autonomous does not ask for actions already granted" and "revoked agents stop" | S4 | L |
 | S8 | **AI Bridge integration** (W4: A9–A11) | "Connect agent" wizard (detect, show exact config change, write only after approval), Secure Profiles and Smart Profile Routing per agent, locked-profile rules (unlock before task; delegation only as an explicit, documented extra unlock method), UX screens | Codex CLI and Claude Code connected through the wizard in a throwaway home; per-agent routing works; no access to a locked profile | S5, S7 | L |
-| S9 | **Phone Companion, Android POC** (W3: U6–U7) | Only after the S2 ADR is approved: small Android app (Keystore/StrongBox, BiometricPrompt-bound key use), pairing and unlock against the S3 protocol, revocation, lost-phone and recovery tests | Real device unlocks a test profile; replay/expired/unpaired/substituted cases fail | S2, S3; device and SDK approval | L |
 | S10 | **Security key provider** (W3) | FIDO2 hmac-secret/PRF as an unlock method when the key supports it; capability detection; PIN/UV | A real key unlocks a test profile; a key without hmac-secret is refused clearly | S3; a key | S |
+| S11 | **Phone Companion, Android POC** (W3: U6–U7), **last** | Only after the S2 ADR is approved and the desktop side is done: small Android app (Keystore/StrongBox, BiometricPrompt-bound key use), pairing and unlock against the S3 protocol, revocation, lost-phone and recovery tests. Free-software build only (no Google Play Services, no Firebase push, no trackers) so it can ship on **F-Droid first**; Play Store later. Test device: Samsung Galaxy S24+ (Android 17) | Real device unlocks a test profile; replay/expired/unpaired/substituted cases fail; F-Droid build recipe reproducible | S2, S3, S5, S6 | L |
 | later | W2 Routing M5, Temporary profile; W3 U10 (iOS, Windows evaluation), U11 (hardening, independent audit); W4 A12 (integrated assistant, provider-agnostic, same policies), A13 (advanced compatibility), A14 (hardening, multi-platform); W5 phases 3–6 | | | | |
 
 ```mermaid
@@ -47,25 +47,27 @@ flowchart LR
   S1[S1 Connect P0] --> S8
   S2[S2 Unlock research + ADRs] --> S3[S3 Vault crypto POC]
   S3 --> S5[S5 Vault ↔ Gecko POC] --> S6[S6 Unlock UX]
-  S3 --> S9[S9 Android Companion POC]
+  S6 --> S11[S11 Android Companion, last]
   S3 --> S10[S10 Security key]
   S4[S4 AI Bridge POC] --> S7[S7 Autonomy] --> S8[S8 AI integration]
   S5 --> S8
 ```
 
-S1, S2 and S4 have no dependencies on each other; the order above puts the open roadmap item first, then the security foundation, then the AI POC.
+S1, S2 and S4 have no dependencies on each other; the order above puts the open roadmap item first, then the security foundation, then the AI POC. The Android Companion is deliberately the last slice (maintainer's decision, 2026-10-26): every desktop part, including the simulated phone protocol, is built and tested first.
 
-## Decisions and resources needed from the maintainer
+## Decisions (maintainer, 2026-10-26)
 
-| # | Decision | Recommendation | Needed by |
+The maintainer accepted the recommendations below, with the Android changes noted in D4.
+
+| # | Decision | Outcome | Affects |
 |---|---|---|---|
-| D1 | Crypto library outside the engine (the launcher is standard-library Python, which has no AEAD) | **libsodium through `ctypes`** (system package already installed: XChaCha20-Poly1305, Argon2id, X25519; no pip dependency). Alternatives: `pyca/cryptography` (new dependency), NSS (only inside the engine, but unlock happens before it starts) | S3 |
-| D2 | Encrypted profile storage on Linux | **gocryptfs** (installed, user space, per-profile, no root) for the POC; LUKS file needs root; fscrypt needs filesystem setup | S5 |
-| D3 | TPM-bound provider (`hardware_bound`) | Optional; needs adding your user to the `tss` group (sudo). Default plan works without it | S3 (optional) |
-| D4 | Phone for the Companion POC | Which Android phone, and approval to install the Android SDK (several GB; outside system dirs). iOS stays in the architecture but is not claimed without tests | S9 |
-| D5 | Security key | Whether you have a FIDO2 key with hmac-secret (YubiKey 5 has it) | S10 |
-| D6 | AI Bridge implementation | Nulavio's own MCP server (standard-library Python, like the launcher), evaluating Mozilla's firefox-devtools-mcp (Node) in the matrix; Playwright installed only in a throwaway directory for compatibility tests | S4 |
-| D7 | Agent configuration | Tests use throwaway configuration (`--mcp-config`, temporary homes). Any change to your real Codex or Claude configuration is shown first and written only after you approve it | S4, S8 |
+| D1 | Crypto library outside the engine (the launcher is standard-library Python, which has no AEAD) | **libsodium through `ctypes`** (system package: XChaCha20-Poly1305, Argon2id, X25519; no pip dependency) | S3 |
+| D2 | Encrypted profile storage on Linux | **gocryptfs** (installed, user space, per-profile, no root) | S5 |
+| D3 | TPM-bound provider (`hardware_bound`) | **Optional, not now**: it needs your user in the `tss` group (sudo); the plan works without it | S3 (optional) |
+| D4 | Phone | **Android last** (slice S11). Distribution **F-Droid first, Play Store later**, so the app must be free software with no Google Play Services, Firebase or trackers. Test device: **Samsung Galaxy S24+, Android 17**. Android SDK installed only when S11 starts (outside system directories). iOS stays in the architecture, never claimed without tests | S2 (protocol must not need push services), S11 |
+| D5 | Security key | Not answered yet: S10 waits until a FIDO2 key with hmac-secret is available | S10 |
+| D6 | AI Bridge implementation | **Nulavio's own MCP server** in standard-library Python; Mozilla's firefox-devtools-mcp evaluated in the matrix; Playwright only in a throwaway directory | S4 |
+| D7 | Agent configuration | **Throwaway configuration in tests**; any change to the real Codex or Claude configuration is shown first and written only after approval | S4, S8 |
 
 ## Guardrails for every slice
 
@@ -80,6 +82,6 @@ S1, S2 and S4 have no dependencies on each other; the order above puts the open 
 
 - **Model and effort to execute:** Opus, high effort for S2, S3 and S5 (cryptographic design and key lifecycle; mistakes cost data or security); Opus, medium for S4, S7, S8 (integration work with a defined architecture); Sonnet, medium for S1 and S6 (bounded implementation on existing patterns).
 - **Why:** the Vault and unlock work has irreversible failure modes (lost data, false protection); AI Bridge and Connect follow patterns already in the codebase (privileged modules, Shell pages, Marionette tests).
-- **Open decisions:** D1–D7 above; D1 and D2 block S3 and S5, the rest have defaults or come later.
+- **Open decisions:** only D5 (a security key) is open; D1–D4, D6 and D7 are decided.
 - **When to escalate to a more capable setup:** if S2 finds that no tested combination releases a key from the phone (hybrid PRF unavailable on Linux and Companion blocked), or if the encrypted-container approach cannot keep Gecko consistent across lock/unlock.
-- **Ready to execute:** yes for S1, S2 and S4. S3 needs D1 (recommendation available); S5 needs D2; S9 and S10 need hardware.
+- **Ready to execute:** yes for S1–S8. S10 needs a security key; S11 (Android) comes last by decision.

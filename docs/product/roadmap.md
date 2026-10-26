@@ -57,7 +57,7 @@ Each milestone has a definition of done (DoD). "Done" requires the DoD to be ver
 
 **DoD:** each item verified on the Nulavio build by an integration test that uses the engine's real services.
 
-## Phase 2c — Secure Profiles: Vault and unlock · **planned** ([brief](briefs/2026-10-26-profile-unlock.md), [execution plan](execution-plan.md) S2, S3, S5, S6, S9, S10)
+## Phase 2c — Secure Profiles: Vault and unlock · **planned** ([brief](briefs/2026-10-26-profile-unlock.md), [execution plan](execution-plan.md) S2, S3, S5, S6, S10, S11)
 
 Unlock encrypted profiles with, in order of convenience: the phone (biometrics/PIN), the operating system, the profile's own password, or a FIDO2 security key. A successful authentication only unlocks data if it takes part in releasing the key. Components: Nulavio Vault, Unlock Coordinator, Platform Key Provider, Phone Unlock, Hardware Key Provider. This is not a passkey manager for websites and does not change WebAuthn for pages.
 
@@ -67,7 +67,7 @@ Unlock encrypted profiles with, in order of convenience: the phone (biometrics/P
 - [ ] U3 Threat model (anti-infostealer) and key management (DEK, envelopes, rotation, recovery)
 - [ ] U4 Cryptographic unlock prototype with artificial data (password, recovery code, OS keyring)
 - [ ] U5 Desktop–phone pairing proof (protocol simulated first, no device required)
-- [ ] U6 Android Companion POC (Keystore, BiometricPrompt)
+- [ ] U6 Android Companion POC (Keystore, BiometricPrompt) — **last slice**; free software for F-Droid first, Play Store later; test device Galaxy S24+ (Android 17)
 - [ ] U7 Recovery, replay and lost-device tests
 - [ ] U8 Integration with Gecko profiles (encrypted profile container; lock = instance ended and container closed)
 - [ ] U9 UX: onboarding in three decisions, locked profile, recovery, devices
