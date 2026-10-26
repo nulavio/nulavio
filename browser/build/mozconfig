@@ -14,6 +14,13 @@ ac_add_options --with-app-name=nulavio
 ac_add_options MOZ_APP_REMOTINGNAME=nulavio
 ac_add_options --enable-update-channel=release
 
+# System-wide native-messaging hosts (Plasma Browser Integration, KeePassXC
+# packages) live in /usr/lib64/mozilla on Fedora, the first target. The engine
+# reads the system directory fixed at build time: /usr/lib64/mozilla only when
+# libdir contains "lib64" (toolkit/xre/moz.build), else /usr/lib/mozilla. A
+# Debian/Ubuntu package must build with its own libdir (/usr/lib).
+ac_add_options --libdir=/usr/lib64
+
 # Release-grade build.
 ac_add_options --enable-release
 ac_add_options --enable-optimize

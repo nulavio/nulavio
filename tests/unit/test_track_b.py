@@ -44,6 +44,8 @@ class MozconfigTest(unittest.TestCase):
             "ac_add_options MOZ_REQUIRE_SIGNING=1",
             "ac_add_options --with-app-name=nulavio",
             "ac_add_options --enable-release",
+            # System native-messaging hosts are in /usr/lib64/mozilla on Fedora (Nulavio Connect).
+            "ac_add_options --libdir=/usr/lib64",
         ):
             self.assertIn(required, self.lines)
 
