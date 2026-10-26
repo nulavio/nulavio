@@ -32,7 +32,7 @@ Each milestone has a definition of done (DoD). "Done" requires the DoD to be ver
 - [x] Nulavio Shell UI, M0–M2 first slice: audit, three directions, Horizon chosen, window theme for tab strip, toolbar and address bar (Track B). Next milestones: [design migration plan](../design/migration-plan.md)
 
 - [x] Track A: launcher, isolated profile, start page, desktop identity, chrome theme
-- [x] Track B inputs: `browser/branding/nulavio/` + generated assets, `browser/build/mozconfig`, patch stack (`browser/patches/`, 4 patches: vendor name, l10n mapping of the branding, Horizon stylesheet link, per-provider consent for search suggestions), container build script
+- [x] Track B inputs: `browser/branding/nulavio/` + generated assets, `browser/build/mozconfig`, patch stack (`browser/patches/`, 5 patches: vendor name, l10n mapping of the branding, Horizon stylesheet link, per-provider consent for search suggestions, address-bar routing hook), container build script
 - [x] `distribution/` generated from `browser/config/` (`distribution.ini` defaults + `policies.json`), verified active in the build (`test_13`)
 - [x] Google Safe Browsing API key from a secret: dedicated Google Cloud project, key restricted to the Safe Browsing API, build passes 17/17 incl. the end-to-end phishing test
 - [x] Nulavio Shell built-in add-on (`browser/shell/`), built from the branding directory with no Mozilla file patched
@@ -50,7 +50,8 @@ Each milestone has a definition of done (DoD). "Done" requires the DoD to be ver
 - [x] No typed text leaves without consent: suggestions and trending off; per-provider consent enforced at the single fetch point (patch 0004); measured on the real engine (`test_search`)
 - [x] Nulavio Profiles: engine profiles with templates (Personal, Work, Banking, Research), toolbar selector with the profile's colour and initial, Alt+Shift+P, one-click switch, rename/icon/colour, delete with confirmation; isolation and no duplicate instance measured (`test_profiles`)
 - [x] Smart Profile Routing M4a: decision engine (precedence, IDN, Public Suffix List) + links from other apps routed before any request, with ask-first and conservative failure pages, rules editor and "Always open this site in this profile" (`test_routing`)
-- [ ] Smart Profile Routing M4b/M5: typed URLs, "Always open this site in this profile", rules editor, conflict dialog
+- [x] Smart Profile Routing M4b: typed addresses routed on Enter (patch 0005), "Open link in profile" in the link menu (`test_routing` 11–14)
+- [ ] Smart Profile Routing M5: automatic routing of in-page navigation, only after a security review
 - [ ] Temporary profile (deleted on close)
 - [ ] Nulavio Connect: discovery CLI (`nulavio integrations`), then the Integration Manager page
 
@@ -93,4 +94,4 @@ Each milestone has a definition of done (DoD). "Done" requires the DoD to be ver
 
 ## Next task (recommended)
 
-**Smart Profile Routing M4b**: typed URLs in the address bar routed on submission (before navigation, same hand-off and failure pages), plus an "Open in profile…" item in the link context menu that carries the user's explicit choice. Then M5 (in-page navigation) only after a security review.
+**Nulavio Connect, P0 discovery** ([ADR 0004](../adr/0004-nulavio-connect.md)): read-only detection, with the evidence shown, of KDE Plasma Browser Integration, XDG portals, Secret Service/KWallet and the default browser / URL handlers (`nulavio integrations` in the launcher, then the Integration Manager page in the Shell). Setting Nulavio as the default browser is offered, never automatic.

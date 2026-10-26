@@ -33,7 +33,8 @@ Status per component of the browser window and Nulavio's own pages. "Upstream" m
 | **Nulavio settings** | Shell page (`settings/settings.html`, also Add-ons → Nulavio Shell → Options) | **Done**: Search (defaults, engines, per-provider suggestions, aliases, SearXNG/custom/OpenSearch) and Profiles (edit, open, delete with confirmation, templates) | Smart Routing rules, Integrations (M4–M5) |
 | **Profile selector** | Shell toolbar action (`shell_nulavio_net-browser-action`) | **Done**: colour + initial icon, popup with current profile, others (keys 1–9), templates; Alt+Shift+P | Active-profile tint in the window frame (M4) |
 | **Routing pages** | Shell pages `routing/ask.html`, `routing/blocked.html` | **Done**: the address as text, nothing loaded, explicit choices (open there, open here, remember) | — |
-| **Smart routing rules** | Settings → Profiles → Smart routing; selector "This site" | **Done** (links from other apps) | Typed URLs, link context menu (M4b) |
+| **Smart routing rules** | Settings → Profiles → Smart routing; selector "This site" | **Done** (links from other apps, typed addresses) | In-page navigation (M5) |
+| Link menu "Open link in profile" | Shell `menus` item (content area context menu) | **Done**: lists the other profiles; hidden in private windows | Profile colours as menu icons |
 | Upstream profile menu | App menu → Profiles, `about:profilemanager`, `about:editprofile`, `about:deleteprofile` | Upstream, linked from Nulavio settings | — |
 | Onboarding | `about:welcome` | Upstream | Nulavio flow A (M6) |
 | Error pages | `aboutNetError`, `blockedSite.xhtml` | Upstream | Horizon styling, criteria untouched (M6) |
