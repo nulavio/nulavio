@@ -51,7 +51,7 @@ Languages: the build packages en-US plus `NULAVIO_LOCALES` (default `pt-BR`), fe
 
 Patches go in `browser/patches/` with `Owner:` and `Upstream:` headers, listed in `series`. Prefer prefs, policies, branding or built-in add-ons over patches.
 
-Integration tests against your build: `NULAVIO_ENGINE=~/.cache/nulavio-build/install/nulavio/nulavio python3 -I tests/run.py integration`. The search tests (`test_search.py`) record every HTTP request while typing into the real address bar; the profile tests (`test_profiles.py`) need the build because they use the engine's own profile management, so they register a profile in a throwaway home (`harness.GeckoProfileSession`) and drive the second instance a switch starts.
+Integration tests against your build: `NULAVIO_ENGINE=~/.cache/nulavio-build/install/nulavio/nulavio python3 -I tests/run.py integration`. The search tests (`test_search.py`) record every HTTP request while typing into the real address bar; the profile tests (`test_profiles.py`) need the build because they use the engine's own profile management, so they register a profile in a throwaway home (`harness.GeckoProfileSession`) and drive the second instance a switch starts. It also starts a private D-Bus session bus, because the engine's remote service (how links from other apps and profile switches reach a running instance) uses D-Bus on Linux; `test_routing.py` delivers links that way.
 
 ## Website (nulavio.net)
 

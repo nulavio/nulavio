@@ -27,7 +27,7 @@ Status legend: **Done** (implemented and verified by a test or recorded evidence
 | FR-19 | Environment and profile diagnostics | **Done** (`nulavio doctor`) | manual |
 | FR-20 | Desktop integration without root | **Done** (`nulavio desktop install/uninstall`) | desktop unit tests |
 | FR-21 | Search engine choice: privacy-focused providers, SearXNG instance, custom URL or OpenSearch, aliases, separate private default, add/remove in the UI | **Done (Track B)** ([ADR 0002](../adr/0002-nulavio-search.md)). Track A: upstream Settings | `test_search` 04, 06–10, 12 |
-| FR-22 | Smart Profile Routing (explicit rules, host > domain > policy > stay) | **Planned** (designed in ADR 0003; next slice) | — |
+| FR-22 | Smart Profile Routing (explicit rules, host > domain > policy > stay) | **Done (Track B) for links from other apps** (M4a): decided before any request, conservative failure, ask first, rules editor, "Always open this site in this profile". Typed URLs and in-page links: Planned (M4b, M5) | `test_routing` |
 | FR-23 | Integration Manager (KDE, portals, Secret Service, default browser) with real discovery | **Planned** ([ADR 0004](../adr/0004-nulavio-connect.md)) | — |
 
 ## Security and privacy

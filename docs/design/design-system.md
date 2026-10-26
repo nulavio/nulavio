@@ -8,7 +8,7 @@
 | `browser/branding/nulavio/content/theme/tokens.css` | The browser window (Horizon) | `light-dark()`, following the engine's colour scheme |
 | `browser/shell/lib/identity-colors.js` | The profile icon the Shell draws for the toolbar | Same in both themes |
 
-`scripts/brand/contrast.py` checks every declared pair (**78/78 pass**, both themes). `tests/integration/test_horizon.py` re-measures contrast on the rendered window.
+`scripts/brand/contrast.py` checks every declared pair (**81/81 pass**, both themes). `tests/integration/test_horizon.py` re-measures contrast on the rendered window.
 
 ## Colour
 
@@ -90,6 +90,11 @@ The minimum target is 24×24 CSS px (WCAG 2.5.8); `test_06` measures the real bu
 | Confirmation | `<dialog>` via `confirmDialog()` | Native modal; Cancel focused first; destructive verb in critical text |
 | Badge | `.badge`, `.badge--quiet` | `accent.tint` / `bg.sunken` with `text.primary` |
 | Status line | `#status[role=status]` | Results in words with ✓ or ⚠; never colour alone |
+| Held address | `.url` | A link routing held back, shown as text on `bg.sunken` (never a live link); `overflow-wrap: anywhere` |
+| Target profile | `.target` | Chip + profile name on the routing pages |
+| Links | `a` | `accent.default`, underlined; thicker underline on hover |
+
+Screenshots: [settings](screenshots/settings-light.png), [profile selector](screenshots/profile-selector-dark.png), [routing question](screenshots/routing-ask-light.png), [link not opened](screenshots/routing-blocked-dark.png), [routing rules](screenshots/routing-rules-dark.png).
 
 ## Component gallery
 

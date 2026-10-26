@@ -49,7 +49,7 @@ Each milestone has a definition of done (DoD). "Done" requires the DoD to be ver
 - [x] Nulavio Search: DuckDuckGo default (normal and private, only where the default was still the app's), Brave and Mojeek added with aliases, Kagi and SearXNG on request (never a public instance), custom URL and OpenSearch, add/remove in Nulavio settings
 - [x] No typed text leaves without consent: suggestions and trending off; per-provider consent enforced at the single fetch point (patch 0004); measured on the real engine (`test_search`)
 - [x] Nulavio Profiles: engine profiles with templates (Personal, Work, Banking, Research), toolbar selector with the profile's colour and initial, Alt+Shift+P, one-click switch, rename/icon/colour, delete with confirmation; isolation and no duplicate instance measured (`test_profiles`)
-- [ ] Smart Profile Routing M4a: decision engine (precedence, IDN, Public Suffix List) + external links routed before any request
+- [x] Smart Profile Routing M4a: decision engine (precedence, IDN, Public Suffix List) + links from other apps routed before any request, with ask-first and conservative failure pages, rules editor and "Always open this site in this profile" (`test_routing`)
 - [ ] Smart Profile Routing M4b/M5: typed URLs, "Always open this site in this profile", rules editor, conflict dialog
 - [ ] Temporary profile (deleted on close)
 - [ ] Nulavio Connect: discovery CLI (`nulavio integrations`), then the Integration Manager page
@@ -93,4 +93,4 @@ Each milestone has a definition of done (DoD). "Done" requires the DoD to be ver
 
 ## Next task (recommended)
 
-**Smart Profile Routing, slice M4a**: a pure decision module (`NulavioRouter.sys.mjs`: host and registrable-domain rules, IDN to punycode, Public Suffix List, precedence explicit > host > domain > policy > stay) with exhaustive tests, then external links (desktop handler) routed to the target profile before any network request, with conservative failure. Rules stay local and are created only by the user.
+**Smart Profile Routing M4b**: typed URLs in the address bar routed on submission (before navigation, same hand-off and failure pages), plus an "Open in profile…" item in the link context menu that carries the user's explicit choice. Then M5 (in-page navigation) only after a security review.

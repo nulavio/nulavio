@@ -308,10 +308,10 @@ Each scenario lists: assets · adversary · preconditions · trust boundary · i
 | Preconditions | Several profiles (personal, work, banking) |
 | Boundary | TB13 |
 | Impact | A session or tracker cookie set in one profile is visible in another; a running profile deleted under the user's feet |
-| Preventive | **Now:** each profile is a separate engine instance and directory; switching passes only an activation command, never cookies or storage; the engine's lock refuses deleting a running profile; switching reuses a running instance |
+| Preventive | **Now:** each profile is a separate engine instance and directory; switching passes only an activation command, never cookies or storage; the engine's lock refuses deleting a running profile; switching reuses a running instance. Links from other apps are routed by the user's rules before any request; if the target cannot take a link, nothing is loaded and opening it elsewhere is an explicit choice |
 | Detective | Toolbar shows the active profile's colour, icon and name |
 | Limitations | Same-UID processes can read every profile (TB6, S11); routing rules (next slice) must never move a session |
-| Tests | `test_profiles` 05, 06, 08 |
+| Tests | `test_profiles` 05, 06, 08; `test_routing` |
 | Residual | **Low** |
 
 ---

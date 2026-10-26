@@ -1,6 +1,6 @@
 # ADR 0003 — Nulavio Profiles and Smart Profile Routing
 
-- **Status:** Accepted (2026-10-25). Profiles implemented in Track B (2026-10-26). Routing: designed; the decision engine is the next slice.
+- **Status:** Accepted (2026-10-25). Profiles implemented in Track B (2026-10-26). Routing M4a (links from other apps) implemented (2026-10-26); M4b and M5 designed.
 - **Related:** [ADR 0002](0002-nulavio-search.md), [trust boundaries](../architecture/trust-boundaries.md).
 
 ## Context
@@ -46,7 +46,7 @@ Private windows have a separate policy: the default is never to switch, and rule
 **Normalisation:** lower-case, IDN to punycode (`Services.io.newURI().asciiHost`), trailing dot removed. IP literals match only exact rules.
 
 **Where it runs (staged, safest first):**
-- **M4a External links.** URLs from the desktop handler reach the engine as a command line, through the remote service or at start-up. The router decides **before any network request**. If another profile is the target, it calls `launchInstance(target, [url])` and opens nothing in the current one.
+- **M4a External links (implemented).** URLs from the desktop handler reach the engine as a command line, through the remote service or at start-up. The router decides **before any network request**. If another profile is the target, the link goes there with the routed flag and nothing opens in the current one. See [M4a implementation](#m4a-implementation).
 - **M4b Typed URLs.** The decision runs on the address-bar submission, before navigation, with the same hand-off.
 - **M5 In-page navigation.** Only after a security review: top-level, user-initiated, `GET` navigations to `http(s)` only.
 
@@ -74,13 +74,31 @@ browser.nulavioProfiles (experiment API, built-in Shell only; logic in browser/s
 Identity colour: pref nulavio.profiles.colors (JSON id -> colour key), tracked by the engine's shared-prefs
 store so every profile of the group sees it. Reading never creates the group store.
 
-NulavioRouter.sys.mjs (pure decision engine, next slice)
-  normalizeHost(urlOrHost) -> {host, registrable, isIP}
-  decide({url, source: "external"|"typed"|"link", private, explicitProfileId, currentProfileId, rules, policy})
-    -> {action: "stay"|"open-in"|"ask"|"refuse", profileId?, rule?, reason}
+NulavioRouter.sys.mjs (pure decisions, no state or I/O)
+  normalizeHost(urlOrHost) -> {host, registrable, isIP, display}
+  validateRule({site, match: "host"|"domain", action: "open-in"|"ask"|"stay", profileId?}) -> {match, value, action, profileId}
+  decide({url, rules, enabled, currentProfileId, isPrivate, explicitProfileId})
+    -> {action: "stay"|"open-in"|"ask", profileId, ruleId, reason}
+  parseCommandLine(args) -> {supported, items: [{start, end, value}]}
+
+NulavioRouting.sys.mjs (rules in shared prefs, command lines, hand-off) and browser.nulavioRouting:
+  state() ; setEnabled(bool) ; addRule({site, match, action, profileId?}) ; removeRule(id)
+  setRuleAction(id, action) ; ruleFor(url) ; openIn(profileId, url)   // explicit choice
+  onChanged
 ```
 
 Verification: `tests/integration/test_profiles.py` runs a registered profile in a disposable home (`harness.GeckoProfileSession`) and drives the second instance the switch starts: a cookie and `localStorage` set in one profile are absent in the other, a second switch keeps one process, a running profile cannot be deleted, the popup switches with one click, the settings page asks before deleting and the toolbar follows a rename (10/10).
+
+## M4a implementation
+
+- **Hook.** `browser/branding/nulavio/components.conf` registers `NulavioCommandLine.sys.mjs` as the command-line handler `l-nulavio-routing`. Handlers run in alphabetical order, so it runs before the browser opens URLs (`m-browser`, `x-default`), both at start-up and for command lines from the remote service. It is registered at build time from Nulavio's branding directory: no Mozilla file is patched, and it works before the Shell add-on starts.
+- **What is routed.** Only plain URL command lines: bare URLs, `-url`, `-new-tab`, `-new-window`, with `http`/`https` after the engine's own URL fixup. A command line with any other flag (`-private-window`, `-search`, `-kiosk`, files...) is left entirely to the browser.
+- **Running instance.** The rules in this profile's prefs are current (the engine pushes shared-pref changes to running instances), so the decision is immediate; only the links that move are removed from the command line.
+- **Start-up.** The group's rules may be newer in the group store than in this profile, so web links are held until the engine's profile service has loaded them; links that belong here then open in a new tab next to the start page.
+- **Hand-off.** `--nulavio-routed -new-tab <url>` through the engine's remote service (D-Bus on Linux), or a new instance started with an argument list. The flag marks an explicit or routed open: the receiving profile never routes it again, so rules cannot loop.
+- **Failure.** A missing target profile, a failed start or an internal error opens a local Nulavio page that shows the address as text, loads nothing, and offers "Try again" or "Open in this profile anyway" (the user's explicit choice). "Ask" rules open a local question page, with "Remember for this site".
+- **Rules UI.** Settings → Profiles → Smart routing (global switch, rules list with the target profile, add/remove); the toolbar selector offers "Always open <site> in this profile" for the active tab (`activeTab`, only after a click). Nothing creates a rule without one of these actions.
+- **Verification.** `tests/integration/test_routing.py`: decision matrix on the engine's PSL and IDN, rule validation, command-line forms, and end-to-end links delivered through the remote service: the link loads once and only in the rule's profile; a running target gets it without a second instance; "ask" loads nothing until the choice; routed and private command lines are not moved; routing off; a deleted target never falls back silently; a link that starts the browser waits for the rules; the rules editor.
 
 ## Risks
 
@@ -91,4 +109,6 @@ Verification: `tests/integration/test_profiles.py` runs a registered profile in 
 | A user thinks a switch keeps them signed in | UI copy: "Each profile has its own sessions; you will sign in again" |
 | Routing loops (A sends to B, B rule sends back) | The decision carries `source`; a routed open is always treated as an explicit choice in the target |
 | Leaking which sites a user visits through rules | Rules stay local (profile group store or prefs) and are never logged with URLs |
+| An explicit `-P <profile>` on a command line cannot be told apart from a link (the engine consumes it before handlers run) | Routing applies; turn routing off or use "Never switch" for that site. In-browser explicit choices carry the routed flag |
+| A link that starts the browser opens next to the start page when it stays | Documented ([R22](../security/residual-risks.md)); the alternative (reading the group database synchronously at start-up) was rejected |
 | Upstream behaviours on the first extra profile: the current one becomes "Original profile" and a chooser appears at start-up | Kept as upstream does; renaming is one click in Nulavio settings ([R18](../security/residual-risks.md)) |
