@@ -6,8 +6,9 @@
 |---|---|---|
 | `browser/startpage/tokens.css` | Start page, Shell pages, site, mockups | `prefers-color-scheme` + `[data-theme]` |
 | `browser/branding/nulavio/content/theme/tokens.css` | The browser window (Horizon) | `light-dark()`, following the engine's colour scheme |
+| `browser/shell/lib/identity-colors.js` | The profile icon the Shell draws for the toolbar | Same in both themes |
 
-`scripts/brand/contrast.py` checks every declared pair (**55/55 pass**, both themes). `tests/integration/test_horizon.py` re-measures contrast on the rendered window.
+`scripts/brand/contrast.py` checks every declared pair (**78/78 pass**, both themes). `tests/integration/test_horizon.py` re-measures contrast on the rendered window.
 
 ## Colour
 
@@ -27,6 +28,11 @@ Primitives: navy 950–0, mint 700/400/200/100, amber 700/400/100, red 700/400/3
 | `focus` | mint.700 | mint.400 | Focus rings |
 | `status.warning / critical` | amber.700 / red.700 | amber.400 / red.400 | Warnings and errors, always with an icon and words |
 | `status.secure` | navy.600 | navy.200 | The secure state is **neutral**: no green "safe" |
+| `accent.tint` | mint.100 `#DDF8F0` | mint.900 `#0E3B33` | Badges ("Default", "Current profile") under `text.primary` |
+
+### Profile identity colours (`identity.*`)
+
+Six fills a person picks for a profile: mint `#6FE0C5`, sky `#8CCBF5`, violet `#C2B0F7`, rose `#F4A8BD`, sand `#EBC77F`, slate `#BFD0D6`, with `identity.on` (navy.950) for the icon, initial and ring. They are the same in both themes because a chip is self-contained (fill + ring + icon), and colour is never the only cue: the name, icon or initial is always there. Checked pairs: `identity.on` on every fill (≥ 4.5:1), every fill on the dark toolbar and the ring on the light toolbar (≥ 3:1). Sand is not a warning: it never appears without a profile's name.
 
 ## Scales
 
@@ -71,6 +77,19 @@ The minimum target is 24×24 CSS px (WCAG 2.5.8); `test_06` measures the real bu
 | Toolbar and buttons | `--toolbar-*`, `--toolbarbutton-*` |
 | Address bar | `--toolbar-field-*`, `--urlbar-border-radius`, `--urlbar-height`; results view links via `--link-color` |
 | Links in the chrome | `--link-color(-hover, -active)` = accent |
+| Profile selector (toolbar) | Shell action; icon drawn from `identity-colors.js` (fill, 1 px ring, initial); popup uses the page components below |
+
+## Components (Shell pages)
+
+| Component | Class | Notes |
+|---|---|---|
+| Identity chip | `.chip`, `--sm/--md/--lg` | `--chip` set to an `identity.*` token; the engine's profile icon in `identity.on`, initial while it loads |
+| Row | `.row`, `.row__main`, `.row__end` | Engine and profile lists; one primary action per row, destructive action quiet and confirmed |
+| Switch | `.check--switch input[role=switch]` | Track `border.control` (off) / `accent.default` (on); the label and a hint say what turning it on sends, and to whom; native checkbox in forced colours |
+| Disclosure | `details.more` | Less frequent edits (alias, profile name/icon/colour) |
+| Confirmation | `<dialog>` via `confirmDialog()` | Native modal; Cancel focused first; destructive verb in critical text |
+| Badge | `.badge`, `.badge--quiet` | `accent.tint` / `bg.sunken` with `text.primary` |
+| Status line | `#status[role=status]` | Results in words with ✓ or ⚠; never colour alone |
 
 ## Component gallery
 

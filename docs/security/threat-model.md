@@ -284,6 +284,36 @@ Each scenario lists: assets · adversary · preconditions · trust boundary · i
 | Tests | `test_06_https_only_upgrades_and_exception_is_revocable` |
 | Residual | **Medium** |
 
+### S17 — Typed text sent to search providers
+
+| Field | |
+|---|---|
+| Assets | A3 (browsing history and intent) |
+| Adversary | Search provider, anyone it shares data with |
+| Preconditions | Remote search suggestions or trending searches on; typing in the address bar, including with an alias such as `@engine` |
+| Boundary | TB12 |
+| Impact | Every keystroke, including text never searched for (pasted passwords, private URLs), reaches a third party |
+| Preventive | **Now:** suggestions and trending off by default (both tracks); Track B requires per-provider consent at the single fetch point (patch 0004), so consent for one engine does not cover others reached through aliases; the settings page names the host that receives the text |
+| Detective | Nulavio settings show which providers receive typed text |
+| Limitations | Track A has one global switch (R17); DNS is not measured by the test (R20) |
+| Tests | `test_search` 02, 03, 05 |
+| Residual | **Low** (Track B) / **Medium** (Track A with suggestions turned on) |
+
+### S18 — Data crossing profiles
+
+| Field | |
+|---|---|
+| Assets | A1 (sessions), A2 (credentials) |
+| Adversary | A site the user visits in another profile; a mistaken switch |
+| Preconditions | Several profiles (personal, work, banking) |
+| Boundary | TB13 |
+| Impact | A session or tracker cookie set in one profile is visible in another; a running profile deleted under the user's feet |
+| Preventive | **Now:** each profile is a separate engine instance and directory; switching passes only an activation command, never cookies or storage; the engine's lock refuses deleting a running profile; switching reuses a running instance |
+| Detective | Toolbar shows the active profile's colour, icon and name |
+| Limitations | Same-UID processes can read every profile (TB6, S11); routing rules (next slice) must never move a session |
+| Tests | `test_profiles` 05, 06, 08 |
+| Residual | **Low** |
+
 ---
 
 See the [threat matrix](threat-matrix.md) for the at-a-glance view and [residual risks](residual-risks.md) for what users must know.

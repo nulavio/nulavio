@@ -20,6 +20,8 @@ At-a-glance view of [threat-model.md](threat-model.md). Ratings use likelihood (
 | S14 | Update/package attack | T-SUPPLY, T-NET | 1 | 3 | Distro-signed engine, AMO signing, downgrade protection kept | Signed RPM repo (B) | env unit test | Low-medium |
 | S15 | 3rd-party ext steals creds | T-EXT | 2 | 3 | doctor inventory | Sensitive-sites container | — | Medium-high |
 | S16 | Cross-origin redirects | T-WEB | 2 | 2 | Default referrer policy, HTTPS-Only, query stripping | Redirect provenance on login pages | `test_06` | Medium |
+| S17 | Typed text sent to search providers | Search provider | 3 | 2 | Suggestions and trending off; per-provider consent at the fetch point (Track B) | — | `test_search` | Low (B) / Medium (A, opted in) |
+| S18 | Data crossing profiles | T-WEB | 2 | 2 | Separate instances and directories, engine lock, no session transfer | Routing that never moves sessions | `test_profiles` | Low |
 
 ## Web threats vs. host threats
 

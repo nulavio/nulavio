@@ -20,7 +20,7 @@ A web where the browser's defaults serve the person using it, every protection i
 
 **The Gecko browser that ships protection on day one, works with your password manager, explains every choice, and never phones home.**
 
-Proof points (all verifiable in this repository): upstream sandbox verified per process; ad blocking tested and reversible; official Proton Pass / KeePassXC / Bitwarden extensions; 23 documented defaults; no Nulavio server.
+Proof points (all verifiable in this repository): upstream sandbox verified per process; ad blocking tested and reversible; official Proton Pass / KeePassXC / Bitwarden extensions; 27 documented defaults; no Nulavio server.
 
 ## Audience
 

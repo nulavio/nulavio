@@ -51,6 +51,8 @@ Languages: the build packages en-US plus `NULAVIO_LOCALES` (default `pt-BR`), fe
 
 Patches go in `browser/patches/` with `Owner:` and `Upstream:` headers, listed in `series`. Prefer prefs, policies, branding or built-in add-ons over patches.
 
+Integration tests against your build: `NULAVIO_ENGINE=~/.cache/nulavio-build/install/nulavio/nulavio python3 -I tests/run.py integration`. The search tests (`test_search.py`) record every HTTP request while typing into the real address bar; the profile tests (`test_profiles.py`) need the build because they use the engine's own profile management, so they register a profile in a throwaway home (`harness.GeckoProfileSession`) and drive the second instance a switch starts.
+
 ## Website (nulavio.net)
 
 The site is static (`site/`): no JavaScript, no third-party resources, no cookies, security headers in `site/_headers`. Build it with the brand assets and check it with the unit tests:
@@ -79,6 +81,8 @@ It is hosted on Cloudflare Pages (project `nulavio`). Deployments are uploaded b
 | Logo/icons | Edit `scripts/brand/build_logo.py` (never hand-edit generated SVGs), then run `build_logo.py` and `build_icons.py` |
 | Mockups | Edit `docs/brand/mockups/`, then run `scripts/brand/render_mockups.py` |
 | New integration or trust boundary | Add a row to `docs/architecture/trust-boundaries.md` and a scenario to the threat model |
+| Search provider | `PROVIDERS` in `browser/shell/modules/NulavioSearch.sys.mjs`, with URLs from the provider's own OpenSearch description; `firstRun: false` for paid services; never a public SearXNG instance. Run `test_search.py` on the build |
+| Shell privileged API | Logic in `browser/shell/modules/*.sys.mjs` (validates everything it receives), a thin `experiments/<name>/parent.js`, a schema; error codes need `err_*` messages in both locales (`tests/unit/test_shell.py`) |
 
 ## Commits and pull requests
 

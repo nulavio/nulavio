@@ -32,7 +32,7 @@ Each milestone has a definition of done (DoD). "Done" requires the DoD to be ver
 - [x] Nulavio Shell UI, M0–M2 first slice: audit, three directions, Horizon chosen, window theme for tab strip, toolbar and address bar (Track B). Next milestones: [design migration plan](../design/migration-plan.md)
 
 - [x] Track A: launcher, isolated profile, start page, desktop identity, chrome theme
-- [x] Track B inputs: `browser/branding/nulavio/` + generated assets, `browser/build/mozconfig`, patch stack (`browser/patches/`, 2 patches: vendor name, l10n mapping of the branding), container build script
+- [x] Track B inputs: `browser/branding/nulavio/` + generated assets, `browser/build/mozconfig`, patch stack (`browser/patches/`, 4 patches: vendor name, l10n mapping of the branding, Horizon stylesheet link, per-provider consent for search suggestions), container build script
 - [x] `distribution/` generated from `browser/config/` (`distribution.ini` defaults + `policies.json`), verified active in the build (`test_13`)
 - [x] Google Safe Browsing API key from a secret: dedicated Google Cloud project, key restricted to the Safe Browsing API, build passes 17/17 incl. the end-to-end phishing test
 - [x] Nulavio Shell built-in add-on (`browser/shell/`), built from the branding directory with no Mozilla file patched
@@ -43,6 +43,18 @@ Each milestone has a definition of done (DoD). "Done" requires the DoD to be ver
 - [x] Track B in Portuguese: en-US + pt-BR packaged from signed-off firefox-l10n revisions, brand translated, follows the desktop language
 
 **DoD:** a branded Nulavio binary built from verified source opens a window on Fedora KDE Wayland with the sandbox verified by `test_04`, with no Mozilla marks in the UI.
+
+## Phase 2b — Search, profiles, routing and integrations ([ADR 0002](../adr/0002-nulavio-search.md), [0003](../adr/0003-nulavio-profiles-and-routing.md), [0004](../adr/0004-nulavio-connect.md))
+
+- [x] Nulavio Search: DuckDuckGo default (normal and private, only where the default was still the app's), Brave and Mojeek added with aliases, Kagi and SearXNG on request (never a public instance), custom URL and OpenSearch, add/remove in Nulavio settings
+- [x] No typed text leaves without consent: suggestions and trending off; per-provider consent enforced at the single fetch point (patch 0004); measured on the real engine (`test_search`)
+- [x] Nulavio Profiles: engine profiles with templates (Personal, Work, Banking, Research), toolbar selector with the profile's colour and initial, Alt+Shift+P, one-click switch, rename/icon/colour, delete with confirmation; isolation and no duplicate instance measured (`test_profiles`)
+- [ ] Smart Profile Routing M4a: decision engine (precedence, IDN, Public Suffix List) + external links routed before any request
+- [ ] Smart Profile Routing M4b/M5: typed URLs, "Always open this site in this profile", rules editor, conflict dialog
+- [ ] Temporary profile (deleted on close)
+- [ ] Nulavio Connect: discovery CLI (`nulavio integrations`), then the Integration Manager page
+
+**DoD:** each item verified on the Nulavio build by an integration test that uses the engine's real services.
 
 ## Phase 3 — Privacy and blocking
 
@@ -81,4 +93,4 @@ Each milestone has a definition of done (DoD). "Done" requires the DoD to be ver
 
 ## Next task (recommended)
 
-**Track B build spike** in a disposable Fedora container. Prerequisite: the maintainer approves about 45 GB of disk and 1–2 h of CPU. Output: measured build time, branding dir and first `mozconfig`. In parallel, the maintainer can run the manual Proton Pass certification with a test account.
+**Smart Profile Routing, slice M4a**: a pure decision module (`NulavioRouter.sys.mjs`: host and registrable-domain rules, IDN to punycode, Public Suffix List, precedence explicit > host > domain > policy > stay) with exhaustive tests, then external links (desktop handler) routed to the target profile before any network request, with conservative failure. Rules stay local and are created only by the user.
