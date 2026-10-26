@@ -79,8 +79,9 @@ async function render() {
   const actions = [];
   const remember = () => document.getElementById("remember").checked;
   if (mode === "ask") {
+    const typed = params.get("src") === "typed";
     document.getElementById("explain").textContent = target
-      ? t("routingAskExplain", [host, target.name])
+      ? t(typed ? "routingAskExplainTyped" : "routingAskExplain", [host, target.name])
       : t("routingRuleGone", [host]);
     if (target) {
       actions.push(button(t("routingOpenIn", [target.name]), "button--primary", () => openThere(url, rule, remember())));

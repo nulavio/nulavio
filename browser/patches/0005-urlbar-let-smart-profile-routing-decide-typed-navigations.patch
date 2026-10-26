@@ -1,0 +1,53 @@
+Subject: [PATCH] urlbar: let Smart Profile Routing decide typed navigations
+
+Nulavio routes a navigation to the profile the user's rules name
+(docs/adr/0003-nulavio-profiles-and-routing.md). For addresses typed in
+the address bar the decision has to happen before the load starts, and
+UrlbarParentController.loadURL is the single parent-side place where
+every address-bar load is started.
+
+This adds one call there, to a Nulavio module shipped from the branding
+directory. It returns false (load as usual) unless a rule sends the
+address to another profile or asks first; then this tab is left as it
+is and the input reverts. POST loads, downloads ("save") and private
+windows are never routed. The module catches its own errors.
+
+Owner: Nulavio maintainers
+Upstream: not applicable (product feature).
+---
+--- a/browser/components/urlbar/UrlbarParentController.sys.mjs
++++ b/browser/components/urlbar/UrlbarParentController.sys.mjs
+@@ -31,6 +31,9 @@
+     "chrome://browser/content/usercontext/ContainerCreationPanel.mjs",
+   ExtensionUtils: "resource://gre/modules/ExtensionUtils.sys.mjs",
+   Interactions: "moz-src:///browser/components/places/Interactions.sys.mjs",
++  NulavioUrlbarRouting:
++    "resource:///modules/nulavio/NulavioUrlbarRouting.sys.mjs",
++  PrivateBrowsingUtils: "resource://gre/modules/PrivateBrowsingUtils.sys.mjs",
+   ProvidersManager:
+     "moz-src:///browser/components/urlbar/UrlbarProvidersManager.sys.mjs",
+   SearchService: "moz-src:///toolkit/components/search/SearchService.sys.mjs",
+@@ -1036,6 +1039,23 @@
+     }
+     params.postData = postData;
+ 
++    // Nulavio: Smart Profile Routing decides where a navigation typed in the
++    // address bar happens before anything is loaded here; when it hands the
++    // navigation to another profile (or asks first), this tab stays as it is.
++    if (
++      this.#isAddressbar &&
++      lazy.NulavioUrlbarRouting.handle({
++        url,
++        postData,
++        where,
++        isPrivate:
++          Boolean(params.private) ||
++          lazy.PrivateBrowsingUtils.isWindowPrivate(this.browserWindow),
++      })
++    ) {
++      return { reverted: true, browserId: browser.browserId };
++    }
++
+     if (this.#isAddressbar) {
+       this.#prepareAddressbarLoad({
+         browser,

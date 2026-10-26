@@ -136,6 +136,9 @@ class FixtureServer:
                 f'<img id="ad" src="/adbanners/nulavio-test.png?n={n}">'
             )
             return page.encode(), html, {}
+        if path == "/links":
+            # A page with a link, for link context menus (tests/integration/test_routing.py).
+            return b'<!doctype html><title>links</title><a id="go" href="/page/from-menu">go</a>', html, {}
         if path == "/search":
             # Fixture search engine (tests/integration/test_search.py).
             return f"<!doctype html><title>search-fixture</title><p id=q>{query.get('q', '')}</p>".encode(), html, {}

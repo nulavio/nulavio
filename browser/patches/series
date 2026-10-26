@@ -5,3 +5,4 @@
 0002-l10n-map-nulavio-branding.patch
 0003-shell-load-the-nulavio-horizon-theme.patch
 0004-search-require-per-engine-consent-for-suggestions.patch
+0005-urlbar-let-smart-profile-routing-decide-typed-navigations.patch

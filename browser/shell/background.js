@@ -52,3 +52,47 @@ if (browser.nulavioProfiles && browser.action) {
   browser.nulavioProfiles.onChanged.addListener(() => showCurrentProfile().catch(console.error));
   showCurrentProfile().catch(console.error);
 }
+
+// -- "Open link in profile": the user's explicit choice from a link's menu --
+// Only web links; never offered in private windows (private browsing never
+// switches profile). The link goes with the routed flag, so no rule moves it again.
+
+const LINK_MENU = "nulavio-open-link-in";
+let menuBuild = null;
+
+async function buildLinkMenu() {
+  await browser.menus.removeAll();
+  const state = await browser.nulavioProfiles.list();
+  const others = state.available ? state.profiles.filter(p => !p.isCurrent && p.id !== null) : [];
+  if (!others.length) {
+    return;
+  }
+  const scope = { contexts: ["link"], targetUrlPatterns: ["http://*/*", "https://*/*"] };
+  browser.menus.create({ id: LINK_MENU, title: t("menuOpenLinkIn"), ...scope });
+  for (const profile of others) {
+    browser.menus.create({ id: `${LINK_MENU}:${profile.id}`, parentId: LINK_MENU, title: profile.name, ...scope });
+  }
+}
+
+function rebuildLinkMenu() {
+  clearTimeout(menuBuild);
+  menuBuild = setTimeout(() => buildLinkMenu().catch(console.error), 100);
+}
+
+if (browser.nulavioProfiles && browser.nulavioRouting && browser.menus) {
+  browser.menus.onClicked.addListener((info, tab) => {
+    const id = String(info.menuItemId);
+    if (!id.startsWith(`${LINK_MENU}:`) || tab?.incognito) {
+      return;
+    }
+    browser.nulavioRouting.openIn(Number(id.slice(LINK_MENU.length + 1)), info.linkUrl).catch(console.error);
+  });
+  browser.menus.onShown.addListener(async (info, tab) => {
+    if (info.menuIds.includes(LINK_MENU)) {
+      await browser.menus.update(LINK_MENU, { visible: !tab?.incognito });
+      browser.menus.refresh();
+    }
+  });
+  browser.nulavioProfiles.onChanged.addListener(rebuildLinkMenu);
+  rebuildLinkMenu();
+}

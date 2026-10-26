@@ -16,7 +16,7 @@ sys.path.insert(0, str(ROOT / "scripts" / "build"))
 import make_shell  # noqa: E402
 
 SHELL = ROOT / "browser" / "shell"
-ALLOWED_PERMISSIONS = {"activeTab", "downloads", "management", "privacy", "search"}
+ALLOWED_PERMISSIONS = {"activeTab", "downloads", "management", "menus", "privacy", "search"}
 FLOW_E_TYPES = {".appimage", ".sh", ".run", ".desktop", ".deb", ".rpm", ".flatpakref"}  # docs/brand/ux-flows.md
 
 
@@ -257,8 +257,29 @@ class RoutingTest(unittest.TestCase):
         module = re.search(r'"esModule": "resource:///modules/nulavio/([^"]+)"', conf).group(1)
         self.assertTrue((self.BRANDING / module).is_file())
         moz_build = (self.BRANDING / "moz.build").read_text(encoding="utf-8")
-        self.assertIn(f'EXTRA_JS_MODULES.nulavio += ["{module}"]', moz_build)
+        self.assertRegex(moz_build, rf'EXTRA_JS_MODULES\.nulavio \+= \[[^\]]*"{re.escape(module)}"')
         self.assertIn('XPCOM_MANIFESTS += ["components.conf"]', moz_build)
+
+    def test_address_bar_hook_is_small_and_conservative(self):
+        patch = (
+            ROOT / "browser" / "patches" / "0005-urlbar-let-smart-profile-routing-decide-typed-navigations.patch"
+        ).read_text()
+        added = [line[1:] for line in patch.splitlines() if line.startswith("+") and not line.startswith("+++")]
+        removed = [line for line in patch.splitlines() if line.startswith("-") and not line.startswith("---")]
+        self.assertEqual(removed, [], "the hook only adds code")
+        self.assertLessEqual(len(added), 25)
+        self.assertIn('    "resource:///modules/nulavio/NulavioUrlbarRouting.sys.mjs",', added)
+        hook = (self.BRANDING / "NulavioUrlbarRouting.sys.mjs").read_text(encoding="utf-8")
+        self.assertIn("return false;", hook, "an unavailable router must not block typing")
+        self.assertIn('"NulavioUrlbarRouting.sys.mjs"', (self.BRANDING / "moz.build").read_text(encoding="utf-8"))
+        routing = module_text("NulavioRouting.sys.mjs")
+        self.assertIn('if (postData || !["current", "tab", "tabshifted", "window"].includes(where)) {', routing)
+
+    def test_link_menu_is_explicit_and_not_private(self):
+        background = (SHELL / "background.js").read_text(encoding="utf-8")
+        self.assertIn('targetUrlPatterns: ["http://*/*", "https://*/*"]', background)
+        self.assertIn("tab?.incognito", background)
+        self.assertIn("browser.nulavioRouting.openIn(", background)
 
     def test_handler_only_hands_over(self):
         handler = (self.BRANDING / "NulavioCommandLine.sys.mjs").read_text(encoding="utf-8")

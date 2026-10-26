@@ -201,7 +201,7 @@
   "routingEditRules": {"message": "Edit routing rules"},
   "routingBadLink": {"message": "This page was opened without a valid web address."},
   "routingAskExplain": {"message": "A link from another app goes to $HOST$. Your rule says to ask before opening it in $PROFILE$.", "placeholders": {"host": {"content": "$1"}, "profile": {"content": "$2"}}},
-  "routingRuleGone": {"message": "A link from another app goes to $HOST$. The rule for it no longer exists.", "placeholders": {"host": {"content": "$1"}}},
+  "routingRuleGone": {"message": "This address is on $HOST$, but the rule for it no longer exists.", "placeholders": {"host": {"content": "$1"}}},
   "routingOpenIn": {"message": "Open in $PROFILE$", "placeholders": {"profile": {"content": "$1"}}},
   "routingOpenHere": {"message": "Open in this profile"},
   "routingBlockedMissing": {"message": "Your rule sends $HOST$ to a profile that no longer exists. So that it does not open in the wrong profile, Nulavio stopped here.", "placeholders": {"host": {"content": "$1"}}},
@@ -210,7 +210,7 @@
   "routingTryAgain": {"message": "Try $PROFILE$ again", "placeholders": {"profile": {"content": "$1"}}},
   "routingOpenHereAnyway": {"message": "Open in this profile anyway"},
   "routingHeading": {"message": "Smart routing"},
-  "routingIntro": {"message": "Links you open from other apps (email, chat, documents) follow your rules and open straight in the right profile, before anything is loaded. Links clicked inside pages are not routed yet. Rules stay on this computer and are only created by you."},
+  "routingIntro": {"message": "Links you open from other apps (email, chat, documents) and addresses you type in the address bar follow your rules and open straight in the right profile, before anything is loaded. Links clicked inside pages are not routed automatically: right-click and choose “Open link in profile”. Rules stay on this computer and are only created by you."},
   "routingEnabledLabel": {"message": "Use routing rules"},
   "routingAddHeading": {"message": "New rule"},
   "routingSiteLabel": {"message": "Site"},
@@ -227,7 +227,7 @@
   "routingTargetMissing": {"message": "⚠ The profile of this rule no longer exists"},
   "routingNoRules": {"message": "No rules yet. Create one below, or from the profile selector while a site is open."},
   "routingThisSite": {"message": "This site"},
-  "routingSiteOpensIn": {"message": "Links to $SITE$ from other apps open in $PROFILE$.", "placeholders": {"site": {"content": "$1"}, "profile": {"content": "$2"}}},
+  "routingSiteOpensIn": {"message": "Links from other apps and typed addresses for $SITE$ open in $PROFILE$.", "placeholders": {"site": {"content": "$1"}, "profile": {"content": "$2"}}},
   "routingRemoveRule": {"message": "Remove rule"},
   "routingAlwaysHere": {"message": "Always open $SITE$ in this profile", "placeholders": {"site": {"content": "$1"}}},
   "err_invalid_site": {"message": "That site address is not valid."},
@@ -235,5 +235,7 @@
   "err_invalid_action": {"message": "Choose what the rule does."},
   "err_no_domain": {"message": "IP addresses, localhost and public suffixes need a rule for the exact address."},
   "err_invalid_profile": {"message": "That profile does not exist."},
-  "err_too_many_rules": {"message": "There are too many rules. Remove some first."}
+  "err_too_many_rules": {"message": "There are too many rules. Remove some first."},
+  "menuOpenLinkIn": {"message": "Open link in profile"},
+  "routingAskExplainTyped": {"message": "You typed an address on $HOST$. Your rule says to ask before opening it in $PROFILE$.", "placeholders": {"host": {"content": "$1"}, "profile": {"content": "$2"}}}
 }

@@ -23,6 +23,23 @@ import harness
 from marionette import MarionetteError
 
 SHELL = "resource://builtin-addons/nulavio-shell/modules"
+# Trusted key events into the address bar, as Firefox's own tests type (see test_search.py).
+TYPE_JS = """
+const [text] = arguments;
+gURLBar.focus();
+gURLBar.select();
+const tip = Cc["@mozilla.org/text-input-processor;1"].createInstance(Ci.nsITextInputProcessor);
+if (!tip.beginInputTransactionForTests(window)) {
+  throw new Error("could not start an input transaction");
+}
+for (const ch of text) {
+  const event = ch === "\\n"
+    ? new KeyboardEvent("", {key: "Enter", code: "Enter", keyCode: 13})
+    : new KeyboardEvent("", {key: ch});
+  tip.keydown(event);
+  tip.keyup(event);
+}
+"""
 PRELUDE = (
     f'const R = ChromeUtils.importESModule("{SHELL}/NulavioRouting.sys.mjs").NulavioRouting;'
     f'const D = ChromeUtils.importESModule("{SHELL}/NulavioRouter.sys.mjs");'
@@ -390,6 +407,128 @@ class RoutingTest(unittest.TestCase):
         self.assertEqual((rule["match"], rule["action"]), ("domain", "ask"))
         self.m.send("WebDriver:ElementClick", {"id": self.m.find_element(f'[data-focus-key="rule-remove-{rule["id"]}"]')})
         self.assertTrue(harness.wait_until(lambda: not any("example.org" in r for r in rows()), timeout=10))
+
+    # -- M4b: addresses typed in the address bar, and the link menu -----------
+
+    def type_address(self, url: str) -> None:
+        self.m.chrome("if (window.gDialogBox?.isOpen) { window.gDialogBox.dialog?.close(); }")
+        self.m.chrome(TYPE_JS, [url])
+        time.sleep(0.3)
+        self.m.chrome(TYPE_JS.replace("gURLBar.select();", ""), ["\n"])
+
+    def selected_url(self) -> str:
+        return self.m.chrome("return gBrowser.selectedBrowser.currentURI.spec;")
+
+    def test_11_typed_address_opens_in_the_rule_profile(self):
+        rule = self.call(
+            "return R.addRule({site: '127.0.0.1', match: 'host', action: 'open-in', profileId: args[0]});",
+            self.ids["Trabalho"],
+        )
+        type(self).typed_rule = rule
+        work = self.others["Trabalho"]
+        self.m.navigate("about:blank")
+        before = self.selected_url()
+        url = self.server.url("/page/typed")
+        self.type_address(url)
+        self.assertTrue(harness.wait_until(lambda: self.hits("/page/typed"), timeout=30), "nothing was opened")
+        self.assertTrue(harness.wait_until(lambda: any(u.endswith("/page/typed") for u in self.tabs(work)), timeout=10))
+        time.sleep(1)
+        self.assertEqual(self.hits("/page/typed"), 1)
+        self.assertEqual(self.selected_url(), before, "this tab navigated away")
+        self.assertFalse(any("/page/typed" in u for u in self.own_tabs()), "it was loaded here too")
+        self.assertNotIn("/page/typed", self.m.chrome("return gURLBar.value;"), "the address bar kept the routed address")
+
+    def test_12_typed_address_can_ask_first(self):
+        self.call("await R.setRuleAction(args[0], 'ask');", self.typed_rule)
+        try:
+            self.m.navigate("about:blank")
+            self.type_address(self.server.url("/page/typed-ask"))
+            ask = harness.wait_until(lambda: [u for u in self.own_tabs() if "/routing/ask.html" in u], timeout=20)
+            self.assertTrue(ask, "no question was shown")
+            time.sleep(1)
+            self.assertEqual(self.hits("/page/typed-ask"), 0, "the site was loaded before the user chose")
+            for handle in self.m.window_handles():
+                self.m.switch_to(handle)
+                if "/routing/ask.html" in self.m.current_url():
+                    break
+            harness.wait_until(lambda: self.m.execute("return document.documentElement.dataset.ready === 'true';"), timeout=10)
+            self.assertIn("127.0.0.1", self.m.execute("return document.getElementById('explain').textContent;"))
+            # "Open in this profile" is the user's explicit choice: it loads here.
+            self.m.send("WebDriver:ElementClick", {"id": self.m.find_element("#actions .button--secondary")})
+            self.assertTrue(harness.wait_until(lambda: self.hits("/page/typed-ask"), timeout=20))
+            self.assertTrue(harness.wait_until(lambda: any(u.endswith("/page/typed-ask") for u in self.own_tabs()), timeout=10))
+        finally:
+            self.call("await R.setRuleAction(args[0], 'open-in');", self.typed_rule)
+
+    def test_13_never_routed_typed_navigations(self):
+        url = self.server.url("/page/never")
+        cases = self.call(
+            """
+            const url = args[0];
+            return {
+              privateWindow: R.routeNavigation({url, isPrivate: true}),
+              post: R.routeNavigation({url, postData: "q=1"}),
+              download: R.routeNavigation({url, where: "save"}),
+              internal: R.routeNavigation({url: "about:preferences"}),
+              script: R.routeNavigation({url: "javascript:void(0)"}),
+            };
+            """,
+            url,
+        )
+        self.assertEqual(cases, dict.fromkeys(cases, False))
+        time.sleep(1)
+        self.assertEqual(self.hits("/page/never"), 0)
+
+    def test_14_link_menu_opens_the_link_in_the_chosen_profile(self):
+        work = self.others["Trabalho"]
+        self.m.navigate(self.server.url("/links"))
+        link = self.m.find_element("#go")
+        menu_item = 'document.querySelector("[id$=\\"nulavio-open-link-in\\"]")'
+        self.m.send(
+            "WebDriver:PerformActions",
+            {
+                "actions": [
+                    {
+                        "type": "pointer",
+                        "id": "mouse",
+                        "parameters": {"pointerType": "mouse"},
+                        "actions": [
+                            {
+                                "type": "pointerMove",
+                                "origin": {"element-6066-11e4-a52e-4f735466cecf": link},
+                                "x": 0,
+                                "y": 0,
+                            },
+                            {"type": "pointerDown", "button": 2},
+                            {"type": "pointerUp", "button": 2},
+                        ],
+                    }
+                ]
+            },
+        )
+        self.m.send("WebDriver:ReleaseActions")
+        shown = harness.wait_until(
+            lambda: self.m.chrome(
+                "const m = document.getElementById('contentAreaContextMenu');"
+                f"const item = {menu_item};"
+                "return m.state === 'open' && item && !item.hidden ? item.getAttribute('label') : null;"
+            ),
+            timeout=10,
+        )
+        self.assertTrue(shown, "the link menu has no 'Open link in profile' item")
+        target = self.m.chrome(
+            f"const item = {menu_item};"
+            "const choice = [...item.querySelectorAll('menuitem')].find(i => i.getAttribute('label') === arguments[0]);"
+            "if (!choice) { return [...item.querySelectorAll('menuitem')].map(i => i.getAttribute('label')); }"
+            "choice.click(); document.getElementById('contentAreaContextMenu').hidePopup(); return 'clicked';",
+            ["Trabalho"],
+        )
+        self.assertEqual(target, "clicked")
+        self.assertTrue(harness.wait_until(lambda: self.hits("/page/from-menu"), timeout=30), "nothing was opened")
+        self.assertTrue(harness.wait_until(lambda: any(u.endswith("/page/from-menu") for u in self.tabs(work)), timeout=10))
+        time.sleep(1)
+        self.assertEqual(self.hits("/page/from-menu"), 1)
+        self.assertFalse(any("/page/from-menu" in u for u in self.own_tabs()))
 
 
 if __name__ == "__main__":

@@ -2,8 +2,8 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-/* Smart Profile Routing, M4a: links from other applications
-   (docs/adr/0003-nulavio-profiles-and-routing.md).
+/* Smart Profile Routing: links from other applications (M4a) and addresses
+   typed in the address bar (M4b) (docs/adr/0003-nulavio-profiles-and-routing.md).
 
    A link clicked in another application reaches Nulavio as a command line,
    either when it starts or through the engine's remote service. Nulavio's
@@ -261,6 +261,40 @@ class NulavioRoutingClass {
     this.#dispatch(take.map(c => c.url), { initial }).catch(e => console.error("Nulavio routing: dispatch failed", e));
   }
 
+  /**
+   * A navigation the user started in this window (address bar). Synchronous:
+   * true means routing took it over and nothing must load here.
+   * POST loads, downloads and private windows are never routed.
+   */
+  routeNavigation({ url, postData = null, where = "current", isPrivate = false, source = "typed" }) {
+    if (postData || !["current", "tab", "tabshifted", "window"].includes(where)) {
+      return false;
+    }
+    if (!this.enabled() || !Services.prefs.getBoolPref(GROUPED_PREF, false)) {
+      return false;
+    }
+    const service = lazy.SelectableProfileService;
+    if (!service.initialized || !service.currentProfile) {
+      return false; // no profile group loaded in this instance yet
+    }
+    let decision;
+    try {
+      decision = decide({ url, rules: this.rules(), currentProfileId: service.currentProfile.id, isPrivate });
+    } catch (e) {
+      console.error("Nulavio routing: decision failed; holding the navigation", e);
+      this.#openPage("routing/blocked.html", { u: url, why: "error", src: source }).catch(console.error);
+      return true;
+    }
+    if (decision.action === "stay") {
+      return false;
+    }
+    this.#handOff(url, decision, source).catch(e => {
+      console.error("Nulavio routing: could not route a navigation", e);
+      this.#openPage("routing/blocked.html", { u: url, why: "error", src: source }).catch(console.error);
+    });
+    return true;
+  }
+
   #resolve(cmdLine, value) {
     try {
       const resolved = cmdLine.resolveURI(value);
@@ -294,7 +328,7 @@ class NulavioRoutingClass {
         await this.#dispatchOne(url, { failed, rules, enabled, current });
       } catch (e) {
         console.error("Nulavio routing: could not route a link", e);
-        await this.#openPage("routing/blocked.html", { u: url, why: "error" }).catch(console.error);
+        await this.#openPage("routing/blocked.html", { u: url, why: "error", src: "app" }).catch(console.error);
       }
     }
     if (initial) {
@@ -304,7 +338,7 @@ class NulavioRoutingClass {
 
   async #dispatchOne(url, { failed, rules, enabled, current }) {
     if (failed) {
-      await this.#openPage("routing/blocked.html", { u: url, why: "error" });
+      await this.#openPage("routing/blocked.html", { u: url, why: "error", src: "app" });
       return;
     }
     const decision = decide({ url, rules, enabled, currentProfileId: current });
@@ -312,20 +346,25 @@ class NulavioRoutingClass {
       await this.#openHere(url); // held at start-up; it belongs here after all
       return;
     }
+    await this.#handOff(url, decision, "app");
+  }
+
+  /** Send a navigation where a rule says: ask first, or the target profile; never here by default. */
+  async #handOff(url, decision, source) {
     if (decision.action === "ask") {
-      await this.#openPage("routing/ask.html", { u: url, r: decision.ruleId });
+      await this.#openPage("routing/ask.html", { u: url, r: decision.ruleId, src: source });
       return;
     }
     const profile = await lazy.SelectableProfileService.getProfile(decision.profileId).catch(() => null);
     if (!profile) {
-      await this.#openPage("routing/blocked.html", { u: url, r: decision.ruleId, why: "missing" });
+      await this.#openPage("routing/blocked.html", { u: url, r: decision.ruleId, why: "missing", src: source });
       return;
     }
     try {
       this.#launchRouted(profile, url);
     } catch (e) {
       console.error("Nulavio routing: could not open the target profile", e);
-      await this.#openPage("routing/blocked.html", { u: url, r: decision.ruleId, why: "launch" });
+      await this.#openPage("routing/blocked.html", { u: url, r: decision.ruleId, why: "launch", src: source });
     }
   }
 
