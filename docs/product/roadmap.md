@@ -29,6 +29,8 @@ Each milestone has a definition of done (DoD). "Done" requires the DoD to be ver
 
 ## Phase 2 — Browser vertical slice · **Track A done; Track B dev build done**
 
+- [x] Nulavio Shell UI, M0–M2 first slice: audit, three directions, Horizon chosen, window theme for tab strip, toolbar and address bar (Track B). Next milestones: [design migration plan](../design/migration-plan.md)
+
 - [x] Track A: launcher, isolated profile, start page, desktop identity, chrome theme
 - [x] Track B inputs: `browser/branding/nulavio/` + generated assets, `browser/build/mozconfig`, patch stack (`browser/patches/`, 2 patches: vendor name, l10n mapping of the branding), container build script
 - [x] `distribution/` generated from `browser/config/` (`distribution.ini` defaults + `policies.json`), verified active in the build (`test_13`)

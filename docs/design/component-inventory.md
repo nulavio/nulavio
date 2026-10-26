@@ -1,0 +1,34 @@
+# Component inventory: current vs Horizon
+
+Status per component of the browser window and Nulavio's own pages. "Upstream" means Firefox 158's component, unmodified. Milestones refer to the [migration plan](migration-plan.md).
+
+| Component | Upstream implementation | Status (2026-10-25) | Next |
+|---|---|---|---|
+| **Tab strip** | `tabbrowser-tabs`, `tab.tabbrowser-tab` | **Horizon**: tones, 10 px radius, 34/30/41 px heights, background-tab text colour | Tab hover preview, overflow arrows (M2) |
+| Selected tab | `[visuallyselected]` | **Horizon**: raised surface + route mark | — |
+| Pinned tab | `[pinned]` | Horizon tokens; mark centred | — |
+| Sound / muted tab | `.tab-audio-button`, `[soundplaying]`, `[muted]` | Upstream icons, Horizon colours | — |
+| Loading tab | `.tab-throbber`, `[busy]` | Throbber in accent | Nulavio loading motion with the symbol's dots (M6, reduced-motion aware) |
+| Crashed tab | `[crashed]` | Upstream | Review copy and icon (M6) |
+| Tab groups | `tab-group`, `.tab-group-line` | Upstream colours; the mark sits above the group line | Group palette aligned with tokens (M2) |
+| Containers | `.tab-context-line`, usercontext | Upstream | — |
+| Vertical tabs | `sidebar.verticalTabs`, `#tabbrowser-tabs[orient="vertical"]` | **Horizon**; vertical mark | Layout choice in onboarding (M6) |
+| Tab search | List all tabs (`alltabs-button`) | Upstream | Keep; promote in onboarding tips |
+| Workspaces | — (tab groups and containers exist) | Not started | Data model proposal before UI (M4+) |
+| **Toolbar** | `#nav-bar`, CustomizableUI | **Horizon** colours, 10 px buttons | — |
+| Back / forward / reload | `#back-button`, `#forward-button`, `#stop-reload-button` | Horizon; ≥ 24 px measured | — |
+| **Address bar** | `moz-urlbar#urlbar` | **Horizon**: 36 px, 14 px radius, ≥ 3:1 border, mint focus ring | Results view surfaces (M2) |
+| Trust / tracking / permission icons | `#trust-icon-container`, `#tracking-protection-icon-container`, `#identity-permission-box` | **Untouched by design** (`test_07`) | Privacy Center entry point (M4) |
+| New-tab identity chip | identity box for `moz-extension://` | **Shows "Extensão (Nulavio Shell)"** on the new tab: confusing | Fix with the Home milestone (M3) |
+| Address bar results | `view-nova.css` | Links in accent; rest upstream | Default top sites without Mozilla entries (M3) |
+| Extensions button and actions | `#unified-extensions-button`, extension `browserAction`s | Upstream behaviour, Horizon colours; Proton Pass, KeePassXC, Bitwarden popups unchanged | — |
+| App menu / overflow | `#PanelUI-menu-button`, `panelUI.css` | Upstream | Panel tokens (M4) |
+| Context menus | `contextmenu.css`, native menus | Upstream (GTK) | Decide native vs Horizon menus (M4) |
+| Bookmarks toolbar | `#PersonalToolbar` | Horizon colours, links in accent | — |
+| Window controls / CSD | `customtitlebar`, GTK decorations | Upstream; KDE Wayland server-side decorations by default | Screenshot review on real KDE (M7) |
+| **New tab (Nulavio Home)** | Shell page | Search, live protection status, shortcuts, "if a site breaks" | Favourites, recent sessions, timing budget (M3) |
+| Download warning | Shell page (flow E) | Done | In-panel placement (M6) |
+| Privacy Center | `browser-siteProtections.js`, `controlcenter/` (upstream panels) | Upstream panels | Shell page with real signals (M4) |
+| Settings | `about:preferences` | Upstream | Organised sections, Providers (M5) |
+| Onboarding | `about:welcome` | Upstream | Nulavio flow A (M6) |
+| Error pages | `aboutNetError`, `blockedSite.xhtml` | Upstream | Horizon styling, criteria untouched (M6) |

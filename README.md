@@ -25,7 +25,9 @@ Verified on Fedora 44 KDE Plasma 6.7.5 (Wayland), Firefox 158.0.1. Each item has
 - Nothing is sent to Nulavio. There is no Nulavio server.
 - Verified on **Ubuntu userspace** too (Firefox from Mozilla's APT repository): 15/15 integration tests.
 
-**Track B (development build):** `scripts/build/build_nulavio.sh 158.0.1` builds a Nulavio-branded browser from signature-verified Firefox source in a rootless container. It takes about 52 min and 23 GB on the reference laptop. With a Google Safe Browsing key (kept outside the repository), the build passes all 17 integration tests, including an end-to-end phishing-protection test. Download reputation is not available to non-partner keys (residual risk R15). The build includes the **Nulavio Shell**: a new tab with search and the live state of each protection, and a warning page for downloaded installers and scripts (Show in folder / Delete, no Open). It ships in English and Portuguese and follows the desktop language. See [build](docs/architecture/build.md).
+**Track B (development build):** `scripts/build/build_nulavio.sh 158.0.1` builds a Nulavio-branded browser from signature-verified Firefox source in a rootless container. It takes about 52 min and 23 GB on the reference laptop. With a Google Safe Browsing key (kept outside the repository), the build passes all 17 integration tests, including an end-to-end phishing-protection test. Download reputation is not available to non-partner keys (residual risk R15). The build includes the **Nulavio Shell**: a new tab with search and the live state of each protection, and a warning page for downloaded installers and scripts (Show in folder / Delete, no Open). It ships in English and Portuguese and follows the desktop language. Its window uses **Nulavio Horizon**, its own theme for the tab strip, toolbar and address bar, in light and dark ([design](docs/design/architecture.md)). See [build](docs/architecture/build.md).
+
+![Nulavio Horizon, dark](docs/design/screenshots/after-dark-1366x768.png)
 
 <p align="center"><img src="docs/brand/assets/review/trackb-about-dialog.png" alt="About Nulavio dialog from the Track B build" width="480"></p>
 

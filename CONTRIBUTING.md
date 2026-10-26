@@ -62,6 +62,12 @@ python3 -I tests/run.py unit                   # tests/unit/test_site.py
 
 It is hosted on Cloudflare Pages (project `nulavio`). Deployments are uploaded by the maintainer for now (Pages → Create deployment → the zip of `dist/site`). Keep email addresses out of the HTML: Cloudflare's email obfuscation would inject a script. Renew `site/.well-known/security.txt` before its `Expires` date (the unit test fails once it has passed).
 
+## Window theme (Nulavio Horizon, Track B)
+
+1. Change values in `docs/brand/tokens.json`, never in CSS. Run `python3 -I scripts/brand/build_tokens.py` and `python3 -I scripts/brand/contrast.py`; add a contrast pair for every new foreground/background use.
+2. Map tokens to Firefox variables in `browser/branding/nulavio/content/theme/horizon.css`: geometry in the `tokens-foundation-brand-nova` layer, colours inside the accessibility guard, no literal colours, no `!important`, no security UI selectors (`tests/unit/test_horizon_theme.py` checks these).
+3. Rebuild (about 1 minute), then run `tests/integration/test_horizon.py` against the build and capture before/after with `scripts/research/shell_screenshots.py`.
+
 ## Common changes
 
 | Change | How |

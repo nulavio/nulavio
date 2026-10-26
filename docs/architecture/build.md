@@ -13,7 +13,7 @@ scripts/build/build_nulavio.sh <version>
  ├─ scripts/build/make_branding.py             browser/branding/nulavio/ (text, reviewed in git)
  │                                              + generated icons/logos/wordmarks from docs/brand (no Mozilla art)
  │                                              + the Nulavio Shell built-in add-on (make_shell.py)
- ├─ scripts/build/apply_patches.py             browser/patches/series (2 patches)
+ ├─ scripts/build/apply_patches.py             browser/patches/series (3 patches: vendor, l10n mapping, Horizon link)
  ├─ browser/build/mozconfig                    copied into the source tree
  └─ podman (rootless) localhost/nulavio-build:f44   ci/containers/fedora-build.Containerfile
       ./mach build && ./mach package-multi-locale --locales en-US pt-BR
@@ -89,6 +89,10 @@ The build packages **en-US and pt-BR** (`NULAVIO_LOCALES`, default `pt-BR`). `fe
 - The branding strings are localizable (`%` entries in `browser/branding/nulavio/locales/jar.mn`). Firefox's l10n configuration only maps the official branding, so patch `0002` adds Nulavio's branding directory. Without it, packaging fails (`MissingJarSource`).
 - The build follows the desktop's language (`intl.locale.requested=""`, as Fedora's Firefox does); users can pick another one in Settings.
 - `test_15` checks that pt-BR is packaged, that "O Nulavio está atualizado" uses the Nulavio brand, that the legal line is translated and that no "Firefox" leaks into Portuguese UI strings.
+
+## Nulavio Horizon (window theme)
+
+`browser/branding/nulavio/content/theme/horizon.css` re-values Firefox's design tokens for the tab strip, toolbar and address bar; `tokens.css` next to it is generated from `docs/brand/tokens.json`. Patch 0003 adds one `<link>` to `browser.xhtml` so the theme applies from the first paint. Pref `nulavio.horizon.enabled` (default true) switches it off. Architecture and rebase notes: [docs/design/architecture.md](../design/architecture.md).
 
 ## Nulavio Shell (built-in add-on)
 

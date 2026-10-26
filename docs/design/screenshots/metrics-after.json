@@ -1,0 +1,140 @@
+{
+ "label": "after",
+ "engine": "Nulavio 158.0.1",
+ "runs": 12,
+ "firstPaintMs": {
+  "median": 2346.5,
+  "min": 1973,
+  "max": 2942
+ },
+ "sessionRestoredMs": {
+  "median": 2510.5
+ },
+ "newTabMs": {
+  "median": 121.4,
+  "min": 94.6,
+  "max": 162.4
+ },
+ "shots": [
+  {
+   "shot": "after-light-1366x768@100.png",
+   "firstPaint": 1973,
+   "sessionRestored": 2142,
+   "newTabMs": [
+    139.71816799999942,
+    122.9564760000012,
+    147.10913999999957
+   ]
+  },
+  {
+   "shot": "after-light-1366x768@125.png",
+   "firstPaint": 2110,
+   "sessionRestored": 2296,
+   "newTabMs": [
+    95.29317600000013,
+    127.91686000000027,
+    132.5417150000003
+   ]
+  },
+  {
+   "shot": "after-light-1366x768@150.png",
+   "firstPaint": 2231,
+   "sessionRestored": 2444,
+   "newTabMs": [
+    114.72483999999986,
+    102.55736699999943,
+    117.76316899999983
+   ]
+  },
+  {
+   "shot": "after-light-1920x1080@100.png",
+   "firstPaint": 2237,
+   "sessionRestored": 2464,
+   "newTabMs": [
+    100.62567499999932,
+    103.44165200000043,
+    120.15280199999961
+   ]
+  },
+  {
+   "shot": "after-light-1920x1080@125.png",
+   "firstPaint": 2345,
+   "sessionRestored": 2520,
+   "newTabMs": [
+    98.27128700000048,
+    94.57056600000124,
+    136.97125700000106
+   ]
+  },
+  {
+   "shot": "after-light-1920x1080@150.png",
+   "firstPaint": 2395,
+   "sessionRestored": 2593,
+   "newTabMs": [
+    136.22742899999957,
+    162.43064999999933,
+    139.5770219999995
+   ]
+  },
+  {
+   "shot": "after-dark-1366x768@100.png",
+   "firstPaint": 2479,
+   "sessionRestored": 2792,
+   "newTabMs": [
+    148.91875000000073,
+    103.10692500000005,
+    111.14746399999967
+   ]
+  },
+  {
+   "shot": "after-dark-1366x768@125.png",
+   "firstPaint": 2348,
+   "sessionRestored": 2501,
+   "newTabMs": [
+    111.5320299999994,
+    95.70203799999945,
+    147.03744899999947
+   ]
+  },
+  {
+   "shot": "after-dark-1366x768@150.png",
+   "firstPaint": 2406,
+   "sessionRestored": 2629,
+   "newTabMs": [
+    139.67788500000006,
+    137.1743349999997,
+    157.91585399999985
+   ]
+  },
+  {
+   "shot": "after-dark-1920x1080@100.png",
+   "firstPaint": 2425,
+   "sessionRestored": 2694,
+   "newTabMs": [
+    130.5763020000004,
+    146.92800100000022,
+    119.9325429999999
+   ]
+  },
+  {
+   "shot": "after-dark-1920x1080@125.png",
+   "firstPaint": 2196,
+   "sessionRestored": 2398,
+   "newTabMs": [
+    103.11607099999947,
+    122.64114400000017,
+    126.17409899999984
+   ]
+  },
+  {
+   "shot": "after-dark-1920x1080@150.png",
+   "firstPaint": 2942,
+   "sessionRestored": 3121,
+   "newTabMs": [
+    94.99454500000047,
+    95.74596799999927,
+    112.16876499999944
+   ]
+  }
+ ]
+}

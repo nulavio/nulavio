@@ -1,0 +1,140 @@
+{
+ "label": "before",
+ "engine": "Nulavio 158.0.1",
+ "runs": 12,
+ "firstPaintMs": {
+  "median": 2672.5,
+  "min": 2344,
+  "max": 3324
+ },
+ "sessionRestoredMs": {
+  "median": 2923.0
+ },
+ "newTabMs": {
+  "median": 130.5,
+  "min": 89.9,
+  "max": 176.5
+ },
+ "shots": [
+  {
+   "shot": "before-light-1366x768@100.png",
+   "firstPaint": 2977,
+   "sessionRestored": 3256,
+   "newTabMs": [
+    136.46886599999925,
+    147.46934200000032,
+    164.41363499999898
+   ]
+  },
+  {
+   "shot": "before-light-1366x768@125.png",
+   "firstPaint": 3324,
+   "sessionRestored": 3700,
+   "newTabMs": [
+    176.48528199999964,
+    126.39329799999996,
+    139.70377199999893
+   ]
+  },
+  {
+   "shot": "before-light-1366x768@150.png",
+   "firstPaint": 3010,
+   "sessionRestored": 3348,
+   "newTabMs": [
+    156.77434299999913,
+    130.81458400000065,
+    131.7320980000004
+   ]
+  },
+  {
+   "shot": "before-light-1920x1080@100.png",
+   "firstPaint": 2496,
+   "sessionRestored": 2718,
+   "newTabMs": [
+    170.24474699999973,
+    162.33502500000031,
+    107.79742100000021
+   ]
+  },
+  {
+   "shot": "before-light-1920x1080@125.png",
+   "firstPaint": 2344,
+   "sessionRestored": 2609,
+   "newTabMs": [
+    113.38328900000033,
+    142.50069300000087,
+    153.49340399999983
+   ]
+  },
+  {
+   "shot": "before-light-1920x1080@150.png",
+   "firstPaint": 2661,
+   "sessionRestored": 2911,
+   "newTabMs": [
+    126.85884200000055,
+    129.30862400000024,
+    127.3934819999995
+   ]
+  },
+  {
+   "shot": "before-dark-1366x768@100.png",
+   "firstPaint": 2576,
+   "sessionRestored": 2840,
+   "newTabMs": [
+    109.16228599999977,
+    141.97649300000012,
+    145.1208029999998
+   ]
+  },
+  {
+   "shot": "before-dark-1366x768@125.png",
+   "firstPaint": 2522,
+   "sessionRestored": 2900,
+   "newTabMs": [
+    105.88267999999971,
+    128.99316199999976,
+    152.9163180000005
+   ]
+  },
+  {
+   "shot": "before-dark-1366x768@150.png",
+   "firstPaint": 2997,
+   "sessionRestored": 3279,
+   "newTabMs": [
+    125.20548400000007,
+    116.55266599999959,
+    163.08196899999984
+   ]
+  },
+  {
+   "shot": "before-dark-1920x1080@100.png",
+   "firstPaint": 2778,
+   "sessionRestored": 3058,
+   "newTabMs": [
+    96.01329499999974,
+    115.21991900000012,
+    115.4703329999993
+   ]
+  },
+  {
+   "shot": "before-dark-1920x1080@125.png",
+   "firstPaint": 2684,
+   "sessionRestored": 2935,
+   "newTabMs": [
+    147.31754600000022,
+    111.49623800000063,
+    130.1342510000004
+   ]
+  },
+  {
+   "shot": "before-dark-1920x1080@150.png",
+   "firstPaint": 2518,
+   "sessionRestored": 2734,
+   "newTabMs": [
+    89.91275399999995,
+    145.20508599999994,
+    96.60389599999962
+   ]
+  }
+ ]
+}
