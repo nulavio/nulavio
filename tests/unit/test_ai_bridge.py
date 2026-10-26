@@ -18,6 +18,7 @@ import socket
 import struct
 import tempfile
 import threading
+import time
 import tomllib
 import unittest
 from pathlib import Path
@@ -515,6 +516,119 @@ class CliTest(Home):
             self.assertEqual(
                 main(["ai", "add", "F", "--client", "other", "--autonomy", "full-control", "--accept-full-control"]), 0
             )
+
+
+class AutonomyControlsTest(Home):
+    """S7: pause, new key, client evidence, approvals in the browser, activity retention, the Settings API."""
+
+    def decide(self, agent_id, capability, approver=None):
+        return registry.decide(
+            agent_id, capability, host=None, target=None, session_id="s-1", approver=approver or registry.Approver()
+        )
+
+    def test_pause_and_resume(self):
+        agent, _ = registry.add("p", "other", "full_control", accept_full_control=True)
+        registry.pause(agent["id"], True)
+        self.assertEqual(self.decide(agent["id"], "read_pages").reason, "paused")
+        bridge = tools.Bridge(agent["id"], "s-1", approver=registry.Approver())
+        self.assertEqual([t["name"] for t in bridge.list_tools()], ["session_state"])
+        registry.pause(agent["id"], False)
+        self.assertTrue(self.decide(agent["id"], "read_pages").allowed)
+
+    def test_new_key_replaces_the_old_one(self):
+        agent, old = registry.add("k", "codex", "assisted")
+        new = registry.rotate_token(agent["id"])
+        self.assertIsNone(registry.by_token(old))
+        self.assertEqual(registry.by_token(new)["id"], agent["id"])
+
+    def test_client_evidence(self):
+        agent, _ = registry.add("c", "claude-code", "assisted")
+        self.assertTrue(registry.record_client(agent["id"], "claude"))
+        self.assertFalse(registry.record_client(agent["id"], "python3"))
+        self.assertFalse(registry.get(agent["id"])["last_client"]["matches"])
+        other, _ = registry.add("o", "other", "assisted")
+        self.assertTrue(registry.record_client(other["id"], "anything"))
+
+    def answer_when_seen(self, answer, delay=0.1):
+        def run():
+            folder = registry.requests_dir()
+            for _ in range(100):
+                pending = list(folder.glob("*.json"))
+                if pending:
+                    request = pending[0]
+                    request.with_suffix(".seen").touch()
+                    time.sleep(delay)
+                    registry.answer_request(request.stem, answer)
+                    return
+                time.sleep(0.05)
+
+        thread = threading.Thread(target=run)
+        thread.start()
+        return thread
+
+    def test_browser_approver(self):
+        agent, _ = registry.add("b", "other", "restricted")
+        for answer in ("once", "session", "deny"):
+            thread = self.answer_when_seen(answer)
+            approver = registry.BrowserApprover(fallback=Approve("deny"), notice=3, timeout=5, poll=0.05)
+            self.assertEqual(approver.ask(registry.get(agent["id"]), "interact", "https://example.org"), answer)
+            thread.join()
+        self.assertEqual(list(registry.requests_dir().iterdir()), [])  # nothing left behind
+
+    def test_browser_approver_falls_back_when_no_browser_answers(self):
+        agent, _ = registry.add("f", "other", "restricted")
+        fallback = Approve("once")
+        approver = registry.BrowserApprover(fallback=fallback, notice=0.3, timeout=5, poll=0.05)
+        self.assertEqual(approver.ask(registry.get(agent["id"]), "interact", None), "once")
+        self.assertEqual(fallback.asked, [("interact", None)])
+        self.assertEqual(list(registry.requests_dir().iterdir()), [])
+
+    def test_unanswered_request_is_denied(self):
+        agent, _ = registry.add("u", "other", "restricted")
+
+        def mark_seen():
+            for _ in range(100):
+                pending = list(registry.requests_dir().glob("*.json"))
+                if pending:
+                    pending[0].with_suffix(".seen").touch()
+                    return
+                time.sleep(0.05)
+
+        thread = threading.Thread(target=mark_seen)
+        thread.start()
+        approver = registry.BrowserApprover(notice=3, timeout=0.5, poll=0.05)
+        self.assertEqual(approver.ask(registry.get(agent["id"]), "interact", None), "deny")
+        thread.join()
+
+    def test_answers_are_validated(self):
+        for request_id, answer in (("../../x", "once"), ("0123456789abcdef", "always"), ("0123456789abcdef", "once")):
+            with self.assertRaises(registry.RegistryError):
+                registry.answer_request(request_id, answer)
+
+    def test_activity_retention(self):
+        old = (policy.now() - _dt.timedelta(days=40)).isoformat(timespec="milliseconds")
+        audit.audit_path().write_text(json.dumps({"ts": old, "tool": "x"}) + "\n")
+        audit.record(tool="y")
+        self.assertEqual([e["tool"] for e in audit.read()], ["y"])
+        audit.clear()
+        self.assertEqual(audit.read(), [])
+
+    def test_settings_api(self):
+        added = ai_cli.api_request({"op": "add", "name": "Claude", "client": "claude-code", "autonomy": "assisted"})
+        agent_id = added["agent"]["id"]
+        self.assertNotIn("token_sha256", added["agent"])
+        self.assertIn("NULAVIO_AGENT_TOKEN", added["config"])
+        ai_cli.api_request({"op": "grant", "agent": agent_id, "capability": "execute_js", "mode": "allow", "minutes": 30})
+        overview = ai_cli.api_request({"op": "overview"})
+        self.assertEqual(overview["agents"][0]["modes"]["execute_js"], "allow")
+        self.assertNotIn("token_sha256", json.dumps(overview))
+        ai_cli.api_request({"op": "pause", "agent": agent_id, "paused": True})
+        ai_cli.api_request({"op": "stop", "stopped": True})
+        self.assertTrue(ai_cli.api_request({"op": "overview"})["stopped"])
+        with self.assertRaises(registry.RegistryError):
+            ai_cli.api_request({"op": "add", "name": "F", "client": "other", "autonomy": "full_control"})
+        with self.assertRaises(registry.RegistryError):
+            ai_cli.api_request({"op": "explode"})
 
 
 if __name__ == "__main__":

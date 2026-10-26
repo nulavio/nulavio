@@ -86,13 +86,13 @@ External agents (Codex CLI and Desktop, Claude Code and Desktop, other MCP clien
 - [x] A2 [ADR 0007](../adr/0007-ai-bridge.md) AI Bridge; [architecture](../architecture/ai-bridge.md)
 - [x] A3 [Threat model for automation and autonomy](../security/threat-model-ai.md) (incl. deliberately accepted risk)
 - [x] A4 MCP server (`nulavio ai serve`) with 11 browser tools on a per-agent AI Workspace; tested with real Claude Code
-- [ ] A5 Gecko automation adapter
-- [ ] A6 Agent registry and sessions (authenticated local transport)
-- [ ] A7 Permission and autonomy manager (per agent, profile, site, duration) — first cut done in S4: per agent, site and duration, presets for the four levels; per profile in S8
-- [ ] A8 Restricted, Assisted, Autonomous, Full control
+- [x] A5 Gecko automation adapter (S7: dialogs, downloads per permission, uploads from a dedicated folder)
+- [x] A6 Agent registry and sessions (S4/S7: token per agent, pause, new key, client evidence; stdio sessions)
+- [x] A7 Permission and autonomy manager (per agent, site and duration; per profile in S8)
+- [x] A8 Restricted, Assisted, Autonomous, Full control (with the full-control warning)
 - [ ] A9 Codex CLI and Claude Code connection wizard
 - [ ] A10 Secure Profiles and Smart Profile Routing integration
-- [ ] A11 UX (Horizon): agents, autonomy, activity, revoke, emergency stop
+- [x] A11 UX (Horizon): agents, autonomy, activity, revoke, emergency stop, permission requests (S7); agent detection and sessions view in S8
 - [ ] A12 Built-in assistant (provider-agnostic, same policies)
 - [ ] A13 Advanced compatibility (Playwright/CDP adapters where feasible)
 - [ ] A14 Hardening, multi-platform tests, documentation
@@ -136,4 +136,4 @@ External agents (Codex CLI and Desktop, Claude Code and Desktop, other MCP clien
 
 ## Next task (recommended)
 
-Follow the [execution plan](execution-plan.md): S1 (Connect P0), S2 (unlock research and ADRs), S3 (Vault crypto prototype), S4 (AI Bridge foundation), S5 (encrypted profile storage) and S6 (unlock UX in the browser) are done; next **S7** (AI autonomy and its UI), then **S8** (AI integration with profiles and routing). The plan lists the decisions each slice needs from the maintainer.
+Follow the [execution plan](execution-plan.md): S1 (Connect P0), S2 (unlock research and ADRs), S3 (Vault crypto prototype), S4 (AI Bridge foundation), S5 (encrypted profile storage), S6 (unlock UX in the browser) and S7 (AI autonomy and its UI) are done; next **S8** (AI integration with profiles and routing). The plan lists the decisions each slice needs from the maintainer.

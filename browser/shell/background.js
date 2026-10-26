@@ -102,3 +102,22 @@ if (browser.nulavioProfiles && browser.nulavioRouting && browser.menus) {
   browser.nulavioProfiles.onChanged.addListener(rebuildLinkMenu);
   rebuildLinkMenu();
 }
+
+// -- AI & Automation: permission requests from agents, and the AI Workspace mark --
+// In the user's windows, requests from the AI Bridge open a request page. In an
+// AI Workspace (driven by an agent) none are shown; a bar says who drives it.
+
+async function setUpAI() {
+  const agent = await browser.nulavioAI.workspaceAgent();
+  if (!agent) {
+    await browser.nulavioAI.watch();
+    return;
+  }
+  const { agents } = await browser.nulavioAI.overview().catch(() => ({ agents: [] }));
+  const name = agents.find(a => a.id === agent)?.name ?? agent;
+  await browser.nulavioAI.markWorkspace(browser.i18n.getMessage("aiWorkspaceBar", [name]));
+}
+
+if (browser.nulavioAI) {
+  setUpAI().catch(console.error);
+}

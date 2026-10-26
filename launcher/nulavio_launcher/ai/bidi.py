@@ -37,7 +37,12 @@ class Bidi:
         self.events: list[tuple[int, dict]] = []
         self._reader = threading.Thread(target=self._read_loop, name="bidi-reader", daemon=True)
         self._reader.start()
-        self.session = self.command("session.new", {"capabilities": {"alwaysMatch": {"acceptInsecureCerts": False}}})
+        # Page dialogs (alert, confirm, prompt) stay open for the agent to read and answer
+        # with the `dialog` tool; leaving a page is never held up by "are you sure?".
+        prompts = {"default": "ignore", "beforeUnload": "accept"}
+        self.session = self.command(
+            "session.new", {"capabilities": {"alwaysMatch": {"acceptInsecureCerts": False, "unhandledPromptBehavior": prompts}}}
+        )
 
     def _read_loop(self) -> None:
         try:
@@ -56,7 +61,10 @@ class Bidi:
                 self._closed = str(exc) or "closed"
                 self._lock.notify_all()
 
-    def command(self, method: str, params: dict, timeout: float = 30.0, cancel: threading.Event | None = None) -> dict:
+    def command(self, method: str, params: dict, timeout: float = 30.0, cancel: threading.Event | None = None,
+                until: tuple[str, str, int] | None = None) -> dict | None:  # fmt: skip
+        """Send a command and wait for its result. `until=(event, context, mark)`: stop waiting (return None)
+        if that event arrives first, e.g. a page dialog that holds the command until it is answered."""
         command_id = next(self._ids)
         with self._lock:
             if self._closed:
@@ -69,6 +77,11 @@ class Bidi:
                     raise BidiError("disconnected", self._closed)
                 if cancel is not None and cancel.is_set():
                     raise Cancelled()
+                if until is not None and any(
+                    seq > until[2] and e.get("method") == until[0] and e.get("params", {}).get("context") == until[1]
+                    for seq, e in self.events
+                ):
+                    return None
                 remaining = deadline - time.monotonic()
                 if remaining <= 0:
                     raise BidiError("timeout", f"{method} took longer than {timeout:.0f} s")

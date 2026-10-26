@@ -140,6 +140,19 @@ def _audit(args) -> int:
     return 0
 
 
+def _pause(args) -> int:
+    registry.pause(args.agent, not args.resume)
+    _out(f"{args.agent}: {'resumed' if args.resume else 'paused'}")
+    return 0
+
+
+def _rotate(args) -> int:
+    token = registry.rotate_token(args.agent)
+    _out("New configuration (the old token no longer works):\n")
+    _out(client_config(registry.get(args.agent)["client"], token))
+    return 0
+
+
 def _capabilities(args) -> int:
     names = list(policy.PRESETS)
     _out(f"{'capability':<24}" + "".join(f"{n.replace('_', ' '):<14}" for n in names))
@@ -161,14 +174,120 @@ def _serve(args) -> int:
         print(f"nulavio ai serve: access for {agent['id']} was revoked", file=sys.stderr)
         return 2
     session = "s-" + secrets.token_hex(6)
+    executable = registry.parent_executable()
+    matches = registry.record_client(agent["id"], executable)
+    audit.record(agent=agent["id"], client=agent.get("client"), session=session, event="connected", client_exe=executable,
+                 outcome="ok" if matches else "client-mismatch")  # fmt: skip
     print(f"nulavio ai serve: agent {agent['id']} session {session}", file=sys.stderr)
     Server(Bridge(agent["id"], session, headless=args.headless)).serve()
     return 0
 
 
-HANDLERS = {"add": _add, "agents": _agents, "grant": _grant, "autonomy": _autonomy, "revoke": _revoke,
-            "remove": _remove, "stop": _stop, "resume": _resume, "audit": _audit, "capabilities": _capabilities,
-            "serve": _serve}  # fmt: skip
+# -- helper API for the browser (Settings → AI & Automation) ------------------------------------
+
+API_LIMIT = 64 * 1024
+
+
+def _public(agent: dict) -> dict:
+    """What the UI may see: never the token hash."""
+    view = {k: v for k, v in agent.items() if k != "token_sha256"}
+    view["modes"] = {c: policy.effective_mode(agent, c, "")[0] for c in policy.CAPABILITIES}
+    return view
+
+
+def api_request(request: dict) -> dict:
+    op = request.get("op")
+    agent_id = request.get("agent")
+    if op == "overview":
+        data = registry.load()
+        return {
+            "agents": [_public(a) for a in data["agents"].values()],
+            "stopped": registry.stopped(),
+            "capabilities": policy.CAPABILITIES,
+            "presets": policy.PRESETS,
+            "levels": list(LEVELS.values()),
+            "fullControlWarning": policy.FULL_CONTROL_WARNING,
+            "requests": registry.pending_requests(),
+        }
+    if op == "add":
+        level = LEVELS.get(str(request.get("autonomy", "")).replace("_", "-"), request.get("autonomy"))
+        agent, token = registry.add(str(request.get("name", "")), str(request.get("client", "")), str(level),
+                                    domains=list(request.get("domains") or []), disposable=bool(request.get("disposable")),
+                                    accept_full_control=bool(request.get("acceptFullControl")))  # fmt: skip
+        return {"agent": _public(agent), "config": client_config(agent["client"], token, bool(request.get("headless")))}
+    if op == "rotate-token":
+        token = registry.rotate_token(str(agent_id))
+        return {"config": client_config(registry.get(str(agent_id))["client"], token)}
+    if op == "autonomy":
+        registry.set_autonomy(str(agent_id), str(request.get("level")), bool(request.get("acceptFullControl")))
+    elif op == "grant":
+        minutes = request.get("minutes")
+        registry.grant(str(agent_id), str(request.get("capability")), str(request.get("mode")),
+                       minutes=int(minutes) if minutes else None)  # fmt: skip
+    elif op == "clear-grant":
+        registry.clear_grant(str(agent_id), str(request.get("capability")))
+    elif op == "domains":
+        registry.set_domains(str(agent_id), list(request.get("domains") or []))
+    elif op == "pause":
+        registry.pause(str(agent_id), bool(request.get("paused")))
+    elif op == "revoke":
+        registry.revoke(str(agent_id))
+    elif op == "remove":
+        registry.remove(str(agent_id))
+    elif op == "stop":
+        registry.set_stopped(bool(request.get("stopped")))
+    elif op == "audit":
+        return {"entries": audit.read(int(request.get("limit") or 100), request.get("agent"))}
+    elif op == "audit-clear":
+        audit.clear()
+    elif op == "answer":
+        registry.answer_request(str(request.get("id")), str(request.get("answer")))
+    else:
+        raise registry.RegistryError("bad-request")
+    return {"done": True}
+
+
+def _api(args) -> int:
+    raw = sys.stdin.read(API_LIMIT + 1)
+    try:
+        if len(raw) > API_LIMIT:
+            raise registry.RegistryError("bad-request")
+        request = json.loads(raw)
+        if not isinstance(request, dict):
+            raise registry.RegistryError("bad-request")
+        result = api_request(request)
+    except registry.RegistryError as exc:
+        text = str(exc)
+        code = (
+            "full-control-not-accepted"
+            if text.startswith("full control")
+            else "bad-request"
+            if text == "bad-request"
+            else "invalid"
+        )
+        result = {"error": code, "detail": text[:200]}
+    except (ValueError, TypeError, OSError) as exc:
+        result = {"error": "failed", "detail": type(exc).__name__}
+    print(json.dumps(result))
+    return 0
+
+
+HANDLERS = {
+    "api": _api,
+    "add": _add,
+    "agents": _agents,
+    "grant": _grant,
+    "autonomy": _autonomy,
+    "revoke": _revoke,
+    "remove": _remove,
+    "stop": _stop,
+    "resume": _resume,
+    "audit": _audit,
+    "capabilities": _capabilities,
+    "pause": _pause,
+    "rotate-token": _rotate,
+    "serve": _serve,
+}
 
 
 def add_parser(sub) -> None:
@@ -203,6 +322,12 @@ def add_parser(sub) -> None:
     q.add_argument("--limit", type=int, default=50)
     q.add_argument("--json", action="store_true")
     asub.add_parser("capabilities", help="capabilities and what each autonomy level does with them")
+    asub.add_parser("api", help=argparse.SUPPRESS)  # JSON on stdin/stdout, used by the browser
+    q = asub.add_parser("pause", help="hold an agent without revoking it")
+    q.add_argument("agent")
+    q.add_argument("--resume", action="store_true")
+    q = asub.add_parser("rotate-token", help="replace an agent's token (prints the new configuration)")
+    q.add_argument("agent")
     q = asub.add_parser("serve", help="MCP server on stdin/stdout (started by the agent, not by you)")
     q.add_argument("--headless", action="store_true")
     p.set_defaults(func=cmd)

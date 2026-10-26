@@ -117,7 +117,9 @@ class PrivilegedApiTest(unittest.TestCase):
 
     def test_only_the_documented_apis(self):
         apis = self.manifest["experiment_apis"]
-        self.assertEqual(set(apis), {"nulavioSearch", "nulavioProfiles", "nulavioRouting", "nulavioConnect", "nulavioVault"})
+        self.assertEqual(
+            set(apis), {"nulavioSearch", "nulavioProfiles", "nulavioRouting", "nulavioConnect", "nulavioVault", "nulavioAI"}
+        )
         for name, api in apis.items():
             with self.subTest(api=name):
                 self.assertEqual(api["parent"]["scopes"], ["addon_parent"], "no API code runs in content processes")

@@ -4,6 +4,8 @@ The agent gets its own browser profile (the AI Workspace) and only the permissio
 
 ## 1. Register the agent
 
+In the browser: **Settings → AI & Automation → Connect an agent** (agent, autonomy, connect; copy the configuration). Or from a terminal:
+
 ```sh
 nulavio ai add "Claude Code" --client claude-code --autonomy assisted
 nulavio ai add "Codex" --client codex --autonomy autonomous --site example.org
@@ -48,7 +50,9 @@ nulavio ai resume
 nulavio ai audit --agent ag-1234                     # what it did (no page content, no typed text)
 ```
 
-Changes apply to the agent's next call. When a permission is set to "ask", Nulavio shows a desktop dialog outside the agent's browser; without a way to ask, the answer is no.
+Changes apply to the agent's next call. When a permission is set to "ask", your Nulavio window shows the request (never the agent's own workspace window); if Nulavio is closed, a KDE dialog asks; without a way to ask, the answer is no. Pause, revoke, permissions and the emergency stop are also in Settings → AI & Automation.
+
+Files: downloads are saved only when the agent may use files, into `~/.local/share/nulavio/ai/workspaces/<agent>/downloads/`; for uploads, put the files the agent may send into `.../<agent>/uploads/`.
 
 ## What this does and does not protect
 

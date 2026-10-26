@@ -8,12 +8,12 @@ Decision: [ADR 0007](../adr/0007-ai-bridge.md). Threats: [threat model for autom
 |---|---|---|
 | Nulavio AI Bridge (MCP server) | `ai/mcp.py`, `nulavio ai serve` | Done: stdio, dual-era (2025 `initialize` and 2026-07-28 `_meta`), tools only |
 | Agent Registry | `ai/registry.py`, `$XDG_STATE_HOME/nulavio/ai/agents.json` (0600) | Done: id, client, autonomy, grants, site list, workspace kind, token hash, revocation |
-| Agent Session Manager | one bridge process = one session id; session-bound grants | Basic: sessions end with the process; task handles in S7 |
-| Permission & Autonomy Manager (Policy Decision Point) | `ai/policy.py`, `registry.decide` | Done: presets, grants (forever / minutes / session), site list, stop switch, revocation, "ask" through a desktop dialog |
+| Agent Session Manager | one bridge process = one session id; session-bound grants; client evidence | Sessions end with the process ("for this session" = for this task in stdio); explicit task handles later |
+| Permission & Autonomy Manager (Policy Decision Point) | `ai/policy.py`, `registry.decide` | Done: presets, grants (forever / minutes / session), site list, stop switch, revocation, pause; "ask" in the browser (KDE dialog as fallback) |
 | Browser Automation Controller | `ai/tools.py` | Done: 11 tools with per-call checks |
 | Gecko Adapter | `ai/bidi.py`, `ai/websocket.py`, `ai/workspace.py` | Done: WebDriver BiDi over a local WebSocket; AI Workspace launch with protections on |
 | Profile Access Coordinator | — | S8 (real profiles, routing per agent, locked profiles) |
-| Activity & Audit Manager | `ai/audit.py`, `nulavio ai audit` | Done: metadata only, rotation; UI in S7 |
+| Activity & Audit Manager | `ai/audit.py`, `nulavio ai audit`, Settings → AI & Automation | Done: metadata only, 30-day retention, clear; shown in Settings |
 | Compatibility Adapters | — | A13 (raw BiDi mode; Playwright/CDP only where feasible) |
 
 ## Trust boundaries and flow
@@ -62,14 +62,16 @@ Onboarding in three decisions: choose agent → choose autonomy → connect and 
 
 | Screen (brief) | Slice | Notes |
 |---|---|---|
-| AI & Automation (overview), Connected Agents, Connect New Agent, Agent Detected | S7/S8 | Detection of Claude Code/Codex binaries and their config paths; the exact snippet and file are shown before any change |
-| Choose Autonomy Level, Custom Permissions | S7 | The four levels as cards with one-line consequences; capability rows with allow/ask/block and duration |
-| Full Control Warning | S7 | The text of `policy.FULL_CONTROL_WARNING`; Cancel / Configure permissions / Authorize full control; shown once per agent, again only when the scope grows |
-| Agent Permission Request | S7 | Replaces the kdialog prompt: exact action, site and agent; Allow once / for this task / for this session / Deny |
+| AI & Automation (overview), Connected Agents, Connect New Agent | **S7 done** | Settings section; the configuration is shown and copied, never written by Nulavio |
+| Agent Detected | S8 | Detection of Claude Code/Codex binaries and their config paths; the exact file and diff shown before any change |
+| Choose Autonomy Level, Custom Permissions | **S7 done** | The four levels with one-line consequences; capability rows with allow/ask/block and duration |
+| Full Control Warning | **S7 done** | The text of `policy.FULL_CONTROL_WARNING`; Cancel / Authorize full control (danger), Cancel focused |
+| Agent Permission Request | **S7 done** | `ai/request.html`: agent, autonomy, action, site; Allow once / for this session / Deny (focused); never in an AI Workspace |
 | Authorized Profiles, Authorized Websites | S8 | Per-agent profile grants; site list editor |
-| Active Agent Sessions, Agent Activity, Automation History | S7 | From the audit; filters per agent and site |
+| Agent Activity, Automation History | **S7 done** | From the audit, last 30 days, clearable; per-agent filter later |
+| Active Agent Sessions | S8 | Live sessions per agent and workspace |
 | Background Automation | S7 | Explicit grant with duration |
-| Revoke Agent Access, Emergency Stop | S7 | One click each; the toolbar indicator offers both |
-| Agent Connection Error | S7 | Plain reasons: unknown token, revoked, engine missing |
+| Revoke Agent Access, Emergency Stop, Pause | **S7 done** | Revoke confirmed; stop as a switch; pause/resume per agent |
+| Agent Connection Error | S8 | Plain reasons: unknown token, revoked, engine missing (today in the agent's MCP log) |
 
-Activity indicator: discreet toolbar chip in the AI Workspace window with agent name, profile, autonomy and current action; actions: view activity, pause, revoke, end task. Closing the indicator does not stop the agent.
+Activity indicator: the AI Workspace window shows the engine's own remote-control marks (robot icon, striped toolbar) and, since S7, a bar naming the agent. Pause, revoke and stop live in the user's own Settings, where the agent cannot click them. Closing a bar does not stop the agent.

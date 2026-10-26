@@ -216,6 +216,12 @@
 .row__title { margin: 0; font-weight: var(--nv-font-weight-semibold); overflow-wrap: anywhere; }
 .row__meta { margin: 0; font-size: 0.875rem; color: var(--nv-color-text-secondary); font-family: var(--nv-font-family-mono); overflow-wrap: anywhere; }
 .row__end { display: flex; flex-wrap: wrap; gap: var(--nv-space-3); justify-content: flex-end; }
+/* Rows without a chip (agents, permissions, activity); a disclosure spans the whole row. */
+.row--plain { grid-template-columns: minmax(0, 1fr) auto; }
+.row--plain > .more { grid-column: 1 / -1; }
+.row__note { margin: 0; font-size: 0.875rem; color: var(--nv-color-text-secondary); overflow-wrap: anywhere; }
+fieldset.stack { border: 0; padding: 0; margin: 0; min-width: 0; }
+fieldset.stack > legend { padding: 0; margin-bottom: var(--nv-space-2); }
 .suggest { display: grid; gap: var(--nv-space-1); }
 .swatches { display: flex; flex-wrap: wrap; gap: var(--nv-space-3); margin: 0; padding: 0; border: 0; }
 .swatches legend { padding: 0; margin-bottom: var(--nv-space-2); }

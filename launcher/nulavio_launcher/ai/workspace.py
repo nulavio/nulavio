@@ -43,6 +43,13 @@ WORKSPACE_PREFS: dict[str, object] = {
 }
 
 
+EVENTS = [
+    "browsingContext.navigationStarted", "browsingContext.load",
+    "browsingContext.userPromptOpened", "browsingContext.userPromptClosed",
+    "browsingContext.downloadWillBegin", "browsingContext.downloadEnd",
+]  # fmt: skip
+
+
 class WorkspaceError(RuntimeError):
     pass
 
@@ -52,8 +59,10 @@ def workspaces_root() -> Path:
 
 
 class Workspace:
-    def __init__(self, agent_id: str, *, disposable: bool = False, headless: bool = False, engine=None):
+    def __init__(self, agent_id: str, *, disposable: bool = False, headless: bool = False, engine=None,
+                 uploads: bool = False):  # fmt: skip
         self.agent_id = agent_id
+        self.uploads = uploads
         self.disposable = disposable
         self.headless = headless
         self.engine = engine
@@ -64,12 +73,27 @@ class Workspace:
         else:
             self.dir = paths.ensure_private_dir(workspaces_root() / agent_id)
         self.profile_dir = self.dir / "profile"
+        # Downloads land here (only when the agent may use files); uploads come only from here,
+        # where the user puts the files an agent may send.
+        self.downloads_dir = self.dir / "downloads"
+        self.uploads_dir = self.dir / "uploads"
+        for folder in (self.downloads_dir, self.uploads_dir):
+            folder.mkdir(mode=0o700, exist_ok=True)
 
     def _write_prefs(self) -> None:
         paths.ensure_private_dir(self.profile_dir)
         merged = {p.name: p.value for p in profile.baseline_prefs()}
         merged["browser.startup.homepage"] = "about:blank"  # the start page belongs to user profiles
         merged.update(WORKSPACE_PREFS)
+        # Tells Nulavio's own pages in this window that an agent drives it: they show who, and never
+        # answer permission requests here (the agent could click them).
+        merged["nulavio.ai.workspace"] = self.agent_id
+        if self.uploads:
+            # Only for agents that may use files. The content sandbox stays on; page processes may
+            # also *read* this one folder, where the user puts files meant for upload, and turn a
+            # path into a File (what a file field needs). Nothing else becomes readable.
+            merged["security.sandbox.content.read_path_whitelist"] = str(self.uploads_dir) + "/"
+            merged["dom.file.createInChild"] = True
         unresolved = [k for k, v in merged.items() if isinstance(v, str) and "@" in v]
         for key in unresolved:
             del merged[key]
@@ -111,7 +135,7 @@ class Workspace:
                 time.sleep(0.2)
                 continue
             self.bidi = Bidi(port)
-            self.bidi.command("session.subscribe", {"events": ["browsingContext.navigationStarted", "browsingContext.load"]})
+            self.bidi.command("session.subscribe", {"events": EVENTS})
             return self.bidi
         self.stop()
         raise WorkspaceError("the engine's automation endpoint did not start")

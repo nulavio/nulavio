@@ -36,7 +36,9 @@ Checked on 2026-10-26 on Fedora 44 KDE (Wayland), engine Gecko 158.0.1 (Nulavio 
 | Screenshots | `screenshot` | SUPPORTED | Viewport PNG |
 | Click, type, submit | `click`, `type` | SUPPORTED | Real input events (`input.performActions`); submit and link clicks checked against their capabilities |
 | JavaScript | `evaluate` | SUPPORTED (when granted) | Blocked below Full control unless granted |
-| Upload, download | — | UNSUPPORTED (S7) | Capability `files` reserved |
+| Download | (automatic) + `downloads_list` | SUPPORTED | Allowed by the engine only when `files` is allowed, into the workspace's downloads folder; otherwise refused by the engine |
+| Upload | `upload` | SUPPORTED | Only files in the workspace's uploads folder (the user puts them there) |
+| Page dialogs (alert, confirm, prompt) | `dialog` | SUPPORTED | Kept open for the agent; clicks that open one return at once with its text |
 | Network, console, debugging | — | UNSUPPORTED (A13) | Capabilities reserved |
 | Windows management, long tasks, task cancellation | — | PARTIAL | Each call can be cancelled (`notifications/cancelled`); task handles in S7 |
 | Several agents at once | — | SUPPORTED | One workspace per agent; tested with two agents concurrently |

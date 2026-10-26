@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title data-i18n="aiRequestTitle"></title>
+  <link rel="icon" href="../shared/nulavio-symbol.svg">
+  <link rel="stylesheet" href="../shared/tokens.css">
+  <link rel="stylesheet" href="../shared/base.css">
+  <link rel="stylesheet" href="../shared/shell.css">
+  <script type="module" src="request.js"></script>
+</head>
+<body data-state="loading">
+  <main class="page page--narrow">
+    <section class="card stack" aria-labelledby="headline">
+      <p class="hint" id="who"></p>
+      <h1 class="warning__headline" id="headline"></h1>
+      <p class="url mono" id="target" hidden></p>
+      <p data-i18n="aiRequestOnlyIf"></p>
+      <div class="actions" id="actions">
+        <button class="button button--primary" type="button" id="once" data-i18n="aiAllowOnce"></button>
+        <button class="button button--secondary" type="button" id="session" data-i18n="aiAllowSession"></button>
+        <button class="button button--quiet" type="button" id="deny" data-i18n="aiDeny"></button>
+      </div>
+      <p class="status" id="status" role="status" aria-live="polite"></p>
+      <p class="hint"><a href="../settings/settings.html#ai" data-i18n="aiManage"></a></p>
+    </section>
+  </main>
+</body>
+</html>

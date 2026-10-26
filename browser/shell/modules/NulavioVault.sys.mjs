@@ -20,7 +20,7 @@ ChromeUtils.defineESModuleGetters(lazy, {
   NulavioProfiles: "resource://builtin-addons/nulavio-shell/modules/NulavioProfiles.sys.mjs",
   NulavioRouting: "resource://builtin-addons/nulavio-shell/modules/NulavioRouting.sys.mjs",
   SelectableProfileService: "resource:///modules/profiles/SelectableProfileService.sys.mjs",
-  Subprocess: "resource://gre/modules/Subprocess.sys.mjs",
+  callTool: "resource://builtin-addons/nulavio-shell/modules/NulavioTools.sys.mjs",
 });
 
 const SHELL_ID = "shell@nulavio.net";
@@ -41,11 +41,6 @@ function fail(code, message) {
   throw new VaultError(code, message);
 }
 
-function toolPath() {
-  const gre = Services.dirsvc.get("GreD", Ci.nsIFile).path;
-  return PathUtils.join(gre, "nulavio-tools", "bin", "nulavio");
-}
-
 function checkSecret(value) {
   if (typeof value !== "string" || !value.length || value.length > MAX_SECRET) {
     fail("bad-secret");
@@ -55,38 +50,10 @@ function checkSecret(value) {
 
 /** One request to the Vault helper; resolves to its JSON answer or throws its error code. */
 export async function helper(request) {
-  const tool = toolPath();
-  if (!(await IOUtils.exists(tool))) {
-    fail("tools-missing");
-  }
-  const proc = await lazy.Subprocess.call({ command: tool, arguments: ["vault", "api"], stderr: "pipe" });
-  const timer = Cc["@mozilla.org/timer;1"].createInstance(Ci.nsITimer);
-  timer.initWithCallback(() => proc.kill(), TIMEOUT_MS, Ci.nsITimer.TYPE_ONE_SHOT);
   try {
-    await proc.stdin.write(JSON.stringify(request));
-    await proc.stdin.close();
-    const drain = async pipe => {
-      let text = "";
-      let chunk;
-      while ((chunk = await pipe.readString())) {
-        text += chunk;
-      }
-      return text;
-    };
-    const [stdout] = await Promise.all([drain(proc.stdout), drain(proc.stderr)]);
-    await proc.wait();
-    let answer;
-    try {
-      answer = JSON.parse(stdout);
-    } catch {
-      fail("helper-failed");
-    }
-    if (answer?.error) {
-      fail(String(answer.error));
-    }
-    return answer;
-  } finally {
-    timer.cancel();
+    return await lazy.callTool(["vault", "api"], request, TIMEOUT_MS);
+  } catch (e) {
+    fail(e.code ?? "helper-failed");
   }
 }
 

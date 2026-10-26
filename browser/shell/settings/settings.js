@@ -5,6 +5,7 @@
 import { localize, t } from "../lib/i18n.js";
 import { TEMPLATE_NAMES, freeName } from "../lib/names.js";
 import { announce, chip, confirmDialog, errorText, h, rerender } from "../lib/ui.js";
+import { setUpAI } from "./ai.js";
 
 const search = browser.nulavioSearch;
 const profiles = browser.nulavioProfiles;
@@ -605,6 +606,9 @@ localize();
 const ready = [];
 if (search && profiles && routing && connect) {
   ready.push(setUpSearch(), setUpProfiles(), setUpRouting(), setUpIntegrations());
+  if (browser.nulavioAI) {
+    ready.push(setUpAI());
+  }
 } else {
   document.getElementById("needs-build").hidden = false;
 }

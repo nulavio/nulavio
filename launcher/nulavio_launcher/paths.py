@@ -79,7 +79,10 @@ def ensure_private_dir(path: Path) -> Path:
         missing.append(probe)
         probe = probe.parent
     for directory in reversed(missing):
-        os.mkdir(directory, PRIVATE_DIR_MODE)
+        try:
+            os.mkdir(directory, PRIVATE_DIR_MODE)
+        except FileExistsError:
+            pass  # created meanwhile by another thread or process; checked below
     check_private(path, PRIVATE_DIR_MODE, fix=True)
     return path
 

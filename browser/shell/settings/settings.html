@@ -20,6 +20,7 @@
         <a href="#search" data-i18n="searchHeading">Search</a>
         <a href="#profiles" data-i18n="profilesHeading">Profiles</a>
         <a href="#integrations" data-i18n="connectHeading">Integrations</a>
+        <a href="#ai" data-i18n="aiHeading">AI &amp; Automation</a>
       </nav>
     </header>
 
@@ -180,6 +181,57 @@
         <div class="actions">
           <button class="button button--quiet" type="button" id="connect-refresh" data-i18n="connectRefresh"></button>
         </div>
+      </div>
+    </section>
+    <section class="section" id="ai" aria-labelledby="ai-heading" hidden>
+      <h2 class="section__title" id="ai-heading" data-i18n="aiHeading">AI &amp; Automation</h2>
+
+      <div class="card stack" id="ai-agents-card">
+        <p class="hint" data-i18n="aiIntro"></p>
+        <label class="check check--switch">
+          <input type="checkbox" role="switch" id="ai-stop">
+          <span><span data-i18n="aiStopLabel"></span><span class="hint" data-i18n="aiStopHint"></span></span>
+        </label>
+        <ul class="list" id="ai-agents"></ul>
+      </div>
+
+      <div class="card stack" id="ai-connect">
+        <h3 class="card__title" data-i18n="aiConnectTitle"></h3>
+        <form class="stack" id="ai-connect-form" novalidate>
+          <fieldset class="stack stack--tight">
+            <legend class="subhead" data-i18n="aiChooseAgent"></legend>
+            <div class="actions" id="ai-clients">
+              <label class="check"><input type="radio" name="client" value="claude-code" checked><span>Claude Code</span></label>
+              <label class="check"><input type="radio" name="client" value="codex"><span>Codex</span></label>
+              <label class="check"><input type="radio" name="client" value="other"><span data-i18n="aiOtherClient"></span></label>
+            </div>
+            <label class="field"><span class="field__label" data-i18n="aiAgentName"></span>
+              <input class="input" name="name" maxlength="48" autocomplete="off" required></label>
+          </fieldset>
+          <fieldset class="stack stack--tight">
+            <legend class="subhead" data-i18n="aiChooseAutonomy"></legend>
+            <div class="stack stack--tight" id="ai-levels"></div>
+          </fieldset>
+          <label class="check"><input type="checkbox" name="disposable"><span data-i18n="aiDisposable"></span></label>
+          <p class="form-error" role="alert"></p>
+          <div class="actions"><button class="button button--primary" type="submit" data-i18n="aiConnectButton"></button></div>
+        </form>
+        <div class="stack" id="ai-connect-result" hidden>
+          <p id="ai-config-intro"></p>
+          <pre class="notice mono" id="ai-config"></pre>
+          <div class="actions">
+            <button class="button button--secondary" type="button" id="ai-copy" data-i18n="aiCopy"></button>
+            <button class="button button--quiet" type="button" id="ai-connect-again" data-i18n="aiConnectAnother"></button>
+          </div>
+          <p class="hint" data-i18n="aiConfigOnce"></p>
+        </div>
+      </div>
+
+      <div class="card stack" id="ai-activity-card">
+        <h3 class="card__title" data-i18n="aiActivityTitle"></h3>
+        <p class="hint" data-i18n="aiActivityHint"></p>
+        <ul class="list" id="ai-activity"></ul>
+        <div class="actions"><button class="button button--quiet" type="button" id="ai-activity-clear" data-i18n="aiActivityClear"></button></div>
       </div>
     </section>
   </main>

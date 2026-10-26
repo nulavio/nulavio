@@ -16,6 +16,7 @@ import time
 import urllib.parse
 from collections.abc import Callable
 from dataclasses import dataclass
+from pathlib import Path
 
 from . import audit, policy, registry
 from .bidi import Bidi, BidiError, script_result
@@ -143,6 +144,17 @@ TOOLS: tuple[Tool, ...] = (
     Tool("evaluate", "Run JavaScript", "Run a JavaScript expression in the page and return its JSON value.",
          "execute_js", _schema({"tab": TAB, "expression": {"type": "string", "minLength": 1, "maxLength": 20000}},
                                ("tab", "expression")), False),
+    Tool("dialog", "Answer a page dialog",
+         "Accept or dismiss the alert, confirm or prompt dialog a page opened (results report open dialogs).",
+         "interact",
+         _schema({"tab": TAB, "accept": {"type": "boolean"}, "text": {"type": "string", "maxLength": 1000}}, ("tab", "accept")),
+         False),
+    Tool("downloads_list", "Downloads", "Files this workspace downloaded (or that were refused), with where they are.", "files",
+         _schema({}), True),
+    Tool("upload", "Upload a file",
+         "Put a file into a file field (from page_snapshot). Only files the user placed in this agent's uploads folder.",
+         "files", _schema({"tab": TAB, "element": ELEMENT, "file": {"type": "string", "pattern": "^[^/\\\\]{1,255}$"}},
+                          ("tab", "element", "file")), False),
     Tool("session_state", "Bridge status",
          "Who you are to Nulavio: agent, autonomy, the effective permission for each capability, workspace.",
          None, _schema({}), True),
@@ -199,6 +211,7 @@ class Bridge:
         self.elements: dict[str, dict[str, str]] = {}  # tab -> element id -> BiDi sharedId
         self._lock = threading.Lock()
         self._target: str | None = None  # the address the current call acts on (for the audit)
+        self._downloads_mode: bool | None = None
 
     # -- policy ----------------------------------------------------------------------
 
@@ -229,7 +242,7 @@ class Bridge:
 
     def list_tools(self) -> list[dict]:
         agent = self._agent()
-        if agent is None or agent.get("revoked") or registry.stopped():
+        if agent is None or agent.get("revoked") or agent.get("paused") or registry.stopped():
             return [descriptor(BY_NAME["session_state"])]
         visible = []
         for tool in TOOLS:
@@ -250,6 +263,7 @@ class Bridge:
         try:
             validate(tool.schema, arguments)
             with self._lock:
+                self._sync_downloads()
                 result, target_url = getattr(self, "_t_" + name)(arguments, cancel, checked)
             outcome, decision, reason = "ok", "allow", None
         except Denied as denied:
@@ -287,9 +301,10 @@ class Bridge:
     def bidi(self) -> Bidi:
         if self.workspace is None:
             agent = self._agent() or {}
+            uploads = bool(agent) and policy.effective_mode(agent, "files", self.session_id)[0] != "block"
             self.workspace = (self.workspace_factory(agent) if self.workspace_factory else
                               Workspace(self.agent_id, disposable=agent.get("workspace") == "disposable",
-                                        headless=self.headless))  # fmt: skip
+                                        headless=self.headless, uploads=uploads))  # fmt: skip
         return self.workspace.start()
 
     def close(self) -> None:
@@ -297,6 +312,39 @@ class Bridge:
             self.workspace.stop()
             self.workspace = None
         self.elements.clear()
+        self._downloads_mode = None
+
+    def _sync_downloads(self) -> None:
+        """Downloads follow the `files` permission in the engine itself: allowed into the workspace's folder, or refused."""
+        if self.workspace is None or self.workspace.bidi is None:
+            return
+        agent = self._agent() or {}
+        mode = policy.effective_mode(agent, "files", self.session_id)[0] if agent else "block"
+        allowed = mode == "allow" and not agent.get("paused") and not registry.stopped()
+        if allowed == self._downloads_mode:
+            return
+        behavior = {"type": "allowed", "destinationFolder": str(self.workspace.downloads_dir)} if allowed else {"type": "denied"}
+        self.workspace.bidi.command("browser.setDownloadBehavior", {"downloadBehavior": behavior})
+        self._downloads_mode = allowed
+
+    def _events(self, method: str, tab: str | None = None) -> list[dict]:
+        bidi = self.workspace.bidi if self.workspace else None
+        if bidi is None:
+            return []
+        return [
+            e["params"]
+            for _, e in list(bidi.events)
+            if e.get("method") == method and (tab is None or e["params"].get("context") == tab)
+        ]
+
+    def _open_dialog(self, tab: str) -> dict | None:
+        """The dialog a page has open in this tab, if any (type and message, from the engine's events)."""
+        opened = self._events("browsingContext.userPromptOpened", tab)
+        closed = self._events("browsingContext.userPromptClosed", tab)
+        if len(opened) <= len(closed):
+            return None
+        last = opened[-1]
+        return {"type": last.get("type"), "message": str(last.get("message", ""))[:500]}
 
     def _tabs(self, cancel) -> list[dict]:
         tree = self.bidi().command("browsingContext.getTree", {"maxDepth": 0}, cancel=cancel)
@@ -352,7 +400,8 @@ class Bridge:
             raise ToolError("this agent is no longer registered in Nulavio")
         modes = {c: policy.effective_mode(agent, c, self.session_id)[0] for c in policy.CAPABILITIES}
         data = {"agent": agent["name"], "agent_id": agent["id"], "autonomy": agent["autonomy"],
-                "revoked": bool(agent.get("revoked")), "stopped": registry.stopped(), "sites": agent.get("domains", []),
+                "revoked": bool(agent.get("revoked")), "paused": bool(agent.get("paused")), "stopped": registry.stopped(),
+                "sites": agent.get("domains", []),
                 "workspace": agent.get("workspace"), "capabilities": modes}  # fmt: skip
         return self._ok(data), None
 
@@ -398,7 +447,7 @@ class Bridge:
         page = self._eval(tab, READ_EXPR % (limit + 1), cancel)
         text = page.get("text") or ""
         data = {"tab": tab, "url": page.get("url"), "title": page.get("title"), "text": text[:limit],
-                "truncated": len(text) > limit, "untrusted": True}  # fmt: skip
+                "truncated": len(text) > limit, "untrusted": True, "dialog": self._open_dialog(tab)}  # fmt: skip
         return self._ok(data, f"{UNTRUSTED}\n\nTitle: {data['title']}\nURL: {data['url']}\n\n{data['text']}"), url
 
     def _t_page_snapshot(self, args, cancel, checked):
@@ -440,10 +489,15 @@ class Bridge:
         actions = [{"type": "pointer", "id": "nulavio-mouse", "parameters": {"pointerType": "mouse"}, "actions": [
             {"type": "pointerMove", "x": 0, "y": 0, "origin": {"type": "element", "element": element}},
             {"type": "pointerDown", "button": 0}, {"type": "pointerUp", "button": 0}]}]  # fmt: skip
-        self.bidi().command("input.performActions", {"context": tab, "actions": actions}, cancel=cancel)
+        done = self.bidi().command("input.performActions", {"context": tab, "actions": actions}, cancel=cancel,
+                                   until=("browsingContext.userPromptOpened", tab, mark))  # fmt: skip
+        if done is None:  # the click opened a dialog, which holds the input until it is answered
+            return self._ok({"tab": tab, "url": url, "navigated": False, "dialog": self._open_dialog(tab)}), url
         self.bidi().command("input.releaseActions", {"context": tab}, cancel=cancel)
         navigated = self._settle(tab, mark, expected=bool(info.get("submits") or info.get("href")), cancel=cancel)
-        return self._ok({"tab": tab, "url": self._url_of(tab, cancel), "navigated": navigated}), url
+        dialog = self._open_dialog(tab)
+        data = {"tab": tab, "url": self._url_of(tab, cancel), "navigated": navigated, "dialog": dialog}
+        return self._ok(data), url
 
     def _t_type(self, args, cancel, checked):
         tab = args["tab"]
@@ -474,6 +528,45 @@ class Bridge:
         return self._ok({"tab": tab, "typed": len(args["text"]), "submitted": bool(args.get("submit")),
                          "navigated": navigated, "url": self._url_of(tab, cancel)}), url  # fmt: skip
 
+    def _t_dialog(self, args, cancel, checked):
+        tab = args["tab"]
+        url = self._url_of(tab, cancel)
+        self.require("interact", url, checked=checked)
+        if self._open_dialog(tab) is None:
+            raise ToolError("no dialog is open in that tab")
+        params = {"context": tab, "accept": bool(args["accept"])}
+        if args.get("text") is not None:
+            params["userText"] = args["text"]
+        self.bidi().command("browsingContext.handleUserPrompt", params, cancel=cancel)
+        return self._ok({"tab": tab, "accepted": bool(args["accept"])}), url
+
+    def _t_downloads_list(self, args, cancel, checked):
+        self.require("files", checked=checked)
+        begun = self._events("browsingContext.downloadWillBegin")
+        ended = {e.get("navigation"): e for e in self._events("browsingContext.downloadEnd")}
+        items = []
+        for item in begun[-50:]:
+            end = ended.get(item.get("navigation"), {})
+            path = end.get("filepath") if end.get("status") == "complete" else None
+            items.append({"file": item.get("suggestedFilename"), "from": policy.origin(item.get("url")),
+                          "status": end.get("status", "in progress"), "path": path})  # fmt: skip
+        folder = str(self.workspace.downloads_dir) if self.workspace else None
+        return self._ok({"downloads": items, "folder": folder}), None
+
+    def _t_upload(self, args, cancel, checked):
+        tab = args["tab"]
+        url = self._url_of(tab, cancel)
+        element = self._element(tab, args["element"])
+        self.require("files", url, checked=checked)
+        folder = _uploads(self).resolve()
+        if not self.workspace.uploads:
+            raise ToolError("uploads were not allowed when this workspace started; reconnect the agent after allowing files")
+        path = (folder / args["file"]).resolve()
+        if path.parent != folder or not path.is_file():
+            raise ToolError(f"no file named {args['file']!r} in this agent's uploads folder ({folder})")
+        self.bidi().command("input.setFiles", {"context": tab, "element": element, "files": [str(path)]}, cancel=cancel)
+        return self._ok({"tab": tab, "file": path.name}), url
+
     def _t_evaluate(self, args, cancel, checked):
         tab = args["tab"]
         url = self._url_of(tab, cancel)
@@ -485,10 +578,16 @@ class Bridge:
         return self._ok({"tab": tab, "value": value, "untrusted": True}, f"{UNTRUSTED}\n\n{text}"), url
 
 
+def _uploads(bridge: Bridge) -> Path:
+    bridge.bidi()
+    return bridge.workspace.uploads_dir
+
+
 def _why(decision: policy.Decision) -> str:
     return {
         "stopped": "blocked: the user pressed the emergency stop",
         "revoked": "blocked: the user revoked this agent's access",
+        "paused": "blocked for now: the user paused this agent",
         "out-of-scope": "blocked on this site: it is outside the sites this agent may use",
         "no-approver": "set to 'ask' and there is no way to ask the user right now",
         "denied": "set to 'ask' and the user said no",

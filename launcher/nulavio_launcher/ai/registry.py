@@ -21,6 +21,7 @@ import re
 import secrets
 import shutil
 import subprocess
+import time
 from pathlib import Path
 
 from .. import paths
@@ -209,6 +210,55 @@ def grant(agent_id: str, capability: str, mode: str, *, minutes: int | None = No
     return entry
 
 
+def _change(agent_id: str, fn) -> None:
+    def apply(data):
+        agent = data["agents"].get(agent_id)
+        if agent is None:
+            raise RegistryError(f"no agent {agent_id}")
+        fn(agent)
+
+    _update(apply)
+
+
+def pause(agent_id: str, paused: bool) -> None:
+    """Hold an agent without revoking it: its calls are refused until resumed."""
+    _change(agent_id, lambda a: a.__setitem__("paused", now().isoformat(timespec="seconds") if paused else None))
+
+
+def set_domains(agent_id: str, domains: list[str]) -> None:
+    clean = sorted({_domain(d) for d in domains})
+    _change(agent_id, lambda a: a.__setitem__("domains", clean))
+
+
+def rotate_token(agent_id: str) -> str:
+    """A new token for the agent's configuration; the old one stops working at once."""
+    token = secrets.token_urlsafe(32)
+    _change(agent_id, lambda a: a.__setitem__("token_sha256", _hash(token)))
+    return token
+
+
+# Program names that each client runs as (the bridge's parent process). Evidence only:
+# a mismatch is shown to the user, never used to grant anything.
+CLIENT_EXECUTABLES = {"claude-code": {"claude", "node", "bun"}, "codex": {"codex", "codex-exec", "node"}}
+
+
+def parent_executable() -> str | None:
+    try:
+        return Path(os.readlink(f"/proc/{os.getppid()}/exe")).name
+    except OSError:
+        return None
+
+
+def record_client(agent_id: str, executable: str | None) -> bool:
+    """Remember which program started the bridge; returns False when it does not look like the registered client."""
+    agent = load()["agents"].get(agent_id) or {}
+    expected = CLIENT_EXECUTABLES.get(agent.get("client"))
+    matches = expected is None or executable is None or executable in expected
+    _change(agent_id, lambda a: a.__setitem__("last_client", {
+        "executable": executable, "seen": now().isoformat(timespec="seconds"), "matches": matches}))  # fmt: skip
+    return matches
+
+
 def clear_grant(agent_id: str, capability: str) -> None:
     def apply(data):
         data["agents"].get(agent_id, {}).get("grants", {}).pop(capability, None)
@@ -252,11 +302,75 @@ class KDialogApprover(Approver):
         return {0: "once", 1: "session"}.get(result.returncode, "deny")
 
 
+class BrowserApprover(Approver):
+    """Ask in the user's Nulavio window (Shell page "Agent permission request").
+
+    The bridge writes a request file; a running Nulavio (never the AI Workspace
+    itself) marks it seen, shows it, and writes the answer. If no browser
+    picks it up quickly, the next approver is asked (the KDE dialog, or no).
+    """
+
+    def __init__(self, fallback: Approver | None = None, notice: float = 4.0, timeout: float = 120.0, poll: float = 0.2):
+        self.fallback = fallback or Approver()
+        self.notice, self.timeout, self.poll = notice, timeout, poll
+
+    def ask(self, agent: dict, capability: str, target: str | None) -> str | None:
+        folder = requests_dir()
+        request_id = secrets.token_hex(8)
+        base = folder / request_id
+        body = {"id": request_id, "agent_id": agent["id"], "agent": agent["name"], "client": agent.get("client"),
+                "autonomy": agent["autonomy"], "capability": capability, "label": CAPABILITIES[capability],
+                "target": target, "created": now().isoformat(timespec="seconds"),
+                "expires": (now() + _dt.timedelta(seconds=self.timeout)).isoformat(timespec="seconds")}  # fmt: skip
+        paths.write_private_file(base.with_suffix(".json"), json.dumps(body))
+        try:
+            deadline = time.monotonic() + self.notice
+            while not base.with_suffix(".seen").exists():
+                if time.monotonic() > deadline:
+                    base.with_suffix(".json").unlink(missing_ok=True)
+                    return self.fallback.ask(agent, capability, target)
+                time.sleep(self.poll)
+            deadline = time.monotonic() + self.timeout
+            while time.monotonic() < deadline:
+                answer = base.with_suffix(".answer")
+                if answer.exists():
+                    value = answer.read_text().strip()
+                    return value if value in ("once", "session", "deny") else "deny"
+                time.sleep(self.poll)
+            return "deny"
+        finally:
+            for suffix in (".json", ".seen", ".answer"):
+                base.with_suffix(suffix).unlink(missing_ok=True)
+
+
+def requests_dir() -> Path:
+    return paths.ensure_private_dir(ai_state() / "requests")
+
+
+def pending_requests() -> list[dict]:
+    out = []
+    for item in sorted(requests_dir().glob("*.json")):
+        try:
+            out.append(json.loads(item.read_text()))
+        except (OSError, ValueError):
+            continue
+    return out
+
+
+def answer_request(request_id: str, answer: str) -> None:
+    if not re.fullmatch(r"[0-9a-f]{16}", request_id) or answer not in ("once", "session", "deny"):
+        raise RegistryError("bad answer")
+    base = requests_dir() / request_id
+    if not base.with_suffix(".json").exists():
+        raise RegistryError("no such request (expired?)")
+    paths.write_private_file(base.with_suffix(".answer"), answer)
+
+
 def default_approver() -> Approver:
     if os.environ.get("NULAVIO_AI_APPROVER") == "none":  # only ever makes the bridge stricter
         return Approver()
     kdialog = KDialogApprover()
-    return kdialog if kdialog.available() else Approver()
+    return BrowserApprover(fallback=kdialog if kdialog.available() else Approver())
 
 
 def decide(agent_id: str, capability: str, *, host: str | None, target: str | None, session_id: str,
@@ -267,6 +381,8 @@ def decide(agent_id: str, capability: str, *, host: str | None, target: str | No
         return Decision(False, "block", capability, "stopped")
     if agent is None or agent.get("revoked"):
         return Decision(False, "block", capability, "revoked")
+    if agent.get("paused"):
+        return Decision(False, "block", capability, "paused")
     if not in_scope(agent, host):
         return Decision(False, "block", capability, "out-of-scope")
     mode, source = effective_mode(agent, capability, session_id)

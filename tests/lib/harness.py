@@ -155,6 +155,22 @@ class FixtureServer:
         if path == "/agent-result":
             q = "".join(c for c in query.get("q", "") if c.isalnum() or c in "+-_")[:64]
             return f"<!doctype html><title>agent-result</title><p id=result>Result: {q}</p>".encode(), html, {}
+        if path == "/agent-dialog":
+            page = (
+                "<!doctype html><title>agent-dialog</title>"
+                "<button id=ask onclick=\"document.getElementById('r').textContent ="
+                " confirm('Proceed?') ? 'yes' : 'no'\">Ask</button>"
+                "<p id=r>none</p>"
+            )
+            return page.encode(), html, {}
+        if path == "/agent-upload":
+            page = (
+                "<!doctype html><title>agent-upload</title>"
+                "<label>Attachment <input id=f type=file"
+                " onchange=\"document.getElementById('n').textContent = this.files[0].name\"></label>"
+                "<p id=n>nothing</p>"
+            )
+            return page.encode(), html, {}
         if path == "/popup-on-load":
             page = "<!doctype html><title>popup</title><script>window.open('/page/popup')</script>"
             return page.encode(), html, {}

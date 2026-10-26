@@ -185,7 +185,11 @@ class AiBridgeTest(unittest.TestCase):
         text = audit.audit_path().read_text()
         for secret in ("s3cr3tTypedValue", "QUARTZ", "agent-task", "word="):
             self.assertNotIn(secret, text)
-        entries = [json.loads(line) for line in text.splitlines()]
+        everything = [json.loads(line) for line in text.splitlines()]
+        connected = [e for e in everything if e.get("event") == "connected"]
+        self.assertEqual(len(connected), 1)
+        self.assertTrue(connected[0].get("client_exe"))  # which program started the bridge (evidence, not identity)
+        entries = [e for e in everything if "tool" in e]
         self.assertEqual([e["tool"] for e in entries], ["tab_new", "page_snapshot", "type", "page_read"])
         self.assertTrue(all(e["agent"] == agent["id"] and e["target"] == f"http://127.0.0.1:{self.fx.port}" for e in entries))
         self.assertEqual(entries[2]["input_chars"], len("s3cr3tTypedValue"))
@@ -233,6 +237,59 @@ class AiBridgeTest(unittest.TestCase):
         self.assertEqual(c.close(), 0)
         self.assertFalse(any(p.exists() for p in created))
         self.assertFalse((self.home / "data" / "ai" / "workspaces" / agent["id"]).exists())
+
+    def test_14_downloads_follow_the_files_permission(self):
+        allowed, env = self.agent("autonomous")
+        c = self.client(env)
+        tab = c.call("tab_new", url=self.fx.url("/page/start"))["structuredContent"]["tab"]
+        c.call("navigate", tab=tab, url=self.fx.url("/download"))
+        folder = self.home / "data" / "ai" / "workspaces" / allowed["id"] / "downloads"
+        self.assertTrue(harness.wait_until(lambda: (folder / "nulavio-fixture.bin").exists(), timeout=20))
+        listed = harness.wait_until(
+            lambda: [d for d in c.call("downloads_list")["structuredContent"]["downloads"] if d["status"] == "complete"],
+            timeout=20,
+        )
+        self.assertEqual(listed[0]["file"], "nulavio-fixture.bin")
+        self.assertTrue(listed[0]["path"].startswith(str(folder)))
+
+        refused, env = self.agent("assisted")  # files: ask, and nobody can answer here
+        c2 = self.client(env)
+        tab = c2.call("tab_new", url=self.fx.url("/page/start"))["structuredContent"]["tab"]
+        c2.call("navigate", tab=tab, url=self.fx.url("/download"))
+        time.sleep(2)
+        folder = self.home / "data" / "ai" / "workspaces" / refused["id"] / "downloads"
+        self.assertEqual(list(folder.iterdir()), [])
+        self.assertTrue(c2.call("downloads_list")["isError"])
+
+    def test_15_page_dialogs_wait_for_the_agent(self):
+        _, env = self.agent("autonomous")
+        c = self.client(env)
+        tab = c.call("tab_new", url=self.fx.url("/agent-dialog"))["structuredContent"]["tab"]
+        snap = c.call("page_snapshot", tab=tab)
+        clicked = c.call("click", tab=tab, element=self.element(snap, name="Ask"))["structuredContent"]
+        self.assertEqual(clicked["dialog"], {"type": "confirm", "message": "Proceed?"})
+        self.assertFalse(c.call("dialog", tab=tab, accept=True)["isError"])
+        self.assertTrue(
+            harness.wait_until(lambda: "yes" in c.call("page_read", tab=tab)["structuredContent"]["text"], timeout=10)
+        )
+        self.assertIsNone(c.call("page_read", tab=tab)["structuredContent"]["dialog"])
+        self.assertTrue(c.call("dialog", tab=tab, accept=False)["isError"])  # nothing open now
+
+    def test_16_uploads_only_from_the_uploads_folder(self):
+        agent, env = self.agent("autonomous")
+        c = self.client(env)
+        tab = c.call("tab_new", url=self.fx.url("/agent-upload"))["structuredContent"]["tab"]
+        uploads = self.home / "data" / "ai" / "workspaces" / agent["id"] / "uploads"
+        (uploads / "report.txt").write_text("artificial upload")
+        field = self.element(c.call("page_snapshot", tab=tab), type="file")
+        self.assertFalse(c.call("upload", tab=tab, element=field, file="report.txt")["isError"])
+        self.assertTrue(
+            harness.wait_until(lambda: "report.txt" in c.call("page_read", tab=tab)["structuredContent"]["text"], timeout=10)
+        )
+        self.assertIn("uploads folder", c.call("upload", tab=tab, element=field, file="missing.txt")["content"][0]["text"])
+        traversal = c.call("upload", tab=tab, element=field, file="../profile/prefs.js")  # refused before anything runs
+        self.assertTrue(traversal["isError"])
+        self.assertIn("wrong format", traversal["content"][0]["text"])
 
 
 if __name__ == "__main__":
