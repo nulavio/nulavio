@@ -53,7 +53,8 @@ Each milestone has a definition of done (DoD). "Done" requires the DoD to be ver
 - [x] Smart Profile Routing M4b: typed addresses routed on Enter (patch 0005), "Open link in profile" in the link menu (`test_routing` 11–14)
 - [ ] Smart Profile Routing M5: automatic routing of in-page navigation, only after a security review
 - [ ] Temporary profile (deleted on close)
-- [ ] Nulavio Connect: discovery CLI (`nulavio integrations`), then the Integration Manager page
+- [x] Nulavio Connect P0: `nulavio integrations` and Settings → Integrations (Plasma Browser Integration, portals, secret storage, default browser) with evidence; "Make Nulavio the default browser" on request, with restore (`test_connect`)
+- [ ] Nulavio Connect P1/P2: KRunner, KDE Connect send link, screen-cast status, passkeys status, notifications; MPRIS, activities, per-profile proxy
 
 **DoD:** each item verified on the Nulavio build by an integration test that uses the engine's real services.
 
@@ -135,4 +136,4 @@ External agents (Codex CLI and Desktop, Claude Code and Desktop, other MCP clien
 
 ## Next task (recommended)
 
-Follow the [execution plan](execution-plan.md): **S1 Nulavio Connect P0**, then **S2** (unlock research and ADRs) and **S3** (Vault crypto prototype), then **S4** (AI Bridge foundation and first MCP POC). The plan lists the decisions each slice needs from the maintainer.
+Follow the [execution plan](execution-plan.md): S1 (Connect P0) is done; next **S2** (unlock research and ADRs) and **S3** (Vault crypto prototype), then **S4** (AI Bridge foundation and first MCP POC). The plan lists the decisions each slice needs from the maintainer.

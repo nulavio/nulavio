@@ -35,6 +35,7 @@ Status per component of the browser window and Nulavio's own pages. "Upstream" m
 | **Routing pages** | Shell pages `routing/ask.html`, `routing/blocked.html` | **Done**: the address as text, nothing loaded, explicit choices (open there, open here, remember) | — |
 | **Smart routing rules** | Settings → Profiles → Smart routing; selector "This site" | **Done** (links from other apps, typed addresses) | In-page navigation (M5) |
 | Link menu "Open link in profile" | Shell `menus` item (content area context menu) | **Done**: lists the other profiles; hidden in private windows | Profile colours as menu icons |
+| **Integrations** | Settings → Integrations (Shell) | **Done (P0)**: state in words and a mark, evidence on request, make default / restore | P1/P2 integrations |
 | Upstream profile menu | App menu → Profiles, `about:profilemanager`, `about:editprofile`, `about:deleteprofile` | Upstream, linked from Nulavio settings | — |
 | Onboarding | `about:welcome` | Upstream | Nulavio flow A (M6) |
 | Error pages | `aboutNetError`, `blockedSite.xhtml` | Upstream | Horizon styling, criteria untouched (M6) |

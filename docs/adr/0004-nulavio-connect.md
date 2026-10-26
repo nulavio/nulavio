@@ -1,6 +1,6 @@
 # ADR 0004 — Nulavio Connect and the Integration Manager
 
-- **Status:** Accepted (2026-10-25). Interfaces and discovery defined; adapters staged (M6–M7).
+- **Status:** Accepted (2026-10-25). **P0 discovery implemented (2026-10-26)**: `nulavio integrations` and Settings → Integrations; P1/P2 adapters staged.
 - **Related:** [trust boundaries](../architecture/trust-boundaries.md), [password providers](../architecture/password-providers.md).
 
 ## Context
@@ -51,11 +51,20 @@ class Status:
     evidence: str                 # what was checked (e.g. "D-Bus name org.kde.plasma.browser_integration owned")
 ```
 
+## P0 implementation (2026-10-26)
+
+- **One definition file**, `browser/config/integrations.json`, read by the launcher (`launcher/nulavio_launcher/connect.py`, `nulavio integrations [--json]`) and packaged into the Shell (`modules/NulavioConnect.sys.mjs`, Settings → Integrations).
+- **Probes**, each an argument list with a timeout (Python `subprocess`, the engine's `Subprocess` module), never a shell: `busctl --user status|get-property` for D-Bus name owners and portal interface versions; `xdg-settings get` and `xdg-mime query default` for the default browser; the host manifest and program for Plasma Browser Integration, in the directories **this build reads** (`XREUserNativeManifests`, `XRESysNativeManifests`). A version or owner that is not reported is shown as "not reported", never guessed.
+- **States** `enabled`, `available`, `unavailable`, `error`, `unknown`, each with a reason and the evidence lines shown under "How this was checked".
+- **The only change** is "Make Nulavio the default browser": a confirmation, a user-level desktop entry (`net.nulavio.Nulavio.desktop`, `Exec` unquoted because `xdg-settings` does not unquote it), `xdg-settings set`, a check that it took effect, and the previous browser kept for "Restore".
+- **Finding:** the engine reads system native-messaging hosts from a directory fixed at build time (`/usr/lib64/mozilla` only when `libdir` contains `lib64`). Without `--libdir=/usr/lib64` the Nulavio build did not see Fedora's Plasma Browser Integration host; the mozconfig now sets it, and the Integrations page says so plainly when a host is installed where the build does not read ("not-read"). A Debian/Ubuntu package must build with `/usr/lib`.
+- **Verification:** `tests/unit/test_connect.py` (real CLI, private D-Bus bus, fake services, read-only proof) and `tests/integration/test_connect.py` (inside the browser: discovery, make default and restore in a throwaway home, settings page, the real desktop's `mimeapps.list` and `kdeglobals` hashed before and after).
+
 ## Risks
 
 | Risk | Mitigation |
 |---|---|
 | Plasma Browser Integration registers for "Firefox" by name | Verified: manifests are read from the Firefox path in rebranded builds; the extension's AMO ID works with Nulavio's Firefox app ID |
 | Portals differ between KDE and GNOME | Discovery reads interface versions; features degrade to the engine's default dialogs |
-| D-Bus probing reveals too much | Only `NameHasOwner` for named services; no monitoring (a past experiment that captured other apps' traffic is not repeated) |
+| D-Bus probing reveals too much | Only the owner of a few named services (its program name) and the `version` property of portal interfaces; no monitoring, no calls into services (a past experiment that captured other apps' traffic is not repeated) |
 | Default-browser change is intrusive | Offered, never automatic; `xdg-settings` is called with an argument list, no shell |
