@@ -72,6 +72,13 @@ class ShellTest(unittest.TestCase):
         finally:
             cls.m.set_context("content")
 
+    def root_data(self, name: str):
+        """data-* attribute of the current page's root, or None while the document is not there yet."""
+        try:
+            return self.m.execute("return document.documentElement && document.documentElement.dataset[arguments[0]];", [name])
+        except MarionetteError:
+            return None  # navigation in progress: the document can be briefly missing
+
     def new_handles(self, before: set[str]) -> list[str]:
         return [h for h in self.m.window_handles() if h not in before]
 
@@ -101,7 +108,7 @@ class ShellTest(unittest.TestCase):
         created = harness.wait_until(lambda: self.new_handles(before), timeout=10)
         self.assertTrue(created, "Ctrl+T did not open a tab")
         self.m.switch_to(created[0])
-        ready = harness.wait_until(lambda: self.m.execute("return document.documentElement.dataset.ready;"), timeout=15)
+        ready = harness.wait_until(lambda: self.root_data("ready"), timeout=15)
         self.assertEqual(ready, "true")
         self.assertEqual(self.m.current_url(), url)
         status = dict(
@@ -134,7 +141,7 @@ class ShellTest(unittest.TestCase):
         self.assertTrue(target.exists())
         self.assertEqual(stat.S_IMODE(target.stat().st_mode) & 0o111, 0, "download saved with execute permission")
         self.m.switch_to(created[0])
-        state = harness.wait_until(lambda: self.m.execute("return document.documentElement.dataset.state;"), timeout=15)
+        state = harness.wait_until(lambda: self.root_data("state"), timeout=15)
         self.assertEqual(state, "ready")
         self.assertIn("/warning/warning.html?id=", self.m.current_url())
         text = self.m.execute("return document.body.innerText;")
@@ -148,7 +155,7 @@ class ShellTest(unittest.TestCase):
         self.assertFalse(any(label.lower() in ("abrir", "open") for _, label in buttons), "flow E must not offer Open")
         (self.artifacts / "shell-download-warning.png").write_bytes(self.m.screenshot_png())
         self.m.execute("document.getElementById('delete').click();")
-        deleted = harness.wait_until(lambda: self.m.execute("return document.documentElement.dataset.state;") == "deleted")
+        deleted = harness.wait_until(lambda: self.root_data("state") == "deleted")
         self.assertTrue(deleted, "Delete did not report success")
         self.assertFalse(target.exists(), "Delete left the file on disk")
 
@@ -167,7 +174,7 @@ class ShellTest(unittest.TestCase):
             self.m.navigate(url)
         except MarionetteError:
             pass
-        state = harness.wait_until(lambda: self.m.execute("return document.documentElement.dataset.state;"), timeout=10)
+        state = harness.wait_until(lambda: self.root_data("state"), timeout=10)
         self.assertEqual(state, "error")
         buttons = self.m.execute("return [...document.querySelectorAll('button')].filter(b => !b.closest('[hidden]')).length;")
         self.assertEqual(buttons, 0, "no actions for a download that does not exist")
