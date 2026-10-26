@@ -33,6 +33,9 @@ WORKSPACE_PREFS: dict[str, object] = {
     # Keep Safe Browsing, updates, the pop-up blocker and the rest of the
     # baseline: never apply the remote agent's test-automation preferences.
     "remote.prefs.recommended": False,
+    # Mozilla's official builds show a Terms of Use modal on first run that blocks new tabs.
+    # The engine's own automation prefs skip it; it is a notice, not a protection, so keep only this one.
+    "termsofuse.bypassNotification": True,
     "browser.shell.checkDefaultBrowser": False,
     "browser.startup.homepage_override.mstone": "ignore",
     "startup.homepage_welcome_url": "",
