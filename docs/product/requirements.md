@@ -29,6 +29,10 @@ Status legend: **Done** (implemented and verified by a test or recorded evidence
 | FR-21 | Search engine choice: privacy-focused providers, SearXNG instance, custom URL or OpenSearch, aliases, separate private default, add/remove in the UI | **Done (Track B)** ([ADR 0002](../adr/0002-nulavio-search.md)). Track A: upstream Settings | `test_search` 04, 06–10, 12 |
 | FR-22 | Smart Profile Routing (explicit rules, host > domain > policy > stay) | **Done (Track B) for links from other apps** (M4a): decided before any request, conservative failure, ask first, rules editor, "Always open this site in this profile". **Typed addresses** routed on Enter (M4b); in-page links move only by an explicit "Open link in profile"; automatic in-page routing: Planned (M5, after a security review) | `test_routing` |
 | FR-23 | Integration Manager (KDE, portals, Secret Service, default browser) with real discovery | **Planned** ([ADR 0004](../adr/0004-nulavio-connect.md)) | — |
+| FR-24 | Encrypted profiles at rest with real lock/unlock (Nulavio Vault) | **Planned** (roadmap phase 2c, U3–U8) | — |
+| FR-25 | Unlock with the phone (biometrics/PIN), OS authentication, profile password or FIDO2 key; recovery code and second device | **Planned** (phase 2c; protocol decided in U2) | — |
+| FR-26 | AI Bridge: MCP for external agents with per-agent autonomy (Restricted, Assisted, Autonomous, Full control), revocable and audited | **Planned** (roadmap phase 2d) | — |
+| FR-27 | Built-in AI assistant, provider-agnostic, under the same policies as external agents | **Planned** (phase 2d, A12) | — |
 
 ## Security and privacy
 

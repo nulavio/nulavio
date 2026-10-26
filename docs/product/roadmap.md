@@ -57,6 +57,47 @@ Each milestone has a definition of done (DoD). "Done" requires the DoD to be ver
 
 **DoD:** each item verified on the Nulavio build by an integration test that uses the engine's real services.
 
+## Phase 2c — Secure Profiles: Vault and unlock · **planned** ([brief](briefs/2026-10-26-profile-unlock.md), [execution plan](execution-plan.md) S2, S3, S5, S6, S9, S10)
+
+Unlock encrypted profiles with, in order of convenience: the phone (biometrics/PIN), the operating system, the profile's own password, or a FIDO2 security key. A successful authentication only unlocks data if it takes part in releasing the key. Components: Nulavio Vault, Unlock Coordinator, Platform Key Provider, Phone Unlock, Hardware Key Provider. This is not a passkey manager for websites and does not change WebAuthn for pages.
+
+- [ ] U0 Repository audit
+- [ ] U1 Study: WebAuthn hybrid + PRF vs Nulavio Companion vs approval-only, with a tested compatibility matrix (Windows/Linux × Android/iPhone)
+- [ ] U2 ADR `phone-profile-unlock` (protocol choice, cancellation criteria)
+- [ ] U3 Threat model (anti-infostealer) and key management (DEK, envelopes, rotation, recovery)
+- [ ] U4 Cryptographic unlock prototype with artificial data (password, recovery code, OS keyring)
+- [ ] U5 Desktop–phone pairing proof (protocol simulated first, no device required)
+- [ ] U6 Android Companion POC (Keystore, BiometricPrompt)
+- [ ] U7 Recovery, replay and lost-device tests
+- [ ] U8 Integration with Gecko profiles (encrypted profile container; lock = instance ended and container closed)
+- [ ] U9 UX: onboarding in three decisions, locked profile, recovery, devices
+- [ ] U10 iOS and Windows evaluation
+- [ ] U11 Hardening and independent audit
+
+**DoD:** a profile does not unlock without a valid method; copying its files does not reveal the key; at least two recovery methods work before phone unlock ships; the protection-state matrix (`encrypted_at_rest`, `os_user_protected`, `password_protected`, `hardware_bound`, `phone_approved`, `phone_key_release_verified`) shows only what is really in place.
+
+## Phase 2d — AI Bridge, agent autonomy and browser automation · **planned** ([brief](briefs/2026-10-26-ai-bridge.md), [execution plan](execution-plan.md) S4, S7, S8)
+
+External agents (Codex CLI and Desktop, Claude Code and Desktop, other MCP clients) and, later, a built-in assistant use the browser through one policy decision point outside the model. Safe by default (isolated AI Workspace profile), with autonomy the user can grant up to full control; grants are honoured as given, visible and revocable.
+
+- [ ] A0 Audit (engine, Shell, profiles, IPC, automation tests)
+- [ ] A1 Compatibility matrix: Nulavio MCP, WebDriver BiDi, Marionette, firefox-devtools-mcp, Playwright, CDP (documented / implemented / tested)
+- [ ] A2 ADR AI Bridge
+- [ ] A3 Threat model for automation and autonomy (incl. deliberately accepted risk)
+- [ ] A4 Minimal MCP server with navigation tools on a throwaway profile
+- [ ] A5 Gecko automation adapter
+- [ ] A6 Agent registry and sessions (authenticated local transport)
+- [ ] A7 Permission and autonomy manager (per agent, profile, site, duration)
+- [ ] A8 Restricted, Assisted, Autonomous, Full control
+- [ ] A9 Codex CLI and Claude Code connection wizard
+- [ ] A10 Secure Profiles and Smart Profile Routing integration
+- [ ] A11 UX (Horizon): agents, autonomy, activity, revoke, emergency stop
+- [ ] A12 Built-in assistant (provider-agnostic, same policies)
+- [ ] A13 Advanced compatibility (Playwright/CDP adapters where feasible)
+- [ ] A14 Hardening, multi-platform tests, documentation
+
+**DoD:** real clients (not mocks) connect and act within their grants; denied capabilities are denied; "Autonomous" does not ask again for granted actions; revocation stops new operations; no access to a locked profile; nothing in the UI claims isolation that is not there.
+
 ## Phase 3 — Privacy and blocking
 
 - [x] uBO pinned and verified; ETP Strict; HTTPS-Only; reversibility tested
@@ -94,4 +135,4 @@ Each milestone has a definition of done (DoD). "Done" requires the DoD to be ver
 
 ## Next task (recommended)
 
-**Nulavio Connect, P0 discovery** ([ADR 0004](../adr/0004-nulavio-connect.md)): read-only detection, with the evidence shown, of KDE Plasma Browser Integration, XDG portals, Secret Service/KWallet and the default browser / URL handlers (`nulavio integrations` in the launcher, then the Integration Manager page in the Shell). Setting Nulavio as the default browser is offered, never automatic.
+Follow the [execution plan](execution-plan.md): **S1 Nulavio Connect P0**, then **S2** (unlock research and ADRs) and **S3** (Vault crypto prototype), then **S4** (AI Bridge foundation and first MCP POC). The plan lists the decisions each slice needs from the maintainer.
