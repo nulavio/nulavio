@@ -111,6 +111,8 @@
     --nv-color-status-warning: #E7AE61;
     --nv-color-status-critical: #E26D70;
     --nv-color-status-criticalText: #EE8A8C;
+    --nv-color-status-warningTint: #3A2A12;
+    --nv-color-status-criticalTint: #3F1A1D;
     --nv-color-chrome-toolbox: #070F18;
     --nv-color-chrome-toolbar: #0B1623;
     --nv-color-chrome-tabSelected: #183746;
@@ -146,6 +148,8 @@
   --nv-color-status-warning: #E7AE61;
   --nv-color-status-critical: #E26D70;
   --nv-color-status-criticalText: #EE8A8C;
+  --nv-color-status-warningTint: #3A2A12;
+  --nv-color-status-criticalTint: #3F1A1D;
   --nv-color-chrome-toolbox: #070F18;
   --nv-color-chrome-toolbar: #0B1623;
   --nv-color-chrome-tabSelected: #183746;

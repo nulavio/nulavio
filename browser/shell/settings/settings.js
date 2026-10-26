@@ -481,12 +481,114 @@ function setUpRouting() {
   return renderRouting();
 }
 
+// -- integrations (Nulavio Connect) -----------------------------------------
+
+const connect = browser.nulavioConnect;
+const STATE_KEYS = {
+  enabled: "connectStateEnabled",
+  available: "connectStateAvailable",
+  unavailable: "connectStateUnavailable",
+  error: "connectStateError",
+  unknown: "connectStateUnknown",
+};
+
+function integrationText(item) {
+  const key = `connect_${item.id}_${item.reason}`.replaceAll("-", "_");
+  const substitutions =
+    {
+      "secret-service": [item.params.provider ?? ""],
+      "default-browser": [item.params.name || t("connectNoBrowser")],
+      "xdg-portals": [t(`connectPicker_${item.params.picker ?? "automatic"}`)],
+      "plasma-browser-integration": [item.params.dir ?? ""],
+    }[item.id] ?? [];
+  return browser.i18n.getMessage(key, substitutions) || t("connectCheckFailed");
+}
+
+function integrationActions(item) {
+  const actions = [];
+  if (item.id === "plasma-browser-integration" && item.reason === "ready" && /^https:\/\//.test(item.params.page ?? "")) {
+    actions.push(h("a", { class: "button button--secondary", href: item.params.page, target: "_blank", rel: "noreferrer", text: t("connectInstallExtension") }));
+  }
+  if (item.id === "default-browser" && item.reason === "other") {
+    const make = h("button", { class: "button button--secondary", type: "button", text: t("connectMakeDefault"), "data-focus-key": "make-default" });
+    make.addEventListener("click", async () => {
+      const ok = await confirmDialog({
+        title: t("connectMakeDefaultTitle"),
+        body: t("connectMakeDefaultBody"),
+        confirm: t("connectMakeDefaultConfirm"),
+      });
+      if (ok && (await run(() => connect.setDefaultBrowser(), { done: t("connectDefaultSet") })) !== undefined) {
+        renderIntegrations();
+      }
+    });
+    actions.push(make);
+  }
+  if (item.id === "default-browser" && item.state === "enabled" && item.params.previous) {
+    const restore = h("button", {
+      class: "button button--quiet",
+      type: "button",
+      text: t("connectRestore", [item.params.previousName || item.params.previous]),
+      "data-focus-key": "restore-default",
+    });
+    restore.addEventListener("click", async () => {
+      if ((await run(() => connect.restoreDefaultBrowser(), { done: t("connectRestored") })) !== undefined) {
+        renderIntegrations();
+      }
+    });
+    actions.push(restore);
+  }
+  return actions;
+}
+
+function integrationRow(item) {
+  return h(
+    "li",
+    { class: "row", dataset: { integration: item.id, state: item.state } },
+    h("span", { class: `state-mark state-mark--${item.state}`, "aria-hidden": "true" }),
+    h(
+      "div",
+      { class: "row__main" },
+      h(
+        "p",
+        { class: "row__title" },
+        h("span", { text: t(`connectTitle_${item.id.replaceAll("-", "_")}`) }),
+        h("span", { class: `badge badge--state badge--${item.state}`, text: t(STATE_KEYS[item.state] ?? "connectStateUnknown") })
+      ),
+      h("p", { class: "hint", text: integrationText(item) }),
+      h(
+        "details",
+        { class: "more", "data-open-key": `evidence-${item.id}` },
+        h("summary", { text: t("connectEvidence") }),
+        h("ul", { class: "evidence" }, item.evidence.map(line => h("li", { class: "mono", text: line })))
+      )
+    ),
+    h("div", { class: "row__end" }, integrationActions(item))
+  );
+}
+
+async function renderIntegrations() {
+  const list = document.getElementById("integration-list");
+  list.setAttribute("aria-busy", "true");
+  const items = await run(() => connect.discover());
+  list.setAttribute("aria-busy", "false");
+  if (items) {
+    rerender(list, () => items.map(integrationRow));
+    list.dataset.ready = "true";
+  }
+}
+
+function setUpIntegrations() {
+  document.getElementById("integrations").hidden = false;
+  document.getElementById("connect-refresh").addEventListener("click", () => renderIntegrations());
+  return renderIntegrations();
+}
+
 // -- page -----------------------------------------------------------------
 
 localize();
 const ready = [];
-if (search && profiles && routing) {
-  ready.push(setUpSearch(), setUpProfiles(), setUpRouting());
+if (search && profiles && routing && connect) {
+  ready.push(setUpSearch(), setUpProfiles(), setUpRouting(), setUpIntegrations());
 } else {
   document.getElementById("needs-build").hidden = false;
 }

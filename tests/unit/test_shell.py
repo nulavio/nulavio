@@ -115,9 +115,9 @@ class PrivilegedApiTest(unittest.TestCase):
     def setUp(self):
         self.manifest = make_shell.manifest()
 
-    def test_only_the_two_documented_apis(self):
+    def test_only_the_documented_apis(self):
         apis = self.manifest["experiment_apis"]
-        self.assertEqual(set(apis), {"nulavioSearch", "nulavioProfiles", "nulavioRouting"})
+        self.assertEqual(set(apis), {"nulavioSearch", "nulavioProfiles", "nulavioRouting", "nulavioConnect"})
         for name, api in apis.items():
             with self.subTest(api=name):
                 self.assertEqual(api["parent"]["scopes"], ["addon_parent"], "no API code runs in content processes")
@@ -129,6 +129,7 @@ class PrivilegedApiTest(unittest.TestCase):
         self.assertEqual(apis["nulavioSearch"]["parent"]["events"], ["startup"])
         self.assertNotIn("events", apis["nulavioProfiles"]["parent"])
         self.assertNotIn("events", apis["nulavioRouting"]["parent"])
+        self.assertNotIn("events", apis["nulavioConnect"]["parent"])
 
     def test_parent_scripts_only_bridge_to_the_modules(self):
         for script in (SHELL / "experiments").rglob("parent.js"):

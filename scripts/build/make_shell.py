@@ -26,6 +26,8 @@ SHARED_FROM_REPO = {
     "shared/base.css": ROOT / "browser" / "startpage" / "startpage.css",
     "shared/nulavio-symbol.svg": ROOT / "docs" / "brand" / "assets" / "logo" / "nulavio-symbol.svg",
     "shared/nulavio-symbol-dark-on-light.svg": ROOT / "docs" / "brand" / "assets" / "logo" / "nulavio-symbol-dark-on-light.svg",
+    # Nulavio Connect definitions, shared with the launcher (nulavio integrations).
+    "shared/integrations.json": ROOT / "browser" / "config" / "integrations.json",
 }
 JAR_DIR = "builtin-addons/nulavio-shell"
 HEADER = (

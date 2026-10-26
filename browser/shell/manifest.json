@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "__MSG_extName__",
   "description": "__MSG_extDescription__",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "default_locale": "en",
   "browser_specific_settings": {
     "gecko": {
@@ -79,6 +79,20 @@
         "paths": [
           [
             "nulavioRouting"
+          ]
+        ]
+      }
+    },
+    "nulavioConnect": {
+      "schema": "experiments/connect/schema.json",
+      "parent": {
+        "scopes": [
+          "addon_parent"
+        ],
+        "script": "experiments/connect/parent.js",
+        "paths": [
+          [
+            "nulavioConnect"
           ]
         ]
       }

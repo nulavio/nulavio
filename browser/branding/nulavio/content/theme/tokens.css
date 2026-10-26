@@ -75,6 +75,8 @@
   --nv-color-status-warning: light-dark(#8A5A10, #E7AE61);
   --nv-color-status-critical: light-dark(#A8323A, #E26D70);
   --nv-color-status-criticalText: #EE8A8C;
+  --nv-color-status-warningTint: light-dark(#FBEBD3, #3A2A12);
+  --nv-color-status-criticalTint: light-dark(#F9DEDF, #3F1A1D);
   --nv-color-chrome-toolbox: light-dark(#E2EBEE, #070F18);
   --nv-color-chrome-toolbar: light-dark(#F1F7F5, #0B1623);
   --nv-color-chrome-tabSelected: light-dark(#FFFFFF, #183746);
@@ -88,6 +90,4 @@
   --nv-color-identity-sand: light-dark(#EBC77F, #EBC77F);
   --nv-color-identity-slate: light-dark(#BFD0D6, #BFD0D6);
   --nv-color-identity-on: light-dark(#070F18, #070F18);
-  --nv-color-status-warningTint: #FBEBD3;
-  --nv-color-status-criticalTint: #F9DEDF;
 }

@@ -305,6 +305,19 @@ PROFILE_TEST_PREFS = {
 }
 
 
+def private_bus_config(socket: Path) -> str:
+    """A session bus with no service directories: nothing on it is ever auto-started,
+    so a test sees exactly the services it starts itself."""
+    return (
+        '<!DOCTYPE busconfig PUBLIC "-//freedesktop//DTD D-Bus Bus Configuration 1.0//EN"'
+        ' "http://www.freedesktop.org/standards/dbus/1.0/busconfig.dtd">\n'
+        "<busconfig><type>session</type>"
+        f"<listen>unix:path={socket}</listen><auth>EXTERNAL</auth>"
+        '<policy context="default"><allow send_destination="*" eavesdrop="true"/>'
+        '<allow eavesdrop="true"/><allow own="*"/></policy></busconfig>\n'
+    )
+
+
 class GeckoProfileSession:
     """A *registered* engine profile in a disposable HOME (Track B profiles).
 
@@ -353,8 +366,10 @@ class GeckoProfileSession:
         if daemon is None:
             return  # remote delivery then falls back to starting the binary (profile lock decides)
         address = f"unix:path={self.tmp / 'run' / 'bus'}"
+        config = private_bus_config(self.tmp / "run" / "bus")
+        (self.tmp / "dbus.conf").write_text(config)
         self.bus = subprocess.Popen(
-            [daemon, "--session", "--nofork", "--nopidfile", f"--address={address}"],
+            [daemon, f"--config-file={self.tmp / 'dbus.conf'}", "--nofork", "--nopidfile"],
             env=self.env,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,

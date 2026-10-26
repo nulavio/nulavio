@@ -39,9 +39,28 @@ def _run(cmd: list[str], timeout: float = 5.0) -> str:
     return result.stdout.strip()
 
 
+def _dbus_has_owner(name: str) -> bool:
+    """Whether a name is owned right now. NameHasOwner never starts an activatable service."""
+    out = _run(
+        [
+            "busctl",
+            "--user",
+            "--no-pager",
+            "call",
+            "org.freedesktop.DBus",
+            "/org/freedesktop/DBus",
+            "org.freedesktop.DBus",
+            "NameHasOwner",
+            "s",
+            name,
+        ]
+    )
+    return out.strip() == "b true"
+
+
 def _dbus_name_owner(name: str) -> str | None:
-    """Executable name owning a well-known name on the session bus, if any."""
-    if not shutil.which("busctl"):
+    """Executable name owning a well-known name on the session bus, if any (never activates it)."""
+    if not shutil.which("busctl") or not _dbus_has_owner(name):
         return None
     out = _run(["busctl", "--user", "--no-pager", "status", name])
     fields = dict(line.split("=", 1) for line in out.splitlines() if "=" in line)

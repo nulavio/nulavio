@@ -342,3 +342,15 @@ a:hover { text-decoration-thickness: 2px; }
 .target { display: flex; align-items: center; gap: var(--nv-space-3); font-weight: var(--nv-font-weight-medium); }
 .target[hidden] { display: none; }
 .url { margin: 0; padding: var(--nv-space-3) var(--nv-space-4); border-radius: var(--nv-radius-sm); background: var(--nv-color-bg-sunken); overflow-wrap: anywhere; }
+
+/* Integrations: state in words and a mark; never colour alone */
+.state-mark { width: 1.75rem; height: 1.75rem; border-radius: 50%; display: inline-grid; place-items: center; font-weight: var(--nv-font-weight-semibold); background: var(--nv-color-bg-sunken); color: var(--nv-color-text-secondary); }
+.state-mark::before { content: "?"; }
+.state-mark--enabled { background: var(--nv-color-accent-tint); color: var(--nv-color-text-primary); }
+.state-mark--enabled::before { content: "✓"; }
+.state-mark--available::before { content: "•"; }
+.state-mark--unavailable::before { content: "–"; }
+.state-mark--error { background: var(--nv-color-status-warningTint); color: var(--nv-color-status-warning); }
+.state-mark--error::before { content: "!"; }
+.evidence { margin: 0; padding-left: 1.25rem; display: grid; gap: var(--nv-space-1); font-size: 0.8125rem; color: var(--nv-color-text-secondary); overflow-wrap: anywhere; }
+a.button { display: inline-flex; align-items: center; text-decoration: none; }

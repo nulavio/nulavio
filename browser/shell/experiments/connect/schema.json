@@ -1,0 +1,11 @@
+[
+  {
+    "namespace": "nulavioConnect",
+    "description": "Nulavio Connect P0: read-only discovery of desktop integrations, and the default-browser offer (docs/adr/0004-nulavio-connect.md). Built-in Shell only.",
+    "functions": [
+      { "name": "discover", "type": "function", "async": true, "parameters": [] },
+      { "name": "setDefaultBrowser", "type": "function", "async": true, "parameters": [] },
+      { "name": "restoreDefaultBrowser", "type": "function", "async": true, "parameters": [] }
+    ]
+  }
+]

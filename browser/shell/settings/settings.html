@@ -19,6 +19,7 @@
       <nav class="settings-nav" data-i18n-attr="aria-label:settingsNav">
         <a href="#search" data-i18n="searchHeading">Search</a>
         <a href="#profiles" data-i18n="profilesHeading">Profiles</a>
+        <a href="#integrations" data-i18n="connectHeading">Integrations</a>
       </nav>
     </header>
 
@@ -168,6 +169,17 @@
         <summary data-i18n="profilesVsContainers"></summary>
         <p data-i18n="profilesVsContainersBody"></p>
       </details>
+    </section>
+
+    <section class="section" id="integrations" aria-labelledby="integrations-heading" hidden>
+      <h2 class="section__title" id="integrations-heading" data-i18n="connectHeading">Integrations</h2>
+      <div class="card stack">
+        <p class="hint" data-i18n="connectIntro"></p>
+        <ul class="list" id="integration-list" aria-busy="true"></ul>
+        <div class="actions">
+          <button class="button button--quiet" type="button" id="connect-refresh" data-i18n="connectRefresh"></button>
+        </div>
+      </div>
     </section>
   </main>
 </body>

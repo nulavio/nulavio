@@ -8,7 +8,7 @@ import sys
 import textwrap
 from pathlib import Path
 
-from . import __version__, desktop, doctor, extensions, guard, log, paths, profile
+from . import __version__, connect, desktop, doctor, extensions, guard, log, paths, profile
 from . import engine as engine_mod
 from . import prefs as prefs_mod
 
@@ -284,6 +284,19 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     return 1 if any(c.status == "fail" for c in checks) else 0
 
 
+def cmd_integrations(args: argparse.Namespace) -> int:
+    statuses = connect.discover()
+    if args.json:
+        _out(connect.to_json(statuses))
+        return 0
+    marks = {"enabled": "✓", "available": "•", "unavailable": "–", "error": "!", "unknown": "?"}
+    for s in statuses:
+        _out(f"{marks[s.state]} {s.id} [{s.state}] {s.detail}")
+        for item in s.evidence:
+            _out(f"    {item}")
+    return 0
+
+
 def cmd_desktop(args: argparse.Namespace) -> int:
     if args.desktop_cmd == "install":
         written = desktop.install(_launcher_path())
@@ -361,6 +374,10 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("doctor", help="check engine, sandbox prerequisites, secrets, native messaging, profiles")
     p.add_argument("--json", action="store_true")
     p.set_defaults(func=cmd_doctor)
+
+    p = sub.add_parser("integrations", help="what the desktop offers (KDE, portals, secret storage, default browser); read-only")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=cmd_integrations)
 
     p = sub.add_parser("desktop", help="user-level desktop entry and icons")
     p.add_argument("desktop_cmd", choices=["install", "uninstall"])
