@@ -5,8 +5,12 @@ Semantic colours switch with the system colour scheme (light by default,
 dark under ``prefers-color-scheme: dark``) and can be forced with
 ``data-theme="light|dark"`` on the root element or on any subtree.
 
-    python3 -I scripts/brand/build_tokens.py            # write browser/startpage/tokens.css
-    python3 -I scripts/brand/build_tokens.py --check    # fail if the file is stale (CI)
+A second file serves the browser window (Nulavio Shell, Track B): the same
+tokens with colours as ``light-dark(light, dark)``, which follow the
+colour scheme the engine sets on its chrome.
+
+    python3 -I scripts/brand/build_tokens.py            # write both files
+    python3 -I scripts/brand/build_tokens.py --check    # fail if either file is stale (CI)
 """
 
 from __future__ import annotations
@@ -22,6 +26,7 @@ from contrast import flatten, resolve  # noqa: E402
 
 TOKENS = ROOT / "docs" / "brand" / "tokens.json"
 OUTPUT = ROOT / "browser" / "startpage" / "tokens.css"
+CHROME_OUTPUT = ROOT / "browser" / "branding" / "nulavio" / "content" / "theme" / "tokens.css"
 HEADER = "/* Generated from docs/brand/tokens.json by scripts/brand/build_tokens.py. Do not edit. */\n"
 
 
@@ -62,22 +67,47 @@ def build(data: dict) -> str:
     return "\n".join(lines)
 
 
+def build_chrome(data: dict) -> str:
+    """Tokens for the browser window: one :root block, colours as light-dark()."""
+    tokens = flatten(data)
+    shared, colors = [], {}
+    for path, token in tokens.items():
+        if path.startswith("color.primitive."):
+            continue
+        if path.startswith(("color.light.", "color.dark.")):
+            theme, semantic = path.split(".")[1], "color." + ".".join(path.split(".")[2:])
+            colors.setdefault(semantic, {})[theme] = css_value(token, tokens, path)
+        else:
+            shared.append(f"  {var_name(path)}: {css_value(token, tokens, path)};")
+    lines = [
+        f"  {var_name(name)}: light-dark({v['light']}, {v['dark']});"
+        if len(v) == 2
+        else f"  {var_name(name)}: {next(iter(v.values()))};"  # defined for one theme only
+        for name, v in colors.items()
+    ]
+    note = "/* Nulavio Shell tokens for the browser window. Colours follow the engine's colour scheme. */\n"
+    return HEADER + note + ":root {\n" + "\n".join(shared + lines) + "\n}\n"
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--check", action="store_true")
-    parser.add_argument("--out", type=Path, default=OUTPUT)
     args = parser.parse_args()
-    css = build(json.loads(TOKENS.read_text(encoding="utf-8")))
-    if args.check:
-        current = args.out.read_text(encoding="utf-8") if args.out.exists() else ""
-        if current != css:
-            print(f"{args.out} is stale; run scripts/brand/build_tokens.py", file=sys.stderr)
-            return 1
-        print(f"{args.out.relative_to(ROOT)} is up to date")
-        return 0
-    args.out.write_text(css, encoding="utf-8")
-    print(f"wrote {args.out.relative_to(ROOT)}")
-    return 0
+    data = json.loads(TOKENS.read_text(encoding="utf-8"))
+    status = 0
+    for out, css in ((OUTPUT, build(data)), (CHROME_OUTPUT, build_chrome(data))):
+        if args.check:
+            current = out.read_text(encoding="utf-8") if out.exists() else ""
+            if current != css:
+                print(f"{out.relative_to(ROOT)} is stale; run scripts/brand/build_tokens.py", file=sys.stderr)
+                status = 1
+            else:
+                print(f"{out.relative_to(ROOT)} is up to date")
+            continue
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(css, encoding="utf-8")
+        print(f"wrote {out.relative_to(ROOT)}")
+    return status
 
 
 if __name__ == "__main__":

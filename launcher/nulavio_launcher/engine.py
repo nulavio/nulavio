@@ -53,6 +53,11 @@ class Engine:
     def label(self) -> str:
         return f"{self.vendor} {self.version}"
 
+    @property
+    def builtin_theme(self) -> bool:
+        """The Nulavio build ships its window theme (Horizon); distribution Firefox does not."""
+        return self.vendor == "Nulavio"
+
 
 # Real engine binaries, checked before $PATH. Distribution wrappers (e.g.
 # Fedora's /usr/bin/firefox shell script) are bypassed on purpose: they write

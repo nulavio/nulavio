@@ -20,3 +20,6 @@ browser.jar:
   content/branding/icon64.png                    (../default64.png)
   content/branding/icon128.png                   (../default128.png)
   content/branding/aboutDialog.css
+# Nulavio Horizon window theme (loaded by browser.xhtml, browser/patches/0003)
+  content/branding/theme/tokens.css              (theme/tokens.css)
+  content/branding/theme/horizon.css             (theme/horizon.css)

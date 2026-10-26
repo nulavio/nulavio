@@ -1,0 +1,156 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+/* Nulavio Horizon: the browser window theme of the Nulavio build (Track B).
+ *
+ * Loaded last by browser.xhtml (browser/patches/0003). Design rationale and
+ * the token map: docs/design/architecture.md and docs/design/design-system.md.
+ *
+ * Rules that keep this file safe to carry across Firefox releases:
+ *
+ * 1. Re-value upstream tokens, do not re-implement components. Geometry goes
+ *    into Mozilla's last brand layer (tokens-foundation-brand-nova): the
+ *    accessibility layers declared after it (prefers-contrast, forced-colors)
+ *    keep winning.
+ * 2. Colours apply to the default theme, including over the GTK colours it
+ *    uses on Linux (-moz-native-theme): Horizon is the Nulavio look. They step
+ *    aside for user-installed themes ([lwtheme]), forced colours and a
+ *    high-contrast preference.
+ * 0. Everything is gated by the pref nulavio.horizon.enabled (default true,
+ *    firefox-branding.js). Off restores the upstream look, GTK colours
+ *    included, without a restart.
+ * 3. The few unlayered component variables (tab and address-bar heights) are
+ *    re-valued per density (normal, compact, touch).
+ * 4. Security UI (trust icon, permission and tracking-protection icons,
+ *    remote-control indicator) is never hidden, moved or recoloured here.
+ * 5. Every value comes from tokens.css, generated from docs/brand/tokens.json.
+ */
+
+@import url("chrome://branding/content/theme/tokens.css");
+
+@media -moz-pref("nulavio.horizon.enabled") {
+  /* 1. Geometry, every theme ---------------------------------------------- */
+
+  @layer tokens-foundation-brand-nova {
+    :root {
+      --tab-border-radius: var(--nv-radius-md);
+      --toolbarbutton-border-radius: var(--nv-radius-md);
+      --urlbar-border-radius: var(--nv-radius-lg);
+    }
+  }
+
+  :root {
+    --tab-min-height: var(--nv-size-tab-height);
+    --urlbar-height: max(var(--nv-size-field-height), 1.4em);
+
+    &[uidensity="compact"] {
+      --tab-min-height: var(--nv-size-tab-heightCompact);
+      --urlbar-height: max(var(--nv-size-field-heightCompact), 1.4em);
+    }
+
+    &[uidensity="touch"] {
+      --tab-min-height: var(--nv-size-tab-heightTouch);
+      --urlbar-height: max(var(--nv-size-field-heightTouch), 1.4em);
+    }
+  }
+
+  /* 2. Colours: default theme, normal contrast ----------------------------- */
+
+  @media not ((forced-colors) or (prefers-contrast)) {
+    :root:not([lwtheme]) {
+      --color-accent-primary: var(--nv-color-accent-default);
+      --focus-outline-color: var(--nv-color-focus);
+      /* Links in the chrome and URLs in address-bar results */
+      --link-color: var(--nv-color-accent-default);
+      --link-color-hover: var(--nv-color-accent-default);
+      --link-color-active: var(--nv-color-accent-default);
+
+      /* Tab strip */
+      --toolbox-background-color: var(--nv-color-chrome-toolbox);
+      --toolbox-background-color-inactive: var(--nv-color-chrome-toolbox);
+      --toolbox-text-color: var(--nv-color-text-primary);
+      --toolbox-text-color-inactive: var(--nv-color-chrome-tabText);
+      --tab-text-color: var(--nv-color-chrome-tabText);
+      --tab-text-color-hover: var(--nv-color-text-primary);
+      --tab-text-color-selected: var(--nv-color-text-primary);
+      --tab-background-color-selected: var(--nv-color-chrome-tabSelected);
+      --tab-background-color-hover: color-mix(in srgb, currentColor calc(var(--nv-state-hoverOverlay) * 100%), transparent);
+      --tab-icon-fill-loading: var(--nv-color-accent-default);
+      --tab-attention-dot-color: var(--nv-color-accent-default);
+
+      /* Navigation toolbar */
+      --toolbar-background-color: var(--nv-color-chrome-toolbar);
+      --toolbar-text-color: var(--nv-color-text-primary);
+      --toolbarbutton-icon-fill: var(--nv-color-chrome-icon);
+
+      /* Address bar and other toolbar fields */
+      --toolbar-field-background-color: var(--nv-color-chrome-field);
+      --toolbar-field-background-color-focus: var(--nv-color-chrome-field);
+      --toolbar-field-text-color: var(--nv-color-text-primary);
+      --toolbar-field-text-color-focus: var(--nv-color-text-primary);
+      --toolbar-field-border-color: var(--nv-color-border-control);
+      --toolbar-field-border-color-focus: var(--nv-color-focus);
+    }
+  }
+
+  /* 3. Selected tab: the route mark ----------------------------------------
+   * Surface and elevation alone sit below 3:1 against the tab strip, so the
+   * selected tab also carries a short accent mark (>= 3:1, WCAG 1.4.11). It
+   * echoes the route in the Nulavio symbol. In the horizontal strip it sits
+   * under the tab icon, at the bottom edge (centred on pinned tabs); in the
+   * vertical strip it runs along the inline-start edge.
+   * Nesting cannot target pseudo-elements, so each variant is a full selector.
+   */
+
+  .tabbrowser-tab[visuallyselected] > .tab-stack > .tab-background {
+    position: relative;
+  }
+
+  .tabbrowser-tab[visuallyselected] > .tab-stack > .tab-background::after {
+    content: "";
+    position: absolute;
+    inset-block-end: var(--nv-size-indicator-thickness);
+    /* centred under the 16px tab icon, which starts after --tab-padding-inline */
+    inset-inline-start: calc(var(--tab-padding-inline, 8px) + 8px - var(--nv-size-indicator-length) / 2);
+    inline-size: var(--nv-size-indicator-length);
+    block-size: var(--nv-size-indicator-thickness);
+    border-radius: var(--nv-size-indicator-thickness);
+    background-color: var(--color-accent-primary);
+    pointer-events: none;
+  }
+
+  .tabbrowser-tab[pinned][visuallyselected] > .tab-stack > .tab-background::after {
+    inset-inline-start: calc(50% - var(--nv-size-indicator-length) / 2);
+  }
+
+  #tabbrowser-tabs[orient="vertical"] .tabbrowser-tab[visuallyselected] > .tab-stack > .tab-background::after {
+    inset-block-end: calc(50% - var(--nv-size-indicator-length) / 2);
+    inset-inline-start: var(--nv-size-indicator-thickness);
+    inline-size: var(--nv-size-indicator-thickness);
+    block-size: var(--nv-size-indicator-length);
+  }
+
+  :root[lwtheme] .tabbrowser-tab[visuallyselected] > .tab-stack > .tab-background::after {
+    background-color: currentColor;
+  }
+
+  @media (forced-colors) {
+    .tabbrowser-tab[visuallyselected] > .tab-stack > .tab-background::after {
+      background-color: SelectedItem;
+    }
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .tabbrowser-tab[visuallyselected] > .tab-stack > .tab-background::after {
+      animation: nulavio-route-in var(--nv-motion-duration-fast) var(--nv-motion-easing-standard);
+    }
+  }
+}
+
+@keyframes nulavio-route-in {
+  from {
+    opacity: 0;
+    transform: scaleX(0.4);
+  }
+}

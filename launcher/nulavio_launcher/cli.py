@@ -71,7 +71,10 @@ def cmd_setup(args: argparse.Namespace) -> int:
         _out(f"             sha256 {_short_hash(ublock.sha256)}, Mozilla signature verified by the engine")
         _out("             removable any time in Add-ons; per-site off switch in its toolbar button")
     _out(f"  Passwords  {providers[args.provider]['label']}")
-    _out(f"  Theme      {'Nulavio colours for the browser chrome' if not args.no_theme else 'engine default'}")
+    if eng.builtin_theme:
+        _out("  Theme      Nulavio Horizon, built into this engine")
+    else:
+        _out(f"  Theme      {'Nulavio colours for the browser chrome' if not args.no_theme else 'engine default'}")
     _out("  Network    nothing is sent to Nulavio; there is no Nulavio server\n")
     if not _confirm("Create this profile?", args.yes):
         return 1
@@ -128,7 +131,9 @@ def cmd_run(args: argparse.Namespace) -> int:
         locale = prof.load_settings().get("locale", "en")
         if locale != "en":
             profile.sync_langpack(prof, engine_mod.langpack(eng, locale))
-        applied = profile.prepare_for_launch(prof, {"engine": eng.label, **_filter_context(prof)})
+        applied = profile.prepare_for_launch(
+            prof, {"engine": eng.label, **_filter_context(prof)}, builtin_theme=eng.builtin_theme
+        )
         log.event(
             "launch", profile=prof.name, engine=eng.label, private=args.private, url_given=bool(args.url), seeded=len(applied)
         )

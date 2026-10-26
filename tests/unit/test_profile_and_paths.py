@@ -143,6 +143,20 @@ class ProfileTest(TempHome):
         with self.assertRaises(profile.ProfileError):
             profile.set_provider(prof, "made-up")
 
+    def test_builtin_theme_replaces_only_the_launchers_css(self):
+        # The Nulavio build ships its window theme: the preview userChrome.css would
+        # override it, so the launcher removes its own copy and never installs it.
+        prof = self.make()
+        css = prof.path / "chrome" / "userChrome.css"
+        profile.prepare_for_launch(prof, {})
+        self.assertTrue(css.exists())
+        profile.prepare_for_launch(prof, {}, builtin_theme=True)
+        self.assertFalse(css.exists())
+        self.assertNotIn("toolkit.legacyUserProfileCustomizations.stylesheets", prefs.read_user_prefs(prof.path / "user.js"))
+        css.write_text("/* my own chrome tweaks */\n#nav-bar { opacity: 1; }\n")
+        profile.prepare_for_launch(prof, {}, builtin_theme=True)
+        self.assertEqual(css.read_text(), "/* my own chrome tweaks */\n#nav-bar { opacity: 1; }\n", "user's file touched")
+
     def test_theme_off_removes_css_and_pref(self):
         prof = self.make()
         profile.prepare_for_launch(prof, {})

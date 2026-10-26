@@ -219,8 +219,12 @@ def _variables(profile: Profile) -> dict[str, str]:
     return {"STARTPAGE_URL": profile.startpage_url}
 
 
-def prepare_for_launch(profile: Profile, context: dict[str, str]) -> list[str]:
+def prepare_for_launch(profile: Profile, context: dict[str, str], builtin_theme: bool = False) -> list[str]:
     """Apply pending seed prefs, render user.js, theme and start page.
+
+    ``builtin_theme``: the engine (the Nulavio build) ships its own window
+    theme, so the preview userChrome.css is not installed and any copy the
+    launcher wrote earlier is removed (it would override the built-in theme).
 
     Must run while the profile is not in use. Returns the names of prefs that
     were newly written into prefs.js.
@@ -241,7 +245,9 @@ def prepare_for_launch(profile: Profile, context: dict[str, str]) -> list[str]:
     settings["pending_prefs"] = {}
 
     enforced = [(p.name, prefs.substitute(p.value, variables)) for p in baseline_prefs() if p.mode == "enforce"]
-    if settings.get("theme", True):
+    if builtin_theme:
+        _remove_preview_theme(profile)
+    elif settings.get("theme", True):
         enforced += [(p.name, p.value) for p in theme_prefs()]
         _install_theme(profile)
     paths.write_private_file(profile.path / "user.js", prefs.render(enforced, USER_JS_HEADER))
@@ -261,10 +267,21 @@ def _append_prefs_js(profile: Profile, items: list[tuple[str, prefs.PrefValue]])
     paths.write_private_file(target, existing + "\n".join(block) + "\n")
 
 
+PREVIEW_THEME_MARKER = "Nulavio Preview chrome theme (Track A, userChrome.css)"
+
+
 def _install_theme(profile: Profile) -> None:
     source = paths.repo_root() / "browser" / "theme" / "userChrome.css"
     chrome_dir = paths.ensure_private_dir(profile.path / "chrome")
     paths.write_private_file(chrome_dir / "userChrome.css", source.read_text(encoding="utf-8"))
+
+
+def _remove_preview_theme(profile: Profile) -> None:
+    """Delete the launcher's own userChrome.css; never a file the user wrote."""
+    css = profile.path / "chrome" / "userChrome.css"
+    if css.is_file() and not css.is_symlink() and PREVIEW_THEME_MARKER in css.read_text(encoding="utf-8", errors="replace")[:400]:
+        css.unlink()
+        log.event("theme.preview_removed", profile=profile.name)
 
 
 def ui_language() -> str:

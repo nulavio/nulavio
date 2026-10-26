@@ -51,6 +51,14 @@
   --nv-icon-size-md: 20px;
   --nv-icon-size-lg: 24px;
   --nv-icon-stroke: 1.75px;
+  --nv-size-tab-height: 34px;
+  --nv-size-tab-heightCompact: 30px;
+  --nv-size-tab-heightTouch: 41px;
+  --nv-size-field-height: 36px;
+  --nv-size-field-heightCompact: 30px;
+  --nv-size-field-heightTouch: 40px;
+  --nv-size-indicator-length: 16px;
+  --nv-size-indicator-thickness: 2px;
   --nv-color-bg-canvas: #F1F7F5;
   --nv-color-bg-surface: #FFFFFF;
   --nv-color-bg-raised: #FFFFFF;
@@ -69,6 +77,12 @@
   --nv-color-status-warningTint: #FBEBD3;
   --nv-color-status-critical: #A8323A;
   --nv-color-status-criticalTint: #F9DEDF;
+  --nv-color-chrome-toolbox: #E2EBEE;
+  --nv-color-chrome-toolbar: #F1F7F5;
+  --nv-color-chrome-tabSelected: #FFFFFF;
+  --nv-color-chrome-tabText: #23495A;
+  --nv-color-chrome-field: #FFFFFF;
+  --nv-color-chrome-icon: #23495A;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -89,6 +103,12 @@
     --nv-color-status-warning: #E7AE61;
     --nv-color-status-critical: #E26D70;
     --nv-color-status-criticalText: #EE8A8C;
+    --nv-color-chrome-toolbox: #070F18;
+    --nv-color-chrome-toolbar: #0B1623;
+    --nv-color-chrome-tabSelected: #183746;
+    --nv-color-chrome-tabText: #BFD0D6;
+    --nv-color-chrome-field: #112432;
+    --nv-color-chrome-icon: #BFD0D6;
   }
 }
 
@@ -110,6 +130,12 @@
   --nv-color-status-warning: #E7AE61;
   --nv-color-status-critical: #E26D70;
   --nv-color-status-criticalText: #EE8A8C;
+  --nv-color-chrome-toolbox: #070F18;
+  --nv-color-chrome-toolbar: #0B1623;
+  --nv-color-chrome-tabSelected: #183746;
+  --nv-color-chrome-tabText: #BFD0D6;
+  --nv-color-chrome-field: #112432;
+  --nv-color-chrome-icon: #BFD0D6;
 }
 
 [data-theme="light"] {
@@ -132,4 +158,10 @@
   --nv-color-status-warningTint: #FBEBD3;
   --nv-color-status-critical: #A8323A;
   --nv-color-status-criticalTint: #F9DEDF;
+  --nv-color-chrome-toolbox: #E2EBEE;
+  --nv-color-chrome-toolbar: #F1F7F5;
+  --nv-color-chrome-tabSelected: #FFFFFF;
+  --nv-color-chrome-tabText: #23495A;
+  --nv-color-chrome-field: #FFFFFF;
+  --nv-color-chrome-icon: #23495A;
 }

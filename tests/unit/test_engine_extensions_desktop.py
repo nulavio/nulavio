@@ -66,6 +66,11 @@ class EngineCommandTest(unittest.TestCase):
         self.assertEqual(env["WAYLAND_DISPLAY"], "wayland-0")
         self.assertEqual(env["MOZ_APP_REMOTINGNAME"], engine.APP_ID)
 
+    def test_only_the_nulavio_build_ships_the_window_theme(self):
+        self.assertFalse(FAKE_ENGINE.builtin_theme)
+        nulavio = engine.Engine(path=Path("/opt/nulavio/nulavio"), version="158.0.1", vendor="Nulavio")
+        self.assertTrue(nulavio.builtin_theme)
+
     def test_version_output_parsing(self):
         self.assertEqual(engine.parse_version_output("Mozilla Firefox 158.0.1\n"), ("Mozilla Firefox", "158.0.1"))
         self.assertEqual(engine.parse_version_output("Nulavio Nulavio 158.0.1\n"), ("Nulavio", "158.0.1"))

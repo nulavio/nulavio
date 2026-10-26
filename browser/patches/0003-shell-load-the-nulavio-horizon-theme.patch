@@ -1,0 +1,24 @@
+Subject: [PATCH] shell: load the Nulavio Horizon theme in the browser window
+
+The main window loads no branding stylesheet, so a product theme would
+otherwise need userChrome.css (a per-profile, user-level file) or an
+add-on that styles the window after it appears. One stylesheet link,
+loaded after every upstream sheet, lets the theme re-value upstream
+design tokens from the first paint. The stylesheet lives in the Nulavio
+branding directory; everything it changes is documented there.
+
+Owner: Nulavio maintainers
+Upstream: not applicable (product theme).
+---
+--- a/browser/base/content/browser.xhtml
++++ b/browser/base/content/browser.xhtml
+@@ -57,6 +57,9 @@
+     rel="stylesheet"
+     href="chrome://global/content/resistfingerprinting/letterboxing.css"
+   />
++  <!-- Nulavio Horizon window theme: loaded last, re-values design tokens
++       (browser/branding/nulavio/content/theme/horizon.css). -->
++  <link rel="stylesheet" href="chrome://branding/content/theme/horizon.css" />
+ 
+   <link rel="localization" href="branding/brand.ftl"/>
+   <link rel="localization" href="browser/allTabsMenu.ftl"/>

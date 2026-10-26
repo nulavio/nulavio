@@ -50,3 +50,7 @@ pref("browser.safebrowsing.downloads.remote.enabled", false);
 // the OS locales" (intl/locale/LocaleService.cpp); users can still pick a
 // language in Settings.
 pref("intl.locale.requested", "");
+
+// Nulavio Horizon window theme (content/theme/horizon.css). false restores
+// the upstream look, including the GTK colours of the default theme on Linux.
+pref("nulavio.horizon.enabled", true);

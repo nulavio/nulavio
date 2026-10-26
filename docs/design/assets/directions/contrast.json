@@ -1,0 +1,546 @@
+{
+  "horizon": {
+    "name": "Horizon (ocean and mint)",
+    "pairs": [
+      {
+        "theme": "light",
+        "pair": "Selected tab label",
+        "fg": "#0B1623",
+        "bg": "#FFFFFF",
+        "ratio": 18.21,
+        "min": 4.5,
+        "pass": true
+      },
+      {
+        "theme": "light",
+        "pair": "Background tab label",
+        "fg": "#23495A",
+        "bg": "#E2EBEE",
+        "ratio": 7.99,
+        "min": 4.5,
+        "pass": true
+      },
+      {
+        "theme": "light",
+        "pair": "Toolbar text",
+        "fg": "#0B1623",
+        "bg": "#F1F7F5",
+        "ratio": 16.79,
+        "min": 4.5,
+        "pass": true
+      },
+      {
+        "theme": "light",
+        "pair": "Address text",
+        "fg": "#0B1623",
+        "bg": "#FFFFFF",
+        "ratio": 18.21,
+        "min": 4.5,
+        "pass": true
+      },
+      {
+        "theme": "light",
+        "pair": "Address placeholder",
+        "fg": "#4F7383",
+        "bg": "#FFFFFF",
+        "ratio": 5.11,
+        "min": 4.5,
+        "pass": true
+      },
+      {
+        "theme": "light",
+        "pair": "Toolbar icons",
+        "fg": "#23495A",
+        "bg": "#F1F7F5",
+        "ratio": 8.91,
+        "min": 3.0,
+        "pass": true
+      },
+      {
+        "theme": "light",
+        "pair": "Focus ring on toolbar",
+        "fg": "#0F7A68",
+        "bg": "#F1F7F5",
+        "ratio": 4.84,
+        "min": 3.0,
+        "pass": true
+      },
+      {
+        "theme": "light",
+        "pair": "Focus ring on field",
+        "fg": "#0F7A68",
+        "bg": "#FFFFFF",
+        "ratio": 5.24,
+        "min": 3.0,
+        "pass": true
+      },
+      {
+        "theme": "light",
+        "pair": "Selected-tab indicator on tab",
+        "fg": "#0F7A68",
+        "bg": "#FFFFFF",
+        "ratio": 5.24,
+        "min": 3.0,
+        "pass": true
+      },
+      {
+        "theme": "dark",
+        "pair": "Selected tab label",
+        "fg": "#F1F7F5",
+        "bg": "#183746",
+        "ratio": 11.57,
+        "min": 4.5,
+        "pass": true
+      },
+      {
+        "theme": "dark",
+        "pair": "Background tab label",
+        "fg": "#BFD0D6",
+        "bg": "#070F18",
+        "ratio": 12.11,
+        "min": 4.5,
+        "pass": true
+      },
+      {
+        "theme": "dark",
+        "pair": "Toolbar text",
+        "fg": "#F1F7F5",
+        "bg": "#0B1623",
+        "ratio": 16.79,
+        "min": 4.5,
+        "pass": true
+      },
+      {
+        "theme": "dark",
+        "pair": "Address text",
+        "fg": "#F1F7F5",
+        "bg": "#112432",
+        "ratio": 14.64,
+        "min": 4.5,
+        "pass": true
+      },
+      {
+        "theme": "dark",
+        "pair": "Address placeholder",
+        "fg": "#8FAAB5",
+        "bg": "#112432",
+        "ratio": 6.49,
+        "min": 4.5,
+        "pass": true
+      },
+      {
+        "theme": "dark",
+        "pair": "Toolbar icons",
+        "fg": "#BFD0D6",
+        "bg": "#0B1623",
+        "ratio": 11.45,
+        "min": 3.0,
+        "pass": true
+      },
+      {
+        "theme": "dark",
+        "pair": "Focus ring on toolbar",
+        "fg": "#6FE0C5",
+        "bg": "#0B1623",
+        "ratio": 11.4,
+        "min": 3.0,
+        "pass": true
+      },
+      {
+        "theme": "dark",
+        "pair": "Focus ring on field",
+        "fg": "#6FE0C5",
+        "bg": "#112432",
+        "ratio": 9.94,
+        "min": 3.0,
+        "pass": true
+      },
+      {
+        "theme": "dark",
+        "pair": "Selected-tab indicator on tab",
+        "fg": "#6FE0C5",
+        "bg": "#183746",
+        "ratio": 7.85,
+        "min": 3.0,
+        "pass": true
+      }
+    ],
+    "passing": 18,
+    "total": 18
+  },
+  "graphite": {
+    "name": "Graphite and copper (no blue or green)",
+    "pairs": [
+      {
+        "theme": "light",
+        "pair": "Selected tab label",
+        "fg": "#1F1C19",
+        "bg": "#FFFFFF",
+        "ratio": 16.96,
+        "min": 4.5,
+        "pass": true
+      },
+      {
+        "theme": "light",
+        "pair": "Background tab label",
+        "fg": "#4A443D",
+        "bg": "#E9E6E1",
+        "ratio": 7.72,
+        "min": 4.5,
+        "pass": true
+      },
+      {
+        "theme": "light",
+        "pair": "Toolbar text",
+        "fg": "#1F1C19",
+        "bg": "#F7F5F1",
+        "ratio": 15.57,
+        "min": 4.5,
+        "pass": true
+      },
+      {
+        "theme": "light",
+        "pair": "Address text",
+        "fg": "#1F1C19",
+        "bg": "#FFFFFF",
+        "ratio": 16.96,
+        "min": 4.5,
+        "pass": true
+      },
+      {
+        "theme": "light",
+        "pair": "Address placeholder",
+        "fg": "#6A635A",
+        "bg": "#FFFFFF",
+        "ratio": 5.92,
+        "min": 4.5,
+        "pass": true
+      },
+      {
+        "theme": "light",
+        "pair": "Toolbar icons",
+        "fg": "#4A443D",
+        "bg": "#F7F5F1",
+        "ratio": 8.82,
+        "min": 3.0,
+        "pass": true
+      },
+      {
+        "theme": "light",
+        "pair": "Focus ring on toolbar",
+        "fg": "#9C4A22",
+        "bg": "#F7F5F1",
+        "ratio": 5.65,
+        "min": 3.0,
+        "pass": true
+      },
+      {
+        "theme": "light",
+        "pair": "Focus ring on field",
+        "fg": "#9C4A22",
+        "bg": "#FFFFFF",
+        "ratio": 6.15,
+        "min": 3.0,
+        "pass": true
+      },
+      {
+        "theme": "light",
+        "pair": "Selected-tab indicator on tab",
+        "fg": "#9C4A22",
+        "bg": "#FFFFFF",
+        "ratio": 6.15,
+        "min": 3.0,
+        "pass": true
+      },
+      {
+        "theme": "dark",
+        "pair": "Selected tab label",
+        "fg": "#F3EFE9",
+        "bg": "#2A2622",
+        "ratio": 13.11,
+        "min": 4.5,
+        "pass": true
+      },
+      {
+        "theme": "dark",
+        "pair": "Background tab label",
+        "fg": "#D3CBC0",
+        "bg": "#141210",
+        "ratio": 11.63,
+        "min": 4.5,
+        "pass": true
+      },
+      {
+        "theme": "dark",
+        "pair": "Toolbar text",
+        "fg": "#F3EFE9",
+        "bg": "#1C1A17",
+        "ratio": 15.16,
+        "min": 4.5,
+        "pass": true
+      },
+      {
+        "theme": "dark",
+        "pair": "Address text",
+        "fg": "#F3EFE9",
+        "bg": "#24211D",
+        "ratio": 13.99,
+        "min": 4.5,
+        "pass": true
+      },
+      {
+        "theme": "dark",
+        "pair": "Address placeholder",
+        "fg": "#ABA295",
+        "bg": "#24211D",
+        "ratio": 6.36,
+        "min": 4.5,
+        "pass": true
+      },
+      {
+        "theme": "dark",
+        "pair": "Toolbar icons",
+        "fg": "#D3CBC0",
+        "bg": "#1C1A17",
+        "ratio": 10.81,
+        "min": 3.0,
+        "pass": true
+      },
+      {
+        "theme": "dark",
+        "pair": "Focus ring on toolbar",
+        "fg": "#E79A69",
+        "bg": "#1C1A17",
+        "ratio": 7.63,
+        "min": 3.0,
+        "pass": true
+      },
+      {
+        "theme": "dark",
+        "pair": "Focus ring on field",
+        "fg": "#E79A69",
+        "bg": "#24211D",
+        "ratio": 7.04,
+        "min": 3.0,
+        "pass": true
+      },
+      {
+        "theme": "dark",
+        "pair": "Selected-tab indicator on tab",
+        "fg": "#E79A69",
+        "bg": "#2A2622",
+        "ratio": 6.59,
+        "min": 3.0,
+        "pass": true
+      }
+    ],
+    "passing": 18,
+    "total": 18
+  },
+  "monoline": {
+    "name": "Monoline (dense, neutral, accent only on focus)",
+    "pairs": [
+      {
+        "theme": "light",
+        "pair": "Selected tab label",
+        "fg": "#18181B",
+        "bg": "#FFFFFF",
+        "ratio": 17.72,
+        "min": 4.5,
+        "pass": true
+      },
+      {
+        "theme": "light",
+        "pair": "Background tab label",
+        "fg": "#3F3F46",
+        "bg": "#F4F4F5",
+        "ratio": 9.5,
+        "min": 4.5,
+        "pass": true
+      },
+      {
+        "theme": "light",
+        "pair": "Toolbar text",
+        "fg": "#18181B",
+        "bg": "#FFFFFF",
+        "ratio": 17.72,
+        "min": 4.5,
+        "pass": true
+      },
+      {
+        "theme": "light",
+        "pair": "Address text",
+        "fg": "#18181B",
+        "bg": "#F4F4F5",
+        "ratio": 16.12,
+        "min": 4.5,
+        "pass": true
+      },
+      {
+        "theme": "light",
+        "pair": "Address placeholder",
+        "fg": "#5E5E66",
+        "bg": "#F4F4F5",
+        "ratio": 5.84,
+        "min": 4.5,
+        "pass": true
+      },
+      {
+        "theme": "light",
+        "pair": "Toolbar icons",
+        "fg": "#3F3F46",
+        "bg": "#FFFFFF",
+        "ratio": 10.44,
+        "min": 3.0,
+        "pass": true
+      },
+      {
+        "theme": "light",
+        "pair": "Focus ring on toolbar",
+        "fg": "#0F7A68",
+        "bg": "#FFFFFF",
+        "ratio": 5.24,
+        "min": 3.0,
+        "pass": true
+      },
+      {
+        "theme": "light",
+        "pair": "Focus ring on field",
+        "fg": "#0F7A68",
+        "bg": "#F4F4F5",
+        "ratio": 4.77,
+        "min": 3.0,
+        "pass": true
+      },
+      {
+        "theme": "light",
+        "pair": "Selected-tab indicator on tab",
+        "fg": "#18181B",
+        "bg": "#FFFFFF",
+        "ratio": 17.72,
+        "min": 3.0,
+        "pass": true
+      },
+      {
+        "theme": "dark",
+        "pair": "Selected tab label",
+        "fg": "#F4F4F5",
+        "bg": "#1A1A1D",
+        "ratio": 15.8,
+        "min": 4.5,
+        "pass": true
+      },
+      {
+        "theme": "dark",
+        "pair": "Background tab label",
+        "fg": "#D4D4D8",
+        "bg": "#121214",
+        "ratio": 12.66,
+        "min": 4.5,
+        "pass": true
+      },
+      {
+        "theme": "dark",
+        "pair": "Toolbar text",
+        "fg": "#F4F4F5",
+        "bg": "#1A1A1D",
+        "ratio": 15.8,
+        "min": 4.5,
+        "pass": true
+      },
+      {
+        "theme": "dark",
+        "pair": "Address text",
+        "fg": "#F4F4F5",
+        "bg": "#232327",
+        "ratio": 14.25,
+        "min": 4.5,
+        "pass": true
+      },
+      {
+        "theme": "dark",
+        "pair": "Address placeholder",
+        "fg": "#A1A1AA",
+        "bg": "#232327",
+        "ratio": 6.11,
+        "min": 4.5,
+        "pass": true
+      },
+      {
+        "theme": "dark",
+        "pair": "Toolbar icons",
+        "fg": "#D4D4D8",
+        "bg": "#1A1A1D",
+        "ratio": 11.75,
+        "min": 3.0,
+        "pass": true
+      },
+      {
+        "theme": "dark",
+        "pair": "Focus ring on toolbar",
+        "fg": "#6FE0C5",
+        "bg": "#1A1A1D",
+        "ratio": 10.87,
+        "min": 3.0,
+        "pass": true
+      },
+      {
+        "theme": "dark",
+        "pair": "Focus ring on field",
+        "fg": "#6FE0C5",
+        "bg": "#232327",
+        "ratio": 9.8,
+        "min": 3.0,
+        "pass": true
+      },
+      {
+        "theme": "dark",
+        "pair": "Selected-tab indicator on tab",
+        "fg": "#F4F4F5",
+        "bg": "#1A1A1D",
+        "ratio": 15.8,
+        "min": 3.0,
+        "pass": true
+      }
+    ],
+    "passing": 18,
+    "total": 18
+  },
+  "proposed_palette": [
+    {
+      "name": "Deep Ocean",
+      "proposed": "#0C1822",
+      "brand_token": "navy.900",
+      "brand": "#0B1623",
+      "deltaE76": 2.5
+    },
+    {
+      "name": "Slate",
+      "proposed": "#193946",
+      "brand_token": "navy.800",
+      "brand": "#183746",
+      "deltaE76": 1.7
+    },
+    {
+      "name": "Mint",
+      "proposed": "#7BE5D0",
+      "brand_token": "mint.400",
+      "brand": "#6FE0C5",
+      "deltaE76": 4.5
+    },
+    {
+      "name": "Cloud",
+      "proposed": "#F1F7F8",
+      "brand_token": "navy.50",
+      "brand": "#F1F7F5",
+      "deltaE76": 1.5
+    },
+    {
+      "name": "Amber",
+      "proposed": "#E4AC68",
+      "brand_token": "amber.400",
+      "brand": "#E7AE61",
+      "deltaE76": 4.5
+    }
+  ]
+}
