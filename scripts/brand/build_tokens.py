@@ -7,7 +7,8 @@ dark under ``prefers-color-scheme: dark``) and can be forced with
 
 A second file serves the browser window (Nulavio Shell, Track B): the same
 tokens with colours as ``light-dark(light, dark)``, which follow the
-colour scheme the engine sets on its chrome.
+colour scheme the engine sets on its chrome. A third, a JavaScript module,
+gives the Shell the profile identity colours it draws into the toolbar icon.
 
     python3 -I scripts/brand/build_tokens.py            # write both files
     python3 -I scripts/brand/build_tokens.py --check    # fail if either file is stale (CI)
@@ -27,6 +28,7 @@ from contrast import flatten, resolve  # noqa: E402
 TOKENS = ROOT / "docs" / "brand" / "tokens.json"
 OUTPUT = ROOT / "browser" / "startpage" / "tokens.css"
 CHROME_OUTPUT = ROOT / "browser" / "branding" / "nulavio" / "content" / "theme" / "tokens.css"
+IDENTITY_OUTPUT = ROOT / "browser" / "shell" / "lib" / "identity-colors.js"
 HEADER = "/* Generated from docs/brand/tokens.json by scripts/brand/build_tokens.py. Do not edit. */\n"
 
 
@@ -89,13 +91,27 @@ def build_chrome(data: dict) -> str:
     return HEADER + note + ":root {\n" + "\n".join(shared + lines) + "\n}\n"
 
 
+def build_identity(data: dict) -> str:
+    """Profile identity colours (same in both themes) for canvas drawing in the Shell."""
+    tokens = flatten(data)
+    prefix = "color.light.identity."
+    colors = {path[len(prefix) :]: resolve(tokens, path) for path in tokens if path.startswith(prefix)}
+    body = ",\n".join(f'  {name}: "{value}"' for name, value in colors.items())
+    return (
+        HEADER.replace("/*", "//", 1).replace(" */", "", 1)
+        + "export const IDENTITY_COLORS = Object.freeze({\n"
+        + body
+        + ",\n});\n"
+    )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--check", action="store_true")
     args = parser.parse_args()
     data = json.loads(TOKENS.read_text(encoding="utf-8"))
     status = 0
-    for out, css in ((OUTPUT, build(data)), (CHROME_OUTPUT, build_chrome(data))):
+    for out, css in ((OUTPUT, build(data)), (CHROME_OUTPUT, build_chrome(data)), (IDENTITY_OUTPUT, build_identity(data))):
         if args.check:
             current = out.read_text(encoding="utf-8") if out.exists() else ""
             if current != css:

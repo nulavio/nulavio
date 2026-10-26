@@ -2,8 +2,11 @@
 
    Flow E: when a download that can run programs completes, open a Nulavio
    page explaining the risk, with "Show in folder" and "Delete" and no "Open".
+   Profiles: keep the toolbar selector showing the current profile.
    Nothing is sent anywhere; nothing is stored. */
 
+import { t } from "./lib/i18n.js";
+import { drawProfileIcon } from "./lib/profile-icon.js";
 import { isRiskyFilename } from "./lib/risky.js";
 
 async function windowFor(incognito) {
@@ -31,3 +34,21 @@ browser.downloads.onChanged.addListener(async delta => {
     url: browser.runtime.getURL(`warning/warning.html?id=${encodeURIComponent(item.id)}`),
   });
 });
+
+// -- Profile selector (Track B: the engine's profiles; absent in Track A) --
+
+async function showCurrentProfile() {
+  const state = await browser.nulavioProfiles.list();
+  const current = state.profiles.find(p => p.isCurrent);
+  if (!state.available || !current) {
+    await browser.action.setTitle({ title: t("profilesButton") });
+    return;
+  }
+  await browser.action.setIcon({ imageData: drawProfileIcon(current) });
+  await browser.action.setTitle({ title: t("profilesButtonNamed", [current.name]) });
+}
+
+if (browser.nulavioProfiles && browser.action) {
+  browser.nulavioProfiles.onChanged.addListener(() => showCurrentProfile().catch(console.error));
+  showCurrentProfile().catch(console.error);
+}

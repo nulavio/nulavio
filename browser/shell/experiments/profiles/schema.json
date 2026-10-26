@@ -1,0 +1,50 @@
+[
+  {
+    "namespace": "nulavioProfiles",
+    "description": "Nulavio profiles over the engine's profile service (docs/adr/0003-nulavio-profiles-and-routing.md). Built-in Shell only.",
+    "functions": [
+      { "name": "list", "type": "function", "async": true, "parameters": [] },
+      { "name": "options", "type": "function", "async": true, "parameters": [] },
+      {
+        "name": "create", "type": "function", "async": true,
+        "parameters": [{
+          "name": "details", "type": "object",
+          "properties": {
+            "name": { "type": "string", "maxLength": 60 },
+            "templateId": { "type": "string", "optional": true },
+            "avatar": { "type": "string", "optional": true },
+            "color": { "type": "string", "optional": true }
+          }
+        }]
+      },
+      {
+        "name": "update", "type": "function", "async": true,
+        "parameters": [
+          { "name": "id", "type": "integer" },
+          {
+            "name": "details", "type": "object",
+            "properties": {
+              "name": { "type": "string", "optional": true, "maxLength": 60 },
+              "avatar": { "type": "string", "optional": true },
+              "color": { "type": "string", "optional": true }
+            }
+          }
+        ]
+      },
+      { "name": "switchTo", "type": "function", "async": true, "parameters": [{ "name": "id", "type": "integer" }] },
+      { "name": "remove", "type": "function", "async": true, "parameters": [{ "name": "id", "type": "integer" }] },
+      { "name": "openManager", "type": "function", "async": true, "parameters": [] },
+      {
+        "name": "openCurrentPage", "type": "function", "async": true,
+        "parameters": [{ "name": "page", "type": "string", "enum": ["edit", "delete"] }]
+      },
+      {
+        "name": "avatarSvg", "type": "function", "async": true,
+        "parameters": [{ "name": "avatar", "type": "string" }, { "name": "ink", "type": "string" }]
+      }
+    ],
+    "events": [
+      { "name": "onChanged", "type": "function", "parameters": [] }
+    ]
+  }
+]

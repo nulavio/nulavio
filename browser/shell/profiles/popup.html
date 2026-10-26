@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="referrer" content="no-referrer">
+  <title data-i18n="profilesButton">Profiles</title>
+  <link rel="stylesheet" href="../shared/tokens.css">
+  <link rel="stylesheet" href="../shared/base.css">
+  <link rel="stylesheet" href="../shared/shell.css">
+  <script type="module" src="popup.js"></script>
+</head>
+<body class="popup">
+  <main class="popup__main">
+    <section aria-labelledby="current-label">
+      <h1 class="popup__label" id="current-label" data-i18n="profilesCurrent">Current profile</h1>
+      <div class="popup__current" id="current"></div>
+    </section>
+
+    <p class="notice" id="unavailable" hidden></p>
+
+    <section id="others-section" aria-labelledby="others-label" hidden>
+      <h2 class="popup__label" id="others-label" data-i18n="profilesOthers">Switch to</h2>
+      <ul class="popup__list" id="others"></ul>
+    </section>
+
+    <section id="new-section" aria-labelledby="new-label" hidden>
+      <h2 class="popup__label" id="new-label" data-i18n="profilesNew">New profile</h2>
+      <div class="popup__templates" id="templates"></div>
+    </section>
+
+    <p class="status" id="status" role="status" aria-live="polite"></p>
+    <p class="popup__note" data-i18n="profilesIsolation"></p>
+
+    <footer class="popup__footer">
+      <button class="button button--quiet" type="button" id="manage" data-i18n="profilesManage">Manage profiles</button>
+      <p class="popup__keys" data-i18n="profilesKeyHint"></p>
+    </footer>
+  </main>
+</body>
+</html>

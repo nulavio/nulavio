@@ -134,6 +134,32 @@ user_pref("browser.places.speculativeConnect.enabled", false);
 // @tradeoff Rare peer-to-peer setups on multi-homed hosts may need a TURN relay.
 user_pref("media.peerconnection.ice.default_address_only", true);
 
+// --- Search (docs/adr/0002-nulavio-search.md) ---
+
+// @mode seed
+// @category privacy
+// @why Do not send what you type in the address bar to a search engine while you type. In the Nulavio build, suggestions are switched on per provider in Nulavio search settings.
+// @tradeoff No remote search suggestions until you opt in. History, bookmark and open-tab suggestions still work; they stay on the device.
+user_pref("browser.search.suggest.enabled", false);
+
+// @mode seed
+// @category privacy
+// @why Do not ask the search engine for "trending searches" each time the address bar is focused.
+// @tradeoff No trending list in an empty address bar.
+user_pref("browser.urlbar.suggest.trending", false);
+
+// @mode seed
+// @category privacy
+// @why Allow a separate default search engine for private windows (the engine's own feature, off by default upstream).
+// @tradeoff None; both defaults start as the same engine.
+user_pref("browser.search.separatePrivateDefault.featureGate", true);
+
+// @mode seed
+// @category privacy
+// @why Private windows use their own default search engine, chosen independently in Settings.
+// @tradeoff None.
+user_pref("browser.search.separatePrivateDefault.enabled", true);
+
 // --- Nulavio shell (preview) ---
 
 // @mode seed

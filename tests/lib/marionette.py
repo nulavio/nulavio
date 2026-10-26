@@ -151,6 +151,15 @@ class Marionette:
         # focus=False: Mozilla's official headless build was observed hanging on focus.
         self.send("WebDriver:SwitchToWindow", {"handle": handle, "focus": False})
 
+    def find_element(self, css: str) -> str:
+        """Id of the first element matching a CSS selector (current context)."""
+        value = self.send("WebDriver:FindElement", {"using": "css selector", "value": css})["value"]
+        return next(iter(value.values()))
+
+    def send_keys(self, element_id: str, text: str) -> None:
+        """Type into an element with real key events (as a user would)."""
+        self.send("WebDriver:ElementSendKeys", {"id": element_id, "text": text})
+
     def install_addon(self, path: str, temporary: bool = False) -> str:
         return self.send("Addon:Install", {"path": path, "temporary": temporary})["value"]
 

@@ -4,3 +4,4 @@
 0001-branding-set-application-vendor.patch
 0002-l10n-map-nulavio-branding.patch
 0003-shell-load-the-nulavio-horizon-theme.patch
+0004-search-require-per-engine-consent-for-suggestions.patch

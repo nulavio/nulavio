@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title data-i18n="settingsTitle">Nulavio settings</title>
+  <link rel="icon" href="../shared/nulavio-symbol.svg">
+  <link rel="stylesheet" href="../shared/tokens.css">
+  <link rel="stylesheet" href="../shared/base.css">
+  <link rel="stylesheet" href="../shared/shell.css">
+  <script type="module" src="settings.js"></script>
+</head>
+<body>
+  <main class="page page--settings">
+    <header class="settings-header">
+      <h1 class="settings-header__title" data-i18n="settingsTitle">Nulavio settings</h1>
+      <p class="settings-header__intro" data-i18n="settingsIntro"></p>
+      <nav class="settings-nav" data-i18n-attr="aria-label:settingsNav">
+        <a href="#search" data-i18n="searchHeading">Search</a>
+        <a href="#profiles" data-i18n="profilesHeading">Profiles</a>
+      </nav>
+    </header>
+
+    <p class="notice" id="needs-build" hidden data-i18n="settingsNeedsBuild"></p>
+    <p class="status" id="status" role="status" aria-live="polite"></p>
+
+    <section class="section" id="search" aria-labelledby="search-heading" hidden>
+      <h2 class="section__title" id="search-heading" data-i18n="searchHeading">Search</h2>
+
+      <div class="card stack">
+        <div class="field-row">
+          <label class="field">
+            <span class="field__label" data-i18n="searchDefaultLabel"></span>
+            <select class="select" id="default-engine" data-focus-key="default-engine"></select>
+          </label>
+          <label class="field" id="private-default-field">
+            <span class="field__label" data-i18n="searchDefaultPrivateLabel"></span>
+            <select class="select" id="default-private-engine" data-focus-key="default-private-engine"></select>
+          </label>
+        </div>
+      </div>
+
+      <div class="card stack">
+        <h3 class="card__title" data-i18n="searchEnginesHeading"></h3>
+        <p class="hint" data-i18n="searchEnginesNote"></p>
+        <ul class="list" id="engines"></ul>
+        <label class="check">
+          <input type="checkbox" id="suggest-private" data-focus-key="suggest-private">
+          <span><span data-i18n="suggestPrivateLabel"></span><span class="hint" data-i18n="suggestPrivateNote"></span></span>
+        </label>
+      </div>
+
+      <div class="card stack">
+        <h3 class="card__title" data-i18n="addHeading"></h3>
+
+        <div class="stack stack--tight">
+          <h4 class="subhead" data-i18n="addProvidersLabel"></h4>
+          <div class="actions" id="providers"></div>
+          <p class="hint" data-i18n="addProviderKagiNote"></p>
+        </div>
+
+        <form class="stack stack--tight" id="add-searxng" novalidate>
+          <h4 class="subhead" data-i18n="addSearxngHeading"></h4>
+          <label class="field">
+            <span class="field__label" data-i18n="addSearxngLabel"></span>
+            <input class="input" name="url" type="url" inputmode="url" autocomplete="off" spellcheck="false"
+                   placeholder="https://searx.example.org/" required>
+          </label>
+          <p class="hint" data-i18n="addSearxngNote"></p>
+          <p class="form-error" role="alert"></p>
+          <div class="actions"><button class="button button--secondary" type="submit" data-i18n="addSearxngButton"></button></div>
+        </form>
+
+        <form class="stack stack--tight" id="add-custom" novalidate>
+          <h4 class="subhead" data-i18n="addCustomHeading"></h4>
+          <div class="field-row">
+            <label class="field"><span class="field__label" data-i18n="addCustomName"></span>
+              <input class="input" name="name" autocomplete="off" maxlength="60" required></label>
+            <label class="field"><span class="field__label" data-i18n="addCustomAlias"></span>
+              <input class="input" name="alias" autocomplete="off" spellcheck="false" maxlength="21" placeholder="@example"></label>
+          </div>
+          <label class="field"><span class="field__label" data-i18n="addCustomUrl"></span>
+            <input class="input" name="url" type="url" inputmode="url" autocomplete="off" spellcheck="false"
+                   placeholder="https://example.org/search?q=%s" required></label>
+          <label class="field"><span class="field__label" data-i18n="addCustomSuggest"></span>
+            <input class="input" name="suggestUrl" type="url" inputmode="url" autocomplete="off" spellcheck="false"
+                   placeholder="https://example.org/suggest?q=%s"></label>
+          <p class="form-error" role="alert"></p>
+          <div class="actions"><button class="button button--secondary" type="submit" data-i18n="addCustomButton"></button></div>
+        </form>
+
+        <form class="stack stack--tight" id="add-opensearch" novalidate>
+          <h4 class="subhead" data-i18n="addOpenSearchHeading"></h4>
+          <label class="field"><span class="field__label" data-i18n="addOpenSearchLabel"></span>
+            <input class="input" name="url" type="url" inputmode="url" autocomplete="off" spellcheck="false"
+                   placeholder="https://example.org/opensearch.xml" required></label>
+          <p class="hint" data-i18n="addOpenSearchNote"></p>
+          <p class="form-error" role="alert"></p>
+          <div class="actions"><button class="button button--secondary" type="submit" data-i18n="addOpenSearchButton"></button></div>
+        </form>
+      </div>
+    </section>
+
+    <section class="section" id="profiles" aria-labelledby="profiles-heading" hidden>
+      <h2 class="section__title" id="profiles-heading" data-i18n="profilesHeading">Profiles</h2>
+      <p class="notice" id="profiles-unavailable" hidden></p>
+
+      <div class="card stack" id="profiles-card">
+        <p class="hint" data-i18n="profilesIsolation"></p>
+        <ul class="list" id="profile-list"></ul>
+        <div class="actions">
+          <button class="button button--quiet" type="button" id="open-manager" data-i18n="profilesFullManager"></button>
+        </div>
+      </div>
+
+      <div class="card stack" id="profiles-new">
+        <h3 class="card__title" data-i18n="profilesNew"></h3>
+        <div class="stack stack--tight">
+          <h4 class="subhead" data-i18n="profilesTemplates"></h4>
+          <div class="actions" id="templates"></div>
+          <p class="hint" data-i18n="profilesTemplatesNote"></p>
+        </div>
+        <form class="stack stack--tight" id="create-profile" novalidate>
+          <label class="field"><span class="field__label" data-i18n="profilesNameLabel"></span>
+            <input class="input" name="name" autocomplete="off" maxlength="60" required></label>
+          <p class="form-error" role="alert"></p>
+          <div class="actions"><button class="button button--secondary" type="submit" data-i18n="profilesCreateButton"></button></div>
+        </form>
+      </div>
+
+      <details class="card why">
+        <summary data-i18n="profilesVsContainers"></summary>
+        <p data-i18n="profilesVsContainersBody"></p>
+      </details>
+    </section>
+  </main>
+</body>
+</html>

@@ -136,6 +136,13 @@ class FixtureServer:
                 f'<img id="ad" src="/adbanners/nulavio-test.png?n={n}">'
             )
             return page.encode(), html, {}
+        if path == "/search":
+            # Fixture search engine (tests/integration/test_search.py).
+            return f"<!doctype html><title>search-fixture</title><p id=q>{query.get('q', '')}</p>".encode(), html, {}
+        if path == "/suggest":
+            # OpenSearch suggestions format: [query, [suggestions]].
+            term = query.get("q", "")
+            return f'["{term}", ["{term} one", "{term} two"]]'.encode(), "application/x-suggestions+json", {}
         if path.endswith(".png"):
             return self.PNG_1PX, "image/png", {}
         if path == "/download":
@@ -152,6 +159,11 @@ class FixtureServer:
                 {"Content-Disposition": 'attachment; filename="nulavio-setup.AppImage"'},
             )
         return None, html, {}
+
+    def requests_to(self, path: str) -> list[str]:
+        """Requests whose path (without the query string) equals ``path``."""
+        with self._lock:
+            return [hit for hit in self.hits if hit.partition("?")[0] == path]
 
     def count(self, path: str) -> int:
         """Number of requests whose path (including the query string) equals ``path``."""
@@ -270,6 +282,154 @@ class Session:
 
     def engine_pid(self) -> int:
         return int(self.client.chrome("return Services.appinfo.processID;"))
+
+
+def nulavio_engine():
+    """The Nulavio build (Track B) if that is the engine under test, else None."""
+    try:
+        from nulavio_launcher import engine
+
+        found = engine.find_engine()
+        return found if found.vendor == "Nulavio" else None
+    except Exception:
+        return None
+
+
+PROFILE_TEST_PREFS = {
+    "marionette.port": 0,
+    "remote.prefs.recommended": False,
+    "browser.shell.checkDefaultBrowser": False,
+}
+
+
+class GeckoProfileSession:
+    """A *registered* engine profile in a disposable HOME (Track B profiles).
+
+    The engine's profile management (SelectableProfileService) only works for
+    profiles listed in profiles.ini; the launcher and ``Session`` start
+    ``--profile <dir>`` instead. This session registers one profile with
+    ``-CreateProfile`` in a temporary XDG home and starts it with ``-P``,
+    exactly like a user's menu entry. ``MOZ_MARIONETTE=1`` is inherited by the
+    instances the browser itself starts (profile switching), so a test can
+    drive them too, after ``enable_marionette`` on their profile directory.
+    Nothing touches the real home or the real profiles.ini.
+    """
+
+    def __init__(self, name: str = "Pessoal"):
+        self.engine = nulavio_engine()
+        if self.engine is None:
+            raise RuntimeError("GeckoProfileSession needs the Nulavio build (NULAVIO_ENGINE)")
+        self.tmp = Path(tempfile.mkdtemp(prefix="nulavio-gps-"))
+        home = self.tmp / "home"
+        self.env = {
+            "HOME": str(home),
+            "XDG_CONFIG_HOME": str(home / ".config"),
+            "XDG_DATA_HOME": str(home / ".local" / "share"),
+            "XDG_CACHE_HOME": str(home / ".cache"),
+            "XDG_RUNTIME_DIR": str(self.tmp / "run"),
+            "PATH": "/usr/bin:/bin",
+            "LANG": os.environ.get("NULAVIO_TEST_LANG", "pt_BR.UTF-8"),
+            "MOZ_MARIONETTE": "1",
+        }
+        (self.tmp / "run").mkdir(mode=0o700)
+        if os.environ.get("NULAVIO_TEST_HEADFUL") != "1":
+            self.env["MOZ_HEADLESS"] = "1"
+        elif os.environ.get("WAYLAND_DISPLAY"):
+            self.env["WAYLAND_DISPLAY"] = os.environ["WAYLAND_DISPLAY"]
+        self.name = name
+        self.profile_dir = self.tmp / "profiles" / "first"
+        self.process: subprocess.Popen | None = None
+        self.client: Marionette | None = None
+
+    def _run(self, *args: str) -> subprocess.CompletedProcess:
+        return subprocess.run(
+            [str(self.engine.path), "--headless", *args], env=self.env, capture_output=True, text=True, timeout=120, check=False
+        )
+
+    @staticmethod
+    def enable_marionette(profile_dir: Path) -> None:
+        """Test-only prefs for a disposable profile (Marionette on a random port)."""
+        lines = [f'user_pref("{k}", {Session._js(v)});' for k, v in PROFILE_TEST_PREFS.items()]
+        with open(Path(profile_dir) / "user.js", "a", encoding="utf-8") as handle:
+            handle.write("// test harness overlay (disposable profile only)\n" + "\n".join(lines) + "\n")
+
+    def start(self) -> Marionette:
+        self.profile_dir.parent.mkdir(parents=True)
+        created = self._run("-CreateProfile", f"{self.name} {self.profile_dir}")
+        if not self.profile_dir.is_dir():
+            raise RuntimeError(f"-CreateProfile failed: {created.stderr[-400:]}")
+        self.enable_marionette(self.profile_dir)
+        engine_log = os.environ.get("NULAVIO_TEST_ENGINE_LOG")
+        output = open(engine_log, "ab") if engine_log else subprocess.DEVNULL  # noqa: SIM115
+        self.process = subprocess.Popen(
+            [str(self.engine.path), "-P", self.name, "--remote-allow-system-access"],
+            env=self.env,
+            stdout=output,
+            stderr=output,
+            preexec_fn=lambda: os.umask(0o077),
+            start_new_session=True,
+        )
+        self.client = self.connect(self.profile_dir, self.process)
+        return self.client
+
+    @staticmethod
+    def connect(profile_dir: Path, process: subprocess.Popen | None = None, timeout: float = 90) -> Marionette:
+        port_file = Path(profile_dir) / "MarionetteActivePort"
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            if port_file.exists() and port_file.read_text().strip():
+                client = Marionette(int(port_file.read_text().strip())).connect()
+                client.new_session()
+                return client
+            if process is not None and process.poll() is not None:
+                raise RuntimeError(f"engine exited early with {process.returncode}")
+            time.sleep(0.3)
+        raise TimeoutError(f"Marionette did not start for {profile_dir}")
+
+    def processes_for(self, profile_dir: Path) -> list[int]:
+        """Engine main processes started for a profile directory (in this session's HOME)."""
+        wanted = str(profile_dir)
+        found = []
+        for entry in Path("/proc").iterdir():
+            if not entry.name.isdigit():
+                continue
+            try:
+                args = (entry / "cmdline").read_bytes().split(b"\0")
+                environ = (entry / "environ").read_bytes()
+            except OSError:
+                continue
+            decoded = [a.decode(errors="replace") for a in args if a]
+            if f"HOME={self.env['HOME']}".encode() not in environ:
+                continue
+            if any("contentproc" in arg or "forkserver" in arg for arg in decoded):
+                continue  # child processes of an instance, not an instance
+            if any(arg == wanted for arg in decoded):
+                found.append(int(entry.name))
+        return sorted(found)
+
+    def stop(self) -> None:
+        if self.client is not None:
+            self.client.quit()
+            self.client = None
+        if self.process is not None:
+            try:
+                self.process.wait(timeout=30)
+            except subprocess.TimeoutExpired:
+                os.killpg(self.process.pid, signal.SIGKILL)
+                self.process.wait(timeout=10)
+            self.process = None
+
+    def cleanup(self) -> None:
+        self.stop()
+        for entry in Path("/proc").iterdir():  # instances started by the browser itself
+            if not entry.name.isdigit():
+                continue
+            try:
+                if f"HOME={self.env['HOME']}".encode() in (entry / "environ").read_bytes():
+                    os.kill(int(entry.name), signal.SIGKILL)
+            except OSError:
+                continue
+        shutil.rmtree(self.tmp, ignore_errors=True)
 
 
 def descendants(pid: int) -> list[int]:

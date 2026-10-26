@@ -49,7 +49,7 @@ class ShellTest(unittest.TestCase):
         cls.state = cls.addon_state()
         if cls.state is None:  # distribution Firefox: load the same files temporarily
             shell_dir = cls.tmp / "shell"
-            make_shell.assemble(shell_dir)
+            make_shell.assemble(shell_dir, privileged=False)
             cls.m.install_addon(str(shell_dir), temporary=True)
             cls.state = harness.wait_until(lambda: (lambda s: s if s and s.get("active") else None)(cls.addon_state()))
 

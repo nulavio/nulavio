@@ -72,7 +72,19 @@ document.getElementById("search").addEventListener("submit", event => {
   }
 });
 
+async function showEngine() {
+  const engines = await browser.search.get();
+  const current = engines.find(engine => engine.isDefault);
+  if (current) {
+    document.getElementById("search-input").placeholder = t("searchWith", [current.name]);
+  }
+}
+
+// Search settings exist only where the Shell is built in (privileged API).
+document.getElementById("search-settings").hidden = !browser.nulavioSearch;
+
 localize();
+showEngine().catch(() => {});
 refresh().then(() => {
   document.documentElement.dataset.ready = "true";
 });

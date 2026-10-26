@@ -53,14 +53,21 @@ class ManifestTest(unittest.TestCase):
                 self.assertNotRegex(text, r"""(src|href)=["']https?:""", "remote resource")
                 self.assertNotRegex(text, r"<script(?![^>]*\bsrc=)", "inline script")
                 self.assertNotIn("style=", text, "inline style")
-        for script in SHELL.rglob("*.js"):
+        for script in [*SHELL.rglob("*.js"), *SHELL.rglob("*.mjs")]:
             text = script.read_text(encoding="utf-8")
             with self.subTest(script=script.name):
                 self.assertNotRegex(
                     text, r"\.(innerHTML|outerHTML)\s*=|insertAdjacentHTML|document\.write", "HTML injection sink"
                 )
-                self.assertNotRegex(text, r"\bfetch\(|XMLHttpRequest|WebSocket|sendBeacon", "the Shell makes no network requests")
+                self.assertNotRegex(
+                    text,
+                    r"\bfetch\(|XMLHttpRequest|WebSocket|sendBeacon|newChannel|loadSubScript",
+                    "the Shell makes no network requests",
+                )
                 self.assertNotRegex(text, r"\beval\(|new Function\(")
+                # The only resource a privileged module reads itself: the engine's own profile icons.
+                for match in __import__("re").finditer(r"asyncFetch\(\s*\{\s*uri:\s*`([^`]+)`", text):
+                    self.assertTrue(match.group(1).startswith("chrome://browser/content/profiles/assets/"), match.group(1))
 
     def test_flow_e_has_no_open_action(self):
         warning = (SHELL / "warning" / "warning.js").read_text(encoding="utf-8")
@@ -90,9 +97,150 @@ class LocaleTest(unittest.TestCase):
             referenced |= set(re.findall(r'data-i18n="([A-Za-z0-9]+)"', text))
             referenced |= {pair.split(":")[1] for pair in re.findall(r'data-i18n-attr="([^"]+)"', text)}
         for script in SHELL.rglob("*.js"):
-            referenced |= set(re.findall(r'\bt\("([A-Za-z0-9]+)"', script.read_text(encoding="utf-8")))
+            referenced |= set(re.findall(r'\bt\("([A-Za-z0-9_]+)"', script.read_text(encoding="utf-8")))
         referenced |= {m[6:-2] for m in re.findall(r"__MSG_[A-Za-z0-9]+__", json.dumps(make_shell.manifest()))}
         self.assertEqual(referenced - keys, set())
+
+
+MODULES = SHELL / "modules"
+
+
+def module_text(name: str) -> str:
+    return (MODULES / name).read_text(encoding="utf-8")
+
+
+class PrivilegedApiTest(unittest.TestCase):
+    """The Shell's experiment APIs: what they reach, and nothing more."""
+
+    def setUp(self):
+        self.manifest = make_shell.manifest()
+
+    def test_only_the_two_documented_apis(self):
+        apis = self.manifest["experiment_apis"]
+        self.assertEqual(set(apis), {"nulavioSearch", "nulavioProfiles"})
+        for name, api in apis.items():
+            with self.subTest(api=name):
+                self.assertEqual(api["parent"]["scopes"], ["addon_parent"], "no API code runs in content processes")
+                self.assertEqual(api["parent"]["paths"], [[name]])
+                self.assertNotIn("child", api)
+                self.assertTrue((SHELL / api["parent"]["script"]).is_file())
+                schema = json.loads((SHELL / api["schema"]).read_text(encoding="utf-8"))
+                self.assertEqual([ns["namespace"] for ns in schema], [name])
+        self.assertEqual(apis["nulavioSearch"]["parent"]["events"], ["startup"])
+        self.assertNotIn("events", apis["nulavioProfiles"]["parent"])
+
+    def test_parent_scripts_only_bridge_to_the_modules(self):
+        for script in (SHELL / "experiments").rglob("parent.js"):
+            text = script.read_text(encoding="utf-8")
+            with self.subTest(script=str(script.relative_to(SHELL))):
+                imports = re.findall(r'importESModule\("([^"]+)"\)', text)
+                for url in imports:
+                    self.assertTrue(
+                        url.startswith("resource://builtin-addons/nulavio-shell/modules/")
+                        or url == "resource://gre/modules/ExtensionParent.sys.mjs",
+                        url,
+                    )
+                self.assertNotIn("Services.prefs.set", text)
+
+    def test_profile_selector_is_on_the_toolbar_with_a_shortcut(self):
+        self.assertEqual(self.manifest["action"]["default_area"], "navbar")
+        self.assertEqual(self.manifest["action"]["default_popup"], "profiles/popup.html")
+        self.assertEqual(self.manifest["commands"]["_execute_action"]["suggested_key"]["default"], "Alt+Shift+P")
+
+    def test_every_module_error_has_a_message(self):
+        en = locale("en")
+        text = "".join(module_text(n) for n in ("NulavioSearch.sys.mjs", "NulavioProfiles.sys.mjs"))
+        codes = set(re.findall(r'fail\("([a-z-]+)"', text)) | {"disabled", "unregistered", "unexpected"}
+        for code in codes:
+            self.assertIn(f"err_{code.replace('-', '_')}", en, code)
+
+
+class SearchProvidersTest(unittest.TestCase):
+    """docs/adr/0002-nulavio-search.md: who search goes to, and when."""
+
+    def setUp(self):
+        self.text = module_text("NulavioSearch.sys.mjs")
+        block = self.text[self.text.index("export const PROVIDERS") : self.text.index("export class SearchSettingsError")]
+        self.providers = {
+            key: dict(re.findall(r'(\w+): ("[^"]*"|null|true|false)', body))
+            for key, body in re.findall(r"(\w+): Object\.freeze\(\{(.*?)\}\)", block, re.S)
+        }
+
+    def test_curated_providers(self):
+        self.assertEqual(set(self.providers), {"duckduckgo", "brave", "mojeek", "kagi"})
+        for key, p in self.providers.items():
+            with self.subTest(provider=key):
+                self.assertRegex(p["search"], r'^"https://[a-z0-9.-]+/[^"]*\{searchTerms\}')
+                if p["suggest"] != "null":
+                    self.assertRegex(p["suggest"], r'^"https://[a-z0-9.-]+/[^"]*\{searchTerms\}')
+                self.assertRegex(p["alias"], r'^"@[a-z]+"$')
+
+    def test_paid_service_and_searxng_are_never_added_by_themselves(self):
+        self.assertEqual(self.providers["kagi"]["firstRun"], "false")
+        self.assertNotIn("searxng", self.providers)
+        # example.org/example.com are reserved names (RFC 2606), used in comments only.
+        instance = re.search(r"https://(?![a-z0-9.-]*example\.)[a-z0-9.-]*searx[a-z0-9.-]*\.[a-z]+/", self.text)
+        self.assertIsNone(instance, "a SearXNG instance is hard-coded")
+
+    def test_no_nulavio_endpoint(self):
+        self.assertIsNone(re.search(r"nulavio\.net|nulavio\.(com|org|io)", self.text), "a Nulavio endpoint")
+
+    def test_baseline_turns_remote_suggestions_and_trending_off(self):
+        baseline = (ROOT / "browser" / "config" / "prefs" / "baseline.js").read_text(encoding="utf-8")
+        for pref, value in (
+            ("browser.search.suggest.enabled", "false"),
+            ("browser.urlbar.suggest.trending", "false"),
+            ("browser.search.separatePrivateDefault.featureGate", "true"),
+            ("browser.search.separatePrivateDefault.enabled", "true"),
+        ):
+            self.assertIn(f'user_pref("{pref}", {value});', baseline)
+
+    def test_consent_pref_is_the_one_the_patch_reads(self):
+        patch = (ROOT / "browser" / "patches" / "0004-search-require-per-engine-consent-for-suggestions.patch").read_text()
+        pref = re.search(r'PREF_OPTIN = "([^"]+)"', self.text).group(1)
+        self.assertIn(f'pref: "{pref}"', patch)
+        self.assertIn('default: "",', patch, "no engine may have consent by default")
+        removed = [line for line in patch.splitlines() if line.startswith("-") and not line.startswith("---")]
+        self.assertEqual(
+            [line.strip() for line in removed],
+            ["-      SearchSuggestionController.engineOffersSuggestions(engine, fetchTrending)"],
+            "the patch may only add a condition, never drop an upstream one",
+        )
+
+
+class ProfileTemplatesTest(unittest.TestCase):
+    def setUp(self):
+        self.text = module_text("NulavioProfiles.sys.mjs")
+
+    def listed(self, name: str) -> list[str]:
+        block = re.search(rf"export const {name} = Object\.freeze\(\[(.*?)\]\);", self.text, re.S).group(1)
+        return re.findall(r'"([a-z-]+)"', block)
+
+    def test_templates_use_offered_icons_and_colours(self):
+        avatars, colors = set(self.listed("AVATARS")), set(self.listed("COLORS"))
+        templates = re.findall(r'id: "(\w+)", avatar: "([a-z-]+)", color: "(\w+)"', self.text)
+        self.assertEqual([t[0] for t in templates], ["personal", "work", "banking", "research"])
+        for template_id, avatar, color in templates:
+            with self.subTest(template=template_id):
+                self.assertIn(avatar, avatars)
+                self.assertIn(color, colors)
+        names = (SHELL / "lib" / "names.js").read_text(encoding="utf-8")
+        for template_id, *_ in templates:
+            key = re.search(rf'{template_id}: "(\w+)"', names).group(1)
+            self.assertIn(key, locale("en"))
+
+    def test_no_temporary_profile_until_it_exists(self):
+        self.assertNotIn("temporary", [t for t in self.listed("TEMPLATES")])
+        self.assertNotRegex(self.text, r'id: "temporary"')
+
+    def test_colours_are_design_tokens(self):
+        tokens = json.loads((ROOT / "docs" / "brand" / "tokens.json").read_text(encoding="utf-8"))
+        for theme in ("light", "dark"):
+            self.assertEqual(set(self.listed("COLORS")) | {"on"}, set(tokens["color"][theme]["identity"]) - {"$description"})
+        for color in self.listed("COLORS"):
+            self.assertIn(f"color_{color}", locale("en"))
+        for avatar in self.listed("AVATARS"):
+            self.assertIn(f"avatar_{avatar.replace('-', '_')}", locale("en"))
 
 
 class PackagingTest(unittest.TestCase):
@@ -107,12 +255,24 @@ class PackagingTest(unittest.TestCase):
         files = set(make_shell.assemble(out))
         for page in out.rglob("*.html"):
             for ref in re.findall(r'(?:src|href|srcset)="([^"]+)"', page.read_text(encoding="utf-8")):
-                target = (page.parent / ref).resolve()
+                if ref.startswith("#"):
+                    continue  # a section of the same page
+                target = (page.parent / ref.split("#")[0]).resolve()
                 with self.subTest(page=page.name, ref=ref):
                     self.assertTrue(target.is_file(), f"{ref} missing")
                     self.assertIn(str(target.relative_to(out.resolve())), files)
         for icon in make_shell.manifest()["icons"].values():
             self.assertIn(icon, files)
+
+    def test_unprivileged_variant_for_temporary_installs(self):
+        out = self.tmp / "plain"
+        files = make_shell.assemble(out, privileged=False)
+        manifest = json.loads((out / "manifest.json").read_text(encoding="utf-8"))
+        for key in ("experiment_apis", "action", "commands", "options_ui"):
+            self.assertNotIn(key, manifest)
+        self.assertFalse([f for f in files if f.split("/")[0] in ("experiments", "modules", "settings", "profiles")])
+        self.assertIn("newtab/newtab.html", files)
+        self.assertEqual(manifest["permissions"], make_shell.manifest()["permissions"])
 
     def test_build_files_list_every_file_under_builtin_addons(self):
         branding = self.tmp / "branding"

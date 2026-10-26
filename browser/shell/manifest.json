@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "__MSG_extName__",
   "description": "__MSG_extDescription__",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "default_locale": "en",
   "browser_specific_settings": {
     "gecko": {
@@ -16,6 +16,41 @@
   },
   "chrome_url_overrides": {
     "newtab": "newtab/newtab.html"
+  },
+  "options_ui": {
+    "page": "settings/settings.html",
+    "open_in_tab": true
+  },
+  "action": {
+    "default_title": "__MSG_profilesButton__",
+    "default_popup": "profiles/popup.html",
+    "default_area": "navbar",
+    "default_icon": "shared/nulavio-symbol.svg"
+  },
+  "commands": {
+    "_execute_action": {
+      "suggested_key": { "default": "Alt+Shift+P" },
+      "description": "__MSG_profilesShortcut__"
+    }
+  },
+  "experiment_apis": {
+    "nulavioSearch": {
+      "schema": "experiments/search/schema.json",
+      "parent": {
+        "scopes": ["addon_parent"],
+        "script": "experiments/search/parent.js",
+        "events": ["startup"],
+        "paths": [["nulavioSearch"]]
+      }
+    },
+    "nulavioProfiles": {
+      "schema": "experiments/profiles/schema.json",
+      "parent": {
+        "scopes": ["addon_parent"],
+        "script": "experiments/profiles/parent.js",
+        "paths": [["nulavioProfiles"]]
+      }
+    }
   },
   "permissions": ["downloads", "management", "privacy", "search"],
   "incognito": "spanning",

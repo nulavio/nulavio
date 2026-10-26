@@ -1,0 +1,68 @@
+Subject: [PATCH] search: require per-engine consent for remote suggestions
+
+Remote search suggestions send what the user types, keystroke by
+keystroke, to a search engine. Upstream gates them with global switches
+only: once suggestions are on, typing "@engine text" sends the text to
+that engine even if the user only meant to allow their default engine.
+
+SearchSuggestionController is the single place that fetches remote
+suggestions and trending searches (address bar, search bar, new tab
+search box). This adds one more condition there: the engine's id must
+be listed in the pref nulavio.search.suggest.optin, which Nulavio's
+search settings write when the user switches suggestions on for a
+provider. The pref is empty by default, so no engine receives typed
+text until the user opts in. Local suggestions (history, form history)
+are unaffected.
+
+Owner: Nulavio maintainers
+Upstream: not proposed yet (product policy; see docs/adr/0002-nulavio-search.md).
+---
+--- a/toolkit/components/search/SearchSuggestionController.sys.mjs
++++ b/toolkit/components/search/SearchSuggestionController.sys.mjs
+@@ -36,6 +36,14 @@
+     pref: "browser.search.suggest.timeout",
+     default: REMOTE_TIMEOUT_DEFAULT,
+   },
++  /**
++   * Nulavio: ids of the engines the user allowed to receive what they type,
++   * comma-separated. Empty means no engine gets remote suggestion requests.
++   */
++  nulavioSuggestConsent: {
++    pref: "nulavio.search.suggest.optin",
++    default: "",
++  },
+ });
+ 
+ /**
+@@ -229,6 +237,21 @@
+   static REMOTE_TIMEOUT_DEFAULT = REMOTE_TIMEOUT_DEFAULT;
+ 
+   /**
++   * Nulavio: whether the user allowed this engine to receive what they type.
++   * Remote suggestions (and trending searches) need this consent in addition
++   * to the upstream switches, so an alias such as "@engine" cannot send
++   * keystrokes to an engine the user did not choose for suggestions.
++   *
++   * @param {SearchEngine} engine - The search engine
++   * @returns {boolean} True if the user opted in for this engine.
++   */
++  static nulavioHasSuggestConsent(engine) {
++    return lazy.nulavioSuggestConsent
++      .split(",")
++      .some(id => id.trim() && id.trim() === engine.id);
++  }
++
++  /**
+    * Determines whether the given engine offers search suggestions.
+    *
+    * @param {SearchEngine} engine - The search engine
+@@ -339,7 +362,8 @@
+       lazy.suggestionsEnabled &&
+       (!inPrivateBrowsing || lazy.suggestionsInPrivateBrowsingEnabled) &&
+       maxRemoteResults &&
+-      SearchSuggestionController.engineOffersSuggestions(engine, fetchTrending)
++      SearchSuggestionController.engineOffersSuggestions(engine, fetchTrending) &&
++      SearchSuggestionController.nulavioHasSuggestConsent(engine)
+     ) {
+       promises.push(this.#fetchRemote(this.#context));
+     }

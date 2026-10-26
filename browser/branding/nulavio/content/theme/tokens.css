@@ -69,6 +69,7 @@
   --nv-color-border-control: light-dark(#6B8794, #6E93A2);
   --nv-color-accent-default: light-dark(#0F7A68, #6FE0C5);
   --nv-color-accent-on: light-dark(#FFFFFF, #0B1623);
+  --nv-color-accent-tint: light-dark(#DDF8F0, #0E3B33);
   --nv-color-focus: light-dark(#0F7A68, #6FE0C5);
   --nv-color-status-secure: light-dark(#3A6273, #BFD0D6);
   --nv-color-status-warning: light-dark(#8A5A10, #E7AE61);
@@ -80,7 +81,13 @@
   --nv-color-chrome-tabText: light-dark(#23495A, #BFD0D6);
   --nv-color-chrome-field: light-dark(#FFFFFF, #112432);
   --nv-color-chrome-icon: light-dark(#23495A, #BFD0D6);
-  --nv-color-accent-tint: #DDF8F0;
+  --nv-color-identity-mint: light-dark(#6FE0C5, #6FE0C5);
+  --nv-color-identity-sky: light-dark(#8CCBF5, #8CCBF5);
+  --nv-color-identity-violet: light-dark(#C2B0F7, #C2B0F7);
+  --nv-color-identity-rose: light-dark(#F4A8BD, #F4A8BD);
+  --nv-color-identity-sand: light-dark(#EBC77F, #EBC77F);
+  --nv-color-identity-slate: light-dark(#BFD0D6, #BFD0D6);
+  --nv-color-identity-on: light-dark(#070F18, #070F18);
   --nv-color-status-warningTint: #FBEBD3;
   --nv-color-status-criticalTint: #F9DEDF;
 }

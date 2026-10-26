@@ -83,6 +83,13 @@
   --nv-color-chrome-tabText: #23495A;
   --nv-color-chrome-field: #FFFFFF;
   --nv-color-chrome-icon: #23495A;
+  --nv-color-identity-mint: #6FE0C5;
+  --nv-color-identity-sky: #8CCBF5;
+  --nv-color-identity-violet: #C2B0F7;
+  --nv-color-identity-rose: #F4A8BD;
+  --nv-color-identity-sand: #EBC77F;
+  --nv-color-identity-slate: #BFD0D6;
+  --nv-color-identity-on: #070F18;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -98,6 +105,7 @@
     --nv-color-border-control: #6E93A2;
     --nv-color-accent-default: #6FE0C5;
     --nv-color-accent-on: #0B1623;
+    --nv-color-accent-tint: #0E3B33;
     --nv-color-focus: #6FE0C5;
     --nv-color-status-secure: #BFD0D6;
     --nv-color-status-warning: #E7AE61;
@@ -109,6 +117,13 @@
     --nv-color-chrome-tabText: #BFD0D6;
     --nv-color-chrome-field: #112432;
     --nv-color-chrome-icon: #BFD0D6;
+    --nv-color-identity-mint: #6FE0C5;
+    --nv-color-identity-sky: #8CCBF5;
+    --nv-color-identity-violet: #C2B0F7;
+    --nv-color-identity-rose: #F4A8BD;
+    --nv-color-identity-sand: #EBC77F;
+    --nv-color-identity-slate: #BFD0D6;
+    --nv-color-identity-on: #070F18;
   }
 }
 
@@ -125,6 +140,7 @@
   --nv-color-border-control: #6E93A2;
   --nv-color-accent-default: #6FE0C5;
   --nv-color-accent-on: #0B1623;
+  --nv-color-accent-tint: #0E3B33;
   --nv-color-focus: #6FE0C5;
   --nv-color-status-secure: #BFD0D6;
   --nv-color-status-warning: #E7AE61;
@@ -136,6 +152,13 @@
   --nv-color-chrome-tabText: #BFD0D6;
   --nv-color-chrome-field: #112432;
   --nv-color-chrome-icon: #BFD0D6;
+  --nv-color-identity-mint: #6FE0C5;
+  --nv-color-identity-sky: #8CCBF5;
+  --nv-color-identity-violet: #C2B0F7;
+  --nv-color-identity-rose: #F4A8BD;
+  --nv-color-identity-sand: #EBC77F;
+  --nv-color-identity-slate: #BFD0D6;
+  --nv-color-identity-on: #070F18;
 }
 
 [data-theme="light"] {
@@ -164,4 +187,11 @@
   --nv-color-chrome-tabText: #23495A;
   --nv-color-chrome-field: #FFFFFF;
   --nv-color-chrome-icon: #23495A;
+  --nv-color-identity-mint: #6FE0C5;
+  --nv-color-identity-sky: #8CCBF5;
+  --nv-color-identity-violet: #C2B0F7;
+  --nv-color-identity-rose: #F4A8BD;
+  --nv-color-identity-sand: #EBC77F;
+  --nv-color-identity-slate: #BFD0D6;
+  --nv-color-identity-on: #070F18;
 }

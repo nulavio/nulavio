@@ -7,8 +7,8 @@ browser.jar (toolkit/mozapps/extensions/gen_built_in_addons.py), so no
 Mozilla file is patched: the branding directory, which is Nulavio's, builds it
 as a subdirectory.
 
-    # assemble only (tests load it as a temporary add-on in any Firefox)
-    python3 -I scripts/build/make_shell.py --out /tmp/nulavio-shell
+    # assemble only; --unprivileged for a temporary add-on in a distribution Firefox
+    python3 -I scripts/build/make_shell.py --out /tmp/nulavio-shell --unprivileged
     # make_branding.py calls install() for the Firefox source tree
 """
 
@@ -40,14 +40,32 @@ def manifest() -> dict:
     return json.loads((SOURCE / "manifest.json").read_text(encoding="utf-8"))
 
 
-def assemble(out: Path) -> list[str]:
-    """Copy the add-on and the shared brand files into `out`; return relative file paths."""
+# Parts that need the privileges of a built-in add-on (experiment APIs over
+# the engine's Search Service and profile service) and the UI that uses them.
+PRIVILEGED_KEYS = ("experiment_apis", "action", "commands", "options_ui")
+PRIVILEGED_DIRS = ("experiments", "modules", "settings", "profiles")
+
+
+def assemble(out: Path, privileged: bool = True) -> list[str]:
+    """Copy the add-on and the shared brand files into `out`; return relative file paths.
+
+    `privileged=False` builds the variant a distribution Firefox can load as a
+    temporary add-on (tests on Track A): the engine rejects `experiment_apis`
+    outside built-in add-ons, so those parts are left out instead of failing.
+    """
     if out.exists():
         shutil.rmtree(out)
     shutil.copytree(SOURCE, out)
     for relative, source in SHARED_FROM_REPO.items():
         (out / relative).parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(source, out / relative)
+    if not privileged:
+        data = json.loads((out / "manifest.json").read_text(encoding="utf-8"))
+        for key in PRIVILEGED_KEYS:
+            data.pop(key, None)
+        (out / "manifest.json").write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+        for name in PRIVILEGED_DIRS:
+            shutil.rmtree(out / name, ignore_errors=True)
     return sorted(str(p.relative_to(out)) for p in out.rglob("*") if p.is_file())
 
 
@@ -69,8 +87,11 @@ def install(branding_dir: Path) -> Path:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--out", type=Path, required=True, help="directory to assemble the add-on into")
+    parser.add_argument(
+        "--unprivileged", action="store_true", help="leave out the parts that need a built-in add-on (temporary installs)"
+    )
     args = parser.parse_args()
-    files = assemble(args.out)
+    files = assemble(args.out, privileged=not args.unprivileged)
     print(f"assembled {manifest()['browser_specific_settings']['gecko']['id']} ({len(files)} files) in {args.out}")
     return 0
 
