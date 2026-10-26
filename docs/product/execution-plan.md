@@ -2,6 +2,28 @@
 
 How the open work is sequenced: the next steps already on the [roadmap](roadmap.md) plus two new programmes, **Secure Profiles: Vault and unlock** (phone, OS, password, security key) and **AI Bridge** (agents, autonomy, browser automation). Each slice is a vertical piece that ends with real tests; nothing is "done" while it is only UI or a mock.
 
+## Project goal (set by the maintainer, 2026-10-26)
+
+**Finish the whole project**: Nulavio 1.0 for Linux (Fedora KDE first, then Ubuntu), with Windows evaluated. Work proceeds slice by slice in the order below without pausing between slices; it stops only for something only the maintainer or a third party can provide.
+
+Nulavio is complete when all of the following are verified (tests or recorded evidence), not just implemented:
+
+1. Every roadmap phase's DoD (0–6, 2b, 2c, 2d) and the [release criteria](release-criteria.md) alpha gate.
+2. Secure Profiles: encrypted profiles at rest with real lock/unlock; password, recovery code and OS methods; phone unlock with the Android Companion (F-Droid build); at least two recovery methods; protection states shown truthfully.
+3. AI Bridge: real agents (Codex CLI, Claude Code) connected through the wizard; the four autonomy levels behave as granted; revocation and emergency stop; no access to locked profiles.
+4. Packaging and updates: signed RPM in a signed repository, SBOM attached, update SLA rehearsed; Debian/Ubuntu package built with its own `libdir`.
+5. Hardening: Guard runtime checks, regression suite over real sites, documentation of every residual risk.
+
+| Needs the maintainer or a third party | When |
+|---|---|
+| Trademark searches (INPI, USPTO, EUIPO) | Before a public 1.0 |
+| Google Safe Browsing quota review; download-protection access (R15) | Alpha gate |
+| Signing keys for packages and the repository; F-Droid and Play Store accounts | Packaging (phase 6), S11 |
+| Android SDK installation (approved: when S11 starts) and the test phone | S11 |
+| A FIDO2 security key (D5) | S10 |
+| Independent security audit (U11, A14) | Before 1.0 |
+| Test vulnerability report to `security@nulavio.net` | Alpha gate |
+
 ## Where we are
 
 | Area | State (verified) |
@@ -31,7 +53,7 @@ One slice per working session, in this order. Sizes are relative (S ≈ one sess
 | # | Slice | Scope | Done when | Depends on | Size |
 |---|---|---|---|---|---|
 | S1 | **Connect P0** (W1) — **done 2026-10-26** | `nulavio integrations` (read-only discovery with evidence: Plasma Browser Integration, portals, Secret Service/KWallet, default browser and URL handlers), Integration Manager page, "make Nulavio the default browser" offered, never automatic | Discovery tests against fake and real D-Bus services on a private bus; nothing changes without a click | — | M |
-| S2 | **Unlock research and decisions** (W3: U0–U3) | Repository audit; compatibility report with official sources for WebAuthn hybrid + PRF (Windows/Linux × Android/iPhone, each cell SUPPORTED_AND_TESTED / DOCUMENTED_NOT_TESTED / EXPERIMENTAL / UNSUPPORTED / UNKNOWN), Companion app, approval-only; ADR `phone-profile-unlock`; ADR Vault key management (DEK, envelopes, metadata, rotation, crash consistency, recovery); anti-infostealer threat model for unlock; trust-boundary and key-flow diagrams; protection-state matrix (`encrypted_at_rest`, `os_user_protected`, `password_protected`, `hardware_bound`, `phone_approved`, `phone_key_release_verified`) | ADRs accepted by the maintainer; every compatibility claim has a source or a test | — | M |
+| S2 | **Unlock research and decisions** (W3: U0–U3) — **done 2026-10-26** | Repository audit; compatibility report with official sources for WebAuthn hybrid + PRF (Windows/Linux × Android/iPhone, each cell SUPPORTED_AND_TESTED / DOCUMENTED_NOT_TESTED / EXPERIMENTAL / UNSUPPORTED / UNKNOWN), Companion app, approval-only; ADR `phone-profile-unlock`; ADR Vault key management (DEK, envelopes, metadata, rotation, crash consistency, recovery); anti-infostealer threat model for unlock; trust-boundary and key-flow diagrams; protection-state matrix (`encrypted_at_rest`, `os_user_protected`, `password_protected`, `hardware_bound`, `phone_approved`, `phone_key_release_verified`) | ADRs accepted by the maintainer; every compatibility claim has a source or a test | — | M |
 | S3 | **Vault crypto POC** (W3: U4, U5 simulated) | Standalone, artificial data only: random profile DEK, AEAD envelopes per unlock method, versioned metadata with domain separation, atomic writes; providers: password (Argon2id), recovery code (high entropy), OS keyring (Secret Service; reported as `os_user_protected`, not hardware); **phone protocol simulated** (desktop + a reference "phone" in the test suite): pairing with QR invitation + user confirmation, challenge bound to profile/device/operation/expiry, HPKE-style E2E release, replay and substitution rejected | All tests listed in the spec that do not need a real phone pass on Fedora KDE, including "copying the protected files does not recover the DEK" and "no plaintext secret after a crash" | S2 | L |
 | S4 | **AI Bridge foundation** (W4: A0–A4, A7 first cut) | Audit; compatibility matrix (Nulavio MCP, WebDriver BiDi, Marionette, firefox-devtools-mcp, Playwright, CDP: documented vs implemented vs tested); ADR AI Bridge; threat model for automation and autonomy; **POC**: Nulavio MCP server (stdio) driving a throwaway *AI Workspace* profile (tabs, navigate, read page, accessibility snapshot, screenshot, click, type), with a policy decision point outside the model and per-capability grants (ask / allow for task / session / period / always / block) | Real clients connect and run tools: Claude Code and Codex CLI with throwaway configuration (no change to the user's agent configs); denied capabilities are denied; revocation stops new calls | — | L |
 | S5 | **Vault ↔ Gecko profile POC** (W3: U8 spike) | Encrypted profile container for a throwaway profile (gocryptfs, already installed): unlock = derive the volume key from the DEK and mount before the engine starts; lock = end the instance and unmount; profile switching and routing respect locked profiles; no direct changes to Gecko storage files | A locked profile's files are unreadable at rest; unlock/lock cycles survive crashes; routing to a locked profile asks to unlock instead of opening | S3 | M |

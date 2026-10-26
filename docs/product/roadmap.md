@@ -62,10 +62,10 @@ Each milestone has a definition of done (DoD). "Done" requires the DoD to be ver
 
 Unlock encrypted profiles with, in order of convenience: the phone (biometrics/PIN), the operating system, the profile's own password, or a FIDO2 security key. A successful authentication only unlocks data if it takes part in releasing the key. Components: Nulavio Vault, Unlock Coordinator, Platform Key Provider, Phone Unlock, Hardware Key Provider. This is not a passkey manager for websites and does not change WebAuthn for pages.
 
-- [ ] U0 Repository audit
-- [ ] U1 Study: WebAuthn hybrid + PRF vs Nulavio Companion vs approval-only, with a tested compatibility matrix (Windows/Linux × Android/iPhone)
-- [ ] U2 ADR `phone-profile-unlock` (protocol choice, cancellation criteria)
-- [ ] U3 Threat model (anti-infostealer) and key management (DEK, envelopes, rotation, recovery)
+- [x] U0 Repository audit (no Vault code existed; tooling inventory in the [execution plan](execution-plan.md))
+- [x] U1 Study: WebAuthn hybrid + PRF vs Nulavio Companion vs approval-only ([compatibility report](../research/phone-unlock-compatibility.md))
+- [x] U2 [ADR 0005](../adr/0005-phone-profile-unlock.md): Nulavio Companion, protocol `nv1`, cancellation criteria
+- [x] U3 [Threat model for unlock](../security/threat-model-unlock.md) and [ADR 0006](../adr/0006-nulavio-vault.md) key management; [architecture](../architecture/vault-and-unlock.md)
 - [ ] U4 Cryptographic unlock prototype with artificial data (password, recovery code, OS keyring)
 - [ ] U5 Desktop–phone pairing proof (protocol simulated first, no device required)
 - [ ] U6 Android Companion POC (Keystore, BiometricPrompt) — **last slice**; free software for F-Droid first, Play Store later; test device Galaxy S24+ (Android 17)
