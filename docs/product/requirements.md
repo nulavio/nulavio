@@ -31,7 +31,7 @@ Status legend: **Done** (implemented and verified by a test or recorded evidence
 | FR-23 | Integration Manager (KDE, portals, Secret Service, default browser) with real discovery | **Done for P0** ([ADR 0004](../adr/0004-nulavio-connect.md)): `nulavio integrations`, Settings → Integrations, default browser on request with restore. P1/P2: Planned | `test_connect` (unit and integration) |
 | FR-24 | Encrypted profiles at rest with real lock/unlock (Nulavio Vault) | **In progress:** key management done as a prototype on artificial data (S3: DEK, envelopes, metadata MAC, atomic writes, lock wipes the key); profile storage and real lock: Planned (S5) | `test_vault` |
 | FR-25 | Unlock with the phone (biometrics/PIN), OS authentication, profile password or FIDO2 key; recovery code and second device | **Prototype (S3, artificial data):** password, recovery code, OS keyring and password + phone work; phone protocol `nv1` runs end to end against a simulated phone (second phone, revocation). Not shipped: UI (S6), phone app (S11), security key (S10) | `test_vault` |
-| FR-26 | AI Bridge: MCP for external agents with per-agent autonomy (Restricted, Assisted, Autonomous, Full control), revocable and audited | **Planned** (roadmap phase 2d) | — |
+| FR-26 | AI Bridge: MCP for external agents with per-agent autonomy (Restricted, Assisted, Autonomous, Full control), revocable and audited | **Foundation done (S4)** ([ADR 0007](../adr/0007-ai-bridge.md)): `nulavio ai`, MCP server (2025 and 2026-07-28 protocols), per-agent AI Workspace, four levels with per-capability grants, revoke, emergency stop, audit; real Claude Code tested. UI (S7), real profiles (S8): Planned | `test_ai_bridge` (unit, engine), `test_ai_agents_real` |
 | FR-27 | Built-in AI assistant, provider-agnostic, under the same policies as external agents | **Planned** (phase 2d, A12) | — |
 
 ## Security and privacy
@@ -54,6 +54,7 @@ Status legend: **Done** (implemented and verified by a test or recorded evidence
 | SEC-14 | What you type in the address bar is not sent anywhere without consent; consent is per search provider | **Done (Track B)**; Track A: remote suggestions and trending off (one global switch upstream) | `test_search` 02, 03, 05 |
 | SEC-15 | Profiles never share cookies or site storage; a running profile is not deleted; switching never starts a duplicate instance | **Done (Track B)** | `test_profiles` 05 |
 | SEC-16 | An unlock opens a profile only when a method releases its key: no method, a phone approval without the key, or a copy of the files does not reveal it; requests expire, are one-shot and signed; nothing secret in logs or files | **Done in the prototype (S3, simulated phone)**; applies to real profiles from S5 | `test_vault` |
+| SEC-17 | An agent gets only what the user granted: decisions come from the user's configuration on every call, never from the agent or page content; the local network needs a grant; revocation and the emergency stop apply to the next call; the agent's workspace keeps Safe Browsing and the pop-up blocker on | **Done (S4)** | `test_ai_bridge` |
 
 ## Non-functional
 

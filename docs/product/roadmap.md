@@ -81,14 +81,14 @@ Unlock encrypted profiles with, in order of convenience: the phone (biometrics/P
 
 External agents (Codex CLI and Desktop, Claude Code and Desktop, other MCP clients) and, later, a built-in assistant use the browser through one policy decision point outside the model. Safe by default (isolated AI Workspace profile), with autonomy the user can grant up to full control; grants are honoured as given, visible and revocable.
 
-- [ ] A0 Audit (engine, Shell, profiles, IPC, automation tests)
-- [ ] A1 Compatibility matrix: Nulavio MCP, WebDriver BiDi, Marionette, firefox-devtools-mcp, Playwright, CDP (documented / implemented / tested)
-- [ ] A2 ADR AI Bridge
-- [ ] A3 Threat model for automation and autonomy (incl. deliberately accepted risk)
-- [ ] A4 Minimal MCP server with navigation tools on a throwaway profile
+- [x] A0 Audit (engine, Shell, profiles, IPC, automation tests) — in [ADR 0007](../adr/0007-ai-bridge.md)
+- [x] A1 [Compatibility matrix](../ai/compatibility.md): Nulavio MCP, WebDriver BiDi, Marionette, firefox-devtools-mcp, Playwright, Puppeteer, Selenium, CDP (documented / implemented / tested)
+- [x] A2 [ADR 0007](../adr/0007-ai-bridge.md) AI Bridge; [architecture](../architecture/ai-bridge.md)
+- [x] A3 [Threat model for automation and autonomy](../security/threat-model-ai.md) (incl. deliberately accepted risk)
+- [x] A4 MCP server (`nulavio ai serve`) with 11 browser tools on a per-agent AI Workspace; tested with real Claude Code
 - [ ] A5 Gecko automation adapter
 - [ ] A6 Agent registry and sessions (authenticated local transport)
-- [ ] A7 Permission and autonomy manager (per agent, profile, site, duration)
+- [ ] A7 Permission and autonomy manager (per agent, profile, site, duration) — first cut done in S4: per agent, site and duration, presets for the four levels; per profile in S8
 - [ ] A8 Restricted, Assisted, Autonomous, Full control
 - [ ] A9 Codex CLI and Claude Code connection wizard
 - [ ] A10 Secure Profiles and Smart Profile Routing integration
@@ -136,4 +136,4 @@ External agents (Codex CLI and Desktop, Claude Code and Desktop, other MCP clien
 
 ## Next task (recommended)
 
-Follow the [execution plan](execution-plan.md): S1 (Connect P0), S2 (unlock research and ADRs) and S3 (Vault crypto prototype) are done; next **S4** (AI Bridge foundation and first MCP POC), then **S5** (Vault ↔ Gecko profile storage). The plan lists the decisions each slice needs from the maintainer.
+Follow the [execution plan](execution-plan.md): S1 (Connect P0), S2 (unlock research and ADRs), S3 (Vault crypto prototype) and S4 (AI Bridge foundation) are done; next **S5** (Vault ↔ Gecko profile storage), then **S6** (unlock UX) and **S7** (AI autonomy and its UI). The plan lists the decisions each slice needs from the maintainer.

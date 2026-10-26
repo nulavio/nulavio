@@ -382,6 +382,10 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("desktop", help="user-level desktop entry and icons")
     p.add_argument("desktop_cmd", choices=["install", "uninstall"])
     p.set_defaults(func=cmd_desktop)
+
+    from .ai import cli as ai_cli
+
+    ai_cli.add_parser(sub)
     return parser
 
 

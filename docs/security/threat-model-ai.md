@@ -1,0 +1,54 @@
+# Threat model: AI agents and browser automation
+
+Scope: the AI Bridge ([ADR 0007](../adr/0007-ai-bridge.md), [architecture](../architecture/ai-bridge.md)) as built in S4: external agents over MCP, the Policy Decision Point (PDP), the per-agent AI Workspace. Real profiles (S8) and the built-in assistant (A12) will extend this file. Tests: `tests/unit/test_ai_bridge.py` (U), `tests/integration/test_ai_bridge.py` (I, real engine), `tests/integration/test_ai_agents_real.py` (R, real clients).
+
+Two facts frame everything below:
+1. **The agent process runs as the user.** A CLI agent with shell access can read and write anything the user can, including Nulavio's policy file and the agent token, and can start its own browser. The bridge controls what goes *through the bridge*; it cannot confine a process that already has the user's privileges. Isolation of the agent itself (sandbox, separate account, container) is the user's option, not something the browser can impose.
+2. **The model can be manipulated** by anything it reads (pages, tool results, other servers). Permissions therefore come only from the user's configuration, and every call is checked against it.
+
+| # | Threat | Asset | Adversary | Preconditions | Controls | Limits | Residual | Test |
+|---|---|---|---|---|---|---|---|---|
+| AI-T1 | Prompt injection from a page | Agent's grants and the user's accounts | Website author | Agent reads a hostile page | Page content marked untrusted in every result; no tool reads or changes policy; PDP decides from configuration only; least-privilege presets | Within its grants, a misled agent can still act (see accepted risk) | Medium (depends on grants) | I `test_12`; R (model ignored the injected instruction) |
+| AI-T2 | Agent hijacking (another instruction source takes over the agent) | Same | Website, poisoned tool result, other MCP server | Multiple servers in one agent | Same as T1; bridge results never name tools, servers or scopes; tool names are fixed and namespaced by the client | Cross-server flows inside the agent are the client's responsibility | Medium | U `test_no_tool_edits_policy` |
+| AI-T3 | Confused deputy (agent used to reach what the attacker cannot) | Local services, intranet | Website | Agent follows page instructions to a local URL | Addresses classified before navigation; local network, `localhost`, private and link-local IPs, `.local` names, names that resolve to them, `file:`/`about:` need `local_resources`; link clicks checked the same way | DNS rebinding after the check; page-initiated requests (scripts, redirects) are not tool calls | Medium | U `AddressTest`; I `test_03` (no request reached the server) |
+| AI-T4 | SSRF / internal services / cloud metadata | Router admin, dev servers, 169.254.169.254 | Website or misled model | — | As T3; `169.254.169.254` is link-local, so blocked by default | As T3 | Medium | U `test_local_network_needs_local_resources` |
+| AI-T5 | Compromised MCP server (the bridge itself) | Everything the workspace holds | Supply chain, local attacker | Bridge code replaced | Launcher runs Python isolated (`-I`); no third-party dependencies; repository files are not writable by others | Same-user malware can replace any user file | Low/Medium | U `test_launcher_has_no_third_party_imports` |
+| AI-T6 | Tool poisoning (descriptions that steer the model) | Agent behaviour | Another MCP server in the same client | Several servers configured | Our descriptions are static and minimal; annotations are hints only; the client namespaces tools (`mcp__nulavio__*`) | Other servers' tools are outside Nulavio | Low (for Nulavio's tools) | U `ProtocolTest` |
+| AI-T7 | Unauthorized local client / agent impersonation | Agent's grants | Same-user process | Reads the agent's MCP config | Token per agent, stored only as SHA-256; unknown or revoked token: server refuses to start; per-agent grants | The token identifies a configuration, not a program; a same-user process can read it | Medium | U `test_agents_do_not_share_permissions`, `test_serve_refuses_unknown_tokens` |
+| AI-T8 | Token theft and replay | Agent's grants | Same-user process, backup leak | Token copied | Revocation (`nulavio ai revoke`) invalidates it at the next call; `nulavio ai remove` deletes the agent and its workspace; tokens never logged | No rotation command yet (re-add the agent) | Medium | I `test_05` |
+| AI-T9 | Abuse of persistent sessions (logged-in workspace) | Accounts signed in inside the workspace | Misled agent | Agent signed in earlier | Disposable workspaces; signed-in sessions capability; per-agent workspace | Persistent workspace keeps cookies by design | Medium | I `test_13` |
+| AI-T10 | Cookie extraction | Session cookies | Misled agent | `execute_js` granted | `execute_js` blocked below Full control and `cookies_storage` blocked except Full control; HttpOnly cookies unreadable by page scripts | With Full control, page-visible cookies are readable | Medium (Full control: accepted) | I `test_02`, `test_07` |
+| AI-T11 | Exfiltration of page data | Data shown in the workspace | Misled agent | Read access | Workspace holds only what the agent itself opened; real profiles unreachable (S4); audit records targets | The agent can send what it reads anywhere (it is the user's process) | Medium | I `test_09` (audit) |
+| AI-T12 | Navigation to malicious destinations | Workspace, downloads | Website | — | Safe Browsing, HTTPS-Only, ETP Strict, pop-up blocker stay on (recommended automation prefs disabled); sandboxes untouched | Zero-day exploits | Low/Medium | I `test_08` (pop-up blocker, positive control in the S4 report) |
+| AI-T13 | Unwanted purchases or account changes | Money, accounts | Misled or buggy agent | Signed-in session | `transactions` and `account_settings` ask in Autonomous; capabilities exist but S4 has no tool that classifies a click as a payment | Detection of "this click pays" needs site semantics (S7+) | Medium | U `test_presets` |
+| AI-T14 | Upload of sensitive files | Local files | Misled agent | Upload tool | No upload tool in S4; `files` capability reserved | — | Low (S4) | — |
+| AI-T15 | Changing critical browser settings | Engine prefs | Misled agent | Navigates to `about:config` | `about:` pages need `local_resources` + `debugging` | Full control can | Low | U `test_internal_pages` |
+| AI-T16 | Cross-profile access | Personal/Work/Banking data | Agent | — | S4: the bridge only drives the agent's own workspace profile | S8 adds profile grants | Low (S4) | I `test_07` |
+| AI-T17 | Cross-agent access | Another agent's session | Agent A | Two agents | One workspace profile per agent; grants per agent | Same-user processes can reach either BiDi port | Low/Medium | I `test_07`; U `test_agents_do_not_share_permissions` |
+| AI-T18 | IPC interception | Tool calls, page data | Same-user process | — | stdio pipes between the agent and its child; BiDi on loopback only | Same-user processes can attach (ptrace) or connect to the port | Medium (TB6) | U `test_size_limit_and_remote_hosts` |
+| AI-T19 | Orphaned automation sessions | Workspace left running | — | Agent crashes | Bridge closes the workspace on stdin EOF; disposable workspaces deleted | A killed bridge (SIGKILL) can leave the engine running until the user closes it | Low | I `test_13` |
+| AI-T20 | Agent keeps acting after revocation | Everything | Agent | Revoked mid-task | Registry re-read on every call; revoked or stopped: call refused and workspace closed | A call already running finishes its current step | Low | I `test_05`, `test_06` |
+| AI-T21 | Profile changes during a task | Data in the wrong profile | — | S8 | Not applicable in S4 (one profile per agent); S8: capabilities bound to the profile they were granted for | — | — | — |
+| AI-T22 | Compromised extension in the workspace | Workspace data | Extension author | Extensions installed | The workspace never loads the user's extensions: only what the engine build itself ships | Nulavio's pinned extensions (uBlock Origin) are not installed in the workspace yet (S8) | Low/Medium | — |
+| AI-T23 | Vault data exposure | Encrypted profiles | Agent | S8 | A permission is never a key: locked profiles stay locked; no delegation without an explicit Vault method (ADR 0006) | An unlocked profile is readable by same-user processes (U-T3) | — (S8) | — |
+| AI-T24 | Compromised local device | Everything | Malware with user or root rights | — | Out of the browser's reach | — | Out of scope | — |
+| AI-T25 | Automation in an already unlocked session | Data of that profile | Agent | S8 | S4: not possible; S8: profile grants are separate from unlock | — | — | — |
+| AI-T26 | Remote Agent weakening protections | Safe Browsing, updates, pop-up blocker | — | Default Remote Agent prefs | `remote.prefs.recommended=false` in every workspace | Third-party tools that start the engine themselves may re-enable them | Low | U `test_command_and_prefs`; I `test_08` |
+| AI-T27 | Secrets in logs | Typed passwords, page text | Developer mistake | — | Audit field allow-list; target is the origin only; typed text and scripts recorded as lengths | — | Low | U `AuditTest`; I `test_09` |
+
+## Deliberately accepted risk
+
+When the user grants a capability without confirmation, Nulavio honours it and adds no hidden prompt. Example: an agent allowed to submit forms on a mail site without asking can send messages; a compromised or misled agent can then send messages within that grant. The protection then rests on:
+- the integrity of the agent and the model;
+- the scope the user chose (sites, profiles, duration);
+- what remains outside the grant (other capabilities, other profiles, locked profiles);
+- revocation and the emergency stop, which apply to the next call;
+- the audit, which shows what happened.
+
+Full control removes the remaining prompts for the selected profiles; the warning says so before the first grant, and the UI never calls such a setup "protected".
+
+## Not verified yet
+
+- Claude Desktop and Codex Desktop (not installed); Codex CLI end-to-end (account quota exhausted during S4; see the [compatibility matrix](../ai/compatibility.md)).
+- Windows (named pipes, DPAPI): planned with the Windows matrix.
+- The kdialog approval prompt on a real Plasma session (unit-tested with a stand-in executable).
