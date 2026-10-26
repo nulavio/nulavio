@@ -139,7 +139,7 @@ def _run_encrypted(args: argparse.Namespace, eng, prof) -> int:
         return _run(args, eng, prof, supervise=True)
     finally:
         try:
-            vault_profiles.lock(prof)
+            vault_profiles.lock(prof, after_exit=True)
         except Exception as exc:
             _err(f"could not lock profile '{prof.name}': {exc}")
 

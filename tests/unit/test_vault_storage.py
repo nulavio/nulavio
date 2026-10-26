@@ -122,8 +122,14 @@ class StorageCase(unittest.TestCase):
     def nulavio(self, *args, env=None, stdin: str = "", wait: bool = True):
         command = [str(ROOT / "bin" / "nulavio"), *args]
         if not wait:
-            proc = subprocess.Popen(command, env=env or os.environ.copy(), stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                                    stderr=subprocess.PIPE, text=True)  # fmt: skip
+            proc = subprocess.Popen(
+                command,
+                env=env or os.environ.copy(),
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
             proc.stdin.write(stdin)
             proc.stdin.close()
             return proc
@@ -316,6 +322,110 @@ class SupervisedRunTest(StorageCase):
         profiles.lock(prof, force=True)
         self.assertFalse(box.mounted())
         proc.wait(30)
+
+
+class HelperApiTest(StorageCase):
+    """`nulavio vault api`: what the browser's Shell calls (S6). Secrets travel on stdin only."""
+
+    def api(self, request: dict) -> dict:
+        result = self.nulavio("vault", "api", stdin=json.dumps(request))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        return json.loads(result.stdout)
+
+    def test_lifecycle(self):
+        path = self.tmp / "group" / "abc.Cofre"
+        path.mkdir(parents=True)
+        (path / "prefs.js").write_text(MARKER)
+        self.assertTrue(self.api({"op": "capabilities"})["storage"])
+        code = self.api({"op": "encrypt", "path": str(path), "password": PASSWORD})["recovery_code"]
+        self.assertEqual(list(path.iterdir()), [])
+        self.assertEqual(self.api({"op": "encrypt", "path": str(path), "password": PASSWORD}), {"error": "exists"})
+        status = self.api({"op": "status", "path": str(path)})
+        self.assertEqual((status["encrypted"], status["locked"]), (True, True))
+        self.assertEqual(
+            self.api({"op": "unlock", "path": str(path), "method": "password", "secret": "no"}), {"error": "wrong-secret"}
+        )
+        self.assertEqual(
+            self.api({"op": "unlock", "path": str(path), "method": "password", "secret": PASSWORD, "autolock": False}),
+            {"unlocked": True},
+        )
+        self.assertEqual((path / "prefs.js").read_text(), MARKER)
+        self.assertEqual(self.api({"op": "lock", "path": str(path)}), {"locked": True})
+        new_code = self.api({"op": "new-recovery-code", "path": str(path), "current": code})["recovery_code"]
+        self.assertEqual(
+            self.api({"op": "unlock", "path": str(path), "method": "recovery-code", "secret": code}), {"error": "wrong-secret"}
+        )
+        self.assertEqual(
+            self.api({"op": "add-password", "path": str(path), "current": new_code, "password": "second password"}),
+            {"done": True},
+        )
+        password_ids = [m["id"] for m in self.api({"op": "status", "path": str(path)})["methods"] if m["method"] == "password"]
+        self.assertEqual(len(password_ids), 2)
+        self.api({"op": "remove-method", "path": str(path), "current": "second password", "envelope": password_ids[0]})
+        self.assertEqual(
+            self.api({"op": "unlock", "path": str(path), "method": "password", "secret": PASSWORD}), {"error": "wrong-secret"}
+        )
+        self.assertEqual(
+            self.api({"op": "unlock", "path": str(path), "method": "password", "secret": "second password", "autolock": False}),
+            {"unlocked": True},
+        )
+        self.api({"op": "lock", "path": str(path)})
+
+    def test_forget_before_deletion(self):
+        path = self.tmp / "gone"
+        path.mkdir()
+        self.api({"op": "encrypt", "path": str(path), "password": PASSWORD})
+        self.api({"op": "unlock", "path": str(path), "method": "password", "secret": PASSWORD, "autolock": False})
+        self.assertEqual(self.api({"op": "forget", "path": str(path)}), {"error": "unlocked"})
+        self.api({"op": "lock", "path": str(path)})
+        self.assertEqual(self.api({"op": "forget", "path": str(path)}), {"forgotten": True})
+        self.assertFalse(storage.Container(path).root.exists())
+        self.assertEqual(os.stat(path).st_mode & 0o777, 0o700)  # an empty, deletable folder is all that is left
+
+    def test_bad_requests(self):
+        for request in (
+            {"op": "status"},
+            {"op": "status", "path": "relative/dir"},
+            {"op": "explode", "path": "/x"},
+            {"op": "unlock", "path": str(self.tmp), "method": "telepathy"},
+        ):
+            self.assertIn("error", self.api(request))
+        too_big = self.nulavio("vault", "api", stdin="{" + " " * (70 * 1024) + "}")
+        self.assertEqual(json.loads(too_big.stdout), {"error": "bad-request"})
+        self.assertEqual(json.loads(self.nulavio("vault", "api", stdin="not json").stdout)["error"], "failed")
+
+    def test_secrets_never_reach_argv_or_logs(self):
+        path = self.tmp / "p"
+        path.mkdir()
+        self.api({"op": "encrypt", "path": str(path), "password": PASSWORD})
+        log = self.home / "state" / "launcher.log"
+        self.assertNotIn(PASSWORD, log.read_text() if log.exists() else "")
+
+    def test_autolock_after_the_profile_closes(self):
+        path = self.tmp / "q"
+        path.mkdir()
+        self.api({"op": "encrypt", "path": str(path), "password": PASSWORD})
+        self.api({"op": "unlock", "path": str(path), "method": "password", "secret": PASSWORD})  # starts the watcher
+        box = storage.Container(path)
+        self.assertTrue(box.mounted())
+        env = self.fake_engine()
+        engine = subprocess.Popen([env["NULAVIO_ENGINE"], "--profile", str(path)], env=env)
+        wait_for(lambda: (path / "lock").is_symlink())
+        time.sleep(1)
+        self.assertTrue(box.mounted())  # still open while the engine runs
+        self.stop_file.touch()
+        engine.wait(10)
+        wait_for(lambda: not box.mounted(), timeout=20)
+        self.assertEqual(list(path.iterdir()), [])
+
+    def test_autolock_when_nobody_opens_it(self):
+        path = self.tmp / "r"
+        path.mkdir()
+        self.api({"op": "encrypt", "path": str(path), "password": PASSWORD})
+        self.api({"op": "unlock", "path": str(path), "method": "password", "secret": PASSWORD, "autolock": False})
+        prof = profile.Profile(name="r", path=path)
+        self.assertEqual(profiles.autolock(prof, grace=0.5, poll=0.1), "unused")
+        self.assertFalse(storage.Container(path).mounted())
 
 
 if __name__ == "__main__":

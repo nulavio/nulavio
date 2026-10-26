@@ -56,7 +56,11 @@ function render(state, options) {
             profile.locked ? h("span", { class: "badge", text: t("profilesLocked") }) : null,
             key ? h("kbd", { "aria-hidden": "true", text: key }) : null
           );
-          button.addEventListener("click", () => act(() => profiles.switchTo(profile.id), t("profilesOpening", [profile.name])));
+          button.addEventListener("click", () =>
+            profile.locked
+              ? act(() => browser.nulavioVault.openUnlockPage(profile.id))
+              : act(() => profiles.switchTo(profile.id), t("profilesOpening", [profile.name]))
+          );
           return h("li", {}, button);
         })
       : [h("li", { class: "popup__empty", text: t("profilesNone") })])
@@ -159,3 +163,7 @@ if (profiles) {
       document.querySelector("#others .popup__item, #templates button, #manage")?.focus();
     });
 }
+
+document.getElementById("new-protected").addEventListener("click", () =>
+  act(() => browser.tabs.create({ url: browser.runtime.getURL("vault/create.html") }))
+);

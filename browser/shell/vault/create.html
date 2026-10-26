@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title data-i18n="vaultCreateTitle"></title>
+  <link rel="icon" href="../shared/nulavio-symbol.svg">
+  <link rel="stylesheet" href="../shared/tokens.css">
+  <link rel="stylesheet" href="../shared/base.css">
+  <link rel="stylesheet" href="../shared/shell.css">
+  <script type="module" src="create.js"></script>
+</head>
+<body data-step="profile">
+  <main class="page page--narrow">
+    <section class="card stack" aria-labelledby="headline">
+      <p class="hint" id="progress"></p>
+      <h1 id="headline"></h1>
+
+      <form class="stack" id="step-profile">
+        <label class="field">
+          <span class="field__label" data-i18n="vaultProfileName"></span>
+          <input class="input" id="name" maxlength="60" required>
+        </label>
+        <fieldset class="stack stack--tight">
+          <legend class="field__label" data-i18n="vaultProfileKind"></legend>
+          <div class="actions" id="templates"></div>
+        </fieldset>
+        <div class="actions"><button class="button button--primary" type="submit" data-i18n="vaultNext"></button></div>
+      </form>
+
+      <form class="stack" id="step-protection" hidden>
+        <label class="check">
+          <input type="radio" name="method" value="password" checked>
+          <span><strong data-i18n="vaultChoosePassword"></strong><span class="hint" data-i18n="vaultChoosePasswordHint"></span></span>
+        </label>
+        <div class="stack stack--tight" id="password-fields">
+          <label class="field">
+            <span class="field__label" data-i18n="vaultNewPassword"></span>
+            <input class="input" id="password" type="password" autocomplete="new-password" minlength="8" maxlength="1024">
+          </label>
+          <label class="field">
+            <span class="field__label" data-i18n="vaultRepeatPassword"></span>
+            <input class="input" id="password2" type="password" autocomplete="new-password" minlength="8" maxlength="1024">
+          </label>
+          <label class="check" id="also-keyring-field" hidden>
+            <input type="checkbox" id="also-keyring">
+            <span data-i18n="vaultAlsoKeyring"></span>
+          </label>
+        </div>
+        <label class="check" id="keyring-choice" hidden>
+          <input type="radio" name="method" value="keyring">
+          <span><strong data-i18n="vaultChooseKeyring"></strong><span class="hint" data-i18n="vaultChooseKeyringHint"></span></span>
+        </label>
+        <p class="form-error" id="protection-error" role="alert"></p>
+        <div class="actions">
+          <button class="button button--primary" type="submit" data-i18n="vaultCreate"></button>
+          <button class="button button--secondary" type="button" id="protection-back" data-i18n="vaultBack"></button>
+        </div>
+      </form>
+
+      <form class="stack" id="step-recovery" hidden>
+        <p data-i18n="vaultRecoveryIntro"></p>
+        <p class="notice mono" id="code"></p>
+        <p class="hint" data-i18n="vaultRecoveryKeep"></p>
+        <div class="field-row">
+          <label class="field">
+            <span class="field__label" id="group-a-label"></span>
+            <input class="input mono input--short" id="group-a" maxlength="4" autocomplete="off" spellcheck="false" required>
+          </label>
+          <label class="field">
+            <span class="field__label" id="group-b-label"></span>
+            <input class="input mono input--short" id="group-b" maxlength="4" autocomplete="off" spellcheck="false" required>
+          </label>
+        </div>
+        <p class="form-error" id="recovery-error" role="alert"></p>
+        <div class="actions"><button class="button button--primary" type="submit" data-i18n="vaultFinish"></button></div>
+      </form>
+
+      <div class="stack" id="step-done" hidden>
+        <p id="done-text"></p>
+        <div class="actions" id="done-actions"></div>
+      </div>
+
+      <p class="status" id="status" role="status" aria-live="polite"></p>
+      <p class="hint" data-i18n="vaultNoMasterKey"></p>
+    </section>
+  </main>
+</body>
+</html>

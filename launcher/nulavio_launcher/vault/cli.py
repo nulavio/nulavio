@@ -13,6 +13,7 @@ import sys
 from pathlib import Path
 
 from .. import profile
+from ..log import event as log_event
 from . import profiles, sodium
 from .core import Vault, VaultError
 from .providers import Keyring, add_os_keyring, remove_os_keyring
@@ -54,8 +55,9 @@ def read_secret(prompt: str, *, from_stdin: bool, confirm: bool = False) -> str 
         return first
     kdialog = shutil.which("kdialog")
     if kdialog and (os.environ.get("WAYLAND_DISPLAY") or os.environ.get("DISPLAY")):
-        result = subprocess.run([kdialog, "--title", "Nulavio", "--password", prompt], capture_output=True, text=True,
-                                timeout=300, check=False)  # fmt: skip
+        result = subprocess.run(
+            [kdialog, "--title", "Nulavio", "--password", prompt], capture_output=True, text=True, timeout=300, check=False
+        )
         return result.stdout.rstrip("\n") if result.returncode == 0 else None
     return None
 
@@ -90,6 +92,16 @@ def unlock_for_run(prof: profile.Profile, *, password_stdin: bool = False):
 
 
 def cmd(args: argparse.Namespace) -> int:
+    if args.vault_cmd == "api" and not (tools_available() and sodium.available()):
+        try:
+            request = json.loads(sys.stdin.read(API_LIMIT) or "{}")
+        except ValueError:
+            request = {}
+        if request.get("op") == "capabilities":
+            print(json.dumps({"storage": tools_available(), "sodium": sodium.available(), "keyring": keyring().available()}))
+        else:
+            print(json.dumps({"error": "storage-unavailable"}))
+        return 0
     if not tools_available() and args.vault_cmd not in ("status",):
         _err("encrypted profiles need gocryptfs and FUSE (Fedora: dnf install gocryptfs)")
         return 1
@@ -113,8 +125,9 @@ def _create(args) -> int:
         if password is None:
             _err("no terminal to ask for a password; use --password-stdin")
             return 1
-    prof, code = profiles.create(args.name, password=password, keyring=keyring() if args.keyring else None,
-                                 provider=args.provider, theme=not args.no_theme)  # fmt: skip
+    prof, code = profiles.create(
+        args.name, password=password, keyring=keyring() if args.keyring else None, provider=args.provider, theme=not args.no_theme
+    )
     print(f"Encrypted profile '{prof.name}' created: {prof.path}")
     print("\nRecovery code (shown once; write it down and keep it away from this computer):\n")
     print(f"    {code}\n")
@@ -240,8 +253,163 @@ def _change(args) -> int:
     return 0
 
 
-HANDLERS = {"create": _create, "encrypt": _encrypt, "unlock": _unlock, "lock": _lock, "status": _status, "add-password": _change,
-            "new-recovery-code": _change, "add-keyring": _change, "remove-method": _change}  # fmt: skip
+# -- helper API for the browser (Shell) ------------------------------------------------------
+
+API_LIMIT = 64 * 1024
+
+
+def spawn_autolock(prof: profile.Profile) -> None:
+    """A detached watcher that locks the profile when its browser instance closes."""
+    launcher_dir = Path(__file__).resolve().parents[2]
+    bootstrap = "import sys; sys.path.insert(0, sys.argv[1]); from nulavio_launcher.cli import main; sys.exit(main(sys.argv[2:]))"
+    subprocess.Popen(
+        [sys.executable, "-I", "-c", bootstrap, str(launcher_dir), "vault", "autolock", "--path", str(prof.path)],
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        start_new_session=True,
+        close_fds=True,
+    )
+
+
+def _reauth(vault, current: str) -> None:
+    try:
+        vault.unlock_password(current)
+    except VaultError:
+        try:
+            vault.unlock_recovery_code(current)
+        except VaultError:
+            raise VaultError("wrong-secret") from None
+
+
+def api_request(request: dict) -> dict:
+    """One operation for the Shell. Secrets arrive in the request body (stdin), never in argv."""
+    op = request.get("op")
+    if op == "capabilities":
+        return {"storage": tools_available(), "sodium": sodium.available(), "keyring": keyring().available()}
+    path = request.get("path")
+    if not isinstance(path, str) or not path.startswith("/"):
+        raise VaultError("bad-request", "path")
+    prof = profile.Profile(name=Path(path).name, path=Path(path))
+    if op == "status":
+        return profiles.status(prof)
+    if op == "unlock":
+        method = request.get("method")
+        secret = request.get("secret")
+        if method == "password":
+            vault = profiles.unlock(prof, password=str(secret or ""))
+        elif method == "recovery-code":
+            vault = profiles.unlock(prof, recovery_code=str(secret or ""))
+        elif method == "os-keyring":
+            vault = profiles.unlock(prof, keyring=keyring())
+        else:
+            raise VaultError("no-such-method")
+        vault.lock()
+        if request.get("autolock", True):
+            spawn_autolock(prof)
+        return {"unlocked": True}
+    if op == "lock":
+        profiles.lock(prof)
+        return {"locked": True}
+    if op == "forget":
+        # Before the browser deletes a protected profile: drop its keys, so what is left is unreadable.
+        box = profiles.container(prof)
+        if box.mounted() or prof.running_pid():
+            raise VaultError("unlocked", "lock the profile first")
+        if any(prof.path.iterdir()):
+            raise VaultError("mountpoint-not-empty")
+        for dirpath, _dirs, _files in os.walk(box.root):
+            os.chmod(dirpath, 0o700)
+        shutil.rmtree(box.root)
+        os.chmod(prof.path, 0o700)
+        log_event("vault.forget", profile=prof.name)
+        return {"forgotten": True}
+    if op == "encrypt":
+        if profiles.is_encrypted(prof):
+            raise VaultError("exists")
+        if prof.running_pid():
+            raise profile.ProfileInUse("in-use")
+        box = Container(prof.path)
+        vault = Vault.create(box.vault_path)
+        try:
+            if request.get("password"):
+                vault.add_password(str(request["password"]))
+            if request.get("keyring"):
+                add_os_keyring(vault, keyring(), label="computer login")
+            if not vault.envelopes():
+                raise VaultError("no-method")
+            code = vault.add_recovery_code()
+            vault.save()
+            encrypt_existing(prof.path, vault)
+        finally:
+            vault.lock()
+        return {"recovery_code": code}
+    if op in ("new-recovery-code", "add-password", "add-keyring", "remove-method"):
+        box = profiles.container(prof)
+        vault = box.load_vault()
+        _reauth(vault, str(request.get("current") or ""))
+        try:
+            result: dict = {"done": True}
+            if op == "new-recovery-code":
+                result["recovery_code"] = vault.replace_recovery_code()
+            elif op == "add-password":
+                vault.add_password(str(request.get("password") or ""))
+            elif op == "add-keyring":
+                add_os_keyring(vault, keyring(), label="computer login")
+            else:
+                env = next((e for e in vault.envelopes() if e.id == request.get("envelope")), None)
+                if env is None:
+                    raise VaultError("not-found")
+                if env.method == "os-keyring":
+                    remove_os_keyring(vault, keyring(), env.id)
+                else:
+                    vault.remove(env.id)
+            vault.save()
+            box.record_generation(vault)
+        finally:
+            vault.lock()
+        return result
+    raise VaultError("bad-request", "op")
+
+
+def _api(args) -> int:
+    raw = sys.stdin.read(API_LIMIT + 1)
+    try:
+        if len(raw) > API_LIMIT:
+            raise VaultError("bad-request", "too large")
+        request = json.loads(raw)
+        if not isinstance(request, dict):
+            raise VaultError("bad-request")
+        result = api_request(request)
+    except (VaultError, StorageError) as exc:
+        result = {"error": exc.code}
+    except profile.ProfileInUse:
+        result = {"error": "in-use"}
+    except (profile.ProfileError, ValueError, OSError) as exc:
+        result = {"error": "failed", "detail": type(exc).__name__}
+    print(json.dumps(result))
+    return 0
+
+
+def _autolock(args) -> int:
+    prof = target(args)
+    profiles.autolock(prof, grace=args.grace)
+    return 0
+
+
+HANDLERS = {
+    "api": _api,
+    "autolock": _autolock,
+    "create": _create,
+    "encrypt": _encrypt,
+    "unlock": _unlock,
+    "lock": _lock,
+    "status": _status,
+    "add-password": _change,
+    "new-recovery-code": _change,
+    "add-keyring": _change,
+    "remove-method": _change,
+}
 
 
 def add_parser(sub) -> None:
@@ -274,8 +442,11 @@ def add_parser(sub) -> None:
     q.add_argument("name", nargs="?")
     q.add_argument("--path")
     q.add_argument("--json", action="store_true")
-    for name, text in (("add-password", "add a password"), ("new-recovery-code", "replace the recovery code"),
-                       ("add-keyring", "also unlock with your computer login")):  # fmt: skip
+    for name, text in (
+        ("add-password", "add a password"),
+        ("new-recovery-code", "replace the recovery code"),
+        ("add-keyring", "also unlock with your computer login"),
+    ):
         q = vsub.add_parser(name, help=text)
         q.add_argument("name", nargs="?")
         q.add_argument("--path")
@@ -285,4 +456,9 @@ def add_parser(sub) -> None:
     q.add_argument("--path")
     q.add_argument("envelope")
     q.add_argument("--password-stdin", action="store_true")
+    vsub.add_parser("api", help=argparse.SUPPRESS)  # JSON on stdin/stdout, used by the browser
+    q = vsub.add_parser("autolock", help=argparse.SUPPRESS)
+    q.add_argument("name", nargs="?")
+    q.add_argument("--path")
+    q.add_argument("--grace", type=float, default=120.0)
     p.set_defaults(func=cmd)

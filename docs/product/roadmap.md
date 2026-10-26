@@ -71,7 +71,7 @@ Unlock encrypted profiles with, in order of convenience: the phone (biometrics/P
 - [ ] U6 Android Companion POC (Keystore, BiometricPrompt) — **last slice**; free software for F-Droid first, Play Store later; test device Galaxy S24+ (Android 17)
 - [ ] U7 Recovery, replay and lost-device tests — done with the simulated phone (`test_vault`); repeat on the real device in U6
 - [x] U8 Integration with Gecko profiles (encrypted profile container; lock = instance ended and container closed) — S5: launcher profiles end to end (`nulavio vault`, supervised `nulavio run`); browser-group profiles recognised as locked by the selector and routing
-- [ ] U9 UX: onboarding in three decisions, locked profile, recovery, devices
+- [x] U9 UX: onboarding in three decisions, locked profile, recovery (S6, `browser/shell/vault/`); phone devices come with U6
 - [ ] U10 iOS and Windows evaluation
 - [ ] U11 Hardening and independent audit
 
@@ -136,4 +136,4 @@ External agents (Codex CLI and Desktop, Claude Code and Desktop, other MCP clien
 
 ## Next task (recommended)
 
-Follow the [execution plan](execution-plan.md): S1 (Connect P0), S2 (unlock research and ADRs), S3 (Vault crypto prototype), S4 (AI Bridge foundation) and S5 (encrypted profile storage) are done; next **S6** (unlock UX in the browser), then **S7** (AI autonomy and its UI). The plan lists the decisions each slice needs from the maintainer.
+Follow the [execution plan](execution-plan.md): S1 (Connect P0), S2 (unlock research and ADRs), S3 (Vault crypto prototype), S4 (AI Bridge foundation), S5 (encrypted profile storage) and S6 (unlock UX in the browser) are done; next **S7** (AI autonomy and its UI), then **S8** (AI integration with profiles and routing). The plan lists the decisions each slice needs from the maintainer.

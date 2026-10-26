@@ -93,8 +93,15 @@ The minimum target is 24×24 CSS px (WCAG 2.5.8); `test_06` measures the real bu
 | Held address | `.url` | A link routing held back, shown as text on `bg.sunken` (never a live link); `overflow-wrap: anywhere` |
 | Target profile | `.target` | Chip + profile name on the routing pages |
 | Links | `a` | `accent.default`, underlined; thicker underline on hover |
+| Steps | `#progress` hint + `h1` | Onboarding flows ("Step 2 of 3"); focus moves to the first control of each step |
+| Method choice | `.check` with `input[type=radio]` | One line of consequence under each option (what it protects against, what it does not) |
+| Secret field | `.input[type=password]` | `autocomplete=current-password/new-password`; cleared after a wrong attempt, focus kept there |
+| Recovery code | `.notice.mono` | Shown once; two groups typed back to confirm; removed from the page after confirmation |
+| Locked profile | `vault/unlock.html` | Chip + name, held address as `.url`, password first, other methods as secondary/quiet buttons, states in `body[data-state]` |
 
-Screenshots: [settings](screenshots/settings-light.png), [profile selector](screenshots/profile-selector-dark.png), [routing question](screenshots/routing-ask-light.png), [link not opened](screenshots/routing-blocked-dark.png), [routing rules](screenshots/routing-rules-dark.png).
+Screenshots: [settings](screenshots/settings-light.png), [profile selector](screenshots/profile-selector-dark.png), [routing question](screenshots/routing-ask-light.png), [link not opened](screenshots/routing-blocked-dark.png), [routing rules](screenshots/routing-rules-dark.png); protected profiles (S6): [locked profile](screenshots/vault-unlock-idle-light.png) ([dark](screenshots/vault-unlock-idle-dark.png)), [wrong password](screenshots/vault-unlock-error-light.png), [computer login unavailable](screenshots/vault-unlock-device-unavailable-dark.png), [recovery only](screenshots/vault-unlock-recovery-required-light.png), [choose protection](screenshots/vault-create-2-protection-dark.png), [recovery code](screenshots/vault-create-3-recovery-light.png), [settings with a locked profile](screenshots/vault-settings-locked-profile-dark.png).
+
+State overlays: the `state.*` tokens are opacities; Shell buttons apply them as `color-mix(in srgb, currentColor <n>%, transparent)` (until S6 the hover and pressed overlays were invalid CSS and showed nothing). Buttons use `appearance: none` so the toolkit never paints them in the other scheme.
 
 ## Component gallery
 

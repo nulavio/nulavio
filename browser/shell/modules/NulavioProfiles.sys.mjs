@@ -17,6 +17,7 @@ const lazy = {};
 ChromeUtils.defineESModuleGetters(lazy, {
   NetUtil: "resource://gre/modules/NetUtil.sys.mjs",
   profileLockState: "resource://builtin-addons/nulavio-shell/modules/NulavioVaultState.sys.mjs",
+  vaultHelper: "resource://builtin-addons/nulavio-shell/modules/NulavioVault.sys.mjs",
   SelectableProfileService: "resource:///modules/profiles/SelectableProfileService.sys.mjs",
 });
 
@@ -272,8 +273,13 @@ class NulavioProfilesClass {
     if (profile.id === this.#service.currentProfile?.id) {
       fail("is-current");
     }
-    if ((await lazy.profileLockState(profile.path)) !== "plain") {
-      fail("encrypted"); // deleting needs the Vault too (S6); never leave a key file behind
+    const lock = await lazy.profileLockState(profile.path);
+    if (lock === "unlocked") {
+      fail("unlocked"); // lock it first: its files are open
+    }
+    if (lock === "locked") {
+      // Drop its keys first: without them the encrypted files can never be read again.
+      await lazy.vaultHelper({ op: "forget", path: profile.path });
     }
     try {
       await this.#service.deleteProfile(profile);

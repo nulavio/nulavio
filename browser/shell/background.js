@@ -85,7 +85,13 @@ if (browser.nulavioProfiles && browser.nulavioRouting && browser.menus) {
     if (!id.startsWith(`${LINK_MENU}:`) || tab?.incognito) {
       return;
     }
-    browser.nulavioRouting.openIn(Number(id.slice(LINK_MENU.length + 1)), info.linkUrl).catch(console.error);
+    const profileId = Number(id.slice(LINK_MENU.length + 1));
+    browser.nulavioRouting.openIn(profileId, info.linkUrl).catch(e => {
+      if (e?.message === "locked" && browser.nulavioVault) {
+        return browser.nulavioVault.openUnlockPage(profileId, info.linkUrl);
+      }
+      console.error(e);
+    });
   });
   browser.menus.onShown.addListener(async (info, tab) => {
     if (info.menuIds.includes(LINK_MENU)) {

@@ -365,8 +365,8 @@ class NulavioRoutingClass {
       return;
     }
     if ((await lazy.profileLockState(profile.path)) === "locked") {
-      // Never start an engine on a locked profile: say so here, without loading the site.
-      await this.#openPage("routing/blocked.html", { u: url, r: decision.ruleId, why: "locked", src: source });
+      // Never start an engine on a locked profile: offer to unlock it here, without loading the site.
+      await this.#openPage("vault/unlock.html", { p: String(profile.id), u: url, src: source });
       return;
     }
     try {

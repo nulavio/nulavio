@@ -1,6 +1,6 @@
 # ADR 0006 — Nulavio Vault: profile keys, envelopes and lifecycle
 
-- **Status:** Accepted (2026-10-26). Key management **implemented (S3)**; encrypted profile storage **implemented (S5)**: launcher profiles end to end, browser-group profiles recognised as locked. Unlock UI: S6.
+- **Status:** Accepted (2026-10-26). Key management **implemented (S3)**; encrypted profile storage **implemented (S5)**; unlock and onboarding in the browser **implemented (S6)** for password, computer login (OS keyring) and recovery code. Phone (S11) and security keys (S10) to come.
 - **Related:** [ADR 0005](0005-phone-profile-unlock.md), [architecture](../architecture/vault-and-unlock.md), [threat model for unlock](../security/threat-model-unlock.md).
 
 ## Decision
@@ -92,7 +92,17 @@ Not yet (after S3): storage encryption and real lock (done in S5, below), UI (S6
 - **Existing profiles.** `nulavio vault encrypt (NAME | --path DIR)` moves a closed profile into a new volume, verifies by mounting, restores the original on any failure, then deletes the plaintext originals (fragments can remain on SSDs and in backups; the command says so).
 - **Browser profiles (Track B).** The Shell reads two facts per profile (`NulavioVaultState.sys.mjs`): is there a `P.vault/vault.json`, and is the volume mounted. Locked profiles show "Locked" in the selector and Settings; switching, "Open link in profile" and deleting refuse with a plain message; routing a link or typed address to a locked profile shows an explanation instead of starting it. Unlocking from the browser is S6; until then `nulavio vault unlock --path DIR`.
 
-Tests: `tests/unit/test_vault_storage.py` (15, real FUSE mounts, a stand-in engine for supervision, SIGTERM and crash), `tests/integration/test_vault_profiles.py` (real engine: a visited address is in the profile while unlocked and nowhere readable after lock; a direct engine start writes nothing; Track B selector, switching and routing). CI installs `gocryptfs` and `fuse3` and requires these tests.
+## Implementation (S6, 2026-10-26): unlock and onboarding in the browser
+
+- **One crypto implementation.** The browser never handles keys. The Shell (`NulavioVault.sys.mjs`, experiment API `nulavioVault`) runs `nulavio-tools/bin/nulavio vault api` (installed next to the engine by `scripts/build/make_tools.py`) with an argument list; one JSON request on stdin carries the operation and, when needed, the password or recovery code; one JSON answer comes back. Typed secrets are JavaScript strings and cannot be wiped; they live in the page and that call only.
+- **Locked profile page** (`vault/unlock.html`): shown instead of a locked profile from routing (links from apps, typed addresses), the profile selector, "Open link in profile" and Settings. Password first; "Use my computer login" and "Use the recovery code" when configured; states `idle`, `unlocking`, `unlocked`, `error`, `device-unavailable`, `recovery-required`, `storage-unavailable`, `not-locked`. A held-back address is shown as text and opened only after unlock, in the unlocked profile.
+- **Lock when the window closes.** Unlocking from the browser starts a small watcher (`nulavio vault autolock`) that waits for that profile's engine to start and exit, then locks; if nobody opens it within two minutes it locks too. When the engine's helpers still hold files, it waits up to a minute, then detaches the volume (lazy unmount: gone from the file system at once, open files finish closing).
+- **New protected profile** (`vault/create.html`), three decisions: name and kind; how it unlocks (a password, optionally also the computer login, or only the computer login, each with one line on what it protects against); the recovery code, shown once, with two groups typed back. The profile is encrypted before anything is written to it; if encryption fails the new profile is removed rather than left unprotected.
+- **Settings and selector.** Locked profiles show "Locked" and "Unlock…"; an open protected profile that is not running offers "Lock now". Deleting a protected profile requires it locked: the helper first deletes its keys (`P.vault/`), which makes whatever remains unreadable, then the browser deletes the profile.
+
+Tests: `tests/integration/test_vault_ui.py` (7, every page state, keyboard focus, light and dark captures), `HelperApiTest` in `tests/unit/test_vault_storage.py` (the helper API, autolock).
+
+Tests (S5): `tests/unit/test_vault_storage.py` (15, real FUSE mounts, a stand-in engine for supervision, SIGTERM and crash), `tests/integration/test_vault_profiles.py` (real engine: a visited address is in the profile while unlocked and nowhere readable after lock; a direct engine start writes nothing; Track B selector, switching and routing). CI installs `gocryptfs` and `fuse3` and requires these tests.
 
 ## Consequences
 

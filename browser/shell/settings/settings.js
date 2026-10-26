@@ -301,7 +301,14 @@ function profileRow(profile) {
       "aria-label": t("profilesOpenNamed", [profile.name]),
       "data-focus-key": `open-${profile.id}`,
     });
-    open.addEventListener("click", () => run(() => profiles.switchTo(profile.id), { done: t("profilesOpening", [profile.name]) }));
+    open.addEventListener("click", () =>
+      profile.locked
+        ? run(() => browser.nulavioVault.openUnlockPage(profile.id))
+        : run(() => profiles.switchTo(profile.id), { done: t("profilesOpening", [profile.name]) })
+    );
+    if (profile.locked) {
+      open.textContent = t("vaultUnlockButton");
+    }
     const del = h("button", {
       class: "button button--quiet",
       type: "button",
@@ -320,7 +327,15 @@ function profileRow(profile) {
         await run(() => profiles.remove(profile.id), { done: t("profilesDeleted") });
       }
     });
-    end.push(open, del);
+    end.push(open);
+    if (profile.encrypted && !profile.locked) {
+      const lock = h("button", { class: "button button--quiet", type: "button", text: t("vaultLockNow"), "data-focus-key": `lock-${profile.id}` });
+      lock.addEventListener("click", () =>
+        run(() => browser.nulavioVault.lock(profile.id).then(() => renderProfiles()), { done: t("vaultLockedNow", [profile.name]) })
+      );
+      end.push(lock);
+    }
+    end.push(del);
   }
 
   return h(

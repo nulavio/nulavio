@@ -163,7 +163,13 @@ class Container:
         if self.mounted():
             self._check_state(vault)
 
-    def unmount(self, wait: float = 15.0) -> None:
+    def unmount(self, wait: float = 15.0, lazy_after: bool = False) -> None:
+        """Unmount; while files are still open, retry for `wait` seconds.
+
+        `lazy_after`: then detach anyway (the volume disappears from the file
+        system at once; files already open stay usable until closed). Used when
+        the engine has exited and only its helpers are still closing files.
+        """
         tool = shutil.which("fusermount3") or shutil.which("fusermount") or "fusermount3"
         deadline = time.monotonic() + wait
         while self.mounted():
@@ -171,6 +177,10 @@ class Container:
             if result.returncode == 0:
                 break
             if time.monotonic() > deadline:
+                if lazy_after:
+                    subprocess.run([tool, "-u", "-z", str(self.mountpoint)], capture_output=True, timeout=30, check=False)
+                    if not self.mounted():
+                        break
                 raise StorageError("busy", result.stderr.decode(errors="replace").strip()[:200])
             time.sleep(0.3)  # engine helper processes still closing files
         os.chmod(self.mountpoint, LOCKED_MODE)

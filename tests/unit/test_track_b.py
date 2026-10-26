@@ -236,3 +236,24 @@ class DistributionTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ToolsBundleTest(unittest.TestCase):
+    def test_tools_are_copied_next_to_the_build(self):
+        import importlib.util
+        import tempfile
+
+        spec = importlib.util.spec_from_file_location("make_tools", ROOT / "scripts" / "build" / "make_tools.py")
+        make_tools = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(make_tools)
+        out = Path(tempfile.mkdtemp()) / "nulavio-tools"
+        try:
+            make_tools.build(out)
+            self.assertTrue((out / "bin" / "nulavio").stat().st_mode & 0o111)
+            self.assertTrue((out / "launcher" / "nulavio_launcher" / "vault" / "cli.py").is_file())
+            self.assertTrue((out / "browser" / "config" / "prefs" / "baseline.js").is_file())
+            self.assertFalse(list(out.rglob("__pycache__")))
+        finally:
+            import shutil
+
+            shutil.rmtree(out.parent, ignore_errors=True)

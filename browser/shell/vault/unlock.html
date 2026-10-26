@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title data-i18n="vaultUnlockTitle"></title>
+  <link rel="icon" href="../shared/nulavio-symbol.svg">
+  <link rel="stylesheet" href="../shared/tokens.css">
+  <link rel="stylesheet" href="../shared/base.css">
+  <link rel="stylesheet" href="../shared/shell.css">
+  <script type="module" src="unlock.js"></script>
+</head>
+<body data-state="loading">
+  <main class="page page--narrow">
+    <section class="card stack" aria-labelledby="headline">
+      <div class="target" id="who"></div>
+      <h1 class="warning__headline" id="headline" data-i18n="vaultLockedHeadline"></h1>
+      <p id="explain"></p>
+      <p class="url mono" id="url" hidden></p>
+      <form class="stack stack--tight" id="password-form" hidden>
+        <label class="field">
+          <span class="field__label" data-i18n="vaultPasswordLabel"></span>
+          <input class="input" id="password" type="password" autocomplete="current-password" maxlength="1024" required>
+        </label>
+        <div class="actions"><button class="button button--primary" type="submit" data-i18n="vaultUnlock"></button></div>
+      </form>
+      <form class="stack stack--tight" id="recovery-form" hidden>
+        <label class="field">
+          <span class="field__label" data-i18n="vaultRecoveryLabel"></span>
+          <input class="input mono" id="recovery" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="64" required>
+        </label>
+        <div class="actions">
+          <button class="button button--primary" type="submit" data-i18n="vaultUnlockWithRecovery"></button>
+          <button class="button button--secondary" type="button" id="recovery-back" data-i18n="vaultBack"></button>
+        </div>
+      </form>
+      <div class="actions" id="alternatives"></div>
+      <p class="status" id="status" role="status" aria-live="polite"></p>
+      <p class="hint" data-i18n="vaultNoMasterKey"></p>
+    </section>
+  </main>
+</body>
+</html>

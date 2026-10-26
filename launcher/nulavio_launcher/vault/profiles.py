@@ -87,8 +87,12 @@ def unlock(prof: profile.Profile, *, password: str | None = None, recovery_code:
     return vault
 
 
-def lock(prof: profile.Profile, *, force: bool = False, wait: float = 30.0) -> None:
-    """End the profile's engine instance (only with force) and unmount."""
+def lock(prof: profile.Profile, *, force: bool = False, wait: float = 30.0, after_exit: bool = False) -> None:
+    """End the profile's engine instance (only with force) and unmount.
+
+    `after_exit`: the engine has just exited (supervised run); give its helper
+    processes time to close files, then detach the volume regardless.
+    """
     box = container(prof)
     if not box.mounted():
         return
@@ -102,7 +106,7 @@ def lock(prof: profile.Profile, *, force: bool = False, wait: float = 30.0) -> N
             time.sleep(0.3)
         if prof.running_pid():
             raise profile.ProfileInUse(f"profile '{prof.name}' did not close in {wait:.0f} s")
-    box.unmount()
+    box.unmount(wait=60.0, lazy_after=True) if after_exit else box.unmount()
     log.event("vault.lock", profile=prof.name, forced=bool(pid))
 
 
@@ -120,3 +124,28 @@ def status(prof: profile.Profile) -> dict:
         "methods": [{"id": e.id, "method": e.method, "label": e.label, "created": e.created} for e in vault.envelopes()],
         "protection": vault.protection_states(),
     }  # fmt: skip
+
+
+def autolock(prof: profile.Profile, *, grace: float = 120.0, poll: float = 0.5) -> str:
+    """Lock the profile once its engine instance has come and gone (browser-group profiles, S6).
+
+    Waits up to `grace` seconds for an engine to take the profile, then until
+    it exits, then unmounts. Returns what happened, for the log.
+    """
+    box = container(prof)
+    deadline = time.monotonic() + grace
+    while not prof.running_pid():
+        if not box.mounted():
+            return "already-locked"
+        if time.monotonic() > deadline:
+            box.unmount()  # nobody opened it: do not leave it unlocked
+            log.event("vault.autolock", profile=prof.name, reason="unused")
+            return "unused"
+        time.sleep(poll)
+    while prof.running_pid():
+        if not box.mounted():
+            return "already-locked"
+        time.sleep(poll)
+    box.unmount(wait=60.0, lazy_after=True)  # the engine is gone; its helpers may still be closing files
+    log.event("vault.autolock", profile=prof.name, reason="closed")
+    return "closed"

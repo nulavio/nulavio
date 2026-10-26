@@ -56,8 +56,9 @@ class EncryptedLauncherProfileTest(unittest.TestCase):
         self.box = storage.Container(self.profile_dir)
 
     def nulavio(self, *args, stdin: str = "") -> subprocess.CompletedProcess:
-        return subprocess.run([str(ROOT / "bin" / "nulavio"), *args], env=self.env, input=stdin, capture_output=True,
-                              text=True, timeout=300)  # fmt: skip
+        return subprocess.run(
+            [str(ROOT / "bin" / "nulavio"), *args], env=self.env, input=stdin, capture_output=True, text=True, timeout=300
+        )
 
     def test_profile_data_is_unreadable_when_locked(self):
         created = self.nulavio("vault", "create", "work", "--password-stdin", stdin=f"{PASSWORD}\n{PASSWORD}\n")
@@ -69,9 +70,13 @@ class EncryptedLauncherProfileTest(unittest.TestCase):
             handle.write("".join(f"user_pref({k!r}, {harness.Session._js(v)});\n".replace("'", '"') for k, v in prefs.items()))
         token = f"vault-{uuid.uuid4().hex[:12]}"
         with harness.FixtureServer() as fx:
-            engine = subprocess.Popen([*command, "--marionette", "--headless", "--new-instance"],
-                                      env={**self.env, "MOZ_HEADLESS": "1"}, stdout=subprocess.DEVNULL,
-                                      stderr=subprocess.DEVNULL, start_new_session=True)  # fmt: skip
+            engine = subprocess.Popen(
+                [*command, "--marionette", "--headless", "--new-instance"],
+                env={**self.env, "MOZ_HEADLESS": "1"},
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=True,
+            )
             port_file = self.profile_dir / "MarionetteActivePort"
             self.assertTrue(harness.wait_until(lambda: port_file.exists() and port_file.read_text().strip(), timeout=90))
             client = Marionette(int(port_file.read_text().strip())).connect()
@@ -87,9 +92,13 @@ class EncryptedLauncherProfileTest(unittest.TestCase):
         self.assertFalse(contains(self.box.root, token.encode()), "the visited address is readable on disk")
 
         # An engine started directly on the locked profile cannot write plaintext there.
-        direct = subprocess.Popen([command[0], "--profile", str(self.profile_dir), "--headless", "--no-remote", "about:blank"],
-                                  env={**self.env, "MOZ_HEADLESS": "1"}, stdout=subprocess.DEVNULL,
-                                  stderr=subprocess.DEVNULL, start_new_session=True)  # fmt: skip
+        direct = subprocess.Popen(
+            [command[0], "--profile", str(self.profile_dir), "--headless", "--no-remote", "about:blank"],
+            env={**self.env, "MOZ_HEADLESS": "1"},
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
         try:
             direct.wait(20)
         except subprocess.TimeoutExpired:
@@ -147,9 +156,9 @@ class LockedGroupProfileTest(unittest.TestCase):
         try:
             if cls.box.mounted():
                 cls.box.unmount()
-            for dirpath, _d, _f in os.walk(cls.box.root):
-                os.chmod(dirpath, 0o700)
-            os.chmod(cls.path, 0o700)
+            for top in (cls.box.root, cls.path):
+                for dirpath, _d, _f in os.walk(top):
+                    os.chmod(dirpath, 0o700)
             cls.session.cleanup()
         finally:
             cls.server.__exit__(None, None, None)
@@ -168,21 +177,26 @@ class LockedGroupProfileTest(unittest.TestCase):
             cls.m.set_context("content")
         return result
 
-    def test_selector_shows_locked_and_switching_refuses(self):
+    def test_selector_shows_locked_switching_refuses_and_delete_drops_the_keys(self):
         profiles = self.call("return (await P.list()).profiles;")["ok"]
         cofre = next(p for p in profiles if p["id"] == self.vault_id)
         self.assertEqual((cofre["encrypted"], cofre["locked"]), (True, True))
         self.assertEqual(self.call("return P.switchTo(args[0]);", self.vault_id), {"error": "locked"})
-        self.assertEqual(self.call("return R.openIn(args[0], args[1]);", self.vault_id, self.server.url("/page/x")),
-                         {"error": "locked"})  # fmt: skip
-        self.assertEqual(self.call("return P.remove(args[0]);", self.vault_id), {"error": "encrypted"})
+        self.assertEqual(
+            self.call("return R.openIn(args[0], args[1]);", self.vault_id, self.server.url("/page/x")), {"error": "locked"}
+        )
         time.sleep(2)
         self.assertEqual(self.session.processes_for(self.path), [])
         self.assertEqual(list(self.path.iterdir()), [])
+        # Deleting a locked protected profile drops its keys first, then the profile.
+        self.assertEqual(self.call("return P.remove(args[0]);", self.vault_id), {"ok": None})
+        self.assertFalse(self.box.root.exists())
+        self.assertFalse(any(p["id"] == self.vault_id for p in self.call("return (await P.list()).profiles;")["ok"]))
 
-    def test_routing_to_a_locked_profile_explains_instead_of_starting_it(self):
-        rule = self.call("return R.addRule({site: '127.0.0.1', match: 'host', action: 'open-in', profileId: args[0]});",
-                         self.vault_id)["ok"]  # fmt: skip
+    def test_routing_to_a_locked_profile_asks_to_unlock_instead_of_starting_it(self):
+        rule = self.call(
+            "return R.addRule({site: '127.0.0.1', match: 'host', action: 'open-in', profileId: args[0]});", self.vault_id
+        )["ok"]
         try:
             self.m.navigate("about:blank")
             self.m.chrome("if (window.gDialogBox?.isOpen) { window.gDialogBox.dialog?.close(); }")
@@ -190,8 +204,12 @@ class LockedGroupProfileTest(unittest.TestCase):
             time.sleep(0.3)
             self.m.chrome(TYPE_JS.replace("gURLBar.select();", ""), ["\n"])
             tabs = lambda: self.m.chrome("return gBrowser.browsers.map(b => b.currentURI.spec);")  # noqa: E731
-            self.assertTrue(harness.wait_until(lambda: any("/routing/blocked.html" in u and "why=locked" in u for u in tabs()),
-                                               timeout=20), tabs())  # fmt: skip
+            self.assertTrue(
+                harness.wait_until(
+                    lambda: any("/vault/unlock.html" in u and f"p={self.vault_id}" in u for u in tabs()), timeout=20
+                ),
+                tabs(),
+            )
             time.sleep(1)
             self.assertEqual(self.server.requests_to("/page/to-the-vault"), [])
             self.assertEqual(self.session.processes_for(self.path), [])

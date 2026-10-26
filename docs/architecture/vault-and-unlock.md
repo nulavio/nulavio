@@ -116,7 +116,7 @@ Without a working phone method: password or OS keyring with a recovery code; the
 2. **Protection:** "Unlock with phone" (only once available), "Use a password", "Use a security key" (only when one is connected), "Protect with my computer login" (OS keyring). Each option says in one line what it protects against.
 3. **Recovery and finish:** the recovery code is shown once; the user types back two groups to prove it was saved; optional second method.
 
-Screens (S6): choose method, connect phone, QR, confirm pairing (6 digits), phone connected, test unlock, set up recovery, profile locked, request sent to phone, approve with biometrics (phone), phone unavailable, use another method, authorized devices, remove lost phone, change profile policy. Plain words only ("Unlock with phone", "Recover access", "Lock profile"); no protocol names.
+Screens: choose method, set up recovery, profile locked, use another method, change protection (Settings) — **done in S6** (`browser/shell/vault/`); connect phone, QR, confirm pairing (6 digits), phone connected, request sent to phone, approve with biometrics (phone), phone unavailable, authorized devices, remove lost phone — with the Companion (S11). Plain words only ("Unlock with phone", "Recover access", "Lock profile"); no protocol names.
 
 ## Effective protection matrix
 

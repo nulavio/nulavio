@@ -159,8 +159,11 @@ class Marionette:
     def install_addon(self, path: str, temporary: bool = False) -> str:
         return self.send("Addon:Install", {"path": path, "temporary": temporary})["value"]
 
-    def screenshot_png(self) -> bytes:
-        return base64.b64decode(self.send("WebDriver:TakeScreenshot", {"full": False})["value"])
+    def screenshot_png(self, full: bool = False, element: str | None = None) -> bytes:
+        params = {"full": full}
+        if element:
+            params["id"] = element
+        return base64.b64decode(self.send("WebDriver:TakeScreenshot", params)["value"])
 
     def quit(self) -> None:
         try:

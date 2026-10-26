@@ -117,7 +117,7 @@ class PrivilegedApiTest(unittest.TestCase):
 
     def test_only_the_documented_apis(self):
         apis = self.manifest["experiment_apis"]
-        self.assertEqual(set(apis), {"nulavioSearch", "nulavioProfiles", "nulavioRouting", "nulavioConnect"})
+        self.assertEqual(set(apis), {"nulavioSearch", "nulavioProfiles", "nulavioRouting", "nulavioConnect", "nulavioVault"})
         for name, api in apis.items():
             with self.subTest(api=name):
                 self.assertEqual(api["parent"]["scopes"], ["addon_parent"], "no API code runs in content processes")
@@ -343,7 +343,9 @@ class PackagingTest(unittest.TestCase):
         manifest = json.loads((out / "manifest.json").read_text(encoding="utf-8"))
         for key in ("experiment_apis", "action", "commands", "options_ui"):
             self.assertNotIn(key, manifest)
-        self.assertFalse([f for f in files if f.split("/")[0] in ("experiments", "modules", "settings", "profiles", "routing")])
+        self.assertFalse(
+            [f for f in files if f.split("/")[0] in ("experiments", "modules", "settings", "profiles", "routing", "vault")]
+        )
         self.assertIn("newtab/newtab.html", files)
         self.assertEqual(manifest["permissions"], make_shell.manifest()["permissions"])
 
