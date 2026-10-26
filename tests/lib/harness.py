@@ -340,6 +340,27 @@ class GeckoProfileSession:
         self.profile_dir = self.tmp / "profiles" / "first"
         self.process: subprocess.Popen | None = None
         self.client: Marionette | None = None
+        self.bus: subprocess.Popen | None = None
+
+    def _start_private_bus(self) -> None:
+        """A throwaway D-Bus session bus: the engine's remote service (how a link from
+        another app, or a profile switch, reaches a running instance) uses D-Bus on
+        Linux. Private, so nothing reaches the real desktop session."""
+        daemon = shutil.which("dbus-daemon")
+        if daemon is None:
+            return  # remote delivery then falls back to starting the binary (profile lock decides)
+        address = f"unix:path={self.tmp / 'run' / 'bus'}"
+        self.bus = subprocess.Popen(
+            [daemon, "--session", "--nofork", "--nopidfile", f"--address={address}"],
+            env=self.env,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+        harness_bus = self.tmp / "run" / "bus"
+        if not wait_until(harness_bus.exists, timeout=10):
+            raise RuntimeError("private D-Bus session bus did not start")
+        self.env["DBUS_SESSION_BUS_ADDRESS"] = address
 
     def _run(self, *args: str) -> subprocess.CompletedProcess:
         return subprocess.run(
@@ -354,6 +375,7 @@ class GeckoProfileSession:
             handle.write("// test harness overlay (disposable profile only)\n" + "\n".join(lines) + "\n")
 
     def start(self) -> Marionette:
+        self._start_private_bus()
         self.profile_dir.parent.mkdir(parents=True)
         created = self._run("-CreateProfile", f"{self.name} {self.profile_dir}")
         if not self.profile_dir.is_dir():
@@ -421,6 +443,10 @@ class GeckoProfileSession:
 
     def cleanup(self) -> None:
         self.stop()
+        if self.bus is not None:
+            self.bus.kill()
+            self.bus.wait(timeout=10)
+            self.bus = None
         for entry in Path("/proc").iterdir():  # instances started by the browser itself
             if not entry.name.isdigit():
                 continue

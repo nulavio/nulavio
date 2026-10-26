@@ -81,6 +81,51 @@ function render(state, options) {
   );
 }
 
+/* "Always open this site in this profile": a rule the user creates with one
+   click, for the site of the active tab (activeTab: only after this click). */
+async function renderSite(state) {
+  const routing = browser.nulavioRouting;
+  const current = state.profiles.find(p => p.isCurrent);
+  if (!routing || !state.available || !current?.id || state.profiles.length < 2) {
+    return;
+  }
+  const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
+  if (!tab?.url || !/^https?:/.test(tab.url)) {
+    return;
+  }
+  const site = await routing.ruleFor(tab.url);
+  const name = site.registrable ? site.registrable : site.host;
+  const shown = site.registrable ? (await routing.ruleFor(`https://${site.registrable}/`)).display : site.display;
+  const rule = site.rule;
+  const text = document.getElementById("site-rule");
+  const actions = [];
+  if (rule && rule.action !== "stay") {
+    const target = state.profiles.find(p => p.id === rule.profileId);
+    text.textContent = target ? t("routingSiteOpensIn", [shown, target.name]) : t("routingTargetMissing");
+    const remove = h("button", { class: "button button--quiet", type: "button", text: t("routingRemoveRule") });
+    remove.addEventListener("click", () => act(() => routing.removeRule(rule.id), t("doneRemoved")));
+    actions.push(remove);
+  }
+  if (!rule || rule.profileId !== current.id) {
+    const always = h("button", { class: "button button--secondary", type: "button", text: t("routingAlwaysHere", [shown]) });
+    always.addEventListener("click", () =>
+      act(
+        () =>
+          routing.addRule({
+            site: name,
+            match: site.registrable ? "domain" : "host",
+            action: "open-in",
+            profileId: current.id,
+          }),
+        t("doneAdded")
+      )
+    );
+    actions.unshift(always);
+  }
+  document.getElementById("site-actions").replaceChildren(...actions);
+  document.getElementById("site-section").hidden = actions.length === 0;
+}
+
 document.addEventListener("keydown", event => {
   if (event.altKey || event.ctrlKey || event.metaKey || !/^[1-9]$/.test(event.key)) {
     return;
@@ -103,7 +148,10 @@ document.getElementById("manage").addEventListener("click", async () => {
 localize();
 if (profiles) {
   Promise.all([profiles.list(), profiles.options()])
-    .then(([state, options]) => render(state, options))
+    .then(async ([state, options]) => {
+      render(state, options);
+      await renderSite(state).catch(e => console.error(e));
+    })
     .catch(e => announce(errorText(e), "error"))
     .finally(() => {
       document.documentElement.dataset.ready = "true";

@@ -129,6 +129,41 @@
         </form>
       </div>
 
+      <div class="card stack" id="routing" hidden>
+        <h3 class="card__title" data-i18n="routingHeading"></h3>
+        <p class="hint" data-i18n="routingIntro"></p>
+        <label class="check check--switch">
+          <input type="checkbox" role="switch" id="routing-enabled" data-focus-key="routing-enabled">
+          <span data-i18n="routingEnabledLabel"></span>
+        </label>
+        <ul class="list" id="rules"></ul>
+        <form class="stack stack--tight" id="add-rule" novalidate>
+          <h4 class="subhead" data-i18n="routingAddHeading"></h4>
+          <div class="field-row">
+            <label class="field"><span class="field__label" data-i18n="routingSiteLabel"></span>
+              <input class="input" name="site" autocomplete="off" spellcheck="false" maxlength="2048"
+                     placeholder="example.com" required></label>
+            <label class="field"><span class="field__label" data-i18n="routingMatchLabel"></span>
+              <select class="select" name="match">
+                <option value="domain" data-i18n="routingMatchDomain"></option>
+                <option value="host" data-i18n="routingMatchHost"></option>
+              </select></label>
+          </div>
+          <div class="field-row">
+            <label class="field"><span class="field__label" data-i18n="routingProfileLabel"></span>
+              <select class="select" name="profileId" id="rule-profile"></select></label>
+            <label class="field"><span class="field__label" data-i18n="routingActionLabel"></span>
+              <select class="select" name="action">
+                <option value="open-in" data-i18n="routingActionOpen"></option>
+                <option value="ask" data-i18n="routingActionAsk"></option>
+                <option value="stay" data-i18n="routingActionStay"></option>
+              </select></label>
+          </div>
+          <p class="form-error" role="alert"></p>
+          <div class="actions"><button class="button button--secondary" type="submit" data-i18n="routingAddButton"></button></div>
+        </form>
+      </div>
+
       <details class="card why">
         <summary data-i18n="profilesVsContainers"></summary>
         <p data-i18n="profilesVsContainersBody"></p>

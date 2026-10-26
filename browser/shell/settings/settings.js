@@ -401,12 +401,92 @@ async function setUpProfiles() {
   return renderProfiles();
 }
 
+// -- smart profile routing --------------------------------------------------
+
+const routing = browser.nulavioRouting;
+const ACTION_KEYS = { "open-in": "routingActionOpen", ask: "routingActionAsk", stay: "routingActionStay" };
+
+function ruleRow(rule) {
+  const scope = rule.match === "domain" ? t("routingScopeDomain", [rule.display]) : rule.display;
+  const where =
+    rule.action === "stay"
+      ? t("routingActionStay")
+      : rule.missing
+        ? t("routingTargetMissing")
+        : `${rule.profileName} · ${t(ACTION_KEYS[rule.action])}`;
+  const remove = h("button", {
+    class: "button button--quiet",
+    type: "button",
+    text: t("engineRemove"),
+    "aria-label": `${t("engineRemove")} ${rule.display}`,
+    "data-focus-key": `rule-remove-${rule.id}`,
+  });
+  remove.addEventListener("click", () => run(() => routing.removeRule(rule.id), { done: t("doneRemoved") }));
+  const lead = rule.profileName
+    ? chip({ name: rule.profileName, color: rule.profileColor, avatar: null }, "md")
+    : h("span", { class: "chip chip--md chip--neutral", "aria-hidden": "true", text: "–" });
+  return h(
+    "li",
+    { class: "row", dataset: { ruleId: rule.id } },
+    lead,
+    h(
+      "div",
+      { class: "row__main" },
+      h("p", { class: "row__title", text: scope }),
+      h("p", { class: `hint${rule.missing ? " form-error" : ""}`, text: where })
+    ),
+    h("div", { class: "row__end" }, remove)
+  );
+}
+
+async function renderRouting() {
+  const [state, people] = await Promise.all([run(() => routing.state()), run(() => profiles.list())]);
+  if (!state || !people) {
+    return;
+  }
+  const card = document.getElementById("routing");
+  card.hidden = !state.available;
+  if (!state.available) {
+    return;
+  }
+  document.getElementById("routing-enabled").checked = state.enabled;
+  rerender(document.getElementById("rules"), () =>
+    state.rules.length ? state.rules.map(ruleRow) : h("li", { class: "hint", text: t("routingNoRules") })
+  );
+  const select = document.getElementById("rule-profile");
+  const chosen = select.value;
+  select.replaceChildren(
+    ...people.profiles
+      .filter(p => p.id !== null)
+      .map(p => h("option", { value: String(p.id), selected: String(p.id) === chosen, text: p.name }))
+  );
+}
+
+function setUpRouting() {
+  document.getElementById("routing-enabled").addEventListener("change", event =>
+    run(() => routing.setEnabled(event.target.checked), { done: t("doneSaved") })
+  );
+  const form = document.getElementById("add-rule");
+  form.addEventListener("submit", async event => {
+    event.preventDefault();
+    const { site, match, action, profileId } = Object.fromEntries(new FormData(form));
+    const rule = { site, match, action, ...(action === "stay" ? {} : { profileId: Number(profileId) }) };
+    const added = await run(() => routing.addRule(rule), { form, done: t("doneAdded") });
+    if (added !== undefined) {
+      form.elements.site.value = "";
+    }
+  });
+  routing.onChanged.addListener(debounce(renderRouting));
+  profiles.onChanged.addListener(debounce(renderRouting));
+  return renderRouting();
+}
+
 // -- page -----------------------------------------------------------------
 
 localize();
 const ready = [];
-if (search && profiles) {
-  ready.push(setUpSearch(), setUpProfiles());
+if (search && profiles && routing) {
+  ready.push(setUpSearch(), setUpProfiles(), setUpRouting());
 } else {
   document.getElementById("needs-build").hidden = false;
 }

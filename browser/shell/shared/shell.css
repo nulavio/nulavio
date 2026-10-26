@@ -333,3 +333,12 @@
   .check--switch input[role="switch"] { appearance: auto; width: auto; height: auto; }
   .check--switch input[role="switch"]::before { display: none; }
 }
+
+/* Links on Shell pages use the accent, like links in the chrome */
+a { color: var(--nv-color-accent-default); }
+a:hover { text-decoration-thickness: 2px; }
+
+/* Routing pages: the held address is shown as text only */
+.target { display: flex; align-items: center; gap: var(--nv-space-3); font-weight: var(--nv-font-weight-medium); }
+.target[hidden] { display: none; }
+.url { margin: 0; padding: var(--nv-space-3) var(--nv-space-4); border-radius: var(--nv-radius-sm); background: var(--nv-color-bg-sunken); overflow-wrap: anywhere; }

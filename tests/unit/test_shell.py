@@ -16,7 +16,7 @@ sys.path.insert(0, str(ROOT / "scripts" / "build"))
 import make_shell  # noqa: E402
 
 SHELL = ROOT / "browser" / "shell"
-ALLOWED_PERMISSIONS = {"downloads", "management", "privacy", "search"}
+ALLOWED_PERMISSIONS = {"activeTab", "downloads", "management", "privacy", "search"}
 FLOW_E_TYPES = {".appimage", ".sh", ".run", ".desktop", ".deb", ".rpm", ".flatpakref"}  # docs/brand/ux-flows.md
 
 
@@ -94,7 +94,7 @@ class LocaleTest(unittest.TestCase):
         referenced = set()
         for page in SHELL.rglob("*.html"):
             text = page.read_text(encoding="utf-8")
-            referenced |= set(re.findall(r'data-i18n="([A-Za-z0-9]+)"', text))
+            referenced |= set(re.findall(r'data-i18n="([A-Za-z0-9_]+)"', text))
             referenced |= {pair.split(":")[1] for pair in re.findall(r'data-i18n-attr="([^"]+)"', text)}
         for script in SHELL.rglob("*.js"):
             referenced |= set(re.findall(r'\bt\("([A-Za-z0-9_]+)"', script.read_text(encoding="utf-8")))
@@ -117,7 +117,7 @@ class PrivilegedApiTest(unittest.TestCase):
 
     def test_only_the_two_documented_apis(self):
         apis = self.manifest["experiment_apis"]
-        self.assertEqual(set(apis), {"nulavioSearch", "nulavioProfiles"})
+        self.assertEqual(set(apis), {"nulavioSearch", "nulavioProfiles", "nulavioRouting"})
         for name, api in apis.items():
             with self.subTest(api=name):
                 self.assertEqual(api["parent"]["scopes"], ["addon_parent"], "no API code runs in content processes")
@@ -128,6 +128,7 @@ class PrivilegedApiTest(unittest.TestCase):
                 self.assertEqual([ns["namespace"] for ns in schema], [name])
         self.assertEqual(apis["nulavioSearch"]["parent"]["events"], ["startup"])
         self.assertNotIn("events", apis["nulavioProfiles"]["parent"])
+        self.assertNotIn("events", apis["nulavioRouting"]["parent"])
 
     def test_parent_scripts_only_bridge_to_the_modules(self):
         for script in (SHELL / "experiments").rglob("parent.js"):
@@ -149,7 +150,7 @@ class PrivilegedApiTest(unittest.TestCase):
 
     def test_every_module_error_has_a_message(self):
         en = locale("en")
-        text = "".join(module_text(n) for n in ("NulavioSearch.sys.mjs", "NulavioProfiles.sys.mjs"))
+        text = "".join(module_text(n.name) for n in MODULES.glob("*.sys.mjs"))
         codes = set(re.findall(r'fail\("([a-z-]+)"', text)) | {"disabled", "unregistered", "unexpected"}
         for code in codes:
             self.assertIn(f"err_{code.replace('-', '_')}", en, code)
@@ -243,6 +244,56 @@ class ProfileTemplatesTest(unittest.TestCase):
             self.assertIn(f"avatar_{avatar.replace('-', '_')}", locale("en"))
 
 
+class RoutingTest(unittest.TestCase):
+    """Smart Profile Routing wiring (ADR 0003). Decisions are tested on the engine (test_routing.py)."""
+
+    BRANDING = ROOT / "browser" / "branding" / "nulavio"
+
+    def test_handler_runs_before_the_browser_opens_links(self):
+        conf = (self.BRANDING / "components.conf").read_text(encoding="utf-8")
+        entry = re.search(r'"command-line-handler": "([^"]+)"', conf).group(1)
+        # Handlers run in alphabetical order; the browser opens URLs in "m-browser" and "x-default".
+        self.assertLess(entry, "m-browser")
+        module = re.search(r'"esModule": "resource:///modules/nulavio/([^"]+)"', conf).group(1)
+        self.assertTrue((self.BRANDING / module).is_file())
+        moz_build = (self.BRANDING / "moz.build").read_text(encoding="utf-8")
+        self.assertIn(f'EXTRA_JS_MODULES.nulavio += ["{module}"]', moz_build)
+        self.assertIn('XPCOM_MANIFESTS += ["components.conf"]', moz_build)
+
+    def test_handler_only_hands_over(self):
+        handler = (self.BRANDING / "NulavioCommandLine.sys.mjs").read_text(encoding="utf-8")
+        self.assertIn("resource://builtin-addons/nulavio-shell/modules/NulavioRouting.sys.mjs", handler)
+        self.assertNotRegex(handler, r"execProcess|sendCommandLine|Services\.prefs\.set")
+
+    def test_never_a_shell_and_never_session_data(self):
+        routing = module_text("NulavioRouting.sys.mjs") + module_text("NulavioRouter.sys.mjs")
+        forbidden = r"nsIProcess|Subprocess\.|/bin/sh|\bbash\b|Services\.cookies|nsICookie|SessionStore|sessionstore\.js"
+        self.assertIsNone(re.search(forbidden, routing), "routing must not run commands or touch sessions")
+        self.assertIn('service.execProcess(["--profile", profile.path, ...args])', routing)
+
+    def test_only_plain_url_forms_and_web_schemes_are_routed(self):
+        router = module_text("NulavioRouter.sys.mjs")
+        self.assertIn('const URL_FLAGS = new Set(["url", "new-tab", "new-window"]);', router)
+        self.assertIn('const ROUTABLE_SCHEMES = new Set(["http", "https"]);', router)
+        self.assertIn('return stay("private");', router)
+
+    def test_rules_are_never_inferred(self):
+        # Only the settings page, the toolbar selector and the ask page create or change rules.
+        for path in SHELL.rglob("*.js"):
+            text = path.read_text(encoding="utf-8")
+            if re.search(r"\.(addRule|setRuleAction)\(", text):
+                with self.subTest(path=str(path.relative_to(SHELL))):
+                    self.assertIn(
+                        path.relative_to(SHELL).as_posix(),
+                        {
+                            "settings/settings.js",
+                            "profiles/popup.js",
+                            "routing/page.js",
+                            "experiments/routing/parent.js",
+                        },
+                    )
+
+
 class PackagingTest(unittest.TestCase):
     def setUp(self):
         self.tmp = Path(tempfile.mkdtemp())
@@ -270,7 +321,7 @@ class PackagingTest(unittest.TestCase):
         manifest = json.loads((out / "manifest.json").read_text(encoding="utf-8"))
         for key in ("experiment_apis", "action", "commands", "options_ui"):
             self.assertNotIn(key, manifest)
-        self.assertFalse([f for f in files if f.split("/")[0] in ("experiments", "modules", "settings", "profiles")])
+        self.assertFalse([f for f in files if f.split("/")[0] in ("experiments", "modules", "settings", "profiles", "routing")])
         self.assertIn("newtab/newtab.html", files)
         self.assertEqual(manifest["permissions"], make_shell.manifest()["permissions"])
 

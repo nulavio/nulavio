@@ -1,0 +1,38 @@
+[
+  {
+    "namespace": "nulavioRouting",
+    "description": "Smart Profile Routing rules and explicit choices (docs/adr/0003-nulavio-profiles-and-routing.md). Built-in Shell only.",
+    "functions": [
+      { "name": "state", "type": "function", "async": true, "parameters": [] },
+      { "name": "setEnabled", "type": "function", "async": true, "parameters": [{ "name": "enabled", "type": "boolean" }] },
+      {
+        "name": "addRule", "type": "function", "async": true,
+        "parameters": [{
+          "name": "rule", "type": "object",
+          "properties": {
+            "site": { "type": "string", "maxLength": 2048 },
+            "match": { "type": "string", "enum": ["host", "domain"] },
+            "action": { "type": "string", "enum": ["open-in", "ask", "stay"] },
+            "profileId": { "type": "integer", "optional": true }
+          }
+        }]
+      },
+      { "name": "removeRule", "type": "function", "async": true, "parameters": [{ "name": "id", "type": "string", "maxLength": 64 }] },
+      {
+        "name": "setRuleAction", "type": "function", "async": true,
+        "parameters": [
+          { "name": "id", "type": "string", "maxLength": 64 },
+          { "name": "action", "type": "string", "enum": ["open-in", "ask", "stay"] }
+        ]
+      },
+      { "name": "ruleFor", "type": "function", "async": true, "parameters": [{ "name": "url", "type": "string", "maxLength": 2048 }] },
+      {
+        "name": "openIn", "type": "function", "async": true,
+        "parameters": [{ "name": "profileId", "type": "integer" }, { "name": "url", "type": "string", "maxLength": 8192 }]
+      }
+    ],
+    "events": [
+      { "name": "onChanged", "type": "function", "parameters": [] }
+    ]
+  }
+]
