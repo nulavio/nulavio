@@ -40,7 +40,9 @@ flowchart LR
 
 ## Phone protocol `nv1`
 
-Primitives (libsodium): X25519 `scalarmult`, Ed25519 `sign_detached`, XChaCha20-Poly1305-IETF, BLAKE2b (`generichash`, 32 bytes). `KDF(k, label, parts…) = BLAKE2b(key=k, "nulavio/nv1/" ‖ label ‖ 0x00 ‖ len‖part ‖ …)`. Messages are canonical JSON (sorted keys) with base64url values.
+Primitives (libsodium): X25519 `scalarmult`, Ed25519 `sign_detached`, XChaCha20-Poly1305-IETF, BLAKE2b (`generichash`, 32 bytes). `KDF(k, label, parts…) = BLAKE2b(key=k, "nulavio/nv1/" ‖ label ‖ 0x00 ‖ len‖part ‖ …)` with 4-byte big-endian lengths. Messages are canonical JSON (sorted keys, no spaces) with base64url values.
+
+Implemented in `launcher/nulavio_launcher/vault/phone.py` (desktop) and `tests/lib/phone_reference.py` (phone, the executable spec the Android app must match); the version-1 fixture in `tests/fixtures/vault-v1/` includes artificial phone keys so the app can be checked against the same vault.
 
 ### Identities
 
@@ -51,9 +53,11 @@ Primitives (libsodium): X25519 `scalarmult`, Ed25519 `sign_detached`, XChaCha20-
 
 1. Desktop shows a QR: `{v:1, i: invite_id(16), k: de_pk, s: pair_secret(32), d: Dsig_pk, a: "host:port", e: expiry(+300 s)}`.
 2. Phone → desktop `hello`: `{i, pe_pk, box: AEAD(k1, {Psig_pk, Pkx_pk, name})}`, with `shared = X25519(pe, de_pk)`, `k1 = KDF(pair_secret, "pair/k1", shared, i, de_pk, pe_pk)`. Only a device that read the QR can produce it.
-3. Desktop → phone `accept`: `AEAD(k2, {Dkx_pk, desktop_name, sig_D})`, `T = BLAKE2b(i ‖ de_pk ‖ pe_pk ‖ Dsig_pk ‖ Psig_pk ‖ Pkx_pk ‖ name)`, `k2 = KDF(pair_secret, "pair/k2", shared, T)`, `sig_D = Ed25519(Dsig, "nv1/pair/desktop" ‖ T)`.
-4. Both show `SAS = 6 digits from KDF(shared, "pair/sas", T)`; the user confirms they match.
-5. Phone → desktop `confirm`: `AEAD(k3, {sig_P = Ed25519(Psig, "nv1/pair/phone" ‖ T)})`. The desktop stores `{phone_id, Psig_pk, Pkx_pk, name}` and creates the phone envelope.
+3. Desktop → phone `accept`: `AEAD(k2, {Dkx_pk, desktop_name, sig_D})`, `T = BLAKE2b(i ‖ de_pk ‖ pe_pk ‖ Dsig_pk ‖ Psig_pk ‖ Pkx_pk ‖ name)` (each part length-prefixed), `k2 = KDF(pair_secret, "pair/k2", shared, T)`, `sig_D = Ed25519(Dsig, "nv1/pair/desktop" ‖ T)`. Because `T` includes the desktop key the phone read in the QR, a substituted key already makes `accept` fail to decrypt. All boxes use the invite id as associated data.
+4. Both show `SAS = first 4 bytes of KDF(shared, "pair/sas", T) mod 10^6`, as 6 digits; the user confirms they match.
+5. Phone → desktop `confirm`: `AEAD(k3, {sig_P = Ed25519(Psig, "nv1/pair/phone" ‖ T)})` with `k3 = KDF(pair_secret, "pair/k3", shared, T)`. The desktop accepts it only if the user also confirmed the digits on the desktop; it then creates the phone envelope, which holds `{phone_id, Psig_pk, Pkx_pk, name}`.
+
+An invite takes one `hello`: a second one, or one that fails to decrypt (no QR secret), ends the attempt. Pairing needs a new QR after a failure.
 
 ### Phone envelope
 
@@ -63,10 +67,12 @@ Primitives (libsodium): X25519 `scalarmult`, Ed25519 `sign_detached`, XChaCha20-
 
 1. Desktop creates `R = {v:1, req_id(16), op:"unlock-profile", profile_id, profile_name, desktop_name, envelope_id, eph_pk, s_pk, expiry(+60 s)}` with a fresh session key `s`, signs it (`Ed25519(Dsig, "nv1/unlock/request" ‖ canonical(R))`) and shows it as a QR (and over the local network when the app is reachable).
 2. Phone checks: paired desktop, signature, expiry (±120 s skew), `req_id` never seen, `envelope` is for this phone. It shows profile and desktop name, then asks for biometrics/PIN.
-3. Phone computes `KEK` as above (with `Pkx`), then `rk = KDF(X25519(Pkx, s_pk), "unlock/response", BLAKE2b(R))` and sends `{req_id, phone_id, box: AEAD(rk, KEK, ad=req_id), sig_P = Ed25519(Psig, "nv1/unlock/response" ‖ BLAKE2b(R) ‖ box)}`.
-4. Desktop accepts once, before expiry: verifies `sig_P`, derives `rk` with `s`, opens `KEK`, unwraps the DEK, checks `dek_check`, wipes `s` and `KEK`.
+3. Phone computes `KEK` as above (with `Pkx`), then `rk = KDF(X25519(Pkx, s_pk), "unlock/response", BLAKE2b(R))` and sends `{req_id, phone_id, box: AEAD(rk, KEK, ad=req_id), sig_P = Ed25519(Psig, "nv1/unlock/response" ‖ BLAKE2b(R) ‖ canonical(box))}`. A refusal is `{req_id, phone_id, error, sig_P}` with the signature over `{"error": code}` instead of the box; codes: `declined`, `biometric-unavailable`, `device-locked` (anything else is shown as a generic phone error).
+4. Desktop accepts once, before expiry: verifies `sig_P`, derives `rk` with `s`, opens `KEK`, unwraps the DEK, checks `dek_check`, wipes `s` and `KEK`. A response that is not signed by the phone named in the envelope is ignored without cancelling the request, so a stranger on the network cannot cancel the user's unlock.
 
-Replay: `s` and `req_id` are one-shot. Substitution: `sig_P` covers the request hash, and `rk` needs both the phone's and the session's private keys. Cancellation: dropping `s` makes any later answer useless.
+Replay: `s` and `req_id` are one-shot; the desktop keeps the last 1024 request ids and the phone every id it answered. Substitution: `sig_P` covers the request hash, and `rk` needs both the phone's and the session's private keys. Cancellation: dropping `s` makes any later answer useless. One pending request per profile: a new request cancels the previous one.
+
+Password + phone (`combined` envelope): the desktop stretches the password first, sends the request for that envelope, and opens it with `KDF(constant, "combined-kek", KEK_password, KEK_phone)`. Neither factor alone opens it, and a wrong password is only detected after the phone answered.
 
 ## Unlock Coordinator states
 

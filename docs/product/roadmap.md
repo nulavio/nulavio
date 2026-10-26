@@ -66,10 +66,10 @@ Unlock encrypted profiles with, in order of convenience: the phone (biometrics/P
 - [x] U1 Study: WebAuthn hybrid + PRF vs Nulavio Companion vs approval-only ([compatibility report](../research/phone-unlock-compatibility.md))
 - [x] U2 [ADR 0005](../adr/0005-phone-profile-unlock.md): Nulavio Companion, protocol `nv1`, cancellation criteria
 - [x] U3 [Threat model for unlock](../security/threat-model-unlock.md) and [ADR 0006](../adr/0006-nulavio-vault.md) key management; [architecture](../architecture/vault-and-unlock.md)
-- [ ] U4 Cryptographic unlock prototype with artificial data (password, recovery code, OS keyring)
-- [ ] U5 Desktop–phone pairing proof (protocol simulated first, no device required)
+- [x] U4 Cryptographic unlock prototype with artificial data (password, recovery code, OS keyring, password + phone) — `launcher/nulavio_launcher/vault/`, [ADR 0006](../adr/0006-nulavio-vault.md#implementation-s3-2026-10-26)
+- [x] U5 Desktop–phone pairing proof with a simulated phone (`tests/lib/phone_reference.py`); the real device comes in U6
 - [ ] U6 Android Companion POC (Keystore, BiometricPrompt) — **last slice**; free software for F-Droid first, Play Store later; test device Galaxy S24+ (Android 17)
-- [ ] U7 Recovery, replay and lost-device tests
+- [ ] U7 Recovery, replay and lost-device tests — done with the simulated phone (`test_vault`); repeat on the real device in U6
 - [ ] U8 Integration with Gecko profiles (encrypted profile container; lock = instance ended and container closed)
 - [ ] U9 UX: onboarding in three decisions, locked profile, recovery, devices
 - [ ] U10 iOS and Windows evaluation
@@ -136,4 +136,4 @@ External agents (Codex CLI and Desktop, Claude Code and Desktop, other MCP clien
 
 ## Next task (recommended)
 
-Follow the [execution plan](execution-plan.md): S1 (Connect P0) is done; next **S2** (unlock research and ADRs) and **S3** (Vault crypto prototype), then **S4** (AI Bridge foundation and first MCP POC). The plan lists the decisions each slice needs from the maintainer.
+Follow the [execution plan](execution-plan.md): S1 (Connect P0), S2 (unlock research and ADRs) and S3 (Vault crypto prototype) are done; next **S4** (AI Bridge foundation and first MCP POC), then **S5** (Vault ↔ Gecko profile storage). The plan lists the decisions each slice needs from the maintainer.

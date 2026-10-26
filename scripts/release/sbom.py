@@ -2,8 +2,8 @@
 """Generate a CycloneDX 1.6 SBOM for the Nulavio preview distribution.
 
 Covers what Nulavio itself pins or ships: the launcher (this repo), the
-pinned extensions (with SHA-256), and the engine as an external dependency
-(Track A uses the distribution package; it is not redistributed). Brand
+pinned extensions (with SHA-256), and the engine and libsodium as external
+dependencies (distribution packages; not redistributed). Brand
 fonts are referenced, not bundled, so they are not listed.
 
     python3 -I scripts/release/sbom.py > sbom/nulavio-preview.cdx.json
@@ -46,7 +46,17 @@ def main() -> int:
             "licenses": [{"license": {"id": "MPL-2.0"}}],
             "scope": "required",
             "externalReferences": [{"type": "website", "url": "https://www.mozilla.org/firefox/"}],
-        }
+        },
+        {
+            "type": "library",
+            "bom-ref": "system:libsodium",
+            "name": "libsodium",
+            "version": ">=1.0.18 (distribution package, loaded through ctypes, not redistributed)",
+            "licenses": [{"license": {"id": "ISC"}}],
+            "scope": "optional",
+            "externalReferences": [{"type": "website", "url": "https://libsodium.org/"}],
+            "properties": [{"name": "nulavio:role", "value": "Nulavio Vault cryptography (decision D1)"}],
+        },
     ]
     for entry in lock["extensions"]:
         license_id = entry["license"] if entry["license"] in {"GPL-3.0-only", "MPL-2.0"} else None

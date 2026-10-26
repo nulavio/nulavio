@@ -29,8 +29,8 @@ Status legend: **Done** (implemented and verified by a test or recorded evidence
 | FR-21 | Search engine choice: privacy-focused providers, SearXNG instance, custom URL or OpenSearch, aliases, separate private default, add/remove in the UI | **Done (Track B)** ([ADR 0002](../adr/0002-nulavio-search.md)). Track A: upstream Settings | `test_search` 04, 06–10, 12 |
 | FR-22 | Smart Profile Routing (explicit rules, host > domain > policy > stay) | **Done (Track B) for links from other apps** (M4a): decided before any request, conservative failure, ask first, rules editor, "Always open this site in this profile". **Typed addresses** routed on Enter (M4b); in-page links move only by an explicit "Open link in profile"; automatic in-page routing: Planned (M5, after a security review) | `test_routing` |
 | FR-23 | Integration Manager (KDE, portals, Secret Service, default browser) with real discovery | **Done for P0** ([ADR 0004](../adr/0004-nulavio-connect.md)): `nulavio integrations`, Settings → Integrations, default browser on request with restore. P1/P2: Planned | `test_connect` (unit and integration) |
-| FR-24 | Encrypted profiles at rest with real lock/unlock (Nulavio Vault) | **Planned** (roadmap phase 2c, U3–U8) | — |
-| FR-25 | Unlock with the phone (biometrics/PIN), OS authentication, profile password or FIDO2 key; recovery code and second device | **Planned** (phase 2c; protocol decided in U2) | — |
+| FR-24 | Encrypted profiles at rest with real lock/unlock (Nulavio Vault) | **In progress:** key management done as a prototype on artificial data (S3: DEK, envelopes, metadata MAC, atomic writes, lock wipes the key); profile storage and real lock: Planned (S5) | `test_vault` |
+| FR-25 | Unlock with the phone (biometrics/PIN), OS authentication, profile password or FIDO2 key; recovery code and second device | **Prototype (S3, artificial data):** password, recovery code, OS keyring and password + phone work; phone protocol `nv1` runs end to end against a simulated phone (second phone, revocation). Not shipped: UI (S6), phone app (S11), security key (S10) | `test_vault` |
 | FR-26 | AI Bridge: MCP for external agents with per-agent autonomy (Restricted, Assisted, Autonomous, Full control), revocable and audited | **Planned** (roadmap phase 2d) | — |
 | FR-27 | Built-in AI assistant, provider-agnostic, under the same policies as external agents | **Planned** (phase 2d, A12) | — |
 
@@ -53,6 +53,7 @@ Status legend: **Done** (implemented and verified by a test or recorded evidence
 | SEC-13 | Signed artefacts and secure updates | **Planned** (Track B) | — |
 | SEC-14 | What you type in the address bar is not sent anywhere without consent; consent is per search provider | **Done (Track B)**; Track A: remote suggestions and trending off (one global switch upstream) | `test_search` 02, 03, 05 |
 | SEC-15 | Profiles never share cookies or site storage; a running profile is not deleted; switching never starts a duplicate instance | **Done (Track B)** | `test_profiles` 05 |
+| SEC-16 | An unlock opens a profile only when a method releases its key: no method, a phone approval without the key, or a copy of the files does not reveal it; requests expire, are one-shot and signed; nothing secret in logs or files | **Done in the prototype (S3, simulated phone)**; applies to real profiles from S5 | `test_vault` |
 
 ## Non-functional
 
@@ -60,6 +61,6 @@ Status legend: **Done** (implemented and verified by a test or recorded evidence
 |---|---|---|
 | NFR-01 | Accessibility: keyboard, screen readers, scaling, contrast WCAG AA | Tokens AA-verified (78 pairs); engine a11y upstream; Nulavio pages semantic HTML |
 | NFR-02 | Performance comparable to the engine (no extra processes at runtime) | Launcher exits via `exec`; zero runtime overhead |
-| NFR-03 | Zero third-party runtime dependencies in the launcher | Done (Python stdlib) |
+| NFR-03 | Zero third-party runtime dependencies in the launcher | Done (Python stdlib; no pip packages). The Vault loads the system libsodium through `ctypes` (decision D1), listed in the SBOM |
 | NFR-04 | Reproducible brand assets | Done (generators + determinism tests) |
 | NFR-05 | Works offline after setup | Done (start page local; uBO ships lists) |

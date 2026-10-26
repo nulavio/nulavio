@@ -1,0 +1,56 @@
+{
+ "created": "2026-10-26T15:48:04Z",
+ "dek_check": "Yqg3ugCZ1qYuEasqYWARIi_wPrOWPlg7M838eNuN7n4",
+ "envelopes": [
+  {
+   "created": "2026-10-26T15:48:04Z",
+   "ct": "gonCqYtVG2dAo1zuJbDjc4NomwjEeRSO2QxBCHBwDUzFSPAkDn-gYt50eQuR9Sjw",
+   "data": {
+    "kdf": "argon2id13",
+    "mem": 8388608,
+    "ops": 1,
+    "salt": "wX6vj27oePfCrhfzojnbCw"
+   },
+   "id": "3522c757fd704c59b07d246ea41d1441",
+   "label": "password",
+   "method": "password",
+   "nonce": "HiXlNNiZ5h5SgWhQMxUrZ6JQN1tRPb1Q"
+  },
+  {
+   "created": "2026-10-26T15:48:04Z",
+   "ct": "LVKEZXrK3KnnS9-FQI4EQ8fpbJitxsPtQMbX9jXfF11EJohPJT-nOd9wMvwFSCF8",
+   "data": {
+    "kdf": "argon2id13",
+    "mem": 8388608,
+    "ops": 1,
+    "salt": "FG-3SNzEbuF6vrVoiUZdlw"
+   },
+   "id": "ec9b1496bd514c1c8699ad5e6f01befc",
+   "label": "",
+   "method": "recovery-code",
+   "nonce": "x2LSHpc5B8nqDwSPBCksW0HpwP0jPOdO"
+  },
+  {
+   "created": "2026-10-26T15:48:04Z",
+   "ct": "zXwGgIpHLWUghavqdYqg7iPkQ-W1quq_9Ygrs8MJeBREWZeXoLqcpLPJ-LapGNGE",
+   "data": {
+    "eph_pk": "2Z2Sn8rWWMqjR2zjs_C_Bj-39f7Hi3kjHbvrzgS9m3w",
+    "name": "Fixture phone",
+    "phone_id": "OGQSsBR7lsq_9GTs5o81wA",
+    "pkx_pk": "9korYoC9MZLdhsMHIsIF8Kws2QhFcf_c9dxsp2AWxyQ",
+    "psig_pk": "1ZJHdwBvS5hmKlEysb9fjOLzlVMdH94e9VUYQ6__gCM"
+   },
+   "id": "ee4ddfb698674a79ab358d763a164db2",
+   "label": "Fixture phone",
+   "method": "phone",
+   "nonce": "eltgqu9yZrrEJxFGvUBEHlPVweR2Y4bh"
+  }
+ ],
+ "format": "nulavio-vault",
+ "generation": 1,
+ "mac": "S6SGZIxpwY_Cz0tRrJSskq_LvOxK5666aCoSaJbu6MY",
+ "policy": {},
+ "profile_id": "fixture-v1",
+ "suite": "nv1",
+ "version": 1
+}

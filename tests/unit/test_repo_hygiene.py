@@ -64,7 +64,7 @@ class HygieneTest(unittest.TestCase):
         import sys
 
         stdlib = set(sys.stdlib_module_names)
-        for source in (ROOT / "launcher" / "nulavio_launcher").glob("*.py"):
+        for source in (ROOT / "launcher" / "nulavio_launcher").rglob("*.py"):
             for match in re.finditer(r"^(?:from|import)\s+([a-zA-Z_][\w]*)", source.read_text(), re.M):
                 module = match.group(1)
                 self.assertTrue(
