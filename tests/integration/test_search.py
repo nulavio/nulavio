@@ -39,7 +39,24 @@ Services.obs.removeObserver(net.observer, "http-on-modify-request");
 delete window.nulavioTestNet;
 return net.seen;
 """
-ENTER = "\ue007"  # WebDriver key code
+ENTER = "\n"
+TYPE_JS = """
+const [text, select] = arguments;
+if (select) {
+  gURLBar.select();
+}
+const tip = Cc["@mozilla.org/text-input-processor;1"].createInstance(Ci.nsITextInputProcessor);
+if (!tip.beginInputTransactionForTests(window)) {
+  throw new Error("could not start an input transaction");
+}
+for (const ch of text) {
+  const event = ch === "\\n"
+    ? new KeyboardEvent("", {key: "Enter", code: "Enter", keyCode: 13})
+    : new KeyboardEvent("", {key: ch});
+  tip.keydown(event);
+  tip.keyup(event);
+}
+"""
 SEARCH_HOSTS = (
     "google.com",
     "bing.com",
@@ -106,21 +123,24 @@ class SearchPrivacyTest(unittest.TestCase):
     def search_error(self, body: str, *args) -> str | None:
         return chrome_async(self.m, f"const S = {MODULE}; {body}", args).get("error")
 
-    def type_keys(self, keys: str) -> None:
-        """Focus the address bar, select what it shows and type over it with real key events."""
-        self.m.chrome("gURLBar.focus(); gURLBar.select();")
-        self.m.set_context("chrome")
-        try:
-            self.m.send_keys(self.m.find_element("#urlbar-input"), keys)
-        finally:
-            self.m.set_context("content")
+    def type_keys(self, keys: str, select: bool = True) -> None:
+        """Type into the address bar with trusted key events (as Firefox's own tests do).
 
-    def type_more(self, keys: str) -> None:
-        self.m.set_context("chrome")
-        try:
-            self.m.send_keys(self.m.find_element("#urlbar-input"), keys)
-        finally:
-            self.m.set_context("content")
+        nsITextInputProcessor dispatches keydown/keypress/keyup to the focused
+        field, so the address bar handles them exactly like a user's typing.
+        WebDriver's element typing is not used: it refuses the address bar in
+        some headless setups ("not reachable by keyboard").
+        """
+        if select:
+            self.focus_urlbar()
+        self.m.chrome(TYPE_JS, [keys, select])
+
+    def focus_urlbar(self) -> None:
+        # Mozilla's own builds open a first-run modal (Terms of Use) that holds
+        # the window's focus; a user closes it before typing, and so do we.
+        self.m.chrome("if (window.gDialogBox?.isOpen) { window.gDialogBox.dialog?.close(); }")
+        focused = harness.wait_until(lambda: self.m.chrome("gURLBar.focus(); return gURLBar.focused;"), timeout=10)
+        self.assertTrue(focused, "the address bar did not take focus")
 
     def type_in_urlbar(self, text: str, settle: float = 2.0) -> list[str]:
         """Type `text` as a search; return every HTTP request the browser started meanwhile."""
@@ -238,7 +258,7 @@ class SearchPrivacyTest(unittest.TestCase):
             self.type_keys("@fixgo nvaliassearch")
             # The alias switches the address bar to that engine first; then Enter searches.
             harness.wait_until(lambda: self.m.chrome("return gURLBar.searchMode?.engineName ?? null;") == "Fixture Go", timeout=5)
-            self.type_more(ENTER)
+            self.type_keys(ENTER, select=False)
             harness.wait_until(lambda: self.server.requests_to("/search"), timeout=15)
             seen = self.m.chrome(NET_STOP)
             self.assertTrue(any("q=nvaliassearch" in h for h in self.server.requests_to("/search")))

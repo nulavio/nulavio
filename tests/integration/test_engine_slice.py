@@ -123,7 +123,10 @@ class EngineSliceTest(unittest.TestCase):
         self.m.chrome("Services.prefs.setIntPref('layout.css.prefers-color-scheme.content-override', 0);")
         try:
             self.m.navigate(homepage)
-            dark_symbol = self.m.execute("return document.querySelector('.hero__symbol').currentSrc;")
+            # <picture> re-selects its source asynchronously after the colour scheme changes.
+            current = lambda: self.m.execute("return document.querySelector('.hero__symbol').currentSrc;")  # noqa: E731
+            harness.wait_until(lambda: current().endswith("/nulavio-symbol.svg"), timeout=5)
+            dark_symbol = current()
             self.assertTrue(dark_symbol.endswith("/nulavio-symbol.svg"), dark_symbol)
             canvas = self.m.execute("return getComputedStyle(document.documentElement).backgroundColor;")
             self.assertEqual(canvas, "rgb(11, 22, 35)")  # color.dark.bg.canvas #0B1623
