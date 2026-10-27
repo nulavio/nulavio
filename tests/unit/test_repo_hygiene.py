@@ -18,12 +18,14 @@ SECRET_PATTERNS = {
     "Slack token": re.compile(r"\bxox[baprs]-[A-Za-z0-9-]{10,}\b"),
     "generic bearer": re.compile(r"(?i)authorization:\s*bearer\s+[A-Za-z0-9._-]{20,}"),
 }
-EXECUTABLES = {"bin/nulavio"}
+EXECUTABLES = {"bin/nulavio", "android/gradlew"}
 
 
 def repo_files():
     for root, dirs, files in os.walk(ROOT):
         dirs[:] = [d for d in dirs if d not in SKIP_DIRS]
+        if Path(root).is_relative_to(ROOT / "android"):
+            dirs[:] = [d for d in dirs if d not in {"build", ".gradle", ".kotlin"}]  # Gradle outputs (ignored by git)
         for name in files:
             yield Path(root) / name
 

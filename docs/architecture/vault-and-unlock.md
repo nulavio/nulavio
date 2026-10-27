@@ -83,6 +83,12 @@ Browser API (`nulavio vault api`): `phone-pair-start {path, current}` (re-authen
 
 Tests: `tests/unit/test_phone_link.py` runs pairing and unlock over real TCP with the reference phone listening (`tests/lib/phone_link_ref.py`) against real encrypted profiles: success, digits that do not match on either side, wrong current secret, declined, a stranger answering first (ignored, then the phone unlocks), a phone that never answers; with `NULAVIO_LAN_TESTS=1`, the same through the machine's Avahi and `nulavio vault api`.
 
+### Companion protocol library (S11)
+
+`android/nv1` is the phone's side of `nv1` in plain Java, so it runs on Android and on the desktop JVM: X25519, Ed25519 and XChaCha20-Poly1305 from Tink (`tink-android`), keyed BLAKE2b from Bouncy Castle, no cryptography of Nulavio's own. Canonical JSON is written byte for byte as the desktop's `json.dumps(sort_keys=True, separators=(",", ":"), ensure_ascii=True)`, since signatures and hashes cover it. The phone object holds public state only (its public keys, paired desktops, answered request ids); its private keys come in as `Secrets` for the two steps that need them (confirming a pairing, answering a request) and are wiped after.
+
+Checks: fixed vectors from the desktop's libsodium (`tests/fixtures/nv1-vectors.json`, written by `tests/lib/nv1_vectors.py`) for every primitive, the KDF, transcripts, the 6 digits, ids, mDNS names and canonical JSON; `tests/unit/test_companion_protocol.py` runs the Java phone (`PhoneCli`, test sources) against the Python desktop's own session code over a socket: pairing, an unlock that mounts a real encrypted profile, and the phone's refusals (replay, tampered request, unknown desktop, expired). Gradle and every dependency are pinned by checksum (`gradle/wrapper/gradle-wrapper.properties`, `gradle/verification-metadata.xml`); CI builds and tests it on every push.
+
 ## Unlock Coordinator states
 
 ```mermaid
