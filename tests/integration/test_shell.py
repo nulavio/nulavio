@@ -114,7 +114,7 @@ class ShellTest(unittest.TestCase):
         status = dict(
             (key, (level, text))
             for key, level, text in self.m.execute(
-                "return [...document.querySelectorAll('[data-status]')]"
+                "return [...document.querySelectorAll('[data-status]')].filter(e => !e.closest('[hidden]'))"
                 ".map(e => [e.dataset.status, e.dataset.level, e.textContent]);"
             )
         )
