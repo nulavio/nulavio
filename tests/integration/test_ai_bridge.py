@@ -350,6 +350,29 @@ class AiBridgeTest(unittest.TestCase):
             self.assertIn("only the user can unlock it", result["content"][0]["text"])
             self.assertEqual(list(locked.iterdir()), [])  # nothing was written into the locked profile
 
+    def test_19_engine_ends_with_a_killed_bridge(self):
+        _, env = self.agent("autonomous")
+        c = self.client(env)
+        self.assertFalse(c.call("tab_new", url=self.fx.url("/page/orphan"))["isError"])
+        marker = f"{self.home}/"  # the workspace profile lives in this test's Nulavio home
+        engines = [
+            pid
+            for pid in engine_processes("--remote-debugging-port=0")
+            if marker.encode() in Path(f"/proc/{pid}/cmdline").read_bytes()
+        ]
+        self.assertTrue(engines, "no workspace engine")
+        c.process.kill()  # the agent killed its MCP server without letting it close anything
+        c.process.wait(timeout=10)
+
+        def alive():
+            return [
+                pid
+                for pid in engines
+                if Path(f"/proc/{pid}").exists() and "zombie" not in Path(f"/proc/{pid}/status").read_text()
+            ]
+
+        self.assertTrue(harness.wait_until(lambda: not alive(), timeout=60), f"engine left running: {alive()}")
+
 
 if __name__ == "__main__":
     unittest.main()

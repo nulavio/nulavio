@@ -388,6 +388,15 @@ class AuditTest(Home):
 
 
 class WorkspaceTest(Home):
+    def test_engine_ends_with_the_bridge(self):
+        from nulavio_launcher.ai import workspace
+
+        with mock.patch.object(workspace.shutil, "which", return_value="/usr/bin/setpriv") as which:
+            self.assertEqual(workspace.die_with_parent(), ["/usr/bin/setpriv", "--pdeathsig", "TERM", "--"])
+        self.assertEqual(which.call_args.kwargs["path"], "/usr/bin:/bin")  # never a setpriv from the user's PATH
+        with mock.patch.object(workspace.shutil, "which", return_value=None):
+            self.assertEqual(workspace.die_with_parent(), [])
+
     def test_command_and_prefs(self):
         engine = mock.Mock(path=Path("/opt/engine/nulavio"))
         ws = Workspace("ag-1", engine=engine, headless=True)

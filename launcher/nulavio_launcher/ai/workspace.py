@@ -122,8 +122,8 @@ class Workspace:
         env = engine_mod.launch_env()  # sandboxes stay on; no MOZ_* debugging knobs
         env["MOZ_APP_REMOTINGNAME"] = APP_ID
         self.process = subprocess.Popen(
-            self.command(), env=env, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-            start_new_session=True, preexec_fn=lambda: os.umask(0o077),
+            [*die_with_parent(), *self.command()], env=env, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL, start_new_session=True, preexec_fn=lambda: os.umask(0o077),
         )  # fmt: skip
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
@@ -159,6 +159,19 @@ class Workspace:
             self.process = None
         if self.disposable:
             shutil.rmtree(self.dir, ignore_errors=True)
+
+
+def die_with_parent() -> list[str]:
+    """A prefix that ends the engine if the bridge dies without closing it (killed, crashed).
+
+    An engine left running would keep its automation endpoint open, and in a
+    user's profile also the temporary automation lines. `setpriv --pdeathsig`
+    (util-linux) sets the kernel's parent-death signal and then runs the engine
+    in its place. The bridge starts engines from its long-lived tool thread, so
+    the signal comes when the bridge process ends, not before.
+    """
+    setpriv = shutil.which("setpriv", path="/usr/bin:/bin")
+    return [setpriv, "--pdeathsig", "TERM", "--"] if setpriv else []
 
 
 TEMPORARY = "// nulavio-ai-temporary"
