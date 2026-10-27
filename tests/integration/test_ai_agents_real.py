@@ -53,7 +53,9 @@ class RealAgentsTest(unittest.TestCase):
     def check(self, answer: str, agent: dict) -> None:
         self.assertIn("BASALT", answer)
         self.assertEqual(self.fx.requests_to("/agent-result"), ["/agent-result?q=hello"])
-        entries = audit.read(agent=agent["id"])
+        everything = audit.read(agent=agent["id"])
+        self.assertTrue([e for e in everything if e.get("event") == "connected"])
+        entries = [e for e in everything if "tool" in e]
         tools = [e["tool"] for e in entries]
         self.assertIn("tab_new", tools)
         evaluate = [e for e in entries if e["tool"] == "evaluate"]

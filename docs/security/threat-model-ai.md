@@ -54,6 +54,6 @@ Full control removes the remaining prompts for the selected profiles; the warnin
 
 ## Not verified yet
 
-- Claude Desktop and Codex Desktop (not installed); Codex CLI end-to-end (account quota exhausted during S4; see the [compatibility matrix](../ai/compatibility.md)).
+- Claude Desktop and Codex Desktop (not installed). Claude Code and Codex CLI are tested end to end ([compatibility matrix](../ai/compatibility.md))..
 - Windows (named pipes, DPAPI): planned with the Windows matrix.
 - The kdialog approval prompt on a real Plasma session (unit-tested with a stand-in executable).
