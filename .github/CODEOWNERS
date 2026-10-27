@@ -1,0 +1,18 @@
+# Security-sensitive paths and who must review changes to them.
+#
+# On the current plan (private repository, GitHub Free) this file is
+# documentation only: GitHub does not request or require code-owner reviews.
+# It takes effect if the repository becomes public or moves to GitHub Pro, and
+# becomes a merge requirement only with a ruleset that asks for code-owner
+# review (docs/process/pull-requests.md, "Upgrading the plan").
+
+/.github/                          @caiolombello
+/browser/patches/                  @caiolombello
+/launcher/nulavio_launcher/vault/  @caiolombello
+/launcher/nulavio_launcher/ai/     @caiolombello
+/android/nv1/                      @caiolombello
+/scripts/ci/                       @caiolombello
+/scripts/git-hooks/                @caiolombello
+/scripts/release/                  @caiolombello
+/scripts/upstream/                 @caiolombello
+/docs/security/                    @caiolombello

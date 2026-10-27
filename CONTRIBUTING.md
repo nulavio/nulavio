@@ -88,8 +88,9 @@ It is hosted on Cloudflare Pages (project `nulavio`). Deployments are uploaded b
 
 - Conventional commits (`feat:`, `fix:`, `docs:`, `security:`, `test:`, `chore:`), small and verifiable.
 - Sign off your commits (`git commit -s`, Developer Certificate of Origin).
-- A PR description states: what changed, how it was verified (commands + results), and what remains unverified.
-- Security-relevant PRs need a second reviewer.
+- Branch names, how to open a pull request, and what coding agents may do: [docs/process/pull-requests.md](docs/process/pull-requests.md). Agents push only their own branch and open a pull request; they never push to `main`, merge or approve.
+- A PR description states: what changed, how it was verified (commands + results), and what remains unverified ([template](.github/pull_request_template.md)).
+- Security-relevant PRs need a second reviewer. The AI review comment is advisory: a person decides, and an empty AI review proves nothing.
 
 ## Reporting vulnerabilities
 

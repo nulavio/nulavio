@@ -1,0 +1,65 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["summary", "findings", "injection_attempts", "not_checked"],
+  "properties": {
+    "summary": {
+      "type": "string",
+      "maxLength": 1500,
+      "description": "What was checked and the overall result, in plain words. Never an approval."
+    },
+    "findings": {
+      "type": "array",
+      "maxItems": 25,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["severity", "invariant", "file", "title", "evidence", "fix"],
+        "properties": {
+          "severity": { "type": "string", "enum": ["critical", "high", "medium", "low"] },
+          "invariant": {
+            "type": "string",
+            "enum": [
+              "I1-protections",
+              "I2-no-telemetry",
+              "I3-secrets",
+              "I4-subprocess",
+              "I5-supply-chain",
+              "I6-patch-policy",
+              "I7-ai-bridge",
+              "I8-vault-crypto",
+              "I9-files-launcher",
+              "I10-shell-ui",
+              "I11-honest-docs",
+              "I12-tests-ci",
+              "other"
+            ]
+          },
+          "file": { "type": "string", "minLength": 1, "maxLength": 300, "description": "Repository-relative path." },
+          "line": { "type": "integer", "minimum": 1, "maximum": 10000000 },
+          "title": { "type": "string", "minLength": 1, "maxLength": 200 },
+          "evidence": { "type": "string", "minLength": 1, "maxLength": 1500, "description": "Quoted lines, 3 at most." },
+          "fix": { "type": "string", "minLength": 1, "maxLength": 800 }
+        }
+      }
+    },
+    "injection_attempts": {
+      "type": "array",
+      "maxItems": 10,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["file", "quote"],
+        "properties": {
+          "file": { "type": "string", "minLength": 1, "maxLength": 300 },
+          "quote": { "type": "string", "minLength": 1, "maxLength": 300 }
+        }
+      }
+    },
+    "not_checked": {
+      "type": "array",
+      "maxItems": 15,
+      "items": { "type": "string", "minLength": 1, "maxLength": 300 }
+    }
+  }
+}
