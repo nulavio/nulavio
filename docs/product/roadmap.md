@@ -103,7 +103,7 @@ External agents (Codex CLI and Desktop, Claude Code and Desktop, other MCP clien
 
 - [x] uBO pinned and verified; ETP Strict; HTTPS-Only; reversibility tested. Correction (2026-10-26): in the Nulavio build the Strict category came only as a `distribution.ini` default, which the engine recomputes to Standard; since S14 the Shell sets it once per profile as a user value, and `test_privacy` checks every baseline pref of the build and a real blocked tracker
 - [x] Per-site privacy panel with honest state: the engine's own site panel (address bar: connection, what tracking protection blocked from the engine's log, per-site switch, clear site data) plus Settings → Site exceptions (every site where a protection is off, removable; uBlock Origin's own trusted-sites page) (`test_privacy`)
-- [ ] Real-site regression suite (top sites list, screenshot diff, breakage triage)
+- [x] Real-site regression suite (top sites list, screenshot diff, breakage triage): 50 sites, 0 breakages caused by Nulavio's protections, 9 differences triaged ([report](../research/site-regression-2026-10.md))
 - [x] DoH onboarding choice (new tab asks once; Settings → DNS: computer's resolver, encrypted with fallback, encrypted only; Cloudflare, Quad9, Mullvad or own https:// resolver) (`test_dns`, local DoH resolver); fingerprinting regression analysis, measured ([fingerprinting](../research/fingerprinting.md), `test_privacy`)
 
 **DoD:** blocking test + 50-site regression run with recorded breakage and per-site fixes.
@@ -116,7 +116,7 @@ External agents (Codex CLI and Desktop, Claude Code and Desktop, other MCP clien
 - [ ] KeePassXC on Ubuntu KDE and Flatpak KeePassXC: community testers (the maintainer does not use KeePassXC; container E2E runs in CI)
 - [x] Bitwarden desktop-app native messaging host verified in Bitwarden's source
 - [ ] Bitwarden login/autofill: community testers (the maintainer does not use Bitwarden)
-- [ ] Provider chooser UI (flow B), suspicious-login interstitial (flow D)
+- [x] Provider chooser UI (flow B, with flow H), suspicious-login interstitial (flow D) for logins kept by the browser's manager (`test_passwords`)
 
 **DoD:** checklist passes for the P0 providers on both distributions, or a blocker is recorded with its technical cause.
 
@@ -136,4 +136,4 @@ External agents (Codex CLI and Desktop, Claude Code and Desktop, other MCP clien
 
 ## Next task (recommended)
 
-Follow the [execution plan](execution-plan.md): S1 (Connect P0), S2 (unlock research and ADRs), S3 (Vault crypto prototype), S4 (AI Bridge foundation), S5 (encrypted profile storage), S6 (unlock UX in the browser), S7 (AI autonomy and its UI), S8 (AI with profiles, routing and the connect wizard), S12 (temporary profile), S13 (Guard at run time), S14 (per-site privacy, Strict fix) and S15 (DNS choice, fingerprinting measured) are done; next: S16 (real-site regression suite) through S24 (alpha gate), with S10 (security key, needs a key) and S11 (Android Companion, last) waiting on the maintainer. The plan lists the decisions each slice needs from the maintainer.
+Follow the [execution plan](execution-plan.md): S1 (Connect P0), S2 (unlock research and ADRs), S3 (Vault crypto prototype), S4 (AI Bridge foundation), S5 (encrypted profile storage), S6 (unlock UX in the browser), S7 (AI autonomy and its UI), S8 (AI with profiles, routing and the connect wizard), S12 (temporary profile), S13 (Guard at run time), S14 (per-site privacy, Strict fix), S15 (DNS choice, fingerprinting measured), S16 (real-site regression) and S17 (password flows B, D, H) are done; next: S18 (packaging) through S24 (alpha gate), with S10 (security key, needs a key) and S11 (Android Companion, last) waiting on the maintainer. The plan lists the decisions each slice needs from the maintainer.

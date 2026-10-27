@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title data-i18n="lookalikeTitle"></title>
+  <link rel="icon" href="../shared/nulavio-symbol.svg">
+  <link rel="stylesheet" href="../shared/tokens.css">
+  <link rel="stylesheet" href="../shared/base.css">
+  <link rel="stylesheet" href="../shared/shell.css">
+  <script type="module" src="lookalike.js"></script>
+</head>
+<body data-state="loading">
+  <main class="page page--narrow">
+    <article class="card warning stack" aria-labelledby="headline">
+      <h1 class="warning__headline" id="headline" data-i18n="lookalikeHeadline"></h1>
+      <div class="callout callout--warning" role="alert">
+        <svg class="callout__icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 2 21h20z M12 10v5 M12 18v.5" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <p id="explain"></p>
+      </div>
+      <p class="url mono" id="address"></p>
+      <div class="actions">
+        <button class="button button--primary" type="button" id="go-real"></button>
+        <button class="button button--secondary" type="button" id="continue"></button>
+      </div>
+      <details class="why">
+        <summary data-i18n="lookalikeWhy"></summary>
+        <ul>
+          <li data-i18n="lookalikeWhy1"></li>
+          <li data-i18n="lookalikeWhy2"></li>
+          <li data-i18n="lookalikeWhy3"></li>
+        </ul>
+      </details>
+    </article>
+  </main>
+</body>
+</html>

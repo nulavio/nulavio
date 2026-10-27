@@ -110,7 +110,7 @@ def module_text(name: str) -> str:
 
 
 API_NAMES = ("nulavioSearch", "nulavioProfiles", "nulavioRouting", "nulavioConnect", "nulavioVault", "nulavioAI")
-API_NAMES += ("nulavioGuard", "nulavioPrivacy")
+API_NAMES += ("nulavioGuard", "nulavioPrivacy", "nulavioPasswords")
 
 
 class PrivilegedApiTest(unittest.TestCase):
@@ -415,6 +415,39 @@ class GuardModuleTest(unittest.TestCase):
         self.assertIn("browser.runtime.onStartup.addListener", background)  # the event page starts with the browser
         self.assertIn('addEventListener("click"', review)
         self.assertEqual(review.count("guard.resolve("), 1)
+
+
+class PasswordsTest(unittest.TestCase):
+    """Flows B and D: pinned providers, and a content script that never reads what is typed."""
+
+    def test_provider_data_matches_the_pins(self):
+        data = make_shell.providers()["providers"]
+        lock = {
+            e["key"]: e
+            for e in json.loads((ROOT / "browser" / "distribution" / "extensions.lock.json").read_text())["extensions"]
+        }
+        config = json.loads((ROOT / "browser" / "config" / "providers.json").read_text())["providers"]
+        self.assertEqual(set(data), set(config))
+        for key, provider in data.items():
+            with self.subTest(provider=key):
+                ext_key = config[key]["extension"]
+                if ext_key is None:
+                    self.assertIsNone(provider["extension"])
+                    continue
+                self.assertEqual(provider["extension"]["sha256"], lock[ext_key]["sha256"])
+                self.assertEqual(provider["extension"]["version"], lock[ext_key]["version"])
+                self.assertTrue(provider["extension"]["url"].startswith("https://addons.mozilla.org/"))
+                self.assertEqual(provider["prefs"]["signon.rememberSignons"], False)
+
+    def test_lookalike_check_reads_nothing_from_pages(self):
+        child = module_text("NulavioLookalikeChild.sys.mjs")
+        for forbidden in (".value", "innerText", "textContent", "location", "document.", "form", "fetch(", "keydown"):
+            self.assertNotIn(forbidden, child.rsplit("*/", 1)[1])  # code, after the comments
+        self.assertEqual(child.count("sendAsyncMessage("), 1)
+        parent = module_text("NulavioLookalikeParent.sys.mjs")
+        self.assertIn("this.manager.documentURI", parent)  # the address comes from the engine
+        self.assertNotIn("message.data", parent)
+        self.assertNotIn("content_scripts", make_shell.manifest())
 
 
 if __name__ == "__main__":

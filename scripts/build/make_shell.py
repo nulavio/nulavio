@@ -38,6 +38,25 @@ HEADER = (
 )
 
 
+def providers() -> dict:
+    """Password providers for the Shell (flow B): browser/config/providers.json plus the pinned official
+    extension of each (browser/distribution/extensions.lock.json), so the Shell installs exactly the
+    version and file the launcher pins (AMO address, SHA-256)."""
+    config = json.loads((ROOT / "browser" / "config" / "providers.json").read_text(encoding="utf-8"))
+    pins = json.loads((ROOT / "browser" / "distribution" / "extensions.lock.json").read_text(encoding="utf-8"))
+    lock = {e["key"]: e for e in pins["extensions"]}
+    out = {}
+    for key, provider in config["providers"].items():
+        entry = lock.get(provider["extension"]) if provider.get("extension") else None
+        out[key] = {
+            "label": provider["label"],
+            "prefs": provider["prefs"],
+            "native": provider.get("native_messaging"),
+            "extension": None if entry is None else {k: entry[k] for k in ("id", "name", "version", "url", "sha256", "size")},
+        }
+    return {"schema": 1, "generated": "scripts/build/make_shell.py", "providers": out}
+
+
 def manifest() -> dict:
     return json.loads((SOURCE / "manifest.json").read_text(encoding="utf-8"))
 
@@ -45,7 +64,7 @@ def manifest() -> dict:
 # Parts that need the privileges of a built-in add-on (experiment APIs over
 # the engine's Search Service and profile service) and the UI that uses them.
 PRIVILEGED_KEYS = ("experiment_apis", "action", "commands", "options_ui")
-PRIVILEGED_DIRS = ("experiments", "modules", "settings", "profiles", "routing", "vault", "ai", "guard")
+PRIVILEGED_DIRS = ("experiments", "modules", "settings", "profiles", "routing", "vault", "ai", "guard", "passwords")
 
 
 def assemble(out: Path, privileged: bool = True) -> list[str]:
@@ -61,6 +80,7 @@ def assemble(out: Path, privileged: bool = True) -> list[str]:
     for relative, source in SHARED_FROM_REPO.items():
         (out / relative).parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(source, out / relative)
+    (out / "shared" / "providers.json").write_text(json.dumps(providers(), indent=2) + "\n", encoding="utf-8")
     if not privileged:
         data = json.loads((out / "manifest.json").read_text(encoding="utf-8"))
         for key in PRIVILEGED_KEYS:

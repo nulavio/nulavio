@@ -607,6 +607,92 @@ function setUpIntegrations() {
   return renderIntegrations();
 }
 
+// -- passwords (flows B and H) ------------------------------------------------
+
+const passwords = browser.nulavioPasswords;
+
+function providerName(item) {
+  return item.key === "builtin" ? t("passwordsBuiltin") : item.extension.name;
+}
+
+function providerStatus(item) {
+  if (item.key === "builtin") {
+    return t("passwordsBuiltinNote");
+  }
+  const ext = item.extension;
+  const parts = [
+    ext.enabled
+      ? t("passwordsInstalled", [ext.version])
+      : ext.installed
+        ? t("passwordsInstalledOff")
+        : t("passwordsNotInstalled", [ext.pinned]),
+  ];
+  if (item.native && !item.native.found) {
+    parts.push(t(item.native.required ? "passwordsNativeMissing" : "passwordsNativeOptional"));
+  }
+  return parts.join(" ");
+}
+
+function providerRow(item, state) {
+  const inUse = state.current === item.key;
+  const end = [];
+  if (inUse && item.key !== "builtin") {
+    const off = h("button", { class: "button button--quiet", type: "button", text: t("passwordsDisableIntegration"), "data-focus-key": `pw-off-${item.key}` });
+    off.addEventListener("click", async () => {
+      const ok = await confirmDialog({ title: t("passwordsDisableTitle"), body: t("passwordsDisableBody", [providerName(item)]), confirm: t("passwordsDisableIntegration") });
+      if (ok) {
+        run(() => passwords.choose("builtin"), { done: t("passwordsChosen", [t("passwordsBuiltin")]) }).then(renderPasswords);
+      }
+    });
+    end.push(off);
+  } else if (!inUse) {
+    const use = h("button", { class: "button button--secondary", type: "button", text: t("passwordsUse"), "data-focus-key": `pw-use-${item.key}` });
+    use.addEventListener("click", async () => {
+      if (item.extension && !item.extension.installed) {
+        const ok = await confirmDialog({
+          title: t("passwordsConfirmTitle", [providerName(item)]),
+          body: t("passwordsConfirmBody", [providerName(item), item.extension.pinned]),
+          confirm: t("passwordsConfirmButton"),
+        });
+        if (!ok) {
+          return;
+        }
+        announce(t("passwordsInstalling", [providerName(item)]));
+      }
+      run(() => passwords.choose(item.key), { done: t("passwordsChosen", [providerName(item)]) }).then(renderPasswords);
+    });
+    end.push(use);
+  }
+  return h(
+    "li",
+    { class: "row row--plain", dataset: { provider: item.key, inUse: String(inUse) } },
+    h(
+      "div",
+      { class: "row__main" },
+      h("p", { class: "row__title" }, h("span", { text: providerName(item) }), inUse ? h("span", { class: "badge", text: t("passwordsInUse") }) : null),
+      h("p", { class: "hint", text: providerStatus(item) })
+    ),
+    h("div", { class: "row__end" }, ...end)
+  );
+}
+
+async function renderPasswords() {
+  const state = await run(() => passwords.state());
+  if (!state) {
+    return;
+  }
+  const list = document.getElementById("provider-list");
+  rerender(list, () => state.providers.map(item => providerRow(item, state)));
+  list.setAttribute("aria-busy", "false");
+  list.dataset.current = state.current;
+  document.getElementById("engine-logins").textContent = t("passwordsEngineLogins", [String(state.engineLogins)]);
+}
+
+function setUpPasswords() {
+  document.getElementById("passwords").hidden = false;
+  return renderPasswords();
+}
+
 // -- site exceptions --------------------------------------------------------
 
 const privacy = browser.nulavioPrivacy;
@@ -735,6 +821,9 @@ if (search && profiles && routing && connect) {
   }
   if (privacy) {
     ready.push(setUpExceptions(), setUpDns());
+  }
+  if (passwords) {
+    ready.push(setUpPasswords());
   }
 } else {
   document.getElementById("needs-build").hidden = false;

@@ -18,7 +18,7 @@ Status legend: **Done** (implemented and verified by a test or recorded evidence
 | FR-10 | Proton Pass official extension works | **Preview**: install, signature, background, popup Done; **login and autofill on a real site done on the maintainer's desktop** (2026-10-25) | `test_password_extensions` |
 | FR-11 | KeePassXC-Browser works with native messaging | **Done (container)**: association + autofill end to end with KeePassXC 2.8.0, in CI. No manual desktop certification planned by the maintainer | `keepassxc_native_messaging_spike.py` |
 | FR-12 | Bitwarden official extension works | **Preview**: install, signature, background, popup Done; desktop-app host name verified in Bitwarden's source. No manual certification planned by the maintainer | `test_password_extensions` |
-| FR-13 | Choose the credential provider; only one autofills | **Preview** (CLI `provider set`) | provider unit tests |
+| FR-13 | Choose the credential provider; only one autofills | **Done (Track B)**: Settings → Passwords (real state, pinned official extension installed after one confirmation, browser prompts off; disable integration keeps the extension). Track A: CLI `provider set` | provider unit tests, `test_passwords` |
 | FR-14 | User can install their own extensions | **Done** (engine/AMO) | E4 normal installs |
 | FR-15 | Settings essentials explained | **Preview** (`nulavio prefs explain`; engine settings UI) | — |
 | FR-16 | Private window | **Done** (engine; `nulavio run --private`) | engine unit test |

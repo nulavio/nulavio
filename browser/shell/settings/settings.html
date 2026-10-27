@@ -19,6 +19,7 @@
       <nav class="settings-nav" data-i18n-attr="aria-label:settingsNav">
         <a href="#search" data-i18n="searchHeading">Search</a>
         <a href="#profiles" data-i18n="profilesHeading">Profiles</a>
+        <a href="#passwords" data-i18n="passwordsHeading">Passwords</a>
         <a href="#exceptions" data-i18n="exceptionsHeading">Site exceptions</a>
         <a href="#dns" data-i18n="dnsHeading">DNS</a>
         <a href="#integrations" data-i18n="connectHeading">Integrations</a>
@@ -181,6 +182,15 @@
         <summary data-i18n="profilesVsContainers"></summary>
         <p data-i18n="profilesVsContainersBody"></p>
       </details>
+    </section>
+
+    <section class="section" id="passwords" aria-labelledby="passwords-heading" hidden>
+      <h2 class="section__title" id="passwords-heading" data-i18n="passwordsHeading">Passwords</h2>
+      <div class="card stack">
+        <p class="hint" data-i18n="passwordsIntro"></p>
+        <ul class="list" id="provider-list" aria-busy="true"></ul>
+        <p class="hint" id="engine-logins"></p>
+      </div>
     </section>
 
     <section class="section" id="exceptions" aria-labelledby="exceptions-heading" hidden>

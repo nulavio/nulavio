@@ -158,6 +158,23 @@
           "startup"
         ]
       }
+    },
+    "nulavioPasswords": {
+      "schema": "experiments/passwords/schema.json",
+      "parent": {
+        "scopes": [
+          "addon_parent"
+        ],
+        "script": "experiments/passwords/parent.js",
+        "paths": [
+          [
+            "nulavioPasswords"
+          ]
+        ],
+        "events": [
+          "startup"
+        ]
+      }
     }
   },
   "permissions": [

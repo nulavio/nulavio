@@ -1,0 +1,18 @@
+[
+  {
+    "namespace": "nulavioPasswords",
+    "description": "Password providers (flow B) and the look-alike login check (flow D), docs/brand/ux-flows.md. Built-in Shell only; never reads a vault.",
+    "functions": [
+      { "name": "state", "type": "function", "async": true, "parameters": [] },
+      {
+        "name": "choose", "type": "function", "async": true,
+        "parameters": [{ "name": "key", "type": "string", "enum": ["builtin", "proton-pass", "keepassxc", "bitwarden"] }]
+      },
+      { "name": "checkLogin", "type": "function", "async": true, "parameters": [{ "name": "url", "type": "string", "maxLength": 8192 }] },
+      {
+        "name": "dismiss", "type": "function", "async": true,
+        "parameters": [{ "name": "site", "type": "string", "maxLength": 300 }, { "name": "similar", "type": "string", "maxLength": 300 }]
+      }
+    ]
+  }
+]

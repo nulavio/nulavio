@@ -50,6 +50,7 @@ Address-bar security states: neutral site-info (HTTPS valid) · **"Not secure"**
 
 - Error states: install failed (network) → retry, plus "use the built-in manager for now". Extension disabled by the user → banner in Settings › Passwords.
 - **Track A today:** `nulavio provider set proton-pass --install-extension`. Verified: install, signature, popup. Pending: login certification.
+- **Track B (implemented, S17):** Settings › Passwords lists the browser's manager, Proton Pass, KeePassXC and Bitwarden with real state (installed, on, desktop app found) and how many logins the browser keeps (a count). Choosing an extension asks once, installs the version Nulavio pins from addons.mozilla.org (SHA-256 checked, Mozilla signature required), turns it on and turns the browser's own prompts off. Verified on the real engine (`test_passwords`; the download from AMO runs with `NULAVIO_NETWORK_TESTS=1`).
 
 ## C. Site blocked by mistake
 
@@ -69,7 +70,7 @@ Address-bar security states: neutral site-info (HTTPS valid) · **"Not secure"**
 4. If the user continues, autofill stays off on that page; the user can still type.
 
 - False-positive control: dismissal per site pair, remembered locally. The heuristic is never applied to the site's own saved origin.
-- **Status:** Planned (Guard runtime). Until then: Safe Browsing plus the provider's own origin matching.
+- **Track B (implemented, S17):** an engine window actor (no content script in pages) notices the first focus on a password field in a top-level document; the parent takes the address from the engine and compares the site with the sites of the logins the browser's own manager keeps: confusable characters (Latin, Cyrillic, Greek look-alikes, "rn"/"m"), one edit (two for names of eight letters or more), the brand plus a login word, or the brand as a subdomain of another site. On a match the tab shows the warning page first: **Go to <real site>** (focused) · Continue · Why. Continuing is remembered for that pair of sites in this profile. Not done: autofill of third-party managers cannot be held back on that page, and their vaults are not read, so only logins kept by the browser's manager are compared ([R41](../security/residual-risks.md)).
 
 ## E. Potentially dangerous download
 
@@ -104,6 +105,7 @@ Address-bar security states: neutral site-info (HTTPS valid) · **"Not secure"**
 3. Confirm, then "Undo" stays available in the same place.
 
 - **Track A today:** `nulavio provider set builtin` (requires the profile to be closed; tested to be reversible).
+- **Track B (implemented, S17):** Settings › Passwords › **Disable integration** (with confirmation) returns the prompts to the browser; the extension stays installed and its vault untouched.
 
 ## I. KWallet / Secret Service missing or failing
 
