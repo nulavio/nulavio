@@ -5,9 +5,27 @@ What changed for security in each Nulavio build, in plain words. One entry per b
 Format of an entry:
 
 - **Build**: Nulavio package version, the Firefox release inside it, date published.
-- **Upstream**: Mozilla's release date, its advisory, and the time from Mozilla's release to the Nulavio build (target: 72 hours, [update policy](../architecture/update-policy.md)).
+- **Upstream**: Mozilla's release (date and time, UTC), its advisory, and the urgency with its reasons (urgent: 24-hour target; standard: 72 hours; the deadline is 72 hours either way, [update policy](../architecture/update-policy.md)).
+- **Timing**: when the release was detected (staged or published), when the build was ready to sign, and when it was published, each in hours from Mozilla's release, against the target and the deadline.
 - **Nulavio fixes**: weaknesses found in Nulavio's own code or configuration, with the commit and what a user should do, if anything.
 - **New protections and their limits**: with the residual-risk entry that states what they do not do.
+
+Template for an engine update (`scripts/release/bump_engine.py` prints the first lines):
+
+```markdown
+## Nulavio <package version> (Firefox <version>), published <date>
+
+**Upstream**: Firefox <version>, released by Mozilla <date> <time> UTC ([mfsa<year>-<n>](https://www.mozilla.org/security/advisories/)).
+Urgency: <urgent | standard> (<reasons>). Source SHA-256 <digest> (Mozilla's signed SHA256SUMS).
+
+**Timing**
+
+| Mozilla's release | Detected | Ready to sign | Published | Target | Deadline |
+|---|---|---|---|---|---|
+| <time UTC> | <staged or published>, <+/- h> | <+ h> | <+ h> | <24 or 72> h: <met or missed> | 72 h: <met or missed> |
+
+**Nulavio fixes**: <none, or the table above>.
+```
 
 ## Unreleased (development, Firefox 158.0.1)
 

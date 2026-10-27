@@ -67,6 +67,62 @@ step check-deb bash -c '"$0" "$1"/nulavio_*.deb' "$repo/scripts/release/check_de
 step signed-repository "$repo/scripts/release/test_signed_repo.sh" "$out/packages"
 step sbom sbom
 
+# <out>/manifest.json: what this rehearsal verified, built and checked. Signing
+# takes only the files listed there, with these digests (autobuild.py checks it).
+manifest() {
+    python3 -I - "$out" "$version" "$repo" <<'EOF'
+import datetime
+import hashlib
+import json
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+out, version, repo = Path(sys.argv[1]), sys.argv[2], sys.argv[3]
+log = (out / "logs" / "verify-source.log").read_text(encoding="utf-8")
+subkey = re.search(r"\(subkey ([0-9A-F]{16,40})\)", log)
+digest = re.search(r"^([0-9a-f]{64})  source/firefox-" + re.escape(version) + r"\.source\.tar\.xz$", log, re.M)
+if not (subkey and digest):
+    sys.exit("manifest: verify-source.log has no verified source digest")
+
+
+def sha256(path):
+    hashed = hashlib.sha256()
+    with open(path, "rb") as handle:
+        for chunk in iter(lambda: handle.read(1 << 20), b""):
+            hashed.update(chunk)
+    return hashed.hexdigest()
+
+
+def git(*args):
+    return subprocess.run(["git", "-C", repo, *args], check=True, capture_output=True).stdout
+
+
+packages = sorted([*out.glob("packages/x86_64/nulavio-*.rpm"), *out.glob("packages/nulavio_*.deb")])
+sboms = sorted(out.glob("packages/**/*.cdx.json"))
+if not packages:
+    sys.exit("manifest: no packages to list")
+engine = json.loads((Path(repo) / "browser" / "build" / "engine.json").read_text(encoding="utf-8"))
+manifest = {
+    "firefox": version,
+    "source_sha256": digest.group(1),
+    "signing_subkey": subkey.group(1),
+    "engine_json": {"firefox": engine.get("firefox"), "source_sha256": engine.get("source_sha256")},
+    "nulavio_base_commit": git("rev-parse", "HEAD").decode().strip(),
+    "worktree_diff_sha256": hashlib.sha256(git("diff", "HEAD", "--binary")).hexdigest(),
+    "untracked": sorted(git("ls-files", "--others", "--exclude-standard").decode().splitlines()),
+    "packages": [{"file": str(path.relative_to(out)), "sha256": sha256(path)} for path in packages],
+    "sboms": [{"file": str(path.relative_to(out)), "sha256": sha256(path)} for path in sboms],
+    "rehearsal": "ok",
+    "finished_at": datetime.datetime.now(datetime.UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
+}
+(out / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+print(f"manifest: {len(packages)} packages, {len(sboms)} SBOMs")
+EOF
+}
+step manifest manifest
+
 total=$(( $(date +%s) - start ))
 printf '\nTotal: %d h %02d min, against the 72-hour target from Mozilla'"'"'s release (stretch: 24 h).\nNot rehearsed: signing with the release key and publishing (they need the key and the host).\n' \
     $((total / 3600)) $(( (total % 3600) / 60 )) >> "$report"

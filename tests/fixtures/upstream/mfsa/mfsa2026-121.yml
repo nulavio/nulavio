@@ -1,0 +1,29 @@
+## mfsa2026-121.yml
+announced: October 27, 2026
+impact: high
+fixed_in:
+- Thunderbird 159
+title: Security Vulnerabilities fixed in Thunderbird 159
+description: |
+  *Many of these flaws cannot be exploited through email in the Thunderbird product because scripting is disabled when reading mail, however they may pose risks in browser or browser-like contexts.*
+
+  **Note**: We have changed how we publish advisories. We no longer roll all internally identified memory safety vulnerabilities into a single CVE and are now issuing an advisory for every individual bug.
+advisories:
+  CVE-2026-118174:
+    title: Displaying a message could load an attacker-chosen URL through an OpenPGP key attachment
+    impact: high
+    reporter: Magnus Melin
+    description: |
+      When a message containing an OpenPGP key attachment was displayed, Thunderbird automatically loaded the attachment's content to offer importing the key. A sender could mark the attachment as an external attachment pointing to an arbitrary URL, which Thunderbird then loaded without any user interaction, bypassing remote content blocking. On Windows, a URL pointing to an attacker-controlled network share could leak the user's NTLM credentials.
+
+      The NTLM credential leak only affects Thunderbird on Windows. On other operating systems, the issue allowed a remote request that bypassed remote content blocking.
+    bugs:
+      - url: 2080910
+  CVE-2026-118175:
+    title: Content of other messages could be included when replying to a crafted message
+    impact: high
+    reporter: YuYoung Sung
+    description: |
+      When replying to, forwarding, or editing a crafted email message as new, Thunderbird could embed parts of a different message stored in the same folder into the message being composed, without showing a blocked content warning. If the user sent the message, the content of the other message was disclosed to the recipients.
+    bugs:
+      - url: 2081720

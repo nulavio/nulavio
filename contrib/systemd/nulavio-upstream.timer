@@ -1,0 +1,14 @@
+# Runs nulavio-upstream.service every 30 minutes, and after a resume or boot
+# when a run was missed. Opt-in: see nulavio-upstream.service.
+
+[Unit]
+Description=Nulavio: check Firefox releases every 30 minutes
+
+[Timer]
+OnCalendar=*-*-* *:07,37:00
+RandomizedDelaySec=120
+AccuracySec=1min
+Persistent=true
+
+[Install]
+WantedBy=timers.target
