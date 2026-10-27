@@ -40,6 +40,8 @@ android {
     lint {
         abortOnError = true
         warningsAsErrors = false
+        lintConfig = file("lint.xml") // Android lint's security checks are errors (CI runs :app:lintDebug)
+        checkDependencies = true // also check nv1, the protocol library this APK ships
     }
 }
 
@@ -48,4 +50,14 @@ dependencies {
     // QR scanning with the camera (Apache-2.0), no Google services.
     implementation("com.journeyapps:zxing-android-embedded:4.3.0") { isTransitive = false }
     implementation("com.google.zxing:core:3.5.4")
+}
+
+// The APK's classpath is locked: gradle.lockfile lists every module it resolves, transitive ones
+// included. A change shows up in review and fails the build until the lock is rewritten
+// (docs/security/dependency-updates.md). STRICT: a missing lock fails too.
+dependencyLocking {
+    lockMode.set(LockMode.STRICT)
+}
+configurations.matching { it.name == "releaseRuntimeClasspath" }.configureEach {
+    resolutionStrategy.activateDependencyLocking()
 }

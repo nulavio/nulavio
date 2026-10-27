@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Android lint's Security checks that default to a warning are errors here, so CI (:app:lintDebug,
+     abortOnError) fails on them, for this app and for nv1 (checkDependencies). Security checks that
+     already default to error or fatal keep that severity: this file must only raise severities.
+     Not listed: RiskyLibrary (it depends on Google Play's SDK Index, fetched from the network) and the
+     checks lint turns off by default (EasterEgg, PermissionNamingConvention, VulnerableCordovaVersion).
+     Source: the Security category in the issue list of lint 9.4 (the SDK command-line tool's show
+     option). After an Android Gradle plugin update, compare again (docs/security/dependency-updates.md);
+     checked by tests/unit/test_dependency_pins.py. -->
+<lint>
+    <issue id="AcceptsUserCertificates" severity="error" />
+    <issue id="AddJavascriptInterface" severity="error" />
+    <issue id="AllowAllHostnameVerifier" severity="error" />
+    <issue id="AuthLeak" severity="error" />
+    <issue id="BadHostnameVerifier" severity="error" />
+    <issue id="CustomPermissionTypo" severity="error" />
+    <issue id="CustomX509TrustManager" severity="error" />
+    <issue id="DataExtractionRules" severity="error" />
+    <issue id="DeprecatedProvider" severity="error" />
+    <issue id="ExportedContentProvider" severity="error" />
+    <issue id="ExportedPreferenceActivity" severity="error" />
+    <issue id="ExportedReceiver" severity="error" />
+    <issue id="ExportedService" severity="error" />
+    <issue id="GetInstance" severity="error" />
+    <issue id="GrantAllUris" severity="error" />
+    <issue id="HardwareIds" severity="error" />
+    <issue id="InsecureBaseConfiguration" severity="error" />
+    <issue id="IntentFilterExportedReceiver" severity="error" />
+    <issue id="IntentWithNullActionLaunch" severity="error" />
+    <issue id="ProviderReadPermissionOnly" severity="error" />
+    <issue id="ProxyPassword" severity="error" />
+    <issue id="SSLCertificateSocketFactoryCreateSocket" severity="error" />
+    <issue id="SSLCertificateSocketFactoryGetInsecure" severity="error" />
+    <issue id="SecretInSource" severity="error" />
+    <issue id="SecureRandom" severity="error" />
+    <issue id="SetJavaScriptEnabled" severity="error" />
+    <issue id="SetWorldReadable" severity="error" />
+    <issue id="SetWorldWritable" severity="error" />
+    <issue id="SignatureOrSystemPermissions" severity="error" />
+    <issue id="SystemPermissionTypo" severity="error" />
+    <issue id="TileProviderPermissions" severity="error" />
+    <issue id="TrulyRandom" severity="error" />
+    <issue id="TrustAllX509TrustManager" severity="error" />
+    <issue id="UnprotectedSMSBroadcastReceiver" severity="error" />
+    <issue id="UnsafeDynamicallyLoadedCode" severity="error" />
+    <issue id="UnsafeIntentLaunch" severity="error" />
+    <issue id="UnsafeNativeCodeLocation" severity="error" />
+    <issue id="UnsafeProtectedBroadcastReceiver" severity="error" />
+    <issue id="UnsanitizedFilenameFromContentProvider" severity="error" />
+    <issue id="UseCheckPermission" severity="error" />
+    <issue id="UsingHttp" severity="error" />
+    <issue id="WebViewClientOnReceivedSslError" severity="error" />
+    <issue id="WorldReadableFiles" severity="error" />
+    <issue id="WorldWriteableFiles" severity="error" />
+</lint>

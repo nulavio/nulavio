@@ -19,7 +19,7 @@ key=${3:?key id or fingerprint}
 gnupg=$(realpath "${GNUPGHOME:-$HOME/.gnupg}")
 baseurl=${NULAVIO_REPO_BASEURL:-https://packages.nulavio.net/rpm/fedora/\$releasever/\$basearch}
 keyurl=${NULAVIO_REPO_KEYURL:-https://nulavio.net/keys/nulavio-packages.asc}
-image=registry.fedoraproject.org/fedora:44
+image=$("$(dirname "$0")/base_image.sh" fedora-build)
 
 podman run --rm --security-opt label=disable \
     -v "$packages:/packages:ro" -v "$gnupg:/gnupg-ro:ro" -v "$out:/repo" "$image" bash -euc '

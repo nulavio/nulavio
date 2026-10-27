@@ -1,0 +1,89 @@
+# Dependabot version updates for every pin except the Firefox engine (docs/security/dependency-updates.md).
+# Dependabot's own runs are free; each pull request it opens runs the ci workflow (about 14
+# billed minutes), so updates are grouped and batched. Security fixes do not wait for these
+# schedules: scripts/release/watch_dependencies.py checks every pin daily against OSV.dev, the
+# AMO blocklist and the registries. No registries or credentials are configured here, nothing
+# auto-merges, and a pull request is merged only with green CI after a human review.
+version: 2
+updates:
+  # Workflow actions, pinned by commit SHA with the tag in a same-line comment
+  # (tests/unit/test_repo_hygiene.py). GitHub raises no Dependabot alerts for
+  # SHA-pinned actions, so these updates and the daily watcher are the only signals.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "wednesday" # not Tuesday, when Firefox releases land
+      time: "07:00"
+      timezone: "America/Sao_Paulo"
+    cooldown:
+      default-days: 7 # time for a hijacked tag or release to be noticed upstream
+    groups:
+      actions:
+        patterns: ["*"]
+    commit-message:
+      prefix: "ci"
+      include: "scope"
+    open-pull-requests-limit: 2
+
+  # ruff (development only), pinned with --require-hashes. Dependabot rewrites the hashes
+  # from PyPI (one per published file of the new version).
+  - package-ecosystem: "pip"
+    directory: "/requirements"
+    schedule:
+      interval: "monthly"
+      time: "07:00"
+      timezone: "America/Sao_Paulo"
+    cooldown:
+      default-days: 7
+    groups:
+      python-dev-tools:
+        patterns: ["*"]
+    commit-message:
+      prefix: "build"
+      include: "scope"
+    open-pull-requests-limit: 2
+
+  # Companion: Gradle wrapper, Android Gradle plugin, Tink, Bouncy Castle, ZXing, JUnit.
+  # Dependabot cannot write android/gradle/verification-metadata.xml (dependabot-core #1996),
+  # and its Gradle run that rewrites the gradle.lockfile files fails on that verification, so
+  # these pull requests fail CI until a maintainer regenerates both locally and reviews them
+  # (scripts/upstream/review_gradle_verification.py). Monthly: one such session a month.
+  - package-ecosystem: "gradle"
+    directory: "/android"
+    schedule:
+      interval: "monthly"
+      time: "07:00"
+      timezone: "America/Sao_Paulo"
+    cooldown:
+      default-days: 7
+      semver-major-days: 30
+    groups:
+      android:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+    commit-message:
+      prefix: "build"
+      include: "scope"
+    open-pull-requests-limit: 3
+
+  # Base images, pinned as tag@sha256 digest in ci/containers (the release scripts read them
+  # there: scripts/release/base_image.sh). Distribution upgrades (Fedora 45, Ubuntu 27.04)
+  # are product decisions, and Fedora's newest numeric tag is Rawhide, so major versions are
+  # ignored: these pull requests refresh the digest within the pinned release.
+  - package-ecosystem: "docker"
+    directory: "/ci/containers"
+    schedule:
+      interval: "monthly"
+      time: "07:00"
+      timezone: "America/Sao_Paulo"
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+    groups:
+      base-images:
+        patterns: ["*"]
+    commit-message:
+      prefix: "build"
+      include: "scope"
+    open-pull-requests-limit: 2

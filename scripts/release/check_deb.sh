@@ -8,10 +8,9 @@
 set -euo pipefail
 
 deb=$(realpath "${1:?usage: check_deb.sh <nulavio.deb>}")
-image=${NULAVIO_CHECK_DEB_IMAGE:-docker.io/library/ubuntu:26.10}
-
 here=$(cd "$(dirname "$0")" && pwd)
 lib=$(cd "$here/../../tests/lib" && pwd)
+image=${NULAVIO_CHECK_DEB_IMAGE:-$("$here/base_image.sh" ubuntu-itest)}
 
 podman run --rm --security-opt label=disable -v "$here/sysdir_probe.py:/checks/sysdir_probe.py:ro" -v "$lib:/checks/lib:ro" -v "$deb:/pkg/nulavio.deb:ro" "$image" bash -euc '
     export DEBIAN_FRONTEND=noninteractive

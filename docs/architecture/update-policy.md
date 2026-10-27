@@ -5,6 +5,7 @@
 - Security updates are never disabled to simplify development or testing.
 - No silent downgrades. The engine's profile-downgrade protection stays on (the launcher removes `MOZ_ALLOW_DOWNGRADE`).
 - Every artefact Nulavio pins has a verifiable identity: a GPG key fingerprint, or a SHA-256 plus a Mozilla signature.
+- Pins other than the engine (actions, ruff, Gradle and the Companion's libraries, base images, extensions) are kept current by Dependabot and checked daily for known vulnerabilities: [dependency updates](../security/dependency-updates.md).
 
 ## Track A (preview)
 
