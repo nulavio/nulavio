@@ -27,3 +27,22 @@
 6. Security policy contact live (✅ `security@nulavio.net`, `security.txt`, 2026-10-25); vulnerability intake tested (pending: a test report end to end).
 7. Trademark/domain search completed. Domain `nulavio.net` registered (2026-10-25); INPI/USPTO/EUIPO searches still open ([status](../brand/strategy.md#trademark-and-availability-status)).
 8. No critical Guard findings on a fresh install; integration suite green on CI.
+
+## Alpha gate walk-through — 2026-10-27 (S24)
+
+Each item was checked again on 2026-10-27 against the Nulavio build of Firefox 158.0.1 and distribution Firefox 158.0.1 on Fedora 44 KDE, at commits `39aa3ba` (S22) and `6c2875f` (S23).
+
+| # | Item | Verified | Still open (owner) |
+|---|---|---|---|
+| 1 | 12 MVP criteria, built from verified source | ✅ The release rehearsal checked Mozilla's signed checksums and built from that source ([report](../research/evidence/release-rehearsal-2026-10-27.md)); Track B suites: unit 320, integration 159 (8 opt-in skips, run separately below; three failures in one run were a test sampling a starting process and a timing race under extra load, fixed and re-run green); brand and identity of the build (`test_engine_slice` 13, 15) | — |
+| 2 | Google Safe Browsing | ✅ The build carries its own key (`test_engine_slice` 12) and, against Google's live service, downloads the lists and replaces Google's official test phishing page with the warning (`test_engine_slice` 14, run again 2026-10-27) | Quota review with Google; download protection (R15): request partner access or accept it in writing (**maintainer**) |
+| 3 | P0 password providers | ✅ Proton Pass: real account on the maintainer's desktop (Track A, 2026-10-25); on the Nulavio build, the official extension from addons.mozilla.org loads, and the provider chooser installs the pinned version (`test_password_extensions`, `test_passwords` 05, 2026-10-27); KeePassXC: end to end in CI on every push | Proton Pass sign-in and autofill once on the Nulavio build on the maintainer's desktop (**maintainer**); KeePassXC on a real desktop and Bitwarden (**community testers**) |
+| 4 | Update SLA rehearsed end to end | ✅ 14 minutes for an incremental build, every step passed; about 70 minutes expected with a full build, against 72 hours ([update policy](../architecture/update-policy.md)) | The rehearsal's last two steps: signing with the release key and publishing (**maintainer**: key and host) |
+| 5 | Signed RPM in a signed repository; SBOM | ✅ Packages build and pass clean-container checks on Fedora 44 and Ubuntu 26.10 (S18; the .deb again in S23 with its AppArmor profile); signed repository installs with both checks on and refuses altered metadata (throwaway key); CycloneDX SBOM per package | The release key, where its public part is published, and the repository host (`packages.nulavio.net` is a placeholder) (**maintainer**) |
+| 6 | Security contact and intake | ✅ `security@nulavio.net` and `security.txt` live (2026-10-25); security changelog started ([changelog](../security/changelog.md)) | Send one test report to `security@nulavio.net` and confirm it arrives and is answered (**maintainer**; Nulavio sends no mail on anyone's behalf) |
+| 7 | Trademark and domain | ✅ `nulavio.net` registered | INPI, USPTO and EUIPO searches (**maintainer or counsel**) |
+| 8 | Fresh install, CI | ✅ A fresh profile has no Guard finding above "info" on either track (the Nulavio build from the developer cache warns that its binary is user-writable; installed packages are root-owned, checked by `check_rpm`/`check_deb`); CI green at `39aa3ba` | — |
+| — | Found in S23: Ubuntu host | The `.deb` AppArmor profile parses in a clean Ubuntu container | On a real Ubuntu 26.04 host: install the `.deb`, open `about:support` and check that user namespaces are available ([R46](../security/residual-risks.md)) (**maintainer or a community tester**) |
+
+**Result:** the alpha is **not released yet**. Everything that can be done without the maintainer is done and verified; the release waits on the items marked **maintainer** above (release key and repository host, Safe Browsing quota and download protection decision, test security report, trademark searches, Proton Pass once on the Nulavio build). Slices outside the alpha that also wait: S10 (a FIDO2 security key) and S11 (Android, last by decision; the test phone).
+
