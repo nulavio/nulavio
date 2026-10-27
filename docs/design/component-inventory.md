@@ -27,7 +27,7 @@ Status per component of the browser window and Nulavio's own pages. "Upstream" m
 | Bookmarks toolbar | `#PersonalToolbar` | Horizon colours, links in accent | — |
 | Window controls / CSD | `customtitlebar`, GTK decorations | Upstream; KDE Wayland server-side decorations by default | Screenshot review on real KDE (M7) |
 | **New tab (Nulavio Home)** | Shell page | Search, live protection status, shortcuts, "if a site breaks" | Favourites, recent sessions, timing budget (M3) |
-| Download warning | Shell page (flow E) | Done | In-panel placement (M6) |
+| Download warning | Shell page (flow E) and the engine's downloads panel (patch 0007: no Open, shown in its folder, status line) | Done | — |
 | Privacy Center | `browser-siteProtections.js`, `controlcenter/` (upstream panels) | Upstream panels | Per-site: upstream trust panel, verified with a real blocked tracker (`test_privacy`); all exceptions: Settings → Site exceptions (Shell) |
 | Settings | `about:preferences` | Upstream | Organised sections, Providers (M5) |
 | **Nulavio settings** | Shell page (`settings/settings.html`, also Add-ons → Nulavio Shell → Options) | **Done**: Search (defaults, engines, per-provider suggestions, aliases, SearXNG/custom/OpenSearch) and Profiles (edit, open, delete with confirmation, templates) | Smart Routing rules, Integrations (M4–M5) |

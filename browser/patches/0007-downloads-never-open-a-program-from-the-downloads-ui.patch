@@ -1,0 +1,109 @@
+Subject: [PATCH] downloads: never open a program from the downloads UI (flow E)
+
+Nulavio's build has no download-reputation check (R15: Google's download
+protection is partner-only), so files that can run programs (AppImage,
+shell scripts, packages, ...) get Nulavio's flow E instead: saved without
+the execute bit, explained on a Nulavio page, and, with this patch, never
+opened from the downloads panel or the Library. Their default action and a
+click in the panel show the file in its folder (a click on one still
+downloading no longer sets it to open when done), "Open" and "Always open similar files" are
+unavailable, and the panel's status line says why. The file-type list lives
+in a module of the branding directory (NulavioDownloads.sys.mjs), kept equal
+to the Shell's by a test.
+
+Owner: Nulavio maintainers
+Upstream: not applicable (product policy).
+---
+--- a/browser/components/downloads/DownloadsViewUI.sys.mjs
++++ b/browser/components/downloads/DownloadsViewUI.sys.mjs
+@@ -19,6 +19,7 @@
+   DownloadsCommon:
+     "moz-src:///browser/components/downloads/DownloadsCommon.sys.mjs",
+   FileUtils: "resource://gre/modules/FileUtils.sys.mjs",
++  NulavioDownloads: "resource:///modules/nulavio/NulavioDownloads.sys.mjs",
+   UrlbarShared: "chrome://browser/content/urlbar/UrlbarShared.mjs",
+ });
+ 
+@@ -763,7 +764,21 @@
+           );
+ 
+           let sizeWithUnits = DownloadsViewUI.getSizeWithUnits(this.download);
+-          if (this.isPanel) {
++          // Nulavio (flow E): a program is shown in its folder, never opened from here.
++          let isProgram = lazy.NulavioDownloads.isProgram(this.download);
++          this.element.toggleAttribute("nulavio-program", isProgram);
++          if (this.isPanel && isProgram) {
++            let status = lazy.NulavioDownloads.statusLabel();
++            if (sizeWithUnits) {
++              status = lazy.DownloadsCommon.strings.statusSeparator(
++                status,
++                sizeWithUnits
++              );
++            }
++            this.showStatus(status, {
++              l10n: { id: "downloads-cmd-show-description-2" },
++            });
++          } else if (this.isPanel) {
+             // In the Downloads Panel, we show the file size after the state
+             // label, for example "Completed - 1.5 MB". When the pointer is over
+             // the main area of the item, this label is replaced with a
+@@ -1077,7 +1092,10 @@
+       case lazy.DownloadsCommon.DOWNLOAD_PAUSED:
+         return "downloadsCmd_pauseResume";
+       case lazy.DownloadsCommon.DOWNLOAD_FINISHED:
+-        return "downloadsCmd_open";
++        // Nulavio (flow E): a program is shown in its folder, never opened from here.
++        return lazy.NulavioDownloads.isProgram(this.download)
++          ? "downloadsCmd_show"
++          : "downloadsCmd_open";
+       case lazy.DownloadsCommon.DOWNLOAD_BLOCKED_PARENTAL:
+       case lazy.DownloadsCommon.DOWNLOAD_BLOCKED_CONTENT_ANALYSIS:
+         return "downloadsCmd_openReferrer";
+@@ -1121,7 +1139,11 @@
+       case "downloadsCmd_open:window":
+       case "downloadsCmd_alwaysOpenSimilarFiles":
+         // This property is false if the download did not succeed.
+-        return this.download.target.exists;
++        // Nulavio (flow E): programs are never opened from the downloads UI.
++        return (
++          this.download.target.exists &&
++          !lazy.NulavioDownloads.isProgram(this.download)
++        );
+ 
+       case "downloadsCmd_show":
+       case "downloadsCmd_deleteFile": {
+--- a/browser/components/downloads/content/downloads.js
++++ b/browser/components/downloads/content/downloads.js
+@@ -33,6 +33,7 @@
+ );
+ 
+ ChromeUtils.defineESModuleGetters(this, {
++  NulavioDownloads: "resource:///modules/nulavio/NulavioDownloads.sys.mjs",
+   DownloadsViewUI:
+     "moz-src:///browser/components/downloads/DownloadsViewUI.sys.mjs",
+   FileUtils: "resource://gre/modules/FileUtils.sys.mjs",
+@@ -976,6 +977,10 @@
+       let command = "downloadsCmd_open";
+       if (download.hasBlockedData) {
+         command = "downloadsCmd_showBlockedInfo";
++      } else if (NulavioDownloads.isProgram(download)) {
++        // Nulavio (flow E): a program is shown in its folder, never opened (or
++        // set to open when done) from the panel.
++        command = "downloadsCmd_show";
+       } else if (aEvent.shiftKey || aEvent.ctrlKey || aEvent.metaKey) {
+         // We adjust the command for supported modifiers to suggest where the download
+         // may be opened
+@@ -1187,8 +1192,11 @@
+       case "downloadsCmd_open:tabshifted":
+       case "downloadsCmd_open:window":
+       case "downloadsCmd_alwaysOpenSimilarFiles": {
+-        if (!this.download.succeeded) {
+-          return false;
++        if (
++          !this.download.succeeded ||
++          NulavioDownloads.isProgram(this.download)
++        ) {
++          return false; // Nulavio (flow E): programs are never opened from the panel
+         }
+ 
+         let file = new FileUtils.File(this.download.target.path);

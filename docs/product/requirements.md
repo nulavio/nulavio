@@ -9,7 +9,7 @@ Status legend: **Done** (implemented and verified by a test or recorded evidence
 | FR-01 | Starts on Fedora KDE Wayland with upstream sandbox active | **Done** (Track A) | `test_04`; real-window check (ADR E3) |
 | FR-02 | Navigation, URL bar, search, back/forward/reload | **Done** (engine UI) | `test_05` |
 | FR-03 | Tabs | **Done** | `test_05` |
-| FR-04 | Downloads, saved privately, no auto-open | **Done**. Track B adds the executable-download warning (flow E) | `test_07`, `test_shell` 03–05 |
+| FR-04 | Downloads, saved privately, no auto-open | **Done**. Track B adds the executable-download warning (flow E), also inside the engine's downloads panel (patch 0007) | `test_07`, `test_shell` 03–05 |
 | FR-05 | Isolated Nulavio profile, separate from Firefox profiles | **Done** | `test_09`, registry hashes, path unit tests |
 | FR-06 | Multiple profiles (work/personal) | **Done (Track B)**: engine profiles with Nulavio templates, toolbar selector (Alt+Shift+P), one-click switch, edit, delete with confirmation ([ADR 0003](../adr/0003-nulavio-profiles-and-routing.md)). Track A: CLI `--profile` | `test_profiles`, profile unit tests |
 | FR-07 | Nulavio identity: icon, app name in the desktop, start page | **Done in Track B** (engine UI says Nulavio in English and Portuguese, About dialog, new tab, Horizon window theme). Track A preview: desktop entry, app_id, start page, chrome theme; engine UI says Firefox | `test_01`, `test_13`, `test_15`, ADR E3 |

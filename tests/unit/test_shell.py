@@ -225,6 +225,28 @@ class SearchProvidersTest(unittest.TestCase):
         )
 
 
+class DownloadsPanelTest(unittest.TestCase):
+    """Flow E in the engine's downloads panel (patch 0007) uses the Shell's list of program file types."""
+
+    def test_the_branding_module_and_the_shell_list_the_same_types(self):
+        def listed(path: Path) -> list[str]:
+            block = re.search(r"RISKY_EXTENSIONS = Object\.freeze\(\[(.*?)\]\)", path.read_text(encoding="utf-8"), re.S).group(1)
+            return re.findall(r'"(\.[a-z]+)"', block)
+
+        shell = listed(SHELL / "lib" / "risky.js")
+        branding = listed(ROOT / "browser" / "branding" / "nulavio" / "NulavioDownloads.sys.mjs")
+        self.assertEqual(shell, branding)
+        self.assertIn(".appimage", shell)
+
+    def test_the_patch_only_closes_open_for_programs(self):
+        name = "0007-downloads-never-open-a-program-from-the-downloads-ui.patch"
+        patch = (ROOT / "browser" / "patches" / name).read_text(encoding="utf-8")
+        added = [line[1:] for line in patch.splitlines() if line.startswith("+") and not line.startswith("+++")]
+        self.assertTrue(any("NulavioDownloads.isProgram" in line for line in added))
+        self.assertFalse(any("deleteFile" in line for line in added))  # "Show in folder" and "Delete" stay
+        self.assertIn(name, (ROOT / "browser" / "patches" / "series").read_text(encoding="utf-8"))
+
+
 class ProfileTemplatesTest(unittest.TestCase):
     def setUp(self):
         self.text = module_text("NulavioProfiles.sys.mjs")

@@ -28,7 +28,7 @@ Nulavio is complete when all of the following are verified (tests or recorded ev
 
 | Area | State (verified) |
 |---|---|
-| Engine | Firefox 158.0.1 source build (Track B), 5 patches, rootless container build; Track A launcher over distribution Firefox |
+| Engine | Firefox 158.0.1 source build (Track B), 7 patches, rootless container build; Track A launcher over distribution Firefox |
 | Shell | Built-in add-on with privileged modules: new tab, download warning, search, profiles, Smart Profile Routing (links from apps, typed addresses, link menu) |
 | Profiles | Engine profile groups (`SelectableProfileService`); isolation by separate instances and directories; **no encryption at rest yet** |
 | Guard | Launcher pre-launch audit (`guard.py`); refuses profiles with automation prefs (Marionette, remote agent) |
@@ -75,7 +75,7 @@ One slice per working session, in this order. Sizes are relative (S ≈ one sess
 | S22 | **Routing M5** (W2) — **done 2026-10-27** ([review](../security/routing-m5-review.md)) | Security review first (redirects, POST, scripted navigation), then automatic in-page routing if the review allows | Review recorded; tests for every refused case | — | M |
 | S23 | **Phase 5 spikes** (W5) — **done 2026-10-27** ([report](../security/phase5-spikes.md)) | bubblewrap, Flatpak and the native-messaging portal, SELinux module; sensitive-sites container with clear-on-close | Each spike ends with a recorded decision and, where adopted, a test | — | L |
 | S24 | **Alpha gate** — **walked 2026-10-27** ([result](release-criteria.md#alpha-gate-walk-through--2026-10-27-s24)): everything verifiable here passes; the release waits on maintainer items | Walk the [release criteria](release-criteria.md); collect the items only the maintainer can provide | Every criterion verified or listed as a maintainer item | all | M |
-| later | W3 U10 (iOS, Windows evaluation), U11 (hardening, independent audit) | | | | |
+| later | W3 U10 (iOS, Windows evaluation) — **done 2026-10-27** ([report](../research/windows-ios-evaluation.md)); U11 (hardening, independent audit) | | | | |
 
 ```mermaid
 flowchart LR

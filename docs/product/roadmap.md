@@ -32,14 +32,14 @@ Each milestone has a definition of done (DoD). "Done" requires the DoD to be ver
 - [x] Nulavio Shell UI, M0–M2 first slice: audit, three directions, Horizon chosen, window theme for tab strip, toolbar and address bar (Track B). Next milestones: [design migration plan](../design/migration-plan.md)
 
 - [x] Track A: launcher, isolated profile, start page, desktop identity, chrome theme
-- [x] Track B inputs: `browser/branding/nulavio/` + generated assets, `browser/build/mozconfig`, patch stack (`browser/patches/`, 5 patches: vendor name, l10n mapping of the branding, Horizon stylesheet link, per-provider consent for search suggestions, address-bar routing hook), container build script
+- [x] Track B inputs: `browser/branding/nulavio/` + generated assets, `browser/build/mozconfig`, patch stack (`browser/patches/`, 7 patches: vendor name, l10n mapping of the branding, Horizon stylesheet link, per-provider consent for search suggestions, address-bar routing hook, system Mozilla directory, programs never opened from the downloads UI), container build script
 - [x] `distribution/` generated from `browser/config/` (`distribution.ini` defaults + `policies.json`), verified active in the build (`test_13`)
 - [x] Google Safe Browsing API key from a secret: dedicated Google Cloud project, key restricted to the Safe Browsing API, build passes 17/17 incl. the end-to-end phishing test
 - [x] Nulavio Shell built-in add-on (`browser/shell/`), built from the branding directory with no Mozilla file patched
 - [x] New tab (FR-08): search with the default engine, live protection status read from the browser settings
 - [x] Flow E executable-download warning (compensates R15): Show in folder / Delete, no Open
 - [ ] Google's download-protection API for Track B (request access) (R15)
-- [ ] Flow E inside the engine's downloads panel (needs engine UI work; today a Nulavio page opens next to it)
+- [x] Flow E inside the engine's downloads panel (patch 0007, 2026-10-27): a program's default action and panel click show it in its folder, "Open" and "Always open similar files" are unavailable, a click while it downloads no longer sets it to open when done, and the status line says why; the Nulavio page still explains (`test_shell` 03–04)
 - [x] Track B in Portuguese: en-US + pt-BR packaged from signed-off firefox-l10n revisions, brand translated, follows the desktop language
 
 **DoD:** a branded Nulavio binary built from verified source opens a window on Fedora KDE Wayland with the sandbox verified by `test_04`, with no Mozilla marks in the UI.
@@ -72,7 +72,7 @@ Unlock encrypted profiles with, in order of convenience: the phone (biometrics/P
 - [ ] U7 Recovery, replay and lost-device tests — done with the simulated phone (`test_vault`) and the Java phone against the desktop (`test_companion_protocol`); repeat on the real device
 - [x] U8 Integration with Gecko profiles (encrypted profile container; lock = instance ended and container closed) — S5: launcher profiles end to end (`nulavio vault`, supervised `nulavio run`); browser-group profiles recognised as locked by the selector and routing
 - [x] U9 UX: onboarding in three decisions, locked profile, recovery (S6, `browser/shell/vault/`); phone devices come with U6
-- [ ] U10 iOS and Windows evaluation
+- [x] U10 iOS and Windows evaluation ([report](../research/windows-ios-evaluation.md), 2026-10-27): feasible on the current design, outside the Linux 1.0 scope; Windows needs a code-signing identity and a protected-profile storage without FUSE, iOS a Mac and an Apple developer account
 - [ ] U11 Hardening and independent audit
 
 **DoD:** a profile does not unlock without a valid method; copying its files does not reveal the key; at least two recovery methods work before phone unlock ships; the protection-state matrix (`encrypted_at_rest`, `os_user_protected`, `password_protected`, `hardware_bound`, `phone_approved`, `phone_key_release_verified`) shows only what is really in place.

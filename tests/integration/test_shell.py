@@ -79,6 +79,40 @@ class ShellTest(unittest.TestCase):
         except MarionetteError:
             return None  # navigation in progress: the document can be briefly missing
 
+    def panel_item(self, name: str) -> dict:
+        """The engine's downloads panel entry for a file (flow E in the panel, patch 0007)."""
+        self.m.set_context("chrome")
+        try:
+            return self.m.execute_async(
+                """
+                const [name, done] = arguments;
+                (async () => {
+                  const { Downloads } = ChromeUtils.importESModule("resource://gre/modules/Downloads.sys.mjs");
+                  const list = await Downloads.getList(Downloads.ALL);
+                  const download = (await list.getAll()).find(d => d.target.path.endsWith("/" + name));
+                  DownloadsPanel.showPanel();
+                  let item = null;
+                  for (let i = 0; i < 100 && !(item = DownloadsView._visibleViewItems.get(download)); i++) {
+                    await new Promise(r => setTimeout(r, 100));
+                  }
+                  const out = {
+                    defaultCommand: item.currentDefaultCommandName,
+                    canOpen: item.isCommandEnabled("downloadsCmd_open"),
+                    canAlwaysOpen: item.isCommandEnabled("downloadsCmd_alwaysOpenSimilarFiles"),
+                    canShow: item.isCommandEnabled("downloadsCmd_show"),
+                    canDelete: item.isCommandEnabled("downloadsCmd_deleteFile"),
+                    program: item.element.hasAttribute("nulavio-program"),
+                    status: item._downloadDetailsNormal.getAttribute("value") ?? "",
+                  };
+                  DownloadsPanel.hidePanel();
+                  return out;
+                })().then(done, e => done({ error: String(e) }));
+                """,
+                [name],
+            )
+        finally:
+            self.m.set_context("content")
+
     def new_handles(self, before: set[str]) -> list[str]:
         return [h for h in self.m.window_handles() if h not in before]
 
@@ -157,6 +191,13 @@ class ShellTest(unittest.TestCase):
         self.assertEqual([b[0] for b in buttons], ["show", "delete"], buttons)
         self.assertFalse(any(label.lower() in ("abrir", "open") for _, label in buttons), "flow E must not offer Open")
         (self.artifacts / "shell-download-warning.png").write_bytes(self.m.screenshot_png())
+        if harness.nulavio_engine():
+            # The engine's own downloads panel (patch 0007): shown in its folder, never opened from there.
+            panel = self.panel_item("nulavio-setup.AppImage")
+            self.assertEqual(panel["defaultCommand"], "downloadsCmd_show", panel)
+            self.assertEqual((panel["canOpen"], panel["canAlwaysOpen"]), (False, False), panel)
+            self.assertEqual((panel["canShow"], panel["canDelete"], panel["program"]), (True, True, True), panel)
+            self.assertIn("program", panel["status"].lower())
         self.m.execute("document.getElementById('delete').click();")
         deleted = harness.wait_until(lambda: self.root_data("state") == "deleted")
         self.assertTrue(deleted, "Delete did not report success")
@@ -170,6 +211,9 @@ class ShellTest(unittest.TestCase):
         self.assertTrue(harness.wait_until(target.exists, timeout=20), "download did not complete")
         time.sleep(2)  # the warning, if any, opens right after completion
         self.assertEqual(self.new_handles(before), [], "a non-executable download must not trigger flow E")
+        if harness.nulavio_engine():
+            panel = self.panel_item("nulavio-fixture.bin")
+            self.assertEqual((panel["defaultCommand"], panel["canOpen"], panel["program"]), ("downloadsCmd_open", True, False))
 
     def test_05_warning_page_handles_unknown_download(self):
         url = self.m.chrome(NEW_TAB_URL).replace("/newtab/newtab.html", "/warning/warning.html?id=999999")
