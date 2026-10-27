@@ -1,0 +1,19 @@
+[
+  {
+    "namespace": "nulavioGuard",
+    "description": "Nulavio Guard at run time: changes made to this profile outside the browser since it last ran, for the user to review (docs/security/hardening.md). Built-in Shell only.",
+    "functions": [
+      { "name": "check", "type": "function", "async": true, "parameters": [] },
+      { "name": "findings", "type": "function", "async": true, "parameters": [] },
+      {
+        "name": "resolve", "type": "function", "async": true,
+        "parameters": [
+          { "name": "id", "type": "string", "maxLength": 4096 },
+          { "name": "action", "type": "string", "enum": ["keep", "undo"] }
+        ]
+      },
+      { "name": "reveal", "type": "function", "async": true, "parameters": [{ "name": "id", "type": "string", "maxLength": 4096 }] },
+      { "name": "hideBar", "type": "function", "async": true, "parameters": [] }
+    ]
+  }
+]

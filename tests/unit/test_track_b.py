@@ -219,7 +219,10 @@ class DistributionTest(unittest.TestCase):
         ini = make_distribution.distribution_ini()
         self.assertIn("[Preferences]", ini)
         self.assertIn("dom.security.https_only_mode=true", ini)
-        self.assertIn('browser.contentblocking.category="strict"', ini)
+        # Only works as a user value; the Shell sets it once per profile (NulavioPrivacy.seedDefaults).
+        self.assertNotIn("browser.contentblocking.category", ini)
+        shell = (ROOT / "browser" / "shell" / "modules" / "NulavioPrivacy.sys.mjs").read_text(encoding="utf-8")
+        self.assertIn('Services.prefs.setStringPref("browser.contentblocking.category", "strict")', shell)
         self.assertNotIn("@STARTPAGE_URL@", ini)
         self.assertNotRegex(ini, r"(?m)^security\.sandbox|^xpinstall\.signatures")
 

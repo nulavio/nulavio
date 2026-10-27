@@ -33,6 +33,7 @@ from nulavio_launcher import temporary
 ROOT = Path(__file__).resolve().parents[2]
 MODULE = 'ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioProfiles.sys.mjs").NulavioProfiles'
 ROUTING = 'ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioRouting.sys.mjs").NulavioRouting'
+GUARD = 'ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioGuard.sys.mjs").NulavioGuard'
 ACTION_BUTTON = "shell_nulavio_net-BAP"
 
 
@@ -172,6 +173,9 @@ class TemporaryFromTheBrowserTest(unittest.TestCase):
             self.assertEqual(prefs, [True, False, False])
             routing = chrome_async(m, f"return await {ROUTING}.state();")
             self.assertFalse(routing["available"])  # no rules move pages out of (or into) a temporary profile
+            guard = chrome_async(m, f"return await {GUARD}.check();")
+            self.assertEqual((guard["state"], guard["reason"]), ("skipped", "temporary"))  # nothing in it is kept
+            self.assertFalse((path / "nulavio-guard.json").exists())
 
             # The identity: the toolbar button and a bar in every window.
             tooltip = lambda: m.chrome(f"return document.getElementById('{ACTION_BUTTON}')?.getAttribute('tooltiptext') ?? '';")  # noqa: E731

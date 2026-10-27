@@ -14,7 +14,7 @@ Status legend: **Done** (implemented and verified by a test or recorded evidence
 | FR-06 | Multiple profiles (work/personal) | **Done (Track B)**: engine profiles with Nulavio templates, toolbar selector (Alt+Shift+P), one-click switch, edit, delete with confirmation ([ADR 0003](../adr/0003-nulavio-profiles-and-routing.md)). Track A: CLI `--profile` | `test_profiles`, profile unit tests |
 | FR-07 | Nulavio identity: icon, app name in the desktop, start page | **Done in Track B** (engine UI says Nulavio in English and Portuguese, About dialog, new tab, Horizon window theme). Track A preview: desktop entry, app_id, start page, chrome theme; engine UI says Firefox | `test_01`, `test_13`, `test_15`, ADR E3 |
 | FR-08 | New tab with Nulavio identity | **Done (Track B)**: built-in Nulavio Shell new tab with search and live protection status. Track A: start page on launch and Home | `test_shell` 01–02 |
-| FR-09 | Ad and tracker blocking on first run, reversible per site | **Done** (uBO + ETP Strict; per-site toggles are upstream UI) | `test_03`, `test_08` |
+| FR-09 | Ad and tracker blocking on first run, reversible per site | **Done** (uBO + ETP Strict; per-site toggles are upstream UI). Track B: Strict set once per profile by the Shell (the build's default alone was recomputed to Standard until 2026-10-26) | `test_03`, `test_08`, `test_privacy` |
 | FR-10 | Proton Pass official extension works | **Preview**: install, signature, background, popup Done; **login and autofill on a real site done on the maintainer's desktop** (2026-10-25) | `test_password_extensions` |
 | FR-11 | KeePassXC-Browser works with native messaging | **Done (container)**: association + autofill end to end with KeePassXC 2.8.0, in CI. No manual desktop certification planned by the maintainer | `keepassxc_native_messaging_spike.py` |
 | FR-12 | Bitwarden official extension works | **Preview**: install, signature, background, popup Done; desktop-app host name verified in Bitwarden's source. No manual certification planned by the maintainer | `test_password_extensions` |
@@ -23,7 +23,7 @@ Status legend: **Done** (implemented and verified by a test or recorded evidence
 | FR-15 | Settings essentials explained | **Preview** (`nulavio prefs explain`; engine settings UI) | — |
 | FR-16 | Private window | **Done** (engine; `nulavio run --private`) | engine unit test |
 | FR-17 | Onboarding | **Prototype** (CLI plan + flows in [ux-flows](../brand/ux-flows.md)) | — |
-| FR-18 | Privacy dashboard / per-site panel | **Prototype** (mockups) | — |
+| FR-18 | Privacy dashboard / per-site panel | **Done (Track B)**: the engine's site panel (real blocked-tracker log, per-site switch, clear site data) and Settings → Site exceptions (all exceptions, removable; uBlock Origin's own list opened, never edited) | `test_privacy` |
 | FR-19 | Environment and profile diagnostics | **Done** (`nulavio doctor`) | manual |
 | FR-20 | Desktop integration without root | **Done** (`nulavio desktop install/uninstall`) | desktop unit tests |
 | FR-21 | Search engine choice: privacy-focused providers, SearXNG instance, custom URL or OpenSearch, aliases, separate private default, add/remove in the UI | **Done (Track B)** ([ADR 0002](../adr/0002-nulavio-search.md)). Track A: upstream Settings | `test_search` 04, 06–10, 12 |
@@ -34,6 +34,7 @@ Status legend: **Done** (implemented and verified by a test or recorded evidence
 | FR-26 | AI Bridge: MCP for external agents with per-agent autonomy (Restricted, Assisted, Autonomous, Full control), revocable and audited | **Foundation done (S4)** ([ADR 0007](../adr/0007-ai-bridge.md)): `nulavio ai`, MCP server (2025 and 2026-07-28 protocols), per-agent AI Workspace, four levels with per-capability grants, revoke, emergency stop, audit; real Claude Code tested. Settings → AI & Automation, permission requests in the browser, pause, dialogs/downloads/uploads: done (S7). Given profiles, per-agent routes and the connect wizard: done (S8) | `test_ai_bridge` (unit, engine), `test_ai_ui`, `test_ai_agents_real` |
 | FR-27 | Built-in AI assistant, provider-agnostic, under the same policies as external agents | **Planned** (phase 2d, A12) | — |
 | FR-28 | Temporary profile, deleted when it closes | **Done**: "New temporary window" in the selector and Settings (Track B), `nulavio run --temporary` (both tracks); in memory where the system allows, deleted by the Nulavio tools after its instance exits ([ADR 0003](../adr/0003-nulavio-profiles-and-routing.md#temporary-profile-implementation)) | `test_temporary` (unit, engine) |
+| FR-29 | Explicit DNS choice: the computer's resolver or encrypted DNS through a resolver the user picks; nothing to a Nulavio server | **Done (Track B)**: new-tab question (asked once) and Settings → DNS; the text follows the engine's effective mode | `test_dns` (local DoH resolver: lookups reach it; encrypted-only fails closed; system mode sends nothing to it) |
 
 ## Security and privacy
 
@@ -56,6 +57,7 @@ Status legend: **Done** (implemented and verified by a test or recorded evidence
 | SEC-15 | Profiles never share cookies or site storage; a running profile is not deleted; switching never starts a duplicate instance | **Done (Track B)** | `test_profiles` 05 |
 | SEC-16 | An unlock opens a profile only when a method releases its key: no method, a phone approval without the key, or a copy of the files does not reveal it; requests expire, are one-shot and signed; nothing secret in logs or files | **Done in the prototype (S3, simulated phone)**; applies to real profiles from S5 | `test_vault` |
 | SEC-17 | An agent gets only what the user granted: decisions come from the user's configuration on every call, never from the agent or page content; the local network needs a grant; revocation and the emergency stop apply to the next call; the agent's workspace keeps Safe Browsing and the pop-up blocker on | **Done (S4)** | `test_ai_bridge` |
+| SEC-18 | Report changes made to a profile outside the browser (extensions, protective settings, certificate authorities, security modules, native-messaging hosts, policies, `user.js`, search) and let the user undo or keep each | **Done (Track B)**: Guard at run time, with a bypass analysis; detection, not prevention ([R38](../security/residual-risks.md)) | `test_guard`, `test_shell.GuardModuleTest` |
 
 ## Non-functional
 

@@ -58,6 +58,7 @@ Address-bar security states: neutral site-info (HTTPS valid) · **"Not secure"**
 3. Confirmation: "Filter off for news.example. Turn back on anytime from this panel." It is listed in Settings › Site exceptions.
 4. Optional: "Report to the filter list maintainers" opens uBO's own reporter. Nulavio sends nothing.
 
+- **Track B (implemented):** the address bar's site panel is the engine's own trust panel: what tracking protection blocked on the page (the engine's log, no invented numbers) and a per-site switch. Settings › Site exceptions lists every site where a protection is off, by the user or by the browser itself, each removable, and opens uBlock Origin's own trusted-sites page (its per-site switch stays in its button; Nulavio never edits its data).
 - **Track A today:** uBO's toolbar popup (power button = per-site), Firefox's shield panel (per-site ETP). The start page explains both.
 
 ## D. Login on a suspicious domain

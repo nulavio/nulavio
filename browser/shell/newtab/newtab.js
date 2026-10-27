@@ -80,11 +80,40 @@ async function showEngine() {
   }
 }
 
+// DNS (Nulavio build): how site names are looked up, and the one-time choice.
+async function showDns() {
+  const privacy = browser.nulavioPrivacy;
+  if (!privacy) {
+    return;
+  }
+  const state = await privacy.dns();
+  const row = document.getElementById("dns-status");
+  row.hidden = false;
+  if (state.choice === "system" || state.choice === "default") {
+    show("dns", t(state.choice === "system" ? "dnsStatusSystem" : "dnsStatusDefault"), "ok");
+  } else {
+    show("dns", t(state.choice === "strict" ? "dnsStatusStrict" : "dnsStatusFallback"), "ok");
+  }
+  const card = document.getElementById("dns-choice");
+  card.hidden = state.chosen;
+  card.querySelector("p").textContent = t(state.encryptedNow ? "dnsChoiceBodyEncrypted" : "dnsChoiceBody");
+  if (state.chosen) {
+    return;
+  }
+  const done = async action => {
+    await action();
+    card.hidden = true;
+    await showDns();
+  };
+  document.getElementById("dns-keep-system").onclick = () => done(() => privacy.setDns({ choice: "system" }));
+  document.getElementById("dns-later").onclick = () => done(() => privacy.dismissDnsChoice());
+}
+
 // Search settings exist only where the Shell is built in (privileged API).
 document.getElementById("search-settings").hidden = !browser.nulavioSearch;
 
 localize();
 showEngine().catch(() => {});
-refresh().then(() => {
+Promise.allSettled([refresh(), showDns()]).then(() => {
   document.documentElement.dataset.ready = "true";
 });

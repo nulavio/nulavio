@@ -101,10 +101,10 @@ External agents (Codex CLI and Desktop, Claude Code and Desktop, other MCP clien
 
 ## Phase 3 — Privacy and blocking
 
-- [x] uBO pinned and verified; ETP Strict; HTTPS-Only; reversibility tested
-- [ ] Per-site privacy panel (Shell) with honest state (no invented counters)
+- [x] uBO pinned and verified; ETP Strict; HTTPS-Only; reversibility tested. Correction (2026-10-26): in the Nulavio build the Strict category came only as a `distribution.ini` default, which the engine recomputes to Standard; since S14 the Shell sets it once per profile as a user value, and `test_privacy` checks every baseline pref of the build and a real blocked tracker
+- [x] Per-site privacy panel with honest state: the engine's own site panel (address bar: connection, what tracking protection blocked from the engine's log, per-site switch, clear site data) plus Settings → Site exceptions (every site where a protection is off, removable; uBlock Origin's own trusted-sites page) (`test_privacy`)
 - [ ] Real-site regression suite (top sites list, screenshot diff, breakage triage)
-- [ ] DoH onboarding choice; fingerprinting regression analysis
+- [x] DoH onboarding choice (new tab asks once; Settings → DNS: computer's resolver, encrypted with fallback, encrypted only; Cloudflare, Quad9, Mullvad or own https:// resolver) (`test_dns`, local DoH resolver); fingerprinting regression analysis, measured ([fingerprinting](../research/fingerprinting.md), `test_privacy`)
 
 **DoD:** blocking test + 50-site regression run with recorded breakage and per-site fixes.
 
@@ -122,7 +122,7 @@ External agents (Codex CLI and Desktop, Claude Code and Desktop, other MCP clien
 
 ## Phase 5 — Hardening and anti-infostealer measures (with proven limits)
 
-- [ ] Guard runtime: extension-set change alert, profile integrity manifest
+- [x] Guard runtime: changes made outside the browser since the last run (extensions, protective settings, certificate authorities, security modules, native-messaging hosts, policies, `user.js`, search engines), reviewed and undone or kept by the user; bypass analysis in [hardening](../security/hardening.md#guard-at-run-time-what-it-catches-and-how-it-can-be-bypassed) (`test_guard`)
 - [ ] Spikes: bubblewrap, Flatpak and native-messaging portal, SELinux module
 - [ ] Sensitive-sites container with clear-on-close
 
@@ -136,4 +136,4 @@ External agents (Codex CLI and Desktop, Claude Code and Desktop, other MCP clien
 
 ## Next task (recommended)
 
-Follow the [execution plan](execution-plan.md): S1 (Connect P0), S2 (unlock research and ADRs), S3 (Vault crypto prototype), S4 (AI Bridge foundation), S5 (encrypted profile storage), S6 (unlock UX in the browser), S7 (AI autonomy and its UI), S8 (AI with profiles, routing and the connect wizard) and S12 (temporary profile) are done; next: S13 (Guard runtime) through S24 (alpha gate), with S10 (security key, needs a key) and S11 (Android Companion, last) waiting on the maintainer. The plan lists the decisions each slice needs from the maintainer.
+Follow the [execution plan](execution-plan.md): S1 (Connect P0), S2 (unlock research and ADRs), S3 (Vault crypto prototype), S4 (AI Bridge foundation), S5 (encrypted profile storage), S6 (unlock UX in the browser), S7 (AI autonomy and its UI), S8 (AI with profiles, routing and the connect wizard), S12 (temporary profile), S13 (Guard at run time), S14 (per-site privacy, Strict fix) and S15 (DNS choice, fingerprinting measured) are done; next: S16 (real-site regression suite) through S24 (alpha gate), with S10 (security key, needs a key) and S11 (Android Companion, last) waiting on the maintainer. The plan lists the decisions each slice needs from the maintainer.

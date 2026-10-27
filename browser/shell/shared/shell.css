@@ -369,3 +369,9 @@ a:hover { text-decoration-thickness: 2px; }
 .state-mark--error::before { content: "!"; }
 .evidence { margin: 0; padding-left: 1.25rem; display: grid; gap: var(--nv-space-1); font-size: 0.8125rem; color: var(--nv-color-text-secondary); overflow-wrap: anywhere; }
 a.button { display: inline-flex; align-items: center; text-decoration: none; }
+
+/* Guard review: one card per change; long values (paths, fingerprints) wrap */
+.finding__detail { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 0.8125rem; color: var(--nv-color-text-secondary); }
+
+/* New tab: the one-time DNS question, above the facts */
+.dns-choice { max-width: 52rem; margin-inline: auto; width: 100%; }

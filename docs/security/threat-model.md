@@ -204,9 +204,9 @@ Each scenario lists: assets · adversary · preconditions · trust boundary · i
 | Boundary | TB6 (there is no boundary between same-user processes on a default desktop) |
 | Impact | Theft of cookies/sessions, saved passwords (if no Primary Password, or after capturing it), extension injection (E8: sideloaded XPIs auto-enable), pref tampering |
 | Preventive | Data minimisation: recommend an external vault (KeePassXC locks; Proton/Bitwarden time out) over engine-stored passwords; recommend a Primary Password if the engine store is used; profile 0700 (protects from *other* users only). **Planned:** short session lifetimes for sensitive sites (container + clear on close) |
-| Detective | **Now:** Guard detects weakened security prefs before launch; doctor lists unpinned extensions. **Planned:** extension-set change alert; profile integrity manifest (hashes of `user.js`, `extensions/`) checked at launch |
+| Detective | **Now:** Guard detects weakened security prefs before launch; doctor lists unpinned extensions; **Guard at run time (Track B)** reports changes made outside the browser since the last run: extensions, protective settings, certificate authorities, security modules, native-messaging hosts and their programs, policies, `user.js`, search engines ([hardening](hardening.md#guard-at-run-time-what-it-catches-and-how-it-can-be-bypassed)) |
 | Limitations | **Fundamental.** Detection can be bypassed by malware that also edits Nulavio's state. Sandboxing the browser does not stop malware outside the sandbox from reading the browser's files |
-| Tests | Guard unit tests; `test_10_guard_refuses_test_profile` |
+| Tests | Guard unit tests; `test_10_guard_refuses_test_profile`; `test_guard` (tampered closed profile on the real engine) |
 | Residual | **High. Out of scope for prevention; documented in [residual-risks](residual-risks.md)** |
 
 ### S12 — Malware with root

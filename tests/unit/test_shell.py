@@ -109,17 +109,28 @@ def module_text(name: str) -> str:
     return (MODULES / name).read_text(encoding="utf-8")
 
 
+API_NAMES = ("nulavioSearch", "nulavioProfiles", "nulavioRouting", "nulavioConnect", "nulavioVault", "nulavioAI")
+API_NAMES += ("nulavioGuard", "nulavioPrivacy")
+
+
 class PrivilegedApiTest(unittest.TestCase):
     """The Shell's experiment APIs: what they reach, and nothing more."""
 
     def setUp(self):
         self.manifest = make_shell.manifest()
 
+    def test_parent_scripts_declare_nothing_at_top_level(self):
+        # The engine loads every experiment's parent script into one shared scope: a top-level
+        # const/let/class/function in two of them stops the second API from loading.
+        for name, api in self.manifest["experiment_apis"].items():
+            with self.subTest(api=name):
+                source = (SHELL / api["parent"]["script"]).read_text(encoding="utf-8")
+                top = re.findall(r"^(?:const|let|var|class|function|async function)\s+(\w+)", source, re.M)
+                self.assertEqual(top, [], f"{api['parent']['script']} declares {top} at top level")
+
     def test_only_the_documented_apis(self):
         apis = self.manifest["experiment_apis"]
-        self.assertEqual(
-            set(apis), {"nulavioSearch", "nulavioProfiles", "nulavioRouting", "nulavioConnect", "nulavioVault", "nulavioAI"}
-        )
+        self.assertEqual(set(apis), set(API_NAMES))
         for name, api in apis.items():
             with self.subTest(api=name):
                 self.assertEqual(api["parent"]["scopes"], ["addon_parent"], "no API code runs in content processes")
@@ -129,6 +140,8 @@ class PrivilegedApiTest(unittest.TestCase):
                 schema = json.loads((SHELL / api["schema"]).read_text(encoding="utf-8"))
                 self.assertEqual([ns["namespace"] for ns in schema], [name])
         self.assertEqual(apis["nulavioSearch"]["parent"]["events"], ["startup"])
+        self.assertEqual(apis["nulavioGuard"]["parent"]["events"], ["startup"])  # independent of the event page
+        self.assertEqual(apis["nulavioPrivacy"]["parent"]["events"], ["startup"])  # defaults before the first page
         self.assertNotIn("events", apis["nulavioProfiles"]["parent"])
         self.assertNotIn("events", apis["nulavioRouting"]["parent"])
         self.assertNotIn("events", apis["nulavioConnect"]["parent"])
@@ -366,6 +379,42 @@ class PackagingTest(unittest.TestCase):
     def test_branding_builds_the_shell(self):
         moz_build = (ROOT / "browser" / "branding" / "nulavio" / "moz.build").read_text(encoding="utf-8")
         self.assertRegex(moz_build, r'DIRS \+= \[[^\]]*"shell"')
+
+
+class GuardModuleTest(unittest.TestCase):
+    """Nulavio Guard at run time: what it watches, where its record lives, what it never does."""
+
+    def setUp(self):
+        self.source = module_text("NulavioGuard.sys.mjs")
+        block = self.source[self.source.index("WATCHED_PREFS = Object.freeze([") :]
+        self.watched = re.findall(r'"([^"]+)"', block[: block.index("]);")])
+
+    def watches(self, name: str) -> bool:
+        return name in self.watched or any(w.endswith(".") and name.startswith(w) for w in self.watched)
+
+    def test_watches_every_protective_pref_the_launcher_guard_checks(self):
+        rules = json.loads((ROOT / "browser" / "config" / "guard-rules.json").read_text(encoding="utf-8"))["rules"]
+        # Automation prefs are set (and left in prefs.js) by the AI Bridge for an agent session in a given profile.
+        automation = {"remote.prefs.recommended", "marionette.port"}
+        for rule in rules:
+            if rule["pref"] not in automation:
+                self.assertTrue(self.watches(rule["pref"]), rule["pref"])
+        for name in ("network.proxy.http", "network.proxy.type", "network.trr.uri", "security.enterprise_roots.enabled"):
+            self.assertTrue(self.watches(name), name)
+
+    def test_record_lives_in_the_profile_and_nothing_is_sent(self):
+        self.assertIn('RECORD = "nulavio-guard.json"', self.source)
+        self.assertIn('"ProfD"', self.source)
+        for forbidden in ("fetch(", "XMLHttpRequest", "newChannel", "sendBeacon", "WebSocket"):
+            self.assertNotIn(forbidden, self.source)
+
+    def test_undo_only_after_a_click(self):
+        review = (SHELL / "guard" / "review.js").read_text(encoding="utf-8")
+        background = (SHELL / "background.js").read_text(encoding="utf-8")
+        self.assertNotIn("resolve(", background)
+        self.assertIn("browser.runtime.onStartup.addListener", background)  # the event page starts with the browser
+        self.assertIn('addEventListener("click"', review)
+        self.assertEqual(review.count("guard.resolve("), 1)
 
 
 if __name__ == "__main__":

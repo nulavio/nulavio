@@ -29,6 +29,16 @@
         <a class="hero__link" id="search-settings" href="../settings/settings.html#search" hidden data-i18n="searchSettingsLink">Search settings</a></p>
     </header>
 
+    <section class="card stack dns-choice" id="dns-choice" aria-labelledby="dns-choice-heading" hidden>
+      <h2 class="card__title" id="dns-choice-heading" data-i18n="dnsChoiceHeading"></h2>
+      <p></p>
+      <div class="actions">
+        <button class="button button--secondary" type="button" id="dns-keep-system" data-i18n="dnsKeepSystem"></button>
+        <a class="button button--secondary" id="dns-open-settings" href="../settings/settings.html#dns" data-i18n="dnsChooseEncrypted"></a>
+        <button class="button button--quiet" type="button" id="dns-later" data-i18n="dnsLater"></button>
+      </div>
+    </section>
+
     <section class="grid">
       <article class="card card--facts" aria-labelledby="status-heading">
         <h2 class="card__title" id="status-heading" data-i18n="statusHeading">Protections right now</h2>
@@ -38,6 +48,7 @@
           <div><dt data-i18n="statusGpc">Global Privacy Control signal</dt><dd data-status="gpc">…</dd></div>
           <div><dt data-i18n="statusFilter">Content filter</dt><dd data-status="filter">…</dd></div>
           <div><dt data-i18n="statusPasswords">Passwords</dt><dd data-status="passwords">…</dd></div>
+          <div id="dns-status" hidden><dt data-i18n="dnsHeading">DNS</dt><dd data-status="dns">…</dd></div>
         </dl>
         <p class="card__note" data-i18n="statusNote">Read just now from the browser settings. Nothing is sent to Nulavio.</p>
       </article>

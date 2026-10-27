@@ -19,6 +19,8 @@
       <nav class="settings-nav" data-i18n-attr="aria-label:settingsNav">
         <a href="#search" data-i18n="searchHeading">Search</a>
         <a href="#profiles" data-i18n="profilesHeading">Profiles</a>
+        <a href="#exceptions" data-i18n="exceptionsHeading">Site exceptions</a>
+        <a href="#dns" data-i18n="dnsHeading">DNS</a>
         <a href="#integrations" data-i18n="connectHeading">Integrations</a>
         <a href="#ai" data-i18n="aiHeading">AI &amp; Automation</a>
       </nav>
@@ -179,6 +181,50 @@
         <summary data-i18n="profilesVsContainers"></summary>
         <p data-i18n="profilesVsContainersBody"></p>
       </details>
+    </section>
+
+    <section class="section" id="exceptions" aria-labelledby="exceptions-heading" hidden>
+      <h2 class="section__title" id="exceptions-heading" data-i18n="exceptionsHeading">Site exceptions</h2>
+      <div class="card stack">
+        <p class="hint" data-i18n="exceptionsIntro"></p>
+        <ul class="list" id="exception-list" aria-busy="true"></ul>
+        <p class="hint" id="exceptions-empty" data-i18n="exceptionsEmpty" hidden></p>
+      </div>
+      <div class="card stack" id="filter-card">
+        <h3 class="card__title" data-i18n="exceptionsFilterTitle"></h3>
+        <p class="hint" id="filter-text"></p>
+        <div class="actions">
+          <button class="button button--secondary" type="button" id="open-filter-list" data-i18n="exceptionsFilterOpen" hidden></button>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="dns" aria-labelledby="dns-heading" hidden>
+      <h2 class="section__title" id="dns-heading" data-i18n="dnsHeading">DNS</h2>
+      <form class="card stack" id="dns-form" novalidate>
+        <p class="hint" data-i18n="dnsIntro"></p>
+        <p class="notice" id="dns-current" role="status"></p>
+        <fieldset class="stack stack--tight">
+          <legend class="subhead" data-i18n="dnsChoiceLegend"></legend>
+          <label class="check"><input type="radio" name="choice" value="system" data-focus-key="dns-system"> <span><strong data-i18n="dnsSystem"></strong><br><span class="hint" data-i18n="dnsSystemNote"></span></span></label>
+          <label class="check"><input type="radio" name="choice" value="fallback" data-focus-key="dns-fallback"> <span><strong data-i18n="dnsFallback"></strong><br><span class="hint" data-i18n="dnsFallbackNote"></span></span></label>
+          <label class="check"><input type="radio" name="choice" value="strict" data-focus-key="dns-strict"> <span><strong data-i18n="dnsStrict"></strong><br><span class="hint" data-i18n="dnsStrictNote"></span></span></label>
+        </fieldset>
+        <div class="field-row" id="dns-provider-row">
+          <label class="field"><span class="field__label" data-i18n="dnsProviderLabel"></span>
+            <select class="select" name="provider" id="dns-provider">
+              <option value="cloudflare" data-i18n="dnsCloudflare"></option>
+              <option value="quad9" data-i18n="dnsQuad9"></option>
+              <option value="mullvad" data-i18n="dnsMullvad"></option>
+              <option value="custom" data-i18n="dnsCustom"></option>
+            </select></label>
+          <label class="field" id="dns-uri-field"><span class="field__label" data-i18n="dnsUriLabel"></span>
+            <input class="input mono" name="uri" id="dns-uri" autocomplete="off" spellcheck="false" maxlength="2048" placeholder="https://"></label>
+        </div>
+        <p class="hint" data-i18n="dnsThirdParty"></p>
+        <p class="form-error" role="alert"></p>
+        <div class="actions"><button class="button button--primary" type="submit" data-i18n="dnsSave"></button></div>
+      </form>
     </section>
 
     <section class="section" id="integrations" aria-labelledby="integrations-heading" hidden>

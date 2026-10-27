@@ -136,6 +136,36 @@ class FixtureServer:
                 f'<img id="ad" src="/adbanners/nulavio-test.png?n={n}">'
             )
             return page.encode(), html, {}
+        if path == "/privacy-page":
+            # Tracking-protection fixture (tests/integration/test_privacy.py): a script from "localhost", a
+            # third party here, which the test lists as a tracker through the engine's own test-entries pref.
+            n = query.get("n", "0")
+            page = (
+                "<!doctype html><title>privacy-page</title><p id=state>no tracker</p>"
+                f'<script src="http://localhost:{self.port}/tracker.js?n={n}"></script>'
+            )
+            return page.encode(), html, {}
+        if path == "/fp-probe":
+            # Fingerprinting surface (tests/integration/test_privacy.py): values a script can read.
+            page = (
+                "<!doctype html><title>fp-probe</title><canvas id=c width=220 height=60></canvas><pre id=fp></pre><script>"
+                "(async () => { const c = document.getElementById('c'), x = c.getContext('2d');"
+                " const g = x.createLinearGradient(0, 0, 220, 0); g.addColorStop(0, '#12a37f'); g.addColorStop(1, '#3b6fd8');"
+                " x.fillStyle = g; x.fillRect(0, 0, 220, 60); x.fillStyle = '#fff'; x.font = '20px sans-serif';"
+                " x.fillText('Nulavio fp probe', 10, 38);"
+                " const sha = async bytes => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)))"
+                ".map(b => b.toString(16).padStart(2, '0')).join('');"
+                " const hash = () => sha(x.getImageData(0, 0, 220, 60).data);"
+                " const exported = () => sha(new TextEncoder().encode(c.toDataURL()));"
+                " const out = { hardwareConcurrency: navigator.hardwareConcurrency, maxTouchPoints: navigator.maxTouchPoints,"
+                " availIsScreen: screen.availWidth === screen.width && screen.availHeight === screen.height,"
+                " pixels: await hash(), dataUrl: await exported(), dataUrlAgain: await exported(),"
+                " timezone: Intl.DateTimeFormat().resolvedOptions().timeZone };"
+                " document.getElementById('fp').textContent = JSON.stringify(out); })();</script>"
+            )
+            return page.encode(), html, {}
+        if path == "/tracker.js":
+            return b"document.getElementById('state').textContent = 'tracker ran';", "text/javascript", {}
         if path == "/agent-task":
             # AI Bridge fixture (tests/integration/test_ai_bridge.py): an artificial code word, a form,
             # a link, a button with a visible effect, and text that tries to instruct the agent.
@@ -437,6 +467,23 @@ class GeckoProfileSession:
         if not self.profile_dir.is_dir():
             raise RuntimeError(f"-CreateProfile failed: {created.stderr[-400:]}")
         self.enable_marionette(self.profile_dir)
+        engine_log = os.environ.get("NULAVIO_TEST_ENGINE_LOG")
+        output = open(engine_log, "ab") if engine_log else subprocess.DEVNULL  # noqa: SIM115
+        self.process = subprocess.Popen(
+            [str(self.engine.path), "-P", self.name, "--remote-allow-system-access"],
+            env=self.env,
+            stdout=output,
+            stderr=output,
+            preexec_fn=lambda: os.umask(0o077),
+            start_new_session=True,
+        )
+        self.client = self.connect(self.profile_dir, self.process)
+        return self.client
+
+    def restart(self) -> Marionette:
+        """Quit and start the same profile again (as a user closing and reopening Nulavio)."""
+        self.stop()
+        (self.profile_dir / "MarionetteActivePort").unlink(missing_ok=True)
         engine_log = os.environ.get("NULAVIO_TEST_ENGINE_LOG")
         output = open(engine_log, "ab") if engine_log else subprocess.DEVNULL  # noqa: SIM115
         self.process = subprocess.Popen(

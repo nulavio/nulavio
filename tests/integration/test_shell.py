@@ -118,7 +118,10 @@ class ShellTest(unittest.TestCase):
                 ".map(e => [e.dataset.status, e.dataset.level, e.textContent]);"
             )
         )
-        self.assertEqual(set(status), {"tracking", "https", "gpc", "filter", "passwords"})
+        expected = {"tracking", "https", "gpc", "filter", "passwords"}
+        if harness.nulavio_engine():
+            expected.add("dns")  # the build's privileged Shell reads the DNS mode too
+        self.assertEqual(set(status), expected)
         for key in ("tracking", "https", "gpc"):  # Nulavio defaults: ETP Strict, HTTPS-Only, GPC
             self.assertEqual(status[key][0], "ok", f"{key}: {status[key]}")
         for key, (level, text) in status.items():

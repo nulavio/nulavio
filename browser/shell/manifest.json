@@ -124,6 +124,40 @@
           ]
         ]
       }
+    },
+    "nulavioGuard": {
+      "schema": "experiments/guard/schema.json",
+      "parent": {
+        "scopes": [
+          "addon_parent"
+        ],
+        "script": "experiments/guard/parent.js",
+        "paths": [
+          [
+            "nulavioGuard"
+          ]
+        ],
+        "events": [
+          "startup"
+        ]
+      }
+    },
+    "nulavioPrivacy": {
+      "schema": "experiments/privacy/schema.json",
+      "parent": {
+        "scopes": [
+          "addon_parent"
+        ],
+        "script": "experiments/privacy/parent.js",
+        "paths": [
+          [
+            "nulavioPrivacy"
+          ]
+        ],
+        "events": [
+          "startup"
+        ]
+      }
     }
   },
   "permissions": [

@@ -607,6 +607,123 @@ function setUpIntegrations() {
   return renderIntegrations();
 }
 
+// -- site exceptions --------------------------------------------------------
+
+const privacy = browser.nulavioPrivacy;
+const EXCEPTION_LABELS = {
+  trackingprotection: { allow: "exceptionTracking" },
+  "trackingprotection-pb": { allow: "exceptionTrackingPrivate" },
+  "https-only-load-insecure": { allow: "exceptionHttpsOnly", session: "exceptionHttpsOnlySession" },
+  cookie: { allow: "exceptionCookieAllow", deny: "exceptionCookieDeny", session: "exceptionCookieSession" },
+  install: { allow: "exceptionInstall" },
+  popup: { allow: "exceptionPopup" },
+};
+
+function exceptionRow(entry) {
+  const key = EXCEPTION_LABELS[entry.type]?.[entry.capability] ?? EXCEPTION_LABELS[entry.type]?.allow;
+  const what = key ? t(key) : `${entry.type} (${entry.capability})`;
+  const notes = [
+    entry.builtIn ? t("exceptionBuiltIn") : null,
+    entry.session ? t("exceptionUntilClose") : null,
+    entry.private ? t("exceptionPrivate") : null,
+  ].filter(Boolean);
+  const remove = h("button", {
+    class: "button button--quiet",
+    type: "button",
+    text: t("engineRemove"),
+    "aria-label": `${t("engineRemove")}: ${entry.site} — ${what}`,
+    "data-focus-key": `exception-${entry.type}-${entry.origin}`,
+  });
+  remove.addEventListener("click", () => run(() => privacy.remove(entry.type, entry.origin), { done: t("doneRemoved") }));
+  return h(
+    "li",
+    { class: "row row--plain", dataset: { type: entry.type, origin: entry.origin } },
+    h(
+      "div",
+      { class: "row__main" },
+      h("p", { class: "row__title mono", text: entry.site }),
+      h("p", { class: "hint", text: [what, ...notes].join(" · ") })
+    ),
+    h("div", { class: "row__end" }, remove)
+  );
+}
+
+async function renderExceptions() {
+  const list = document.getElementById("exception-list");
+  const [entries, filter] = await Promise.all([run(() => privacy.exceptions()), run(() => privacy.filter())]);
+  if (entries) {
+    rerender(list, () => entries.map(exceptionRow));
+    list.setAttribute("aria-busy", "false");
+    document.getElementById("exceptions-empty").hidden = entries.length > 0;
+  }
+  if (filter) {
+    document.getElementById("filter-text").textContent = t(
+      filter.active ? "exceptionsFilterOn" : filter.installed ? "exceptionsFilterOff" : "exceptionsFilterMissing"
+    );
+    document.getElementById("open-filter-list").hidden = !filter.active;
+  }
+}
+
+function setUpExceptions() {
+  document.getElementById("exceptions").hidden = false;
+  document.getElementById("open-filter-list").addEventListener("click", () => run(() => privacy.openFilterList()));
+  privacy.onChanged.addListener(debounce(renderExceptions));
+  return renderExceptions();
+}
+
+// -- DNS ----------------------------------------------------------------------
+
+function dnsText(state) {
+  if (state.choice === "system") {
+    return t("dnsNowSystem");
+  }
+  if (state.choice === "default") {
+    return t("dnsNowDefault");
+  }
+  const name = state.provider === "custom" ? state.uri : t(`dns${state.provider[0].toUpperCase()}${state.provider.slice(1)}`);
+  return t(state.choice === "strict" ? "dnsNowStrict" : "dnsNowFallback", [name]);
+}
+
+function syncDnsForm(form) {
+  const choice = form.elements.choice.value;
+  document.getElementById("dns-provider-row").hidden = choice === "system" || !choice;
+  document.getElementById("dns-uri-field").hidden = form.elements.provider.value !== "custom";
+}
+
+async function renderDns() {
+  const state = await run(() => privacy.dns());
+  if (!state) {
+    return;
+  }
+  const form = document.getElementById("dns-form");
+  document.getElementById("dns-current").textContent = dnsText(state);
+  form.dataset.choice = state.choice;
+  for (const radio of form.elements.choice) {
+    radio.checked = radio.value === state.choice;
+  }
+  form.elements.provider.value = state.provider ?? "cloudflare";
+  form.elements.uri.value = state.provider === "custom" ? state.uri : "";
+  syncDnsForm(form);
+}
+
+function setUpDns() {
+  document.getElementById("dns").hidden = false;
+  const form = document.getElementById("dns-form");
+  form.addEventListener("change", () => syncDnsForm(form));
+  form.addEventListener("submit", async event => {
+    event.preventDefault();
+    const choice = form.elements.choice.value;
+    if (!choice) {
+      return;
+    }
+    const details = { choice, provider: form.elements.provider.value, uri: form.elements.uri.value };
+    if (await run(() => privacy.setDns(details), { form, done: t("dnsSaved") })) {
+      await renderDns();
+    }
+  });
+  return renderDns();
+}
+
 // -- page -----------------------------------------------------------------
 
 localize();
@@ -615,6 +732,9 @@ if (search && profiles && routing && connect) {
   ready.push(setUpSearch(), setUpProfiles(), setUpRouting(), setUpIntegrations());
   if (browser.nulavioAI) {
     ready.push(setUpAI());
+  }
+  if (privacy) {
+    ready.push(setUpExceptions(), setUpDns());
   }
 } else {
   document.getElementById("needs-build").hidden = false;

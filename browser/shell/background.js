@@ -10,6 +10,10 @@ import { drawProfileIcon } from "./lib/profile-icon.js";
 import { isRiskyFilename } from "./lib/risky.js";
 import { temporaryStorageText } from "./lib/ui.js";
 
+// This is an event page: without a listener here it would not start with the browser after the
+// first run, and the work below (profile icon, AI requests, temporary bar) would wait for an event.
+browser.runtime.onStartup.addListener(() => {});
+
 async function windowFor(incognito) {
   // Keep private downloads in private windows and vice versa.
   const windows = await browser.windows.getAll({ windowTypes: ["normal"] });

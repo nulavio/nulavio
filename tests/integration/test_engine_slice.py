@@ -336,7 +336,8 @@ class EngineSliceTest(unittest.TestCase):
             " policyNames: Object.keys(Services.policies.getActivePolicies() || {}),"
             " distId: d.getStringPref('distribution.id', ''),"
             " httpsOnlyDefault: d.getBoolPref('dom.security.https_only_mode'),"
-            " etpDefault: d.getStringPref('browser.contentblocking.category'),"
+            " etp: Services.prefs.getStringPref('browser.contentblocking.category'),"
+            " etpNormalWindows: Services.prefs.getBoolPref('privacy.trackingprotection.enabled'),"
             " chromeDevtools: d.getBoolPref('devtools.chrome.enabled'),"
             " remoteDebugging: d.getBoolPref('devtools.debugger.remote-enabled'),"
             " dumpEnabled: d.getBoolPref('browser.dom.window.dump.enabled'),"
@@ -352,7 +353,9 @@ class EngineSliceTest(unittest.TestCase):
         self.assertIn("ExtensionSettings", state["policyNames"])
         self.assertEqual(state["distId"], "nulavio")
         self.assertTrue(state["httpsOnlyDefault"])
-        self.assertEqual(state["etpDefault"], "strict")
+        # In effect, not only a default: the engine recomputes a default category (test_privacy covers engine profiles).
+        self.assertEqual(state["etp"], "strict")
+        self.assertTrue(state["etpNormalWindows"])
         # Non-official builds default these to true; Nulavio restores Mozilla's shipped values.
         for key in ("chromeDevtools", "remoteDebugging", "dumpEnabled", "chromeStdout"):
             self.assertFalse(state[key], f"{key} is on by default in this build")
