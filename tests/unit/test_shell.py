@@ -143,7 +143,7 @@ class PrivilegedApiTest(unittest.TestCase):
         self.assertEqual(apis["nulavioGuard"]["parent"]["events"], ["startup"])  # independent of the event page
         self.assertEqual(apis["nulavioPrivacy"]["parent"]["events"], ["startup"])  # defaults before the first page
         self.assertNotIn("events", apis["nulavioProfiles"]["parent"])
-        self.assertNotIn("events", apis["nulavioRouting"]["parent"])
+        self.assertEqual(apis["nulavioRouting"]["parent"]["events"], ["startup"])  # links clicked in pages (M5)
         self.assertNotIn("events", apis["nulavioConnect"]["parent"])
 
     def test_parent_scripts_only_bridge_to_the_modules(self):

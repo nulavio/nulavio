@@ -32,6 +32,7 @@ import sys
 import tempfile
 import threading
 import time
+import urllib.parse
 import zlib
 from pathlib import Path
 
@@ -90,12 +91,30 @@ class FixtureServer:
             def do_GET(self):
                 with outer._lock:
                     outer.hits.append(self.path)
+                if self.path.startswith("/redirect?to=http://"):
+                    # Routing fixture (test_routing.py): a redirect onto another site.
+                    self.send_response(302)
+                    self.send_header("Location", urllib.parse.unquote(self.path.split("=", 1)[1]))
+                    self.send_header("Content-Length", "0")
+                    self.end_headers()
+                    return
                 body, ctype, extra = outer.route(self.path)
                 self.send_response(200 if body is not None else 404)
                 self.send_header("Content-Type", ctype)
                 self.send_header("Cache-Control", "no-store")
                 for key, value in extra.items():
                     self.send_header(key, value)
+                self.end_headers()
+                if body is not None:
+                    self.wfile.write(body)
+
+            def do_POST(self):
+                self.rfile.read(int(self.headers.get("Content-Length") or 0))
+                with outer._lock:
+                    outer.hits.append(self.path)
+                body, ctype, _extra = outer.route(self.path)
+                self.send_response(200 if body is not None else 404)
+                self.send_header("Content-Type", ctype)
                 self.end_headers()
                 if body is not None:
                     self.wfile.write(body)
@@ -203,6 +222,29 @@ class FixtureServer:
             return page.encode(), html, {}
         if path == "/popup-on-load":
             page = "<!doctype html><title>popup</title><script>window.open('/page/popup')</script>"
+            return page.encode(), html, {}
+        if path == "/m5":
+            # Links clicked in pages (test_routing.py, M5). Served from one site; the links go to another
+            # (127.0.0.1) unless they say otherwise, through each way a page can start a navigation.
+            t = f"http://127.0.0.1:{self.port}/page"
+            hop = f"http://nulavio-hop.test:{self.port}/redirect?to={t}/m5-redirect"
+            page = (
+                "<!doctype html><title>m5</title>"
+                f'<p><a id=link href="{t}/m5-link">link</a> <a id=blank target=_blank href="{t}/m5-blank">new tab</a>'
+                f' <a id=same href="/page/m5-same">same site</a> <a id=redirect href="{hop}">redirect</a></p>'
+                f'<form id=fget action="{t}/m5-form-get" method=get><input name=q value=x><button id=fgetb>get</button></form>'
+                f'<form id=fpost action="{t}/m5-form-post" method=post><input name=q value=x>'
+                "<button id=fpostb>post</button></form>"
+                f"<button id=popup onclick=\"window.open('{t}/m5-popup')\">pop-up</button>"
+                f"<button id=twice onclick=\"location.href = '{t}/m5-twice-1';"
+                f" setTimeout(() => location.href = '{t}/m5-twice-2', 300)\">twice</button>"
+                f'<iframe id=frame src="/m5-frame"></iframe>'
+            )
+            return page.encode(), html, {}
+        if path == "/m5-frame":
+            t = f"http://127.0.0.1:{self.port}/page"
+            page = f'<!doctype html><a id=in href="{t}/m5-frame-in">in frame</a>'
+            page += f' <a id=top target=_top href="{t}/m5-frame-top">top</a>'
             return page.encode(), html, {}
         if path == "/links":
             # A page with a link, for link context menus (tests/integration/test_routing.py).

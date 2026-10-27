@@ -1,6 +1,6 @@
 # ADR 0003 — Nulavio Profiles and Smart Profile Routing
 
-- **Status:** Accepted (2026-10-25). Profiles implemented in Track B (2026-10-26). Routing M4a (links from other apps) and M4b (typed addresses, "Open link in profile") implemented (2026-10-26); temporary profile implemented (2026-10-26); M5 designed.
+- **Status:** Accepted (2026-10-25). Profiles implemented in Track B (2026-10-26). Routing M4a (links from other apps) and M4b (typed addresses, "Open link in profile") implemented (2026-10-26); temporary profile implemented (2026-10-26); M5 (links clicked in pages) reviewed and implemented as an opt-in (2026-10-27).
 - **Related:** [ADR 0002](0002-nulavio-search.md), [trust boundaries](../architecture/trust-boundaries.md).
 
 ## Context
@@ -48,7 +48,7 @@ Private windows have a separate policy: the default is never to switch, and rule
 **Where it runs (staged, safest first):**
 - **M4a External links (implemented).** URLs from the desktop handler reach the engine as a command line, through the remote service or at start-up. The router decides **before any network request**. If another profile is the target, the link goes there with the routed flag and nothing opens in the current one. See [M4a implementation](#m4a-implementation).
 - **M4b Typed URLs (implemented).** The decision runs on the address-bar submission, before navigation, with the same hand-off. Links clicked inside pages are moved only by an explicit choice: "Open link in profile" in the link's menu. See [M4b implementation](#m4b-implementation).
-- **M5 In-page navigation.** Only after a security review: top-level, user-initiated, `GET` navigations to `http(s)` only.
+- **M5 In-page navigation (implemented, opt-in).** After the [security review](../security/routing-m5-review.md): top-level, user-initiated `GET` navigations to `http(s)` that a top-level web page starts, to another site; never forms, redirects, frames, pop-ups with an opener or private windows; one per click. Off by default. See [M5 implementation](#m5-implementation).
 
 **Never transferred:**
 - `POST`, downloads and redirects mid-flight;
@@ -84,7 +84,9 @@ NulavioRouter.sys.mjs (pure decisions, no state or I/O)
 NulavioRouting.sys.mjs (rules in shared prefs, command lines, hand-off) and browser.nulavioRouting:
   state() ; setEnabled(bool) ; addRule({site, match, action, profileId?}) ; removeRule(id)
   setRuleAction(id, action) ; ruleFor(url) ; openIn(profileId, url)   // explicit choice
+  setInPage(bool)                                                       // M5 opt-in; state().inPage
   onChanged
+NulavioRouter: pageNavigationRefusal(facts) -> null | reason ; siteOf(url) // M5
 ```
 
 Verification: `tests/integration/test_profiles.py` runs a registered profile in a disposable home (`harness.GeckoProfileSession`) and drives the second instance the switch starts: a cookie and `localStorage` set in one profile are absent in the other, a second switch keeps one process, a running profile cannot be deleted, the popup switches with one click, the settings page asks before deleting and the toolbar follows a rename (10/10).
@@ -106,6 +108,13 @@ Verification: `tests/integration/test_profiles.py` runs a registered profile in 
 - **Never routed:** POST loads (search engines that POST), `save` (downloads), private windows, non-web schemes, and instances whose profile group is not loaded yet.
 - **Link menu.** "Open link in profile" (WebExtension `menus`, `http(s)` links only, hidden in private windows) lists the other profiles; choosing one is an explicit choice, sent with the routed flag, so no rule moves it again. Only the address moves; cookies and sessions stay in each profile.
 - **Verification.** `test_routing` 11–14: a typed address with a rule opens once, only in the rule's profile, and this tab does not navigate; "ask" holds it; private, POST, download and internal addresses are not routed; the real link context menu opens a link in the chosen profile.
+
+## M5 implementation
+
+- **Hook.** `http-on-opening-request` in the parent process, for top-level document channels: the engine announces each load there once, before the request is sent, and never for redirects. A load that a rule moves is cancelled there and handed to the target profile like an M4a link (routed flag, so it is never routed again); `ask` rules show the question page. A `target=_blank` link leaves an empty tab, which is closed.
+- **Only when asked for.** The observer exists only while "Also for links clicked in pages", routing and a profile group are all on.
+- **Never routed:** see the [review](../security/routing-m5-review.md) (no gesture, forms, redirects, frames, pop-ups with an opener, same site, private windows, a second navigation within one gesture, middle-click and Ctrl+click).
+- **Verification.** `test_routing` 15–22.
 
 ## Temporary profile implementation
 

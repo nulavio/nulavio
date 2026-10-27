@@ -5,6 +5,7 @@
     "functions": [
       { "name": "state", "type": "function", "async": true, "parameters": [] },
       { "name": "setEnabled", "type": "function", "async": true, "parameters": [{ "name": "enabled", "type": "boolean" }] },
+      { "name": "setInPage", "type": "function", "async": true, "parameters": [{ "name": "enabled", "type": "boolean" }] },
       {
         "name": "addRule", "type": "function", "async": true,
         "parameters": [{

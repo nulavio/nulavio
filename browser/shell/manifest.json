@@ -80,6 +80,9 @@
           [
             "nulavioRouting"
           ]
+        ],
+        "events": [
+          "startup"
         ]
       }
     },

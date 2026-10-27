@@ -474,6 +474,9 @@ async function renderRouting() {
     return;
   }
   document.getElementById("routing-enabled").checked = state.enabled;
+  const inPage = document.getElementById("routing-in-page");
+  inPage.checked = state.inPage;
+  inPage.disabled = !state.enabled;
   rerender(document.getElementById("rules"), () =>
     state.rules.length ? state.rules.map(ruleRow) : h("li", { class: "hint", text: t("routingNoRules") })
   );
@@ -489,6 +492,9 @@ async function renderRouting() {
 function setUpRouting() {
   document.getElementById("routing-enabled").addEventListener("change", event =>
     run(() => routing.setEnabled(event.target.checked), { done: t("doneSaved") })
+  );
+  document.getElementById("routing-in-page").addEventListener("change", event =>
+    run(() => routing.setInPage(event.target.checked), { done: t("doneSaved") })
   );
   const form = document.getElementById("add-rule");
   form.addEventListener("submit", async event => {

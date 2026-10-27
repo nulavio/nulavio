@@ -19,6 +19,8 @@ export const RULES_PREF = "nulavio.routing.rules";
 export const ENABLED_PREF = "nulavio.routing.enabled";
 /** Marks a command line sent by routing or by an explicit choice: it is never routed again. */
 export const ROUTED_FLAG = "nulavio-routed";
+/** Opt-in, shared by the group: rules also apply to links clicked in pages (M5). Default off. */
+export const IN_PAGE_PREF = "nulavio.routing.inPage";
 
 export const MATCHES = Object.freeze(["host", "domain"]);
 export const ACTIONS = Object.freeze(["open-in", "ask", "stay"]);
@@ -209,6 +211,54 @@ export function decide({ url, rules, enabled = true, currentProfileId = null, is
     return stay("already-here", rule);
   }
   return { action: rule.action, profileId: rule.profileId, ruleId: rule.id, reason: rule.match };
+}
+
+/**
+ * Whether a navigation that a web page started may be routed at all (M5,
+ * docs/security/routing-m5-review.md). Takes the engine's facts about the load;
+ * returns null when rules may apply, otherwise why it always loads here.
+ *
+ * @param {object} facts
+ * @param {boolean} facts.isPrivate
+ * @param {string} facts.method - The request method.
+ * @param {boolean} facts.isFormSubmission
+ * @param {boolean} facts.isMetaRefresh
+ * @param {boolean} facts.userGesture - The page had a valid user gesture when it navigated.
+ * @param {boolean} facts.topLevel - The load replaces a top-level page (a tab), not a frame.
+ * @param {boolean} facts.fromTopPage - Started by the top-level page itself, not by a frame in it.
+ * @param {boolean} facts.hasOpener - The target is a pop-up its opener can still script.
+ * @param {boolean} facts.sameSite - Source page and target share a registrable domain (or host).
+ * @returns {?string}
+ */
+export function pageNavigationRefusal(facts) {
+  if (facts.isPrivate) {
+    return "private";
+  }
+  if (facts.method !== "GET") {
+    return "method";
+  }
+  if (facts.isFormSubmission) {
+    return "form";
+  }
+  if (facts.isMetaRefresh || !facts.userGesture) {
+    return "no-gesture";
+  }
+  if (!facts.topLevel || !facts.fromTopPage) {
+    return "frame";
+  }
+  if (facts.hasOpener) {
+    return "opener";
+  }
+  if (facts.sameSite) {
+    return "same-site";
+  }
+  return null;
+}
+
+/** The registrable domain of a URL, or its host where there is none (IP addresses, localhost). */
+export function siteOf(input) {
+  const { host, registrable } = normalizeHost(input);
+  return registrable ?? host;
 }
 
 /**

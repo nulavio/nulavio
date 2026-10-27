@@ -530,6 +530,160 @@ class RoutingTest(unittest.TestCase):
         self.assertEqual(self.hits("/page/from-menu"), 1)
         self.assertFalse(any("/page/from-menu" in u for u in self.own_tabs()))
 
+    # -- M5: links clicked in pages (docs/security/routing-m5-review.md) -------
+
+    def m5_setup(self) -> None:
+        """Rule: 127.0.0.1 opens in Trabalho. The fixture page is served from localhost, another site."""
+        if "Trabalho" not in self.others:
+            self.start("Trabalho")
+        type(self).m5_rule = self.call(
+            "return R.addRule({site: '127.0.0.1', match: 'host', action: 'open-in', profileId: args[0]});",
+            self.ids["Trabalho"],
+        )
+
+    def open_m5(self, origin: str = "localhost") -> None:
+        self.m.navigate(f"http://{origin}:{self.server.port}/m5")
+
+    def click(self, selector: str, frame: str | None = None) -> None:
+        """A real click (trusted input, so the page gets a user gesture)."""
+        if frame:
+            self.m.send("WebDriver:SwitchToFrame", {"element": self.m.find_element(frame)})
+        try:
+            self.m.send("WebDriver:ElementClick", {"id": self.m.find_element(selector)})
+        finally:
+            if frame:
+                self.m.send("WebDriver:SwitchToParentFrame")
+
+    def routed_only(self, name: str) -> None:
+        """Requested once, by Trabalho; never loaded here."""
+        path, work = f"/page/{name}", self.others["Trabalho"]
+        self.assertTrue(harness.wait_until(lambda: self.hits(path), timeout=30), f"{name}: nothing was opened")
+        self.assertTrue(
+            harness.wait_until(lambda: any(u.endswith(path) for u in self.tabs(work)), timeout=10), f"{name}: not in Trabalho"
+        )
+        time.sleep(1)
+        self.assertEqual(self.hits(path), 1, f"{name}: requested more than once")
+        self.assertFalse(any(path in u for u in self.own_tabs()), f"{name}: also loaded here")
+
+    def stayed_here(self, name: str) -> None:
+        """Requested here, as in any browser; Trabalho never got it."""
+        path = f"/page/{name}"
+        self.assertTrue(harness.wait_until(lambda: self.hits(path), timeout=20), f"{name}: never loaded")
+        time.sleep(1)
+        self.assertFalse(any(path in u for u in self.tabs(self.others["Trabalho"])), f"{name}: routed")
+
+    def test_15_in_page_routing_is_off_by_default(self):
+        self.m5_setup()
+        self.assertFalse(self.call("return (await R.state()).inPage;"))
+        self.open_m5()
+        self.m.execute("document.getElementById('link').href += '-default';")
+        self.click("#link")
+        self.stayed_here("m5-link-default")
+
+    def test_16_a_clicked_link_opens_in_the_rule_profile_and_the_page_stays(self):
+        self.m5_setup()
+        self.call("await R.setInPage(true);")
+        self.open_m5()
+        self.click("#link")
+        self.routed_only("m5-link")
+        self.assertTrue(self.selected_url().endswith("/m5"), "the page the user was on did not stay")
+
+    def test_17_a_new_tab_link_is_routed_and_its_empty_tab_closes(self):
+        self.open_m5()
+        tabs_before = len(self.own_tabs())
+        self.click("#blank")
+        self.routed_only("m5-blank")
+        self.assertTrue(harness.wait_until(lambda: len(self.own_tabs()) == tabs_before, timeout=10), self.own_tabs())
+
+    def test_18_navigations_that_are_never_routed_load_here(self):
+        port = self.server.port
+        hop = f"http://nulavio-hop.test:{port}"
+        chrome_async(
+            self.m,
+            "Services.prefs.setStringPref('network.dns.localDomains', 'nulavio-hop.test');"
+            "const p = Services.scriptSecurityManager.createContentPrincipalFromOrigin(args[0]);"
+            "Services.perms.addFromPrincipal(p, 'https-only-load-insecure', Ci.nsIPermissionManager.ALLOW_ACTION);",
+            [hop],
+        )
+        cases = [
+            ("no gesture", None, None, "m5-script"),
+            ("GET form", "#fgetb", None, "m5-form-get"),
+            ("POST form", "#fpostb", None, "m5-form-post"),
+            ("pop-up with an opener", "#popup", None, "m5-popup"),
+            ("redirect onto a routed site", "#redirect", None, "m5-redirect"),
+            ("link inside a frame", "#in", "#frame", "m5-frame-in"),
+            ("frame navigating the page", "#top", "#frame", "m5-frame-top"),
+        ]
+        for label, selector, frame, name in cases:
+            with self.subTest(label):
+                self.open_m5()
+                if selector is None:
+                    self.m.execute("location.href = arguments[0];", [self.server.url(f"/page/{name}")])
+                else:
+                    self.click(selector, frame)
+                self.stayed_here(name)
+        with self.subTest("same site"):
+            self.open_m5("127.0.0.1")
+            self.click("#same")
+            self.stayed_here("m5-same")
+
+    def test_19_one_click_moves_one_navigation(self):
+        self.open_m5()
+        self.click("#twice")  # navigates, then navigates again 0.3 s later within the same gesture
+        self.routed_only("m5-twice-1")
+        self.stayed_here("m5-twice-2")
+
+    def test_20_private_windows_never_route(self):
+        handles = set(self.m.window_handles())
+        self.m.chrome("OpenBrowserWindow({private: true});")
+        self.assertTrue(harness.wait_until(lambda: set(self.m.window_handles()) - handles, timeout=20))
+        private = (set(self.m.window_handles()) - handles).pop()
+        main = self.m.send("WebDriver:GetWindowHandle")["value"]
+        self.m.switch_to(private)
+        # Let the new window finish its own first page before navigating it.
+        harness.wait_until(lambda: self.m.current_url() == "about:privatebrowsing", timeout=20)
+        time.sleep(1)
+        try:
+            self.open_m5()
+            self.m.execute("document.getElementById('link').href += '-private';")
+            self.click("#link")
+            self.stayed_here("m5-link-private")
+        finally:
+            self.m.switch_to(private)
+            self.m.send("WebDriver:CloseWindow")
+            self.m.switch_to(main)
+
+    def test_21_an_ask_rule_asks_and_loads_nothing(self):
+        self.call("await R.setRuleAction(args[0], 'ask');", self.m5_rule)
+        try:
+            self.open_m5()
+            before = self.hits("/page/m5-link")
+            self.click("#link")
+            ask = harness.wait_until(lambda: [u for u in self.own_tabs() if "/routing/ask.html" in u], timeout=20)
+            self.assertTrue(ask, "no question was shown")
+            self.assertIn("src=page", ask[0])
+            time.sleep(1)
+            self.assertEqual(self.hits("/page/m5-link"), before, "the site was loaded before the user chose")
+            self.assertTrue(self.selected_url().endswith("/m5") or "/routing/ask.html" in self.selected_url())
+        finally:
+            self.call("await R.setRuleAction(args[0], 'open-in');", self.m5_rule)
+
+    def test_22_settings_switch(self):
+        url = self.m.chrome("return WebExtensionPolicy.getByID('shell@nulavio.net').getURL('settings/settings.html#routing');")
+        self.m.navigate(url)
+        harness.wait_until(lambda: self.m.execute("return document.documentElement.dataset.ready === 'true';"), timeout=15)
+        checked = "return document.getElementById('routing-in-page').checked;"
+        self.assertTrue(harness.wait_until(lambda: self.m.execute(checked), timeout=10))
+        self.m.send("WebDriver:ElementClick", {"id": self.m.find_element("#routing-in-page")})
+        self.assertTrue(harness.wait_until(lambda: not self.call("return (await R.state()).inPage;"), timeout=10))
+        hint = self.m.execute("return document.getElementById('routing-in-page-hint').textContent;")
+        self.assertIn("pop-up", hint.lower())
+        # With it off, the request observer is gone: a clicked link loads here again.
+        self.open_m5()
+        self.m.execute("document.getElementById('link').href += '-off';")
+        self.click("#link")
+        self.stayed_here("m5-link-off")
+
 
 if __name__ == "__main__":
     unittest.main()

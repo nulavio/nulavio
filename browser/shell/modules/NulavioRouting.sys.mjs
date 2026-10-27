@@ -2,8 +2,10 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-/* Smart Profile Routing: links from other applications (M4a) and addresses
-   typed in the address bar (M4b) (docs/adr/0003-nulavio-profiles-and-routing.md).
+/* Smart Profile Routing: links from other applications (M4a), addresses
+   typed in the address bar (M4b) and, when the user turns it on, links clicked
+   in pages (M5) (docs/adr/0003-nulavio-profiles-and-routing.md,
+   docs/security/routing-m5-review.md).
 
    A link clicked in another application reaches Nulavio as a command line,
    either when it starts or through the engine's remote service. Nulavio's
@@ -26,14 +28,17 @@
 
 import {
   ENABLED_PREF,
+  IN_PAGE_PREF,
   MAX_RULES,
   ROUTED_FLAG,
   RULES_PREF,
   RoutingError,
   decide,
   normalizeHost,
+  pageNavigationRefusal,
   parseCommandLine,
   parseRules,
+  siteOf,
   validateRule,
 } from "resource://builtin-addons/nulavio-shell/modules/NulavioRouter.sys.mjs";
 
@@ -46,6 +51,7 @@ ChromeUtils.defineESModuleGetters(lazy, {
 
 const SHELL_ID = "shell@nulavio.net";
 const GROUPED_PREF = "browser.profiles.created";
+const GESTURE_PREF = "dom.user_activation.transient.timeout";
 
 function fail(code, message) {
   throw new RoutingError(code, message);
@@ -74,11 +80,18 @@ function webUrl(url) {
 class NulavioRoutingClass {
   #listeners = new Set();
   #observing = false;
+  #pageWatch = false; // M5: preference observers installed
+  #pageObserving = false; // M5: the request observer is installed
+  #pageRoutes = new Map(); // M5: inner window id of a page -> when it last had a navigation routed
 
   // -- rules (shared by every profile of the group) -------------------------
 
   enabled() {
     return Services.prefs.getBoolPref(ENABLED_PREF, true);
+  }
+
+  inPage() {
+    return Services.prefs.getBoolPref(IN_PAGE_PREF, false);
   }
 
   rules() {
@@ -110,6 +123,7 @@ class NulavioRoutingClass {
     return {
       ...availability,
       enabled: this.enabled(),
+      inPage: this.inPage(),
       rules: this.rules().map(rule => {
         const target = byId.get(rule.profileId);
         let display = rule.value;
@@ -125,6 +139,13 @@ class NulavioRoutingClass {
     this.#requireProfiles();
     Services.prefs.setBoolPref(ENABLED_PREF, Boolean(enabled));
     await this.#share(ENABLED_PREF);
+  }
+
+  /** M5 opt-in: rules also apply to links clicked in pages. */
+  async setInPage(enabled) {
+    this.#requireProfiles();
+    Services.prefs.setBoolPref(IN_PAGE_PREF, Boolean(enabled));
+    await this.#share(IN_PAGE_PREF);
   }
 
   /** Add (or replace) the user's rule for a site. Returns its id. */
@@ -297,6 +318,150 @@ class NulavioRoutingClass {
       this.#openPage("routing/blocked.html", { u: url, why: "error", src: source }).catch(console.error);
     });
     return true;
+  }
+
+  // -- links clicked in pages (M5) ------------------------------------------------
+
+  /**
+   * Called when the Shell starts. The request observer is installed only while
+   * the opt-in, routing and a profile group are all on, so nothing runs per
+   * request otherwise. Idempotent (the Shell may restart within one session).
+   */
+  watchPages() {
+    if (!this.#pageWatch) {
+      this.#pageWatch = true;
+      for (const pref of [IN_PAGE_PREF, ENABLED_PREF, GROUPED_PREF]) {
+        Services.prefs.addObserver(pref, this.#pagePrefObserver);
+      }
+    }
+    this.#syncPageObserver();
+  }
+
+  unwatchPages() {
+    if (this.#pageWatch) {
+      this.#pageWatch = false;
+      for (const pref of [IN_PAGE_PREF, ENABLED_PREF, GROUPED_PREF]) {
+        Services.prefs.removeObserver(pref, this.#pagePrefObserver);
+      }
+    }
+    this.#syncPageObserver();
+  }
+
+  #pagePrefObserver = { observe: () => this.#syncPageObserver() };
+
+  #requestObserver = {
+    observe: subject => {
+      try {
+        this.#onOpeningRequest(subject);
+      } catch (e) {
+        console.error("Nulavio routing: in-page check failed; the page loads here", e);
+      }
+    },
+  };
+
+  #syncPageObserver() {
+    const wanted =
+      this.#pageWatch && this.inPage() && this.enabled() && Services.prefs.getBoolPref(GROUPED_PREF, false);
+    if (wanted && !this.#pageObserving) {
+      Services.obs.addObserver(this.#requestObserver, "http-on-opening-request");
+    } else if (!wanted && this.#pageObserving) {
+      Services.obs.removeObserver(this.#requestObserver, "http-on-opening-request");
+      this.#pageRoutes.clear();
+    }
+    this.#pageObserving = wanted;
+  }
+
+  /**
+   * The engine announces each new request here, in the parent process, before
+   * it is sent; never for redirects. Only top-level document loads that a web
+   * page started are considered; everything else returns at once.
+   */
+  #onOpeningRequest(subject) {
+    const channel = subject.QueryInterface(Ci.nsIHttpChannel);
+    const loadInfo = channel.loadInfo;
+    if (loadInfo.externalContentPolicyType !== Ci.nsIContentPolicy.TYPE_DOCUMENT) {
+      return;
+    }
+    const principal = loadInfo.triggeringPrincipal;
+    if (!principal?.isContentPrincipal || !(principal.schemeIs("http") || principal.schemeIs("https"))) {
+      return; // the browser, extensions, local files: not a page navigation (M4a/M4b or explicit)
+    }
+    const service = lazy.SelectableProfileService;
+    if (!service.initialized || !service.currentProfile) {
+      return;
+    }
+    const target = loadInfo.browsingContext;
+    const source = WindowGlobalParent.getByInnerWindowId(loadInfo.triggeringWindowId);
+    const url = channel.URI.spec;
+    let sameSite = true;
+    try {
+      sameSite = siteOf(url) === siteOf(principal.originNoSuffix);
+    } catch {}
+    const refusal = pageNavigationRefusal({
+      isPrivate: loadInfo.originAttributes.privateBrowsingId > 0,
+      method: channel.requestMethod,
+      isFormSubmission: loadInfo.isFormSubmission,
+      isMetaRefresh: loadInfo.isMetaRefresh,
+      userGesture: loadInfo.hasValidUserGestureActivation,
+      topLevel: Boolean(target) && !target.parent,
+      fromTopPage: Boolean(source) && !source.browsingContext.parent && source.documentPrincipal.equals(principal),
+      hasOpener: Boolean(target?.opener),
+      sameSite,
+    });
+    if (refusal) {
+      return;
+    }
+    const decision = decide({ url, rules: this.rules(), currentProfileId: service.currentProfile.id });
+    if (decision.action === "stay") {
+      return;
+    }
+    // One routed navigation per page and gesture: a page that navigates again
+    // within the same gesture window loads here.
+    const now = ChromeUtils.now();
+    const windowMs = Services.prefs.getIntPref(GESTURE_PREF, 5000);
+    for (const [id, at] of this.#pageRoutes) {
+      if (now - at >= windowMs) {
+        this.#pageRoutes.delete(id);
+      }
+    }
+    if (this.#pageRoutes.has(source.innerWindowId)) {
+      return;
+    }
+    this.#pageRoutes.set(source.innerWindowId, now);
+
+    channel.cancel(Cr.NS_BINDING_ABORTED); // nothing is requested here
+    const emptyTab = target !== source.browsingContext && this.#isEmptyTab(target);
+    Services.tm.dispatchToMainThread(() => {
+      if (emptyTab) {
+        this.#closeEmptyTab(target);
+      }
+      this.#handOff(url, decision, "page").catch(e => {
+        console.error("Nulavio routing: could not route a link", e);
+        this.#openPage("routing/blocked.html", { u: url, why: "error", src: "page" }).catch(console.error);
+      });
+    });
+  }
+
+  /** A tab that has shown nothing yet: no document but the initial blank one, no history. */
+  #isEmptyTab(browsingContext) {
+    const page = browsingContext.currentWindowGlobal;
+    return (!page || page.isInitialDocument) && !(browsingContext.sessionHistory?.count > 0);
+  }
+
+  /** A link that opened a new tab and was routed leaves an empty tab behind: close it. */
+  #closeEmptyTab(browsingContext) {
+    const browser = browsingContext.embedderElement;
+    const windows = [...Services.wm.getEnumerator("navigator:browser")];
+    const win = windows.find(w => w.gBrowser?.getTabForBrowser(browser));
+    const tab = win?.gBrowser.getTabForBrowser(browser);
+    if (!tab || !this.#isEmptyTab(browsingContext) || browser.currentURI?.spec !== "about:blank") {
+      return;
+    }
+    if (win.gBrowser.tabs.length > 1) {
+      win.gBrowser.removeTab(tab);
+    } else if (windows.length > 1) {
+      win.close();
+    }
   }
 
   #resolve(cmdLine, value) {
