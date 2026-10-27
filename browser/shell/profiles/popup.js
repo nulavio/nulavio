@@ -3,7 +3,7 @@
    second one. Creating from a template creates the profile and opens it. */
 
 import { localize, t } from "../lib/i18n.js";
-import { announce, chip, errorText, h } from "../lib/ui.js";
+import { announce, chip, errorText, h, temporaryStorageText } from "../lib/ui.js";
 import { TEMPLATE_NAMES, freeName } from "../lib/names.js";
 
 const profiles = browser.nulavioProfiles;
@@ -21,16 +21,25 @@ async function act(action, doneText) {
 }
 
 function render(state, options) {
-  const current = state.profiles.find(p => p.isCurrent);
+  const temporary = state.reason === "temporary";
+  const current = temporary ? { ...state.profiles[0], name: t("profilesTemporary") } : state.profiles.find(p => p.isCurrent);
   const others = state.profiles.filter(p => !p.isCurrent);
+  // A temporary profile's chip shows the initial of "Temporary", not of "Temporary profile" in every language.
+  const badge = temporary ? { ...current, name: t("profilesTemporaryShort") } : current;
 
   document.getElementById("current").replaceChildren(
-    ...(current ? [chip(current, "lg"), h("span", { class: "popup__name", text: current.name })] : [])
+    ...(current ? [chip(badge, "lg"), h("span", { class: "popup__name", text: current.name })] : [])
   );
+  document.querySelector(".popup__keys").hidden = temporary;
 
   const unavailable = document.getElementById("unavailable");
   unavailable.hidden = state.available;
-  unavailable.textContent = state.available ? "" : t(state.reason === "disabled" ? "profilesDisabled" : "profilesUnavailable");
+  unavailable.textContent = state.available
+    ? ""
+    : temporary
+      ? temporaryStorageText(state.temporary)
+      : t(state.reason === "disabled" ? "profilesDisabled" : "profilesUnavailable");
+  document.getElementById("new-protected").hidden = temporary;
   document.getElementById("others-section").hidden = !state.available;
   document.getElementById("new-section").hidden = !state.available;
   if (!state.available) {
@@ -163,6 +172,10 @@ if (profiles) {
       document.querySelector("#others .popup__item, #templates button, #manage")?.focus();
     });
 }
+
+document.getElementById("new-temporary").addEventListener("click", () =>
+  act(() => profiles.openTemporary(), t("profilesTemporaryOpening"))
+);
 
 document.getElementById("new-protected").addEventListener("click", () =>
   act(() => browser.tabs.create({ url: browser.runtime.getURL("vault/create.html") }))

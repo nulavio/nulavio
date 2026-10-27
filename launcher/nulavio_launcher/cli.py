@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import signal
 import subprocess
@@ -10,7 +11,7 @@ import sys
 import textwrap
 from pathlib import Path
 
-from . import __version__, connect, desktop, doctor, extensions, guard, log, paths, profile
+from . import __version__, connect, desktop, doctor, extensions, guard, log, paths, profile, temporary
 from . import engine as engine_mod
 from . import prefs as prefs_mod
 
@@ -114,6 +115,8 @@ def _filter_context(prof: profile.Profile) -> dict[str, str]:
 def cmd_run(args: argparse.Namespace) -> int:
     eng = engine_mod.find_engine()
     engine_mod.check_supported(eng)
+    if args.temporary:
+        return _run_temporary(args, eng)
     prof = profile.get(args.profile)
     from .vault import profiles as vault_profiles
 
@@ -142,6 +145,28 @@ def _run_encrypted(args: argparse.Namespace, eng, prof) -> int:
             vault_profiles.lock(prof, after_exit=True)
         except Exception as exc:
             _err(f"could not lock profile '{prof.name}': {exc}")
+
+
+def _run_temporary(args: argparse.Namespace, eng) -> int:
+    """A new temporary profile: run the engine as a child, delete the profile when it exits."""
+    temp = temporary.create()
+    try:
+        if not eng.builtin_theme and not args.no_ublock:
+            # The Nulavio build installs uBlock Origin by policy; distribution Firefox gets the pinned copy.
+            extensions.install(extensions.load_lock()["ublock-origin"], temp.path)
+        where = (
+            "in memory"
+            if temp.in_memory and not temp.swap_on_disk
+            else ("in memory (may reach swap on disk)" if temp.in_memory else "in a temporary folder on disk")
+        )
+        _out(f"Temporary profile, kept {where}; deleted when Nulavio closes.")
+        return _run(args, eng, temp.profile, supervise=True)
+    finally:
+        try:
+            temporary.remove(temp.path)
+        except (OSError, temporary.TemporaryError) as exc:
+            _err(f"could not delete the temporary profile: {exc}")
+        temp.release()
 
 
 def _run(args: argparse.Namespace, eng, prof, supervise: bool = False) -> int:
@@ -342,6 +367,35 @@ def cmd_integrations(args: argparse.Namespace) -> int:
     return 0
 
 
+TEMPORARY_API_LIMIT = 4096
+
+
+def cmd_temporary(args: argparse.Namespace) -> int:
+    if args.temporary_cmd == "clean":
+        removed = temporary.cleanup()
+        _out(f"{removed} temporary profile(s) deleted")
+        return 0
+    if args.temporary_cmd == "reap":
+        outcome = temporary.reap(Path(args.path), args.guard_fd, grace=args.grace)
+        log.event("temporary.reap", outcome=outcome)
+        return 0
+    raw = sys.stdin.read(TEMPORARY_API_LIMIT + 1)
+    try:
+        try:
+            request = json.loads(raw) if len(raw) <= TEMPORARY_API_LIMIT else None
+        except ValueError:
+            request = None
+        if not isinstance(request, dict):
+            raise temporary.TemporaryError("bad-request")
+        result = temporary.api_request(request)
+    except temporary.TemporaryError as exc:
+        result = {"error": exc.code}
+    except (profile.ProfileError, paths.UnsafePathError, ValueError, OSError) as exc:
+        result = {"error": "failed", "detail": type(exc).__name__}
+    print(json.dumps(result))
+    return 0
+
+
 def cmd_desktop(args: argparse.Namespace) -> int:
     if args.desktop_cmd == "install":
         written = desktop.install(_launcher_path())
@@ -374,6 +428,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--engine-output", action="store_true", help="keep engine stdout/stderr (may include page console noise)")
     p.add_argument("--dry-run", action="store_true", help="prepare the profile and print the engine command")
     p.add_argument("--password-stdin", action="store_true", help="encrypted profile: read its password from stdin")
+    p.add_argument("--temporary", action="store_true", help="a new profile, deleted when Nulavio closes (ignores --profile)")
+    p.add_argument("--no-ublock", action="store_true", help=argparse.SUPPRESS)
     p.set_defaults(func=cmd_run)
 
     p = sub.add_parser("profile", help="manage profiles")
@@ -428,6 +484,16 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("desktop", help="user-level desktop entry and icons")
     p.add_argument("desktop_cmd", choices=["install", "uninstall"])
     p.set_defaults(func=cmd_desktop)
+
+    p = sub.add_parser("temporary", help="temporary profiles (deleted on close); `nulavio run --temporary` opens one")
+    tsub = p.add_subparsers(dest="temporary_cmd", required=True)
+    tsub.add_parser("clean", help="delete temporary profiles left behind by a crash")
+    tsub.add_parser("api", help=argparse.SUPPRESS)
+    q = tsub.add_parser("reap", help=argparse.SUPPRESS)
+    q.add_argument("--path", required=True)
+    q.add_argument("--guard-fd", type=int)
+    q.add_argument("--grace", type=float, default=120.0)
+    p.set_defaults(func=cmd_temporary)
 
     from .ai import cli as ai_cli
     from .vault import cli as vault_cli

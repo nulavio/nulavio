@@ -38,6 +38,12 @@
         "name": "openCurrentPage", "type": "function", "async": true,
         "parameters": [{ "name": "page", "type": "string", "enum": ["edit", "delete"] }]
       },
+      { "name": "temporaryState", "type": "function", "async": true, "parameters": [] },
+      { "name": "openTemporary", "type": "function", "async": true, "parameters": [] },
+      {
+        "name": "markTemporary", "type": "function", "async": true,
+        "parameters": [{ "name": "text", "type": "string", "maxLength": 300 }]
+      },
       {
         "name": "avatarSvg", "type": "function", "async": true,
         "parameters": [{ "name": "avatar", "type": "string" }, { "name": "ink", "type": "string" }]

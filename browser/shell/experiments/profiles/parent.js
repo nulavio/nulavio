@@ -39,6 +39,9 @@ this.nulavioProfiles = class extends ExtensionAPI {
         remove: call(id => profiles.remove(id)),
         openManager: call(() => profiles.openManager()),
         openCurrentPage: call(page => profiles.openCurrentPage(page)),
+        temporaryState: call(() => profiles.temporaryState()),
+        openTemporary: call(() => profiles.openTemporary()),
+        markTemporary: call(text => profiles.markTemporary(text)),
         avatarSvg: call((avatar, ink) => profiles.avatarSvg(avatar, ink)),
         onChanged: new ExtensionCommon.EventManager({
           context,

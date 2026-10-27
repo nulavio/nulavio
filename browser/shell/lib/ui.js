@@ -75,7 +75,8 @@ export function avatarURL(avatar) {
 
 /** A profile's identity chip: its colour plus its icon (or initial while the icon loads). */
 export function chip(profile, size = "md") {
-  const el = h("span", { class: `chip chip--${size}`, "aria-hidden": "true", text: initial(profile.name) });
+  const kind = profile.temporary ? " chip--temporary" : "";
+  const el = h("span", { class: `chip chip--${size}${kind}`, "aria-hidden": "true", text: initial(profile.name) });
   el.style.setProperty("--chip", `var(--nv-color-identity-${profile.color})`);
   avatarURL(profile.avatar).then(url => {
     if (url) {
@@ -120,4 +121,12 @@ export function announce(text, level = "ok") {
     status.dataset.level = level;
     status.textContent = text;
   }
+}
+
+/** Where a temporary profile is kept, in the words the UI may use (never "memory only" if swap on disk is active). */
+export function temporaryStorageText(state) {
+  if (!state?.inMemory) {
+    return t("profilesTemporaryDisk");
+  }
+  return t(state.swapOnDisk ? "profilesTemporarySwap" : "profilesTemporaryMemory");
 }

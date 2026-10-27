@@ -8,6 +8,7 @@
 import { t } from "./lib/i18n.js";
 import { drawProfileIcon } from "./lib/profile-icon.js";
 import { isRiskyFilename } from "./lib/risky.js";
+import { temporaryStorageText } from "./lib/ui.js";
 
 async function windowFor(incognito) {
   // Keep private downloads in private windows and vice versa.
@@ -39,6 +40,12 @@ browser.downloads.onChanged.addListener(async delta => {
 
 async function showCurrentProfile() {
   const state = await browser.nulavioProfiles.list();
+  if (state.reason === "temporary") {
+    await browser.action.setIcon({ imageData: drawProfileIcon({ name: t("profilesTemporaryShort"), temporary: true }) });
+    await browser.action.setTitle({ title: t("profilesTemporaryButton") });
+    await browser.nulavioProfiles.markTemporary(`${t("profilesTemporaryBar")} ${temporaryStorageText(state.temporary)}`);
+    return;
+  }
   const current = state.profiles.find(p => p.isCurrent);
   if (!state.available || !current) {
     await browser.action.setTitle({ title: t("profilesButton") });

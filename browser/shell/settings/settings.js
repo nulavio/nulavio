@@ -4,7 +4,7 @@
 
 import { localize, t } from "../lib/i18n.js";
 import { TEMPLATE_NAMES, freeName } from "../lib/names.js";
-import { announce, chip, confirmDialog, errorText, h, rerender } from "../lib/ui.js";
+import { announce, chip, confirmDialog, errorText, h, rerender, temporaryStorageText } from "../lib/ui.js";
 import { setUpAI } from "./ai.js";
 
 const search = browser.nulavioSearch;
@@ -374,7 +374,11 @@ async function renderProfiles() {
   const unavailable = document.getElementById("profiles-unavailable");
   const usable = state.available;
   unavailable.hidden = usable;
-  unavailable.textContent = usable ? "" : t(state.reason === "disabled" ? "profilesDisabled" : "profilesUnavailable");
+  unavailable.textContent = usable
+    ? ""
+    : state.reason === "temporary"
+      ? `${t("profilesTemporaryBar")} ${temporaryStorageText(state.temporary)}`
+      : t(state.reason === "disabled" ? "profilesDisabled" : "profilesUnavailable");
   for (const id of ["profiles-card", "profiles-new"]) {
     document.getElementById(id).hidden = !usable;
   }
@@ -406,6 +410,9 @@ async function setUpProfiles() {
   document.getElementById("profiles").hidden = false;
   profileOptions = await profiles.options();
   document.getElementById("open-manager").addEventListener("click", () => run(() => profiles.openManager()));
+  document
+    .getElementById("open-temporary")
+    .addEventListener("click", () => run(() => profiles.openTemporary(), { done: t("profilesTemporaryOpening") }));
   const form = document.getElementById("create-profile");
   form.addEventListener("submit", async event => {
     event.preventDefault();

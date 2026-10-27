@@ -52,7 +52,7 @@ Each milestone has a definition of done (DoD). "Done" requires the DoD to be ver
 - [x] Smart Profile Routing M4a: decision engine (precedence, IDN, Public Suffix List) + links from other apps routed before any request, with ask-first and conservative failure pages, rules editor and "Always open this site in this profile" (`test_routing`)
 - [x] Smart Profile Routing M4b: typed addresses routed on Enter (patch 0005), "Open link in profile" in the link menu (`test_routing` 11–14)
 - [ ] Smart Profile Routing M5: automatic routing of in-page navigation, only after a security review
-- [ ] Temporary profile (deleted on close)
+- [x] Temporary profile (deleted on close): in memory where the system allows, deleted by the Nulavio tools when its instance exits; selector, Settings and `nulavio run --temporary` (`test_temporary`)
 - [x] Nulavio Connect P0: `nulavio integrations` and Settings → Integrations (Plasma Browser Integration, portals, secret storage, default browser) with evidence; "Make Nulavio the default browser" on request, with restore (`test_connect`)
 - [ ] Nulavio Connect P1/P2: KRunner, KDE Connect send link, screen-cast status, passkeys status, notifications; MPRIS, activities, per-profile proxy
 
@@ -136,4 +136,4 @@ External agents (Codex CLI and Desktop, Claude Code and Desktop, other MCP clien
 
 ## Next task (recommended)
 
-Follow the [execution plan](execution-plan.md): S1 (Connect P0), S2 (unlock research and ADRs), S3 (Vault crypto prototype), S4 (AI Bridge foundation), S5 (encrypted profile storage), S6 (unlock UX in the browser), S7 (AI autonomy and its UI) and S8 (AI with profiles, routing and the connect wizard) are done; next: S10 (security key, needs a key) and S11 (Android Companion, last), plus the remaining roadmap phases. The plan lists the decisions each slice needs from the maintainer.
+Follow the [execution plan](execution-plan.md): S1 (Connect P0), S2 (unlock research and ADRs), S3 (Vault crypto prototype), S4 (AI Bridge foundation), S5 (encrypted profile storage), S6 (unlock UX in the browser), S7 (AI autonomy and its UI), S8 (AI with profiles, routing and the connect wizard) and S12 (temporary profile) are done; next: S13 (Guard runtime) through S24 (alpha gate), with S10 (security key, needs a key) and S11 (Android Companion, last) waiting on the maintainer. The plan lists the decisions each slice needs from the maintainer.

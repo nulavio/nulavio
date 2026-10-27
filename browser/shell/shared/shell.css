@@ -185,6 +185,12 @@
 .chip--md { width: 1.75rem; height: 1.75rem; font-size: 0.875rem; }
 .chip--lg { width: 2.25rem; height: 2.25rem; font-size: 1rem; }
 .chip--neutral { --chip: var(--nv-color-bg-sunken); color: var(--nv-color-text-secondary); box-shadow: none; }
+/* Temporary profile: the neutral identity colour with a dashed ring ("not kept"), same in both themes */
+.chip--temporary {
+  box-shadow: none;
+  outline: 2px dashed color-mix(in srgb, var(--nv-color-identity-on) 70%, transparent);
+  outline-offset: -2px;
+}
 
 /* Settings page */
 .page--settings { max-width: 52rem; gap: var(--nv-space-7); padding-top: var(--nv-space-8); }

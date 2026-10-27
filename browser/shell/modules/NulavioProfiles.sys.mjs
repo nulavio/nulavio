@@ -15,6 +15,7 @@
 
 const lazy = {};
 ChromeUtils.defineESModuleGetters(lazy, {
+  callTool: "resource://builtin-addons/nulavio-shell/modules/NulavioTools.sys.mjs",
   NetUtil: "resource://gre/modules/NetUtil.sys.mjs",
   profileLockState: "resource://builtin-addons/nulavio-shell/modules/NulavioVaultState.sys.mjs",
   vaultHelper: "resource://builtin-addons/nulavio-shell/modules/NulavioVault.sys.mjs",
@@ -33,8 +34,12 @@ export const AVATARS = Object.freeze([
   "palette", "plane", "shopping", "message", "history", "sparkle-single",
 ]);
 
+/** File the launcher writes into a temporary profile (launcher/nulavio_launcher/temporary.py). */
+export const TEMPORARY_MARKER = "nulavio-temporary.json";
+
 /* Templates are starting points (name, icon, colour), never mandatory
-   profiles. "Temporary" is not offered until deletion on close exists. */
+   profiles. A temporary profile is not a template: it is opened with
+   openTemporary() and deleted by the Nulavio tools when it closes. */
 export const TEMPLATES = Object.freeze([
   Object.freeze({ id: "personal", avatar: "heart", color: "mint" }),
   Object.freeze({ id: "work", avatar: "briefcase", color: "sky" }),
@@ -80,6 +85,7 @@ class NulavioProfilesClass {
   #listeners = new Set();
   #observing = false;
   #avatarCache = new Map();
+  #temporary = null;
 
   get #service() {
     return lazy.SelectableProfileService;
@@ -137,6 +143,60 @@ class NulavioProfilesClass {
     return COLORS.includes(stored) ? stored : COLORS[(profile.id - 1 + COLORS.length) % COLORS.length];
   }
 
+  // -- temporary profiles -------------------------------------------------
+
+  /**
+   * Whether this instance runs a temporary profile, and where it is kept.
+   * Read from the launcher's marker in the profile folder; the browser never
+   * deletes anything itself (the Nulavio tools do, after it exits).
+   */
+  async temporaryState() {
+    if (!this.#temporary) {
+      const marker = PathUtils.join(Services.dirsvc.get("ProfD", Ci.nsIFile).path, TEMPORARY_MARKER);
+      const data = await IOUtils.readJSON(marker).catch(() => null);
+      this.#temporary =
+        data && typeof data === "object" && !Array.isArray(data)
+          ? { temporary: true, inMemory: data.in_memory === true, swapOnDisk: data.swap_on_disk !== false }
+          : { temporary: false, inMemory: false, swapOnDisk: false };
+    }
+    return this.#temporary;
+  }
+
+  /**
+   * Open a new temporary profile in its own instance. The Nulavio tools create
+   * it (in memory where the system allows) and start a watcher that deletes it
+   * when that instance exits; the engine is started with an argument list.
+   */
+  async openTemporary() {
+    const answer = await lazy.callTool(["temporary", "api"], { op: "create" });
+    if (typeof answer?.path !== "string" || !answer.path.startsWith("/") || answer.path.includes("\0")) {
+      fail("helper-failed");
+    }
+    const process = Cc["@mozilla.org/process/util;1"].createInstance(Ci.nsIProcess);
+    process.init(Services.dirsvc.get("XREExeF", Ci.nsIFile));
+    const args = ["--profile", answer.path];
+    process.runw(false, args, args.length);
+    return { inMemory: answer.inMemory === true, swapOnDisk: answer.swapOnDisk !== false };
+  }
+
+  /** In a temporary instance, a bar in every window says that its data is deleted on close. */
+  async markTemporary(text) {
+    if (!(await this.temporaryState()).temporary) {
+      return;
+    }
+    const mark = win => {
+      const box = win.gNotificationBox;
+      if (!box || box.getNotificationWithValue("nulavio-temporary")) {
+        return;
+      }
+      box.appendNotification("nulavio-temporary", { label: String(text), priority: box.PRIORITY_INFO_MEDIUM }, []);
+    };
+    for (const win of Services.wm.getEnumerator("navigator:browser")) {
+      mark(win);
+    }
+    Services.obs.addObserver(subject => mark(subject), "browser-delayed-startup-finished");
+  }
+
   /** What the UI may offer: templates, colours and icons. */
   options() {
     return { templates: TEMPLATES, colors: COLORS, avatars: AVATARS };
@@ -163,6 +223,12 @@ class NulavioProfilesClass {
    * store: before the first extra profile exists, only the current one is listed.
    */
   async list() {
+    const temporary = await this.temporaryState();
+    if (temporary.temporary) {
+      // Not part of the profile group: no switching from here, and nothing to rename.
+      const self = { id: null, name: "", avatar: null, color: "slate", isCurrent: true, temporary: true };
+      return { available: false, reason: "temporary", temporary, profiles: [self] };
+    }
     const availability = this.availability();
     if (!availability.available) {
       return { ...availability, profiles: [] };

@@ -1,6 +1,7 @@
 /* Toolbar icon for the current profile: its identity colour with its initial,
    drawn locally. Colours are generated from the design tokens
-   (lib/identity-colors.js), so there is one source of truth. */
+   (lib/identity-colors.js), so there is one source of truth. A temporary
+   profile gets a dashed ring, as its chip in Shell pages does. */
 
 import { IDENTITY_COLORS } from "./identity-colors.js";
 
@@ -17,9 +18,13 @@ export function drawProfileIcon(profile, sizes = [16, 32]) {
     ctx.arc(r, r, r - size / 16, 0, Math.PI * 2);
     ctx.fillStyle = fill;
     ctx.fill();
-    ctx.lineWidth = size / 16;
+    ctx.lineWidth = profile.temporary ? size / 10 : size / 16;
     ctx.strokeStyle = ink;
+    if (profile.temporary) {
+      ctx.setLineDash([size / 8, size / 12]);
+    }
     ctx.stroke();
+    ctx.setLineDash([]);
     ctx.fillStyle = ink;
     ctx.font = `600 ${Math.round(size * 0.6)}px system-ui, sans-serif`;
     ctx.textAlign = "center";

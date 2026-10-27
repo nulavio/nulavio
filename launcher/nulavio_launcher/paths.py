@@ -54,6 +54,26 @@ def cache_home() -> Path:
     return override / "cache" if override else _xdg("XDG_CACHE_HOME", ".cache") / APP
 
 
+def runtime_home() -> Path | None:
+    """Per-session directory for short-lived files ($XDG_RUNTIME_DIR/nulavio), or None.
+
+    The XDG directory must be an absolute path, owned by the user and private
+    (0700, as the spec requires); otherwise it is not used.
+    """
+    override = _home_override()
+    if override:
+        return override / "runtime"
+    value = os.environ.get("XDG_RUNTIME_DIR", "")
+    if not value or not os.path.isabs(value):
+        return None
+    try:
+        if check_private(Path(value), PRIVATE_DIR_MODE):
+            return None
+    except (OSError, UnsafePathError):
+        return None
+    return Path(value) / APP
+
+
 def profiles_root() -> Path:
     return data_home() / "profiles"
 

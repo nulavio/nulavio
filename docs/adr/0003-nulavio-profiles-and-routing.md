@@ -1,6 +1,6 @@
 # ADR 0003 — Nulavio Profiles and Smart Profile Routing
 
-- **Status:** Accepted (2026-10-25). Profiles implemented in Track B (2026-10-26). Routing M4a (links from other apps) and M4b (typed addresses, "Open link in profile") implemented (2026-10-26); M5 designed.
+- **Status:** Accepted (2026-10-25). Profiles implemented in Track B (2026-10-26). Routing M4a (links from other apps) and M4b (typed addresses, "Open link in profile") implemented (2026-10-26); temporary profile implemented (2026-10-26); M5 designed.
 - **Related:** [ADR 0002](0002-nulavio-search.md), [trust boundaries](../architecture/trust-boundaries.md).
 
 ## Context
@@ -23,7 +23,7 @@ Verified on the Nulavio build: it works when the current profile is **registered
    Create, edit and delete use the upstream pages, which keep their confirmations and safe deletion: a running profile cannot be deleted.
 2. **Full profiles, not containers.** Each profile is a separate engine instance with its own directory, which isolates cookies, storage, history, extensions, credentials and preferences. Containers (contextual identities) only split cookies and storage inside one profile; they share history, extensions and preferences. Both stay available, and the UI never calls a container a profile.
 3. **Search and passwords per profile** follow from the profile directory: `search.json`, installed extensions (Proton Pass, KeePassXC-Browser), and `logins.json`.
-4. **"Temporary" profile is not shipped** until deletion on close is implemented and tested. No UI is offered for an unimplemented promise.
+4. **Temporary profile: offered only with deletion on close implemented and tested** (see [Temporary profile](#temporary-profile-implementation)). It is an action ("New temporary window"), not a template.
 
 ## Smart Profile Routing (designed, staged)
 
@@ -107,6 +107,17 @@ Verification: `tests/integration/test_profiles.py` runs a registered profile in 
 - **Link menu.** "Open link in profile" (WebExtension `menus`, `http(s)` links only, hidden in private windows) lists the other profiles; choosing one is an explicit choice, sent with the routed flag, so no rule moves it again. Only the address moves; cookies and sessions stay in each profile.
 - **Verification.** `test_routing` 11–14: a typed address with a rule opens once, only in the rule's profile, and this tab does not navigate; "ask" holds it; private, POST, download and internal addresses are not routed; the real link context menu opens a link in the chosen profile.
 
+## Temporary profile implementation
+
+A new, empty engine profile in its own instance, deleted when that instance exits.
+
+- **Where.** `$XDG_RUNTIME_DIR/nulavio/temporary/tmp-<random>/` (0700). On systemd desktops that is a per-user tmpfs: the profile is kept in memory and also disappears at logout or reboot. The runtime directory is used only if it is the user's own and private; otherwise the profile goes to the cache directory on disk. The marker file records which case applies (`/proc/self/mountinfo`) and whether a swap area on disk is active (`/proc/swaps`; zram is memory); the UI says "kept in memory only" only when both hold.
+- **Who deletes it.** The Nulavio tools (`launcher/nulavio_launcher/temporary.py`), never the browser. They create the folder and take an exclusive `flock` on its guard file; the holder deletes it: the supervising `nulavio run --temporary`, or, when the browser opens one ("New temporary window" in the selector or in Settings → Profiles), a detached watcher that inherits the lock, waits for the engine to take the profile (2 minutes at most) and then for it to exit. A folder with a free guard lock and no engine is an orphan (its watcher was killed) and is deleted the next time a temporary profile is created, or with `nulavio temporary clean`. Deletion is limited to marked folders directly under the temporary root, never through a symlink (`shutil.rmtree`'s fd-based version).
+- **What it is.** Not part of the profile group, so no switching or routing from it (rules neither move pages into nor out of it). The engine's own defaults and policies apply (the Nulavio build installs uBlock Origin by policy; the launcher installs the pinned copy for distribution Firefox). Prefs that follow from "deleted on close": downloads stay out of the desktop's recent files, the password manager does not offer to save (a saved password would be deleted), no crash restore, no "what's new" page. Nothing that protects the user is changed.
+- **Identity.** A dashed ring with "T" on the toolbar button and in Shell pages, the tooltip "Temporary profile (deleted on close)", and a bar in every window: "Temporary profile: nothing here is kept." plus where it is kept.
+- **Verification.** `tests/unit/test_temporary.py` (16: storage detection, private runtime directory, marker and prefs, guard lock, orphans, refusals, the real watcher); `tests/integration/test_temporary.py` (4, real engine): the selector starts an ordinary instance (no automation flags) whose folder is deleted after it exits; inside it the identity, the storage note, no switching or routing, and the prefs; Settings offers it; `nulavio run --temporary` deletes the profile after the engine exits and even a dry run leaves nothing. A probe of the disposable home after a temporary session (cookies and site storage written) found no new or changed file outside the deleted folder except the launcher's log ("created", "deleted"; no addresses).
+- **Limits** ([R37](../security/residual-risks.md)): files saved to Downloads and data kept by other apps (password managers through native messaging, the clipboard) are not part of the profile; memory may be written to a swap area on disk; a crash leaves the folder until the next temporary profile, logout or reboot.
+
 ## Risks
 
 | Risk | Mitigation |
@@ -118,4 +129,5 @@ Verification: `tests/integration/test_profiles.py` runs a registered profile in 
 | Leaking which sites a user visits through rules | Rules stay local (profile group store or prefs) and are never logged with URLs |
 | An explicit `-P <profile>` on a command line cannot be told apart from a link (the engine consumes it before handlers run) | Routing applies; turn routing off or use "Never switch" for that site. In-browser explicit choices carry the routed flag |
 | A link that starts the browser opens next to the start page when it stays | Documented ([R22](../security/residual-risks.md)); the alternative (reading the group database synchronously at start-up) was rejected |
+| A user expects a temporary profile to leave no trace anywhere | The UI says where it is kept and that only the profile is deleted; [R37](../security/residual-risks.md) lists what stays outside it |
 | Upstream behaviours on the first extra profile: the current one becomes "Original profile" and a chooser appears at start-up | Kept as upstream does; renaming is one click in Nulavio settings ([R18](../security/residual-risks.md)) |
