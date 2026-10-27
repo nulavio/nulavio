@@ -297,16 +297,21 @@ class AiBridgeTest(unittest.TestCase):
         agent, env = self.agent("autonomous")
         work = self.home / "user-profiles" / "work"
         work.mkdir(parents=True)
+        # A profile the user already uses: Mozilla's own builds have had their Terms of Use accepted there.
+        accepted = ('user_pref("termsofuse.acceptedVersion", 4);', 'user_pref("termsofuse.acceptedDate", "1761436800000");')
+        (work / "prefs.js").write_text("\n".join(accepted) + "\n")
         registry.set_profiles(agent["id"], [{"label": "Trabalho", "path": str(work)}])
         registry.set_routes(agent["id"], [{"site": "127.0.0.1", "profile": "Trabalho"}])
         registry.grant(agent["id"], "execute_js", "allow")
         c = self.client(env)
         listed = c.call("profiles_list")["structuredContent"]
         self.assertEqual([p["profile"] for p in listed["profiles"]], ["AI Workspace", "Trabalho"])
-        routed = c.call("tab_new", url=self.fx.url("/page/routed"))["structuredContent"]
+        routed = c.call("tab_new", url=self.fx.url("/page/routed"))
+        self.assertIn("structuredContent", routed, routed)
+        routed = routed["structuredContent"]
         self.assertEqual(routed["profile"], "Trabalho")  # the site goes to the profile the user chose
         self.assertIn("nulavio-ai-temporary", (work / "user.js").read_text())
-        self.assertTrue((work / "prefs.js").exists() or (work / "times.json").exists())
+        self.assertTrue((work / "times.json").exists() or (work / "sessionstore-backups").exists())
         # Using the AI Workspace as well means working in two profiles: autonomous asks, nobody can answer.
         denied = c.call("tab_new")
         self.assertIn("more than one profile", denied["content"][0]["text"])
