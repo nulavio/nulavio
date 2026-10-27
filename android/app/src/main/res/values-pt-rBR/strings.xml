@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Nulavio Companion</string>
+    <string name="intro">Desbloqueie seus perfis protegidos do Nulavio com este celular. A chave que os abre fica no celular, protegida pela sua digital, rosto ou bloqueio de tela.</string>
+    <string name="setup_button">Configurar este celular</string>
+    <string name="setup_needs_lock">Defina primeiro um bloqueio de tela (PIN, padrão ou senha) neste celular. O Nulavio o usa para proteger as chaves.</string>
+    <string name="setup_prompt_title">Criar as chaves deste celular</string>
+    <string name="phone_name">Este celular: %1$s</string>
+    <string name="protection_strongbox">Chaves protegidas pelo chip de segurança do celular (StrongBox).</string>
+    <string name="protection_tee">Chaves protegidas pelo hardware seguro do celular (TEE).</string>
+    <string name="protection_software">Chaves protegidas só por software neste aparelho.</string>
+    <string name="computers_heading">Computadores</string>
+    <string name="no_computers">Nenhum computador pareado ainda. No computador, abra Nulavio → Configurações → Perfis → um perfil protegido → Conectar celular e leia o código.</string>
+    <string name="remove">Remover</string>
+    <string name="removed">Removido. Remova também este celular no computador (Configurações → Perfis → métodos de desbloqueio).</string>
+    <string name="scan_button">Ler o código no computador</string>
+    <string name="scan_prompt">Leia o código que o Nulavio mostra</string>
+    <string name="not_a_nulavio_code">Esse não é um código do Nulavio.</string>
+    <string name="waiting_for_computer">Esperando o computador nesta rede…</string>
+    <string name="compare_title">Estes 6 dígitos são iguais aos de %1$s?</string>
+    <string name="digits_match">São iguais</string>
+    <string name="digits_differ">São diferentes</string>
+    <string name="confirm_prompt_title">Parear com %1$s</string>
+    <string name="paired">Pareado com %1$s.</string>
+    <string name="pairing_cancelled">Pareamento cancelado. Nada foi salvo.</string>
+    <string name="unlock_title">Desbloquear “%1$s” em %2$s?</string>
+    <string name="unlock_hint">Só aprove se você acabou de pedir isso naquele computador.</string>
+    <string name="unlock_button">Desbloquear</string>
+    <string name="not_now">Agora não</string>
+    <string name="unlock_prompt_title">Desbloquear “%1$s”</string>
+    <string name="unlocked">“%1$s” está desbloqueado em %2$s.</string>
+    <string name="working">Trabalhando…</string>
+    <string name="local_network_needed">O Nulavio precisa de acesso aos dispositivos da sua rede local para alcançar o computador.</string>
+    <string name="error_expired">Este código expirou. Peça um novo no computador.</string>
+    <string name="error_replay">Este pedido já foi respondido.</string>
+    <string name="error_unpaired">Este computador não está pareado com este celular.</string>
+    <string name="error_bad_signature">Este pedido não veio de um computador pareado. Nada foi enviado.</string>
+    <string name="error_not_for_this_phone">Este pedido é para outro celular.</string>
+    <string name="error_unreachable">O computador não se conectou. Confira se os dois estão na mesma rede e tente de novo.</string>
+    <string name="error_keys_invalidated">As chaves deste celular não podem mais ser usadas (as digitais ou o bloqueio de tela mudaram). Configure-o de novo e pareie de novo com seus computadores.</string>
+    <string name="error_generic">Algo deu errado (%1$s). Nada foi desbloqueado.</string>
+</resources>

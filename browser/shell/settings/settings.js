@@ -339,6 +339,11 @@ function profileRow(profile) {
     }
     end.push(del);
   }
+  if (profile.encrypted) {
+    const phones = h("button", { class: "button button--quiet", type: "button", text: t("vaultPhones"), "data-focus-key": `phones-${profile.id}` });
+    phones.addEventListener("click", () => run(() => browser.nulavioVault.openPhonePage(profile.id)));
+    end.push(phones);
+  }
 
   return h(
     "li",

@@ -14,15 +14,17 @@ import shutil
 import socket
 import subprocess
 import threading
+from pathlib import Path
 
 from nulavio_launcher.vault import link
 from phone_reference import PhoneRejected, ReferencePhone
 
 
 class LinkedPhone:
-    def __init__(self, phone: ReferencePhone, announce: str = "local"):
+    def __init__(self, phone: ReferencePhone, announce: str = "local", registry: Path | None = None):
         self.phone = phone
         self.announce = announce
+        self.registry = registry  # tests/lib/fake_avahi.py reads it
         self.names: dict[str, tuple[str, int]] = {}
         self.sas: str | None = None
         self.result: dict | None = None
@@ -44,6 +46,8 @@ class LinkedPhone:
             self._publishers.append(subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL))
         else:
             self.names[name] = ("127.0.0.1", port)
+            if self.registry is not None:
+                self.registry.write_text(json.dumps(self.names))
         return server
 
     def _run(self, target) -> threading.Thread:

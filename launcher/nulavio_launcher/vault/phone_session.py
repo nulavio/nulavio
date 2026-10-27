@@ -278,6 +278,8 @@ def unlock(session: Session, request: dict, emit, resolver: link.Resolver = link
                 coordinator.cancel()
                 break
             try:
+                coordinator.phone_acknowledged()
+                session.set("approve-on-phone")  # the phone has the request; the user decides there
                 message = channel.recv(deadline)
                 if message.get("t") != "response":
                     raise link.LinkError("bad-message")
@@ -287,6 +289,7 @@ def unlock(session: Session, request: dict, emit, resolver: link.Resolver = link
                     _send_quietly(channel, {"t": "ok"})
                 elif state in (State.WAITING_FOR_PHONE, State.WAITING_FOR_BIOMETRIC):
                     _send_quietly(channel, {"t": "error", "code": "bad-signature"})  # not the paired phone: keep waiting
+                    session.set("waiting-for-phone")
                 else:
                     _send_quietly(channel, {"t": "error", "code": coordinator.error or "failed"})
             except link.LinkError:

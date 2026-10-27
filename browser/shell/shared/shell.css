@@ -380,3 +380,8 @@ a.button { display: inline-flex; align-items: center; text-decoration: none; }
 body.assistant { padding: var(--nv-space-4); }
 .segmented { display: flex; gap: var(--nv-space-3); border: 0; padding: 0; margin: 0; }
 .assistant__answer { white-space: pre-wrap; overflow-wrap: anywhere; padding: var(--nv-space-3); border-radius: var(--nv-radius-md); background: var(--nv-color-bg-sunken); }
+
+/* Phone pairing and unlock (S11): the QR is always dark on light, with its quiet zone, in both themes */
+.qr-box { display: flex; justify-content: center; }
+.qr { width: min(18rem, 80vw); height: auto; border-radius: var(--nv-radius-md); }
+.digits { font-size: 2.5rem; letter-spacing: 0.15em; text-align: center; margin: var(--nv-space-3) 0; }

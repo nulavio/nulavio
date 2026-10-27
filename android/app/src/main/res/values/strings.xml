@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Nulavio Companion</string>
+    <string name="intro">Unlock your protected Nulavio profiles with this phone. The key that opens them stays on the phone, behind your fingerprint, face or screen lock.</string>
+    <string name="setup_button">Set up this phone</string>
+    <string name="setup_needs_lock">Set a screen lock (PIN, pattern or password) on this phone first. Nulavio uses it to protect the keys.</string>
+    <string name="setup_prompt_title">Create this phone\'s keys</string>
+    <string name="phone_name">This phone: %1$s</string>
+    <string name="protection_strongbox">Keys protected by the phone\'s security chip (StrongBox).</string>
+    <string name="protection_tee">Keys protected by the phone\'s secure hardware (TEE).</string>
+    <string name="protection_software">Keys protected by software only on this device.</string>
+    <string name="computers_heading">Computers</string>
+    <string name="no_computers">No computer paired yet. On your computer, open Nulavio → Settings → Profiles → a protected profile → Connect phone, then scan the code.</string>
+    <string name="remove">Remove</string>
+    <string name="removed">Removed. Also remove this phone on the computer (Settings → Profiles → unlock methods).</string>
+    <string name="scan_button">Scan the code on your computer</string>
+    <string name="scan_prompt">Scan the code Nulavio shows</string>
+    <string name="not_a_nulavio_code">That is not a Nulavio code.</string>
+    <string name="waiting_for_computer">Waiting for the computer on this network…</string>
+    <string name="compare_title">Do these 6 digits match the ones on %1$s?</string>
+    <string name="digits_match">They match</string>
+    <string name="digits_differ">They are different</string>
+    <string name="confirm_prompt_title">Pair with %1$s</string>
+    <string name="paired">Paired with %1$s.</string>
+    <string name="pairing_cancelled">Pairing cancelled. Nothing was saved.</string>
+    <string name="unlock_title">Unlock “%1$s” on %2$s?</string>
+    <string name="unlock_hint">Only approve if you just asked for it on that computer.</string>
+    <string name="unlock_button">Unlock</string>
+    <string name="not_now">Not now</string>
+    <string name="unlock_prompt_title">Unlock “%1$s”</string>
+    <string name="unlocked">“%1$s” is unlocked on %2$s.</string>
+    <string name="working">Working…</string>
+    <string name="local_network_needed">Nulavio needs access to devices on your local network to reach your computer.</string>
+    <string name="error_expired">This code has expired. Ask the computer for a new one.</string>
+    <string name="error_replay">This request was already answered.</string>
+    <string name="error_unpaired">This computer is not paired with this phone.</string>
+    <string name="error_bad_signature">This request is not from a paired computer. Nothing was sent.</string>
+    <string name="error_not_for_this_phone">This request is for another phone.</string>
+    <string name="error_unreachable">The computer did not connect. Check that both are on the same network, then try again.</string>
+    <string name="error_keys_invalidated">This phone\'s keys can no longer be used (its fingerprints or screen lock changed). Set it up again and pair it again with your computers.</string>
+    <string name="error_generic">Something went wrong (%1$s). Nothing was unlocked.</string>
+</resources>

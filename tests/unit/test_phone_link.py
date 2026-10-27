@@ -102,14 +102,14 @@ class LinkTest(unittest.TestCase):
             '"192.168.1.23",40123,[],13]}\'\n'
         )
         fake.chmod(0o700)
-        with mock.patch.dict(os.environ, {"PATH": f"{tmp}:/usr/bin:/bin"}):
+        with mock.patch.dict(os.environ, {"NULAVIO_BUSCTL": str(fake)}):
             self.assertEqual(link.avahi_resolve("nv1-u-abc"), ("192.168.1.23", 40123))
         argv = json.loads(log.read_text())
         # "--" before the call: the interface index -1 must not be read as an option.
         self.assertLess(argv.index("--"), argv.index("call"))
         self.assertEqual(argv[argv.index("iisssiu") + 1 :], ["-1", "0", "nv1-u-abc", link.SERVICE_TYPE, "local", "0", "0"])
         fake.write_text('#!/bin/sh\necho \'{"data": [0,0,0,0,0,0,0,"not-an-ip",1]}\'\n')
-        with mock.patch.dict(os.environ, {"PATH": f"{tmp}:/usr/bin:/bin"}):
+        with mock.patch.dict(os.environ, {"NULAVIO_BUSCTL": str(fake)}):
             self.assertIsNone(link.avahi_resolve("nv1-u-abc"))
 
 

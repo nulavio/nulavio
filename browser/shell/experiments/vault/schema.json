@@ -3,52 +3,245 @@
     "namespace": "nulavioVault",
     "description": "Protected (encrypted) profiles: status, unlock, lock, create, change methods (docs/adr/0006-nulavio-vault.md). Keys never enter the browser; secrets go to the Nulavio tools on stdin. Built-in Shell only.",
     "functions": [
-      { "name": "capabilities", "type": "function", "async": true, "parameters": [] },
-      { "name": "status", "type": "function", "async": true, "parameters": [{ "name": "profileId", "type": "integer" }] },
       {
-        "name": "unlock", "type": "function", "async": true,
+        "name": "capabilities",
+        "type": "function",
+        "async": true,
+        "parameters": []
+      },
+      {
+        "name": "status",
+        "type": "function",
+        "async": true,
         "parameters": [
-          { "name": "profileId", "type": "integer" },
-          { "name": "method", "type": "string", "enum": ["password", "recovery-code", "os-keyring"] },
-          { "name": "secret", "type": "string", "optional": true, "maxLength": 1024 },
-          { "name": "url", "type": "string", "optional": true, "maxLength": 8192 }
+          {
+            "name": "profileId",
+            "type": "integer"
+          }
         ]
       },
-      { "name": "lock", "type": "function", "async": true, "parameters": [{ "name": "profileId", "type": "integer" }] },
       {
-        "name": "createProtected", "type": "function", "async": true,
-        "parameters": [{
-          "name": "details", "type": "object",
-          "properties": {
-            "name": { "type": "string", "maxLength": 60 },
-            "templateId": { "type": "string", "optional": true },
-            "avatar": { "type": "string", "optional": true },
-            "color": { "type": "string", "optional": true },
-            "password": { "type": "string", "optional": true, "maxLength": 1024 },
-            "keyring": { "type": "boolean", "optional": true }
+        "name": "unlock",
+        "type": "function",
+        "async": true,
+        "parameters": [
+          {
+            "name": "profileId",
+            "type": "integer"
+          },
+          {
+            "name": "method",
+            "type": "string",
+            "enum": [
+              "password",
+              "recovery-code",
+              "os-keyring"
+            ]
+          },
+          {
+            "name": "secret",
+            "type": "string",
+            "optional": true,
+            "maxLength": 1024
+          },
+          {
+            "name": "url",
+            "type": "string",
+            "optional": true,
+            "maxLength": 8192
           }
-        }]
+        ]
       },
       {
-        "name": "change", "type": "function", "async": true,
+        "name": "lock",
+        "type": "function",
+        "async": true,
         "parameters": [
-          { "name": "profileId", "type": "integer" },
-          { "name": "op", "type": "string", "enum": ["new-recovery-code", "add-password", "add-keyring", "remove-method"] },
           {
-            "name": "details", "type": "object",
+            "name": "profileId",
+            "type": "integer"
+          }
+        ]
+      },
+      {
+        "name": "createProtected",
+        "type": "function",
+        "async": true,
+        "parameters": [
+          {
+            "name": "details",
+            "type": "object",
             "properties": {
-              "current": { "type": "string", "maxLength": 1024 },
-              "password": { "type": "string", "optional": true, "maxLength": 1024 },
-              "envelope": { "type": "string", "optional": true, "maxLength": 64 }
+              "name": {
+                "type": "string",
+                "maxLength": 60
+              },
+              "templateId": {
+                "type": "string",
+                "optional": true
+              },
+              "avatar": {
+                "type": "string",
+                "optional": true
+              },
+              "color": {
+                "type": "string",
+                "optional": true
+              },
+              "password": {
+                "type": "string",
+                "optional": true,
+                "maxLength": 1024
+              },
+              "keyring": {
+                "type": "boolean",
+                "optional": true
+              }
             }
           }
         ]
       },
       {
-        "name": "openUnlockPage", "type": "function", "async": true,
+        "name": "change",
+        "type": "function",
+        "async": true,
         "parameters": [
-          { "name": "profileId", "type": "integer" },
-          { "name": "url", "type": "string", "optional": true, "maxLength": 8192 }
+          {
+            "name": "profileId",
+            "type": "integer"
+          },
+          {
+            "name": "op",
+            "type": "string",
+            "enum": [
+              "new-recovery-code",
+              "add-password",
+              "add-keyring",
+              "remove-method"
+            ]
+          },
+          {
+            "name": "details",
+            "type": "object",
+            "properties": {
+              "current": {
+                "type": "string",
+                "maxLength": 1024
+              },
+              "password": {
+                "type": "string",
+                "optional": true,
+                "maxLength": 1024
+              },
+              "envelope": {
+                "type": "string",
+                "optional": true,
+                "maxLength": 64
+              }
+            }
+          }
+        ]
+      },
+      {
+        "name": "openUnlockPage",
+        "type": "function",
+        "async": true,
+        "parameters": [
+          {
+            "name": "profileId",
+            "type": "integer"
+          },
+          {
+            "name": "url",
+            "type": "string",
+            "optional": true,
+            "maxLength": 8192
+          }
+        ]
+      },
+      {
+        "name": "phoneStart",
+        "type": "function",
+        "async": true,
+        "parameters": [
+          {
+            "name": "profileId",
+            "type": "integer"
+          },
+          {
+            "name": "kind",
+            "type": "string",
+            "enum": [
+              "pair",
+              "unlock"
+            ]
+          },
+          {
+            "name": "details",
+            "type": "object",
+            "optional": true,
+            "properties": {
+              "current": {
+                "type": "string",
+                "optional": true,
+                "maxLength": 1024
+              }
+            }
+          }
+        ]
+      },
+      {
+        "name": "phoneSession",
+        "type": "function",
+        "async": true,
+        "parameters": [
+          {
+            "name": "session",
+            "type": "string",
+            "maxLength": 64
+          },
+          {
+            "name": "action",
+            "type": "string",
+            "enum": [
+              "status",
+              "confirm",
+              "cancel"
+            ]
+          },
+          {
+            "name": "match",
+            "type": "boolean",
+            "optional": true
+          }
+        ]
+      },
+      {
+        "name": "phoneOpen",
+        "type": "function",
+        "async": true,
+        "parameters": [
+          {
+            "name": "profileId",
+            "type": "integer"
+          },
+          {
+            "name": "url",
+            "type": "string",
+            "optional": true,
+            "maxLength": 8192
+          }
+        ]
+      },
+      {
+        "name": "openPhonePage",
+        "type": "function",
+        "async": true,
+        "parameters": [
+          {
+            "name": "profileId",
+            "type": "integer"
+          }
         ]
       }
     ]

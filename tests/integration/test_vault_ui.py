@@ -18,6 +18,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
 import harness
+from fake_avahi import FAKE_BUSCTL
+from phone_link_ref import LinkedPhone
+from phone_reference import ReferencePhone
 
 from nulavio_launcher.vault import sodium, storage
 
@@ -63,6 +66,13 @@ class VaultUiTest(unittest.TestCase):
         cls.keyring_store = cls.session.tmp / "keyring.json"
         cls.session.env["NULAVIO_SECRET_TOOL"] = str(tool)
         cls.session.env["NV_FAKE_KEYRING"] = str(cls.keyring_store)
+        # The phone is found through a stand-in for Avahi: nothing is announced on the real network.
+        busctl = cls.session.tmp / "busctl"
+        busctl.write_text(FAKE_BUSCTL.format(python=sys.executable))
+        busctl.chmod(0o700)
+        cls.avahi = cls.session.tmp / "avahi.json"
+        cls.session.env["NULAVIO_BUSCTL"] = str(busctl)
+        cls.session.env["NV_FAKE_AVAHI"] = str(cls.avahi)
         cls.m = cls.session.start()
         cls.base = cls.m.chrome('return WebExtensionPolicy.getByID("shell@nulavio.net").getURL("");')
         cls.shots = harness.artifacts_dir() / "vault-ui"
@@ -336,6 +346,58 @@ class VaultUiTest(unittest.TestCase):
         self.call("await P.remove(args[0]);", locked["id"])
         self.assertFalse((path.parent / f"{path.name}.vault").exists())
         self.assertFalse(path.exists())
+
+    # -- phone (Nulavio Companion, S11) ---------------------------------------------------------
+
+    def qr_code(self, selector: str) -> str:
+        script = f"return document.querySelector('{selector} svg')?.dataset.code ?? null;"
+        self.assertTrue(harness.wait_until(lambda: self.m.execute(script), timeout=30), "no code shown")
+        return self.m.execute(script)
+
+    def test_08_connect_a_phone_with_the_six_digits(self):
+        profile_id, _code = self.create_via_api("Celular", password=PASSWORD, keyring=False)
+        type(self).phone_profile = profile_id
+        self.open_page(f"vault/phone.html?p={profile_id}")
+        self.wait_state("idle")
+        self.shoot("phone-idle")
+        self.type_into("current", "not the password")
+        self.click("#start-form button[type=submit]")
+        self.wait_state("error")
+        self.type_into("current", PASSWORD)
+        self.click("#start-form button[type=submit]")
+        self.wait_state("waiting")
+        code = self.qr_code("#qr")
+        self.shoot("phone-qr")
+        linked = LinkedPhone(ReferencePhone("Pixel de teste"), registry=self.avahi)
+        self.addClassCleanup(linked.close)
+        linked.pair(code)
+        self.wait_state("compare")
+        digits = self.m.execute("return document.getElementById('digits').textContent;")
+        self.assertEqual(digits.replace(" ", ""), linked.sas)  # the same 6 digits on both screens
+        self.shoot("phone-compare")
+        self.click("#match")
+        self.wait_state("paired")
+        phones = self.m.execute("return document.getElementById('phones').textContent;")
+        self.assertIn("Pixel de teste", phones)
+        type(self).linked = linked
+
+    def test_09_unlock_with_the_phone_opens_the_profile(self):
+        profile_id = self.phone_profile
+        path = self.profile_path(profile_id)
+        url = self.server.url("/page/phone-opened")
+        self.open_page(f"vault/unlock.html?p={profile_id}&u={url}")
+        self.wait_state("idle")
+        self.click("#use-phone")
+        self.wait_state("waiting")
+        code = self.qr_code("#phone-qr")
+        self.shoot("unlock-phone")
+        self.assertEqual(self.server.requests_to("/page/phone-opened"), [])
+        self.linked.unlock(code)
+        self.assertTrue(harness.wait_until(lambda: self.instances(path), timeout=60), "the profile did not start")
+        self.assertTrue(harness.wait_until(lambda: self.server.requests_to("/page/phone-opened"), timeout=60))
+        self.stop_instance(path)
+        box = storage.Container(path)
+        self.assertTrue(harness.wait_until(lambda: not box.mounted(), timeout=30), "not locked after the window closed")
 
 
 if __name__ == "__main__":

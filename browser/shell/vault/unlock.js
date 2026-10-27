@@ -6,6 +6,7 @@
    device-unavailable, recovery-required, storage-unavailable, not-locked. */
 
 import { localize, t } from "../lib/i18n.js";
+import { qrSvg } from "../lib/qr.js";
 import { announce, chip, errorText, h } from "../lib/ui.js";
 
 const vault = browser.nulavioVault;
@@ -77,6 +78,63 @@ async function attempt(method, secret = null) {
   }
 }
 
+// -- unlock with the phone (Nulavio Companion, S11) ------------------------------------------
+
+let phoneSession = null;
+let phoneTimer = null;
+const PHONE_ENDINGS = {
+  declined: "vaultPhoneDeclined",
+  expired: "vaultPhoneExpired",
+  unreachable: "vaultPhoneUnreachable",
+  cancelled: "vaultPhoneCancelled",
+  gone: "vaultPhoneCancelled",
+};
+
+function showPhone(show) {
+  byId("phone-panel").hidden = !show;
+  byId("password-form").hidden = show || !profile.methods.some(m => m.method === "password");
+  byId("alternatives").hidden = show;
+  if (!show) {
+    clearInterval(phoneTimer);
+    phoneTimer = null;
+    phoneSession = null;
+  }
+}
+
+async function phonePoll() {
+  const status = await browser.nulavioVault.phoneSession(phoneSession, "status");
+  if (status.state === "approve-on-phone") {
+    byId("phone-qr").hidden = true;
+    byId("phone-hint").textContent = t("vaultPhoneApprove");
+    setState("unlocking", t("vaultPhoneApprove"));
+  } else if (status.state === "unlocked") {
+    showPhone(false);
+    await vault.phoneOpen(profileId, url?.href);
+    setState("unlocked", t("vaultUnlocked", [profile.name]));
+    await closeSoon();
+  } else if (PHONE_ENDINGS[status.state] || status.state === "failed") {
+    showPhone(false);
+    const message = status.state === "failed" ? errorText(new Error(status.error)) : t(PHONE_ENDINGS[status.state]);
+    setState("device-unavailable", message, "error");
+  }
+}
+
+async function startPhone() {
+  setState("unlocking", t("vaultPhoneStarting"));
+  try {
+    const started = await vault.phoneStart(profileId, "unlock");
+    phoneSession = started.session;
+    byId("phone-qr").replaceChildren(qrSvg(started.qr, t("phoneQrLabel"), started.code));
+    byId("phone-qr").hidden = false;
+    byId("phone-hint").textContent = t("vaultPhoneScan");
+    showPhone(true);
+    setState("waiting", t("vaultPhoneScan"));
+    phoneTimer = setInterval(() => phonePoll().catch(e => setState("error", errorText(e), "error")), 1000);
+  } catch (e) {
+    setState("error", errorText(e), "error");
+  }
+}
+
 async function render() {
   const capabilities = await vault.capabilities();
   if (!capabilities.storage || !capabilities.sodium) {
@@ -105,6 +163,10 @@ async function render() {
   const kinds = new Set(profile.methods.map(m => m.method));
   byId("password-form").hidden = !kinds.has("password");
   const alternatives = [];
+  if (kinds.has("phone") && capabilities.phone) {
+    const onclick = () => startPhone();
+    alternatives.push(h("button", { class: "button button--secondary", type: "button", id: "use-phone", text: t("vaultUsePhone"), onclick }));
+  }
   if (kinds.has("os-keyring")) {
     const onclick = () => attempt("os-keyring");
     alternatives.push(h("button", { class: "button button--secondary", type: "button", id: "use-keyring", text: t("vaultUseKeyring"), onclick }));
@@ -114,13 +176,13 @@ async function render() {
     alternatives.push(h("button", { class: "button button--quiet", type: "button", id: "use-recovery", text: t("vaultUseRecovery"), onclick }));
   }
   byId("alternatives").replaceChildren(...alternatives);
-  if (!kinds.has("password") && !kinds.has("os-keyring")) {
+  if (!kinds.has("password") && !kinds.has("os-keyring") && !kinds.has("phone")) {
     showRecovery(true);
     setState("recovery-required", t("vaultRecoveryRequired"));
     return;
   }
   setState("idle");
-  (kinds.has("password") ? byId("password") : byId("use-keyring"))?.focus();
+  (kinds.has("password") ? byId("password") : byId("use-phone") ?? byId("use-keyring"))?.focus();
 }
 
 byId("password-form").addEventListener("submit", event => {
@@ -132,6 +194,13 @@ byId("recovery-form").addEventListener("submit", event => {
   attempt("recovery-code", byId("recovery").value);
 });
 byId("recovery-back").addEventListener("click", () => showRecovery(false));
+byId("phone-cancel").addEventListener("click", () => {
+  if (phoneSession) {
+    browser.nulavioVault.phoneSession(phoneSession, "cancel").catch(() => null);
+  }
+  showPhone(false);
+  setState("idle");
+});
 
 const UNAVAILABLE = new Set(["tools-missing", "storage-unavailable", "helper-failed"]);
 

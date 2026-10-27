@@ -1,0 +1,36 @@
+# Recipe for fdroiddata (metadata/net.nulavio.companion.yml), to submit when the first Companion
+# release is tagged (ADR 0005, decision D4: F-Droid first). Checked by tests/unit/test_companion_build.py.
+Categories:
+  - Security
+License: MPL-2.0
+AuthorName: Nulavio
+WebSite: https://nulavio.net
+SourceCode: https://github.com/caiolombello/nulavio
+IssueTracker: https://github.com/caiolombello/nulavio/issues
+
+AutoName: Nulavio Companion
+Summary: Unlock protected Nulavio profiles with your phone
+Description: |-
+  Nulavio Companion unlocks the protected (encrypted) profiles of the Nulavio
+  web browser on your computer. The key that opens a profile is kept on the
+  phone, behind its secure hardware and your fingerprint, face or screen lock;
+  the computer cannot open the profile without it.
+
+  It works on your local network only: no account, no server, no cloud, no
+  Google services, no trackers. Pairing compares six digits on both screens.
+
+RepoType: git
+Repo: https://github.com/caiolombello/nulavio.git
+
+Builds:
+  - versionName: 0.1.0
+    versionCode: 1
+    commit: companion-v0.1.0
+    subdir: android/app
+    gradle:
+      - yes
+
+AutoUpdateMode: Version
+UpdateCheckMode: Tags ^companion-v.*$
+CurrentVersion: 0.1.0
+CurrentVersionCode: 1

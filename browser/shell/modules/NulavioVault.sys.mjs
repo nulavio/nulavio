@@ -167,6 +167,49 @@ class Vault {
     return { done: true, recoveryCode: answer.recovery_code ?? null };
   }
 
+  // -- phone (Nulavio Companion, ADR 0005, S11) ---------------------------------------------
+
+  /**
+   * Start pairing a phone ("pair", needs a current secret) or an unlock with the paired phone
+   * ("unlock"). The Nulavio tools run the operation; the page gets the session id and the code to
+   * show, as rows of QR modules drawn by the engine's own encoder.
+   */
+  async phoneStart(profileId, kind, { current = null } = {}) {
+    const { path } = await this.#path(profileId);
+    const request = kind === "pair" ? { op: "phone-pair-start", path, current: checkSecret(current) } : { op: "phone-unlock-start", path };
+    const answer = await helper(request);
+    if (answer.error || typeof answer.qr !== "string") {
+      fail(answer.error ?? "failed");
+    }
+    const { QR } = ChromeUtils.importESModule("moz-src:///toolkit/components/qrcode/encoder.mjs");
+    const { matrix } = QR.encodeToMatrix(answer.qr, "L");
+    const rows = matrix.map(row => row.map(dark => (dark ? "1" : "0")).join(""));
+    return { session: answer.session, expiry: answer.expiry, qr: rows, code: answer.qr };
+  }
+
+  /** A running session: "status", "confirm" (the user's answer about the 6 digits) or "cancel". */
+  async phoneSession(session, action, match = false) {
+    return helper({ op: "phone-session", session: String(session), action, match: Boolean(match) });
+  }
+
+  /** After an unlock with the phone: open the profile, with the held-back address if any. */
+  async phoneOpen(profileId, url = null) {
+    if (url) {
+      return { opened: (await lazy.NulavioRouting.openIn(Number(profileId), url)).action };
+    }
+    return { opened: (await lazy.NulavioProfiles.switchTo(Number(profileId))).action };
+  }
+
+  /** The page for connecting and removing phones. */
+  async openPhonePage(profileId) {
+    const win = Services.wm.getMostRecentBrowserWindow();
+    const policy = WebExtensionPolicy.getByID(SHELL_ID);
+    if (!win || !policy) {
+      fail("no-window");
+    }
+    win.openTrustedLinkIn(`${policy.getURL("vault/phone.html")}?p=${Number(profileId)}`, "tab");
+  }
+
   /** The page shown instead of a locked profile: never the site, never the profile itself. */
   async openUnlockPage(profileId, url = null, source = null) {
     const win = Services.wm.getMostRecentBrowserWindow();

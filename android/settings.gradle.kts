@@ -16,4 +16,4 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "nulavio-companion"
-include(":nv1")
+include(":nv1", ":app")

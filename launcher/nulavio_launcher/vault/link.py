@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import base64
 import json
+import os
 import shutil
 import socket
 import subprocess
@@ -40,11 +41,17 @@ def instance_name(kind: str, operation_id: str) -> str:
     return f"nv1-{kind}-" + base64.b32encode(digest).decode().lower()[:16]
 
 
+def _busctl() -> str | None:
+    """systemd's busctl from the system directories; NULAVIO_BUSCTL names a stand-in (tests, like NULAVIO_SECRET_TOOL)."""
+    return os.environ.get("NULAVIO_BUSCTL") or shutil.which("busctl", path="/usr/bin:/bin")
+
+
 def avahi_available() -> bool:
-    if not shutil.which("busctl", path="/usr/bin:/bin"):
+    busctl = _busctl()
+    if not busctl:
         return False
     probe = subprocess.run(
-        ["busctl", "--system", "--json=short", "call", "org.freedesktop.Avahi", "/",
+        [busctl, "--system", "--json=short", "call", "org.freedesktop.Avahi", "/",
          "org.freedesktop.Avahi.Server", "GetVersionString"],
         capture_output=True, text=True, timeout=5, check=False,
     )  # fmt: skip
@@ -53,9 +60,12 @@ def avahi_available() -> bool:
 
 def avahi_resolve(name: str) -> tuple[str, int] | None:
     """IPv4 address and port of `name` on the local network, through Avahi on the system bus."""
+    busctl = _busctl()
+    if not busctl:
+        return None
     result = subprocess.run(
         # "--": the interface index -1 (any) would otherwise read as an option.
-        ["busctl", "--system", "--json=short", "--timeout=6", "--", "call", "org.freedesktop.Avahi", "/",
+        [busctl, "--system", "--json=short", "--timeout=6", "--", "call", "org.freedesktop.Avahi", "/",
          "org.freedesktop.Avahi.Server", "ResolveService", "iisssiu",
          "-1", "0", name, SERVICE_TYPE, "local", "0", "0"],
         capture_output=True, text=True, timeout=10, check=False,

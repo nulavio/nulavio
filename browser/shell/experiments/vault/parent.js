@@ -36,6 +36,10 @@ this.nulavioVault = class extends ExtensionAPI {
         createProtected: call(details => vault.createProtected(details)),
         change: call((id, op, details) => vault.change(id, op, details)),
         openUnlockPage: call((id, url) => vault.openUnlockPage(id, url ?? null, "selector")),
+        phoneStart: call((id, kind, details) => vault.phoneStart(id, kind, { current: details?.current ?? null })),
+        phoneSession: call((session, action, match) => vault.phoneSession(session, action, match ?? false)),
+        phoneOpen: call((id, url) => vault.phoneOpen(id, url ?? null)),
+        openPhonePage: call(id => vault.openPhonePage(id)),
       },
     };
   }
