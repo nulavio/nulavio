@@ -12,7 +12,7 @@ Decision: [ADR 0007](../adr/0007-ai-bridge.md). Threats: [threat model for autom
 | Permission & Autonomy Manager (Policy Decision Point) | `ai/policy.py`, `registry.decide` | Done: presets, grants (forever / minutes / session), site list, stop switch, revocation, pause; "ask" in the browser (KDE dialog as fallback) |
 | Browser Automation Controller | `ai/tools.py` | Done: 11 tools with per-call checks |
 | Gecko Adapter | `ai/bidi.py`, `ai/websocket.py`, `ai/workspace.py` | Done: WebDriver BiDi over a local WebSocket; AI Workspace launch with protections on |
-| Profile Access Coordinator | — | S8 (real profiles, routing per agent, locked profiles) |
+| Profile Access Coordinator | `ai/workspace.ProfileTarget`, `tools.Bridge` (engines per profile, tab owners), `registry.set_profiles/set_routes` | Done (S8): given profiles, routes per agent, refusal of locked or open profiles |
 | Activity & Audit Manager | `ai/audit.py`, `nulavio ai audit`, Settings → AI & Automation | Done: metadata only, 30-day retention, clear; shown in Settings |
 | Compatibility Adapters | — | A13 (raw BiDi mode; Playwright/CDP only where feasible) |
 
@@ -63,13 +63,13 @@ Onboarding in three decisions: choose agent → choose autonomy → connect and 
 | Screen (brief) | Slice | Notes |
 |---|---|---|
 | AI & Automation (overview), Connected Agents, Connect New Agent | **S7 done** | Settings section; the configuration is shown and copied, never written by Nulavio |
-| Agent Detected | S8 | Detection of Claude Code/Codex binaries and their config paths; the exact file and diff shown before any change |
+| Agent Detected | **S8 done** | Claude Code / Codex found with version; the exact command and the file it changes; run after the click |
 | Choose Autonomy Level, Custom Permissions | **S7 done** | The four levels with one-line consequences; capability rows with allow/ask/block and duration |
 | Full Control Warning | **S7 done** | The text of `policy.FULL_CONTROL_WARNING`; Cancel / Authorize full control (danger), Cancel focused |
 | Agent Permission Request | **S7 done** | `ai/request.html`: agent, autonomy, action, site; Allow once / for this session / Deny (focused); never in an AI Workspace |
-| Authorized Profiles, Authorized Websites | S8 | Per-agent profile grants; site list editor |
+| Authorized Profiles, Authorized Websites | **S7/S8 done** | Per-agent profiles and routes; site list |
 | Agent Activity, Automation History | **S7 done** | From the audit, last 30 days, clearable; per-agent filter later |
-| Active Agent Sessions | S8 | Live sessions per agent and workspace |
+| Active Agent Sessions | **S8 done** | "Connected now" per agent from connect/disconnect events |
 | Background Automation | S7 | Explicit grant with duration |
 | Revoke Agent Access, Emergency Stop, Pause | **S7 done** | Revoke confirmed; stop as a switch; pause/resume per agent |
 | Agent Connection Error | S8 | Plain reasons: unknown token, revoked, engine missing (today in the agent's MCP log) |

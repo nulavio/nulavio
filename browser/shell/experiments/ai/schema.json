@@ -3,49 +3,244 @@
     "namespace": "nulavioAI",
     "description": "AI & Automation: the AI Bridge's agents, autonomy, grants, emergency stop, activity and permission requests (docs/adr/0007-ai-bridge.md). Built-in Shell only; agents never reach it.",
     "functions": [
-      { "name": "workspaceAgent", "type": "function", "async": true, "parameters": [] },
-      { "name": "overview", "type": "function", "async": true, "parameters": [] },
       {
-        "name": "add", "type": "function", "async": true,
-        "parameters": [{
-          "name": "details", "type": "object",
-          "properties": {
-            "name": { "type": "string", "maxLength": 48 },
-            "client": { "type": "string", "enum": ["claude-code", "codex", "other"] },
-            "autonomy": { "type": "string", "enum": ["restricted", "assisted", "autonomous", "full_control"] },
-            "domains": { "type": "array", "optional": true, "items": { "type": "string", "maxLength": 253 }, "maxItems": 50 },
-            "disposable": { "type": "boolean", "optional": true },
-            "acceptFullControl": { "type": "boolean", "optional": true }
+        "name": "workspaceAgent",
+        "type": "function",
+        "async": true,
+        "parameters": []
+      },
+      {
+        "name": "overview",
+        "type": "function",
+        "async": true,
+        "parameters": []
+      },
+      {
+        "name": "detect",
+        "type": "function",
+        "async": true,
+        "parameters": []
+      },
+      {
+        "name": "plan",
+        "type": "function",
+        "async": true,
+        "parameters": [
+          {
+            "name": "agent",
+            "type": "string",
+            "maxLength": 32
+          },
+          {
+            "name": "client",
+            "type": "string",
+            "enum": [
+              "claude-code",
+              "codex"
+            ]
           }
-        }]
-      },
-      {
-        "name": "change", "type": "function", "async": true,
-        "parameters": [
-          { "name": "agent", "type": "string", "maxLength": 32 },
-          { "name": "op", "type": "string", "enum": ["autonomy", "grant", "clear-grant", "domains", "pause", "revoke", "remove", "rotate-token"] },
-          { "name": "details", "type": "object", "optional": true, "additionalProperties": { "type": "any" } }
         ]
       },
-      { "name": "setStopped", "type": "function", "async": true, "parameters": [{ "name": "stopped", "type": "boolean" }] },
       {
-        "name": "activity", "type": "function", "async": true,
+        "name": "install",
+        "type": "function",
+        "async": true,
         "parameters": [
-          { "name": "limit", "type": "integer", "optional": true, "minimum": 1, "maximum": 500 },
-          { "name": "agent", "type": "string", "optional": true, "maxLength": 32 }
+          {
+            "name": "agent",
+            "type": "string",
+            "maxLength": 32
+          },
+          {
+            "name": "client",
+            "type": "string",
+            "enum": [
+              "claude-code",
+              "codex"
+            ]
+          },
+          {
+            "name": "replace",
+            "type": "boolean",
+            "optional": true
+          }
         ]
       },
-      { "name": "clearActivity", "type": "function", "async": true, "parameters": [] },
-      { "name": "request", "type": "function", "async": true, "parameters": [{ "name": "id", "type": "string", "maxLength": 16 }] },
       {
-        "name": "answer", "type": "function", "async": true,
+        "name": "add",
+        "type": "function",
+        "async": true,
         "parameters": [
-          { "name": "id", "type": "string", "maxLength": 16 },
-          { "name": "answer", "type": "string", "enum": ["once", "session", "deny"] }
+          {
+            "name": "details",
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "maxLength": 48
+              },
+              "client": {
+                "type": "string",
+                "enum": [
+                  "claude-code",
+                  "codex",
+                  "other"
+                ]
+              },
+              "autonomy": {
+                "type": "string",
+                "enum": [
+                  "restricted",
+                  "assisted",
+                  "autonomous",
+                  "full_control"
+                ]
+              },
+              "domains": {
+                "type": "array",
+                "optional": true,
+                "items": {
+                  "type": "string",
+                  "maxLength": 253
+                },
+                "maxItems": 50
+              },
+              "disposable": {
+                "type": "boolean",
+                "optional": true
+              },
+              "acceptFullControl": {
+                "type": "boolean",
+                "optional": true
+              }
+            }
+          }
         ]
       },
-      { "name": "watch", "type": "function", "async": true, "parameters": [] },
-      { "name": "markWorkspace", "type": "function", "async": true, "parameters": [{ "name": "text", "type": "string", "maxLength": 300 }] }
+      {
+        "name": "change",
+        "type": "function",
+        "async": true,
+        "parameters": [
+          {
+            "name": "agent",
+            "type": "string",
+            "maxLength": 32
+          },
+          {
+            "name": "op",
+            "type": "string",
+            "enum": [
+              "autonomy",
+              "grant",
+              "clear-grant",
+              "domains",
+              "profiles",
+              "routes",
+              "pause",
+              "revoke",
+              "remove",
+              "rotate-token"
+            ]
+          },
+          {
+            "name": "details",
+            "type": "object",
+            "optional": true,
+            "additionalProperties": {
+              "type": "any"
+            }
+          }
+        ]
+      },
+      {
+        "name": "setStopped",
+        "type": "function",
+        "async": true,
+        "parameters": [
+          {
+            "name": "stopped",
+            "type": "boolean"
+          }
+        ]
+      },
+      {
+        "name": "activity",
+        "type": "function",
+        "async": true,
+        "parameters": [
+          {
+            "name": "limit",
+            "type": "integer",
+            "optional": true,
+            "minimum": 1,
+            "maximum": 500
+          },
+          {
+            "name": "agent",
+            "type": "string",
+            "optional": true,
+            "maxLength": 32
+          }
+        ]
+      },
+      {
+        "name": "clearActivity",
+        "type": "function",
+        "async": true,
+        "parameters": []
+      },
+      {
+        "name": "request",
+        "type": "function",
+        "async": true,
+        "parameters": [
+          {
+            "name": "id",
+            "type": "string",
+            "maxLength": 16
+          }
+        ]
+      },
+      {
+        "name": "answer",
+        "type": "function",
+        "async": true,
+        "parameters": [
+          {
+            "name": "id",
+            "type": "string",
+            "maxLength": 16
+          },
+          {
+            "name": "answer",
+            "type": "string",
+            "enum": [
+              "once",
+              "session",
+              "deny"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "watch",
+        "type": "function",
+        "async": true,
+        "parameters": []
+      },
+      {
+        "name": "markWorkspace",
+        "type": "function",
+        "async": true,
+        "parameters": [
+          {
+            "name": "text",
+            "type": "string",
+            "maxLength": 300
+          }
+        ]
+      }
     ]
   }
 ]

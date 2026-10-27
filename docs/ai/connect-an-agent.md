@@ -1,10 +1,10 @@
 # Connect an AI agent to Nulavio
 
-The agent gets its own browser profile (the AI Workspace) and only the permissions you choose. Nulavio prints the configuration; you add it to the agent. Nulavio never edits another program's settings.
+The agent gets its own browser profile (the AI Workspace) and only the permissions you choose. Nulavio prints the configuration for you to add, or, after you approve the exact command, asks the agent's own tool to add it. Nulavio never edits another program's files itself.
 
 ## 1. Register the agent
 
-In the browser: **Settings → AI & Automation → Connect an agent** (agent, autonomy, connect; copy the configuration). Or from a terminal:
+In the browser: **Settings → AI & Automation → Connect an agent** (agent, autonomy, connect). If Claude Code or Codex is installed, Nulavio shows the exact command of that tool that adds Nulavio to its settings and runs it when you click; otherwise copy the configuration. From a terminal: `nulavio ai add …` then `nulavio ai connect <agent>`, or:
 
 ```sh
 nulavio ai add "Claude Code" --client claude-code --autonomy assisted
@@ -22,7 +22,7 @@ Autonomy levels (`nulavio ai capabilities` shows the full table):
 
 Options: `--site DOMAIN` (repeatable) limits the agent to those sites; `--disposable` deletes the workspace when the agent disconnects; `--headless` runs without a window.
 
-The command prints the configuration once, with the agent's token.
+The command prints the configuration. It holds no secret: it points to the agent's key file in Nulavio (`~/.local/state/nulavio/ai/tokens/`, readable only by you).
 
 ## 2. Add the configuration to the agent
 
@@ -56,8 +56,8 @@ Files: downloads are saved only when the agent may use files, into `~/.local/sha
 
 ## What this does and does not protect
 
-- The agent works in its own profile: your Personal, Work or Banking profiles, cookies and history are not reachable.
+- The agent works in its own profile. Your Personal, Work or Banking profiles are reachable only if you give them to that agent (Settings → AI & Automation → its permissions), only while they are closed in your windows, and never while they are locked.
 - Safe Browsing, HTTPS-Only, tracking protection and the pop-up blocker stay on in the AI Workspace.
 - The local network and this computer (`localhost`, router pages, `file:`) are off unless you allow `local_resources`.
-- A CLI agent runs with your user's rights. Outside Nulavio's tools it can do whatever you can do in a terminal, including reading the token in its configuration. Use its own sandbox options if you want to limit that.
+- A CLI agent runs with your user's rights. Outside Nulavio's tools it can do whatever you can do in a terminal, including reading its key file. Use its own sandbox options if you want to limit that.
 - Within what you allowed, a misled or compromised agent can act without asking. Revoke or stop it at any time.

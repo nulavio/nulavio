@@ -47,6 +47,21 @@ def stop_path() -> Path:
     return ai_state() / "STOP"
 
 
+def token_file(agent_id: str) -> Path:
+    """Where an agent's key lives (0600). Agent configurations point here instead of holding the key."""
+    return paths.ensure_private_dir(ai_state() / "tokens") / f"{agent_id}.token"
+
+
+def read_token_file(path: str | None) -> str | None:
+    if not path:
+        return None
+    try:
+        with open(path, encoding="utf-8") as handle:
+            return handle.read(256).strip() or None
+    except OSError:
+        return None
+
+
 def _hash(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
 
@@ -124,6 +139,7 @@ def add(name: str, client: str, autonomy: str, *, domains: list[str] | None = No
         data["agents"][record["id"]] = record
 
     _update(apply)
+    paths.write_private_file(token_file(record["id"]), token)
     return record, token
 
 
@@ -169,6 +185,7 @@ def remove(agent_id: str) -> None:
     from .workspace import workspaces_root
 
     shutil.rmtree(workspaces_root() / agent_id, ignore_errors=True)
+    token_file(agent_id).unlink(missing_ok=True)
 
 
 def set_autonomy(agent_id: str, autonomy: str, accept_full_control: bool = False) -> None:
@@ -230,10 +247,49 @@ def set_domains(agent_id: str, domains: list[str]) -> None:
     _change(agent_id, lambda a: a.__setitem__("domains", clean))
 
 
+LABEL_RE = re.compile(r"^[\w .+-]{1,40}$")
+
+
+def set_profiles(agent_id: str, profiles: list[dict]) -> None:
+    """Real browser profiles this agent may use, besides its AI Workspace: [{"label", "path"}]."""
+    clean = []
+    for item in profiles:
+        label, path = str(item.get("label", "")).strip(), str(item.get("path", ""))
+        if not LABEL_RE.match(label) or not path.startswith("/") or "\x00" in path:
+            raise RegistryError(f"bad profile entry {label!r}")
+        if label.lower() in ("workspace", "ai workspace") or any(p["label"] == label for p in clean):
+            raise RegistryError(f"profile label {label!r} is reserved or repeated")
+        clean.append({"label": label, "path": str(Path(path))})
+    _change(agent_id, lambda a: a.__setitem__("profiles", clean))
+
+
+def set_routes(agent_id: str, routes: list[dict]) -> None:
+    """Per-agent routing: sites that open in one of the agent's authorised profiles: [{"site", "profile"}]."""
+    agent = get(agent_id)
+    labels = {p["label"] for p in agent.get("profiles", [])}
+    clean = []
+    for item in routes:
+        site, label = _domain(str(item.get("site", ""))), str(item.get("profile", ""))
+        if label not in labels:
+            raise RegistryError(f"route to {label!r}: not one of this agent's profiles")
+        clean.append({"site": site, "profile": label})
+    _change(agent_id, lambda a: a.__setitem__("routes", clean))
+
+
+def route_for(agent: dict, host: str | None) -> str | None:
+    """The profile label a site goes to for this agent (the most specific site wins), or None (its workspace)."""
+    if not host:
+        return None
+    host = host.lower().rstrip(".")
+    matches = [r for r in agent.get("routes", []) if host == r["site"] or host.endswith("." + r["site"])]
+    return max(matches, key=lambda r: len(r["site"]))["profile"] if matches else None
+
+
 def rotate_token(agent_id: str) -> str:
     """A new token for the agent's configuration; the old one stops working at once."""
     token = secrets.token_urlsafe(32)
     _change(agent_id, lambda a: a.__setitem__("token_sha256", _hash(token)))
+    paths.write_private_file(token_file(agent_id), token)
     return token
 
 

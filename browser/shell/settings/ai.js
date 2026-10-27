@@ -85,6 +85,64 @@ function capabilityRow(agent, capability) {
   );
 }
 
+let groupProfiles = [];
+
+function profilesEditor(agent) {
+  const allowed = new Map((agent.profiles ?? []).map(p => [p.path, p.label]));
+  const boxes = groupProfiles.map(profile => {
+    const box = h("input", { type: "checkbox", value: profile.path, checked: allowed.has(profile.path), dataset: { label: profile.name } });
+    return h("label", { class: "check" }, box, h("span", { text: profile.name }));
+  });
+  const save = h("button", { class: "button button--secondary", type: "button", text: t("profilesSave"), "data-focus-key": `profiles-save-${agent.id}` });
+  save.addEventListener("click", () => {
+    const chosen = boxes.map(b => b.querySelector("input")).filter(i => i.checked).map(i => ({ label: i.dataset.label, path: i.value }));
+    run(() => ai.change(agent.id, "profiles", { profiles: chosen }).then(renderAgents), t("doneSaved"));
+  });
+  const routes = (agent.routes ?? []).map(route => {
+    const others = agent.routes.filter(r => r !== route);
+    const remove = h("button", {
+      class: "button button--quiet",
+      type: "button",
+      text: t("aiRouteRemove"),
+      onclick: () => run(() => ai.change(agent.id, "routes", { routes: others }).then(renderAgents), t("doneSaved")),
+    });
+    return h(
+      "li",
+      { class: "row row--plain" },
+      h("div", { class: "row__main" }, h("p", { class: "row__title", text: t("aiRouteText", [route.site, route.profile]) })),
+      h("div", { class: "row__end" }, remove)
+    );
+  });
+  const site = h("input", { class: "input", placeholder: "localhost, dev.example.org", "aria-label": t("aiRouteSite"), "data-focus-key": `route-site-${agent.id}` });
+  const target = h(
+    "select",
+    { class: "select", "aria-label": t("aiRouteProfile"), "data-focus-key": `route-profile-${agent.id}` },
+    ...(agent.profiles ?? []).map(p => h("option", { value: p.label, text: p.label }))
+  );
+  const addRoute = h(
+    "form",
+    { class: "inline-form", novalidate: true },
+    site,
+    target,
+    h("button", { class: "button button--secondary", type: "submit", text: t("aiRouteAdd"), "data-focus-key": `route-add-${agent.id}` })
+  );
+  addRoute.addEventListener("submit", event => {
+    event.preventDefault();
+    const next = [...(agent.routes ?? []), { site: site.value.trim(), profile: target.value }];
+    run(() => ai.change(agent.id, "routes", { routes: next }).then(renderAgents), t("doneSaved"));
+  });
+  return h(
+    "div",
+    { class: "stack stack--tight" },
+    h("p", { class: "subhead", text: t("aiProfilesLabel") }),
+    h("p", { class: "hint", text: t("aiProfilesHint") }),
+    boxes.length ? h("div", { class: "actions" }, ...boxes, save) : h("p", { class: "hint", text: t("aiNoProfiles") }),
+    h("p", { class: "subhead", text: t("aiRoutesLabel") }),
+    routes.length ? h("ul", { class: "list" }, ...routes) : h("p", { class: "hint", text: t("aiNoRoutes") }),
+    agent.profiles?.length ? addRoute : null
+  );
+}
+
 function agentRow(agent) {
   const badges = [
     h("span", { class: "badge badge--quiet", text: t(`aiClient_${agent.client.replace("-", "_")}`) }),
@@ -94,6 +152,7 @@ function agentRow(agent) {
   ];
   const seen = agent.last_client;
   const meta = [
+    agent.active_sessions?.length ? t("aiConnectedNow", [String(agent.active_sessions.length)]) : null,
     seen ? t("aiLastSeen", [when(seen.seen), seen.executable ?? "?"]) : t("aiNeverConnected"),
     seen && seen.matches === false ? t("aiClientMismatch") : null,
     agent.domains?.length ? t("aiSitesOnly", [agent.domains.join(", ")]) : t("aiAnySite"),
@@ -157,11 +216,7 @@ function agentRow(agent) {
     class: "button button--quiet",
     type: "button",
     text: t("aiNewToken"),
-    onclick: () =>
-      run(async () => {
-        const { config } = await ai.change(agent.id, "rotate-token");
-        showConfig(agent.client, config);
-      }),
+    onclick: () => run(() => ai.change(agent.id, "rotate-token"), t("aiKeyReplaced", [agent.name])),
   });
 
   return h(
@@ -184,6 +239,7 @@ function agentRow(agent) {
         h("label", { class: "field" }, h("span", { class: "field__label", text: t("aiAutonomyLabel") }), level),
         sitesForm
       ),
+      profilesEditor(agent),
       h("ul", { class: "list" }, ...Object.keys(state.capabilities).map(c => capabilityRow(agent, c))),
       h("div", { class: "actions" }, rotate, remove)
     )
@@ -192,6 +248,7 @@ function agentRow(agent) {
 
 async function renderAgents() {
   state = await ai.overview();
+  groupProfiles = browser.nulavioProfiles ? (await browser.nulavioProfiles.list()).profiles.filter(p => p.path) : [];
   const stop = document.getElementById("ai-stop");
   stop.checked = state.stopped;
   rerender(document.getElementById("ai-agents"), () =>
@@ -212,8 +269,50 @@ function renderLevels() {
   );
 }
 
-function showConfig(client, config) {
-  document.getElementById("ai-config-intro").textContent = t(`aiConfigIntro_${client.replace("-", "_")}`);
+async function offerWizard(agent, config) {
+  const form = document.getElementById("ai-connect-form");
+  if (agent.client === "other") {
+    showConfig(agent.client, config);
+    return;
+  }
+  const { clients } = await ai.detect();
+  const found = clients.find(c => c.client === agent.client);
+  if (!found?.path) {
+    showConfig(agent.client, config, t("aiNotDetected", [found?.label ?? agent.client]));
+    return;
+  }
+  const plan = await ai.plan(agent.id, agent.client);
+  document.getElementById("ai-wizard-detected").textContent = t("aiDetected", [found.label, found.version ?? ""]);
+  document.getElementById("ai-wizard-intro").textContent = t("aiWizardIntro", [found.label, plan.target]);
+  document.getElementById("ai-wizard-command").textContent = plan.display;
+  const existing = document.getElementById("ai-wizard-existing");
+  existing.hidden = !plan.existing;
+  existing.textContent = t("aiReplaceExisting", [found.label]);
+  const install = document.getElementById("ai-wizard-install");
+  install.textContent = t("aiInstall", [found.label]);
+  install.onclick = () =>
+    run(async () => {
+      install.disabled = true;
+      try {
+        const result = await ai.install(agent.id, agent.client, plan.existing);
+        const state = result.check.connected ? "connected" : result.check.configured ? "configured" : "missing";
+        document.getElementById("ai-wizard").hidden = true;
+        showConfig(agent.client, config, t(`aiInstalled_${state}`, [found.label]));
+      } finally {
+        install.disabled = false;
+      }
+    });
+  document.getElementById("ai-wizard-manual").onclick = () => {
+    document.getElementById("ai-wizard").hidden = true;
+    showConfig(agent.client, config);
+  };
+  form.hidden = true;
+  document.getElementById("ai-wizard").hidden = false;
+  install.focus();
+}
+
+function showConfig(client, config, note = null) {
+  document.getElementById("ai-config-intro").textContent = [note, t(`aiConfigIntro_${client.replace("-", "_")}`)].filter(Boolean).join(" ");
   document.getElementById("ai-config").textContent = config;
   document.getElementById("ai-connect-form").hidden = true;
   document.getElementById("ai-connect-result").hidden = false;
@@ -244,10 +343,10 @@ async function connect(event) {
     }
   }
   try {
-    const { config } = await ai.add(details);
-    showConfig(details.client, config);
+    const { agent, config } = await ai.add(details);
     form.reset();
     await renderAgents();
+    await offerWizard(agent, config);
   } catch (e) {
     error.textContent = errorText(e);
   }
@@ -290,6 +389,7 @@ export async function setUpAI() {
   document.getElementById("ai-connect-again").addEventListener("click", () => {
     document.getElementById("ai-config").textContent = "";
     document.getElementById("ai-connect-result").hidden = true;
+    document.getElementById("ai-wizard").hidden = true;
     document.getElementById("ai-connect-form").hidden = false;
   });
   document.getElementById("ai-activity-clear").addEventListener("click", async () => {

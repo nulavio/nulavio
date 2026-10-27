@@ -8,8 +8,10 @@ the browser and this test. Captures (light and dark) go to tests/artifacts/ai-ui
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
+import shutil
 import sys
 import threading
 import time
@@ -40,6 +42,9 @@ class AiUiTest(unittest.TestCase):
         cls.session = harness.GeckoProfileSession(name="Pessoal")
         cls.home = cls.session.tmp / "nulavio-home"
         cls.session.env["NULAVIO_HOME"] = str(cls.home)
+        # The agents' own CLIs (if installed) run with this throwaway HOME: they write only there.
+        local_bin = Path(os.environ.get("HOME", "/")) / ".local" / "bin"
+        cls.session.env["PATH"] = f"{local_bin}:/usr/bin:/bin"
         cls.patcher = mock.patch.dict(os.environ, {"NULAVIO_HOME": str(cls.home)})
         cls.patcher.start()
         cls.m = cls.session.start()
@@ -107,13 +112,18 @@ class AiUiTest(unittest.TestCase):
         self.click("#ai-levels input[value=assisted]")
         self.shoot("connect-form", "ai")
         self.click("#ai-connect-form button[type=submit]")
-        self.assertTrue(
-            harness.wait_until(lambda: not self.js("return document.getElementById('ai-connect-result').hidden;"), timeout=30)
-        )
+        shown = lambda i: not self.js(f"return document.getElementById('{i}').hidden;")  # noqa: E731
+        self.assertTrue(harness.wait_until(lambda: shown("ai-wizard") or shown("ai-connect-result"), timeout=60))
+        if shown("ai-wizard"):  # Claude Code is installed: choose to copy the configuration instead
+            self.click("#ai-wizard-manual")
+        self.assertTrue(harness.wait_until(lambda: shown("ai-connect-result"), timeout=30))
         config = json.loads(self.js("return document.getElementById('ai-config').textContent;"))
         server = config["mcpServers"]["nulavio"]
         self.assertEqual(server["args"], ["ai", "serve"])
-        token = server["env"]["NULAVIO_AGENT_TOKEN"]
+        self.assertNotIn("NULAVIO_AGENT_TOKEN", server["env"])  # a pointer to the key file, never the key
+        token_file = Path(server["env"]["NULAVIO_AGENT_TOKEN_FILE"])
+        self.assertEqual(os.stat(token_file).st_mode & 0o777, 0o600)
+        token = token_file.read_text()
         agent = registry.by_token(token)
         self.assertEqual((agent["name"], agent["client"], agent["autonomy"]), ("Claude UI", "claude-code", "assisted"))
         self.assertNotIn(token, json.dumps(self.agents()))  # only the hash is stored
@@ -231,6 +241,93 @@ class AiUiTest(unittest.TestCase):
             self.assertIn("AI Workspace of Workspace", label or "")
         finally:
             self.m.chrome("Services.prefs.clearUserPref('nulavio.ai.workspace');")
+
+    def real_config_fingerprint(self) -> dict:
+        home = Path(os.environ["HOME"])
+        out = {}
+        for path in (home / ".claude.json", home / ".codex" / "config.toml"):
+            out[str(path)] = hashlib.sha256(path.read_bytes()).hexdigest() if path.exists() else None
+        return out
+
+    def test_07_connect_wizard_runs_the_agents_own_cli(self):
+        clients = [c for c in ("claude", "codex") if shutil.which(c, path=self.session.env["PATH"])]
+        if not clients:
+            self.skipTest("neither Claude Code nor Codex is installed")
+        before = self.real_config_fingerprint()
+        fake_home = Path(self.session.env["HOME"])
+        for binary, client, label in (("claude", "claude-code", "Claude Code"), ("codex", "codex", "Codex")):
+            if binary not in clients:
+                continue
+            self.open_page("settings/settings.html#ai")
+            self.js("document.querySelector('#ai-connect-form [name=name]').value = arguments[0];", f"{label} via wizard")
+            self.click(f"#ai-clients input[value={client}]")
+            self.click("#ai-connect-form button[type=submit]")
+            self.assertTrue(
+                harness.wait_until(lambda: not self.js("return document.getElementById('ai-wizard').hidden;"), timeout=60)
+            )
+            command = self.js("return document.getElementById('ai-wizard-command').textContent;")
+            self.assertIn("NULAVIO_AGENT_TOKEN_FILE", command)
+            agent = next(a for a in self.agents().values() if a["name"] == f"{label} via wizard")
+            token = registry.token_file(agent["id"]).read_text()
+            self.assertNotIn(token, command)  # no secret on the command line or in the agent's settings
+            if client == "claude-code":
+                self.assertIn("mcp add-json --scope user nulavio", command)
+                self.shoot("wizard")
+            else:
+                self.assertIn("mcp add nulavio", command)
+            self.click("#ai-wizard-install")
+            self.assertTrue(
+                harness.wait_until(
+                    lambda: not self.js("return document.getElementById('ai-connect-result').hidden;"), timeout=120
+                )
+            )
+            intro = self.js("return document.getElementById('ai-config-intro').textContent;")
+            expected = "aiInstalled_connected" if client == "claude-code" else "aiInstalled_configured"
+            self.assertTrue(
+                intro.startswith(self.js("return browser.i18n.getMessage(arguments[0], [arguments[1]]);", expected, label)), intro
+            )
+            written = (fake_home / ".claude.json") if client == "claude-code" else (fake_home / ".codex" / "config.toml")
+            text = written.read_text()
+            self.assertIn(str(registry.token_file(agent["id"])), text)
+            self.assertNotIn(token, text)
+        self.assertEqual(self.real_config_fingerprint(), before)  # the user's real agent settings were not touched
+
+    def test_08_profiles_and_routes_for_an_agent(self):
+        agent, _ = registry.add("Rotas", "codex", "autonomous")
+        self.m.set_context("chrome")
+        try:
+            created = self.m.execute_async(
+                "const done = arguments[arguments.length - 1];"
+                "const P = ChromeUtils.importESModule('resource://builtin-addons/nulavio-shell/modules/NulavioProfiles.sys.mjs').NulavioProfiles;"
+                "P.create({templateId: 'work', name: 'Trabalho'})"
+                ".then(async id => done((await P.list()).profiles.find(p => p.id === id).path));"
+            )
+        finally:
+            self.m.set_context("content")
+        self.open_page("settings/settings.html#ai")
+        row = f"[data-agent-id='{agent['id']}']"
+        self.assertTrue(harness.wait_until(lambda: self.js(f'return !!document.querySelector("{row}");'), timeout=20))
+        self.js(f'document.querySelector("{row} details").open = true;')
+        self.js(f'document.querySelector("{row} input[type=checkbox][value=\'" + arguments[0] + "\']").checked = true;', created)
+        self.click(f"[data-focus-key='profiles-save-{agent['id']}']")
+        self.assertTrue(
+            harness.wait_until(
+                lambda: registry.get(agent["id"]).get("profiles") == [{"label": "Trabalho", "path": created}], timeout=20
+            )
+        )
+        self.assertTrue(
+            harness.wait_until(
+                lambda: self.js(f"return !!document.querySelector(\"[data-focus-key='route-site-{agent['id']}']\");"), timeout=20
+            )
+        )
+        self.js(f"document.querySelector(\"{row} details\").open = true;"
+                f"document.querySelector(\"[data-focus-key='route-site-{agent['id']}']\").value = 'localhost';")  # fmt: skip
+        self.click(f"[data-focus-key='route-add-{agent['id']}']")
+        self.assertTrue(
+            harness.wait_until(
+                lambda: registry.get(agent["id"]).get("routes") == [{"site": "localhost", "profile": "Trabalho"}], timeout=20
+            )
+        )
 
 
 if __name__ == "__main__":

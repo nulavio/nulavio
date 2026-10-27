@@ -31,6 +31,9 @@ this.nulavioAI = class extends ExtensionAPI {
       nulavioAI: {
         workspaceAgent: call(() => ai.workspaceAgent()),
         overview: call(() => ai.overview()),
+        detect: call(() => ai.detect()),
+        plan: call((agent, client) => ai.plan(agent, client)),
+        install: call((agent, client, replace) => ai.install(agent, client, replace ?? false)),
         add: call(details => ai.add(details)),
         change: call((agent, op, details) => ai.change(agent, op, details ?? {})),
         setStopped: call(stopped => ai.setStopped(stopped)),

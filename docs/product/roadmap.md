@@ -90,8 +90,8 @@ External agents (Codex CLI and Desktop, Claude Code and Desktop, other MCP clien
 - [x] A6 Agent registry and sessions (S4/S7: token per agent, pause, new key, client evidence; stdio sessions)
 - [x] A7 Permission and autonomy manager (per agent, site and duration; per profile in S8)
 - [x] A8 Restricted, Assisted, Autonomous, Full control (with the full-control warning)
-- [ ] A9 Codex CLI and Claude Code connection wizard
-- [ ] A10 Secure Profiles and Smart Profile Routing integration
+- [x] A9 Codex CLI and Claude Code connection wizard (S8: the agent's own CLI, after approval; key file, no secret in configs)
+- [x] A10 Secure Profiles and Smart Profile Routing integration (S8: given profiles, per-agent routes, locked and open profiles refused)
 - [x] A11 UX (Horizon): agents, autonomy, activity, revoke, emergency stop, permission requests (S7); agent detection and sessions view in S8
 - [ ] A12 Built-in assistant (provider-agnostic, same policies)
 - [ ] A13 Advanced compatibility (Playwright/CDP adapters where feasible)
@@ -136,4 +136,4 @@ External agents (Codex CLI and Desktop, Claude Code and Desktop, other MCP clien
 
 ## Next task (recommended)
 
-Follow the [execution plan](execution-plan.md): S1 (Connect P0), S2 (unlock research and ADRs), S3 (Vault crypto prototype), S4 (AI Bridge foundation), S5 (encrypted profile storage), S6 (unlock UX in the browser) and S7 (AI autonomy and its UI) are done; next **S8** (AI integration with profiles and routing). The plan lists the decisions each slice needs from the maintainer.
+Follow the [execution plan](execution-plan.md): S1 (Connect P0), S2 (unlock research and ADRs), S3 (Vault crypto prototype), S4 (AI Bridge foundation), S5 (encrypted profile storage), S6 (unlock UX in the browser), S7 (AI autonomy and its UI) and S8 (AI with profiles, routing and the connect wizard) are done; next: S10 (security key, needs a key) and S11 (Android Companion, last), plus the remaining roadmap phases. The plan lists the decisions each slice needs from the maintainer.

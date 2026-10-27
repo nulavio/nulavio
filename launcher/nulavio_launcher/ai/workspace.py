@@ -159,3 +159,80 @@ class Workspace:
             self.process = None
         if self.disposable:
             shutil.rmtree(self.dir, ignore_errors=True)
+
+
+TEMPORARY = "// nulavio-ai-temporary"
+
+
+class TargetError(WorkspaceError):
+    def __init__(self, code: str, detail: str = ""):
+        super().__init__(detail or code)
+        self.code = code
+
+
+class ProfileTarget(Workspace):
+    """One of the user's own profiles, which the user authorised this agent to use (ADR 0007, S8).
+
+    It opens in its own engine instance only while it is not open elsewhere and
+    not locked: an agent never gets a profile's keys, and never takes over a
+    window the user is using. Two temporary lines go into its user.js (no
+    remote-agent test preferences; this window is driven by an agent) and are
+    removed when the agent's session ends.
+    """
+
+    def __init__(self, agent_id: str, label: str, path: Path, *, downloads_dir: Path, headless: bool = False, engine=None):
+        self.agent_id = agent_id
+        self.label = label
+        self.uploads = False
+        self.disposable = False
+        self.headless = headless
+        self.engine = engine
+        self.process = None
+        self.bidi = None
+        self.dir = Path(path)
+        self.profile_dir = Path(path)
+        self.downloads_dir = downloads_dir
+        self.uploads_dir = None
+
+    def check(self) -> None:
+        from ..profile import Profile
+        from ..vault.storage import Container
+
+        if not self.profile_dir.is_dir():
+            raise TargetError("profile-missing", self.label)
+        box = Container(self.profile_dir)
+        if box.vault_path.exists() and not box.mounted():
+            raise TargetError("profile-locked", self.label)
+        if Profile(name=self.label, path=self.profile_dir).running_pid():
+            raise TargetError("profile-in-use", self.label)
+
+    def _write_prefs(self) -> None:
+        user_js = self.profile_dir / "user.js"
+        self._remove_temporary()
+        lines = [
+            f'user_pref("remote.prefs.recommended", false); {TEMPORARY}',
+            f'user_pref("nulavio.ai.workspace", "{self.agent_id}:{os.getpid()}"); {TEMPORARY}',
+        ]
+        existing = user_js.read_text(encoding="utf-8") if user_js.exists() else ""
+        if existing and not existing.endswith("\n"):
+            existing += "\n"
+        paths.write_private_file(user_js, existing + "\n".join(lines) + "\n")
+
+    def _remove_temporary(self) -> None:
+        user_js = self.profile_dir / "user.js"
+        if not user_js.exists():
+            return
+        kept = [line for line in user_js.read_text(encoding="utf-8").splitlines() if TEMPORARY not in line]
+        if kept:
+            paths.write_private_file(user_js, "\n".join(kept) + "\n")
+        else:
+            user_js.unlink()
+
+    def start(self, timeout: float = 60.0) -> Bidi:
+        if self.bidi is None:
+            self.check()
+        return super().start(timeout)
+
+    def stop(self) -> None:
+        super().stop()
+        self._remove_temporary()

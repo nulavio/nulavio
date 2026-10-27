@@ -13,7 +13,7 @@ import secrets
 import sys
 
 from .. import paths
-from . import audit, policy, registry
+from . import audit, connect, policy, registry
 
 LEVELS = {"restricted": "restricted", "assisted": "assisted", "autonomous": "autonomous", "full-control": "full_control"}
 
@@ -26,18 +26,20 @@ def _launcher() -> str:
     return str(paths.repo_root() / "bin" / "nulavio")
 
 
-def server_env(token: str) -> dict[str, str]:
-    env = {"NULAVIO_AGENT_TOKEN": token}
+def server_env(token: str | None = None, agent_id: str | None = None) -> dict[str, str]:
+    """The bridge's environment in an agent's configuration: a pointer to the key file, never the key
+    (configurations get copied, shared and committed). An explicit token is for one-off runs and tests."""
+    env = {"NULAVIO_AGENT_TOKEN": token} if token else {"NULAVIO_AGENT_TOKEN_FILE": str(registry.token_file(agent_id))}
     for key in ("NULAVIO_ENGINE", "NULAVIO_HOME"):
         if os.environ.get(key):
             env[key] = os.environ[key]
     return env
 
 
-def client_config(client: str, token: str, headless: bool = False) -> str:
+def client_config(client: str, token: str | None = None, headless: bool = False, agent_id: str | None = None) -> str:
     """Exact configuration for the user to add to their agent (or to pass for one run)."""
     args = ["ai", "serve"] + (["--headless"] if headless else [])
-    env = server_env(token)
+    env = server_env(token, agent_id)
     if client == "codex":
         lines = ["[mcp_servers.nulavio]", f"command = {json.dumps(_launcher())}", f"args = {json.dumps(args)}",
                  "startup_timeout_sec = 30", "tool_timeout_sec = 90", "", "[mcp_servers.nulavio.env]"]  # fmt: skip
@@ -58,11 +60,11 @@ def _add(args) -> int:
     level = LEVELS[args.autonomy]
     if level == "full_control":
         print(policy.FULL_CONTROL_WARNING, file=sys.stderr)
-    agent, token = registry.add(args.name, args.client, level, domains=args.site, disposable=args.disposable,
+    agent, _ = registry.add(args.name, args.client, level, domains=args.site, disposable=args.disposable,
                                 accept_full_control=args.accept_full_control)  # fmt: skip
     _out(f"Agent {agent['id']} ({agent['name']}, {args.autonomy}) registered.")
-    _out("Add this to the agent's MCP configuration yourself; the token is shown only once:\n")
-    _out(client_config(agent["client"], token, args.headless))
+    _out("Add this to the agent's MCP configuration (it points to the agent's key file; no secret in it):\n")
+    _out(client_config(agent["client"], headless=args.headless, agent_id=agent["id"]))
     if agent["client"] == "claude-code":
         _out("\nClaude Code: save it as a file and run `claude --mcp-config <file>`, or add it to .mcp.json.")
     elif agent["client"] == "codex":
@@ -147,10 +149,40 @@ def _pause(args) -> int:
 
 
 def _rotate(args) -> int:
-    token = registry.rotate_token(args.agent)
-    _out("New configuration (the old token no longer works):\n")
-    _out(client_config(registry.get(args.agent)["client"], token))
+    registry.rotate_token(args.agent)
+    _out(f"{args.agent}: new key in effect; the old one no longer works. The agent's configuration does not change.")
     return 0
+
+
+def _connect(args) -> int:
+    """Add Nulavio to the agent's own configuration, through the agent's CLI, after showing exactly what runs."""
+    agent = registry.get(args.agent)
+    try:
+        plan = connect.plan(agent["client"], agent["id"])
+    except connect.ConnectError as exc:
+        print(f"nulavio: {exc.code}: {exc}", file=sys.stderr)
+        return 1
+    _out(f"{plan['label']} will be configured to use Nulavio. This changes: {plan['target']}.")
+    _out("Command (no secret in it; it points to the agent's key file):\n")
+    _out("    " + connect.describe(plan["command"]) + "\n")
+    if plan["existing"]:
+        _out(f"{plan['label']} already has a server named 'nulavio'; it will be replaced.")
+    if not args.yes:
+        if not sys.stdin.isatty():
+            print("nulavio: not a terminal; re-run with --yes to run the command shown above", file=sys.stderr)
+            return 1
+        if input("Run it? [y/N] ").strip().lower() not in ("y", "yes", "s", "sim"):
+            _out("Nothing was changed.")
+            return 1
+    try:
+        result = connect.install(agent["client"], agent["id"], replace=plan["existing"])
+    except connect.ConnectError as exc:
+        print(f"nulavio: {exc.code}: {exc}", file=sys.stderr)
+        return 1
+    check = result["check"]
+    state = "connected" if check["connected"] else "configured" if check["configured"] else "not visible"
+    _out(f"{plan['label']}: Nulavio is {state}.")
+    return 0 if check["configured"] else 1
 
 
 def _capabilities(args) -> int:
@@ -165,7 +197,8 @@ def _serve(args) -> int:
     from .mcp import Server
     from .tools import Bridge
 
-    agent = registry.by_token(os.environ.get("NULAVIO_AGENT_TOKEN"))
+    token = os.environ.get("NULAVIO_AGENT_TOKEN") or registry.read_token_file(os.environ.get("NULAVIO_AGENT_TOKEN_FILE"))
+    agent = registry.by_token(token)
     if agent is None:
         print("nulavio ai serve: unknown or missing NULAVIO_AGENT_TOKEN; register the agent with `nulavio ai add`",
               file=sys.stderr)  # fmt: skip
@@ -179,7 +212,10 @@ def _serve(args) -> int:
     audit.record(agent=agent["id"], client=agent.get("client"), session=session, event="connected", client_exe=executable,
                  outcome="ok" if matches else "client-mismatch")  # fmt: skip
     print(f"nulavio ai serve: agent {agent['id']} session {session}", file=sys.stderr)
-    Server(Bridge(agent["id"], session, headless=args.headless)).serve()
+    try:
+        Server(Bridge(agent["id"], session, headless=args.headless)).serve()
+    finally:
+        audit.record(agent=agent["id"], client=agent.get("client"), session=session, event="disconnected")
     return 0
 
 
@@ -188,11 +224,26 @@ def _serve(args) -> int:
 API_LIMIT = 64 * 1024
 
 
-def _public(agent: dict) -> dict:
+def _public(agent: dict, active: dict | None = None) -> dict:
     """What the UI may see: never the token hash."""
     view = {k: v for k, v in agent.items() if k != "token_sha256"}
     view["modes"] = {c: policy.effective_mode(agent, c, "")[0] for c in policy.CAPABILITIES}
+    view["active_sessions"] = (active or {}).get(agent["id"], [])
     return view
+
+
+def active_sessions() -> dict[str, list[dict]]:
+    """Bridge sessions that connected and have not disconnected (from the activity log)."""
+    sessions: dict[str, dict] = {}
+    for entry in audit.read(1000):
+        if entry.get("event") == "connected":
+            sessions[entry.get("session")] = {"agent": entry.get("agent"), "since": entry["ts"], "session": entry.get("session")}
+        elif entry.get("event") == "disconnected":
+            sessions.pop(entry.get("session"), None)
+    out: dict[str, list[dict]] = {}
+    for item in sessions.values():
+        out.setdefault(item["agent"], []).append(item)
+    return out
 
 
 def api_request(request: dict) -> dict:
@@ -200,8 +251,9 @@ def api_request(request: dict) -> dict:
     agent_id = request.get("agent")
     if op == "overview":
         data = registry.load()
+        active = active_sessions()
         return {
-            "agents": [_public(a) for a in data["agents"].values()],
+            "agents": [_public(a, active) for a in data["agents"].values()],
             "stopped": registry.stopped(),
             "capabilities": policy.CAPABILITIES,
             "presets": policy.PRESETS,
@@ -211,13 +263,14 @@ def api_request(request: dict) -> dict:
         }
     if op == "add":
         level = LEVELS.get(str(request.get("autonomy", "")).replace("_", "-"), request.get("autonomy"))
-        agent, token = registry.add(str(request.get("name", "")), str(request.get("client", "")), str(level),
+        agent, _ = registry.add(str(request.get("name", "")), str(request.get("client", "")), str(level),
                                     domains=list(request.get("domains") or []), disposable=bool(request.get("disposable")),
                                     accept_full_control=bool(request.get("acceptFullControl")))  # fmt: skip
-        return {"agent": _public(agent), "config": client_config(agent["client"], token, bool(request.get("headless")))}
+        config = client_config(agent["client"], headless=bool(request.get("headless")), agent_id=agent["id"])
+        return {"agent": _public(agent), "config": config}
     if op == "rotate-token":
-        token = registry.rotate_token(str(agent_id))
-        return {"config": client_config(registry.get(str(agent_id))["client"], token)}
+        registry.rotate_token(str(agent_id))  # the key file changes; the agent's configuration stays valid
+        return {"done": True}
     if op == "autonomy":
         registry.set_autonomy(str(agent_id), str(request.get("level")), bool(request.get("acceptFullControl")))
     elif op == "grant":
@@ -228,6 +281,10 @@ def api_request(request: dict) -> dict:
         registry.clear_grant(str(agent_id), str(request.get("capability")))
     elif op == "domains":
         registry.set_domains(str(agent_id), list(request.get("domains") or []))
+    elif op == "profiles":
+        registry.set_profiles(str(agent_id), list(request.get("profiles") or []))
+    elif op == "routes":
+        registry.set_routes(str(agent_id), list(request.get("routes") or []))
     elif op == "pause":
         registry.pause(str(agent_id), bool(request.get("paused")))
     elif op == "revoke":
@@ -242,6 +299,17 @@ def api_request(request: dict) -> dict:
         audit.clear()
     elif op == "answer":
         registry.answer_request(str(request.get("id")), str(request.get("answer")))
+    elif op == "detect":
+        return {"clients": connect.detect()}
+    elif op == "plan":
+        plan = connect.plan(str(request.get("client")), str(agent_id))
+        return {**plan, "display": connect.describe(plan["command"])}
+    elif op == "install":
+        return connect.install(str(request.get("client")), str(agent_id), bool(request.get("replace")))
+    elif op == "verify":
+        return connect.verify(str(request.get("client")))
+    elif op == "unconfigure":
+        return {"removed": connect.remove(str(request.get("client")))}
     else:
         raise registry.RegistryError("bad-request")
     return {"done": True}
@@ -256,6 +324,8 @@ def _api(args) -> int:
         if not isinstance(request, dict):
             raise registry.RegistryError("bad-request")
         result = api_request(request)
+    except connect.ConnectError as exc:
+        result = {"error": exc.code, "detail": str(exc)[:300]}
     except registry.RegistryError as exc:
         text = str(exc)
         code = (
@@ -286,6 +356,7 @@ HANDLERS = {
     "capabilities": _capabilities,
     "pause": _pause,
     "rotate-token": _rotate,
+    "connect": _connect,
     "serve": _serve,
 }
 
@@ -326,8 +397,11 @@ def add_parser(sub) -> None:
     q = asub.add_parser("pause", help="hold an agent without revoking it")
     q.add_argument("agent")
     q.add_argument("--resume", action="store_true")
-    q = asub.add_parser("rotate-token", help="replace an agent's token (prints the new configuration)")
+    q = asub.add_parser("rotate-token", help="replace an agent's key (its configuration stays valid)")
     q.add_argument("agent")
+    q = asub.add_parser("connect", help="add Nulavio to the agent's own configuration, through its CLI, after approval")
+    q.add_argument("agent")
+    q.add_argument("--yes", action="store_true", help="run the command shown without asking")
     q = asub.add_parser("serve", help="MCP server on stdin/stdout (started by the agent, not by you)")
     q.add_argument("--headless", action="store_true")
     p.set_defaults(func=cmd)

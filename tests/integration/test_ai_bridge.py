@@ -24,6 +24,8 @@ import harness
 from mcp_client import McpClient
 
 from nulavio_launcher.ai import audit, registry
+from nulavio_launcher.vault import sodium, storage
+from nulavio_launcher.vault.core import Vault
 
 
 def engine_processes(marker: str) -> list[int]:
@@ -290,6 +292,58 @@ class AiBridgeTest(unittest.TestCase):
         traversal = c.call("upload", tab=tab, element=field, file="../profile/prefs.js")  # refused before anything runs
         self.assertTrue(traversal["isError"])
         self.assertIn("wrong format", traversal["content"][0]["text"])
+
+    def test_17_authorised_profile_and_routes(self):
+        agent, env = self.agent("autonomous")
+        work = self.home / "user-profiles" / "work"
+        work.mkdir(parents=True)
+        registry.set_profiles(agent["id"], [{"label": "Trabalho", "path": str(work)}])
+        registry.set_routes(agent["id"], [{"site": "127.0.0.1", "profile": "Trabalho"}])
+        registry.grant(agent["id"], "execute_js", "allow")
+        c = self.client(env)
+        listed = c.call("profiles_list")["structuredContent"]
+        self.assertEqual([p["profile"] for p in listed["profiles"]], ["AI Workspace", "Trabalho"])
+        routed = c.call("tab_new", url=self.fx.url("/page/routed"))["structuredContent"]
+        self.assertEqual(routed["profile"], "Trabalho")  # the site goes to the profile the user chose
+        self.assertIn("nulavio-ai-temporary", (work / "user.js").read_text())
+        self.assertTrue((work / "prefs.js").exists() or (work / "times.json").exists())
+        # Using the AI Workspace as well means working in two profiles: autonomous asks, nobody can answer.
+        denied = c.call("tab_new")
+        self.assertIn("more than one profile", denied["content"][0]["text"])
+        registry.grant(agent["id"], "multiple_profiles", "allow")
+        own = c.call("tab_new", url=self.fx.url("/page/ws"), profile="AI Workspace")["structuredContent"]
+        self.assertEqual(own["profile"], "AI Workspace")
+        by_profile = {t["tab"]: t["profile"] for t in c.call("tabs_list")["structuredContent"]["tabs"]}
+        self.assertEqual(by_profile[routed["tab"]], "Trabalho")
+        self.assertEqual(by_profile[own["tab"]], "AI Workspace")
+        c.call("evaluate", tab=routed["tab"], expression="document.cookie = 'nvwork=1; path=/'")
+        self.assertEqual(c.call("evaluate", tab=own["tab"], expression="document.cookie")["structuredContent"]["value"], "")
+        c.close()
+        self.assertFalse((work / "user.js").exists() and "nulavio-ai-temporary" in (work / "user.js").read_text())
+
+    def test_18_profiles_the_agent_may_not_use(self):
+        agent, env = self.agent("full_control")
+        busy = self.home / "user-profiles" / "busy"
+        busy.mkdir(parents=True)
+        os.symlink(f"127.0.0.1:+{os.getpid()}", busy / "lock")  # open in one of the user's windows
+        registry.set_profiles(agent["id"], [{"label": "Ocupado", "path": str(busy)}])
+        c = self.client(env)
+        self.assertIn("not one this agent may use", c.call("tab_new", profile="Pessoal")["content"][0]["text"])
+        self.assertIn("is open in a window", c.call("tab_new", profile="Ocupado")["content"][0]["text"])
+        if storage.tools_available() and sodium.available():
+            locked = self.home / "user-profiles" / "banco"
+            box = storage.Container(locked)
+            box.root.mkdir(parents=True, mode=0o700)
+            vault = Vault.create(box.vault_path)
+            vault.add_password("artificial pass 12", {"ops": 1, "mem": 8 * 1024 * 1024})
+            vault.save()
+            box.init(vault)
+            vault.lock()
+            self.addCleanup(lambda: [os.chmod(d, 0o700) for d, _, _ in os.walk(locked.parent)])
+            registry.set_profiles(agent["id"], [{"label": "Banco", "path": str(locked)}])
+            result = c.call("tab_new", profile="Banco")
+            self.assertIn("only the user can unlock it", result["content"][0]["text"])
+            self.assertEqual(list(locked.iterdir()), [])  # nothing was written into the locked profile
 
 
 if __name__ == "__main__":

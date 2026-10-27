@@ -42,7 +42,8 @@ Checked on 2026-10-26 on Fedora 44 KDE (Wayland), engine Gecko 158.0.1 (Nulavio 
 | Network, console, debugging | — | UNSUPPORTED (A13) | Capabilities reserved |
 | Windows management, long tasks, task cancellation | — | PARTIAL | Each call can be cancelled (`notifications/cancelled`); task handles in S7 |
 | Several agents at once | — | SUPPORTED | One workspace per agent; tested with two agents concurrently |
-| Real profiles (Personal, Work, …) | — | UNSUPPORTED (S8) | |
+| Real profiles (Personal, Work, …) | `tab_new profile=…`, routes, `profiles_list` | SUPPORTED | Only profiles the user gave the agent, while closed in the user's windows and not locked; needs `authenticated_sessions`, plus `multiple_profiles` to use more than one at a time |
+| Agent configuration | Settings wizard, `nulavio ai connect` | SUPPORTED | Claude Code (`claude mcp add-json --scope user`, then `claude mcp get` reports Connected) and Codex (`codex mcp add`), tested in a throwaway HOME |
 
 ## Platforms
 

@@ -631,5 +631,43 @@ class AutonomyControlsTest(Home):
             ai_cli.api_request({"op": "explode"})
 
 
+class ProfilesAndKeysTest(Home):
+    """S8: profiles an agent may use, its routes, and the key file its configuration points to."""
+
+    def test_key_file(self):
+        agent, token = registry.add("k", "claude-code", "assisted")
+        path = registry.token_file(agent["id"])
+        self.assertEqual(path.read_text(), token)
+        self.assertEqual(os.stat(path).st_mode & 0o777, 0o600)
+        config = json.loads(ai_cli.client_config("claude-code", agent_id=agent["id"]))
+        self.assertEqual(config["mcpServers"]["nulavio"]["env"]["NULAVIO_AGENT_TOKEN_FILE"], str(path))
+        self.assertNotIn(token, json.dumps(config))
+        new = registry.rotate_token(agent["id"])
+        self.assertEqual(path.read_text(), new)  # the configuration stays valid
+        self.assertEqual(registry.read_token_file(str(path)), new)
+        self.assertIsNone(registry.read_token_file(str(self.home / "missing")))
+        registry.remove(agent["id"])
+        self.assertFalse(path.exists())
+
+    def test_profiles_and_routes(self):
+        agent, _ = registry.add("r", "codex", "autonomous")
+        registry.set_profiles(agent["id"], [{"label": "Trabalho", "path": "/home/u/.nulavio/p1"},
+                                            {"label": "Dev", "path": "/home/u/.nulavio/p2"}])  # fmt: skip
+        for bad in ([{"label": "AI Workspace", "path": "/x"}], [{"label": "a/b", "path": "/x"}], [{"label": "X", "path": "rel"}],
+                    [{"label": "X", "path": "/a"}, {"label": "X", "path": "/b"}]):  # fmt: skip
+            with self.assertRaises(registry.RegistryError):
+                registry.set_profiles(agent["id"], bad)
+        registry.set_routes(
+            agent["id"], [{"site": "example.org", "profile": "Trabalho"}, {"site": "dev.example.org", "profile": "Dev"}]
+        )
+        with self.assertRaises(registry.RegistryError):
+            registry.set_routes(agent["id"], [{"site": "x.org", "profile": "Banco"}])  # not one of its profiles
+        stored = registry.get(agent["id"])
+        self.assertEqual(registry.route_for(stored, "api.dev.example.org"), "Dev")  # the most specific site wins
+        self.assertEqual(registry.route_for(stored, "www.example.org"), "Trabalho")
+        self.assertIsNone(registry.route_for(stored, "example.org.evil.test"))
+        self.assertIsNone(registry.route_for(stored, None))
+
+
 if __name__ == "__main__":
     unittest.main()

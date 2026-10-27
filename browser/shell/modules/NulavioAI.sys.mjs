@@ -58,8 +58,18 @@ class AI {
   #timer = null;
   #shown = new Set();
 
-  workspaceAgent() {
-    return Services.prefs.getStringPref(WORKSPACE_PREF, "");
+  /** The agent driving this window, if any. "agent:pid" (one of the user's profiles, opened for an agent)
+      counts only while that bridge process lives; a bare agent id is an AI Workspace. */
+  async workspaceAgent() {
+    const value = Services.prefs.getStringPref(WORKSPACE_PREF, "");
+    if (!value) {
+      return "";
+    }
+    const [id, pid] = value.split(":");
+    if (pid && !(/^\d+$/.test(pid) && (await IOUtils.exists(`/proc/${pid}`)))) {
+      return ""; // the agent's session ended: an ordinary window again
+    }
+    return id;
   }
 
   overview() {
@@ -71,11 +81,24 @@ class AI {
   }
 
   change(id, op, details = {}) {
-    const allowed = ["autonomy", "grant", "clear-grant", "domains", "pause", "revoke", "remove", "rotate-token"];
+    const allowed = ["autonomy", "grant", "clear-grant", "domains", "profiles", "routes", "pause", "revoke", "remove", "rotate-token"];
     if (!allowed.includes(op)) {
       fail("bad-request");
     }
     return api({ ...details, op, agent: agentId(id) });
+  }
+
+  /** The connect wizard: which agents are installed, the exact command, then run it after approval. */
+  detect() {
+    return api({ op: "detect" });
+  }
+
+  plan(id, client) {
+    return api({ op: "plan", agent: agentId(id), client });
+  }
+
+  install(id, client, replace = false) {
+    return api({ op: "install", agent: agentId(id), client, replace: Boolean(replace) });
   }
 
   setStopped(stopped) {
@@ -107,7 +130,7 @@ class AI {
   }
 
   async answer(id, answer) {
-    if (this.workspaceAgent()) {
+    if (await this.workspaceAgent()) {
       fail("workspace"); // never from the window an agent drives
     }
     if (!ID_RE.test(String(id)) || !ANSWERS.has(answer)) {
@@ -118,7 +141,7 @@ class AI {
 
   /** Watch for permission requests (idempotent). Not in an AI Workspace. */
   watch() {
-    if (this.#timer || this.workspaceAgent()) {
+    if (this.#timer) {
       return;
     }
     this.#timer = Cc["@mozilla.org/timer;1"].createInstance(Ci.nsITimer);
@@ -126,7 +149,7 @@ class AI {
   }
 
   async #poll() {
-    if (this.workspaceAgent()) {
+    if (await this.workspaceAgent()) {
       return; // never in a window an agent drives
     }
     const dir = this.#requestsDir();
@@ -165,7 +188,7 @@ class AI {
 
   /** In an AI Workspace: say plainly who drives this window, in every browser window. */
   async markWorkspace(text) {
-    if (!this.workspaceAgent()) {
+    if (!(await this.workspaceAgent())) {
       return;
     }
     const mark = win => {

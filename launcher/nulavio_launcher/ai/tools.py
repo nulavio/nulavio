@@ -20,7 +20,7 @@ from pathlib import Path
 
 from . import audit, policy, registry
 from .bidi import Bidi, BidiError, script_result
-from .workspace import Workspace
+from .workspace import ProfileTarget, TargetError, Workspace
 
 TAB = {"type": "string", "pattern": "^[A-Za-z0-9-]{1,64}$", "description": "Tab id from tabs_list or tab_new"}
 ELEMENT = {"type": "string", "pattern": "^e[0-9]{1,5}$", "description": "Element id from page_snapshot (e.g. e12)"}
@@ -120,8 +120,12 @@ def _schema(properties: dict, required: tuple[str, ...] = ()) -> dict:
 TOOLS: tuple[Tool, ...] = (
     Tool("tabs_list", "List tabs", "List the open tabs of your AI Workspace (id, address, title).", "read_pages",
          _schema({}), True),
-    Tool("tab_new", "Open a tab", "Open a new tab, optionally at an http(s) address.", "navigate",
-         _schema({"url": URL}), False, 60),
+    Tool("tab_new", "Open a tab",
+         "Open a new tab, optionally at an http(s) address, in your AI Workspace or in one of the user's profiles you "
+         "were given (see profiles_list). Sites the user routed to a profile open there.", "navigate",
+         _schema({"url": URL, "profile": {"type": "string", "pattern": "^[\\w .+-]{1,40}$"}}), False, 60),
+    Tool("profiles_list", "Profiles", "Where you can open tabs: your AI Workspace and the user's profiles you were given.",
+         None, _schema({}), True),
     Tool("tab_close", "Close a tab", "Close one tab.", "navigate", _schema({"tab": TAB}, ("tab",)), False),
     Tool("navigate", "Go to an address", "Load an http(s) address in a tab and wait for the page.", "navigate",
          _schema({"tab": TAB, "url": URL}, ("tab", "url")), False, 60),
@@ -208,10 +212,12 @@ class Bridge:
         self.headless = headless
         self.workspace_factory = workspace_factory
         self.workspace: Workspace | None = None
+        self.profiles: dict[str, ProfileTarget] = {}  # the user's own profiles opened for this agent, by label
+        self.owner: dict[str, str] = {}  # tab -> "" (AI Workspace) or a profile label
         self.elements: dict[str, dict[str, str]] = {}  # tab -> element id -> BiDi sharedId
         self._lock = threading.Lock()
         self._target: str | None = None  # the address the current call acts on (for the audit)
-        self._downloads_mode: bool | None = None
+        self._downloads_mode: dict[str, bool] = {}
 
     # -- policy ----------------------------------------------------------------------
 
@@ -298,44 +304,77 @@ class Bridge:
 
     # -- browser ---------------------------------------------------------------------
 
-    def bidi(self) -> Bidi:
+    def _workspace(self) -> Workspace:
         if self.workspace is None:
             agent = self._agent() or {}
             uploads = bool(agent) and policy.effective_mode(agent, "files", self.session_id)[0] != "block"
             self.workspace = (self.workspace_factory(agent) if self.workspace_factory else
                               Workspace(self.agent_id, disposable=agent.get("workspace") == "disposable",
                                         headless=self.headless, uploads=uploads))  # fmt: skip
-        return self.workspace.start()
+        return self.workspace
+
+    def _engines(self) -> list[tuple[str, Workspace]]:
+        """Running engines: ("", AI Workspace) and (label, one of the user's profiles)."""
+        out = [("", self.workspace)] if self.workspace is not None and self.workspace.bidi is not None else []
+        return out + [(label, t) for label, t in self.profiles.items() if t.bidi is not None]
+
+    def bidi(self, tab: str | None = None) -> Bidi:
+        """The AI Workspace's engine, or the engine that holds `tab`."""
+        if tab is None:
+            return self._workspace().start()
+        owner = self._owner(tab)
+        return self.profiles[owner].bidi if owner else self._workspace().start()
+
+    def _owner(self, tab: str) -> str:
+        known = self.owner.get(tab)
+        if known == "" or (known and known in self.profiles):
+            return known
+        engines = self._engines() or [("", self._workspace())]
+        for label, target in engines:
+            bidi = target.start() if not label else target.bidi
+            for context in bidi.command("browsingContext.getTree", {"maxDepth": 0}).get("contexts", []):
+                self.owner[context["context"]] = label
+        if tab not in self.owner:
+            raise ToolError(f"no tab {tab}; call tabs_list")
+        return self.owner[tab]
 
     def close(self) -> None:
+        for target in self.profiles.values():
+            target.stop()
+        self.profiles.clear()
         if self.workspace is not None:
             self.workspace.stop()
             self.workspace = None
         self.elements.clear()
-        self._downloads_mode = None
+        self.owner.clear()
+        self._downloads_mode = {}
 
     def _sync_downloads(self) -> None:
-        """Downloads follow the `files` permission in the engine itself: allowed into the workspace's folder, or refused."""
-        if self.workspace is None or self.workspace.bidi is None:
+        """Downloads follow the `files` permission in each engine: allowed into the agent's downloads folder, or refused."""
+        engines = self._engines()
+        if not engines:
             return
         agent = self._agent() or {}
         mode = policy.effective_mode(agent, "files", self.session_id)[0] if agent else "block"
         allowed = mode == "allow" and not agent.get("paused") and not registry.stopped()
-        if allowed == self._downloads_mode:
-            return
-        behavior = {"type": "allowed", "destinationFolder": str(self.workspace.downloads_dir)} if allowed else {"type": "denied"}
-        self.workspace.bidi.command("browser.setDownloadBehavior", {"downloadBehavior": behavior})
-        self._downloads_mode = allowed
+        folder = str(self._workspace().downloads_dir)
+        for label, target in engines:
+            if self._downloads_mode.get(label) == allowed:
+                continue
+            behavior = {"type": "allowed", "destinationFolder": folder} if allowed else {"type": "denied"}
+            target.bidi.command("browser.setDownloadBehavior", {"downloadBehavior": behavior})
+            self._downloads_mode[label] = allowed
 
     def _events(self, method: str, tab: str | None = None) -> list[dict]:
-        bidi = self.workspace.bidi if self.workspace else None
-        if bidi is None:
-            return []
-        return [
-            e["params"]
-            for _, e in list(bidi.events)
-            if e.get("method") == method and (tab is None or e["params"].get("context") == tab)
-        ]
+        sources = [self.bidi(tab)] if tab is not None else [target.bidi for _, target in self._engines()]
+        out = []
+        for bidi in sources:
+            out += [
+                e["params"]
+                for _, e in list(bidi.events)
+                if e.get("method") == method and (tab is None or e["params"].get("context") == tab)
+            ]
+        return out
 
     def _open_dialog(self, tab: str) -> dict | None:
         """The dialog a page has open in this tab, if any (type and message, from the engine's events)."""
@@ -347,24 +386,32 @@ class Bridge:
         return {"type": last.get("type"), "message": str(last.get("message", ""))[:500]}
 
     def _tabs(self, cancel) -> list[dict]:
-        tree = self.bidi().command("browsingContext.getTree", {"maxDepth": 0}, cancel=cancel)
-        return tree.get("contexts", [])
+        """Tabs of every running engine, each with the profile it belongs to."""
+        engines = self._engines() or [("", self._workspace())]
+        out = []
+        for label, target in engines:
+            bidi = target.start() if not label else target.bidi
+            for context in bidi.command("browsingContext.getTree", {"maxDepth": 0}, cancel=cancel).get("contexts", []):
+                self.owner[context["context"]] = label
+                out.append({**context, "profile": label or "AI Workspace"})
+        return out
 
     def _url_of(self, tab: str, cancel) -> str:
-        for context in self._tabs(cancel):
+        tree = self.bidi(tab).command("browsingContext.getTree", {"maxDepth": 0}, cancel=cancel)
+        for context in tree.get("contexts", []):
             if context["context"] == tab:
                 return context.get("url", "")
         raise ToolError(f"no tab {tab}; call tabs_list")
 
     def _eval(self, tab: str, expression: str, cancel, timeout: float = 30) -> object:
-        result = self.bidi().command("script.evaluate", {
+        result = self.bidi(tab).command("script.evaluate", {
             "expression": expression, "target": {"context": tab}, "awaitPromise": True, "resultOwnership": "none",
             "serializationOptions": {"maxDomDepth": 0, "maxObjectDepth": 4},
         }, timeout=timeout, cancel=cancel)  # fmt: skip
         return script_result(result)
 
     def _call_fn(self, tab: str, fn: str, args: list, cancel) -> object:
-        result = self.bidi().command("script.callFunction", {
+        result = self.bidi(tab).command("script.callFunction", {
             "functionDeclaration": fn, "target": {"context": tab}, "arguments": args, "awaitPromise": False,
             "resultOwnership": "none", "serializationOptions": {"maxDomDepth": 0, "maxObjectDepth": 4},
         }, cancel=cancel)  # fmt: skip
@@ -372,7 +419,7 @@ class Bridge:
 
     def _settle(self, tab: str, mark: int, *, expected: bool, cancel) -> bool:
         """After an input: if it started a navigation, wait for the new page to load."""
-        bidi = self.bidi()
+        bidi = self.bidi(tab)
         started = bidi.wait_event("browsingContext.navigationStarted", tab, mark, 2.0 if expected else 0.4, cancel)
         if started is None:
             return False
@@ -407,8 +454,10 @@ class Bridge:
 
     def _t_tabs_list(self, args, cancel, checked):
         self.require("read_pages", checked=checked)
-        tabs = [{"tab": c["context"], "url": c.get("url", ""), "title": self._title(c["context"], cancel)}
-                for c in self._tabs(cancel)[:50]]  # fmt: skip
+        tabs = [
+            {"tab": c["context"], "profile": c["profile"], "url": c.get("url", ""), "title": self._title(c["context"], cancel)}
+            for c in self._tabs(cancel)[:50]
+        ]
         return self._ok({"tabs": tabs}), None
 
     def _t_tab_new(self, args, cancel, checked):
@@ -417,16 +466,67 @@ class Bridge:
             self.require_url(url, checked=checked)
         else:
             self.require("navigate", checked=checked)
-        tab = self.bidi().command("browsingContext.create", {"type": "tab"}, cancel=cancel)["context"]
+        agent = self._agent() or {}
+        label = args.get("profile")
+        if label is None and url:
+            label = registry.route_for(agent, urllib.parse.urlsplit(url).hostname)
+        if label in (None, "", "AI Workspace"):
+            if any(name for name, _ in self._engines()):
+                self.require("multiple_profiles", url, checked=checked)  # a profile of the user's is open too
+            bidi, owner = self.bidi(), ""
+        else:
+            bidi, owner = self._open_profile(agent, label, url, checked), label
+        tab = bidi.command("browsingContext.create", {"type": "tab"}, cancel=cancel)["context"]
+        self.owner[tab] = owner
         if url:
-            self.bidi().command("browsingContext.navigate", {"context": tab, "url": url, "wait": "complete"},
-                                timeout=60, cancel=cancel)  # fmt: skip
-        return self._ok({"tab": tab, "url": self._url_of(tab, cancel), "title": self._title(tab, cancel)}), url
+            bidi.command("browsingContext.navigate", {"context": tab, "url": url, "wait": "complete"}, timeout=60, cancel=cancel)
+        data = {
+            "tab": tab,
+            "profile": owner or "AI Workspace",
+            "url": self._url_of(tab, cancel),
+            "title": self._title(tab, cancel),
+        }
+        return self._ok(data), url
+
+    def _open_profile(self, agent: dict, label: str, url: str | None, checked: list[str]) -> Bidi:
+        """One of the user's own profiles, if this agent was given it: the sessions there are the user's."""
+        entry = next((p for p in agent.get("profiles", []) if p["label"] == label), None)
+        if entry is None:
+            checked.append("authenticated_sessions")
+            raise Denied(policy.Decision(False, "block", "authenticated_sessions", "profile-not-authorized"))
+        self.require("authenticated_sessions", url, checked=checked)
+        if {name for name, _ in self._engines()} - {label}:
+            self.require("multiple_profiles", url, checked=checked)
+        target = self.profiles.get(label)
+        if target is None:
+            target = ProfileTarget(self.agent_id, label, Path(entry["path"]), downloads_dir=self._workspace().downloads_dir,
+                                   headless=self.headless)  # fmt: skip
+            self.profiles[label] = target
+        try:
+            bidi = target.start()
+        except TargetError as exc:
+            self.profiles.pop(label, None)
+            messages = {
+                "profile-locked": f"the profile {label} is locked: only the user can unlock it; agents never get keys",
+                "profile-in-use": f"the profile {label} is open in a window; the user must close it before an agent can use it",
+                "profile-missing": f"the profile {label} no longer exists",
+            }
+            raise ToolError(messages.get(exc.code, f"the profile {label} could not be opened")) from None
+        self._sync_downloads()
+        return bidi
+
+    def _t_profiles_list(self, args, cancel, checked):
+        agent = self._agent() or {}
+        items = [{"profile": "AI Workspace", "open": self.workspace is not None and self.workspace.bidi is not None}]
+        for entry in agent.get("profiles", []):
+            items.append({"profile": entry["label"], "open": entry["label"] in self.profiles})
+        routes = [{"site": r["site"], "profile": r["profile"]} for r in agent.get("routes", [])]
+        return self._ok({"profiles": items, "routes": routes}), None
 
     def _t_tab_close(self, args, cancel, checked):
         url = self._url_of(args["tab"], cancel)
         self.require("navigate", url, checked=checked)
-        self.bidi().command("browsingContext.close", {"context": args["tab"]}, cancel=cancel)
+        self.bidi(args["tab"]).command("browsingContext.close", {"context": args["tab"]}, cancel=cancel)
         self.elements.pop(args["tab"], None)
         return self._ok({"closed": args["tab"]}), url
 
@@ -435,7 +535,7 @@ class Bridge:
         self._url_of(tab, cancel)
         self.require_url(url, checked=checked)
         self.elements.pop(tab, None)
-        self.bidi().command("browsingContext.navigate", {"context": tab, "url": url, "wait": "complete"},
+        self.bidi(tab).command("browsingContext.navigate", {"context": tab, "url": url, "wait": "complete"},
                             timeout=60, cancel=cancel)  # fmt: skip
         return self._ok({"tab": tab, "url": self._url_of(tab, cancel), "title": self._title(tab, cancel)}), url
 
@@ -468,7 +568,7 @@ class Bridge:
         tab = args["tab"]
         url = self._url_of(tab, cancel)
         self.require("screenshots", url, checked=checked)
-        png = self.bidi().command("browsingContext.captureScreenshot", {"context": tab}, cancel=cancel)["data"]
+        png = self.bidi(tab).command("browsingContext.captureScreenshot", {"context": tab}, cancel=cancel)["data"]
         data = {"tab": tab, "url": url, "bytes": len(png) * 3 // 4}
         return self._ok(data, f"Screenshot of {url}", [{"type": "image", "data": png, "mimeType": "image/png"}]), url
 
@@ -485,15 +585,15 @@ class Bridge:
         if info.get("href") and not info["href"].startswith(("javascript:", "#")):
             self.require_url(info["href"], checked=checked)
         self._call_fn(tab, SCROLL_FN, [element], cancel)
-        mark = self.bidi().mark()
+        mark = self.bidi(tab).mark()
         actions = [{"type": "pointer", "id": "nulavio-mouse", "parameters": {"pointerType": "mouse"}, "actions": [
             {"type": "pointerMove", "x": 0, "y": 0, "origin": {"type": "element", "element": element}},
             {"type": "pointerDown", "button": 0}, {"type": "pointerUp", "button": 0}]}]  # fmt: skip
-        done = self.bidi().command("input.performActions", {"context": tab, "actions": actions}, cancel=cancel,
+        done = self.bidi(tab).command("input.performActions", {"context": tab, "actions": actions}, cancel=cancel,
                                    until=("browsingContext.userPromptOpened", tab, mark))  # fmt: skip
         if done is None:  # the click opened a dialog, which holds the input until it is answered
             return self._ok({"tab": tab, "url": url, "navigated": False, "dialog": self._open_dialog(tab)}), url
-        self.bidi().command("input.releaseActions", {"context": tab}, cancel=cancel)
+        self.bidi(tab).command("input.releaseActions", {"context": tab}, cancel=cancel)
         navigated = self._settle(tab, mark, expected=bool(info.get("submits") or info.get("href")), cancel=cancel)
         dialog = self._open_dialog(tab)
         data = {"tab": tab, "url": self._url_of(tab, cancel), "navigated": navigated, "dialog": dialog}
@@ -519,11 +619,11 @@ class Bridge:
             keys += [{"type": "keyDown", "value": char}, {"type": "keyUp", "value": char}]
         if args.get("submit"):
             keys += [{"type": "keyDown", "value": ""}, {"type": "keyUp", "value": ""}]
-        mark = self.bidi().mark()
+        mark = self.bidi(tab).mark()
         if keys:
-            self.bidi().command("input.performActions", {"context": tab, "actions": [
+            self.bidi(tab).command("input.performActions", {"context": tab, "actions": [
                 {"type": "key", "id": "nulavio-keyboard", "actions": keys}]}, timeout=60, cancel=cancel)  # fmt: skip
-            self.bidi().command("input.releaseActions", {"context": tab}, cancel=cancel)
+            self.bidi(tab).command("input.releaseActions", {"context": tab}, cancel=cancel)
         navigated = self._settle(tab, mark, expected=bool(args.get("submit")), cancel=cancel)
         return self._ok({"tab": tab, "typed": len(args["text"]), "submitted": bool(args.get("submit")),
                          "navigated": navigated, "url": self._url_of(tab, cancel)}), url  # fmt: skip
@@ -537,7 +637,7 @@ class Bridge:
         params = {"context": tab, "accept": bool(args["accept"])}
         if args.get("text") is not None:
             params["userText"] = args["text"]
-        self.bidi().command("browsingContext.handleUserPrompt", params, cancel=cancel)
+        self.bidi(tab).command("browsingContext.handleUserPrompt", params, cancel=cancel)
         return self._ok({"tab": tab, "accepted": bool(args["accept"])}), url
 
     def _t_downloads_list(self, args, cancel, checked):
@@ -550,7 +650,7 @@ class Bridge:
             path = end.get("filepath") if end.get("status") == "complete" else None
             items.append({"file": item.get("suggestedFilename"), "from": policy.origin(item.get("url")),
                           "status": end.get("status", "in progress"), "path": path})  # fmt: skip
-        folder = str(self.workspace.downloads_dir) if self.workspace else None
+        folder = str(self._workspace().downloads_dir)
         return self._ok({"downloads": items, "folder": folder}), None
 
     def _t_upload(self, args, cancel, checked):
@@ -558,13 +658,15 @@ class Bridge:
         url = self._url_of(tab, cancel)
         element = self._element(tab, args["element"])
         self.require("files", url, checked=checked)
+        if self._owner(tab):
+            raise ToolError("uploads work only in the AI Workspace, from its uploads folder")
         folder = _uploads(self).resolve()
         if not self.workspace.uploads:
             raise ToolError("uploads were not allowed when this workspace started; reconnect the agent after allowing files")
         path = (folder / args["file"]).resolve()
         if path.parent != folder or not path.is_file():
             raise ToolError(f"no file named {args['file']!r} in this agent's uploads folder ({folder})")
-        self.bidi().command("input.setFiles", {"context": tab, "element": element, "files": [str(path)]}, cancel=cancel)
+        self.bidi(tab).command("input.setFiles", {"context": tab, "element": element, "files": [str(path)]}, cancel=cancel)
         return self._ok({"tab": tab, "file": path.name}), url
 
     def _t_evaluate(self, args, cancel, checked):
@@ -589,6 +691,7 @@ def _why(decision: policy.Decision) -> str:
         "revoked": "blocked: the user revoked this agent's access",
         "paused": "blocked for now: the user paused this agent",
         "out-of-scope": "blocked on this site: it is outside the sites this agent may use",
+        "profile-not-authorized": "blocked: that profile is not one this agent may use",
         "no-approver": "set to 'ask' and there is no way to ask the user right now",
         "denied": "set to 'ask' and the user said no",
     }.get(decision.reason, f"blocked for this agent ({decision.reason})")

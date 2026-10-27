@@ -154,6 +154,7 @@ class NulavioProfilesClass {
       isCurrent: profile.id === currentId,
       encrypted: lock !== "plain",
       locked: lock === "locked",
+      path: profile.path,
     };
   }
 

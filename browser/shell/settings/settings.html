@@ -216,6 +216,16 @@
           <p class="form-error" role="alert"></p>
           <div class="actions"><button class="button button--primary" type="submit" data-i18n="aiConnectButton"></button></div>
         </form>
+        <div class="stack" id="ai-wizard" hidden>
+          <p id="ai-wizard-detected"></p>
+          <p id="ai-wizard-intro"></p>
+          <pre class="notice mono" id="ai-wizard-command"></pre>
+          <p class="hint" id="ai-wizard-existing" hidden></p>
+          <div class="actions">
+            <button class="button button--primary" type="button" id="ai-wizard-install"></button>
+            <button class="button button--secondary" type="button" id="ai-wizard-manual" data-i18n="aiShowConfig"></button>
+          </div>
+        </div>
         <div class="stack" id="ai-connect-result" hidden>
           <p id="ai-config-intro"></p>
           <pre class="notice mono" id="ai-config"></pre>
