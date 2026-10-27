@@ -260,3 +260,42 @@ class ToolsBundleTest(unittest.TestCase):
             import shutil
 
             shutil.rmtree(out.parent, ignore_errors=True)
+
+
+class PackagingTest(unittest.TestCase):
+    """RPM and .deb (phase 6): one engine build, root-owned install, identity that matches the build."""
+
+    def test_desktop_entry_matches_the_build_identity(self):
+        desktop = (ROOT / "packaging" / "linux" / "nulavio.desktop").read_text(encoding="utf-8")
+        mozconfig = (ROOT / "browser" / "build" / "mozconfig").read_text(encoding="utf-8")
+        self.assertIn("ac_add_options MOZ_APP_REMOTINGNAME=nulavio", mozconfig)
+        self.assertIn("StartupWMClass=nulavio\n", desktop)  # the Wayland app_id is the remoting name
+        self.assertIn("Exec=nulavio %u\n", desktop)
+        self.assertIn("x-scheme-handler/https", desktop)
+
+    def test_packages_install_under_system_directories_only(self):
+        spec = (ROOT / "packaging" / "rpm" / "nulavio.spec").read_text(encoding="utf-8")
+        self.assertIn("%global nulavio_dir %{_libdir}/nulavio", spec)
+        self.assertNotIn("%post", spec)  # no scripts run as root at install time
+        self.assertNotRegex(spec, r"(?m)^\s*(curl|wget)\b")
+        deb = (ROOT / "scripts" / "release" / "make_deb.sh").read_text(encoding="utf-8")
+        self.assertIn("--root-owner-group", deb)
+        self.assertNotIn("DEBIAN/postinst", deb)
+
+    def test_one_build_reads_the_system_directory_the_distribution_has(self):
+        series = (ROOT / "browser" / "patches" / "series").read_text(encoding="utf-8")
+        self.assertIn("0006-xre-use-the-system-mozilla-directory-the-distribution-has.patch", series)
+        for check, directory in (("check_rpm.sh", "/usr/lib64/mozilla"), ("check_deb.sh", "/usr/lib/mozilla")):
+            self.assertIn(f'[ "$sysdir" = "{directory}" ]', (ROOT / "scripts" / "release" / check).read_text(encoding="utf-8"))
+
+    def test_repository_signing_never_stores_a_key(self):
+        sign = (ROOT / "scripts" / "release" / "sign_repo.sh").read_text(encoding="utf-8")
+        self.assertIn("/gnupg-ro:ro", sign)
+        self.assertIn('rm -rf "$GNUPGHOME"', sign)
+        self.assertIn("repo_gpgcheck=1", sign)
+        test = (ROOT / "scripts" / "release" / "test_signed_repo.sh").read_text(encoding="utf-8")
+        self.assertIn("tampered", test)
+
+
+if __name__ == "__main__":
+    unittest.main()

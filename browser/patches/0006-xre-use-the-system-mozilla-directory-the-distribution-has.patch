@@ -1,0 +1,41 @@
+Subject: [PATCH] xre: use the system Mozilla directory the distribution has
+
+The system directory for native-messaging hosts and system extensions
+(/usr/lib64/mozilla or /usr/lib/mozilla) is fixed when the engine is built,
+from its libdir. Fedora packages put hosts such as KeePassXC-Browser and
+Plasma Browser Integration in /usr/lib64/mozilla; Debian and Ubuntu use
+/usr/lib/mozilla. With one Nulavio build for both families, the engine
+keeps the build-time directory when it exists and otherwise uses the other
+one that exists. Both are root-owned system locations; nothing in the
+user's home is involved.
+
+Owner: Nulavio maintainers
+Upstream: not applicable (distribution packaging choice).
+---
+--- a/toolkit/xre/nsXREDirProvider.cpp
++++ b/toolkit/xre/nsXREDirProvider.cpp
+@@ -352,6 +352,24 @@
+ #    endif
+       ;
+   rv = NS_NewNativeLocalFile(dirname, getter_AddRefs(localDir));
++#    if defined(XP_LINUX)
++  // Nulavio: one build for Fedora and Debian/Ubuntu. Use whichever system
++  // directory the distribution actually has (Fedora: /usr/lib64/mozilla,
++  // Debian/Ubuntu: /usr/lib/mozilla); keep the build-time default when
++  // neither exists. Both are root-owned system locations.
++  bool exists = false;
++  if (NS_SUCCEEDED(rv) && (NS_FAILED(localDir->Exists(&exists)) || !exists)) {
++    for (const auto& candidate :
++         {"/usr/lib64/mozilla"_ns, "/usr/lib/mozilla"_ns}) {
++      nsCOMPtr<nsIFile> other;
++      if (NS_SUCCEEDED(NS_NewNativeLocalFile(candidate, getter_AddRefs(other))) &&
++          NS_SUCCEEDED(other->Exists(&exists)) && exists) {
++        localDir = other;
++        break;
++      }
++    }
++  }
++#    endif
+ #  endif
+ 
+   if (NS_SUCCEEDED(rv)) {

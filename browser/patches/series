@@ -6,3 +6,4 @@
 0003-shell-load-the-nulavio-horizon-theme.patch
 0004-search-require-per-engine-consent-for-suggestions.patch
 0005-urlbar-let-smart-profile-routing-decide-typed-navigations.patch
+0006-xre-use-the-system-mozilla-directory-the-distribution-has.patch

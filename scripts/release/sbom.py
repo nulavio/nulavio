@@ -7,10 +7,20 @@ dependencies (distribution packages; not redistributed). Brand
 fonts are referenced, not bundled, so they are not listed.
 
     python3 -I scripts/release/sbom.py > sbom/nulavio-preview.cdx.json
+
+With --package, the SBOM of a Nulavio package (RPM or .deb) instead: the
+engine is then redistributed, built from Mozilla's source release with the
+patches in browser/patches (each listed with its SHA-256 in the pedigree),
+and the package file's own SHA-256 identifies what it describes.
+
+    python3 -I scripts/release/sbom.py --package dist/packages/x86_64/nulavio-158.0.1-0.1.fc44.x86_64.rpm \
+        --engine-version 158.0.1 > nulavio-158.0.1-0.1.fc44.x86_64.rpm.cdx.json
 """
 
 from __future__ import annotations
 
+import argparse
+import hashlib
 import json
 import subprocess
 import sys
@@ -23,6 +33,44 @@ sys.path.insert(0, str(ROOT / "launcher"))
 from nulavio_launcher import __version__  # noqa: E402
 
 LOCK = ROOT / "browser" / "distribution" / "extensions.lock.json"
+PATCHES = ROOT / "browser" / "patches"
+
+
+def sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with open(path, "rb") as handle:
+        for chunk in iter(lambda: handle.read(1 << 20), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def engine_built(version: str) -> dict:
+    """The engine as a Nulavio package redistributes it: Mozilla's source release plus Nulavio's patches."""
+    names = [line.strip() for line in (PATCHES / "series").read_text().splitlines() if line.strip() and not line.startswith("#")]
+    return {
+        "type": "application",
+        "bom-ref": "engine:firefox",
+        "name": "firefox",
+        "supplier": {"name": "Mozilla"},
+        "version": version,
+        "licenses": [{"license": {"id": "MPL-2.0"}}],
+        "scope": "required",
+        "externalReferences": [
+            {"type": "distribution", "url": f"https://archive.mozilla.org/pub/firefox/releases/{version}/source/"},
+        ],
+        "properties": [{"name": "nulavio:role", "value": "redistributed, built by scripts/build/build_nulavio.sh"}],
+        "pedigree": {
+            "patches": [
+                {
+                    "type": "unofficial",
+                    "diff": {"url": f"browser/patches/{name}"},
+                    "resolves": [],
+                }
+                | {"properties": [{"name": "sha256", "value": sha256(PATCHES / name)}]}
+                for name in names
+            ]
+        },
+    }
 
 
 def git_revision() -> str | None:
@@ -35,6 +83,12 @@ def git_revision() -> str | None:
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--package", type=Path, help="describe this RPM or .deb instead of the preview")
+    parser.add_argument("--engine-version", help="engine version inside the package")
+    args = parser.parse_args()
+    if args.package and not args.engine_version:
+        parser.error("--package needs --engine-version")
     lock = json.loads(LOCK.read_text())
     components = [
         {
@@ -72,6 +126,8 @@ def main() -> int:
         }
         component["licenses"] = [{"license": {"id": license_id}}] if license_id else [{"license": {"name": entry["license"]}}]
         components.append(component)
+    if args.package:
+        components[0] = engine_built(args.engine_version)
     bom = {
         "bomFormat": "CycloneDX",
         "specVersion": "1.6",
@@ -90,6 +146,19 @@ def main() -> int:
         "components": components,
         "dependencies": [{"ref": "nulavio-preview", "dependsOn": [c["bom-ref"] for c in components]}],
     }
+    if args.package:
+        bom["metadata"]["component"] = {
+            "type": "application",
+            "bom-ref": "nulavio-preview",
+            "name": "nulavio",
+            "version": args.engine_version,
+            "licenses": [{"license": {"id": "MPL-2.0"}}],
+            "hashes": [{"alg": "SHA-256", "content": sha256(args.package)}],
+            "properties": [
+                {"name": "nulavio:package-file", "value": args.package.name},
+                {"name": "nulavio:git-revision", "value": git_revision() or "uncommitted"},
+            ],
+        }
     json.dump(bom, sys.stdout, indent=2)
     sys.stdout.write("\n")
     return 0

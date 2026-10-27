@@ -130,10 +130,11 @@ External agents (Codex CLI and Desktop, Claude Code and Desktop, other MCP clien
 
 ## Phase 6 — Tests, packaging, alpha
 
-- [ ] RPM (Fedora) with signed repository; DEB later
+- [x] RPM (Fedora) and .deb (Ubuntu) from one engine build, installed and checked in clean containers; signed-repository tooling verified end to end with a throwaway key; SBOM per package ([build](../architecture/build.md#packages-s18))
+- [ ] Sign with the release key and publish the repository (needs the maintainer's key and a host)
 - [ ] Update SLA automation; security changelog
 - [ ] Alpha only after [release criteria](release-criteria.md) are met
 
 ## Next task (recommended)
 
-Follow the [execution plan](execution-plan.md): S1 (Connect P0), S2 (unlock research and ADRs), S3 (Vault crypto prototype), S4 (AI Bridge foundation), S5 (encrypted profile storage), S6 (unlock UX in the browser), S7 (AI autonomy and its UI), S8 (AI with profiles, routing and the connect wizard), S12 (temporary profile), S13 (Guard at run time), S14 (per-site privacy, Strict fix), S15 (DNS choice, fingerprinting measured), S16 (real-site regression) and S17 (password flows B, D, H) are done; next: S18 (packaging) through S24 (alpha gate), with S10 (security key, needs a key) and S11 (Android Companion, last) waiting on the maintainer. The plan lists the decisions each slice needs from the maintainer.
+Follow the [execution plan](execution-plan.md): S1 (Connect P0), S2 (unlock research and ADRs), S3 (Vault crypto prototype), S4 (AI Bridge foundation), S5 (encrypted profile storage), S6 (unlock UX in the browser), S7 (AI autonomy and its UI), S8 (AI with profiles, routing and the connect wizard), S12 (temporary profile), S13 (Guard at run time), S14 (per-site privacy, Strict fix), S15 (DNS choice, fingerprinting measured), S16 (real-site regression), S17 (password flows B, D, H) and S18 (packages) are done; next: S19 (update SLA) through S24 (alpha gate), with S10 (security key, needs a key) and S11 (Android Companion, last) waiting on the maintainer. The plan lists the decisions each slice needs from the maintainer.

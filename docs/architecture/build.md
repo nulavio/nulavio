@@ -113,7 +113,7 @@ The build packages **en-US and pt-BR** (`NULAVIO_LOCALES`, default `pt-BR`). `fe
 ## Release blockers for Track B
 
 1. ~~Google Safe Browsing API key~~ **Resolved 2026-10-25** (section above). What remains: a quota review with Google, and either access to Google's download-protection API or acceptance of R15 for downloads.
-2. Signed packages and repository ([update policy](update-policy.md)).
+2. Signed packages and repository ([update policy](update-policy.md)): packages and the signing tooling are done and verified (section below); what remains is the maintainer's release key and a host for the repository.
 3. Policy/legal confirmation for keeping Firefox's add-on application ID and using AMO.
 4. Brand clearance ([strategy](../brand/strategy.md#trademark-and-availability-status)).
 
@@ -128,3 +128,21 @@ python3 -I scripts/build/make_tools.py --out ~/.cache/nulavio-build/install/nula
 NULAVIO_ENGINE=~/.cache/nulavio-build/install/nulavio/nulavio python3 -I tests/run.py integration
 # add NULAVIO_NETWORK_TESTS=1 to also run the Safe Browsing end-to-end test (contacts Google)
 ```
+
+## Packages (S18)
+
+One engine build serves Fedora and Debian/Ubuntu: patch 0006 makes the engine read the system Mozilla directory the distribution has (`/usr/lib64/mozilla` on Fedora, `/usr/lib/mozilla` on Debian/Ubuntu), so native-messaging hosts installed by distribution packages are found on both ([R25](../security/residual-risks.md), resolved). Every step runs in a disposable rootless container; nothing is installed on the host.
+
+| Step | Command | What it does |
+|---|---|---|
+| RPM | `scripts/release/make_rpm.sh [out]` | `packaging/rpm/nulavio.spec` in a Fedora 44 container: the tree under `/usr/lib64/nulavio`, `/usr/bin/nulavio`, desktop entry and icons; no install scripts; Requires python3 and util-linux, Recommends libsodium, gocryptfs, fuse3 |
+| .deb | `scripts/release/make_deb.sh [out]` | The same tree under `/usr/lib/nulavio`, built in an Ubuntu 26.10 container; `Depends` computed from the libraries the engine needs and does not ship (readelf + apt-file) |
+| Check | `scripts/release/check_rpm.sh <rpm>`, `check_deb.sh <deb>` | Install in a clean container with the distribution's own repositories; files as packaged (`rpm -V`, `dpkg --verify`), root-owned and not writable by users; `nulavio --version`; a headless start renders a page; the system Mozilla directory the engine reads (Marionette probe); the Nulavio tools answer |
+| Sign | `GNUPGHOME=… scripts/release/sign_repo.sh <packages> <repo> <key>` | `rpmsign`, `createrepo_c`, detached signature of `repomd.xml`, public key and `nulavio.repo` (gpgcheck and repo_gpgcheck on); the key is read from a read-only mount and its copy is deleted |
+| Check signing | `scripts/release/test_signed_repo.sh <packages>` | With a throwaway key made for the run: install from the signed repository in a clean container with both checks on, then confirm a repository with altered metadata is refused |
+| SBOM | `scripts/release/sbom.py --package <file> --engine-version <v>` | CycloneDX for one package: the engine as redistributed (Mozilla source release plus each patch with its SHA-256 as pedigree), the pinned extensions, and the package's own SHA-256 |
+
+Measured on the reference laptop (2026-10-26): RPM 91 MB, built in about 2.5 minutes; .deb built in about 1 minute after the container's package index is fetched; each check about 30–60 seconds. Results of the first run: both packages install and pass every check; the signed repository installs with verified signatures and refuses altered metadata.
+
+Still with the maintainer: the release key (and where its public part is published), the repository host (`packages.nulavio.net` is a placeholder in `nulavio.repo`), and a .deb repository (APT) when Ubuntu users need updates through `apt`.
+

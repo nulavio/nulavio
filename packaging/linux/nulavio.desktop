@@ -1,0 +1,32 @@
+[Desktop Entry]
+Type=Application
+Version=1.5
+Name=Nulavio
+GenericName=Web Browser
+GenericName[pt_BR]=Navegador web
+Comment=Private, calm browsing
+Comment[pt_BR]=Navegação privada e tranquila
+Exec=nulavio %u
+Icon=nulavio
+Terminal=false
+StartupNotify=true
+StartupWMClass=nulavio
+Categories=Network;WebBrowser;
+Keywords=web;browser;internet;privacy;navegador;
+MimeType=text/html;text/xml;application/xhtml+xml;x-scheme-handler/http;x-scheme-handler/https;
+Actions=new-window;new-private-window;profile-manager;
+
+[Desktop Action new-window]
+Name=New Window
+Name[pt_BR]=Nova janela
+Exec=nulavio --new-window
+
+[Desktop Action new-private-window]
+Name=New Private Window
+Name[pt_BR]=Nova janela privativa
+Exec=nulavio --private-window
+
+[Desktop Action profile-manager]
+Name=Profiles
+Name[pt_BR]=Perfis
+Exec=nulavio --ProfileManager
