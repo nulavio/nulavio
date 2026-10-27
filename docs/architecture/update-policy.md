@@ -36,6 +36,12 @@
 
 If Mozilla rotates the primary release key, update the pinned fingerprint only after confirming it through two independent channels (Mozilla's KEY file plus a Mozilla blog/announcement or keyserver history). Then record it in this file.
 
+### Automation (S19)
+
+- `scripts/release/watch_upstream.py` compares `browser/build/engine.json` with Mozilla's public release history and states the deadline (72 hours from the first newer release; every release can carry security fixes, so the stricter target is used). The `upstream` workflow runs it daily and fails when the deadline has passed, so the maintainers get GitHub's failure notice.
+- `scripts/release/rehearse_release.sh <version>` runs the whole path and times each step: Mozilla's signed checksums, the build, unit and integration tests, RPM and .deb with their clean-container checks, the signed-repository check (throwaway key), SBOMs. First full rehearsal (2026-10-27, Firefox 158.0.1, incremental build): **14 minutes**, every step passed ([report](../research/evidence/release-rehearsal-2026-10-27.md)). For a new Firefox release the build is a full one (about 52 minutes measured), so about 70 minutes from Mozilla's release to checked packages, against the 72-hour target. Not rehearsed: signing with the release key and publishing.
+- [Security changelog](../security/changelog.md): one entry per published build.
+
 ## Base branch choice (open)
 
 Recommendation: follow **Release**. Re-evaluate in favour of ESR if the non-branding patch stack exceeds about 10 patches or a rebase takes more than one working day.

@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import re
+import contextlib
 import threading
 import time
 import urllib.parse
@@ -159,11 +160,20 @@ TOOLS: tuple[Tool, ...] = (
          "Put a file into a file field (from page_snapshot). Only files the user placed in this agent's uploads folder.",
          "files", _schema({"tab": TAB, "element": ELEMENT, "file": {"type": "string", "pattern": "^[^/\\\\]{1,255}$"}},
                           ("tab", "element", "file")), False),
+    Tool("raw_automation", "Raw automation endpoint",
+         "Hand over your AI Workspace's WebDriver BiDi endpoint, for your own automation library (Puppeteer, Selenium, "
+         "WebdriverIO). Nulavio does not check, ask about or log what is done through it; Nulavio's other tools stop "
+         "working for the workspace. Needs the user's 'Privileged debugging' permission.", "debugging", _schema({}), False),
     Tool("session_state", "Bridge status",
          "Who you are to Nulavio: agent, autonomy, the effective permission for each capability, workspace.",
          None, _schema({}), True),
 )  # fmt: skip
 BY_NAME = {t.name: t for t in TOOLS}
+RAW_WARNING = (
+    "Raw automation: from now on Nulavio does not check, ask about or log what is done through this endpoint. The "
+    "user's permissions, site list and activity log no longer apply to it; the user's emergency stop, pause and revoke "
+    "still end this AI Workspace. Use it only for the task the user gave you."
+)
 
 
 def validate(schema: dict, value, path: str = "arguments") -> None:
@@ -218,6 +228,7 @@ class Bridge:
         self._lock = threading.Lock()
         self._target: str | None = None  # the address the current call acts on (for the audit)
         self._downloads_mode: dict[str, bool] = {}
+        self.raw = False  # the AI Workspace's endpoint was handed over (raw_automation)
 
     # -- policy ----------------------------------------------------------------------
 
@@ -305,6 +316,8 @@ class Bridge:
     # -- browser ---------------------------------------------------------------------
 
     def _workspace(self) -> Workspace:
+        if self.raw:
+            raise ToolError("your AI Workspace is under raw automation (raw_automation): Nulavio's tools are off for it")
         if self.workspace is None:
             agent = self._agent() or {}
             uploads = bool(agent) and policy.effective_mode(agent, "files", self.session_id)[0] != "block"
@@ -339,6 +352,10 @@ class Bridge:
         return self.owner[tab]
 
     def close(self) -> None:
+        if self.raw:
+            self.raw = False
+            why = "stopped" if registry.stopped() else "closed"
+            audit.record(agent=self.agent_id, session=self.session_id, tool="raw_automation", event="raw-ended", reason=why)
         for target in self.profiles.values():
             target.stop()
         self.profiles.clear()
@@ -440,6 +457,36 @@ class Bridge:
             return ""
 
     # -- tools -----------------------------------------------------------------------
+
+    def _t_raw_automation(self, args, cancel, checked):
+        self.require("debugging", checked=checked)
+        bidi = self._workspace().start()
+        workspace = self.workspace
+        with contextlib.suppress(Exception):  # free the engine's single BiDi session for the agent's own client
+            bidi.command("session.end", {}, timeout=5)
+        bidi.ws.close()
+        workspace.bidi = None
+        self.raw = True
+        self.elements.clear()
+        self.owner = {tab: label for tab, label in self.owner.items() if label}
+        threading.Thread(target=self._raw_watch, args=(workspace,), name="raw-watch", daemon=True).start()
+        endpoint = f"ws://127.0.0.1:{workspace.port}/session"
+        usage = "Puppeteer: puppeteer.connect({browserWSEndpoint, protocol: 'webDriverBiDi'}). One session at a time."
+        text = f"{RAW_WARNING}\n\nWebDriver BiDi endpoint: {endpoint}\n{usage}"
+        return self._ok({"endpoint": endpoint, "protocol": "webdriver-bidi", "policyApplies": False}, text), None
+
+    def _raw_watch(self, workspace: Workspace) -> None:
+        """While the endpoint is out, the user's stop, pause and revoke still end the AI Workspace."""
+        while self.raw and self.workspace is workspace:
+            agent = self._agent()
+            if agent is None or agent.get("revoked") or agent.get("paused") or registry.stopped():
+                why = "revoked" if agent is None or agent.get("revoked") else "paused" if agent.get("paused") else "stopped"
+                self.raw = False
+                self.workspace = None
+                workspace.stop()
+                audit.record(agent=self.agent_id, session=self.session_id, tool="raw_automation", event="raw-ended", reason=why)
+                return
+            time.sleep(1.0)
 
     def _t_session_state(self, args, cancel, checked):
         agent = self._agent()

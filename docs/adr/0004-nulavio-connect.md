@@ -1,6 +1,6 @@
 # ADR 0004 — Nulavio Connect and the Integration Manager
 
-- **Status:** Accepted (2026-10-25). **P0 discovery implemented (2026-10-26)**: `nulavio integrations` and Settings → Integrations; P1/P2 adapters staged.
+- **Status:** Accepted (2026-10-25). **P0 discovery implemented (2026-10-26)**: `nulavio integrations` and Settings → Integrations. **P1/P2 implemented (2026-10-27)**, except activities ↔ workspaces and per-profile proxy (below).
 - **Related:** [trust boundaries](../architecture/trust-boundaries.md), [password providers](../architecture/password-providers.md).
 
 ## Context
@@ -59,6 +59,18 @@ class Status:
 - **The only change** is "Make Nulavio the default browser": a confirmation, a user-level desktop entry (`net.nulavio.Nulavio.desktop`, `Exec` unquoted because `xdg-settings` does not unquote it), `xdg-settings set`, a check that it took effect, and the previous browser kept for "Restore".
 - **Finding:** the engine reads system native-messaging hosts from a directory fixed at build time (`/usr/lib64/mozilla` only when `libdir` contains `lib64`). Without `--libdir=/usr/lib64` the Nulavio build did not see Fedora's Plasma Browser Integration host; the mozconfig now sets it, and the Integrations page says so plainly when a host is installed where the build does not read ("not-read"). A Debian/Ubuntu package must build with `/usr/lib`.
 - **Verification:** `tests/unit/test_connect.py` (real CLI, private D-Bus bus, fake services, read-only proof) and `tests/integration/test_connect.py` (inside the browser: discovery, make default and restore in a throwaway home, settings page, the real desktop's `mimeapps.list` and `kdeglobals` hashed before and after).
+
+## P1/P2 implementation (2026-10-27)
+
+- **One implementation** for P1/P2 probes, in the Nulavio tools (`launcher/nulavio_launcher/connect_p1.py`): `nulavio integrations` prints them and the browser asks for them (`nulavio integrations api`), with a stable reason code per state so Settings → Integrations translates them. P0 probes keep running inside the browser.
+- **KDE Connect**: the daemon's D-Bus name and the devices `kdeconnect-cli --list-available` reports. **Send link to device** in the link menu lists the devices reachable when the menu opens and shares that one address with that one device (`kdeconnect-cli --device … --share …`, an argument list); only http(s) links; never in private windows; nothing is sent otherwise.
+- **Screen sharing**: the portal's ScreenCast version and a running PipeWire; the desktop asks the user which screen or window every time.
+- **Security keys and passkeys**: hidraw devices whose HID report descriptor carries the FIDO usage page (0xF1D0), and whether this user may open them (udev rules); status only. It is also the first check of the planned security-key unlock (S10).
+- **Notifications**: the desktop's notification service and portal.
+- **KRunner**: an optional plugin, "Add to KRunner" in Settings: two user-level files (a D-Bus runner entry in `~/.local/share/krunner/dbusplugins/` and a session-bus activation file) and a small service (`nulavio integrations krunner-serve`, Python GLib bindings, started on demand, gone after five idle minutes). Typing an address offers "Open … in Nulavio"; "nulavio <words>" offers a search. Running a match opens it like a link from any app, so Smart Profile Routing chooses the profile. "Remove from KRunner" deletes both files.
+- **Plasma activities**: detected and reported as not used. Mapping profiles to activities waits until it can be done as an explicit choice (the brief forbids inferring profiles from the desktop's state without consent).
+- **MPRIS** is the engine's own (media keys and the desktop's media controls); **per-profile proxy** is already per profile in the engine's connection settings, and Guard reports proxy changes made outside the browser. Nulavio adds no separate adapter for either.
+- **Verification**: `tests/unit/test_connect_p1.py` (FIDO descriptors in a fake sysfs, refusals, one link to one device, plugin files, the runner answering KRunner's `Match`/`Run` on a private session bus) and `tests/integration/test_connect.py` 05–06 (the states in the browser, sending a link through a stand-in `kdeconnect-cli`, adding and removing the plugin).
 
 ## Risks
 

@@ -67,6 +67,7 @@ class Workspace:
         self.headless = headless
         self.engine = engine
         self.process: subprocess.Popen | None = None
+        self.port: int | None = None  # the engine's WebDriver BiDi port (loopback)
         self.bidi: Bidi | None = None
         if disposable:
             self.dir = Path(tempfile.mkdtemp(prefix="nulavio-ai-"))
@@ -134,6 +135,7 @@ class Workspace:
             except (OSError, ValueError, KeyError):
                 time.sleep(0.2)
                 continue
+            self.port = port
             self.bidi = Bidi(port)
             self.bidi.command("session.subscribe", {"events": EVENTS})
             return self.bidi

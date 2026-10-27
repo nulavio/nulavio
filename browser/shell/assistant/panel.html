@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title data-i18n="assistantTitle"></title>
+  <link rel="stylesheet" href="../shared/tokens.css">
+  <link rel="stylesheet" href="../shared/base.css">
+  <link rel="stylesheet" href="../shared/shell.css">
+  <script type="module" src="panel.js"></script>
+</head>
+<body class="assistant" data-state="loading">
+  <main class="stack">
+    <h1 class="card__title" data-i18n="assistantTitle"></h1>
+
+    <section class="stack stack--tight" id="setup" hidden>
+      <p id="setup-text"></p>
+      <div class="actions">
+        <button class="button button--secondary" type="button" id="open-settings" data-i18n="assistantOpenSettings"></button>
+        <button class="button button--primary" type="button" id="allow-profile" data-i18n="assistantAllowProfile" hidden></button>
+      </div>
+    </section>
+
+    <form class="stack stack--tight" id="ask" hidden novalidate>
+      <fieldset class="segmented">
+        <legend class="visually-hidden" data-i18n="assistantModeLegend"></legend>
+        <label><input type="radio" name="mode" value="ask" checked> <span data-i18n="assistantModeAsk"></span></label>
+        <label><input type="radio" name="mode" value="task"> <span data-i18n="assistantModeTask"></span></label>
+      </fieldset>
+      <label class="field"><span class="field__label" id="prompt-label" data-i18n="assistantQuestion"></span>
+        <textarea class="input" id="prompt" rows="4" maxlength="8000" required></textarea></label>
+      <label class="check" id="page-option"><input type="checkbox" id="include-page"> <span id="page-label"></span></label>
+      <p class="hint" id="task-note" hidden></p>
+      <div class="actions">
+        <button class="button button--primary" type="submit" id="send" data-i18n="assistantSend"></button>
+        <button class="button button--quiet" type="button" id="summarize" data-i18n="assistantSummarize"></button>
+      </div>
+      <p class="status" id="status" role="status" aria-live="polite"></p>
+      <div class="assistant__answer" id="answer" aria-live="polite" hidden></div>
+      <ol class="hint" id="steps" hidden></ol>
+    </form>
+
+    <p class="hint" id="footer"></p>
+  </main>
+</body>
+</html>

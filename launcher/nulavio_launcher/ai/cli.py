@@ -342,8 +342,38 @@ def _api(args) -> int:
     return 0
 
 
+ASSISTANT_LIMIT = 512 * 1024  # a question plus the page's text
+
+
+def _assistant(args) -> int:
+    """`nulavio ai assistant`: one JSON request on stdin for the browser's assistant panel (A12)."""
+    from . import assistant
+    from ..vault.core import VaultError
+
+    raw = sys.stdin.read(ASSISTANT_LIMIT + 1)
+    try:
+        request = json.loads(raw) if len(raw) <= ASSISTANT_LIMIT else None
+    except ValueError:
+        request = None
+    try:
+        if not isinstance(request, dict):
+            raise assistant.AssistantError("bad-request")
+        result = assistant.api_request(request)
+    except assistant.AssistantError as exc:
+        result = {"error": exc.code, "detail": str(exc)[:200] if str(exc) != exc.code else None}
+    except VaultError as exc:  # the system keyring
+        result = {"error": exc.code}
+    except registry.RegistryError:
+        result = {"error": "registry"}
+    except OSError as exc:
+        result = {"error": "failed", "detail": type(exc).__name__}
+    print(json.dumps(result))
+    return 0
+
+
 HANDLERS = {
     "api": _api,
+    "assistant": _assistant,
     "add": _add,
     "agents": _agents,
     "grant": _grant,
@@ -394,6 +424,7 @@ def add_parser(sub) -> None:
     q.add_argument("--json", action="store_true")
     asub.add_parser("capabilities", help="capabilities and what each autonomy level does with them")
     asub.add_parser("api", help=argparse.SUPPRESS)  # JSON on stdin/stdout, used by the browser
+    asub.add_parser("assistant", help=argparse.SUPPRESS)  # the browser's assistant panel (A12)
     q = asub.add_parser("pause", help="hold an agent without revoking it")
     q.add_argument("agent")
     q.add_argument("--resume", action="store_true")

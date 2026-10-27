@@ -29,6 +29,8 @@ class Status:
     state: str
     detail: str
     evidence: list[str] = field(default_factory=list)
+    reason: str = ""  # stable code for the browser's translations (P1/P2)
+    params: dict = field(default_factory=dict)
 
 
 def definitions() -> list[dict]:
@@ -218,9 +220,11 @@ PROBES = {
 
 
 def discover() -> list[Status]:
+    from .connect_p1 import PROBES as LATER  # P1/P2 probes
+
     results = []
     for spec in definitions():
-        probe = PROBES[spec["id"]]
+        probe = PROBES.get(spec["id"]) or LATER[spec["id"]]
         try:
             results.append(probe(spec))
         except Exception as exc:  # a broken probe reports itself; it never hides the others

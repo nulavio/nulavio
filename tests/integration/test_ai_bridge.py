@@ -373,6 +373,45 @@ class AiBridgeTest(unittest.TestCase):
 
         self.assertTrue(harness.wait_until(lambda: not alive(), timeout=60), f"engine left running: {alive()}")
 
+    def test_20_raw_automation_needs_debugging_bypasses_policy_and_still_ends_with_stop(self):
+        agent, env = self.agent("autonomous")  # "Privileged debugging" stays blocked until the user allows it
+        c = self.client(env)
+        self.assertIn("Denied by Nulavio", c.call("raw_automation")["content"][0]["text"])
+        registry.grant(agent["id"], "debugging", "allow")
+        handed = c.call("raw_automation")
+        raw = handed["structuredContent"]
+        self.assertFalse(raw["policyApplies"])
+        self.assertIn("does not check, ask about or log", handed["content"][0]["text"])
+        port = int(raw["endpoint"].split(":")[2].split("/")[0])
+        from nulavio_launcher.ai.bidi import Bidi
+
+        library = Bidi(port)  # what Puppeteer or Selenium would do: a session of their own
+        self.addCleanup(library.ws.close)
+        context = library.command("browsingContext.getTree", {})["contexts"][0]["context"]
+        library.command(
+            "browsingContext.navigate", {"context": context, "url": self.fx.url("/page/raw-mode"), "wait": "complete"}
+        )
+        self.assertIn("/page/raw-mode", self.fx.hits)
+        self.assertIn("raw automation", c.call("tabs_list")["content"][0]["text"])  # Nulavio's tools are off for it
+        marker = f"{self.home}/"
+        engines = [
+            p for p in engine_processes("--remote-debugging-port=0") if marker.encode() in Path(f"/proc/{p}/cmdline").read_bytes()
+        ]
+        self.assertTrue(engines)
+        registry.set_stopped(True)
+        self.addCleanup(registry.set_stopped, False)
+
+        def alive():
+            return [p for p in engines if Path(f"/proc/{p}").exists() and "zombie" not in Path(f"/proc/{p}/status").read_text()]
+
+        self.assertTrue(harness.wait_until(lambda: not alive(), timeout=30), "the emergency stop did not end the workspace")
+        events = [e for e in audit.read(agent=agent["id"]) if e.get("event") == "raw-ended"]
+        self.assertTrue(
+            harness.wait_until(lambda: [e for e in audit.read(agent=agent["id"]) if e.get("event") == "raw-ended"], 10)
+        )
+        events = [e for e in audit.read(agent=agent["id"]) if e.get("event") == "raw-ended"]
+        self.assertEqual(events[-1]["reason"], "stopped")
+
 
 if __name__ == "__main__":
     unittest.main()

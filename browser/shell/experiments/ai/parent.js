@@ -14,8 +14,10 @@ this.nulavioAI = class extends ExtensionAPI {
     return ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioAI.sys.mjs").NulavioAI;
   }
 
-  getAPI() {
+  getAPI(context) {
     const ai = this.module();
+    // The browser window around the calling page (the sidebar's or a tab's): its selected tab is "this page".
+    const windowOf = () => context.xulBrowser?.ownerGlobal?.browsingContext?.topChromeWindow ?? null;
     const call = fn => async (...args) => {
       try {
         return await fn(...args);
@@ -43,6 +45,13 @@ this.nulavioAI = class extends ExtensionAPI {
         answer: call((id, answer) => ai.answer(id, answer)),
         watch: call(() => ai.watch()),
         markWorkspace: call(text => ai.markWorkspace(text)),
+        assistantState: call(() => ai.assistantState()),
+        assistantConfigure: call(details => ai.assistantConfigure(details)),
+        assistantAllow: call(allowed => ai.assistantAllow(allowed)),
+        assistantForget: call(() => ai.assistantForget()),
+        assistantPage: call(async () => ai.assistantPage(windowOf())),
+        assistantAsk: call((question, includePage) => ai.assistantAsk(question, includePage, windowOf())),
+        assistantTask: call(task => ai.assistantTask(task)),
       },
     };
   }

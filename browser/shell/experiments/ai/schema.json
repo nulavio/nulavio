@@ -240,6 +240,101 @@
             "maxLength": 300
           }
         ]
+      },
+      {
+        "name": "assistantState",
+        "type": "function",
+        "async": true,
+        "parameters": []
+      },
+      {
+        "name": "assistantConfigure",
+        "type": "function",
+        "async": true,
+        "parameters": [
+          {
+            "name": "details",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "openai",
+                  "anthropic"
+                ]
+              },
+              "baseUrl": {
+                "type": "string",
+                "maxLength": 2048
+              },
+              "model": {
+                "type": "string",
+                "maxLength": 200
+              },
+              "label": {
+                "type": "string",
+                "optional": true,
+                "maxLength": 60
+              },
+              "key": {
+                "type": "string",
+                "optional": true,
+                "maxLength": 512
+              }
+            }
+          }
+        ]
+      },
+      {
+        "name": "assistantAllow",
+        "type": "function",
+        "async": true,
+        "parameters": [
+          {
+            "name": "allowed",
+            "type": "boolean"
+          }
+        ]
+      },
+      {
+        "name": "assistantForget",
+        "type": "function",
+        "async": true,
+        "parameters": []
+      },
+      {
+        "name": "assistantPage",
+        "type": "function",
+        "async": true,
+        "parameters": []
+      },
+      {
+        "name": "assistantAsk",
+        "type": "function",
+        "async": true,
+        "parameters": [
+          {
+            "name": "question",
+            "type": "string",
+            "maxLength": 8000
+          },
+          {
+            "name": "includePage",
+            "type": "boolean"
+          }
+        ]
+      },
+      {
+        "name": "assistantTask",
+        "type": "function",
+        "async": true,
+        "parameters": [
+          {
+            "name": "task",
+            "type": "string",
+            "maxLength": 8000
+          }
+        ]
       }
     ]
   }

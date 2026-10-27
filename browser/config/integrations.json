@@ -15,19 +15,64 @@
       "priority": "P0",
       "busName": "org.freedesktop.portal.Desktop",
       "objectPath": "/org/freedesktop/portal/desktop",
-      "interfaces": ["FileChooser", "OpenURI", "ScreenCast", "Notification", "Settings"]
+      "interfaces": [
+        "FileChooser",
+        "OpenURI",
+        "ScreenCast",
+        "Notification",
+        "Settings"
+      ]
     },
     {
       "id": "secret-service",
       "priority": "P0",
       "busName": "org.freedesktop.secrets",
-      "related": ["org.kde.kwalletd6", "org.kde.kwalletd5"]
+      "related": [
+        "org.kde.kwalletd6",
+        "org.kde.kwalletd5"
+      ]
     },
     {
       "id": "default-browser",
       "priority": "P0",
-      "types": ["x-scheme-handler/http", "x-scheme-handler/https", "text/html"],
-      "nulavioDesktopIds": ["net.nulavio.Nulavio.desktop", "nulavio-preview.desktop"]
+      "types": [
+        "x-scheme-handler/http",
+        "x-scheme-handler/https",
+        "text/html"
+      ],
+      "nulavioDesktopIds": [
+        "net.nulavio.Nulavio.desktop",
+        "nulavio-preview.desktop"
+      ]
+    },
+    {
+      "id": "kde-connect",
+      "priority": "P1",
+      "busName": "org.kde.kdeconnect.daemon"
+    },
+    {
+      "id": "screen-cast",
+      "priority": "P1",
+      "busName": "org.freedesktop.portal.Desktop",
+      "objectPath": "/org/freedesktop/portal/desktop"
+    },
+    {
+      "id": "security-keys",
+      "priority": "P1"
+    },
+    {
+      "id": "notifications",
+      "priority": "P1",
+      "busName": "org.freedesktop.Notifications"
+    },
+    {
+      "id": "krunner",
+      "priority": "P1"
+    },
+    {
+      "id": "activities",
+      "priority": "P2",
+      "busName": "org.kde.ActivityManager"
     }
   ]
 }

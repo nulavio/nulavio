@@ -1,0 +1,4 @@
+{
+  "comment": "The Firefox release the Nulavio build ships. scripts/release/watch_upstream.py compares it with Mozilla's releases (update SLA, docs/architecture/update-policy.md); bump it in the commit that moves the build to a new release.",
+  "firefox": "158.0.1"
+}

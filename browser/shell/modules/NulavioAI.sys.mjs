@@ -187,6 +187,72 @@ class AI {
   }
 
   /** In an AI Workspace: say plainly who drives this window, in every browser window. */
+  // -- Nulavio Assistant (A12): a model the user chose, through the Nulavio tools ------------------
+  // The tools hold the API key (system keyring) and talk to the provider; the browser sends them
+  // the question and, only when the user ticked it, the visible text of the current page.
+
+  async #assistant(request, timeoutMs = 60000) {
+    if (await this.workspaceAgent()) {
+      fail("ai-workspace"); // an agent drives this window: no assistant here
+    }
+    const profile = Services.dirsvc.get("ProfD", Ci.nsIFile).path;
+    try {
+      return await lazy.callTool(["ai", "assistant"], { ...request, profile }, timeoutMs);
+    } catch (e) {
+      fail(e.code ?? "helper-failed");
+    }
+  }
+
+  assistantState() {
+    return this.#assistant({ op: "state" });
+  }
+
+  assistantConfigure({ kind, baseUrl, model, label, key } = {}) {
+    // The extension schema passes absent optional properties as null.
+    label ??= "";
+    key ??= undefined;
+    const text = v => typeof v === "string" && v.length <= 2048;
+    if (![kind, baseUrl, model, label].every(text) || (key !== undefined && (!text(key) || key.length > 512))) {
+      fail("bad-request");
+    }
+    return this.#assistant({ op: "configure", kind, baseUrl, model, label, ...(key !== undefined ? { key } : {}) });
+  }
+
+  assistantAllow(allowed) {
+    return this.#assistant({ op: "allow-profile", allowed: Boolean(allowed) });
+  }
+
+  assistantForget() {
+    return this.#assistant({ op: "forget" });
+  }
+
+  /** The page the user would share: the selected tab of `win` (address and title only). */
+  assistantPage(win) {
+    const browser = win?.gBrowser?.selectedBrowser;
+    const url = browser?.currentURI?.spec ?? "";
+    return /^https?:/.test(url) ? { url, title: browser.contentTitle || url } : null;
+  }
+
+  /** Ask; `includePage`: the user ticked "include this page", so its visible text goes along. */
+  async assistantAsk(question, includePage, win) {
+    let page = null;
+    if (includePage) {
+      const browser = win?.gBrowser?.selectedBrowser;
+      if (!this.assistantPage(win)) {
+        fail("no-page");
+      }
+      // The engine's own extractor (visible text, as reader-like features use); no script in the page.
+      const extracted = await browser.browsingContext.currentWindowGlobal.getActor("PageExtractor").getText({});
+      page = { url: browser.currentURI.spec, title: browser.contentTitle, text: String(extracted?.text ?? "") };
+    }
+    return this.#assistant({ op: "ask", question: String(question), page }, 180000);
+  }
+
+  /** A task in the assistant's AI Workspace, under its agent permissions. */
+  assistantTask(task) {
+    return this.#assistant({ op: "task", task: String(task) }, 600000);
+  }
+
   async markWorkspace(text) {
     if (!(await this.workspaceAgent())) {
       return;

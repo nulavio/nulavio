@@ -243,10 +243,20 @@ class AiUiTest(unittest.TestCase):
             self.m.chrome("Services.prefs.clearUserPref('nulavio.ai.workspace');")
 
     def real_config_fingerprint(self) -> dict:
+        """The user's real MCP server settings. Claude Code rewrites the rest of ~/.claude.json while it runs
+        (other state), so only the MCP sections are compared; Codex's config.toml is compared whole."""
         home = Path(os.environ["HOME"])
         out = {}
-        for path in (home / ".claude.json", home / ".codex" / "config.toml"):
-            out[str(path)] = hashlib.sha256(path.read_bytes()).hexdigest() if path.exists() else None
+        claude = home / ".claude.json"
+        if claude.exists():
+            data = json.loads(claude.read_text(encoding="utf-8"))
+            servers = {
+                "user": data.get("mcpServers"),
+                "projects": {k: v.get("mcpServers") for k, v in data.get("projects", {}).items()},
+            }
+            out[str(claude)] = hashlib.sha256(json.dumps(servers, sort_keys=True).encode()).hexdigest()
+        codex = home / ".codex" / "config.toml"
+        out[str(codex)] = hashlib.sha256(codex.read_bytes()).hexdigest() if codex.exists() else None
         return out
 
     def test_07_connect_wizard_runs_the_agents_own_cli(self):

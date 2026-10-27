@@ -375,3 +375,8 @@ a.button { display: inline-flex; align-items: center; text-decoration: none; }
 
 /* New tab: the one-time DNS question, above the facts */
 .dns-choice { max-width: 52rem; margin-inline: auto; width: 100%; }
+
+/* Assistant side panel: narrow, plain-text answers */
+body.assistant { padding: var(--nv-space-4); }
+.segmented { display: flex; gap: var(--nv-space-3); border: 0; padding: 0; margin: 0; }
+.assistant__answer { white-space: pre-wrap; overflow-wrap: anywhere; padding: var(--nv-space-3); border-radius: var(--nv-radius-md); background: var(--nv-color-bg-sunken); }

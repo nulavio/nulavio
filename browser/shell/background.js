@@ -72,7 +72,7 @@ const LINK_MENU = "nulavio-open-link-in";
 let menuBuild = null;
 
 async function buildLinkMenu() {
-  await browser.menus.removeAll();
+  await browser.menus.remove(LINK_MENU).catch(() => {}); // only this menu: others (send link) stay
   const state = await browser.nulavioProfiles.list();
   const others = state.available ? state.profiles.filter(p => !p.isCurrent && p.id !== null) : [];
   if (!others.length) {
@@ -131,4 +131,35 @@ async function setUpAI() {
 
 if (browser.nulavioAI) {
   setUpAI().catch(console.error);
+}
+
+// -- Nulavio Connect: send one link to a KDE Connect device, on the user's click --
+// The menu lists the devices reachable when it opens; never offered in private windows.
+
+const SEND_MENU = "nulavio-send-link";
+
+if (browser.nulavioConnect && browser.menus) {
+  const scope = { contexts: ["link"], targetUrlPatterns: ["http://*/*", "https://*/*"] };
+  browser.menus.create({ id: SEND_MENU, title: t("menuSendLink"), visible: false, ...scope });
+  let shown = [];
+  browser.menus.onShown.addListener(async (info, tab) => {
+    if (!info.menuIds.includes(SEND_MENU)) {
+      return;
+    }
+    const devices = tab?.incognito ? [] : await browser.nulavioConnect.kdeDevices().catch(() => []);
+    await Promise.all(shown.map(id => browser.menus.remove(id).catch(() => {})));
+    shown = devices.map(device => {
+      const id = `${SEND_MENU}:${device.id}`;
+      browser.menus.create({ id, parentId: SEND_MENU, title: device.name, ...scope });
+      return id;
+    });
+    await browser.menus.update(SEND_MENU, { visible: devices.length > 0 });
+    browser.menus.refresh();
+  });
+  browser.menus.onClicked.addListener((info, tab) => {
+    const id = String(info.menuItemId);
+    if (id.startsWith(`${SEND_MENU}:`) && !tab?.incognito) {
+      browser.nulavioConnect.sendLink(info.linkUrl, id.slice(SEND_MENU.length + 1)).catch(console.error);
+    }
+  });
 }

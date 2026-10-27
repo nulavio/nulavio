@@ -40,14 +40,21 @@ class DefinitionsTest(unittest.TestCase):
         finally:
             shutil.rmtree(out, ignore_errors=True)
 
-    def test_both_implementations_cover_every_integration(self):
-        ids = [i["id"] for i in json.loads(DEFINITIONS.read_text(encoding="utf-8"))["integrations"]]
-        self.assertEqual(ids, ["plasma-browser-integration", "xdg-portals", "secret-service", "default-browser"])
+    def test_every_integration_has_a_probe(self):
+        items = json.loads(DEFINITIONS.read_text(encoding="utf-8"))["integrations"]
+        p0 = [i["id"] for i in items if i["priority"] == "P0"]
+        later = [i["id"] for i in items if i["priority"] != "P0"]
+        self.assertEqual(p0, ["plasma-browser-integration", "xdg-portals", "secret-service", "default-browser"])
+        self.assertEqual(later, ["kde-connect", "screen-cast", "security-keys", "notifications", "krunner", "activities"])
         python = (ROOT / "launcher" / "nulavio_launcher" / "connect.py").read_text(encoding="utf-8")
+        later_python = (ROOT / "launcher" / "nulavio_launcher" / "connect_p1.py").read_text(encoding="utf-8")
         shell = (ROOT / "browser" / "shell" / "modules" / "NulavioConnect.sys.mjs").read_text(encoding="utf-8")
-        for integration in ids:
+        for integration in p0:  # in the launcher and, in the browser, probed directly
             self.assertIn(f'"{integration}":', python)
             self.assertIn(f'"{integration}": spec =>', shell)
+        for integration in later:  # one implementation, in the Nulavio tools; the browser asks them
+            self.assertIn(f'"{integration}":', later_python)
+        self.assertIn('callTool(["integrations", "api"]', shell)
 
     def test_probes_never_use_a_shell(self):
         python = (ROOT / "launcher" / "nulavio_launcher" / "connect.py").read_text(encoding="utf-8")

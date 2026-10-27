@@ -189,5 +189,11 @@
   "icons": {
     "48": "shared/nulavio-symbol.svg",
     "96": "shared/nulavio-symbol.svg"
+  },
+  "sidebar_action": {
+    "default_panel": "assistant/panel.html",
+    "default_title": "__MSG_assistantTitle__",
+    "default_icon": "shared/nulavio-symbol.svg",
+    "open_at_install": false
   }
 }

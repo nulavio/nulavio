@@ -18,6 +18,7 @@
 
 const lazy = {};
 ChromeUtils.defineESModuleGetters(lazy, {
+  callTool: "resource://builtin-addons/nulavio-shell/modules/NulavioTools.sys.mjs",
   AddonManager: "resource://gre/modules/AddonManager.sys.mjs",
   NetUtil: "resource://gre/modules/NetUtil.sys.mjs",
   Subprocess: "resource://gre/modules/Subprocess.sys.mjs",
@@ -286,14 +287,55 @@ class NulavioConnectClass {
       "default-browser": spec => this.#defaultBrowser(spec),
     };
     const results = [];
-    for (const spec of await this.definitions()) {
+    const definitions = await this.definitions();
+    for (const spec of definitions.filter(d => d.priority === "P0")) {
       try {
         results.push(await probes[spec.id](spec));
       } catch (e) {
         results.push(status(spec, "error", "check-failed", {}, [String(e?.message ?? e)]));
       }
     }
+    // P1/P2: probed by the Nulavio tools (one implementation, shared with `nulavio integrations`).
+    const later = definitions.filter(d => d.priority !== "P0");
+    if (later.length) {
+      let items = [];
+      try {
+        items = (await lazy.callTool(["integrations", "api"], { op: "discover" }, 30000)).items ?? [];
+      } catch (e) {
+        items = later.map(spec => status(spec, "unknown", "tools-missing", {}, [String(e?.code ?? e)]));
+      }
+      for (const spec of later) {
+        const item = items.find(i => i.id === spec.id);
+        results.push(item ? status(spec, item.state, item.reason || "check-failed", item.params ?? {}, item.evidence ?? []) : status(spec, "unknown", "check-failed"));
+      }
+    }
     return results;
+  }
+
+  async #tools(request) {
+    try {
+      return await lazy.callTool(["integrations", "api"], request, 30000);
+    } catch (e) {
+      fail(e.code ?? "helper-failed");
+    }
+  }
+
+  /** KDE Connect devices reachable now: [{id, name}]. */
+  async kdeDevices() {
+    return (await this.#tools({ op: "devices" })).devices ?? [];
+  }
+
+  /** Share one web address with one device, on the user's click (link menu). */
+  async sendLink(url, device) {
+    if (!/^https?:\/\//.test(String(url))) {
+      fail("bad-url");
+    }
+    return this.#tools({ op: "send-link", url: String(url), device: String(device) });
+  }
+
+  /** Install or remove the KRunner plugin (two user-level files). */
+  async setKrunner(enabled) {
+    return this.#tools({ op: enabled ? "krunner-enable" : "krunner-disable" });
   }
 
   /** The user clicked "Make Nulavio the default browser". */

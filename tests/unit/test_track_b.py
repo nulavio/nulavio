@@ -297,5 +297,46 @@ class PackagingTest(unittest.TestCase):
         self.assertIn("tampered", test)
 
 
+class UpstreamWatchTest(unittest.TestCase):
+    """Update SLA: the watcher's verdicts from Mozilla's release history."""
+
+    def setUp(self):
+        sys.path.insert(0, str(ROOT / "scripts" / "release"))
+        import watch_upstream
+
+        self.watch = watch_upstream
+        self.history = {"157.0": "2026-09-29", "158.0": "2026-10-13", "158.0.1": "2026-10-20", "153.5.1": "2026-10-20"}
+
+    def at(self, text: str):
+        import datetime as dt
+
+        return dt.datetime.fromisoformat(text).replace(tzinfo=dt.UTC)
+
+    def test_up_to_date_ignores_older_and_esr_lines(self):
+        result = self.watch.status("158.0.1", self.history, self.at("2026-10-27T00:00:00"))
+        self.assertEqual(result["state"], "up-to-date")
+
+    def test_pending_then_overdue_after_72_hours(self):
+        history = {**self.history, "158.0.2": "2026-10-28"}
+        pending = self.watch.status("158.0.1", history, self.at("2026-10-29T12:00:00"))
+        self.assertEqual((pending["state"], pending["first"], pending["hours_left"]), ("pending", "158.0.2", 36.0))
+        overdue = self.watch.status("158.0.1", history, self.at("2026-10-31T00:00:01"))
+        self.assertEqual(overdue["state"], "overdue")
+        self.assertIn("OVERDUE", self.watch.describe(overdue))
+
+    def test_the_earliest_newer_release_sets_the_deadline(self):
+        history = {**self.history, "159.0": "2026-11-06", "158.0.2": "2026-10-28"}
+        result = self.watch.status("158.0.1", history, self.at("2026-10-28T01:00:00"))
+        self.assertEqual(result["first"], "158.0.2")
+        self.assertEqual(result["newer"], ["158.0.2", "159.0"])
+
+    def test_pinned_version_is_the_built_one(self):
+        engine = json.loads((ROOT / "browser" / "build" / "engine.json").read_text())
+        self.assertRegex(engine["firefox"], r"^\d+\.\d+(\.\d+)?$")
+        workflow = (ROOT / ".github" / "workflows" / "upstream.yml").read_text()
+        self.assertIn("watch_upstream.py", workflow)
+        self.assertIn("contents: read", workflow)
+
+
 if __name__ == "__main__":
     unittest.main()

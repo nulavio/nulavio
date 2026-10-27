@@ -54,7 +54,7 @@ Each milestone has a definition of done (DoD). "Done" requires the DoD to be ver
 - [ ] Smart Profile Routing M5: automatic routing of in-page navigation, only after a security review
 - [x] Temporary profile (deleted on close): in memory where the system allows, deleted by the Nulavio tools when its instance exits; selector, Settings and `nulavio run --temporary` (`test_temporary`)
 - [x] Nulavio Connect P0: `nulavio integrations` and Settings → Integrations (Plasma Browser Integration, portals, secret storage, default browser) with evidence; "Make Nulavio the default browser" on request, with restore (`test_connect`)
-- [ ] Nulavio Connect P1/P2: KRunner, KDE Connect send link, screen-cast status, passkeys status, notifications; MPRIS, activities, per-profile proxy
+- [x] Nulavio Connect P1/P2: KRunner plugin, KDE Connect "send link to device", screen-cast, security keys/passkeys and notifications status; activities detected (mapping later, by choice); MPRIS and per-profile proxy are the engine's own (`test_connect_p1`, `test_connect`)
 
 **DoD:** each item verified on the Nulavio build by an integration test that uses the engine's real services.
 
@@ -93,9 +93,9 @@ External agents (Codex CLI and Desktop, Claude Code and Desktop, other MCP clien
 - [x] A9 Codex CLI and Claude Code connection wizard (S8: the agent's own CLI, after approval; key file, no secret in configs)
 - [x] A10 Secure Profiles and Smart Profile Routing integration (S8: given profiles, per-agent routes, locked and open profiles refused)
 - [x] A11 UX (Horizon): agents, autonomy, activity, revoke, emergency stop, permission requests (S7); agent detection and sessions view in S8
-- [ ] A12 Built-in assistant (provider-agnostic, same policies)
-- [ ] A13 Advanced compatibility (Playwright/CDP adapters where feasible)
-- [ ] A14 Hardening, multi-platform tests, documentation
+- [x] A12 Built-in assistant (provider-agnostic, same policies): side panel, OpenAI-compatible or Anthropic providers, key in the system keyring, per-profile consent, tasks as an agent under the same policy (`test_assistant`, `test_assistant_ui`)
+- [x] A13 Advanced compatibility: raw WebDriver BiDi endpoint for the agent's own library, behind "Privileged debugging", stop still applies (`test_ai_bridge` 20); Playwright (needs its patched Firefox) and CDP (removed from Firefox) are not feasible
+- [ ] A14 Hardening, multi-platform tests, documentation: engines end with a killed bridge, raw-mode watcher, Fedora and Ubuntu CI; Windows waits for U10
 
 **DoD:** real clients (not mocks) connect and act within their grants; denied capabilities are denied; "Autonomous" does not ask again for granted actions; revocation stops new operations; no access to a locked profile; nothing in the UI claims isolation that is not there.
 
@@ -132,9 +132,9 @@ External agents (Codex CLI and Desktop, Claude Code and Desktop, other MCP clien
 
 - [x] RPM (Fedora) and .deb (Ubuntu) from one engine build, installed and checked in clean containers; signed-repository tooling verified end to end with a throwaway key; SBOM per package ([build](../architecture/build.md#packages-s18))
 - [ ] Sign with the release key and publish the repository (needs the maintainer's key and a host)
-- [ ] Update SLA automation; security changelog
+- [x] Update SLA automation (daily upstream check, release rehearsal script); security changelog ([changelog](../security/changelog.md))
 - [ ] Alpha only after [release criteria](release-criteria.md) are met
 
 ## Next task (recommended)
 
-Follow the [execution plan](execution-plan.md): S1 (Connect P0), S2 (unlock research and ADRs), S3 (Vault crypto prototype), S4 (AI Bridge foundation), S5 (encrypted profile storage), S6 (unlock UX in the browser), S7 (AI autonomy and its UI), S8 (AI with profiles, routing and the connect wizard), S12 (temporary profile), S13 (Guard at run time), S14 (per-site privacy, Strict fix), S15 (DNS choice, fingerprinting measured), S16 (real-site regression), S17 (password flows B, D, H) and S18 (packages) are done; next: S19 (update SLA) through S24 (alpha gate), with S10 (security key, needs a key) and S11 (Android Companion, last) waiting on the maintainer. The plan lists the decisions each slice needs from the maintainer.
+Follow the [execution plan](execution-plan.md): S1 (Connect P0), S2 (unlock research and ADRs), S3 (Vault crypto prototype), S4 (AI Bridge foundation), S5 (encrypted profile storage), S6 (unlock UX in the browser), S7 (AI autonomy and its UI), S8 (AI with profiles, routing and the connect wizard), S12 (temporary profile), S13 (Guard at run time), S14 (per-site privacy, Strict fix), S15 (DNS choice, fingerprinting measured), S16 (real-site regression), S17 (password flows B, D, H) and S18 (packages), S19 (update SLA), S20 (assistant, raw automation) and S21 (Connect P1/P2) are done; next: S22 (Routing M5 review), S23 (phase 5 spikes) and S24 (alpha gate), with S10 (security key, needs a key) and S11 (Android Companion, last) waiting on the maintainer. The plan lists the decisions each slice needs from the maintainer.

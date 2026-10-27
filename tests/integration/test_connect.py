@@ -51,6 +51,16 @@ class ConnectTest(unittest.TestCase):
     def setUpClass(cls):
         cls.real_before = digest(REAL_SETTINGS)
         cls.session = harness.GeckoProfileSession(name="Pessoal")
+        # A stand-in kdeconnect-cli (P1): two reachable devices, and a log of what was shared.
+        fake_bin = cls.session.tmp / "bin"
+        fake_bin.mkdir()
+        cls.kdeconnect_log = cls.session.tmp / "kdeconnect.log"
+        (fake_bin / "kdeconnect-cli").write_text(
+            f'#!/bin/sh\necho "$@" >> "{cls.kdeconnect_log}"\n'
+            'case "$1" in --list-available) echo "abc123_def Pixel"; echo "zzz999 Tablet" ;; esac\n'
+        )
+        (fake_bin / "kdeconnect-cli").chmod(0o700)
+        cls.session.env["PATH"] = f"{fake_bin}:{cls.session.env['PATH']}"
         cls.m = cls.session.start()
         cls.fakes: list[subprocess.Popen] = []
 
@@ -179,9 +189,9 @@ class ConnectTest(unittest.TestCase):
                 return None
 
         listed = harness.wait_until(rows, timeout=20)
-        self.assertEqual(
-            [r[0] for r in listed], ["plasma-browser-integration", "xdg-portals", "secret-service", "default-browser"]
-        )
+        p0 = ["plasma-browser-integration", "xdg-portals", "secret-service", "default-browser"]
+        later = ["kde-connect", "screen-cast", "security-keys", "notifications", "krunner", "activities"]
+        self.assertEqual([r[0] for r in listed], p0 + later)
         self.assertEqual(dict(listed)["xdg-portals"], "available")
         self.assertTrue(self.m.execute("return Boolean(document.querySelector('[data-focus-key=\"make-default\"]'));"))
         # Nothing on the page reached the network.
@@ -190,6 +200,35 @@ class ConnectTest(unittest.TestCase):
             ".filter(n => !n.startsWith('moz-extension:') && !n.startsWith('data:'));"
         )
         self.assertEqual(external, [])
+
+    # -- P1/P2, through the Nulavio tools -------------------------------------------
+
+    def test_05_p1_and_p2_states_from_the_tools(self):
+        self.own("org.kde.kdeconnect.daemon", "org.freedesktop.Notifications", "org.kde.ActivityManager")
+        found = self.found()
+        self.assertEqual((found["kde-connect"]["state"], found["kde-connect"]["reason"]), ("available", "devices"))
+        self.assertEqual(found["kde-connect"]["params"]["devices"], "Pixel, Tablet")
+        self.assertEqual((found["notifications"]["state"], found["notifications"]["reason"]), ("available", "ready"))
+        self.assertEqual(found["activities"]["reason"], "not-used")
+        self.assertIn(found["security-keys"]["reason"], {"none", "usable", "no-permission"})  # the real hardware
+        self.assertIn(found["krunner"]["reason"], {"available", "no-krunner", "no-gi"})
+        self.assertEqual(found["screen-cast"]["priority"], "P1")
+
+    def test_06_send_one_link_and_krunner_on_request(self):
+        self.call("return C.sendLink(args[0], args[1]);", "https://example.org/shared", "abc123_def")
+        self.assertIn("--device abc123_def --share https://example.org/shared", self.kdeconnect_log.read_text())
+        self.assertEqual(
+            chrome_async(self.m, "return C.sendLink(args[0], args[1]);", ["file:///etc/passwd", "abc123_def"]).get("error"),
+            "bad-url",
+        )
+        if self.found()["krunner"]["state"] != "available":
+            self.skipTest("KRunner or Python's GLib bindings are not installed")
+        data = Path(self.session.env["XDG_DATA_HOME"])
+        self.call("return C.setKrunner(true);")
+        self.assertTrue((data / "krunner" / "dbusplugins" / "net.nulavio.krunner.desktop").exists())
+        self.assertEqual(self.found()["krunner"]["state"], "enabled")
+        self.call("return C.setKrunner(false);")
+        self.assertFalse((data / "krunner" / "dbusplugins" / "net.nulavio.krunner.desktop").exists())
 
     def test_99_real_desktop_settings_untouched(self):
         time.sleep(0.5)

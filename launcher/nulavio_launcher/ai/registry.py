@@ -27,7 +27,7 @@ from pathlib import Path
 from .. import paths
 from .policy import CAPABILITIES, FULL_CONTROL_WARNING, MODES, PRESETS, Decision, effective_mode, in_scope, now
 
-CLIENTS = ("claude-code", "codex", "other")
+CLIENTS = ("claude-code", "codex", "other", "nulavio-assistant")
 NAME_RE = re.compile(r"^[\w .+-]{1,48}$")
 
 

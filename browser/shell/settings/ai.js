@@ -373,6 +373,57 @@ async function renderActivity() {
   );
 }
 
+// -- Nulavio Assistant (A12) -----------------------------------------------------------
+
+async function renderAssistant() {
+  const form = document.getElementById("ai-assistant");
+  const state = await ai.assistantState().catch(e => (announce(errorText(e), "error"), null));
+  if (!state) {
+    return;
+  }
+  const status = document.getElementById("ai-assistant-state");
+  status.textContent = state.configured
+    ? t("assistantStateConfigured", [state.provider.model, state.recipient, t(state.hasKey ? "assistantKeyStored" : "assistantKeyNone")])
+    : t("assistantStateNone");
+  if (state.configured) {
+    form.elements.kind.value = state.provider.kind;
+    form.elements.model.value = state.provider.model;
+    form.elements.baseUrl.value = state.provider.base_url;
+  }
+  form.elements.allowed.checked = state.profileAllowed;
+  document.getElementById("ai-assistant-allowed-hint").textContent = t("assistantAllowHint", [state.recipient ?? t("assistantRecipientUnknown")]);
+  document.getElementById("ai-assistant-forget").hidden = !state.configured;
+  form.dataset.configured = String(state.configured);
+}
+
+function setUpAssistant() {
+  const form = document.getElementById("ai-assistant");
+  form.addEventListener("submit", async event => {
+    event.preventDefault();
+    const error = form.querySelector(".form-error");
+    error.textContent = "";
+    const details = { kind: form.elements.kind.value, baseUrl: form.elements.baseUrl.value.trim(), model: form.elements.model.value.trim() };
+    if (form.elements.key.value) {
+      details.key = form.elements.key.value; // to the system keyring through the Nulavio tools; never stored here
+    }
+    try {
+      await ai.assistantConfigure(details);
+      await ai.assistantAllow(form.elements.allowed.checked);
+      form.elements.key.value = "";
+      announce(t("assistantSaved"));
+      await renderAssistant();
+    } catch (e) {
+      error.textContent = errorText(e);
+    }
+  });
+  document.getElementById("ai-assistant-forget").addEventListener("click", async () => {
+    if (await confirmDialog({ title: t("assistantForgetTitle"), body: t("assistantForgetBody"), confirm: t("assistantForget"), danger: true })) {
+      await ai.assistantForget().then(renderAssistant, e => announce(errorText(e), "error"));
+    }
+  });
+  return renderAssistant();
+}
+
 export async function setUpAI() {
   if (await ai.workspaceAgent()) {
     return; // an agent drives this window: its settings are managed from the user's own window
@@ -399,4 +450,5 @@ export async function setUpAI() {
   });
   await renderAgents();
   await renderActivity();
+  await setUpAssistant();
 }
