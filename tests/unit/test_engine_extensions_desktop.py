@@ -48,7 +48,7 @@ class EngineCommandTest(unittest.TestCase):
                 engine.build_command(FAKE_ENGINE, Path("/p"), url=url)
 
     def test_env_strips_sandbox_and_remote_knobs(self):
-        hostile = {
+        hostile = {  # nosemgrep: nulavio-py-engine-sandbox-env -- the input launch_env() must strip
             "MOZ_DISABLE_CONTENT_SANDBOX": "1",
             "MOZ_DISABLE_RDD_SANDBOX": "1",
             "MOZ_SANDBOX_LOGGING": "1",

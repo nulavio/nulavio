@@ -1,0 +1,62 @@
+# Test cases for ci/sast/nulavio-rules.yml (generic rules: shell, CI, container,
+# packaging and Gradle lines); not a script, never run.
+# A line annotated "ruleid" must match the rule named, a line annotated "ok" must not.
+#   scripts/security/scan.sh opengrep-rules
+
+# --- nulavio-verification-bypass
+
+# ruleid: nulavio-verification-bypass
+curl -fsSLk -o tool.tar.gz https://example.org/tool.tar.gz
+# ruleid: nulavio-verification-bypass
+curl --insecure https://example.org/tool.tar.gz
+# ruleid: nulavio-verification-bypass
+curl -fsSL https://example.org/install.sh | sh
+# ruleid: nulavio-verification-bypass
+wget -qO- https://example.org/install.sh | sudo bash
+# ruleid: nulavio-verification-bypass
+wget --no-check-certificate https://example.org/tool.tar.gz
+# ruleid: nulavio-verification-bypass
+git -c http.sslVerify=false clone https://example.org/repo.git
+# ruleid: nulavio-verification-bypass
+export GIT_SSL_NO_VERIFY=1
+# ruleid: nulavio-verification-bypass
+gpgcheck=0
+# ruleid: nulavio-verification-bypass
+dnf install -y --nogpgcheck tool
+# ruleid: nulavio-verification-bypass
+deb [trusted=yes] https://example.org/apt stable main
+# ruleid: nulavio-verification-bypass
+apt-get install -y --allow-unauthenticated tool
+# ruleid: nulavio-verification-bypass
+rpm -i --nosignature tool.rpm
+# ruleid: nulavio-verification-bypass
+pip install --trusted-host example.org tool
+# ruleid: nulavio-verification-bypass
+python3 -m pip install ruff
+# ruleid: nulavio-verification-bypass
+./gradlew build --dependency-verification=off
+# ok: nulavio-verification-bypass
+curl -fsSL --proto '=https' --tlsv1.2 -o tool.tar.gz https://example.org/tool.tar.gz
+# ok: nulavio-verification-bypass
+gpgcheck=1
+# ok: nulavio-verification-bypass
+deb [signed-by=/usr/share/keyrings/example.gpg] https://example.org/apt stable main
+# ok: nulavio-verification-bypass
+.venv/bin/pip install --require-hashes -r requirements/dev.txt
+# ok: nulavio-verification-bypass
+./gradlew build --dependency-verification=strict
+
+# --- nulavio-sh-secret-in-argv
+
+# ruleid: nulavio-sh-secret-in-argv
+gpg --batch --passphrase "$PASSPHRASE" --sign SHA256SUMS
+# ruleid: nulavio-sh-secret-in-argv
+tool login --token=$TOKEN
+# ruleid: nulavio-sh-secret-in-argv
+sshpass -p "$PW" ssh host
+# ok: nulavio-sh-secret-in-argv
+gpg --batch --passphrase-fd 3 --sign SHA256SUMS 3<"$passphrase_file"
+# ok: nulavio-sh-secret-in-argv
+gpg --batch --pinentry-mode loopback --passphrase '' --quick-gen-key test
+# ok: nulavio-sh-secret-in-argv
+tool login --token-file "$token_file"

@@ -91,4 +91,4 @@ podman run --rm --security-opt label=disable -v "$work:/work" -v "$out:/out" "$i
     dpkg-deb --root-owner-group -Zxz --build pkg "/out/nulavio_'"$version-$release"'_amd64.deb" >/dev/null
     grep "^Depends" pkg/DEBIAN/control
 '
-ls "$out"/nulavio_"$version-$release"_amd64.deb
+ls "$out/nulavio_$version-${release}_amd64.deb"

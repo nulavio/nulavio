@@ -13,8 +13,13 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: upstream
+  cancel-in-progress: false
+
 jobs:
   firefox-release:
+    name: Firefox release against the shipped version
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:

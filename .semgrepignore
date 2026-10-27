@@ -1,0 +1,6 @@
+# Paths Opengrep skips (scripts/security/scan.sh opengrep; rules in ci/sast/).
+# This file replaces Opengrep's default list, so tests/ is scanned too.
+# Files ignored by git are never scanned.
+
+# The rules' own test cases: wrong on purpose.
+tests/fixtures/sast/

@@ -1,0 +1,18 @@
+# gitleaks findings checked by hand and found not to be secrets, by fingerprint
+# (commit:file:rule:line). Add one only with the reason; see .gitleaks.toml.
+
+# generic-api-key read the words after "API key." / "Safe Browsing key:" as a key:
+# "WITHOUT IT, PHISHING/MALWARE LISTS ARE INACTIVE" (a comment in browser/build/mozconfig)
+# and "phishing/malware lists inactive" (an assertion message in test_engine_slice.py).
+73c6b5a63dfbc09bfdde6079264aafc4d0c74a6f:browser/build/mozconfig:generic-api-key:34
+73c6b5a63dfbc09bfdde6079264aafc4d0c74a6f:tests/integration/test_engine_slice.py:generic-api-key:290
+3d8186c14f5b9d2ea4eb6aa7668b4b3f95b17d9a:browser/build/mozconfig:generic-api-key:34
+3d8186c14f5b9d2ea4eb6aa7668b4b3f95b17d9a:tests/integration/test_engine_slice.py:generic-api-key:290
+affda58fa96bdfaa8cfe97273a40952a8a142a34:browser/build/mozconfig:generic-api-key:34
+affda58fa96bdfaa8cfe97273a40952a8a142a34:tests/integration/test_engine_slice.py:generic-api-key:290
+07a8ff6eb81d6ef059a441e7e01ee5544b11a9ee:browser/build/mozconfig:generic-api-key:34
+07a8ff6eb81d6ef059a441e7e01ee5544b11a9ee:tests/integration/test_engine_slice.py:generic-api-key:303
+4aa5392c3765975dc66bc4f4c28d53400ed8132c:browser/build/mozconfig:generic-api-key:34
+4aa5392c3765975dc66bc4f4c28d53400ed8132c:tests/integration/test_engine_slice.py:generic-api-key:303
+d5073086c46f9900cf38d45b23f8ee67e73f8e5a:browser/build/mozconfig:generic-api-key:34
+d5073086c46f9900cf38d45b23f8ee67e73f8e5a:tests/integration/test_engine_slice.py:generic-api-key:321

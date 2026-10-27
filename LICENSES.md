@@ -24,7 +24,12 @@ Nothing below is **redistributed** by the Track A preview. Nulavio downloads pin
 | Bitwarden extension | 2026.10.0 | Not declared on AMO. The upstream repo mixes GPL-3.0 and the Bitwarden License | Downloaded on explicit request; **must not be bundled** until clarified |
 | Inter, JetBrains Mono, Noto Sans (fonts) | — | SIL OFL 1.1 | Referenced by CSS only; **not bundled** (system fonts are used if absent) |
 | ruff (dev tool) | 0.17.2 | MIT | Lint/format in development and CI only; hash-pinned |
+| actionlint, gitleaks, zizmor (dev tools) | 1.7.12, 8.30.1, 1.31.1 | MIT | Security scanners in development and CI only; version and SHA-256 pinned ([code scanning](docs/security/code-scanning.md)) |
+| Opengrep (dev tool) | 1.32.0 | LGPL-2.1 | Runs Nulavio's own rules in development and CI only; version and SHA-256 pinned |
+| ShellCheck (dev tool) | 0.11.0 | GPL-3.0 | Shell script checks in development and CI only, run as a separate program; version and SHA-256 pinned |
 
 ## SBOM
 
 `python3 -I scripts/release/sbom.py > sbom/nulavio-preview.cdx.json` (CycloneDX 1.6). CI regenerates it on every run and attaches it as a build artifact.
+
+The Companion app has its own: `scripts/release/sbom.py --companion --gradle-dependencies <report>` lists every library of its release build as Gradle resolved it, each with its Maven purl and the SHA-256 Gradle verifies ([build](docs/architecture/build.md#packages-s18)).

@@ -1,0 +1,23 @@
+
+------------------------------------------------------------
+Project ':app'
+------------------------------------------------------------
+
+releaseRuntimeClasspath - Runtime classpath of '/release'.
++--- org.jetbrains.kotlin:kotlin-stdlib:2.2.10
+|    \--- org.jetbrains:annotations:13.0
++--- project ':nv1'
+|    +--- com.google.crypto.tink:tink-android:1.24.0
+|    |    +--- androidx.annotation:annotation-jvm:1.8.2
+|    |    |    \--- org.jetbrains.kotlin:kotlin-stdlib:1.7.10 -> 2.2.10 (*)
+|    |    +--- com.google.code.findbugs:jsr305:3.0.2
+|    |    +--- com.google.code.gson:gson:2.13.2
+|    |    |    \--- com.google.errorprone:error_prone_annotations:2.41.0
+|    |    \--- com.google.errorprone:error_prone_annotations:2.41.0
+|    \--- org.bouncycastle:bcprov-jdk18on:1.86
++--- com.journeyapps:zxing-android-embedded:4.3.0
+\--- com.google.zxing:core:3.5.4
+
+(*) - Indicates repeated occurrences of a transitive dependency subtree. Gradle expands transitive dependency subtrees only once per project; repeat occurrences only display the root of the subtree, followed by this annotation.
+
+A web-based, searchable dependency report is available by adding the --scan option.

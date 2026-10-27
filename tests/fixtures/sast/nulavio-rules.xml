@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Test cases for ci/sast/nulavio-rules.yml (Android manifest and resources); never built.
+     A line annotated "ruleid" must match the rule named, a line annotated "ok" must not. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- ruleid: nulavio-android-unsafe-storage-or-manifest -->
+    <application android:allowBackup="true"
+        android:label="@string/app_name">
+    </application>
+    <!-- ruleid: nulavio-android-unsafe-storage-or-manifest -->
+    <application android:usesCleartextTraffic="true" />
+    <!-- ruleid: nulavio-android-unsafe-storage-or-manifest -->
+    <application android:debuggable="true" />
+    <!-- ruleid: nulavio-android-unsafe-storage-or-manifest -->
+    <base-config cleartextTrafficPermitted="true" />
+    <!-- ok: nulavio-android-unsafe-storage-or-manifest -->
+    <application android:allowBackup="false" android:dataExtractionRules="@xml/data_extraction_rules" />
+</manifest>

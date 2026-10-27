@@ -1,7 +1,7 @@
 {
   "bomFormat": "CycloneDX",
   "specVersion": "1.6",
-  "serialNumber": "urn:uuid:bfdc4a7f-c2ed-533b-a2ca-51c161b4110c",
+  "serialNumber": "urn:uuid:79f2c2f0-0685-5384-b9ed-1921194d87ce",
   "version": 1,
   "metadata": {
     "component": {
@@ -19,7 +19,7 @@
       "properties": [
         {
           "name": "nulavio:git-revision",
-          "value": "uncommitted"
+          "value": "40149a2c560d3be89e4eb52e9af6501702ef37f6"
         }
       ]
     }
@@ -45,6 +45,32 @@
         {
           "type": "website",
           "url": "https://www.mozilla.org/firefox/"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "system:libsodium",
+      "name": "libsodium",
+      "version": ">=1.0.18 (distribution package, loaded through ctypes, not redistributed)",
+      "licenses": [
+        {
+          "license": {
+            "id": "ISC"
+          }
+        }
+      ],
+      "scope": "optional",
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://libsodium.org/"
+        }
+      ],
+      "properties": [
+        {
+          "name": "nulavio:role",
+          "value": "Nulavio Vault cryptography (decision D1)"
         }
       ]
     },
@@ -76,6 +102,8 @@
           "value": "content-filter"
         }
       ],
+      "purl": "pkg:generic/addons.mozilla.org/ublock-origin@1.75.0",
+      "cpe": "cpe:2.3:a:ublockorigin:ublock_origin:1.75.0:*:*:*:*:*:*:*",
       "licenses": [
         {
           "license": {
@@ -112,6 +140,7 @@
           "value": "credential-provider"
         }
       ],
+      "purl": "pkg:generic/addons.mozilla.org/proton-pass@1.41.1",
       "licenses": [
         {
           "license": {
@@ -148,6 +177,8 @@
           "value": "credential-provider"
         }
       ],
+      "purl": "pkg:generic/addons.mozilla.org/keepassxc-browser@1.10.4.1",
+      "cpe": "cpe:2.3:a:keepassxc:keepassxc-browser:1.10.4.1:*:*:*:*:*:*:*",
       "licenses": [
         {
           "license": {
@@ -184,6 +215,7 @@
           "value": "credential-provider"
         }
       ],
+      "purl": "pkg:generic/addons.mozilla.org/bitwarden@2026.10.0",
       "licenses": [
         {
           "license": {
@@ -198,6 +230,7 @@
       "ref": "nulavio-preview",
       "dependsOn": [
         "engine:firefox",
+        "system:libsodium",
         "xpi:uBlock0@raymondhill.net",
         "xpi:78272b6fa58f4a1abaac99321d503a20@proton.me",
         "xpi:keepassxc-browser@keepassxc.org",
