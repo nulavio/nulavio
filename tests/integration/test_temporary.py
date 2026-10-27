@@ -8,8 +8,9 @@
    a bar in the window), where it is kept, no profile switching, and the prefs
    that follow from "deleted on close". The test drives it with test-only
    Marionette prefs added to that disposable profile.
-3. `nulavio run --temporary` (launcher, any supported engine): supervised,
-   deleted after the engine exits.
+3. `nulavio run --temporary` (launcher, any supported engine): the dry run
+   leaves nothing; the supervised run (opt-in, it opens a window) deletes the
+   profile after the engine exits.
 """
 
 from __future__ import annotations
@@ -227,26 +228,36 @@ class TemporaryFromTheBrowserTest(unittest.TestCase):
 
 @unittest.skipUnless(harness.engine_available(), "needs a Gecko engine")
 class TemporaryFromTheLauncherTest(unittest.TestCase):
-    def test_run_temporary_deletes_the_profile_after_the_engine_exits(self):
-        session = harness.Session()
-        self.addCleanup(session.cleanup)
-        env = {**session.env, "MOZ_HEADLESS": "1"}
-        root = session.home / "runtime" / "temporary"
-        dry = subprocess.run(
-            [str(ROOT / "bin" / "nulavio"), "run", "--temporary", "--no-ublock", "--dry-run"],
-            env=env, capture_output=True, text=True, timeout=120, check=True,
-        )  # fmt: skip
-        self.assertIn("--profile", dry.stdout)
-        self.assertEqual(list(root.glob("tmp-*")), [])  # even a dry run leaves nothing behind
+    def setUp(self):
+        self.session = harness.Session()
+        self.addCleanup(self.session.cleanup)
+        self.root = self.session.home / "runtime" / "temporary"
 
+    def run_nulavio(self, *args: str) -> subprocess.CompletedProcess:
+        return subprocess.run(
+            [str(ROOT / "bin" / "nulavio"), *args], env=self.session.env, capture_output=True, text=True, timeout=120, check=True
+        )
+
+    def test_dry_run_prepares_a_temporary_profile_and_leaves_nothing(self):
+        dry = self.run_nulavio("run", "--temporary", "--no-ublock", "--dry-run")
+        command = dry.stdout.strip().splitlines()[-1].split()
+        profile_dir = Path(command[command.index("--profile") + 1])
+        self.assertEqual(profile_dir.parent, self.root)
+        self.assertIn("Temporary profile, kept", dry.stdout)
+        self.assertEqual(list(self.root.glob("tmp-*")), [])  # even a dry run leaves nothing behind
+
+    # The launcher never starts the engine headless (it drops MOZ_HEADLESS), so a
+    # real run opens a window: only on request, on a desktop.
+    @unittest.skipUnless(os.environ.get("NULAVIO_TEST_HEADFUL") == "1", "opens a visible window (NULAVIO_TEST_HEADFUL=1)")
+    def test_run_temporary_deletes_the_profile_after_the_engine_exits(self):
         launcher = subprocess.Popen(
             [str(ROOT / "bin" / "nulavio"), "run", "--temporary", "--no-ublock"],
-            env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, start_new_session=True,
+            env=self.session.env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, start_new_session=True,
         )  # fmt: skip
         self.addCleanup(lambda: launcher.poll() is None and os.killpg(launcher.pid, signal.SIGKILL))
 
         def running():
-            return [p for p in root.glob("tmp-*") if (p / "lock").is_symlink()]
+            return [p for p in self.root.glob("tmp-*") if (p / "lock").is_symlink()]
 
         self.assertTrue(harness.wait_until(running, timeout=90), "the engine did not start")
         [path] = running()

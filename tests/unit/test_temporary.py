@@ -238,6 +238,37 @@ class ApiTest(TempHome):
                 self.assertEqual(cli.main(["temporary", "api"]), 0)
             self.assertEqual(json.loads(out.getvalue())["error"], "bad-request")
 
+    def test_run_temporary_deletes_the_profile_when_the_engine_exits_or_fails(self):
+        seen = []
+
+        def fake_run(args, eng, prof, supervise=False):
+            self.assertTrue(supervise)  # the launcher waits for the engine
+            self.assertTrue(guard_is_held(prof.path))
+            seen.append(prof.path)
+            if len(seen) == 2:
+                raise OSError("engine failed")
+            return 0
+
+        engine = mock.Mock(builtin_theme=True)
+        with mock.patch.object(cli.engine_mod, "find_engine", return_value=engine), \
+             mock.patch.object(cli.engine_mod, "check_supported"), mock.patch.object(cli, "_run", side_effect=fake_run), \
+             mock.patch.object(cli.extensions, "install") as install, redirect_stdout(io.StringIO()):  # fmt: skip
+            self.assertEqual(cli.main(["run", "--temporary"]), 0)
+            self.assertEqual(cli.main(["run", "--temporary"]), 1)  # the error is reported, the profile still goes
+        install.assert_not_called()  # the Nulavio build installs uBlock Origin by policy
+        self.assertEqual(len(seen), 2)
+        self.assertFalse(any(path.exists() for path in seen))
+
+    def test_run_temporary_installs_the_pinned_filter_for_distribution_firefox(self):
+        engine = mock.Mock(builtin_theme=False)
+        with mock.patch.object(cli.engine_mod, "find_engine", return_value=engine), \
+             mock.patch.object(cli.engine_mod, "check_supported"), mock.patch.object(cli, "_run", return_value=0), \
+             mock.patch.object(cli.extensions, "install") as install, redirect_stdout(io.StringIO()):  # fmt: skip
+            self.assertEqual(cli.main(["run", "--temporary"]), 0)
+        entry, target = install.call_args.args
+        self.assertEqual(entry.key, "ublock-origin")
+        self.assertEqual(target.parent, self.home / "runtime" / "temporary")
+
     def test_cli_clean(self):
         temp = self.make()
         temp.release()
