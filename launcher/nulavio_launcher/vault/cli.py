@@ -272,6 +272,37 @@ def spawn_autolock(prof: profile.Profile) -> None:
     )
 
 
+def spawn_phone_session(request: dict, timeout: float = 20.0) -> dict:
+    """Start a pairing or phone-unlock helper; return its first answer (the QR payload, or an error)."""
+    launcher_dir = Path(__file__).resolve().parents[2]
+    bootstrap = "import sys; sys.path.insert(0, sys.argv[1]); from nulavio_launcher.cli import main; sys.exit(main(sys.argv[2:]))"
+    helper = subprocess.Popen(
+        [sys.executable, "-I", "-c", bootstrap, str(launcher_dir), "vault", "phone-session"],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        start_new_session=True,  # it outlives this API call; it ends by itself
+        close_fds=True,
+    )
+    helper.stdin.write(json.dumps(request).encode())  # secrets travel on a pipe, never in argv
+    helper.stdin.close()
+    import selectors
+
+    with selectors.DefaultSelector() as selector:
+        selector.register(helper.stdout, selectors.EVENT_READ)
+        ready = selector.select(timeout)
+    line = helper.stdout.readline() if ready else b""
+    helper.stdout.close()
+    try:
+        answer = json.loads(line)
+    except ValueError:
+        answer = None
+    if not isinstance(answer, dict):
+        helper.kill()
+        raise VaultError("failed", "the phone session did not start")
+    return answer
+
+
 def _reauth(vault, current: str) -> None:
     try:
         vault.unlock_password(current)
@@ -286,7 +317,18 @@ def api_request(request: dict) -> dict:
     """One operation for the Shell. Secrets arrive in the request body (stdin), never in argv."""
     op = request.get("op")
     if op == "capabilities":
-        return {"storage": tools_available(), "sodium": sodium.available(), "keyring": keyring().available()}
+        from . import link
+
+        return {"storage": tools_available(), "sodium": sodium.available(), "keyring": keyring().available(),
+                "phone": link.avahi_available()}  # fmt: skip
+    if op == "phone-session":
+        from . import phone_session
+
+        action = request.get("action")
+        if action not in ("status", "confirm", "cancel"):
+            raise VaultError("bad-request", "action")
+        return phone_session.control(str(request.get("session") or ""),
+                                     {"action": action, "match": bool(request.get("match"))})  # fmt: skip
     path = request.get("path")
     if not isinstance(path, str) or not path.startswith("/"):
         raise VaultError("bad-request", "path")
@@ -311,6 +353,15 @@ def api_request(request: dict) -> dict:
     if op == "lock":
         profiles.lock(prof)
         return {"locked": True}
+    if op == "phone-pair-start":
+        return spawn_phone_session({"kind": "pair", "path": str(prof.path), "current": str(request.get("current") or "")})
+    if op == "phone-unlock-start":
+        if not profiles.is_encrypted(prof):
+            raise VaultError("not-encrypted")
+        return spawn_phone_session({
+            "kind": "unlock", "path": str(prof.path), "envelope": request.get("envelope"),
+            "password": request.get("password"), "autolock": request.get("autolock", True),
+        })  # fmt: skip
     if op == "forget":
         # Before the browser deletes a protected profile: drop its keys, so what is left is unreadable.
         box = profiles.container(prof)
@@ -391,6 +442,12 @@ def _api(args) -> int:
     return 0
 
 
+def _phone_session(args) -> int:
+    from . import phone_session
+
+    return phone_session.main()
+
+
 def _autolock(args) -> int:
     prof = target(args)
     profiles.autolock(prof, grace=args.grace)
@@ -400,6 +457,7 @@ def _autolock(args) -> int:
 HANDLERS = {
     "api": _api,
     "autolock": _autolock,
+    "phone-session": _phone_session,
     "create": _create,
     "encrypt": _encrypt,
     "unlock": _unlock,
@@ -457,6 +515,7 @@ def add_parser(sub) -> None:
     q.add_argument("envelope")
     q.add_argument("--password-stdin", action="store_true")
     vsub.add_parser("api", help=argparse.SUPPRESS)  # JSON on stdin/stdout, used by the browser
+    vsub.add_parser("phone-session", help=argparse.SUPPRESS)  # one pairing or phone unlock; started by `api`
     q = vsub.add_parser("autolock", help=argparse.SUPPRESS)
     q.add_argument("name", nargs="?")
     q.add_argument("--path")

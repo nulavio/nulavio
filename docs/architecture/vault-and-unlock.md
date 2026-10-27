@@ -75,6 +75,14 @@ Replay: `s` and `req_id` are one-shot; the desktop keeps the last 1024 request i
 
 Password + phone (`combined` envelope): the desktop stretches the password first, sends the request for that envelope, and opens it with `KDF(constant, "combined-kek", KEK_password, KEK_phone)`. Neither factor alone opens it, and a wrong password is only detected after the phone answered.
 
+### Transport (S11)
+
+The phone listens for one operation and announces it over mDNS; the desktop resolves that exact name through Avahi and connects out ([ADR 0005, transport amendment](../adr/0005-phone-profile-unlock.md#transport-amendment-2026-10-27)). Desktop side: `launcher/nulavio_launcher/vault/link.py` (canonical JSON lines of at most 16 KiB, instance names `nv1-p-…`/`nv1-u-…` from BLAKE2b of the invite or request id, `ResolveService` through `busctl` on the system bus) and `vault/phone_session.py`: each pairing or unlock runs in a short-lived helper (`nulavio vault phone-session`, request on stdin) that keeps the operation's secrets in memory only and is driven by the browser through a private UNIX socket in the runtime folder.
+
+Browser API (`nulavio vault api`): `phone-pair-start {path, current}` (re-authenticates; needs a recovery code and one other method, ADR 0005 §6) and `phone-unlock-start {path, envelope?, password?}` return `{session, qr, expiry}`; `phone-session {session, action: status|confirm|cancel, match?}`. Session states: `waiting-for-phone`, `compare` (6 digits shown), `waiting-for-you`, `paired`, `unlocked`, `declined`, `expired`, `unreachable`, `cancelled`, `failed` (with a code). `capabilities` reports `phone` (Avahi reachable).
+
+Tests: `tests/unit/test_phone_link.py` runs pairing and unlock over real TCP with the reference phone listening (`tests/lib/phone_link_ref.py`) against real encrypted profiles: success, digits that do not match on either side, wrong current secret, declined, a stranger answering first (ignored, then the phone unlocks), a phone that never answers; with `NULAVIO_LAN_TESTS=1`, the same through the machine's Avahi and `nulavio vault api`.
+
 ## Unlock Coordinator states
 
 ```mermaid

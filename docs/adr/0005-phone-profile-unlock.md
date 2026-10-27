@@ -1,6 +1,6 @@
 # ADR 0005 — Phone profile unlock (the brief's `phone-profile-unlock`)
 
-- **Status:** Accepted (2026-10-26). Desktop side and protocol: prototype with a simulated phone (S3). Android app: last slice (S11).
+- **Status:** Accepted (2026-10-26). Desktop side and protocol: prototype with a simulated phone (S3). Android app: last slice (S11). Transport amended 2026-10-27 (S11): the phone listens, the desktop resolves it over mDNS and connects out.
 - **Scope:** unlocking **Nulavio profiles** only. Not a passkey manager for websites; WebAuthn for pages is unchanged; no remote login.
 - **Related:** [compatibility report](../research/phone-unlock-compatibility.md), [ADR 0006 Vault](0006-nulavio-vault.md), [architecture](../architecture/vault-and-unlock.md), [threat model](../security/threat-model-unlock.md), [brief](../product/briefs/2026-10-26-profile-unlock.md).
 
@@ -33,8 +33,23 @@ Evidence and per-platform states: [compatibility report](../research/phone-unloc
    - **Unlock:** a request signed by the desktop, bound to profile, device, operation and a 60-second expiry; the phone shows it, the user authenticates locally, the phone computes the wrapping key and returns it encrypted to a fresh desktop session key and signed. Replayed, expired, unpaired or substituted responses fail.
    - **Phone key storage (v1):** the phone's Curve25519 keys are kept encrypted under a **non-exportable hardware key that requires biometrics or the device PIN for each use** (Android Keystore, StrongBox when present; iOS Keychain with access control). This is *hardware-protected*, not *hardware-bound*: during an unlock the private key is briefly in the app's memory.
    - **Suite v2 (reserved):** HPKE (RFC 9180) with DHKEM(P-256) computed inside StrongBox or the Secure Enclave, so the phone key never leaves hardware. Both phone platforms support P-256 key agreement in hardware; the desktop needs a vetted P-256 implementation, which libsodium does not provide. Adopted in S11 if the device test confirms it, with a reviewed desktop library; the metadata is versioned for it.
-5. **Transport:** local network first (the desktop listens on a random port only during pairing or an unlock request; the phone connects); QR code carries the address. No relay in v1. A relay, if ever added, would only carry end-to-end encrypted messages it cannot open.
+5. **Transport:** local network, no relay in v1 (a relay, if ever added, would only carry end-to-end encrypted messages it cannot open). **Amended 2026-10-27 (S11):** the *phone* listens and the desktop connects out, instead of the reverse. See [Transport amendment](#transport-amendment-2026-10-27).
 6. **Recovery before release:** phone unlock is not offered for distribution until at least two other methods work for the same profile (recovery code, plus a password, a second phone or a security key), and the onboarding tests the recovery code.
+
+## Transport amendment (2026-10-27)
+
+**Evidence.** On the reference Fedora 44 KDE desktop the firewall's default zone is `public`, which accepts incoming connections only for cockpit, dhcpv6-client, mDNS and SSH. A desktop listening on a random port, as first decided, is unreachable from the phone unless the user changes the system firewall (an administrator action Nulavio must not take silently). Outgoing connections and mDNS are allowed; Avahi runs by default on Fedora and Ubuntu desktops and answers on the system bus.
+
+**Decision.** For pairing and for each unlock request, the phone opens a listening socket on its Wi-Fi address for that operation only (at most the pairing's 5 minutes or the request's 60 seconds) and announces it over mDNS as service `_nulavio-nv1._tcp` with an instance name derived from the operation: `nv1-p-<16 base32 chars of BLAKE2b(invite_id)>` for pairing, `nv1-u-<… of BLAKE2b(req_id)>` for unlock. The desktop resolves exactly that name through Avahi (`ResolveService` on the system bus, IPv4) and connects out. Neither side needs a firewall change. On the connection, messages are canonical JSON lines (at most 16 KiB each) and the phone speaks first:
+
+| Operation | Phone → desktop | Desktop → phone |
+|---|---|---|
+| Pairing | `{"t":"hello",…}`, later `{"t":"confirm",…}` or `{"t":"cancel"}` | `{"t":"accept",…}`, then `{"t":"paired"}` or `{"t":"error","code":…}` |
+| Unlock | `{"t":"response",…}` (box or refusal, signed) | `{"t":"ok"}` or `{"t":"error","code":…}` |
+
+**Why it is safe.** The transport adds no trust: everything the desktop accepts is authenticated by the protocol (`nv1`). Someone on the network who announces the same name, or connects to the phone first, learns nothing usable (the pairing box needs the QR secret; the unlock box needs the desktop's session key) and can only delay the operation; the desktop ignores a response not signed by the paired phone and keeps resolving until the request expires. The mDNS name reveals to the local network that a Nulavio phone operation is under way, not which profile or desktop.
+
+**Limits.** Networks that isolate Wi-Fi clients or drop multicast (some guest and corporate networks) block both directions alike; then the UI says the phone could not be reached and offers the profile's other methods. Without Avahi on the desktop, "Unlock with phone" is unavailable (shown as such).
 
 ## Threat model summary
 
