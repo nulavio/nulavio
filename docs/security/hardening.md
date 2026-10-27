@@ -34,13 +34,13 @@ What the Track A preview applies today, how each item is verified, and which hos
 | DNS | Track A: Fedora disables DoH (`network.trr.mode=5`) to respect the system resolver, and Nulavio keeps that. Track B (S15): the new tab asks once how to look up sites: the computer's resolver (mode 5, "off by choice", which also keeps Mozilla's regional roll-out off), encrypted DNS with fallback (mode 2) or encrypted only (mode 3), through Cloudflare (the engine's default, [Mozilla's resolver program](https://wiki.mozilla.org/Security/DOH-resolver-policy)), [Quad9](https://quad9.net/doh-quad9-dns-servers/), [Mullvad](https://mullvad.net/en/help/dns-over-https-and-dns-over-tls) or an https:// address of the user's. Until the user answers, the engine's default applies. Nulavio runs no resolver; the UI says the chosen resolver sees the lookups. `test_dns` proves lookups reach the chosen resolver and that "encrypted only" fails closed |
 | `privacy.resistFingerprinting` | Breaks time zones, window sizes and many sites. ETP Strict's fingerprinting protection is used instead; RFP may become an opt-in "hardened" mode |
 
-## Host-level options evaluated (not adopted yet)
+## Host-level options evaluated
 
 | Option | Benefit | Blockers found | Status |
 |---|---|---|---|
-| **Flatpak** | Filesystem confinement and portals | Native messaging (KeePassXC, Bitwarden biometrics) needs host binaries outside the sandbox. A portal-based solution must be validated first. Nested sandbox interplay with Gecko's user-namespace sandbox | Phase 5 spike |
-| **bubblewrap wrapper** | Hide `~` except the profile and Downloads from the browser process | Same native messaging problem. Interaction with Gecko's own namespaces. File chooser needs portals | Phase 5 spike |
-| **SELinux policy module** | Mandatory access control for the browser domain on Fedora | Needs policy authoring and maintenance; Fedora's Firefox runs unconfined | Phase 5 evaluation |
+| **Flatpak** | Filesystem confinement and portals | Native messaging: the host-side proxy (`xdg-native-messaging-proxy`) now ships in Fedora 44 and Ubuntu 26.04+, so it is solvable; a second packaging and update path for no gain over bubblewrap | **Not now** ([spikes](phase5-spikes.md#flatpak-and-native-messaging)) |
+| **bubblewrap wrapper** | Hide `~` except the profile and Downloads from the browser process | Measured: the engine's sandbox is unchanged inside it; uploads only from Downloads; the session bus is not filtered | **Adopted as opt-in** `nulavio run --confined` ([spikes](phase5-spikes.md#bubblewrap)) |
+| **SELinux policy module** | Mandatory access control for the browser domain on Fedora | Needs root on every machine and per-release maintenance; the browser runs `unconfined_t` like Fedora's Firefox; bubblewrap covers the filesystem part without root | **Not adopted** ([spikes](phase5-spikes.md#selinux)) |
 | **Secret Service / KWallet for engine logins** | OS keyring storage | Gecko on Linux does not use it for `logins.json`. The spec does not enforce per-application access: any same-user process can usually read an unlocked collection | Not a security gain against T-LOCAL; see [password providers](../architecture/password-providers.md) |
 
 ## User recommendations (shown in docs and onboarding)

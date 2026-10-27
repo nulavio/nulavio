@@ -11,7 +11,7 @@ import sys
 import textwrap
 from pathlib import Path
 
-from . import __version__, connect, desktop, doctor, extensions, guard, log, paths, profile, temporary
+from . import __version__, confine, connect, desktop, doctor, extensions, guard, log, paths, profile, temporary
 from . import engine as engine_mod
 from . import prefs as prefs_mod
 
@@ -184,6 +184,16 @@ def _run(args: argparse.Namespace, eng, prof, supervise: bool = False) -> int:
         return 3
     command = engine_mod.build_command(eng, prof.path, url=args.url, private=args.private)
     pid = prof.running_pid()
+    if getattr(args, "confined", False):
+        if pid is not None:
+            # The engine would hand this request to the running instance, which is not confined by this command.
+            _err(f"profile '{prof.name}' is already open; close it, then start it again with --confined")
+            return 1
+        try:
+            command = confine.wrap(command, profile_dir=prof.path, engine_dir=eng.path.resolve().parent, supervised=supervise)
+        except confine.ConfineError as exc:
+            _err(str(exc))
+            return 1
     if pid is None:
         locale = prof.load_settings().get("locale", "en")
         if locale != "en":
@@ -192,8 +202,9 @@ def _run(args: argparse.Namespace, eng, prof, supervise: bool = False) -> int:
             prof, {"engine": eng.label, **_filter_context(prof)}, builtin_theme=eng.builtin_theme
         )
         log.event(
-            "launch", profile=prof.name, engine=eng.label, private=args.private, url_given=bool(args.url), seeded=len(applied)
-        )
+            "launch", profile=prof.name, engine=eng.label, private=args.private, url_given=bool(args.url), seeded=len(applied),
+            confined=bool(getattr(args, "confined", False)),
+        )  # fmt: skip
     else:
         # The engine forwards the request to the instance already using this profile.
         log.event("launch.forward", profile=prof.name, private=args.private, url_given=bool(args.url))
@@ -451,6 +462,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--dry-run", action="store_true", help="prepare the profile and print the engine command")
     p.add_argument("--password-stdin", action="store_true", help="encrypted profile: read its password from stdin")
     p.add_argument("--temporary", action="store_true", help="a new profile, deleted when Nulavio closes (ignores --profile)")
+    p.add_argument(
+        "--confined", action="store_true",
+        help="run inside bubblewrap: the browser sees only this profile and Downloads in your home folder",
+    )  # fmt: skip
     p.add_argument("--no-ublock", action="store_true", help=argparse.SUPPRESS)
     p.set_defaults(func=cmd_run)
 

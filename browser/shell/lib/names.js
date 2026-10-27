@@ -6,6 +6,7 @@ export const TEMPLATE_NAMES = Object.freeze({
   work: "templateWork",
   banking: "templateBanking",
   research: "templateResearch",
+  sensitive: "templateSensitive",
 });
 
 /** A name not used yet: "Work", then "Work 2", "Work 3"... (case-insensitive). */

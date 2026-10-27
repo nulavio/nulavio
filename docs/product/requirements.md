@@ -58,6 +58,8 @@ Status legend: **Done** (implemented and verified by a test or recorded evidence
 | SEC-16 | An unlock opens a profile only when a method releases its key: no method, a phone approval without the key, or a copy of the files does not reveal it; requests expire, are one-shot and signed; nothing secret in logs or files | **Done in the prototype (S3, simulated phone)**; applies to real profiles from S5 | `test_vault` |
 | SEC-17 | An agent gets only what the user granted: decisions come from the user's configuration on every call, never from the agent or page content; the local network needs a grant; revocation and the emergency stop apply to the next call; the agent's workspace keeps Safe Browsing and the pop-up blocker on | **Done (S4)** | `test_ai_bridge` |
 | SEC-18 | Report changes made to a profile outside the browser (extensions, protective settings, certificate authorities, security modules, native-messaging hosts, policies, `user.js`, search) and let the user undo or keep each | **Done (Track B)**: Guard at run time, with a bypass analysis; detection, not prevention ([R38](../security/residual-risks.md)) | `test_guard`, `test_shell.GuardModuleTest` |
+| SEC-19 | Optional outer confinement: the browser can run seeing only its profile and Downloads in the home folder, without weakening the engine's own sandbox | **Done** (opt-in `nulavio run --confined`, bubblewrap; [spikes](../security/phase5-spikes.md)) | `test_confine`, `test_confined` |
+| SEC-20 | A profile for sensitive sites: its own extensions, nothing installed by web pages, cleared on close | **Done** (template "Sensitive sites") | `test_profiles` 11 |
 
 ## Non-functional
 

@@ -295,7 +295,8 @@ class FixtureServer:
 class Session:
     """Disposable Nulavio home + running engine + Marionette client."""
 
-    def __init__(self, profile: str = "itest", setup_args: tuple[str, ...] = ()):
+    def __init__(self, profile: str = "itest", setup_args: tuple[str, ...] = (), run_args: tuple[str, ...] = ()):
+        self.run_args = run_args
         self.tmp = Path(tempfile.mkdtemp(prefix="nulavio-itest-"))
         self.home = self.tmp / "home"
         self.downloads = self.tmp / "downloads"
@@ -329,7 +330,7 @@ class Session:
 
     def prepare(self) -> list[str]:
         self.nulavio("setup", "--yes", "--profile", self.profile_name, *self.setup_args)
-        dry = self.nulavio("run", "--dry-run", "--profile", self.profile_name)
+        dry = self.nulavio("run", "--dry-run", "--profile", self.profile_name, *self.run_args)
         command = dry.stdout.strip().split()
         prefs = dict(TEST_PREFS)
         prefs["browser.download.dir"] = str(self.downloads)

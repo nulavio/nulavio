@@ -1,0 +1,14 @@
+# Nulavio: Ubuntu 24.04 and later let only programs with an AppArmor profile
+# create unprivileged user namespaces. The engine needs them to sandbox its
+# content processes, so this profile names the engine and allows exactly that,
+# as Ubuntu's own profiles do for other browsers. It confines nothing else.
+
+abi <abi/4.0>,
+include <tunables/global>
+
+profile nulavio /usr/lib/nulavio/nulavio{,-bin} flags=(unconfined) {
+  userns,
+
+  # Site-specific additions and overrides. See local/README for details.
+  include if exists <local/nulavio>
+}

@@ -2,7 +2,7 @@
 # Install a Nulavio .deb in a clean, disposable Ubuntu container and check it, as
 # check_rpm.sh does for Fedora: dependencies resolve from Ubuntu's archive, files
 # are root-owned and not writable by users, the browser starts headless and
-# renders a page, the Nulavio tools answer.
+# renders a page, the Nulavio tools answer, the AppArmor profile parses.
 #
 #   scripts/release/check_deb.sh dist/packages/nulavio_<v>_amd64.deb
 set -euo pipefail
@@ -26,6 +26,10 @@ podman run --rm --security-opt label=disable -v "$here/sysdir_probe.py:/checks/s
     su tester -c "nulavio --version"
     su tester -c "timeout 120 nulavio --headless --screenshot /tmp/shot.png file:///tmp/page.html" >/dev/null 2>&1 || true
     [ -s /tmp/shot.png ] && echo "headless start: rendered a page ($(stat -c %s /tmp/shot.png) bytes)" || { echo "headless start failed"; exit 1; }
+    # The AppArmor profile (Ubuntu 24.04+ user-namespace restriction): installed, and valid for the parser.
+    { apt-get -qq install -y apparmor; } >/dev/null 2>&1 || { echo "apt install apparmor failed"; exit 1; }
+    [ -f /etc/apparmor.d/nulavio ] || { echo "AppArmor profile missing"; exit 1; }
+    apparmor_parser -Q -K /etc/apparmor.d/nulavio && echo "AppArmor profile: parses (userns for /usr/lib/nulavio/nulavio)"
     mkdir -p /usr/lib/mozilla/native-messaging-hosts   # as a password manager package would
     sysdir=$(su tester -c "python3 -I /checks/sysdir_probe.py /checks/lib")
     [ "$sysdir" = "/usr/lib/mozilla" ] && echo "system Mozilla directory read: $sysdir" || { echo "reads $sysdir, expected /usr/lib/mozilla"; exit 1; }

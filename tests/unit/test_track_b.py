@@ -273,6 +273,18 @@ class PackagingTest(unittest.TestCase):
         self.assertIn("Exec=nulavio %u\n", desktop)
         self.assertIn("x-scheme-handler/https", desktop)
 
+    def test_deb_lets_the_engine_sandbox_use_user_namespaces_and_nothing_else(self):
+        """Ubuntu 24.04+ restricts unprivileged user namespaces to programs with an AppArmor profile."""
+        profile = (ROOT / "packaging" / "linux" / "apparmor-nulavio").read_text(encoding="utf-8")
+        rules = [line.strip() for line in profile.splitlines() if line.strip() and not line.strip().startswith("#")]
+        self.assertIn("profile nulavio /usr/lib/nulavio/nulavio{,-bin} flags=(unconfined) {", rules)
+        body = rules[rules.index("profile nulavio /usr/lib/nulavio/nulavio{,-bin} flags=(unconfined) {") + 1 : -1]
+        self.assertEqual(body, ["userns,", "include if exists <local/nulavio>"])
+        make_deb = (ROOT / "scripts" / "release" / "make_deb.sh").read_text(encoding="utf-8")
+        self.assertIn('"$pkg/etc/apparmor.d/nulavio"', make_deb)
+        self.assertIn("printf '/etc/apparmor.d/nulavio\\n' > \"$pkg/DEBIAN/conffiles\"", make_deb)
+        self.assertIn("apparmor_parser -Q -K /etc/apparmor.d/nulavio", (ROOT / "scripts/release/check_deb.sh").read_text())
+
     def test_packages_install_under_system_directories_only(self):
         spec = (ROOT / "packaging" / "rpm" / "nulavio.spec").read_text(encoding="utf-8")
         self.assertIn("%global nulavio_dir %{_libdir}/nulavio", spec)
@@ -280,7 +292,15 @@ class PackagingTest(unittest.TestCase):
         self.assertNotRegex(spec, r"(?m)^\s*(curl|wget)\b")
         deb = (ROOT / "scripts" / "release" / "make_deb.sh").read_text(encoding="utf-8")
         self.assertIn("--root-owner-group", deb)
-        self.assertNotIn("DEBIAN/postinst", deb)
+        # The only maintainer scripts load and unload the AppArmor profile (as dh_apparmor does), nothing else.
+        for name in ("POSTINST", "POSTRM"):
+            script = deb.split(f"<<'{name}'\n", 1)[1].split(f"\n{name}\n", 1)[0]
+            commands = [line.strip() for line in script.splitlines() if line.strip() and not line.strip().startswith("#")]
+            self.assertTrue(script.startswith("#!/bin/sh\nset -e\n"), script)
+            calls = [c for c in commands if "apparmor_parser" in c and not c.startswith("if ")]
+            self.assertEqual(len(calls), 1, script)
+            self.assertRegex(calls[0], r"^apparmor_parser -(r -T -W|R) /etc/apparmor\.d/nulavio")
+            self.assertNotRegex(script, r"\b(curl|wget|rm|chmod|chown|useradd|systemctl)\b")
 
     def test_one_build_reads_the_system_directory_the_distribution_has(self):
         series = (ROOT / "browser" / "patches" / "series").read_text(encoding="utf-8")

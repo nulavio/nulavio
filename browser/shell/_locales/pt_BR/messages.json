@@ -139,6 +139,8 @@
   "templateWork": {"message": "Trabalho"},
   "templateBanking": {"message": "Bancos"},
   "templateResearch": {"message": "Pesquisa"},
+  "profilesSensitiveHint": {"message": "Perfil de sites sensíveis: cookies, dados de sites, histórico e cache são apagados sempre que ele fecha, então você entra de novo a cada vez. Páginas não podem instalar extensões aqui, e as extensões dos seus outros perfis nunca veem as páginas dele. Adicione só o gerenciador de senhas em que confia e mande sites de banco, saúde e governo para cá com regras de roteamento."},
+  "templateSensitive": {"message": "Sites sensíveis"},
   "profilesTemplates": {"message": "Começar por um modelo"},
   "profilesTemplatesNote": {"message": "Um modelo só preenche nome, ícone e cor."},
   "profilesNameLabel": {"message": "Nome do perfil"},

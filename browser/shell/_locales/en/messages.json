@@ -139,6 +139,8 @@
   "templateWork": {"message": "Work"},
   "templateBanking": {"message": "Banking"},
   "templateResearch": {"message": "Research"},
+  "profilesSensitiveHint": {"message": "Sensitive sites profile: cookies, site data, history and cache are deleted every time it closes, so you sign in again each time. Web pages cannot install extensions here, and the extensions of your other profiles never see its pages. Add only the password manager you trust, and send bank, health and government sites here with routing rules."},
+  "templateSensitive": {"message": "Sensitive sites"},
   "profilesTemplates": {"message": "Start from a template"},
   "profilesTemplatesNote": {"message": "A template only fills in the name, icon and colour."},
   "profilesNameLabel": {"message": "Profile name"},

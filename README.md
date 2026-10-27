@@ -38,7 +38,7 @@ Requirements: Linux x86_64, Python ≥ 3.11, a distribution Firefox ≥ 140 (Fed
 ```sh
 git clone <this repo> nulavio && cd nulavio
 bin/nulavio setup            # shows the full plan, asks before creating anything
-bin/nulavio run              # start; add a URL or --private
+bin/nulavio run              # start; add a URL, --private, --temporary or --confined (bubblewrap: sees only the profile and Downloads)
 bin/nulavio doctor           # check your environment and profile
 bin/nulavio desktop install  # optional: menu entry + icons under ~/.local/share (no root)
 ```

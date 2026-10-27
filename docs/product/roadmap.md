@@ -123,8 +123,8 @@ External agents (Codex CLI and Desktop, Claude Code and Desktop, other MCP clien
 ## Phase 5 — Hardening and anti-infostealer measures (with proven limits)
 
 - [x] Guard runtime: changes made outside the browser since the last run (extensions, protective settings, certificate authorities, security modules, native-messaging hosts, policies, `user.js`, search engines), reviewed and undone or kept by the user; bypass analysis in [hardening](../security/hardening.md#guard-at-run-time-what-it-catches-and-how-it-can-be-bypassed) (`test_guard`)
-- [ ] Spikes: bubblewrap, Flatpak and native-messaging portal, SELinux module
-- [ ] Sensitive-sites container with clear-on-close
+- [x] Spikes ([report](../security/phase5-spikes.md)): bubblewrap adopted as the opt-in `nulavio run --confined` (`test_confine`, `test_confined`); Flatpak not now (native messaging solvable through the proxy in Fedora 44 and Ubuntu 26.04+); SELinux module not adopted; AppArmor profile in the `.deb` for the engine's user namespaces on Ubuntu
+- [x] Sensitive sites, as a profile template rather than a container (containers share extensions): cleared on close, no installs from web pages (`test_profiles` 11)
 
 **DoD:** each control has a test and a documented bypass analysis.
 
@@ -137,4 +137,4 @@ External agents (Codex CLI and Desktop, Claude Code and Desktop, other MCP clien
 
 ## Next task (recommended)
 
-Follow the [execution plan](execution-plan.md): S1 (Connect P0), S2 (unlock research and ADRs), S3 (Vault crypto prototype), S4 (AI Bridge foundation), S5 (encrypted profile storage), S6 (unlock UX in the browser), S7 (AI autonomy and its UI), S8 (AI with profiles, routing and the connect wizard), S12 (temporary profile), S13 (Guard at run time), S14 (per-site privacy, Strict fix), S15 (DNS choice, fingerprinting measured), S16 (real-site regression), S17 (password flows B, D, H) and S18 (packages), S19 (update SLA), S20 (assistant, raw automation), S21 (Connect P1/P2) and S22 (Routing M5) are done; next: S23 (phase 5 spikes) and S24 (alpha gate), with S10 (security key, needs a key) and S11 (Android Companion, last) waiting on the maintainer. The plan lists the decisions each slice needs from the maintainer.
+Follow the [execution plan](execution-plan.md): S1 (Connect P0), S2 (unlock research and ADRs), S3 (Vault crypto prototype), S4 (AI Bridge foundation), S5 (encrypted profile storage), S6 (unlock UX in the browser), S7 (AI autonomy and its UI), S8 (AI with profiles, routing and the connect wizard), S12 (temporary profile), S13 (Guard at run time), S14 (per-site privacy, Strict fix), S15 (DNS choice, fingerprinting measured), S16 (real-site regression), S17 (password flows B, D, H) and S18 (packages), S19 (update SLA), S20 (assistant, raw automation), S21 (Connect P1/P2), S22 (Routing M5) and S23 (phase 5 spikes) are done; next: S24 (alpha gate), with S10 (security key, needs a key) and S11 (Android Companion, last) waiting on the maintainer. The plan lists the decisions each slice needs from the maintainer.

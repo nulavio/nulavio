@@ -183,7 +183,7 @@ class ProfilesTest(unittest.TestCase):
         )
         self.assertFalse(page["unavailable"])
         self.assertTrue(page["current"])
-        self.assertEqual(page["templates"], 4)
+        self.assertEqual(page["templates"], 5)
         self.assertIn(["Trabalho", "1"], page["others"])
 
         path = self.path_of(self.work)
@@ -229,6 +229,57 @@ class ProfilesTest(unittest.TestCase):
         self.profiles("await P.remove(args[0]);", self.work)
         self.assertNotIn("Trabalho", self.listed())
         self.assertTrue(harness.wait_until(lambda: not path.exists(), timeout=10), "profile files were kept")
+
+    def test_11_sensitive_sites_profile_clears_on_close(self):
+        """The "Sensitive sites" template (docs/security/phase5-spikes.md): its own profile, cleared when it closes."""
+        sensitive = self.profiles("return P.create({templateId: 'sensitive', name: 'Sites sensíveis'});")
+        path = self.path_of(sensitive)
+        user_js = (path / "user.js").read_text()
+        for line in (
+            'user_pref("privacy.sanitize.sanitizeOnShutdown", true);',
+            'user_pref("privacy.clearOnShutdown_v2.cookiesAndStorage", true);',
+            'user_pref("xpinstall.enabled", false);',
+        ):
+            self.assertIn(line, user_js)
+        listed = self.listed()
+        self.assertEqual(listed["Sites sensíveis"]["kind"], "sensitive")
+        self.assertEqual([p["kind"] for p in listed.values() if p["isCurrent"]], [None])
+
+        def launch():
+            self.profiles("return P.switchTo(args[0]);", sensitive)
+
+        other = self.open_instance(path, launch)
+        try:
+            other.navigate(self.server.url("/page/sensitive"))
+            other.execute("document.cookie = 'nv_s=1; path=/; max-age=86400'; localStorage.setItem('nv_s', '1');")
+            self.assertIn("nv_s=1", other.execute("return document.cookie;"))
+            prefs = other.chrome(
+                "return [Services.prefs.getBoolPref('xpinstall.enabled'),"
+                " Services.prefs.getBoolPref('privacy.sanitize.sanitizeOnShutdown')];"
+            )
+            self.assertEqual(prefs, [False, True])
+        finally:
+            self.close_instance(other, path)
+
+        other = self.open_instance(path, launch)
+        try:
+            other.navigate(self.server.url("/page/sensitive-again"))
+            self.assertNotIn("nv_s", other.execute("return document.cookie;"), "a cookie survived closing")
+            self.assertIsNone(other.execute("return localStorage.getItem('nv_s');"), "site storage survived closing")
+            visits = chrome_async(
+                other,
+                "const {PlacesUtils} = ChromeUtils.importESModule('resource://gre/modules/PlacesUtils.sys.mjs');"
+                "return (await PlacesUtils.history.fetch(args[0])) !== null;",
+                [self.server.url("/page/sensitive")],
+            )
+            self.assertEqual(visits, {"ok": False}, "history survived closing")
+        finally:
+            self.close_instance(other, path)
+
+        self.m.navigate(self.shell_url + "settings/settings.html#profiles")
+        self.assertTrue(harness.wait_until(self.ready, timeout=15))
+        hint = f'#profile-list > li[data-profile-id="{sensitive}"] [data-kind="sensitive"]'
+        self.assertTrue(harness.wait_until(lambda: self.m.execute(f"return Boolean(document.querySelector('{hint}'));"), 10))
 
 
 if __name__ == "__main__":

@@ -113,10 +113,10 @@ Each scenario lists: assets · adversary · preconditions · trust boundary · i
 | Preconditions | Renderer compromise (S4) plus a parent/IPC or kernel bug |
 | Boundary | TB2, kernel |
 | Impact | Equivalent to T-LOCAL (see S13) |
-| Preventive | Upstream sandbox; SELinux enforcing on Fedora (host); fast patching. **Evaluated:** bubblewrap or Flatpak confinement of the whole browser (see [hardening](hardening.md)): not adopted until native messaging, portals and KDE integration are proven |
+| Preventive | Upstream sandbox; fast patching; **opt-in outer confinement** `nulavio run --confined` (bubblewrap): the browser sees only its profile and Downloads in the home folder, its writes elsewhere stay in memory, and the engine's sandbox is unchanged ([spikes](phase5-spikes.md#bubblewrap)); on Ubuntu the `.deb`'s AppArmor profile keeps user namespaces available to the engine's sandbox. Flatpak not now, SELinux module not adopted ([spikes](phase5-spikes.md)) |
 | Detective | None reliable inside the browser |
 | Limitations | Out-of-browser containment is the only further layer |
-| Tests | Sandbox presence only (we cannot test escapes) |
+| Tests | Sandbox presence only (we cannot test escapes); `test_confine`, `test_confined` (what a confined browser can reach) |
 | Residual | **Low likelihood, critical impact** |
 
 ### S6 — Phishing and lookalike domains
@@ -263,10 +263,10 @@ Each scenario lists: assets · adversary · preconditions · trust boundary · i
 | Preconditions | A non-provider extension with `<all_urls>` reads password fields as they are filled |
 | Boundary | TB3 |
 | Impact | Credential capture regardless of which manager filled them |
-| Preventive | **Planned:** onboarding warning when extensions with all-site access are installed next to a password manager; "sensitive sites" container where only the chosen provider is allowed **(B, policy-based)** |
+| Preventive | **Sensitive sites profile** (template): its own profile, so other profiles' extensions never see its pages; web pages cannot install extensions in it; cookies, site data and history deleted when it closes; routing rules send chosen sites there ([spikes](phase5-spikes.md#sensitive-sites)). **Planned:** onboarding warning when extensions with all-site access are installed next to a password manager |
 | Detective | doctor inventory |
 | Limitations | Engine has no per-field isolation from extensions with host access |
-| Tests | Planned |
+| Tests | `test_profiles` 11 |
 | Residual | **Medium-high** |
 
 ### S16 — Cross-origin redirects

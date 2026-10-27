@@ -351,7 +351,9 @@ class RoutingTest(unittest.TestCase):
 
     def test_08_a_missing_profile_never_falls_back_silently(self):
         self.stop("Bancos")
-        self.call("await P.remove(args[0]);", self.ids["Bancos"])
+        # The engine's profile lock can outlive the process by a moment on a busy machine.
+        removed = harness.wait_until(lambda: self.error_of("await P.remove(args[0]);", self.ids["Bancos"]) is None, 15)
+        self.assertTrue(removed, "the closed profile could not be removed")
         state = self.call("return R.state();")
         self.assertTrue(state["rules"][0]["missing"])
         time.sleep(1.5)

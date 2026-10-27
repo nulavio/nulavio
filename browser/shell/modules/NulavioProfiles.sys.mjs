@@ -39,13 +39,38 @@ export const TEMPORARY_MARKER = "nulavio-temporary.json";
 
 /* Templates are starting points (name, icon, colour), never mandatory
    profiles. A temporary profile is not a template: it is opened with
-   openTemporary() and deleted by the Nulavio tools when it closes. */
+   openTemporary() and deleted by the Nulavio tools when it closes.
+
+   "Sensitive sites" also writes settings into the new profile's user.js
+   (docs/security/phase5-spikes.md): its cookies, site data, history and cache
+   are deleted every time it closes, and web pages cannot install extensions in
+   it. Being its own profile, it has its own extensions: those of the user's
+   other profiles never see its pages. */
 export const TEMPLATES = Object.freeze([
   Object.freeze({ id: "personal", avatar: "heart", color: "mint" }),
   Object.freeze({ id: "work", avatar: "briefcase", color: "sky" }),
   Object.freeze({ id: "banking", avatar: "diamond", color: "sand" }),
   Object.freeze({ id: "research", avatar: "book", color: "violet" }),
+  Object.freeze({ id: "sensitive", avatar: "history", color: "slate" }),
 ]);
+
+const KIND_PREF = "nulavio.profile.kind";
+/** What the "Sensitive sites" template writes into the profile (engine prefs only). */
+export const SENSITIVE_PREFS = Object.freeze({
+  [KIND_PREF]: "sensitive",
+  "privacy.sanitize.sanitizeOnShutdown": true,
+  "privacy.clearOnShutdown_v2.cookiesAndStorage": true,
+  "privacy.clearOnShutdown_v2.cache": true,
+  "privacy.clearOnShutdown_v2.browsingHistoryAndDownloads": true,
+  "privacy.clearOnShutdown_v2.formdata": true,
+  "browser.formfill.enable": false,
+  "xpinstall.enabled": false, // no installs started by web pages (addons.mozilla.org included)
+});
+
+function userJs(prefs, title) {
+  const lines = Object.entries(prefs).map(([k, v]) => `user_pref(${JSON.stringify(k)}, ${JSON.stringify(v)});`);
+  return `// ${title}\n// Written by Nulavio when this profile was created. Deleting this file turns these settings off.\n${lines.join("\n")}\n`;
+}
 
 export class ProfilesError extends Error {
   constructor(code, message = code) {
@@ -204,9 +229,20 @@ class NulavioProfilesClass {
 
   // -- reading ------------------------------------------------------------
 
+  /** "sensitive" when the profile's own user.js still says so; null otherwise or when it cannot be read (locked). */
+  async #kind(path) {
+    try {
+      const text = await IOUtils.readUTF8(PathUtils.join(path, "user.js"));
+      return text.includes(`user_pref("${KIND_PREF}", "sensitive");`) ? "sensitive" : null;
+    } catch {
+      return null;
+    }
+  }
+
   async #describe(profile, map, currentId) {
     const lock = await lazy.profileLockState(profile.path).catch(() => "plain");
     return {
+      kind: lock === "locked" ? null : await this.#kind(profile.path),
       id: profile.id,
       name: profile.name,
       avatar: profile.avatar,
@@ -290,6 +326,10 @@ class NulavioProfilesClass {
       fail("name-taken");
     }
     const profile = await service.createNewProfile(false, null, "nulavio-shell");
+    if (template?.id === "sensitive") {
+      // Before its first start, so the settings apply from the first page.
+      await IOUtils.writeUTF8(PathUtils.join(profile.path, "user.js"), userJs(SENSITIVE_PREFS, "Nulavio: sensitive sites profile"));
+    }
     await profile.setNameAsync(name);
     await profile.setAvatar(avatar);
     await this.#setColor(profile.id, color);

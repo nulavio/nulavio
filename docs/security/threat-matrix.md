@@ -8,17 +8,17 @@ At-a-glance view of [threat-model.md](threat-model.md). Ratings use likelihood (
 | S2 | Malicious/compromised extension | T-EXT, T-SUPPLY | 2 | 3 | Signature required, 1 pinned default ext, blocklist on, doctor inventory | Permission review UI, new-extension alert | lock unit tests | Medium-high |
 | S3 | Over-privileged extension | — | 2 | 2 | Reviewed permissions in lock, diff on refresh | Host-permission explainer | lock refresh | Medium |
 | S4 | Compromised renderer | T-WEB | 2 | 2 | seccomp + userns + Fission, env stripping | Release SLA (B) | `test_04`, env unit test | Medium |
-| S5 | Sandbox escape | T-WEB | 1 | 3 | Upstream sandbox, SELinux host | Evaluate outer confinement | — | Low L / critical I |
+| S5 | Sandbox escape | T-WEB | 1 | 3 | Upstream sandbox; opt-in bubblewrap confinement; AppArmor userns profile (.deb) | — | `test_confine`, `test_confined` | Low L / critical I |
 | S6 | Phishing / lookalike | T-WEB | 3 | 3 | Safe Browsing on, provider origin matching | Suspicious-login interstitial, passkeys | guard rule | Medium-high |
 | S7 | Malicious download | T-WEB | 2 | 3 | No auto-open, SB downloads, 0600 files | Executable warning flow | `test_07` | Medium |
-| S8 | Cookie/session leak | T-WEB, T-NET, T-LOCAL | 2 | 3 | TCP, ETP Strict, HTTPS-Only, 0700 profile | Clear-on-close, containers | `test_03`, `test_06`, `test_09` | High vs T-LOCAL |
+| S8 | Cookie/session leak | T-WEB, T-NET, T-LOCAL | 2 | 3 | TCP, ETP Strict, HTTPS-Only, 0700 profile | — | `test_03`, `test_06`, `test_09`; sensitive-sites profile clears on close (`test_profiles` 11) | High vs T-LOCAL |
 | S9 | Autofill exfiltration | T-WEB, T-EXT | 2 | 3 | Single provider, engine fill off for external providers | Gesture-required fill, certification | provider unit tests | Medium |
 | S10 | Native host compromised | T-LOCAL, T-SUPPLY | 1 | 3 | doctor manifest checks, allowed IDs | Package-ownership warning | doctor | High vs T-LOCAL |
 | S11 | Same-user infostealer | T-LOCAL | 2 | 3 | Guard, doctor, data minimisation guidance | Integrity manifest, ext-change alert | guard tests | **High (out of prevention scope)** |
 | S12 | Root malware | T-ROOT | 1 | 3 | — | — | — | **Accepted** |
 | S13 | Dependency supply chain | T-SUPPLY | 1 | 3 | Stdlib-only launcher, SHA-256 pins, pinned Mozilla key, SBOM, SHA-pinned CI actions | Hermetic builds, provenance | integrity tests, `verify_firefox_release.py` | Medium |
 | S14 | Update/package attack | T-SUPPLY, T-NET | 1 | 3 | Distro-signed engine, AMO signing, downgrade protection kept | Signed RPM repo (B) | env unit test | Low-medium |
-| S15 | 3rd-party ext steals creds | T-EXT | 2 | 3 | doctor inventory | Sensitive-sites container | — | Medium-high |
+| S15 | 3rd-party ext steals creds | T-EXT | 2 | 3 | doctor inventory; sensitive-sites profile | Onboarding warning | `test_profiles` 11 | Medium |
 | S16 | Cross-origin redirects | T-WEB | 2 | 2 | Default referrer policy, HTTPS-Only, query stripping | Redirect provenance on login pages | `test_06` | Medium |
 | S17 | Typed text sent to search providers | Search provider | 3 | 2 | Suggestions and trending off; per-provider consent at the fetch point (Track B) | — | `test_search` | Low (B) / Medium (A, opted in) |
 | S18 | Data crossing profiles | T-WEB | 2 | 2 | Separate instances and directories, engine lock, no session transfer | Routing that never moves sessions | `test_profiles` | Low |

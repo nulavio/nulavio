@@ -236,7 +236,7 @@ class ProfileTemplatesTest(unittest.TestCase):
     def test_templates_use_offered_icons_and_colours(self):
         avatars, colors = set(self.listed("AVATARS")), set(self.listed("COLORS"))
         templates = re.findall(r'id: "(\w+)", avatar: "([a-z-]+)", color: "(\w+)"', self.text)
-        self.assertEqual([t[0] for t in templates], ["personal", "work", "banking", "research"])
+        self.assertEqual([t[0] for t in templates], ["personal", "work", "banking", "research", "sensitive"])
         for template_id, avatar, color in templates:
             with self.subTest(template=template_id):
                 self.assertIn(avatar, avatars)
@@ -245,6 +245,16 @@ class ProfileTemplatesTest(unittest.TestCase):
         for template_id, *_ in templates:
             key = re.search(rf'{template_id}: "(\w+)"', names).group(1)
             self.assertIn(key, locale("en"))
+
+    def test_sensitive_template_only_sets_engine_prefs_that_clear_and_block_installs(self):
+        block = re.search(r"export const SENSITIVE_PREFS = Object\.freeze\(\{(.*?)\}\);", self.text, re.S).group(1)
+        prefs = dict(re.findall(r'"([\w.]+)": (true|false|"\w+")', block))
+        self.assertEqual(prefs["privacy.sanitize.sanitizeOnShutdown"], "true")
+        self.assertEqual(prefs["privacy.clearOnShutdown_v2.cookiesAndStorage"], "true")
+        self.assertEqual(prefs["xpinstall.enabled"], "false")
+        # Nothing that weakens a protection (sandbox, TLS, Safe Browsing, updates, signatures).
+        for name in prefs:
+            self.assertFalse(re.match(r"(security|browser\.safebrowsing|app\.update|extensions\.update|network)\.", name), name)
 
     def test_no_temporary_profile_until_it_exists(self):
         self.assertNotIn("temporary", [t for t in self.listed("TEMPLATES")])

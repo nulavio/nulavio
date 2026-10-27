@@ -33,6 +33,25 @@ for size in 16 32 48 64 128; do
         "$pkg/usr/share/icons/hicolor/${size}x${size}/apps/nulavio.png"
 done
 cp "$repo/LICENSE" "$pkg/usr/share/doc/nulavio/copyright"
+# Ubuntu 24.04+: without a profile the engine may not create the user namespaces its content sandbox uses.
+install -Dm0644 "$repo/packaging/linux/apparmor-nulavio" "$pkg/etc/apparmor.d/nulavio"
+printf '/etc/apparmor.d/nulavio\n' > "$pkg/DEBIAN/conffiles"
+cat > "$pkg/DEBIAN/postinst" <<'POSTINST'
+#!/bin/sh
+set -e
+# Load the AppArmor profile now when AppArmor is active (as dh_apparmor does); a reboot loads it otherwise.
+if [ "$1" = configure ] && [ -d /sys/kernel/security/apparmor ] && command -v apparmor_parser >/dev/null 2>&1; then
+    apparmor_parser -r -T -W /etc/apparmor.d/nulavio || true
+fi
+POSTINST
+cat > "$pkg/DEBIAN/postrm" <<'POSTRM'
+#!/bin/sh
+set -e
+if [ "$1" = remove ] && [ -d /sys/kernel/security/apparmor ] && command -v apparmor_parser >/dev/null 2>&1; then
+    apparmor_parser -R /etc/apparmor.d/nulavio 2>/dev/null || true
+fi
+POSTRM
+chmod 0755 "$pkg/DEBIAN/postinst" "$pkg/DEBIAN/postrm"
 cat > "$pkg/DEBIAN/control.in" <<CONTROL
 Package: nulavio
 Version: $version-$release

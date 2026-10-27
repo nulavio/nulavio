@@ -280,6 +280,7 @@ function profileRow(profile) {
       avatarSelect(profile)
     ),
     colorPicker(profile),
+    profile.kind === "sensitive" ? h("p", { class: "hint", "data-kind": "sensitive", text: t("profilesSensitiveHint") }) : null,
     h("p", { class: "form-error", role: "alert" }),
     h("div", { class: "actions" }, h("button", { class: "button button--secondary", type: "submit", text: t("profilesSave"), "data-focus-key": `save-${profile.id}` }))
   );
