@@ -73,7 +73,9 @@ SCHEMA_KEYWORDS = {
 ARRAYS = ("findings", "injection_attempts", "not_checked")
 # Control, bidirectional, zero-width and tag characters (the last are used to hide instructions).
 INVISIBLE_RE = re.compile(
-    "[\x00-\x08\x0b-\x1f\x7f-\x9f\u00ad\u061c\u180e\u200b-\u200f\u202a-\u202e\u2060-\u2064\u2066-\u2069\ufeff\U000e0000-\U000e007f]"
+    "[\x00-\x08\x0b-\x1f\x7f-\x9f\u00ad\u034f\u061c\u115f\u1160\u17b4\u17b5\u180b-\u180f\u200b-\u200f\u202a-\u202e"
+    "\u2060-\u2064\u2066-\u206f\u2800\u3164\ufe00-\ufe0f\ufeff\uffa0\U0001d173-\U0001d17a\U000e0000-\U000e007f"
+    "\U000e0100-\U000e01ef]"
 )
 SECRET_PATTERNS = (
     re.compile(r"-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----.*?(?:-----END [A-Z0-9 ]*PRIVATE KEY-----|\Z)", re.S),
@@ -282,7 +284,10 @@ def render_finding(number: int, finding: dict, clean: Sanitiser) -> str:
 
 
 def header(ctx: Context) -> str:
-    return f"{MARKER}\n## Advisory AI review\n\nAdvisory AI review of {ctx.head_sha} ({ctx.source}). {DISCLAIMER}\n"
+    return (
+        f"{MARKER}\n## Advisory AI review\n\nAdvisory AI review of {ctx.head_sha} ({ctx.source}); "
+        f"commits pushed after it are not covered. {DISCLAIMER}\n"
+    )
 
 
 def footer(notes: list[str], ctx: Context) -> str:

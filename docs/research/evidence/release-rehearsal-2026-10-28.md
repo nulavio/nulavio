@@ -1,6 +1,6 @@
 # Release rehearsal: Firefox 159.0
 
-The first Firefox release handled with the engine security fast path. Mozilla rated it urgent under the [update policy](../../architecture/update-policy.md): [mfsa2026-118](https://www.mozilla.org/security/advisories/mfsa2026-118/), impact high, with a sandbox escape; no exploitation in the wild reported. Target 24 hours, deadline 72 hours.
+The first urgent Firefox release since the engine security fast path was written. It was handled by hand while that work was being integrated: the rehearsal ran from `main` (commit `e2ca9e2`), before the fast-path scripts (watcher v2, autobuild, timer, manifest) were merged, so it shows what the build and release steps take, not the detectors. Mozilla rated it urgent under the [update policy](../../architecture/update-policy.md): [mfsa2026-118](https://www.mozilla.org/security/advisories/mfsa2026-118/), impact high, with a sandbox escape; no exploitation in the wild reported. Target 24 hours, deadline 72 hours.
 
 | Time (UTC) | Hours after Mozilla's release | What happened |
 |---|---|---|

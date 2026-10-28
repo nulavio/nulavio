@@ -155,7 +155,7 @@ class RenderTest(unittest.TestCase):
     def test_header_marks_the_comment_as_advisory(self):
         body, _ = comment(result())
         self.assertTrue(body.startswith(post.MARKER + "\n"))
-        self.assertIn(f"Advisory AI review of {HEAD} (test model)", body)
+        self.assertIn(f"Advisory AI review of {HEAD} (test model); commits pushed after it are not covered.", body)
         self.assertIn("Not an approval", body)
         self.assertNotRegex(body.lower(), r"\b(approved|lgtm|safe to merge)\b")
 
@@ -190,6 +190,14 @@ class RenderTest(unittest.TestCase):
         for char in ("\u202e", "\u2066", "\U000e0041", "\x07"):
             self.assertNotIn(char, body)
         self.assertIn("safeevilx", body)
+
+    def test_variation_selectors_and_blank_fillers_are_removed(self):
+        # Characters that render as nothing (or blank) and can carry hidden text past a person.
+        hidden = ["\ufe0f", "\U000e0101", "\u3164", "\uffa0", "\u115f", "\u2800", "\u034f", "\u180b", "\U0001d173"]
+        body, _ = comment(result(summary="a" + "".join(hidden) + "b"))
+        for char in hidden:
+            self.assertNotIn(char, body)
+        self.assertIn("ab", body)
 
     def test_secret_like_strings_are_redacted(self):
         secrets = [FAKE_GITHUB_TOKEN, FAKE_ANTHROPIC_KEY, FAKE_JWT, FAKE_PEM, FAKE_GOOGLE_KEY]

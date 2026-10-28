@@ -46,7 +46,7 @@ Pushes to branches cost no Actions minutes: CI runs on pushes to `main` and on p
 | Control | Today | What enforces it |
 |---|---|---|
 | Changes reach `main` only through a pull request | **Advisory** | Convention; the pre-push hook (opt-in, skipped by `git push --no-verify`); agent permission rules ([proposal](agent-guardrails.md)) |
-| A commit that reached `main` without a merged pull request is reported | **Ready, off** | CI check "main changed only through merged pull requests", on when the repository variable `REQUIRE_PR_FOR_MAIN` is `true` (set it after adopting this flow, or every direct push fails CI) |
+| A commit that reached `main` without a merged pull request is reported | **Ready, off** | Workflow `main-via-pr.yml` ("main changed only through merged pull requests"), on when the repository variable `REQUIRE_PR_FOR_MAIN` is `true` (set it after adopting this flow, or every direct push fails CI) |
 | CI must pass before merging | **Advisory** | The maintainer reads CI. Required status checks need branch protection, which this plan does not offer for private repositories |
 | A person approves | **Advisory** | Only the maintainer merges. `GITHUB_TOKEN` cannot approve pull requests (repository setting) |
 | Code owners review their paths | **Documentation** | [`.github/CODEOWNERS`](../../.github/CODEOWNERS) has no effect on this plan |
@@ -62,10 +62,11 @@ Pushes to branches cost no Actions minutes: CI runs on pushes to `main` and on p
 ### When it runs
 
 - When a pull request is opened or marked ready for review, and when someone adds the label `ai-review` (remove and add it again to review new pushes). Not on every push, to save Actions minutes.
-- For any pull request that touches something other than `docs/brand/`, `docs/design/`, `docs/product/`, `docs/research/`, `LICENSE`, `LICENSES.md` and `.editorconfig`. New directories, agent instruction files (`CLAUDE.md`, `AGENTS.md`, `.claude/`) and scanner settings are covered without changing the workflow. A pull request that touches only the excluded files is never reviewed, not even with the label.
+- For any pull request that touches something other than `docs/brand/`, `docs/design/`, `docs/research/`, `LICENSE`, `LICENSES.md` and `.editorconfig`. New directories, agent instruction files (`CLAUDE.md`, `AGENTS.md`, `.claude/`) and scanner settings are covered without changing the workflow. A pull request that touches only the excluded files is never reviewed, not even with the label.
 - Skipped, before any runner starts: drafts; branches from forks; pull requests opened by bots (unless a person adds the label); the label `no-ai-review`; more than 80 changed files or more than 4,000 added or 4,000 deleted lines; the repository variable `AI_REVIEW` set to `off`.
 - A diff over 1.5 MB gets a comment saying it needs a human-only review.
 - A newer review of the same pull request cancels the running one. Adding `no-ai-review` cancels it too.
+- The comment names the commit it reviewed and says later commits are not covered. When a later run is skipped (draft, size limits), the earlier comment stays as it was: check its commit against the pull request's head.
 
 ### How it is locked down
 
@@ -134,7 +135,7 @@ When Mozilla publishes a security release, the [update policy](../architecture/u
 
 ### GitHub Pro (repository stays private)
 
-- A ruleset on `main`: require a pull request; require the status checks "lint, unit tests, generated files, SBOM", "Companion app (lint, release build)" and both "engine integration (…)" jobs, never "AI review (advisory)"; linear history; block force pushes and deletion; let only the maintainer bypass it (for the update deadline).
+- A ruleset on `main`: require a pull request; require the status checks "lint, unit tests, generated files, SBOM", "Companion app (lint, release build)", "security scanners (…)" and the engine integration result, never "AI review (advisory)". A matrix job skipped by the Markdown-only gate reports no per-image check name, so first add a small job that needs `changes` and `integration` and fails unless `changes` succeeded and `integration` succeeded or was skipped, and require that job; linear history; block force pushes and deletion; let only the maintainer bypass it (for the update deadline).
 - Require one approval and code-owner review only after agents use a separate machine account. Otherwise the maintainer could not approve pull requests that agents opened under his own account.
 - An environment `release`, with the maintainer as required reviewer and limited to `main`, for signing and publishing jobs once the release key exists. An environment `ai-review` holding `ANTHROPIC_API_KEY` (if not using federation), limited to `main`.
 - 3,000 Actions minutes a month are included.

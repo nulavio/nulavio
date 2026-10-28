@@ -30,7 +30,6 @@ on:
       - ".*/**"
       - "!docs/brand/**"
       - "!docs/design/**"
-      - "!docs/product/**"
       - "!docs/research/**"
       - "!LICENSE"
       - "!LICENSES.md"

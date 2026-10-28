@@ -22,8 +22,7 @@ tests, which do read the docs, always run; so does the weekly scheduled run.
 
 Reads EVENT, BASE (pull request), GITHUB_REPOSITORY and GH_TOKEN (push) from
 the environment, never from expressions inside the workflow script. Prints
-`integration=true|false` and `base=<sha or empty>` (the merged-pull-request
-check walks main from that base).
+`integration=true|false` and `base=<sha or empty>` (shown in the job log).
 """
 
 from __future__ import annotations

@@ -260,10 +260,11 @@ class WorkflowTest(unittest.TestCase):
             "docs/adr/0007-ai-bridge.md",
             "docs/process/pull-requests.md",
             "docs/ai/connect-an-agent.md",
+            "docs/product/roadmap.md",  # plans that agents follow, and claims about what is done
         ):
             with self.subTest(path=path):
                 self.assertTrue(github_path_filter_matches(patterns, path))
-        for path in ("docs/product/roadmap.md", "docs/brand/tokens.json", "docs/design/architecture.md", "LICENSE"):
+        for path in ("docs/research/x.md", "docs/brand/tokens.json", "docs/design/architecture.md", "LICENSE"):
             with self.subTest(path=path):
                 self.assertFalse(github_path_filter_matches(patterns, path))
 

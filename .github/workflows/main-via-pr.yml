@@ -1,0 +1,54 @@
+name: main-via-pr
+
+# Reports commits that reached main without a merged pull request
+# (docs/process/pull-requests.md). Off until the maintainer sets the repository
+# variable REQUIRE_PR_FOR_MAIN to true; while it is off the job is skipped before any
+# runner starts. A workflow of its own, never cancelled by a newer push: each run
+# checks exactly the commits its push brought, so one direct push fails only its own
+# run and GitHub e-mails the maintainer about it.
+
+on:
+  push:
+    branches: [main]
+
+permissions: {}
+
+# One group per pushed commit: a newer push never cancels or replaces this run.
+concurrency:
+  group: main-via-pr-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  check:
+    name: main changed only through merged pull requests
+    if: ${{ vars.REQUIRE_PR_FOR_MAIN == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read # which pull request each commit came from
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Each commit of this push belongs to a merged pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BEFORE: ${{ github.event.before }}
+          SHA: ${{ github.sha }}
+        run: |
+          if printf '%s' "$BEFORE" | grep -Eqx '[0-9a-f]{40}' && git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+            commits=$(git rev-list --first-parent "$BEFORE..$SHA")
+          else
+            commits=$SHA # a new branch or a rewritten main: check the head only
+          fi
+          status=0
+          for commit in $commits; do
+            merged=$(gh api "repos/$GITHUB_REPOSITORY/commits/$commit/pulls" --jq 'map(select(.merged_at != null)) | length')
+            if [ "$merged" -eq 0 ]; then
+              echo "::error title=main without a pull request::$commit reached main without a merged pull request (docs/process/pull-requests.md)"
+              status=1
+            fi
+          done
+          exit "$status"

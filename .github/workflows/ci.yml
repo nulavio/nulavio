@@ -137,7 +137,6 @@ jobs:
       actions: read # the last successful ci run on main (scripts/ci/needs_integration.py)
     outputs:
       integration: ${{ steps.diff.outputs.integration }}
-      base: ${{ steps.diff.outputs.base }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -150,45 +149,6 @@ jobs:
           BASE: ${{ github.event.pull_request.base.sha }}
           GH_TOKEN: ${{ github.token }}
         run: python3 -I scripts/ci/needs_integration.py >> "$GITHUB_OUTPUT"
-
-  main-via-pr:
-    name: main changed only through merged pull requests
-    # Off until the maintainer sets the repository variable REQUIRE_PR_FOR_MAIN to true
-    # (docs/process/pull-requests.md). A failure here makes GitHub e-mail the maintainer.
-    # Every first-parent commit since the last successful run is checked, so a push whose
-    # own run was cancelled by a newer one is not missed.
-    needs: changes
-    if: ${{ !cancelled() && github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.REQUIRE_PR_FOR_MAIN == 'true' }}
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    permissions:
-      contents: read
-      pull-requests: read # which pull request each commit came from
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-          fetch-depth: 0
-      - name: Each new commit on main belongs to a merged pull request
-        env:
-          GH_TOKEN: ${{ github.token }}
-          SHA: ${{ github.sha }}
-          BASE: ${{ needs.changes.outputs.base }}
-        run: |
-          if printf '%s' "$BASE" | grep -Eqx '[0-9a-f]{40}'; then
-            commits=$(git rev-list --first-parent "$BASE..$SHA")
-          else
-            commits=$SHA # no known tested base: check the head only
-          fi
-          status=0
-          for commit in $commits; do
-            merged=$(gh api "repos/$GITHUB_REPOSITORY/commits/$commit/pulls" --jq 'map(select(.merged_at != null)) | length')
-            if [ "$merged" -eq 0 ]; then
-              echo "::error title=main without a pull request::$commit reached main without a merged pull request (docs/process/pull-requests.md)"
-              status=1
-            fi
-          done
-          exit "$status"
 
   integration:
     name: engine integration (${{ matrix.image }}, headless)
