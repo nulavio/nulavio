@@ -2,6 +2,7 @@
 // against the Python desktop (tests/unit/test_companion_protocol.py) and fixed vectors.
 plugins {
     `java-library`
+    id("com.android.lint") // the app's lint (checkDependencies) also checks this code, which ships in the APK
 }
 
 java {
@@ -19,6 +20,16 @@ dependencies {
     implementation("com.google.crypto.tink:tink-android:1.24.0")
     implementation("org.bouncycastle:bcprov-jdk18on:1.86")
     testImplementation("junit:junit:4.13.2")
+}
+
+// This classpath ships in the APK, so it is locked: gradle.lockfile lists every module it resolves,
+// transitive ones included. A change shows up in review and fails the build until the lock is
+// rewritten (docs/security/dependency-updates.md). STRICT: a missing lock fails too.
+dependencyLocking {
+    lockMode.set(LockMode.STRICT)
+}
+configurations.named("runtimeClasspath") {
+    resolutionStrategy.activateDependencyLocking()
 }
 
 val fixtures = rootDir.parentFile.resolve("tests/fixtures")

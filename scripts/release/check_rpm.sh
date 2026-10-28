@@ -8,10 +8,9 @@
 set -euo pipefail
 
 rpm=$(realpath "${1:?usage: check_rpm.sh <nulavio.rpm>}")
-image=${NULAVIO_CHECK_IMAGE:-registry.fedoraproject.org/fedora:44}
-
 here=$(cd "$(dirname "$0")" && pwd)
 lib=$(cd "$here/../../tests/lib" && pwd)
+image=${NULAVIO_CHECK_IMAGE:-$("$here/base_image.sh" fedora-build)}
 
 podman run --rm --security-opt label=disable -v "$here/sysdir_probe.py:/checks/sysdir_probe.py:ro" -v "$lib:/checks/lib:ro" -v "$rpm:/pkg/nulavio.rpm:ro" "$image" bash -euc '
     dnf -y -q install /pkg/nulavio.rpm >/dev/null

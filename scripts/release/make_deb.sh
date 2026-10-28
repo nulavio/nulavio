@@ -11,7 +11,7 @@ repo=$(cd "$(dirname "$0")/../.." && pwd)
 install_dir=${NULAVIO_INSTALL_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/nulavio-build/install/nulavio}
 out=$(mkdir -p "${1:-$repo/dist/packages}" && cd "${1:-$repo/dist/packages}" && pwd)
 release=${NULAVIO_RELEASE:-0.1}
-image=${NULAVIO_DEB_IMAGE:-docker.io/library/ubuntu:26.10}
+image=${NULAVIO_DEB_IMAGE:-$("$repo/scripts/release/base_image.sh" ubuntu-itest)}
 
 [[ -x $install_dir/nulavio && -d $install_dir/nulavio-tools && -f $install_dir/distribution/policies.json ]] || {
     echo "make_deb: $install_dir is not a complete Nulavio tree" >&2

@@ -5,6 +5,14 @@
 - Security updates are never disabled to simplify development or testing.
 - No silent downgrades. The engine's profile-downgrade protection stays on (the launcher removes `MOZ_ALLOW_DOWNGRADE`).
 - Every artefact Nulavio pins has a verifiable identity: a GPG key fingerprint, or a SHA-256 plus a Mozilla signature.
+- Pins other than the engine (actions, ruff, Gradle and the Companion's libraries, base images, extensions) are kept current by Dependabot and checked daily for known vulnerabilities: [dependency updates](../security/dependency-updates.md).
+
+## Pinned dependencies
+
+- Dependabot (`.github/dependabot.yml`) opens grouped pull requests: actions weekly on Wednesdays with a 7-day cooldown; ruff, Gradle and the base-image digests monthly. Distribution upgrades (Fedora 45, Ubuntu 27.04) are product decisions and are not proposed.
+- Nothing merges automatically. A pull request is merged only with green CI, after a person read the diff; without branch protection this rule is kept by hand.
+- Gradle pull requests fail CI until a maintainer regenerates `android/gradle/verification-metadata.xml` and the lockfiles locally and reviews them with `scripts/upstream/review_gradle_verification.py`. CI or a bot never writes that file.
+- A security fix does not wait for these schedules: `scripts/release/watch_dependencies.py` fails the daily `upstream` run on a known vulnerability without a dated exception (`docs/security/vulnerability-exceptions.json`), and the dependency is updated that day.
 
 ## Track A (preview)
 

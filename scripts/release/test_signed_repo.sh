@@ -9,6 +9,7 @@
 set -euo pipefail
 
 repo_root=$(cd "$(dirname "$0")/../.." && pwd)
+image=$("$repo_root/scripts/release/base_image.sh" fedora-build)
 packages=$(realpath "${1:?usage: test_signed_repo.sh <packages-dir>}")
 work=$(mktemp -d "${TMPDIR:-/tmp}/nulavio-signtest-XXXXXX")
 trap 'rm -rf "$work"' EXIT
@@ -23,7 +24,7 @@ NULAVIO_REPO_BASEURL=file:///repo NULAVIO_REPO_KEYURL=file:///repo/nulavio-packa
 echo "signed with throwaway key ${fpr: -16}"
 
 install_from() {
-    podman run --rm --security-opt label=disable -v "$1:/repo:ro" registry.fedoraproject.org/fedora:44 bash -euc '
+    podman run --rm --security-opt label=disable -v "$1:/repo:ro" "$image" bash -euc '
         cp /repo/nulavio.repo /etc/yum.repos.d/
         dnf -y -q install nulavio >/dev/null 2>&1 || { echo "refused"; exit 3; }
         rpm -K /repo/x86_64/nulavio-*.rpm | grep -q "signatures OK" && echo "installed with verified signatures"
