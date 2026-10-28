@@ -58,7 +58,7 @@ The first entries (2026-10-27, until 2026-12-31) are ten advisories in tooling o
 
 Dependabot updates the build files and the wrapper, but it cannot write `verification-metadata.xml` ([dependabot-core #1996](https://github.com/dependabot/dependabot-core/issues/1996)), and its attempt to rewrite the lockfiles fails on that same verification. So CI fails with "Dependency verification failed", and the unit tests name the coordinate that is missing.
 
-**CI or a bot must never write this file.**
+**CI or a bot must never write this file.** (The Opengrep rule `nulavio-ci-writes-gradle-verification` rejects `--write-verification-metadata` in workflows and CI files.)
 
 1. The file is the trust anchor. Writing it in the same pipeline that checks it makes the check circular: it passes on whatever the repositories serve that day. Gradle's documentation says a generated file must be reviewed.
 2. Writing back needs a token with `contents: write` while running code the pull request controls (`build.gradle.kts` is code, and plugins run during configuration). That is the "pwn request" pattern, and it breaks the read-only token CI has today.

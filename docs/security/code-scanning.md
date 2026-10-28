@@ -47,7 +47,7 @@ This is git's local configuration, nothing changes on GitHub. `git commit --no-v
 |---|---|
 | `nulavio-py-shell-command` | `shell=True`, `os.system`, `os.popen` and the other ways of running a command through a shell |
 | `nulavio-py-cleartext-request` | `urllib` and `http.client` requests over `http://` to anything but the loopback interface |
-| `nulavio-py-tls-verification-off` | Unverified SSL contexts, `check_hostname = False`, `CERT_NONE`, contexts without a protocol, TLS below 1.2 |
+| `nulavio-py-tls-verification-off` | Unverified SSL contexts, `check_hostname = False`, `CERT_NONE`, contexts without a protocol, TLS below 1.2, and replacing `ssl._create_default_https_context`, which turns the checks off for every later request |
 | `nulavio-py-secret-in-argv` | A password, passphrase, token or key passed as a command-line argument (readable in `/proc/<pid>/cmdline`) |
 | `nulavio-py-engine-sandbox-env` | Starting the engine with `MOZ_*SANDBOX*`, `MOZ_ALLOW_DOWNGRADE`, `MOZ_MARIONETTE*` or `MOZ_REMOTE*` |
 | `nulavio-js-html-sink` | `innerHTML`, `outerHTML`, `insertAdjacentHTML`, `document.write`, `srcdoc`, `on*` attributes in `browser/` |
@@ -58,7 +58,8 @@ This is git's local configuration, nothing changes on GitHub. `git commit --no-v
 | `nulavio-java-tls-verification-off` | Trust managers and host-name verifiers that accept everything |
 | `nulavio-java-default-locale` | `String.format`, `formatted`, `toLowerCase` and `toUpperCase` without a `Locale` in `android/`: in Persian, Arabic or Hindi they write other digits, so the pairing code and the canonical JSON would differ from the desktop's (found and fixed in `Nv1.sasDigits` on 2026-10-27) |
 | `nulavio-android-unsafe-storage-or-manifest` | World-readable files, cleartext traffic, `debuggable` or `allowBackup` in the Companion app |
-| `nulavio-verification-bypass` | `curl -k`, `curl … \| sh`, `--no-check-certificate`, `gpgcheck=0`, `--nogpgcheck`, `trusted=yes`, `pip install` without `--require-hashes`, Gradle dependency verification off, and similar, in scripts, CI, containers, packaging and Gradle files |
+| `nulavio-verification-bypass` | `curl -k`, `curl … \| sh` (also when the command goes on over lines ending in `\`), `--no-check-certificate`, `gpgcheck=0`, `--nogpgcheck`, `trusted=yes`, `pip install` without `--require-hashes`, Gradle dependency verification off (`--dependency-verification`, `-F`), and similar, in scripts, CI, containers, packaging and Gradle files |
+| `nulavio-ci-writes-gradle-verification` | `--write-verification-metadata` (or `-M`) in workflows and CI files: only a person regenerates the Companion's trust anchor, and reviews it |
 | `nulavio-sh-secret-in-argv` | `--password=…`, `--token …`, `sshpass -p` and similar in shell, CI and packaging files |
 
 To add or change a rule, add test cases in `tests/fixtures/sast/nulavio-rules.<ext>`: a `ruleid: <id>` comment above each line that must match and an `ok: <id>` comment above lines that must not. Then run `scripts/security/scan.sh opengrep-rules opengrep`. `tests/unit/test_security_tooling.py` checks that every rule has both kinds of cases.

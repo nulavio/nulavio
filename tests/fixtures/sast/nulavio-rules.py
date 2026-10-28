@@ -63,6 +63,14 @@ context = ssl.SSLContext(ssl.PROTOCOL_TLS)
 context.minimum_version = ssl.TLSVersion.TLSv1
 # ruleid: nulavio-py-tls-verification-off
 os.environ["PYTHONHTTPSVERIFY"] = "0"
+# ruleid: nulavio-py-tls-verification-off
+ssl._create_default_https_context = ssl._create_unverified_context
+# ruleid: nulavio-py-tls-verification-off
+ssl._create_default_https_context = make_context
+# ruleid: nulavio-py-tls-verification-off
+setattr(ssl, "_create_default_https_context", make_context)
+# ruleid: nulavio-py-tls-verification-off
+handler = urllib.request.HTTPSHandler(context=ssl._create_unverified_context())
 # ok: nulavio-py-tls-verification-off
 context = ssl.create_default_context()
 # ok: nulavio-py-tls-verification-off

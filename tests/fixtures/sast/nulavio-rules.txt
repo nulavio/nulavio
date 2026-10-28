@@ -35,6 +35,19 @@ pip install --trusted-host example.org tool
 python3 -m pip install ruff
 # ruleid: nulavio-verification-bypass
 ./gradlew build --dependency-verification=off
+# ruleid: nulavio-verification-bypass
+RUN curl -fsSL -o /tmp/tool.tar.gz \
+    --insecure https://example.org/tool.tar.gz
+# ruleid: nulavio-verification-bypass
+curl -fsSL https://example.org/install.sh \
+    | bash
+# ruleid: nulavio-verification-bypass
+curl -fsSL https://example.org/install.sh | \
+    sudo sh
+# ruleid: nulavio-verification-bypass
+./gradlew -F off build
+# ruleid: nulavio-verification-bypass
+android/gradlew -p android --no-daemon -F=lenient :app:assembleRelease
 # ok: nulavio-verification-bypass
 curl -fsSL --proto '=https' --tlsv1.2 -o tool.tar.gz https://example.org/tool.tar.gz
 # ok: nulavio-verification-bypass
@@ -45,6 +58,23 @@ deb [signed-by=/usr/share/keyrings/example.gpg] https://example.org/apt stable m
 .venv/bin/pip install --require-hashes -r requirements/dev.txt
 # ok: nulavio-verification-bypass
 ./gradlew build --dependency-verification=strict
+# ok: nulavio-verification-bypass
+./gradlew -F strict build
+# ok: nulavio-verification-bypass
+grep -F off notes.txt
+# ok: nulavio-verification-bypass
+curl -fsSL --proto '=https' --tlsv1.2 -o tool.tar.gz \
+    https://example.org/tool.tar.gz
+tar -xkf tool.tar.gz
+
+# --- nulavio-ci-writes-gradle-verification
+
+# ruleid: nulavio-ci-writes-gradle-verification
+android/gradlew -p android --no-daemon --write-verification-metadata sha256 :app:assembleRelease
+# ruleid: nulavio-ci-writes-gradle-verification
+./gradlew -M sha256,pgp help
+# ok: nulavio-ci-writes-gradle-verification
+android/gradlew -p android --no-daemon -q :app:lintDebug :app:assembleRelease
 
 # --- nulavio-sh-secret-in-argv
 
