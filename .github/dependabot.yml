@@ -71,6 +71,9 @@ updates:
   # there: scripts/release/base_image.sh). Distribution upgrades (Fedora 45, Ubuntu 27.04)
   # are product decisions, and Fedora's newest numeric tag is Rawhide, so major versions are
   # ignored: these pull requests refresh the digest within the pinned release.
+  # Dependabot cannot read registry.fedoraproject.org without credentials (its first run on
+  # 2026-10-28 failed with private_source_authentication_failure), so the Fedora image is
+  # left to the daily watcher, which reports a newer digest for it (watch_dependencies.py).
   - package-ecosystem: "docker"
     directory: "/ci/containers"
     schedule:
@@ -80,6 +83,8 @@ updates:
     ignore:
       - dependency-name: "*"
         update-types: ["version-update:semver-major"]
+      - dependency-name: "registry.fedoraproject.org/fedora"
+      - dependency-name: "fedora"
     groups:
       base-images:
         patterns: ["*"]

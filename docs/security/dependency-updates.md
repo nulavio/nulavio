@@ -49,7 +49,7 @@ The first entries (2026-10-27, until 2026-12-31) are ten advisories in tooling o
 
 - **Actions**, weekly on Wednesdays (Firefox releases on Tuesdays), with a 7-day cooldown so that a hijacked tag has time to be noticed. Check that the new SHA is the tag's commit (`git ls-remote https://github.com/<owner>/<repo> refs/tags/<tag>^{}`).
 - **pip**, monthly. Dependabot writes one hash per file PyPI publishes for the new version, so one hash becomes about twenty. That is expected.
-- **docker**, monthly, digest updates within the pinned release only. Moving to Fedora 45 or Ubuntu 27.04 is a product decision (major versions are ignored; Fedora's newest numeric tag is Rawhide). The release scripts follow the Containerfiles automatically.
+- **docker**, monthly, digest updates within the pinned release only. Moving to Fedora 45 or Ubuntu 27.04 is a product decision (major versions are ignored; Fedora's newest numeric tag is Rawhide). The release scripts follow the Containerfiles automatically. Ubuntu only: Dependabot cannot read `registry.fedoraproject.org` without credentials, so a newer Fedora 44 digest comes from the daily watch, and the update is the command below.
 - **gradle**, monthly (major versions wait 30 days). These pull requests fail CI until the step below is done.
 
 ## Finishing a Gradle pull request
