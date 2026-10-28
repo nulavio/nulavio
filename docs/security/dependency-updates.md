@@ -21,13 +21,13 @@ Android lint's security checks that default to a warning are errors (`android/ap
 
 ## The daily watch
 
-`scripts/release/watch_dependencies.py` runs every day in the `upstream` workflow, after the Firefox check, and writes its findings in the job summary. It checks:
+`scripts/release/watch_dependencies.py` runs every day in the `upstream` workflow, after the Firefox check, and writes its findings in the job summary. CI runs it too, so a push or pull request that brings in a vulnerable version is flagged at once (there, data that cannot be fetched is only a warning; the daily run fails on it). It checks:
 
 - every pinned package above against [OSV.dev](https://osv.dev) (one batch query; GitHub Actions versions are matched locally because OSV.dev does not match them);
 - each pinned extension against addons.mozilla.org: blocklist, the file served for the pinned version, how long the lock has been behind;
 - each base image digest against its registry.
 
-Exit status 1 (the job fails, GitHub emails the maintainers) means: a known vulnerability without a valid exception, a blocked extension, a pinned extension file that AMO now serves differently, or a lock more than 30 days behind AMO. A newer base image build is only reported. Exit status 2 means the data could not be fetched. Only public package names and versions are sent, to api.osv.dev, addons.mozilla.org and the registries.
+Exit status 1 (the job fails, GitHub emails the maintainers) means: a known vulnerability without a valid exception, a blocked extension, a pinned extension file that AMO now serves differently, or a lock more than 30 days behind AMO. A newer base image build is only reported. Exit status 2 means some data could not be fetched and nothing else needs action. Each source is checked on its own: OSV.dev, AMO or one registry being down does not hide what the others found. Only public package names and versions are sent, to api.osv.dev, addons.mozilla.org and the registries.
 
 ```sh
 python3 -I scripts/release/watch_dependencies.py           # the check
@@ -85,7 +85,7 @@ Never use `--write-verification-metadata` with anything but `sha256`, and never 
 
 The first download is about 140 MB (Gradle) plus the dependencies. Rehearsed on 2026-10-27 with a simulated `com.google.zxing:core` change: two components added, checksums matched Maven Central's, both signed, and the strict build passed after the old version was removed.
 
-A pull request that only updates the wrapper changes `gradle-wrapper.properties`, `gradlew` and `gradle-wrapper.jar`, not the metadata. Compare `distributionSha256Sum` with `https://services.gradle.org/distributions/gradle-<version>-bin.zip.sha256`; the `companion` CI job checks the jar against Gradle's published checksums (`gradle/actions/wrapper-validation`).
+A pull request that only updates the wrapper changes `gradle-wrapper.properties`, `gradlew` and `gradle-wrapper.jar`, not the metadata. Compare `distributionSha256Sum` with `https://services.gradle.org/distributions/gradle-<version>-bin.zip.sha256`. The jar is a binary nobody can review in a diff, so CI checks it against Gradle's published checksums (`gradle/actions/wrapper-validation`) before any job runs `gradlew`.
 
 The APK stays reproducible: Gradle locking and lint settings do not change its bytes (checked on 2026-10-27, same SHA-256 before and after). After any Gradle change, build twice from fresh copies and compare.
 
@@ -114,6 +114,7 @@ These alerts cover little here (ruff only: no alerts for actions pinned by SHA, 
 - **Gradle signature verification.** Most artifacts publish PGP signatures. Trusting each publisher's key for its group (`verify-signatures`, a committed keyring, key servers off, fingerprints checked through an independent channel) would let most Gradle pull requests pass on their own, with the publisher's proof instead of trust on first use. Needs the maintainer to approve the list of keys.
 - **Fewer CI jobs on Dependabot branches.** pip pull requests need only `checks`; Gradle ones `checks` and `companion`; docker ones `checks` and `integration`.
 - **Extension permissions.** `refresh_extensions_lock.py --write` copies AMO's permissions into `reviewed_permissions`. It should require an explicit `--accept-permissions` when permissions were added.
+- **Stale base images.** Dependabot may suppress pull requests that change only a digest (a server-side option it is testing). If the monthly docker pull request never comes while the watch keeps reporting a newer build, make the watch fail when a newer build has waited more than a month.
 - **Repository content filters.** In `android/settings.gradle.kts`, ask Google's repository only for the groups it publishes (`com.android.*`, `androidx.*`, `com.google.android.*`, `com.google.testing.platform`), so a regeneration cannot pick a same-named artifact from the wrong repository. The exact list has to be found by building.
 
 Considered and not adopted: Renovate (a third-party app with write access, or self-hosted with a token to keep, and it rewrites the verification metadata itself); an OSV-Scanner binary (the same data as the watch, without actions, extensions or images, and one more binary to pin); Gradle dependency submission (a workflow with write access running the build, for alerts the watch already gives).

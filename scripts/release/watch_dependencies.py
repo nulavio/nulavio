@@ -16,7 +16,9 @@ for one package version, with a reason and an expiry (docs/security/dependency-u
     python3 -I scripts/release/watch_dependencies.py --list     # the inventory only, no network
 
 Exit status: 0 nothing to act on, 1 action needed (a known vulnerability without a valid exception,
-a blocked or replaced extension, a lock more than 30 days behind AMO), 2 data unavailable.
+a blocked or replaced extension, a lock more than 30 days behind AMO), 2 some data was unavailable and
+nothing else needs action. The three checks run independently: one source being down does not hide
+what the others found.
 Sends only public package names and versions to api.osv.dev, addons.mozilla.org and the registries.
 """
 
@@ -40,6 +42,7 @@ AMO = "https://addons.mozilla.org/api/v5/"
 EXCEPTIONS = ROOT / "docs" / "security" / "vulnerability-exceptions.json"
 APK_LOCKFILE = "android/app/gradle.lockfile"  # the APK's classpath (releaseRuntimeClasspath), nv1 included
 EXTENSION_LAG_DAYS = 30
+UNAVAILABLE = (OSError, ValueError, KeyError, TypeError)  # network errors, unexpected or malformed replies
 BATCH = 500  # OSV.dev accepts up to 1000 queries per batch
 INDEX_TYPES = ", ".join([
     "application/vnd.oci.image.index.v1+json", "application/vnd.docker.distribution.manifest.list.v2+json",
@@ -63,7 +66,7 @@ class Dep:
 @dataclasses.dataclass
 class Row:
     check: str  # osv, extension, image, exception
-    state: str  # ok, warn, accepted, fail
+    state: str  # ok, warn, accepted, fail, error (data unavailable)
     text: str
     detail: dict = dataclasses.field(default_factory=dict)
 
@@ -226,10 +229,19 @@ def severity(info: dict) -> str:
 # Exceptions --------------------------------------------------------------------------------------
 
 
+EXCEPTION_KEYS = {"id", "ecosystem", "package", "version", "reason", "until"}
+
+
 def load_exceptions(path: Path = EXCEPTIONS) -> list[dict]:
+    """The accepted findings; a malformed entry stops the run here rather than being skipped."""
     if not path.exists():
         return []
-    return json.loads(path.read_text(encoding="utf-8"))["exceptions"]
+    items = json.loads(path.read_text(encoding="utf-8"))["exceptions"]
+    for item in items:
+        if set(item) != EXCEPTION_KEYS or not str(item["reason"]).strip():
+            raise ValueError(f"{path.name}: each exception needs exactly {sorted(EXCEPTION_KEYS)}: {item}")
+        _dt.date.fromisoformat(item["until"])  # ValueError when it is not a date
+    return items
 
 
 def matching_exception(ids: set[str], dep: Dep, exceptions: list[dict]) -> dict | None:
@@ -294,13 +306,19 @@ def extension_rows(net: Net, now: _dt.datetime, root: Path = ROOT) -> list[Row]:
     rows = []
     for entry in lock["extensions"]:
         guid = urllib.parse.quote(entry["id"], safe="")
-        data = net.json(f"{AMO}addons/addon/{guid}/")["current_version"]
-        algorithm, _, digest = data["file"]["hash"].partition(":")
-        if algorithm != "sha256":
-            raise ValueError(f"{entry['key']}: AMO returned a {algorithm} hash")
-        current = {"version": data["version"], "sha256": digest, "created": data["file"]["created"]}
-        block = net.json(f"{AMO}blocklist/block/{guid}/", missing_ok=True)  # 404: not blocked
-        state, text = extension_verdict(entry, current, block, now)
+        try:
+            data = net.json(f"{AMO}addons/addon/{guid}/")["current_version"]
+            algorithm, _, digest = data["file"]["hash"].partition(":")
+            if algorithm != "sha256":
+                raise ValueError(f"AMO returned a {algorithm} hash")
+            current = {"version": data["version"], "sha256": digest, "created": data["file"]["created"]}
+            block = net.json(f"{AMO}blocklist/block/{guid}/", missing_ok=True)  # 404: not blocked
+            state, text = extension_verdict(entry, current, block, now)
+        except UNAVAILABLE as exc:  # the other extensions are still checked
+            rows.append(
+                Row("extension", "error", f"{entry['key']}: no data from addons.mozilla.org: {exc}", {"key": entry["key"]})
+            )
+            continue
         rows.append(Row("extension", state, text, {"key": entry["key"], "pinned": entry["version"], "amo": current["version"]}))
     return rows
 
@@ -349,8 +367,12 @@ def image_rows(net: Net, root: Path = ROOT) -> list[Row]:
         if "@sha256:" not in ref:
             rows.append(Row("image", "fail", f"{name}: {ref} is not pinned by digest"))
             continue
-        latest = registry_digest(ref, net)
         tag, _, pinned = ref.partition("@")
+        try:
+            latest = registry_digest(ref, net)
+        except UNAVAILABLE as exc:  # one registry down: the other images are still checked
+            rows.append(Row("image", "error", f"{name}: no data for {tag}: {exc}"))
+            continue
         if pinned == latest:
             rows.append(Row("image", "ok", f"{name}: {tag} is current"))
         else:
@@ -363,30 +385,49 @@ def image_rows(net: Net, root: Path = ROOT) -> list[Row]:
 # Report ------------------------------------------------------------------------------------------
 
 
+def osv_rows(deps: list[Dep], net: Net, exceptions: list[dict], today: _dt.date) -> list[Row]:
+    findings = osv_findings(deps, net)
+    details = {vid: net.json(f"{OSV}vulns/{urllib.parse.quote(vid)}") for vid in sorted({vid for _, vid in findings})}
+    return vulnerability_rows(findings, details, exceptions, today)
+
+
 def run(net: Net, now: _dt.datetime, root: Path = ROOT, exceptions: list[dict] | None = None) -> tuple[list[Dep], list[Row]]:
     deps = inventory(root)
     exceptions = (
         load_exceptions(root / "docs" / "security" / "vulnerability-exceptions.json") if exceptions is None else exceptions
     )
-    findings = osv_findings(deps, net)
-    details = {vid: net.json(f"{OSV}vulns/{urllib.parse.quote(vid)}") for vid in sorted({vid for _, vid in findings})}
-    rows = vulnerability_rows(findings, details, exceptions, now.date())
-    return deps, rows + extension_rows(net, now, root) + image_rows(net, root)
+    sections = (
+        ("osv", "OSV.dev", lambda: osv_rows(deps, net, exceptions, now.date())),
+        ("extension", "addons.mozilla.org", lambda: extension_rows(net, now, root)),
+        ("image", "the registries", lambda: image_rows(net, root)),
+    )
+    rows: list[Row] = []
+    for check, source, section in sections:
+        try:
+            rows += section()
+        except UNAVAILABLE as exc:  # the other checks still run and report
+            rows.append(Row(check, "error", f"no data from {source}: {type(exc).__name__}: {exc}"))
+    return deps, rows
 
 
-ORDER = {"fail": 0, "accepted": 1, "warn": 2, "ok": 3}
+ORDER = {"fail": 0, "error": 1, "accepted": 2, "warn": 3, "ok": 4}
 
 
 def exit_status(rows: list[Row]) -> int:
-    return 1 if any(r.state == "fail" for r in rows) else 0
+    if any(r.state == "fail" for r in rows):
+        return 1
+    return 2 if any(r.state == "error" for r in rows) else 0
 
 
 def report(deps: list[Dep], rows: list[Row]) -> str:
     shipped = sum(d.ships for d in deps)
-    extensions = sum(r.check == "extension" for r in rows)
-    images = sum(r.check == "image" for r in rows)
-    head = f"Checked {len(deps)} pinned packages against OSV.dev ({shipped} ship in the APK)"
-    lines = [f"{head}, {extensions} extensions and {images} base images."]
+    extensions = sum(r.check == "extension" and r.state != "error" for r in rows)
+    images = sum(r.check == "image" and r.state != "error" for r in rows)
+    osv_down = any(r.check == "osv" and r.state == "error" for r in rows)
+    head = (
+        f"{'Could not check' if osv_down else 'Checked'} {len(deps)} pinned packages against OSV.dev ({shipped} ship in the APK)"
+    )
+    lines = [f"{head}; checked {extensions} extensions and {images} base images."]
     lines += [f"{r.state.upper():8} {r.text}" for r in sorted(rows, key=lambda r: ORDER[r.state]) if r.state != "ok"]
     return "\n".join(lines)
 
@@ -409,11 +450,11 @@ def main() -> int:
         return 0
     try:
         deps, rows = run(Net(), _dt.datetime.now(_dt.UTC))
-    except (OSError, ValueError, KeyError) as exc:
-        print(f"watch_dependencies: data unavailable: {exc}", file=sys.stderr)
+    except UNAVAILABLE as exc:  # the repository's own files (inventory, exceptions) could not be read
+        print(f"watch_dependencies: cannot read the pins: {exc}", file=sys.stderr)
         if args.summary:
             with open(args.summary, "a", encoding="utf-8") as handle:
-                handle.write(f"### Pinned dependencies\n\nData unavailable: {exc}\n")
+                handle.write(f"### Pinned dependencies\n\nCannot read the pins: {exc}\n")
         return 2
     if args.json:
         results = [dataclasses.asdict(r) for r in rows]

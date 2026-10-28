@@ -219,7 +219,8 @@ class OtherPinsTest(unittest.TestCase):
 class FakeNet:
     """Stands in for watch_dependencies.Net: OSV, AMO and the registries answer from fixtures."""
 
-    def __init__(self, vulns=None, action_vulns=None, details=None, digests=None, amo=None, blocks=None):
+    def __init__(self, vulns=None, action_vulns=None, details=None, digests=None, amo=None, blocks=None, down=()):
+        self.down = down  # URL prefixes that fail as if the service were unreachable
         self.vulns = vulns or {}  # (ecosystem, name, version) -> [ids]
         self.action_vulns = action_vulns or {}  # name -> [OSV records]
         self.details = details or {}
@@ -229,7 +230,12 @@ class FakeNet:
         self.lock = json.loads((ROOT / "browser" / "distribution" / "extensions.lock.json").read_text())
         self.pinned = {watch.manifest_url(ref): ref.partition("@")[2] for _, ref in watch.image_refs(ROOT)}
 
+    def unreachable(self, url):
+        if url.startswith(tuple(self.down)):
+            raise OSError(f"test: {url} is down")
+
     def json(self, url, data=None, missing_ok=False):
+        self.unreachable(url)
         if url == watch.OSV + "querybatch":
             return {
                 "results": [
@@ -260,6 +266,7 @@ class FakeNet:
         raise AssertionError(f"unexpected URL {url}")
 
     def head(self, url, headers):
+        self.unreachable(url)
         return 200, {"docker-content-digest": self.digests.get(url, self.pinned[url])}
 
 
@@ -415,6 +422,41 @@ class WatcherTest(unittest.TestCase):
         self.assertEqual(registry.calls[2][2], "Bearer anonymous-test-token")
         with self.assertRaises(ValueError):
             watch.manifest_url("fedora:44")  # short names are ambiguous
+
+    def test_one_source_down_does_not_hide_what_the_others_found(self):
+        vulnerable = {("Maven", "org.bouncycastle:bcprov-jdk18on", "1.86"): ["GHSA-test-0001"]}
+        net = FakeNet(vulns=vulnerable, details={"GHSA-test-0001": ADVISORY}, down=[watch.AMO, "https://registry-1.docker.io/"])
+        _, rows = watch.run(net, NOW, exceptions=[])
+        states = sorted({(r.check, r.state) for r in rows if r.state in ("fail", "error")})
+        self.assertEqual(states, [("extension", "error"), ("image", "error"), ("osv", "fail")])
+        self.assertEqual(watch.exit_status(rows), 1)  # action needed outranks missing data
+        self.assertIn("no data from addons.mozilla.org", watch.report([], rows))
+        images = {r.text.split(":")[0]: r.state for r in rows if r.check == "image"}
+        self.assertEqual(images["ubuntu-itest.Containerfile"], "error")
+        self.assertEqual(images["fedora-build.Containerfile"], "ok")  # one registry down, the other still checked
+        _, rows = watch.run(FakeNet(down=[watch.OSV]), NOW, exceptions=[])
+        self.assertEqual([r.state for r in rows if r.check == "osv"], ["error"])
+        self.assertEqual({r.state for r in rows if r.check != "osv"}, {"ok"})
+        self.assertEqual(watch.exit_status(rows), 2)
+        self.assertTrue(watch.markdown([], rows).splitlines()[2].startswith("Could not check"), watch.markdown([], rows))
+
+    def test_a_malformed_exception_stops_the_run(self):
+        good = {
+            "id": "GHSA-test-0001",
+            "ecosystem": "Maven",
+            "package": "a:b",
+            "version": "1",
+            "reason": "r",
+            "until": "2026-12-31",
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "exceptions.json"
+            for bad in ({**good, "until": "soon"}, {k: v for k, v in good.items() if k != "version"}, {**good, "reason": " "}):
+                path.write_text(json.dumps({"exceptions": [bad]}))
+                with self.assertRaises(ValueError, msg=bad):
+                    watch.load_exceptions(path)
+            path.write_text(json.dumps({"exceptions": [good]}))
+            self.assertEqual(watch.load_exceptions(path), [good])
 
     def test_only_https_is_fetched(self):
         with self.assertRaises(ValueError):
