@@ -15,6 +15,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts" / "brand"))
 import harness
+import pngdiff
 from contrast import ratio
 
 SHEET = "chrome://branding/content/theme/horizon.css"
@@ -59,6 +60,73 @@ return {
 """
 
 
+RESULTS = """
+const [base, done] = arguments;
+(async () => {
+  const wait = ms => new Promise(r => setTimeout(r, ms));
+  gURLBar.focus();
+  gURLBar.search(new URL(base).host);
+  for (let i = 0; i < 50 && !(gURLBar.view.isOpen && gURLBar.view.visibleRowCount > 1); i++) await wait(100);
+  gURLBar.view.selectedRowIndex = 1;
+  await wait(300);
+  const cs = e => getComputedStyle(e);
+  const probe = value => {
+    const el = document.createElement("div");
+    el.style.color = value;
+    document.documentElement.append(el);
+    const c = getComputedStyle(el).color;
+    el.remove();
+    return c;
+  };
+  const part = (row, sel) => { const e = row.querySelector(sel); return e && e.textContent.trim() ? cs(e).color : null; };
+  const describe = row => ({bg: cs(row).backgroundColor, outline: cs(row).outlineStyle, outlineColor: cs(row).outlineColor,
+    title: part(row, ".urlbarView-title"), url: part(row, ".urlbarView-url"), action: part(row, ".urlbarView-action")});
+  const rows = [...document.querySelectorAll(".urlbarView-row:not([hidden])")];
+  const selected = rows.find(r => r.hasAttribute("selected"));
+  return {open: gURLBar.view.isOpen, selected: selected ? describe(selected) : null,
+    others: rows.filter(r => r !== selected).map(describe),
+    panel: cs(document.querySelector("#urlbar .urlbar-background")).backgroundColor,
+    tint: probe("var(--nv-color-accent-tint)"), focus: probe("var(--nv-color-focus)")};
+})().then(done, e => done({error: String(e)}));
+"""
+
+
+SYMBOLS = """
+const [view, selectShell, done] = arguments;
+(async () => {
+  const wait = ms => new Promise(r => setTimeout(r, ms));
+  const url = WebExtensionPolicy.getByID("shell@nulavio.net").getURL("settings/settings.html");
+  let tab = gBrowser.tabs.find(t => t.linkedBrowser.currentURI.spec === url);
+  if (!tab) {
+    tab = gBrowser.addTrustedTab(url);
+  }
+  gBrowser.selectedTab = selectShell ? tab : gBrowser.tabs.find(t => t !== tab && !t.pinned);
+  await SidebarController.promiseInitialized;
+  await SidebarController.show(view);
+  await wait(1500);
+  const main = document.querySelector("sidebar-main");
+  await main.updateComplete;
+  const deep = (root, out = []) => {
+    for (const el of root.querySelectorAll("*")) {
+      if (el.localName === "moz-button" && el.getAttribute("view")) out.push(el);
+      if (el.shadowRoot) deep(el.shadowRoot, out);
+    }
+    return out;
+  };
+  const rect = e => { const b = e.getBoundingClientRect(); return [b.x, b.y, b.width, b.height]; };
+  const launcher = deep(main.shadowRoot).find(b => b.getAttribute("view") === "shell_nulavio_net-sidebar-action");
+  const action = document.getElementById("shell_nulavio_net-BAP");
+  return {
+    dpr: devicePixelRatio,
+    tab: rect(tab.querySelector(".tab-icon-image")),
+    action: rect(action.querySelector(".toolbarbutton-icon")),
+    launcher: launcher ? rect(launcher.shadowRoot.querySelector("img")) : null,
+    open: launcher?.getAttribute("type") === "icon",
+  };
+})().then(done, e => done({error: String(e)}));
+"""
+
+
 def rgb(css: str) -> str:
     """'rgb(1, 2, 3)' / 'rgba(...)' / 'color(srgb r g b)' -> '#RRGGBB' (alpha ignored)."""
     css = css.strip()
@@ -68,6 +136,23 @@ def rgb(css: str) -> str:
     else:
         values = [round(float(v)) for v in css[css.index("(") + 1 : css.index(")")].replace("/", ",").split(",")[:3]]
     return "#" + "".join(f"{v:02X}" for v in values)
+
+
+def symbol_on_surface(png: bytes, rect: list[float], dpr: float) -> tuple[str, str]:
+    """(symbol colour, surface colour) in a rendered icon box: the surface is the most common colour, the
+    symbol the most common one that clearly differs from it (anti-aliased edges are rarer)."""
+    width, height, bpp, rows = pngdiff.decode(png)
+    x0, y0, w, h = (round(v * dpr) for v in rect)
+    counts: dict[str, int] = {}
+    for y in range(max(0, y0), min(height, y0 + h)):
+        row = rows[y]
+        for x in range(max(0, x0), min(width, x0 + w)):
+            key = "#" + bytes(row[x * bpp : x * bpp + 3]).hex().upper()
+            counts[key] = counts.get(key, 0) + 1
+    ranked = sorted(counts, key=counts.get, reverse=True)
+    surface = ranked[0]
+    symbol = next((c for c in ranked[1:] if ratio(c, surface) > 1.25), surface)
+    return symbol, surface
 
 
 @unittest.skipUnless(harness.engine_available(), "no supported Gecko engine installed")
@@ -273,6 +358,73 @@ class HorizonTest(unittest.TestCase):
             self.assertEqual((s["mark"]["w"], s["mark"]["h"]), ("2px", "16px"))
         finally:
             self.set_pref("sidebar.verticalTabs", False)
+
+    def results_row(self) -> dict:
+        """Open the address-bar results for the fixture server and select the second row (keyboard selection)."""
+        self.m.set_context("chrome")
+        try:
+            return self.m.execute_async(RESULTS, [self.server.url("/")])
+        finally:
+            self.m.set_context("content")
+
+    def test_14_address_bar_results_selected_row_is_readable_and_visible(self):
+        # WCS-09: the keyboard-selected result used the system SelectedItem (white on #3399FF, 2.9:1 in light;
+        # a cyan row in dark). Horizon gives it the accent tint, primary text and the focus ring.
+        for dark in (0, 1):
+            with self.subTest(scheme="dark" if dark else "light"):
+                self.set_pref("ui.systemUsesDarkTheme", dark)
+                try:
+                    self.assertTrue(harness.wait_until(lambda want=bool(dark): self.state()["dark"] == want, timeout=10))
+                    r = self.results_row()
+                    self.assertTrue(r["open"] and r["selected"], r)
+                    sel = r["selected"]
+                    self.assertEqual(rgb(sel["bg"]), rgb(r["tint"]), "selected row is not in the accent tint")
+                    for part in ("title", "url", "action"):
+                        if sel[part]:
+                            self.assert_contrast(sel[part], sel["bg"], 4.5, f"selected result {part}")
+                    self.assertEqual((sel["outline"], rgb(sel["outlineColor"])), ("solid", rgb(r["focus"])), sel)
+                    self.assert_contrast(sel["outlineColor"], r["panel"], 3.0, "selected-row ring on the results panel")
+                    for row in r["others"]:
+                        self.assertEqual(row["outline"], "none", "only the selected row carries the ring")
+                        self.assert_contrast(row["title"], r["panel"], 4.5, "result title")
+                        if row["url"]:
+                            self.assert_contrast(row["url"], r["panel"], 4.5, "result URL")
+                finally:
+                    self.m.chrome("gURLBar.view.close(); gURLBar.blur();")
+                    self.set_pref("ui.systemUsesDarkTheme", 0)
+
+    def test_15_the_nulavio_symbol_follows_the_colour_scheme(self):
+        # WCS-11: the Shell shipped one mint-on-dark symbol (1.3-1.6:1 on light chrome). It is now Mint 700 in
+        # light and mint in dark (one SVG with a colour-scheme query) on the tab, the toolbar button and the
+        # sidebar launcher, and stays >= 3:1 where it sits, including the launcher's pressed (open) state.
+        expected = {0: "#0F7A68", 1: "#6FE0C5"}
+        try:
+            for dark, vertical in ((0, False), (0, True), (1, False), (1, True)):
+                self.set_pref("ui.systemUsesDarkTheme", dark)
+                self.set_pref("sidebar.verticalTabs", vertical)
+                self.assertTrue(harness.wait_until(lambda want=bool(dark): self.state()["dark"] == want, timeout=10))
+                for view, select_shell in (("shell_nulavio_net-sidebar-action", True), ("viewBookmarksSidebar", False)):
+                    self.m.set_context("chrome")
+                    try:
+                        boxes = self.m.execute_async(SYMBOLS, [view, select_shell])
+                        png = self.m.screenshot_png()
+                    finally:
+                        self.m.set_context("content")
+                    self.assertNotIn("error", boxes, boxes)
+                    self.assertTrue(boxes["launcher"], "the assistant is missing from the sidebar launcher")
+                    self.assertEqual(boxes["open"], view != "viewBookmarksSidebar")
+                    tab_state = "selected" if select_shell else "background"
+                    launcher_state = "open" if boxes["open"] else "closed"
+                    for where in ("tab", "action", "launcher"):
+                        state = {"tab": tab_state, "launcher": launcher_state}.get(where, "")
+                        with self.subTest(scheme="dark" if dark else "light", vertical=vertical, where=where, state=state):
+                            symbol, surface = symbol_on_surface(png, boxes[where], boxes["dpr"])
+                            self.assertEqual(symbol, expected[dark], f"symbol {symbol} on {surface}")
+                            self.assertGreaterEqual(ratio(symbol, surface), 3.0, f"{symbol} on {surface}")
+        finally:
+            self.m.chrome("SidebarController.hide();")
+            self.clear_pref("sidebar.verticalTabs")
+            self.set_pref("ui.systemUsesDarkTheme", 0)
 
 
 @unittest.skipUnless(harness.engine_available(), "no supported Gecko engine installed")

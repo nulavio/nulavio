@@ -91,6 +91,38 @@
       --toolbar-field-text-color-focus: var(--nv-color-text-primary);
       --toolbar-field-border-color: var(--nv-color-border-control);
       --toolbar-field-border-color-focus: var(--nv-color-focus);
+
+      /* Address-bar results: the keyboard-selected row in the accent tint with
+         primary text (>= 4.5:1, its URL and secondary text inherit it), instead
+         of the system's SelectedItem (white on #3399FF, 2.9:1, on Linux); hover
+         is the same overlay as the tabs. */
+      --urlbarview-background-color-selected: var(--nv-color-accent-tint);
+      --urlbarview-text-color-selected: var(--nv-color-text-primary);
+      --urlbarview-background-color-hover: color-mix(in srgb, currentColor calc(var(--nv-state-hoverOverlay) * 100%), transparent);
+      --urlbarview-text-color-hover: var(--nv-color-text-primary);
+    }
+
+    /* The tint alone sits below 3:1 against the results panel, so the selected
+     * row (what Enter opens) also carries the focus ring, drawn in the row's
+     * gutter around its background (>= 3:1, WCAG 1.4.11 and 2.4.7). */
+    :root:not([lwtheme]) .urlbarView-row[selected] {
+      outline: var(--nv-state-focusRingWidth) solid var(--nv-color-focus);
+      outline-offset: calc(-1 * var(--urlbarview-row-gutter, var(--nv-space-2)));
+    }
+
+    /* Sidebar launcher: the open tool's button (moz-button type="icon") in the
+     * accent tint with an accent edge, the pressed tool of the design direction,
+     * instead of the toolkit's grey: the Mint 700 Nulavio symbol was 2.5:1 on
+     * it. Closed tools are ghost buttons and keep their own colours. */
+    :root:not([lwtheme]) sidebar-main {
+      --button-background-color: var(--nv-color-accent-tint);
+      --button-background-color-selected: var(--nv-color-accent-tint);
+      --button-background-color-hover: color-mix(in srgb, currentColor calc(var(--nv-state-hoverOverlay) * 100%), var(--nv-color-accent-tint));
+      --button-background-color-active: color-mix(in srgb, currentColor calc(var(--nv-state-pressedOverlay) * 100%), var(--nv-color-accent-tint));
+      --button-border-color: var(--nv-color-accent-default);
+      --button-border-color-selected: var(--nv-color-accent-default);
+      --button-border-color-hover: var(--nv-color-accent-default);
+      --button-border-color-active: var(--nv-color-accent-default);
     }
   }
 

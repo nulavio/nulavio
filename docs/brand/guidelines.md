@@ -11,6 +11,7 @@ An **N** drawn as a single navigation route with round joins. Its origin (bottom
 | App icon (tile) | `assets/icons/hicolor/scalable/apps/nulavio.svg`, PNG 16–512 | Launchers, docks, task managers, stores |
 | Symbol, mint | `assets/logo/nulavio-symbol.svg` | On dark backgrounds (Deep Navy, Ocean Slate) |
 | Symbol, Mint 700 | `assets/logo/nulavio-symbol-dark-on-light.svg` | On light backgrounds |
+| Symbol, adaptive | `assets/logo/nulavio-symbol-adaptive.svg` | UI that follows the colour scheme (the browser window's tab, toolbar and sidebar icons): Mint 700, mint when the scheme is dark |
 | Monochrome | `assets/logo/nulavio-mono-black.svg`, `nulavio-mono-white.svg` | Single-colour print, embossing, legal |
 | Symbolic (desktop) | `assets/icons/hicolor/symbolic/apps/nulavio-symbolic.svg` | KDE/GNOME panels and menus; recoloured by the desktop (`ColorScheme-Text`, `currentColor`) |
 | Wordmark | `assets/logo/nulavio-wordmark.svg` (navy), `-light.svg` (cloud), `-mono-black.svg` | Text-only contexts |

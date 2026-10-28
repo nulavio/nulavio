@@ -26,6 +26,8 @@ SHARED_FROM_REPO = {
     "shared/base.css": ROOT / "browser" / "startpage" / "startpage.css",
     "shared/nulavio-symbol.svg": ROOT / "docs" / "brand" / "assets" / "logo" / "nulavio-symbol.svg",
     "shared/nulavio-symbol-dark-on-light.svg": ROOT / "docs" / "brand" / "assets" / "logo" / "nulavio-symbol-dark-on-light.svg",
+    # Follows the colour scheme: the toolbar, sidebar and tab icons (WCS-11).
+    "shared/nulavio-symbol-adaptive.svg": ROOT / "docs" / "brand" / "assets" / "logo" / "nulavio-symbol-adaptive.svg",
     # Nulavio Connect definitions, shared with the launcher (nulavio integrations).
     "shared/integrations.json": ROOT / "browser" / "config" / "integrations.json",
 }

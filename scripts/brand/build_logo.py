@@ -54,6 +54,14 @@ def mark(color: str, *, stroke: float = STROKE, route: str = ROUTE, dots=DOTS, e
     )
 
 
+def adaptive_mark() -> str:
+    """The symbol for UI that follows the colour scheme (tab favicon, toolbar and sidebar icons in the
+    browser window): Mint 700 by default (>= 3:1 on light and on navy, also where media queries are
+    ignored), mint where the scheme is dark. Guidelines §4.4: never the mint symbol on light."""
+    style = f"<style>.nv-mark{{color:{MINT_DARK}}}@media (prefers-color-scheme: dark){{.nv-mark{{color:{MINT}}}}}</style>"
+    return f'{style}\n<g class="nv-mark">\n{mark("currentColor")}\n</g>'
+
+
 def tile_background(size: float = 96, radius: float = TILE_RADIUS, gid: str = "bg") -> str:
     return (
         f'<defs><linearGradient id="{gid}" x1="0" y1="0" x2="1" y2="1">'
@@ -176,6 +184,7 @@ def logo_family() -> None:
     logo = ASSETS / "logo"
     write(logo / "nulavio-symbol.svg", svg("20 16 56 64", mark(MINT), title="Nulavio symbol"))
     write(logo / "nulavio-symbol-dark-on-light.svg", svg("20 16 56 64", mark(MINT_DARK), title="Nulavio symbol"))
+    write(logo / "nulavio-symbol-adaptive.svg", svg("20 16 56 64", adaptive_mark(), title="Nulavio symbol"))
     write(logo / "nulavio-tile.svg", svg("0 0 96 96", tile_background() + "\n" + mark(MINT), title="Nulavio"))
     write(logo / "nulavio-mono-black.svg", svg("20 16 56 64", mark("#000000"), title="Nulavio symbol (monochrome)"))
     write(logo / "nulavio-mono-white.svg", svg("20 16 56 64", mark("#FFFFFF"), title="Nulavio symbol (monochrome)"))

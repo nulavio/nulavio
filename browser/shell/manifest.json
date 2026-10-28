@@ -27,7 +27,7 @@
     "default_title": "__MSG_profilesButton__",
     "default_popup": "profiles/popup.html",
     "default_area": "navbar",
-    "default_icon": "shared/nulavio-symbol.svg"
+    "default_icon": "shared/nulavio-symbol-adaptive.svg"
   },
   "commands": {
     "_execute_action": {
@@ -190,13 +190,13 @@
   ],
   "incognito": "spanning",
   "icons": {
-    "48": "shared/nulavio-symbol.svg",
-    "96": "shared/nulavio-symbol.svg"
+    "48": "shared/nulavio-symbol-adaptive.svg",
+    "96": "shared/nulavio-symbol-adaptive.svg"
   },
   "sidebar_action": {
     "default_panel": "assistant/panel.html",
     "default_title": "__MSG_assistantTitle__",
-    "default_icon": "shared/nulavio-symbol.svg",
+    "default_icon": "shared/nulavio-symbol-adaptive.svg",
     "open_at_install": false
   }
 }
