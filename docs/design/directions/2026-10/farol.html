@@ -1,0 +1,904 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Nulavio · Direção Farol</title>
+<style>
+:root{--mono:"JetBrains Mono","Noto Sans Mono",monospace;--sans:"Noto Sans",system-ui,sans-serif}
+html,body{margin:0;padding:0;background:transparent}
+*{box-sizing:border-box}
+.board{display:flex;flex-direction:column;gap:22px;font-family:var(--sans)}
+.scene{display:flex;flex-direction:column}
+.cap{display:inline-flex;align-items:center;gap:8px;align-self:flex-start;background:#0B1623;color:#F1F7F5;font:600 12px/1 var(--sans);padding:6px 10px;border-radius:4px;margin-bottom:6px}
+.cap b{color:#6FE0C5}
+.cap span{color:#BFD0D6;font-weight:400}
+.zoom{zoom:var(--z,.55);width:1280px}
+svg.i{width:16px;height:16px;flex:none;fill:none;stroke:currentColor;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round}
+svg.nv{width:14px;height:16px;flex:none}
+
+/* ---------- themes ---------- */
+.t-light{--strip:#E2EBEE;--toolbar:#FFFFFF;--tabsel:#FFFFFF;--field:#F1F7F5;--fieldb:#6B8794;--text:#0B1623;--text2:#3A6273;--muted:#4F7383;--hair:#BFD0D6;--accent:#0F7A68;--accent-on:#FFFFFF;--tint:#DDF8F0;--icon:#23495A;--tabtext:#23495A;--band:#0B1623;--warn:#8A5A10;--warnt:#FBEBD3;--crit:#A8323A;--critt:#F9DEDF;--group:#5B47B8;--popup:#FFFFFF;--popb:#BFD0D6;--canvas:#F1F7F5;--sunken:#E2EBEE;--shadow:0 4px 12px rgba(7,15,24,.16),0 12px 32px rgba(7,15,24,.14);
+ --pbg:#FFFFFF;--ptext:#1E2329;--pmuted:#57606A;--pcode:#F3F4F6;--pcodeb:#D8DEE4;--plink:#0B5CAD;color-scheme:light}
+.t-dark{--strip:#0B1623;--toolbar:#112432;--tabsel:#112432;--field:#0B1623;--fieldb:#6E93A2;--text:#F1F7F5;--text2:#BFD0D6;--muted:#8FAAB5;--hair:#23495A;--accent:#6FE0C5;--accent-on:#0B1623;--tint:#0E3B33;--icon:#BFD0D6;--tabtext:#BFD0D6;--band:#04080D;--warn:#E7AE61;--warnt:#3A2A12;--crit:#E26D70;--critt:#3F1A1D;--group:#C2B0F7;--popup:#183746;--popb:#23495A;--canvas:#0B1623;--sunken:#070F18;--shadow:0 4px 12px rgba(0,0,0,.45),0 12px 32px rgba(0,0,0,.5);
+ --pbg:#15181C;--ptext:#E6E8EA;--pmuted:#A0A8B0;--pcode:#1E2227;--pcodeb:#30363D;--plink:#6CB6FF;color-scheme:dark}
+.p-sky{--id:#8CCBF5}.p-sand{--id:#EBC77F}.p-rose{--id:#F4A8BD}.p-slate{--id:#BFD0D6}
+
+/* ---------- window ---------- */
+.win{position:relative;width:1280px;height:760px;display:flex;flex-direction:column;overflow:hidden;border-radius:10px;background:var(--toolbar);color:var(--text);font:13px/1.3 var(--sans);box-shadow:0 0 0 1px rgba(7,15,24,.45),0 10px 28px rgba(7,15,24,.22)}
+.win.c{width:630px;height:234px}
+
+/* ---------- farol band (always night tokens) ---------- */
+.band{--icon:#BFD0D6;--field:#112432;--fieldb:#6E93A2;--text:#F1F7F5;--muted:#8FAAB5;--accent:#6FE0C5;--tint:#0E3B33;
+ position:relative;flex:none;height:26px;background:var(--band);color:#F1F7F5;display:flex;align-items:stretch;font:600 12px/1 var(--sans);border-bottom:1px solid #23495A;z-index:5}
+.band::before{content:"";position:absolute;left:0;right:0;top:0;height:2px;background:var(--id);z-index:2}
+.flag{flex:none;display:flex;align-items:center;gap:6px;padding:2px 20px 0 10px;background:var(--id);color:#070F18;font-weight:700;white-space:nowrap;clip-path:polygon(0 0,100% 0,calc(100% - 9px) 100%,0 100%)}
+.flag.temp{clip-path:none;padding-right:14px}
+.flag svg.i{width:14px;height:14px;stroke-width:2}
+.bitems{display:flex;align-items:center;gap:6px;padding:2px 0 0 8px}
+.badge{display:inline-flex;align-items:center;gap:5px;height:18px;padding:0 7px;border:1px solid #6E93A2;border-radius:4px;color:#F1F7F5;font-weight:600;white-space:nowrap;background:var(--band)}
+.badge svg.i{width:13px;height:13px}
+.badge .m{color:#8FAAB5;font-weight:500}
+.bcenter{position:absolute;left:50%;top:2px;bottom:0;transform:translateX(-50%);display:flex;align-items:center;gap:6px;color:#F1F7F5;white-space:nowrap}
+.bcenter .m{color:#8FAAB5;font-weight:500}
+.bright{margin-left:auto;display:flex;align-items:center;gap:4px;padding:2px 2px 0 8px}
+.wc{width:26px;height:22px;display:grid;place-items:center;color:#BFD0D6;border-radius:4px}
+.wc svg.i{width:12px;height:12px}
+.bbtn{display:inline-flex;align-items:center;gap:4px;height:18px;padding:0 7px;border-radius:4px;background:#F1F7F5;color:#0B1623;font-weight:700;white-space:nowrap}
+.bbtn svg.i{width:11px;height:11px}
+.bbtn.ghost{background:transparent;color:#F1F7F5;border:1px solid #6E93A2}
+
+/* temporary daymark: dashed */
+.s-temp .band::before{background:repeating-linear-gradient(90deg,#F1F7F5 0 8px,transparent 8px 13px)}
+.flag.temp{background:transparent;color:#F1F7F5;box-shadow:inset 0 0 0 1.5px transparent;position:relative}
+.flag.temp::after{content:"";position:absolute;inset:5px 2px 3px 4px;border:1.5px dashed #F1F7F5;border-radius:4px}
+/* private daymark: plum field with dots */
+.s-priv .band{--band:#2A1745;background:#2A1745 radial-gradient(circle,#9E86C9 0 1px,transparent 1.4px) 0 0/7px 7px;border-bottom-color:#4A3570}
+.s-priv .band::before{background:repeating-linear-gradient(90deg,#9E86C9 0 2px,transparent 2px 6px)}
+/* AI workspace daymark: scanlines + double frame */
+.s-ai .band{background:#0B1623 repeating-linear-gradient(180deg,transparent 0 3px,#6E93A2 3px 4px)}
+.s-ai .band::before{background:#F1F7F5}
+.s-ai::after{content:"";position:absolute;inset:0;border:3px solid var(--agent);border-radius:inherit;box-shadow:inset 0 0 0 2px var(--toolbar),inset 0 0 0 3px var(--agent);pointer-events:none;z-index:40}
+.t-light.s-ai{--agent:#0B1623}.t-dark.s-ai{--agent:#F1F7F5}
+.badge.inv{background:#F1F7F5;color:#0B1623;border-color:#F1F7F5;font-weight:700}
+/* automation daymark: stripes */
+.s-auto .band::before{background:#E26D70}
+.stripes{flex:1;align-self:stretch;margin:2px 0 0 8px;background:repeating-linear-gradient(135deg,#E26D70 0 7px,var(--band) 7px 14px)}
+.badge.crit{background:#E26D70;color:#0B1623;border-color:#E26D70;font-weight:700}
+.badge.warn{border-color:#E7AE61;color:#F1F7F5}
+.badge.warn svg.i{color:#E7AE61}
+.badge.warn u{color:#E7AE61;text-underline-offset:2px}
+
+/* ---------- tab strip ---------- */
+.strip{flex:none;height:34px;background:var(--strip);display:flex;align-items:flex-end;padding:0 4px;border-bottom:1px solid var(--hair);position:relative}
+.tab{position:relative;flex:none;height:30px;width:178px;display:flex;align-items:center;gap:8px;padding:0 10px;color:var(--tabtext);border-radius:6px 6px 0 0;white-space:nowrap}
+.tab .t{flex:1;overflow:hidden;-webkit-mask-image:linear-gradient(90deg,#000 78%,transparent);mask-image:linear-gradient(90deg,#000 78%,transparent)}
+.tab::before{content:"";position:absolute;left:0;top:8px;height:14px;width:1px;background:var(--hair)}
+.tab.first::before,.tab.sel::before,.tab.sel+.tab::before,.glabel+.tab::before{display:none}
+.tab.sel{background:var(--tabsel);color:var(--text);height:31px;margin-bottom:-1px;font-weight:600;box-shadow:inset 0 2px 0 var(--accent),inset 1px 0 0 var(--hair),inset -1px 0 0 var(--hair);z-index:2}
+.tab.g::after{content:"";position:absolute;left:8px;right:8px;bottom:2px;height:2px;border-radius:1px;background:var(--group)}
+.tab.pin{width:42px;justify-content:center;padding:0}
+.tab .x{width:20px;height:20px;display:grid;place-items:center;border-radius:4px;color:var(--icon)}
+.tab .x svg.i{width:12px;height:12px}
+.glabel{flex:none;align-self:center;margin:2px 4px 0 8px;height:22px;display:flex;align-items:center;gap:6px;padding:0 8px;border:1.5px solid var(--group);border-radius:4px;color:var(--text);font-weight:600;font-size:12px;white-space:nowrap}
+.glabel i{width:8px;height:8px;background:var(--group);border-radius:2px}
+.strip .tb{align-self:center;margin-top:2px}
+.fav{width:16px;height:16px;flex:none;border-radius:3px;display:grid;place-items:center;font:700 9px/1 var(--sans);color:#fff;background:#3D4F5C}
+.f2{background:#5A4A3A}.f3{background:#2F4858}.f4{background:#4B4453}.f5{background:#47555E}
+.fav.nvf{background:transparent}
+
+/* ---------- nav bar ---------- */
+.nav{flex:none;height:40px;background:var(--toolbar);display:flex;align-items:center;gap:2px;padding:0 6px;border-bottom:1px solid var(--hair);position:relative;z-index:4}
+.tb{flex:none;width:28px;height:28px;display:grid;place-items:center;border-radius:4px;color:var(--icon);position:relative}
+.tb.dis{opacity:.45}
+.tb.on{background:var(--tint);color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.tb .dotw{position:absolute;right:3px;top:3px;width:8px;height:8px;border-radius:2px;background:#E7AE61;box-shadow:0 0 0 1.5px var(--toolbar)}
+.field{position:relative;flex:1;min-width:0;height:30px;margin:0 8px;display:flex;align-items:center;padding:0 3px;background:var(--field);border:1px solid var(--fieldb);border-radius:6px;color:var(--text)}
+.field.focus{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.fi{flex:none;width:24px;height:24px;display:grid;place-items:center;color:var(--icon);border-radius:4px}
+.fi.on{background:var(--tint);color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.url{flex:1;min-width:0;padding:0 6px;font:13px/1 var(--mono);color:var(--muted);white-space:nowrap;overflow:hidden}
+.url b{color:var(--text);font-weight:400}
+.url .hl{background:var(--accent);color:var(--accent-on)}
+.url .hl b{color:var(--accent-on)}
+.idlabel{flex:none;display:flex;align-items:center;gap:6px;height:22px;padding:0 8px;margin-right:2px;border-radius:4px;background:var(--sunken);font:600 12px/1 var(--sans);color:var(--text)}
+.pchip{flex:none;height:28px;display:flex;align-items:center;gap:2px;padding:0 3px;border-radius:4px;color:var(--icon)}
+.idsq{width:20px;height:20px;border-radius:4px;background:var(--id);color:#070F18;display:grid;place-items:center;flex:none}
+.idsq svg.i{width:14px;height:14px;stroke-width:2}
+.pchip .chev{width:12px;height:12px}
+
+/* ---------- page: docs site ---------- */
+.page{flex:1;min-height:0;display:flex;background:var(--pbg);color:var(--ptext);overflow:hidden;position:relative}
+.site{flex:1;min-width:0;overflow:hidden;position:relative}
+.sitehead{height:52px;display:flex;align-items:center;gap:28px;padding:0 48px;border-bottom:1px solid var(--pcodeb);font:600 15px/1 var(--sans)}
+.sitehead .lg{display:flex;align-items:center;gap:8px;font-weight:700}
+.sitehead .lg i{width:18px;height:18px;border-radius:4px;background:#3D4F5C}
+.sitehead span{color:var(--pmuted);font-weight:500;font-size:14px}
+.doc{max-width:780px;margin:0 auto;padding:30px 40px}
+.doc .crumb{font-size:13px;color:var(--pmuted)}
+.doc h1{font:700 34px/1.2 var(--sans);margin:6px 0 12px;letter-spacing:-.01em}
+.doc p{font:16px/1.6 var(--sans);margin:0 0 14px}
+.doc h2{font:700 22px/1.3 var(--sans);margin:22px 0 8px}
+.doc pre{font:13px/1.6 var(--mono);background:var(--pcode);border:1px solid var(--pcodeb);border-radius:6px;padding:12px 16px;margin:0 0 14px;white-space:pre;overflow:hidden}
+.doc code{font:14px var(--mono);background:var(--pcode);padding:1px 4px;border-radius:4px}
+.doc a{color:var(--plink)}
+.selx{background:#B4D5FE;color:#0B1623}
+
+/* ---------- popups ---------- */
+.pop{position:absolute;background:var(--popup);border:1px solid var(--popb);border-radius:10px;box-shadow:var(--shadow);color:var(--text);z-index:30}
+.btn{height:30px;padding:0 12px;border-radius:6px;display:inline-flex;align-items:center;gap:6px;font:600 13px/1 var(--sans);border:1px solid var(--fieldb);color:var(--text);background:var(--toolbar);white-space:nowrap}
+.btn.primary{background:var(--accent);color:var(--accent-on);border-color:var(--accent)}
+.btn.sm{height:24px;padding:0 8px;font-size:12px}
+.btn svg.i{width:14px;height:14px}
+
+/* urlbar results (scene 1 dark) */
+.urlview{position:absolute;left:-2px;right:-2px;top:33px;background:var(--popup);border:1px solid var(--popb);border-radius:6px;box-shadow:var(--shadow);padding:8px;z-index:30;color:var(--text);font-size:13px}
+.uvcap{font:600 12px/1 var(--sans);color:var(--muted);padding:6px 8px 8px;display:flex;align-items:center;gap:8px}
+.qa{display:flex;gap:8px;padding:0 8px 10px}
+.qb{height:30px;display:flex;align-items:center;gap:6px;padding:0 10px;border:1px solid var(--fieldb);border-radius:6px;font:500 13px/1 var(--sans);white-space:nowrap}
+.qb.sel{background:var(--tint);border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent);font-weight:600}
+.hint{display:flex;align-items:center;gap:8px;margin:0 8px 6px;padding:7px 10px;border-radius:4px;background:var(--toolbar);color:var(--text2);font-size:13px}
+kbd{font:600 12px/1 var(--mono);min-width:20px;height:20px;padding:0 5px;border:1px solid var(--fieldb);border-radius:4px;display:inline-grid;place-items:center;color:var(--text);background:var(--canvas)}
+.ur{height:34px;display:flex;align-items:center;gap:10px;padding:0 8px;border-radius:4px}
+.ur .u{font:12px/1 var(--mono);color:var(--muted)}
+.ur .r{margin-left:auto;color:var(--muted);font-size:12px}
+.uvsec{font:600 12px/1 var(--sans);color:var(--muted);padding:10px 8px 4px;border-top:1px solid var(--popb);margin-top:4px}
+
+/* activity pill */
+.act{display:flex;align-items:center;gap:8px;height:22px;padding:0 3px 0 9px;border:1px solid #6FE0C5;border-radius:4px;background:#0E3B33;color:#F1F7F5;font:600 12px/1 var(--sans);white-space:nowrap}
+.act .dot{width:7px;height:7px;border-radius:50%;background:#6FE0C5}
+.act .m{color:#BFD0D6;font-weight:500}
+.act .ab{height:16px;padding:0 6px;border-radius:3px;display:flex;align-items:center;gap:4px;border:1px solid #6E93A2;color:#F1F7F5;font-size:11px}
+.act .ab.stop{background:#F1F7F5;color:#0B1623;border-color:#F1F7F5;font-weight:700}
+.act .ab svg.i{width:10px;height:10px}
+
+/* ---------- annotations (not UI) ---------- */
+.ann{position:absolute;z-index:60;width:24px;height:24px;border-radius:50%;background:#C2185B;color:#fff;font:700 13px/24px var(--sans);text-align:center;box-shadow:0 0 0 2px #fff,0 2px 6px rgba(0,0,0,.35)}
+.legend{margin-top:14px;background:#0B1623;color:#F1F7F5;border-radius:6px;padding:14px 18px;font:15px/1.5 var(--sans)}
+.legend b{color:#6FE0C5}
+.legend .n{display:inline-grid;place-items:center;width:20px;height:20px;border-radius:50%;background:#C2185B;color:#fff;font:700 12px/1 var(--sans);margin-right:6px;vertical-align:1px}
+.legend .row{display:flex;gap:24px}
+.legend .row>div{flex:1}
+.legend kbd{background:#112432;color:#F1F7F5;border-color:#6E93A2}
+
+/* ---------- focus mode ---------- */
+.band.merged{height:42px}
+.band.merged .flag{padding:2px 24px 0 12px;font-size:13px;clip-path:polygon(0 0,100% 0,calc(100% - 12px) 100%,0 100%)}
+.band.merged .tb{width:30px;height:30px}
+.band.merged .field{height:30px;margin:0 6px}
+.band .tb{color:#BFD0D6}
+.band .tabsbtn{display:flex;align-items:center;gap:6px;height:28px;padding:0 8px;border:1px solid #6E93A2;border-radius:6px;color:#F1F7F5;font-weight:600;white-space:nowrap}
+.band .vault{display:grid;place-items:center;width:26px;height:26px;border:1px solid #6E93A2;border-radius:4px;color:#F1F7F5}
+.band .vault svg.i{width:14px;height:14px}
+.edgehint{position:absolute;left:0;right:0;top:0;height:6px;z-index:6}
+
+/* legend mini schematics */
+.mini{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:14px}
+.mcard{background:#0B1623;color:#F1F7F5;border-radius:6px;padding:12px;font:14px/1.45 var(--sans)}
+.mcard h4{margin:0 0 8px;font:700 14px/1.2 var(--sans);color:#F1F7F5}
+.mcard p{margin:8px 0 0;color:#BFD0D6}
+.mwin{position:relative;height:130px;border-radius:6px;overflow:hidden;background:#15181C;box-shadow:0 0 0 1px #23495A}
+.mrow{height:30px;background:#04080D;display:flex;align-items:center;gap:6px;padding:0 6px 0 0;position:relative;border-bottom:1px solid #23495A}
+.mrow::before{content:"";position:absolute;left:0;right:0;top:0;height:2px;background:#8CCBF5}
+.mflag{align-self:stretch;width:30px;background:#8CCBF5;color:#070F18;display:grid;place-items:center}
+.mfield{flex:1;height:20px;border:1px solid #6E93A2;border-radius:4px;background:#112432;display:flex;align-items:center;gap:4px;padding:0 4px;color:#BFD0D6;font:10px var(--mono)}
+.mfield svg.i{width:11px;height:11px}
+.mtabs{position:absolute;left:0;right:0;top:31px;height:30px;display:flex;align-items:flex-end;gap:2px;padding:0 6px;border-bottom:1px solid #6E93A2}
+.mtab{height:24px;flex:1;border-radius:4px 4px 0 0;background:rgba(241,247,245,.06);color:#BFD0D6;font:11px/24px var(--sans);padding:0 6px;white-space:nowrap;overflow:hidden}
+.mtab.s{background:#112432;color:#F1F7F5;box-shadow:inset 0 2px 0 #6FE0C5}
+.mlines{position:absolute;left:14px;right:14px;top:42px}
+.mlines i{display:block;height:6px;border-radius:2px;background:#30363D;margin-bottom:8px}
+.glass{background:rgba(11,22,35,.9);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px)}
+.solid{background:#0B1623}
+.hc .mwin{background:#000;box-shadow:0 0 0 2px #fff}
+.hc .mrow{background:#000;border-bottom:2px solid #fff}
+.hc .mrow::before{display:none}
+.hc .mflag{background:#000;color:#fff;box-shadow:inset 0 0 0 2px #fff}
+.hc .mfield{background:#000;border:2px solid #fff;color:#fff}
+.hc .mtabs{background:#000;border-bottom:2px solid #fff}
+.hc .mtab{background:#000;color:#fff}
+.hc .mtab.s{box-shadow:inset 0 0 0 2px #FFFF00;color:#FFFF00}
+.hc .mlines i{background:#fff;opacity:.6}
+.presets{display:flex;gap:8px}
+.pre{flex:1;text-align:center;font:12px/1.3 var(--sans);color:#BFD0D6}
+.pre .sk{height:70px;border-radius:4px;background:#15181C;box-shadow:0 0 0 1px #23495A;position:relative;overflow:hidden;margin-bottom:6px}
+.pre.on .sk{box-shadow:0 0 0 2px #6FE0C5}
+.pre.on{color:#F1F7F5;font-weight:600}
+.sk .b{position:absolute;left:0;right:0;top:0;height:6px;background:#04080D;border-top:2px solid #8CCBF5}
+.sk .t{position:absolute;left:0;right:0;top:6px;height:7px;background:#0B1623}
+.sk .n{position:absolute;left:0;right:0;top:13px;height:8px;background:#112432}
+.sk .v{position:absolute;left:0;top:6px;bottom:0;width:22px;background:#0B1623;border-right:1px solid #23495A}
+.sk .v i{display:block;height:5px;margin:4px 3px;background:#23495A;border-radius:1px}
+.sk .v i:first-child{background:#6FE0C5;width:2px;margin-left:1px}
+.sk .f{position:absolute;left:0;right:0;top:0;height:10px;background:#04080D;border-top:2px solid #8CCBF5}
+
+/* ---------- assistant panel ---------- */
+.panel{width:404px;flex:none;background:var(--canvas);border-left:1px solid var(--hair);display:flex;flex-direction:column;color:var(--text);font:13px/1.45 var(--sans);position:relative}
+.ph{flex:none;height:40px;display:flex;align-items:center;gap:8px;padding:0 6px 0 14px;border-bottom:1px solid var(--hair);background:var(--toolbar);font:600 14px/1 var(--sans)}
+.ph .sp{flex:1}
+.ph .pol{font:500 12px/1 var(--sans);color:var(--text2);border:1px solid var(--hair);border-radius:4px;padding:4px 6px}
+.dest{flex:none;display:flex;align-items:center;gap:8px;padding:8px 14px;border-bottom:1px solid var(--hair);background:var(--toolbar);font-size:12px;color:var(--text2)}
+.dsel{flex:1;display:flex;align-items:center;gap:6px;height:28px;padding:0 8px;border:1px solid var(--fieldb);border-radius:6px;font:600 13px/1 var(--sans);color:var(--text)}
+.dsel .h{font:12px/1 var(--mono);color:var(--text2);font-weight:400}
+.dsel .chev{margin-left:auto;width:12px;height:12px}
+.seg{flex:none;display:flex;margin:10px 14px 0;border:1px solid var(--fieldb);border-radius:6px;overflow:hidden}
+.seg span{flex:1;height:28px;display:flex;align-items:center;justify-content:center;gap:6px;font:500 13px/1 var(--sans);color:var(--text2)}
+.seg span+span{border-left:1px solid var(--fieldb)}
+.seg .on{background:var(--text);color:var(--toolbar);font-weight:600}
+.seg svg.i{width:14px;height:14px}
+.thread{flex:1;min-height:0;overflow:hidden;padding:10px 14px;display:flex;flex-direction:column;gap:10px}
+.mu{background:var(--toolbar);border:1px solid var(--hair);border-radius:6px;padding:9px 12px}
+.who{font:600 12px/1 var(--sans);color:var(--muted);display:flex;align-items:center;gap:6px;margin-bottom:6px}
+.who svg.i{width:13px;height:13px}
+.sent{margin-top:8px;padding-top:7px;border-top:1px solid var(--hair);display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);flex-wrap:wrap}
+.sent svg.i{width:13px;height:13px}
+.sent .h{font:12px var(--mono)}
+.ans p{margin:0 0 6px}
+.ans ol{margin:0 0 6px;padding-left:20px}
+.ans li{margin-bottom:4px}
+.ans code{font:12px var(--mono);background:var(--sunken);padding:1px 4px;border-radius:4px}
+.ref{display:inline-grid;place-items:center;min-width:16px;height:16px;padding:0 3px;border-radius:4px;border:1px solid var(--accent);color:var(--accent);font:700 10px/1 var(--sans);vertical-align:1px;margin-left:2px}
+.caret{display:inline-block;width:7px;height:15px;background:var(--text);vertical-align:-3px;margin-left:1px}
+.srow{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text2);margin-top:4px}
+.srow .sp{flex:1}
+.srcs{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;font-size:12px;color:var(--text2);align-items:center}
+.src{display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 7px;border:1px solid var(--hair);border-radius:4px;background:var(--toolbar);color:var(--text)}
+.composer{flex:none;margin:0 10px 10px;background:var(--toolbar);border:1px solid var(--fieldb);border-radius:10px;padding:10px;position:relative}
+.ctxl{font:600 12px/1 var(--sans);color:var(--text2);margin-bottom:6px;display:flex;gap:6px;align-items:center}
+.ctxl .m{font-weight:400;color:var(--muted)}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 3px 0 8px;border:1px solid var(--accent);background:var(--tint);border-radius:4px;font:600 12px/1 var(--sans);color:var(--text)}
+.chip .m{font-weight:400;color:var(--text2)}
+.chip .cx{width:20px;height:20px;display:grid;place-items:center;border-radius:3px;color:var(--text)}
+.chip .cx svg.i{width:12px;height:12px}
+.chip.add{border-color:var(--fieldb);background:transparent;color:var(--text2);padding:0 8px;font-weight:500}
+.chip svg.i{width:13px;height:13px}
+.ta{font:14px/1.45 var(--sans);padding:8px 2px 6px;color:var(--text)}
+.ta .cur{display:inline-block;width:1.5px;height:17px;background:var(--text);vertical-align:-3px}
+.cfoot{display:flex;align-items:center;gap:8px}
+.rcpt{flex:1;font-size:12px;color:var(--muted)}
+.rcpt .h{font:12px var(--mono);color:var(--text2)}
+.nosend{font-size:12px;color:var(--muted);margin:6px 2px 0}
+.cmenu{position:absolute;width:340px;background:var(--popup);border:1px solid var(--popb);border-radius:6px;box-shadow:var(--shadow);padding:4px;font:13px/1 var(--sans);color:var(--text);z-index:30}
+.cmi{height:30px;display:flex;align-items:center;gap:10px;padding:0 10px;border-radius:4px;white-space:nowrap}
+.cmi .k{margin-left:auto;color:var(--muted);font-size:12px}
+.cmi.hl{background:var(--tint);box-shadow:inset 0 0 0 1px var(--accent);font-weight:600}
+.cmi svg.i{width:15px;height:15px}
+.cmi .sp16{width:15px}
+.csep{height:1px;background:var(--popb);margin:4px 6px}
+
+/* ---------- security strip ---------- */
+.sgrid{display:grid;grid-template-columns:630px 630px;gap:18px 20px}
+.crop{display:flex;flex-direction:column}
+.clab{align-self:flex-start;font:600 15px/1 var(--sans);background:#0B1623;color:#F1F7F5;padding:6px 10px;border-radius:4px;margin-bottom:8px}
+.clab b{color:#6FE0C5}
+.win.c .tab{width:150px}
+.mpage{padding:16px 28px}
+.mpage h3{font:700 22px/1.2 var(--sans);margin:0 0 6px}
+.mpage p{font:14px/1.5 var(--sans);margin:0;color:var(--pmuted)}
+.shellp{flex:1;background:var(--canvas);color:var(--text);display:flex;gap:14px;padding:14px 24px;align-items:flex-start}
+.ltile{width:40px;height:40px;border-radius:6px;background:var(--sunken);display:grid;place-items:center;color:var(--text);flex:none}
+.ltile svg.i{width:22px;height:22px}
+.shellp h3{font:700 17px/1.2 var(--sans);margin:0 0 4px}
+.shellp p{font:13px/1.45 var(--sans);margin:0 0 10px;color:var(--text2)}
+.shellp code{font:12px var(--mono);color:var(--text)}
+.pmenu{right:40px;top:96px;width:236px;padding:4px}
+.pmi{height:30px;display:flex;align-items:center;gap:8px;padding:0 8px;border-radius:4px;font:13px/1 var(--sans);white-space:nowrap}
+.pmi .m{margin-left:auto;font-size:12px;color:var(--text2);display:flex;align-items:center;gap:4px}
+.pmi .m svg.i{width:13px;height:13px}
+.pmi.cur{background:var(--sunken);font-weight:600}
+.idsq .lk{position:absolute}
+.lockb{position:relative}
+.lockb::after{content:"";position:absolute;right:-4px;bottom:-4px;width:12px;height:12px;border-radius:3px;background:#0B1623 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none' stroke='%23F1F7F5' stroke-width='2.4' stroke-linecap='round'%3E%3Crect x='4.5' y='9' width='11' height='8' rx='1.5'/%3E%3Cpath d='M7 9V6.5a3 3 0 0 1 6 0V9'/%3E%3C/svg%3E") center/10px no-repeat;box-shadow:0 0 0 1.5px var(--popup)}
+.dlp{right:6px;top:96px;width:384px;padding:8px}
+.dlh{font:600 12px/1 var(--sans);color:var(--muted);padding:2px 4px 8px}
+.dlrow{display:flex;gap:10px;padding:8px;border-radius:6px;background:var(--warnt)}
+.dlrow .ft{width:34px;height:34px;border-radius:6px;display:grid;place-items:center;background:var(--toolbar);color:var(--warn);flex:none;box-shadow:inset 0 0 0 1px var(--warn)}
+.dlrow .nm{font:600 13px/1.2 var(--mono);color:var(--text)}
+.dlrow .ds{font:12px/1.35 var(--sans);color:var(--warn);display:flex;gap:5px;align-items:flex-start;margin:3px 0 7px}
+.dlrow .ds svg.i{width:13px;height:13px;margin-top:1px}
+.dlrow .bt{display:flex;gap:6px}
+.privstrip{--strip:#1F1233;--toolbar:#2B1A45;--tabsel:#2B1A45;--field:#3A2759;--fieldb:#9E86C9;--text:#F1F7F5;--muted:#C9B8E8;--hair:#4A3570;--icon:#E0D6F0;--tabtext:#E0D6F0;--accent:#C9B8E8}
+.privind{align-self:center;margin:2px 6px 0 auto;width:24px;height:24px;border-radius:50%;background:#7542C2;color:#fff;display:grid;place-items:center}
+.privind svg.i{width:14px;height:14px}
+.autofield{background:repeating-linear-gradient(-45deg,rgba(226,109,112,.22) 0 9px,transparent 9px 18px),var(--field)}
+.robot{color:var(--crit)}
+
+/* ---------- settings ---------- */
+.shell{flex:1;min-height:0;display:flex;background:#F1F7F5;color:#0B1623;font:14px/1.5 var(--sans)}
+.snav{width:268px;flex:none;padding:18px 12px;border-right:1px solid #BFD0D6;display:flex;flex-direction:column;gap:2px}
+.stitle{font:600 20px/1.2 var(--sans);padding:0 10px 12px;display:flex;align-items:center;gap:8px}
+.ssearch{height:34px;display:flex;align-items:center;gap:8px;padding:0 6px 0 10px;background:#FFFFFF;border:1px solid #6B8794;border-radius:6px;color:#4F7383;margin-bottom:12px;font-size:13px;white-space:nowrap}
+.ssearch .sp{flex:1}
+.sni{height:36px;display:flex;align-items:center;gap:10px;padding:0 10px;border-radius:6px;color:#23495A;font-weight:500;position:relative}
+.sni svg.i{width:18px;height:18px}
+.sni.on{background:#DDF8F0;color:#0B1623;font-weight:600}
+.sni.on::before{content:"";position:absolute;left:0;top:8px;bottom:8px;width:3px;border-radius:2px;background:#0F7A68}
+.sni .ct{margin-left:auto;font-size:12px;color:#3A6273;font-weight:500}
+.snav .ver{margin-top:auto;padding:0 10px;font-size:12px;color:#4F7383}
+.smain{flex:1;min-width:0;padding:22px 40px;overflow:hidden;background:#FFFFFF}
+.scrumb{font-size:13px;color:#4F7383;margin-bottom:6px}
+.shead{display:flex;align-items:flex-end;gap:16px}
+.shead h1{font:600 24px/1.2 var(--sans);margin:0}
+.shead .sub{color:#3A6273;margin:6px 0 0;max-width:620px}
+.shead .sp{flex:1}
+.ptable{margin-top:18px;border-top:1px solid #BFD0D6}
+.prow{display:grid;grid-template-columns:200px 1fr 128px 214px;align-items:center;min-height:58px;border-bottom:1px solid #BFD0D6;gap:14px;padding:0 6px}
+.prow.phd{min-height:32px;font:600 12px/1 var(--sans);color:#4F7383}
+.pname{display:flex;align-items:center;gap:12px}
+.tok{width:32px;height:32px;border-radius:6px;background:var(--id);display:grid;place-items:center;color:#070F18;flex:none;position:relative}
+.tok svg.i{width:18px;height:18px;stroke-width:1.9}
+.tok.temp{background:transparent;border:2px dashed #3A6273;color:#3A6273}
+.tok.ai{background:#0B1623;color:#F1F7F5}
+.pn{font-weight:600;line-height:1.2}
+.pt{font-size:12px;color:#3A6273;line-height:1.3}
+.tag{display:inline-block;font:600 11px/1 var(--sans);padding:3px 5px;border-radius:3px;background:#E2EBEE;color:#23495A;margin-left:6px;vertical-align:1px}
+.prot{display:flex;align-items:center;gap:8px}
+.prot svg.i{color:#3A6273;width:17px;height:17px}
+.prot .m{color:#3A6273}
+.st{display:flex;align-items:center;gap:6px;font-weight:500}
+.st svg.i{width:15px;height:15px}
+.pact{display:flex;gap:8px;justify-content:flex-end}
+.t-light .btn{--toolbar:#FFFFFF}
+.ssec{margin-top:22px;display:grid;grid-template-columns:1fr 1fr;gap:28px}
+.ssec h2{font:600 16px/1.3 var(--sans);margin:0 0 4px}
+.ssec p{margin:0 0 10px;color:#3A6273;font-size:13px}
+.selectx{display:inline-flex;align-items:center;gap:8px;height:32px;padding:0 10px;border:1px solid #6B8794;border-radius:6px;background:#fff;font-weight:500}
+.saved{display:inline-flex;align-items:center;gap:4px;margin-left:10px;font-size:13px;color:#3A6273}
+.bprev{border-radius:6px;overflow:hidden;box-shadow:0 0 0 1px #BFD0D6;width:100%}
+.bprev .band{border-bottom:none}
+.foot{background:#0B1623;color:#BFD0D6;font:12px/1.5 var(--sans);padding:8px 12px;border-radius:4px}
+.foot b{color:#F1F7F5}
+
+@media (prefers-reduced-motion:no-preference){
+ .act .dot{animation:pulse 1.6s cubic-bezier(.2,0,0,1) infinite}
+ .caret{animation:blink 1s steps(1) infinite}
+}
+@keyframes pulse{50%{opacity:.35}}
+@keyframes blink{50%{opacity:0}}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+ <symbol id="back" viewBox="0 0 20 20"><path d="M16 10H4M9 5l-5 5 5 5"/></symbol>
+ <symbol id="fwd" viewBox="0 0 20 20"><path d="M4 10h12M11 5l5 5-5 5"/></symbol>
+ <symbol id="reload" viewBox="0 0 20 20"><path d="M16 10a6 6 0 1 1-1.8-4.3M16.2 3.5V7h-3.5"/></symbol>
+ <symbol id="info" viewBox="0 0 20 20"><path d="M4 7h7M14.5 7H16M4 13h1.5M9 13h7"/><circle cx="12.8" cy="7" r="1.7"/><circle cx="7.2" cy="13" r="1.7"/></symbol>
+ <symbol id="shield" viewBox="0 0 20 20"><path d="M10 3l6 2.4V10c0 3.6-2.6 6.2-6 7.3C6.6 16.2 4 13.6 4 10V5.4z"/></symbol>
+ <symbol id="star" viewBox="0 0 20 20"><path d="M10 3.2l2.1 4.4 4.8.6-3.5 3.3.9 4.8L10 14l-4.3 2.3.9-4.8-3.5-3.3 4.8-.6z"/></symbol>
+ <symbol id="download" viewBox="0 0 20 20"><path d="M10 3.5v9M6 8.5l4 4 4-4M4 16.5h12"/></symbol>
+ <symbol id="ext" viewBox="0 0 20 20"><rect x="3.5" y="3.5" width="5.5" height="5.5" rx="1"/><rect x="11" y="3.5" width="5.5" height="5.5" rx="1"/><rect x="3.5" y="11" width="5.5" height="5.5" rx="1"/><path d="M13.75 11v5.5M11 13.75h5.5"/></symbol>
+ <symbol id="menu" viewBox="0 0 20 20"><path d="M4 6h12M4 10h12M4 14h12"/></symbol>
+ <symbol id="plus" viewBox="0 0 20 20"><path d="M10 4v12M4 10h12"/></symbol>
+ <symbol id="x" viewBox="0 0 20 20"><path d="M5.5 5.5l9 9M14.5 5.5l-9 9"/></symbol>
+ <symbol id="chev" viewBox="0 0 20 20"><path d="M6 8l4 4 4-4"/></symbol>
+ <symbol id="brief" viewBox="0 0 20 20"><rect x="3" y="6.5" width="14" height="10" rx="1.5"/><path d="M7.5 6.5V5a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v1.5M3 11h14"/></symbol>
+ <symbol id="vault" viewBox="0 0 20 20"><rect x="3" y="3.5" width="14" height="12.5" rx="2"/><circle cx="10" cy="9.75" r="2.9"/><path d="M10 6.85v1.2M5.5 16v1.2M14.5 16v1.2"/></symbol>
+ <symbol id="lock" viewBox="0 0 20 20"><rect x="4.5" y="9" width="11" height="8" rx="1.5"/><path d="M7 9V6.5a3 3 0 0 1 6 0V9"/></symbol>
+ <symbol id="hour" viewBox="0 0 20 20"><path d="M6 3h8M6 17h8M7 3v2.6L10 10l3-4.4V3M7 17v-2.6L10 10l3 4.4V17"/></symbol>
+ <symbol id="eyeoff" viewBox="0 0 20 20"><path d="M3 10s2.5-5 7-5 7 5 7 5-2.5 5-7 5-7-5-7-5z"/><circle cx="10" cy="10" r="2.2"/><path d="M4 16L16 4"/></symbol>
+ <symbol id="agent" viewBox="0 0 20 20"><path d="M4.5 3.5l4.6 12.5 1.9-5 5-1.9z"/><path d="M13 13l3.5 3.5"/></symbol>
+ <symbol id="robot" viewBox="0 0 20 20"><rect x="4" y="6.5" width="12" height="9" rx="2"/><path d="M10 3.5v3M7.5 13h5"/><circle cx="7.8" cy="10.3" r=".9"/><circle cx="12.2" cy="10.3" r=".9"/></symbol>
+ <symbol id="warn" viewBox="0 0 20 20"><path d="M10 3.5l7.5 13h-15z"/><path d="M10 8.5v3.6M10 14.4v.1"/></symbol>
+ <symbol id="mail" viewBox="0 0 20 20"><rect x="3" y="5" width="14" height="10.5" rx="1.5"/><path d="M3.5 6l6.5 5 6.5-5"/></symbol>
+ <symbol id="mute" viewBox="0 0 20 20"><path d="M3 8h3l4-3v10l-4-3H3zM13 8l4 4M17 8l-4 4"/></symbol>
+ <symbol id="bubble" viewBox="0 0 20 20"><path d="M4 4.5h12a1 1 0 0 1 1 1v7.5a1 1 0 0 1-1 1H9.5L6 16.8V14H4a1 1 0 0 1-1-1V5.5a1 1 0 0 1 1-1z"/><path d="M6.5 8h7M6.5 10.8h4.5"/></symbol>
+ <symbol id="stop" viewBox="0 0 20 20"><rect x="5.5" y="5.5" width="9" height="9" rx="1.2" fill="currentColor"/></symbol>
+ <symbol id="pause" viewBox="0 0 20 20"><path d="M7.5 5v10M12.5 5v10"/></symbol>
+ <symbol id="search" viewBox="0 0 20 20"><circle cx="9" cy="9" r="5"/><path d="M13 13l4 4"/></symbol>
+ <symbol id="home" viewBox="0 0 20 20"><path d="M3.5 9.5L10 4l6.5 5.5M5.5 8v8.5h9V8"/></symbol>
+ <symbol id="bank" viewBox="0 0 20 20"><path d="M3 7.5L10 3.5l7 4M4 16.5h12M5.5 9.5v5M10 9.5v5M14.5 9.5v5"/></symbol>
+ <symbol id="gear" viewBox="0 0 20 20"><circle cx="10" cy="10" r="2.6"/><path d="M10 2.8v2.4M10 14.8v2.4M2.8 10h2.4M14.8 10h2.4M4.9 4.9l1.7 1.7M13.4 13.4l1.7 1.7M4.9 15.1l1.7-1.7M13.4 6.6l1.7-1.7"/></symbol>
+ <symbol id="route" viewBox="0 0 20 20"><path d="M5 16.5V8a3 3 0 0 1 6 0v4a3 3 0 0 0 6 0V3.5"/><circle cx="5" cy="16.5" r=".6"/></symbol>
+ <symbol id="key" viewBox="0 0 20 20"><circle cx="7" cy="13" r="3.5"/><path d="M9.5 10.5L16 4M13.5 6.5l2 2"/></symbol>
+ <symbol id="globe" viewBox="0 0 20 20"><circle cx="10" cy="10" r="7"/><path d="M3 10h14M10 3c2.4 2.5 2.4 11.5 0 14M10 3c-2.4 2.5-2.4 11.5 0 14"/></symbol>
+ <symbol id="plug" viewBox="0 0 20 20"><path d="M7.5 3v4M12.5 3v4M5.5 7h9v2.5a4.5 4.5 0 0 1-9 0zM10 14v3"/></symbol>
+ <symbol id="infoc" viewBox="0 0 20 20"><circle cx="10" cy="10" r="7"/><path d="M10 9v5M10 6.4v.1"/></symbol>
+ <symbol id="users" viewBox="0 0 20 20"><circle cx="8" cy="7.5" r="2.8"/><path d="M3.5 16c.5-2.8 2.3-4.2 4.5-4.2s4 1.4 4.5 4.2"/><circle cx="14.3" cy="8.2" r="2"/><path d="M14 12c1.7 0 3 1.1 3.4 3.4"/></symbol>
+ <symbol id="folder" viewBox="0 0 20 20"><path d="M3 6a1 1 0 0 1 1-1h4l1.5 2H16a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/></symbol>
+ <symbol id="trash" viewBox="0 0 20 20"><path d="M4 6h12M8 6V4h4v2M5.5 6l.8 10.5h7.4l.8-10.5"/></symbol>
+ <symbol id="prog" viewBox="0 0 20 20"><path d="M5 3h6.5L15 6.5V17H5z"/><path d="M11.5 3v3.5H15M8.5 10.5L7 12l1.5 1.5M11.5 10.5L13 12l-1.5 1.5"/></symbol>
+ <symbol id="min" viewBox="0 0 20 20"><path d="M5 10h10"/></symbol>
+ <symbol id="max" viewBox="0 0 20 20"><rect x="5" y="5" width="10" height="10" rx="1"/></symbol>
+ <symbol id="sel" viewBox="0 0 20 20"><path d="M4 5h12M4 10h8M4 15h10"/></symbol>
+ <symbol id="doc" viewBox="0 0 20 20"><path d="M5 3h7l3 3v11H5z"/><path d="M12 3v3h3M7.5 10h5M7.5 13h5"/></symbol>
+ <symbol id="cpu" viewBox="0 0 20 20"><rect x="5.5" y="5.5" width="9" height="9" rx="1.5"/><path d="M8 3v2.5M12 3v2.5M8 14.5V17M12 14.5V17M3 8h2.5M3 12h2.5M14.5 8H17M14.5 12H17"/></symbol>
+ <symbol id="check" viewBox="0 0 20 20"><path d="M4.5 10.5l3.5 3.5 7.5-8"/></symbol>
+ <symbol id="more" viewBox="0 0 20 20"><circle cx="5" cy="10" r=".9"/><circle cx="10" cy="10" r=".9"/><circle cx="15" cy="10" r=".9"/></symbol>
+ <symbol id="copy" viewBox="0 0 20 20"><rect x="7" y="7" width="9.5" height="9.5" rx="1.5"/><path d="M13 7V4.5A1 1 0 0 0 12 3.5H4.5a1 1 0 0 0-1 1V12a1 1 0 0 0 1 1H7"/></symbol>
+ <symbol id="send" viewBox="0 0 20 20"><path d="M10 16V4M5 9l5-5 5 5"/></symbol>
+ <symbol id="tabs" viewBox="0 0 20 20"><rect x="3" y="6" width="14" height="10.5" rx="1.5"/><path d="M3 9.5h14M7 6V4h6v2"/></symbol>
+ <symbol id="nvs" viewBox="20 16 56 64"><path d="M30 45V26L66 70V26" fill="none" stroke="currentColor" stroke-width="11" stroke-linecap="round" stroke-linejoin="round"/><circle cx="30" cy="61" r="5.5" fill="currentColor"/></symbol>
+</svg>
+
+<div class="board">
+
+<!-- ===================== SCENE 1 LIGHT ===================== -->
+<section class="scene">
+ <div class="cap"><b>1</b> Janela do dia a dia <span>· tema claro · abas no topo, compacta</span></div>
+ <div class="zoom">
+ <div class="win t-light p-sky">
+  <div class="band">
+   <div class="flag"><svg class="i"><use href="#brief"/></svg>Trabalho</div>
+   <div class="bitems"><span class="badge"><svg class="i"><use href="#vault"/></svg>Protegido <span class="m">· desbloqueado</span></span></div>
+   <div class="bright"><span class="wc"><svg class="i"><use href="#min"/></svg></span><span class="wc"><svg class="i"><use href="#max"/></svg></span><span class="wc"><svg class="i"><use href="#x"/></svg></span></div>
+  </div>
+  <div class="strip">
+   <div class="tab pin first"><span class="fav f2"><svg class="i" style="width:12px;height:12px"><use href="#mail"/></svg></span></div>
+   <div class="glabel"><i></i>Projeto Atlas</div>
+   <div class="tab g"><span class="fav f3">B</span><span class="t">Quadro — board.example</span></div>
+   <div class="tab g"><span class="fav">D</span><span class="t">Especificação — docs.example</span></div>
+   <div class="tab g"><span class="fav f4">G</span><span class="t">PR #42 — git.example</span></div>
+   <div class="tab sel" style="width:236px"><span class="fav">D</span><span class="t">Guia de integração — docs.example/guia</span><span class="x"><svg class="i"><use href="#x"/></svg></span></div>
+   <div class="tab" style="width:150px"><svg class="i" style="width:14px;height:14px"><use href="#mute"/></svg><span class="fav f5">R</span><span class="t">Rádio</span></div>
+   <span class="tb"><svg class="i"><use href="#plus"/></svg></span>
+   <span class="tb" style="margin-left:auto"><svg class="i"><use href="#chev"/></svg></span>
+  </div>
+  <div class="nav">
+   <span class="tb"><svg class="i"><use href="#back"/></svg></span><span class="tb dis"><svg class="i"><use href="#fwd"/></svg></span><span class="tb"><svg class="i"><use href="#reload"/></svg></span>
+   <div class="field">
+    <span class="fi"><svg class="i"><use href="#info"/></svg></span><span class="fi"><svg class="i"><use href="#shield"/></svg></span>
+    <span class="url"><b>docs.example</b>/guia/integracao</span>
+    <span class="fi" title="Perguntar sobre esta página"><svg class="i"><use href="#bubble"/></svg></span><span class="fi"><svg class="i"><use href="#star"/></svg></span>
+   </div>
+   <span class="tb"><svg class="i"><use href="#download"/></svg></span>
+   <span class="pchip"><span class="idsq"><svg class="i"><use href="#brief"/></svg></span><svg class="i chev"><use href="#chev"/></svg></span>
+   <span class="tb"><svg class="i"><use href="#ext"/></svg></span><span class="tb"><svg class="i"><use href="#menu"/></svg></span>
+  </div>
+  <div class="page"><div class="site">
+   <div class="sitehead"><span class="lg"><i></i>docs.example</span><span>Guias</span><span>API</span><span>Status</span></div>
+   <div class="doc">
+    <div class="crumb">Documentação › Integrações</div>
+    <h1>Guia de integração</h1>
+    <p>Conecte sua conta à API de pagamentos em três passos: crie uma chave, registre um webhook e valide cada evento recebido.</p>
+    <h2>Autenticação</h2>
+    <p>Todas as chamadas usam HTTPS e uma chave de API no cabeçalho <code>Authorization</code>. Gere chaves separadas para testes e produção.</p>
+<pre>curl https://api.docs.example/v2/pagamentos \
+  -H "Authorization: Bearer $CHAVE_API" \
+  -d valor=4990 -d moeda=BRL</pre>
+    <h2>Webhooks</h2>
+    <p>Cada evento chega assinado. Calcule o HMAC-SHA256 do corpo bruto com o segredo do webhook e compare o resultado com o cabeçalho X-Assinatura antes de processá-lo.</p>
+   </div>
+  </div></div>
+ </div>
+ </div>
+</section>
+
+<!-- ===================== SCENE 1 DARK ===================== -->
+<section class="scene">
+ <div class="cap"><b>1</b> Janela do dia a dia <span>· tema escuro · Ctrl+L: ações do Nulavio no endereço</span></div>
+ <div class="zoom">
+ <div class="win t-dark p-sky">
+  <div class="band">
+   <div class="flag"><svg class="i"><use href="#brief"/></svg>Trabalho</div>
+   <div class="bitems"><span class="badge"><svg class="i"><use href="#vault"/></svg>Protegido <span class="m">· desbloqueado</span></span></div>
+   <div class="bright"><span class="wc"><svg class="i"><use href="#min"/></svg></span><span class="wc"><svg class="i"><use href="#max"/></svg></span><span class="wc"><svg class="i"><use href="#x"/></svg></span></div>
+  </div>
+  <div class="strip">
+   <div class="tab pin first"><span class="fav f2"><svg class="i" style="width:12px;height:12px"><use href="#mail"/></svg></span></div>
+   <div class="glabel"><i></i>Projeto Atlas</div>
+   <div class="tab g"><span class="fav f3">B</span><span class="t">Quadro — board.example</span></div>
+   <div class="tab g"><span class="fav">D</span><span class="t">Especificação — docs.example</span></div>
+   <div class="tab g"><span class="fav f4">G</span><span class="t">PR #42 — git.example</span></div>
+   <div class="tab sel" style="width:236px"><span class="fav">D</span><span class="t">Guia de integração — docs.example/guia</span><span class="x"><svg class="i"><use href="#x"/></svg></span></div>
+   <div class="tab" style="width:150px"><svg class="i" style="width:14px;height:14px"><use href="#mute"/></svg><span class="fav f5">R</span><span class="t">Rádio</span></div>
+   <span class="tb"><svg class="i"><use href="#plus"/></svg></span>
+   <span class="tb" style="margin-left:auto"><svg class="i"><use href="#chev"/></svg></span>
+  </div>
+  <div class="nav">
+   <span class="tb"><svg class="i"><use href="#back"/></svg></span><span class="tb dis"><svg class="i"><use href="#fwd"/></svg></span><span class="tb"><svg class="i"><use href="#reload"/></svg></span>
+   <div class="field focus">
+    <span class="fi"><svg class="i"><use href="#info"/></svg></span><span class="fi"><svg class="i"><use href="#shield"/></svg></span>
+    <span class="url"><span class="hl"><b>docs.example</b>/guia/integracao</span></span>
+    <span class="fi"><svg class="i"><use href="#bubble"/></svg></span><span class="fi"><svg class="i"><use href="#star"/></svg></span>
+    <div class="urlview">
+     <div class="uvcap">Ações do Nulavio <span style="font-weight:400">· desta aba e deste perfil</span></div>
+     <div class="qa">
+      <span class="qb sel"><svg class="i"><use href="#bubble"/></svg>Perguntar sobre esta página</span>
+      <span class="qb"><svg class="i"><use href="#route"/></svg>Abrir em outro perfil…</span>
+      <span class="qb"><svg class="i"><use href="#hour"/></svg>Nova janela temporária</span>
+      <span class="qb"><svg class="i"><use href="#lock"/></svg>Bloquear Trabalho</span>
+      <span class="qb"><svg class="i"><use href="#stop"/></svg>Parar agentes</span>
+     </div>
+     <div class="hint"><kbd>&gt;</kbd> Digite <b style="color:var(--text)">&gt;</b> para ver todas as ações <span style="margin-left:auto;display:flex;gap:6px;align-items:center"><kbd>↑</kbd><kbd>↓</kbd> escolher <kbd>Enter</kbd> executar <kbd>Esc</kbd> fechar</span></div>
+     <div class="uvsec">Abas abertas</div>
+     <div class="ur"><span class="fav f3">B</span>Quadro — board.example <span class="u">board.example/atlas</span><span class="r">Ir para a aba</span></div>
+     <div class="uvsec">Histórico</div>
+     <div class="ur"><span class="fav">D</span>Especificação — docs.example <span class="u">docs.example/atlas/spec</span></div>
+     <div class="ur"><span class="fav f4">G</span>PR #42 — git.example <span class="u">git.example/atlas/pull/42</span></div>
+    </div>
+   </div>
+   <span class="tb"><svg class="i"><use href="#download"/></svg></span>
+   <span class="pchip"><span class="idsq"><svg class="i"><use href="#brief"/></svg></span><svg class="i chev"><use href="#chev"/></svg></span>
+   <span class="tb"><svg class="i"><use href="#ext"/></svg></span><span class="tb"><svg class="i"><use href="#menu"/></svg></span>
+  </div>
+  <div class="page"><div class="site">
+   <div class="sitehead"><span class="lg"><i></i>docs.example</span><span>Guias</span><span>API</span><span>Status</span></div>
+   <div class="doc">
+    <div class="crumb">Documentação › Integrações</div>
+    <h1>Guia de integração</h1>
+    <p>Conecte sua conta à API de pagamentos em três passos: crie uma chave, registre um webhook e valide cada evento recebido.</p>
+    <h2>Autenticação</h2>
+    <p>Todas as chamadas usam HTTPS e uma chave de API no cabeçalho <code>Authorization</code>. Gere chaves separadas para testes e produção.</p>
+<pre>curl https://api.docs.example/v2/pagamentos \
+  -H "Authorization: Bearer $CHAVE_API" \
+  -d valor=4990 -d moeda=BRL</pre>
+    <h2>Webhooks</h2>
+    <p>Cada evento chega assinado. Calcule o HMAC-SHA256 do corpo bruto com o segredo do webhook e compare o resultado com o cabeçalho X-Assinatura antes de processá-lo.</p>
+   </div>
+  </div></div>
+ </div>
+ </div>
+</section>
+
+<!-- ===================== SCENE 2 FOCUS ===================== -->
+<section class="scene">
+ <div class="cap"><b>2</b> Modo foco <span>· tema escuro · a faixa vira a única barra; o endereço nunca some</span></div>
+ <div class="zoom">
+ <div class="win t-dark p-sky">
+  <div class="band merged">
+   <div class="flag"><svg class="i"><use href="#brief"/></svg>Trabalho</div>
+   <div class="bitems" style="gap:4px">
+    <span class="vault" title="Protegido · desbloqueado"><svg class="i"><use href="#vault"/></svg></span>
+    <span class="tb"><svg class="i"><use href="#back"/></svg></span><span class="tb"><svg class="i"><use href="#reload"/></svg></span>
+   </div>
+   <div class="field" style="flex:1;align-self:center;margin:2px 10px 0">
+    <span class="fi"><svg class="i"><use href="#info"/></svg></span><span class="fi"><svg class="i"><use href="#shield"/></svg></span>
+    <span class="url"><b>docs.example</b>/guia/integracao</span>
+    <span class="fi"><svg class="i"><use href="#bubble"/></svg></span><span class="fi"><svg class="i"><use href="#star"/></svg></span>
+   </div>
+   <div class="bright" style="gap:6px">
+    <span class="act" style="height:28px;padding:0 4px 0 10px;font-size:13px"><span class="dot"></span>Assistente agindo <span class="m">· 3 ações</span><span class="ab" style="height:20px;font-size:12px"><svg class="i"><use href="#pause"/></svg>Pausar</span><span class="ab stop" style="height:20px;font-size:12px"><svg class="i"><use href="#stop"/></svg>Parar</span></span>
+    <span class="tabsbtn"><svg class="i" style="width:15px;height:15px"><use href="#tabs"/></svg>7 abas<svg class="i" style="width:12px;height:12px"><use href="#chev"/></svg></span>
+    <span class="tb"><svg class="i"><use href="#menu"/></svg></span>
+    <span class="wc"><svg class="i"><use href="#min"/></svg></span><span class="wc"><svg class="i"><use href="#max"/></svg></span><span class="wc"><svg class="i"><use href="#x"/></svg></span>
+   </div>
+  </div>
+  <div class="page"><div class="site">
+   <div class="sitehead"><span class="lg"><i></i>docs.example</span><span>Guias</span><span>API</span><span>Status</span></div>
+   <div class="doc">
+    <div class="crumb">Documentação › Integrações</div>
+    <h1>Guia de integração</h1>
+    <p>Conecte sua conta à API de pagamentos em três passos: crie uma chave, registre um webhook e valide cada evento recebido.</p>
+    <h2>Autenticação</h2>
+    <p>Todas as chamadas usam HTTPS e uma chave de API no cabeçalho <code>Authorization</code>. Gere chaves separadas para testes e produção.</p>
+<pre>curl https://api.docs.example/v2/pagamentos \
+  -H "Authorization: Bearer $CHAVE_API" \
+  -d valor=4990 -d moeda=BRL</pre>
+    <h2>Webhooks</h2>
+    <p>Cada evento chega assinado. Calcule o HMAC-SHA256 do corpo bruto com o segredo do webhook e compare o resultado com o cabeçalho X-Assinatura antes de processá-lo.</p>
+    <p>Responda com o status 200 em até cinco segundos. Se não houver resposta, o evento é reenviado com intervalos crescentes durante 24 horas.</p>
+   </div>
+  </div></div>
+  <span class="ann" style="left:560px;top:52px">1</span>
+  <span class="ann" style="left:150px;top:52px">2</span>
+  <span class="ann" style="left:820px;top:52px">3</span>
+  <span class="ann" style="left:1050px;top:52px">4</span>
+ </div>
+ <div class="legend">
+  <div class="row">
+   <div><span class="n">1</span><b>Borda superior:</b> passe o mouse no topo da janela e as abas descem sobre a página, sem deslocar o conteúdo.</div>
+   <div><span class="n">2</span><b>Sempre visível:</b> cor, ícone e nome do perfil; o cofre indica “Protegido” (nome completo ao focar).</div>
+   <div><span class="n">3</span><b>Agente agindo:</b> a pílula fica na faixa e nenhum modo a esconde. <kbd>Parar</kbd> é sempre o botão mais forte.</div>
+   <div><span class="n">4</span><b>Teclado:</b> <kbd>Ctrl</kbd>+<kbd>L</kbd> endereço · <kbd>Ctrl</kbd>+<kbd>Tab</kbd> abas · <kbd>F6</kbd> áreas · <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>F</kbd> sair do foco (sugerido, remapeável).</div>
+  </div>
+ </div>
+ <div class="mini">
+  <div class="mcard"><h4>Abas reveladas (translúcido)</h4>
+   <div class="mwin"><div class="mrow"><span class="mflag"><svg class="i" style="width:13px;height:13px;stroke-width:2"><use href="#brief"/></svg></span><span class="mfield"><svg class="i"><use href="#info"/></svg><svg class="i"><use href="#shield"/></svg>docs.example/guia</span></div>
+    <div class="mlines"><i style="width:70%;background:#E6E8EA;height:9px"></i><i></i><i style="width:85%"></i><i></i><i style="width:60%"></i></div>
+    <div class="mtabs glass"><span class="mtab">Quadro</span><span class="mtab">PR #42</span><span class="mtab s">Guia de integ…</span><span class="mtab">Rádio</span></div>
+   </div>
+   <p>Fundo navy a 90% com desfoque de 14 px; piso de opacidade 0,88 mantém o texto ≥ 12:1 sobre qualquer página.</p></div>
+  <div class="mcard"><h4>Transparência reduzida</h4>
+   <div class="mwin"><div class="mrow"><span class="mflag"><svg class="i" style="width:13px;height:13px;stroke-width:2"><use href="#brief"/></svg></span><span class="mfield"><svg class="i"><use href="#info"/></svg><svg class="i"><use href="#shield"/></svg>docs.example/guia</span></div>
+    <div class="mlines"><i style="width:70%;background:#E6E8EA;height:9px"></i><i></i><i style="width:85%"></i><i></i><i style="width:60%"></i></div>
+    <div class="mtabs solid"><span class="mtab">Quadro</span><span class="mtab">PR #42</span><span class="mtab s">Guia de integ…</span><span class="mtab">Rádio</span></div>
+   </div>
+   <p>Sólido #0B1623, sem desfoque. Vale também para renderização por software e para o ajuste do Nulavio “Reduzir transparência”.</p></div>
+  <div class="mcard hc"><h4>Alto contraste / cores forçadas</h4>
+   <div class="mwin"><div class="mrow"><span class="mflag"><svg class="i" style="width:13px;height:13px;stroke-width:2"><use href="#brief"/></svg></span><span class="mfield">docs.example/guia</span></div>
+    <div class="mlines"><i style="width:70%"></i><i></i><i style="width:85%"></i></div>
+    <div class="mtabs"><span class="mtab">Quadro</span><span class="mtab">PR #42</span><span class="mtab s">Guia de integ…</span></div>
+   </div>
+   <p>Cores do sistema, bordas de 2 px. A identidade fica no ícone e no nome; tracejado e listras dos estados continuam como estilo de borda.</p></div>
+  <div class="mcard"><h4>Layouts prontos</h4>
+   <div class="presets">
+    <div class="pre on"><div class="sk"><span class="b"></span><span class="t"></span><span class="n"></span></div>Abas no topo<br>(padrão)</div>
+    <div class="pre"><div class="sk"><span class="b"></span><span class="v"><i></i><i></i><i></i><i></i></span><span class="n" style="left:22px"></span></div>Abas verticais</div>
+    <div class="pre"><div class="sk"><span class="f"></span></div>Foco</div>
+   </div>
+   <p>Em todos, faixa, endereço e indicadores de segurança ficam no lugar. Troca por <kbd>&gt;</kbd> layout ou em Configurações › Geral.</p></div>
+ </div>
+ </div>
+</section>
+
+<!-- ===================== SCENE 3 ASSISTANT ===================== -->
+<section class="scene">
+ <div class="cap"><b>3</b> Assistente <span>· tema claro · painel à direita, contexto só por chip explícito (ADR 0007)</span></div>
+ <div class="zoom">
+ <div class="win t-light p-sky">
+  <div class="band">
+   <div class="flag"><svg class="i"><use href="#brief"/></svg>Trabalho</div>
+   <div class="bitems"><span class="badge"><svg class="i"><use href="#vault"/></svg>Protegido <span class="m">· desbloqueado</span></span></div>
+   <div class="bright"><span class="wc"><svg class="i"><use href="#min"/></svg></span><span class="wc"><svg class="i"><use href="#max"/></svg></span><span class="wc"><svg class="i"><use href="#x"/></svg></span></div>
+  </div>
+  <div class="strip">
+   <div class="tab pin first"><span class="fav f2"><svg class="i" style="width:12px;height:12px"><use href="#mail"/></svg></span></div>
+   <div class="glabel"><i></i>Projeto Atlas</div>
+   <div class="tab g" style="width:150px"><span class="fav f3">B</span><span class="t">Quadro — board.example</span></div>
+   <div class="tab g" style="width:150px"><span class="fav">D</span><span class="t">Especificação — docs.example</span></div>
+   <div class="tab g" style="width:150px"><span class="fav f4">G</span><span class="t">PR #42 — git.example</span></div>
+   <div class="tab sel" style="width:236px"><span class="fav">D</span><span class="t">Guia de integração — docs.example/guia</span><span class="x"><svg class="i"><use href="#x"/></svg></span></div>
+   <div class="tab" style="width:140px"><svg class="i" style="width:14px;height:14px"><use href="#mute"/></svg><span class="fav f5">R</span><span class="t">Rádio</span></div>
+   <span class="tb"><svg class="i"><use href="#plus"/></svg></span>
+   <span class="tb" style="margin-left:auto"><svg class="i"><use href="#chev"/></svg></span>
+  </div>
+  <div class="nav">
+   <span class="tb"><svg class="i"><use href="#back"/></svg></span><span class="tb dis"><svg class="i"><use href="#fwd"/></svg></span><span class="tb"><svg class="i"><use href="#reload"/></svg></span>
+   <div class="field">
+    <span class="fi"><svg class="i"><use href="#info"/></svg></span><span class="fi"><svg class="i"><use href="#shield"/></svg></span>
+    <span class="url"><b>docs.example</b>/guia/integracao</span>
+    <span class="fi on"><svg class="i"><use href="#bubble"/></svg></span><span class="fi"><svg class="i"><use href="#star"/></svg></span>
+   </div>
+   <span class="tb"><svg class="i"><use href="#download"/></svg></span>
+   <span class="pchip"><span class="idsq"><svg class="i"><use href="#brief"/></svg></span><svg class="i chev"><use href="#chev"/></svg></span>
+   <span class="tb"><svg class="i"><use href="#ext"/></svg></span><span class="tb"><svg class="i"><use href="#menu"/></svg></span>
+  </div>
+  <div class="page">
+   <div class="site">
+    <div class="sitehead"><span class="lg"><i></i>docs.example</span><span>Guias</span><span>API</span></div>
+    <div class="doc" style="padding:24px 40px">
+     <div class="crumb">Documentação › Integrações</div>
+     <h1>Guia de integração</h1>
+     <h2 style="margin-top:8px">Autenticação</h2>
+     <p>Todas as chamadas usam HTTPS e uma chave de API no cabeçalho <code>Authorization</code>. Gere chaves separadas para testes e produção.</p>
+     <h2>Webhooks</h2>
+     <p><span class="selx">Cada evento chega assinado. Calcule o HMAC-SHA256 do corpo bruto com o segredo do webhook e compare o resultado com o cabeçalho X-Assinatura antes de processá-lo. Recuse eventos com mais de cinco minutos de atraso.</span></p>
+     <h2>Assinatura</h2>
+     <p>O segredo aparece uma única vez, ao criar o webhook. Guarde-o fora do código e troque-o a cada 90 dias.</p>
+    </div>
+    <div class="cmenu" style="left:330px;top:360px">
+     <div class="cmi"><svg class="i"><use href="#copy"/></svg>Copiar<span class="k">Ctrl+C</span></div>
+     <div class="cmi"><span class="sp16"></span>Selecionar tudo<span class="k">Ctrl+A</span></div>
+     <div class="cmi"><svg class="i"><use href="#search"/></svg>Pesquisar “Cada evento…” no DuckDuckGo</div>
+     <div class="csep"></div>
+     <div class="cmi hl"><svg class="i"><use href="#bubble"/></svg>Perguntar ao assistente<span class="k">anexa, não envia</span></div>
+     <div class="cmi"><span class="sp16"></span>Imprimir seleção…</div>
+    </div>
+   </div>
+   <div class="panel">
+    <div class="ph"><svg class="i"><use href="#bubble"/></svg>Assistente<span class="sp"></span><span class="pol">Política: Assistida</span><span class="tb"><svg class="i"><use href="#more"/></svg></span><span class="tb"><svg class="i"><use href="#x"/></svg></span></div>
+    <div class="dest">Destino
+     <span class="dsel"><svg class="i" style="width:15px;height:15px"><use href="#cpu"/></svg>Modelo local <span class="h">· 127.0.0.1:11434</span><svg class="i chev"><use href="#chev"/></svg></span>
+    </div>
+    <div class="seg"><span class="on"><svg class="i"><use href="#bubble"/></svg>Perguntar</span><span><svg class="i"><use href="#agent"/></svg>Fazer uma tarefa</span></div>
+    <div class="thread">
+     <div class="mu">
+      <div class="who">Você</div>
+      Como eu configuro o webhook de pagamentos?
+      <div class="sent"><svg class="i"><use href="#check"/></svg>Enviado: <b style="color:var(--text)">Página</b> · 4.812 car. → <span class="h">127.0.0.1:11434</span></div>
+     </div>
+     <div class="ans">
+      <div class="who"><svg class="i"><use href="#cpu"/></svg>Assistente · Modelo local</div>
+      <p>Para receber os eventos de pagamento:</p>
+            <ol>
+       <li>Gere uma chave de API de testes.<span class="ref">1</span></li>
+       <li>Registre a URL e guarde o segredo (aparece uma vez).<span class="ref">2</span></li>
+       <li>Valide cada evento com <code>X-Assinatura</code> antes de<span class="caret"></span></li>
+      </ol>
+      <div class="srow"><svg class="i" style="width:13px;height:13px"><use href="#more"/></svg>Escrevendo a resposta…<span class="sp"></span><span class="btn sm"><svg class="i"><use href="#stop"/></svg>Parar</span></div>
+      <div class="srcs">Fontes: <span class="src"><b class="ref" style="margin:0">1</b>Autenticação</span><span class="src"><b class="ref" style="margin:0">2</b>Webhooks</span></div>
+     </div>
+    </div>
+    <div class="composer">
+     <div class="ctxl">Vai com a próxima mensagem <span class="m">· só desta aba</span></div>
+     <div class="chips">
+      <span class="chip"><svg class="i"><use href="#sel"/></svg>Seleção: 214 caracteres <span class="m">· Guia de integração</span><span class="cx"><svg class="i"><use href="#x"/></svg></span></span>
+      <span class="chip add"><svg class="i"><use href="#plus"/></svg>Página</span>
+     </div>
+     <div class="ta">Isso vale para o ambiente de testes?<span class="cur"></span></div>
+     <div class="cfoot"><span class="rcpt">Para <span class="h">127.0.0.1:11434</span> · 214 caracteres</span><span class="btn primary"><svg class="i"><use href="#send"/></svg>Enviar</span></div>
+     <div class="nosend">Nada sai antes de Enviar. O chip some se a aba mudar de página.</div>
+    </div>
+   </div>
+  </div>
+  <span class="ann" style="left:1040px;top:70px">1</span>
+  <span class="ann" style="left:300px;top:486px">2</span>
+  <span class="ann" style="left:862px;top:590px">3</span>
+  <span class="ann" style="left:862px;top:430px">4</span>
+  <span class="ann" style="left:862px;top:146px">5</span>
+ </div>
+ <div class="legend">
+  <div class="row">
+   <div><span class="n">1</span><b>Endereço:</b> “Perguntar sobre esta página” (botão no campo ou <kbd>&gt;</kbd> perguntar) abre o painel com a página anexada como chip.</div>
+   <div><span class="n">2</span><b>Seleção:</b> “Perguntar ao assistente” anexa só o trecho. Nos dois casos nada é enviado antes de Enviar.</div>
+   <div><span class="n">3</span><b>Chip ligado à aba:</b> mostra tamanho e destino antes do envio; × remove; some se a aba navegar ou fechar.</div>
+   <div><span class="n">4</span><b>Parar</b> corta a geração; o texto parcial fica marcado como interrompido. <span class="n">5</span><b>Destino</b> sempre visível: Modelo local ou Anthropic · api.anthropic.com.</div>
+  </div>
+ </div>
+ </div>
+</section>
+
+<!-- ===================== SCENE 4 SECURITY STRIP ===================== -->
+<section class="scene">
+ <div class="cap"><b>4</b> Estados de segurança <span>· topo da janela, tema claro (privativa usa o tema do motor) · janelas estreitas de 630 px</span></div>
+ <div class="zoom">
+ <div class="sgrid">
+
+  <!-- 1 normal -->
+  <div class="crop"><div class="clab"><b>1</b> Perfil normal · identidade = cor sólida + ícone + nome</div>
+  <div class="win c t-light p-sky">
+   <div class="band"><div class="flag"><svg class="i"><use href="#brief"/></svg>Trabalho</div><div class="bitems"><span class="badge"><svg class="i"><use href="#vault"/></svg>Protegido <span class="m">· desbloqueado</span></span></div><div class="bright"><span class="wc"><svg class="i"><use href="#x"/></svg></span></div></div>
+   <div class="strip"><div class="tab first"><span class="fav f3">B</span><span class="t">Quadro — board.example</span></div><div class="tab sel"><span class="fav">D</span><span class="t">Guia de integração</span></div><span class="tb"><svg class="i"><use href="#plus"/></svg></span></div>
+   <div class="nav"><span class="tb"><svg class="i"><use href="#back"/></svg></span><span class="tb"><svg class="i"><use href="#reload"/></svg></span><div class="field"><span class="fi"><svg class="i"><use href="#info"/></svg></span><span class="fi"><svg class="i"><use href="#shield"/></svg></span><span class="url"><b>docs.example</b>/guia/integracao</span><span class="fi"><svg class="i"><use href="#star"/></svg></span></div><span class="pchip"><span class="idsq"><svg class="i"><use href="#brief"/></svg></span></span><span class="tb"><svg class="i"><use href="#menu"/></svg></span></div>
+   <div class="page"><div class="mpage"><h3>Guia de integração</h3><p>Conecte sua conta à API de pagamentos em três passos.</p></div></div>
+  </div></div>
+
+  <!-- 2 locked -->
+  <div class="crop"><div class="clab"><b>2</b> Perfil protegido bloqueado · link roteado fica retido</div>
+  <div class="win c t-light p-sky">
+   <div class="band"><div class="flag"><svg class="i"><use href="#brief"/></svg>Trabalho</div><div class="bcenter" style="left:62%"><svg class="nv" style="color:#6FE0C5"><use href="#nvs"/></svg>Nulavio <span class="m">· Desbloqueio</span></div><div class="bright"><span class="wc"><svg class="i"><use href="#x"/></svg></span></div></div>
+   <div class="strip"><div class="tab first"><span class="fav">D</span><span class="t">Guia de integração</span></div><div class="tab sel" style="width:170px"><span class="fav nvf"><svg class="nv" style="color:#0F7A68;width:12px"><use href="#nvs"/></svg></span><span class="t">Desbloquear Banco</span></div></div>
+   <div class="nav"><span class="tb"><svg class="i"><use href="#back"/></svg></span><span class="tb"><svg class="i"><use href="#reload"/></svg></span><div class="field"><span class="idlabel"><svg class="nv" style="color:#0F7A68;width:11px"><use href="#nvs"/></svg>Nulavio</span><span class="url">desbloquear/banco</span></div><span class="pchip" style="background:var(--sunken)"><span class="idsq"><svg class="i"><use href="#brief"/></svg></span><svg class="i chev"><use href="#chev"/></svg></span><span class="tb"><svg class="i"><use href="#menu"/></svg></span></div>
+   <div class="shellp"><span class="ltile"><svg class="i"><use href="#lock"/></svg></span><div><h3>Banco está bloqueado</h3><p style="max-width:300px">O link <code>banco.example/extrato</code> está retido e abre no Banco depois do desbloqueio.</p><span class="btn primary sm">Desbloquear…</span> <span class="btn sm">Descartar link</span></div></div>
+   <div class="pop pmenu">
+    <div class="pmi cur"><span class="idsq"><svg class="i"><use href="#brief"/></svg></span>Trabalho<span class="m">esta janela</span></div>
+    <div class="pmi p-sand"><span class="idsq lockb"><svg class="i"><use href="#bank"/></svg></span>Banco<span class="m"><svg class="i"><use href="#lock"/></svg>Bloqueado</span></div>
+    <div class="pmi p-rose"><span class="idsq"><svg class="i"><use href="#home"/></svg></span>Pessoal<span class="m">Sem proteção</span></div>
+   </div>
+  </div></div>
+
+  <!-- 3 temporary -->
+  <div class="crop"><div class="clab"><b>3</b> Perfil temporário · tracejado é reservado a este estado</div>
+  <div class="win c t-light p-slate s-temp">
+   <div class="band"><div class="flag temp"><svg class="i"><use href="#hour"/></svg>Temporário <span style="font-weight:500;color:#BFD0D6">· apagado ao fechar</span></div><div class="bright"><span class="bbtn ghost">Apagar agora</span><span class="wc"><svg class="i"><use href="#x"/></svg></span></div></div>
+   <div class="strip"><div class="tab sel first"><span class="fav f5">L</span><span class="t">Loja — shop.example</span></div><span class="tb"><svg class="i"><use href="#plus"/></svg></span></div>
+   <div class="nav"><span class="tb"><svg class="i"><use href="#back"/></svg></span><span class="tb"><svg class="i"><use href="#reload"/></svg></span><div class="field"><span class="fi"><svg class="i"><use href="#info"/></svg></span><span class="fi"><svg class="i"><use href="#shield"/></svg></span><span class="url"><b>shop.example</b>/ofertas</span><span class="fi"><svg class="i"><use href="#star"/></svg></span></div><span class="pchip"><span class="idsq" style="background:transparent;border:1.5px dashed #3A6273;color:#3A6273"><svg class="i"><use href="#hour"/></svg></span></span><span class="tb"><svg class="i"><use href="#menu"/></svg></span></div>
+   <div class="page"><div class="mpage"><h3>Ofertas da semana</h3><p>Cookies, histórico e downloads deste perfil somem ao fechar a janela.</p></div></div>
+  </div></div>
+
+  <!-- 4 private -->
+  <div class="crop"><div class="clab"><b>4</b> Janela privativa · faixa ameixa pontilhada + indicador do motor</div>
+  <div class="win c t-dark p-sky s-priv privstrip">
+   <div class="band"><div class="flag"><svg class="i"><use href="#brief"/></svg>Trabalho</div><div class="bitems"><span class="badge" style="border-color:#9E86C9"><svg class="i"><use href="#eyeoff"/></svg>Janela privativa <span class="m" style="color:#CDBFE6">· nada fica salvo</span></span></div><div class="bright"><span class="wc"><svg class="i"><use href="#x"/></svg></span></div></div>
+   <div class="strip"><div class="tab sel first"><span class="fav f4">N</span><span class="t">Notícias — news.example</span></div><span class="tb"><svg class="i"><use href="#plus"/></svg></span><span class="privind" title="Indicador de navegação privativa do motor"><svg class="i"><use href="#eyeoff"/></svg></span></div>
+   <div class="nav"><span class="tb"><svg class="i"><use href="#back"/></svg></span><span class="tb"><svg class="i"><use href="#reload"/></svg></span><div class="field"><span class="fi"><svg class="i"><use href="#info"/></svg></span><span class="fi"><svg class="i"><use href="#shield"/></svg></span><span class="url"><b>news.example</b>/hoje</span><span class="fi"><svg class="i"><use href="#star"/></svg></span></div><span class="pchip"><span class="idsq"><svg class="i"><use href="#brief"/></svg></span></span><span class="tb"><svg class="i"><use href="#menu"/></svg></span></div>
+   <div class="page"><div class="mpage"><h3>Manchetes de hoje</h3><p>O assistente fica desligado em janelas privativas.</p></div></div>
+  </div></div>
+
+  <!-- 5 AI workspace -->
+  <div class="crop"><div class="clab"><b>5</b> Área de IA · moldura dupla + linhas horizontais</div>
+  <div class="win c t-light p-slate s-ai">
+   <div class="band"><div class="bitems" style="padding-left:8px"><span class="badge inv"><svg class="i"><use href="#agent"/></svg>Área de IA · Claude Code</span><span class="badge">Política: Assistida</span></div><div class="bright"><span class="bbtn"><svg class="i"><use href="#stop"/></svg>Parar agente</span><span class="wc"><svg class="i"><use href="#x"/></svg></span></div></div>
+   <div class="strip"><div class="tab first"><span class="fav f3">B</span><span class="t">Quadro — board.example</span></div><div class="tab sel"><span class="fav f4">G</span><span class="t">PR #42 — git.example</span></div></div>
+   <div class="nav"><span class="tb"><svg class="i"><use href="#back"/></svg></span><span class="tb"><svg class="i"><use href="#reload"/></svg></span><div class="field"><span class="fi"><svg class="i"><use href="#info"/></svg></span><span class="fi"><svg class="i"><use href="#shield"/></svg></span><span class="url"><b>git.example</b>/atlas/pull/42</span></div><span class="pchip"><span class="idsq" style="background:#0B1623;color:#F1F7F5"><svg class="i"><use href="#agent"/></svg></span></span><span class="tb"><svg class="i"><use href="#menu"/></svg></span></div>
+   <div class="page"><div class="mpage"><h3>PR #42 · Ajusta webhooks</h3><p>Perfil próprio do agente: sem acesso aos seus perfis, senhas ou abas.</p></div></div>
+  </div></div>
+
+  <!-- 6 automation -->
+  <div class="crop"><div class="clab"><b>6</b> Automação crua · listras reservadas, rótulo crítico</div>
+  <div class="win c t-light p-sky s-auto">
+   <div class="band"><div class="flag"><svg class="i"><use href="#brief"/></svg>Trabalho</div><div class="bitems"><span class="badge crit"><svg class="i"><use href="#robot"/></svg>Controle remoto ativo</span></div><span class="stripes"></span><div class="bright"><span class="badge">WebDriver BiDi <span class="m">· Detalhes</span></span><span class="wc"><svg class="i"><use href="#x"/></svg></span></div></div>
+   <div class="strip"><div class="tab sel first"><span class="fav f5">T</span><span class="t">Teste — 127.0.0.1</span></div><span class="tb"><svg class="i"><use href="#plus"/></svg></span></div>
+   <div class="nav"><span class="tb"><svg class="i"><use href="#back"/></svg></span><span class="tb"><svg class="i"><use href="#reload"/></svg></span><div class="field autofield"><span class="fi robot"><svg class="i"><use href="#robot"/></svg></span><span class="fi"><svg class="i"><use href="#info"/></svg></span><span class="url">http://<b>127.0.0.1</b>:33257/pagina</span><span class="fi"><svg class="i"><use href="#star"/></svg></span></div><span class="pchip"><span class="idsq"><svg class="i"><use href="#brief"/></svg></span></span><span class="tb"><svg class="i"><use href="#menu"/></svg></span></div>
+   <div class="page"><div class="mpage"><h3>Página de teste</h3><p>Listras e ícone do motor no endereço são mantidos.</p></div></div>
+  </div></div>
+
+  <!-- 7 guard -->
+  <div class="crop"><div class="clab"><b>7</b> Guard · mudanças feitas fora do Nulavio</div>
+  <div class="win c t-light p-sky">
+   <div class="band"><div class="flag"><svg class="i"><use href="#brief"/></svg>Trabalho</div><div class="bitems"><span class="badge"><svg class="i"><use href="#vault"/></svg>Protegido</span></div><div class="bright"><span class="badge warn"><svg class="i"><use href="#warn"/></svg>2 mudanças feitas fora do Nulavio <u>Revisar</u></span><span class="wc"><svg class="i"><use href="#x"/></svg></span></div></div>
+   <div class="strip"><div class="tab first"><span class="fav f3">B</span><span class="t">Quadro — board.example</span></div><div class="tab sel"><span class="fav">D</span><span class="t">Guia de integração</span></div></div>
+   <div class="nav"><span class="tb"><svg class="i"><use href="#back"/></svg></span><span class="tb"><svg class="i"><use href="#reload"/></svg></span><div class="field"><span class="fi"><svg class="i"><use href="#info"/></svg></span><span class="fi"><svg class="i"><use href="#shield"/></svg></span><span class="url"><b>docs.example</b>/guia/integracao</span></div><span class="pchip"><span class="idsq"><svg class="i"><use href="#brief"/></svg></span></span><span class="tb"><svg class="i"><use href="#menu"/></svg></span></div>
+   <div class="page"><div class="mpage"><h3>Guia de integração</h3><p>O aviso fica na faixa até você revisar; a página não consegue desenhar ali.</p></div></div>
+  </div></div>
+
+  <!-- 8 download -->
+  <div class="crop"><div class="clab"><b>8</b> Download de programa · sem “Abrir”</div>
+  <div class="win c t-light p-sky">
+   <div class="band"><div class="flag"><svg class="i"><use href="#brief"/></svg>Trabalho</div><div class="bitems"><span class="badge"><svg class="i"><use href="#vault"/></svg>Protegido</span></div><div class="bright"><span class="wc"><svg class="i"><use href="#x"/></svg></span></div></div>
+   <div class="strip"><div class="tab sel first"><span class="fav f4">G</span><span class="t">Versões — git.example</span></div></div>
+   <div class="nav"><span class="tb"><svg class="i"><use href="#back"/></svg></span><span class="tb"><svg class="i"><use href="#reload"/></svg></span><div class="field"><span class="fi"><svg class="i"><use href="#info"/></svg></span><span class="fi"><svg class="i"><use href="#shield"/></svg></span><span class="url"><b>git.example</b>/ferramenta/versoes</span></div><span class="tb on"><svg class="i"><use href="#download"/></svg><span class="dotw"></span></span><span class="pchip"><span class="idsq"><svg class="i"><use href="#brief"/></svg></span></span><span class="tb"><svg class="i"><use href="#menu"/></svg></span></div>
+   <div class="page"><div class="mpage"><h3>ferramenta 1.4</h3></div></div>
+   <div class="pop dlp">
+    <div class="dlh">Downloads</div>
+    <div class="dlrow"><span class="ft"><svg class="i" style="width:20px;height:20px"><use href="#prog"/></svg></span><div><div class="nm">ferramenta-1.4.AppImage</div><div class="ds"><svg class="i"><use href="#warn"/></svg><span><b>Programa · 48 MB.</b> Pode instalar ou alterar coisas no computador.</span></div><div class="bt"><span class="btn primary sm"><svg class="i"><use href="#trash"/></svg>Excluir</span><span class="btn sm"><svg class="i"><use href="#folder"/></svg>Mostrar na pasta</span></div></div></div>
+   </div>
+  </div></div>
+
+ </div>
+ <div class="legend" style="margin-top:16px">
+  <div class="row">
+   <div><b>Identidade</b> = só cor sólida, ícone e nome, à esquerda. Nunca usa padrão.</div>
+   <div><b>Marcas de estado</b> (como as faixas pintadas de um farol): tracejado = temporário · pontos em ameixa = privativa · linhas horizontais + moldura dupla = Área de IA · listras diagonais = controle remoto.</div>
+   <div><b>Sempre com palavras</b> e na faixa, que a página não alcança. Âmbar e vermelho só aparecem em avisos e nunca são cor de perfil.</div>
+  </div>
+ </div>
+ </div>
+</section>
+
+<!-- ===================== SCENE 5 SETTINGS ===================== -->
+<section class="scene">
+ <div class="cap"><b>5</b> Configurações › Perfis <span>· tema claro · página do Shell no idioma Farol</span></div>
+ <div class="zoom">
+ <div class="win t-light p-sky">
+  <div class="band">
+   <div class="flag"><svg class="i"><use href="#brief"/></svg>Trabalho</div>
+   <div class="bitems"><span class="badge"><svg class="i"><use href="#vault"/></svg>Protegido <span class="m">· desbloqueado</span></span></div>
+   <div class="bcenter"><svg class="nv" style="color:#6FE0C5"><use href="#nvs"/></svg>Nulavio <span class="m">· Configurações · página do sistema</span></div>
+   <div class="bright"><span class="wc"><svg class="i"><use href="#min"/></svg></span><span class="wc"><svg class="i"><use href="#max"/></svg></span><span class="wc"><svg class="i"><use href="#x"/></svg></span></div>
+  </div>
+  <div class="strip">
+   <div class="tab pin first"><span class="fav f2"><svg class="i" style="width:12px;height:12px"><use href="#mail"/></svg></span></div>
+   <div class="tab"><span class="fav">D</span><span class="t">Guia de integração — docs.example/guia</span></div>
+   <div class="tab sel" style="width:200px"><span class="fav nvf"><svg class="nv" style="color:#0F7A68;width:12px"><use href="#nvs"/></svg></span><span class="t">Configurações</span><span class="x"><svg class="i"><use href="#x"/></svg></span></div>
+   <span class="tb"><svg class="i"><use href="#plus"/></svg></span>
+   <span class="tb" style="margin-left:auto"><svg class="i"><use href="#chev"/></svg></span>
+  </div>
+  <div class="nav">
+   <span class="tb"><svg class="i"><use href="#back"/></svg></span><span class="tb dis"><svg class="i"><use href="#fwd"/></svg></span><span class="tb"><svg class="i"><use href="#reload"/></svg></span>
+   <div class="field"><span class="idlabel"><svg class="nv" style="color:#0F7A68;width:11px"><use href="#nvs"/></svg>Nulavio</span><span class="url">configuracoes/<b>perfis</b></span><span class="fi"><svg class="i"><use href="#star"/></svg></span></div>
+   <span class="tb"><svg class="i"><use href="#download"/></svg></span>
+   <span class="pchip"><span class="idsq"><svg class="i"><use href="#brief"/></svg></span><svg class="i chev"><use href="#chev"/></svg></span>
+   <span class="tb"><svg class="i"><use href="#ext"/></svg></span><span class="tb"><svg class="i"><use href="#menu"/></svg></span>
+  </div>
+  <div class="shell">
+   <nav class="snav">
+    <div class="stitle"><svg class="i" style="width:20px;height:20px"><use href="#gear"/></svg>Configurações</div>
+    <div class="ssearch"><svg class="i"><use href="#search"/></svg><span class="sp">Buscar nas configurações</span><kbd>/</kbd></div>
+    <div class="sni"><svg class="i"><use href="#gear"/></svg>Geral</div>
+    <div class="sni on" aria-current="page"><svg class="i"><use href="#users"/></svg>Perfis<span class="ct">5</span></div>
+    <div class="sni"><svg class="i"><use href="#route"/></svg>Roteamento</div>
+    <div class="sni"><svg class="i"><use href="#search"/></svg>Busca</div>
+    <div class="sni"><svg class="i"><use href="#key"/></svg>Senhas</div>
+    <div class="sni"><svg class="i"><use href="#globe"/></svg>Privacidade e DNS</div>
+    <div class="sni"><svg class="i"><use href="#agent"/></svg>IA e automação</div>
+    <div class="sni"><svg class="i"><use href="#plug"/></svg>Integrações</div>
+    <div class="sni"><svg class="i"><use href="#infoc"/></svg>Sobre</div>
+    <div class="ver">Nulavio 158.0.1 · sem telemetria</div>
+   </nav>
+   <main class="smain">
+    <div class="scrumb">Configurações › Perfis</div>
+    <div class="shead">
+     <div><h1>Perfis</h1><p class="sub">Cada perfil é um navegador separado, com cookies, histórico, senhas e extensões próprios. A cor, o ícone e o nome aparecem na faixa do topo de cada janela.</p></div>
+     <span class="sp"></span>
+     <span class="btn primary" style="height:34px;padding:0 14px"><svg class="i"><use href="#plus"/></svg>Novo perfil</span>
+    </div>
+    <div class="ptable">
+     <div class="prow phd"><span>Perfil</span><span>Proteção</span><span>Agora</span><span></span></div>
+     <div class="prow p-sky"><div class="pname"><span class="tok"><svg class="i"><use href="#brief"/></svg></span><div><div class="pn">Trabalho<span class="tag">esta janela</span></div><div class="pt">Céu · maleta</div></div></div>
+      <div class="prot"><svg class="i"><use href="#vault"/></svg><span>Protegido <span class="m">· senha + código de recuperação</span></span></div>
+      <div class="st">Desbloqueado</div>
+      <div class="pact"><span class="btn sm"><svg class="i"><use href="#lock"/></svg>Bloquear</span><span class="btn sm">Editar</span></div></div>
+     <div class="prow p-sand"><div class="pname"><span class="tok lockb" style="--popup:#fff"><svg class="i"><use href="#bank"/></svg></span><div><div class="pn">Banco</div><div class="pt">Areia · colunas</div></div></div>
+      <div class="prot"><svg class="i"><use href="#vault"/></svg><span>Protegido <span class="m">· senha + celular (Companion)</span></span></div>
+      <div class="st"><svg class="i"><use href="#lock"/></svg>Bloqueado</div>
+      <div class="pact"><span class="btn sm">Desbloquear…</span><span class="btn sm">Editar</span></div></div>
+     <div class="prow p-rose"><div class="pname"><span class="tok"><svg class="i"><use href="#home"/></svg></span><div><div class="pn">Pessoal</div><div class="pt">Rosa · casa</div></div></div>
+      <div class="prot"><svg class="i"><use href="#infoc"/></svg><span>Sem proteção <span class="m">· dados sem criptografia extra</span></span></div>
+      <div class="st">Aberto</div>
+      <div class="pact"><span class="btn sm">Proteger…</span><span class="btn sm">Editar</span></div></div>
+     <div class="prow"><div class="pname"><span class="tok temp"><svg class="i"><use href="#hour"/></svg></span><div><div class="pn">Temporário</div><div class="pt">Sem cor · tracejado</div></div></div>
+      <div class="prot"><svg class="i"><use href="#hour"/></svg><span>Temporário <span class="m">· apagado ao fechar</span></span></div>
+      <div class="st">Aberto</div>
+      <div class="pact"><span class="btn sm"><svg class="i"><use href="#trash"/></svg>Fechar e apagar</span></div></div>
+     <div class="prow"><div class="pname"><span class="tok ai"><svg class="i"><use href="#agent"/></svg></span><div><div class="pn">Claude Code</div><div class="pt">Área de IA · perfil do agente</div></div></div>
+      <div class="prot"><svg class="i"><use href="#agent"/></svg><span>Área de IA <span class="m">· política Assistida</span></span></div>
+      <div class="st">Fechado</div>
+      <div class="pact"><span class="btn sm">Editar</span></div></div>
+    </div>
+    <div class="ssec">
+     <div><h2>Faixa do topo</h2><p>Mostra o perfil e os estados de segurança em toda janela. Não pode ser ocultada.</p>
+      <div class="bprev p-sky"><div class="band"><div class="flag"><svg class="i"><use href="#brief"/></svg>Trabalho</div><div class="bitems"><span class="badge"><svg class="i"><use href="#vault"/></svg>Protegido <span class="m">· desbloqueado</span></span></div></div></div></div>
+     <div><h2>Links sem regra</h2><p>Quando nenhum perfil corresponde ao endereço.</p><span class="selectx">Perguntar a cada vez <svg class="i" style="width:14px;height:14px"><use href="#chev"/></svg></span><span class="saved"><svg class="i" style="width:14px;height:14px"><use href="#check"/></svg>Salvo</span></div>
+    </div>
+   </main>
+  </div>
+ </div>
+ </div>
+</section>
+
+<div class="foot"><b>Dados de exemplo:</b> perfis, sites (*.example), textos, tamanhos e números são fictícios. Círculos rosa numerados são anotações do mockup, não interface. Direção “Farol” · Nulavio Track B sobre Gecko 158.</div>
+</div>
+</body>
+</html>
