@@ -6,6 +6,9 @@
 # whole rule, file type or directory. Any other false positive goes in .gitleaksignore,
 # by fingerprint, with the reason.
 #
+# scan.sh reads merges with --remerge-diff, which names a file with a conflict b/<path>:
+# hence the optional "b/" in each path below, and in such a finding's fingerprint.
+#
 # A real secret that reached a commit stays in the history and in every clone: revoke or
 # rotate it first, then remove it (SECURITY.md).
 
@@ -24,19 +27,19 @@ tags = ["key", "file"]
 description = "nv1 test vectors: the fixed bytes 00 01 02 ... 1f in base64url, never a real key (tests/lib/nv1_vectors.py writes the file)"
 targetRules = ["generic-api-key"]
 condition = "AND"
-paths = ['''^tests/fixtures/nv1-vectors\.json$''']
+paths = ['''^(b/)?tests/fixtures/nv1-vectors\.json$''']
 regexes = ['''^AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8$''']
 
 [[allowlists]]
 description = "Artificial API keys of the AI bridge tests: only tests/lib/fake_llm.py accepts them"
 targetRules = ["generic-api-key"]
 condition = "AND"
-paths = ['''^tests/(unit|integration)/test_assistant(_ui)?\.py$''']
+paths = ['''^(b/)?tests/(unit|integration)/test_assistant(_ui)?\.py$''']
 regexes = ['''^sk-artificial-[a-z]+-key-[0-9]+$''']
 
 [[allowlists]]
 description = "OpenPGP fingerprint of Mozilla's release-signing subkey in the engine fast-path tests: public data, published with Firefox's KEY file"
 targetRules = ["generic-api-key"]
 condition = "AND"
-paths = ['''^tests/unit/test_upstream_fast_path\.py$''']
+paths = ['''^(b/)?tests/unit/test_upstream_fast_path\.py$''']
 regexes = ['''^827E658608679618CD349F93678E455D76767AA3$''']

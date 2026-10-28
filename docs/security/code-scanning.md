@@ -72,7 +72,7 @@ To add or change a rule, add test cases in `tests/fixtures/sast/nulavio-rules.<e
 | Tool | How |
 |---|---|
 | Opengrep | `# nosemgrep: <rule id> -- <why this line is safe>` on the line (`//` in JavaScript and Java), one rule id only. Opengrep also obeys `nosem`, `noopengrep` and other spellings in any case, and a bare one silences every rule on the line: the unit tests reject any form but this one, in every file Opengrep reads, `.github/` included |
-| gitleaks | The finding's fingerprint (`commit:file:rule:line`, printed by gitleaks) in `.gitleaksignore`, under a comment with the reason. `.gitleaks.toml` allowlists only documented test fixtures, by exact file and value |
+| gitleaks | The finding's fingerprint (`commit:file:rule:line`, printed by gitleaks) in `.gitleaksignore`, under a comment with the reason. In a merge, a file with a conflict is named `b/<path>` in the finding and in its fingerprint. `.gitleaks.toml` allowlists only documented test fixtures, by exact file (with or without that `b/`) and value |
 | ShellCheck | `# shellcheck disable=SC<number> # <reason>` on the line before the command |
 | zizmor | `# zizmor: ignore[<audit>] <reason>` on the line |
 | actionlint | Fix it; actionlint reports real errors in the workflow |

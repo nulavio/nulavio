@@ -172,7 +172,8 @@ class GitleaksConfigTest(unittest.TestCase):
                 self.assertEqual(allowlist["condition"], "AND")  # the files AND the exact values
                 self.assertTrue(allowlist["targetRules"])
                 self.assertFalse({"commits", "stopwords"} & set(allowlist), "never allowlist whole commits or words")
-                self.assertTrue(all(path.startswith("^tests/") and path.endswith("$") for path in allowlist["paths"]))
+                # b/: --remerge-diff names a file with a conflict b/<path> (scan.sh reads merges with it)
+                self.assertTrue(all(path.startswith("^(b/)?tests/") and path.endswith("$") for path in allowlist["paths"]))
                 self.assertTrue(all(value.startswith("^") and value.endswith("$") for value in allowlist["regexes"]))
 
     def test_no_inline_exceptions_and_an_opt_in_hook_for_staged_changes(self):
@@ -233,6 +234,15 @@ def cached_download(tool: str) -> Path | None:
         return path
     return None
 
+
+# A line .gitleaks.toml allowlists in each test fixture: (file, how the line starts). The test
+# reads the line from the file, so this one holds no key-like value.
+ALLOWLISTED = (
+    ("tests/unit/test_assistant.py", "KEY = "),
+    ("tests/integration/test_assistant_ui.py", "KEY = "),
+    ("tests/unit/test_upstream_fast_path.py", "SUBKEY = "),
+    ("tests/fixtures/nv1-vectors.json", '"key": '),
+)
 
 # Binary, as `gpg --export-secret-keys -o` and KeePassXC write them; not keys.
 BINARY_KEYS = {"signing-backup.gpg": bytes(range(256)), "release.kdbx": bytes(range(255, -1, -1)), "upload.jks": b"\0" * 64}
@@ -314,6 +324,27 @@ class GitleaksHistoryTest(unittest.TestCase):
         (self.repo / "README.md").write_text(f'one\nmerged\ntoken = "{fake_token()}"\nthree\n')
         merge = self.commit("merge side")
         self.assertEqual(self.findings(), {("github-pat", "README.md", merge)})
+
+    def test_allowlisted_fixtures_rewritten_while_resolving_a_merge(self):
+        # --remerge-diff names a conflicted file b/<path>: .gitleaks.toml's allowlists must still
+        # match it, and only it (the same lines in another file are still found).
+        resolved = {}
+        for name, start in ALLOWLISTED:
+            resolved[name] = next(line for line in (ROOT / name).read_text().splitlines() if line.lstrip().startswith(start))
+        resolved["elsewhere.py"] = "\n".join(resolved.values())
+        self.git("switch", "-q", "-c", "side")
+        for branch in ("side", "main"):
+            if branch == "main":
+                self.git("switch", "-q", "main")
+            for name in resolved:
+                (self.repo / name).parent.mkdir(parents=True, exist_ok=True)
+                (self.repo / name).write_text(f"{branch}\n")
+            self.commit(branch)
+        self.git("merge", "-q", "side", check=False)  # a conflict in every file
+        for name, text in resolved.items():
+            (self.repo / name).write_text(f"{text}\n")
+        merge = self.commit("merge side")
+        self.assertEqual(self.findings(), {("generic-api-key", "elsewhere.py", merge)})
 
     def test_a_secret_added_in_an_octopus_merge(self):
         for branch in ("a", "b"):
