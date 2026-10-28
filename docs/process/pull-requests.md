@@ -107,7 +107,7 @@ To turn it off, set the repository variable `AI_REVIEW` to `off` (no cost), or r
 
 ### Updating the pins
 
-At most monthly, or at once for a security advisory:
+At most monthly, or at once for a security advisory (the daily [dependency watch](../security/dependency-updates.md) reports them for both, as npm packages):
 
 1. Choose a release of `anthropics/claude-code-action`, resolve its tag to a commit with `gh api repos/anthropics/claude-code-action/tags`, and read `action.yml` and `src/entrypoints/run.ts` at that commit.
 2. `CLAUDE_CODE_VERSION` must equal `claudeCodeVersion` in `run.ts`. Run `python3 -I scripts/upstream/verify_claude_code_release.py <version>` for `CLAUDE_CODE_SHA256`, and replace the files in `tests/fixtures/claude-code/` with that release's manifest and signature.

@@ -80,7 +80,7 @@ Never switch a rule or a check off, leave a directory out of a scan, or make the
 
 ## Updating a tool
 
-Change the version, URL and SHA-256 in `scripts/security/fetch_tools.sh` together, in one commit that says why. Take the SHA-256 from the release's checksum file where there is one (actionlint, gitleaks) and compare it with the digest GitHub shows for the asset. Read the release notes: new checks can bring new findings, which the same commit fixes or suppresses. Wait about a week after a release unless it fixes a problem that affects Nulavio. Opengrep 1.33.0 came out on 2026-10-27 and is not adopted yet for that reason.
+Change the version, URL and SHA-256 in `scripts/security/fetch_tools.sh` together, in one commit that says why. Take the SHA-256 from the release's checksum file where there is one (actionlint, gitleaks) and compare it with the digest GitHub shows for the asset. Read the release notes: new checks can bring new findings, which the same commit fixes or suppresses. Wait about a week after a release unless it fixes a problem that affects Nulavio. Opengrep 1.33.0 came out on 2026-10-27 and is not adopted yet for that reason. The daily [dependency watch](dependency-updates.md) does not check these tools yet, so look at each one's security advisories when bumping it.
 
 ## Decisions
 

@@ -207,7 +207,7 @@ class OtherPinsTest(unittest.TestCase):
         for item in data["exceptions"]:
             self.assertEqual(set(item), {"id", "ecosystem", "package", "version", "reason", "until"}, item)
             self.assertRegex(item["id"], r"^(GHSA|CVE|PYSEC|OSV|BIT)-[\w-]+$", item)
-            self.assertIn(item["ecosystem"], ("Maven", "PyPI", "GitHub Actions", "Bitnami"), item)
+            self.assertIn(item["ecosystem"], ("Maven", "PyPI", "GitHub Actions", "Bitnami", "npm"), item)
             self.assertGreater(len(item["reason"]), 40, item)
             until = datetime.date.fromisoformat(item["until"])
             self.assertLessEqual((until - datetime.date.today()).days, 366, f"{item['id']}: at most a year ahead")
@@ -302,7 +302,7 @@ class WatcherTest(unittest.TestCase):
 
     def test_inventory_reads_the_repository(self):
         found = watch.inventory()
-        self.assertEqual({d.ecosystem for d in found}, {"GitHub Actions", "PyPI", "Maven", "Bitnami"})
+        self.assertEqual({d.ecosystem for d in found}, {"GitHub Actions", "PyPI", "Maven", "Bitnami", "npm"})
         keys = [(d.ecosystem, d.name, d.version) for d in found]
         self.assertEqual(len(keys), len(set(keys)), "one entry per package version, with all its sources")
         checkout = next(d for d in found if d.name == "actions/checkout")
@@ -312,6 +312,23 @@ class WatcherTest(unittest.TestCase):
         self.assertIn(("org.bouncycastle:bcprov-jdk18on", "1.86"), shipped)
         self.assertFalse(any(d.ships for d in found if d.name == "com.android.tools.build:gradle"))
         self.assertIn(("Bitnami", "gradle"), {(d.ecosystem, d.name) for d in found})
+
+    def test_inventory_has_what_the_ai_review_downloads(self):
+        # Claude Code reads pull request text while holding a credential; Dependabot cannot see these pins.
+        workflow = (ROOT / ".github" / "workflows" / "ai-review.yml").read_text()
+        found = {(d.ecosystem, d.name, d.version): d.sources for d in watch.inventory()}
+        for variable, package in (("CLAUDE_CODE_VERSION", "@anthropic-ai/claude-code"), ("BUN_VERSION", "bun")):
+            with self.subTest(package=package):
+                versions = re.findall(rf'^ +{variable}: "(\d[\w.-]*)"$', workflow, re.M)
+                self.assertEqual(len(versions), 1, variable)
+                self.assertEqual(found.get(("npm", package, versions[0])), (".github/workflows/ai-review.yml",))
+                without = re.sub(rf"^ +{variable}:.*\n", "", workflow, flags=re.M)
+                with self.assertRaisesRegex(ValueError, variable):  # the watch stops instead of dropping the package
+                    watch.ai_review_tools(without)
+        claude = next(d for d in watch.inventory() if d.name == "@anthropic-ai/claude-code")
+        net = FakeNet(vulns={("npm", claude.name, claude.version): ["GHSA-test-0002"]}, details={"GHSA-test-0002": ADVISORY})
+        _, rows = watch.run(net, NOW, exceptions=[])
+        self.assertEqual([r.state for r in rows if claude.name in r.text], ["fail"])
 
     def test_clean_run_has_nothing_to_act_on(self):
         deps, rows = watch.run(FakeNet(), NOW, exceptions=[])

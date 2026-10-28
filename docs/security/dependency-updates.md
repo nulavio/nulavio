@@ -12,6 +12,8 @@ Everything Nulavio pins, except the Firefox engine, and how it stays current. Th
 | Companion libraries and the Android Gradle plugin | `android/*/build.gradle.kts` | version, SHA-256 of every artifact in `android/gradle/verification-metadata.xml`, and the APK's classpath in `android/app/gradle.lockfile` (`nv1` in `android/nv1/gradle.lockfile`) | Dependabot, monthly, plus a local step (below) | the daily watch, for every component in the metadata (213 today), build-time ones included |
 | Base images | `ci/containers/*.Containerfile` | `tag@sha256:digest`; the release scripts read it there (`scripts/release/base_image.sh`) | Dependabot, monthly (new digest of the same release) | the daily watch reports a newer build |
 | Extensions | `browser/distribution/extensions.lock.json` | version and SHA-256 | `scripts/upstream/refresh_extensions_lock.py`, with review | the daily watch: Mozilla's blocklist, a replaced file, more than 30 days behind AMO |
+| Claude Code and Bun (AI review only) | `CLAUDE_CODE_VERSION` and `BUN_VERSION` in `.github/workflows/ai-review.yml` | version and SHA-256 | by hand, with the pinned action ([updating the pins](../process/pull-requests.md#updating-the-pins)) | the daily watch, as the npm packages `@anthropic-ai/claude-code` and `bun` (Dependabot cannot see these pins); it stops with an error if either line is gone |
+| Security scanners | `scripts/security/fetch_tools.sh` | version and SHA-256 | by hand ([code scanning](code-scanning.md#updating-a-tool)) | none yet: read the tool's advisories when bumping it (next steps) |
 
 Not pinned by hash, on purpose: libsodium, gocryptfs and fuse3 on the CI runner, the JDK and the Android SDK of the runner image, and the packages `dnf` and `apt` install inside the images. They are signed distribution packages.
 
@@ -23,7 +25,7 @@ Android lint's security checks that default to a warning are errors (`android/ap
 
 `scripts/release/watch_dependencies.py` runs every day in the `upstream` workflow, after the Firefox check, and writes its findings in the job summary. CI runs it too, so a push or pull request that brings in a vulnerable version is flagged at once (there, data that cannot be fetched is only a warning; the daily run fails on it). It checks:
 
-- every pinned package above against [OSV.dev](https://osv.dev) (one batch query; GitHub Actions versions are matched locally because OSV.dev does not match them);
+- every pinned package above but the security scanners against [OSV.dev](https://osv.dev) (one batch query; GitHub Actions versions are matched locally because OSV.dev does not match them);
 - each pinned extension against addons.mozilla.org: blocklist, the file served for the pinned version, how long the lock has been behind;
 - each base image digest against its registry.
 
@@ -111,6 +113,7 @@ These alerts cover little here (ruff only: no alerts for actions pinned by SHA, 
 
 ## Next steps (not done yet)
 
+- **Watch the security scanners.** zizmor (PyPI, crates.io), actionlint and gitleaks (Go) and ShellCheck (Hackage) are in ecosystems OSV.dev covers, but none of them has had an advisory yet to confirm the package names against. Opengrep's release binary needs its own source of advisories.
 - **Gradle signature verification.** Most artifacts publish PGP signatures. Trusting each publisher's key for its group (`verify-signatures`, a committed keyring, key servers off, fingerprints checked through an independent channel) would let most Gradle pull requests pass on their own, with the publisher's proof instead of trust on first use. Needs the maintainer to approve the list of keys.
 - **Fewer CI jobs on Dependabot branches.** pip pull requests need only `checks`; Gradle ones `checks` and `companion`; docker ones `checks` and `integration`.
 - **Extension permissions.** `refresh_extensions_lock.py --write` copies AMO's permissions into `reviewed_permissions`. It should require an explicit `--accept-permissions` when permissions were added.
