@@ -356,7 +356,8 @@ class Session:
         command = self.prepare()
         command += ["--marionette", "--new-instance"]
         env = dict(self.env)
-        env[SYSTEM_ACCESS_ENV] = "1"  # test-only: Marionette's chrome context (Firefox 159+ reads only this variable)
+        # Test-only: Marionette's chrome context (Firefox 159+ reads only this variable).
+        env[SYSTEM_ACCESS_ENV] = "1"  # nosemgrep: nulavio-py-engine-sandbox-env -- throwaway test profile
         if os.environ.get("NULAVIO_TEST_HEADFUL") != "1":
             command.append("--headless")
             env["MOZ_HEADLESS"] = "1"

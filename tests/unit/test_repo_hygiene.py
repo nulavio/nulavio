@@ -10,7 +10,11 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 SKIP_DIRS = {".git", ".venv", "__pycache__", ".ruff_cache", "artifacts", ".claude"}  # .claude: local agent worktrees, not in git
-TEXT_SUFFIXES = {".py", ".js", ".json", ".md", ".html", ".css", ".svg", ".yml", ".yaml", ".toml", ".txt", ".in", ""}
+TEXT_SUFFIXES = {
+    ".py", ".js", ".mjs", ".json", ".md", ".html", ".css", ".svg", ".yml", ".yaml", ".toml", ".txt", ".in", "",
+    ".sh", ".java", ".kts", ".xml", ".properties", ".patch", ".spec", ".conf", ".Containerfile", ".lockfile",
+    ".ftl", ".mn", ".build", ".desktop",
+}  # fmt: skip
 SECRET_PATTERNS = {
     "private key": re.compile(r"-----BEGIN (RSA |EC |OPENSSH |DSA |PGP )?PRIVATE KEY"),
     "GitHub token": re.compile(r"\bgh[pousr]_[A-Za-z0-9]{36,}\b"),
@@ -19,6 +23,53 @@ SECRET_PATTERNS = {
     "generic bearer": re.compile(r"(?i)authorization:\s*bearer\s+[A-Za-z0-9._-]{20,}"),
 }
 EXECUTABLES = {"bin/nulavio", "android/gradlew"}
+# Workflow write permissions: (workflow file, job id, permission) -> why. Every other permission is read-only
+# or absent; a new write needs an entry here and a reason a reviewer can check.
+WRITE_PERMISSIONS = {
+    ("ai-review.yml", "review", "id-token"): "Workload Identity Federation to the Claude API (no GitHub write)",
+    ("ai-review.yml", "publish", "pull-requests"): "one advisory comment, posted by scripts/ci/post_ai_review.py",
+    ("upstream.yml", "firefox-release", "issues"): "one issue per newer Firefox release (scripts/release/upstream_issue.py)",
+}
+# Expressions that carry text an attacker or a model can choose; they never go inside a run: script.
+UNTRUSTED_IN_RUN = re.compile(r"\$\{\{[^}]*\b(github\.event\.|github\.head_ref|steps\.|needs\.|inputs\.)")
+
+
+def workflow_jobs(text: str) -> dict[str, str]:
+    """Job id -> its text, for workflows in this repository's layout (two-space indentation)."""
+    body = text.split("\njobs:\n", 1)[1]
+    return {m.group(1): m.group(2) for m in re.finditer(r"^  ([\w-]+):\n(.*?)(?=^  [\w-]+:\n|\Z)", body, re.M | re.S)}
+
+
+def permission_entries(text: str, indent: int) -> list[tuple[str, str]]:
+    """(name, access) pairs of the permissions: keys at the given indentation, block or flow style."""
+    pad = " " * indent
+    entries = []
+    for match in re.finditer(rf"^{pad}permissions:[ \t]*(\S.*)?\n((?:{pad}  .*\n)*)", text + "\n", re.M):
+        inline = (match.group(1) or "").split("#", 1)[0].strip()
+        if inline in ("read-all", "write-all"):
+            entries.append(("*", inline.split("-")[0]))
+        entries += re.findall(r"([\w-]+)\s*:\s*(\w+)", inline if inline.startswith("{") else match.group(2))
+    return entries
+
+
+def run_scripts(text: str) -> list[str]:
+    """The script of every run: key (inline or block scalar)."""
+    scripts, lines = [], text.splitlines()
+    for index, line in enumerate(lines):
+        match = re.match(r"^(\s*)(?:- )?run:\s*(.*)$", line)
+        if not match:
+            continue
+        indent, value = len(match.group(1)), match.group(2)
+        if value not in ("|", ">", "|-", ">-"):
+            scripts.append(value)
+            continue
+        body = []
+        for following in lines[index + 1 :]:
+            if following.strip() and len(following) - len(following.lstrip()) <= indent:
+                break
+            body.append(following)
+        scripts.append("\n".join(body))
+    return scripts
 
 
 def repo_files():
@@ -73,6 +124,35 @@ class HygieneTest(unittest.TestCase):
                     module in stdlib or module in allowed_local or module == "__future__",
                     f"{source.name} imports third-party module {module}",
                 )
+
+
+class WorkflowSecurityTest(unittest.TestCase):
+    workflows = sorted((ROOT / ".github" / "workflows").glob("*.yml"))
+
+    def test_write_permissions_are_on_jobs_and_listed(self):
+        found = set()
+        for workflow in self.workflows:
+            text = workflow.read_text()
+            top = text.split("\njobs:\n", 1)[0]
+            for name, access in permission_entries(top, 0):
+                self.assertNotEqual(access, "write", f"{workflow.name}: {name}: write belongs on a job, not the workflow")
+            for job, body in workflow_jobs(text).items():
+                for name, access in permission_entries(body, 4):
+                    if access == "write":
+                        found.add((workflow.name, job, name))
+        self.assertEqual(found, set(WRITE_PERMISSIONS), "update WRITE_PERMISSIONS (with the reason) or drop the write")
+
+    def test_no_untrusted_expression_inside_a_run_script(self):
+        for workflow in self.workflows:
+            for script in run_scripts(workflow.read_text()):
+                self.assertIsNone(UNTRUSTED_IN_RUN.search(script), f"{workflow.name}: pass it through env: instead")
+
+    def test_pull_request_head_is_checked_out_only_into_its_own_path(self):
+        for workflow in self.workflows:
+            for step in re.split(r"^ +- ", workflow.read_text(), flags=re.M)[1:]:
+                if "actions/checkout@" in step and re.search(r"github\.event\.pull_request\.head|github\.head_ref", step):
+                    self.assertRegex(step, r"(?m)^\s+path: \S", f"{workflow.name}: pull request code next to trusted code")
+                    self.assertIn("persist-credentials: false", step, workflow.name)
 
 
 if __name__ == "__main__":

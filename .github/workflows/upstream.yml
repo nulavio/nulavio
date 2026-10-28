@@ -8,6 +8,9 @@ name: upstream
 # maintainer (GitHub sends e-mail and push). The job fails when a release is past
 # the 72-hour deadline, when Mozilla's data is unavailable, or when a signature
 # does not verify, so GitHub's failure notice is a second alert.
+# A second step checks every other pinned dependency against OSV.dev, the AMO
+# blocklist and the base-image digests (scripts/release/watch_dependencies.py);
+# the job summary says which step failed.
 #
 # 04:47 UTC catches releases Mozilla staged overnight (signed checksums usually
 # appear 00:00-04:00 UTC for dot releases and chemspills); 14:47 UTC comes about
@@ -31,7 +34,7 @@ concurrency:
 
 jobs:
   firefox-release:
-    name: Firefox release against the shipped version
+    name: Firefox release and pinned dependencies
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
@@ -66,3 +69,7 @@ jobs:
             3) echo "::error::A Mozilla signature did not verify: nothing may be built from that release."; exit 1 ;;
             *) echo "::error::watch_upstream.py exited with $RC."; exit 1 ;;
           esac
+      - name: Pinned dependencies (OSV.dev, AMO blocklist, base-image digests)
+        if: ${{ !cancelled() }}
+        timeout-minutes: 3
+        run: python3 -I scripts/release/watch_dependencies.py --summary "$GITHUB_STEP_SUMMARY"

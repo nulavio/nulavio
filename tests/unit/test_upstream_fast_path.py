@@ -688,8 +688,11 @@ class IssueTest(TempDirTest):
 class BumpTest(TempDirTest):
     def setUp(self):
         super().setUp()
+        # The repository's file shape with a fixed pin, so these tests survive every real engine bump.
         self.engine = self.tmp / "engine.json"
-        shutil.copy(ROOT / "browser" / "build" / "engine.json", self.engine)
+        shape = json.loads((ROOT / "browser" / "build" / "engine.json").read_text())
+        shape.update(firefox="158.0.1", source_sha256=D158)
+        self.engine.write_text(json.dumps(shape, indent=2) + "\n")
         self.original = self.engine.read_text()
 
     def bump(self, version, *, published=True, verify=(D159, SUBKEY), staged=False):
@@ -758,15 +761,16 @@ class BumpTest(TempDirTest):
             fetch_firefox_source.check_pin("158.0.1", D159, self.engine)
 
     def test_fetch_checks_the_pin_before_downloading(self):
+        pinned = json.loads((ROOT / "browser" / "build" / "engine.json").read_text())["firefox"]  # the real pin
         with (
             mock.patch.object(fetch_firefox_source, "signed_source_digest", return_value=("f" * 64, SUBKEY)),
             mock.patch.object(fetch_firefox_source, "download", side_effect=AssertionError("downloaded")),
-            mock.patch.object(sys, "argv", ["fetch", "158.0.1", "--dest", str(self.tmp)]),
+            mock.patch.object(sys, "argv", ["fetch", pinned, "--dest", str(self.tmp)]),
             contextlib.redirect_stdout(io.StringIO()),
             self.assertRaisesRegex(SystemExit, "refusing"),
         ):
             fetch_firefox_source.main()
-        self.assertFalse((self.tmp / "downloads" / "firefox-158.0.1.source.tar.xz").exists())
+        self.assertFalse((self.tmp / "downloads" / f"firefox-{pinned}.source.tar.xz").exists())
 
 
 # --- the local autobuild (autobuild.py) -----------------------------------------------------

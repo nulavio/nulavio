@@ -26,6 +26,19 @@ class NulavioRulesCases {
         SecureRandom j = new SecureRandom();
     }
 
+    void locale(long n, char c, String name) {
+        // ruleid: nulavio-java-default-locale
+        String a = String.format("%06d", n);
+        // ruleid: nulavio-java-default-locale
+        String b = "\\u%04x".formatted((int) c);
+        // ruleid: nulavio-java-default-locale
+        String d = name.toLowerCase();
+        // ok: nulavio-java-default-locale
+        String e = String.format(Locale.ROOT, "%06d", n);
+        // ok: nulavio-java-default-locale
+        String f = name.toUpperCase(Locale.ROOT);
+    }
+
     void tls(HttpsURLConnection connection) {
         // ruleid: nulavio-java-tls-verification-off
         connection.setHostnameVerifier(verifier);

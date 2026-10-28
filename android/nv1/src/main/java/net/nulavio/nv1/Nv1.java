@@ -3,6 +3,7 @@ package net.nulavio.nv1;
 import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
+import java.util.Locale;
 import java.util.Map;
 
 /** Protocol nv1 helpers, byte for byte as the desktop's launcher/nulavio_launcher/vault/phone.py. */
@@ -95,7 +96,7 @@ public final class Nv1 {
         byte[] raw = kdf(shared, "pair/sas", t);
         long n = ((raw[0] & 0xffL) << 24) | ((raw[1] & 0xffL) << 16) | ((raw[2] & 0xffL) << 8) | (raw[3] & 0xffL);
         Crypto.wipe(raw);
-        return String.format("%06d", n % 1_000_000L);
+        return String.format(Locale.ROOT, "%06d", n % 1_000_000L); // ASCII digits in every locale
     }
 
     public static byte[] phoneKek(byte[] z, String profileId, String envelopeId, String phoneId, byte[] ephPk) {

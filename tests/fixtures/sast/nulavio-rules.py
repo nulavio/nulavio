@@ -101,6 +101,8 @@ env.setdefault("MOZ_ALLOW_DOWNGRADE", "1")
 os.putenv("MOZ_MARIONETTE", "1")
 # ruleid: nulavio-py-engine-sandbox-env
 launch = {"HOME": home, "MOZ_REMOTE_SETTINGS_DEVTOOLS": "1"}
+# ruleid: nulavio-py-engine-sandbox-env
+launch = {**os.environ, "MOZ_REMOTE_ALLOW_SYSTEM_ACCESS": "1"}
 # ok: nulavio-py-engine-sandbox-env
 env["MOZ_APP_REMOTINGNAME"] = "nulavio"
 # ok: nulavio-py-engine-sandbox-env

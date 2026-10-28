@@ -3,6 +3,7 @@ package net.nulavio.nv1;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.TreeMap;
 
@@ -77,7 +78,7 @@ public final class Json {
                 case '\f': out.append("\\f"); break;
                 default:
                     if (c < 0x20 || c > 0x7e) {
-                        out.append(String.format("\\u%04x", (int) c)); // Python escapes DEL and every non-ASCII unit
+                        out.append(String.format(Locale.ROOT, "\\u%04x", (int) c)); // Python escapes DEL and every non-ASCII unit
                     } else {
                         out.append(c);
                     }

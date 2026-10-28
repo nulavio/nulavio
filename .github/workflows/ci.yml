@@ -2,10 +2,13 @@ name: ci
 
 # No paths-ignore for documentation-only changes: the unit tests read docs/ (design
 # tokens, links, claims), so such a change can fail them (docs/security/code-scanning.md).
+# The engine integration matrix, the most expensive job, is skipped when a push or pull
+# request changes only Markdown files, which no integration test reads (job `changes`).
 on:
   push:
     branches: [main]
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
   schedule:
     - cron: "17 6 * * 1" # weekly: catch engine / AMO / upstream drift
 
@@ -21,6 +24,9 @@ jobs:
     name: lint, unit tests, generated files, SBOM
     runs-on: ubuntu-24.04
     timeout-minutes: 20
+    permissions:
+      contents: read
+      pull-requests: read # the "merged pull request" check below
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -31,14 +37,14 @@ jobs:
           .venv/bin/pip install --require-hashes -r requirements/dev.txt
           .venv/bin/ruff check .
           .venv/bin/ruff format --check .
-      - name: Shell
-        run: shellcheck bin/nulavio scripts/build/build_nulavio.sh
       - name: Generated tokens are current
         run: python3 -I scripts/brand/build_tokens.py --check
       - name: WCAG contrast of design tokens
         run: python3 -I scripts/brand/contrast.py
       - name: libsodium and gocryptfs for the Vault tests (decisions D1, D2)
         run: sudo apt-get update -q && sudo apt-get install -y --no-install-recommends libsodium23 gocryptfs fuse3
+      - name: Gradle wrapper JAR is an official Gradle release (Dependabot replaces it on wrapper updates)
+        uses: gradle/actions/wrapper-validation@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
       - name: Companion protocol library (Java; Gradle and dependencies checksum-verified)
         run: JAVA_HOME="$JAVA_HOME_21_X64" android/gradlew -p android --no-daemon -q :nv1:test
       - name: Unit tests
@@ -46,13 +52,41 @@ jobs:
           NULAVIO_REQUIRE_SODIUM: "1"
           NULAVIO_REQUIRE_GOCRYPTFS: "1"
         run: python3 -I tests/run.py unit
-      - name: SBOM (CycloneDX)
-        run: python3 -I scripts/release/sbom.py > sbom.cdx.json
+      - name: Pinned Firefox source digest is the one Mozilla signed (engine.json)
+        run: python3 -I scripts/release/bump_engine.py --check
+      - name: SBOM (CycloneDX; the Companion app's from android/app/gradle.lockfile)
+        run: |
+          python3 -I scripts/release/sbom.py > sbom.cdx.json
+          python3 -I scripts/release/sbom.py --companion > companion.cdx.json
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: sbom
-          path: sbom.cdx.json
+          path: |
+            sbom.cdx.json
+            companion.cdx.json
           retention-days: 14 # artifacts count against the plan's storage; releases keep their own SBOM
+      - name: Pinned dependencies against OSV.dev, the AMO blocklist and the registries (daily in upstream.yml too)
+        run: |
+          status=0
+          python3 -I scripts/release/watch_dependencies.py --summary "$GITHUB_STEP_SUMMARY" || status=$?
+          if [ "$status" -eq 2 ]; then
+            echo "::warning title=Dependency watch::some data could not be fetched; the daily upstream run fails on this"
+            exit 0
+          fi
+          exit "$status"
+      - name: main changed only through a merged pull request
+        # Off until the maintainer sets the repository variable REQUIRE_PR_FOR_MAIN to true
+        # (docs/process/pull-requests.md). A failure here makes GitHub e-mail the maintainer.
+        if: ${{ !cancelled() && github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.REQUIRE_PR_FOR_MAIN == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.sha }}
+        run: |
+          merged=$(gh api "repos/$GITHUB_REPOSITORY/commits/$SHA/pulls" --jq 'map(select(.merged_at != null)) | length')
+          if [ "$merged" -eq 0 ]; then
+            echo "::error title=main without a pull request::$SHA reached main without a merged pull request (docs/process/pull-requests.md)"
+            exit 1
+          fi
 
   security:
     name: security scanners (workflows, secrets, shell scripts, Nulavio rules)
@@ -91,17 +125,44 @@ jobs:
 
   companion:
     name: Companion app (lint, release build)
+    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }} # drafts get the quick checks only
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: Gradle wrapper JAR is an official Gradle release (Dependabot replaces it on wrapper updates)
+        uses: gradle/actions/wrapper-validation@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
       - name: Lint and release build (Gradle and dependencies checksum-verified; no signing key in CI)
         run: JAVA_HOME="$JAVA_HOME_21_X64" android/gradlew -p android --no-daemon -q :app:lintDebug :app:assembleRelease
 
+  changes:
+    name: does this change need the engine integration run
+    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }} # drafts get the quick checks only
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      integration: ${{ steps.diff.outputs.integration }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Files changed
+        id: diff
+        env:
+          EVENT: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: python3 -I scripts/ci/needs_integration.py >> "$GITHUB_OUTPUT"
+
   integration:
     name: engine integration (${{ matrix.image }}, headless)
+    needs: changes
+    if: ${{ needs.changes.outputs.integration == 'true' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     strategy:
@@ -110,12 +171,14 @@ jobs:
         # fedora-itest: distribution Firefox RPM + KeePassXC (provider spike).
         # ubuntu-itest: Mozilla's own Firefox build from its APT repository.
         image: [fedora-itest, ubuntu-itest]
+    env:
+      IMAGE: ${{ matrix.image }} # used as "$IMAGE" in run blocks, never expanded into the script
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - name: Build test image (packages installed inside the container only)
-        run: docker build -t nulavio-${{ matrix.image }} -f ci/containers/${{ matrix.image }}.Containerfile ci/containers
+        run: docker build -t "nulavio-$IMAGE" -f "ci/containers/$IMAGE.Containerfile" ci/containers
       - name: Integration tests as an unprivileged user (incl. official password-manager extensions)
         # Docker's default seccomp profile blocks the user namespaces that the
         # browser's own content sandbox needs. Relaxing the *container* filter
@@ -126,16 +189,16 @@ jobs:
           docker run --rm --security-opt seccomp=unconfined \
             -v "$GITHUB_WORKSPACE":/src:ro -v "$GITHUB_WORKSPACE/artifacts":/artifacts \
             -e NULAVIO_NETWORK_TESTS=1 -e NULAVIO_TEST_ARTIFACTS=/artifacts \
-            nulavio-${{ matrix.image }} \
+            "nulavio-$IMAGE" \
             sh -c 'cp -r /src "$HOME/nulavio" && cd "$HOME/nulavio" && python3 -I tests/run.py integration'
       - name: KeePassXC native messaging end to end (throwaway database)
         if: matrix.image == 'fedora-itest'
         run: |
-          docker run --rm --security-opt seccomp=unconfined -v "$GITHUB_WORKSPACE":/src:ro nulavio-${{ matrix.image }} \
+          docker run --rm --security-opt seccomp=unconfined -v "$GITHUB_WORKSPACE":/src:ro "nulavio-$IMAGE" \
             sh -c 'cp -r /src "$HOME/nulavio" && cd "$HOME/nulavio" && python3 -I scripts/research/keepassxc_native_messaging_spike.py'
       - name: Verify Mozilla release signature for the tested engine version
         run: |
-          version=$(docker run --rm nulavio-${{ matrix.image }} sh -c 'firefox --version 2>/dev/null' | awk '{print $3}')
+          version=$(docker run --rm "nulavio-$IMAGE" sh -c 'firefox --version 2>/dev/null' | awk '{print $3}')
           python3 -I scripts/upstream/verify_firefox_release.py "$version"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()

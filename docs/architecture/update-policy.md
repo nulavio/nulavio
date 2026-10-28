@@ -98,7 +98,7 @@ Each run takes a lock, so runs never overlap. It builds only a release whose sig
 
 ### Measured
 
-`rehearse_release.sh <version>` was first run in full on 2026-10-27 (Firefox 158.0.1, incremental build): **14 minutes**, every step passed ([report](../research/evidence/release-rehearsal-2026-10-27.md)). For a new Firefox release the build is a full one (about 52 minutes measured), so about 70 minutes from the start to checked packages. With a pre-build from the staged release, the packages are ready before Mozilla publishes; without it, about 1 hour 40 minutes after. Not rehearsed: signing with the release key and publishing.
+`rehearse_release.sh <version>` was first run in full on 2026-10-27 (Firefox 158.0.1, incremental build): **14 minutes**, every step passed ([report](../research/evidence/release-rehearsal-2026-10-27.md)). The first urgent release, Firefox 159.0 (2026-10-27), had its packages ready to sign 12.8 hours after Mozilla's release, inside the 24-hour target, with one interruption and one test fix on the way ([report](../research/evidence/release-rehearsal-2026-10-28.md)). For a new Firefox release the build is a full one (about 52 minutes measured), so about 70 minutes from the start to checked packages. With a pre-build from the staged release, the packages are ready before Mozilla publishes; without it, about 1 hour 40 minutes after. Not rehearsed: signing with the release key and publishing.
 
 [Security changelog](../security/changelog.md): one entry per published build, with the hours from Mozilla's release to "ready to sign" and to "published".
 

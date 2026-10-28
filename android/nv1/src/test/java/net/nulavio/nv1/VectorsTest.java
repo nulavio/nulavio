@@ -10,6 +10,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -44,6 +45,23 @@ public class VectorsTest {
     public void canonicalJsonMatchesPython() {
         Map<String, Object> c = m("canonical");
         assertEquals(c.get("bytes"), new String(Json.canonical(c.get("object")), StandardCharsets.US_ASCII));
+    }
+
+    @Test
+    public void digitsAndEscapesStayAsciiInEveryLocale() {
+        // Persian, Arabic, Devanagari and Thai digits: a phone in these languages must show and hash the same text.
+        Locale saved = Locale.getDefault();
+        try {
+            for (String tag : new String[] {"fa-IR", "ar-EG", "hi-IN-u-nu-deva", "th-TH-u-nu-thai"}) {
+                Locale.setDefault(Locale.forLanguageTag(tag));
+                Map<String, Object> s = m("sas");
+                assertEquals(tag, s.get("digits"), Nv1.sasDigits(b(s, "shared"), b(s, "t")));
+                Map<String, Object> c = m("canonical");
+                assertEquals(tag, c.get("bytes"), new String(Json.canonical(c.get("object")), StandardCharsets.US_ASCII));
+            }
+        } finally {
+            Locale.setDefault(saved);
+        }
     }
 
     @Test

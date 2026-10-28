@@ -40,7 +40,7 @@ Tests never use your real profile: integration tests set `NULAVIO_HOME` to a tem
 ## Track B (building Nulavio from source)
 
 ```sh
-scripts/build/build_nulavio.sh 158.0.1   # verified source -> branding -> patches -> container build
+scripts/build/build_nulavio.sh 159.0     # verified source -> branding -> patches -> container build
 ```
 
 Everything happens in rootless podman containers and in `~/.cache/nulavio-build` (about 23 GB). Nothing is installed on the host. See [docs/architecture/build.md](docs/architecture/build.md).

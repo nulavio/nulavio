@@ -133,6 +133,8 @@ rules:
           - pattern: os.putenv("$KEY", ...)
           - pattern: |
               {..., "$KEY": $VALUE, ...}
+          - pattern: |
+              {**$BASE, ..., "$KEY": $VALUE, ...}
           - pattern: dict(..., $KEY=$VALUE, ...)
       - metavariable-regex:
           metavariable: $KEY
@@ -347,6 +349,23 @@ rules:
       - pattern: SSLSocketFactory.ALLOW_ALL_HOSTNAME_VERIFIER
       - pattern: new AllowAllHostnameVerifier()
       - pattern: NoopHostnameVerifier.INSTANCE
+
+  - id: nulavio-java-default-locale
+    message: >-
+      Without a Locale, String.format and toLowerCase/toUpperCase follow the phone's language:
+      Persian, Arabic or Hindi digits, a Turkish dotless i. nv1 codes and canonical bytes must
+      match the desktop's exactly, so pass Locale.ROOT.
+    languages: [java]
+    severity: ERROR
+    paths:
+      include: ["android/**"]
+    metadata:
+      cwe: "CWE-176: Improper handling of Unicode encoding"
+    pattern-either:
+      - pattern: String.format("$FMT", ...)
+      - pattern: ("$FMT").formatted(...)
+      - pattern: $S.toLowerCase()
+      - pattern: $S.toUpperCase()
 
   - id: nulavio-android-unsafe-storage-or-manifest
     message: >-
