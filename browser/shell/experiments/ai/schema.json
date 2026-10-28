@@ -319,8 +319,20 @@
             "maxLength": 8000
           },
           {
-            "name": "includePage",
-            "type": "boolean"
+            "name": "page",
+            "type": "object",
+            "optional": true,
+            "description": "The page the user included in this message, as assistantPage() returned it then; null for the question alone.",
+            "properties": {
+              "tabId": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "url": {
+                "type": "string",
+                "maxLength": 1048576
+              }
+            }
           }
         ]
       },

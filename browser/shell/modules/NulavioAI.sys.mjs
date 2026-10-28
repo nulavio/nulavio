@@ -17,6 +17,8 @@
 const lazy = {};
 ChromeUtils.defineESModuleGetters(lazy, {
   callTool: "resource://builtin-addons/nulavio-shell/modules/NulavioTools.sys.mjs",
+  ExtensionParent: "resource://gre/modules/ExtensionParent.sys.mjs",
+  PrivateBrowsingUtils: "resource://gre/modules/PrivateBrowsingUtils.sys.mjs",
   stateDir: "resource://builtin-addons/nulavio-shell/modules/NulavioTools.sys.mjs",
 });
 
@@ -52,6 +54,17 @@ function agentId(id) {
     fail("bad-request");
   }
   return id;
+}
+
+/** The engine's WebExtension tab ids (the ones the panel's browser.tabs events carry). */
+function tabTracker() {
+  return lazy.ExtensionParent.apiManager.global.tabTracker ?? fail("unexpected");
+}
+
+/** A web page a tab shows (address and title only), or null for anything else. */
+function pageOf(browser) {
+  const url = browser?.currentURI?.spec ?? "";
+  return /^https?:/.test(url) ? { url, title: browser.contentTitle || url } : null;
 }
 
 class AI {
@@ -182,14 +195,50 @@ class AI {
     if (!win || !policy) {
       return;
     }
-    win.openTrustedLinkIn(policy.getURL(page), "tab");
+    // In front, said explicitly (AI-04): a request nobody sees expires as a denial. openTrustedLinkIn
+    // defaults to the foreground in Gecko 158+, but new tabs otherwise follow browser.tabs.loadInBackground.
+    win.openTrustedLinkIn(policy.getURL(page), "tab", { inBackground: false });
     win.focus();
   }
 
-  /** In an AI Workspace: say plainly who drives this window, in every browser window. */
   // -- Nulavio Assistant (A12): a model the user chose, through the Nulavio tools ------------------
   // The tools hold the API key (system keyring) and talk to the provider; the browser sends them
-  // the question and, only when the user ticked it, the visible text of the current page.
+  // the question and, only when the user included it in this message, the visible text of that one
+  // tab. Never in a private window (D-UX6): nothing typed or shown there goes to a model.
+
+  /** The calling window (the one around the panel), if the assistant may work there. */
+  #userWindow(win) {
+    if (!win?.gBrowser || win.closed) {
+      fail("no-window");
+    }
+    if (lazy.PrivateBrowsingUtils.isWindowPrivate(win)) {
+      fail("private-window");
+    }
+    return win;
+  }
+
+  /** The tab the user included (AI-02), still in this window and still at the address they saw. */
+  #includedBrowser(page, win) {
+    const { tabId, url } = page ?? {};
+    if (!Number.isInteger(tabId) || typeof url !== "string") {
+      fail("bad-request");
+    }
+    const tab = tabTracker().getTab(tabId, null);
+    const browser = tab?.linkedBrowser;
+    if (!browser || (tab.documentGlobal ?? tab.ownerGlobal) !== win) {
+      fail("page-changed"); // closed, or moved to another window
+    }
+    if (lazy.PrivateBrowsingUtils.isBrowserPrivate(browser)) {
+      fail("private-window");
+    }
+    const current = pageOf(browser);
+    if (current?.url !== url) {
+      // Another address, even only another #fragment (apps that route by fragment show other content):
+      // the consent was for the page the user saw.
+      fail("page-changed");
+    }
+    return browser;
+  }
 
   async #assistant(request, timeoutMs = 60000) {
     if (await this.workspaceAgent()) {
@@ -203,8 +252,10 @@ class AI {
     }
   }
 
-  assistantState() {
-    return this.#assistant({ op: "state" });
+  /** The assistant's state; `privateWindow` tells the panel to explain instead of offering a composer. */
+  async assistantState(win = null) {
+    const state = await this.#assistant({ op: "state" });
+    return { ...state, privateWindow: Boolean(win && lazy.PrivateBrowsingUtils.isWindowPrivate(win)) };
   }
 
   assistantConfigure({ kind, baseUrl, model, label, key } = {}) {
@@ -226,33 +277,46 @@ class AI {
     return this.#assistant({ op: "forget" });
   }
 
-  /** The page the user would share: the selected tab of `win` (address and title only). */
+  /** The page the user may include now: the selected tab of `win`, as {tabId, url, title} (no text). */
   assistantPage(win) {
-    const browser = win?.gBrowser?.selectedBrowser;
-    const url = browser?.currentURI?.spec ?? "";
-    return /^https?:/.test(url) ? { url, title: browser.contentTitle || url } : null;
+    this.#userWindow(win);
+    const tab = win.gBrowser.selectedTab;
+    const page = pageOf(tab?.linkedBrowser);
+    return page && { tabId: tabTracker().getId(tab), ...page };
   }
 
-  /** Ask; `includePage`: the user ticked "include this page", so its visible text goes along. */
-  async assistantAsk(question, includePage, win) {
-    let page = null;
-    if (includePage) {
-      const browser = win?.gBrowser?.selectedBrowser;
-      if (!this.assistantPage(win)) {
-        fail("no-page");
-      }
+  /** Ask. `page` is null, or the {tabId, url} the user included in this message: that tab's visible
+      text goes along only while it still shows that address. The selected tab at Send is never read. */
+  async assistantAsk(question, page, win) {
+    this.#userWindow(win);
+    if (await this.workspaceAgent()) {
+      fail("ai-workspace");
+    }
+    let sent = null;
+    if (page) {
+      const browser = this.#includedBrowser(page, win);
       // The engine's own extractor (visible text, as reader-like features use); no script in the page.
       const extracted = await browser.browsingContext.currentWindowGlobal.getActor("PageExtractor").getText({});
-      page = { url: browser.currentURI.spec, title: browser.contentTitle, text: String(extracted?.text ?? "") };
+      this.#includedBrowser(page, win); // it navigated while being read: refuse rather than send another page
+      sent = { url: browser.currentURI.spec, title: browser.contentTitle, text: String(extracted?.text ?? "") };
     }
-    return this.#assistant({ op: "ask", question: String(question), page }, 180000);
+    return this.#assistant({ op: "ask", question: String(question), page: sent }, 180000);
   }
 
-  /** A task in the assistant's AI Workspace, under its agent permissions. */
-  assistantTask(task) {
-    return this.#assistant({ op: "task", task: String(task) }, 600000);
+  /** A task in the assistant's AI Workspace, under its agent permissions; never from a private window. */
+  async assistantTask(task, win) {
+    this.#userWindow(win);
+    try {
+      return await this.#assistant({ op: "task", task: String(task) }, 600000);
+    } catch (e) {
+      if (e?.code === "helper-failed") {
+        fail("task-unfinished"); // no answer in time (or the tools ended): the run may have acted already
+      }
+      throw e;
+    }
   }
 
+  /** In an AI Workspace: say plainly who drives this window, in every browser window. */
   async markWorkspace(text) {
     if (!(await this.workspaceAgent())) {
       return;

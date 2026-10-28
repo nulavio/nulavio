@@ -17,7 +17,12 @@ this.nulavioAI = class extends ExtensionAPI {
   getAPI(context) {
     const ai = this.module();
     // The browser window around the calling page (the sidebar's or a tab's): its selected tab is "this page".
-    const windowOf = () => context.xulBrowser?.ownerGlobal?.browsingContext?.topChromeWindow ?? null;
+    // Gecko 158 renamed Node.ownerGlobal to documentGlobal (AI-01); older engines only have ownerGlobal.
+    const windowOf = () => {
+      const browser = context.xulBrowser;
+      const global = browser?.documentGlobal ?? browser?.ownerGlobal;
+      return global?.browsingContext?.topChromeWindow ?? null;
+    };
     const call = fn => async (...args) => {
       try {
         return await fn(...args);
@@ -45,13 +50,14 @@ this.nulavioAI = class extends ExtensionAPI {
         answer: call((id, answer) => ai.answer(id, answer)),
         watch: call(() => ai.watch()),
         markWorkspace: call(text => ai.markWorkspace(text)),
-        assistantState: call(() => ai.assistantState()),
+        assistantState: call(() => ai.assistantState(windowOf())),
         assistantConfigure: call(details => ai.assistantConfigure(details)),
         assistantAllow: call(allowed => ai.assistantAllow(allowed)),
         assistantForget: call(() => ai.assistantForget()),
         assistantPage: call(async () => ai.assistantPage(windowOf())),
-        assistantAsk: call((question, includePage) => ai.assistantAsk(question, includePage, windowOf())),
-        assistantTask: call(task => ai.assistantTask(task)),
+        // `page`: the {tabId, url} the user included in this message, or null (AI-02).
+        assistantAsk: call((question, page) => ai.assistantAsk(question, page ?? null, windowOf())),
+        assistantTask: call(task => ai.assistantTask(task, windowOf())),
       },
     };
   }

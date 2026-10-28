@@ -168,20 +168,103 @@ class AssistantTest(unittest.TestCase):
             assistant.run_task("Again", PROFILE, bridge=FakeBridge(state["agent"]["id"]))
         self.assertEqual(caught.exception.code, "assistant-revoked")
 
-    def test_stop_switch_denies_the_assistant_too(self):
+    def test_stop_switch_blocks_questions_page_text_and_tasks(self):
+        # D-UX5: "stop all agents" silences the built-in assistant too; nothing leaves the computer.
+        state = self.configure()
+        assistant.allow_profile(PROFILE, True)
+        registry.set_stopped(True)
+        self.addCleanup(registry.set_stopped, False)
+        page = {"url": "https://news.example/a", "title": "News", "text": "SECRET-PAGE-WORDS"}
+        bridge = FakeBridge(state["agent"]["id"])
+        for name, run in (
+            ("question", lambda: assistant.ask("Hello?", PROFILE)),
+            ("page", lambda: assistant.ask("Summarize", PROFILE, page)),
+            ("task", lambda: assistant.run_task("Open something", PROFILE, bridge=bridge)),
+        ):
+            with self.subTest(name), self.assertRaises(assistant.AssistantError) as caught:
+                run()
+            self.assertEqual(caught.exception.code, "emergency-stop")
+        self.assertEqual(self.provider.requests, [])  # not even one model turn
+        self.assertEqual(bridge.calls, [])
+        self.assertEqual(assistant.state(PROFILE)["blocked"], "emergency-stop")
+        registry.set_stopped(False)
+        self.assertIsNone(assistant.state(PROFILE)["blocked"])
+        self.assertEqual(assistant.ask("Hello?", PROFILE)["answer"], "ok")
+
+    def test_pause_and_revoke_block_questions_and_page_text_too(self):
+        state = self.configure()
+        assistant.allow_profile(PROFILE, True)
+        agent_id = state["agent"]["id"]
+        page = {"url": "https://news.example/a", "title": "News", "text": "SECRET-PAGE-WORDS"}
+        registry.pause(agent_id, True)
+        for given in (None, page):
+            with self.subTest(page=bool(given)), self.assertRaises(assistant.AssistantError) as caught:
+                assistant.ask("Hello?", PROFILE, given)
+            self.assertEqual(caught.exception.code, "assistant-paused")
+        paused = assistant.state(PROFILE)
+        self.assertEqual((paused["blocked"], paused["agent"]["paused"]), ("assistant-paused", True))
+        registry.pause(agent_id, False)
+        self.assertEqual(assistant.ask("Hello?", PROFILE)["answer"], "ok")
+        registry.revoke(agent_id)
+        with self.assertRaises(assistant.AssistantError) as caught:
+            assistant.ask("Summarize", PROFILE, page)
+        self.assertEqual(caught.exception.code, "assistant-revoked")
+        self.assertEqual(assistant.state(PROFILE)["blocked"], "assistant-revoked")
+        self.assertEqual(len(self.provider.requests), 1)  # only the question asked while resumed
+        self.assertNotIn("SECRET-PAGE-WORDS", json.dumps(self.provider.requests))
+        # "Save the settings again to create a new one" (err_assistant_revoked) is true: a new Restricted agent.
+        again = self.configure(key=None)
+        self.assertNotEqual(again["agent"]["id"], agent_id)
+        self.assertEqual(again["agent"]["autonomy"], "restricted")
+        self.assertIsNone(again["blocked"])
+        self.assertTrue(registry.get(agent_id)["revoked"])  # the old one stays revoked, for the audit
+
+    def test_a_task_stops_before_the_next_model_turn_when_stopped_paused_or_revoked(self):
+        call = {"id": "c1", "type": "function", "function": {"name": "tab_new", "arguments": "{}"}}
+        self.addCleanup(registry.set_stopped, False)
+        for name, act, code in (
+            ("stop", lambda _a: registry.set_stopped(True), "emergency-stop"),
+            ("pause", lambda a: registry.pause(a, True), "assistant-paused"),
+            ("revoke", registry.revoke, "assistant-revoked"),
+        ):
+            with self.subTest(name):
+                registry.set_stopped(False)
+                state = self.configure(key=None)  # after a revocation this starts a new agent
+                assistant.allow_profile(PROFILE, True)
+                agent_id = state["agent"]["id"]
+                registry.pause(agent_id, False)
+                self.provider.requests.clear()
+                self.provider.replies[:] = [
+                    {"choices": [{"message": {"content": None, "tool_calls": [call]}}]},
+                    {"choices": [{"message": {"content": "Could not."}}]},
+                ]
+
+                class ActsDuringTheStep(FakeBridge):
+                    def __init__(self, agent_id, act):
+                        super().__init__(agent_id)
+                        self.act = act
+
+                    def call(self, tool, arguments):
+                        self.act(self.agent_id)  # the user reaches for the control while a step runs
+                        return super().call(tool, arguments)
+
+                bridge = ActsDuringTheStep(agent_id, act)
+                result = assistant.run_task("Open something", PROFILE, bridge=bridge)
+                self.assertEqual(result["stopped"], code)
+                self.assertEqual(result["steps"], [{"tool": "tab_new", "error": True}])
+                self.assertFalse(bridge.calls[0][2])  # the step itself was refused by the policy
+                self.assertEqual(len(self.provider.requests), 1)  # and no second model turn
+                self.assertTrue(bridge.closed)
+
+    def test_the_step_limit_is_reported_as_such(self):
         state = self.configure()
         assistant.allow_profile(PROFILE, True)
         call = {"id": "c1", "type": "function", "function": {"name": "tab_new", "arguments": "{}"}}
-        self.provider.replies += [
-            {"choices": [{"message": {"content": None, "tool_calls": [call]}}]},
-            {"choices": [{"message": {"content": "Could not."}}]},
-        ]
-        registry.set_stopped(True)
-        self.addCleanup(registry.set_stopped, False)
-        bridge = FakeBridge(state["agent"]["id"])
-        result = assistant.run_task("Open something", PROFILE, bridge=bridge)
-        self.assertEqual(result["steps"], [{"tool": "tab_new", "error": True}])
-        self.assertFalse(bridge.calls[0][2])
+        self.provider.replies += [{"choices": [{"message": {"content": None, "tool_calls": [call]}}]}] * assistant.MAX_STEPS
+        result = assistant.run_task("Keep going", PROFILE, bridge=FakeBridge(state["agent"]["id"]))
+        self.assertEqual((result["stopped"], result["limit"], result["answer"]), ("step-limit", assistant.MAX_STEPS, ""))
+        self.assertEqual(len(result["steps"]), assistant.MAX_STEPS)
+        self.assertEqual(len(self.provider.requests), assistant.MAX_STEPS)
 
     def test_cli_api_never_returns_the_key(self):
         self.configure()

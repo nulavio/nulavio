@@ -10,12 +10,14 @@ policies as external agents (no hidden privileges).
 * The API key lives in the system keyring (Secret Service). It is read here,
   in the Nulavio tools, and never enters the browser.
 * Asking: the question goes to the provider; the page's text only when the
-  user ticked "include this page", and the request says so in the result.
-  Only profiles the user allowed may ask at all.
+  user included that page in this message, and the result says so. Only
+  profiles the user allowed may ask at all, and nothing is sent while the
+  emergency stop is on or the assistant's agent is paused or revoked (D-UX5).
 * Tasks: the assistant is an agent in the AI Bridge registry
   ("Nulavio Assistant"). Its browser actions are tool calls of the same
   Bridge, decided by the same Policy Decision Point, audited, stoppable and
-  revocable like any agent's, in an AI Workspace.
+  revocable like any agent's, in an AI Workspace. A run stops before its next
+  model turn once the stop, a pause or a revocation arrives.
 
 Plain HTTP is accepted only for a model on this computer (loopback).
 """
@@ -104,13 +106,22 @@ def state(profile: str | None = None) -> dict:
         except Exception:  # keyring missing: reported as no key
             has_key = False
     agent = registry.load()["agents"].get(data["agent"]) if data["agent"] else None
+    summary = None
+    if agent:
+        summary = {
+            "id": agent["id"],
+            "autonomy": agent["autonomy"],
+            "revoked": agent["revoked"],
+            "paused": bool(agent.get("paused")),
+        }
     return {
         "configured": bool(provider),
         "provider": provider,
         "recipient": urllib.parse.urlsplit(provider["base_url"]).hostname if provider else None,
         "hasKey": has_key,
         "profileAllowed": bool(profile) and profile in data["profiles"],
-        "agent": {"id": agent["id"], "autonomy": agent["autonomy"], "revoked": agent["revoked"]} if agent else None,
+        "agent": summary,
+        "blocked": _blocked(data) if provider else None,
     }
 
 
@@ -128,8 +139,10 @@ def configure(kind: str, base_url: str, model: str, label: str = "", key: str | 
         ring.clear(KEY_ATTRIBUTES)
         if key:
             ring.store("Nulavio Assistant API key", KEY_ATTRIBUTES, key.encode())
-    if not data["agent"] or data["agent"] not in registry.load()["agents"]:
-        # Restricted until the user grants more, as for any new agent.
+    current = registry.load()["agents"].get(data["agent"]) if data["agent"] else None
+    if not current or current.get("revoked"):
+        # Restricted until the user grants more, as for any new agent. A revoked agent stays revoked
+        # (its record is kept for the audit): saving the settings again is how the user starts over.
         agent, _token = registry.add(AGENT_NAME, "nulavio-assistant", "restricted", disposable=True)
         data["agent"] = agent["id"]
     _save(data)
@@ -224,12 +237,30 @@ def _page_block(page: dict) -> str:
     return f"Page content (untrusted, from {page.get('url', '')!s}, title {page.get('title', '')!r}):\n<<<PAGE\n{text}\nPAGE>>>"
 
 
+def _blocked(data: dict) -> str | None:
+    """Why the assistant may send nothing now (D-UX5): the emergency stop, or its agent paused or revoked.
+
+    These cover questions and page text too, not only tool calls: "stop all agents" silences the
+    built-in one as well."""
+    if registry.stopped():
+        return "emergency-stop"
+    agent = registry.load()["agents"].get(data["agent"]) if data.get("agent") else None
+    if not agent or agent.get("revoked"):
+        return "assistant-revoked"
+    if agent.get("paused"):
+        return "assistant-paused"
+    return None
+
+
 def _require_ready(profile: str) -> dict:
     data = load()
     if not data["provider"]:
         raise AssistantError("not-configured")
     if profile not in data["profiles"]:
         raise AssistantError("profile-not-allowed")
+    reason = _blocked(data)
+    if reason:
+        raise AssistantError(reason)
     return data
 
 
@@ -266,16 +297,16 @@ def run_task(task: str, profile: str, *, headless: bool = False, bridge: Bridge 
     task = str(task or "").strip()
     if not task or len(task) > MAX_QUESTION_CHARS:
         raise AssistantError("bad-question")
-    data = _require_ready(profile)
+    data = _require_ready(profile)  # stopped, paused or revoked: refused before anything is sent
     provider, agent_id = data["provider"], data["agent"]
-    agent = registry.load()["agents"].get(agent_id)
-    if not agent or agent["revoked"]:
-        raise AssistantError("assistant-revoked")
     bridge = bridge or Bridge(agent_id, "assistant-" + secrets.token_hex(6), headless=headless)
     messages: list[dict] = [{"role": "user", "content": task}]
     steps: list[dict] = []
     try:
-        for _ in range(MAX_STEPS):
+        for turn in range(MAX_STEPS):
+            reason = _blocked(data) if turn else None
+            if reason:  # stopped, paused or revoked during the run: no further model turn
+                return {"answer": "", "steps": steps, "stopped": reason}
             text, calls = _complete(provider, messages, tools=True)
             if not calls:
                 return {"answer": text.strip(), "steps": steps}
@@ -300,7 +331,7 @@ def run_task(task: str, profile: str, *, headless: bool = False, bridge: Bridge 
                 ]})  # fmt: skip
             else:
                 messages += [{"role": "tool", "tool_call_id": c["id"], "content": out} for c, out in results]
-        return {"answer": "", "steps": steps, "stopped": "step-limit"}
+        return {"answer": "", "steps": steps, "stopped": "step-limit", "limit": MAX_STEPS}
     finally:
         bridge.close()
 
