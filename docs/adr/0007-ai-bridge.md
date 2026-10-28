@@ -85,3 +85,30 @@ Tests (S7): `test_ai_bridge` unit +9 (pause, keys, client evidence, browser appr
 
 **Raw automation (A13).** The `raw_automation` tool hands the AI Workspace's WebDriver BiDi endpoint to the agent's own library (Puppeteer and Selenium speak BiDi to Firefox; Playwright needs its patched Firefox and CDP was removed from Firefox). It needs the "Privileged debugging" capability (blocked in every preset but Full control). The bridge ends its own BiDi session so the agent can start one, turns its other tools off for that workspace, and says plainly that nothing done through the endpoint is checked, asked about or logged. The user's stop, pause and revoke still end the workspace: a watcher in the bridge checks the registry every second, and closing the bridge ends it too (`raw-ended` in the activity log). Never offered for the user's own profiles. Verified: `test_ai_bridge` 20 (denied without the capability; a separate BiDi client opens a session and navigates; the emergency stop ends the engine).
 
+## Implementation (UX1, 2026-10-28): the assistant's consent, private windows and stop
+
+Fixes from the [UX audit](../design/audit-2026-10-27.md) (AI-01, AI-02, AI-15, AI-10, part of AI-04 and AI-12), under decisions D-UX5 and D-UX6. Each one only tightens what the assistant may send.
+
+- **The side panel finds its page (AI-01).** Gecko 158 renamed `Node.ownerGlobal` to `documentGlobal`. The experiment read the old name through optional chaining, so the panel in the sidebar never found its window: "Incluir esta página" and "Resumir esta página" were always unavailable. It now reads `documentGlobal` and falls back to `ownerGlobal` for older engines. The tests drive the real sidebar, through a frame script in the panel's browser, instead of opening the panel as a tab.
+- **Consent per message, bound to one tab (AI-02).**
+  - "Incluir esta página" captures `{tabId, url, title}` at the click. The panel shows an item, "Texto da página · só da aba “title” · host", with a remove control and the recipient.
+  - The item leaves the message after every Send and every Summarise. It also leaves when another tab is selected, or when that tab goes to another address or closes. The panel then says why ("“title” era de outra aba e saiu da mensagem" or "… não está mais nesta aba …") and only *offers* the new page.
+  - `assistantAsk(question, {tabId, url})` resolves that tab through the engine's WebExtension tab ids. The tab must be in the calling window and at exactly that address. A `#fragment` change counts, because apps that route by fragment show other content. The module checks again after extraction. Otherwise it refuses with `page-changed`, and nothing is sent. The tab selected at Send time is never read.
+- **Never in private windows (AI-15, D-UX6).** The module refuses page, ask and task when the calling window is private (`private-window`). A private tab named from a normal window is refused as `page-changed`. In a private window the panel shows "Desligado nesta janela privativa" instead of the composer.
+- **Stop, pause and revoke cover questions too (AI-10, D-UX5).**
+  - `nulavio ai assistant` refuses `ask` and `task` before anything is sent while any of these holds: the emergency stop is on (`emergency-stop`), or the assistant's agent is paused (`assistant-paused`), revoked or removed (`assistant-revoked`). `state` reports the reason as `blocked`.
+  - A task checks the registry again before every later model turn. When the stop, a pause or a revocation arrives mid-run, the task ends with `stopped: <reason>` and makes no further provider call.
+  - The panel shows "Parada de emergência ativa", "Assistente pausado" or "Assistente revogado", with a button to Settings to resume. The emergency stop's hint in Settings now says it covers the assistant.
+  - Saving the assistant's settings after a revocation creates a new Restricted agent; the revoked record stays for the audit. This makes the existing "save again to create another" message true.
+- **Honest task endings (AI-04, today's part).**
+  - Progress carries no ✓ (status `data-level="busy"`).
+  - The step limit reads "Parou após 8 passos sem concluir" (`limit` in the result).
+  - Sometimes the tools end without an answer: the 10-minute limit kills them, or they crash. The module then answers `task-unfinished`, and the panel says that actions may have happened in the Área de IA, with a button to Atividade. It never says "Nada foi alterado" after a task has started.
+  - Permission request pages open with `inBackground: false`. In Firefox 158 and 159, `openTrustedLinkIn` already defaults `forceForeground` to true, so the background tab the audit inferred does not happen there. The explicit option pins the behaviour against later engine changes, and a test guards it.
+- **Accessibility basics (AI-12).**
+  - One polite announcement when a message is sent ("Enviado para …") and one at the end ("Resposta pronta.", or the reason it stopped).
+  - The answer region is not live; it sits under an `h2` "Resposta". A receipt says what went ("N caracteres desta página…" or "Só a pergunta…").
+  - Ctrl+Enter sends (`aria-keyshortcuts`). A quick action that is unavailable is hidden, and the panel says why.
+
+Verified on the Firefox 159 Track B build: `test_assistant` unit, 11 tests. New tests cover the stop, pause and revoke blocking questions, page text and tasks, a stop mid-run without a second model turn, the step limit, and a new agent after a revocation. `test_assistant_ui` integration, 11 tests. They cover the real sidebar offering the page title; the item's binding, removal and clearing after Send and Summarise; the drift message on a tab switch and on navigation; `page-changed` for another address, another `#fragment` or a closed tab; nothing from private windows; the stop and pause in the panel; the step-limit and killed-tools endings; and the request tab in front. Against the previous Shell and tools, 9 of these fail and 2 error; the request-tab test passes there too, for the reason above.
+
