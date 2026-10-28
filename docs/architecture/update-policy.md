@@ -42,7 +42,7 @@ A release is **urgent** (24-hour target) when Mozilla's advisory for it ([MFSA](
 - a sandbox escape;
 - exploitation in the wild reported, or mentioned in words the reader cannot settle ("unclear");
 - public exploit code;
-- no usable advisory: it cannot be fetched or read, or none has appeared yet (until 6 hours after Mozilla's release; an advisory that appears later raises the urgency again). Mozilla's list of advisories for a year that is missing, empty or not a list counts as "cannot be fetched" (urgent, and an error in the report). The one exception is the current year while no newer release came out in it: its directory appears with the year's first advisory.
+- no usable advisory: it cannot be fetched or read, or none has appeared yet (until 6 hours after Mozilla's release; an advisory that appears later raises the urgency again). Mozilla's list of advisories for a year that is missing, empty or not a list counts as "cannot be fetched" (urgent, and an error in the report). The one exception is the current year, whose directory appears with the year's first advisory: while no newer release came out in it, or while Mozilla's index of years lists the previous year and not this one (a dot release early in January, before the year's first advisory).
 
 Otherwise it is **standard** (72 hours): only moderate or low issues, or still no advisory 6 hours after the release. A platform note ("only affects Firefox on Windows") is shown and never lowers the urgency. In 2025 and 2026 nearly every Firefox security release was urgent (high or critical; every major had sandbox escapes): about 2 or 3 a month.
 

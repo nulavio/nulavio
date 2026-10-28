@@ -462,13 +462,19 @@ class WatcherTest(TempDirTest):
 
     def test_only_a_new_years_advisory_listing_may_be_missing(self):
         class Src:
-            def __init__(self, years):
+            def __init__(self, years, index=None):
                 self.years = years
+                self.index = sorted(years) if index is None else index  # the directories in announce/
 
             def advisory_names(self, year):
                 if year not in self.years:
                     raise watch_upstream.ListingMissing(f"announce/{year}: HTTP 404")
                 return self.years[year]
+
+            def advisory_years(self):
+                if isinstance(self.index, Exception):
+                    raise self.index
+                return self.index
 
             def advisory_text(self, year, name):
                 return fixture(f"mfsa/{name}")
@@ -479,15 +485,23 @@ class WatcherTest(TempDirTest):
         self.assertEqual([a.id for a in found["159.0"]], ["mfsa2026-118"])  # announce/2027 does not exist yet
         found, _ = watch_upstream.find_advisories(Src({2026: names, 2027: []}), ["159.0"], {"159.0": "2026-10-27"}, new_year)
         self.assertEqual([a.id for a in found["159.0"]], ["mfsa2026-118"])
+        # A dot release early in January, before the year's first advisory: announce/2027 does not exist yet.
+        january = {"159.0": "2026-10-27", "160.0.1": "2027-01-01"}
+        found, _ = watch_upstream.find_advisories(Src({2026: names}), list(january), january, new_year)
+        self.assertEqual(found["160.0.1"], [])  # "no advisory yet", which becomes standard after the grace period
         cases = [
-            ({2027: []}, {"159.0": "2026-10-27"}),  # a past year must list advisories...
-            ({2026: ["README.md"], 2027: []}, {"159.0": "2026-10-27"}),
-            ({2026: names}, {"160.0": "2027-01-01"}),  # ...and so must the year of a release
-            ({2026: names, 2027: ["firefox"]}, {"160.0": "2027-01-01"}),
+            (Src({2027: []}), {"159.0": "2026-10-27"}, "past year"),  # a past year must list advisories
+            (Src({2026: ["README.md"], 2027: []}), {"159.0": "2026-10-27"}, "past year"),
+            (Src({2026: names}, index=[2025, 2026, 2027]), {"160.0": "2027-01-01"}, "not started"),  # the index has 2027
+            (Src({2026: names}, index=[2025]), {"160.0": "2027-01-01"}, "not started"),  # nor 2026: the index moved
+            (Src({2026: names}, index=[]), {"160.0": "2027-01-01"}, "not started"),
+            (Src({2026: names, 2027: ["firefox"]}), {"160.0": "2027-01-01"}, "not started"),
         ]
-        for years, days in cases:
-            with self.subTest(years=years, days=days), self.assertRaisesRegex(OSError, "must have advisories"):
-                watch_upstream.find_advisories(Src(years), list(days), days, new_year)
+        for src, days, reason in cases:
+            with self.subTest(years=src.years, index=src.index, days=days), self.assertRaisesRegex(OSError, reason):
+                watch_upstream.find_advisories(src, list(days), days, new_year)
+        with self.assertRaises(OSError):  # the index itself cannot be read: unavailable, so urgent
+            watch_upstream.find_advisories(Src({2026: names}, index=OSError("503")), ["160.0"], {"160.0": "2027-01-01"}, new_year)
 
     def test_network_retries_then_gives_up(self):
         slept = []
