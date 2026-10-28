@@ -1,0 +1,12 @@
+## Synthetic: mfsa2026-111 without its top-level impact (the reader must fail closed).
+announced: October 20, 2026
+fixed_in:
+- Firefox 158.0.1
+title: Security Vulnerabilities fixed in Firefox 158.0.1
+advisories:
+  CVE-2026-113399:
+    title: Incorrect boundary conditions in the SVG component
+    impact: high
+    reporter: Mozilla
+    bugs:
+      - url: 2079938

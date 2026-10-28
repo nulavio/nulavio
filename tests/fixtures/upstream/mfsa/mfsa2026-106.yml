@@ -1,0 +1,45 @@
+## mfsa2026-105.yml
+announced: October 13, 2026
+impact: high
+fixed_in:
+- Firefox 158
+title: Security Vulnerabilities fixed in Firefox 158
+description: |
+  **Note**: We have changed how we publish advisories. We no longer roll all internally identified memory safety vulnerabilities into a single CVE and are now issuing an advisory for every individual bug.
+advisories:
+  CVE-2026-109704:
+    title: Privilege escalation in the Application Update component
+    impact: high
+    reporter: Noel
+    bugs:
+      - url: 2037979
+  CVE-2026-109705:
+    title: Sandbox escape, site isolation issue due to incorrect boundary conditions, use-after-free in the Networking component
+    impact: high
+    reporter: Mozilla
+    bugs:
+      - url: 2040905
+  CVE-2026-109706:
+    title: 'Use-after-free in the Storage: IndexedDB component'
+    impact: high
+    reporter: Mozilla
+    bugs:
+      - url: 2053649
+  CVE-2026-109707:
+    title: Sandbox escape due to use-after-free in the Networking component
+    impact: high
+    reporter: Mozilla
+    bugs:
+      - url: 2059150
+  CVE-2026-109708:
+    title: Sandbox escape due to incorrect boundary conditions in the Networking component
+    impact: high
+    reporter: Mozilla
+    bugs:
+      - url: 2059151
+  CVE-2026-109709:
+    title: 'Information disclosure, privilege escalation in the Security: Process Sandboxing component'
+    impact: high
+    reporter: Yaqoub Aldurayhim
+    bugs:
+      - url: 2067976

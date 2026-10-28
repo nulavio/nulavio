@@ -17,30 +17,92 @@
 
 ## Track B (Nulavio build) — targets
 
-| Event | Target |
-|---|---|
-| Mozilla security release (critical/high MFSA) | Nulavio build published **≤ 72 h** after Mozilla's release (stretch: 24 h) |
-| Regular release (every 4 weeks) | ≤ 7 days |
-| Chemspill (out-of-band fix) | Same as critical |
-| Missed SLA twice in a row | Reversal criterion 2 in [ADR 0001](../adr/0001-engine-selection.md) |
+| Event | Deadline (the commitment) | Target |
+|---|---|---|
+| Mozilla security release (critical/high MFSA) | Nulavio build published **≤ 72 h** after Mozilla's release | 24 h (urgent, rules below) |
+| Chemspill (out-of-band fix) | Same as critical | 24 h (urgent) |
+| Regular release (a major every 2 weeks since Firefox 155, dot releases about weekly) | ≤ 7 days | 24 h when urgent by the rules below, else 72 h |
+| Missed SLA twice in a row | Reversal criterion 2 in [ADR 0001](../adr/0001-engine-selection.md) | |
+
+The tools hold every Release-channel release (major or dot) to the 72-hour deadline, because any release can carry security fixes: "overdue" and the failing `upstream` job mean 72 hours have passed since Mozilla published it. The clock starts at Mozilla's publication: the time of the product-details commit that lists the release, or the start of that day (UTC) when the time is unknown, which is stricter.
+
+### Urgency
+
+A release is **urgent** (24-hour target) when Mozilla's advisory for it ([MFSA](https://www.mozilla.org/security/advisories/), read by `scripts/release/mfsa.py`) shows any of:
+
+- highest impact critical or high;
+- a sandbox escape;
+- exploitation in the wild reported, or mentioned in words the reader cannot settle ("unclear");
+- public exploit code;
+- no usable advisory: it cannot be fetched or read, or none has appeared yet (until 6 hours after Mozilla's release; an advisory that appears later raises the urgency again).
+
+Otherwise it is **standard** (72 hours): only moderate or low issues, or still no advisory 6 hours after the release. A platform note ("only affects Firefox on Windows") is shown and never lowers the urgency. In 2025 and 2026 nearly every Firefox security release was urgent (high or critical; every major had sandbox escapes): about 2 or 3 a month.
+
+**Proposed, for the maintainer to decide:** make 24 hours the public commitment for urgent releases (in [SECURITY.md](../../SECURITY.md)). Until then 24 hours is the internal target (formerly "stretch") and 72 hours the commitment.
 
 ### Process
 
-1. Watch Mozilla security advisories (MFSA) and release tags.
-2. Verify the source release: `scripts/upstream/verify_firefox_release.py <version>` checks `SHA256SUMS` against the **pinned** Mozilla Software Releases key (`14F2 6682 D091 6CDD 81E3 7B6D 61B7 B526 D98F 0353`) and prints the tarball hash to pin.
+1. Watch Mozilla's releases and security advisories (MFSA); see the fast path below.
+2. Verify the source release: `scripts/upstream/verify_firefox_release.py <version>` checks `SHA256SUMS` against the **pinned** Mozilla Software Releases key (`14F2 6682 D091 6CDD 81E3 7B6D 61B7 B526 D98F 0353`) and prints the tarball hash. `scripts/release/bump_engine.py <version>` runs that check and pins the version and the hash in `browser/build/engine.json`.
 3. Apply the patch stack (`browser/patches/series`, applied idempotently by `scripts/build/apply_patches.py`). Each patch has an owner, a reason and an upstreaming plan; the unit tests enforce this and cap the stack at about 10 patches.
 4. Build in a clean container. Run unit and integration tests plus the provider certification smoke tests.
-5. Sign packages (RPM GPG; provenance attestation planned). Publish. Record in the security changelog.
+5. Sign packages (RPM GPG; provenance attestation planned): only the files the rehearsal's `manifest.json` lists, with those SHA-256 digests. Publish. Record in the security changelog.
 
 ### Key rotation
 
-If Mozilla rotates the primary release key, update the pinned fingerprint only after confirming it through two independent channels (Mozilla's KEY file plus a Mozilla blog/announcement or keyserver history). Then record it in this file.
+If Mozilla rotates the primary release key, update the pinned fingerprint only after confirming it through two independent channels (Mozilla's KEY file plus a Mozilla blog/announcement or keyserver history). Then record it in this file. Until then every tool here refuses the release: a signature that does not verify stops the build and raises an alert.
 
-### Automation (S19)
+### Release cadence
 
-- `scripts/release/watch_upstream.py` compares `browser/build/engine.json` with Mozilla's public release history and states the deadline (72 hours from the first newer release; every release can carry security fixes, so the stricter target is used). The `upstream` workflow runs it daily and fails when the deadline has passed, so the maintainers get GitHub's failure notice.
-- `scripts/release/rehearse_release.sh <version>` runs the whole path and times each step: Mozilla's signed checksums, the build, unit and integration tests, RPM and .deb with their clean-container checks, the signed-repository check (throwaway key), SBOMs. First full rehearsal (2026-10-27, Firefox 158.0.1, incremental build): **14 minutes**, every step passed ([report](../research/evidence/release-rehearsal-2026-10-27.md)). For a new Firefox release the build is a full one (about 52 minutes measured), so about 70 minutes from Mozilla's release to checked packages, against the 72-hour target. Not rehearsed: signing with the release key and publishing.
-- [Security changelog](../security/changelog.md): one entry per published build.
+Mozilla has shipped a major release every 2 weeks since Firefox 155 (2026-09-01), plus dot releases about weekly: about 4 or 5 full builds a month. It stages each release (the signed `SHA256SUMS` in `archive.mozilla.org/pub/firefox/releases/<version>/`) 8 to 25 hours before publishing it, so a build can be ready before the clock starts. Android uses some dot numbers that desktop skips (158.0.2 was Android only), so the next desktop dot release may skip a number.
+
+### Fast path: from Mozilla's fix to a build ready to sign
+
+| Step | Tool | What it does |
+|---|---|---|
+| Detect | [`watch_upstream.py`](../../scripts/release/watch_upstream.py) | Reads product-details (published releases, Release channel only, ESR excluded), probes the archive for the next likely versions (staged), reads the advisories, finds the publication time; with `--verify` checks Mozilla's signature for each newer release and that `engine.json`'s digest is still the signed one |
+| Alert (GitHub) | [`upstream_issue.py`](../../scripts/release/upstream_issue.py) in the [`upstream` workflow](../../.github/workflows/upstream.yml) | One issue per newer release, with urgency, target, deadline, signature and advisories; @mentions the maintainer when it opens and on escalations (published, urgency raised, exploited in the wild, target missed, deadline passed, signature failure); closes when `engine.json` reaches the release |
+| Alert and pre-build (laptop) | [`autobuild.py`](../../scripts/release/autobuild.py) from the [local timer](../../contrib/systemd/nulavio-upstream.timer) | Desktop notifications; builds in a separate git worktree as soon as a release is staged or published; says READY TO SIGN once Mozilla has published it and the signed digest equals the one built |
+| Pin | [`bump_engine.py`](../../scripts/release/bump_engine.py) | Moves `engine.json` to the release with the verified digest; refuses downgrades, ESR, unpublished releases (unless `--allow-staged`) and anything whose signature does not verify; `--check` verifies the pinned digest again |
+| Build and test | [`rehearse_release.sh`](../../scripts/release/rehearse_release.sh) | The whole path, timed; ends with `manifest.json` (Firefox version, signed digest and subkey, base commit, hash of the worktree diff, packages and SBOMs with their SHA-256) |
+
+`scripts/upstream/fetch_firefox_source.py` refuses to download when `engine.json` pins the version with a digest that differs from Mozilla's signed one.
+
+Detection runs in two places. The local timer is the primary detector: every 30 minutes, no Actions minutes, and the build can start hours before Mozilla publishes. The `upstream` workflow is the backstop for when the laptop is off: it runs at 04:47 UTC (releases staged overnight) and 14:47 UTC (about an hour after Mozilla's usual 12:15–13:55 UTC publication), about 60 Actions minutes a month. GitHub's scheduled runs can be late or skipped, which is why it is not the primary.
+
+The watcher's report (`--json`, schema 2) has, for each newer release: `version`, `phase` (`staged`, `shipped`, or `unconfirmed` when on the archive without a verified signature), `released_at` and `clock_source`, `urgency` and `reasons`, `itw`, `public_exploit`, `platform_notes`, `advisories`, `target` and `target_hours` (24 or 72), `deadline` and `deadline_hours` (72), `target_missed`, `overdue`, and after `--verify` `verified`, `source_sha256` and the signing subkey. Exit status: 0 up to date, staged or within the deadline; 1 overdue; 2 Mozilla's data unavailable (no verdict, never "up to date"); 3 a signature did not verify.
+
+What stays manual: reviewing the worktree's diff and committing the bump to `main`; rebasing a patch that no longer applies; signing with the real key and publishing (they need the key and the host); the security changelog entry; deciding about platform notes; any change to the pinned Mozilla key.
+
+### Local timer (opt-in)
+
+Nothing installs or enables it. Before enabling: a local `main` branch to build from (the timer never fetches or pulls, so only code already in your clone runs), the Google Safe Browsing key at `~/.config/nulavio-build/google-safebrowsing.key` (mode 600, as for `build_nulavio.sh`), about 30 GiB free under `~/.cache/nulavio-build`, and a file `~/.config/nulavio-build/autobuild.env` with one line, `NULAVIO_REPO=/path/to/your/clone`. Then, from the clone:
+
+```sh
+install -Dm644 contrib/systemd/nulavio-upstream.service contrib/systemd/nulavio-upstream.timer -t ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable --now nulavio-upstream.timer
+```
+
+Check it with `systemctl --user list-timers nulavio-upstream.timer` and `journalctl --user -u nulavio-upstream`; stop it with `systemctl --user disable --now nulavio-upstream.timer`. For alerts without builds, add `--no-build` to `ExecStart` (`systemctl --user edit --full nulavio-upstream.service`).
+
+Each run takes a lock, so runs never overlap. It builds only a release whose signature verified, and checks it again in the worktree. It refuses to start a build on battery, with less than 30 GiB free, without the Safe Browsing key (a development override is ignored), or while another build or rehearsal runs (they share the source tree), and it inhibits sleep while it builds (about 70 minutes and 22 GB per release). It never commits, pushes, signs or publishes. A failed build is not retried until you run `autobuild.py --retry` or Mozilla's digest changes. `autobuild.py --prune` removes its own worktrees and outputs for releases older than the pinned one; the source trees in `~/.cache/nulavio-build/firefox-<version>` (about 19 GB each) are left to you.
+
+### Measured
+
+`rehearse_release.sh <version>` was first run in full on 2026-10-27 (Firefox 158.0.1, incremental build): **14 minutes**, every step passed ([report](../research/evidence/release-rehearsal-2026-10-27.md)). For a new Firefox release the build is a full one (about 52 minutes measured), so about 70 minutes from the start to checked packages. With a pre-build from the staged release, the packages are ready before Mozilla publishes; without it, about 1 hour 40 minutes after. Not rehearsed: signing with the release key and publishing.
+
+[Security changelog](../security/changelog.md): one entry per published build, with the hours from Mozilla's release to "ready to sign" and to "published".
+
+### Next steps (not adopted yet)
+
+- `sign_repo.sh` refusing any package that `manifest.json` does not list with the same SHA-256 (today the rule above is followed by hand).
+- Patch stack pre-check against the `FIREFOX_<version>_BUILD<n>` tag of Mozilla's GitHub mirror, days before a major: an early warning that a rebase is needed. Indicative only; builds keep using the signed tarball.
+- `sccache` for dot releases (estimated 52 to 15–25 minutes, not measured yet).
+- The `upstream` job on the 1-vCPU `ubuntu-slim` runner, once the billing shows it costs less.
+- CISA's Known Exploited Vulnerabilities catalogue as a second "exploited in the wild" signal.
+
+Not adopted: building Firefox on GitHub-hosted runners (2 vCPU and 14 GB of disk against a 22 GB build, near the 6-hour limit, half the monthly minutes), a self-hosted runner on the laptop (it would run jobs defined by any commit), bump pull requests from Actions (the repository does not let Actions create pull requests, and the work goes straight to `main`), and hourly polling in Actions (about a third of the monthly minutes for what the local timer does for free).
 
 ## Base branch choice (open)
 

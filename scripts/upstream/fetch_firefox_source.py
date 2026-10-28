@@ -2,8 +2,10 @@
 """Download, verify and extract an official Firefox source release (Track B).
 
 The expected SHA-256 comes from Mozilla's SHA256SUMS, whose signature is
-checked against the pinned release key (verify_firefox_release.py). The
-tarball is hashed while streaming and extracted only if it matches.
+checked against the pinned release key (verify_firefox_release.py). When
+browser/build/engine.json pins this version, its reviewed "source_sha256" must
+be that same digest, or nothing is downloaded. The tarball is hashed while
+streaming and extracted only if it matches.
 
     python3 -I scripts/upstream/fetch_firefox_source.py 158.0.1 --dest ~/.cache/nulavio-build
     -> <dest>/firefox-158.0.1/ (source tree)  and  <dest>/downloads/<tarball>
@@ -13,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import json
 import shutil
 import subprocess
 import sys
@@ -24,6 +27,16 @@ from verify_firefox_release import signed_source_digest
 
 URL = "https://archive.mozilla.org/pub/firefox/releases/{v}/source/firefox-{v}.source.tar.xz"
 CHUNK = 1 << 20
+ENGINE = Path(__file__).resolve().parents[2] / "browser" / "build" / "engine.json"
+
+
+def check_pin(version: str, signed: str, engine: Path = ENGINE) -> None:
+    """When engine.json pins `version`, its reviewed digest must equal the one Mozilla signed."""
+    pin = json.loads(engine.read_text(encoding="utf-8"))
+    if pin.get("firefox") == version and "source_sha256" in pin and pin["source_sha256"] != signed:
+        raise SystemExit(
+            f"engine.json pin differs from Mozilla's signed SHA256SUMS: refusing (pinned {pin['source_sha256']}, signed {signed})"
+        )
 
 
 def download(url: str, target: Path) -> str:
@@ -52,6 +65,7 @@ def main() -> int:
     args = parser.parse_args()
     expected, subkey = signed_source_digest(args.version)
     print(f"signed SHA-256 (subkey {subkey}): {expected}")
+    check_pin(args.version, expected)
     downloads = args.dest / "downloads"
     downloads.mkdir(parents=True, exist_ok=True)
     tarball = downloads / f"firefox-{args.version}.source.tar.xz"

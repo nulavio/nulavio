@@ -1,0 +1,26 @@
+## Synthetic: quoting styles and a folded block, in the shape of a real advisory.
+announced: October 27, 2026
+impact: moderate
+fixed_in:
+  - Firefox 159.0.1
+title: 'Security Vulnerabilities fixed in Firefox 159.0.1 (the ''quoted'' one)'
+description: >
+  A folded description
+  on two lines.
+advisories:
+  CVE-2026-999001:
+    title: "Spoofing in the \"Downloads\" panel"
+    impact: moderate
+    reporter: 'O''Brien'
+    description: |
+      First line.
+      Second line: with a colon.
+    bugs:
+      - url: 1
+        desc: 'Only a note'
+  CVE-2026-999002:
+    title: Plain title # with a comment
+    impact: low
+    reporter: Mozilla
+    bugs:
+      - url: 2

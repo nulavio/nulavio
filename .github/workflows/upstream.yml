@@ -1,25 +1,67 @@
 name: upstream
 
-# Daily check of Mozilla's Firefox releases against the version Nulavio ships
-# (update SLA, docs/architecture/update-policy.md). The job fails when the
-# 72-hour target has passed, so the maintainers get GitHub's failure notice.
-# Reads public release data only; writes nothing to the repository.
+# Engine security fast path, GitHub side: the backstop (the primary detector is
+# the local timer in contrib/systemd/, every 30 minutes). Twice a day this
+# compares Mozilla's Firefox releases and security advisories with the version
+# Nulavio ships (docs/architecture/update-policy.md), verifies Mozilla's
+# signatures, and keeps one issue per newer release that @mentions the
+# maintainer (GitHub sends e-mail and push). The job fails when a release is past
+# the 72-hour deadline, when Mozilla's data is unavailable, or when a signature
+# does not verify, so GitHub's failure notice is a second alert.
+#
+# 04:47 UTC catches releases Mozilla staged overnight (signed checksums usually
+# appear 00:00-04:00 UTC for dot releases and chemspills); 14:47 UTC comes about
+# an hour after Mozilla's publication window (12:15-13:55 UTC observed). Two
+# short runs a day keep Actions minutes low (about 60 a month).
+# Only public data is read. The token can write issues and read the code; no
+# data from outside is expanded into a shell command (the scripts read files).
 
 on:
   schedule:
-    - cron: "17 6 * * *"
+    - cron: "47 4 * * *"
+    - cron: "47 14 * * *"
   workflow_dispatch:
 
 permissions:
   contents: read
 
+concurrency:
+  group: upstream
+  cancel-in-progress: false
+
 jobs:
   firefox-release:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Compare with Mozilla's releases
-        run: python3 -I scripts/release/watch_upstream.py --summary "$GITHUB_STEP_SUMMARY"
+      - name: Compare with Mozilla's releases and advisories (signatures verified)
+        id: watch
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set +e
+          python3 -I scripts/release/watch_upstream.py --json --verify --summary "$GITHUB_STEP_SUMMARY" > "$RUNNER_TEMP/status.json"
+          echo "rc=$?" >> "$GITHUB_OUTPUT"
+      - name: Open, update or close the tracking issue (warns and goes on if the API is unavailable)
+        if: steps.watch.outputs.rc != '2'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 -I scripts/release/upstream_issue.py --status "$RUNNER_TEMP/status.json" --repo "$GITHUB_REPOSITORY" --mention caiolombello
+      - name: Verdict
+        if: ${{ !cancelled() }}
+        env:
+          RC: ${{ steps.watch.outputs.rc }}
+        run: |
+          case "$RC" in
+            0) echo "Up to date, staged, or within the 72-hour deadline." ;;
+            1) echo "::error::A Firefox release is past the 72-hour deadline."; exit 1 ;;
+            2) echo "::error::Mozilla's release data is unavailable: no verdict."; exit 1 ;;
+            3) echo "::error::A Mozilla signature did not verify: nothing may be built from that release."; exit 1 ;;
+            *) echo "::error::watch_upstream.py exited with $RC."; exit 1 ;;
+          esac

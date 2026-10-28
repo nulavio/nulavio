@@ -1,0 +1,13 @@
+## Synthetic: the 'December 18th, 2025' date form seen in real advisories.
+announced: December 18th, 2025
+impact: high
+fixed_in:
+- Firefox 146.0.1
+title: Security Vulnerabilities fixed in Firefox 146.0.1
+advisories:
+  CVE-2025-999003:
+    title: Use-after-free in the Layout component
+    impact: high
+    reporter: Mozilla
+    bugs:
+      - url: 3
