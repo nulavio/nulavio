@@ -153,7 +153,7 @@ class TemporaryFromTheBrowserTest(unittest.TestCase):
         self.assertEqual(path.parent, self.root)
         harness.GeckoProfileSession.enable_marionette(path)  # test-only, this disposable profile
         engine = subprocess.Popen(
-            [str(self.session.engine.path), "--profile", str(path), "--remote-allow-system-access"],
+            [str(self.session.engine.path), "--profile", str(path)],
             env=self.session.env,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,

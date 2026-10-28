@@ -112,7 +112,7 @@ class Marionette:
         return self.send("WebDriver:ExecuteAsyncScript", {"script": script, "args": args or []})["value"]
 
     def chrome(self, script: str, args: list[Any] | None = None) -> Any:
-        """Run privileged JS (needs --remote-allow-system-access, test-only)."""
+        """Run privileged JS (needs MOZ_REMOTE_ALLOW_SYSTEM_ACCESS=1 in the engine's environment, test-only)."""
         self.set_context("chrome")
         try:
             return self.execute(script, args)

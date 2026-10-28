@@ -9,7 +9,7 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-SKIP_DIRS = {".git", ".venv", "__pycache__", ".ruff_cache", "artifacts"}
+SKIP_DIRS = {".git", ".venv", "__pycache__", ".ruff_cache", "artifacts", ".claude"}  # .claude: local agent worktrees, not in git
 TEXT_SUFFIXES = {".py", ".js", ".json", ".md", ".html", ".css", ".svg", ".yml", ".yaml", ".toml", ".txt", ".in", ""}
 SECRET_PATTERNS = {
     "private key": re.compile(r"-----BEGIN (RSA |EC |OPENSSH |DSA |PGP )?PRIVATE KEY"),

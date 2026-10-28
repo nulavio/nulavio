@@ -42,6 +42,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from marionette import Marionette  # noqa: E402
 
+# Lets Marionette run privileged (chrome) code in the disposable test profiles. Firefox 159 removed
+# the --remote-allow-system-access flag; the variable works on 158 too. Never set by the launcher,
+# which strips MOZ_REMOTE_* variables (engine.launch_env).
+SYSTEM_ACCESS_ENV = "MOZ_REMOTE_ALLOW_SYSTEM_ACCESS"
+
 TEST_PREFS = {
     "marionette.port": 0,
     "remote.prefs.recommended": False,
@@ -349,8 +354,9 @@ class Session:
 
     def start(self) -> Marionette:
         command = self.prepare()
-        command += ["--marionette", "--remote-allow-system-access", "--new-instance"]
+        command += ["--marionette", "--new-instance"]
         env = dict(self.env)
+        env[SYSTEM_ACCESS_ENV] = "1"  # test-only: Marionette's chrome context (Firefox 159+ reads only this variable)
         if os.environ.get("NULAVIO_TEST_HEADFUL") != "1":
             command.append("--headless")
             env["MOZ_HEADLESS"] = "1"
@@ -449,6 +455,7 @@ class GeckoProfileSession:
         self.tmp = Path(tempfile.mkdtemp(prefix="nulavio-gps-"))
         home = self.tmp / "home"
         self.env = {
+            SYSTEM_ACCESS_ENV: "1",  # test-only, see above
             "HOME": str(home),
             "XDG_CONFIG_HOME": str(home / ".config"),
             "XDG_DATA_HOME": str(home / ".local" / "share"),
@@ -513,7 +520,7 @@ class GeckoProfileSession:
         engine_log = os.environ.get("NULAVIO_TEST_ENGINE_LOG")
         output = open(engine_log, "ab") if engine_log else subprocess.DEVNULL  # noqa: SIM115
         self.process = subprocess.Popen(
-            [str(self.engine.path), "-P", self.name, "--remote-allow-system-access"],
+            [str(self.engine.path), "-P", self.name],
             env=self.env,
             stdout=output,
             stderr=output,
@@ -530,7 +537,7 @@ class GeckoProfileSession:
         engine_log = os.environ.get("NULAVIO_TEST_ENGINE_LOG")
         output = open(engine_log, "ab") if engine_log else subprocess.DEVNULL  # noqa: SIM115
         self.process = subprocess.Popen(
-            [str(self.engine.path), "-P", self.name, "--remote-allow-system-access"],
+            [str(self.engine.path), "-P", self.name],
             env=self.env,
             stdout=output,
             stderr=output,
