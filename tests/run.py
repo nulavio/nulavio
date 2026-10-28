@@ -4,6 +4,7 @@
     python3 -I tests/run.py unit          # fast, no engine, no network
     python3 -I tests/run.py integration   # needs the Gecko engine (headless)
     python3 -I tests/run.py all
+    python3 -I tests/run.py integration 'test_assistant*.py'   # only matching modules
 
 Integration knobs: NULAVIO_NETWORK_TESTS=1, NULAVIO_TEST_XPI_CACHE=<dir>,
 NULAVIO_TEST_HEADFUL=1, NULAVIO_TEST_ARTIFACTS=<dir>.
@@ -22,11 +23,12 @@ for extra in (ROOT / "launcher", ROOT / "tests" / "lib", ROOT / "scripts" / "bra
 
 def main(argv: list[str]) -> int:
     which = argv[1] if len(argv) > 1 else "unit"
+    pattern = argv[2] if len(argv) > 2 else "test*.py"
     suites = {"unit": ["unit"], "integration": ["integration"], "all": ["unit", "integration"]}[which]
     loader = unittest.TestLoader()
     combined = unittest.TestSuite()
     for name in suites:
-        combined.addTests(loader.discover(str(ROOT / "tests" / name), top_level_dir=str(ROOT / "tests" / name)))
+        combined.addTests(loader.discover(str(ROOT / "tests" / name), pattern=pattern, top_level_dir=str(ROOT / "tests" / name)))
     result = unittest.TextTestRunner(verbosity=2).run(combined)
     return 0 if result.wasSuccessful() else 1
 
