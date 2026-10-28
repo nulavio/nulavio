@@ -71,7 +71,7 @@ To add or change a rule, add test cases in `tests/fixtures/sast/nulavio-rules.<e
 
 | Tool | How |
 |---|---|
-| Opengrep | `# nosemgrep: <rule id> -- <why this line is safe>` on the line (`//` in JavaScript and Java). The unit tests reject a suppression without a rule id and a reason |
+| Opengrep | `# nosemgrep: <rule id> -- <why this line is safe>` on the line (`//` in JavaScript and Java), one rule id only. Opengrep also obeys `nosem`, `noopengrep` and other spellings in any case, and a bare one silences every rule on the line: the unit tests reject any form but this one, in every file Opengrep reads, `.github/` included |
 | gitleaks | The finding's fingerprint (`commit:file:rule:line`, printed by gitleaks) in `.gitleaksignore`, under a comment with the reason. `.gitleaks.toml` allowlists only documented test fixtures, by exact file and value |
 | ShellCheck | `# shellcheck disable=SC<number> # <reason>` on the line before the command |
 | zizmor | `# zizmor: ignore[<audit>] <reason>` on the line |

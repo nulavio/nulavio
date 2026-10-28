@@ -38,9 +38,10 @@ GRADLE_PUBLISHED = {
 TOOLS = {"actionlint", "gitleaks", "opengrep", "shellcheck", "zizmor"}
 CHECKS = ("actionlint", "zizmor", "gitleaks", "shellcheck", "opengrep", "opengrep-rules")
 SHEBANG = re.compile(r"^#!\s*(/usr)?/bin/(env\s+)?(ba|da|k)?sh(\s|$)")
-SOURCE_DIRS = ("launcher", "scripts", "browser", "tests", "bin", "android", "packaging", "ci/containers")
-SOURCE_SUFFIXES = {".py", ".js", ".mjs", ".java", ".kts", ".sh", ".xml", ".yml", ".yaml", ".Containerfile", ""}
-SKIP_DIRS = {".git", ".venv", "__pycache__", ".ruff_cache", "artifacts", "build", ".gradle", ".kotlin"}
+# What Opengrep 1.32 takes as a suppression: nosem, nosemgrep or noopengrep in any case, anywhere in
+# the line (a string too) or alone on the line before; a bare one silences every rule. One form is allowed.
+SUPPRESSION = re.compile(r"(?i)no(?:sem|opengrep)")
+ALLOWED_SUPPRESSION = re.compile(r"nosemgrep: ([\w-]+) -- \S")
 
 
 def rules() -> dict[str, str]:
@@ -59,17 +60,6 @@ def rule_annotations() -> list[tuple[str, str, str]]:
     return found
 
 
-def source_files():
-    """The code Opengrep scans, minus the rules' own test cases and this file."""
-    for name in SOURCE_DIRS:
-        for root, dirs, files in os.walk(ROOT / name):
-            dirs[:] = [d for d in dirs if d not in SKIP_DIRS]
-            for file_name in files:
-                path = Path(root) / file_name
-                if path.suffix in SOURCE_SUFFIXES and not path.is_relative_to(RULE_CASES) and path != Path(__file__).resolve():
-                    yield path
-
-
 def git_files() -> list[str]:
     listed = subprocess.run(
         ["git", "-C", str(ROOT), "ls-files", "-z", "--cached", "--others", "--exclude-standard"],
@@ -77,6 +67,19 @@ def git_files() -> list[str]:
         check=True,
     ).stdout.decode()
     return sorted({name for name in listed.split("\0") if name})
+
+
+def scanned_files():
+    """(path, text) of every file Opengrep may read: what git lists (scan.sh opengrep), minus the rules'
+    own test cases (.semgrepignore), Markdown (no rule reads it), binary files, and this file, which
+    names the forms it looks for."""
+    for name in git_files():
+        path = ROOT / name
+        if path.suffix == ".md" or path.is_symlink() or not path.is_file() or path.is_relative_to(RULE_CASES):
+            continue
+        data = path.read_bytes()
+        if b"\0" not in data and path != Path(__file__).resolve():
+            yield path, data.decode(errors="replace")
 
 
 class PinnedInputsTest(unittest.TestCase):
@@ -137,18 +140,27 @@ class OpengrepRulesTest(unittest.TestCase):
         lines = [line.strip() for line in (ROOT / ".semgrepignore").read_text().splitlines()]
         self.assertEqual([line for line in lines if line and not line.startswith("#")], ["tests/fixtures/sast/"])
 
+    def test_no_rule_reads_markdown(self):
+        # The suppression check leaves Markdown out: the documentation names the forms in prose.
+        for rule_id, block in rules().items():
+            if "languages: [generic]" in block:  # the other languages are Python, JavaScript and Java
+                include, _, exclude = block.split("paths:", 1)[1].split("metadata:", 1)[0].partition("exclude:")
+                globs = re.findall(r'"([^"]+)"', include)
+                with self.subTest(rule=rule_id):
+                    self.assertTrue('"*.md"' in exclude or all(re.search(r"\.(?!md$)\w+$", glob) for glob in globs))
+
     def test_suppressions_name_one_rule_and_the_reason(self):
         found = rules()
         seen = 0
-        for path in source_files():
-            for line in path.read_text(errors="ignore").splitlines():
-                if "nosemgrep" in line:
+        for path, text in scanned_files():
+            for number, line in enumerate(text.splitlines(), 1):
+                if tokens := SUPPRESSION.findall(line):
                     seen += 1
-                    with self.subTest(path=str(path.relative_to(ROOT)), line=line.strip()):
-                        match = re.search(r"nosemgrep: ([\w-]+) -- \S", line)
-                        self.assertIsNotNone(match, "write: nosemgrep: <rule id> -- <why this line is safe>")
+                    with self.subTest(path=str(path.relative_to(ROOT)), line=number, text=line.strip()):
+                        match = ALLOWED_SUPPRESSION.search(line)
+                        self.assertTrue(match and len(tokens) == 1, "write: nosemgrep: <rule id> -- <why this line is safe>")
                         self.assertIn(match[1], found)
-        self.assertGreater(seen, 0)  # the walk reaches the known suppressions in tests/
+        self.assertGreater(seen, 0)  # the walk reaches the known suppressions in scripts/ and tests/
 
 
 class GitleaksConfigTest(unittest.TestCase):
