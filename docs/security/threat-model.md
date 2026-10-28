@@ -314,6 +314,21 @@ Each scenario lists: assets · adversary · preconditions · trust boundary · i
 | Tests | `test_profiles` 05, 06, 08; `test_routing` |
 | Residual | **Low** |
 
+### S19 — Malicious or mistaken change reaching `main`
+
+| Field | |
+|---|---|
+| Assets | A6, then everything users install |
+| Adversary | T-SUPPLY through a pull request; a coding agent misled by content it read (prompt injection) or simply wrong; a stolen maintainer or agent token |
+| Preconditions | Write access to the repository (agents work with the maintainer's token); no branch protection on the current plan (private repository, GitHub Free) |
+| Boundary | TB16, TB8 |
+| Impact | Weakened protections, a backdoor or a leaking workflow shipped in a build; secrets read by a workflow pushed to any branch |
+| Preventive | **Now:** [pull request flow](../process/pull-requests.md) and branch naming (convention; opt-in pre-push hook); actions pinned by commit and least-privilege workflow permissions (unit test); fork pull requests get no secrets; the advisory AI review runs from `main` with read-only tools and posts through a fixed script, and is never a required check. **Proposed:** a fine-grained agent token without the Workflows permission and agent permission rules ([agent guardrails](../process/agent-guardrails.md)); branch protection and required checks on GitHub Pro or a public repository |
+| Detective | CI on every pull request; the AI review comment, including text that looks like prompt injection; a CI check that reports commits on `main` without a merged pull request (off until `REQUIRE_PR_FOR_MAIN` is set) |
+| Limitations | The maintainer is the only reviewer; nothing on GitHub stops a direct push to `main` today; the AI review can miss problems or be misled; the AI review sends the diff and the files it reads to Anthropic's API |
+| Tests | `test_ai_review`, `test_post_ai_review`, `test_repo_hygiene` |
+| Residual | **Medium** |
+
 ---
 
 See the [threat matrix](threat-matrix.md) for the at-a-glance view and [residual risks](residual-risks.md) for what users must know.

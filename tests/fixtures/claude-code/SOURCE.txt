@@ -1,0 +1,12 @@
+Claude Code 2.1.311 release manifest, its detached signature and Anthropic's
+release signing key, copied unchanged on 2026-10-27 from:
+
+  https://downloads.claude.ai/claude-code-releases/2.1.311/manifest.json
+  https://downloads.claude.ai/claude-code-releases/2.1.311/manifest.json.sig
+  https://downloads.claude.ai/keys/claude-code.asc
+
+Key fingerprint 31DD DE24 DDFA B679 F42D 7BD2 BAA9 29FF 1A7E CACE, as published
+at https://code.claude.com/docs/en/setup. Public data (checksums and a public
+key) used by tests/unit/test_ai_review.py to check the pins in
+.github/workflows/ai-review.yml offline. Replace all three files when the pinned
+Claude Code version changes.

@@ -22,6 +22,7 @@ At-a-glance view of [threat-model.md](threat-model.md). Ratings use likelihood (
 | S16 | Cross-origin redirects | T-WEB | 2 | 2 | Default referrer policy, HTTPS-Only, query stripping | Redirect provenance on login pages | `test_06` | Medium |
 | S17 | Typed text sent to search providers | Search provider | 3 | 2 | Suggestions and trending off; per-provider consent at the fetch point (Track B) | — | `test_search` | Low (B) / Medium (A, opted in) |
 | S18 | Data crossing profiles | T-WEB | 2 | 2 | Separate instances and directories, engine lock, no session transfer | Routing that never moves sessions | `test_profiles` | Low |
+| S19 | Malicious or mistaken change reaching `main` | T-SUPPLY, misled agent | 2 | 3 | Pull request flow (convention), SHA-pinned actions and least-privilege workflows, advisory AI review from `main` with read-only tools | Fine-grained agent token without Workflows; branch protection (Pro or public) | `test_ai_review`, `test_repo_hygiene` | Medium |
 
 ## Web threats vs. host threats
 

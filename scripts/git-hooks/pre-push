@@ -1,0 +1,49 @@
+#!/bin/sh
+# Nulavio pre-push hook: refuse pushes to main and branch names outside the
+# convention in docs/process/pull-requests.md.
+#
+# This guards against accidents only: `git push --no-verify` skips it, and
+# nothing on GitHub enforces it on the current plan (no branch protection).
+#
+# Enable once per clone (its worktrees share the setting):
+#   git config core.hooksPath scripts/git-hooks
+# Engine security emergency only (the emergency path in the same document):
+#   NULAVIO_ALLOW_MAIN_PUSH=1 git push origin HEAD:main
+
+set -eu
+
+zero=0000000000000000000000000000000000000000
+types='(feat|fix|docs|security|test|chore)'
+slug='[a-z0-9][a-z0-9._-]*'
+
+valid_branch() {
+  [ "${#1}" -le 60 ] || return 1
+  case "$1" in
+    agent/*) pattern="^agent/[a-z0-9][a-z0-9-]*/$types-$slug\$" ;;
+    release/*) pattern='^release/firefox-[0-9]+(\.[0-9]+){1,2}(esr)?$' ;;
+    sec/*) pattern="^sec/$slug\$" ;;
+    *) pattern="^[a-z0-9][a-z0-9-]*/$types-$slug\$" ;;
+  esac
+  printf '%s\n' "$1" | grep -Eq "$pattern"
+}
+
+status=0
+while read -r _ local_sha remote_ref _; do
+  case "$remote_ref" in
+    refs/heads/*) branch=${remote_ref#refs/heads/} ;;
+    *) continue ;; # tags and other refs
+  esac
+  if [ "$branch" = main ]; then
+    if [ "${NULAVIO_ALLOW_MAIN_PUSH:-}" = 1 ] && [ "$local_sha" != "$zero" ]; then
+      echo "pre-push: pushing to main because NULAVIO_ALLOW_MAIN_PUSH=1 (emergency path; record it in a pull request afterwards)" >&2
+      continue
+    fi
+    echo "pre-push: refusing to push to main; push your own branch and open a pull request (docs/process/pull-requests.md)" >&2
+    status=1
+  elif [ "$local_sha" != "$zero" ] && ! valid_branch "$branch"; then
+    echo "pre-push: branch '$branch' does not follow the naming convention in docs/process/pull-requests.md" >&2
+    echo "pre-push: use agent/<tool>/<type>-<slug>, <name>/<type>-<slug>, sec/<slug> or release/firefox-<version>" >&2
+    status=1
+  fi
+done
+exit "$status"
