@@ -133,7 +133,7 @@ The maintainer's brief: make the experience and look of Nulavio exceptional, wit
 |---|---|---|---|---|
 | UX0 | **Record** — done 2026-10-27 | Audit and findings, "before" captures, the three directions and the final one (HTML mockups, rationales, renders), the decision, revised UX principles, this programme | Docs tests green | S |
 | UX1 | **Security, consent and honesty fixes** — **done 2026-10-28** ([CI](https://github.com/caiolombello/nulavio/actions/runs/40696267881), `8dd50fe5908aee17df464c21b1e7eafafde11496`) | See the list below | Real Track B package: 187 integration tests, 13 skips; 586 unit tests, 3 skips; Fedora/Ubuntu CI green | M–L |
-| UX2 | **System** | See the list below | `build_tokens --check`, `contrast.py`, gallery baselines, unit tests | L |
+| UX2 | **System** — **done 2026-10-28** ([CI](https://github.com/caiolombello/nulavio/actions/runs/40751057936), `0dd29501fff5156c1c3e10837ed7a12202f439c5`) | Tokens v2, component layers, real gallery and identity migration | 600 unit tests (1 skip), 194 real Track B integration tests (13 skips), 208/208 contrast pairs; Fedora/Ubuntu CI green | L |
 | UX3 | **Window** | See the list below | Security-visibility matrix: each state × each preset × both themes; on screen, opacity 1, `elementFromPoint`, host not truncated | L |
 | UX4 | **Shell pages** | See the list below | Integration tests per page state, both themes; every `data-state` captured | L |
 | UX5 | **Assistant** (Dia-like, under ADR 0007) | See the list below | Assistant tests: chips, drift, private refusal, cancel, stream, truncation, approval in front | L |

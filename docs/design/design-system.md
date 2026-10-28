@@ -34,7 +34,7 @@ Primitives: navy 950–0, mint 700/400/200/100, amber 700/400/100, red 700/400/3
 
 ### Profile identity colours (`identity.*`)
 
-Six fills a person picks for a profile: mint `#6FE0C5`, sky `#8CCBF5`, violet `#C2B0F7`, rose `#F4A8BD`, sand `#EBC77F`, slate `#BFD0D6`, with `identity.on` (navy.950) for the icon, initial and ring. They are the same in both themes because a chip is self-contained (fill + ring + icon), and colour is never the only cue: the name, icon or initial is always there. Checked pairs: `identity.on` on every fill (≥ 4.5:1), every fill on the dark toolbar and the ring on the light toolbar (≥ 3:1). Sand is not a warning: it never appears without a profile's name.
+Six fills a person picks for a profile: lima `#C5E384`, sky `#8CCBF5`, violet `#C2B0F7`, coral `#F4A8BD`, sand `#FDCF8B`, slate `#BFD0D6`. `identity.on` and `identity.ring` use opaque navy.950 ink (`#070F18`); the ring is 1 px. They are the same in both themes because a chip is self-contained (fill + ring + icon), and the name, icon or initial is always there. The palette migration and its Settings note are described in [ADR 0003](../adr/0003-nulavio-profiles-and-routing.md#farol-identity-upgrade-ux2-2026-10-28). Mint is reserved for Nulavio/active controls. The temporary state has its own neutral fill and dashed edge. Checked pairs include icon/text on every fill (≥ 4.5:1) and the ring against light surfaces (≥ 3:1).
 
 ## Scales
 
@@ -61,8 +61,8 @@ The minimum target is 24×24 CSS px (WCAG 2.5.8); `test_06` measures the real bu
 
 | State | Rule |
 |---|---|
-| Hover | Text colour at 8% over the surface (`state.hoverOverlay`) |
-| Pressed | 12% (`state.pressedOverlay`) |
+| Hover | 8% over the surface (`state.hoverOverlay`); overlay colour depends on the component variant |
+| Pressed | 12% (`state.pressedOverlay`), with the same contrast-preserving variant colour |
 | Focus | 2 px ring in `focus`, 2 px offset. Never removed |
 | Disabled | 45% opacity plus no hover |
 | Selected (tab) | Raised surface + the **route mark** (16×2 px, `accent.default`, ≥ 3:1) |
