@@ -86,13 +86,18 @@ def _agents(args) -> int:
         for cap, g in sorted(a.get("grants", {}).items()):
             scope = f" until {g['until']}" if g.get("until") else " this session" if g.get("session") else ""
             _out(f"      {cap}: {g['mode']}{scope}")
+        if a.get("raw_automation_accepted"):
+            _out(f"      raw automation: on since {a['raw_automation_accepted']} (Nulavio does not check or log it)")
     if registry.stopped():
         _out("\nEMERGENCY STOP is on: every agent is blocked (`nulavio ai resume` to lift it).")
     return 0
 
 
 def _grant(args) -> int:
-    entry = registry.grant(args.agent, args.capability, args.mode, minutes=args.minutes)
+    if args.capability == policy.RAW_CAPABILITY and args.mode != "block":
+        print(policy.RAW_AUTOMATION_WARNING, file=sys.stderr)
+    entry = registry.grant(args.agent, args.capability, args.mode, minutes=args.minutes,
+                           accept_raw_automation=args.accept_raw_automation)  # fmt: skip
     until = f" until {entry['until']}" if entry["until"] else ""
     _out(f"{args.agent}: {args.capability} = {args.mode}{until}")
     return 0
@@ -258,7 +263,8 @@ def api_request(request: dict) -> dict:
             "capabilities": policy.CAPABILITIES,
             "presets": policy.PRESETS,
             "levels": list(LEVELS.values()),
-            "fullControlWarning": policy.FULL_CONTROL_WARNING,
+            # The consent texts are the browser's own (locale keys), never English from here.
+            "rawCapability": policy.RAW_CAPABILITY,
             "requests": registry.pending_requests(),
         }
     if op == "add":
@@ -276,7 +282,10 @@ def api_request(request: dict) -> dict:
     elif op == "grant":
         minutes = request.get("minutes")
         registry.grant(str(agent_id), str(request.get("capability")), str(request.get("mode")),
-                       minutes=int(minutes) if minutes else None)  # fmt: skip
+                       minutes=int(minutes) if minutes else None,
+                       accept_raw_automation=bool(request.get("acceptRawAutomation")))  # fmt: skip
+    elif op == "raw-automation":
+        registry.set_raw_automation(str(agent_id), bool(request.get("enabled")), bool(request.get("acceptRawAutomation")))
     elif op == "clear-grant":
         registry.clear_grant(str(agent_id), str(request.get("capability")))
     elif op == "domains":
@@ -328,13 +337,7 @@ def _api(args) -> int:
         result = {"error": exc.code, "detail": str(exc)[:300]}
     except registry.RegistryError as exc:
         text = str(exc)
-        code = (
-            "full-control-not-accepted"
-            if text.startswith("full control")
-            else "bad-request"
-            if text == "bad-request"
-            else "invalid"
-        )
+        code = exc.code or ("bad-request" if text == "bad-request" else "invalid")
         result = {"error": code, "detail": text[:200]}
     except (ValueError, TypeError, OSError) as exc:
         result = {"error": "failed", "detail": type(exc).__name__}
@@ -409,6 +412,8 @@ def add_parser(sub) -> None:
     q.add_argument("capability", choices=list(policy.CAPABILITIES))
     q.add_argument("mode", choices=policy.MODES)
     q.add_argument("--minutes", type=int, help="only for this many minutes")
+    q.add_argument("--accept-raw-automation", action="store_true",
+                   help=f"required to allow or ask for {policy.RAW_CAPABILITY} (raw automation)")  # fmt: skip
     q = asub.add_parser("autonomy", help="change an agent's autonomy level")
     q.add_argument("agent")
     q.add_argument("level", choices=list(LEVELS))

@@ -5,6 +5,7 @@
    Profiles: keep the toolbar selector showing the current profile.
    Nothing is sent anywhere; nothing is stored. */
 
+import { workspaceBarTexts } from "./lib/agent-texts.js";
 import { t } from "./lib/i18n.js";
 import { drawProfileIcon } from "./lib/profile-icon.js";
 import { isRiskyFilename } from "./lib/risky.js";
@@ -115,8 +116,10 @@ if (browser.nulavioProfiles && browser.nulavioRouting && browser.menus) {
 }
 
 // -- AI & Automation: permission requests from agents, and the AI Workspace mark --
-// In the user's windows, requests from the AI Bridge open a request page. In an
-// AI Workspace (driven by an agent) none are shown; a bar says who drives it.
+// In the user's windows, requests from the AI Bridge open a request page. In a
+// window an agent drives (its AI Workspace, or one of the user's profiles) none
+// are shown; a bar that cannot be closed says who drives it, at which level and
+// where, with "Parar agente"; raw automation gets its own critical bar.
 
 async function setUpAI() {
   const agent = await browser.nulavioAI.workspaceAgent();
@@ -125,8 +128,9 @@ async function setUpAI() {
     return;
   }
   const { agents } = await browser.nulavioAI.overview().catch(() => ({ agents: [] }));
-  const name = agents.find(a => a.id === agent)?.name ?? agent;
-  await browser.nulavioAI.markWorkspace(browser.i18n.getMessage("aiWorkspaceBar", [name]));
+  const record = agents.find(a => a.id === agent);
+  const target = await browser.nulavioAI.workspaceTarget();
+  await browser.nulavioAI.markWorkspace(workspaceBarTexts(record?.name ?? agent, record?.autonomy, target));
 }
 
 if (browser.nulavioAI) {

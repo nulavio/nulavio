@@ -16,15 +16,20 @@
     <section class="card stack" aria-labelledby="headline">
       <p class="hint" id="who"></p>
       <h1 class="warning__headline" id="headline"></h1>
+      <!-- Risk by capability (policy.RISK): callout--critical / --warning / --info, icon + words -->
+      <div class="callout" id="risk" hidden><p id="risk-text"></p></div>
       <p class="url mono" id="target" hidden></p>
+      <p class="hint" id="where"></p>
       <p data-i18n="aiRequestOnlyIf"></p>
+      <p class="hint" id="expires" hidden></p>
+      <!-- The safe answer first, filled and focused; allowing is secondary, for the session quieter still -->
       <div class="actions" id="actions">
-        <button class="button button--primary" type="button" id="once" data-i18n="aiAllowOnce"></button>
-        <button class="button button--secondary" type="button" id="session" data-i18n="aiAllowSession"></button>
-        <button class="button button--quiet" type="button" id="deny" data-i18n="aiDeny"></button>
+        <button class="button button--primary" type="button" id="deny" data-i18n="aiDeny"></button>
+        <button class="button button--secondary" type="button" id="once" data-i18n="aiAllowOnce"></button>
+        <button class="button button--quiet" type="button" id="session" data-i18n="aiAllowSession"></button>
       </div>
       <p class="status" id="status" role="status" aria-live="polite"></p>
-      <p class="hint"><a href="../settings/settings.html#ai" data-i18n="aiManage"></a></p>
+      <p class="hint"><a href="../settings/settings.html#ai" target="_blank" rel="noopener" data-i18n="aiManage"></a></p>
     </section>
   </main>
 </body>

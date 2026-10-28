@@ -86,17 +86,56 @@ export function chip(profile, size = "md") {
   return el;
 }
 
-/** Ask for confirmation with a native modal <dialog>. Resolves true when confirmed. */
-export function confirmDialog({ title, body, confirm, danger = false }) {
+const SVG_NS = "http://www.w3.org/2000/svg";
+// 24 px line icons (1.75 px stroke, currentColor). State is never carried by an icon alone: words go next to it.
+const ICONS = {
+  critical: "M8.3 2.5h7.4l5.8 5.8v7.4l-5.8 5.8H8.3l-5.8-5.8V8.3z M12 7.5v5.5 M12 16.5v.5",
+  warning: "M12 3 2 21h20z M12 10v5 M12 18v.5",
+  info: "M12 21.5a9.5 9.5 0 1 0 0-19a9.5 9.5 0 0 0 0 19z M12 11v6 M12 7.5v.5",
+  pause: "M9 5v14 M15 5v14",
+  revoked: "M12 21.5a9.5 9.5 0 1 0 0-19a9.5 9.5 0 0 0 0 19z M5.3 5.3l13.4 13.4",
+};
+
+/** A decorative icon (hidden from assistive technology), built without markup strings. */
+export function icon(name, className = "icon") {
+  const svg = document.createElementNS(SVG_NS, "svg");
+  svg.setAttribute("class", className);
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("aria-hidden", "true");
+  svg.dataset.icon = name;
+  const path = document.createElementNS(SVG_NS, "path");
+  for (const [key, value] of Object.entries({
+    d: ICONS[name] ?? ICONS.critical,
+    fill: "none",
+    stroke: "currentColor",
+    "stroke-width": "1.75",
+    "stroke-linecap": "round",
+    "stroke-linejoin": "round",
+  })) {
+    path.setAttribute(key, value);
+  }
+  svg.append(path);
+  return svg;
+}
+
+/** Ask for confirmation with a native modal <dialog>. Resolves true when confirmed.
+    `critical`: a consent that raises what an agent may do (full control, raw automation): a critical
+    icon in the title, the body in primary text, announced as an alert dialog. Cancel is focused first. */
+export function confirmDialog({ title, body, confirm, danger = false, critical = false }) {
   return new Promise(resolve => {
     const dialog = h(
       "dialog",
-      { class: "dialog", "aria-labelledby": "dialog-title" },
+      {
+        class: critical ? "dialog dialog--critical" : "dialog",
+        role: critical ? "alertdialog" : null,
+        "aria-labelledby": "dialog-title",
+        "aria-describedby": body ? "dialog-body" : null,
+      },
       h(
         "form",
         { method: "dialog", class: "dialog__form" },
-        h("h2", { class: "dialog__title", id: "dialog-title", text: title }),
-        body ? h("p", { class: "dialog__body", text: body }) : null,
+        h("h2", { class: "dialog__title", id: "dialog-title" }, critical ? icon("critical", "dialog__icon") : null, h("span", { text: title })),
+        body ? h("p", { class: critical ? "dialog__body dialog__body--strong" : "dialog__body", id: "dialog-body", text: body }) : null,
         h(
           "div",
           { class: "actions actions--end" },

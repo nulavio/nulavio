@@ -10,6 +10,12 @@
         "parameters": []
       },
       {
+        "name": "workspaceTarget",
+        "type": "function",
+        "async": true,
+        "parameters": []
+      },
+      {
         "name": "overview",
         "type": "function",
         "async": true,
@@ -134,6 +140,7 @@
               "autonomy",
               "grant",
               "clear-grant",
+              "raw-automation",
               "domains",
               "profiles",
               "routes",
@@ -235,9 +242,30 @@
         "async": true,
         "parameters": [
           {
-            "name": "text",
-            "type": "string",
-            "maxLength": 300
+            "name": "texts",
+            "type": "object",
+            "properties": {
+              "text": {
+                "type": "string",
+                "maxLength": 400
+              },
+              "rawText": {
+                "type": "string",
+                "maxLength": 400
+              },
+              "pausedText": {
+                "type": "string",
+                "maxLength": 400
+              },
+              "failedText": {
+                "type": "string",
+                "maxLength": 400
+              },
+              "stopLabel": {
+                "type": "string",
+                "maxLength": 60
+              }
+            }
           }
         ]
       },

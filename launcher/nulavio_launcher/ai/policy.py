@@ -34,9 +34,36 @@ CAPABILITIES: dict[str, str] = {
     "transactions": "Make purchases and payments",
     "account_settings": "Change account settings",
     "background": "Keep working in the background",
-    "debugging": "Privileged debugging",
+    "debugging": "Raw automation and the browser's internal pages",
 }
 MODES = ("allow", "ask", "block")
+# Raw automation (the raw_automation tool) and privileged pages (about:, chrome:). No preset
+# includes it, Full control neither (ADR 0007, amendment of 2026-10-28): it is a separate
+# opt-in per agent, with its own confirmation, recorded as `raw_automation_accepted`.
+RAW_CAPABILITY = "debugging"
+
+# How a permission request presents each capability (Shell page ai/request.html): critical for
+# money, code, the user's own data and places outside the AI Workspace; warning for what changes
+# pages or sends data; info for reading. Unknown capabilities are shown as critical.
+RISK: dict[str, str] = {
+    "read_pages": "info",
+    "navigate": "info",
+    "screenshots": "info",
+    "interact": "warning",
+    "submit_forms": "warning",
+    "files": "warning",
+    "background": "warning",
+    "authenticated_sessions": "critical",
+    "execute_js": "critical",
+    "network": "critical",
+    "cookies_storage": "critical",
+    "multiple_profiles": "critical",
+    "private_tabs": "critical",
+    "local_resources": "critical",
+    "transactions": "critical",
+    "account_settings": "critical",
+    "debugging": "critical",
+}
 
 
 def _preset(allow: set[str], ask: set[str]) -> dict[str, str]:
@@ -57,13 +84,22 @@ PRESETS: dict[str, dict[str, str]] = {
         {"read_pages", "navigate", "screenshots", "interact", "submit_forms", "files", "authenticated_sessions", "background"},
         {"transactions", "account_settings", "local_resources", "execute_js", "network", "multiple_profiles", "private_tabs"},
     ),
-    # Everything the user selected, without confirmations.
-    "full_control": _preset(set(CAPABILITIES), set()),
+    # Everything without confirmations, except raw automation (a separate opt-in).
+    "full_control": _preset(set(CAPABILITIES) - {RAW_CAPABILITY}, set()),
 }
+# For the CLI only: the browser shows its own localised text (aiFullControlBody, aiRawBody).
 FULL_CONTROL_WARNING = (
-    "This agent will be able to read data and act in the profiles you authorise, including sensitive "
-    "operations without asking. If the agent is compromised or makes a mistake, your data and accounts "
-    "can be affected. You can revoke access later, but actions already taken may be irreversible."
+    "Full control: this agent will do without asking everything the other levels ask about: any action on "
+    "pages, purchases and payments, account changes, private tabs, the profiles in its list and running "
+    "scripts in pages. Raw automation is not included: it is a separate option with its own confirmation. "
+    "If the agent is compromised or makes a mistake, your data and accounts can be affected. You can revoke "
+    "access later, but actions already taken may be irreversible."
+)
+RAW_AUTOMATION_WARNING = (
+    "Raw automation: this agent gets a direct WebDriver BiDi connection to its AI Workspace's browser and may "
+    "open the browser's internal pages. Nulavio does not check, ask about or record anything done through that "
+    "connection: your permissions, site list and activity log no longer apply to it. The emergency stop, pause "
+    "and revoke still close the AI Workspace. Never available in your own profiles."
 )
 
 
@@ -72,7 +108,9 @@ class Decision:
     allowed: bool
     mode: str  # allow / ask / block (the effective setting before any prompt)
     capability: str
-    reason: str  # preset:<name>, grant, approved-once, approved-session, denied, no-approver, revoked, stopped, out-of-scope
+    # preset:<name>, grant, raw-automation-off, approved-once, approved-session, denied, no-approver, revoked,
+    # stopped, out-of-scope
+    reason: str
 
 
 def now() -> _dt.datetime:
@@ -92,6 +130,9 @@ def effective_mode(agent: dict, capability: str, session_id: str, at: _dt.dateti
     """(mode, source) for one capability: an active explicit grant wins over the preset."""
     if capability not in CAPABILITIES:
         return "block", "unknown-capability"
+    if capability == RAW_CAPABILITY and not agent.get("raw_automation_accepted"):
+        # Only the separate opt-in turns it on; a grant given without that confirmation does not count.
+        return "block", "raw-automation-off"
     grant = agent.get("grants", {}).get(capability)
     if grant and grant_active(grant, session_id, at):
         return grant["mode"], "grant"

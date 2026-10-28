@@ -4,7 +4,7 @@
    changes apply to an agent's next call. */
 
 import { t } from "../lib/i18n.js";
-import { announce, confirmDialog, errorText, h, rerender } from "../lib/ui.js";
+import { announce, confirmDialog, errorText, h, icon, rerender } from "../lib/ui.js";
 
 const ai = browser.nulavioAI;
 const LEVELS = ["restricted", "assisted", "autonomous", "full_control"];
@@ -30,13 +30,35 @@ async function run(action, done = null) {
   }
 }
 
-async function acceptFullControl() {
+// Consents that raise what an agent may do: the browser's own localised words (never text from the tools),
+// the critical dialog variant, Cancel focused first.
+async function acceptFullControl(name) {
   return confirmDialog({
-    title: t("aiFullControlTitle"),
-    body: state.fullControlWarning,
+    title: t("aiFullControlTitle", [name]),
+    body: t("aiFullControlBody", [name]),
     confirm: t("aiFullControlConfirm"),
     danger: true,
+    critical: true,
   });
+}
+
+async function acceptRawAutomation(name) {
+  return confirmDialog({
+    title: t("aiRawTitle", [name]),
+    body: t("aiRawBody", [name]),
+    confirm: t("aiRawConfirm"),
+    danger: true,
+    critical: true,
+  });
+}
+
+/** A localised name for an id from the tools (tool, event, client), or the id itself: never a raw locale key. */
+function named(prefix, id) {
+  return (id && browser.i18n.getMessage(`${prefix}${String(id).replace(/[^a-z0-9_]/gi, "_")}`)) || String(id ?? "");
+}
+
+function rawCapability() {
+  return state?.rawCapability ?? "debugging";
 }
 
 function when(iso) {
@@ -83,6 +105,46 @@ function capabilityRow(agent, capability) {
     h("div", { class: "row__main" }, h("p", { class: "row__title", text: t(`aiCap_${capability}`) }), h("p", { class: "row__note", text: meta })),
     h("div", { class: "row__end" }, select, duration, reset)
   );
+}
+
+/* Raw automation: not part of any level; a separate switch per agent with its own critical confirmation.
+   Off again needs no confirmation; on again shows the warning again. */
+function rawAutomationRow(agent) {
+  const on = Boolean(agent.raw_automation_accepted);
+  const input = h("input", { type: "checkbox", role: "switch", checked: on, "data-focus-key": `raw-${agent.id}` });
+  input.addEventListener("change", async () => {
+    const enabled = input.checked;
+    if (enabled && !(await acceptRawAutomation(agent.name))) {
+      input.checked = false;
+      return;
+    }
+    await run(() => ai.change(agent.id, "raw-automation", { enabled, acceptRawAutomation: enabled }).then(renderAgents), t("doneSaved"));
+  });
+  return h(
+    "label",
+    { class: "check check--switch", dataset: { rawAutomation: agent.id } },
+    input,
+    h(
+      "span",
+      {},
+      h("span", { text: t("aiRawLabel") }),
+      h("span", { class: "hint", text: on ? t("aiRawHintOn", [when(agent.raw_automation_accepted)]) : t("aiRawHintOff") })
+    )
+  );
+}
+
+/* The level in words ("Nível: Controle total"), with the security-state badge family: Controle total has
+   a warning tint and icon, Autônomo a warning outline; the other two stay plain. */
+function levelBadge(level) {
+  const text = t("aiLevelBadge", [t(`aiLevel_${level}`)]);
+  if (level === "full_control") {
+    return h("span", { class: "badge badge--warning", dataset: { level } }, icon("warning", "badge__icon"), text);
+  }
+  return h("span", { class: level === "autonomous" ? "badge badge--outline" : "badge", dataset: { level }, text });
+}
+
+function stateBadge(kind, text) {
+  return h("span", { class: "badge badge--quiet", dataset: { state: kind } }, icon(kind === "paused" ? "pause" : "revoked", "badge__icon"), text);
 }
 
 let groupProfiles = [];
@@ -145,10 +207,10 @@ function profilesEditor(agent) {
 
 function agentRow(agent) {
   const badges = [
-    h("span", { class: "badge badge--quiet", text: t(`aiClient_${agent.client.replace("-", "_")}`) }),
-    h("span", { class: "badge", text: t(`aiLevel_${agent.autonomy}`) }),
-    agent.revoked ? h("span", { class: "badge badge--quiet", text: t("aiRevoked") }) : null,
-    agent.paused ? h("span", { class: "badge badge--quiet", text: t("aiPaused") }) : null,
+    h("span", { class: "badge badge--quiet", text: named("aiClient_", agent.client) }),
+    levelBadge(agent.autonomy),
+    agent.revoked ? stateBadge("revoked", t("aiRevoked")) : null,
+    agent.paused ? stateBadge("paused", t("aiPaused")) : null,
   ];
   const seen = agent.last_client;
   const meta = [
@@ -164,7 +226,7 @@ function agentRow(agent) {
     ...LEVELS.map(l => h("option", { value: l, text: t(`aiLevel_${l}`), selected: agent.autonomy === l }))
   );
   level.addEventListener("change", async () => {
-    const accept = level.value === "full_control" ? await acceptFullControl() : false;
+    const accept = level.value === "full_control" ? await acceptFullControl(agent.name) : false;
     if (level.value === "full_control" && !accept) {
       level.value = agent.autonomy;
       return;
@@ -240,17 +302,36 @@ function agentRow(agent) {
         sitesForm
       ),
       profilesEditor(agent),
-      h("ul", { class: "list" }, ...Object.keys(state.capabilities).map(c => capabilityRow(agent, c))),
+      h(
+        "ul",
+        { class: "list" },
+        ...Object.keys(state.capabilities)
+          .filter(c => c !== rawCapability())
+          .map(c => capabilityRow(agent, c))
+      ),
+      agent.client === "nulavio-assistant" ? null : rawAutomationRow(agent),
       h("div", { class: "actions" }, rotate, remove)
     )
   );
 }
 
+let renders = 0;
+
 async function renderAgents() {
-  state = await ai.overview();
-  groupProfiles = browser.nulavioProfiles ? (await browser.nulavioProfiles.list()).profiles.filter(p => p.path) : [];
+  // The latest call wins: an older answer that arrives late (the stop switch toggled twice quickly)
+  // must not put back a state that is no longer true.
+  const turn = ++renders;
+  const next = await ai.overview();
+  const profiles = browser.nulavioProfiles ? (await browser.nulavioProfiles.list()).profiles.filter(p => p.path) : [];
+  if (turn !== renders) {
+    return;
+  }
+  state = next;
+  groupProfiles = profiles;
   const stop = document.getElementById("ai-stop");
   stop.checked = state.stopped;
+  // While every agent is stopped, a persistent warning at the top of the section says so, with a way back.
+  document.getElementById("ai-stopped").hidden = !state.stopped;
   rerender(document.getElementById("ai-agents"), () =>
     state.agents.length ? state.agents.map(agentRow) : [h("li", { class: "popup__empty", text: t("aiNoAgents") })]
   );
@@ -337,7 +418,7 @@ async function connect(event) {
     return;
   }
   if (details.autonomy === "full_control") {
-    details.acceptFullControl = await acceptFullControl();
+    details.acceptFullControl = await acceptFullControl(details.name);
     if (!details.acceptFullControl) {
       return;
     }
@@ -352,6 +433,14 @@ async function connect(event) {
   }
 }
 
+/** What an activity line did, in words: events (connected, raw automation ended) and tools by their title. */
+function activityTitle(entry) {
+  if (entry.event) {
+    return named("aiEvent_", entry.event);
+  }
+  return entry.tool ? named("aiTool_", entry.tool) : t("aiEvent_other");
+}
+
 async function renderActivity() {
   const { entries } = await ai.activity(30);
   const names = Object.fromEntries((state?.agents ?? []).map(a => [a.id, a.name]));
@@ -364,7 +453,7 @@ async function renderActivity() {
             h(
               "div",
               { class: "row__main" },
-              h("p", { class: "row__title", text: `${names[e.agent] ?? e.agent} · ${e.tool ?? t(`aiEvent_${e.event ?? "other"}`)}` }),
+              h("p", { class: "row__title", text: `${names[e.agent] ?? e.agent} · ${activityTitle(e)}` }),
               h("p", { class: "row__note", text: [when(e.ts), e.target, e.decision === "deny" ? t("aiDenied", [e.reason ?? ""]) : null].filter(Boolean).join(" · ") })
             )
           )
@@ -412,6 +501,7 @@ function setUpAssistant() {
       form.elements.key.value = "";
       announce(t("assistantSaved"));
       await renderAssistant();
+      await renderAgents(); // the assistant is an agent too: it appears in the list at once
     } catch (e) {
       error.textContent = errorText(e);
     }
@@ -432,6 +522,10 @@ export async function setUpAI() {
   renderLevels();
   document.getElementById("ai-stop").addEventListener("change", event =>
     run(() => ai.setStopped(event.target.checked).then(renderAgents), event.target.checked ? t("aiStoppedNow") : t("aiResumedNow"))
+  );
+  document.getElementById("ai-stopped").prepend(icon("warning", "callout__icon"));
+  document.getElementById("ai-resume").addEventListener("click", () =>
+    run(() => ai.setStopped(false).then(renderAgents), t("aiResumedNow"))
   );
   document.getElementById("ai-connect-form").addEventListener("submit", connect);
   document.getElementById("ai-copy").addEventListener("click", () =>

@@ -431,3 +431,22 @@ body.assistant { padding: var(--nv-space-4); }
 @media (forced-colors: active) {
   .assistant__chip, .assistant__drift, .assistant__off { border: 1px solid CanvasText; }
 }
+
+/* -- UX1 · agents: request risk, level and state badges, the critical consent (ADR 0007) ------------
+   State is never colour alone: each variant has an icon (ui.js icon()) and words. */
+.callout--info { background: var(--nv-color-bg-sunken); }
+.callout--info .callout__icon { color: var(--nv-color-text-secondary); }
+.callout--critical .callout__icon { color: var(--nv-color-status-criticalText, var(--nv-color-status-critical)); }
+.callout__action { margin-inline-start: auto; align-self: center; flex: none; }
+.badge__icon { width: 0.875rem; height: 0.875rem; vertical-align: -0.125em; margin-inline-end: var(--nv-space-1); }
+.badge--warning { background: var(--nv-color-status-warningTint); }
+.badge--warning .badge__icon { color: var(--nv-color-status-warning); }
+.badge--outline { background: transparent; box-shadow: inset 0 0 0 1px var(--nv-color-status-warning); }
+.badge--quiet .badge__icon { color: var(--nv-color-text-secondary); }
+.dialog--critical { border-color: var(--nv-color-status-critical); }
+.dialog--critical .dialog__title { display: flex; align-items: flex-start; gap: var(--nv-space-3); }
+.dialog__icon { width: 1.5rem; height: 1.5rem; flex: none; color: var(--nv-color-status-criticalText, var(--nv-color-status-critical)); }
+.dialog__body--strong { color: var(--nv-color-text-primary); }
+@media (forced-colors: active) {
+  .callout--critical, .callout--warning, .callout--info, .badge--warning, .badge--outline { border: 1px solid CanvasText; }
+}

@@ -37,6 +37,7 @@ this.nulavioAI = class extends ExtensionAPI {
     return {
       nulavioAI: {
         workspaceAgent: call(() => ai.workspaceAgent()),
+        workspaceTarget: call(async () => ai.workspaceTarget()),
         overview: call(() => ai.overview()),
         detect: call(() => ai.detect()),
         plan: call((agent, client) => ai.plan(agent, client)),
@@ -49,7 +50,7 @@ this.nulavioAI = class extends ExtensionAPI {
         request: call(id => ai.request(id)),
         answer: call((id, answer) => ai.answer(id, answer)),
         watch: call(() => ai.watch()),
-        markWorkspace: call(text => ai.markWorkspace(text)),
+        markWorkspace: call(texts => ai.markWorkspace(texts)),
         assistantState: call(() => ai.assistantState(windowOf())),
         assistantConfigure: call(details => ai.assistantConfigure(details)),
         assistantAllow: call(allowed => ai.assistantAllow(allowed)),

@@ -27,7 +27,7 @@ from unittest import mock
 from nulavio_launcher.ai import audit, mcp, policy, registry, tools
 from nulavio_launcher.ai import cli as ai_cli
 from nulavio_launcher.ai.websocket import GUID, WebSocket, WebSocketError
-from nulavio_launcher.ai.workspace import WORKSPACE_PREFS, Workspace
+from nulavio_launcher.ai.workspace import RAW_MARKER, WORKSPACE_PREFS, ProfileTarget, Workspace
 
 
 class Home(unittest.TestCase):
@@ -231,9 +231,11 @@ class Approve(registry.Approver):
     def __init__(self, answer):
         self.answer = answer
         self.asked = []
+        self.places = []
 
-    def ask(self, agent, capability, target):
+    def ask(self, agent, capability, target, place=""):
         self.asked.append((capability, target))
+        self.places.append(place)
         return self.answer
 
 
@@ -248,7 +250,8 @@ class PolicyTest(Home):
             "restricted": {"read_pages": True, "interact": False, "execute_js": False, "submit_forms": False},
             "assisted": {"interact": True, "submit_forms": False, "execute_js": False},
             "autonomous": {"interact": True, "submit_forms": True, "files": True, "transactions": False, "execute_js": False},
-            "full_control": {c: True for c in policy.CAPABILITIES},
+            # Everything but raw automation, which is a separate opt-in (ADR 0007, 2026-10-28).
+            "full_control": {c: c != policy.RAW_CAPABILITY for c in policy.CAPABILITIES},
         }
         for level, caps in expect.items():
             agent, _ = registry.add(level, "other", level, accept_full_control=True)
@@ -321,11 +324,74 @@ class PolicyTest(Home):
         self.assertEqual(self.decide(agent["id"], "navigate", host="notexample.org").reason, "out-of-scope")
 
     def test_full_control_needs_acceptance(self):
-        with self.assertRaises(registry.RegistryError):
+        with self.assertRaises(registry.RegistryError) as caught:
             registry.add("f", "other", "full_control")
+        self.assertEqual(caught.exception.code, "full-control-not-accepted")
         agent, _ = registry.add("x", "other", "assisted")
         with self.assertRaises(registry.RegistryError):
             registry.set_autonomy(agent["id"], "full_control")
+
+    def test_raw_automation_is_a_separate_opt_in(self):
+        """D-UX4 / SB-03: no level includes raw automation; it needs its own confirmation, per agent."""
+        raw = policy.RAW_CAPABILITY
+        for level in policy.PRESETS:
+            self.assertEqual(policy.PRESETS[level][raw], "block", level)
+        agent, _ = registry.add("full", "other", "full_control", accept_full_control=True)
+        self.assertEqual(self.decide(agent["id"], raw).reason, "raw-automation-off")
+        bridge = tools.Bridge(agent["id"], "s-1", approver=registry.Approver())
+        self.assertNotIn("raw_automation", {t["name"] for t in bridge.list_tools()})
+        for mode in ("allow", "ask"):  # without the warning, neither turns it on
+            with self.assertRaises(registry.RegistryError) as caught:
+                registry.grant(agent["id"], raw, mode)
+            self.assertEqual(caught.exception.code, "raw-automation-not-accepted")
+        self.assertFalse(self.decide(agent["id"], raw).allowed)
+        registry.set_raw_automation(agent["id"], True, accept=True)
+        self.assertTrue(registry.get(agent["id"])["raw_automation_accepted"])
+        self.assertTrue(self.decide(agent["id"], raw).allowed)
+        self.assertIn("raw_automation", {t["name"] for t in bridge.list_tools()})
+        registry.set_raw_automation(agent["id"], False)
+        self.assertIsNone(registry.get(agent["id"])["raw_automation_accepted"])
+        self.assertEqual(self.decide(agent["id"], raw).reason, "raw-automation-off")
+        with self.assertRaises(registry.RegistryError):  # turning it on again shows the warning again
+            registry.set_raw_automation(agent["id"], True)
+        registry.grant(agent["id"], raw, "ask", accept_raw_automation=True)
+        registry.grant(agent["id"], raw, "block")
+        self.assertIsNone(registry.get(agent["id"])["raw_automation_accepted"])
+
+    def test_registries_from_before_the_opt_in_lose_raw_automation(self):
+        """Tightening: a Full control agent, or a grant given without the new warning, no longer has it."""
+        agent, _ = registry.add("old", "other", "full_control", accept_full_control=True)
+        path = self.home / "state" / "ai" / "agents.json"
+        data = json.loads(path.read_text())
+        data["agents"][agent["id"]]["grants"][policy.RAW_CAPABILITY] = {"mode": "allow", "set": "2026-10-27T10:00:00+00:00",
+                                                                        "until": None, "session": None}  # fmt: skip
+        path.write_text(json.dumps(data))
+        self.assertEqual(self.decide(agent["id"], policy.RAW_CAPABILITY).reason, "raw-automation-off")
+        # Privileged pages are under the same option: Full control alone does not open about:config.
+        self.assertIn(policy.RAW_CAPABILITY, policy.classify_url("about:config").needs)
+
+    def test_every_capability_has_a_risk_tier(self):
+        self.assertEqual(set(policy.RISK), set(policy.CAPABILITIES))
+        self.assertTrue(set(policy.RISK.values()) <= {"critical", "warning", "info"})
+        for capability in ("transactions", "execute_js", "local_resources", "private_tabs", "multiple_profiles",
+                           policy.RAW_CAPABILITY):  # fmt: skip
+            self.assertEqual(policy.RISK[capability], "critical", capability)
+        for capability in ("interact", "submit_forms", "files"):
+            self.assertEqual(policy.RISK[capability], "warning", capability)
+        for capability in ("read_pages", "navigate", "screenshots"):
+            self.assertEqual(policy.RISK[capability], "info", capability)
+
+    def test_requests_say_where_the_agent_acts(self):
+        agent, _ = registry.add("where", "other", "restricted")
+        approver = Approve("deny")
+        bridge = tools.Bridge(agent["id"], "s-1", approver=approver)
+        bridge.owner = {"t1": "Trabalho", "t2": ""}
+        for tab in ("t1", "t2"):
+            bridge.elements[tab] = {"e1": "shared-1"}
+        with mock.patch.object(tools.Bridge, "_url_of", return_value="https://example.org/"):
+            self.assertTrue(bridge.call("click", {"tab": "t1", "element": "e1"})["isError"])
+            self.assertTrue(bridge.call("click", {"tab": "t2", "element": "e1"})["isError"])
+        self.assertEqual(approver.places, ["Trabalho", ""])  # one of the user's profiles, then the AI Workspace
 
     def test_bad_input(self):
         for kwargs in ({"name": "a/b"}, {"client": "mystery"}, {"autonomy": "god"}, {"domains": ["exa mple.org"]}):
@@ -420,6 +486,46 @@ class WorkspaceTest(Home):
         self.assertEqual(user_js.count("browser.aboutwelcome.enabled"), 1)
         self.assertFalse(set(WORKSPACE_PREFS) - set(re.findall(r'user_pref\("([^"]+)"', user_js)))
         self.assertTrue(str(ws.profile_dir).startswith(str(self.home)))
+        self.assertIn('user_pref("nulavio.ai.target", "workspace");', user_js)
+
+    def test_raw_marker_for_the_window(self):
+        """WCS-01: the hand-over is written where the Shell in the AI Workspace can see it, and never outlives it."""
+        agent, _ = registry.add("raw", "other", "autonomous")
+        registry.set_raw_automation(agent["id"], True, accept=True)
+        ws = Workspace(agent["id"], engine=mock.Mock(path=Path("/x")))
+        (ws.profile_dir).mkdir(parents=True, exist_ok=True)
+        (ws.profile_dir / RAW_MARKER).write_text("{}")  # left by a bridge that was killed
+        ws._write_prefs()
+        self.assertFalse((ws.profile_dir / RAW_MARKER).exists())
+        fake = mock.Mock()
+        ws.port = 4444
+
+        def start():
+            ws.bidi = fake
+            return fake
+
+        ws.start = start
+        bridge = tools.Bridge(agent["id"], "s-1", approver=registry.Approver(), workspace_factory=lambda a: ws)
+        result = bridge.call("raw_automation", {})
+        self.assertFalse(result["isError"], result)
+        marker = json.loads((ws.profile_dir / RAW_MARKER).read_text())
+        self.assertEqual((marker["agent"], marker["pid"]), (agent["id"], os.getpid()))
+        self.assertEqual(os.stat(ws.profile_dir / RAW_MARKER).st_mode & 0o777, 0o600)
+        bridge.close()
+        self.assertFalse((ws.profile_dir / RAW_MARKER).exists())
+
+    def test_profile_target_says_it_is_the_users_profile(self):
+        """WCS-02 / AI-06: a profile opened for an agent is marked as the user's, by name, and only temporarily."""
+        folder = self.home / "profiles" / "work"
+        folder.mkdir(parents=True)
+        (folder / "user.js").write_text('user_pref("browser.startup.page", 3);\n')
+        target = ProfileTarget("ag-1", "Trabalho", folder, downloads_dir=self.home / "dl")
+        target._write_prefs()
+        user_js = (folder / "user.js").read_text()
+        self.assertIn('user_pref("nulavio.ai.target", "profile");', user_js)
+        self.assertIn('user_pref("nulavio.ai.target.label", "Trabalho");', user_js)
+        target._remove_temporary()
+        self.assertEqual((folder / "user.js").read_text(), 'user_pref("browser.startup.page", 3);\n')
 
     def test_disposable_workspace_is_deleted(self):
         ws = Workspace("ag-2", disposable=True, engine=mock.Mock(path=Path("/x")))
@@ -527,9 +633,21 @@ class CliTest(Home):
         with mock.patch("sys.stdout", new=io.StringIO()), mock.patch("sys.stderr", new=io.StringIO()) as err:
             self.assertEqual(main(["ai", "add", "F", "--client", "other", "--autonomy", "full-control"]), 1)
             self.assertIn("irreversible", err.getvalue())
+            self.assertIn("Raw automation is not included", err.getvalue())
             self.assertEqual(
                 main(["ai", "add", "F", "--client", "other", "--autonomy", "full-control", "--accept-full-control"]), 0
             )
+
+    def test_raw_automation_flag(self):
+        from nulavio_launcher.cli import main
+
+        agent, _ = registry.add("R", "other", "full_control", accept_full_control=True)
+        with mock.patch("sys.stdout", new=io.StringIO()), mock.patch("sys.stderr", new=io.StringIO()) as err:
+            self.assertEqual(main(["ai", "grant", agent["id"], "debugging", "allow"]), 1)
+            self.assertIn("does not check, ask about or record", err.getvalue())
+            self.assertFalse(registry.get(agent["id"]).get("raw_automation_accepted"))
+            self.assertEqual(main(["ai", "grant", agent["id"], "debugging", "allow", "--accept-raw-automation"]), 0)
+        self.assertTrue(registry.get(agent["id"])["raw_automation_accepted"])
 
 
 class AutonomyControlsTest(Home):
@@ -589,12 +707,43 @@ class AutonomyControlsTest(Home):
             thread.join()
         self.assertEqual(list(registry.requests_dir().iterdir()), [])  # nothing left behind
 
+    def test_request_file_has_risk_place_and_expiry(self):
+        """SB-01: the request page shows the risk tier, where the agent acts and when silence means no."""
+        agent, _ = registry.add("b", "other", "restricted")
+        seen = []
+
+        def read_request():
+            for _ in range(100):
+                pending = list(registry.requests_dir().glob("*.json"))
+                if pending:
+                    seen.append(json.loads(pending[0].read_text()))
+                    pending[0].with_suffix(".seen").touch()
+                    registry.answer_request(pending[0].stem, "deny")
+                    return
+                time.sleep(0.05)
+
+        cases = (
+            ("transactions", "Trabalho", "critical", {"kind": "profile", "profile": "Trabalho"}),
+            ("interact", "", "warning", {"kind": "workspace"}),
+        )
+        for capability, place, risk, where in cases:
+            thread = threading.Thread(target=read_request)
+            thread.start()
+            approver = registry.BrowserApprover(fallback=Approve("deny"), notice=3, timeout=30, poll=0.05)
+            self.assertEqual(approver.ask(registry.get(agent["id"]), capability, None, place), "deny")
+            thread.join()
+            request = seen.pop()
+            self.assertEqual((request["risk"], request["place"]), (risk, where))
+            expires = _dt.datetime.fromisoformat(request["expires"]) - _dt.datetime.fromisoformat(request["created"])
+            self.assertEqual(expires, _dt.timedelta(seconds=30))
+
     def test_browser_approver_falls_back_when_no_browser_answers(self):
         agent, _ = registry.add("f", "other", "restricted")
         fallback = Approve("once")
         approver = registry.BrowserApprover(fallback=fallback, notice=0.3, timeout=5, poll=0.05)
-        self.assertEqual(approver.ask(registry.get(agent["id"]), "interact", None), "once")
+        self.assertEqual(approver.ask(registry.get(agent["id"]), "interact", None, "Trabalho"), "once")
         self.assertEqual(fallback.asked, [("interact", None)])
+        self.assertEqual(fallback.places, ["Trabalho"])  # the desktop dialog says where, too
         self.assertEqual(list(registry.requests_dir().iterdir()), [])
 
     def test_unanswered_request_is_denied(self):
@@ -636,6 +785,16 @@ class AutonomyControlsTest(Home):
         overview = ai_cli.api_request({"op": "overview"})
         self.assertEqual(overview["agents"][0]["modes"]["execute_js"], "allow")
         self.assertNotIn("token_sha256", json.dumps(overview))
+        # SPA-01 / SB-02: consent texts come from the browser's locales; the API sends no English warning.
+        self.assertNotIn("fullControlWarning", overview)
+        self.assertNotIn(policy.FULL_CONTROL_WARNING, json.dumps(overview))
+        self.assertNotIn(policy.RAW_AUTOMATION_WARNING, json.dumps(overview))
+        with self.assertRaises(registry.RegistryError):
+            ai_cli.api_request({"op": "raw-automation", "agent": agent_id, "enabled": True})
+        ai_cli.api_request({"op": "raw-automation", "agent": agent_id, "enabled": True, "acceptRawAutomation": True})
+        self.assertEqual(ai_cli.api_request({"op": "overview"})["agents"][0]["modes"][policy.RAW_CAPABILITY], "allow")
+        ai_cli.api_request({"op": "raw-automation", "agent": agent_id, "enabled": False})
+        self.assertEqual(ai_cli.api_request({"op": "overview"})["agents"][0]["modes"][policy.RAW_CAPABILITY], "block")
         ai_cli.api_request({"op": "pause", "agent": agent_id, "paused": True})
         ai_cli.api_request({"op": "stop", "stopped": True})
         self.assertTrue(ai_cli.api_request({"op": "overview"})["stopped"])

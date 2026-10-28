@@ -12,7 +12,15 @@
    request file. This module, in the user's Nulavio window, notices it, shows
    the request page, and the user's answer goes back through the tools. In an
    AI Workspace (pref nulavio.ai.workspace) it never shows or answers
-   requests, because the agent drives that window; it shows who does. */
+   requests, because the agent drives that window; it shows who does.
+
+   Window states (UX1): in a window an agent drives, a bar the user cannot
+   close names the agent, its level and where it acts (its AI Workspace, or
+   one of the user's own profiles: pref nulavio.ai.target), with "Parar
+   agente" (pauses that agent). When the bridge hands the AI Workspace's
+   endpoint over (raw automation, file nulavio-raw.json in the profile), a
+   critical bar replaces it until the window closes. The root element's
+   nulavio-state attribute carries "ai", "ai-profile" and "raw" for the theme. */
 
 const lazy = {};
 ChromeUtils.defineESModuleGetters(lazy, {
@@ -24,7 +32,14 @@ ChromeUtils.defineESModuleGetters(lazy, {
 
 const SHELL_ID = "shell@nulavio.net";
 const WORKSPACE_PREF = "nulavio.ai.workspace";
+const TARGET_PREF = "nulavio.ai.target";
+const TARGET_LABEL_PREF = "nulavio.ai.target.label";
+const RAW_MARKER = "nulavio-raw.json"; // launcher/nulavio_launcher/ai/workspace.py RAW_MARKER
+const BAR = "nulavio-ai-workspace";
+const RAW_BAR = "nulavio-ai-raw";
+const STATE_ATTR = "nulavio-state";
 const POLL_MS = 1500;
+const RAW_POLL_MS = 1000;
 const ID_RE = /^[0-9a-f]{16}$/;
 const AGENT_RE = /^ag-[0-9a-f]{12}$/;
 const ANSWERS = new Set(["once", "session", "deny"]);
@@ -70,6 +85,10 @@ function pageOf(browser) {
 class AI {
   #timer = null;
   #shown = new Set();
+  #bar = null; // in a window an agent drives: { agent, target, texts, raw, paused, failed }
+  #rawTimer = null;
+  #observing = false;
+  #renders = new WeakMap(); // window -> the last bar update, so updates never overlap
 
   /** The agent driving this window, if any. "agent:pid" (one of the user's profiles, opened for an agent)
       counts only while that bridge process lives; a bare agent id is an AI Workspace. */
@@ -94,7 +113,19 @@ class AI {
   }
 
   change(id, op, details = {}) {
-    const allowed = ["autonomy", "grant", "clear-grant", "domains", "profiles", "routes", "pause", "revoke", "remove", "rotate-token"];
+    const allowed = [
+      "autonomy",
+      "grant",
+      "clear-grant",
+      "raw-automation",
+      "domains",
+      "profiles",
+      "routes",
+      "pause",
+      "revoke",
+      "remove",
+      "rotate-token",
+    ];
     if (!allowed.includes(op)) {
       fail("bad-request");
     }
@@ -316,22 +347,126 @@ class AI {
     }
   }
 
-  /** In an AI Workspace: say plainly who drives this window, in every browser window. */
-  async markWorkspace(text) {
-    if (!(await this.workspaceAgent())) {
+  /** Where the agent driving this window acts: its AI Workspace, or one of the user's own profiles (by name). */
+  workspaceTarget() {
+    // Without the pref (an older launcher), "agent:pid" is only ever written into one of the user's profiles.
+    const legacy = Services.prefs.getStringPref(WORKSPACE_PREF, "").includes(":") ? "profile" : "workspace";
+    const kind = Services.prefs.getStringPref(TARGET_PREF, legacy) === "profile" ? "profile" : "workspace";
+    return { kind, profile: kind === "profile" ? Services.prefs.getStringPref(TARGET_LABEL_PREF, "") : null };
+  }
+
+  /** In a window an agent drives: say plainly who drives it, at which level and where, in every browser
+      window, in a bar that cannot be closed, with "Parar agente". The texts come from the Shell's locales:
+      text (normal), rawText, pausedText, failedText, stopLabel. */
+  async markWorkspace(texts = {}) {
+    const agent = await this.workspaceAgent();
+    if (!agent) {
       return;
     }
-    const mark = win => {
-      const box = win.gNotificationBox;
-      if (!box || box.getNotificationWithValue("nulavio-ai-workspace")) {
-        return;
-      }
-      box.appendNotification("nulavio-ai-workspace", { label: text, priority: box.PRIORITY_INFO_HIGH }, []);
-    };
-    for (const win of Services.wm.getEnumerator("navigator:browser")) {
-      mark(win);
+    const target = this.workspaceTarget();
+    const previous = this.#bar;
+    this.#bar = { agent, target, texts: { ...texts }, raw: previous?.raw ?? false, paused: false, failed: false };
+    this.#renderAll();
+    if (!this.#observing) {
+      this.#observing = true;
+      Services.obs.addObserver(subject => this.#render(subject), "browser-delayed-startup-finished");
     }
-    Services.obs.addObserver(subject => mark(subject), "browser-delayed-startup-finished");
+    if (target.kind === "workspace") {
+      this.#watchRaw(); // raw automation is only ever offered for an AI Workspace
+    }
+  }
+
+  #renderAll() {
+    for (const win of Services.wm.getEnumerator("navigator:browser")) {
+      this.#render(win);
+    }
+  }
+
+  #render(win) {
+    const next = (this.#renders.get(win) ?? Promise.resolve()).then(() => this.#paint(win)).catch(console.error);
+    this.#renders.set(win, next);
+    return next;
+  }
+
+  async #paint(win) {
+    const bar = this.#bar;
+    const box = win?.gNotificationBox;
+    if (!bar || !box || win.closed) {
+      return;
+    }
+    const root = win.document.documentElement;
+    const tokens = new Set((root.getAttribute(STATE_ATTR) ?? "").split(/\s+/).filter(Boolean));
+    tokens.add("ai");
+    tokens[bar.target.kind === "profile" ? "add" : "delete"]("ai-profile");
+    tokens[bar.raw ? "add" : "delete"]("raw");
+    root.setAttribute(STATE_ATTR, [...tokens].join(" "));
+
+    const { texts } = bar;
+    const label = bar.failed ? texts.failedText : bar.paused ? texts.pausedText : bar.raw ? texts.rawText : texts.text;
+    for (const value of [BAR, RAW_BAR]) {
+      const old = box.getNotificationWithValue(value);
+      if (old) {
+        box.removeNotification(old, true);
+      }
+    }
+    const priority = bar.raw
+      ? box.PRIORITY_CRITICAL_HIGH
+      : bar.target.kind === "profile"
+        ? box.PRIORITY_WARNING_HIGH // the user's own profile, with their signed-in sessions
+        : box.PRIORITY_INFO_HIGH;
+    const buttons = bar.paused ? [] : [{ label: texts.stopLabel, callback: () => (this.#stopAgent(), true) }];
+    // dismissable = false: closing the bar would leave the window looking like the user's own.
+    await box.appendNotification(bar.raw ? RAW_BAR : BAR, { label: String(label ?? ""), priority }, buttons, false, false);
+  }
+
+  /** "Parar agente": pauses this window's agent (resume only from the user's own Settings). Clicking it can only
+      stop the agent, so it is safe in the window the agent drives. */
+  async #stopAgent() {
+    const bar = this.#bar;
+    if (!bar || bar.paused) {
+      return;
+    }
+    try {
+      await api({ op: "pause", agent: agentId(bar.agent), paused: true });
+      bar.paused = true;
+      bar.failed = false;
+    } catch (e) {
+      console.error(e);
+      bar.failed = true;
+    }
+    this.#renderAll();
+  }
+
+  /** Raw automation: the bridge writes RAW_MARKER into this profile when it hands the endpoint over. Once seen
+      (for this agent, from a live bridge), the window stays in that state until it closes. */
+  #watchRaw() {
+    if (this.#rawTimer || this.#bar?.raw) {
+      return;
+    }
+    const file = PathUtils.join(Services.dirsvc.get("ProfD", Ci.nsIFile).path, RAW_MARKER);
+    this.#rawTimer = Cc["@mozilla.org/timer;1"].createInstance(Ci.nsITimer);
+    this.#rawTimer.initWithCallback(() => this.#checkRaw(file).catch(console.error), RAW_POLL_MS, Ci.nsITimer.TYPE_REPEATING_SLACK);
+  }
+
+  async #checkRaw(file) {
+    const bar = this.#bar;
+    if (!bar || bar.raw || !(await IOUtils.exists(file))) {
+      return;
+    }
+    let marker = null;
+    try {
+      marker = await IOUtils.readJSON(file);
+    } catch {
+      return; // being written
+    }
+    const pid = String(marker?.pid ?? "");
+    if (marker?.agent !== bar.agent || !/^\d+$/.test(pid) || !(await IOUtils.exists(`/proc/${pid}`))) {
+      return; // another agent's, or left by a bridge that is gone
+    }
+    bar.raw = true; // latched: removing the file does not take the state away
+    this.#rawTimer?.cancel();
+    this.#rawTimer = null;
+    this.#renderAll();
   }
 }
 

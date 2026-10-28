@@ -46,8 +46,8 @@ What each level can and cannot technically do, beyond the preset table in ADR 00
 |---|---|---|
 | Restricted | Read pages, open public http(s) addresses, take screenshots in its own workspace | Act on pages without a yes in the dialog; reach the local network; run scripts |
 | Assisted | Click and type; with a yes: submit, files, signed-in sessions, purchases | Run scripts, reach the local network, see other profiles |
-| Autonomous | Complete multi-step tasks, submit forms, use files and signed-in sessions without asking | Purchases and account changes, scripts, local network, other profiles: ask until granted; cookies/storage and debugging: blocked until granted |
-| Full control | Everything the user selected, without asking | Open a **locked** profile (needs the Vault key, never a permission); stop pages from doing what pages do; restrict what the agent process itself does outside the bridge |
+| Autonomous | Complete multi-step tasks, submit forms, use files and signed-in sessions without asking | Purchases and account changes, scripts, local network, other profiles: ask until granted; cookies/storage: blocked until granted; raw automation: only through its own opt-in |
+| Full control | Everything except raw automation, without asking: actions on pages, purchases and payments, account changes, private tabs, the profiles in its list, scripts | Raw automation and privileged pages (a separate per-agent opt-in with its own warning, [ADR 0007 amendment of 2026-10-28](../adr/0007-ai-bridge.md#amendment-2026-10-28-raw-automation-leaves-full-control-ux1-d-ux4)); open a **locked** profile (needs the Vault key, never a permission); stop pages from doing what pages do; restrict what the agent process itself does outside the bridge |
 
 ## Integration points
 
@@ -65,13 +65,14 @@ Onboarding in three decisions: choose agent → choose autonomy → connect and 
 | AI & Automation (overview), Connected Agents, Connect New Agent | **S7 done** | Settings section; the configuration is shown and copied, never written by Nulavio |
 | Agent Detected | **S8 done** | Claude Code / Codex found with version; the exact command and the file it changes; run after the click |
 | Choose Autonomy Level, Custom Permissions | **S7 done** | The four levels with one-line consequences; capability rows with allow/ask/block and duration |
-| Full Control Warning | **S7 done** | The text of `policy.FULL_CONTROL_WARNING`; Cancel / Authorize full control (danger), Cancel focused |
-| Agent Permission Request | **S7 done** | `ai/request.html`: agent, autonomy, action, site; Allow once / for this session / Deny (focused); never in an AI Workspace |
+| Full Control Warning | **S7 done; UX1** | The Shell's own text (`aiFullControlBody`: what turns on, and that raw automation is not included), never the tools' English; critical dialog variant with the agent's name; Cancel / Authorize full control (danger), Cancel focused |
+| Raw automation opt-in | **UX1** | A switch per agent ("Automação bruta"), outside the capability list and every level; its own critical warning (`aiRawBody`); off again without a prompt |
+| Agent Permission Request | **S7 done; UX1** | `ai/request.html`: agent and level, action, risk callout (critical / warning / info), site, where the agent acts (its Área de IA or your profile), expiry as a clock time; Deny (filled primary, first, focused) / Allow once (secondary) / Allow until the agent disconnects (quiet); never in an AI Workspace |
 | Authorized Profiles, Authorized Websites | **S7/S8 done** | Per-agent profiles and routes; site list |
 | Agent Activity, Automation History | **S7 done** | From the audit, last 30 days, clearable; per-agent filter later |
 | Active Agent Sessions | **S8 done** | "Connected now" per agent from connect/disconnect events |
 | Background Automation | S7 | Explicit grant with duration |
-| Revoke Agent Access, Emergency Stop, Pause | **S7 done** | Revoke confirmed; stop as a switch; pause/resume per agent |
+| Revoke Agent Access, Emergency Stop, Pause | **S7 done; UX1** | Revoke confirmed; stop as a switch, and while it is on a warning callout at the top of the section with "Retomar"; pause/resume per agent; level badges "Nível: …" (Controle total warning-tinted with an icon, Autônomo warning outline, Pausado/Revogado neutral with an icon) |
 | Agent Connection Error | S8 | Plain reasons: unknown token, revoked, engine missing (today in the agent's MCP log) |
 
-Activity indicator: the AI Workspace window shows the engine's own remote-control marks (robot icon, striped toolbar) and, since S7, a bar naming the agent. Pause, revoke and stop live in the user's own Settings, where the agent cannot click them. Closing a bar does not stop the agent.
+Activity indicator: the AI Workspace window shows the engine's own remote-control marks (robot icon, striped toolbar) and a Nulavio bar the user cannot close (UX1). It names the agent, its level and where it acts: "Área de IA de <agente> · Nível: …", or "<agente> está usando o seu perfil <nome>" in one of the user's profiles (pref `nulavio.ai.target`). It has "Parar agente", which pauses that agent. When the endpoint is handed over (`nulavio-raw.json` in the workspace's profile), a critical bar replaces it until the window closes: "Automação bruta: o Nulavio não verifica nem registra o que acontece nesta janela". The root attribute `nulavio-state` (`ai`, `ai-profile`, `raw`) is there for the window theme. Resume, revoke and the emergency stop live in the user's own Settings, where the agent cannot click them; "Parar agente" can only stop.

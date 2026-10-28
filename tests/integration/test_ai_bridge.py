@@ -23,7 +23,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
 import harness
 from mcp_client import McpClient
 
-from nulavio_launcher.ai import audit, registry
+from nulavio_launcher import engine as engine_mod
+from nulavio_launcher.ai import audit, registry, tools
+from nulavio_launcher.ai.bidi import Bidi, script_result
+from nulavio_launcher.ai.workspace import RAW_MARKER
 from nulavio_launcher.vault import sodium, storage
 from nulavio_launcher.vault.core import Vault
 
@@ -374,10 +377,13 @@ class AiBridgeTest(unittest.TestCase):
         self.assertTrue(harness.wait_until(lambda: not alive(), timeout=60), f"engine left running: {alive()}")
 
     def test_20_raw_automation_needs_debugging_bypasses_policy_and_still_ends_with_stop(self):
-        agent, env = self.agent("autonomous")  # "Privileged debugging" stays blocked until the user allows it
+        agent, env = self.agent("full_control")  # not even Full control includes raw automation (D-UX4)
         c = self.client(env)
-        self.assertIn("Denied by Nulavio", c.call("raw_automation")["content"][0]["text"])
-        registry.grant(agent["id"], "debugging", "allow")
+        self.assertNotIn("raw_automation", [t["name"] for t in c.request("tools/list")["result"]["tools"]])
+        self.assertIn("separate option", c.call("raw_automation")["content"][0]["text"])
+        with self.assertRaises(registry.RegistryError):  # a grant without its own warning does not turn it on
+            registry.grant(agent["id"], "debugging", "allow")
+        registry.set_raw_automation(agent["id"], True, accept=True)
         handed = c.call("raw_automation")
         raw = handed["structuredContent"]
         self.assertFalse(raw["policyApplies"])
@@ -393,6 +399,8 @@ class AiBridgeTest(unittest.TestCase):
         )
         self.assertIn("/page/raw-mode", self.fx.hits)
         self.assertIn("raw automation", c.call("tabs_list")["content"][0]["text"])  # Nulavio's tools are off for it
+        raw_marker = self.home / "data" / "ai" / "workspaces" / agent["id"] / "profile" / RAW_MARKER
+        self.assertEqual(json.loads(raw_marker.read_text())["agent"], agent["id"])  # what the window reads (WCS-01)
         marker = f"{self.home}/"
         engines = [
             p for p in engine_processes("--remote-debugging-port=0") if marker.encode() in Path(f"/proc/{p}/cmdline").read_bytes()
@@ -411,6 +419,121 @@ class AiBridgeTest(unittest.TestCase):
         )
         events = [e for e in audit.read(agent=agent["id"]) if e.get("event") == "raw-ended"]
         self.assertEqual(events[-1]["reason"], "stopped")
+        self.assertFalse(raw_marker.exists())
+
+    # -- window states (UX1: WCS-01, WCS-02, AI-06), read from the engine's own chrome ------------------
+
+    def system_access(self) -> None:
+        """Test-only: let this test read the window's chrome over BiDi. The launcher never sets this variable
+        (engine.launch_env removes every MOZ_REMOTE* knob); it is added here, after that filter."""
+        real = engine_mod.launch_env
+        patcher = mock.patch.object(engine_mod, "launch_env", lambda: {**real(), "MOZ_REMOTE_ALLOW_SYSTEM_ACCESS": "1"})
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    @staticmethod
+    def chrome(bidi: Bidi, expression: str):
+        contexts = bidi.command("browsingContext.getTree", {"moz:scope": "chrome", "maxDepth": 0})["contexts"]
+        window = next(c for c in contexts if c.get("url", "").endswith("/browser.xhtml"))
+        result = bidi.command("script.evaluate", {"expression": expression, "target": {"context": window["context"]},
+                                                  "awaitPromise": True, "resultOwnership": "none"})  # fmt: skip
+        return script_result(result)
+
+    BAR = """JSON.stringify((() => {
+      const box = window.gNotificationBox;
+      const n = box.getNotificationWithValue('nulavio-ai-raw') || box.getNotificationWithValue('nulavio-ai-workspace');
+      const ours = box.allNotifications.filter(x => String(x.getAttribute('value')).startsWith('nulavio-ai'));
+      return {value: n ? n.getAttribute('value') : null, type: n ? n.getAttribute('type') : null,
+              label: n ? n.messageText.textContent.trim() : null, dismissable: n ? n.dismissable : null,
+              buttons: n ? [...n.querySelectorAll('.notification-button')].map(b => b.label) : [], count: ours.length,
+              state: (document.documentElement.getAttribute('nulavio-state') || '').split(' ').filter(Boolean)};
+    })())"""
+
+    def bar(self, bidi: Bidi) -> dict:
+        return json.loads(self.chrome(bidi, self.BAR))
+
+    def message(self, bidi: Bidi, key: str, *subs: str) -> str:
+        """The Shell's own text in the engine's language."""
+        text = self.chrome(bidi, f"WebExtensionPolicy.getByID('shell@nulavio.net').extension.localizeMessage({json.dumps(key)}, "
+                                 f"{json.dumps(list(subs))})")  # fmt: skip
+        self.assertTrue(text and text != key, key)
+        return text
+
+    def stop_from_the_bar(self, bidi: Bidi) -> None:
+        self.chrome(bidi, "window.gNotificationBox.getNotificationWithValue('nulavio-ai-raw') ?"
+                          " window.gNotificationBox.getNotificationWithValue('nulavio-ai-raw')"
+                          ".querySelector('.notification-button').doCommand() :"
+                          " window.gNotificationBox.getNotificationWithValue('nulavio-ai-workspace')"
+                          ".querySelector('.notification-button').doCommand()")  # fmt: skip
+
+    @unittest.skipUnless(harness.nulavio_engine(), "the window states come from the Nulavio Shell")
+    def test_21_the_ai_workspace_window_says_who_drives_it_and_when_nothing_is_checked(self):
+        agent, _ = self.agent("autonomous")
+        registry.set_raw_automation(agent["id"], True, accept=True)
+        self.system_access()
+        bridge = tools.Bridge(agent["id"], "s-window", approver=registry.Approver(), headless=True)
+        self.addCleanup(bridge.close)
+        opened = bridge.call("tab_new", {"url": self.fx.url("/page/window")})
+        self.assertFalse(opened["isError"], opened)
+        bidi = bridge.workspace.bidi
+        self.assertTrue(harness.wait_until(lambda: self.bar(bidi)["value"], timeout=40), self.bar(bidi))
+        bar = self.bar(bidi)
+        level = self.message(bidi, "aiLevel_autonomous")
+        # WCS-02 / AI-06: names the agent and its level, cannot be closed, and has "Parar agente".
+        self.assertEqual(bar["label"], self.message(bidi, "aiWorkspaceBar", agent["name"], level))
+        self.assertEqual(
+            (bar["value"], bar["type"], bar["dismissable"], bar["count"]), ("nulavio-ai-workspace", "info", False, 1)
+        )
+        self.assertEqual(bar["buttons"], [self.message(bidi, "aiStopAgent")])
+        self.assertIn("ai", bar["state"])
+        self.assertNotIn("raw", bar["state"])
+        # WCS-01: the endpoint goes to the agent's own library; the window says that nothing is checked.
+        handed = bridge.call("raw_automation", {})
+        self.assertFalse(handed["isError"], handed)
+        library = Bidi(int(handed["structuredContent"]["endpoint"].split(":")[2].split("/")[0]))
+        self.addCleanup(library.ws.close)
+        self.assertTrue(harness.wait_until(lambda: self.bar(library)["value"] == "nulavio-ai-raw", timeout=20), self.bar(library))
+        bar = self.bar(library)
+        self.assertEqual(bar["label"], self.message(library, "aiWorkspaceBarRaw"))
+        self.assertEqual((bar["type"], bar["dismissable"], bar["count"]), ("critical", False, 1))
+        self.assertIn("raw", bar["state"])
+        # Deleting the file (the agent can) does not take the state away.
+        (bridge.workspace.profile_dir / RAW_MARKER).unlink()
+        time.sleep(2.5)
+        self.assertEqual(self.bar(library)["value"], "nulavio-ai-raw")
+        # "Parar agente" pauses the agent; the bridge's watcher then ends the AI Workspace.
+        workspace = bridge.workspace
+        self.stop_from_the_bar(library)
+        self.assertTrue(harness.wait_until(lambda: registry.get(agent["id"]).get("paused"), timeout=30))
+        self.assertTrue(harness.wait_until(lambda: workspace.process is None, timeout=30), "the workspace kept running")
+        ended = [e for e in audit.read(agent=agent["id"]) if e.get("event") == "raw-ended"]
+        self.assertEqual(ended[-1]["reason"], "paused")
+
+    @unittest.skipUnless(harness.nulavio_engine(), "the window states come from the Nulavio Shell")
+    def test_22_an_agent_in_the_users_profile_is_named_as_such(self):
+        agent, _ = self.agent("autonomous")
+        work = self.home / "user-profiles" / "work"
+        work.mkdir(parents=True)
+        accepted = ('user_pref("termsofuse.acceptedVersion", 4);', 'user_pref("termsofuse.acceptedDate", "1761436800000");')
+        (work / "prefs.js").write_text("\n".join(accepted) + "\n")
+        registry.set_profiles(agent["id"], [{"label": "Trabalho", "path": str(work)}])
+        self.system_access()
+        bridge = tools.Bridge(agent["id"], "s-profile", approver=registry.Approver(), headless=True)
+        self.addCleanup(bridge.close)
+        opened = bridge.call("tab_new", {"url": self.fx.url("/page/own"), "profile": "Trabalho"})
+        self.assertFalse(opened["isError"], opened)
+        bidi = bridge.profiles["Trabalho"].bidi
+        self.assertTrue(harness.wait_until(lambda: self.bar(bidi)["value"], timeout=40), self.bar(bidi))
+        bar = self.bar(bidi)
+        level = self.message(bidi, "aiLevel_autonomous")
+        self.assertEqual(bar["label"], self.message(bidi, "aiWorkspaceBarProfile", agent["name"], "Trabalho", level))
+        self.assertEqual((bar["type"], bar["dismissable"]), ("warning", False))  # the user's own sessions are there
+        self.assertIn("ai-profile", bar["state"])
+        self.stop_from_the_bar(bidi)
+        self.assertTrue(harness.wait_until(lambda: registry.get(agent["id"]).get("paused"), timeout=30))
+        self.assertTrue(harness.wait_until(lambda: self.bar(bidi)["buttons"] == [], timeout=20), self.bar(bidi))
+        self.assertEqual(self.bar(bidi)["label"], self.message(bidi, "aiWorkspaceBarPaused", agent["name"]))
+        self.assertIn("paused", bridge.call("tabs_list", {})["content"][0]["text"])
 
 
 if __name__ == "__main__":

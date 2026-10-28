@@ -10,6 +10,12 @@ remote agent's "recommended preferences" are switched off because they
 disable Safe Browsing, updates and the pop-up blocker for test automation.
 The endpoint listens on 127.0.0.1 on a random port; the engine refuses
 WebSocket upgrades that carry an Origin header (web pages) or a foreign Host.
+
+What the Shell in these windows reads (NulavioAI.sys.mjs): the prefs
+`nulavio.ai.workspace` (which agent drives the window) and `nulavio.ai.target`
+("workspace", or "profile" with `nulavio.ai.target.label` for one of the user's
+own profiles), and the file RAW_MARKER in the profile while the BiDi endpoint is
+handed over (raw automation), so the window can say so.
 """
 
 from __future__ import annotations
@@ -29,6 +35,10 @@ from .. import paths, prefs, profile
 from .bidi import Bidi
 
 APP_ID = "nulavio-ai-workspace"
+# Written into the AI Workspace's profile when raw_automation hands the endpoint over, removed when
+# the workspace starts or stops: {"agent", "pid" (the bridge), "since"}. A cue for the window only;
+# the bridge's own state (Bridge.raw) and its watcher are what end the workspace.
+RAW_MARKER = "nulavio-raw.json"
 WORKSPACE_PREFS: dict[str, object] = {
     # Keep Safe Browsing, updates, the pop-up blocker and the rest of the
     # baseline: never apply the remote agent's test-automation preferences.
@@ -89,6 +99,7 @@ class Workspace:
         # Tells Nulavio's own pages in this window that an agent drives it: they show who, and never
         # answer permission requests here (the agent could click them).
         merged["nulavio.ai.workspace"] = self.agent_id
+        merged["nulavio.ai.target"] = "workspace"
         if self.uploads:
             # Only for agents that may use files. The content sandbox stays on; page processes may
             # also *read* this one folder, where the user puts files meant for upload, and turn a
@@ -101,6 +112,13 @@ class Workspace:
         paths.write_private_file(
             self.profile_dir / "user.js", prefs.render(list(merged.items()), "Nulavio AI Workspace (generated)")
         )
+        (self.profile_dir / RAW_MARKER).unlink(missing_ok=True)  # left by a bridge that did not end cleanly
+
+    def mark_raw(self) -> None:
+        """The endpoint was handed over: the window shows the raw-automation state from now until it closes."""
+        since = time.strftime("%Y-%m-%dT%H:%M:%S%z")
+        paths.write_private_file(self.profile_dir / RAW_MARKER,
+                                 json.dumps({"agent": self.agent_id, "pid": os.getpid(), "since": since}))  # fmt: skip
 
     def command(self) -> list[str]:
         command = [
@@ -159,6 +177,8 @@ class Workspace:
                     os.killpg(self.process.pid, signal.SIGKILL)
                     self.process.wait()
             self.process = None
+        with contextlib.suppress(OSError):
+            (self.profile_dir / RAW_MARKER).unlink(missing_ok=True)
         if self.disposable:
             shutil.rmtree(self.dir, ignore_errors=True)
 
@@ -190,9 +210,10 @@ class ProfileTarget(Workspace):
 
     It opens in its own engine instance only while it is not open elsewhere and
     not locked: an agent never gets a profile's keys, and never takes over a
-    window the user is using. Two temporary lines go into its user.js (no
-    remote-agent test preferences; this window is driven by an agent) and are
-    removed when the agent's session ends.
+    window the user is using. Temporary lines go into its user.js (no
+    remote-agent test preferences; this window is driven by an agent, and it is
+    the user's profile by this name) and are removed when the agent's session
+    ends.
     """
 
     def __init__(self, agent_id: str, label: str, path: Path, *, downloads_dir: Path, headless: bool = False, engine=None):
@@ -227,6 +248,9 @@ class ProfileTarget(Workspace):
         lines = [
             f'user_pref("remote.prefs.recommended", false); {TEMPORARY}',
             f'user_pref("nulavio.ai.workspace", "{self.agent_id}:{os.getpid()}"); {TEMPORARY}',
+            # The window says that an agent uses *this* profile of the user's, not an AI Workspace.
+            f'user_pref("nulavio.ai.target", "profile"); {TEMPORARY}',
+            f"{prefs.format_pref('nulavio.ai.target.label', self.label)} {TEMPORARY}",
         ]
         existing = user_js.read_text(encoding="utf-8") if user_js.exists() else ""
         if existing and not existing.endswith("\n"):

@@ -25,14 +25,30 @@ import time
 from pathlib import Path
 
 from .. import paths
-from .policy import CAPABILITIES, FULL_CONTROL_WARNING, MODES, PRESETS, Decision, effective_mode, in_scope, now
+from .policy import (
+    CAPABILITIES,
+    FULL_CONTROL_WARNING,
+    MODES,
+    PRESETS,
+    RAW_AUTOMATION_WARNING,
+    RAW_CAPABILITY,
+    RISK,
+    Decision,
+    effective_mode,
+    in_scope,
+    now,
+)
 
 CLIENTS = ("claude-code", "codex", "other", "nulavio-assistant")
 NAME_RE = re.compile(r"^[\w .+-]{1,48}$")
 
 
 class RegistryError(RuntimeError):
-    pass
+    """`code` is what the browser shows (a locale key err_<code>); the message is for the CLI and logs."""
+
+    def __init__(self, message: str, code: str | None = None):
+        super().__init__(message)
+        self.code = code
 
 
 def ai_state() -> Path:
@@ -125,7 +141,7 @@ def add(name: str, client: str, autonomy: str, *, domains: list[str] | None = No
     if autonomy not in PRESETS:
         raise RegistryError(f"autonomy must be one of {', '.join(PRESETS)}")
     if autonomy == "full_control" and not accept_full_control:
-        raise RegistryError("full control needs an explicit acceptance: " + FULL_CONTROL_WARNING)
+        raise RegistryError("full control needs an explicit acceptance: " + FULL_CONTROL_WARNING, "full-control-not-accepted")
     clean_domains = sorted({_domain(d) for d in domains or []})
     token = secrets.token_urlsafe(32)
     record = {
@@ -192,7 +208,7 @@ def set_autonomy(agent_id: str, autonomy: str, accept_full_control: bool = False
     if autonomy not in PRESETS:
         raise RegistryError(f"autonomy must be one of {', '.join(PRESETS)}")
     if autonomy == "full_control" and not accept_full_control:
-        raise RegistryError("full control needs an explicit acceptance: " + FULL_CONTROL_WARNING)
+        raise RegistryError("full control needs an explicit acceptance: " + FULL_CONTROL_WARNING, "full-control-not-accepted")
 
     def apply(data):
         agent = data["agents"].get(agent_id)
@@ -205,8 +221,14 @@ def set_autonomy(agent_id: str, autonomy: str, accept_full_control: bool = False
     _update(apply)
 
 
-def grant(agent_id: str, capability: str, mode: str, *, minutes: int | None = None, session: str | None = None) -> dict:
-    """Set one capability to allow/ask/block, forever, for N minutes or for one bridge session."""
+def grant(agent_id: str, capability: str, mode: str, *, minutes: int | None = None, session: str | None = None,
+          accept_raw_automation: bool = False) -> dict:  # fmt: skip
+    """Set one capability to allow/ask/block, forever, for N minutes or for one bridge session.
+
+    Raw automation (policy.RAW_CAPABILITY) is a separate opt-in: allowing or asking for it needs
+    `accept_raw_automation` (the user saw its own warning) unless the agent already has it on;
+    blocking it turns the opt-in off, so turning it on again shows the warning again.
+    """
     if capability not in CAPABILITIES:
         raise RegistryError(f"unknown capability {capability}")
     if mode not in MODES:
@@ -221,10 +243,26 @@ def grant(agent_id: str, capability: str, mode: str, *, minutes: int | None = No
         agent = data["agents"].get(agent_id)
         if agent is None:
             raise RegistryError(f"no agent {agent_id}")
+        if capability == RAW_CAPABILITY:
+            if mode == "block":
+                agent["raw_automation_accepted"] = None
+            elif accept_raw_automation:
+                agent["raw_automation_accepted"] = now().isoformat(timespec="seconds")
+            elif not agent.get("raw_automation_accepted"):
+                raise RegistryError("raw automation needs an explicit acceptance: " + RAW_AUTOMATION_WARNING,
+                                    "raw-automation-not-accepted")  # fmt: skip
         agent["grants"][capability] = entry
 
     _update(apply)
     return entry
+
+
+def set_raw_automation(agent_id: str, enabled: bool, accept: bool = False) -> None:
+    """The per-agent "Raw automation" option: on (allowed until changed, after its warning) or off."""
+    if enabled:
+        grant(agent_id, RAW_CAPABILITY, "allow", accept_raw_automation=accept)
+    else:
+        clear_grant(agent_id, RAW_CAPABILITY)
 
 
 def _change(agent_id: str, fn) -> None:
@@ -317,7 +355,10 @@ def record_client(agent_id: str, executable: str | None) -> bool:
 
 def clear_grant(agent_id: str, capability: str) -> None:
     def apply(data):
-        data["agents"].get(agent_id, {}).get("grants", {}).pop(capability, None)
+        agent = data["agents"].get(agent_id, {})
+        agent.get("grants", {}).pop(capability, None)
+        if capability == RAW_CAPABILITY and agent:
+            agent["raw_automation_accepted"] = None  # back to the level's default: off
 
     _update(apply)
 
@@ -326,14 +367,18 @@ def clear_grant(agent_id: str, capability: str) -> None:
 
 
 class Approver:
-    """Asks the person at the computer. `None` means there is no way to ask (fail closed)."""
+    """Asks the person at the computer. `None` means there is no way to ask (fail closed).
 
-    def ask(self, agent: dict, capability: str, target: str | None) -> str | None:
+    `place`: where the call acts, "" for the agent's AI Workspace or the label of one of the
+    user's own profiles the agent was given.
+    """
+
+    def ask(self, agent: dict, capability: str, target: str | None, place: str = "") -> str | None:
         return None
 
 
 class KDialogApprover(Approver):
-    """A KDE dialog, outside the browser the agent controls. Allow once / for this session / deny."""
+    """A KDE dialog, outside the browser the agent controls. Allow once / until the agent disconnects / deny."""
 
     def __init__(self, executable: str | None = None, timeout: float = 120):
         self.executable = executable or shutil.which("kdialog")
@@ -342,15 +387,17 @@ class KDialogApprover(Approver):
     def available(self) -> bool:
         return bool(self.executable) and bool(os.environ.get("WAYLAND_DISPLAY") or os.environ.get("DISPLAY"))
 
-    def ask(self, agent: dict, capability: str, target: str | None) -> str | None:
+    def ask(self, agent: dict, capability: str, target: str | None, place: str = "") -> str | None:
         if not self.available():
             return None
+        where = f"in your profile {place}" if place else "in its AI Workspace"
         text = (f"{agent['name']} ({agent['autonomy'].replace('_', ' ')}) wants to: {CAPABILITIES[capability]}"
-                + (f"\non {target}" if target else "") + "\n\nOnly allow this if you asked the agent to do it.")  # fmt: skip
+                + (f"\non {target}" if target else "") + f"\n{where}"
+                + "\n\nOnly allow this if you asked the agent to do it.")  # fmt: skip
         try:
             result = subprocess.run(
                 [self.executable, "--title", "Nulavio AI Bridge", "--yes-label", "Allow once",
-                 "--no-label", "Allow for this session", "--cancel-label", "Deny", "--yesnocancel", text],
+                 "--no-label", "Allow until the agent disconnects", "--cancel-label", "Deny", "--yesnocancel", text],
                 capture_output=True, timeout=self.timeout, check=False,
             )  # fmt: skip
         except (OSError, subprocess.TimeoutExpired):
@@ -370,13 +417,15 @@ class BrowserApprover(Approver):
         self.fallback = fallback or Approver()
         self.notice, self.timeout, self.poll = notice, timeout, poll
 
-    def ask(self, agent: dict, capability: str, target: str | None) -> str | None:
+    def ask(self, agent: dict, capability: str, target: str | None, place: str = "") -> str | None:
         folder = requests_dir()
         request_id = secrets.token_hex(8)
         base = folder / request_id
         body = {"id": request_id, "agent_id": agent["id"], "agent": agent["name"], "client": agent.get("client"),
                 "autonomy": agent["autonomy"], "capability": capability, "label": CAPABILITIES[capability],
-                "target": target, "created": now().isoformat(timespec="seconds"),
+                "risk": RISK.get(capability, "critical"), "target": target,
+                "place": {"kind": "profile", "profile": place} if place else {"kind": "workspace"},
+                "created": now().isoformat(timespec="seconds"),
                 "expires": (now() + _dt.timedelta(seconds=self.timeout)).isoformat(timespec="seconds")}  # fmt: skip
         paths.write_private_file(base.with_suffix(".json"), json.dumps(body))
         try:
@@ -384,7 +433,7 @@ class BrowserApprover(Approver):
             while not base.with_suffix(".seen").exists():
                 if time.monotonic() > deadline:
                     base.with_suffix(".json").unlink(missing_ok=True)
-                    return self.fallback.ask(agent, capability, target)
+                    return self.fallback.ask(agent, capability, target, place)
                 time.sleep(self.poll)
             deadline = time.monotonic() + self.timeout
             while time.monotonic() < deadline:
@@ -430,7 +479,7 @@ def default_approver() -> Approver:
 
 
 def decide(agent_id: str, capability: str, *, host: str | None, target: str | None, session_id: str,
-           approver: Approver) -> Decision:  # fmt: skip
+           approver: Approver, place: str = "") -> Decision:  # fmt: skip
     """The single decision point: stop switch, revocation, site scope, grant/preset, then a prompt if needed."""
     agent = load()["agents"].get(agent_id)
     if stopped():
@@ -446,7 +495,7 @@ def decide(agent_id: str, capability: str, *, host: str | None, target: str | No
         return Decision(True, mode, capability, source)
     if mode == "block":
         return Decision(False, mode, capability, source)
-    answer = approver.ask(agent, capability, target)
+    answer = approver.ask(agent, capability, target, place)
     if answer is None:
         return Decision(False, mode, capability, "no-approver")
     if answer == "session":

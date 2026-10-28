@@ -163,7 +163,8 @@ TOOLS: tuple[Tool, ...] = (
     Tool("raw_automation", "Raw automation endpoint",
          "Hand over your AI Workspace's WebDriver BiDi endpoint, for your own automation library (Puppeteer, Selenium, "
          "WebdriverIO). Nulavio does not check, ask about or log what is done through it; Nulavio's other tools stop "
-         "working for the workspace. Needs the user's 'Privileged debugging' permission.", "debugging", _schema({}), False),
+         "working for the workspace. Needs the user's separate 'Raw automation' option (not part of any level).",
+         policy.RAW_CAPABILITY, _schema({}), False),
     Tool("session_state", "Bridge status",
          "Who you are to Nulavio: agent, autonomy, the effective permission for each capability, workspace.",
          None, _schema({}), True),
@@ -228,6 +229,7 @@ class Bridge:
         self._lock = threading.Lock()
         self._target: str | None = None  # the address the current call acts on (for the audit)
         self._downloads_mode: dict[str, bool] = {}
+        self._args: dict = {}  # the current call's arguments (where it acts, for permission requests)
         self.raw = False  # the AI Workspace's endpoint was handed over (raw_automation)
 
     # -- policy ----------------------------------------------------------------------
@@ -235,12 +237,23 @@ class Bridge:
     def _agent(self) -> dict | None:
         return registry.load()["agents"].get(self.agent_id)
 
+    def _place(self) -> str:
+        """Where the current call acts: "" (the AI Workspace) or the label of one of the user's profiles."""
+        tab = self._args.get("tab")
+        if isinstance(tab, str):
+            return self.owner.get(tab) or ""
+        label = self._args.get("profile")
+        url = self._args.get("url")
+        if label is None and isinstance(url, str):
+            label = registry.route_for(self._agent() or {}, urllib.parse.urlsplit(url).hostname)
+        return "" if label in (None, "", "AI Workspace") else str(label)
+
     def require(self, capability: str, url: str | None = None, *, checked: list[str]) -> None:
         if url:
             self._target = url
         host = urllib.parse.urlsplit(url).hostname if url else None
         decision = registry.decide(self.agent_id, capability, host=host, target=policy.origin(url),
-                                   session_id=self.session_id, approver=self.approver)  # fmt: skip
+                                   session_id=self.session_id, approver=self.approver, place=self._place())  # fmt: skip
         checked.append(capability)
         if not decision.allowed:
             if decision.reason in ("revoked", "stopped"):
@@ -280,6 +293,7 @@ class Bridge:
         try:
             validate(tool.schema, arguments)
             with self._lock:
+                self._args = arguments
                 self._sync_downloads()
                 result, target_url = getattr(self, "_t_" + name)(arguments, cancel, checked)
             outcome, decision, reason = "ok", "allow", None
@@ -459,7 +473,7 @@ class Bridge:
     # -- tools -----------------------------------------------------------------------
 
     def _t_raw_automation(self, args, cancel, checked):
-        self.require("debugging", checked=checked)
+        self.require(policy.RAW_CAPABILITY, checked=checked)
         bidi = self._workspace().start()
         workspace = self.workspace
         with contextlib.suppress(Exception):  # free the engine's single BiDi session for the agent's own client
@@ -467,6 +481,7 @@ class Bridge:
         bidi.ws.close()
         workspace.bidi = None
         self.raw = True
+        workspace.mark_raw()  # the window now says "Automação bruta" (WCS-01), until it closes
         self.elements.clear()
         self.owner = {tab: label for tab, label in self.owner.items() if label}
         threading.Thread(target=self._raw_watch, args=(workspace,), name="raw-watch", daemon=True).start()
@@ -739,6 +754,7 @@ def _why(decision: policy.Decision) -> str:
         "paused": "blocked for now: the user paused this agent",
         "out-of-scope": "blocked on this site: it is outside the sites this agent may use",
         "profile-not-authorized": "blocked: that profile is not one this agent may use",
+        "raw-automation-off": "off: raw automation is a separate option the user turns on for this agent in Nulavio",
         "no-approver": "set to 'ask' and there is no way to ask the user right now",
         "denied": "set to 'ask' and the user said no",
     }.get(decision.reason, f"blocked for this agent ({decision.reason})")
