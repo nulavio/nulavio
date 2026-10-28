@@ -113,7 +113,14 @@ check_gitleaks() {
         echo "gitleaks: this clone is shallow; the check needs every commit (actions/checkout: fetch-depth: 0)" >&2
         return 1
     fi
-    run_gitleaks git
+    # gitleaks' own `git log` shows no diff for a merge and leaves out type changes (a symlink
+    # replaced by a file). --remerge-diff shows what a merge's resolution added; git skips it for
+    # octopus merges, so the second pass reads those against their first parent. --text: binary
+    # files (key files) and files that .gitattributes marks as binary are read too.
+    local status=0
+    run_gitleaks git --log-opts="--all --full-history --text --remerge-diff" || status=1
+    run_gitleaks git --log-opts="--all --full-history --text --min-parents=3 --diff-merges=first-parent" || status=1
+    return "$status"
 }
 
 check_staged() {

@@ -1,7 +1,8 @@
 """Security scanners (scripts/security/, ci/sast/, .gitleaks.toml) and pinned build inputs.
 
 The scanners themselves run in CI (job "security") and with scripts/security/scan.sh. These
-tests check their configuration and coverage without the network and without the tools.
+tests check their configuration and coverage without the network. Only GitleaksHistoryTest runs
+a scanner, and only when scan.sh's cache already holds it.
 """
 
 from __future__ import annotations
@@ -9,8 +10,11 @@ from __future__ import annotations
 import hashlib
 import os
 import re
+import secrets
 import shutil
+import string
 import subprocess
+import tempfile
 import tomllib
 import unittest
 from pathlib import Path
@@ -182,6 +186,133 @@ class GitleaksConfigTest(unittest.TestCase):
         for line in (ROOT / ".gitleaksignore").read_text().splitlines():
             if line.strip() and not line.startswith("#"):
                 self.assertRegex(line, r"^[0-9a-f]{40}:[^:\s]+:[\w-]+:\d+$")
+
+
+def tools_cache() -> Path:
+    """Where scan.sh keeps the scanners (looked up in the same order as scan.sh)."""
+    if os.environ.get("NULAVIO_SECURITY_TOOLS"):
+        return Path(os.environ["NULAVIO_SECURITY_TOOLS"])
+    if os.environ.get("RUNNER_TEMP"):
+        return Path(os.environ["RUNNER_TEMP"]) / "nulavio-security-tools"
+    return Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "nulavio-security-tools"
+
+
+def cached_download(tool: str) -> Path | None:
+    """The scanner's pinned release download, if scan.sh's cache has it with the pinned SHA-256."""
+    script = (SECURITY / "fetch_tools.sh").read_text()
+    url = re.search(rf"^url\[{tool}\]=(\S+)$", script, re.M)[1]
+    sha = re.search(rf"^sha\[{tool}\]=(\S+)$", script, re.M)[1]
+    path = tools_cache() / "downloads" / url.rsplit("/", 1)[1]
+    if path.is_file() and hashlib.sha256(path.read_bytes()).hexdigest() == sha:
+        return path
+    return None
+
+
+def fake_token() -> str:
+    """A GitHub token's shape with random characters, made at run time: not a real token, and the
+    repository holds no token-like string."""
+    return "ghp_" + "".join(secrets.choice(string.ascii_letters + string.digits) for _ in range(36))
+
+
+@unittest.skipUnless(shutil.which("git") and shutil.which("bash"), "needs git and bash")
+class GitleaksHistoryTest(unittest.TestCase):
+    """scan.sh gitleaks on a throwaway repository, with a fake token where `git log -p` alone shows
+    nothing: a line added while resolving a merge, an octopus merge, a symlink replaced by a file,
+    a file that .gitattributes marks as binary."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.download = cached_download("gitleaks")
+        if cls.download is None:
+            raise unittest.SkipTest("gitleaks is not in scan.sh's cache, and unit tests download nothing")
+
+    def setUp(self):
+        tmp = Path(tempfile.mkdtemp(prefix="nv-gitleaks-"))
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        downloads = tmp / "tools" / "downloads"
+        downloads.mkdir(parents=True)
+        (downloads / self.download.name).symlink_to(self.download)  # fetch_tools.sh checks it and unpacks it there
+        self.env = {
+            "PATH": os.environ.get("PATH", "/usr/bin:/bin"), "HOME": str(tmp), "TMPDIR": str(tmp), "LC_ALL": "C",
+            "NULAVIO_SECURITY_TOOLS": str(tmp / "tools"), "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": os.devnull,
+            "GIT_AUTHOR_NAME": "Test", "GIT_AUTHOR_EMAIL": "test@example.invalid",
+            "GIT_COMMITTER_NAME": "Test", "GIT_COMMITTER_EMAIL": "test@example.invalid",
+        }  # fmt: skip
+        self.repo = tmp / "repo"
+        (self.repo / "scripts" / "security").mkdir(parents=True)
+        for name in ("scan.sh", "fetch_tools.sh"):
+            shutil.copy2(SECURITY / name, self.repo / "scripts" / "security" / name)
+        for name in (".gitleaks.toml", ".gitleaksignore"):
+            shutil.copy2(ROOT / name, self.repo / name)
+        (self.repo / "README.md").write_text("one\ntwo\nthree\n")
+        self.git("init", "-q", "-b", "main")
+        self.commit("base")
+
+    def git(self, *args: str, check: bool = True) -> str:
+        run = subprocess.run(["git", *args], cwd=self.repo, env=self.env, check=check, capture_output=True, text=True)
+        return run.stdout.strip()
+
+    def commit(self, message: str) -> str:
+        self.git("add", "-A")
+        self.git("commit", "-q", "-m", message)
+        return self.git("rev-parse", "HEAD")
+
+    def findings(self, check: str = "gitleaks") -> set[tuple[str, str, str]]:
+        """(rule, file name, commit) of each finding; scan.sh must fail if and only if there is one."""
+        result = subprocess.run(
+            ["bash", "scripts/security/scan.sh", check], cwd=self.repo, env=self.env, capture_output=True, text=True, timeout=120
+        )
+        found = set()
+        for block in result.stdout.split("\n\n"):
+            fields = dict(re.findall(r"^(RuleID|File|Commit):[ \t]*(\S*)$", block, re.M))
+            if "RuleID" in fields:  # a conflicted file of a merge is named b/<path>, hence the name only
+                found.add((fields["RuleID"], Path(fields["File"]).name, fields.get("Commit", "")))
+        self.assertEqual(result.returncode, 1 if found else 0, result.stdout + result.stderr)
+        return found
+
+    def test_a_clean_history_passes(self):
+        self.assertEqual(self.findings(), set())
+
+    def test_a_secret_added_while_resolving_a_merge(self):
+        self.git("switch", "-q", "-c", "side")
+        (self.repo / "README.md").write_text("one\nside\nthree\n")
+        self.commit("side")
+        self.git("switch", "-q", "main")
+        (self.repo / "README.md").write_text("one\nmain\nthree\n")
+        self.commit("main")
+        self.git("merge", "-q", "side", check=False)  # conflict
+        (self.repo / "README.md").write_text(f'one\nmerged\ntoken = "{fake_token()}"\nthree\n')
+        merge = self.commit("merge side")
+        self.assertEqual(self.findings(), {("github-pat", "README.md", merge)})
+
+    def test_a_secret_added_in_an_octopus_merge(self):
+        for branch in ("a", "b"):
+            self.git("switch", "-q", "-c", branch, "main")
+            (self.repo / f"{branch}.txt").write_text(f"{branch}\n")
+            self.commit(branch)
+        self.git("switch", "-q", "main")
+        (self.repo / "main.txt").write_text("main\n")
+        self.commit("main")
+        self.git("merge", "-q", "--no-commit", "a", "b")
+        with open(self.repo / "README.md", "a") as handle:
+            handle.write(f'token = "{fake_token()}"\n')
+        merge = self.commit("merge a and b")
+        self.assertEqual(len(self.git("rev-list", "--parents", "-n1", merge).split()), 4)
+        self.assertEqual(self.findings(), {("github-pat", "README.md", merge)})
+
+    def test_a_secret_in_a_file_that_replaces_a_symlink(self):
+        (self.repo / "link").symlink_to("README.md")
+        self.commit("link")
+        (self.repo / "link").unlink()
+        (self.repo / "link").write_text(f'token = "{fake_token()}"\n')
+        change = self.commit("the symlink becomes a file")
+        self.assertEqual(self.findings(), {("github-pat", "link", change)})
+
+    def test_gitattributes_cannot_hide_a_file(self):
+        (self.repo / ".gitattributes").write_text("*.txt -diff\n")
+        (self.repo / "notes.txt").write_text(f'token = "{fake_token()}"\n')
+        added = self.commit("notes")
+        self.assertEqual(self.findings(), {("github-pat", "notes.txt", added)})
 
 
 @unittest.skipUnless(shutil.which("git") and shutil.which("bash") and (ROOT / ".git").exists(), "needs git, bash and a checkout")
