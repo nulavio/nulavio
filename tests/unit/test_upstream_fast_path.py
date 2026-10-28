@@ -419,6 +419,76 @@ class WatcherTest(TempDirTest):
         with self.assertRaises(ValueError):
             network.staged("159.0; rm -rf /")
 
+    def test_advisory_listing_that_is_missing_or_not_a_list_fails_closed(self):
+        class Response(io.BytesIO):
+            status = 200
+
+        class Opener:
+            def __init__(self, answer):
+                self.answer = answer
+
+            def open(self, request, timeout):
+                if self.answer == 404:
+                    raise urllib.error.HTTPError(request.full_url, 404, "Not Found", {}, io.BytesIO())
+                return Response(self.answer)
+
+        class Listing(watch_upstream.Offline):
+            """The recorded data, except the advisory listing, which comes from Network with this answer."""
+
+            def __init__(self, root, answer):
+                super().__init__(root)
+                self.network = watch_upstream.Network(opener=Opener(answer), sleep=lambda seconds: None)
+
+            def advisory_names(self, year):
+                return self.network.advisory_names(year)
+
+        root = offline_tree(self.tmp, verified={"158.0.1": (D158, SUBKEY), "159.0": (D159, SUBKEY)})
+        answers = {
+            "listing": ((FIXTURES / "github" / "announce" / "2026.json").read_bytes(), "found"),
+            "404": (404, "unavailable"),
+            "object": (b'{"message": "Moved Permanently"}', "unavailable"),
+            "string": (b'"announce/2026"', "unavailable"),
+        }
+        for label, (answer, status) in answers.items():
+            with self.subTest(answer=label):
+                report = watch_upstream.check(
+                    pinned="158.0.1", pinned_sha256=D158, src=Listing(root, answer), now=at("2026-10-28T00:00:00"), verify=True
+                )
+                target = report["targets"][0]
+                self.assertEqual((target["version"], target["urgency"], target["advisory_status"]), ("159.0", "urgent", status))
+                self.assertEqual(target["target_hours"], 24)
+                self.assertEqual(any(e.startswith("advisories unavailable") for e in report["errors"]), status != "found")
+                self.assertEqual(report["exit_code"], 0)
+
+    def test_only_a_new_years_advisory_listing_may_be_missing(self):
+        class Src:
+            def __init__(self, years):
+                self.years = years
+
+            def advisory_names(self, year):
+                if year not in self.years:
+                    raise watch_upstream.ListingMissing(f"announce/{year}: HTTP 404")
+                return self.years[year]
+
+            def advisory_text(self, year, name):
+                return fixture(f"mfsa/{name}")
+
+        names = [item["name"] for item in json.loads(fixture("github/announce/2026.json"))]
+        new_year = at("2027-01-01T12:00:00")
+        found, _ = watch_upstream.find_advisories(Src({2026: names}), ["159.0"], {"159.0": "2026-10-27"}, new_year)
+        self.assertEqual([a.id for a in found["159.0"]], ["mfsa2026-118"])  # announce/2027 does not exist yet
+        found, _ = watch_upstream.find_advisories(Src({2026: names, 2027: []}), ["159.0"], {"159.0": "2026-10-27"}, new_year)
+        self.assertEqual([a.id for a in found["159.0"]], ["mfsa2026-118"])
+        cases = [
+            ({2027: []}, {"159.0": "2026-10-27"}),  # a past year must list advisories...
+            ({2026: ["README.md"], 2027: []}, {"159.0": "2026-10-27"}),
+            ({2026: names}, {"160.0": "2027-01-01"}),  # ...and so must the year of a release
+            ({2026: names, 2027: ["firefox"]}, {"160.0": "2027-01-01"}),
+        ]
+        for years, days in cases:
+            with self.subTest(years=years, days=days), self.assertRaisesRegex(OSError, "must have advisories"):
+                watch_upstream.find_advisories(Src(years), list(days), days, new_year)
+
     def test_network_retries_then_gives_up(self):
         slept = []
 
