@@ -92,8 +92,19 @@ run_opengrep() {
 run_gitleaks() {
     # Inline "gitleaks:allow" comments are ignored: an exception goes in .gitleaks.toml or
     # .gitleaksignore, with its reason, where review sees it.
+    # gitleaks can log an error (git could not produce a diff, for example when it cannot write
+    # the temporary objects --remerge-diff needs), stop early and still say "no leaks found":
+    # an ERR or FTL line in its log fails the check.
+    local status=0 log=$scratch/gitleaks.log
     "$tools/gitleaks" "$@" --no-banner --redact --verbose --ignore-gitleaks-allow \
-        --config .gitleaks.toml --gitleaks-ignore-path .gitleaksignore .
+        --config .gitleaks.toml --gitleaks-ignore-path .gitleaksignore . 2>"$log" || status=$?
+    cat "$log" >&2
+    # Log lines look like "8:37AM ERR ...", with colour codes around the level.
+    if ((status == 0)) && sed 's/\x1b\[[0-9;]*m//g' "$log" | grep -Eq '^[^ ]+ (ERR|FTL) '; then
+        echo "gitleaks: it logged an error, so the scan may be incomplete" >&2
+        status=1
+    fi
+    return "$status"
 }
 
 check_actionlint() {
@@ -113,11 +124,21 @@ check_gitleaks() {
         echo "gitleaks: this clone is shallow; the check needs every commit (actions/checkout: fetch-depth: 0)" >&2
         return 1
     fi
-    run_gitleaks git
+    # gitleaks' own `git log` shows no diff for a merge and leaves out type changes (a symlink
+    # replaced by a file). --remerge-diff shows what a merge's resolution added; git skips it for
+    # octopus merges, so the second pass reads those against their first parent. --text: binary
+    # files (key files) and files that .gitattributes marks as binary are read too.
+    local status=0
+    run_gitleaks git --log-opts="--all --full-history --text --remerge-diff" || status=1
+    run_gitleaks git --log-opts="--all --full-history --text --min-parents=3 --diff-merges=first-parent" || status=1
+    return "$status"
 }
 
 check_staged() {
-    run_gitleaks git --pre-commit --staged
+    # gitleaks' `git diff` skips binary files (a key file); the "diff" attribute makes git show them.
+    printf '* diff\n' >"$scratch/attributes"
+    GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.attributesFile GIT_CONFIG_VALUE_0=$scratch/attributes \
+        run_gitleaks git --pre-commit --staged
 }
 
 check_shellcheck() {

@@ -2,9 +2,10 @@
 """Is any pinned dependency known to be vulnerable, blocked or stale? (daily; the engine has watch_upstream.py)
 
 * Against OSV.dev: the GitHub Actions (commit SHA plus "# vX.Y.Z"), ruff (requirements/dev.txt),
-  the Gradle wrapper, and every artifact in android/gradle/verification-metadata.xml (direct,
-  transitive and build-time; the ones in android/app/gradle.lockfile ship in the APK). GitHub raises
-  no Dependabot alerts for SHA-pinned actions or for Gradle, so this is their vulnerability signal.
+  Claude Code and Bun (the AI review's downloads, as npm packages), the Gradle wrapper, and every
+  artifact in android/gradle/verification-metadata.xml (direct, transitive and build-time; the ones in
+  android/app/gradle.lockfile ship in the APK). GitHub raises no Dependabot alerts for SHA-pinned
+  actions, Gradle or the AI review's downloads, so this is their vulnerability signal.
 * The pinned extensions against addons.mozilla.org: Mozilla's blocklist, a replaced file for the
   pinned version, and how long the lock has lagged behind AMO's current version.
 * The base images' tag@digest pins against their registries (a newer build is reported, not failed).
@@ -41,6 +42,10 @@ OSV = "https://api.osv.dev/v1/"
 AMO = "https://addons.mozilla.org/api/v5/"
 EXCEPTIONS = ROOT / "docs" / "security" / "vulnerability-exceptions.json"
 APK_LOCKFILE = "android/app/gradle.lockfile"  # the APK's classpath (releaseRuntimeClasspath), nv1 included
+AI_REVIEW = ".github/workflows/ai-review.yml"
+# What the AI review downloads, pinned by version and SHA-256 in that workflow's env lines, which
+# Dependabot cannot see. OSV lists their advisories as npm packages.
+AI_REVIEW_TOOLS = {"CLAUDE_CODE_VERSION": "@anthropic-ai/claude-code", "BUN_VERSION": "bun"}
 EXTENSION_LAG_DAYS = 30
 UNAVAILABLE = (OSError, ValueError, KeyError, TypeError)  # network errors, unexpected or malformed replies
 BATCH = 500  # OSV.dev accepts up to 1000 queries per batch
@@ -120,6 +125,18 @@ def locked_modules(lockfile: Path) -> set[tuple[str, str]]:
     return found
 
 
+def ai_review_tools(workflow: str) -> list[tuple[str, str]]:
+    """(npm package, version) of each program the AI review downloads. A pin that is not found stops
+    the watch (ValueError) instead of silently dropping the package from it."""
+    found = []
+    for variable, package in AI_REVIEW_TOOLS.items():
+        versions = sorted(set(re.findall(rf'^\s*{variable}:\s*"?(\d[\w.+-]*)"?\s*$', workflow, re.M)))
+        if not versions:
+            raise ValueError(f"{AI_REVIEW}: no {variable} line with a version, so {package} would go unwatched")
+        found += [(package, version) for version in versions]
+    return found
+
+
 def inventory(root: Path = ROOT) -> list[Dep]:
     seen: dict[tuple[str, str, str], set[str]] = {}
 
@@ -133,6 +150,8 @@ def inventory(root: Path = ROOT) -> list[Dep]:
             add("GitHub Actions", match.group(1), match.group(2), f".github/workflows/{workflow.name}")
     for match in re.finditer(r"^([A-Za-z0-9_.\-]+)==(\S+)", (root / "requirements" / "dev.txt").read_text(), re.M):
         add("PyPI", match.group(1).lower(), match.group(2), "requirements/dev.txt")
+    for package, version in ai_review_tools((root / AI_REVIEW).read_text()):
+        add("npm", package, version, AI_REVIEW)
     wrapper = (root / "android" / "gradle" / "wrapper" / "gradle-wrapper.properties").read_text()
     if match := re.search(r"distributions/gradle-([0-9.]+)-bin\.zip", wrapper):
         add("Bitnami", "gradle", match.group(1), "android/gradle/wrapper")  # OSV lists Gradle's own advisories there

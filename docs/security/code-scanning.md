@@ -10,7 +10,7 @@ These scanners add to what already runs in the `checks` job: ruff with its `S` r
 |---|---|---|---|
 | `actionlint` | actionlint 1.7.12 (MIT) | The workflows: syntax, expressions, and ShellCheck on every `run:` block | none |
 | `zizmor` | zizmor 1.31.1 (MIT) | The workflows, for security problems: template injection, credentials left in the checkout, broad permissions, dangerous triggers. In CI also its online audits, with the job's read-only token: is each pinned SHA a commit of the action's own repository, and does a pinned action have a known advisory | none |
-| `gitleaks` | gitleaks 8.30.1 (MIT) | Every commit of every branch the clone has, with gitleaks' default rules and one Nulavio rule (private key, keystore or keyring files). Inline `gitleaks:allow` comments are ignored: every exception is in the two files on the right | `.gitleaks.toml`, `.gitleaksignore` |
+| `gitleaks` | gitleaks 8.30.1 (MIT) | Every commit of every branch the clone has, with gitleaks' default rules and one Nulavio rule (private key, keystore, keyring or password database files, such as `.jks`, `.p12`, `.pem`, `.gpg` or `.kdbx`). This includes what a merge's resolution added (also in an octopus merge), a symlink replaced by a file, and binary files or files that `.gitattributes` marks as binary, which gitleaks' own `git log` leaves out. Inline `gitleaks:allow` comments are ignored: every exception is in the two files on the right | `.gitleaks.toml`, `.gitleaksignore` |
 | `shellcheck` | ShellCheck 0.11.0 (GPL-3.0, run as a separate program) | Every shell script in the repository, at every severity: files ending in `.sh` and files starting with a `sh`, `bash`, `dash` or `ksh` `#!` line (14 today) | directives in the scripts |
 | `opengrep` | Opengrep 1.32.0 (LGPL-2.1) | Nulavio's own rules (below) on the code, including `tests/` | `ci/sast/nulavio-rules.yml`, `.semgrepignore` |
 | `opengrep-rules` | Opengrep 1.32.0 | The same rules on their test cases: each must match its "ruleid" lines and no other line | `tests/fixtures/sast/` |
@@ -31,7 +31,7 @@ The tools are cached in `~/.cache/nulavio-security-tools` (or `$NULAVIO_SECURITY
 
 ### Secrets before the commit (optional hook)
 
-Commits go straight to `main`, and the plan has no push protection, so CI finds a secret only after it is on GitHub, when it must already be revoked. The pre-commit hook in `scripts/git-hooks/` runs gitleaks on the staged changes (`scripts/security/scan.sh staged`, under a second) and refuses the commit if it finds one. It is off by default; turn it on in each clone:
+Commits go straight to `main`, and the plan has no push protection, so CI finds a secret only after it is on GitHub, when it must already be revoked. The pre-commit hook in `scripts/git-hooks/` runs gitleaks on the staged changes, binary files included unless a committed `.gitattributes` marks them `binary` or `-diff` (the CI history scan reads those too) (`scripts/security/scan.sh staged`, under a second) and refuses the commit if it finds one. It is off by default; turn it on in each clone:
 
 ```sh
 git config core.hooksPath scripts/git-hooks
@@ -47,7 +47,7 @@ This is git's local configuration, nothing changes on GitHub. `git commit --no-v
 |---|---|
 | `nulavio-py-shell-command` | `shell=True`, `os.system`, `os.popen` and the other ways of running a command through a shell |
 | `nulavio-py-cleartext-request` | `urllib` and `http.client` requests over `http://` to anything but the loopback interface |
-| `nulavio-py-tls-verification-off` | Unverified SSL contexts, `check_hostname = False`, `CERT_NONE`, contexts without a protocol, TLS below 1.2 |
+| `nulavio-py-tls-verification-off` | Unverified SSL contexts, `check_hostname = False`, `CERT_NONE`, contexts without a protocol, TLS below 1.2, and replacing `ssl._create_default_https_context`, which turns the checks off for every later request |
 | `nulavio-py-secret-in-argv` | A password, passphrase, token or key passed as a command-line argument (readable in `/proc/<pid>/cmdline`) |
 | `nulavio-py-engine-sandbox-env` | Starting the engine with `MOZ_*SANDBOX*`, `MOZ_ALLOW_DOWNGRADE`, `MOZ_MARIONETTE*` or `MOZ_REMOTE*` |
 | `nulavio-js-html-sink` | `innerHTML`, `outerHTML`, `insertAdjacentHTML`, `document.write`, `srcdoc`, `on*` attributes in `browser/` |
@@ -58,7 +58,8 @@ This is git's local configuration, nothing changes on GitHub. `git commit --no-v
 | `nulavio-java-tls-verification-off` | Trust managers and host-name verifiers that accept everything |
 | `nulavio-java-default-locale` | `String.format`, `formatted`, `toLowerCase` and `toUpperCase` without a `Locale` in `android/`: in Persian, Arabic or Hindi they write other digits, so the pairing code and the canonical JSON would differ from the desktop's (found and fixed in `Nv1.sasDigits` on 2026-10-27) |
 | `nulavio-android-unsafe-storage-or-manifest` | World-readable files, cleartext traffic, `debuggable` or `allowBackup` in the Companion app |
-| `nulavio-verification-bypass` | `curl -k`, `curl … \| sh`, `--no-check-certificate`, `gpgcheck=0`, `--nogpgcheck`, `trusted=yes`, `pip install` without `--require-hashes`, Gradle dependency verification off, and similar, in scripts, CI, containers, packaging and Gradle files |
+| `nulavio-verification-bypass` | `curl -k`, `curl … \| sh` (also when the command goes on over lines ending in `\`), `--no-check-certificate`, `gpgcheck=0`, `--nogpgcheck`, `trusted=yes`, `pip install` without `--require-hashes`, Gradle dependency verification off (`--dependency-verification`, `-F`), and similar, in scripts, CI, containers, packaging and Gradle files |
+| `nulavio-ci-writes-gradle-verification` | `--write-verification-metadata` (or `-M`) in workflows and CI files: only a person regenerates the Companion's trust anchor, and reviews it |
 | `nulavio-sh-secret-in-argv` | `--password=…`, `--token …`, `sshpass -p` and similar in shell, CI and packaging files |
 
 To add or change a rule, add test cases in `tests/fixtures/sast/nulavio-rules.<ext>`: a `ruleid: <id>` comment above each line that must match and an `ok: <id>` comment above lines that must not. Then run `scripts/security/scan.sh opengrep-rules opengrep`. `tests/unit/test_security_tooling.py` checks that every rule has both kinds of cases.
@@ -70,8 +71,8 @@ To add or change a rule, add test cases in `tests/fixtures/sast/nulavio-rules.<e
 
 | Tool | How |
 |---|---|
-| Opengrep | `# nosemgrep: <rule id> -- <why this line is safe>` on the line (`//` in JavaScript and Java). The unit tests reject a suppression without a rule id and a reason |
-| gitleaks | The finding's fingerprint (`commit:file:rule:line`, printed by gitleaks) in `.gitleaksignore`, under a comment with the reason. `.gitleaks.toml` allowlists only documented test fixtures, by exact file and value |
+| Opengrep | `# nosemgrep: <rule id> -- <why this line is safe>` on the line (`//` in JavaScript and Java), one rule id only. Opengrep also obeys `nosem`, `noopengrep` and other spellings in any case, and a bare one silences every rule on the line: the unit tests reject any form but this one, in every file Opengrep reads, `.github/` included |
+| gitleaks | The finding's fingerprint (`commit:file:rule:line`, printed by gitleaks) in `.gitleaksignore`, under a comment with the reason. In a merge, a file with a conflict is named `b/<path>` in the finding and in its fingerprint. `.gitleaks.toml` allowlists only documented test fixtures, by exact file (with or without that `b/`) and value |
 | ShellCheck | `# shellcheck disable=SC<number> # <reason>` on the line before the command |
 | zizmor | `# zizmor: ignore[<audit>] <reason>` on the line |
 | actionlint | Fix it; actionlint reports real errors in the workflow |
@@ -80,7 +81,7 @@ Never switch a rule or a check off, leave a directory out of a scan, or make the
 
 ## Updating a tool
 
-Change the version, URL and SHA-256 in `scripts/security/fetch_tools.sh` together, in one commit that says why. Take the SHA-256 from the release's checksum file where there is one (actionlint, gitleaks) and compare it with the digest GitHub shows for the asset. Read the release notes: new checks can bring new findings, which the same commit fixes or suppresses. Wait about a week after a release unless it fixes a problem that affects Nulavio. Opengrep 1.33.0 came out on 2026-10-27 and is not adopted yet for that reason.
+Change the version, URL and SHA-256 in `scripts/security/fetch_tools.sh` together, in one commit that says why. Take the SHA-256 from the release's checksum file where there is one (actionlint, gitleaks) and compare it with the digest GitHub shows for the asset. Read the release notes: new checks can bring new findings, which the same commit fixes or suppresses. Wait about a week after a release unless it fixes a problem that affects Nulavio. Opengrep 1.33.0 came out on 2026-10-27 and is not adopted yet for that reason. The daily [dependency watch](dependency-updates.md) does not check these tools yet, so look at each one's security advisories when bumping it.
 
 ## Decisions
 

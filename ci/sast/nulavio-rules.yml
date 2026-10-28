@@ -74,8 +74,12 @@ rules:
     metadata:
       cwe: "CWE-295: Improper certificate validation"
     pattern-either:
-      - pattern: ssl._create_unverified_context(...)
-      - pattern: ssl._create_stdlib_context(...)
+      # Called, or passed on: `ssl._create_default_https_context = ssl._create_unverified_context`
+      # switches off the checks of every later urllib request in the process.
+      - pattern: ssl._create_unverified_context
+      - pattern: ssl._create_stdlib_context
+      - pattern: ssl._create_default_https_context = $X
+      - pattern: setattr(ssl, "_create_default_https_context", ...)
       - pattern: $CTX.check_hostname = False
       - pattern: $CTX.verify_mode = ssl.CERT_NONE
       # Without a protocol, or with the generic one, the context checks nothing.
@@ -404,8 +408,9 @@ rules:
     metadata:
       cwe: "CWE-494: Download of code without integrity check"
     pattern-either:
-      - pattern-regex: \bcurl\b[^\n|]*\s(--insecure|-[a-zA-Z]*k[a-zA-Z]*)(?=\s|$)
-      - pattern-regex: \b(curl|wget)\b[^\n|]*\|\s*(sudo\s+)?(ba|da|z)?sh\b
+      # One command, continued over several lines with "\" too; it ends at |, &, ; or a line end.
+      - pattern-regex: \bcurl\b(?:[^\n|&;]|\\\n)*\s(--insecure|-[a-zA-Z]*k[a-zA-Z]*)(?=\s|$)
+      - pattern-regex: \b(curl|wget)\b(?:[^\n|&;]|\\\n)*\|(?:\s|\\\n)*(sudo\s+)?(ba|da|z)?sh\b
       - pattern-regex: --no-check-certificate
       - pattern-regex: --tls-verify[= ]false
       - pattern-regex: (?i)\bssl_?verify\s*[=:]?\s*(false|0|no)\b
@@ -420,6 +425,24 @@ rules:
       - pattern-regex: --trusted-host\b
       - pattern-regex: \bpip3?\s+install\b(?![^\n]*--require-hashes)
       - pattern-regex: \bdependency[.-]verification[= ]+(off|lenient)\b
+      - pattern-regex: \bgradlew?\b(?:[^\n|&;]|\\\n)*\s-F(?:=|[ \t]*)(off|lenient)\b
+
+  - id: nulavio-ci-writes-gradle-verification
+    message: >-
+      CI never writes Gradle's verification metadata: it is the Companion's trust anchor,
+      and a pipeline that records the hashes it then checks passes on whatever the
+      repositories serve that day. A person regenerates it and reviews the result
+      (docs/security/dependency-updates.md).
+    languages: [generic]
+    severity: ERROR
+    paths:
+      include: [".github/**", "ci/**", "scripts/ci/**"]
+      exclude: ["*.md", "ci/sast/**"] # prose that explains the procedure; these rules
+    metadata:
+      cwe: "CWE-494: Download of code without integrity check"
+    pattern-either:
+      - pattern-regex: --write-verification-metadata\b
+      - pattern-regex: \bgradlew?\b(?:[^\n|&;]|\\\n)*\s-M(?:=|[ \t]*)(sha|md5|pgp)
 
   - id: nulavio-sh-secret-in-argv
     message: >-
