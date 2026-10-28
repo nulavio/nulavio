@@ -6,7 +6,12 @@ pull request only as data:
 
 - the diff between the merge base and the head commit, made by git with
   ``--no-ext-diff --no-textconv`` (so nothing in the pull request can make git
-  run a program) and the user's and system's git configuration ignored;
+  run a program), the user's and system's git configuration ignored, and git
+  attributes read from the base commit (``--attr-source``, Git 2.41 or later), so a
+  ``.gitattributes`` in the pull request cannot hide a file from the diff by
+  marking it binary or ``-diff``;
+- the number of files git still shows only as binary (``binary_files``): the
+  model cannot read them, so the comment says they need a human look;
 - the title, description, author and branch names, saved to
   ``pr-meta.untrusted.json`` and never interpolated into a command.
 
@@ -21,7 +26,9 @@ already holds both commits, which is kept.
 
 Environment: BASE_SHA, HEAD_SHA, GITHUB_EVENT_PATH (unless --gh-view) and, in
 Actions, GITHUB_OUTPUT. Outputs: ``status`` (``ready`` or ``too-large``),
-``diff_bytes`` and ``schema`` (the compact output schema for ``--json-schema``).
+``diff_bytes``, ``binary_files`` and ``schema`` (the compact output schema for
+``--json-schema``). Files: ``pr.diff.txt``, ``pr.stat.txt``, ``pr.binary.txt``
+(the binary paths, one per line) and ``pr-meta.untrusted.json``.
 """
 
 from __future__ import annotations
@@ -90,12 +97,31 @@ def event_from_gh_view(view: dict) -> dict:
 
 
 def git_diff(repo: Path, base_sha: str, head_sha: str, *extra: str) -> bytes:
+    # --attr-source: attributes come from the trusted base commit, not from the pull request's .gitattributes.
     return subprocess.run(
-        ["git", "-C", str(repo), *GIT_DIFF, *extra, f"{base_sha}...{head_sha}"],
+        ["git", "-C", str(repo), f"--attr-source={base_sha}", *GIT_DIFF, *extra, f"{base_sha}...{head_sha}"],
         check=True,
         capture_output=True,
         env={**os.environ, **GIT_ENV},
     ).stdout
+
+
+def binary_paths(numstat: bytes) -> list[str]:
+    """Paths that ``git diff --numstat -z`` reports as binary (``-`` instead of line counts)."""
+    fields, paths = numstat.split(b"\0"), []
+    index = 0
+    while index < len(fields):
+        record = fields[index]
+        index += 1
+        if not record:
+            continue
+        added, deleted, path = [*record.split(b"\t", 2), b"", b""][:3]
+        if not path:  # a rename: the old and new names follow as separate fields
+            path = fields[index + 1] if index + 1 < len(fields) else b""
+            index += 2
+        if added == b"-" and deleted == b"-":
+            paths.append(path.decode("utf-8", "replace"))
+    return paths
 
 
 def write_outputs(values: dict[str, str]) -> None:
@@ -115,18 +141,20 @@ def prepare(repo: Path, out: Path, base_sha: str, head_sha: str, event: dict, *,
     try:
         diff = git_diff(repo, base_sha, head_sha)
         stat = git_diff(repo, base_sha, head_sha, "--stat=200")
+        binary = binary_paths(git_diff(repo, base_sha, head_sha, "--numstat", "-z"))
     finally:
         if delete_repo:
             shutil.rmtree(repo, ignore_errors=True)
     (out / "pr-meta.untrusted.json").write_text(json.dumps(pr_metadata(event), indent=2) + "\n", encoding="utf-8")
     (out / "pr.stat.txt").write_bytes(stat)
+    (out / "pr.binary.txt").write_text("".join(f"{path}\n" for path in binary), encoding="utf-8")
     status = "ready"
     if len(diff) > MAX_DIFF_BYTES:
         status = "too-large"
         print(f"::notice title=AI review skipped::the diff is {len(diff)} bytes, over the {MAX_DIFF_BYTES}-byte limit")
     else:
         (out / "pr.diff.txt").write_bytes(diff)
-    return {"status": status, "diff_bytes": str(len(diff)), "schema": compact_schema()}
+    return {"status": status, "diff_bytes": str(len(diff)), "binary_files": str(len(binary)), "schema": compact_schema()}
 
 
 def main(argv: list[str] | None = None) -> int:

@@ -62,7 +62,7 @@ Pushes to branches cost no Actions minutes: CI runs on pushes to `main` and on p
 ### When it runs
 
 - When a pull request is opened or marked ready for review, and when someone adds the label `ai-review` (remove and add it again to review new pushes). Not on every push, to save Actions minutes.
-- Only for pull requests that touch `.github/`, `android/`, `bin/`, `browser/`, `ci/`, `launcher/`, `packaging/`, `requirements/`, `scripts/`, `site/`, `tests/`, `docs/security/`, `docs/architecture/`, `docs/adr/`, `pyproject.toml` or `SECURITY.md`. Pull requests that touch only other files (for example `docs/product/` or `docs/brand/`) are never reviewed, not even with the label.
+- For any pull request that touches something other than `docs/brand/`, `docs/design/`, `docs/product/`, `docs/research/`, `LICENSE`, `LICENSES.md` and `.editorconfig`. New directories, agent instruction files (`CLAUDE.md`, `AGENTS.md`, `.claude/`) and scanner settings are covered without changing the workflow. A pull request that touches only the excluded files is never reviewed, not even with the label.
 - Skipped, before any runner starts: drafts; branches from forks; pull requests opened by bots (unless a person adds the label); the label `no-ai-review`; more than 80 changed files or more than 4,000 added or 4,000 deleted lines; the repository variable `AI_REVIEW` set to `off`.
 - A diff over 1.5 MB gets a comment saying it needs a human-only review.
 - A newer review of the same pull request cancels the running one. Adding `no-ai-review` cancels it too.
@@ -70,7 +70,7 @@ Pushes to branches cost no Actions minutes: CI runs on pushes to `main` and on p
 ### How it is locked down
 
 - `pull_request_target`: the workflow, the instructions and the output schema always come from `main`, so a pull request cannot change its own reviewer. Changes to them take effect only after they are merged.
-- Nothing from the pull request runs. Its head is checked out into `.ai-review/head` only so git can compute the diff (`--no-ext-diff --no-textconv`), then deleted ([`ai_review_input.py`](../../scripts/ci/ai_review_input.py)).
+- Nothing from the pull request runs. Its head is checked out into `.ai-review/head` only so git can compute the diff (`--no-ext-diff --no-textconv`), then deleted ([`ai_review_input.py`](../../scripts/ci/ai_review_input.py)). Git attributes come from `main` (`--attr-source`), so a `.gitattributes` in the pull request cannot hide a file from the diff by marking it binary. Files git still shows only as binary (a NUL byte in the content is enough) cannot be read by the model: the comment gives their number, and the model is told to flag any that look like code or configuration.
 - Job "review" holds the model credential with a read-only GitHub token and only the Read, Grep and Glob tools, limited to the working directory (no shell, network, edit or MCP tools, no hooks, `.git/` unreadable). Its only output is JSON that must match [`schema.json`](../../.github/ai-review/schema.json).
 - Job "publish" never runs the model. [`post_ai_review.py`](../../scripts/ci/post_ai_review.py) from `main` validates the JSON again, drops findings about files that do not exist, removes invisible and bidirectional characters, redacts secret-like strings, neutralises mentions and HTML comments, shows every model-written text inside a code fence, and creates or updates one comment marked `<!-- nulavio-ai-review -->`. It cannot approve or request changes.
 - Claude Code and Bun are downloaded by version and checked against SHA-256 pins. The Claude Code pin comes from a release manifest whose signature [`verify_claude_code_release.py`](../../scripts/upstream/verify_claude_code_release.py) checks against Anthropic's pinned key; a unit test checks the pin against that signed manifest.
@@ -118,7 +118,7 @@ Known gaps: the action installs its own dependencies with `bun install --product
 
 ### Local review
 
-`scripts/review/ai_review_local.sh <number>` runs the same review on your machine with your own Claude Code login: no Actions minutes, no secret on GitHub. It fetches the pull request's head as git objects, reviews it from a throwaway worktree of `origin/main` with the same tools, settings and instructions, and prints the comment. With `--post` it asks, then posts the comment as you. Your machine holds real secrets (the Safe Browsing key, later signing keys); the working-directory limit and the read-only tools are what keep them out of reach, so do not loosen them. Claude Code's interactive `/code-review` is another option.
+`scripts/review/ai_review_local.sh <number>` runs the same review on your machine with your own Claude Code login: no Actions minutes, no secret on GitHub. It fetches the pull request's head as git objects, reviews it from a throwaway worktree of `origin/main` with the same tools, settings and instructions, and prints the comment. With `--post` it asks, then posts the comment as you. It needs Git 2.41 or later (for `--attr-source`). Your machine holds real secrets (the Safe Browsing key, later signing keys); the working-directory limit and the read-only tools are what keep them out of reach, so do not loosen them. Claude Code's interactive `/code-review` is another option.
 
 ## Emergency path: engine security update
 

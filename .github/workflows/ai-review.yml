@@ -21,23 +21,20 @@ on:
   pull_request_target: # zizmor: ignore[dangerous-triggers] -- runs main's copy; the PR is read as a diff, never executed
     types: [opened, ready_for_review, labeled]
     branches: [main]
+    # Every path except documentation that cannot change behaviour or security claims, so new
+    # directories, agent instruction files (CLAUDE.md, AGENTS.md, .claude/) and scanner settings are
+    # reviewed too. Order matters: a later "!" pattern excludes what an earlier pattern matched.
     paths:
-      - ".github/**"
-      - "android/**"
-      - "bin/**"
-      - "browser/**"
-      - "ci/**"
-      - "launcher/**"
-      - "packaging/**"
-      - "requirements/**"
-      - "scripts/**"
-      - "site/**"
-      - "tests/**"
-      - "docs/security/**"
-      - "docs/architecture/**"
-      - "docs/adr/**"
-      - "pyproject.toml"
-      - "SECURITY.md"
+      - "**"
+      - ".*"
+      - ".*/**"
+      - "!docs/brand/**"
+      - "!docs/design/**"
+      - "!docs/product/**"
+      - "!docs/research/**"
+      - "!LICENSE"
+      - "!LICENSES.md"
+      - "!.editorconfig"
 
 permissions: {}
 
@@ -66,11 +63,12 @@ jobs:
     permissions:
       contents: read # the base branch and, as data, the pull request head
       pull-requests: read # the action reads the pull request
-      id-token: write # Workload Identity Federation to the Claude API; the action hides it from Claude
+      id-token: write # Workload Identity Federation to the Claude API (unused with an API key); the action hides it from Claude
     outputs:
       mode: ${{ steps.auth.outputs.mode }}
       status: ${{ steps.input.outputs.status }}
       diff_bytes: ${{ steps.input.outputs.diff_bytes }}
+      binary_files: ${{ steps.input.outputs.binary_files }}
       result: ${{ steps.claude.outputs.structured_output }}
     steps:
       - name: Model credential (the review stays off until one is configured)
@@ -201,6 +199,7 @@ jobs:
           REVIEW_RESULT: ${{ needs.review.result }}
           INPUT_STATUS: ${{ needs.review.outputs.status }}
           DIFF_BYTES: ${{ needs.review.outputs.diff_bytes }}
+          BINARY_FILES: ${{ needs.review.outputs.binary_files }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           BASE_SHA: ${{ github.sha }}

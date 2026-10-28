@@ -14,6 +14,8 @@ and it does so deterministically:
   secret-like strings, neutralises @mentions and HTML comments, and shows
   every model-written field as plain text inside a code fence longer than any
   backtick run in it (no links, images, HTML or mentions);
+- it says, without asking the model, how many files git showed only as binary
+  (the model could not read them);
 - it caps the comment below GitHub's size limit;
 - it creates or updates one issue comment marked ``<!-- nulavio-ai-review -->``.
   It never calls the reviews API, so it can never approve or request changes.
@@ -49,6 +51,7 @@ MAX_RAW_RESULT = 1_000_000
 REPO_RE = re.compile(r"^[A-Za-z0-9_.-]{1,100}/[A-Za-z0-9_.-]{1,100}$")
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 PR_RE = re.compile(r"^[1-9][0-9]{0,9}$")
+COUNT_RE = re.compile(r"^[0-9]{1,6}$")
 LABEL_RE = re.compile(r"^[A-Za-z0-9 ._(),:/-]{1,120}$")
 RUN_URL_RE = re.compile(r"^https://[A-Za-z0-9.-]+/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/actions/runs/[0-9]+$")
 PATH_RE = re.compile(r"^[A-Za-z0-9._@+-]+(?:/[A-Za-z0-9._@+-]+)*$")
@@ -249,6 +252,7 @@ class Context:
     base_sha: str = ""
     source: str = "local run"
     run_url: str = ""
+    binary_files: int = 0
 
 
 class Sanitiser:
@@ -294,6 +298,11 @@ def render(review: Review, ctx: Context) -> tuple[str, int]:
     findings = sorted(review.findings, key=lambda f: SEVERITIES.index(f["severity"]))
     counts = ", ".join(f"{sum(f['severity'] == s for f in findings)} {s}" for s in SEVERITIES)
     summary = f"### Summary\n\n{fence(clean(review.summary))}\n"
+    if ctx.binary_files:
+        summary += (
+            f"\n**{ctx.binary_files} file(s) in this change are binary to git** (`Bin` in the file list), so the model "
+            "could not read them. Check them by hand.\n"
+        )
     extra = ""
     if review.injection_attempts:
         quotes = "\n".join(f"{clean(item['file'])}: {clean(item['quote'])}" for item in review.injection_attempts)
@@ -401,6 +410,7 @@ def build_context(args: argparse.Namespace, env: dict) -> Context:
         base_sha=args.base_sha or env.get("BASE_SHA", ""),
         source=args.source or env.get("AI_REVIEW_SOURCE", "") or "local run",
     )
+    binary = args.binary_files or env.get("BINARY_FILES", "") or "0"
     if env.get("GITHUB_RUN_ID") and env.get("GITHUB_SERVER_URL"):
         ctx.run_url = f"{env['GITHUB_SERVER_URL']}/{ctx.repo}/actions/runs/{env['GITHUB_RUN_ID']}"
     problems = [
@@ -412,11 +422,13 @@ def build_context(args: argparse.Namespace, env: dict) -> Context:
             ("base commit", not ctx.base_sha or SHA_RE.match(ctx.base_sha)),
             ("source label", LABEL_RE.match(ctx.source)),
             ("run URL", not ctx.run_url or RUN_URL_RE.match(ctx.run_url)),
+            ("binary file count", COUNT_RE.match(binary)),
         )
         if not ok
     ]
     if problems:
         raise SystemExit(f"invalid {', '.join(problems)}")
+    ctx.binary_files = int(binary)
     return ctx
 
 
@@ -474,6 +486,7 @@ def main(argv: list[str] | None = None, env: dict | None = None, stdin: Any = No
     parser.add_argument("--status", help="ready or too-large (default $INPUT_STATUS)")
     parser.add_argument("--review-result", help="result of the review job (default $REVIEW_RESULT)")
     parser.add_argument("--source", help="model and tool shown in the header (default $AI_REVIEW_SOURCE)")
+    parser.add_argument("--binary-files", help="files git showed only as binary (default $BINARY_FILES)")
     parser.add_argument("--comment-author", help="login whose earlier comment is updated")
     args = parser.parse_args(argv)
     try:

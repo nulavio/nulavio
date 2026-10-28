@@ -75,6 +75,7 @@ BASE_SHA=$base_sha HEAD_SHA=$head_sha python3 -I "$base/scripts/ci/ai_review_inp
   --repo-dir "$base" --gh-view "$work/view.json" --out "$base/.ai-review" >"$work/input.txt"
 status=$(sed -n 's/^status=//p' "$work/input.txt")
 schema=$(sed -n 's/^schema=//p' "$work/input.txt")
+binary_files=$(sed -n 's/^binary_files=//p' "$work/input.txt")
 if [ "$status" != ready ]; then
   echo "$0: the diff is too large for an AI review; it needs a human-only review" >&2
   exit 1
@@ -93,7 +94,8 @@ echo "Reviewing $repo#$pr at $head_sha with $model (read-only tools)..." >&2
     --json-schema "$schema" --output-format json
 ) >"$work/result.json"
 
-post_args=(--stdin --repo "$repo" --pr "$pr" --head-sha "$head_sha" --base-sha "$base_sha" --source "$model, local run")
+post_args=(--stdin --repo "$repo" --pr "$pr" --head-sha "$head_sha" --base-sha "$base_sha" --source "$model, local run"
+  --binary-files "$binary_files")
 python3 -I "$base/scripts/ci/post_ai_review.py" "${post_args[@]}" <"$work/result.json"
 if [ -n "$post" ]; then
   login=$(gh api user --jq .login)

