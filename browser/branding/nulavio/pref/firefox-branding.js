@@ -54,3 +54,49 @@ pref("intl.locale.requested", "");
 // Nulavio Horizon window theme (content/theme/horizon.css). false restores
 // the upstream look, including the GTK colours of the default theme on Linux.
 pref("nulavio.horizon.enabled", true);
+
+// Mozilla's AI features are off (decision D-UX7). The Nulavio assistant is the
+// one AI path, governed by ADR 0007: per-profile consent, the recipient shown
+// before Send, and the bridge's policy for tasks. Mozilla's chatbot would send
+// the selection or the page to a third-party site from the sidebar, the page
+// context menu and the selection shortcut, outside those rules. The same values
+// are in browser/config/prefs/baseline.js for Track A (tests keep them equal).
+// The browser.ai.control.* values are what Firefox's own AI controls write when
+// a person picks "Blocked"; Settings can still turn a feature back on.
+pref("browser.ml.chat.enabled", false);
+pref("browser.ml.chat.page", false);
+pref("browser.ml.chat.menu", false);
+pref("browser.ml.chat.shortcuts", false);
+pref("browser.ai.control.sidebarChatbot", "blocked");
+pref("browser.ai.control.smartTabGroups", "blocked");
+pref("browser.ai.control.linkPreviewKeyPoints", "blocked");
+pref("browser.ai.control.smartWindow", "blocked");
+pref("browser.tabs.groups.smart.enabled", false);
+// Link Preview fetches the linked page in the background with an identifying
+// header before the person opens it: off in 1.0, key points included.
+pref("browser.ml.linkPreview.enabled", false);
+// Local models for extensions (browser.trial.ml), downloaded on demand.
+pref("extensions.ml.enabled", false);
+// Nimbus rollouts can switch features on remotely (Smart Window is one rollout
+// away). Security fixes arrive with engine updates; Remote Settings (OneCRL,
+// CRLite, the add-on blocklist, Safe Browsing lists) are separate and stay on.
+pref("nimbus.rollouts.enabled", false);
+
+// No Mozilla account or Sync in Nulavio 1.0 (decision D-UX8): no account
+// button or sign-in promo in the toolbar and app menu, no Sync, Send Tab or
+// Relay suggestions that need an account.
+pref("identity.fxaccounts.enabled", false);
+// Sidebar launcher tools for new profiles: the engine's list
+// (browser/components/sidebar/SidebarManager.sys.mjs) without the chatbot and
+// without "tabs from other devices", which needs a Mozilla account. The
+// Nulavio assistant adds itself; the person can add or remove tools.
+pref("sidebar.main.tools", "opentabs,bookmarks,history,passwords");
+
+// No Mozilla theme picker in the add-ons manager (Mozilla artwork).
+pref("browser.aboutaddons.novaThemesPickerEnabled", false);
+
+// No default shortcuts on the engine's home page (about:home): the list comes
+// from Remote Settings and starts with "Add-ons for Firefox". Sites the person
+// visits still appear there.
+pref("browser.topsites.useRemoteSetting", false);
+pref("browser.newtabpage.activity-stream.default.sites", "");

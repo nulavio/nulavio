@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import sys
 import tempfile
 import unittest
@@ -88,6 +89,62 @@ class BaselineTest(unittest.TestCase):
         self.assertEqual(values["n"], 4, "last value must win, as in the engine")
         with self.assertRaises(prefs.PrefFileError):
             prefs.format_pref('bad"); evil("', True)
+
+
+MOZILLA_AI_OFF = {  # decision D-UX7: the Nulavio assistant (ADR 0007) is the one AI path
+    "browser.ml.chat.enabled": False,
+    "browser.ml.chat.page": False,
+    "browser.ml.chat.menu": False,
+    "browser.ml.chat.shortcuts": False,
+    "browser.ai.control.sidebarChatbot": "blocked",
+    "browser.ai.control.smartTabGroups": "blocked",
+    "browser.ai.control.linkPreviewKeyPoints": "blocked",
+    "browser.ai.control.smartWindow": "blocked",
+    "browser.tabs.groups.smart.enabled": False,
+    "browser.ml.linkPreview.enabled": False,
+    "extensions.ml.enabled": False,
+    "nimbus.rollouts.enabled": False,
+}
+TRACK_B_ONLY = {  # Mozilla account, promos and artwork in the Nulavio build (D-UX8, WCS-10)
+    "identity.fxaccounts.enabled": False,
+    "browser.aboutaddons.novaThemesPickerEnabled": False,
+    "browser.topsites.useRemoteSetting": False,
+    "browser.newtabpage.activity-stream.default.sites": "",
+}
+
+
+def branding_prefs() -> dict:
+    """pref("name", value[, sticky]); lines of the Track B branding defaults."""
+    text = (ROOT / "browser" / "branding" / "nulavio" / "pref" / "firefox-branding.js").read_text(encoding="utf-8")
+    out = {}
+    for name, raw in re.findall(r'^pref\("([^"]+)",\s*(.+?)(?:,\s*sticky)?\);', text, re.M):
+        out[name] = {"true": True, "false": False}.get(raw, raw.strip('"') if raw.startswith('"') else raw)
+    return out
+
+
+class MozillaAiAndAccountTest(unittest.TestCase):
+    def test_mozilla_ai_is_off_in_both_tracks_with_the_same_values(self):
+        baseline = {p.name: p for p in profile.baseline_prefs()}
+        branding = branding_prefs()
+        for name, value in MOZILLA_AI_OFF.items():
+            with self.subTest(pref=name):
+                self.assertIn(name, baseline, "Track A needs it too (baseline.js)")
+                self.assertEqual(baseline[name].value, value)
+                self.assertEqual(baseline[name].mode, "seed", "a default the person can change, not enforced")
+                self.assertEqual(branding.get(name), value, "Track B default (firefox-branding.js)")
+
+    def test_account_promos_and_mozilla_tiles_are_off_in_the_nulavio_build(self):
+        branding = branding_prefs()
+        for name, value in TRACK_B_ONLY.items():
+            with self.subTest(pref=name):
+                self.assertEqual(branding.get(name), value)
+
+    def test_branding_prefs_weaken_nothing(self):
+        for name, value in branding_prefs().items():
+            check = FORBIDDEN.get(name)
+            if check:
+                self.assertFalse(check(value), f"{name}={value!r} weakens a protection")
+            self.assertFalse(name.startswith(("security.sandbox.", "marionette.", "remote.")), name)
 
 
 class GuardTest(unittest.TestCase):

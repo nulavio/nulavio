@@ -55,6 +55,7 @@ Audit (A0), 2026-10-26:
 - The bridge only governs what goes through it. A CLI agent with shell access runs as the user and can do anything the user can, including editing Nulavio's files or starting its own browser; the bridge does not and cannot prevent that. This is stated in the UI and the threat model.
 - Pages can still do what pages do once loaded (redirects, scripts, requests to the local network); the PDP decides what the *agent* asks for. Engine protections (Safe Browsing, ETP Strict, HTTPS-Only, pop-up blocker, sandboxes) remain the defence for page behaviour.
 - The tool set is smaller than raw BiDi or firefox-devtools-mcp. It grows per milestone (downloads, uploads, network inspection, profiles), each with its capability.
+- The bridge and the built-in assistant are the only AI paths (UX1, decision D-UX7). Mozilla's own AI features would bypass this ADR, so they are off as defaults: the chatbot (`browser.ml.chat.enabled/page/menu/shortcuts`), smart tab groups, Link Preview and its key points, Smart Window (`browser.ai.control.*` = `blocked`, the value Firefox's AI controls write), local models for extensions (`extensions.ml.enabled`) and Nimbus rollouts that could turn them on. Track B sets them in `firefox-branding.js`, Track A seeds the same values from `baseline.js` (a unit test keeps both equal); the person can still turn a feature on in the engine's settings. Verified on the rendered window: `tests/integration/test_mozilla_features.py`.
 
 ## Implementation (S4, 2026-10-26)
 

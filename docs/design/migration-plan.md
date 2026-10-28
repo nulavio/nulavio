@@ -21,7 +21,7 @@ Found during the audit; they change behaviour, not just looks, so they are not m
 
 1. **Address-bar suggestions send keystrokes to the search engine.** Typing "nul" showed Google's trending searches: search suggestions and trending (`browser.search.suggest.enabled`, `browser.urlbar.trending.*`) are upstream defaults that Nulavio does not change. Options: off by default with an onboarding choice (privacy first), or keep on.
 2. **Default search engine is Google** (upstream default for pt-BR). To be chosen in onboarding (M6).
-3. **Default top sites include "Add-ons for Firefox"** (Mozilla's shortcut list). Replace in M3.
+3. ~~**Default top sites include "Add-ons for Firefox"** (Mozilla's shortcut list).~~ Done in UX1 (2026-10-28): the build ships no default shortcuts on about:home (`browser.topsites.useRemoteSetting=false`, empty `default.sites`); sites the person visits still appear.
 
 ## Track A (preview)
 

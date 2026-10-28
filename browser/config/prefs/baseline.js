@@ -58,6 +58,12 @@ user_pref("app.normandy.enabled", false);
 
 // @mode seed
 // @category privacy
+// @why No Nimbus rollouts switch features on remotely (Mozilla's AI features are one rollout away). Remote Settings (OneCRL, CRLite, add-on blocklist, Safe Browsing lists) stay ON.
+// @tradeoff Features Mozilla rolls out gradually arrive with engine updates instead.
+user_pref("nimbus.rollouts.enabled", false);
+
+// @mode seed
+// @category privacy
 // @why No personalised extension recommendations based on browsing.
 // @tradeoff None.
 user_pref("browser.discovery.enabled", false);
@@ -159,6 +165,74 @@ user_pref("browser.search.separatePrivateDefault.featureGate", true);
 // @why Private windows use their own default search engine, chosen independently in Settings.
 // @tradeoff None.
 user_pref("browser.search.separatePrivateDefault.enabled", true);
+
+// --- Mozilla AI features (decision D-UX7; the Nulavio assistant follows ADR 0007) ---
+
+// @mode seed
+// @category privacy
+// @why Mozilla's AI chatbot sends the selection or the page to a third-party chatbot site from the sidebar; off.
+// @tradeoff No chatbot in the sidebar. Turn it on again in Settings > AI controls.
+user_pref("browser.ml.chat.enabled", false);
+
+// @mode seed
+// @category privacy
+// @why No "summarise this page" with the chatbot (it sends the page text to the chatbot site).
+// @tradeoff None while the chatbot is off.
+user_pref("browser.ml.chat.page", false);
+
+// @mode seed
+// @category privacy
+// @why No "Ask an AI chatbot" item in the page context menu.
+// @tradeoff None while the chatbot is off.
+user_pref("browser.ml.chat.menu", false);
+
+// @mode seed
+// @category privacy
+// @why No chatbot shortcut button over selected text.
+// @tradeoff None while the chatbot is off.
+user_pref("browser.ml.chat.shortcuts", false);
+
+// @mode seed
+// @category privacy
+// @why Firefox's AI controls show the chatbot as blocked (the value its own "Blocked" choice writes).
+// @tradeoff None; changeable in Settings > AI controls.
+user_pref("browser.ai.control.sidebarChatbot", "blocked");
+
+// @mode seed
+// @category privacy
+// @why Firefox's AI controls show smart tab groups (a downloaded model that names and fills groups) as blocked.
+// @tradeoff Tab groups still work; names and suggestions are yours to choose.
+user_pref("browser.ai.control.smartTabGroups", "blocked");
+
+// @mode seed
+// @category privacy
+// @why Firefox's AI controls show Link Preview key points (a downloaded model summarising linked pages) as blocked.
+// @tradeoff None while Link Preview is off.
+user_pref("browser.ai.control.linkPreviewKeyPoints", "blocked");
+
+// @mode seed
+// @category privacy
+// @why Firefox's AI controls show Smart Window (an AI window with an online assistant) as blocked.
+// @tradeoff None; changeable in Settings > AI controls.
+user_pref("browser.ai.control.smartWindow", "blocked");
+
+// @mode seed
+// @category privacy
+// @why No smart tab grouping (suggested names and tabs from a downloaded model).
+// @tradeoff Tab groups still work without suggestions.
+user_pref("browser.tabs.groups.smart.enabled", false);
+
+// @mode seed
+// @category privacy
+// @why No Link Preview: it fetches the linked page in the background with an identifying header before you open it.
+// @tradeoff No preview card on long-press or shortcut; open the link to see the page.
+user_pref("browser.ml.linkPreview.enabled", false);
+
+// @mode seed
+// @category privacy
+// @why Extensions cannot run Mozilla's local AI models (browser.trial.ml), which are downloaded on demand.
+// @tradeoff Extensions that need this API do not work.
+user_pref("extensions.ml.enabled", false);
 
 // --- Nulavio shell (preview) ---
 
