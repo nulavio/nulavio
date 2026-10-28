@@ -1,0 +1,44 @@
+{
+  "label": "ux2-after",
+  "engine": "Nulavio 159.0",
+  "runs": 2,
+  "firstPaintMs": {
+    "median": 1202.5,
+    "min": 1166,
+    "max": 1239
+  },
+  "sessionRestoredMs": {
+    "median": 1301.0
+  },
+  "newTabMs": {
+    "median": 49.4,
+    "min": 45.5,
+    "max": 65.2
+  },
+  "shots": [
+    {
+      "shot": "ux2-after-light-1366x768@100.png",
+      "firstPaint": 1166,
+      "sessionRestored": 1266,
+      "name": "Nulavio",
+      "version": "159.0",
+      "newTabMs": [
+        65.22219000000041,
+        45.51354999999967,
+        50.65589099999943
+      ]
+    },
+    {
+      "shot": "ux2-after-dark-1366x768@100.png",
+      "firstPaint": 1239,
+      "sessionRestored": 1336,
+      "name": "Nulavio",
+      "version": "159.0",
+      "newTabMs": [
+        49.882847999999285,
+        45.79512100000011,
+        48.83787200000006
+      ]
+    }
+  ]
+}

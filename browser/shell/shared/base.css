@@ -6,8 +6,9 @@ html {
   background: var(--nv-color-bg-canvas);
   color: var(--nv-color-text-primary);
   font-family: var(--nv-font-family-brand);
-  font-size: 100%;
-  line-height: var(--nv-font-lineHeight-normal);
+  font-size: var(--nv-type-body-size);
+  font-weight: var(--nv-type-body-weight);
+  line-height: var(--nv-type-body-lineHeight);
   -webkit-font-smoothing: antialiased;
 }
 
@@ -27,6 +28,7 @@ body {
   gap: var(--nv-space-8);
 }
 
+::selection { background: var(--nv-color-selection-bg); color: var(--nv-color-selection-text); }
 
-.mono { font-family: var(--nv-font-family-mono); font-size: 0.9375rem; }
+.mono { font-family: var(--nv-font-family-mono); font-size: var(--nv-type-code-size); font-weight: var(--nv-type-code-weight); }
 }

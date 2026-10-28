@@ -110,6 +110,7 @@ class AiUiTest(unittest.TestCase):
             "return {title: d.querySelector('.dialog__title').textContent, body: d.querySelector('.dialog__body').textContent,"
             " className: d.className, role: d.getAttribute('role'), describedBy: d.getAttribute('aria-describedby'),"
             " icon: !!d.querySelector('.dialog__title svg[data-icon=critical]'), focused: document.activeElement.value,"
+            " primary: d.querySelector('button.button--primary')?.value ?? null,"
             " buttons: [...d.querySelectorAll('button')].map(b => b.value)};"
         )
 
@@ -120,6 +121,7 @@ class AiUiTest(unittest.TestCase):
         self.assertIn("dialog--critical", dialog["className"])
         self.assertEqual((dialog["role"], dialog["describedBy"], dialog["icon"]), ("alertdialog", "dialog-body", True))
         self.assertEqual((dialog["focused"], dialog["buttons"]), ("cancel", ["cancel", "confirm"]))
+        self.assertEqual(dialog["primary"], "cancel", "the safe choice must be visually primary in a critical consent")
 
     def switch_to_tab(self, needle: str) -> None:
         for handle in self.m.window_handles():

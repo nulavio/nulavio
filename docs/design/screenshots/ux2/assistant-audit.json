@@ -1,0 +1,338 @@
+[
+  {
+    "tool": "ui_audit",
+    "version": "1.0.0",
+    "url": "moz-extension://ac9ff09c-decd-4768-b8b0-aa6dfbf545c6/assistant/panel.html",
+    "title": "Assistente Nulavio",
+    "viewport": {
+      "width": 318,
+      "height": 616,
+      "dpr": 1,
+      "narrow": true
+    },
+    "colorScheme": "light",
+    "metrics": {
+      "documentHeight": 616,
+      "textElements": 11,
+      "controls": 6,
+      "images": 0,
+      "fontSizes": {
+        "13": 1,
+        "14": 7,
+        "16": 3
+      },
+      "fontFamilies": {
+        "Inter": 11
+      },
+      "textColors": 4,
+      "radii": [
+        "10px",
+        "4px"
+      ],
+      "shadows": 0,
+      "saturatedHues": 1,
+      "headings": [
+        "h1 Assistente Nulavio"
+      ],
+      "firstViewport": {
+        "headings": [
+          "h1 Assistente Nulavio"
+        ],
+        "controls": 6
+      },
+      "rootBackground": "rgb(241, 247, 245)",
+      "rootColor": "rgb(11, 22, 35)",
+      "htmlBackground": "rgb(241, 247, 245)"
+    },
+    "issues": [
+      {
+        "id": "input-zoom",
+        "severity": "warn",
+        "message": "Inputs below 16px make iOS Safari zoom on focus.",
+        "count": 3,
+        "examples": [
+          {
+            "selector": "#ask > fieldset.segmented > label:nth-of-type(1) > input",
+            "detail": "13.3333px"
+          },
+          {
+            "selector": "#ask > fieldset.segmented > label:nth-of-type(2) > input",
+            "detail": "13.3333px"
+          },
+          {
+            "selector": "#prompt",
+            "detail": "14px"
+          }
+        ]
+      },
+      {
+        "id": "font-not-loaded",
+        "severity": "warn",
+        "message": "A declared font is not available, so a fallback renders instead; load it or change the stack.",
+        "count": 1,
+        "examples": [
+          {
+            "detail": "Inter"
+          }
+        ]
+      },
+      {
+        "id": "touch-target",
+        "severity": "info",
+        "message": "5 controls are under 40px on a touch viewport; 44px is the comfortable minimum.",
+        "count": 1,
+        "examples": []
+      }
+    ],
+    "summary": {
+      "error": 0,
+      "warn": 2,
+      "info": 1
+    },
+    "scene": "attached",
+    "requestedTheme": "light"
+  },
+  {
+    "tool": "ui_audit",
+    "version": "1.0.0",
+    "url": "moz-extension://ac9ff09c-decd-4768-b8b0-aa6dfbf545c6/assistant/panel.html",
+    "title": "Assistente Nulavio",
+    "viewport": {
+      "width": 318,
+      "height": 616,
+      "dpr": 1,
+      "narrow": true
+    },
+    "colorScheme": "light",
+    "metrics": {
+      "documentHeight": 616,
+      "textElements": 6,
+      "controls": 1,
+      "images": 0,
+      "fontSizes": {
+        "13": 1,
+        "14": 2,
+        "16": 3
+      },
+      "fontFamilies": {
+        "Inter": 6
+      },
+      "textColors": 4,
+      "radii": [
+        "4px",
+        "10px"
+      ],
+      "shadows": 0,
+      "saturatedHues": 2,
+      "headings": [
+        "h1 Assistente Nulavio",
+        "h2 Parada de emergência ativa"
+      ],
+      "firstViewport": {
+        "headings": [
+          "h1 Assistente Nulavio",
+          "h2 Parada de emergência ativa"
+        ],
+        "controls": 1
+      },
+      "rootBackground": "rgb(241, 247, 245)",
+      "rootColor": "rgb(11, 22, 35)",
+      "htmlBackground": "rgb(241, 247, 245)"
+    },
+    "issues": [
+      {
+        "id": "font-not-loaded",
+        "severity": "warn",
+        "message": "A declared font is not available, so a fallback renders instead; load it or change the stack.",
+        "count": 1,
+        "examples": [
+          {
+            "detail": "Inter"
+          }
+        ]
+      },
+      {
+        "id": "touch-target",
+        "severity": "info",
+        "message": "1 controls are under 40px on a touch viewport; 44px is the comfortable minimum.",
+        "count": 1,
+        "examples": []
+      }
+    ],
+    "summary": {
+      "error": 0,
+      "warn": 1,
+      "info": 1
+    },
+    "scene": "blocked",
+    "requestedTheme": "light"
+  },
+  {
+    "tool": "ui_audit",
+    "version": "1.0.0",
+    "url": "moz-extension://ac9ff09c-decd-4768-b8b0-aa6dfbf545c6/assistant/panel.html",
+    "title": "Assistente Nulavio",
+    "viewport": {
+      "width": 318,
+      "height": 616,
+      "dpr": 1,
+      "narrow": true
+    },
+    "colorScheme": "dark",
+    "metrics": {
+      "documentHeight": 616,
+      "textElements": 11,
+      "controls": 6,
+      "images": 0,
+      "fontSizes": {
+        "13": 1,
+        "14": 7,
+        "16": 3
+      },
+      "fontFamilies": {
+        "Inter": 11
+      },
+      "textColors": 4,
+      "radii": [
+        "10px",
+        "4px"
+      ],
+      "shadows": 0,
+      "saturatedHues": 2,
+      "headings": [
+        "h1 Assistente Nulavio"
+      ],
+      "firstViewport": {
+        "headings": [
+          "h1 Assistente Nulavio"
+        ],
+        "controls": 6
+      },
+      "rootBackground": "rgb(11, 22, 35)",
+      "rootColor": "rgb(241, 247, 245)",
+      "htmlBackground": "rgb(11, 22, 35)"
+    },
+    "issues": [
+      {
+        "id": "input-zoom",
+        "severity": "warn",
+        "message": "Inputs below 16px make iOS Safari zoom on focus.",
+        "count": 3,
+        "examples": [
+          {
+            "selector": "#ask > fieldset.segmented > label:nth-of-type(1) > input",
+            "detail": "13.3333px"
+          },
+          {
+            "selector": "#ask > fieldset.segmented > label:nth-of-type(2) > input",
+            "detail": "13.3333px"
+          },
+          {
+            "selector": "#prompt",
+            "detail": "14px"
+          }
+        ]
+      },
+      {
+        "id": "font-not-loaded",
+        "severity": "warn",
+        "message": "A declared font is not available, so a fallback renders instead; load it or change the stack.",
+        "count": 1,
+        "examples": [
+          {
+            "detail": "Inter"
+          }
+        ]
+      },
+      {
+        "id": "touch-target",
+        "severity": "info",
+        "message": "5 controls are under 40px on a touch viewport; 44px is the comfortable minimum.",
+        "count": 1,
+        "examples": []
+      }
+    ],
+    "summary": {
+      "error": 0,
+      "warn": 2,
+      "info": 1
+    },
+    "scene": "attached",
+    "requestedTheme": "dark"
+  },
+  {
+    "tool": "ui_audit",
+    "version": "1.0.0",
+    "url": "moz-extension://ac9ff09c-decd-4768-b8b0-aa6dfbf545c6/assistant/panel.html",
+    "title": "Assistente Nulavio",
+    "viewport": {
+      "width": 318,
+      "height": 616,
+      "dpr": 1,
+      "narrow": true
+    },
+    "colorScheme": "dark",
+    "metrics": {
+      "documentHeight": 616,
+      "textElements": 6,
+      "controls": 1,
+      "images": 0,
+      "fontSizes": {
+        "13": 1,
+        "14": 2,
+        "16": 3
+      },
+      "fontFamilies": {
+        "Inter": 6
+      },
+      "textColors": 4,
+      "radii": [
+        "4px",
+        "10px"
+      ],
+      "shadows": 0,
+      "saturatedHues": 3,
+      "headings": [
+        "h1 Assistente Nulavio",
+        "h2 Parada de emergência ativa"
+      ],
+      "firstViewport": {
+        "headings": [
+          "h1 Assistente Nulavio",
+          "h2 Parada de emergência ativa"
+        ],
+        "controls": 1
+      },
+      "rootBackground": "rgb(11, 22, 35)",
+      "rootColor": "rgb(241, 247, 245)",
+      "htmlBackground": "rgb(11, 22, 35)"
+    },
+    "issues": [
+      {
+        "id": "font-not-loaded",
+        "severity": "warn",
+        "message": "A declared font is not available, so a fallback renders instead; load it or change the stack.",
+        "count": 1,
+        "examples": [
+          {
+            "detail": "Inter"
+          }
+        ]
+      },
+      {
+        "id": "touch-target",
+        "severity": "info",
+        "message": "1 controls are under 40px on a touch viewport; 44px is the comfortable minimum.",
+        "count": 1,
+        "examples": []
+      }
+    ],
+    "summary": {
+      "error": 0,
+      "warn": 1,
+      "info": 1
+    },
+    "scene": "blocked",
+    "requestedTheme": "dark"
+  }
+]

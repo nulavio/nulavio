@@ -9,7 +9,7 @@
 }
 .card__title {
   margin: 0 0 var(--nv-space-5);
-  font-size: 0.8125rem;
+  font-size: var(--nv-type-caption-size);
   font-weight: var(--nv-font-weight-semibold);
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -24,7 +24,7 @@ kbd {
   border-bottom-width: 2px;
   border-radius: var(--nv-radius-xs);
   font-family: var(--nv-font-family-mono);
-  font-size: 0.75rem;
+  font-size: var(--nv-type-caption-size);
   text-align: center;
   color: var(--nv-color-text-secondary);
   background: var(--nv-color-bg-sunken);
@@ -42,7 +42,7 @@ kbd {
   min-width: 0;
   padding: var(--nv-space-3) var(--nv-space-4);
   font: inherit;
-  font-size: 1rem;
+  font-size: var(--nv-type-body-size);
   color: var(--nv-color-text-primary);
   background: var(--nv-color-bg-surface);
   border: 1px solid var(--nv-color-border-control);
@@ -52,10 +52,11 @@ kbd {
 
 /* Buttons */
 .button {
+  --button-overlay: currentColor;
   appearance: none; /* drawn by Horizon, not the toolkit, so it follows the page theme at once */
   font: inherit;
-  font-size: 0.9375rem;
-  font-weight: var(--nv-font-weight-medium);
+  font-size: var(--nv-type-label-size);
+  font-weight: var(--nv-type-label-weight);
   padding: var(--nv-space-2) var(--nv-space-5);
   border-radius: var(--nv-radius-md);
   border: 1px solid transparent;
@@ -64,6 +65,7 @@ kbd {
   background: transparent;
 }
 .button--primary {
+  --button-overlay: var(--nv-color-text-primary);
   background: var(--nv-color-accent-default);
   color: var(--nv-color-accent-on);
   border-radius: var(--nv-radius-md);
@@ -71,8 +73,8 @@ kbd {
 .button--secondary { border-color: var(--nv-color-border-control); background: var(--nv-color-bg-raised); }
 .button--quiet { color: var(--nv-color-text-secondary); }
 /* The state tokens are opacities: tint with the button's own text colour. */
-.button:hover:not(:disabled) { box-shadow: inset 0 0 0 100vmax color-mix(in srgb, currentColor calc(var(--nv-state-hoverOverlay) * 100%), transparent); }
-.button:active:not(:disabled) { box-shadow: inset 0 0 0 100vmax color-mix(in srgb, currentColor calc(var(--nv-state-pressedOverlay) * 100%), transparent); }
+.button:hover:not(:disabled) { box-shadow: inset 0 0 0 100vmax color-mix(in srgb, var(--button-overlay) calc(var(--nv-state-hoverOverlay) * 100%), transparent); }
+.button:active:not(:disabled) { box-shadow: inset 0 0 0 100vmax color-mix(in srgb, var(--button-overlay) calc(var(--nv-state-pressedOverlay) * 100%), transparent); }
 
 .callout {
   display: flex;
@@ -92,16 +94,16 @@ kbd {
 .result[data-level="ok"]::before { content: "✓ "; color: var(--nv-color-status-secure); }
 .result[data-level="error"] { color: var(--nv-color-status-criticalText); }
 .why summary { cursor: pointer; color: var(--nv-color-text-secondary); }
-.why ul { margin: var(--nv-space-3) 0 0; padding-left: 1.25rem; display: grid; gap: var(--nv-space-2); color: var(--nv-color-text-secondary); font-size: 0.9375rem; }
+.why ul { margin: var(--nv-space-3) 0 0; padding-left: 1.25rem; display: grid; gap: var(--nv-space-2); color: var(--nv-color-text-secondary); font-size: var(--nv-type-label-size); }
 
 
 /* Shared form and list parts (settings page and toolbar popup) */
 
 .stack { display: grid; gap: var(--nv-space-5); }
 .stack--tight { gap: var(--nv-space-3); }
-.hint { margin: 0; font-size: 0.875rem; color: var(--nv-color-text-secondary); }
+.hint { margin: 0; font-size: var(--nv-type-label-size); color: var(--nv-color-text-secondary); }
 .hint--on { color: var(--nv-color-text-primary); }
-.subhead { margin: 0; font-size: 0.9375rem; font-weight: var(--nv-font-weight-semibold); }
+.subhead { margin: 0; font-size: var(--nv-type-label-size); font-weight: var(--nv-font-weight-semibold); }
 .notice {
   margin: 0;
   padding: var(--nv-space-4) var(--nv-space-5);
@@ -145,7 +147,7 @@ kbd {
 @keyframes nv-status-spin { to { transform: rotate(1turn); } }
 
 .status[data-level]:empty::before { content: none; }
-.form-error { margin: 0; color: var(--nv-color-status-criticalText); font-size: 0.875rem; }
+.form-error { margin: 0; color: var(--nv-color-status-criticalText); font-size: var(--nv-type-label-size); }
 .form-error:empty { display: none; }
 .form-error::before {
   content: ""; display: inline-block; inline-size: 1em; block-size: 1em;
@@ -155,11 +157,11 @@ kbd {
 
 .field { display: grid; gap: var(--nv-space-2); min-width: 0; }
 .field--inline { display: inline-grid; }
-.field__label { font-size: 0.875rem; color: var(--nv-color-text-secondary); }
+.field__label { font-size: var(--nv-type-label-size); font-weight: var(--nv-type-label-weight); color: var(--nv-color-text-secondary); }
 .field-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(14rem, 100%), 1fr)); gap: var(--nv-space-4); }
 .input, .select {
   font: inherit;
-  font-size: 0.9375rem;
+  font-size: var(--nv-type-label-size);
   min-height: var(--nv-size-field-height);
   padding: var(--nv-space-2) var(--nv-space-4);
   color: var(--nv-color-text-primary);
@@ -179,6 +181,7 @@ kbd {
 .button:disabled { opacity: var(--nv-state-disabledOpacity); cursor: default; box-shadow: none; }
 /* Destructive: critical text on the raised surface (pairs checked in tokens.json), plus the verb in words */
 .button--danger {
+  --button-overlay: var(--nv-color-bg-canvas);
   color: var(--nv-color-status-criticalText, var(--nv-color-status-critical));
   background: var(--nv-color-bg-raised);
   border-color: currentColor;
@@ -192,7 +195,7 @@ kbd {
   border-radius: var(--nv-radius-pill);
   background: var(--nv-color-accent-tint);
   color: var(--nv-color-text-primary);
-  font-size: 0.75rem;
+  font-size: var(--nv-type-caption-size);
   font-weight: var(--nv-font-weight-medium);
   vertical-align: middle;
 }
@@ -207,20 +210,22 @@ kbd {
   border-radius: 50%;
   background: var(--chip);
   color: var(--nv-color-identity-on);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--nv-color-identity-on) 35%, transparent);
+  box-shadow: inset 0 0 0 1px var(--nv-color-identity-ring);
   font-family: var(--nv-font-family-ui);
   font-weight: var(--nv-font-weight-semibold);
   line-height: 1;
 }
 .chip img { width: 84%; height: 84%; }
 .chip--sm { width: 1.25rem; height: 1.25rem; font-size: 0.6875rem; }
-.chip--md { width: 1.75rem; height: 1.75rem; font-size: 0.875rem; }
-.chip--lg { width: 2.25rem; height: 2.25rem; font-size: 1rem; }
+.chip--md { width: 1.75rem; height: 1.75rem; font-size: var(--nv-type-label-size); }
+.chip--lg { width: 2.25rem; height: 2.25rem; font-size: var(--nv-type-body-size); }
 .chip--neutral { --chip: var(--nv-color-bg-sunken); color: var(--nv-color-text-secondary); box-shadow: none; }
 /* Temporary profile: the neutral identity colour with a dashed ring ("not kept"), same in both themes */
 .chip--temporary {
   box-shadow: none;
-  outline: 2px dashed var(--nv-color-identity-on);
+  background: var(--nv-color-security-temporary-fill);
+  color: var(--nv-color-security-temporary-text);
+  outline: 2px dashed var(--nv-color-security-temporary-edge);
   outline-offset: -2px;
 }
 
@@ -236,13 +241,13 @@ kbd {
 .row:first-child { border-top: 0; padding-top: 0; }
 .row__main { display: grid; gap: var(--nv-space-3); min-width: 0; }
 .row__title { margin: 0; font-weight: var(--nv-font-weight-semibold); overflow-wrap: anywhere; }
-.row__meta { margin: 0; font-size: 0.875rem; color: var(--nv-color-text-secondary); font-family: var(--nv-font-family-mono); overflow-wrap: anywhere; }
+.row__meta { margin: 0; font-size: var(--nv-type-label-size); color: var(--nv-color-text-secondary); font-family: var(--nv-font-family-mono); overflow-wrap: anywhere; }
 .row__end { display: flex; flex-wrap: wrap; gap: var(--nv-space-3); justify-content: flex-end; }
 
 /* Rows without a chip (agents, permissions, activity); a disclosure spans the whole row. */
 .row--plain { grid-template-columns: minmax(0, 1fr) auto; }
 .row--plain > .more { grid-column: 1 / -1; }
-.row__note { margin: 0; font-size: 0.875rem; color: var(--nv-color-text-secondary); overflow-wrap: anywhere; }
+.row__note { margin: 0; font-size: var(--nv-type-label-size); color: var(--nv-color-text-secondary); overflow-wrap: anywhere; }
 fieldset.stack { border: 0; padding: 0; margin: 0; min-width: 0; }
 fieldset.stack > legend { padding: 0; margin-bottom: var(--nv-space-2); }
 .suggest { display: grid; gap: var(--nv-space-1); }
@@ -255,7 +260,7 @@ fieldset.stack > legend { padding: 0; margin-bottom: var(--nv-space-2); }
   height: 1.75rem;
   border-radius: 50%;
   background: var(--chip);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--nv-color-identity-on) 35%, transparent);
+  box-shadow: inset 0 0 0 1px var(--nv-color-identity-ring);
 }
 .swatch input:checked + .swatch__fill {
   box-shadow: 0 0 0 2px var(--nv-color-bg-surface), 0 0 0 4px var(--nv-color-text-primary);
@@ -273,16 +278,16 @@ fieldset.stack > legend { padding: 0; margin-bottom: var(--nv-space-2); }
   color: var(--nv-color-text-primary);
   box-shadow: var(--nv-elevation-3);
 }
-.dialog::backdrop { background: color-mix(in srgb, var(--nv-color-identity-on) 45%, transparent); }
+.dialog::backdrop { background: var(--nv-color-scrim); }
 .dialog__form { display: grid; gap: var(--nv-space-5); }
-.dialog__title { margin: 0; font-size: max(1.25rem, var(--nv-font-size-xl)); font-weight: var(--nv-font-weight-semibold); }
+.dialog__title { margin: 0; font-size: var(--nv-type-section-size); font-weight: var(--nv-type-section-weight); line-height: var(--nv-type-section-lineHeight); }
 .dialog__body { margin: 0; color: var(--nv-color-text-secondary); }
 
 /* Disclosure for less frequent edits (alias, profile details) */
 .more > summary {
   width: fit-content;
   cursor: pointer;
-  font-size: 0.875rem;
+  font-size: var(--nv-type-label-size);
   color: var(--nv-color-text-secondary);
   border-radius: var(--nv-radius-xs);
 }
@@ -335,7 +340,7 @@ a:hover { text-decoration-thickness: 2px; }
 .state-mark--unavailable::before { content: "–"; }
 .state-mark--error { background: var(--nv-color-status-warningTint); color: var(--nv-color-status-warning); }
 .state-mark--error::before { content: "!"; }
-.evidence { margin: 0; padding-left: 1.25rem; display: grid; gap: var(--nv-space-1); font-size: 0.8125rem; color: var(--nv-color-text-secondary); overflow-wrap: anywhere; }
+.evidence { margin: 0; padding-left: 1.25rem; display: grid; gap: var(--nv-space-1); font-size: var(--nv-type-caption-size); color: var(--nv-color-text-secondary); overflow-wrap: anywhere; }
 a.button { display: inline-flex; align-items: center; text-decoration: none; }
 
 /* -- UX1 · agents: request risk, level and state badges, the critical consent (ADR 0007) ------------
@@ -403,9 +408,9 @@ a.button { display: inline-flex; align-items: center; text-decoration: none; }
    it left. Off states (private window, emergency stop, paused) replace the composer. Progress text
    uses the "progress" status level (no check mark): only a finished answer gets one. */
 .assistant__off { margin: 0; padding: var(--nv-space-4); border-radius: var(--nv-radius-md); background: var(--nv-color-bg-sunken); }
-.assistant__off-title { margin: 0; font-size: 1rem; font-weight: var(--nv-font-weight-semibold); display: flex; gap: var(--nv-space-2); align-items: baseline; }
+.assistant__off-title { margin: 0; font-size: var(--nv-type-body-size); font-weight: var(--nv-font-weight-semibold); display: flex; gap: var(--nv-space-2); align-items: baseline; }
 .assistant__off p { margin: 0; }
-.assistant__drift { margin: 0; display: flex; gap: var(--nv-space-2); align-items: baseline; padding: var(--nv-space-2) var(--nv-space-3); border-radius: var(--nv-radius-sm); background: var(--nv-color-bg-sunken); font-size: 0.875rem; overflow-wrap: anywhere; }
+.assistant__drift { margin: 0; display: flex; gap: var(--nv-space-2); align-items: baseline; padding: var(--nv-space-2) var(--nv-space-3); border-radius: var(--nv-radius-sm); background: var(--nv-color-bg-sunken); font-size: var(--nv-type-label-size); overflow-wrap: anywhere; }
 .assistant__chip {
   display: flex;
   align-items: center;
@@ -438,7 +443,7 @@ a.button { display: inline-flex; align-items: center; text-decoration: none; }
 }
 .assistant__chip-remove:hover { box-shadow: inset 0 0 0 100vmax color-mix(in srgb, currentColor calc(var(--nv-state-hoverOverlay) * 100%), transparent); }
 .assistant__offer { justify-self: start; text-align: start; white-space: normal; overflow-wrap: anywhere; }
-.assistant__answer-title { margin: 0; font-size: 0.875rem; font-weight: var(--nv-font-weight-semibold); }
+.assistant__answer-title { margin: 0; font-size: var(--nv-type-label-size); font-weight: var(--nv-font-weight-semibold); }
 
 
 

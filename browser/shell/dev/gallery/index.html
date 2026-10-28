@@ -4,82 +4,91 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="referrer" content="no-referrer">
-  <title>Nulavio · Component gallery · Artificial examples</title>
+  <title data-i18n="galleryPageTitle">Nulavio · Component gallery · Artificial examples</title>
   <link rel="stylesheet" href="../../shared/tokens.css">
   <link rel="stylesheet" href="../../shared/base.css">
   <link rel="stylesheet" href="../../shared/shell.css">
   <link rel="stylesheet" href="gallery.css">
+  <script type="module" src="gallery.js"></script>
 </head>
 <body>
 <main class="page gallery">
   <header class="stack stack--tight">
-    <p class="hint">Nulavio · Development gallery · Farol / Horizon</p>
-    <h1>Shell component states</h1>
-    <p class="notice">Artificial examples only. These specimens cannot send, unlock, grant consent or change preferences. All controls below are inert samples, not product actions. Theme follows your system.</p>
+    <p class="hint" data-i18n="galleryEyebrow">Nulavio · Development gallery · Farol / Horizon</p>
+    <h1 data-i18n="galleryTitle">Shell component states</h1>
+    <p class="notice" data-i18n="galleryNotice">Artificial examples only. These specimens cannot send, unlock, grant consent or change preferences. All controls below are inert samples, not product actions. Theme follows your system.</p>
   </header>
   <div class="gallery__grid">
     <section class="card stack" aria-labelledby="buttons-title">
-      <h2 id="buttons-title">Buttons</h2>
-      <p class="visually-hidden">Button specimens: default primary, secondary and quiet; hover, focus, active, disabled, pressed and busy.</p>
+      <h2 id="buttons-title" data-i18n="galleryButtonsTitle">Buttons</h2>
+      <p class="visually-hidden" data-i18n="galleryButtonsDescription">Button specimens: default primary, secondary and quiet; hover, focus, active, disabled, pressed and busy.</p>
       <div class="stack stack--tight" inert>
-        <p class="hint">Default · primary / secondary / quiet</p>
-        <div class="actions"><button type="button" class="button button--primary">Review changes</button><button type="button" class="button button--secondary">Later</button><button type="button" class="button button--quiet">Details</button></div>
-        <p class="hint">Hover / focus / active — native states pinned by the rendered test</p>
-        <div class="actions"><button type="button" id="sample-hover" class="button button--primary">Hover</button><button type="button" id="sample-focus" class="button button--secondary">Focus</button><button type="button" id="sample-active" class="button button--secondary">Active</button></div>
-        <p class="hint">Disabled / pressed / progress</p>
-        <div class="actions"><button type="button" class="button button--primary" disabled>Unavailable</button><button type="button" class="button button--secondary" aria-pressed="true">Selected</button><button type="button" class="button button--secondary" aria-busy="true" disabled>Working…</button></div>
+        <p class="hint" data-i18n="galleryButtonsDefault">Default · primary / secondary / quiet</p>
+        <div class="actions"><button type="button" class="button button--primary" data-i18n="galleryReviewChanges">Review changes</button><button type="button" class="button button--secondary" data-i18n="galleryLater">Later</button><button type="button" class="button button--quiet" data-i18n="galleryDetails">Details</button></div>
+        <p class="hint" data-i18n="galleryButtonsPinnedStates">Hover / focus / active — native states pinned by the rendered test</p>
+        <div class="actions"><button type="button" id="sample-hover" class="button button--primary" data-i18n="galleryHover">Hover</button><button type="button" id="sample-focus" class="button button--secondary" data-i18n="galleryFocus">Focus</button><button type="button" id="sample-active" class="button button--primary" data-i18n="galleryActive">Active</button><button type="button" id="sample-danger-active" class="button button--danger" data-i18n="galleryActiveCritical">Critical pressed</button></div>
+        <p class="hint" data-i18n="galleryButtonsDisabledStates">Disabled / pressed / progress</p>
+        <div class="actions"><button type="button" class="button button--primary" disabled data-i18n="galleryUnavailable">Unavailable</button><button type="button" class="button button--secondary" aria-pressed="true" data-i18n="gallerySelected">Selected</button><button type="button" class="button button--secondary" aria-busy="true" disabled data-i18n="galleryWorking">Working…</button></div>
       </div>
     </section>
     <section class="card stack" aria-labelledby="fields-title">
-      <h2 id="fields-title">Fields and switches</h2>
-      <p class="visually-hidden">Field specimens: default, invalid, readonly, disabled select. Switch specimens: off, on and disabled on.</p>
+      <h2 id="fields-title" data-i18n="galleryFieldsTitle">Fields and switches</h2>
+      <p class="visually-hidden" data-i18n="galleryFieldsDescription">Field specimens: default, invalid, readonly, disabled select. Switch specimens: off, on and disabled on.</p>
       <div class="stack stack--tight" inert>
-        <label class="field"><span class="field__label">Example profile name</span><input class="input" value="Research sample"></label>
-        <label class="field"><span class="field__label">Invalid example</span><input class="input" aria-invalid="true" aria-describedby="sample-error" value=""><span class="form-error" id="sample-error">Enter a profile name.</span></label>
+        <label class="field"><span class="field__label" data-i18n="galleryExampleProfileName">Example profile name</span><input class="input" value="Research sample" data-i18n-attr="value:galleryExampleProfileValue"></label>
+        <label class="field"><span class="field__label" data-i18n="galleryInvalidExample">Invalid example</span><input class="input" aria-invalid="true" aria-describedby="sample-error" value=""><span class="form-error" id="sample-error" data-i18n="galleryEnterProfileName">Enter a profile name.</span></label>
         <div class="field-row">
-          <label class="field"><span class="field__label">Read only</span><input class="input" readonly value="Artificial value"></label>
-          <label class="field"><span class="field__label">Disabled select</span><select class="select" disabled><option>Unavailable</option></select></label>
+          <label class="field"><span class="field__label" data-i18n="galleryReadOnly">Read only</span><input class="input" readonly value="Artificial value" data-i18n-attr="value:galleryArtificialValue"></label>
+          <label class="field"><span class="field__label" data-i18n="galleryDisabledSelect">Disabled select</span><select class="select" disabled><option data-i18n="galleryUnavailable">Unavailable</option></select></label>
         </div>
-        <label class="check check--switch"><input type="checkbox" role="switch"><span>Off sample</span></label>
-        <label class="check check--switch"><input type="checkbox" role="switch" checked><span>On sample</span></label>
-        <label class="check check--switch"><input type="checkbox" role="switch" checked disabled><span>Disabled on sample</span></label>
+        <label class="check check--switch"><input type="checkbox" role="switch"><span data-i18n="gallerySwitchOffSample">Off sample</span></label>
+        <label class="check check--switch"><input type="checkbox" role="switch" checked><span data-i18n="gallerySwitchOnSample">On sample</span></label>
+        <label class="check check--switch"><input type="checkbox" role="switch" checked disabled><span data-i18n="gallerySwitchDisabledSample">Disabled on sample</span></label>
       </div>
     </section>
     <section class="card stack" aria-labelledby="identity-title">
-      <h2 id="identity-title">Identity and rows</h2>
-      <p class="visually-hidden">Identity specimens: Research sample with initial R; Temporary sample with initial T and dashed ring; unavailable action.</p>
+      <h2 id="identity-title" data-i18n="galleryIdentityTitle">Identity and rows</h2>
+      <p class="visually-hidden" data-i18n="galleryIdentityDescription">Identity specimens: Research sample with initial R; Temporary sample with initial T and dashed ring; unavailable action.</p>
       <ul class="list" inert>
-        <li class="row"><span class="chip chip--md">R</span><div class="row__main"><p class="row__title">Research sample</p><p class="row__meta">Identity: name + initial + solid fill</p></div><div class="row__end"><button type="button" class="button button--secondary">Open</button></div></li>
-        <li class="row"><span class="chip chip--md chip--temporary">T</span><div class="row__main"><p class="row__title">Temporary sample</p><p class="row__note">Temporary · not kept</p></div><div class="row__end"><button type="button" class="button button--secondary" disabled>Unavailable</button></div></li>
+        <li class="row"><span class="chip chip--md" aria-hidden="true" data-i18n="galleryResearchInitial">R</span><div class="row__main"><p class="row__title" data-i18n="galleryResearchSample">Research sample</p><p class="row__meta" data-i18n="galleryIdentitySample">Identity: name + initial + solid fill</p></div><div class="row__end"><button type="button" class="button button--secondary" data-i18n="galleryOpen">Open</button></div></li>
+        <li class="row"><span class="chip chip--md chip--temporary" aria-hidden="true" data-i18n="galleryTemporaryInitial">T</span><div class="row__main"><p class="row__title" data-i18n="galleryTemporarySample">Temporary sample</p><p class="row__note" data-i18n="galleryTemporaryNotKept">Temporary · not kept</p></div><div class="row__end"><button type="button" class="button button--secondary" disabled data-i18n="galleryUnavailable">Unavailable</button></div></li>
       </ul>
-      <p class="hint">Identity palette migration belongs to the token slice. Mint never means safe.</p>
+      <div class="actions">
+        <span class="target"><span class="chip chip--md" data-identity="lima" aria-hidden="true" data-i18n="galleryResearchInitial">R</span><span data-i18n="color_lima">Lime</span></span>
+        <span class="target"><span class="chip chip--md" data-identity="sky" aria-hidden="true" data-i18n="galleryResearchInitial">R</span><span data-i18n="color_sky">Sky</span></span>
+        <span class="target"><span class="chip chip--md" data-identity="violet" aria-hidden="true" data-i18n="galleryResearchInitial">R</span><span data-i18n="color_violet">Violet</span></span>
+        <span class="target"><span class="chip chip--md" data-identity="coral" aria-hidden="true" data-i18n="galleryResearchInitial">R</span><span data-i18n="color_coral">Coral</span></span>
+        <span class="target"><span class="chip chip--md" data-identity="sand" aria-hidden="true" data-i18n="galleryResearchInitial">R</span><span data-i18n="color_sand">Sand</span></span>
+        <span class="target"><span class="chip chip--md" data-identity="slate" aria-hidden="true" data-i18n="galleryResearchInitial">R</span><span data-i18n="color_slate">Slate</span></span>
+      </div>
+      <p class="hint" data-i18n="galleryIdentityHint">Solid fills identify profiles. Mint marks Nulavio and active items; it never means safe.</p>
     </section>
     <section class="card stack" aria-labelledby="status-title">
-      <h2 id="status-title">Status and recovery</h2>
-      <p class="status" data-level="progress">Preparing artificial example…</p>
-      <p class="status" data-level="ok">Example completed</p>
-      <p class="status" data-level="warn">Example requires review</p>
-      <p class="status" data-level="error">Example failed. Try again.</p>
-      <div class="callout callout--warning"><svg class="callout__icon" viewBox="0 0 24 24" aria-hidden="true" data-icon="warning"><path d="M12 3 2 21h20z M12 10v5 M12 18v.5" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></svg><p>Warning sample: review the destination before continuing.</p></div>
-      <div class="callout callout--critical"><svg class="callout__icon" viewBox="0 0 24 24" aria-hidden="true" data-icon="critical"><path d="M8.3 2.5h7.4l5.8 5.8v7.4l-5.8 5.8H8.3l-5.8-5.8V8.3z M12 7.5v5.5 M12 16.5v.5" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></svg><p>Critical sample: access is blocked. No operation was performed.</p></div>
+      <h2 id="status-title" data-i18n="galleryStatusTitle">Status and recovery</h2>
+      <p class="status" data-level="progress" data-i18n="galleryPreparingExample">Preparing artificial example…</p>
+      <p class="status" data-level="ok" data-i18n="galleryExampleCompleted">Example completed</p>
+      <p class="status" data-level="warn" data-i18n="galleryExampleNeedsReview">Example requires review</p>
+      <p class="status" data-level="error" data-i18n="galleryExampleFailed">Example failed. Try again.</p>
+      <div class="callout callout--warning"><svg class="callout__icon" viewBox="0 0 24 24" aria-hidden="true" data-icon="warning"><path d="M12 3 2 21h20z M12 10v5 M12 18v.5" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></svg><p data-i18n="galleryWarningSample">Warning sample: review the destination before continuing.</p></div>
+      <div class="callout callout--critical"><svg class="callout__icon" viewBox="0 0 24 24" aria-hidden="true" data-icon="critical"><path d="M8.3 2.5h7.4l5.8 5.8v7.4l-5.8 5.8H8.3l-5.8-5.8V8.3z M12 7.5v5.5 M12 16.5v.5" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></svg><p data-i18n="galleryCriticalSample">Critical sample: access is blocked. No operation was performed.</p></div>
     </section>
     <section class="card stack" aria-labelledby="assistant-title">
-      <h2 id="assistant-title">Assistant context and refusal</h2>
-      <div class="assistant__chip" inert><span class="assistant__chip-text">Included page · artificial example<span class="hint">example.invalid · sample tab only · not sent</span></span><button type="button" class="assistant__chip-remove" aria-label="Remove sample page">×</button></div>
-      <p class="assistant__drift">Page changed · sample attachment removed. Include again to send.</p>
-      <div class="assistant__off stack stack--tight"><h3 class="assistant__off-title">Assistant paused · sample</h3><p>No question or page content can be sent.</p></div>
-      <div class="assistant__off stack stack--tight"><h3 class="assistant__off-title">Private window · sample</h3><p>The assistant is unavailable here.</p></div>
-      <p class="status" data-level="progress">Sample request in progress · Stop remains available in the product.</p>
+      <h2 id="assistant-title" data-i18n="galleryAssistantTitle">Assistant context and refusal</h2>
+      <div class="assistant__chip" inert><span class="assistant__chip-text"><span data-i18n="galleryIncludedPage">Included page · artificial example</span><span class="hint" data-i18n="gallerySampleNotSent">example.invalid · sample tab only · not sent</span></span><button type="button" class="assistant__chip-remove" aria-label="Remove sample page" data-i18n-attr="aria-label:galleryRemoveSamplePage">×</button></div>
+      <p class="assistant__drift" data-i18n="galleryPageChanged">Page changed · sample attachment removed. Include again to send.</p>
+      <div class="assistant__off stack stack--tight"><h3 class="assistant__off-title" data-i18n="galleryAssistantPausedTitle">Assistant paused · sample</h3><p data-i18n="galleryAssistantPausedText">No question or page content can be sent.</p></div>
+      <div class="assistant__off stack stack--tight"><h3 class="assistant__off-title" data-i18n="galleryPrivateWindowTitle">Private window · sample</h3><p data-i18n="galleryPrivateWindowText">The assistant is unavailable here.</p></div>
+      <p class="status" data-level="progress" data-i18n="galleryRequestInProgress">Sample request in progress · Stop remains available in the product.</p>
     </section>
     <section class="card stack" aria-labelledby="consent-title">
-      <h2 id="consent-title">Critical consent specimen</h2>
-      <p class="visually-hidden">Critical consent specimen: Keep restricted is first and primary; Allow full control is secondary and critical. Neither can grant permission.</p>
+      <h2 id="consent-title" data-i18n="galleryConsentTitle">Critical consent specimen</h2>
+      <p class="visually-hidden" data-i18n="galleryConsentDescription">Critical consent specimen: Keep restricted is first and primary; Allow full control is secondary and critical. Neither can grant permission.</p>
       <div class="dialog dialog--critical stack" inert>
-        <h3 class="dialog__title"><svg class="dialog__icon" viewBox="0 0 24 24" aria-hidden="true" data-icon="critical"><path d="M8.3 2.5h7.4l5.8 5.8v7.4l-5.8 5.8H8.3l-5.8-5.8V8.3z M12 7.5v5.5 M12 16.5v.5" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></svg>Full control · artificial example</h3>
-        <p class="dialog__body dialog__body--strong">This example illustrates a high-impact permission request. No real permission is requested or granted.</p>
-        <div class="actions"><button type="button" class="button button--primary">Keep restricted</button><button type="button" class="button button--danger">Allow full control</button></div>
+        <h3 class="dialog__title"><svg class="dialog__icon" viewBox="0 0 24 24" aria-hidden="true" data-icon="critical"><path d="M8.3 2.5h7.4l5.8 5.8v7.4l-5.8 5.8H8.3l-5.8-5.8V8.3z M12 7.5v5.5 M12 16.5v.5" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></svg><span data-i18n="galleryFullControlExample">Full control · artificial example</span></h3>
+        <p class="dialog__body dialog__body--strong" data-i18n="galleryPermissionRequestDescription">This example illustrates a high-impact permission request. No real permission is requested or granted.</p>
+        <div class="actions"><button type="button" class="button button--primary" data-i18n="galleryKeepRestricted">Keep restricted</button><button type="button" class="button button--danger" data-i18n="galleryAllowFullControl">Allow full control</button></div>
       </div>
-      <p class="hint">Safe choice stays first and primary. Security cues are opaque, fixed and never animated.</p>
+      <p class="hint" data-i18n="gallerySafeChoiceFirst">Safe choice stays first and primary. Security cues are opaque, fixed and never animated.</p>
     </section>
   </div>
 </main>

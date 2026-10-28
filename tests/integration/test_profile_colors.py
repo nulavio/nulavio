@@ -55,6 +55,8 @@ class ProfileColorsTest(unittest.TestCase):
             ("{broken", "{}"),
             ("[]", "{}"),
             (json.dumps({str(pid): "mint"}), '{"version":3,"mint":[],"future":"kept"}'),
+            (json.dumps({str(pid): "mint"}), '{"version":3,"migrated":[1],"future":"kept"}'),
+            (json.dumps({str(pid): "mint"}), '{"version":3,"mint":{"1":true},"future":"kept"}'),
         ]
         for raw, marker in cases:
             with self.subTest(raw=raw, marker=marker):

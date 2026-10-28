@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import json
 import sys
 import tempfile
 import unittest
@@ -22,16 +23,22 @@ class Specimens(HTMLParser):
         self.stack = []
         self.controls = 0
         self.unsafe = []
+        self.unlocalized = []
 
     def handle_starttag(self, tag, attrs):
         attrs = dict(attrs)
-        inert = "inert" in attrs or any(self.stack)
+        inert = "inert" in attrs or any(frame[0] for frame in self.stack)
         if tag in ("button", "input", "select"):
             self.controls += 1
             if not inert:
                 self.unsafe.append(tag)
+        localized = "data-i18n" in attrs or "data-i18n-attr" in attrs
         if tag not in ("input", "meta", "link", "img", "path", "br"):
-            self.stack.append(inert)
+            self.stack.append((inert, localized))
+
+    def handle_data(self, data):
+        if data.strip() and (not self.stack or not self.stack[-1][1]):
+            self.unlocalized.append(data.strip())
 
     def handle_endtag(self, tag):
         if tag not in ("input", "meta", "link", "img", "path", "br") and self.stack:
@@ -50,12 +57,31 @@ class ComponentGalleryTest(unittest.TestCase):
             gallery = (out / "dev/gallery/index.html").read_text()
             for name in ("tokens", "base", "shell"):
                 self.assertEqual(gallery.count(f"../../shared/{name}.css"), 1)
-            self.assertNotIn("<script", gallery)
+            self.assertEqual(re.findall(r'<script\b[^>]*\bsrc="([^"]+)"[^>]*>', gallery), ["gallery.js"])
+            self.assertEqual(re.findall(r"<script\b[^>]*>(.*?)</script>", gallery, re.DOTALL), [""])
+            self.assertNotRegex(gallery, r'<script\b[^>]*\bsrc="(?:https?:|//|/)')
+            module = (out / "dev/gallery/gallery.js").read_text()
+            self.assertEqual(
+                module.splitlines(),
+                [
+                    'import { localize } from "../../lib/i18n.js";',
+                    "",
+                    "localize();",
+                    'document.documentElement.dataset.ready = "true";',
+                ],
+            )
+            self.assertNotRegex(module, r"\b(?:fetch|XMLHttpRequest|browser\.|sendMessage|addEventListener)\b")
             self.assertIn("Artificial examples only", gallery)
             parser = Specimens()
             parser.feed(gallery)
             self.assertGreater(parser.controls, 15)
             self.assertEqual(parser.unsafe, [])
+            self.assertEqual(parser.unlocalized, [])
+            keys = set(re.findall(r'data-i18n="([^"]+)"', gallery))
+            keys.update(re.findall(r':([A-Za-z][A-Za-z0-9]+)(?:;|")', gallery))
+            for locale in ("en", "pt_BR"):
+                messages = json.loads((ROOT / f"browser/shell/_locales/{locale}/messages.json").read_text())
+                self.assertTrue(keys <= messages.keys(), f"Missing {locale} messages: {keys - messages.keys()}")
 
     def test_cascade_imports_are_single_and_base_has_no_startpage_components(self):
         entry = (SHARED / "shell.css").read_text()

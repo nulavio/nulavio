@@ -61,13 +61,13 @@
   --nv-size-indicator-length: 16px;
   --nv-size-indicator-thickness: 2px;
   --nv-type-body-size: 1rem;
-  --nv-type-body-weight: 500;
+  --nv-type-body-weight: 400;
   --nv-type-body-lineHeight: 1.5;
   --nv-type-label-size: 0.875rem;
   --nv-type-label-weight: 500;
   --nv-type-label-lineHeight: 1.5;
   --nv-type-caption-size: 0.8125rem;
-  --nv-type-caption-weight: 500;
+  --nv-type-caption-weight: 400;
   --nv-type-caption-lineHeight: 1.5;
   --nv-type-title-size: 1.5rem;
   --nv-type-title-weight: 600;
@@ -76,7 +76,7 @@
   --nv-type-section-weight: 600;
   --nv-type-section-lineHeight: 1.2;
   --nv-type-code-size: 0.875rem;
-  --nv-type-code-weight: 500;
+  --nv-type-code-weight: 400;
   --nv-type-code-lineHeight: 1.5;
   --nv-zIndex-base: 0;
   --nv-zIndex-guard: 4;

@@ -120,9 +120,11 @@ export function icon(name, className = "icon") {
 
 /** Ask for confirmation with a native modal <dialog>. Resolves true when confirmed.
     `critical`: a consent that raises what an agent may do (full control, raw automation): a critical
-    icon in the title, the body in primary text, announced as an alert dialog. Cancel is focused first. */
+    icon in the title, the body in primary text, announced as an alert dialog.
+    Critical/destructive confirmations keep Cancel focused, first and visually primary. */
 export function confirmDialog({ title, body, confirm, danger = false, critical = false }) {
   return new Promise(resolve => {
+    const warning = danger || critical;
     const dialog = h(
       "dialog",
       {
@@ -139,8 +141,8 @@ export function confirmDialog({ title, body, confirm, danger = false, critical =
         h(
           "div",
           { class: "actions actions--end" },
-          h("button", { class: "button button--secondary", value: "cancel", autofocus: true, text: t("confirmCancel") }),
-          h("button", { class: `button ${danger ? "button--danger" : "button--primary"}`, value: "confirm", text: confirm })
+          h("button", { class: `button ${warning ? "button--primary" : "button--secondary"}`, value: "cancel", autofocus: true, text: t("confirmCancel") }),
+          h("button", { class: `button ${warning ? "button--danger" : "button--primary"}`, value: "confirm", text: confirm })
         )
       )
     );

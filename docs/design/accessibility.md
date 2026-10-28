@@ -4,7 +4,7 @@ Target: WCAG 2.2 AA in both themes, at 100–150 % scaling, with keyboard and sc
 
 | Requirement | How | Evidence |
 |---|---|---|
-| Text contrast ≥ 4.5:1 | Token pairs | `scripts/brand/contrast.py`: 89/89 |
+| Text contrast ≥ 4.5:1 | Token pairs | `scripts/brand/contrast.py`: 208/208 |
 | Text contrast on the real window | Rendered colours of the selected/background tab labels, address text | `test_horizon` 02 (light), 03 (dark) |
 | Non-text contrast ≥ 3:1 (WCAG 1.4.11) | Field boundary `border.control`; focus ring; selected-tab mark (surface tones alone are below 3:1) | `test_horizon` 02, 03 |
 | Focus visible (2.4.7, 2.4.11) | Mint 2 px ring; address bar focus border = focus token | `test_horizon` 08 |
@@ -39,14 +39,17 @@ focus and forced-colour native switch appearance. Baselines include failure,
 refusal and critical-consent specimens. The sample controls are inert and
 clearly labelled, so they cannot be mistaken for working permission controls.
 
-This is development evidence from a copied engine plus `dev_sync.py`, not a
-release build or WCAG certification. Automated checks do not prove screen-reader
+The initial component evidence used a copied engine plus `dev_sync.py`;
+the [integrated report](design-system.md#ux2-integrated-verification-2026-10-28) identifies the rebuilt package. Neither is
+WCAG certification. Automated checks do not prove screen-reader
 announcements or physical GTK theme behavior. Manual Orca and real desktop
-high-contrast/125–150% checks remain pending. Parent must repeat rendered checks
-on the rebuilt package and after token/identity integration.
+high-contrast/125–150% checks remain pending. The integrated gallery was
+repeated without baseline updates on the rebuilt package after token and
+identity integration; all four comparisons were pixel-identical.
 
-The forced-colour capture uses the engine's 500 px minimum after restart; the
-320/390 px font-enlargement checks run before restart and assert `innerWidth`.
+The font-enlargement fixture checks actual 320/390 px `innerWidth`; the
+forced-colour capture uses browser preferences in a disposable headless window.
+The captured document is 378 px wide (390 px viewport minus its scrollbar).
 The state inventory also has visually hidden descriptions outside the inert
 specimens, so assistive technology can read the examples without exposing fake
 actions. The existing 11 px small identity initial is retained (a non-body glyph,

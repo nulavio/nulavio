@@ -17,6 +17,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
 import harness
 import pngdiff
+import contrast
 
 BASELINES = Path(__file__).resolve().parents[1] / "baselines" / "component-gallery"
 # Repeated captures in one pinned Linux engine are identical. Allow only small
@@ -41,6 +42,13 @@ class ComponentGalleryTest(unittest.TestCase):
     def tearDownClass(cls):
         cls.session.cleanup()
 
+    def open_gallery(self):
+        self.m.navigate(self.url)
+        self.assertTrue(
+            harness.wait_until(lambda: self.m.execute("return document.documentElement?.dataset.ready === 'true';"), timeout=15),
+            "gallery localisation did not complete",
+        )
+
     def pin_states(self):
         """Lock real production pseudo-classes, without gallery-only state CSS."""
         self.m.set_context("chrome")
@@ -54,7 +62,8 @@ class ComponentGalleryTest(unittest.TestCase):
                 mm.addMessageListener(topic, listener);
                 const code = `
                   const doc = content.document;
-                  const states = [['sample-hover', ':hover'], ['sample-focus', ':focus-visible'], ['sample-active', ':active']];
+                  const states = [['sample-hover', ':hover'], ['sample-focus', ':focus-visible'],
+                    ['sample-active', ':active'], ['sample-danger-active', ':active']];
                   for (const [id, state] of states) {
                     InspectorUtils.addPseudoClassLock(doc.getElementById(id), state);
                   }
@@ -72,7 +81,7 @@ class ComponentGalleryTest(unittest.TestCase):
             self.m.send("WebDriver:SetWindowRect", {"width": width, "height": 1000})
             for theme in ("light", "dark"):
                 with self.subTest(width=width, theme=theme):
-                    self.m.navigate(self.url)
+                    self.open_gallery()
                     self.m.execute("document.documentElement.dataset.theme = arguments[0];", [theme])
                     self.assertTrue(self.pin_states())
                     self.m.chrome("Services.prefs.setIntPref('ui.prefersReducedMotion', 1);")
@@ -104,6 +113,20 @@ class ComponentGalleryTest(unittest.TestCase):
                     self.assertEqual(state["opaque"], "1", state)
                     self.assertEqual(state["animated"], "none", state)
                     self.assertTrue(state["safeFirst"] and state["inert"], state)
+                    # Measure actual composited pixels, including the inset overlay, not only background-color.
+                    state["primaryContrast"] = {}
+                    for sample in ("sample-hover", "sample-active", "sample-danger-active"):
+                        foreground = self.m.execute(
+                            "const canvas = document.createElement('canvas'), ctx = canvas.getContext('2d');"
+                            "ctx.fillStyle = getComputedStyle(document.getElementById(arguments[0])).color;"
+                            "ctx.fillRect(0,0,1,1); return Array.from(ctx.getImageData(0,0,1,1).data);",
+                            [sample],
+                        )
+                        _, _, bpp, rows = pngdiff.decode(self.m.screenshot_png(element=self.m.find_element(f"#{sample}")))
+                        background = (*rows[8][8 * bpp : 8 * bpp + 3], 1)
+                        value = contrast.ratio((*foreground[:3], 1), background)
+                        state["primaryContrast"][sample] = value
+                        self.assertGreaterEqual(value, 4.5, f"{sample} in {theme} has insufficient rendered text contrast")
                     capture = self.m.screenshot_png(full=True)
                     name = f"gallery-{width}-{theme}.png"
                     (self.artifacts / name).write_bytes(capture)
@@ -157,7 +180,7 @@ class ComponentGalleryTest(unittest.TestCase):
 
     def test_narrow_font_scaling_and_contrast_modes(self):
         self.m.send("WebDriver:SetWindowRect", {"width": 390, "height": 1000})
-        self.m.navigate(self.url)
+        self.open_gallery()
         self.m.execute("document.documentElement.style.fontSize = '200%';")
         for width in (320, 390):
             self.m.send("WebDriver:SetWindowRect", {"width": width, "height": 1000})
@@ -167,7 +190,7 @@ class ComponentGalleryTest(unittest.TestCase):
         self.m = type(self).m = self.session.restart()
         self.m.chrome("document.documentElement.style.minWidth = '0px';")
         self.m.send("WebDriver:SetWindowRect", {"width": 390, "height": 1000})
-        self.m.navigate(self.url)
+        self.open_gallery()
         self.m.execute("document.documentElement.style.fontSize = '200%';")
         self.assertTrue(self.m.execute("return matchMedia('(prefers-contrast: more)').matches;"))
         self.assertTrue(self.pin_states())

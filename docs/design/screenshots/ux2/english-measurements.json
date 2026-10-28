@@ -1,0 +1,30 @@
+[
+  {
+    "theme": "light",
+    "language": "en-US",
+    "title": "Shell component states",
+    "width": 1280,
+    "overflow": false
+  },
+  {
+    "theme": "dark",
+    "language": "en-US",
+    "title": "Shell component states",
+    "width": 1280,
+    "overflow": false
+  },
+  {
+    "theme": "light",
+    "language": "en-US",
+    "title": "Shell component states",
+    "width": 390,
+    "overflow": false
+  },
+  {
+    "theme": "dark",
+    "language": "en-US",
+    "title": "Shell component states",
+    "width": 390,
+    "overflow": false
+  }
+]

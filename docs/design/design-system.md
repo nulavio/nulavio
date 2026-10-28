@@ -9,7 +9,7 @@
 | `browser/shell/lib/identity-colors.js` | The profile icon the Shell draws for the toolbar | Same in both themes |
 | `browser/shell/shared/sidebar-focus.css` | Focus rings in native sidebar documents | `light-dark()`, scoped to internal sidebar URLs |
 
-`scripts/brand/contrast.py` checks every declared pair (**89/89 pass**, both themes). `tests/integration/test_horizon.py` re-measures contrast on the rendered window. The generator refuses a semantic colour defined for one theme only (it would fall back to an unrelated value in the other), and a unit test checks that every `var(--nv-*)` in the Shell and start-page sheets exists in both themes.
+`scripts/brand/contrast.py` checks every declared pair (**208/208 pass**, both themes). `tests/integration/test_horizon.py` re-measures contrast on the rendered window. The generator refuses a semantic colour defined for one theme only (it would fall back to an unrelated value in the other), and a unit test checks that every `var(--nv-*)` in the Shell and start-page sheets exists in both themes.
 
 ## Colour
 
@@ -121,7 +121,7 @@ The minimum target is 24×24 CSS px (WCAG 2.5.8); `test_06` measures the real bu
 
 Screenshots: [settings](screenshots/settings-light.png), [profile selector](screenshots/profile-selector-dark.png), [routing question](screenshots/routing-ask-light.png), [link not opened](screenshots/routing-blocked-dark.png), [routing rules](screenshots/routing-rules-dark.png); AI & Automation (S7): [connect an agent](screenshots/ai-connect-form-light.png), [configuration shown once](screenshots/ai-connect-result-dark.png), [full-control warning](screenshots/ai-full-control-warning-light.png), [permission request](screenshots/ai-permission-request-light.png) ([dark](screenshots/ai-permission-request-dark.png)), [agent permissions](screenshots/ai-agent-permissions-light.png); protected profiles (S6): [locked profile](screenshots/vault-unlock-idle-light.png) ([dark](screenshots/vault-unlock-idle-dark.png)), [wrong password](screenshots/vault-unlock-error-light.png), [computer login unavailable](screenshots/vault-unlock-device-unavailable-dark.png), [recovery only](screenshots/vault-unlock-recovery-required-light.png), [choose protection](screenshots/vault-create-2-protection-dark.png), [recovery code](screenshots/vault-create-3-recovery-light.png), [settings with a locked profile](screenshots/vault-settings-locked-profile-dark.png); phone (S11): [connect a phone](screenshots/vault-phone-code-light.png), [the 6 digits](screenshots/vault-phone-compare-dark.png), [unlock with phone](screenshots/vault-unlock-phone-light.png) ([dark](screenshots/vault-unlock-phone-dark.png)); temporary profile: [selector inside it](screenshots/profile-temporary-light.png) ([dark](screenshots/profile-temporary-dark.png)); Guard: [changes made outside Nulavio](screenshots/guard-review-light.png) ([dark](screenshots/guard-review-dark.png)); [site exceptions](screenshots/site-exceptions-light.png) ([dark](screenshots/site-exceptions-dark.png)); DNS: [new-tab question](screenshots/dns-newtab-choice-light.png) ([dark](screenshots/dns-newtab-choice-dark.png)), [settings](screenshots/dns-settings-light.png) ([dark](screenshots/dns-settings-dark.png)); passwords: [providers](screenshots/password-providers-light.png) ([dark](screenshots/password-providers-dark.png)), [look-alike site](screenshots/password-lookalike-light.png) ([dark](screenshots/password-lookalike-dark.png)); [assistant panel with a page included](screenshots/assistant-panel-light.png) ([dark](screenshots/assistant-panel-dark.png)), [the page left with a tab switch](screenshots/assistant-drift-dark.png), [emergency stop on](screenshots/assistant-stopped-light.png).
 
-State overlays: the `state.*` tokens are opacities; Shell buttons apply them as `color-mix(in srgb, currentColor <n>%, transparent)` (until S6 the hover and pressed overlays were invalid CSS and showed nothing). Buttons use `appearance: none` so the toolkit never paints them in the other scheme.
+State overlays: `state.*` tokens are opacities. Ordinary buttons use their text colour; primary buttons use `text.primary`, and destructive buttons use `bg.canvas`. These variant overlays preserve text contrast in both themes. The exact composited checks include hover and pressed states; rendered pixel samples separately check primary hover/pressed and destructive pressed. Buttons use `appearance: none` so the toolkit follows the page theme.
 
 ## Shell cascade and component gallery (UX2)
 
@@ -154,10 +154,10 @@ semantics stay intact, with native appearance restored in forced colours.
 
 The real built-in gallery is `dev/gallery/index.html` below the Shell extension
 origin (replace `/newtab/newtab.html` in the built-in new-tab URL). It is a
-development surface, labelled **Artificial examples only**, has no script or
-privileged API and keeps all specimens inert. It imports production CSS, rather
-than copying component styling. It follows the system theme; the rendered test
-sets the generated token sheet's existing `data-theme` override for both themes.
+development surface, labelled as artificial examples in en/pt-BR. Its only
+script runs the existing localisation helper; specimens stay inert and no
+product API is called. It imports production CSS and follows the system theme.
+The rendered test sets the generated token sheet's existing `data-theme` override for both themes.
 Hover/focus/active specimens use engine pseudo-class locks in the test, not fake
 state selectors in production CSS. The safe consent choice is first and primary.
 The mockups in `docs/brand/mockups` remain design references, not this gallery's
@@ -170,9 +170,10 @@ high contrast, and native switches under forced colours. Track B is required:
 stock Firefox does not prove the built-in origin or packaging. Unit tests cover
 packaging and the source/import boundaries without an engine.
 
-PNG baselines live in `tests/baselines/component-gallery/`. They use the copied
-Nulavio 159.0 Linux engine, BuildID `20261028130348`, SourceStamp
-`5add844c26613d7e4d84c799d6e23cf987b1240d`, with dev-synced Shell sources.
+PNG baselines live in `tests/baselines/component-gallery/`. The integrated
+pt-BR baselines include tokens v2, the six identity fills and reserved temporary
+fill, rem roles and localisation. Final verification uses rebuilt Nulavio 159.0,
+BuildID `20261028184647`, SourceStamp `5add844c26613d7e4d84c799d6e23cf987b1240d`.
 Window chrome is excluded. The 390 px fixture removes the native window's 500 px
 minimum only inside its disposable test window and asserts actual `innerWidth`.
 Reduced motion freezes the neutral progress indicator. Repeated captures must
@@ -186,16 +187,16 @@ pre-existing pixel/security assertion was relaxed.
 
 To propose baselines, run with `NULAVIO_UPDATE_GALLERY_BASELINES=1`, inspect all
 four full-page PNGs and their four critical-callout crops, then rerun without that flag. Never regenerate them just to clear CI.
-Font/engine changes require a reviewed refresh. Parent integration must rebuild
-the real package and repeat the gallery suite after the tokens v2 merge.
+Font/engine changes require a reviewed refresh; the integrated baselines were
+reviewed again after type, palette and localisation changes. The final run
+compares them without the update flag on the rebuilt package.
 
-Token dependency: this slice uses only the existing variable API. Tokens v2
-will migrate identity colours and rem type roles. Suggested role replacements
-for the current sizes are `type.body`, `type.label`, `type.heading`, and
-`type.caption`; no such undefined aliases are emitted here. Existing heading
-size tokens have rem floors so text enlargement already works. Manual Orca,
-real GTK high-contrast themes and the final rebuilt release remain separate
-verification obligations.
+Integrated tokens v2: the Shell consumes `type.body` (1 rem/400),
+`type.label` (.875 rem/500), `type.caption` (.8125 rem/400), `type.title`
+(1.5 rem/600), `type.section` (1.25 rem/600), and `type.code` (.875 rem/400).
+Legacy font variables remain available. Identity chips and swatches now use
+the opaque ink ring; selection and dialog scrims use their themed tokens.
+Manual Orca and real GTK high-contrast themes remain separate obligations.
 
 ## UX1 verification (2026-10-28)
 
@@ -228,3 +229,45 @@ renames that copy's `nulavio-tools` directory. Parallel execution can make the
 other modules report missing tools. A recovery-unmount timeout was also observed
 under concurrent load; a later sequential full Vault run passed with the original
 30-second assertion unchanged. Its cause is not established by that replay.
+
+
+### UX2 integrated verification (2026-10-28)
+
+The production package is Nulavio 159.0, BuildID `20261028184647`, tarball
+SHA-256 `e93223bccb3f1845da63b439193ae734721c3cc6ac6756b1eb19016d8afecebf`.
+All 93 packaged Shell/theme source entries were compared byte-for-byte with
+the integration sources. The gallery's four theme/width baselines have zero
+pixel difference; their negative controls detect removal of the critical
+callout and of its octagon. [Measurements](screenshots/ux2/gallery-measurements.json)
+and the [exact 208 composited contrast checks](screenshots/ux2/contrast-pairs.json)
+are recorded separately.
+
+The actual 318 × 616 px assistant panel was audited on included-page and blocked
+states, both themes: zero runtime UI-audit errors. The Inter fallback and iOS
+input-zoom warnings have the same scope as UX1; manual Orca/GTK checks stay open.
+[Audit](screenshots/ux2/assistant-audit.json).
+
+Before/after captures use the verified UX1 package and the rebuilt UX2 package:
+[before, light](screenshots/ux2/ux2-before-light-1366x768@100.png),
+[after, light](screenshots/ux2/ux2-after-light-1366x768@100.png),
+[before, dark](screenshots/ux2/ux2-before-dark-1366x768@100.png),
+[after, dark](screenshots/ux2/ux2-after-dark-1366x768@100.png).
+The quick timing sample (two fresh sessions, three new tabs each) measured
+51.4 ms before and 49.4 ms after median new-tab opening. It ran alongside other
+verification, so it is a budget observation, not evidence of an improvement.
+The canvas is solid and no blur is applied.
+
+Critical/destructive native dialogs now use Cancel as the filled primary,
+focused first, with confirmation outlined in the critical colour. A rendered
+regression reproduced the missing primary on full-control consent before
+the fix, and covers both full-control and separate raw-automation consent.
+The gallery palette uses data attributes plus external CSS; the original
+no-inline-style/no-inline-script guard remains unchanged.
+
+Rendered overlay regression: the prior primary pressed state measured 4.18:1 in light, and destructive pressed measured 4.32:1 in dark. After correction they measure 6.15:1 and 5.46:1 respectively. The original 4.5:1 minimum is unchanged.
+
+The independent integration review found one future-schema guard defect: version 3 without the current `mint` array could be treated as version 0. The real Gecko regression reproduced it with renamed and retyped payloads. The reader now respects a future version before inspecting its payload, preserving both stored strings exactly; all five migration tests pass after the fix. No unresolved review finding remains from that pass.
+
+English gallery verification uses a disposable en-US profile: 1280/390 px in both themes and 320/390 px at 200% root font, with no horizontal overflow. [Measurements](screenshots/ux2/english-measurements.json) and [English narrow/dark](screenshots/ux2/gallery-en-390-dark.png).
+
+Final integrated results on the reviewed package: 600 unit tests OK (1 skip), 194 Track B integration tests OK (13 skips), 208 declared contrast combinations, Ruff/generated-file checks and all six security scans. [Capture provenance](screenshots/ux2/capture-provenance.json); archived previous page captures are kept under `screenshots/ux2/before/`.

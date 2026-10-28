@@ -6,5 +6,11 @@
   .gallery__grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--nv-space-5); }
   .gallery .card { min-width: 0; align-content: start; gap: var(--nv-space-4); }
   .gallery .dialog { width: 100%; max-width: 100%; box-shadow: none; }
+  .gallery [data-identity="lima"] { --chip: var(--nv-color-identity-lima); }
+  .gallery [data-identity="sky"] { --chip: var(--nv-color-identity-sky); }
+  .gallery [data-identity="violet"] { --chip: var(--nv-color-identity-violet); }
+  .gallery [data-identity="coral"] { --chip: var(--nv-color-identity-coral); }
+  .gallery [data-identity="sand"] { --chip: var(--nv-color-identity-sand); }
+  .gallery [data-identity="slate"] { --chip: var(--nv-color-identity-slate); }
   @media (max-width: 48rem) { .gallery__grid { grid-template-columns: minmax(0, 1fr); } }
 }

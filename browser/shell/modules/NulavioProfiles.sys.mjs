@@ -157,6 +157,9 @@ class NulavioProfilesClass {
   #colorMigration() {
     try {
       const value = JSON.parse(Services.prefs.getStringPref(PREF_COLOR_MIGRATION, "{}"));
+      if (Number.isInteger(value?.version) && value.version > 2) {
+        return { version: value.version, mint: [] }; // future payloads need not use this release's schema
+      }
       if (Number.isInteger(value?.version) && Array.isArray(value.mint)) {
         return { version: value.version, mint: value.mint.filter(id => Number.isSafeInteger(id) && id > 0) };
       }
