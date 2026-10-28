@@ -161,6 +161,11 @@ class ProtocolTest(unittest.TestCase):
             w.write(json.dumps(message).encode() + b"\n")
             w.flush()
         bridge.started.wait(5)
+        # Let request 1 finish only once the server has read the cancellation of request 2 (under load
+        # the reader thread can lag behind the writes above).
+        deadline = time.monotonic() + 5
+        while not (server._cancels.get(2) and server._cancels[2].is_set()) and time.monotonic() < deadline:
+            time.sleep(0.01)
         bridge.release.set()
         w.close()
         thread.join(10)

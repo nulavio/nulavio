@@ -106,6 +106,11 @@ jobs:
       - name: Secrets in every commit (gitleaks)
         if: ${{ !cancelled() && steps.fetch.outcome == 'success' }}
         run: scripts/security/scan.sh gitleaks
+      - name: The secret scan reads merges, type changes and binary key files (scanner wiring tests)
+        if: ${{ !cancelled() && steps.fetch.outcome == 'success' }}
+        env:
+          NULAVIO_REQUIRE_SECURITY_TOOLS: "1" # fail, never skip, if the scanners were not fetched
+        run: python3 -I -m unittest discover -s tests/unit -t tests/unit -p test_security_tooling.py -k GitleaksHistoryTest
       - name: Shell scripts (ShellCheck)
         if: ${{ !cancelled() && steps.fetch.outcome == 'success' }}
         run: scripts/security/scan.sh shellcheck
