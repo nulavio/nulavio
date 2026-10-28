@@ -15,6 +15,7 @@ let windowId = null; // the browser window this panel lives in
 let current = null; // what "Incluir esta página" would include now: {tabId, url, title}
 let attached = null; // the page included in the next message, captured when the user included it
 let busy = false;
+let contextVersion = 0; // late page replies cannot restore consent after a send or context change
 
 const $ = id => document.getElementById(id);
 const hostOf = url => URL.parse(url)?.host || url;
@@ -80,7 +81,11 @@ function drop(key) {
 
 /** Re-read this window's selected tab. `changedTab`: the tab an update or removal was about. */
 async function refreshPage(changedTab = null) {
+  const version = ++contextVersion;
   const page = await ai.assistantPage().catch(() => null);
+  if (version !== contextVersion) {
+    return;
+  }
   if (attached) {
     const sameTab = page?.tabId === attached.tabId;
     if (!sameTab && changedTab !== attached.tabId) {
@@ -134,6 +139,7 @@ async function render() {
     await refreshPage();
     syncMode();
   } else {
+    ++contextVersion;
     attached = null;
   }
 }
@@ -187,6 +193,7 @@ async function showError(error, task) {
 async function send(question, page) {
   const task = mode() === "task";
   busy = true;
+  ++contextVersion;
   // Consent is per message: what was included goes with this one only.
   attached = null;
   $("drift").hidden = true;
@@ -196,6 +203,7 @@ async function send(question, page) {
   delete document.body.dataset.answered;
   $("send").disabled = true;
   $("summarize").disabled = true;
+  $("include-page").disabled = true;
   // One polite announcement now, one when it ends (AI-12); no check mark until then.
   announce(t(task ? "assistantWorking" : "assistantAsking", [state.recipient]), "progress");
   try {
@@ -209,6 +217,7 @@ async function send(question, page) {
     busy = false;
     $("send").disabled = false;
     $("summarize").disabled = false;
+    $("include-page").disabled = false;
   }
 }
 
@@ -227,11 +236,19 @@ $("prompt").addEventListener("keydown", event => {
 });
 $("ask").addEventListener("change", event => {
   if (event.target.name === "mode") {
+    ++contextVersion;
     syncMode();
   }
 });
 $("include-page").addEventListener("click", async () => {
+  if (busy) {
+    return;
+  }
+  const version = ++contextVersion;
   const page = await ai.assistantPage().catch(() => null); // what the tab shows at this moment
+  if (version !== contextVersion || document.body.dataset.state !== "ready") {
+    return;
+  }
   if (page) {
     attached = page;
     $("drift").hidden = true;
@@ -241,6 +258,7 @@ $("include-page").addEventListener("click", async () => {
   $("prompt").focus(); // the offer button is gone either way; the question comes next
 });
 $("remove-page").addEventListener("click", () => {
+  ++contextVersion;
   attached = null;
   showContext();
   $("include-page").focus();
@@ -249,13 +267,18 @@ $("summarize").addEventListener("click", async () => {
   if (busy) {
     return;
   }
+  const version = ++contextVersion;
+  const question = t("assistantSummarizePrompt");
+  $("prompt").value = question;
   const page = await ai.assistantPage().catch(() => null); // this explicit action includes the page shown now
+  if (version !== contextVersion || document.body.dataset.state !== "ready") {
+    return;
+  }
   if (!page) {
     refreshPage();
     return;
   }
-  $("prompt").value = t("assistantSummarizePrompt");
-  send($("prompt").value, page);
+  send(question, page);
 });
 const openShell = page => browser.tabs.create({ url: browser.runtime.getURL(page) });
 $("open-settings").addEventListener("click", () => openShell("settings/settings.html#ai-assistant"));

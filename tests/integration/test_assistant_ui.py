@@ -143,16 +143,35 @@ class AssistantUiTest(unittest.TestCase):
         self.m.execute("delete document.documentElement.dataset.theme;")
 
     def shoot_window(self, name: str) -> None:
-        """The browser window with the side panel, in both themes of the panel."""
-        for scheme in ("light", "dark"):
-            self.panel(f"document.documentElement.dataset.theme = '{scheme}';")
-            time.sleep(0.3)
-            self.m.set_context("chrome")
-            try:
-                (self.shots / f"{name}-{scheme}.png").write_bytes(self.m.screenshot_png())
-            finally:
-                self.m.set_context("content")
-        self.panel("delete document.documentElement.dataset.theme;")
+        """The browser window and its side panel follow the same real colour scheme."""
+        previous = self.m.chrome(
+            "return [Services.prefs.prefHasUserValue('ui.systemUsesDarkTheme'),"
+            " Services.prefs.getIntPref('ui.systemUsesDarkTheme', 0)];"
+        )
+        try:
+            for scheme in ("light", "dark"):
+                dark = scheme == "dark"
+                self.m.chrome("Services.prefs.setIntPref('ui.systemUsesDarkTheme', arguments[0]);", [int(dark)])
+                self.assertTrue(
+                    harness.wait_until(
+                        lambda want=dark: (
+                            self.panel("return content.matchMedia('(prefers-color-scheme: dark)').matches;") == want
+                        ),
+                        10,
+                    )
+                )
+                time.sleep(0.3)
+                self.m.set_context("chrome")
+                try:
+                    (self.shots / f"{name}-{scheme}.png").write_bytes(self.m.screenshot_png())
+                finally:
+                    self.m.set_context("content")
+        finally:
+            self.m.chrome(
+                "if (arguments[0]) Services.prefs.setIntPref('ui.systemUsesDarkTheme', arguments[1]);"
+                " else Services.prefs.clearUserPref('ui.systemUsesDarkTheme');",
+                previous,
+            )
 
     def panel(self, code: str, which: str | None = None):
         self.m.set_context("chrome")
@@ -175,8 +194,6 @@ class AssistantUiTest(unittest.TestCase):
     def show_sidebar(self, which: str | None = None, reload: bool = False) -> dict:
         show = f"const w = {WINDOW}; await w.SidebarController.show(args[0]); return w.SidebarController.currentID;"
         self.assertEqual(chrome_async(self.m, show, [SIDEBAR, which]), {"ok": SIDEBAR})
-        if reload:
-            self.panel("delete document.documentElement.dataset.ready; content.location.reload();", which)
 
         def ready():
             try:
@@ -185,6 +202,9 @@ class AssistantUiTest(unittest.TestCase):
                 return False  # the panel's browser is still being created
 
         self.assertTrue(harness.wait_until(ready, 20))
+        if reload:
+            self.panel("delete document.documentElement.dataset.ready; content.location.reload();", which)
+            self.assertTrue(harness.wait_until(ready, 20))
         return self.view(which)
 
     def select_new_tab(self, url: str) -> None:
@@ -441,6 +461,36 @@ class AssistantUiTest(unittest.TestCase):
         self.go(self.server.url("/page/Fim"))
         self.wait_view(lambda v: v["offer"] == "+ Incluir esta página: Fim")
         self.close_other_tabs()
+
+    def test_07b_a_pending_include_cannot_attach_to_the_next_message(self):
+        self.select_new_tab(self.server.url("/page/Consentimento"))
+        for control in ("include-page", "summarize"):
+            with self.subTest(control=control):
+                self.show_sidebar(reload=True)
+                self.wait_view(lambda v: v["offer"] and "Consentimento" in v["offer"])
+                # Hold the reply at the experiment boundary, after it captured the requested tab.
+                self.m.chrome(
+                    f"const ai = {AI}; const original = ai.assistantPage;"
+                    "ai.assistantPage = function(win) { this.assistantPage = original;"
+                    " const page = original.call(this, win);"
+                    " return new Promise(resolve => { this.testReleasePage = () => {"
+                    " resolve(page); delete this.testReleasePage; }; }); };"
+                )
+                self.addCleanup(self.m.chrome, f"{AI}.testReleasePage?.();")
+                self.panel(f"document.getElementById('{control}').click();")
+                self.assertTrue(harness.wait_until(lambda: self.m.chrome(f"return !!{AI}.testReleasePage;"), 10))
+                self.provider.delay = 1.0
+                before = len(self.provider.requests)
+                self.submit("Envie só esta pergunta")
+                self.wait_view(lambda v: v["level"] == "progress")
+                self.m.chrome(f"{AI}.testReleasePage();")
+                view = self.wait_view(lambda v: v["answered"])
+                self.assertIsNone(view["attached"])
+                self.assertEqual(len(self.provider.requests) - before, 1)
+                self.assertNotIn("<<<PAGE", self.sent_since(before))
+                self.submit("E a próxima também")
+                self.wait_view(lambda v: v["answered"] and v["receipt"].startswith("Só a pergunta"))
+                self.assertNotIn("<<<PAGE", self.sent_since(before))
 
     def test_08_nothing_in_private_windows(self):
         url = self.server.url("/agent-task?word=PRIVATE")

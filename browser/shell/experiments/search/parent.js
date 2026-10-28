@@ -17,11 +17,20 @@ this.nulavioSearch = class extends ExtensionAPI {
   }
 
   onStartup() {
+    // This always-on Shell lifecycle also installs the scoped native-window sheet;
+    // it exposes no additional API to extension pages or web content.
+    ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioWindow.sys.mjs").NulavioWindow.start();
     // After first paint, like the engine's own search add-ons, so start-up is not slowed.
     const { ExtensionParent } = ChromeUtils.importESModule("resource://gre/modules/ExtensionParent.sys.mjs");
     ExtensionParent.browserPaintedPromise
       .then(() => this.module().startup())
       .catch(e => console.error("Nulavio Search start-up failed", e));
+  }
+
+  onShutdown(isAppShutdown) {
+    if (!isAppShutdown) {
+      ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioWindow.sys.mjs").NulavioWindow.stop();
+    }
   }
 
   getAPI(context) {

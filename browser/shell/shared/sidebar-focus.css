@@ -1,0 +1,15 @@
+/* Generated from docs/brand/tokens.json by scripts/brand/build_tokens.py. Do not edit. */
+@-moz-document url-prefix("chrome://browser/content/sidebar/"),
+  url("chrome://browser/content/places/bookmarksSidebar.xhtml"),
+  url("chrome://browser/content/places/historySidebar.xhtml"),
+  url("chrome://browser/content/webext-panels.xhtml") {
+  @media -moz-pref("nulavio.horizon.enabled") {
+    @media -moz-pref("extensions.activeThemeID", "default-theme@mozilla.org") or
+      -moz-pref("extensions.activeThemeID", "firefox-compact-light@mozilla.org") or
+      -moz-pref("extensions.activeThemeID", "firefox-compact-dark@mozilla.org") {
+    @media not ((forced-colors) or (prefers-contrast)) {
+      :root:not([lwtheme]) { --focus-outline-color: light-dark(#0F7A68, #6FE0C5) !important; }
+    }
+    }
+  }
+}

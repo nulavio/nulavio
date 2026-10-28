@@ -29,6 +29,7 @@ TOKENS = ROOT / "docs" / "brand" / "tokens.json"
 OUTPUT = ROOT / "browser" / "startpage" / "tokens.css"
 CHROME_OUTPUT = ROOT / "browser" / "branding" / "nulavio" / "content" / "theme" / "tokens.css"
 IDENTITY_OUTPUT = ROOT / "browser" / "shell" / "lib" / "identity-colors.js"
+SIDEBAR_OUTPUT = ROOT / "browser" / "shell" / "shared" / "sidebar-focus.css"
 HEADER = "/* Generated from docs/brand/tokens.json by scripts/brand/build_tokens.py. Do not edit. */\n"
 
 
@@ -127,6 +128,28 @@ def build_identity(data: dict) -> str:
     )
 
 
+def build_sidebar_focus(data: dict) -> str:
+    """Only native sidebar documents: restore focus contrast without styling web pages."""
+    require_both_themes(data)
+    tokens = flatten(data)
+    light = resolve(tokens, "color.light.focus")
+    dark = resolve(tokens, "color.dark.focus")
+    return (
+        HEADER
+        + '@-moz-document url-prefix("chrome://browser/content/sidebar/"),\n'
+        + '  url("chrome://browser/content/places/bookmarksSidebar.xhtml"),\n'
+        + '  url("chrome://browser/content/places/historySidebar.xhtml"),\n'
+        + '  url("chrome://browser/content/webext-panels.xhtml") {\n'
+        + '  @media -moz-pref("nulavio.horizon.enabled") {\n'
+        + '    @media -moz-pref("extensions.activeThemeID", "default-theme@mozilla.org") or\n'
+        + '      -moz-pref("extensions.activeThemeID", "firefox-compact-light@mozilla.org") or\n'
+        + '      -moz-pref("extensions.activeThemeID", "firefox-compact-dark@mozilla.org") {\n'
+        + "    @media not ((forced-colors) or (prefers-contrast)) {\n"
+        + f"      :root:not([lwtheme]) {{ --focus-outline-color: light-dark({light}, {dark}) !important; }}\n"
+        + "    }\n    }\n  }\n}\n"
+    )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--check", action="store_true")
@@ -138,7 +161,12 @@ def main() -> int:
         print(f"{TOKENS.relative_to(ROOT)}: {error}", file=sys.stderr)
         return 2
     status = 0
-    for out, css in ((OUTPUT, build(data)), (CHROME_OUTPUT, build_chrome(data)), (IDENTITY_OUTPUT, build_identity(data))):
+    for out, css in (
+        (OUTPUT, build(data)),
+        (CHROME_OUTPUT, build_chrome(data)),
+        (IDENTITY_OUTPUT, build_identity(data)),
+        (SIDEBAR_OUTPUT, build_sidebar_focus(data)),
+    ):
         if args.check:
             current = out.read_text(encoding="utf-8") if out.exists() else ""
             if current != css:

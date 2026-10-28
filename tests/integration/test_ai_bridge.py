@@ -427,6 +427,7 @@ class AiBridgeTest(unittest.TestCase):
         """Test-only: let this test read the window's chrome over BiDi. The launcher never sets this variable
         (engine.launch_env removes every MOZ_REMOTE* knob); it is added here, after that filter."""
         real = engine_mod.launch_env
+        # nosemgrep: nulavio-py-engine-sandbox-env -- chrome inspection in this test's throwaway agent profiles only
         patcher = mock.patch.object(engine_mod, "launch_env", lambda: {**real(), "MOZ_REMOTE_ALLOW_SYSTEM_ACCESS": "1"})
         patcher.start()
         self.addCleanup(patcher.stop)
