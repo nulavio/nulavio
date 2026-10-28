@@ -31,7 +31,7 @@ The tools are cached in `~/.cache/nulavio-security-tools` (or `$NULAVIO_SECURITY
 
 ### Secrets before the commit (optional hook)
 
-Commits go straight to `main`, and the plan has no push protection, so CI finds a secret only after it is on GitHub, when it must already be revoked. The pre-commit hook in `scripts/git-hooks/` runs gitleaks on the staged changes, binary files included (`scripts/security/scan.sh staged`, under a second) and refuses the commit if it finds one. It is off by default; turn it on in each clone:
+Commits go straight to `main`, and the plan has no push protection, so CI finds a secret only after it is on GitHub, when it must already be revoked. The pre-commit hook in `scripts/git-hooks/` runs gitleaks on the staged changes, binary files included unless a committed `.gitattributes` marks them `binary` or `-diff` (the CI history scan reads those too) (`scripts/security/scan.sh staged`, under a second) and refuses the commit if it finds one. It is off by default; turn it on in each clone:
 
 ```sh
 git config core.hooksPath scripts/git-hooks

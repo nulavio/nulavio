@@ -92,8 +92,19 @@ run_opengrep() {
 run_gitleaks() {
     # Inline "gitleaks:allow" comments are ignored: an exception goes in .gitleaks.toml or
     # .gitleaksignore, with its reason, where review sees it.
+    # gitleaks can log an error (git could not produce a diff, for example when it cannot write
+    # the temporary objects --remerge-diff needs), stop early and still say "no leaks found":
+    # an ERR or FTL line in its log fails the check.
+    local status=0 log=$scratch/gitleaks.log
     "$tools/gitleaks" "$@" --no-banner --redact --verbose --ignore-gitleaks-allow \
-        --config .gitleaks.toml --gitleaks-ignore-path .gitleaksignore .
+        --config .gitleaks.toml --gitleaks-ignore-path .gitleaksignore . 2>"$log" || status=$?
+    cat "$log" >&2
+    # Log lines look like "8:37AM ERR ...", with colour codes around the level.
+    if ((status == 0)) && sed 's/\x1b\[[0-9;]*m//g' "$log" | grep -Eq '^[^ ]+ (ERR|FTL) '; then
+        echo "gitleaks: it logged an error, so the scan may be incomplete" >&2
+        status=1
+    fi
+    return "$status"
 }
 
 check_actionlint() {

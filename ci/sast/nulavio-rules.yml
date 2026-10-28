@@ -408,9 +408,9 @@ rules:
     metadata:
       cwe: "CWE-494: Download of code without integrity check"
     pattern-either:
-      # One command, continued over several lines with "\" too.
-      - pattern-regex: \bcurl\b(?:[^\n|]|\\\n)*\s(--insecure|-[a-zA-Z]*k[a-zA-Z]*)(?=\s|$)
-      - pattern-regex: \b(curl|wget)\b(?:[^\n|]|\\\n)*\|(?:\s|\\\n)*(sudo\s+)?(ba|da|z)?sh\b
+      # One command, continued over several lines with "\" too; it ends at |, &, ; or a line end.
+      - pattern-regex: \bcurl\b(?:[^\n|&;]|\\\n)*\s(--insecure|-[a-zA-Z]*k[a-zA-Z]*)(?=\s|$)
+      - pattern-regex: \b(curl|wget)\b(?:[^\n|&;]|\\\n)*\|(?:\s|\\\n)*(sudo\s+)?(ba|da|z)?sh\b
       - pattern-regex: --no-check-certificate
       - pattern-regex: --tls-verify[= ]false
       - pattern-regex: (?i)\bssl_?verify\s*[=:]?\s*(false|0|no)\b
@@ -425,7 +425,7 @@ rules:
       - pattern-regex: --trusted-host\b
       - pattern-regex: \bpip3?\s+install\b(?![^\n]*--require-hashes)
       - pattern-regex: \bdependency[.-]verification[= ]+(off|lenient)\b
-      - pattern-regex: \bgradlew?\b(?:[^\n|]|\\\n)*\s-F(?:=|[ \t]*)(off|lenient)\b
+      - pattern-regex: \bgradlew?\b(?:[^\n|&;]|\\\n)*\s-F(?:=|[ \t]*)(off|lenient)\b
 
   - id: nulavio-ci-writes-gradle-verification
     message: >-
@@ -442,7 +442,7 @@ rules:
       cwe: "CWE-494: Download of code without integrity check"
     pattern-either:
       - pattern-regex: --write-verification-metadata\b
-      - pattern-regex: \bgradlew?\b(?:[^\n|]|\\\n)*\s-M(?:=|[ \t]*)(sha|md5|pgp)
+      - pattern-regex: \bgradlew?\b(?:[^\n|&;]|\\\n)*\s-M(?:=|[ \t]*)(sha|md5|pgp)
 
   - id: nulavio-sh-secret-in-argv
     message: >-

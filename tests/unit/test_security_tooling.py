@@ -38,10 +38,12 @@ GRADLE_PUBLISHED = {
 TOOLS = {"actionlint", "gitleaks", "opengrep", "shellcheck", "zizmor"}
 CHECKS = ("actionlint", "zizmor", "gitleaks", "shellcheck", "opengrep", "opengrep-rules")
 SHEBANG = re.compile(r"^#!\s*(/usr)?/bin/(env\s+)?(ba|da|k)?sh(\s|$)")
-# What Opengrep 1.32 takes as a suppression: nosem, nosemgrep or noopengrep in any case, anywhere in
-# the line (a string too) or alone on the line before; a bare one silences every rule. One form is allowed.
+# What Opengrep 1.32 takes as a suppression: the words SUPPRESSION matches, in any case, anywhere in
+# the line (a string too) or alone on the line before; a bare one silences every rule. One form is
+# allowed. The words are split here so that this file holds none of them and is checked like any other.
 SUPPRESSION = re.compile(r"(?i)no(?:sem|opengrep)")
-ALLOWED_SUPPRESSION = re.compile(r"nosemgrep: ([\w-]+) -- \S")
+ALLOWED_FORM = "no" + "semgrep"
+ALLOWED_SUPPRESSION = re.compile(ALLOWED_FORM + r": ([\w-]+) -- \S")
 
 
 def rules() -> dict[str, str]:
@@ -71,14 +73,13 @@ def git_files() -> list[str]:
 
 def scanned_files():
     """(path, text) of every file Opengrep may read: what git lists (scan.sh opengrep), minus the rules'
-    own test cases (.semgrepignore), Markdown (no rule reads it), binary files, and this file, which
-    names the forms it looks for."""
+    own test cases (.semgrepignore), Markdown (no rule reads it) and binary files."""
     for name in git_files():
         path = ROOT / name
         if path.suffix == ".md" or path.is_symlink() or not path.is_file() or path.is_relative_to(RULE_CASES):
             continue
         data = path.read_bytes()
-        if b"\0" not in data and path != Path(__file__).resolve():
+        if b"\0" not in data:
             yield path, data.decode(errors="replace")
 
 
@@ -158,7 +159,9 @@ class OpengrepRulesTest(unittest.TestCase):
                     seen += 1
                     with self.subTest(path=str(path.relative_to(ROOT)), line=number, text=line.strip()):
                         match = ALLOWED_SUPPRESSION.search(line)
-                        self.assertTrue(match and len(tokens) == 1, "write: nosemgrep: <rule id> -- <why this line is safe>")
+                        self.assertTrue(
+                            match and len(tokens) == 1, f"write: {ALLOWED_FORM}: <rule id> -- <why this line is safe>"
+                        )
                         self.assertIn(match[1], found)
         self.assertGreater(seen, 0)  # the walk reaches the known suppressions in scripts/ and tests/
 
@@ -264,6 +267,8 @@ class GitleaksHistoryTest(unittest.TestCase):
     def setUpClass(cls):
         cls.download = cached_download("gitleaks")
         if cls.download is None:
+            if os.environ.get("NULAVIO_REQUIRE_SECURITY_TOOLS") == "1":  # CI's security job: never skip silently
+                raise AssertionError("gitleaks is not in scan.sh's cache")
             raise unittest.SkipTest("gitleaks is not in scan.sh's cache, and unit tests download nothing")
 
     def setUp(self):

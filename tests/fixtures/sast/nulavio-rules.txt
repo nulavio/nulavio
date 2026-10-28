@@ -63,6 +63,15 @@ deb [signed-by=/usr/share/keyrings/example.gpg] https://example.org/apt stable m
 # ok: nulavio-verification-bypass
 grep -F off notes.txt
 # ok: nulavio-verification-bypass
+RUN curl -fsSL -o /tmp/t.tgz https://example.org/t.tgz && \
+    du -sk /tmp/t.tgz
+# ok: nulavio-verification-bypass
+RUN curl -fsSL --proto '=https' -o /tmp/t.tgz https://example.org/t.tgz \
+    && tar -xkf /tmp/t.tgz -C /opt
+# ok: nulavio-verification-bypass
+./gradlew build && \
+    grep -F off notes.txt
+# ok: nulavio-verification-bypass
 curl -fsSL --proto '=https' --tlsv1.2 -o tool.tar.gz \
     https://example.org/tool.tar.gz
 tar -xkf tool.tar.gz
