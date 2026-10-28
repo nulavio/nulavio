@@ -568,10 +568,14 @@ class WatcherTest(TempDirTest):
 
 
 class FakeGitHub:
-    def __init__(self, issues=None, fail=False, labels_fail=False):
+    def __init__(self, issues=None, fail=False, labels_fail=False, fail_on=()):
         self.store = {issue["number"]: dict(issue) for issue in issues or []}
-        self.fail, self.labels_fail = fail, labels_fail
+        self.fail, self.labels_fail, self.fail_on = fail, labels_fail, fail_on
         self.calls: list = []
+
+    def refuse(self, op):
+        if op in self.fail_on:
+            raise upstream_issue.ApiError(f"{op}: HTTP 403")
 
     def issues(self):
         if self.fail:
@@ -584,6 +588,7 @@ class FakeGitHub:
         self.calls.append(("labels", tuple(names)))
 
     def create(self, title, body, labels):
+        self.refuse("create")
         number = max(self.store, default=0) + 1
         self.store[number] = {"number": number, "state": "open", "title": title, "body": body, "labels": labels}
         self.store[number]["user"] = {"login": upstream_issue.BOT}
@@ -591,10 +596,12 @@ class FakeGitHub:
         return number
 
     def update(self, number, **changes):
+        self.refuse("update")
         self.store[number].update(changes)
         self.calls.append(("update", number, tuple(sorted(changes))))
 
     def comment(self, number, text):
+        self.refuse("comment")
         self.calls.append(("comment", number, text))
 
 
@@ -603,7 +610,7 @@ class IssueTest(TempDirTest):
 
     def sync(self, api, report, mention="caiolombello"):
         actions = upstream_issue.plan(report, api.issues(), mention=mention)
-        return upstream_issue.apply(api, actions, [])
+        return upstream_issue.apply(api, actions, [], [])
 
     def published(self, **kwargs):
         return report_for(self.tmp / f"r{next(self.runs)}", "2026-10-27T15:00:00", **kwargs)
@@ -694,22 +701,66 @@ class IssueTest(TempDirTest):
     def test_labels_unavailable_issue_still_opens(self):
         api = FakeGitHub(labels_fail=True)
         warnings: list = []
-        upstream_issue.apply(api, upstream_issue.plan(self.published(), [], mention=None), warnings)
+        upstream_issue.apply(api, upstream_issue.plan(self.published(), [], mention=None), warnings, [])
         self.assertEqual(api.store[1]["labels"], [])
         self.assertIn("labels unavailable", warnings[0])
 
-    def test_api_unavailable_warns_and_exits_0(self):
-        status = self.tmp / "status.json"
-        status.write_text(json.dumps(self.published()))
-        out = io.StringIO()
-        with contextlib.redirect_stdout(out):
-            rc = upstream_issue.main(["--status", str(status), "--repo", "caiolombello/nulavio"], api=FakeGitHub(fail=True))
+    def run_main(self, report, api, *extra):
+        status = self.tmp / f"status-{next(self.runs)}.json"
+        status.write_text(json.dumps(report))
+        with contextlib.redirect_stdout(io.StringIO()) as out:
+            rc = upstream_issue.main(["--status", str(status), "--repo", "caiolombello/nulavio", *extra], api=api)
+        return rc, out.getvalue()
+
+    def test_an_alert_that_cannot_be_written_fails_with_exit_4(self):
+        published = self.published()
+        cases = {
+            "issues cannot be listed": (FakeGitHub(fail=True), published),
+            "issue cannot be opened": (FakeGitHub(fail_on=("create",)), published),
+            "escalation cannot be written": (FakeGitHub(fail_on=("update",)), published),
+            "escalation comment cannot be written": (FakeGitHub(fail_on=("comment",)), published),
+        }
+        for label, (api, report) in cases.items():
+            with self.subTest(case=label):
+                if "escalation" in label:  # an issue opened while 159.0 was staged; now Mozilla published it
+                    staged = report_for(
+                        self.tmp / f"s{next(self.runs)}",
+                        "2026-10-27T05:00:00",
+                        drop=("159.0",),
+                        latest="158.0.1",
+                        staged=("159.0",),
+                        hide=("mfsa2026-118.yml", "mfsa2026-121.yml"),
+                    )
+                    upstream_issue.apply(api, upstream_issue.plan(staged, [], mention="caiolombello"), [], [])
+                rc, out = self.run_main(report, api, "--mention", "caiolombello")
+                self.assertEqual(rc, 4)
+                self.assertIn("::error::upstream_issue: alert not delivered for Firefox 159.0", out)
+        with mock.patch.dict(os.environ, {"GITHUB_TOKEN": ""}):
+            rc, out = self.run_main(published, None)
+        self.assertEqual(rc, 4)
+        self.assertIn("GITHUB_TOKEN is not set", out)
+
+    def test_issue_changes_that_alert_nobody_only_warn(self):
+        rc, out = self.run_main(self.published(), FakeGitHub(labels_fail=True))
         self.assertEqual(rc, 0)
-        self.assertIn("::warning::upstream_issue: GitHub API unavailable", out.getvalue())
-        with contextlib.redirect_stdout(io.StringIO()) as out, mock.patch.dict(os.environ, {"GITHUB_TOKEN": ""}):
-            rc = upstream_issue.main(["--status", str(status), "--repo", "caiolombello/nulavio"])
-        self.assertEqual(rc, 0)
-        self.assertIn("GITHUB_TOKEN is not set", out.getvalue())
+        self.assertIn("::warning::upstream_issue: labels unavailable", out)
+        opened = FakeGitHub(fail_on=("update",))
+        upstream_issue.apply(opened, upstream_issue.plan(self.published(), [], mention=None), [], [])
+        quieter = self.published()
+        quieter["targets"][0]["advisories"].append({"id": "mfsa2026-999", "impact": "low", "title": "x", "url": "u"})
+        caught_up = report_for(self.tmp / "c", "2026-10-28T15:00:00", pinned="159.0", digest=D159)
+        unavailable = {"schema": 2, "state": "unavailable", "exit_code": 2, "targets": [], "errors": ["down"]}
+        for label, api, report in (
+            ("body rewrite", opened, quieter),
+            ("close", FakeGitHub(opened.issues(), fail_on=("comment", "update")), caught_up),
+            ("nothing newer, issues cannot be listed", FakeGitHub(fail=True), caught_up),
+            ("no report, issues cannot be listed", FakeGitHub(fail=True), unavailable),
+        ):
+            with self.subTest(case=label):
+                rc, out = self.run_main(report, api)
+                self.assertEqual(rc, 0)
+                self.assertIn("::warning::upstream_issue: GitHub API unavailable", out)
+                self.assertNotIn("::error::", out)
 
     def test_invalid_status_exits_3(self):
         status = self.tmp / "status.json"
@@ -1285,6 +1336,9 @@ class ReleaseFilesTest(TempDirTest):
         self.assertIn("persist-credentials: false", text)
         self.assertIn("watch_upstream.py --json --verify", text)
         self.assertIn("upstream_issue.py --status", text)
+        # A failed issue step (exit 4: an alert not delivered) fails the job; the verdict and the other watch still run.
+        self.assertEqual(len(re.findall(r"(?m)^        if: \$\{\{ !cancelled\(\) \}\}$", text)), 2)
+        self.assertRegex(text, r"- name: Verdict\n        if: \$\{\{ !cancelled\(\) \}\}\n")
         lines = text.splitlines()
         for index, line in enumerate(lines):
             match = re.match(r"^(\s*)run: ?(.*)$", line)

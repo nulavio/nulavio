@@ -6,8 +6,9 @@ name: upstream
 # Nulavio ships (docs/architecture/update-policy.md), verifies Mozilla's
 # signatures, and keeps one issue per newer release that @mentions the
 # maintainer (GitHub sends e-mail and push). The job fails when a release is past
-# the 72-hour deadline, when Mozilla's data is unavailable, or when a signature
-# does not verify, so GitHub's failure notice is a second alert.
+# the 72-hour deadline, when Mozilla's data is unavailable, when a signature
+# does not verify, or when that issue could not be written (upstream_issue.py
+# exits 4), so GitHub's failure notice is a second alert, or the only one.
 # A second step checks every other pinned dependency against OSV.dev, the AMO
 # blocklist and the base-image digests (scripts/release/watch_dependencies.py);
 # the job summary says which step failed.
@@ -52,7 +53,7 @@ jobs:
           set +e
           python3 -I scripts/release/watch_upstream.py --json --verify --summary "$GITHUB_STEP_SUMMARY" > "$RUNNER_TEMP/status.json"
           echo "rc=$?" >> "$GITHUB_OUTPUT"
-      - name: Open, update or close the tracking issue (warns and goes on if the API is unavailable)
+      - name: Open, update or close the tracking issue (fails the job if an alert could not be written)
         if: steps.watch.outputs.rc != '2'
         env:
           GITHUB_TOKEN: ${{ github.token }}
