@@ -8,7 +8,7 @@
 | `browser/branding/nulavio/content/theme/tokens.css` | The browser window (Horizon) | `light-dark()`, following the engine's colour scheme |
 | `browser/shell/lib/identity-colors.js` | The profile icon the Shell draws for the toolbar | Same in both themes |
 
-`scripts/brand/contrast.py` checks every declared pair (**81/81 pass**, both themes). `tests/integration/test_horizon.py` re-measures contrast on the rendered window.
+`scripts/brand/contrast.py` checks every declared pair (**89/89 pass**, both themes). `tests/integration/test_horizon.py` re-measures contrast on the rendered window. The generator refuses a semantic colour defined for one theme only (it would fall back to an unrelated value in the other), and a unit test checks that every `var(--nv-*)` in the Shell and start-page sheets exists in both themes.
 
 ## Colour
 
@@ -27,6 +27,7 @@ Primitives: navy 950–0, mint 700/400/200/100, amber 700/400/100, red 700/400/3
 | `accent.default` | mint.700 `#0F7A68` | mint.400 `#6FE0C5` | Nulavio, "your route", links, the selected-tab mark |
 | `focus` | mint.700 | mint.400 | Focus rings |
 | `status.warning / critical` | amber.700 / red.700 | amber.400 / red.400 | Warnings and errors, always with an icon and words |
+| `status.criticalText` | red.700 `#A8323A` | red.300 `#EE8A8C` | Critical text and icons (errors, dangerous downloads) on surfaces and on `status.criticalTint` |
 | `status.secure` | navy.600 | navy.200 | The secure state is **neutral**: no green "safe" |
 | `accent.tint` | mint.100 `#DDF8F0` | mint.900 `#0E3B33` | Badges ("Default", "Current profile") under `text.primary` |
 

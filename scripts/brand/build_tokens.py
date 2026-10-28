@@ -46,7 +46,33 @@ def var_name(path: str) -> str:
     return "--nv-" + path.replace(".", "-")
 
 
+class TokenError(ValueError):
+    pass
+
+
+def one_theme_tokens(data: dict) -> list[str]:
+    """Semantic colours defined for one theme only (e.g. color.light.x without color.dark.x)."""
+    names: dict[str, set[str]] = {"light": set(), "dark": set()}
+    for path in flatten(data):
+        if path.startswith(("color.light.", "color.dark.")):
+            theme, _, name = path[len("color.") :].partition(".")
+            names[theme].add(name)
+    missing = [
+        f"color.{other}.{name}" for theme, other in (("light", "dark"), ("dark", "light")) for name in names[theme] - names[other]
+    ]
+    return sorted(missing)
+
+
+def require_both_themes(data: dict) -> None:
+    """A colour missing in one theme would fall back to an unrelated value there (the light critical
+    text once rendered navy, and the chrome file got the dark value in light): refuse to generate."""
+    missing = one_theme_tokens(data)
+    if missing:
+        raise TokenError("semantic colour defined for one theme only; add: " + ", ".join(missing))
+
+
 def build(data: dict) -> str:
+    require_both_themes(data)
     tokens = flatten(data)
     lines = [HEADER]
     shared = []
@@ -71,6 +97,7 @@ def build(data: dict) -> str:
 
 def build_chrome(data: dict) -> str:
     """Tokens for the browser window: one :root block, colours as light-dark()."""
+    require_both_themes(data)
     tokens = flatten(data)
     shared, colors = [], {}
     for path, token in tokens.items():
@@ -81,12 +108,7 @@ def build_chrome(data: dict) -> str:
             colors.setdefault(semantic, {})[theme] = css_value(token, tokens, path)
         else:
             shared.append(f"  {var_name(path)}: {css_value(token, tokens, path)};")
-    lines = [
-        f"  {var_name(name)}: light-dark({v['light']}, {v['dark']});"
-        if len(v) == 2
-        else f"  {var_name(name)}: {next(iter(v.values()))};"  # defined for one theme only
-        for name, v in colors.items()
-    ]
+    lines = [f"  {var_name(name)}: light-dark({v['light']}, {v['dark']});" for name, v in colors.items()]
     note = "/* Nulavio Shell tokens for the browser window. Colours follow the engine's colour scheme. */\n"
     return HEADER + note + ":root {\n" + "\n".join(shared + lines) + "\n}\n"
 
@@ -110,6 +132,11 @@ def main() -> int:
     parser.add_argument("--check", action="store_true")
     args = parser.parse_args()
     data = json.loads(TOKENS.read_text(encoding="utf-8"))
+    try:
+        require_both_themes(data)
+    except TokenError as error:
+        print(f"{TOKENS.relative_to(ROOT)}: {error}", file=sys.stderr)
+        return 2
     status = 0
     for out, css in ((OUTPUT, build(data)), (CHROME_OUTPUT, build_chrome(data)), (IDENTITY_OUTPUT, build_identity(data))):
         if args.check:

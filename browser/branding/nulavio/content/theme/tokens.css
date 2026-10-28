@@ -74,7 +74,7 @@
   --nv-color-status-secure: light-dark(#3A6273, #BFD0D6);
   --nv-color-status-warning: light-dark(#8A5A10, #E7AE61);
   --nv-color-status-critical: light-dark(#A8323A, #E26D70);
-  --nv-color-status-criticalText: #EE8A8C;
+  --nv-color-status-criticalText: light-dark(#A8323A, #EE8A8C);
   --nv-color-status-warningTint: light-dark(#FBEBD3, #3A2A12);
   --nv-color-status-criticalTint: light-dark(#F9DEDF, #3F1A1D);
   --nv-color-chrome-toolbox: light-dark(#E2EBEE, #070F18);

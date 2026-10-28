@@ -40,6 +40,29 @@ class TokensTest(unittest.TestCase):
         css = build_tokens.build(json.loads(build_tokens.TOKENS.read_text()))
         self.assertEqual(css, build_tokens.OUTPUT.read_text(), "run scripts/brand/build_tokens.py")
 
+    def test_generator_refuses_a_colour_defined_for_one_theme(self):
+        data = json.loads(build_tokens.TOKENS.read_text())
+        self.assertEqual(build_tokens.one_theme_tokens(data), [])
+        data["color"]["dark"]["status"]["onlyDark"] = {"$type": "color", "$value": "{color.primitive.red.300}"}
+        self.assertEqual(build_tokens.one_theme_tokens(data), ["color.light.status.onlyDark"])
+        for build in (build_tokens.build, build_tokens.build_chrome):
+            with self.subTest(build=build.__name__), self.assertRaises(build_tokens.TokenError):
+                build(data)
+
+    def test_every_token_the_pages_use_exists_in_both_themes(self):
+        css = build_tokens.OUTPUT.read_text()
+        light = css[css.index(":root {") : css.index("@media (prefers-color-scheme: dark)")]
+        dark = css[css.index('[data-theme="dark"] {') : css.index('[data-theme="light"] {')]
+        defined_light = set(re.findall(r"(--nv-[\w-]+)\s*:", light))
+        defined_dark = set(re.findall(r"(--nv-[\w-]+)\s*:", dark))
+        sheets = [*sorted((ROOT / "browser" / "shell").rglob("*.css")), ROOT / "browser" / "startpage" / "startpage.css"]
+        for sheet in sheets:
+            used = set(re.findall(r"var\((--nv-[\w-]+)", sheet.read_text(encoding="utf-8")))
+            with self.subTest(sheet=str(sheet.relative_to(ROOT))):
+                self.assertEqual(used - defined_light, set(), "not defined in the light tokens")
+                colours = {name for name in used if name.startswith("--nv-color-")}
+                self.assertEqual(colours - defined_dark, set(), "colour not defined in the dark tokens")
+
     def test_secure_state_is_not_green(self):
         tokens = contrast.flatten(json.loads(contrast.TOKENS.read_text()))
         for theme in ("light", "dark"):
