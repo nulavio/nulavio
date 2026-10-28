@@ -1,0 +1,32 @@
+/* Shell reset, typography and layout. No start-page hero or ambience. */
+@layer nv-base {
+*, *::before, *::after { box-sizing: border-box; }
+
+html {
+  background: var(--nv-color-bg-canvas);
+  color: var(--nv-color-text-primary);
+  font-family: var(--nv-font-family-brand);
+  font-size: 100%;
+  line-height: var(--nv-font-lineHeight-normal);
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: var(--nv-color-bg-canvas);
+}
+
+.page {
+  max-width: 68rem;
+  margin: 0 auto;
+  padding: clamp(2rem, 8vh, 6rem) var(--nv-space-6) var(--nv-space-7);
+  display: flex;
+  flex-direction: column;
+  gap: var(--nv-space-8);
+}
+
+
+.mono { font-family: var(--nv-font-family-mono); font-size: 0.9375rem; }
+}

@@ -39,3 +39,24 @@ Status per component of the browser window and Nulavio's own pages. "Upstream" m
 | Upstream profile menu | App menu → Profiles, `about:profilemanager`, `about:editprofile`, `about:deleteprofile` | Upstream, linked from Nulavio settings | — |
 | Onboarding | `about:welcome` | Upstream | Nulavio flow A (M6) |
 | Error pages | `aboutNetError`, `blockedSite.xhtml` | Upstream | Horizon styling, criteria untouched (M6) |
+
+## UX2 Shell system (2026-10-28)
+
+The built-in `dev/gallery/index.html` uses the same production CSS and markup
+primitives as the Shell. All states are artificial, labelled and inert.
+
+| Family | Enumerated states | Production owner |
+|---|---|---|
+| Buttons | Primary / secondary / quiet, native hover / focus / active, disabled, pressed, busy | `shared/components.css` |
+| Fields | Default, invalid with associated error, readonly, disabled select | `shared/components.css` |
+| Switches | Off, on, disabled on; native checkbox fallback in forced colours | `shared/components.css` |
+| Rows / identity | Named initial, temporary named initial with reserved dashed ring, disabled action, narrow stacking | `shared/components.css`, responsive composition in `pages.css` |
+| Status | Progress, completed, warning, error with octagon | `shared/components.css` |
+| Security | Warning triangle, critical octagon, critical consent with safe-first primary | `shared/components.css` |
+| Assistant | Included item, changed-page removal notice, paused/private refusal, progress | `shared/components.css` |
+| Accessibility | Focus, reduced motion, increased contrast, forced colours, hidden state | `shared/accessibility.css` (last layer) |
+
+Both themes and narrow/wide renders have reviewed PNG baselines. The gallery
+shows visual contracts, not an alternate product UI: real stop/pause/revoke,
+consent, private refusal and tab binding remain covered by the existing assistant,
+AI and Vault integration modules. No new framework, dependency or telemetry.

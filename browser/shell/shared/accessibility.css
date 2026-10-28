@@ -1,0 +1,39 @@
+/* Last cascade layer: accessibility wins over every component/page rule. */
+@layer nv-accessibility {
+.visually-hidden {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+:focus-visible {
+  outline: var(--nv-state-focusRingWidth) solid var(--nv-color-focus);
+  outline-offset: var(--nv-state-focusRingOffset);
+}
+[hidden] { display: none !important; }
+:where(button, input, select, textarea) { max-inline-size: 100%; }
+:where(p, h1, h2, h3, label, legend) { overflow-wrap: anywhere; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+}
+@media (prefers-contrast: more) {
+  .card, .notice, .assistant__off, .assistant__drift { border: 1px solid var(--nv-color-text-primary); }
+  .button, .input, .select { border-width: 2px; }
+  :focus-visible { outline-width: max(3px, var(--nv-state-focusRingWidth)); }
+}
+@media (forced-colors: active) {
+  :focus-visible { outline: 2px solid Highlight; }
+  .button, .input, .select, .card, .notice, .callout, .dialog,
+  .callout--info, .badge--warning, .badge--outline,
+  .assistant__chip, .assistant__drift, .assistant__off, .chip { border: 1px solid CanvasText; box-shadow: none; }
+  .button { color: ButtonText; background: ButtonFace; }
+  .button:disabled, .input:disabled, .select:disabled, .check input:disabled { color: GrayText; opacity: 1; }
+  .button[aria-pressed="true"] { outline: 2px solid Highlight; outline-offset: 1px; }
+  .status[data-level="error"]::before, .result[data-level="error"]::before,
+  .form-error::before { background-color: CanvasText; forced-color-adjust: none; }
+  .check--switch input[role="switch"] { appearance: auto; width: auto; height: auto; }
+  .check--switch input[role="switch"]::before { display: none; }
+  .swatch input { position: static; opacity: 1; }
+  .swatch__fill { display: none; }
+  .callout--critical, .dialog--critical,
+  .input[aria-invalid="true"], .select[aria-invalid="true"] { border: 2px solid CanvasText; }
+}
+}

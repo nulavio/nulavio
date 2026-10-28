@@ -21,9 +21,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 SOURCE = ROOT / "browser" / "shell"
+# Shell base/components/pages/accessibility are source-owned in shared/ and
+# copied by copytree; only resources owned elsewhere are mapped here.
 SHARED_FROM_REPO = {
     "shared/tokens.css": ROOT / "browser" / "startpage" / "tokens.css",
-    "shared/base.css": ROOT / "browser" / "startpage" / "startpage.css",
     "shared/nulavio-symbol.svg": ROOT / "docs" / "brand" / "assets" / "logo" / "nulavio-symbol.svg",
     "shared/nulavio-symbol-dark-on-light.svg": ROOT / "docs" / "brand" / "assets" / "logo" / "nulavio-symbol-dark-on-light.svg",
     # Follows the colour scheme: the toolbar, sidebar and tab icons (WCS-11).

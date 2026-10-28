@@ -1,0 +1,10 @@
+/* Only gallery composition; every specimen imports the production sheets. */
+@layer nv-gallery {
+  .gallery { max-width: 80rem; gap: var(--nv-space-6); padding-block: var(--nv-space-6); }
+  .gallery h1 { margin: 0; font-size: 2rem; line-height: var(--nv-font-lineHeight-tight); }
+  .gallery h2 { margin: 0; font-size: 1.25rem; }
+  .gallery__grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--nv-space-5); }
+  .gallery .card { min-width: 0; align-content: start; gap: var(--nv-space-4); }
+  .gallery .dialog { width: 100%; max-width: 100%; box-shadow: none; }
+  @media (max-width: 48rem) { .gallery__grid { grid-template-columns: minmax(0, 1fr); } }
+}

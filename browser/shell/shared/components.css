@@ -1,0 +1,453 @@
+/* Production components; page layout lives in pages.css. */
+@layer nv-components {
+.card {
+  background: var(--nv-color-bg-surface);
+  border: 1px solid var(--nv-color-border-subtle);
+  border-radius: var(--nv-radius-lg);
+  padding: var(--nv-space-6);
+  box-shadow: var(--nv-elevation-1);
+}
+.card__title {
+  margin: 0 0 var(--nv-space-5);
+  font-size: 0.8125rem;
+  font-weight: var(--nv-font-weight-semibold);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--nv-color-text-muted);
+}
+
+kbd {
+  display: inline-block;
+  min-width: 1.6em;
+  padding: 0.1em 0.45em;
+  border: 1px solid var(--nv-color-border-control);
+  border-bottom-width: 2px;
+  border-radius: var(--nv-radius-xs);
+  font-family: var(--nv-font-family-mono);
+  font-size: 0.75rem;
+  text-align: center;
+  color: var(--nv-color-text-secondary);
+  background: var(--nv-color-bg-sunken);
+}
+
+/* Search */
+.search {
+  display: flex;
+  gap: var(--nv-space-2);
+  width: min(40rem, 100%);
+  margin-top: var(--nv-space-2);
+}
+.search__input {
+  flex: 1;
+  min-width: 0;
+  padding: var(--nv-space-3) var(--nv-space-4);
+  font: inherit;
+  font-size: 1rem;
+  color: var(--nv-color-text-primary);
+  background: var(--nv-color-bg-surface);
+  border: 1px solid var(--nv-color-border-control);
+  border-radius: var(--nv-radius-md);
+}
+.search__input::placeholder { color: var(--nv-color-text-muted); }
+
+/* Buttons */
+.button {
+  appearance: none; /* drawn by Horizon, not the toolkit, so it follows the page theme at once */
+  font: inherit;
+  font-size: 0.9375rem;
+  font-weight: var(--nv-font-weight-medium);
+  padding: var(--nv-space-2) var(--nv-space-5);
+  border-radius: var(--nv-radius-md);
+  border: 1px solid transparent;
+  cursor: pointer;
+  color: var(--nv-color-text-primary);
+  background: transparent;
+}
+.button--primary {
+  background: var(--nv-color-accent-default);
+  color: var(--nv-color-accent-on);
+  border-radius: var(--nv-radius-md);
+}
+.button--secondary { border-color: var(--nv-color-border-control); background: var(--nv-color-bg-raised); }
+.button--quiet { color: var(--nv-color-text-secondary); }
+/* The state tokens are opacities: tint with the button's own text colour. */
+.button:hover:not(:disabled) { box-shadow: inset 0 0 0 100vmax color-mix(in srgb, currentColor calc(var(--nv-state-hoverOverlay) * 100%), transparent); }
+.button:active:not(:disabled) { box-shadow: inset 0 0 0 100vmax color-mix(in srgb, currentColor calc(var(--nv-state-pressedOverlay) * 100%), transparent); }
+
+.callout {
+  display: flex;
+  gap: var(--nv-space-3);
+  padding: var(--nv-space-4);
+  border-radius: var(--nv-radius-md);
+}
+.callout[hidden] { display: none; }
+.callout p { margin: 0; }
+.callout__icon { width: 1.25rem; height: 1.25rem; flex: none; }
+.callout--warning { background: var(--nv-color-status-warningTint); }
+.callout--warning .callout__icon { color: var(--nv-color-status-warning); }
+.callout--critical { background: var(--nv-color-status-criticalTint); color: var(--nv-color-status-criticalText); }
+.actions { display: flex; flex-wrap: wrap; gap: var(--nv-space-3); }
+.actions[hidden] { display: none; }
+.result { margin: 0; font-weight: var(--nv-font-weight-medium); }
+.result[data-level="ok"]::before { content: "✓ "; color: var(--nv-color-status-secure); }
+.result[data-level="error"] { color: var(--nv-color-status-criticalText); }
+.why summary { cursor: pointer; color: var(--nv-color-text-secondary); }
+.why ul { margin: var(--nv-space-3) 0 0; padding-left: 1.25rem; display: grid; gap: var(--nv-space-2); color: var(--nv-color-text-secondary); font-size: 0.9375rem; }
+
+
+/* Shared form and list parts (settings page and toolbar popup) */
+
+.stack { display: grid; gap: var(--nv-space-5); }
+.stack--tight { gap: var(--nv-space-3); }
+.hint { margin: 0; font-size: 0.875rem; color: var(--nv-color-text-secondary); }
+.hint--on { color: var(--nv-color-text-primary); }
+.subhead { margin: 0; font-size: 0.9375rem; font-weight: var(--nv-font-weight-semibold); }
+.notice {
+  margin: 0;
+  padding: var(--nv-space-4) var(--nv-space-5);
+  border-radius: var(--nv-radius-md);
+  background: var(--nv-color-bg-sunken);
+  color: var(--nv-color-text-primary);
+}
+.status { margin: 0; min-height: 1.5em; font-weight: var(--nv-font-weight-medium); }
+.status:empty { min-height: 0; }
+/* Levels set by announce() in lib/ui.js: info has no mark; ✓ only for a result that happened */
+.status[data-level="ok"]::before { content: "✓ "; color: var(--nv-color-status-secure); }
+.status[data-level="warn"] { color: var(--nv-color-status-warning); }
+.status[data-level="warn"]::before { content: "⚠ "; }
+.status[data-level="error"] { color: var(--nv-color-status-criticalText); }
+.status[data-level="error"]::before,
+.result[data-level="error"]::before {
+  content: "";
+  display: inline-block;
+  inline-size: 1em;
+  block-size: 1em;
+  margin-inline-end: 0.4em;
+  vertical-align: -0.15em;
+  background-color: currentColor;
+  mask: url("icon-critical.svg") center / contain no-repeat;
+}
+.status[data-level="progress"]::before {
+  content: "";
+  display: inline-block;
+  box-sizing: border-box;
+  inline-size: 0.9em;
+  block-size: 0.9em;
+  margin-inline-end: 0.5em;
+  vertical-align: -0.1em;
+  border: 2px solid currentColor;
+  border-inline-end-color: transparent;
+  border-radius: 50%;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .status[data-level="progress"]::before { animation: nv-status-spin 0.9s linear infinite; }
+}
+@keyframes nv-status-spin { to { transform: rotate(1turn); } }
+
+.status[data-level]:empty::before { content: none; }
+.form-error { margin: 0; color: var(--nv-color-status-criticalText); font-size: 0.875rem; }
+.form-error:empty { display: none; }
+.form-error::before {
+  content: ""; display: inline-block; inline-size: 1em; block-size: 1em;
+  margin-inline-end: var(--nv-space-2); vertical-align: -0.15em;
+  background: currentColor; mask: url("icon-critical.svg") center / contain no-repeat;
+}
+
+.field { display: grid; gap: var(--nv-space-2); min-width: 0; }
+.field--inline { display: inline-grid; }
+.field__label { font-size: 0.875rem; color: var(--nv-color-text-secondary); }
+.field-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(14rem, 100%), 1fr)); gap: var(--nv-space-4); }
+.input, .select {
+  font: inherit;
+  font-size: 0.9375rem;
+  min-height: var(--nv-size-field-height);
+  padding: var(--nv-space-2) var(--nv-space-4);
+  color: var(--nv-color-text-primary);
+  background: var(--nv-color-bg-surface);
+  border: 1px solid var(--nv-color-border-control);
+  border-radius: var(--nv-radius-md);
+  min-width: 0;
+}
+.input--short { width: 10rem; }
+.input::placeholder { color: var(--nv-color-text-muted); }
+.inline-form { display: flex; flex-wrap: wrap; align-items: center; gap: var(--nv-space-3); }
+.check { display: flex; gap: var(--nv-space-3); align-items: flex-start; cursor: pointer; }
+.check > span { display: grid; gap: var(--nv-space-1); }
+.check input { margin: 0.2em 0 0; width: 1.125rem; height: 1.125rem; accent-color: var(--nv-color-accent-default); flex: none; }
+.actions--end { justify-content: flex-end; }
+.button { min-height: 2.25rem; }
+.button:disabled { opacity: var(--nv-state-disabledOpacity); cursor: default; box-shadow: none; }
+/* Destructive: critical text on the raised surface (pairs checked in tokens.json), plus the verb in words */
+.button--danger {
+  color: var(--nv-color-status-criticalText, var(--nv-color-status-critical));
+  background: var(--nv-color-bg-raised);
+  border-color: currentColor;
+  font-weight: var(--nv-font-weight-semibold);
+}
+.button--with-chip { display: inline-flex; align-items: center; gap: var(--nv-space-3); padding-inline-start: var(--nv-space-3); }
+.badge {
+  display: inline-block;
+  margin-inline-start: var(--nv-space-3);
+  padding: 0 var(--nv-space-3);
+  border-radius: var(--nv-radius-pill);
+  background: var(--nv-color-accent-tint);
+  color: var(--nv-color-text-primary);
+  font-size: 0.75rem;
+  font-weight: var(--nv-font-weight-medium);
+  vertical-align: middle;
+}
+.badge--quiet { background: var(--nv-color-bg-sunken); }
+
+/* Identity chip: a profile's colour with its icon or initial; never colour alone */
+.chip {
+  --chip: var(--nv-color-identity-slate);
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  border-radius: 50%;
+  background: var(--chip);
+  color: var(--nv-color-identity-on);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--nv-color-identity-on) 35%, transparent);
+  font-family: var(--nv-font-family-ui);
+  font-weight: var(--nv-font-weight-semibold);
+  line-height: 1;
+}
+.chip img { width: 84%; height: 84%; }
+.chip--sm { width: 1.25rem; height: 1.25rem; font-size: 0.6875rem; }
+.chip--md { width: 1.75rem; height: 1.75rem; font-size: 0.875rem; }
+.chip--lg { width: 2.25rem; height: 2.25rem; font-size: 1rem; }
+.chip--neutral { --chip: var(--nv-color-bg-sunken); color: var(--nv-color-text-secondary); box-shadow: none; }
+/* Temporary profile: the neutral identity colour with a dashed ring ("not kept"), same in both themes */
+.chip--temporary {
+  box-shadow: none;
+  outline: 2px dashed var(--nv-color-identity-on);
+  outline-offset: -2px;
+}
+
+.list { list-style: none; margin: 0; padding: 0; display: grid; }
+.row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: var(--nv-space-4) var(--nv-space-5);
+  align-items: start;
+  padding: var(--nv-space-5) 0;
+  border-top: 1px solid var(--nv-color-border-subtle);
+}
+.row:first-child { border-top: 0; padding-top: 0; }
+.row__main { display: grid; gap: var(--nv-space-3); min-width: 0; }
+.row__title { margin: 0; font-weight: var(--nv-font-weight-semibold); overflow-wrap: anywhere; }
+.row__meta { margin: 0; font-size: 0.875rem; color: var(--nv-color-text-secondary); font-family: var(--nv-font-family-mono); overflow-wrap: anywhere; }
+.row__end { display: flex; flex-wrap: wrap; gap: var(--nv-space-3); justify-content: flex-end; }
+
+/* Rows without a chip (agents, permissions, activity); a disclosure spans the whole row. */
+.row--plain { grid-template-columns: minmax(0, 1fr) auto; }
+.row--plain > .more { grid-column: 1 / -1; }
+.row__note { margin: 0; font-size: 0.875rem; color: var(--nv-color-text-secondary); overflow-wrap: anywhere; }
+fieldset.stack { border: 0; padding: 0; margin: 0; min-width: 0; }
+fieldset.stack > legend { padding: 0; margin-bottom: var(--nv-space-2); }
+.suggest { display: grid; gap: var(--nv-space-1); }
+.swatches { display: flex; flex-wrap: wrap; gap: var(--nv-space-3); margin: 0; padding: 0; border: 0; }
+.swatches legend { padding: 0; margin-bottom: var(--nv-space-2); }
+.swatch { position: relative; display: inline-grid; cursor: pointer; }
+.swatch input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; }
+.swatch__fill {
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 50%;
+  background: var(--chip);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--nv-color-identity-on) 35%, transparent);
+}
+.swatch input:checked + .swatch__fill {
+  box-shadow: 0 0 0 2px var(--nv-color-bg-surface), 0 0 0 4px var(--nv-color-text-primary);
+}
+.swatch input:focus-visible + .swatch__fill {
+  outline: var(--nv-state-focusRingWidth) solid var(--nv-color-focus);
+  outline-offset: 4px;
+}
+.dialog {
+  max-width: min(30rem, calc(100vw - 2rem));
+  padding: var(--nv-space-6);
+  border: 1px solid var(--nv-color-border-subtle);
+  border-radius: var(--nv-radius-md);
+  background: var(--nv-color-bg-raised);
+  color: var(--nv-color-text-primary);
+  box-shadow: var(--nv-elevation-3);
+}
+.dialog::backdrop { background: color-mix(in srgb, var(--nv-color-identity-on) 45%, transparent); }
+.dialog__form { display: grid; gap: var(--nv-space-5); }
+.dialog__title { margin: 0; font-size: max(1.25rem, var(--nv-font-size-xl)); font-weight: var(--nv-font-weight-semibold); }
+.dialog__body { margin: 0; color: var(--nv-color-text-secondary); }
+
+/* Disclosure for less frequent edits (alias, profile details) */
+.more > summary {
+  width: fit-content;
+  cursor: pointer;
+  font-size: 0.875rem;
+  color: var(--nv-color-text-secondary);
+  border-radius: var(--nv-radius-xs);
+}
+.more > summary:hover { color: var(--nv-color-text-primary); }
+.more[open] > summary { margin-bottom: var(--nv-space-3); }
+
+/* Switch: a checkbox with role="switch", drawn as a track and knob; the label says what it does */
+.check--switch { align-items: center; }
+.check--switch input[role="switch"] {
+  appearance: none;
+  position: relative;
+  width: 2.25rem;
+  height: 1.25rem;
+  margin: 0;
+  border-radius: var(--nv-radius-pill);
+  background: var(--nv-color-border-control);
+  cursor: pointer;
+}
+.check--switch input[role="switch"]::before {
+  content: "";
+  position: absolute;
+  inset-block-start: 2px;
+  inset-inline-start: 2px;
+  width: calc(1.25rem - 4px);
+  height: calc(1.25rem - 4px);
+  border-radius: 50%;
+  background: var(--nv-color-bg-surface);
+}
+.check--switch input[role="switch"]:checked { background: var(--nv-color-accent-default); }
+.check--switch input[role="switch"]:checked::before { inset-inline-start: calc(100% - 1.25rem + 2px); }
+.check--switch input[role="switch"]:focus-visible {
+  outline: var(--nv-state-focusRingWidth) solid var(--nv-color-focus);
+  outline-offset: var(--nv-state-focusRingOffset);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .check--switch input[role="switch"]::before { transition: inset-inline-start var(--nv-motion-duration-fast) var(--nv-motion-easing-standard); }
+}
+
+
+/* Links on Shell pages use the accent, like links in the chrome */
+a { color: var(--nv-color-accent-default); }
+a:hover { text-decoration-thickness: 2px; }
+
+/* Integrations: state in words and a mark; never colour alone */
+.state-mark { width: 1.75rem; height: 1.75rem; border-radius: 50%; display: inline-grid; place-items: center; font-weight: var(--nv-font-weight-semibold); background: var(--nv-color-bg-sunken); color: var(--nv-color-text-secondary); }
+.state-mark::before { content: "?"; }
+.state-mark--enabled { background: var(--nv-color-accent-tint); color: var(--nv-color-text-primary); }
+.state-mark--enabled::before { content: "✓"; }
+.state-mark--available::before { content: "•"; }
+.state-mark--unavailable::before { content: "–"; }
+.state-mark--error { background: var(--nv-color-status-warningTint); color: var(--nv-color-status-warning); }
+.state-mark--error::before { content: "!"; }
+.evidence { margin: 0; padding-left: 1.25rem; display: grid; gap: var(--nv-space-1); font-size: 0.8125rem; color: var(--nv-color-text-secondary); overflow-wrap: anywhere; }
+a.button { display: inline-flex; align-items: center; text-decoration: none; }
+
+/* -- UX1 · agents: request risk, level and state badges, the critical consent (ADR 0007) ------------
+   State is never colour alone: each variant has an icon (ui.js icon()) and words. */
+.callout--info { background: var(--nv-color-bg-sunken); }
+.callout--info .callout__icon { color: var(--nv-color-text-secondary); }
+.callout--critical .callout__icon { color: var(--nv-color-status-criticalText, var(--nv-color-status-critical)); }
+.callout__action { margin-inline-start: auto; align-self: center; flex: none; }
+.badge__icon { width: 0.875rem; height: 0.875rem; vertical-align: -0.125em; margin-inline-end: var(--nv-space-1); }
+.badge--warning { background: var(--nv-color-status-warningTint); }
+.badge--warning .badge__icon { color: var(--nv-color-status-warning); }
+.badge--outline { background: var(--nv-color-bg-surface); box-shadow: inset 0 0 0 1px var(--nv-color-status-warning); }
+.badge--quiet .badge__icon { color: var(--nv-color-text-secondary); }
+.dialog--critical { border-color: var(--nv-color-status-critical); }
+.dialog--critical .dialog__title { display: flex; align-items: flex-start; gap: var(--nv-space-3); }
+.dialog__icon { width: 1.5rem; height: 1.5rem; flex: none; color: var(--nv-color-status-criticalText, var(--nv-color-status-critical)); }
+.dialog__body--strong { color: var(--nv-color-text-primary); }
+
+
+/* ==== UX1 pages: consent and honesty fixes (audit 2026-10-27: SB-05, SB-07, SB-10, DS-04, DS-05, DS-11) ==== */
+
+/* Native radios and checkboxes in the brand accent, not the toolkit's blue (DS-11) */
+:root { accent-color: var(--nv-color-accent-default); }
+
+/* A pressed toggle (e.g. the profile templates on vault/create.html) looks pressed: tint, accent edge
+   and a ✓, never colour alone (DS-05) */
+.button[aria-pressed="true"] {
+  background: var(--nv-color-accent-tint);
+  border-color: var(--nv-color-accent-default);
+  color: var(--nv-color-text-primary);
+}
+.button[aria-pressed="true"]::before { content: "✓"; font-weight: var(--nv-font-weight-semibold); }
+
+
+/* Download warning (flow E): the critical state has its own colour, icon and headline (SB-05, DS-04) */
+.callout--critical .callout__icon { color: var(--nv-color-status-criticalText); }
+[data-severity="critical"] .file__icon { color: var(--nv-color-status-criticalText); }
+
+/* ==== end UX1 pages ==== */
+
+/* Consistent native form states. Validation remains owned by the page. */
+.input:hover:not(:disabled), .select:hover:not(:disabled) { border-color: var(--nv-color-text-secondary); }
+.input[aria-invalid="true"], .select[aria-invalid="true"] {
+  border: 2px solid var(--nv-color-status-criticalText);
+}
+.input:disabled, .select:disabled, .check input:disabled {
+  opacity: var(--nv-state-disabledOpacity); cursor: default;
+}
+.input[readonly] { background: var(--nv-color-bg-sunken); }
+.button[aria-busy="true"] { cursor: progress; }
+.callout--warning, .callout--critical, .dialog--critical {
+  border-radius: var(--nv-radius-xs);
+  opacity: 1;
+  animation: none;
+  transition: none;
+}
+.callout--warning { border: 1px solid var(--nv-color-status-warning); }
+.callout--critical { border: 1px solid var(--nv-color-status-criticalText); }
+.dialog--critical { border-width: 2px; }
+.assistant__answer { white-space: pre-wrap; overflow-wrap: anywhere; padding: var(--nv-space-3); border-radius: var(--nv-radius-md); background: var(--nv-color-bg-sunken); }
+
+
+/* -- Assistant panel, UX1 (AI-02, AI-10, AI-12, AI-15) ------------------------------------------
+   The included page is an item bound to one tab, with its own remove control; the panel says why
+   it left. Off states (private window, emergency stop, paused) replace the composer. Progress text
+   uses the "progress" status level (no check mark): only a finished answer gets one. */
+.assistant__off { margin: 0; padding: var(--nv-space-4); border-radius: var(--nv-radius-md); background: var(--nv-color-bg-sunken); }
+.assistant__off-title { margin: 0; font-size: 1rem; font-weight: var(--nv-font-weight-semibold); display: flex; gap: var(--nv-space-2); align-items: baseline; }
+.assistant__off p { margin: 0; }
+.assistant__drift { margin: 0; display: flex; gap: var(--nv-space-2); align-items: baseline; padding: var(--nv-space-2) var(--nv-space-3); border-radius: var(--nv-radius-sm); background: var(--nv-color-bg-sunken); font-size: 0.875rem; overflow-wrap: anywhere; }
+.assistant__chip {
+  display: flex;
+  align-items: center;
+  gap: var(--nv-space-2);
+  min-height: 1.75rem;
+  padding: var(--nv-space-1) var(--nv-space-1) var(--nv-space-1) var(--nv-space-3);
+  border: 1px solid var(--nv-color-accent-default);
+  border-radius: var(--nv-radius-sm);
+  background: var(--nv-color-accent-tint);
+  color: var(--nv-color-text-primary);
+}
+.assistant__chip-text { flex: 1; min-width: 0; display: grid; gap: 2px; font-weight: var(--nv-font-weight-semibold); overflow-wrap: anywhere; }
+.assistant__chip-text .hint { font-weight: var(--nv-font-weight-regular); color: var(--nv-color-text-primary); }
+.assistant__chip-remove {
+  appearance: none;
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  min-width: 1.5rem;
+  min-height: 1.5rem;
+  padding: 0;
+  border: 0;
+  border-radius: var(--nv-radius-xs);
+  background: transparent;
+  color: var(--nv-color-text-primary);
+  font: inherit;
+  font-size: 1.125rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.assistant__chip-remove:hover { box-shadow: inset 0 0 0 100vmax color-mix(in srgb, currentColor calc(var(--nv-state-hoverOverlay) * 100%), transparent); }
+.assistant__offer { justify-self: start; text-align: start; white-space: normal; overflow-wrap: anywhere; }
+.assistant__answer-title { margin: 0; font-size: 0.875rem; font-weight: var(--nv-font-weight-semibold); }
+
+
+
+
+.assistant__chip { border-radius: var(--nv-radius-md); }
+.assistant__off, .assistant__drift, .badge--warning, .badge--outline {
+  border-radius: var(--nv-radius-xs); opacity: 1; animation: none; transition: none;
+}
+.check input:hover:not(:disabled) { outline: 1px solid var(--nv-color-text-secondary); outline-offset: 2px; }
+.check input:active:not(:disabled) { outline: 2px solid var(--nv-color-text-primary); }
+.button[aria-pressed="true"] { display: inline-flex; align-items: center; gap: var(--nv-space-2); }
+}

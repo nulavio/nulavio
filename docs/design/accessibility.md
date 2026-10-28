@@ -21,3 +21,33 @@ Target: WCAG 2.2 AA in both themes, at 100–150 % scaling, with keyboard and sc
 | User choice | `nulavio.horizon.enabled = false` restores upstream; installed themes keep their colours | `test_horizon` 09, 10 |
 
 Pending: manual Orca pass, forced colours on a real high-contrast GTK theme, 125/150 % on real hardware.
+
+## UX2 Shell component checks
+
+The last CSS layer (`nv-accessibility`) guarantees that page/gallery composition
+does not replace keyboard focus, high-contrast borders or forced-colour native
+inputs. Reduced motion disables transitions and animations, including pseudo
+elements. Critical/warning/refusal signals are opaque and non-animated even when
+motion is allowed. Invalid fields have a 2 px critical border and an associated
+text error with an octagon; colour is supplemental. Buttons preserve native
+disabled semantics, and pressed controls retain a check mark and outline.
+
+The rendered Track B gallery suite measures 1280/390 px in both themes, asserts
+focus outline, invalid border, equal primary/secondary radius, and no horizontal
+overflow. It separately tests 320/390 px at 200% root font, increased-contrast
+focus and forced-colour native switch appearance. Baselines include failure,
+refusal and critical-consent specimens. The sample controls are inert and
+clearly labelled, so they cannot be mistaken for working permission controls.
+
+This is development evidence from a copied engine plus `dev_sync.py`, not a
+release build or WCAG certification. Automated checks do not prove screen-reader
+announcements or physical GTK theme behavior. Manual Orca and real desktop
+high-contrast/125–150% checks remain pending. Parent must repeat rendered checks
+on the rebuilt package and after token/identity integration.
+
+The forced-colour capture uses the engine's 500 px minimum after restart; the
+320/390 px font-enlargement checks run before restart and assert `innerWidth`.
+The state inventory also has visually hidden descriptions outside the inert
+specimens, so assistive technology can read the examples without exposing fake
+actions. The existing 11 px small identity initial is retained (a non-body glyph,
+with the profile name beside it); `ui_lint` reports it as the one accepted warning.

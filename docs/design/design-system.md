@@ -123,15 +123,79 @@ Screenshots: [settings](screenshots/settings-light.png), [profile selector](scre
 
 State overlays: the `state.*` tokens are opacities; Shell buttons apply them as `color-mix(in srgb, currentColor <n>%, transparent)` (until S6 the hover and pressed overlays were invalid CSS and showed nothing). Buttons use `appearance: none` so the toolkit never paints them in the other scheme.
 
-## Component gallery
+## Shell cascade and component gallery (UX2)
 
-Firefox's Storybook (`browser/components/storybook`) needs a large npm dependency tree. That is more supply chain than this project accepts for documentation, and the chrome components it documents are upstream. Equivalent, already in the repository:
+`shared/base.css` is owned by the Shell. It contains reset, inherited type,
+solid canvas and `.page` layout. The launcher/site continue to use the independent
+`browser/startpage/startpage.css`; the Shell build no longer copies that sheet
+under the name `base.css`.
 
-- `docs/brand/mockups/index.html`: the brand's components and flows as HTML using the tokens (`scripts/brand/render_mockups.py` renders PNGs).
-- `scripts/brand/ui_directions.py`: the window slice per direction, with contrast.
-- `scripts/research/shell_screenshots.py`: the real window, theme × scale × resolution matrix and timings.
+Existing pages keep exactly three links: generated `tokens.css`, `base.css`,
+and `shell.css`. The last is an entry point with one import each for
+`components.css`, `pages.css` and `accessibility.css`. All rules live in named
+layers, ordered `nv-base`, `nv-components`, `nv-pages`, `nv-gallery`,
+`nv-accessibility`. Gallery composition cannot override the accessibility layer.
+New page sheets must use `nv-pages`, never unlayered overrides. Avoid `!important`
+except visibility and the global reduced-motion guard. Important declarations
+reverse layer priority; do not add competing important rules in earlier layers.
 
-A Shell gallery page (live components inside the built-in add-on) is planned with the Privacy Center, when there are more Shell components than two.
+Components own buttons, fields, switches, rows, cards, identity chips, status,
+callouts, dialogs and assistant context/refusal parts. Page composition owns
+hero/facts, Settings header/navigation, routing, download layout, phone pairing
+and popup dimensions. The canvas and components are solid; optional new-tab
+ambience/translucency remains UX6.
+
+Buttons (including primary), fields and context chips use the existing 10 px
+`radius.md`; security callouts, critical consent, refusal/drift and warning badges
+use opaque 4 px `radius.xs`, without animation. Warning keeps the triangle;
+validation errors use critical text plus the octagon, matching `aria-invalid`
+borders. Progress is neutral and never carries the success check. Native switch
+semantics stay intact, with native appearance restored in forced colours.
+
+The real built-in gallery is `dev/gallery/index.html` below the Shell extension
+origin (replace `/newtab/newtab.html` in the built-in new-tab URL). It is a
+development surface, labelled **Artificial examples only**, has no script or
+privileged API and keeps all specimens inert. It imports production CSS, rather
+than copying component styling. It follows the system theme; the rendered test
+sets the generated token sheet's existing `data-theme` override for both themes.
+Hover/focus/active specimens use engine pseudo-class locks in the test, not fake
+state selectors in production CSS. The safe consent choice is first and primary.
+The mockups in `docs/brand/mockups` remain design references, not this gallery's
+implementation.
+
+`tests/integration/test_component_gallery.py` checks real 1280/390 CSS-pixel
+viewports × light/dark, production state styles, no horizontal overflow, safe
+ordering, inert controls, reduced motion, 320/390 px reflow with 200% root font,
+high contrast, and native switches under forced colours. Track B is required:
+stock Firefox does not prove the built-in origin or packaging. Unit tests cover
+packaging and the source/import boundaries without an engine.
+
+PNG baselines live in `tests/baselines/component-gallery/`. They use the copied
+Nulavio 159.0 Linux engine, BuildID `20261028130348`, SourceStamp
+`5add844c26613d7e4d84c799d6e23cf987b1240d`, with dev-synced Shell sources.
+Window chrome is excluded. The 390 px fixture removes the native window's 500 px
+minimum only inside its disposable test window and asserts actual `innerWidth`.
+Reduced motion freezes the neutral progress indicator. Repeated captures must
+be identical. `pngdiff` samples every pixel; dimensions must match exactly;
+mean difference ≤ 0.1 grey level and changed share ≤ 0.001 (threshold 40).
+These small allowances accommodate raster drift, not layout changes. A negative
+control hides the critical callout and must fail the same oracle in every case.
+Each critical callout also has a cropped baseline and must reject removal of
+its octagon, so a missing glyph cannot be diluted by the full page. No
+pre-existing pixel/security assertion was relaxed.
+
+To propose baselines, run with `NULAVIO_UPDATE_GALLERY_BASELINES=1`, inspect all
+four full-page PNGs and their four critical-callout crops, then rerun without that flag. Never regenerate them just to clear CI.
+Font/engine changes require a reviewed refresh. Parent integration must rebuild
+the real package and repeat the gallery suite after the tokens v2 merge.
+
+Token dependency: this slice uses only the existing variable API. Tokens v2
+will migrate identity colours and rem type roles. Suggested role replacements
+for the current sizes are `type.body`, `type.label`, `type.heading`, and
+`type.caption`; no such undefined aliases are emitted here. Existing heading
+size tokens have rem floors so text enlargement already works. Manual Orca,
+real GTK high-contrast themes and the final rebuilt release remain separate
+verification obligations.
 
 ## UX1 verification (2026-10-28)
 
@@ -142,3 +206,25 @@ Rendered QA covers a 318 px assistant panel inside a 1366×768 window, both syst
 During verification, one run timed out waiting for the recovery-unlocked profile to unmount after its engine was terminated. Three isolated replays passed, with unmounts in 0.34–0.62 s; the original cause was not established. The shutdown assertion and its deadline were kept unchanged.
 
 Captures: [included page, narrow/light](screenshots/assistant-narrow-context-light.png), [emergency stop, narrow/dark](screenshots/assistant-narrow-stopped-dark.png), [critical agent request](screenshots/ai-permission-request-critical-dark.png), [separate raw-automation consent](screenshots/ai-raw-automation-warning-light.png).
+
+### UX2 render review
+
+The reviewed narrow/light and narrow/dark captures keep the inventory in one
+column; long context and consent copy wrap, actions stay in reading order, and
+warning/critical glyphs remain inside their callouts. The wide captures use two
+aligned columns. The initial excess spacing inside the button specimen was
+removed; invalid-field helper text now matches the critical border and octagon.
+The forced-colour/font-enlargement capture preserves words, glyphs and native
+switches without clipping. The gallery is new, so no same-route before image
+exists; existing page behavior is checked by the integration modules.
+
+Visual rubric (0–3): hierarchy 3, layout 2, type 2, colour 3, spacing 2,
+states 3, reflow 3, accessibility 2, copy 3, distinctiveness 2; mean 2.5.
+This is a scoped visual assessment, not accessibility certification.
+
+Run the existing Vault, assistant and AI integration modules **sequentially**
+when they share one engine copy: Vault's `test_06_tools_missing` temporarily
+renames that copy's `nulavio-tools` directory. Parallel execution can make the
+other modules report missing tools. A recovery-unmount timeout was also observed
+under concurrent load; a later sequential full Vault run passed with the original
+30-second assertion unchanged. Its cause is not established by that replay.
