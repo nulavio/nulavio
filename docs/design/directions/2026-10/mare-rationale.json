@@ -1,0 +1,411 @@
+{
+ "name": "Maré",
+ "slug": "mare",
+ "one_liner": "Horizon, settled: a calm vertical-first browser where each profile is a named place, and one mint route mark says where you are.",
+ "concept": "Maré treats every Nulavio profile as a place, not a colour dot: the window opens on a sidebar whose first line is the place itself (identity tile with its glyph, the name, and the protection state in words), followed by that place's tabs organised in native tab groups. The whole chrome is one continuous, low-chroma tinted surface (12% of the profile colour in light, 10% in dark, mixed in OKLab), sealed at the top by a 3 px identity edge, the 'tide line'; the page sits flush inside it, separated by hairlines, never floating. Everything else is still water: tonal navy and cloud layers, no chrome shadows, 10/14 px geometry, and a single clear signal, the mint route mark, made stronger in light mode (3×20 px). Security states never borrow identity hues: they own reserved patterns, positions and words (dashed = temporary, double ink rule = AI Workspace, diagonal stripes = raw automation, padlock + 'Bloqueado' = locked, amber pill + number = Guard), and they replace the identity tint instead of mixing with it. A non-removable state slot in the toolbar (which is never hidden) carries them in every layout and density. The assistant docks to the right of the page and only ever sends what the user pinned as chips bound to an exact tab, with recipient and size shown before Send. Translucency exists in two places only (the Shell new tab ambience and the expand-on-hover overlay), with a 0.86 opacity floor and a solid fallback.",
+ "mood_words": [
+  "serene",
+  "precise",
+  "anchored"
+ ],
+ "layout_default": "Preset 'Vertical' (default): native Firefox vertical tabs in the sidebar, always shown and expanded (sidebar.verticalTabs=true, sidebar.visibility=always-show, ~248 px), with, top to bottom: profile header (tile + name + protection state in words + 'Bloquear agora' when protected), pinned-tab tile grid, native tab groups (name + re-valued colour line), tabs with the route mark, 'Nova aba', and the native tools row (Assistente, Favoritos, Histórico, Personalizar; Mozilla's AI chatbot removed). The toolbar stays one horizontal row across the window: back, forward, reload, full-width address bar (site info, tracking shield, URL in mono, 'Perguntar sobre esta página' action, star), the state slot, the profile chip, extensions, menu. With the sidebar expanded the chip shows only the tile (the name is right below it); when the sidebar is collapsed, hidden or in the horizontal preset the chip grows to tile + name + state. Other presets: 'Horizontal' (upstream tab strip, chip with name) and 'Foco' (expand-on-hover icon strip + compact density; address bar, state slot and chip with name stay). No preset hides the address bar, its security indicators, the profile identity or a security state.",
+ "identity_treatment": "One identity token per profile (colour + glyph + name), drawn the same way everywhere: a 6 px-radius tile in the identity fill with the glyph in identity.on (9.95–12.11:1), the name in words, and the protection state in words beside it. The window wears it three ways at once, so colour is never the only cue: (1) the frame tint, color-mix(in oklab, identity 12%, #E6EEF0) in light and 10% into #08121C in dark, applied to toolbar, sidebar and sidebar panel only (never to the page, never taken from the page); (2) the 3 px tide line at the window's top edge, in identity.edge (a navy-shifted, low-chroma variant ≥3:1 in light; the pastel itself in dark); (3) the sidebar header and toolbar chip with name. Protected profiles carry a small padlock badge on the tile: open padlock = protected and unlocked ('Protegido · desbloqueado'), closed padlock on ink = locked ('Bloqueado'); unprotected profiles carry no badge and say 'Sem proteção'. States override identity: private, AI Workspace and raw automation windows drop the tint; temporary uses a dashed ring and a dashed tide line. Sand and violet stay safe because warnings never appear as a tint or line, only as amber/red pills with an icon, a number and words in the state slot, and the private window keeps the engine's own theme plus its mask label.",
+ "security_states": {
+  "normal_protected_unlocked": "Tint + tide line in the profile colour; tile with open-padlock badge; header 'Protegido · desbloqueado'; one-click 'Bloquear agora' (vaultLockNow) in the header. Unprotected profiles: no badge, 'Sem proteção'.",
+  "locked": "A locked profile has no window. The selector (header menu and toolbar chip) lists it with a closed padlock on an ink badge and the word 'Bloqueado'. A link routed to it opens the Shell unlock page in the current window: the address bar shows the trusted 'Nulavio' identity label (chrome, not page), the page says the link waits only as text, primary 'Desbloquear Trabalho…', secondary 'Descartar o link'.",
+  "temporary": "Reserved dashed pattern: dashed tide line, dashed ring tile with hourglass, and an always-on state-slot pill 'Temporário · apagado ao fechar' (non-removable widget). No identity tint.",
+  "private": "The engine's private theme and its private-browsing indicator ('Navegação privada' with mask) are kept unchanged. Nulavio adds the word 'Privada' under the profile name in the chip and 'Privada · nada fica salvo' in the header, removes the identity tint and tide line, and hides the assistant entry points.",
+  "ai_workspace": "The agent's own window gets a 6 px double rule in ink around the whole window (reserved pattern, hue-free), no identity tint, a state-slot label in an inverted ink pill 'Área de IA · Claude Code' with a 'Parar agente' button, and a header with the agent tile ('Claude Code · modo Assistido'). The existing AI Workspace notification bar stays.",
+  "raw_automation": "The engine's remote-control stripes and robot icon in the address bar stay. Nulavio adds a 4 px diagonal critical stripe at the window's top edge (replacing the tide line) and a critical pill 'Controle remoto ativo' with an antenna icon; the header says 'Depuração privilegiada: o Nulavio não limita' in critical text.",
+  "guard": "Amber state-slot pill with warning icon, the count and words ('2 mudanças feitas fora do Nulavio'), plus the upstream notification bar restyled: warning tint, icon, guardBar text, primary 'Revisar mudanças' (the safe action), dismiss as 'Lembrar depois'.",
+  "download_warning": "Downloads button gets an amber warning badge; the panel row shows a program icon, file name in mono, size/host/'concluído', an amber line 'É um programa: pode executar código no seu computador', primary 'Excluir' (the safe action), secondary 'Mostrar na pasta', and never 'Abrir' (patch 0007 already blocks opening).",
+  "agent_running": "Mint is 'active', not 'safe': a mint-tint pill 'Assistente agindo · 3 ações' with 'Pausar' and an ink 'Parar' sits in the state slot; it is a non-removable widget in #nav-bar, so compact density, the Foco preset or customisation cannot hide it.",
+  "always_visible_rule": "All of the above live in #nav-bar (never auto-hidden in Nulavio) or the window frame. A rendered test must assert, per preset (Vertical, Horizontal, Foco, revealed/hidden overlay) and per window kind, that each indicator's rect is on-screen, opacity 1 and hit by elementFromPoint."
+ },
+ "assistant": "Panel docked at the right of the page (Vertical preset; same panel in the left sidebar box if the side patch is not taken). Header names provider and where it runs ('Modelo local · 127.0.0.1:11434 — neste computador' or 'Anthropic · api.anthropic.com — fora deste computador'). Modes 'Perguntar' / 'Fazer uma tarefa'. Entry points: the address-bar action 'Perguntar sobre esta página', the selection menu 'Perguntar ao assistente', a keyboard command, and quick buttons in the empty state; each one only opens the panel and pins a chip — nothing leaves the computer before Enviar. Context row 'Vai junto com esta mensagem' shows removable chips ('Página: Guia de integração · 4.212 caract.', 'Seleção: 214 caracteres') bound to a tabId + URL: switching tabs does not move them, navigating or closing that tab drops them, and the line under them states recipient host and total characters. After sending, the user message keeps a receipt ('Enviado para api.anthropic.com: página…, 4.212 caracteres'), extending the existing assistantSentPage string. Answers stream as plain text with a static caret; while streaming, Send becomes an ink 'Parar' (Esc). 'Da página incluída' lists only headings of included text that the answer quotes verbatim (string match in the panel, not a model claim); no match, no sources row. Tasks run in the assistant's own AI Workspace under the AI Bridge policy (pause, revoke, emergency stop) and surface as the agent pill in the user's window. Unavailable in private windows and AI Workspace windows; Mozilla's chatbot is turned off (browser.ml.chat.enabled=false, 'aichat' removed from sidebar tools).",
+ "translucency": "Only two surfaces: (1) the expand-on-hover sidebar overlay in the Foco preset: frame colour at alpha 0.86 + blur(18px); (2) the Shell new tab card over a calm 'horizon' ambience (two tonal bands and one identity-coloured hairline, no gradient art, no grain): surface at alpha 0.86 + blur(20px). Never on the address bar, tabs, identity header, state slot, warnings, permission or download panels, menus or the assistant. Opacity floor 0.86: worst-case composites over black, white, pure red, yellow and blue keep tab text ≥5.72:1 (light) and ≥6.67:1 (dark); text.secondary is not allowed on translucent surfaces in light (it would drop below 4.5:1). Solid fallback = the same frame/surface colour at alpha 1, used when the user turns on 'Reduzir transparência' (pref nulavio.ui.reduceTransparency, which also sets ui.prefersReducedTransparency for the chrome and a data attribute for Shell pages), under prefers-contrast / forced colours (system colours, 2 px borders, yellow selection ring as in the inset), and automatically when the Shell detects software rendering.",
+ "motion": [
+  {
+   "motion": "Route mark appears on the selected tab",
+   "duration": "motion.duration.fast 120ms, easing.standard",
+   "reduced": "No animation; mark drawn immediately."
+  },
+  {
+   "motion": "Expand-on-hover overlay reveal / hide (Foco)",
+   "duration": "enter motion.duration.base 180ms easing.standard; exit 120ms new easing.exit",
+   "reduced": "Instant show/hide, no slide (sidebar.animation.enabled follows reduced motion)."
+  },
+  {
+   "motion": "Context chip pinned or removed",
+   "duration": "120ms opacity + scale 0.96→1",
+   "reduced": "Instant; change announced through the context row's live region."
+  },
+  {
+   "motion": "Agent pill count changes",
+   "duration": "single 280ms border flash (motion.duration.slow), no loop",
+   "reduced": "No flash; aria-live announces the new count."
+  },
+  {
+   "motion": "Assistant answer streaming",
+   "duration": "none: text appends, caret is static (no blinking)",
+   "reduced": "Same."
+  },
+  {
+   "motion": "Assistant panel open/close",
+   "duration": "engine sidebar animation, 180ms",
+   "reduced": "Instant."
+  },
+  {
+   "motion": "Security states (pills, stripes, double rule, badges)",
+   "duration": "none, they appear instantly",
+   "reduced": "Same: state never waits on animation."
+  }
+ ],
+ "typography": "Chrome uses the system UI font (Noto Sans on KDE), Shell pages the same until Inter is bundled; URLs, hosts and code in JetBrains Mono. Roles: chrome.label 13/1.3 (tabs, menus, pills; 500 for buttons), chrome.identity 14/1.25 600 (profile name in the header), chrome.state 12/1.35 (protection words, never below 12), url.mono 13/1, shell.title 24/1.25 600, shell.heading 16/1.35 600 in sentence case (replaces the 13 px uppercase captions), shell.body 14/1.5, assistant.answer 14/1.55, caption 12/1.35 for metadata only. Five sizes in the chrome, six in Shell pages; no uppercase, no letter-spacing tricks.",
+ "new_tokens": [
+  {
+   "name": "color.{light,dark}.chrome.frame.sky (frame tint, one per identity)",
+   "light": "#DCEAF1 = color-mix(in oklab, #8CCBF5 12%, #E6EEF0)",
+   "dark": "#13212E = color-mix(in oklab, #8CCBF5 10%, #08121C)",
+   "purpose": "Toolbar + sidebar + sidebar panel surface of a sky profile; replaces chrome.toolbox/toolbar there.",
+   "contrast_pairs": [
+    "#0B1623 on #DCEAF1: 14.81:1 (needs 4.5:1) — L text.primary on frame.sky",
+    "#23495A on #DCEAF1: 7.86:1 (needs 4.5:1) — L chrome.tabText on frame.sky",
+    "#3A6273 on #DCEAF1: 5.38:1 (needs 4.5:1) — L text.secondary on frame.sky",
+    "#F1F7F5 on #13212E: 15.07:1 (needs 4.5:1) — D text.primary on frame.sky",
+    "#BFD0D6 on #13212E: 10.28:1 (needs 4.5:1) — D chrome.tabText/secondary on frame.sky",
+    "#8FAAB5 on #13212E: 6.68:1 (needs 4.5:1) — D text.muted on frame.sky"
+   ]
+  },
+  {
+   "name": "color.{light,dark}.chrome.frame.{mint,rose,sand,violet,slate}",
+   "light": "mint #DAEDEB · rose #E9E6EA · sand #E7EAE3 · violet #E2E7F1 · slate #E1EAED",
+   "dark": "mint #10232B · rose #1C1F2A · sand #1A2126 · violet #171F2E · slate #17222C",
+   "purpose": "Same formula for the other identities. text.muted is not used on light frames (4.0–4.1:1); text.secondary is used instead.",
+   "contrast_pairs": [
+    "#3A6273 on #DAEDEB: 5.45:1 (needs 4.5:1) — L text.secondary on frame.mint",
+    "#3A6273 on #E9E6EA: 5.35:1 (needs 4.5:1) — L text.secondary on frame.rose",
+    "#3A6273 on #E7EAE3: 5.44:1 (needs 4.5:1) — L text.secondary on frame.sand",
+    "#3A6273 on #E2E7F1: 5.33:1 (needs 4.5:1) — L text.secondary on frame.violet",
+    "#3A6273 on #E1EAED: 5.42:1 (needs 4.5:1) — L text.secondary on frame.slate",
+    "#8FAAB5 on #10232B: 6.62:1 (needs 4.5:1) — D text.muted on frame.mint",
+    "#8FAAB5 on #1C1F2A: 6.71:1 (needs 4.5:1) — D text.muted on frame.rose",
+    "#8FAAB5 on #1A2126: 6.66:1 (needs 4.5:1) — D text.muted on frame.sand",
+    "#8FAAB5 on #171F2E: 6.75:1 (needs 4.5:1) — D text.muted on frame.violet",
+    "#8FAAB5 on #17222C: 6.6:1 (needs 4.5:1) — D text.muted on frame.slate"
+   ]
+  },
+  {
+   "name": "color.{light,dark}.identity.edge.<id>",
+   "light": "sky #5A85A5 · mint #468C83 · rose #9D7285 · sand #8D7E5D · violet #7F78AA · slate #73838D (mix with navy 900 until ≥3:1)",
+   "dark": "the identity fill itself (sky #8CCBF5 …)",
+   "purpose": "3 px tide line at the window top and 1 px tile ring in light. Low chroma on purpose; sand edge stays khaki, away from warning amber #8A5A10.",
+   "contrast_pairs": [
+    "#5A85A5 on #DCEAF1: 3.2:1 (needs 3:1) — L identity.edge.sky on frame.sky",
+    "#5A85A5 on #FFFFFF: 3.94:1 (needs 3:1) — L identity.edge.sky on white (tide line over content edge)",
+    "#468C83 on #DAEDEB: 3.24:1 (needs 3:1) — L identity.edge.mint on frame.mint",
+    "#9D7285 on #E9E6EA: 3.28:1 (needs 3:1) — L identity.edge.rose on frame.rose",
+    "#8D7E5D on #E7EAE3: 3.28:1 (needs 3:1) — L identity.edge.sand on frame.sand",
+    "#7F78AA on #E2E7F1: 3.28:1 (needs 3:1) — L identity.edge.violet on frame.violet",
+    "#73838D on #E1EAED: 3.21:1 (needs 3:1) — L identity.edge.slate on frame.slate",
+    "#8CCBF5 on #13212E: 9.32:1 (needs 3:1) — D identity.edge.sky on frame.sky"
+   ]
+  },
+  {
+   "name": "size.identity.edge",
+   "light": "3px",
+   "dark": "3px",
+   "purpose": "Tide line thickness (automation replaces it with a 4px stripe).",
+   "contrast_pairs": []
+  },
+  {
+   "name": "size.indicator.{thickness,length}Strong",
+   "light": "3px × 20px",
+   "dark": "2px × 16px (existing)",
+   "purpose": "Route mark is stronger in light mode where tabSelected white vs tinted frame is only 1.2:1.",
+   "contrast_pairs": [
+    "#0F7A68 on #FFFFFF: 5.24:1 (needs 3:1) — L route mark (3x20) on tabSelected",
+    "#6FE0C5 on #183746: 7.85:1 (needs 3:1) — D route mark on tabSelected"
+   ]
+  },
+  {
+   "name": "color.{light,dark}.chrome.quiet",
+   "light": "rgba(11,22,35,.07)",
+   "dark": "rgba(0,0,0,.28)",
+   "purpose": "Quiet fills: segmented control track, user message, provider row, ghost buttons, tags.",
+   "contrast_pairs": [
+    "#0B1623 on #CDDBE3: 12.87:1 (needs 4.5:1) — L text.primary on seg/user-message tint (rgba(11,22,35,.07) over frame)",
+    "#3A6273 on #CDDBE3: 4.67:1 (needs 4.5:1) — L text.secondary on seg tint",
+    "#BFD0D6 on #0E1821: 11.28:1 (needs 4.5:1) — D text.secondary on seg tint (rgba(0,0,0,.28) over frame)",
+    "#BFD0D6 on #0C1A24: 11.11:1 (needs 4.5:1) — D tag text on tag bg over surface"
+   ]
+  },
+  {
+   "name": "surface.overlay.{alpha,blur,solid}",
+   "light": "0.86 · 18px · chrome.frame",
+   "dark": "0.86 · 18px · chrome.frame",
+   "purpose": "Expand-on-hover overlay only; tab text and primary text only.",
+   "contrast_pairs": [
+    "#23495A on #BDC9CF: 5.72:1 (needs 4.5:1) — L overlay(.86) tabText, backdrop #000000",
+    "#23495A on #BDC9F3: 5.9:1 (needs 4.5:1) — L overlay(.86) tabText, backdrop #0000FF",
+    "#23495A on #E1C9CF: 6.2:1 (needs 4.5:1) — L overlay(.86) tabText, backdrop #FF0000",
+    "#BFD0D6 on #34404B: 6.67:1 (needs 4.5:1) — D overlay(.86) tabText, backdrop #FFFFFF",
+    "#BFD0D6 on #344028: 6.92:1 (needs 4.5:1) — D overlay(.86) tabText, backdrop #FFFF00"
+   ]
+  },
+  {
+   "name": "surface.shellAmbient.{alpha,blur,solid}",
+   "light": "0.86 · 20px · bg.surface",
+   "dark": "0.86 · 20px · bg.surface (#112432)",
+   "purpose": "New tab card over the horizon ambience.",
+   "contrast_pairs": [
+    "#BFD0D6 on #32434F: 6.44:1 (needs 4.5:1) — D newtab card(.86) secondary, backdrop #FFFFFF",
+    "#BFD0D6 on #32432B: 6.69:1 (needs 4.5:1) — D newtab card(.86) secondary, backdrop #FFFF00",
+    "#BFD0D6 on #0F1F2B: 10.56:1 (needs 4.5:1) — D newtab card(.86) secondary, backdrop #000000"
+   ]
+  },
+  {
+   "name": "security.aiWorkspace.rule",
+   "light": "6px double #0B1623",
+   "dark": "6px double #F1F7F5",
+   "purpose": "Reserved hue-free frame for an agent's own window.",
+   "contrast_pairs": [
+    "#0B1623 on #E6EEF0: 15.48:1 (needs 3:1) — L AI Workspace double rule on neutral frame",
+    "#F1F7F5 on #0B1623: 16.79:1 (needs 4.5:1) — L ink pill text (AI Workspace) on ink"
+   ]
+  },
+  {
+   "name": "security.temporary.dash",
+   "light": "border.control #6B8794, dash 10 / gap 6",
+   "dark": "border.control #6E93A2",
+   "purpose": "Reserved dashed pattern: tide line, tile ring, state pill.",
+   "contrast_pairs": [
+    "#6B8794 on #DCEAF1: 3.1:1 (needs 3:1) — L border.control (field/chip/dashed temp) on frame.sky",
+    "#6E93A2 on #13212E: 4.95:1 (needs 3:1) — D border.control on frame.sky"
+   ]
+  },
+  {
+   "name": "security.automation.stripe",
+   "light": "status.critical #A8323A, 45°, 5px/5px, 4px tall",
+   "dark": "status.critical #E26D70",
+   "purpose": "Reserved stripes at the window top for raw automation (the engine keeps its own address-bar stripes).",
+   "contrast_pairs": [
+    "#A8323A on #DCEAF1: 5.37:1 (needs 3:1) — L automation stripe edge (critical) on frame.sky",
+    "#0B1623 on #EED6D8: 13.22:1 (needs 4.5:1) — L url text on remote-control stripe (worst band)",
+    "#3A6273 on #EED6D8: 4.8:1 (needs 4.5:1) — L url path on remote-control stripe"
+   ]
+  },
+  {
+   "name": "state pills (reuse status tints)",
+   "light": "warning #8A5A10/#FBEBD3 · critical #A8323A/#F9DEDF · agent text.primary on accent.tint #DDF8F0 + accent border",
+   "dark": "warning #E7AE61/#3A2A12 · critical #EE8A8C/#3F1A1D · agent #F1F7F5 on #0E3B33",
+   "purpose": "State slot labels; always icon + words.",
+   "contrast_pairs": [
+    "#8A5A10 on #FBEBD3: 5.05:1 (needs 4.5:1) — L warning pill text on warningTint",
+    "#A8323A on #F9DEDF: 5.2:1 (needs 4.5:1) — L critical pill text on criticalTint",
+    "#0B1623 on #DDF8F0: 16.27:1 (needs 4.5:1) — L agent pill text on accent.tint",
+    "#0F7A68 on #DCEAF1: 4.27:1 (needs 3:1) — L agent pill border accent on frame.sky",
+    "#E7AE61 on #3A2A12: 6.99:1 (needs 4.5:1) — D warning pill text on warningTint",
+    "#EE8A8C on #3F1A1D: 6.28:1 (needs 4.5:1) — D critical text on criticalTint",
+    "#F1F7F5 on #0E3B33: 11.44:1 (needs 4.5:1) — D agent pill text on accent.tint",
+    "#0B1623 on #F1F7F5: 16.79:1 (needs 4.5:1) — D ink button (Parar) text"
+   ]
+  },
+  {
+   "name": "color.{light,dark}.group.alga (one of 9 re-valued tab-group colours)",
+   "light": "#4F7A3A",
+   "dark": "#A5C98B",
+   "purpose": "Tab groups drawn as a line + swatch, never a fill; palette kept away from identity pastels and from warning/critical hues (full 9-colour set is a follow-up).",
+   "contrast_pairs": [
+    "#4F7A3A on #DCEAF1: 4.09:1 (needs 3:1) — L group.alga line/swatch on frame.sky",
+    "#A5C98B on #13212E: 8.82:1 (needs 3:1) — D group.alga on frame.sky"
+   ]
+  },
+  {
+   "name": "motion.easing.exit",
+   "light": "cubic-bezier(0.3, 0, 1, 1)",
+   "dark": "same",
+   "purpose": "Exits (overlay hide); enters keep easing.standard.",
+   "contrast_pairs": []
+  },
+  {
+   "name": "font.role.{chrome.label, chrome.identity, chrome.state, url, shell.title, shell.heading, shell.body, assistant.answer, caption}",
+   "light": "13/1.3 · 14/1.25 600 · 12/1.35 · 13 mono · 24/1.25 600 · 16/1.35 600 · 14/1.5 · 14/1.55 · 12/1.35",
+   "dark": "same",
+   "purpose": "Composite type roles (rem in Shell pages) replacing raw sizes and uppercase captions.",
+   "contrast_pairs": []
+  }
+ ],
+ "reference_ideas": [
+  {
+   "reference": "Dia",
+   "idea": "Ask about the page or a selection with explicit, removable context chips",
+   "nulavio_problem": "Consent drift: the 'include this page' checkbox stays ticked across tab switches and sends whichever tab is selected at Send (panel.js 13-22, NulavioAI.sys.mjs 237-247).",
+   "adaptation": "Chips bound to tabId + URL, dropped on navigation/close, recipient host and character count shown before Send, receipt after; entry points only pin, never send; no 'Chat' pill, no gradient, panel stays in the native sidebar."
+  },
+  {
+   "reference": "Arc",
+   "idea": "The window wears the identity of the place you are in",
+   "nulavio_problem": "Profile is a ~16 px chip among extension icons; name not visible; three different identity drawings.",
+   "adaptation": "One identity token (tile + glyph + name + protection words), a 10–12% OKLab frame tint and a 3 px tide line set by a per-profile pref; no gradients, grain, emoji or space switcher; states replace the tint."
+  },
+  {
+   "reference": "Vivaldi 8 layout presets",
+   "idea": "Choose a layout once instead of tuning many settings",
+   "nulavio_problem": "Vertical tabs and compact density exist but are 'not pushed'; the layout choice is planned for onboarding.",
+   "adaptation": "Three presets only (Vertical default, Horizontal, Foco) mapped to native prefs; none hides the address bar, identity or state slot."
+  },
+  {
+   "reference": "Opera Air",
+   "idea": "Calm chrome, restrained material",
+   "nulavio_problem": "New tab is noisy and translucency has no reliable OS signal on Linux.",
+   "adaptation": "New tab reduced to place + live protection values + frequent sites; glass limited to two surfaces with a 0.86 floor and a user switch; no wallpapers, no page-tinted glass."
+  },
+  {
+   "reference": "Zen (compact mode)",
+   "idea": "Reclaim space by collapsing the tab strip",
+   "nulavio_problem": "Focus mode must not hide identity or security indicators (test_07 cannot catch an auto-hide that moves them).",
+   "adaptation": "Foco collapses only the tab strip to the native icon strip (identity tile on top, name on hover/focus) and keeps the address bar, state slot and chip with name; no floating card, no floating URL bar."
+  }
+ ],
+ "implementation": [
+  {
+   "element": "Vertical preset default",
+   "mechanism": "pref",
+   "notes": "sidebar.revamp=true, sidebar.verticalTabs=true, sidebar.visibility=always-show; sidebar.main.tools without 'aichat'/'syncedtabs'; browser.ml.chat.enabled=false. Presets switch these from Settings (Shell privileged module)."
+  },
+  {
+   "element": "Frame tint + tide line per profile",
+   "mechanism": "horizon CSS",
+   "notes": "Each profile is its own engine instance, so a string pref nulavio.profile.identity='sky' (written by the Shell/launcher) is read with @media -moz-pref('nulavio.profile.identity', 'sky'), which Gecko 158 supports for string values. Tint on --toolbar/--toolbox/--sidebar-background-color; tide line as a border on #navigator-toolbox. Steps aside for lwtheme, forced colours and prefers-contrast like the rest of Horizon."
+  },
+  {
+   "element": "Profile header at the top of the sidebar",
+   "mechanism": "Shell privileged module",
+   "notes": "Insert one button node into #vertical-tabs (light DOM, slot 'tabstrip') before #tabbrowser-tabs; must be verified against CustomizableUI area rules. Fallback: new patch adding a static node in browser-box.inc.xhtml (S)."
+  },
+  {
+   "element": "Toolbar profile chip with name and badge",
+   "mechanism": "Shell privileged module",
+   "notes": "CustomizableUI custom widget (removable:false) replacing the icon-only browserAction; shows name when the sidebar is collapsed/hidden or horizontal."
+  },
+  {
+   "element": "State slot (temporary, Guard, automation, agent, AI Workspace labels)",
+   "mechanism": "Shell privileged module",
+   "notes": "Second non-removable custom widget in #nav-bar fed by vault, guard and AI registry modules; priority rules collapse long labels to icon + count but never remove them."
+  },
+  {
+   "element": "Route mark stronger in light",
+   "mechanism": "horizon CSS",
+   "notes": "Re-value the existing ::after mark sizes under the light scheme; forced colours keep SelectedItem."
+  },
+  {
+   "element": "Temporary dashed tide line, AI Workspace double rule",
+   "mechanism": "horizon CSS",
+   "notes": "Temporary and AI Workspace profiles are their own engine instances: launcher sets nulavio.window.kind='temporary'|'ai-workspace' in that profile; horizon reads it with -moz-pref(). Rule drawn on #browser/#navigator-toolbox borders."
+  },
+  {
+   "element": "Automation top stripe",
+   "mechanism": "horizon CSS",
+   "notes": ":root[remotecontrol] (engine attribute); the engine's address-bar stripes and robot icon are untouched."
+  },
+  {
+   "element": "Private window treatment",
+   "mechanism": "horizon CSS",
+   "notes": "Under [privatebrowsingmode] remove tint/tide line; engine private theme and indicator untouched; Shell widget adds 'Privada'. Assistant hidden in private windows (Shell page check; fixes the 'spanning' gap)."
+  },
+  {
+   "element": "Assistant panel on the right of the content",
+   "mechanism": "new patch",
+   "notes": "SidebarController.setPosition() writes inline style.order on #browser children, which horizon.css cannot override without !important (banned). Small patch: when nulavio.sidebar.panelEnd=true, order #sidebar-box after the content and flip the splitter. Without it, the panel opens beside the tabs on the left."
+  },
+  {
+   "element": "Context chips, recipient line, receipt, stop",
+   "mechanism": "Shell page",
+   "notes": "assistant/panel + NulavioAI module: chips store tabId+URL, tabs.onUpdated/onRemoved drop them, text extracted at Send from that tab only via PageExtractor."
+  },
+  {
+   "element": "Streaming answers and sources row",
+   "mechanism": "Shell privileged module",
+   "notes": "Planned: launcher assistant.py streaming (SSE) through the existing bridge; sources = verbatim matches against headings of the included text."
+  },
+  {
+   "element": "'Perguntar sobre esta página' in the address bar",
+   "mechanism": "Shell page",
+   "notes": "Manifest page_action (or a '>' quick action via ActionsProviderQuickActions.addAction); opens the panel and pins the page chip."
+  },
+  {
+   "element": "Selection menu 'Perguntar ao assistente' + shortcut",
+   "mechanism": "Shell page",
+   "notes": "menus API (selection context) + manifest command for the sidebar; Ctrl+Alt+A is a placeholder to be checked against about:keyboard, KDE/GNOME and Orca. Planned."
+  },
+  {
+   "element": "Foco preset and expand-on-hover overlay translucency",
+   "mechanism": "horizon CSS",
+   "notes": "sidebar.visibility=expand-on-hover + browser.uidensity=1 (pref); overlay background color-mix(frame 86%) + backdrop-filter, disabled by @media (prefers-reduced-transparency) or -moz-pref('nulavio.ui.reduceTransparency')."
+  },
+  {
+   "element": "'Nulavio' trust label in the identity box for Shell pages",
+   "mechanism": "new patch",
+   "notes": "Identity box shows 'Extensão (Nulavio Shell)' today; a small patch treats the built-in Shell origin as a browser page with the symbol and 'Nulavio'. Pages cannot draw into this area."
+  },
+  {
+   "element": "Guard notification bar, download panel row",
+   "mechanism": "horizon CSS",
+   "notes": "Restyle upstream notification-message for Nulavio bars; the download row's 'Excluir' primary + 'Mostrar na pasta' needs an extra hunk in patch 0007 (new patch content), which already removes 'Abrir'."
+  },
+  {
+   "element": "Tab group palette",
+   "mechanism": "horizon CSS",
+   "notes": "Re-value --tab-group-color-* (9 colours) away from identity pastels and status hues; draw as line + swatch."
+  },
+  {
+   "element": "Settings with navigation, search, inline status",
+   "mechanism": "Shell page",
+   "notes": "Split the 4,000 px page into sections with a left nav (aria-current), local search over labels (planned), inline confirmations next to the control."
+  },
+  {
+   "element": "New tab",
+   "mechanism": "Shell page",
+   "notes": "Place + live protection values (existing reads) + frequent sites (topSites API); no slogan, no second search box, no legal footer; ambience translucency gated by the reduce-transparency attribute."
+  }
+ ],
+ "risks": [
+  "Contradicts docs/design/ux-principles.md ('no sidebar-first layout', vertical tabs 'not pushed'); needs an explicit principle change. Mitigation: native vertical tabs, full-width address bar in the toolbar, Horizontal preset one click away.",
+  "The tint is deliberately restrained (10–12%); two profiles side by side can look alike at a glance, so recognition leans on the header words and glyph rather than colour.",
+  "Light identity edges sit at 3.20–3.28:1 and border.control on the sky frame at 3.10:1: little headroom; contrast.py must gain these pairs or a later frame tweak will break them.",
+  "Inserting the header into the CustomizableUI vertical-tabs area may break across releases; the fallback is a small patch.",
+  "Panel-on-the-right needs a patch; without it, tabs + panel take ~600 px on the left of a 1366 px screen.",
+  "State slot crowding at 1366×768 / 150 %: several pills (agent + Guard + temporary) compete with the address bar; needs priority and collapse rules plus a rendered test.",
+  "Private windows depend on the engine's purple theme; a violet profile chip in a normal window and a private window are distinguished by the mask label and words, not by hue.",
+  "Translucency on software rendering costs CPU; the Shell must force the solid fallback there, and contrast.py cannot yet check alpha surfaces.",
+  "Sources and streaming are planned backend work; until then the panel must show plain answers without a sources row."
+ ],
+ "cost": {
+  "layout_presets_and_prefs": "S",
+  "identity_header_chip_and_tint": "M",
+  "security_states_and_state_slot": "M",
+  "assistant_chips_streaming_panel_side": "L",
+  "settings_navigation": "M",
+  "new_tab": "S",
+  "translucency_and_fallbacks": "S",
+  "tokens_tests_contrast": "M",
+  "overall": "L"
+ },
+ "what_it_rejects": [
+  "A floating content card with gaps, big shadows or squircles; the page stays flush with hairlines.",
+  "A centred or auto-hiding address bar; #nav-bar is always visible with its trust, tracking and permission icons.",
+  "Gradient, grain or wallpaper themes, page-derived chrome colours, and emoji or bottom-row space switchers.",
+  "Colour-only identity and identity hues used for states; states own patterns, positions and words.",
+  "Shadows for chrome elevation, pill-shaped primaries and 13 px uppercase captions.",
+  "Translucency on any surface that carries security state, text.secondary on glass, and glass without a solid fallback.",
+  "A second AI surface (Mozilla's chatbot), a sticky 'include this page' checkbox, sending before Send, and sparkles meaning AI.",
+  "A slogan, duplicate search box, generic shortcut list and legal footer on the new tab."
+ ],
+ "files": {
+  "mockup": "scratch/directions/mare/mockup.html",
+  "generator": "scratch/directions/mare/_build/gen.py",
+  "contrast_table": "scratch/directions/mare/_build/contrast.json"
+ },
+ "visual_check": "Rendered with headless Chromium (Playwright) at 1366 px with --z:1 and at 728 px, and with headless Firefox at 728 px; clipped text, overlapping annotations, crowded crop toolbars and a clipped context menu were fixed. 78 colour pairs computed, 0 below their threshold. Engine-owned visuals (private theme, remote-control stripes, robot icon) are approximations."
+}

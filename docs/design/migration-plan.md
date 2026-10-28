@@ -1,5 +1,7 @@
 # Migration plan: from Firefox's look to the Nulavio Shell
 
+> Superseded on 2026-10-27 by the [UX redesign programme](../product/execution-plan.md#ux-redesign-programme-from-2026-10-27) (slices UX0–UX7). The open milestones below (M2 remainder, M3–M7) are folded into it; this page stays as history.
+
 Rule for every step: build on the Nulavio build, run the full integration suite (both tracks), capture before/after with `scripts/research/shell_screenshots.py`, keep patches minimal and documented.
 
 | Milestone | Scope | Status |

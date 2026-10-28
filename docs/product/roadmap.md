@@ -140,3 +140,16 @@ External agents (Codex CLI and Desktop, Claude Code and Desktop, other MCP clien
 ## Next task (recommended)
 
 Follow the [execution plan](execution-plan.md): S1 (Connect P0), S2 (unlock research and ADRs), S3 (Vault crypto prototype), S4 (AI Bridge foundation), S5 (encrypted profile storage), S6 (unlock UX in the browser), S7 (AI autonomy and its UI), S8 (AI with profiles, routing and the connect wizard), S12 (temporary profile), S13 (Guard at run time), S14 (per-site privacy, Strict fix), S15 (DNS choice, fingerprinting measured), S16 (real-site regression), S17 (password flows B, D, H) and S18 (packages), S19 (update SLA), S20 (assistant, raw automation), S21 (Connect P1/P2), S22 (Routing M5), S23 (phase 5 spikes), S24 (alpha gate walk-through), S25 (security pipeline) and S11 (Android Companion, built; the real-phone run is open) are done; waiting on the maintainer: the phone run, S10 (a security key) and the alpha items, with S10 (security key, needs a key) and S11 (Android Companion, last) waiting on the maintainer. The plan lists the decisions each slice needs from the maintainer.
+
+## Phase 7 — UX redesign (from 2026-10-27) ([programme](execution-plan.md#ux-redesign-programme-from-2026-10-27))
+
+- [x] UX0 Audit (107 findings), three directions with HTML mockups, judged; decision: Farol with Maré's organisation and Névoa's flows ([audit](../design/audit-2026-10-27.md), [direction](../design/visual-directions.md))
+- [ ] UX1 Security, consent and honesty fixes found by the audit
+- [ ] UX2 Design system v2 (tokens, components, contrast v2, gallery)
+- [ ] UX3 Window: the band, security states, Horizon v2, layout presets
+- [ ] UX4 Shell pages (Settings, new tab, profile menu, routing, security moments, vault methods)
+- [ ] UX5 Assistant (tab-bound context, streaming, runs, entry points)
+- [ ] UX6 Safe personalisation
+- [ ] UX7 Motion and finish
+
+**DoD:** every state of the security-visibility matrix verified on the Nulavio build in both themes and every preset; WCAG 2.2 AA checks green (contrast, focus, targets, reduced motion/transparency, high contrast); before/after captures and design docs current; no protection weakened (Guard and prefs tests unchanged or stricter).

@@ -1,15 +1,18 @@
 # UX principles of the Nulavio Shell
 
-These extend the principles and flows in [`docs/brand/ux-flows.md`](../brand/ux-flows.md); they are the rules used to judge Shell changes.
+These extend the principles and flows in [`docs/brand/ux-flows.md`](../brand/ux-flows.md); they are the rules used to judge Shell changes. Revised on 2026-10-27 for the redesign ([direction](visual-directions.md), [audit](audit-2026-10-27.md)).
 
 | Principle | What it means in the Shell | How we check |
 |---|---|---|
-| Content is the focus | Chrome uses quiet tones and no decoration; the only brand mark is the 16 px route under the selected tab | Screenshots before/after |
-| You know where you are | Selected tab = raised surface + mark; the address bar is the widest, tallest control | Rendered contrast tests |
-| Security visible, not alarming | Trust, tracking and permission indicators stay exactly as upstream; "secure" is neutral, warnings use amber/red + icon + words | `test_horizon` 07 |
-| Frequent controls within reach | Upstream layout kept (back, forward, reload, address, extensions, menu); targets ≥ 24 px | `test_horizon` 06 |
-| Advanced without overload | Densities, vertical tabs, themes and the Horizon switch exist but are not pushed | Defaults |
-| Perceived performance is design | No added scripts in the window; new tab ≤ 150 ms median; first paint not slower | `shell_screenshots.py` metrics |
-| Extensions and small screens are first-class | Password-manager popups unchanged; 1366×768 at 150 % checked | Integration suite, matrix |
-| Original, not borrowed | Geometric 10/14 px radii (not Firefox Nova's 24 px pills), ocean tones, route mark; no page-colour tabs, no sidebar-first layout | [Directions](visual-directions.md) |
-| Honest | Shell pages show only signals read from real APIs; no score, no fake toggles | Shell unit tests |
+| Content is the focus | Chrome uses quiet tones and no decoration. The brand marks are the route mark on the selected tab and the profile flag in the band. The band never carries page content or page titles | Screenshots before/after |
+| You know where you are | The band names the profile with fill, glyph and name, and states its protection in words. The selected tab has a raised surface and the route mark. The address bar is the widest control | Rendered contrast and security-visibility tests |
+| Security visible, not alarming | The address-bar trust, tracking and permission indicators stay exactly as upstream. Nulavio's states use reserved patterns, a glyph and words, always in the same place. A layout, density, theme or fullscreen never hides them; colour alone never carries them. "Secure" is neutral: no green "safe" and no "tudo certo" | `test_horizon` 07, security-visibility matrix (UX3) |
+| Two grammars | Calm surfaces are tonal, with 8–14 px radii, and may animate. Security signals are opaque, with 4 px corners and pattern + glyph + word. They never animate and are never translucent. The safe action is the primary one in every warning | Component gallery, reviews |
+| Trusted surface | The band is drawn only by the browser. Nulavio's own pages are named there ("Nulavio · Desbloqueio"), so a web page cannot imitate a security moment | Rendered tests |
+| Frequent controls within reach | Back, forward, reload, the full address bar, downloads, extensions and the menu stay in one row in every preset. Targets are at least 24 px | `test_horizon` 06 |
+| Organised, not hidden | Native vertical tabs ("Lateral") are the default since 2026-10-27; "Abas no topo" and "Foco" are presets. Tab groups organise work inside a profile; profiles are the isolated places. There is no toolbar autohide and no floating content card | Defaults, presets |
+| Advanced without overload | Layout presets, density, accents, reduced transparency and more contrast are offered but never pushed. No option turns a protection off | Unit test over the option list (UX6) |
+| Perceived performance is design | The chrome is solid. Translucency appears only where measured, with an opaque fallback. No added scripts in pages; new tab ≤ 150 ms median | `shell_screenshots.py` metrics |
+| Extensions and small screens are first-class | Password-manager popups are unchanged. 1366×768 at 150 % is checked, and Nulavio UI never truncates the host in the address bar | Integration suite, matrix |
+| Original, not borrowed | Ideas from Zen, Dia, Arc, Opera Air and Vivaldi are re-derived from a Nulavio problem. Nothing is copied: no assets, names, copy, distinctive layouts or trade dress. Geometry: buttons and fields 10 px, address bar 14 px, seals 4 px; no pill buttons | [Directions](visual-directions.md) |
+| Honest | Shell pages show only signals read from real APIs: no score and no fake toggles. The assistant sends nothing before Send, and shows the destination and the full size first | Shell unit tests, `test_assistant_ui` |

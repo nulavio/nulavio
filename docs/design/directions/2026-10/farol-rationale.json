@@ -1,0 +1,459 @@
+{
+ "name": "Farol",
+ "slug": "farol",
+ "one_liner": "Navegador de abas no topo, familiar e rápido, com uma faixa noturna fixa no alto da janela que diz em palavras de quem é a janela e em que estado ela está.",
+ "concept": "Farol keeps the browser people already know (tabs on top, compact by default, flat hairline geometry) and adds one strong idea: a 26 px 'farol' band at the top edge of every window, always Deep Navy in both themes, that only Nulavio's privileged chrome can draw. On the left the band carries the profile's 'light': a solid identity flag (colour + icon + name) with a slanted beam edge, plus a 2 px line of the same colour across the whole top edge. Security states are painted like a lighthouse's daymarks: reserved patterns that identity never uses (dashed = temporary, plum with dots = private window, horizontal lines + double window frame = AI Workspace, diagonal stripes = raw automation), always with words and a glyph. Because web content cannot reach the band, it is also the trusted channel: Shell pages are announced there ('Nulavio · Configurações · página do sistema'), Guard warnings and the agent activity pill live there, and no page title is ever shown in it. Command focus is part of the look: Ctrl+L shows Nulavio quick actions and a '>' hint in the empty address-bar results, and the assistant opens from the address bar or the selection menu into a right-side panel with tab-bound context chips. Focus mode collapses the window to a single night row (identity, back, reload, full address bar with its security icons, activity, tab count) and never hides the address bar or any state. Mint is used only as the signal: selected-tab beam, focus ring, primary action and the Nulavio mark.",
+ "mood_words": [
+  "confiante",
+  "legível",
+  "ágil"
+ ],
+ "layout_default": "Horizontal tabs on top, compact density by default (30 px tabs, 30 px address field, 40 px nav bar), flat surfaces, 1 px hairline separators, selected tab connected to the toolbar with a full-width 2 px mint beam on its top edge, 4-6-10 px radii. Order top to bottom: farol band (26 px, with window controls) / tab strip (34 px) / nav bar (40 px) / content. Presets: 'Abas no topo' (default), 'Abas verticais' (native sidebar.verticalTabs, band unchanged), 'Foco' (band and nav bar merge into one 42 px row; tabs reveal from the top edge). No preset hides the address bar, the trust/tracking/permission icons or the band.",
+ "identity_treatment": "One token drawn the same way everywhere: a solid identity-colour shape with a #070F18 outline glyph, plus the profile name in words. In the band it is a flag flush to the left window edge (identity fill, glyph + name in 12/700, slanted right edge) and a 2 px identity line across the full top edge; in the toolbar it is a 20 px rounded-square chip (same fill and glyph) that opens the profile menu; in Settings, the profile menu and routing pages it is a 32/20 px square with the same glyph. Identity is only ever a flat solid fill, never a pattern, tint of the whole chrome, gradient or page-derived colour, and never sits in the band's state zone. Name is always visible in the band (also in focus mode); colour is never the only cue. Protected-but-open profiles add a separate neutral badge 'Protegido · desbloqueado' with a vault glyph (focus mode: vault icon with the full text on hover/focus), so they no longer look like unprotected ones. Sand and violet stay legal identity colours because warnings and private state use other channels (glyph + words + pattern + position).",
+ "security_states": {
+  "normal (Trabalho, protected, unlocked)": "Identity flag + 'Protegido · desbloqueado' neutral badge (1 px #6E93A2 border on navy, vault glyph). No other mark.",
+  "unprotected profile": "Identity flag only; Settings and the profile menu say 'Sem proteção' in words.",
+  "protected profile locked": "The profile cannot open. Profile menu shows its chip with a navy lock corner badge and 'Bloqueado' in words; a link routed to it opens the existing Shell unlock page in the current window, announced in the band centre as 'Nulavio · Desbloqueio' (trusted), with the held URL in mono, primary 'Desbloquear…' and secondary 'Descartar link'.",
+  "temporary profile": "Reserved DASHED daymark: the flag has no fill, a 1.5 px dashed cloud outline, hourglass glyph and 'Temporário · apagado ao fechar'; the 2 px top line becomes dashed; the toolbar chip is a dashed square. Dashed is never used anywhere else in the UI (not for 'add' buttons, not for drop zones).",
+  "private window": "Reserved PLUM field with a dot texture (#2A1745 + #9E86C9 dots) for the whole band, dotted top line, badge 'Janela privativa · nada fica salvo' with an eye-off glyph; the engine's own private-browsing indicator and private window theme are kept untouched; the profile flag stays visible. The assistant entry points are hidden in private windows.",
+  "AI Workspace (agent's own profile)": "Reserved HORIZONTAL-LINES band (1 px #6E93A2 every 4 px) plus a DOUBLE window frame (3 px ink + 2 px gap + 1 px ink; ink = #0B1623 in light, #F1F7F5 in dark) around the whole window; inverse badge 'Área de IA · Claude Code' with a cursor glyph replaces the identity flag; policy shown in words ('Política: Assistida'); band-right 'Parar agente' (emergency stop, cloud-solid button).",
+  "raw automation (WebDriver BiDi / remote control)": "Engine's remote-control stripes and robot icon in the address bar are kept unchanged; the band adds reserved DIAGONAL STRIPES (#E26D70 on navy), a solid critical label 'Controle remoto ativo' (#0B1623 on #E26D70, 5.77:1) and 'WebDriver BiDi · Detalhes'. Stripes are reserved for this state only.",
+  "Guard (changes made outside Nulavio)": "Warning badge in the band's right zone: amber triangle + '2 mudanças feitas fora do Nulavio' + 'Revisar' link, stays until reviewed. Amber appears only in warnings.",
+  "download warning (program)": "Downloads button gets a small amber square badge; the panel row has a warning tint, program glyph, 'Programa · 48 MB. Pode instalar ou alterar coisas no computador.', primary 'Excluir' (safe action) and secondary 'Mostrar na pasta'; there is no 'Abrir'.",
+  "agent acting in a normal window": "Activity pill in the band (mint outline, mint dot, 'Assistente agindo · 3 ações', 'Pausar', cloud-solid 'Parar'); focus mode, presets and density cannot hide it.",
+  "Shell (Nulavio) page": "Band centre shows the Nulavio symbol + 'Nulavio · <página> · página do sistema', derived from the tab's principal, never from the page title; address bar identity label reads 'Nulavio'. Web pages cannot paint into the band, so security moments (unlock, agent permission, Guard review, download warning, look-alike login) always carry this trusted header.",
+  "forced colours / high contrast": "Band uses Canvas/CanvasText with 2 px borders; the flag keeps glyph + name with a 2 px outline; daymarks survive as border styles (dashed, double) and words; selected tab uses Highlight."
+ },
+ "assistant": "Right-side panel (native sidebar on the right, sidebar.position_start=false) built as a Shell page. Entry points: (1) an address-bar button and the '>' quick action 'Perguntar sobre esta página'; (2) the selection context-menu item 'Perguntar ao assistente' (labelled 'anexa, não envia'). Both open the panel with the page or the selection pre-attached as a removable chip ('Seleção: 214 caracteres · Guia de integração'); nothing is sent before Enviar. Each chip is bound to a tabId + URL and disappears when that tab navigates or closes (fixes the consent drift of the old checkbox); '+ Página' re-adds the page explicitly. The recipient is always visible at the top ('Destino: Modelo local · 127.0.0.1:11434' or 'Anthropic · api.anthropic.com', switchable) and repeated next to Enviar with the exact size ('Para 127.0.0.1:11434 · 214 caracteres'). After sending, the user message keeps a receipt ('Enviado: Página · 4.812 car. → 127.0.0.1:11434'). Answers stream as formatted text (lists, inline code) with a 'Parar' button; a stopped answer is marked as interrupted; numbered source chips point to the page sections that were included. Modes: 'Perguntar' and 'Fazer uma tarefa' (agent through AI Bridge policy); a running task shows the band activity pill with Pausar/Parar. Disabled in private windows and AI Workspace windows; Mozilla's chatbot is turned off by pref so there is one AI surface. Planned backend work: tab-bound chips, streaming and stop in NulavioAI.sys.mjs / panel.js; source mapping to page sections is planned (named backend: assistant page extractor).",
+ "translucency": "One surface only: the tab strip that drops over the page when tabs are revealed in focus mode (and the hover-revealed vertical strip in the vertical preset). Night overlay rgba(11,22,35,0.90) with backdrop-filter blur(14px); opacity floor 0.88, which keeps #F1F7F5 text at >= 12.0:1 and #8FAAB5 at >= 5.3:1 over a pure white backdrop (composite #28323D) and higher over black or saturated backdrops. Solid fallback #0B1623 under prefers-reduced-transparency (chrome), the Nulavio pref nulavio.ui.reduceTransparency (read by -moz-pref()), prefers-contrast, forced-colors and software rendering (Shell module sets the pref from gfxInfo). Never translucent: the band, flags, badges, address bar, popups, downloads panel, assistant panel, any surface that carries security state.",
+ "motion": [
+  {
+   "motion": "Band state change (badge appears, daymark switches)",
+   "duration": "--nv-motion-duration-base 180ms, standard easing; daymarks themselves never animate or flash",
+   "reduced": "Instant swap"
+  },
+  {
+   "motion": "Selected-tab beam",
+   "duration": "--nv-motion-duration-fast 120ms scaleX 0.4→1 (existing nulavio-route-in)",
+   "reduced": "No animation"
+  },
+  {
+   "motion": "Focus-mode tab reveal",
+   "duration": "180ms translateY(-100%→0) with new enter easing cubic-bezier(0,0,0,1); exit 120ms with exit easing cubic-bezier(0.3,0,1,1); 300ms hover intent delay",
+   "reduced": "Appears/disappears instantly, no movement"
+  },
+  {
+   "motion": "Assistant panel open/close",
+   "duration": "180ms slide from the right edge",
+   "reduced": "Instant"
+  },
+  {
+   "motion": "Agent activity dot",
+   "duration": "1600ms opacity pulse while the agent acts",
+   "reduced": "Static dot; the words 'Assistente agindo' carry the state"
+  },
+  {
+   "motion": "Streaming caret",
+   "duration": "1s step blink",
+   "reduced": "Static caret"
+  }
+ ],
+ "typography": {
+  "family": "Chrome and pages: 'Noto Sans', system-ui (desktop font, respects scaling); URLs, hosts, code, file names: 'JetBrains Mono','Noto Sans Mono'. Sentence case everywhere, no uppercase captions.",
+  "roles": [
+   {
+    "role": "band.label",
+    "size": "12px/1, 700 (flag), 600 (badges)",
+    "use": "Profile name, state words in the band"
+   },
+   {
+    "role": "band.meta",
+    "size": "12px, 500, #8FAAB5",
+    "use": "'· desbloqueado', '· página do sistema'"
+   },
+   {
+    "role": "tab",
+    "size": "13px, 400; selected 600",
+    "use": "Tab titles, group label 12/600"
+   },
+   {
+    "role": "ui.body",
+    "size": "13px/1.3-1.45",
+    "use": "Menus, urlbar results, panel text"
+   },
+   {
+    "role": "field.url",
+    "size": "13px mono; host in primary, path in muted",
+    "use": "Address bar"
+   },
+   {
+    "role": "panel.title",
+    "size": "14px, 600",
+    "use": "Assistant header, quick action labels"
+   },
+   {
+    "role": "page.body",
+    "size": "14px/1.5 (Shell)",
+    "use": "Settings rows and descriptions"
+   },
+   {
+    "role": "heading",
+    "size": "16px/1.3, 600",
+    "use": "Settings sections"
+   },
+   {
+    "role": "title",
+    "size": "24px/1.2, 600",
+    "use": "Shell page h1 ('Perfis')"
+   },
+   {
+    "role": "caption",
+    "size": "12px, 400-600, muted",
+    "use": "Table headers, receipts, hints"
+   },
+   {
+    "role": "mono",
+    "size": "12-13px",
+    "use": "Hosts, sizes, file names, code"
+   }
+  ]
+ },
+ "new_tokens": [
+  {
+   "name": "farol.band.bg",
+   "light": "#0B1623",
+   "dark": "#04080D",
+   "purpose": "The band is always 'night' in both themes; the band uses the dark semantic set in both themes so one set of pairs covers it",
+   "contrast_pairs": [
+    "#F1F7F5 on #0B1623 16.79:1",
+    "#F1F7F5 on #04080D 18.52:1",
+    "#8FAAB5 on #0B1623 7.44:1",
+    "#8FAAB5 on #04080D 8.21:1",
+    "#6FE0C5 (Nulavio mark) on #0B1623 11.40:1",
+    "band vs light tab strip #E2EBEE 15.05:1"
+   ]
+  },
+  {
+   "name": "farol.band.rule",
+   "light": "#6E93A2",
+   "dark": "#6E93A2",
+   "purpose": "Badge borders and band controls",
+   "contrast_pairs": [
+    "#6E93A2 on #0B1623 5.51:1",
+    "#6E93A2 on #04080D 6.08:1"
+   ]
+  },
+  {
+   "name": "farol.band.hairline",
+   "light": "#23495A",
+   "dark": "#23495A",
+   "purpose": "Decorative 1 px under the band (not a required cue)",
+   "contrast_pairs": [
+    "decorative, 1.88:1 on #0B1623 by design"
+   ]
+  },
+  {
+   "name": "farol.flag.text",
+   "light": "#070F18 (= identity.on)",
+   "dark": "#070F18",
+   "purpose": "Glyph and name on identity fills",
+   "contrast_pairs": [
+    "on sky #8CCBF5 10.98:1",
+    "on sand #EBC77F 11.93:1",
+    "on rose #F4A8BD 10.25:1",
+    "on slate #BFD0D6 12.11:1",
+    "on violet #C2B0F7 9.95:1",
+    "on mint #6FE0C5 12.05:1",
+    "identity fills vs band: sky 10.38, sand 11.28, rose 9.70, slate 11.45, violet 9.41 (all on #0B1623)"
+   ]
+  },
+  {
+   "name": "daymark.temporary",
+   "light": "dashed 1.5px #F1F7F5 (8 on / 5 off) on band; dashed #3A6273 in pages",
+   "dark": "same on band; dashed #8FAAB5 in pages",
+   "purpose": "Reserved pattern: temporary profile only",
+   "contrast_pairs": [
+    "#F1F7F5 on #0B1623 16.79:1",
+    "#3A6273 on #FFFFFF 6.62:1",
+    "#3A6273 on #E2EBEE 5.47:1"
+   ]
+  },
+  {
+   "name": "daymark.private.bg / .dot / .text",
+   "light": "#2A1745 / #9E86C9 / #F1F7F5 (muted #CDBFE6)",
+   "dark": "same",
+   "purpose": "Reserved private-window band field",
+   "contrast_pairs": [
+    "#F1F7F5 on #2A1745 14.82:1",
+    "#CDBFE6 on #2A1745 9.33:1",
+    "dots #9E86C9 on #2A1745 5.13:1",
+    "badge border #6E93A2 on #2A1745 4.86:1"
+   ]
+  },
+  {
+   "name": "daymark.agent.ink / .lines",
+   "light": "#0B1623 / #6E93A2",
+   "dark": "#F1F7F5 / #6E93A2",
+   "purpose": "AI Workspace double window frame and band line texture; inverse badge",
+   "contrast_pairs": [
+    "frame #0B1623 vs light chrome #E2EBEE 15.05:1",
+    "frame #F1F7F5 vs dark chrome #0B1623 16.79:1",
+    "lines #6E93A2 on #0B1623 5.51:1",
+    "badge text #0B1623 on #F1F7F5 16.79:1"
+   ]
+  },
+  {
+   "name": "daymark.automation.stripe / .label",
+   "light": "#E26D70 on band / label #E26D70 with #0B1623 text",
+   "dark": "same",
+   "purpose": "Reserved diagonal stripes for remote control (complements the engine's own stripes)",
+   "contrast_pairs": [
+    "#E26D70 on #0B1623 5.77:1",
+    "#E26D70 on #04080D 6.36:1",
+    "#0B1623 on #E26D70 5.77:1"
+   ]
+  },
+  {
+   "name": "farol.alert.warning (band)",
+   "light": "#E7AE61",
+   "dark": "#E7AE61",
+   "purpose": "Guard and other warnings inside the band (night set)",
+   "contrast_pairs": [
+    "#E7AE61 on #0B1623 9.21:1",
+    "#E7AE61 on #04080D 10.16:1"
+   ]
+  },
+  {
+   "name": "farol.activity",
+   "light": "bg #0E3B33, border/dot #6FE0C5, text #F1F7F5, meta #BFD0D6",
+   "dark": "same",
+   "purpose": "Agent activity pill in the band",
+   "contrast_pairs": [
+    "#F1F7F5 on #0E3B33 11.44:1",
+    "#BFD0D6 on #0E3B33 7.81:1",
+    "#6FE0C5 on #0E3B33 7.77:1"
+   ]
+  },
+  {
+   "name": "tab.beam",
+   "light": "#0F7A68 (accent.default)",
+   "dark": "#6FE0C5",
+   "purpose": "Selected tab: 2 px full-width beam on the top edge (replaces the 16 px route mark)",
+   "contrast_pairs": [
+    "#0F7A68 on #FFFFFF 5.24:1",
+    "#0F7A68 on strip #E2EBEE 4.33:1",
+    "#6FE0C5 on #112432 9.94:1"
+   ]
+  },
+  {
+   "name": "chrome.dark.strip / toolbar / field (Farol re-map)",
+   "light": "#E2EBEE / #FFFFFF / #F1F7F5",
+   "dark": "#0B1623 / #112432 / #0B1623",
+   "purpose": "Flatter, higher-contrast chrome; selected tab = toolbar colour",
+   "contrast_pairs": [
+    "#23495A tab text on #E2EBEE 7.99:1",
+    "#BFD0D6 on #0B1623 11.45:1",
+    "field border #6B8794 on #FFFFFF 3.81:1",
+    "#6E93A2 on #112432 4.81:1",
+    "#8FAAB5 path on #112432 6.49:1"
+   ]
+  },
+  {
+   "name": "group.violetInk (tab group swatch, underline, outline)",
+   "light": "#5B47B8",
+   "dark": "#C2B0F7",
+   "purpose": "Re-values the upstream blue/indigo group colour; group name is always text, colour is supplementary",
+   "contrast_pairs": [
+    "#5B47B8 on #E2EBEE 5.71:1",
+    "#5B47B8 on #FFFFFF 6.91:1",
+    "#C2B0F7 on #0B1623 9.41:1"
+   ]
+  },
+  {
+   "name": "surface.overlay.night (+ .solid, .floor)",
+   "light": "rgba(11,22,35,0.90), floor 0.88, solid #0B1623",
+   "dark": "same",
+   "purpose": "Focus-mode tab reveal only",
+   "contrast_pairs": [
+    "#F1F7F5 over worst case (0.88 over white = #28323D) 12.00:1",
+    "#8FAAB5 over #28323D 5.32:1"
+   ]
+  },
+  {
+   "name": "motion.easing.enter / exit",
+   "light": "cubic-bezier(0,0,0,1) / cubic-bezier(0.3,0,1,1)",
+   "dark": "same",
+   "purpose": "Reveal in/out; standard stays cubic-bezier(0.2,0,0,1)",
+   "contrast_pairs": []
+  }
+ ],
+ "reference_ideas": [
+  {
+   "reference": "Arc",
+   "idea": "One strong per-space identity token",
+   "nulavio_problem": "Profile identity is a 16 px chip among extension icons and is drawn three different ways",
+   "adaptation": "One solid identity token (fill + outline glyph + name) used identically in the band flag, toolbar chip, menus and Settings; no gradients, grain, emoji or whole-window tints"
+  },
+  {
+   "reference": "Dia",
+   "idea": "Ask about the current page or a selection with low friction",
+   "nulavio_problem": "Assistant reachable only from the sidebar; 'include this page' checkbox drifts across tabs",
+   "adaptation": "Address-bar and selection-menu entries that only attach; tab-bound removable chips with size and recipient before Send; no 'Chat' pill, no gradient, no auto-routing of typed text"
+  },
+  {
+   "reference": "Vivaldi 8.0",
+   "idea": "Layout presets",
+   "nulavio_problem": "Layout choices are scattered and could hide security UI",
+   "adaptation": "Three presets (top, vertical, focus); none hides the address bar, its icons or the band"
+  },
+  {
+   "reference": "Zen compact mode",
+   "idea": "Reveal hidden chrome on demand",
+   "nulavio_problem": "Users want minimal chrome without losing safety cues",
+   "adaptation": "Only the tab strip hides; it drops from the top edge over the page; the address bar never floats or hides; no floating card, no centred URL bar"
+  },
+  {
+   "reference": "Opera Air",
+   "idea": "Calm, progressive disclosure",
+   "nulavio_problem": "Noisy new tab and settings, status far from controls",
+   "adaptation": "Flat surfaces, single signal colour, inline 'Salvo' next to the control; translucency opt-in, one surface, with a floor and solid fallback"
+  },
+  {
+   "reference": "Firefox 158 (engine)",
+   "idea": "'>' quick actions, remote-control stripes, private indicator, vertical tabs, tab groups",
+   "nulavio_problem": "Nulavio features are hidden behind menus; engine security marks must survive restyling",
+   "adaptation": "Shell registers Nulavio quick actions and shows them in the empty results; engine marks kept unchanged and complemented by band daymarks"
+  },
+  {
+   "reference": "Lighthouse daymarks and light characteristics (maritime, non-software)",
+   "idea": "A lighthouse is identified by its light colour at night and by painted bands/stripes by day",
+   "nulavio_problem": "Identity colours (sand, violet) collide with warning amber and private purple",
+   "adaptation": "Identity = the light (solid colour + name); states = daymarks (reserved patterns + words). The two vocabularies never mix"
+  },
+  {
+   "reference": "Desktop title bars",
+   "idea": "The top line of a window names it",
+   "nulavio_problem": "Pages can imitate Nulavio's security screens",
+   "adaptation": "The band is the title line but shows only chrome-derived facts (profile, states, 'Nulavio' for Shell pages); it never shows page titles, so it cannot be spoofed"
+  }
+ ],
+ "implementation": [
+  {
+   "element": "Farol band toolbar (#nulavio-farol) above the tab strip",
+   "mechanism": "Shell privileged module",
+   "notes": "Creates a real toolbar element per browser window (accessible name, focusable flag button that opens the profile menu); fed by profile metadata (name, colour, icon) and state sources. Drag region via -moz-window-dragging. Rendered test must assert it is on-screen, opacity 1 and hit-testable in every preset."
+  },
+  {
+   "element": "Band styling, flag beam edge, 2 px identity line, badges",
+   "mechanism": "horizon CSS",
+   "notes": "Keyed on root attributes set by the module (nulavio-profile-color, nulavio-state-*); colours from new farol.* tokens; forced-colors block with system colours."
+  },
+  {
+   "element": "Window controls moved into the band",
+   "mechanism": "Shell privileged module",
+   "notes": "Reparents .titlebar-buttonbox-container when the window uses client-side decorations; fallback: controls stay in the tab strip. With KDE server-side decorations the band sits under the KWin title bar."
+  },
+  {
+   "element": "Private and automation daymarks",
+   "mechanism": "horizon CSS",
+   "notes": "Read the engine's own root attributes (privatebrowsingmode, remotecontrol); engine indicators are not moved or recoloured."
+  },
+  {
+   "element": "Temporary, AI Workspace, locked, Guard, activity states in the band",
+   "mechanism": "Shell privileged module",
+   "notes": "Sets attributes and badge content from the Vault, temporary-profile, AI Bridge and Guard backends (all exist); 'Parar agente' calls the AI Bridge emergency stop."
+  },
+  {
+   "element": "Trusted 'Nulavio · <página>' label in the band",
+   "mechanism": "Shell privileged module",
+   "notes": "Derived from the selected tab's principal (the Shell's moz-extension origin), never from document.title."
+  },
+  {
+   "element": "Address-bar identity label 'Nulavio' for Shell pages",
+   "mechanism": "new patch",
+   "notes": "Small patch (S) to label the built-in Shell origin 'Nulavio' instead of 'Extensão (Nulavio Shell)'. No-patch fallback: rename the add-on to 'Nulavio' → 'Extensão (Nulavio)'."
+  },
+  {
+   "element": "Compact by default, tab geometry, beam, hairlines, group colours",
+   "mechanism": "pref",
+   "notes": "browser.compactmode.show=true + browser.uidensity=1; geometry and group colour re-valuing in horizon CSS (verify the 158 tab-group colour variable names)."
+  },
+  {
+   "element": "Nulavio quick actions in the address bar + zero-prefix display",
+   "mechanism": "Shell privileged module",
+   "notes": "ActionsProviderQuickActions.addAction for Perguntar, Abrir em outro perfil, Janela temporária, Bloquear <perfil>, Parar agentes, Layout; zero-prefix via the engine quick-actions pref (verify name in 158). The '>' hint row is planned as a small UrlbarProvider in the same module. Lowering protection still goes through its confirmation page."
+  },
+  {
+   "element": "'Perguntar sobre esta página' button in the address bar",
+   "mechanism": "Shell page",
+   "notes": "Manifest page_action opening the sidebar with a page chip; hidden in private and AI Workspace windows."
+  },
+  {
+   "element": "Selection menu 'Perguntar ao assistente'",
+   "mechanism": "Shell page",
+   "notes": "menus API in background.js; attaches the selection as a chip, never sends."
+  },
+  {
+   "element": "Assistant panel on the right, chips, streaming, stop, sources",
+   "mechanism": "Shell page",
+   "notes": "sidebar_action + sidebar.position_start=false; tab-bound chips and streaming need changes in NulavioAI.sys.mjs (privileged module); browser.ml.chat.enabled=false (pref) removes Mozilla's chatbot."
+  },
+  {
+   "element": "Focus mode (merged row, tab reveal, tab count button)",
+   "mechanism": "Shell privileged module",
+   "notes": "Sets :root[nulavio-layout='focus']; moves the flag and state items into #nav-bar, horizon CSS collapses the empty band row and the tab strip, adds a 6 px top-edge hover zone and an overlay strip. Shortcut through manifest commands (suggested Ctrl+Alt+F, to verify against about:keyboard, KDE/GNOME and Orca)."
+  },
+  {
+   "element": "Translucent tab overlay + reduced-transparency path",
+   "mechanism": "horizon CSS",
+   "notes": "@media (prefers-reduced-transparency), (prefers-contrast), (forced-colors) and -moz-pref('nulavio.ui.reduceTransparency') switch to solid; the module sets that pref under software rendering."
+  },
+  {
+   "element": "Downloads panel program warning",
+   "mechanism": "horizon CSS",
+   "notes": "Restyles the existing flow (patch 0007): warning tint row, 'Excluir' primary, 'Mostrar na pasta', no 'Abrir'."
+  },
+  {
+   "element": "Profile menu lock badge, unlock page for held links",
+   "mechanism": "Shell page",
+   "notes": "Existing profile selector popup and routing/unlock pages restyled in Farol components."
+  },
+  {
+   "element": "Settings with navigation, search, Perfis table",
+   "mechanism": "Shell page",
+   "notes": "Split settings into sections with hash routing and aria-current; client-side search over section labels; inline 'Salvo' status; new type roles and component tokens in shell.css."
+  }
+ ],
+ "risks": [
+  "Vertical space: the band adds 26 px (chrome 101 px vs about 85 px upstream). Compact default and the focus preset offset it, but 768 px-tall laptops will notice.",
+  "Reparenting chrome DOM (band toolbar, window controls, focus-mode merge) from a privileged module is fragile across Firefox upgrades; Track B rendered tests currently skip in CI (DS-01), so this needs that CI job first.",
+  "A navy band in the light theme reads like a dark title bar; some users may find it heavy. It is intentional (constant trusted line) and cannot be turned off, which may draw complaints.",
+  "Daymarks at 26 px are small: dashed vs dotted can blur for low-vision users at a glance; words, glyphs and colour fields carry the meaning, but this needs testing with users and at 125-200% font scaling.",
+  "With the native sidebar revamp, vertical tabs and panels share the same side: in the vertical preset the assistant may have to open on the left, breaking the 'assistant on the right' rule.",
+  "Fullscreen (F11, video) hides all chrome including the band; automation and AI Workspace states need a fullscreen-entry notice or a persistent 3 px top line (planned, not drawn).",
+  "Mint is also an identity colour; a mint profile flag must stay visually distinct from the Nulavio trusted label (the label always uses the symbol and the word 'Nulavio', never a flag shape).",
+  "The 'Nulavio' identity label in the address bar needs a small engine patch; without it the label reads 'Extensão (Nulavio)'."
+ ],
+ "cost": {
+  "tokens and contrast tooling": "S",
+  "band + identity + states (module, CSS, rendered tests)": "M",
+  "tab strip and toolbar restyle, compact default": "S",
+  "address-bar quick actions and hint": "S",
+  "assistant panel (tab-bound chips, streaming, stop, sources)": "M",
+  "focus mode and presets": "L",
+  "Settings page with navigation and search": "M",
+  "address-bar 'Nulavio' label patch": "S",
+  "overall": "L"
+ },
+ "what_it_rejects": [
+  "Floating content card, gaps and big shadows; centred floating URL bar; auto-hiding the address bar or any security indicator",
+  "Page-derived or gradient/grain chrome colours; tinting the whole window with the profile colour",
+  "Showing page titles or any page-controlled text in the band",
+  "Using dashes, dots, stripes or horizontal lines for anything except their reserved state",
+  "Mint as 'safe' or a green padlock; secure stays neutral",
+  "Translucency on any surface that carries state, and translucency without a solid fallback",
+  "Pill primaries, uppercase 13 px captions, mixed radii outside 4-6-10",
+  "Mozilla's AI chatbot in the sidebar; any AI path that sends page text before Enviar or keeps consent after a tab switch",
+  "Copying names, icons or layouts from Zen, Arc, Dia, Opera or Vivaldi"
+ ]
+}

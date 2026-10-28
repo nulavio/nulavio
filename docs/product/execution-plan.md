@@ -121,3 +121,128 @@ The maintainer accepted the recommendations below, with the Android changes note
 - **Open decisions:** only D5 (a security key) is open; D1–D4, D6 and D7 are decided. S13–S24 need no new decision before they start; S18 needs signing keys only for the signing step.
 - **When to escalate to a more capable setup:** if S2 finds that no tested combination releases a key from the phone (hybrid PRF unavailable on Linux and Companion blocked), or if the encrypted-container approach cannot keep Gecko consistent across lock/unlock.
 - **Ready to execute:** yes for S1–S8 and S12–S24 (S1–S8 and S12–S24 done; S24's open items belong to the maintainer). S10 needs a security key; S11 (Android) comes last by decision.
+
+## UX redesign programme (from 2026-10-27)
+
+The maintainer's brief: make the experience and look of Nulavio exceptional, with its own coherent identity on every surface, without weakening any protection.
+- **Engine target:** Firefox 159.0.
+- **Inputs:** the [audit](../design/audit-2026-10-27.md) (107 findings) and the [direction](../design/visual-directions.md): Farol, with Maré's organisation and Névoa's flows.
+- **Done means:** each slice ends with tests green, a commit on `main`, a push, and CI green on the full SHA. Nothing is "done" while it is only a mockup.
+
+| # | Slice | Scope | Done when | Size |
+|---|---|---|---|---|
+| UX0 | **Record** — done 2026-10-27 | Audit and findings, "before" captures, the three directions and the final one (HTML mockups, rationales, renders), the decision, revised UX principles, this programme | Docs tests green | S |
+| UX1 | **Security, consent and honesty fixes** (P0 of the audit, independent of the look) | See the list below | A regression test per fix on the Track B build; contrast and Horizon checks green | M–L |
+| UX2 | **System** | See the list below | `build_tokens --check`, `contrast.py`, gallery baselines, unit tests | L |
+| UX3 | **Window** | See the list below | Security-visibility matrix: each state × each preset × both themes; on screen, opacity 1, `elementFromPoint`, host not truncated | L |
+| UX4 | **Shell pages** | See the list below | Integration tests per page state, both themes; every `data-state` captured | L |
+| UX5 | **Assistant** (Dia-like, under ADR 0007) | See the list below | Assistant tests: chips, drift, private refusal, cancel, stream, truncation, approval in front | L |
+| UX6 | **Safe personalisation** | See the list below | No option can turn a protection off (test over the option list); contrast pairs for every variant | M |
+| UX7 | **Motion and finish** | See the list below | Captures and docs current; reduced-motion test; perf budget recorded | M |
+
+**UX1 — Security, consent and honesty fixes**
+- **Assistant.** It finds the page in 158+ (AI-01), together with consent bound to a tab (AI-02) and no assistant in private windows (AI-15). The emergency stop also stops Ask, and the approval tab opens in front.
+- **Prefs.** Mozilla AI, promos, account and theme picker are turned off.
+- **Agent request.** Deny is the primary action, and requests show risk tiers.
+- **Full control.** The consent text is localised. Raw automation becomes separate and gets its own window state.
+- **Other pages.** The DNS "keep" button; neutral focus on the 6-digit comparison; look-alike "continue" states its consequence and can be undone; the download warning follows severity and gets the light critical colour.
+- **Contrast.** Address-bar results and the sidebar focus ring; a scheme-aware Nulavio symbol.
+
+**UX2 — System**
+- **Tokens v2:**
+  - type roles in rem;
+  - the band and the surfaces;
+  - elevation that changes per theme;
+  - motion easings, with their reduced-motion variants;
+  - z-index, scrim, selection and focus on accent;
+  - reserved `security.*` cues;
+  - the tab-group palette;
+  - the identity palette;
+  - translucency with an opacity floor and a solid fallback.
+- **Generator.** It fails on any token defined for one theme only.
+- **Contrast checks v2.** Composited pairs, and the exact set of pairs checked.
+- **Shell CSS.** Split into base, component and page layers, with a state matrix and prefers-contrast and forced-colours blocks.
+- **Component gallery.** Pinned with pngdiff baselines.
+
+**UX3 — Window**
+- **The band.** A toolbar area registered by a privileged Shell module, holding the identity, protection, seals, the trusted header and the profile menu.
+- **Horizon v2:**
+  - the vertical list and the route mark;
+  - tab groups, address-bar results, panels and the sidebar;
+  - private-window chrome, and the AI Workspace and raw-automation frames;
+  - the temporary seal and the fullscreen line;
+  - the downloads program badge and the Guard bar.
+- **Layout presets.** Set by prefs.
+- **Sidebar tools.** Curated, with the bookmarks bar (D-UX13).
+
+**UX4 — Shell pages**
+- **Settings.** Two panes, with search, scope labels and inline status.
+- **New tab.** "Você está em …".
+- **Profile menu.** It shows running and locked profiles, and creating a profile opens a create sheet.
+- **Routing.** Current → target, unlock from routing, and the notice in the band.
+- **Security moments.** One template, used for unlock, phone, look-alike, download, Guard and agent requests.
+- **Vault.** An unlock-methods page and a recovery-code ceremony.
+
+**UX5 — Assistant**
+- **Context.** Chips bound to a tab; recipient and full size shown before Send; the drift message.
+- **Conversation.** A session thread, Cancel and streaming.
+- **Runs.** A run timeline with inline approval.
+- **Answers.**
+  - errors by cause;
+  - truncation flags;
+  - sources only on literal matches;
+  - a safe Markdown subset.
+- **Entry points.**
+  - the selection menu;
+  - a keyboard shortcut;
+  - an address-bar keyword;
+  - a quick action.
+- **Visibility.** An agent-activity seal in the band.
+
+**UX6 — Safe personalisation**
+- **Presets.** Offered in onboarding and in Settings.
+- **Appearance.** Density, contrast-checked accents, "Reduzir transparência" and "Mais contraste".
+- **Shortcuts.** A link to about:keyboard, Nulavio commands the user can remap, and Nulavio quick actions after ">".
+- **Routing.** The default destination for links from other apps.
+
+**UX7 — Motion and finish**
+- **Motion tokens applied.** Profile arrival on the band, the sidebar, sheets, chips and toasts; all off under reduced motion.
+- **Measurement and captures.** A frame-time scene, and the capture matrix at 100/125/150 %.
+- **Docs.** The design docs are refreshed.
+
+### Decisions (maintainer, 2026-10-27: every recommendation accepted)
+
+| # | Decision | Outcome |
+|---|---|---|
+| D-UX1 | Direction | Farol, with Maré's organisation and Névoa's flows |
+| D-UX2 | Default layout for new profiles | "Lateral" (native vertical tabs), chosen again at first run; existing profiles keep theirs |
+| D-UX3 | Mint as a profile colour | Removed (mint means Nulavio/active); mint profiles migrate to lima |
+| D-UX4 | Raw automation and "Controle total" | Raw automation becomes a separate opt-in with its own confirmation (ADR 0007 amendment; it only tightens) |
+| D-UX5 | Emergency stop and assistant pause | They also block questions and page text |
+| D-UX6 | Assistant in private windows | Off entirely |
+| D-UX7 | Mozilla AI features | Chatbot, smart tab groups, Link Preview key points, Smart Window and `extensions.ml` off by prefs; Link Preview itself off in v1 (background fetch with an identifying header) |
+| D-UX8 | Mozilla account and Sync | Off for 1.0 (`identity.fxaccounts.enabled=false`) |
+| D-UX9 | "Nulavio" label patch for the address bar | Not now: the band gives a trusted header without a patch |
+| D-UX10 | Translucency | Solid chrome by default; optional ambience only on the new tab; "Reduzir transparência" setting |
+| D-UX11 | Assistant streaming | Yes (backend change in UX5) |
+| D-UX12 | pt-BR for "AI Workspace" | "Área de IA" |
+| D-UX13 | Bookmarks bar | Shown only when there are bookmarks |
+| D-UX14 | Track B rendered tests in CI | A self-hosted runner later (maintainer). Until then each slice runs the Track B suite locally and records it in the commit message |
+| D-UX15 | Identity palette | Mint → lima `#C5E384`, sand → `#FDCF8B`, "rosa" renamed "coral" |
+| D-UX16 | Tab-group colours | Orange, purple and red swatches hidden (too close to warning, private and critical); old groups drawn muted; engine colour names kept |
+| D-UX17 | Page title in the KDE title bar | Kept (Alt+Tab and taskbar need it); option "Esconder o título da página na barra da janela" |
+| D-UX18 | Downloads button | Warning triangle badge for programs (a hunk in patch 0007); no critical download state until download reputation exists (R15) |
+| D-UX19 | Routing notice | Inside the band next to the profile flag |
+| D-UX20 | Light band tone | navy 200 `#BFD0D6`, with a 1 px ring on identity flags |
+| D-UX21 | Autonomy labels | "Nível: Restrito / Assistido / Autônomo / Controle total" |
+| D-UX22 | Assistant next to the vertical tab list | No automatic collapse; Ctrl+Alt+Z and the Foco preset cover narrow windows |
+| D-UX23 | Shortcuts for Foco and "Bloquear agora" | Chosen in UX6, after checking about:keyboard, KDE/GNOME and Orca |
+
+### UX plan summary
+
+- **Model and effort.**
+  - Opus, high: UX1 and UX3 (policy behaviour and engine-chrome internals).
+  - Opus, medium: UX2 and UX5.
+  - Sonnet, medium: UX0, UX4, UX6 and UX7.
+- **Escalate if** the band cannot be a registered toolbar area without patching `browser.xhtml`, the state seal cannot be made non-removable, or streaming through the tools subprocess needs an IPC redesign.
+- **Needs the maintainer.** A Track B CI runner. Real-desktop passes that headless cannot do: the KDE title bar with the band, Orca, a real high-contrast theme, frame times with a visible window.
