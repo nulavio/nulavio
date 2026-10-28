@@ -10,8 +10,8 @@ tokens with colours as ``light-dark(light, dark)``, which follow the
 colour scheme the engine sets on its chrome. A third, a JavaScript module,
 gives the Shell the profile identity colours it draws into the toolbar icon.
 
-    python3 -I scripts/brand/build_tokens.py            # write both files
-    python3 -I scripts/brand/build_tokens.py --check    # fail if either file is stale (CI)
+    python3 -I scripts/brand/build_tokens.py            # write generated files
+    python3 -I scripts/brand/build_tokens.py --check    # fail if any generated file is stale (CI)
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from contrast import flatten, resolve  # noqa: E402
+from contrast import flatten, resolve, rgba  # noqa: E402
 
 TOKENS = ROOT / "docs" / "brand" / "tokens.json"
 OUTPUT = ROOT / "browser" / "startpage" / "tokens.css"
@@ -51,25 +51,62 @@ class TokenError(ValueError):
     pass
 
 
+def themed_path(path: str) -> tuple[str | None, str]:
+    parts = path.split(".")
+    themes = [part for part in parts if part in ("light", "dark")]
+    if not themes:
+        return None, path
+    if len(themes) != 1:
+        raise TokenError(f"ambiguous theme in {path}")
+    return themes[0], ".".join(part for part in parts if part not in ("light", "dark"))
+
+
 def one_theme_tokens(data: dict) -> list[str]:
-    """Semantic colours defined for one theme only (e.g. color.light.x without color.dark.x)."""
-    names: dict[str, set[str]] = {"light": set(), "dark": set()}
-    for path in flatten(data):
-        if path.startswith(("color.light.", "color.dark.")):
-            theme, _, name = path[len("color.") :].partition(".")
-            names[theme].add(name)
-    missing = [
-        f"color.{other}.{name}" for theme, other in (("light", "dark"), ("dark", "light")) for name in names[theme] - names[other]
-    ]
+    tokens = flatten(data)
+    missing = []
+    for path in tokens:
+        theme, _ = themed_path(path)
+        if theme:
+            other = "dark" if theme == "light" else "light"
+            counterpart = ".".join(other if p == theme else p for p in path.split("."))
+            if counterpart not in tokens:
+                missing.append(counterpart)
     return sorted(missing)
 
 
 def require_both_themes(data: dict) -> None:
-    """A colour missing in one theme would fall back to an unrelated value there (the light critical
-    text once rendered navy, and the chrome file got the dark value in light): refuse to generate."""
     missing = one_theme_tokens(data)
     if missing:
-        raise TokenError("semantic colour defined for one theme only; add: " + ", ".join(missing))
+        raise TokenError("token defined for one theme only; add: " + ", ".join(missing))
+    tokens = flatten(data)
+    names = {}
+    for path, token in tokens.items():
+        try:
+            resolve(tokens, path)
+        except ValueError as error:
+            raise TokenError(str(error)) from error
+        theme, semantic = themed_path(path)
+        key = (theme or "shared", semantic)
+        if key in names:
+            raise TokenError(f"duplicate CSS token: {path} and {names[key]}")
+        names[key] = path
+        if theme:
+            other = "dark" if theme == "light" else "light"
+            counterpart = ".".join(other if p == theme else p for p in path.split("."))
+            if token.get("$type") != tokens[counterpart].get("$type"):
+                raise TokenError(f"theme type mismatch: {path} and {counterpart}")
+        elif any(themed_path(p)[1] == semantic and themed_path(p)[0] for p in tokens):
+            raise TokenError(f"shared token conflicts with themed token: {path}")
+
+    if "translucency.frost.light.opacityFloor" in tokens:
+        for theme in ("light", "dark"):
+            floor = resolve(tokens, f"translucency.frost.{theme}.opacityFloor")
+            opacity = resolve(tokens, f"translucency.frost.{theme}.opacity")
+            alpha = rgba(resolve(tokens, f"color.{theme}.surface.frost"))[3]
+            if not (0 <= floor <= opacity <= 1 and alpha == opacity):
+                raise TokenError(f"frost opacity violates floor or differs from surface alpha: {theme}")
+            if rgba(resolve(tokens, f"color.{theme}.surface.frostFallback"))[3] != 1:
+                raise TokenError(f"frost fallback must be solid: {theme}")
 
 
 def build(data: dict) -> str:
@@ -81,9 +118,8 @@ def build(data: dict) -> str:
     for path, token in tokens.items():
         if path.startswith("color.primitive."):
             continue
-        if path.startswith(("color.light.", "color.dark.")):
-            theme = path.split(".")[1]
-            semantic = "color." + ".".join(path.split(".")[2:])
+        theme, semantic = themed_path(path)
+        if theme:
             themes[theme].append(f"  {var_name(semantic)}: {css_value(token, tokens, path)};")
         else:
             shared.append(f"  {var_name(path)}: {css_value(token, tokens, path)};")
@@ -97,28 +133,42 @@ def build(data: dict) -> str:
 
 
 def build_chrome(data: dict) -> str:
-    """Tokens for the browser window: one :root block, colours as light-dark()."""
+    """Colours follow engine scheme; non-colours switch through engine media queries."""
     require_both_themes(data)
     tokens = flatten(data)
     shared, colors = [], {}
+    themes: dict[str, list[str]] = {"light": [], "dark": []}
     for path, token in tokens.items():
         if path.startswith("color.primitive."):
             continue
-        if path.startswith(("color.light.", "color.dark.")):
-            theme, semantic = path.split(".")[1], "color." + ".".join(path.split(".")[2:])
-            colors.setdefault(semantic, {})[theme] = css_value(token, tokens, path)
+        theme, semantic = themed_path(path)
+        value = css_value(token, tokens, path)
+        if theme and token.get("$type") == "color":
+            colors.setdefault(semantic, {})[theme] = value
+        elif theme:
+            themes[theme].append(f"  {var_name(semantic)}: {value};")
         else:
-            shared.append(f"  {var_name(path)}: {css_value(token, tokens, path)};")
+            shared.append(f"  {var_name(path)}: {value};")
     lines = [f"  {var_name(name)}: light-dark({v['light']}, {v['dark']});" for name, v in colors.items()]
-    note = "/* Nulavio Shell tokens for the browser window. Colours follow the engine's colour scheme. */\n"
-    return HEADER + note + ":root {\n" + "\n".join(shared + lines) + "\n}\n"
+    css = HEADER + ":root {\n" + "\n".join(shared + lines + themes["light"]) + "\n}\n"
+    if themes["dark"]:
+        css += "@media (prefers-color-scheme: dark) {\n  :root {\n" + "\n".join(themes["dark"]) + "\n  }\n}\n"
+    return css
 
 
 def build_identity(data: dict) -> str:
     """Profile identity colours (same in both themes) for canvas drawing in the Shell."""
     tokens = flatten(data)
     prefix = "color.light.identity."
-    colors = {path[len(prefix) :]: resolve(tokens, path) for path in tokens if path.startswith(prefix)}
+    require_both_themes(data)
+    colors = {
+        path[len(prefix) :]: resolve(tokens, path)
+        for path in tokens
+        if path.startswith(prefix) and "." not in path[len(prefix) :] and path[len(prefix) :] != "ring"
+    }
+    for name, value in colors.items():
+        if resolve(tokens, f"color.dark.identity.{name}") != value:
+            raise TokenError(f"drawing identity must match both themes: {name}")
     body = ",\n".join(f'  {name}: "{value}"' for name, value in colors.items())
     return (
         HEADER.replace("/*", "//", 1).replace(" */", "", 1)
@@ -156,17 +206,17 @@ def main() -> int:
     args = parser.parse_args()
     data = json.loads(TOKENS.read_text(encoding="utf-8"))
     try:
-        require_both_themes(data)
-    except TokenError as error:
+        outputs = (
+            (OUTPUT, build(data)),
+            (CHROME_OUTPUT, build_chrome(data)),
+            (IDENTITY_OUTPUT, build_identity(data)),
+            (SIDEBAR_OUTPUT, build_sidebar_focus(data)),
+        )
+    except ValueError as error:
         print(f"{TOKENS.relative_to(ROOT)}: {error}", file=sys.stderr)
         return 2
     status = 0
-    for out, css in (
-        (OUTPUT, build(data)),
-        (CHROME_OUTPUT, build_chrome(data)),
-        (IDENTITY_OUTPUT, build_identity(data)),
-        (SIDEBAR_OUTPUT, build_sidebar_focus(data)),
-    ):
+    for out, css in outputs:
         if args.check:
             current = out.read_text(encoding="utf-8") if out.exists() else ""
             if current != css:

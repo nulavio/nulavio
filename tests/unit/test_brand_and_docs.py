@@ -37,8 +37,41 @@ class TokensTest(unittest.TestCase):
         self.assertGreaterEqual(len(rows), 25)
 
     def test_generated_css_is_current(self):
-        css = build_tokens.build(json.loads(build_tokens.TOKENS.read_text()))
-        self.assertEqual(css, build_tokens.OUTPUT.read_text(), "run scripts/brand/build_tokens.py")
+        data = json.loads(build_tokens.TOKENS.read_text())
+        for generate, output in (
+            (build_tokens.build, build_tokens.OUTPUT),
+            (build_tokens.build_chrome, build_tokens.CHROME_OUTPUT),
+            (build_tokens.build_identity, build_tokens.IDENTITY_OUTPUT),
+            (build_tokens.build_sidebar_focus, build_tokens.SIDEBAR_OUTPUT),
+        ):
+            with self.subTest(output=output):
+                self.assertEqual(generate(data), output.read_text(), "run scripts/brand/build_tokens.py")
+
+    def test_drawing_palette_preserves_ink_and_excludes_old_identity_names(self):
+        js = build_tokens.build_identity(json.loads(build_tokens.TOKENS.read_text()))
+        colors = dict(re.findall(r'  (\w+): "(#[A-F0-9]+)"', js))
+        self.assertEqual(
+            colors,
+            {
+                "lima": "#C5E384",
+                "sky": "#8CCBF5",
+                "violet": "#C2B0F7",
+                "coral": "#F4A8BD",
+                "sand": "#FDCF8B",
+                "slate": "#BFD0D6",
+                "on": "#070F18",
+            },
+        )
+
+    def test_frost_floor_and_solid_fallback_are_enforced(self):
+        data = json.loads(build_tokens.TOKENS.read_text())
+        data["color"]["light"]["surface"]["frost"]["$value"] = "rgba(255,255,255,0.5)"
+        with self.assertRaisesRegex(build_tokens.TokenError, "frost opacity"):
+            build_tokens.build(data)
+        data = json.loads(build_tokens.TOKENS.read_text())
+        data["color"]["dark"]["surface"]["frostFallback"]["$value"] = "rgba(17,36,50,0.88)"
+        with self.assertRaisesRegex(build_tokens.TokenError, "fallback must be solid"):
+            build_tokens.build(data)
 
     def test_generator_refuses_a_colour_defined_for_one_theme(self):
         data = json.loads(build_tokens.TOKENS.read_text())
