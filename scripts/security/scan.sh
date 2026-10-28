@@ -7,11 +7,14 @@
 #
 #   - actionlint      GitHub Actions workflows: syntax, expressions, ShellCheck on run: blocks
 #   - zizmor          GitHub Actions security audits (online audits too when GH_TOKEN is set)
-#   - gitleaks        secrets in every commit of the history (.gitleaks.toml, .gitleaksignore)
+#   - gitleaks        secrets in every commit of every branch the clone has (.gitleaks.toml,
+#                     .gitleaksignore)
 #   - shellcheck      every shell script in the repository (tracked, or new and not ignored)
 #   - opengrep        Nulavio's rules (ci/sast/nulavio-rules.yml) on the repository
 #   - opengrep-rules  the same rules on their test cases (tests/fixtures/sast/)
 #
+#   scripts/security/scan.sh staged           secrets in the staged changes only (the pre-commit
+#                                             hook in scripts/security/hooks/; not run by default)
 #   scripts/security/scan.sh shell-files      list the files the shellcheck check reads
 #
 # Tools live in $NULAVIO_SECURITY_TOOLS, else $RUNNER_TEMP/nulavio-security-tools in
@@ -54,9 +57,10 @@ for check in "${checks[@]}"; do
     case $check in
         actionlint) needed+=(actionlint shellcheck) ;;
         zizmor | gitleaks | shellcheck) needed+=("$check") ;;
+        staged) needed+=(gitleaks) ;;
         opengrep | opengrep-rules) needed+=(opengrep) ;;
         *)
-            echo "scan: unknown check $check (known: ${all_checks[*]} shell-files)" >&2
+            echo "scan: unknown check $check (known: ${all_checks[*]} staged shell-files)" >&2
             exit 2
             ;;
     esac
@@ -85,6 +89,13 @@ run_opengrep() {
         "$tools/opengrep" "$@"
 }
 
+run_gitleaks() {
+    # Inline "gitleaks:allow" comments are ignored: an exception goes in .gitleaks.toml or
+    # .gitleaksignore, with its reason, where review sees it.
+    "$tools/gitleaks" "$@" --no-banner --redact --verbose --ignore-gitleaks-allow \
+        --config .gitleaks.toml --gitleaks-ignore-path .gitleaksignore .
+}
+
 check_actionlint() {
     "$tools/actionlint" -shellcheck "$tools/shellcheck" -pyflakes ""
 }
@@ -102,8 +113,11 @@ check_gitleaks() {
         echo "gitleaks: this clone is shallow; the check needs every commit (actions/checkout: fetch-depth: 0)" >&2
         return 1
     fi
-    "$tools/gitleaks" git --no-banner --redact --verbose \
-        --config .gitleaks.toml --gitleaks-ignore-path .gitleaksignore .
+    run_gitleaks git
+}
+
+check_staged() {
+    run_gitleaks git --pre-commit --staged
 }
 
 check_shellcheck() {

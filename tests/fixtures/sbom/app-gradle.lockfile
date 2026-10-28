@@ -1,0 +1,15 @@
+# This is a Gradle generated file for dependency locking.
+# Manual edits can break the build and are not advised.
+# This file is expected to be part of source control.
+# To regenerate this file, run: ./gradlew :app:dependencies --write-locks
+androidx.annotation:annotation-jvm:1.8.2=releaseRuntimeClasspath
+com.google.code.findbugs:jsr305:3.0.2=releaseRuntimeClasspath
+com.google.code.gson:gson:2.13.2=releaseRuntimeClasspath
+com.google.crypto.tink:tink-android:1.24.0=releaseRuntimeClasspath
+com.google.errorprone:error_prone_annotations:2.41.0=releaseRuntimeClasspath
+com.google.zxing:core:3.5.4=releaseRuntimeClasspath
+com.journeyapps:zxing-android-embedded:4.3.0=releaseRuntimeClasspath
+org.bouncycastle:bcprov-jdk18on:1.86=releaseRuntimeClasspath
+org.jetbrains.kotlin:kotlin-stdlib:2.2.10=releaseRuntimeClasspath
+org.jetbrains:annotations:13.0=releaseRuntimeClasspath
+empty=

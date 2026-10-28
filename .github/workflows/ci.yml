@@ -1,7 +1,7 @@
 name: ci
 
 # No paths-ignore for documentation-only changes: the unit tests read docs/ (design
-# tokens, links, claims) and gitleaks must see every commit.
+# tokens, links, claims), so such a change can fail them (docs/security/code-scanning.md).
 on:
   push:
     branches: [main]

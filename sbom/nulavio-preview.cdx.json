@@ -1,7 +1,7 @@
 {
   "bomFormat": "CycloneDX",
   "specVersion": "1.6",
-  "serialNumber": "urn:uuid:79f2c2f0-0685-5384-b9ed-1921194d87ce",
+  "serialNumber": "urn:uuid:ef12a103-ab06-56b4-92b1-983146c0c27a",
   "version": 1,
   "metadata": {
     "component": {
@@ -19,7 +19,7 @@
       "properties": [
         {
           "name": "nulavio:git-revision",
-          "value": "40149a2c560d3be89e4eb52e9af6501702ef37f6"
+          "value": "fc349802b8a08d6f765b8896be57d3fcd32a12ed"
         }
       ]
     }
@@ -216,6 +216,7 @@
         }
       ],
       "purl": "pkg:generic/addons.mozilla.org/bitwarden@2026.10.0",
+      "cpe": "cpe:2.3:a:bitwarden:bitwarden:2026.10.0:*:*:*:browser:*:*:*",
       "licenses": [
         {
           "license": {

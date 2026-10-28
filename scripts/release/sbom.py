@@ -17,15 +17,22 @@ and the package file's own SHA-256 identifies what it describes.
         --engine-version 158.0.1 > nulavio-158.0.1-0.1.fc44.x86_64.rpm.cdx.json
 
 With --companion, the SBOM of the Android Companion app: every library in its
-release build as Gradle resolved it (with the version Gradle chose), each with
-a Maven purl and the SHA-256 that android/gradle/verification-metadata.xml pins,
-and the dependency graph. Gradle writes the report, this script only reads it:
+release build, each with a Maven purl and the SHA-256 that
+android/gradle/verification-metadata.xml pins. Without Gradle, the libraries come
+from the lock of the release classpath (android/app/gradle.lockfile); the graph
+then only says that the app depends on each of them:
+
+    python3 -I scripts/release/sbom.py --companion > companion.cdx.json
+
+With Gradle's report of the release classpath, the SBOM also has the dependency
+graph, with the version Gradle chose for each library; the report must list
+the same libraries as the lock. Gradle writes the report, this script only reads it:
 
     android/gradlew -p android -q :app:dependencies --configuration releaseRuntimeClasspath > deps.txt
     python3 -I scripts/release/sbom.py --companion --gradle-dependencies deps.txt [--apk app.apk] > companion.cdx.json
 
-Components carry a purl and, where the NVD CPE dictionary has the product, a CPE,
-so vulnerability scanners can match them.
+Every component with an exact version carries a purl and, where the NVD CPE
+dictionary has the product, a CPE, so vulnerability scanners can match them.
 """
 
 from __future__ import annotations
@@ -51,14 +58,17 @@ PATCHES = ROOT / "browser" / "patches"
 ANDROID = ROOT / "android"
 VERIFICATION = ANDROID / "gradle" / "verification-metadata.xml"
 APP_GRADLE = ANDROID / "app" / "build.gradle.kts"
+APP_LOCK = ANDROID / "app" / "gradle.lockfile"
+RELEASE_CLASSPATH = "releaseRuntimeClasspath"
 MPL = [{"license": {"id": "MPL-2.0"}}]
 
-# Vendor and product as the NVD CPE dictionary names them (checked 2026-10-27). Bitwarden's
-# entries there are its desktop app and Proton Pass has none, so those get no CPE.
-ENGINE_CPE = ("mozilla", "firefox")
+# Vendor, product and software edition as the NVD CPE dictionary names them (checked with the
+# NVD CPE API on 2026-10-27). Proton Pass has no entry there, so it gets no CPE.
+ENGINE_CPE = ("mozilla", "firefox", "*")
 EXTENSION_CPE = {
-    "uBlock0@raymondhill.net": ("ublockorigin", "ublock_origin"),
-    "keepassxc-browser@keepassxc.org": ("keepassxc", "keepassxc-browser"),
+    "uBlock0@raymondhill.net": ("ublockorigin", "ublock_origin", "*"),
+    "keepassxc-browser@keepassxc.org": ("keepassxc", "keepassxc-browser", "*"),
+    "{446900e4-71c2-419f-a6a7-df9c091e268b}": ("bitwarden", "bitwarden", "browser"),  # "Browser Edition"
 }
 
 # One line of `gradlew :app:dependencies`: "|    +--- group:name:1.0 -> 1.1 (*)".
@@ -73,12 +83,13 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def cpe(vendor_product: tuple[str, str], version: str) -> str | None:
-    """CPE 2.3 name of one release, or None when the version is not a plain release number."""
+def cpe(product: tuple[str, str, str], version: str) -> str | None:
+    """CPE 2.3 name of one release of (vendor, product, software edition), or None when the version
+    is not a plain release number."""
     if not re.fullmatch(r"[0-9][0-9A-Za-z._-]*", version):
         return None
-    vendor, product = vendor_product
-    return f"cpe:2.3:a:{vendor}:{product}:{version}:*:*:*:*:*:*:*"
+    vendor, name, edition = product
+    return f"cpe:2.3:a:{vendor}:{name}:{version}:*:*:*:{edition}:*:*:*"
 
 
 def purl(kind: str, namespace: str, name: str, version: str, qualifiers: str = "") -> str:
@@ -170,6 +181,23 @@ def parse_gradle_dependencies(text: str) -> tuple[list[str], dict[str, list[str]
     return top, graph
 
 
+def parse_gradle_lock(text: str, configuration: str = RELEASE_CLASSPATH) -> list[str]:
+    """The "group:name:version" modules a gradle.lockfile locks for one configuration."""
+    modules = []
+    for line in text.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or line.startswith("empty="):
+            continue
+        module, _, configurations = line.partition("=")
+        if configuration in configurations.split(","):
+            if not re.fullmatch(r"[\w.-]+:[\w.-]+:[\w.+-]+", module):
+                raise SystemExit(f"sbom: not a locked module in gradle.lockfile: {line!r}")
+            modules.append(module)
+    if not modules:
+        raise SystemExit(f"sbom: gradle.lockfile locks nothing for {configuration}")
+    return sorted(modules)
+
+
 def maven_artifacts(verification: Path) -> dict[str, tuple[str, str]]:
     """{"group:name:version": (file, SHA-256)} for the jar or aar of each component Gradle verifies."""
     root = ET.parse(verification).getroot()  # noqa: S314 -- this repository's own Gradle file
@@ -184,16 +212,35 @@ def maven_artifacts(verification: Path) -> dict[str, tuple[str, str]]:
     return found
 
 
-def companion_bom(report: str, verification: Path, app_gradle: Path, apk: Path | None = None) -> dict:
-    """CycloneDX for the Companion app: the libraries of its release build and how they depend on each other."""
+def companion_bom(
+    verification: Path, app_gradle: Path, *, report: str | None = None, lock: str | None = None, apk: Path | None = None
+) -> dict:
+    """CycloneDX for the Companion app: the libraries of its release build, from Gradle's report (with
+    the graph) or from its lock (without), checked against each other when both are given."""
     gradle = app_gradle.read_text()
     app_id = re.search(r'applicationId = "([^"]+)"', gradle)[1]
     version_name = re.search(r'versionName = "([^"]+)"', gradle)[1]
     version_code = re.search(r"versionCode = (\d+)", gradle)[1]
-    top, graph = parse_gradle_dependencies(report)
+    if report is not None:
+        top, graph = parse_gradle_dependencies(report)
+        if lock is not None:
+            reported = {node for node in graph if not node.startswith("project:")}
+            locked = set(parse_gradle_lock(lock))
+            if reported != locked:
+                raise SystemExit(
+                    "sbom: the Gradle report and gradle.lockfile list different libraries: "
+                    f"only reported {sorted(reported - locked)}, only locked {sorted(locked - reported)}"
+                )
+    elif lock is not None:
+        # The lock has no graph: the app's own modules, then every locked library, all under the app.
+        projects = [f"project:{name}" for name in re.findall(r'implementation\(project\(":([\w.-]+)"\)\)', gradle)]
+        top = projects + parse_gradle_lock(lock)
+        graph = None
+    else:
+        raise SystemExit("sbom: the Companion SBOM needs Gradle's report or android/app/gradle.lockfile")
     artifacts = maven_artifacts(verification)
     refs, components = {}, []
-    for node in graph:
+    for node in graph if graph is not None else top:
         kind, _, rest = node.partition(":")
         if kind == "project":
             component = {
@@ -245,8 +292,10 @@ def companion_bom(report: str, verification: Path, app_gradle: Path, apk: Path |
         "version": 1,
         "metadata": {"component": app},
         "components": components,
+        # Without the graph, the libraries' own dependencies are unknown, so they get no entry
+        # (an empty one would say they have none).
         "dependencies": [{"ref": app["bom-ref"], "dependsOn": [refs[node] for node in top]}]
-        + [{"ref": refs[node], "dependsOn": [refs[child] for child in children]} for node, children in graph.items()],
+        + [{"ref": refs[node], "dependsOn": [refs[child] for child in children]} for node, children in (graph or {}).items()],
     }
 
 
@@ -255,15 +304,19 @@ def main() -> int:
     parser.add_argument("--package", type=Path, help="describe this RPM or .deb instead of the preview")
     parser.add_argument("--engine-version", help="engine version inside the package")
     parser.add_argument("--companion", action="store_true", help="describe the Android Companion app instead")
-    parser.add_argument("--gradle-dependencies", type=Path, help="with --companion: the Gradle report of releaseRuntimeClasspath")
+    parser.add_argument(
+        "--gradle-dependencies", type=Path, help="with --companion: Gradle's report of releaseRuntimeClasspath, for the graph"
+    )
     parser.add_argument("--apk", type=Path, help="with --companion: the APK this SBOM describes")
     args = parser.parse_args()
     if args.package and not args.engine_version:
         parser.error("--package needs --engine-version")
     if args.companion:
-        if args.package or not args.gradle_dependencies:
-            parser.error("--companion needs --gradle-dependencies and no --package")
-        bom = companion_bom(args.gradle_dependencies.read_text(), VERIFICATION, APP_GRADLE, args.apk)
+        if args.package:
+            parser.error("--companion takes no --package")
+        report = args.gradle_dependencies.read_text() if args.gradle_dependencies else None
+        lock = APP_LOCK.read_text() if APP_LOCK.exists() else None
+        bom = companion_bom(VERIFICATION, APP_GRADLE, report=report, lock=lock, apk=args.apk)
         json.dump(bom, sys.stdout, indent=2)
         sys.stdout.write("\n")
         return 0

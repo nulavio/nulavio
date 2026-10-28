@@ -16,7 +16,9 @@
 # A false positive: suppress that one line, with the reason, never a whole rule or file:
 #   call(...)  # nosemgrep: nulavio-py-shell-command -- why this one is safe
 #
-# What is scanned: files tracked by git, minus .semgrepignore (tests/ and docs/).
+# What is scanned: every file git does not ignore (tracked, or new), tests/ included, minus
+# the paths in .semgrepignore (only the rules' own test cases). The paths: filters below
+# narrow some rules to the code they are about.
 
 rules:
   # --- Python (launcher, scripts) ---------------------------------------------------------
@@ -379,6 +381,7 @@ rules:
         - "android/**/*.kts"
         - "android/**/*.properties"
         - "android/gradlew"
+      exclude: ["*.md"] # prose that names these flags to forbid them
     metadata:
       cwe: "CWE-494: Download of code without integrity check"
     pattern-either:
@@ -407,6 +410,7 @@ rules:
     severity: ERROR
     paths:
       include: ["bin/**", "scripts/**/*.sh", "ci/containers/**", ".github/**", "packaging/**"]
+      exclude: ["*.md"]
     metadata:
       cwe: "CWE-214: Invocation of process using visible sensitive information"
     pattern-either:

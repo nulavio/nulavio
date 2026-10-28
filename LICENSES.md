@@ -32,4 +32,4 @@ Nothing below is **redistributed** by the Track A preview. Nulavio downloads pin
 
 `python3 -I scripts/release/sbom.py > sbom/nulavio-preview.cdx.json` (CycloneDX 1.6). CI regenerates it on every run and attaches it as a build artifact.
 
-The Companion app has its own: `scripts/release/sbom.py --companion --gradle-dependencies <report>` lists every library of its release build as Gradle resolved it, each with its Maven purl and the SHA-256 Gradle verifies ([build](docs/architecture/build.md#packages-s18)).
+The Companion app has its own: `scripts/release/sbom.py --companion` lists every library of its release build, from the lock of its release classpath (`android/app/gradle.lockfile`), each with its Maven purl and the SHA-256 Gradle verifies. With `--gradle-dependencies <report>` it also records the dependency graph as Gradle resolved it ([build](docs/architecture/build.md#packages-s18)).

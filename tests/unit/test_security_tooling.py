@@ -159,6 +159,14 @@ class GitleaksConfigTest(unittest.TestCase):
                 self.assertTrue(all(path.startswith("^tests/") and path.endswith("$") for path in allowlist["paths"]))
                 self.assertTrue(all(value.startswith("^") and value.endswith("$") for value in allowlist["regexes"]))
 
+    def test_no_inline_exceptions_and_an_opt_in_hook_for_staged_changes(self):
+        scan = (SECURITY / "scan.sh").read_text()
+        self.assertIn("--ignore-gitleaks-allow", scan)  # "gitleaks:allow" in a line would hide a finding from review
+        self.assertIn("run_gitleaks git --pre-commit --staged", scan)
+        hook = SECURITY / "hooks" / "pre-commit"
+        self.assertTrue(os.access(hook, os.X_OK))
+        self.assertIn('/scripts/security/scan.sh" staged', hook.read_text())
+
     def test_ignored_findings_are_exact_fingerprints(self):
         for line in (ROOT / ".gitleaksignore").read_text().splitlines():
             if line.strip() and not line.startswith("#"):

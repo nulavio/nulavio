@@ -3,6 +3,7 @@ __pycache__/
 .venv/
 tests/artifacts/
 /sbom.cdx.json
+/companion.cdx.json
 .ruff_cache/
 /dist/
 android/.gradle/

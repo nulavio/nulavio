@@ -51,7 +51,7 @@ Status legend: **Done** (implemented and verified by a test or recorded evidence
 | SEC-09 | Conservative failure: refuse to launch weakened profiles | **Done** (Guard critical) | `test_10` |
 | SEC-10 | Never fill credentials without origin validation and user action | **Planned** (provider certification + flow D) | — |
 | SEC-11 | Contextual, revocable device permissions | **Done** upstream; dashboard Planned | — |
-| SEC-12 | SBOM | **Done** (CycloneDX for the preview) | `scripts/release/sbom.py` |
+| SEC-12 | SBOM | **Done** (CycloneDX for the preview, each package and the Companion app; each pinned component with a purl, and a CPE where the NVD has one) | `scripts/release/sbom.py`, `test_sbom` |
 | SEC-13 | Signed artefacts and secure updates | **Planned** (Track B) | — |
 | SEC-14 | What you type in the address bar is not sent anywhere without consent; consent is per search provider | **Done (Track B)**; Track A: remote suggestions and trending off (one global switch upstream) | `test_search` 02, 03, 05 |
 | SEC-15 | Profiles never share cookies or site storage; a running profile is not deleted; switching never starts a duplicate instance | **Done (Track B)** | `test_profiles` 05 |

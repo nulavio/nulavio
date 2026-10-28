@@ -32,6 +32,7 @@ Security scanners (workflows, secrets in the history, shell scripts, Nulavio's o
 
 ```sh
 scripts/security/scan.sh
+git config core.hooksPath scripts/security/hooks   # optional: refuse a commit that adds a secret
 ```
 
 Tests never use your real profile: integration tests set `NULAVIO_HOME` to a temporary directory and use disposable engine profiles. Never put real credentials in tests.

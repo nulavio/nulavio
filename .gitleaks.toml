@@ -33,3 +33,10 @@ targetRules = ["generic-api-key"]
 condition = "AND"
 paths = ['''^tests/(unit|integration)/test_assistant(_ui)?\.py$''']
 regexes = ['''^sk-artificial-[a-z]+-key-[0-9]+$''']
+
+[[allowlists]]
+description = "OpenPGP fingerprint of Mozilla's release-signing subkey in the engine fast-path tests: public data, published with Firefox's KEY file"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''^tests/unit/test_upstream_fast_path\.py$''']
+regexes = ['''^827E658608679618CD349F93678E455D76767AA3$''']
