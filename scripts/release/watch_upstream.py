@@ -61,6 +61,7 @@ VERSIONS = "firefox_versions.json"
 SOURCES = ("firefox_history_major_releases.json", "firefox_history_stability_releases.json")
 ARCHIVE = "https://archive.mozilla.org/pub/firefox/releases/{version}/SHA256SUMS.asc"
 MFSA_INDEX = "https://api.github.com/repos/mozilla/foundation-security-advisories/contents/announce/{year}"
+MFSA_YEARS = "https://api.github.com/repos/mozilla/foundation-security-advisories/contents/announce"
 MFSA_RAW = "https://raw.githubusercontent.com/mozilla/foundation-security-advisories/main/announce/{year}/{name}"
 COMMITS = "https://api.github.com/repos/mozilla-releng/product-details/commits"
 HOSTS = frozenset({"product-details.mozilla.org", "archive.mozilla.org", "api.github.com", "raw.githubusercontent.com"})
@@ -83,6 +84,22 @@ class DataUnavailable(Exception):
 
 class VerificationFailed(Exception):
     """Mozilla's signature on SHA256SUMS did not verify against the pinned key."""
+
+
+class ListingMissing(OSError):
+    """Mozilla's advisory directory for a year does not exist (HTTP 404)."""
+
+
+def advisory_listing(data) -> list[str]:
+    """File names in a GitHub contents listing; anything but a list is an error, never "no advisory"."""
+    if not isinstance(data, list):
+        raise ValueError(f"the advisory listing is a JSON {type(data).__name__}, not a list")
+    return [item["name"] for item in data if isinstance(item, dict) and isinstance(item.get("name"), str)]
+
+
+def advisory_years(data) -> list[int]:
+    """Year directories in the GitHub contents listing of announce/."""
+    return sorted(int(name) for name in advisory_listing(data) if re.fullmatch(r"20\d\d", name))
 
 
 def version_key(version: str) -> tuple[int, ...]:
@@ -261,10 +278,19 @@ class Network:
         return _verify_signed(version)
 
     def advisory_names(self, year: int) -> list[str]:
-        code, data = self.request(MFSA_INDEX.format(year=int(year)), accept="application/vnd.github+json")
+        url = MFSA_INDEX.format(year=int(year))
+        code, data = self.request(url, accept="application/vnd.github+json")
         if code == 404:
-            return []
-        return [item["name"] for item in json.loads(data) if isinstance(item, dict) and isinstance(item.get("name"), str)]
+            raise ListingMissing(f"{url}: HTTP 404")
+        if code != 200:
+            raise OSError(f"{url}: HTTP {code}")
+        return advisory_listing(json.loads(data))
+
+    def advisory_years(self) -> list[int]:
+        code, data = self.request(MFSA_YEARS, accept="application/vnd.github+json")
+        if code != 200:
+            raise OSError(f"{MFSA_YEARS}: HTTP {code}")
+        return advisory_years(json.loads(data))
 
     def advisory_text(self, year: int, name: str) -> str:
         if not mfsa.NAME_RE.match(name):
@@ -320,7 +346,12 @@ class Offline:
 
     def advisory_names(self, year: int) -> list[str]:
         path = self.root / "github" / "announce" / f"{int(year)}.json"
-        return [item["name"] for item in json.loads(path.read_text(encoding="utf-8"))] if path.is_file() else []
+        if not path.is_file():
+            raise ListingMissing(f"no recorded listing for {int(year)}")
+        return advisory_listing(json.loads(path.read_text(encoding="utf-8")))
+
+    def advisory_years(self) -> list[int]:
+        return sorted(int(path.stem) for path in (self.root / "github" / "announce").glob("*.json") if path.stem.isdigit())
 
     def advisory_text(self, year: int, name: str) -> str:
         return (self.root / "mfsa" / name).read_text(encoding="utf-8")
@@ -351,17 +382,41 @@ def _cached_text(cache: dict | None, name: str, fetch, now: _dt.datetime) -> str
     return text
 
 
+def _year_not_started(src, year: int) -> bool:
+    """True when Mozilla's index of years lists the previous year and not this one."""
+    years = src.advisory_years()
+    return year - 1 in years and year not in years
+
+
 def find_advisories(src, versions: list[str], days: dict[str, str | None], now: _dt.datetime, cache: dict | None = None):
     """Advisories for each target version, and the versions whose advisory could not be read.
 
     Reads the newest advisory files first (numeric order) and stops after three
     in a row that were announced before the earliest target's day, minus one day.
+    Mozilla's directory for a year appears with its first advisory, so only the
+    current year may be missing or empty: when no target was released in it, or
+    when the index of years lists the previous year but not this one (a release
+    early in January, before the year's first advisory). Anything else means the
+    index moved: an error, not "no advisory".
     """
     today = now.date()
-    oldest = min([_dt.date.fromisoformat(day) for day in days.values() if day] + [today]) - _dt.timedelta(days=1)
+    released = [_dt.date.fromisoformat(day) for day in days.values() if day]
+    oldest = min([*released, today]) - _dt.timedelta(days=1)
     names = []
     for year in range(oldest.year, today.year + 1):
-        names += [name for name in src.advisory_names(year) if mfsa.NAME_RE.match(name)]
+        try:
+            listed = [name for name in src.advisory_names(year) if mfsa.NAME_RE.match(name)]
+        except ListingMissing:
+            listed = None
+        if not listed:
+            state = "missing" if listed is None else "empty"
+            if year < today.year:
+                raise OSError(f"Mozilla's advisory listing for {year} is {state}, but a past year always has advisories")
+            if any(day.year >= year for day in released) and not _year_not_started(src, year):
+                raise OSError(
+                    f"Mozilla's advisory listing for {year} is {state}, and its index does not show {year} as not started"
+                )
+        names += listed or []
     names.sort(key=mfsa.sort_key, reverse=True)
     found: dict[str, list] = {version: [] for version in versions}
     unreadable: dict[str, str] = {}

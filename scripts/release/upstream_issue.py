@@ -15,10 +15,13 @@ issue per Firefox version, found by a hidden marker in its body
 
 Talks only to api.github.com, with GITHUB_TOKEN (issues: write). Only issues
 opened by the workflow's bot count. Text from outside (advisory titles, errors)
-is made inert: no mentions, HTML, issue links or tables. If the API or the
-labels are unavailable it warns and exits 0, so the watcher's own verdict
-decides the job. Exit status: 0 done or skipped; 3 the status file is not a
-watcher report. Output: {"actions": [...], "warnings": [...]} as JSON.
+is made inert: no mentions, HTML, issue links or tables. An alert that could not
+be written (the issues could not be listed while there are newer releases, or an
+issue could not be opened, reopened or commented on) is an error and exits 4, so
+the job fails and GitHub's failure e-mail reaches the maintainer. Labels, body
+rewrites and closing only warn. Exit status: 0 done, skipped or warned; 3 the
+status file is not a watcher report; 4 an alert was not delivered.
+Output: {"actions": [...], "warnings": [...], "errors": [...]} as JSON.
 """
 
 from __future__ import annotations
@@ -52,6 +55,8 @@ LABELS = {
 PHASES = ("unconfirmed", "staged", "shipped")
 URGENCIES = ("standard", "urgent")
 PAGES = 3
+ALERTS = ("create", "reopen", "comment")  # each @mentions the maintainer (a reopen comes with its comment)
+EXIT_NOT_ALERTED = 4
 
 
 class StatusError(ValueError):
@@ -391,8 +396,17 @@ class GitHub:
         self.call("POST", f"issues/{int(number)}/comments", {"body": text})
 
 
-def apply(api, actions: list[dict], warnings: list[str]) -> list[dict]:
-    """Carry out the plan; on the first API failure, warn and stop (the watcher's verdict still decides the job)."""
+def not_done(actions: list[dict], cause, warnings: list[str], errors: list[str]) -> None:
+    """Report actions the API failure stopped: an error if an alert is among them, else a warning."""
+    missed = sorted({a["version"] for a in actions if a["op"] in ALERTS}, key=watch_upstream.version_key)
+    if missed:
+        errors.append(f"alert not delivered for Firefox {', '.join(missed)}: {cause}")
+    else:
+        warnings.append(f"GitHub API unavailable, issue not updated: {cause}")
+
+
+def apply(api, actions: list[dict], warnings: list[str], errors: list[str]) -> list[dict]:
+    """Carry out the plan; stop at the first API failure (labels only warn)."""
     done: list[dict] = []
     labels_ok = True
     wanted = sorted({name for action in actions for name in action.get("labels", [])})
@@ -422,7 +436,7 @@ def apply(api, actions: list[dict], warnings: list[str]) -> list[dict]:
                 api.update(action["issue"], state="closed", state_reason="completed")
             done.append({key: action[key] for key in ("op", "version", "issue", "reason") if key in action})
     except ApiError as exc:
-        warnings.append(f"GitHub API unavailable, issue not updated: {exc}")
+        not_done(actions[len(done) :], exc, warnings, errors)
     return done
 
 
@@ -447,6 +461,7 @@ def main(argv: list[str] | None = None, *, api=None) -> int:
         print(f"::error::upstream_issue: {_annotation(str(exc))}")
         return 3
     warnings: list[str] = []
+    errors: list[str] = []
     actions: list[dict] = []
     try:
         if api is None:
@@ -456,14 +471,17 @@ def main(argv: list[str] | None = None, *, api=None) -> int:
             api = GitHub(args.repo, token)
         actions = plan(report, api.issues(), mention=args.mention, author=args.author)
         if not args.dry_run:
-            actions = apply(api, actions, warnings)
+            actions = apply(api, actions, warnings, errors)
     except (ApiError, ValueError) as exc:
-        warnings.append(f"GitHub API unavailable, issue not updated: {exc}")
+        # The issues could not be listed: each newer release may be an alert nobody got.
+        not_done(plan(report, [], mention=args.mention, author=args.author), exc, warnings, errors)
     for warning in warnings:
         print(f"::warning::upstream_issue: {_annotation(warning)}")
+    for error in errors:
+        print(f"::error::upstream_issue: {_annotation(error)}")
     shown = [{key: action[key] for key in ("op", "version", "issue", "reason") if key in action} for action in actions]
-    print(json.dumps({"actions": shown, "warnings": warnings}, indent=2))
-    return 0
+    print(json.dumps({"actions": shown, "warnings": warnings, "errors": errors}, indent=2))
+    return EXIT_NOT_ALERTED if errors else 0
 
 
 if __name__ == "__main__":

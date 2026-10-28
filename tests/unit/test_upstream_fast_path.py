@@ -15,6 +15,7 @@ import shutil
 import stat
 import subprocess
 import sys
+import tarfile
 import tempfile
 import unittest
 import urllib.error
@@ -418,6 +419,90 @@ class WatcherTest(TempDirTest):
         with self.assertRaises(ValueError):
             network.staged("159.0; rm -rf /")
 
+    def test_advisory_listing_that_is_missing_or_not_a_list_fails_closed(self):
+        class Response(io.BytesIO):
+            status = 200
+
+        class Opener:
+            def __init__(self, answer):
+                self.answer = answer
+
+            def open(self, request, timeout):
+                if self.answer == 404:
+                    raise urllib.error.HTTPError(request.full_url, 404, "Not Found", {}, io.BytesIO())
+                return Response(self.answer)
+
+        class Listing(watch_upstream.Offline):
+            """The recorded data, except the advisory listing, which comes from Network with this answer."""
+
+            def __init__(self, root, answer):
+                super().__init__(root)
+                self.network = watch_upstream.Network(opener=Opener(answer), sleep=lambda seconds: None)
+
+            def advisory_names(self, year):
+                return self.network.advisory_names(year)
+
+        root = offline_tree(self.tmp, verified={"158.0.1": (D158, SUBKEY), "159.0": (D159, SUBKEY)})
+        answers = {
+            "listing": ((FIXTURES / "github" / "announce" / "2026.json").read_bytes(), "found"),
+            "404": (404, "unavailable"),
+            "object": (b'{"message": "Moved Permanently"}', "unavailable"),
+            "string": (b'"announce/2026"', "unavailable"),
+        }
+        for label, (answer, status) in answers.items():
+            with self.subTest(answer=label):
+                report = watch_upstream.check(
+                    pinned="158.0.1", pinned_sha256=D158, src=Listing(root, answer), now=at("2026-10-28T00:00:00"), verify=True
+                )
+                target = report["targets"][0]
+                self.assertEqual((target["version"], target["urgency"], target["advisory_status"]), ("159.0", "urgent", status))
+                self.assertEqual(target["target_hours"], 24)
+                self.assertEqual(any(e.startswith("advisories unavailable") for e in report["errors"]), status != "found")
+                self.assertEqual(report["exit_code"], 0)
+
+    def test_only_a_new_years_advisory_listing_may_be_missing(self):
+        class Src:
+            def __init__(self, years, index=None):
+                self.years = years
+                self.index = sorted(years) if index is None else index  # the directories in announce/
+
+            def advisory_names(self, year):
+                if year not in self.years:
+                    raise watch_upstream.ListingMissing(f"announce/{year}: HTTP 404")
+                return self.years[year]
+
+            def advisory_years(self):
+                if isinstance(self.index, Exception):
+                    raise self.index
+                return self.index
+
+            def advisory_text(self, year, name):
+                return fixture(f"mfsa/{name}")
+
+        names = [item["name"] for item in json.loads(fixture("github/announce/2026.json"))]
+        new_year = at("2027-01-01T12:00:00")
+        found, _ = watch_upstream.find_advisories(Src({2026: names}), ["159.0"], {"159.0": "2026-10-27"}, new_year)
+        self.assertEqual([a.id for a in found["159.0"]], ["mfsa2026-118"])  # announce/2027 does not exist yet
+        found, _ = watch_upstream.find_advisories(Src({2026: names, 2027: []}), ["159.0"], {"159.0": "2026-10-27"}, new_year)
+        self.assertEqual([a.id for a in found["159.0"]], ["mfsa2026-118"])
+        # A dot release early in January, before the year's first advisory: announce/2027 does not exist yet.
+        january = {"159.0": "2026-10-27", "160.0.1": "2027-01-01"}
+        found, _ = watch_upstream.find_advisories(Src({2026: names}), list(january), january, new_year)
+        self.assertEqual(found["160.0.1"], [])  # "no advisory yet", which becomes standard after the grace period
+        cases = [
+            (Src({2027: []}), {"159.0": "2026-10-27"}, "past year"),  # a past year must list advisories
+            (Src({2026: ["README.md"], 2027: []}), {"159.0": "2026-10-27"}, "past year"),
+            (Src({2026: names}, index=[2025, 2026, 2027]), {"160.0": "2027-01-01"}, "not started"),  # the index has 2027
+            (Src({2026: names}, index=[2025]), {"160.0": "2027-01-01"}, "not started"),  # nor 2026: the index moved
+            (Src({2026: names}, index=[]), {"160.0": "2027-01-01"}, "not started"),
+            (Src({2026: names, 2027: ["firefox"]}), {"160.0": "2027-01-01"}, "not started"),
+        ]
+        for src, days, reason in cases:
+            with self.subTest(years=src.years, index=src.index, days=days), self.assertRaisesRegex(OSError, reason):
+                watch_upstream.find_advisories(src, list(days), days, new_year)
+        with self.assertRaises(OSError):  # the index itself cannot be read: unavailable, so urgent
+            watch_upstream.find_advisories(Src({2026: names}, index=OSError("503")), ["160.0"], {"160.0": "2027-01-01"}, new_year)
+
     def test_network_retries_then_gives_up(self):
         slept = []
 
@@ -497,10 +582,14 @@ class WatcherTest(TempDirTest):
 
 
 class FakeGitHub:
-    def __init__(self, issues=None, fail=False, labels_fail=False):
+    def __init__(self, issues=None, fail=False, labels_fail=False, fail_on=()):
         self.store = {issue["number"]: dict(issue) for issue in issues or []}
-        self.fail, self.labels_fail = fail, labels_fail
+        self.fail, self.labels_fail, self.fail_on = fail, labels_fail, fail_on
         self.calls: list = []
+
+    def refuse(self, op):
+        if op in self.fail_on:
+            raise upstream_issue.ApiError(f"{op}: HTTP 403")
 
     def issues(self):
         if self.fail:
@@ -513,6 +602,7 @@ class FakeGitHub:
         self.calls.append(("labels", tuple(names)))
 
     def create(self, title, body, labels):
+        self.refuse("create")
         number = max(self.store, default=0) + 1
         self.store[number] = {"number": number, "state": "open", "title": title, "body": body, "labels": labels}
         self.store[number]["user"] = {"login": upstream_issue.BOT}
@@ -520,10 +610,12 @@ class FakeGitHub:
         return number
 
     def update(self, number, **changes):
+        self.refuse("update")
         self.store[number].update(changes)
         self.calls.append(("update", number, tuple(sorted(changes))))
 
     def comment(self, number, text):
+        self.refuse("comment")
         self.calls.append(("comment", number, text))
 
 
@@ -532,7 +624,7 @@ class IssueTest(TempDirTest):
 
     def sync(self, api, report, mention="caiolombello"):
         actions = upstream_issue.plan(report, api.issues(), mention=mention)
-        return upstream_issue.apply(api, actions, [])
+        return upstream_issue.apply(api, actions, [], [])
 
     def published(self, **kwargs):
         return report_for(self.tmp / f"r{next(self.runs)}", "2026-10-27T15:00:00", **kwargs)
@@ -623,22 +715,66 @@ class IssueTest(TempDirTest):
     def test_labels_unavailable_issue_still_opens(self):
         api = FakeGitHub(labels_fail=True)
         warnings: list = []
-        upstream_issue.apply(api, upstream_issue.plan(self.published(), [], mention=None), warnings)
+        upstream_issue.apply(api, upstream_issue.plan(self.published(), [], mention=None), warnings, [])
         self.assertEqual(api.store[1]["labels"], [])
         self.assertIn("labels unavailable", warnings[0])
 
-    def test_api_unavailable_warns_and_exits_0(self):
-        status = self.tmp / "status.json"
-        status.write_text(json.dumps(self.published()))
-        out = io.StringIO()
-        with contextlib.redirect_stdout(out):
-            rc = upstream_issue.main(["--status", str(status), "--repo", "caiolombello/nulavio"], api=FakeGitHub(fail=True))
+    def run_main(self, report, api, *extra):
+        status = self.tmp / f"status-{next(self.runs)}.json"
+        status.write_text(json.dumps(report))
+        with contextlib.redirect_stdout(io.StringIO()) as out:
+            rc = upstream_issue.main(["--status", str(status), "--repo", "caiolombello/nulavio", *extra], api=api)
+        return rc, out.getvalue()
+
+    def test_an_alert_that_cannot_be_written_fails_with_exit_4(self):
+        published = self.published()
+        cases = {
+            "issues cannot be listed": (FakeGitHub(fail=True), published),
+            "issue cannot be opened": (FakeGitHub(fail_on=("create",)), published),
+            "escalation cannot be written": (FakeGitHub(fail_on=("update",)), published),
+            "escalation comment cannot be written": (FakeGitHub(fail_on=("comment",)), published),
+        }
+        for label, (api, report) in cases.items():
+            with self.subTest(case=label):
+                if "escalation" in label:  # an issue opened while 159.0 was staged; now Mozilla published it
+                    staged = report_for(
+                        self.tmp / f"s{next(self.runs)}",
+                        "2026-10-27T05:00:00",
+                        drop=("159.0",),
+                        latest="158.0.1",
+                        staged=("159.0",),
+                        hide=("mfsa2026-118.yml", "mfsa2026-121.yml"),
+                    )
+                    upstream_issue.apply(api, upstream_issue.plan(staged, [], mention="caiolombello"), [], [])
+                rc, out = self.run_main(report, api, "--mention", "caiolombello")
+                self.assertEqual(rc, 4)
+                self.assertIn("::error::upstream_issue: alert not delivered for Firefox 159.0", out)
+        with mock.patch.dict(os.environ, {"GITHUB_TOKEN": ""}):
+            rc, out = self.run_main(published, None)
+        self.assertEqual(rc, 4)
+        self.assertIn("GITHUB_TOKEN is not set", out)
+
+    def test_issue_changes_that_alert_nobody_only_warn(self):
+        rc, out = self.run_main(self.published(), FakeGitHub(labels_fail=True))
         self.assertEqual(rc, 0)
-        self.assertIn("::warning::upstream_issue: GitHub API unavailable", out.getvalue())
-        with contextlib.redirect_stdout(io.StringIO()) as out, mock.patch.dict(os.environ, {"GITHUB_TOKEN": ""}):
-            rc = upstream_issue.main(["--status", str(status), "--repo", "caiolombello/nulavio"])
-        self.assertEqual(rc, 0)
-        self.assertIn("GITHUB_TOKEN is not set", out.getvalue())
+        self.assertIn("::warning::upstream_issue: labels unavailable", out)
+        opened = FakeGitHub(fail_on=("update",))
+        upstream_issue.apply(opened, upstream_issue.plan(self.published(), [], mention=None), [], [])
+        quieter = self.published()
+        quieter["targets"][0]["advisories"].append({"id": "mfsa2026-999", "impact": "low", "title": "x", "url": "u"})
+        caught_up = report_for(self.tmp / "c", "2026-10-28T15:00:00", pinned="159.0", digest=D159)
+        unavailable = {"schema": 2, "state": "unavailable", "exit_code": 2, "targets": [], "errors": ["down"]}
+        for label, api, report in (
+            ("body rewrite", opened, quieter),
+            ("close", FakeGitHub(opened.issues(), fail_on=("comment", "update")), caught_up),
+            ("nothing newer, issues cannot be listed", FakeGitHub(fail=True), caught_up),
+            ("no report, issues cannot be listed", FakeGitHub(fail=True), unavailable),
+        ):
+            with self.subTest(case=label):
+                rc, out = self.run_main(report, api)
+                self.assertEqual(rc, 0)
+                self.assertIn("::warning::upstream_issue: GitHub API unavailable", out)
+                self.assertNotIn("::error::", out)
 
     def test_invalid_status_exits_3(self):
         status = self.tmp / "status.json"
@@ -771,6 +907,64 @@ class BumpTest(TempDirTest):
         ):
             fetch_firefox_source.main()
         self.assertFalse((self.tmp / "downloads" / f"firefox-{pinned}.source.tar.xz").exists())
+
+    def test_fetch_reuses_a_source_tree_only_if_it_came_from_the_signed_tarball(self):
+        version = "999.0"  # not engine.json's pin: no pin to compare
+        tarballs = {}
+        for label in ("A", "B", "C"):
+            path = self.tmp / "mozilla" / f"{label}.tar.xz"
+            path.parent.mkdir(exist_ok=True)
+            data = f"source {label}\n".encode()
+            with tarfile.open(path, "w:xz") as archive:
+                info = tarfile.TarInfo(f"firefox-{version}/which")
+                info.size = len(data)
+                archive.addfile(info, io.BytesIO(data))
+            tarballs[label] = (path, hashlib.sha256(path.read_bytes()).hexdigest())
+        dest = self.tmp / "build"
+        tree = dest / f"firefox-{version}"
+
+        def fetch(label: str) -> str:
+            """Mozilla's signed SHA256SUMS lists tarball `label`, and the archive serves it."""
+            path, digest = tarballs[label]
+
+            def download(url, target):
+                shutil.copyfile(path, target)
+                return digest
+
+            with (
+                mock.patch.object(fetch_firefox_source, "signed_source_digest", return_value=(digest, SUBKEY)),
+                mock.patch.object(fetch_firefox_source, "download", side_effect=download),
+                mock.patch.object(sys, "argv", ["fetch", version, "--dest", str(dest)]),
+                contextlib.redirect_stdout(io.StringIO()) as out,
+            ):
+                self.assertEqual(fetch_firefox_source.main(), 0)
+            return out.getvalue()
+
+        def marker() -> str:
+            return (tree / fetch_firefox_source.MARKER).read_text().strip()
+
+        def set_aside() -> list[str]:
+            return sorted((path / "which").read_text() for path in dest.glob(f"firefox-{version}.stale-*/firefox-{version}"))
+
+        fetch("A")
+        self.assertEqual(((tree / "which").read_text(), marker()), ("source A\n", tarballs["A"][1]))
+        (tree / "obj-nulavio").mkdir()  # a build in the tree
+        self.assertIn("already present", fetch("A"))
+        self.assertTrue((tree / "obj-nulavio").is_dir())
+        # Mozilla signs another tarball for the same version (--retry after the old tarball was deleted).
+        (dest / "downloads" / f"firefox-{version}.source.tar.xz").unlink()
+        fetch("B")
+        self.assertEqual(((tree / "which").read_text(), marker()), ("source B\n", tarballs["B"][1]))
+        self.assertFalse((tree / "obj-nulavio").exists())  # nothing built from A is reused...
+        self.assertEqual(set_aside(), ["source A\n"])  # ...nor deleted
+        fetch("C")  # the cached tarball (B) is stale: downloaded again, tree extracted again
+        self.assertEqual(((tree / "which").read_text(), marker()), ("source C\n", tarballs["C"][1]))
+        (tree / fetch_firefox_source.MARKER).unlink()  # a tree from before the marker
+        (tree / "which").write_text("changed by hand\n")
+        fetch("C")
+        self.assertEqual(((tree / "which").read_text(), marker()), ("source C\n", tarballs["C"][1]))
+        self.assertEqual(set_aside(), ["changed by hand\n", "source A\n", "source B\n"])
+        self.assertFalse(list(dest.glob(".extract-*")))
 
 
 # --- the local autobuild (autobuild.py) -----------------------------------------------------
@@ -1083,7 +1277,7 @@ class ReleaseFilesTest(TempDirTest):
     def test_rehearsal_writes_a_manifest_of_what_it_checked(self):
         script = (ROOT / "scripts" / "release" / "rehearse_release.sh").read_text()
         match = re.search(
-            r"manifest\(\) \{\n    python3 -I - \"\$out\" \"\$version\" \"\$repo\" <<'EOF'\n"
+            r"manifest\(\) \{\n    python3 -I - \"\$out\" \"\$version\" \"\$repo\" \"\$work/firefox-\$version\" <<'EOF'\n"
             r"(.*?)\nEOF\n\}\nstep manifest manifest\n",
             script,
             re.S,
@@ -1112,9 +1306,15 @@ class ReleaseFilesTest(TempDirTest):
         rpm.write_bytes(b"rpm")
         (out / "packages" / "nulavio_159.0-0.1_amd64.deb").write_bytes(b"deb")
         (out / "packages" / "nulavio_159.0-0.1_amd64.deb.cdx.json").write_text("{}")
-        run = subprocess.run(
-            [sys.executable, "-I", str(writer), str(out), "159.0", str(repo)], capture_output=True, text=True, env=env
-        )
+        tree = self.tmp / "build" / "firefox-159.0"  # the source tree the build compiled
+        tree.mkdir(parents=True)
+        (tree / ".nulavio-source-sha256").write_text(D159 + "\n")
+
+        def write():
+            command = [sys.executable, "-I", str(writer), str(out), "159.0", str(repo), str(tree)]
+            return subprocess.run(command, capture_output=True, text=True, env=env)
+
+        run = write()
         self.assertEqual(run.returncode, 0, run.stderr)
         manifest = json.loads((out / "manifest.json").read_text())
         self.assertEqual((manifest["firefox"], manifest["source_sha256"], manifest["signing_subkey"]), ("159.0", D159, SUBKEY))
@@ -1124,11 +1324,20 @@ class ReleaseFilesTest(TempDirTest):
         files = {entry["file"]: entry["sha256"] for entry in manifest["packages"]}
         self.assertEqual(files["packages/x86_64/nulavio-159.0-0.1.fc44.x86_64.rpm"], hashlib.sha256(b"rpm").hexdigest())
         self.assertEqual([entry["file"] for entry in manifest["sboms"]], ["packages/nulavio_159.0-0.1_amd64.deb.cdx.json"])
+        # The tree was extracted from another tarball than the one Mozilla signs now, or nobody knows which.
+        for text, error in ((D158 + "\n", "extracted from " + D158), (None, "no verified digest")):
+            with self.subTest(marker=text):
+                (out / "manifest.json").unlink(missing_ok=True)
+                (tree / ".nulavio-source-sha256").unlink(missing_ok=True)
+                if text:
+                    (tree / ".nulavio-source-sha256").write_text(text)
+                run = write()
+                self.assertNotEqual(run.returncode, 0)
+                self.assertIn(error, run.stderr)
+                self.assertFalse((out / "manifest.json").exists())
+        (tree / ".nulavio-source-sha256").write_text(D159 + "\n")
         (out / "logs" / "verify-source.log").write_text("FAILED\n")
-        run = subprocess.run(
-            [sys.executable, "-I", str(writer), str(out), "159.0", str(repo)], capture_output=True, text=True, env=env
-        )
-        self.assertNotEqual(run.returncode, 0)
+        self.assertNotEqual(write().returncode, 0)
 
     def test_upstream_workflow_is_least_privilege_and_takes_no_outside_data_into_shell(self):
         text = (ROOT / ".github" / "workflows" / "upstream.yml").read_text()
@@ -1141,6 +1350,9 @@ class ReleaseFilesTest(TempDirTest):
         self.assertIn("persist-credentials: false", text)
         self.assertIn("watch_upstream.py --json --verify", text)
         self.assertIn("upstream_issue.py --status", text)
+        # A failed issue step (exit 4: an alert not delivered) fails the job; the verdict and the other watch still run.
+        self.assertEqual(len(re.findall(r"(?m)^        if: \$\{\{ !cancelled\(\) \}\}$", text)), 2)
+        self.assertRegex(text, r"- name: Verdict\n        if: \$\{\{ !cancelled\(\) \}\}\n")
         lines = text.splitlines()
         for index, line in enumerate(lines):
             match = re.match(r"^(\s*)run: ?(.*)$", line)
