@@ -72,8 +72,10 @@ step sbom sbom
 
 # <out>/manifest.json: what this rehearsal verified, built and checked. Signing
 # takes only the files listed there, with these digests (autobuild.py checks it).
+# source_sha256 is the digest the built source tree was extracted from
+# (fetch_firefox_source.py's marker); it must be the one Mozilla signed above.
 manifest() {
-    python3 -I - "$out" "$version" "$repo" <<'EOF'
+    python3 -I - "$out" "$version" "$repo" "$work/firefox-$version" <<'EOF'
 import datetime
 import hashlib
 import json
@@ -82,12 +84,20 @@ import subprocess
 import sys
 from pathlib import Path
 
-out, version, repo = Path(sys.argv[1]), sys.argv[2], sys.argv[3]
+out, version, repo, tree = Path(sys.argv[1]), sys.argv[2], sys.argv[3], Path(sys.argv[4])
 log = (out / "logs" / "verify-source.log").read_text(encoding="utf-8")
 subkey = re.search(r"\(subkey ([0-9A-F]{16,40})\)", log)
 digest = re.search(r"^([0-9a-f]{64})  source/firefox-" + re.escape(version) + r"\.source\.tar\.xz$", log, re.M)
 if not (subkey and digest):
     sys.exit("manifest: verify-source.log has no verified source digest")
+try:
+    built = (tree / ".nulavio-source-sha256").read_text(encoding="ascii").strip()
+except (OSError, UnicodeDecodeError):
+    built = ""
+if not re.fullmatch(r"[0-9a-f]{64}", built):
+    sys.exit(f"manifest: {tree} has no verified digest (.nulavio-source-sha256): refusing")
+if built != digest.group(1):
+    sys.exit(f"manifest: {tree} was extracted from {built}, Mozilla signed {digest.group(1)}: refusing")
 
 
 def sha256(path):
@@ -109,7 +119,7 @@ if not packages:
 engine = json.loads((Path(repo) / "browser" / "build" / "engine.json").read_text(encoding="utf-8"))
 manifest = {
     "firefox": version,
-    "source_sha256": digest.group(1),
+    "source_sha256": built,
     "signing_subkey": subkey.group(1),
     "engine_json": {"firefox": engine.get("firefox"), "source_sha256": engine.get("source_sha256")},
     "nulavio_base_commit": git("rev-parse", "HEAD").decode().strip(),

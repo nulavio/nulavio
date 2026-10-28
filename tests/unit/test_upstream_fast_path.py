@@ -15,6 +15,7 @@ import shutil
 import stat
 import subprocess
 import sys
+import tarfile
 import tempfile
 import unittest
 import urllib.error
@@ -772,6 +773,64 @@ class BumpTest(TempDirTest):
             fetch_firefox_source.main()
         self.assertFalse((self.tmp / "downloads" / f"firefox-{pinned}.source.tar.xz").exists())
 
+    def test_fetch_reuses_a_source_tree_only_if_it_came_from_the_signed_tarball(self):
+        version = "999.0"  # not engine.json's pin: no pin to compare
+        tarballs = {}
+        for label in ("A", "B", "C"):
+            path = self.tmp / "mozilla" / f"{label}.tar.xz"
+            path.parent.mkdir(exist_ok=True)
+            data = f"source {label}\n".encode()
+            with tarfile.open(path, "w:xz") as archive:
+                info = tarfile.TarInfo(f"firefox-{version}/which")
+                info.size = len(data)
+                archive.addfile(info, io.BytesIO(data))
+            tarballs[label] = (path, hashlib.sha256(path.read_bytes()).hexdigest())
+        dest = self.tmp / "build"
+        tree = dest / f"firefox-{version}"
+
+        def fetch(label: str) -> str:
+            """Mozilla's signed SHA256SUMS lists tarball `label`, and the archive serves it."""
+            path, digest = tarballs[label]
+
+            def download(url, target):
+                shutil.copyfile(path, target)
+                return digest
+
+            with (
+                mock.patch.object(fetch_firefox_source, "signed_source_digest", return_value=(digest, SUBKEY)),
+                mock.patch.object(fetch_firefox_source, "download", side_effect=download),
+                mock.patch.object(sys, "argv", ["fetch", version, "--dest", str(dest)]),
+                contextlib.redirect_stdout(io.StringIO()) as out,
+            ):
+                self.assertEqual(fetch_firefox_source.main(), 0)
+            return out.getvalue()
+
+        def marker() -> str:
+            return (tree / fetch_firefox_source.MARKER).read_text().strip()
+
+        def set_aside() -> list[str]:
+            return sorted((path / "which").read_text() for path in dest.glob(f"firefox-{version}.stale-*/firefox-{version}"))
+
+        fetch("A")
+        self.assertEqual(((tree / "which").read_text(), marker()), ("source A\n", tarballs["A"][1]))
+        (tree / "obj-nulavio").mkdir()  # a build in the tree
+        self.assertIn("already present", fetch("A"))
+        self.assertTrue((tree / "obj-nulavio").is_dir())
+        # Mozilla signs another tarball for the same version (--retry after the old tarball was deleted).
+        (dest / "downloads" / f"firefox-{version}.source.tar.xz").unlink()
+        fetch("B")
+        self.assertEqual(((tree / "which").read_text(), marker()), ("source B\n", tarballs["B"][1]))
+        self.assertFalse((tree / "obj-nulavio").exists())  # nothing built from A is reused...
+        self.assertEqual(set_aside(), ["source A\n"])  # ...nor deleted
+        fetch("C")  # the cached tarball (B) is stale: downloaded again, tree extracted again
+        self.assertEqual(((tree / "which").read_text(), marker()), ("source C\n", tarballs["C"][1]))
+        (tree / fetch_firefox_source.MARKER).unlink()  # a tree from before the marker
+        (tree / "which").write_text("changed by hand\n")
+        fetch("C")
+        self.assertEqual(((tree / "which").read_text(), marker()), ("source C\n", tarballs["C"][1]))
+        self.assertEqual(set_aside(), ["changed by hand\n", "source A\n", "source B\n"])
+        self.assertFalse(list(dest.glob(".extract-*")))
+
 
 # --- the local autobuild (autobuild.py) -----------------------------------------------------
 
@@ -1083,7 +1142,7 @@ class ReleaseFilesTest(TempDirTest):
     def test_rehearsal_writes_a_manifest_of_what_it_checked(self):
         script = (ROOT / "scripts" / "release" / "rehearse_release.sh").read_text()
         match = re.search(
-            r"manifest\(\) \{\n    python3 -I - \"\$out\" \"\$version\" \"\$repo\" <<'EOF'\n"
+            r"manifest\(\) \{\n    python3 -I - \"\$out\" \"\$version\" \"\$repo\" \"\$work/firefox-\$version\" <<'EOF'\n"
             r"(.*?)\nEOF\n\}\nstep manifest manifest\n",
             script,
             re.S,
@@ -1112,9 +1171,15 @@ class ReleaseFilesTest(TempDirTest):
         rpm.write_bytes(b"rpm")
         (out / "packages" / "nulavio_159.0-0.1_amd64.deb").write_bytes(b"deb")
         (out / "packages" / "nulavio_159.0-0.1_amd64.deb.cdx.json").write_text("{}")
-        run = subprocess.run(
-            [sys.executable, "-I", str(writer), str(out), "159.0", str(repo)], capture_output=True, text=True, env=env
-        )
+        tree = self.tmp / "build" / "firefox-159.0"  # the source tree the build compiled
+        tree.mkdir(parents=True)
+        (tree / ".nulavio-source-sha256").write_text(D159 + "\n")
+
+        def write():
+            command = [sys.executable, "-I", str(writer), str(out), "159.0", str(repo), str(tree)]
+            return subprocess.run(command, capture_output=True, text=True, env=env)
+
+        run = write()
         self.assertEqual(run.returncode, 0, run.stderr)
         manifest = json.loads((out / "manifest.json").read_text())
         self.assertEqual((manifest["firefox"], manifest["source_sha256"], manifest["signing_subkey"]), ("159.0", D159, SUBKEY))
@@ -1124,11 +1189,20 @@ class ReleaseFilesTest(TempDirTest):
         files = {entry["file"]: entry["sha256"] for entry in manifest["packages"]}
         self.assertEqual(files["packages/x86_64/nulavio-159.0-0.1.fc44.x86_64.rpm"], hashlib.sha256(b"rpm").hexdigest())
         self.assertEqual([entry["file"] for entry in manifest["sboms"]], ["packages/nulavio_159.0-0.1_amd64.deb.cdx.json"])
+        # The tree was extracted from another tarball than the one Mozilla signs now, or nobody knows which.
+        for text, error in ((D158 + "\n", "extracted from " + D158), (None, "no verified digest")):
+            with self.subTest(marker=text):
+                (out / "manifest.json").unlink(missing_ok=True)
+                (tree / ".nulavio-source-sha256").unlink(missing_ok=True)
+                if text:
+                    (tree / ".nulavio-source-sha256").write_text(text)
+                run = write()
+                self.assertNotEqual(run.returncode, 0)
+                self.assertIn(error, run.stderr)
+                self.assertFalse((out / "manifest.json").exists())
+        (tree / ".nulavio-source-sha256").write_text(D159 + "\n")
         (out / "logs" / "verify-source.log").write_text("FAILED\n")
-        run = subprocess.run(
-            [sys.executable, "-I", str(writer), str(out), "159.0", str(repo)], capture_output=True, text=True, env=env
-        )
-        self.assertNotEqual(run.returncode, 0)
+        self.assertNotEqual(write().returncode, 0)
 
     def test_upstream_workflow_is_least_privilege_and_takes_no_outside_data_into_shell(self):
         text = (ROOT / ".github" / "workflows" / "upstream.yml").read_text()

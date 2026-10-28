@@ -5,7 +5,12 @@ The expected SHA-256 comes from Mozilla's SHA256SUMS, whose signature is
 checked against the pinned release key (verify_firefox_release.py). When
 browser/build/engine.json pins this version, its reviewed "source_sha256" must
 be that same digest, or nothing is downloaded. The tarball is hashed while
-streaming and extracted only if it matches.
+streaming and extracted only if it matches; a cached tarball that does not match
+is downloaded again. The source tree records the digest it was extracted from
+(<tree>/.nulavio-source-sha256, written before the tree appears) and is reused
+only when that is the digest Mozilla signs now; otherwise it is moved aside to
+<dest>/firefox-<v>.stale-*/ (with anything built in it; never deleted) and
+extracted again.
 
     python3 -I scripts/upstream/fetch_firefox_source.py 158.0.1 --dest ~/.cache/nulavio-build
     -> <dest>/firefox-158.0.1/ (source tree)  and  <dest>/downloads/<tarball>
@@ -19,6 +24,7 @@ import json
 import shutil
 import subprocess
 import sys
+import tempfile
 import urllib.request
 from pathlib import Path
 
@@ -28,6 +34,7 @@ from verify_firefox_release import signed_source_digest
 URL = "https://archive.mozilla.org/pub/firefox/releases/{v}/source/firefox-{v}.source.tar.xz"
 CHUNK = 1 << 20
 ENGINE = Path(__file__).resolve().parents[2] / "browser" / "build" / "engine.json"
+MARKER = ".nulavio-source-sha256"  # in the source tree: the verified tarball digest it was extracted from
 
 
 def check_pin(version: str, signed: str, engine: Path = ENGINE) -> None:
@@ -58,6 +65,14 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
+def tree_digest(tree: Path) -> str | None:
+    """The tarball digest `tree` was extracted from (None when unknown)."""
+    try:
+        return (tree / MARKER).read_text(encoding="ascii").strip()
+    except (OSError, UnicodeDecodeError):
+        return None
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("version")
@@ -69,21 +84,31 @@ def main() -> int:
     downloads = args.dest / "downloads"
     downloads.mkdir(parents=True, exist_ok=True)
     tarball = downloads / f"firefox-{args.version}.source.tar.xz"
-    actual = sha256_file(tarball) if tarball.exists() else download(URL.format(v=args.version), tarball)
+    actual = sha256_file(tarball) if tarball.exists() else None
+    if actual != expected:
+        if actual is not None:
+            print(f"cached {tarball.name} is not the signed one ({actual}): downloading again")
+        actual = download(URL.format(v=args.version), tarball)
     if actual != expected:
         tarball.unlink(missing_ok=True)
         raise SystemExit(f"SHA-256 mismatch: got {actual}")
     print(f"verified {tarball}")
     tree = args.dest / f"firefox-{args.version}"
     if tree.exists():
-        print(f"source tree already present: {tree}")
-        return 0
+        if tree_digest(tree) == expected:
+            print(f"source tree already present: {tree}")
+            return 0
+        # Extracted from another tarball (or nobody knows): never build on it. Kept for you to delete.
+        aside = Path(tempfile.mkdtemp(prefix=f"firefox-{args.version}.stale-", dir=args.dest)) / tree.name
+        tree.replace(aside)
+        print(f"source tree was not extracted from {expected}: moved to {aside} (delete it when done); extracting again")
     staging = args.dest / f".extract-{args.version}"
     shutil.rmtree(staging, ignore_errors=True)
     staging.mkdir()
     # --no-same-owner/--no-same-permissions: never trust archive ownership/modes.
     subprocess.run(["tar", "-xJf", str(tarball), "-C", str(staging), "--no-same-owner", "--no-same-permissions"], check=True)
     (extracted,) = list(staging.iterdir())
+    (extracted / MARKER).write_text(expected + "\n", encoding="ascii")  # before the tree appears under its name
     extracted.replace(tree)
     staging.rmdir()
     print(f"extracted to {tree}")

@@ -7,7 +7,8 @@ Status: **development spike, first build succeeded on 2026-10-24.** Builds are n
 ```
 scripts/build/build_nulavio.sh <version>
  ├─ scripts/upstream/fetch_firefox_source.py   SHA256SUMS signature checked against the pinned Mozilla key,
- │                                              tarball hashed while streaming, extracted only on match
+ │                                              tarball hashed while streaming, extracted only on match;
+ │                                              the tree is reused only if extracted from that digest
  ├─ scripts/upstream/fetch_firefox_l10n.py     translations (default pt-BR) at the revision signed off in the
  │                                              verified source's l10n-changesets.json + Nulavio's browser/l10n/
  ├─ scripts/build/make_branding.py             browser/branding/nulavio/ (text, reviewed in git)
@@ -20,7 +21,7 @@ scripts/build/build_nulavio.sh <version>
                                                 toolchains fetched by --enable-bootstrap into a cached volume
 ```
 
-Work directory (outside the repository): `${NULAVIO_BUILD_DIR:-~/.cache/nulavio-build}`, containing `downloads/`, `firefox-<v>/` (source and `obj-nulavio/`), `mozbuild/` (toolchains) and `logs/`. Deleting it removes everything the build created. Nothing is installed on the host.
+Work directory (outside the repository): `${NULAVIO_BUILD_DIR:-~/.cache/nulavio-build}`, containing `downloads/`, `firefox-<v>/` (source and `obj-nulavio/`), `mozbuild/` (toolchains) and `logs/`, plus `firefox-<v>.stale-*/` when a tree was set aside because it was not extracted from the tarball Mozilla signs now. Deleting it removes everything the build created. Nothing is installed on the host.
 
 ## Measured on the reference machine (Ryzen 7 5825U, 8C/16T, 30 GiB, NVMe/LUKS)
 
