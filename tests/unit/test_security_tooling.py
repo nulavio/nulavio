@@ -187,6 +187,20 @@ class GitleaksConfigTest(unittest.TestCase):
             if line.strip() and not line.startswith("#"):
                 self.assertRegex(line, r"^[0-9a-f]{40}:[^:\s]+:[\w-]+:\d+$")
 
+    def test_key_material_file_names(self):
+        config = tomllib.loads((ROOT / ".gitleaks.toml").read_text())
+        rule = next(r for r in config["rules"] if r["id"] == "nulavio-key-material-file")
+        path = re.compile(rule["path"])  # Go's RE2 syntax, which Python reads the same way here
+        keys = [
+            "android/release.jks", "signing/upload.keystore", "app.p12", "tls/server.pem", "id_ed25519", "packaging/repo.key",
+            "packaging-signing-backup.gpg",  # gpg --export-secret-keys -o (binary)
+            "home/.gnupg/secring.gpg", ".gnupg/private-keys-v1.d/ABCD.key", "release-secrets.kdbx",  # KeePassXC
+        ]  # fmt: skip
+        for name in keys:
+            self.assertRegex(name, path)
+        for name in ("docs/security/signing.md", "packaging/repo-key.asc", "scripts/release/sign_repo.sh", "gpg.conf"):
+            self.assertNotRegex(name, path)
+
 
 def tools_cache() -> Path:
     """Where scan.sh keeps the scanners (looked up in the same order as scan.sh)."""
@@ -206,6 +220,10 @@ def cached_download(tool: str) -> Path | None:
     if path.is_file() and hashlib.sha256(path.read_bytes()).hexdigest() == sha:
         return path
     return None
+
+
+# Binary, as `gpg --export-secret-keys -o` and KeePassXC write them; not keys.
+BINARY_KEYS = {"signing-backup.gpg": bytes(range(256)), "release.kdbx": bytes(range(255, -1, -1)), "upload.jks": b"\0" * 64}
 
 
 def fake_token() -> str:
@@ -313,6 +331,18 @@ class GitleaksHistoryTest(unittest.TestCase):
         (self.repo / "notes.txt").write_text(f'token = "{fake_token()}"\n')
         added = self.commit("notes")
         self.assertEqual(self.findings(), {("github-pat", "notes.txt", added)})
+
+    def test_binary_key_files_in_a_commit(self):
+        for name, data in BINARY_KEYS.items():
+            (self.repo / name).write_bytes(data)
+        added = self.commit("keys")
+        self.assertEqual(self.findings(), {("nulavio-key-material-file", name, added) for name in BINARY_KEYS})
+
+    def test_binary_key_files_in_the_staged_changes(self):
+        for name, data in BINARY_KEYS.items():
+            (self.repo / name).write_bytes(data)
+        self.git("add", "-A")
+        self.assertEqual(self.findings("staged"), {("nulavio-key-material-file", name, "") for name in BINARY_KEYS})
 
 
 @unittest.skipUnless(shutil.which("git") and shutil.which("bash") and (ROOT / ".git").exists(), "needs git, bash and a checkout")

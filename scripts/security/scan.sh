@@ -124,7 +124,10 @@ check_gitleaks() {
 }
 
 check_staged() {
-    run_gitleaks git --pre-commit --staged
+    # gitleaks' `git diff` skips binary files (a key file); the "diff" attribute makes git show them.
+    printf '* diff\n' >"$scratch/attributes"
+    GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.attributesFile GIT_CONFIG_VALUE_0=$scratch/attributes \
+        run_gitleaks git --pre-commit --staged
 }
 
 check_shellcheck() {

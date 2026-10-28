@@ -10,7 +10,7 @@ These scanners add to what already runs in the `checks` job: ruff with its `S` r
 |---|---|---|---|
 | `actionlint` | actionlint 1.7.12 (MIT) | The workflows: syntax, expressions, and ShellCheck on every `run:` block | none |
 | `zizmor` | zizmor 1.31.1 (MIT) | The workflows, for security problems: template injection, credentials left in the checkout, broad permissions, dangerous triggers. In CI also its online audits, with the job's read-only token: is each pinned SHA a commit of the action's own repository, and does a pinned action have a known advisory | none |
-| `gitleaks` | gitleaks 8.30.1 (MIT) | Every commit of every branch the clone has, with gitleaks' default rules and one Nulavio rule (private key, keystore or keyring files). This includes what a merge's resolution added (also in an octopus merge), a symlink replaced by a file, and binary files or files that `.gitattributes` marks as binary, which gitleaks' own `git log` leaves out. Inline `gitleaks:allow` comments are ignored: every exception is in the two files on the right | `.gitleaks.toml`, `.gitleaksignore` |
+| `gitleaks` | gitleaks 8.30.1 (MIT) | Every commit of every branch the clone has, with gitleaks' default rules and one Nulavio rule (private key, keystore, keyring or password database files, such as `.jks`, `.p12`, `.pem`, `.gpg` or `.kdbx`). This includes what a merge's resolution added (also in an octopus merge), a symlink replaced by a file, and binary files or files that `.gitattributes` marks as binary, which gitleaks' own `git log` leaves out. Inline `gitleaks:allow` comments are ignored: every exception is in the two files on the right | `.gitleaks.toml`, `.gitleaksignore` |
 | `shellcheck` | ShellCheck 0.11.0 (GPL-3.0, run as a separate program) | Every shell script in the repository, at every severity: files ending in `.sh` and files starting with a `sh`, `bash`, `dash` or `ksh` `#!` line (14 today) | directives in the scripts |
 | `opengrep` | Opengrep 1.32.0 (LGPL-2.1) | Nulavio's own rules (below) on the code, including `tests/` | `ci/sast/nulavio-rules.yml`, `.semgrepignore` |
 | `opengrep-rules` | Opengrep 1.32.0 | The same rules on their test cases: each must match its "ruleid" lines and no other line | `tests/fixtures/sast/` |
@@ -31,7 +31,7 @@ The tools are cached in `~/.cache/nulavio-security-tools` (or `$NULAVIO_SECURITY
 
 ### Secrets before the commit (optional hook)
 
-Commits go straight to `main`, and the plan has no push protection, so CI finds a secret only after it is on GitHub, when it must already be revoked. The pre-commit hook in `scripts/git-hooks/` runs gitleaks on the staged changes (`scripts/security/scan.sh staged`, under a second) and refuses the commit if it finds one. It is off by default; turn it on in each clone:
+Commits go straight to `main`, and the plan has no push protection, so CI finds a secret only after it is on GitHub, when it must already be revoked. The pre-commit hook in `scripts/git-hooks/` runs gitleaks on the staged changes, binary files included (`scripts/security/scan.sh staged`, under a second) and refuses the commit if it finds one. It is off by default; turn it on in each clone:
 
 ```sh
 git config core.hooksPath scripts/git-hooks

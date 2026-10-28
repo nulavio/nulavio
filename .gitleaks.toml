@@ -16,8 +16,8 @@ useDefault = true
 
 [[rules]]
 id = "nulavio-key-material-file"
-description = "A private key, keystore or keyring file (signing keys stay outside the repository)"
-path = '''(?i)(\.(jks|keystore|bks|p12|pfx|pem|key|ppk|p8)|(^|/)(id_(rsa|dsa|ecdsa|ed25519)|secring\.gpg|private-keys-v1\.d/.*|google-safebrowsing\.key))$'''
+description = "A private key, keystore, keyring or password database file (signing keys stay outside the repository)"
+path = '''(?i)(\.(jks|keystore|bks|p12|pfx|pem|key|ppk|p8|gpg|kdbx)|(^|/)(id_(rsa|dsa|ecdsa|ed25519)|secring\.gpg|private-keys-v1\.d/.*|google-safebrowsing\.key))$'''
 tags = ["key", "file"]
 
 [[allowlists]]
