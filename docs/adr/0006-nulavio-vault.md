@@ -102,6 +102,8 @@ Not yet (after S3): storage encryption and real lock (done in S5, below), UI (S6
 
 Tests: `tests/integration/test_vault_ui.py` (7, every page state, keyboard focus, light and dark captures), `HelperApiTest` in `tests/unit/test_vault_storage.py` (the helper API, autolock).
 
+UX1 amendment (2026-10-28, audit SB-07, SB-12, SB-13, SB-14, SB-17): the pages say what the protection does and when it ends. The password option protects the files while the profile is locked, not while it is open; after unlocking the page says it locks again when its last window closes (and waits 2.5 s, not 0.8 s, so that can be read), and Settings repeats it next to "Lock now". The status line has levels (progress has a spinner and no ✓; a degraded state such as "recovery code only" is a warning with its reason and next step; errors use the critical colour and icon). The phone page says the phone is one more way in (password and recovery code keep working), its button shows a QR, and the "no master key" footer lists the phone; in the 6-digit comparison neither answer is the default (focus on the digits, read one by one). Locked profiles are named "<name>, locked, unlock…" to screen readers in the selector and in Settings.
+
 Tests (S5): `tests/unit/test_vault_storage.py` (15, real FUSE mounts, a stand-in engine for supervision, SIGTERM and crash), `tests/integration/test_vault_profiles.py` (real engine: a visited address is in the profile while unlocked and nowhere readable after lock; a direct engine start writes nothing; Track B selector, switching and routing). CI installs `gocryptfs` and `fuse3` and requires these tests.
 
 ## Consequences

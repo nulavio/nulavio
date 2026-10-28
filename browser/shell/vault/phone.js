@@ -13,9 +13,18 @@ const byId = id => document.getElementById(id);
 let session = null;
 let timer = null;
 
-function setState(state, message = "", level = "ok") {
+function setState(state, message = "", level = "info") {
   document.body.dataset.state = state;
   announce(message, level);
+}
+
+/** The 6 digits as shown ("123 456") and, for screen readers, as six separate digits. */
+function showDigits(sas) {
+  const digits = String(sas).replace(/\D/g, "");
+  byId("digits").replaceChildren(
+    h("span", { "aria-hidden": "true", text: `${digits.slice(0, 3)} ${digits.slice(3)}` }),
+    h("span", { class: "visually-hidden", text: t("phoneDigitsSpoken", [[...digits].join(" ")]) })
+  );
 }
 
 const FAILURES = {
@@ -46,17 +55,18 @@ async function poll() {
   const status = await vault.phoneSession(session, "status");
   if (status.state === "compare" || status.state === "waiting-for-you") {
     if (byId("compare").hidden) {
-      byId("digits").textContent = `${status.sas.slice(0, 3)} ${status.sas.slice(3)}`;
+      showDigits(status.sas);
       byId("compare").hidden = false;
       byId("qr").hidden = true;
       byId("pair-hint").hidden = true;
-      setState("compare", t("phoneCompareStatus"));
-      byId("match").focus();
+      // No status text: the focused digits and their question are read out, once.
+      setState("compare");
+      byId("digits").focus();
     }
   } else if (status.state === "paired") {
     stopPairing();
     await render(); // the list first, then the announcement
-    setState("paired", t("phonePaired", [status.phone ?? ""]));
+    setState("paired", t("phonePaired", [status.phone ?? ""]), "ok");
   } else if (status.state === "failed") {
     stopPairing();
     setState("error", failure(status.error), "error");
@@ -67,7 +77,7 @@ async function poll() {
 }
 
 async function start(current) {
-  setState("waiting", t("phoneStarting"));
+  setState("waiting", t("phoneStarting"), "progress");
   try {
     const started = await vault.phoneStart(profileId, "pair", { current });
     session = started.session;
@@ -77,7 +87,7 @@ async function start(current) {
     byId("pairing").hidden = false;
     byId("start-form").hidden = true;
     byId("current").value = "";
-    setState("waiting", t("phoneScanStatus"));
+    setState("waiting", t("phoneScanStatus"), "progress");
     timer = setInterval(() => poll().catch(e => setState("error", errorText(e), "error")), 1000);
   } catch (e) {
     setState("error", failure(String(e?.message ?? e)), "error");
@@ -97,7 +107,7 @@ function phoneRow(method) {
     try {
       await vault.change(profileId, "remove-method", { current, envelope: method.id });
       byId("current").value = "";
-      setState("idle", t("phoneRemoved", [method.label]));
+      setState("idle", t("phoneRemoved", [method.label]), "ok");
       await render();
     } catch (e) {
       setState("error", failure(String(e?.message ?? e)), "error");
@@ -130,7 +140,7 @@ byId("start-form").addEventListener("submit", event => {
   start(byId("current").value);
 });
 byId("match").addEventListener("click", () => {
-  setState("waiting", t("phoneWaitingConfirm"));
+  setState("waiting", t("phoneWaitingConfirm"), "progress");
   vault.phoneSession(session, "confirm", true).catch(e => setState("error", errorText(e), "error"));
 });
 byId("differ").addEventListener("click", () => vault.phoneSession(session, "confirm", false).catch(() => null));

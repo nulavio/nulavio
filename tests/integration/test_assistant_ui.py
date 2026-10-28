@@ -310,10 +310,10 @@ class AssistantUiTest(unittest.TestCase):
             "const s = document.getElementById('status');"
             "return [s.dataset.level, s.textContent, getComputedStyle(s, '::before').content];"
         )
-        busy = harness.wait_until(lambda: (lambda v: v if v[0] == "busy" else None)(self.m.execute(status)), 10)
+        busy = harness.wait_until(lambda: (lambda v: v if v[0] == "progress" else None)(self.m.execute(status)), 10)
         self.assertTrue(busy, self.m.execute(status))
         self.assertEqual(busy[1], "Enviado para 127.0.0.1. Aguardando a resposta…")
-        self.assertEqual(busy[2], "none")  # no check mark while waiting
+        self.assertNotIn("✓", busy[2])  # a progress mark, never a check mark while waiting
         self.assertTrue(harness.wait_until(lambda: self.m.execute("return document.body.dataset.answered === 'true';"), 20))
         level, text, mark = self.m.execute(status)
         self.assertEqual((level, text), ("ok", "Resposta pronta."))
@@ -552,7 +552,7 @@ class AssistantUiTest(unittest.TestCase):
         self.provider.delay = 5.0
         self.provider.replies.append({"choices": [{"message": {"content": "Feito."}}]})
         self.submit("Faça devagar")
-        self.wait_view(lambda v: v["level"] == "busy")
+        self.wait_view(lambda v: v["level"] == "progress")
         busy = self.view()
         self.assertEqual(busy["status"], "Tarefa enviada para 127.0.0.1. O assistente está trabalhando na Área de IA dele…")
         self.assertNotIn("✓", busy["status"])

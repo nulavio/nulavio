@@ -57,7 +57,8 @@ function render(state, options) {
               class: "popup__item",
               type: "button",
               "aria-keyshortcuts": key,
-              "aria-label": t("profilesOpenNamed", [profile.name]),
+              // The visible name and state stay in the accessible name (SPA-10, SB-17).
+              "aria-label": t(profile.locked ? "profilesUnlockNamed" : "profilesOpenNamed", [profile.name]),
               dataset: { profileId: String(profile.id) },
             },
             chip(profile, "md"),

@@ -154,6 +154,53 @@ class DnsChoiceTest(unittest.TestCase):
             self.m.set_context("content")
         self.assertEqual(self.state()["choice"], "system")  # nothing changed
 
+    def card(self) -> dict:
+        return self.m.execute(
+            "const card = document.getElementById('dns-choice');"
+            "const shown = [...card.querySelectorAll('button, a.button')].filter(b => !b.closest('[hidden]'));"
+            "return {hidden: card.hidden, encrypted: card.dataset.encrypted,"
+            " buttons: shown.map(b => [b.id, b.textContent.trim(), b.classList.contains('button--primary')])};"
+        )
+
+    def test_05_when_dns_is_already_encrypted_keep_keeps_it_and_the_downgrade_says_so(self):
+        # The engine's regional roll-out (doh-rollout.mode) encrypts lookups under the "default" choice (SPA-03).
+        self.m.chrome(
+            "for (const p of ['network.trr.mode', 'nulavio.dns.chosen']) Services.prefs.clearUserPref(p);"
+            "Services.prefs.setIntPref('doh-rollout.mode', 2);"
+        )
+        try:
+            self.assertTrue(harness.wait_until(lambda: self.state()["encryptedNow"], 10), self.state())
+            self.assertEqual((self.state()["choice"], self.state()["chosen"]), ("default", False))
+            self.open("newtab/newtab.html")
+            card = self.card()
+            self.assertEqual((card["hidden"], card["encrypted"]), (False, "true"))
+            ids = [b[0] for b in card["buttons"]]
+            self.assertEqual(ids, ["dns-keep-encrypted", "dns-choose-other", "dns-use-system"])
+            labels = dict((b[0], b[1]) for b in card["buttons"])
+            self.assertEqual(labels["dns-keep-encrypted"], "Manter criptografado (padrão atual)")
+            self.assertEqual(labels["dns-choose-other"], "Escolher outro resolvedor…")
+            self.assertEqual(labels["dns-use-system"], "Usar o resolvedor do computador (sem criptografia)")
+            self.assertEqual([b[0] for b in card["buttons"] if b[2]], ["dns-keep-encrypted"], "keeping is the primary action")
+            for button_id, label in labels.items():
+                if button_id != "dns-keep-encrypted":
+                    self.assertNotIn("manter", label.lower(), "a change is never labelled as keeping")
+            self.shoot("newtab-choice-encrypted")
+            self.m.execute("document.getElementById('dns-keep-encrypted').click();")
+            self.assertTrue(
+                harness.wait_until(lambda: self.m.execute("return document.getElementById('dns-choice').hidden;"), 10)
+            )
+            state = self.state()
+            self.assertEqual((state["choice"], state["chosen"], state["encryptedNow"]), ("default", True, True))
+            self.assertFalse(self.m.chrome("return Services.prefs.prefHasUserValue('network.trr.mode');"), "nothing changed")
+            # The downgrade, when the person picks it, is the computer's resolver, off by choice.
+            self.m.chrome("Services.prefs.clearUserPref('nulavio.dns.chosen');")
+            self.open("newtab/newtab.html")
+            self.m.execute("document.getElementById('dns-use-system').click();")
+            self.assertTrue(harness.wait_until(lambda: self.state()["choice"] == "system", 10))
+            self.assertEqual(self.m.chrome("return Services.prefs.getIntPref('network.trr.mode');"), 5)
+        finally:
+            self.m.chrome("Services.prefs.clearUserPref('doh-rollout.mode');")
+
 
 if __name__ == "__main__":
     unittest.main()

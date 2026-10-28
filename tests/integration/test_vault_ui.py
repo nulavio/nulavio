@@ -129,6 +129,28 @@ class VaultUiTest(unittest.TestCase):
     def status_text(self) -> str:
         return self.m.execute("return document.getElementById('status')?.textContent ?? '';")
 
+    def status_line(self) -> dict:
+        """The status line as drawn: its level, the mark before the words, and whether errors use the critical colour."""
+        return self.m.execute(
+            "const s = document.getElementById('status'); const before = getComputedStyle(s, '::before');"
+            "const probe = v => { const e = document.createElement('i'); e.style.color = v; document.body.append(e);"
+            " const out = getComputedStyle(e).color; e.remove(); return out; };"
+            "return {level: s.dataset.level, text: s.textContent, mark: before.content, mask: before.maskImage,"
+            " color: getComputedStyle(s).color, critical: probe('var(--nv-color-status-criticalText)'),"
+            " warning: probe('var(--nv-color-status-warning)'), state: document.body.dataset.state};"
+        )
+
+    def assert_status(self, level: str) -> dict:
+        line = self.status_line()
+        self.assertEqual(line["level"], level, line)
+        self.assertEqual(line["mark"] == '"✓ "', level == "ok", f"✓ only for a result that happened: {line}")
+        if level == "error":
+            self.assertEqual(line["color"], line["critical"], "errors use the critical style")
+            self.assertIn("icon-critical.svg", line["mask"], "errors carry the critical icon")
+        if level == "warn":
+            self.assertEqual((line["color"], line["mark"]), (line["warning"], '"⚠ "'))
+        return line
+
     def type_into(self, element_id: str, text: str) -> None:
         self.m.execute(
             "const el = document.getElementById(arguments[0]); el.focus(); el.value = arguments[1];"
@@ -188,11 +210,36 @@ class VaultUiTest(unittest.TestCase):
     def test_01_create_a_protected_profile_in_three_decisions(self):
         self.open_page("vault/create.html")
         self.wait_state("profile", "step")
+        # The pressed template looks pressed (DS-05): another surface and edge, and a ✓, not only aria-pressed.
+        templates = self.m.execute(
+            "return [...document.querySelectorAll('#templates button')].map(b => ({pressed: b.getAttribute('aria-pressed'),"
+            " bg: getComputedStyle(b).backgroundColor, border: getComputedStyle(b).borderTopColor,"
+            " mark: getComputedStyle(b, '::before').content}));"
+        )
+        pressed = [b for b in templates if b["pressed"] == "true"]
+        others = [b for b in templates if b["pressed"] == "false"]
+        self.assertEqual(len(pressed), 1, templates)
+        self.assertTrue(others)
+        for other in others:
+            self.assertNotEqual((pressed[0]["bg"], pressed[0]["border"]), (other["bg"], other["border"]))
+            self.assertEqual(other["mark"], "none")
+        self.assertEqual(pressed[0]["mark"], '"✓"')
+        # Native radios and checkboxes take the brand accent, not the toolkit's blue (DS-11).
+        accent = self.m.execute(
+            "const probe = document.createElement('i'); probe.style.color = 'var(--nv-color-accent-default)';"
+            "document.body.append(probe); const want = getComputedStyle(probe).color; probe.remove();"
+            "return [getComputedStyle(document.querySelector('input[name=method]')).accentColor, want];"
+        )
+        self.assertEqual(accent[0], accent[1])
         self.shoot("create-1-profile")
         self.type_into("name", "Cofre UI")
         self.click("#step-profile button[type=submit]")
         self.wait_state("protection", "step")
         self.assertEqual(self.m.execute("return document.activeElement.type;"), "radio")
+        # The password protects the files while the profile is locked, not while it is open (SB-14).
+        hint = self.m.execute("return document.querySelector('[data-i18n=vaultChoosePasswordHint]').textContent;")
+        self.assertIn("bloqueado", hint)
+        self.assertIn("aberto", hint)
         self.type_into("password", PASSWORD)
         self.type_into("password2", PASSWORD + "x")
         self.click("#step-protection button[type=submit]")
@@ -235,6 +282,7 @@ class VaultUiTest(unittest.TestCase):
         self.click("#password-form button[type=submit]")
         self.wait_state("error")
         self.assertEqual(self.m.execute("return document.activeElement.id;"), "password")
+        self.assert_status("error")  # critical colour and icon, no ✓ and no amber (SB-12)
         self.shoot("unlock-error")
         self.click("#use-recovery")
         self.type_into("recovery", "1234")
@@ -244,8 +292,32 @@ class VaultUiTest(unittest.TestCase):
         self.assertEqual(self.server.requests_to("/page/vault-opened"), [])  # nothing loaded while locked
         self.type_into("password", PASSWORD)
         self.click("#password-form button[type=submit]")
+        # Progress is not a result: no ✓ while unlocking; then the result says when it locks again (SB-12, SB-14).
+        seen: dict[str, dict] = {}
+
+        def watch():
+            line = self.status_line()
+            seen.setdefault(line["state"], line)
+            return line["state"] == "unlocked"
+
+        self.assertTrue(harness.wait_until(watch, timeout=60, interval=0.1), f"never showed unlocked: {seen}")
+        if "unlocking" in seen:  # usually caught; the unlock can be faster than one poll
+            self.assertEqual((seen["unlocking"]["level"], seen["unlocking"]["mark"] == '"✓ "'), ("progress", False))
+        self.assertEqual(seen["unlocked"]["level"], "ok")
+        self.assertIn("última janela", seen["unlocked"]["text"])
         self.assertTrue(harness.wait_until(lambda: self.instances(path), timeout=60), "the profile did not start")
         self.assertTrue(harness.wait_until(lambda: self.server.requests_to("/page/vault-opened"), timeout=60))
+        # While it is open, Settings says when it locks again, next to "Lock now" (SB-14).
+        self.m.switch_to(self.m.window_handles()[0])
+        self.m.navigate(self.base + "settings/settings.html#profiles")
+        note = harness.wait_until(
+            lambda: self.m.execute(
+                "return document.querySelector(`[data-profile-id='${arguments[0]}'] [data-relock]`)?.textContent ?? null;",
+                [profile_id],
+            ),
+            timeout=20,
+        )
+        self.assertIn("última janela", note or "")
         self.stop_instance(path)
         box = storage.Container(path)
         self.assertTrue(harness.wait_until(lambda: not box.mounted(), timeout=30), "not locked after the window closed")
@@ -258,6 +330,7 @@ class VaultUiTest(unittest.TestCase):
         self.wait_state("idle")
         self.click("#use-keyring")
         self.wait_state("device-unavailable")
+        self.assert_status("error")
         self.assertEqual(self.m.execute("return document.activeElement.id;"), "password")
         # The pointer is still on the button: hover feedback is visible (state tokens are opacities).
         self.assertNotEqual(self.m.execute("return getComputedStyle(document.getElementById('use-keyring')).boxShadow;"), "none")
@@ -294,6 +367,8 @@ class VaultUiTest(unittest.TestCase):
         self.open_page(f"vault/unlock.html?p={profile_id}")
         self.wait_state("recovery-required")
         self.assertEqual(self.m.execute("return document.activeElement.id;"), "recovery")
+        line = self.assert_status("warn")  # a degraded state with its reason and next step, never a ✓ (SB-12)
+        self.assertIn("código de recuperação", line["text"])
         self.shoot("unlock-recovery-required")
         # The current profile is not locked: the page says so instead of asking.
         current = self.call("return (await P.current()).id;")
@@ -340,6 +415,34 @@ class VaultUiTest(unittest.TestCase):
         self.assertTrue(label.endswith("…"), label)
         if expected:
             self.assertEqual(label, expected)
+        # The accessible name says the state and the action shown, not "Abrir" (SPA-10, SB-17).
+        name = self.m.execute(
+            "return document.querySelector(`[data-focus-key='open-${arguments[0]}']`).getAttribute('aria-label');", [locked["id"]]
+        )
+        self.assertEqual(name, "Cofre UI, bloqueado, desbloquear…")
+        self.assertIn(label.lower(), name.lower(), "WCAG 2.5.3: the visible label is in the name")
+        # The same in the toolbar's profile selector, whose rows are buttons named by aria-label.
+        self.m.navigate(self.base + "profiles/popup.html")
+        popup = harness.wait_until(
+            lambda: self.m.execute(
+                "const b = document.querySelector(`.popup__item[data-profile-id='${arguments[0]}']`);"
+                "return b ? [b.getAttribute('aria-label'), b.textContent] : null;",
+                [locked["id"]],
+            ),
+            timeout=20,
+        )
+        self.assertTrue(popup, "locked profile missing from the selector")
+        self.assertEqual(popup[0], "Cofre UI, bloqueado, desbloquear…")
+        self.assertIn("Bloqueado", popup[1])  # the visible badge, now also in the name
+        self.m.navigate(self.base + "settings/settings.html#profiles")
+        self.assertTrue(
+            harness.wait_until(
+                lambda: self.m.execute(
+                    "return !!document.querySelector(`[data-focus-key='open-${arguments[0]}']`);", [locked["id"]]
+                ),
+                timeout=20,
+            )
+        )
         self.shoot("settings-locked-profile", "#profiles-card")
         # Deleting a locked protected profile drops its keys, then the profile.
         path = self.profile_path(locked["id"])
@@ -359,21 +462,52 @@ class VaultUiTest(unittest.TestCase):
         type(self).phone_profile = profile_id
         self.open_page(f"vault/phone.html?p={profile_id}")
         self.wait_state("idle")
+        # Honest copy (SB-13): one more way to unlock, the others keep working; the button shows a QR, not the
+        # recovery code; the "no master key" footer lists the phone.
+        copy = self.m.execute(
+            "return {explain: document.getElementById('explain').textContent,"
+            " cta: document.querySelector('#start-form button[type=submit]').textContent,"
+            " footer: document.querySelector('[data-i18n=vaultNoMasterKey]').textContent};"
+        )
+        self.assertIn("mais um jeito de desbloquear", copy["explain"])
+        self.assertIn("continuam valendo", copy["explain"])
+        self.assertEqual(copy["cta"], "Mostrar QR para o celular")
+        self.assertIn("celular", copy["footer"])
         self.shoot("phone-idle")
         self.type_into("current", "not the password")
         self.click("#start-form button[type=submit]")
         self.wait_state("error")
+        self.assert_status("error")
         self.type_into("current", PASSWORD)
         self.click("#start-form button[type=submit]")
         self.wait_state("waiting")
         code = self.qr_code("#qr")
+        line = self.assert_status("progress")  # waiting is not a result (SB-12)
+        self.assertNotEqual(line["text"], self.m.execute("return document.getElementById('pair-hint').textContent;"))
         self.shoot("phone-qr")
         linked = LinkedPhone(ReferencePhone("Pixel de teste"), registry=self.avahi)
         self.addClassCleanup(linked.close)
         linked.pair(code)
         self.wait_state("compare")
-        digits = self.m.execute("return document.getElementById('digits').textContent;")
-        self.assertEqual(digits.replace(" ", ""), linked.sas)  # the same 6 digits on both screens
+        compare = self.m.execute(
+            "const d = document.getElementById('digits');"
+            "const weight = b => [...b.classList].filter(c => c.startsWith('button--')).join();"
+            "return {shown: d.querySelector('[aria-hidden=true]').textContent,"
+            " spoken: d.querySelector('.visually-hidden').textContent,"
+            " focused: document.activeElement.id,"
+            " question: document.getElementById(d.getAttribute('aria-describedby')).textContent,"
+            " match: weight(document.getElementById('match')), differ: weight(document.getElementById('differ')),"
+            " status: document.getElementById('status').textContent};"
+        )
+        self.assertEqual(compare["shown"].replace(" ", ""), linked.sas)  # the same 6 digits on both screens
+        # Neither answer is the default (SB-07): the focus is on the digits, both answers weigh the same,
+        # the digits are read one by one, and nothing else is announced over them.
+        self.assertEqual(compare["focused"], "digits")
+        self.assertEqual(compare["match"], compare["differ"])
+        self.assertNotIn("primary", compare["match"])
+        self.assertTrue(compare["spoken"].endswith(" ".join(linked.sas)), compare)
+        self.assertIn("6 dígitos", compare["question"])
+        self.assertEqual(compare["status"], "")
         self.shoot("phone-compare")
         self.click("#match")
         self.wait_state("paired")
@@ -390,6 +524,9 @@ class VaultUiTest(unittest.TestCase):
         self.click("#use-phone")
         self.wait_state("waiting")
         code = self.qr_code("#phone-qr")
+        line = self.assert_status("progress")
+        hint = self.m.execute("return document.getElementById('phone-hint').textContent;")
+        self.assertNotEqual(line["text"], hint, "the instruction is shown once, not repeated in the status line")
         self.shoot("unlock-phone")
         self.assertEqual(self.server.requests_to("/page/phone-opened"), [])
         self.linked.unlock(code)

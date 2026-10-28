@@ -54,11 +54,29 @@ async function render() {
     source ? t("warnFrom", [source]) : "",
     t("warnDone"),
   ].filter(Boolean).join(" · ");
+  const show = document.getElementById("show");
+  const remove = document.getElementById("delete");
+  let primary = show; // a program: look at it in its folder first; deleting is the second choice
   if (!SAFE_DANGER.has(item.danger)) {
+    // A verdict says it is dangerous: deleting is the safe action, with the critical icon and words.
+    document.documentElement.dataset.severity = "critical";
+    document.title = t("warnTitleDanger");
+    document.getElementById("warn-headline").textContent = t("warnHeadlineDanger");
     document.getElementById("callout-text").textContent = t("warnDanger");
     document.getElementById("callout").classList.replace("callout--warning", "callout--critical");
+    // <svg> has no .hidden property: toggle the attribute itself.
+    document.getElementById("icon-warning").setAttribute("hidden", "");
+    document.getElementById("icon-critical").removeAttribute("hidden");
+    remove.textContent = t("warnDeleteFile");
+    remove.className = "button button--primary";
+    show.className = "button button--secondary";
+    remove.after(show); // the primary comes first
+    primary = remove;
+  } else {
+    document.documentElement.dataset.severity = "warning";
   }
   document.getElementById("actions").hidden = false;
+  primary.focus();
 
   document.getElementById("show").addEventListener("click", () => browser.downloads.show(item.id));
   document.getElementById("delete").addEventListener("click", async () => {

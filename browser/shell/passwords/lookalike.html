@@ -22,8 +22,11 @@
       <p class="url mono" id="address"></p>
       <div class="actions">
         <button class="button button--primary" type="button" id="go-real"></button>
-        <button class="button button--secondary" type="button" id="continue"></button>
+        <button class="button button--secondary" type="button" id="continue" data-i18n="lookalikeContinue" aria-describedby="continue-note"></button>
       </div>
+      <!-- What "continue" changes, right next to it, and where to undo it (SB-10) -->
+      <p class="hint" id="continue-note"></p>
+      <p class="status" id="status" role="status"></p>
       <details class="why">
         <summary data-i18n="lookalikeWhy"></summary>
         <ul>

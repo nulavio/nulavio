@@ -97,6 +97,10 @@ async function showDns() {
   const card = document.getElementById("dns-choice");
   card.hidden = state.chosen;
   card.querySelector("p").textContent = t(state.encryptedNow ? "dnsChoiceBodyEncrypted" : "dnsChoiceBody");
+  // The buttons follow what the resolver does now: "keep" always keeps it.
+  card.dataset.encrypted = String(state.encryptedNow);
+  document.getElementById("dns-actions-system").hidden = state.encryptedNow;
+  document.getElementById("dns-actions-encrypted").hidden = !state.encryptedNow;
   if (state.chosen) {
     return;
   }
@@ -105,8 +109,12 @@ async function showDns() {
     card.hidden = true;
     await showDns();
   };
-  document.getElementById("dns-keep-system").onclick = () => done(() => privacy.setDns({ choice: "system" }));
+  const toSystem = () => done(() => privacy.setDns({ choice: "system" }));
+  document.getElementById("dns-keep-system").onclick = toSystem;
   document.getElementById("dns-later").onclick = () => done(() => privacy.dismissDnsChoice());
+  // Keeping the engine's encrypted default changes nothing; it only records that the person decided.
+  document.getElementById("dns-keep-encrypted").onclick = () => done(() => privacy.dismissDnsChoice());
+  document.getElementById("dns-use-system").onclick = toSystem;
 }
 
 // Search settings exist only where the Shell is built in (privileged API).

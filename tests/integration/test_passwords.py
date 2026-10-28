@@ -117,7 +117,29 @@ class PasswordsTest(unittest.TestCase):
         text = self.m.execute("return document.querySelector('main').textContent;")
         self.assertIn(REAL, text)
         self.assertIn(FAKE, text)
+        # What "continue" does is on the button and right next to it, with where to undo it (SB-10).
+        page = self.m.execute(
+            "const b = document.getElementById('continue');"
+            "const note = document.getElementById(b.getAttribute('aria-describedby'));"
+            "return {label: b.textContent.trim(), note: note?.textContent ?? '', focused: document.activeElement.id};"
+        )
+        self.assertEqual(page["label"], "Continuar e não avisar de novo para este par")
+        for words in (FAKE, REAL, "Configurações › Senhas"):
+            self.assertIn(words, page["note"])
+        self.assertEqual(page["focused"], "go-real")
         self.shoot("lookalike")
+        # If the choice cannot be saved, the site does not open as if it had been.
+        chrome_async(self.m, f"{PASSWORDS}.NulavioPasswords.dismiss = () => {{ throw new Error('disk full'); }}; return true;")
+        try:
+            self.m.execute("document.getElementById('continue').click();")
+            failed = harness.wait_until(
+                lambda: self.m.execute("return document.getElementById('status').dataset.level;") == "error", 10
+            )
+            self.assertTrue(failed, "no error shown")
+            self.assertTrue(self.m.current_url().startswith(self.base + "passwords/lookalike.html"))
+            self.assertIn("Nada foi alterado", self.m.execute("return document.getElementById('status').textContent;"))
+        finally:
+            chrome_async(self.m, f"delete {PASSWORDS}.NulavioPasswords.dismiss; return true;")
         self.m.execute("document.getElementById('continue').click();")
         self.assertTrue(harness.wait_until(lambda: self.m.current_url().startswith(self.fake), 10))
         self.assertTrue(self.focus_password(self.fake).startswith(self.fake))  # not asked again for this pair
@@ -141,6 +163,31 @@ class PasswordsTest(unittest.TestCase):
         self.assertEqual(rows, [["builtin", "true"], ["proton-pass", "false"], ["keepassxc", "false"], ["bitwarden", "false"]])
         self.assertIn("1 login", self.m.execute("return document.getElementById('engine-logins').textContent;"))
         self.shoot("settings", keep="passwords")
+
+    def test_06_confirmed_sites_are_listed_in_settings_and_removing_one_brings_the_warning_back(self):
+        self.m.navigate(self.base + "settings/settings.html#passwords")
+        self.assertTrue(
+            harness.wait_until(lambda: self.m.execute("return document.documentElement.dataset.ready === 'true';"), 15)
+        )
+        rows = self.m.execute(
+            "return [...document.querySelectorAll('#confirmed-list > li')].map(li => [li.dataset.site, li.dataset.similar,"
+            " li.querySelector('button').getAttribute('aria-label')]);"
+        )
+        self.assertEqual(rows, [[FAKE, REAL, f"Remover {FAKE}"]])
+        self.assertTrue(self.m.execute("return document.getElementById('confirmed-empty').hidden;"))
+        self.shoot("settings-confirmed", keep="passwords")
+        self.m.execute("document.querySelector('#confirmed-list button').click();")
+        emptied = harness.wait_until(lambda: self.m.execute("return !document.getElementById('confirmed-empty').hidden;"), 10)
+        self.assertTrue(emptied, "the pair is still listed")
+        after = self.m.execute(
+            "return {rows: document.querySelectorAll('#confirmed-list > li').length, focused: document.activeElement.id,"
+            " status: document.getElementById('status').textContent, level: document.getElementById('status').dataset.level};"
+        )
+        self.assertEqual((after["rows"], after["focused"], after["level"]), (0, "confirmed-heading", "ok"))
+        self.assertIn(FAKE, after["status"])
+        self.assertEqual(chrome_async(self.m, f"return {PASSWORDS}.NulavioPasswords.listConfirmed();"), [])
+        url = self.focus_password(self.fake)
+        self.assertTrue(url.startswith(self.base + "passwords/lookalike.html"), f"the warning did not come back: {url}")
 
     @unittest.skipUnless(os.environ.get("NULAVIO_NETWORK_TESTS") == "1", "downloads Proton Pass from addons.mozilla.org")
     def test_05_choosing_proton_pass_installs_the_pinned_version_and_switching_back_keeps_it(self):

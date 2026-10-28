@@ -286,7 +286,8 @@ class Passwords {
       return { suspicious: false };
     }
     const similar = lookalikeOf(parsed.hostname, await this.#sites());
-    if (!similar || this.#dismissed().includes(`${siteOf(parsed.hostname)} ${similar}`)) {
+    const pair = similar ? pairEntry(siteOf(parsed.hostname), similar) : null;
+    if (!similar || this.#dismissed().some(entry => pairEntry(...String(entry).split(" ")) === pair)) {
       return { suspicious: false };
     }
     return { suspicious: true, site: displayHost(siteOf(parsed.hostname)), similar };
@@ -313,11 +314,49 @@ class Passwords {
 
   /** "Continue anyway": not asked again for this pair of sites (kept in this profile only). */
   dismiss(site, similar) {
-    const entry = `${String(site)} ${String(similar)}`;
+    const entry = pairEntry(site, similar);
     const list = this.#dismissed().filter(e => e !== entry);
     list.push(entry);
     Services.prefs.setStringPref(PREF_DISMISSED, JSON.stringify(list.slice(-200)));
   }
+
+  /** The pairs the person chose to continue on, newest first (Settings › Passwords). */
+  listConfirmed() {
+    return this.#dismissed()
+      .map(entry => {
+        const [site = "", similar = ""] = String(entry).split(" ");
+        return { site: displayHost(site), similar };
+      })
+      .filter(pair => pair.site && pair.similar)
+      .reverse();
+  }
+
+  /** Undo "continue anyway": the warning comes back for this pair. Removing a pair that is not there changes nothing. */
+  removeConfirmed(site, similar) {
+    const wanted = pairEntry(site, similar);
+    const left = this.#dismissed().filter(entry => {
+      const [s = "", t = ""] = String(entry).split(" ");
+      return pairEntry(s, t) !== wanted;
+    });
+    if (left.length) {
+      Services.prefs.setStringPref(PREF_DISMISSED, JSON.stringify(left));
+    } else {
+      Services.prefs.clearUserPref(PREF_DISMISSED);
+    }
+    return this.listConfirmed();
+  }
+}
+
+/** A stored pair: both sites in the engine's ASCII form, as checkLogin() compares them. */
+function pairEntry(site, similar) {
+  const ace = host => {
+    try {
+      return Cc["@mozilla.org/network/idn-service;1"].getService(Ci.nsIIDNService).convertUTF8toACE(String(host)).toLowerCase();
+    } catch {
+      return String(host).toLowerCase();
+    }
+  };
+  return `${ace(site)} ${ace(similar)}`;
 }
 
 export const NulavioPasswords = new Passwords();

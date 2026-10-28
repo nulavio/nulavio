@@ -197,7 +197,7 @@ async function send(question, page) {
   $("send").disabled = true;
   $("summarize").disabled = true;
   // One polite announcement now, one when it ends (AI-12); no check mark until then.
-  announce(t(task ? "assistantWorking" : "assistantAsking", [state.recipient]), "busy");
+  announce(t(task ? "assistantWorking" : "assistantAsking", [state.recipient]), "progress");
   try {
     const result = task
       ? await ai.assistantTask(question)

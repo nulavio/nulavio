@@ -17,6 +17,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts" / "build"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts" / "brand"))
+import contrast
 import harness
 import make_shell
 
@@ -30,6 +32,31 @@ const a = await AddonManager.getAddonByID(arguments[0]);
 return a ? {active: a.isActive, builtin: a.isBuiltin, system: a.isSystem, hidden: a.hidden,
             temporary: a.temporarilyInstalled, version: a.version} : null;
 """
+
+
+def hex_colour(css: str) -> str:
+    """'rgb(1, 2, 3)' / 'rgba(1, 2, 3, 0.5)' -> '#010203' (alpha ignored)."""
+    values = [round(float(v)) for v in css[css.index("(") + 1 : css.index(")")].replace("/", ",").split(",")[:3]]
+    return "#" + "".join(f"{v:02X}" for v in values)
+
+
+# ext-downloads.js keeps DownloadItem in the shared global of the parent-side extension APIs.
+FORCE_DANGER = """
+const {ExtensionParent} = ChromeUtils.importESModule("resource://gre/modules/ExtensionParent.sys.mjs");
+const run = code => Cu.evalInSandbox(code, ExtensionParent.apiManager.global, null, "resource://nulavio-test/danger.js", 1);
+if (arguments[0] === null) {
+  run(`if (globalThis.__nvDanger) {
+         Object.defineProperty(DownloadItem.prototype, "danger", globalThis.__nvDanger);
+         delete globalThis.__nvDanger;
+       }`);
+  return true;
+}
+run(`globalThis.__nvDanger ??= Object.getOwnPropertyDescriptor(DownloadItem.prototype, "danger");`);
+const value = JSON.stringify(arguments[0]);
+run(`Object.defineProperty(DownloadItem.prototype, "danger", {configurable: true, get() { return ${value}; }});`);
+return true;
+"""
+
 NEW_TAB_URL = """
 const {AboutNewTab} = ChromeUtils.importESModule("resource:///modules/AboutNewTab.sys.mjs");
 return AboutNewTab.newTabURL;
@@ -113,6 +140,25 @@ class ShellTest(unittest.TestCase):
         finally:
             self.m.set_context("content")
 
+    def warning_state(self) -> dict:
+        """The download warning page as a person meets it: visible actions in order, their weight, the focus."""
+        return self.m.execute(
+            "const weight = b => b.classList.contains('button--primary') ? 'primary'"
+            " : b.classList.contains('button--secondary') ? 'secondary' : 'quiet';"
+            "return {buttons: [...document.querySelectorAll('button')].filter(b => !b.closest('[hidden]'))"
+            ".map(b => [b.id, b.textContent.trim(), weight(b)]),"
+            " focused: document.activeElement?.id ?? null, severity: document.documentElement.dataset.severity,"
+            " icon: [...document.querySelectorAll('.callout__icon')].filter(i => !i.hasAttribute('hidden'))"
+            ".map(i => i.id).join(),"
+            " headline: document.getElementById('warn-headline').textContent,"
+            " deleteFile: browser.i18n.getMessage('warnDeleteFile')};"
+        )
+
+    def force_danger(self, value) -> None:
+        """Test stand-in for a download verdict: the engine's downloads API (parent side) reports `value`
+        as the item's danger, or its own value again with None. Nothing in the product changes."""
+        self.assertTrue(self.m.chrome(FORCE_DANGER, [value]))
+
     def new_handles(self, before: set[str]) -> list[str]:
         return [h for h in self.m.window_handles() if h not in before]
 
@@ -184,13 +230,48 @@ class ShellTest(unittest.TestCase):
         text = self.m.execute("return document.body.innerText;")
         self.assertIn("nulavio-setup.AppImage", text)
         self.assertIn("127.0.0.1", text)
-        buttons = self.m.execute(
-            "return [...document.querySelectorAll('button')].filter(b => !b.closest('[hidden]'))"
-            ".map(b => [b.id, b.textContent.trim()]);"
-        )
-        self.assertEqual([b[0] for b in buttons], ["show", "delete"], buttons)
-        self.assertFalse(any(label.lower() in ("abrir", "open") for _, label in buttons), "flow E must not offer Open")
+        warning = self.warning_state()
+        self.assertEqual([b[0] for b in warning["buttons"]], ["show", "delete"], warning)
+        self.assertFalse(any(b[1].lower() in ("abrir", "open") for b in warning["buttons"]), "flow E must not offer Open")
+        # A program: "Show in folder" is the primary action and has the focus; "Delete" is secondary (SB-05).
+        self.assertEqual([b[2] for b in warning["buttons"]], ["primary", "secondary"], warning)
+        self.assertEqual((warning["focused"], warning["severity"], warning["icon"]), ("show", "warning", "icon-warning"))
         (self.artifacts / "shell-download-warning.png").write_bytes(self.m.screenshot_png())
+        # A verdict that the file is dangerous: "Delete file" first, primary and focused, with the critical
+        # octagon and critical text in both themes. Firefox's downloads API reports every download as "safe"
+        # today (ext-downloads.js: `get danger() { // TODO`), so the test stands in for a verdict there.
+        url = self.m.current_url()
+        self.force_danger("file")
+        try:
+            self.m.navigate(url)
+            self.assertEqual(harness.wait_until(lambda: self.root_data("state"), timeout=15), "ready")
+            critical = self.warning_state()
+        finally:
+            self.force_danger(None)
+        self.assertEqual(critical["severity"], "critical", critical)
+        self.assertEqual([b[0] for b in critical["buttons"]], ["delete", "show"], critical)
+        self.assertEqual([b[2] for b in critical["buttons"]], ["primary", "secondary"], critical)
+        self.assertEqual((critical["focused"], critical["icon"]), ("delete", "icon-critical"))
+        self.assertEqual(critical["buttons"][0][1], critical["deleteFile"])
+        self.assertNotEqual(critical["headline"], warning["headline"])
+        for scheme in ("light", "dark"):
+            colours = self.m.execute(
+                "document.documentElement.dataset.theme = arguments[0];"
+                "const c = getComputedStyle(document.getElementById('callout'));"
+                "const icon = getComputedStyle(document.getElementById('icon-critical'));"
+                "const probe = v => { const e = document.createElement('i'); e.style.color = v; document.body.append(e);"
+                " const out = getComputedStyle(e).color; e.remove(); return out; };"
+                "return {text: c.color, bg: c.backgroundColor, icon: icon.color,"
+                " critical: probe('var(--nv-color-status-criticalText)'), primary: probe('var(--nv-color-text-primary)')};",
+                [scheme],
+            )
+            with self.subTest(scheme=scheme):
+                self.assertEqual(colours["text"], colours["critical"], "critical text colour missing")
+                self.assertEqual(colours["icon"], colours["critical"])
+                self.assertNotEqual(colours["text"], colours["primary"])
+                self.assertGreaterEqual(contrast.ratio(hex_colour(colours["text"]), hex_colour(colours["bg"])), 4.5)
+                (self.artifacts / f"shell-download-warning-critical-{scheme}.png").write_bytes(self.m.screenshot_png())
+        self.m.execute("delete document.documentElement.dataset.theme;")
         if harness.nulavio_engine():
             # The engine's own downloads panel (patch 0007): shown in its folder, never opened from there.
             panel = self.panel_item("nulavio-setup.AppImage")

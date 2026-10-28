@@ -43,6 +43,8 @@ this.nulavioPasswords = class extends ExtensionAPI {
         choose: call(key => passwords.choose(key)),
         checkLogin: call(url => passwords.checkLogin(url)),
         dismiss: call((site, similar) => passwords.dismiss(site, similar)),
+        listConfirmed: call(() => passwords.listConfirmed()),
+        removeConfirmed: call((site, similar) => passwords.removeConfirmed(site, similar)),
       },
     };
   }

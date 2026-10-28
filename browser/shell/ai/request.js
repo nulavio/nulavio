@@ -31,7 +31,7 @@ function expired() {
     button.hidden = true;
   }
   byId("expires").hidden = true;
-  setState("expired", t("aiRequestExpired"), "error");
+  setState("expired", t("aiRequestExpired"), "warn");
 }
 
 async function answer(value) {
@@ -43,7 +43,8 @@ async function answer(value) {
     setState("answered", t(value === "deny" ? "aiAnsweredDeny" : value === "session" ? "aiAnsweredSession" : "aiAnsweredOnce"));
     await closeSoon();
   } catch (e) {
-    setState(e?.message === "invalid" ? "expired" : "error", e?.message === "invalid" ? t("aiRequestExpired") : errorText(e), "error");
+    const expired = e?.message === "invalid"; // answered elsewhere or timed out: a warning, not a failure
+    setState(expired ? "expired" : "error", expired ? t("aiRequestExpired") : errorText(e), expired ? "warn" : "error");
   }
 }
 

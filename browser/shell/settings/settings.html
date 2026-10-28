@@ -196,6 +196,13 @@
         <ul class="list" id="provider-list" aria-busy="true"></ul>
         <p class="hint" id="engine-logins"></p>
       </div>
+      <!-- Look-alike sites the person chose to continue on (flow D), each with a way back (SB-10) -->
+      <div class="card stack" id="confirmed-card">
+        <h3 class="card__title" id="confirmed-heading" data-i18n="passwordsConfirmedTitle"></h3>
+        <p class="hint" data-i18n="passwordsConfirmedIntro"></p>
+        <ul class="list" id="confirmed-list" aria-labelledby="confirmed-heading" aria-busy="true"></ul>
+        <p class="hint" id="confirmed-empty" data-i18n="passwordsConfirmedNone" hidden></p>
+      </div>
     </section>
 
     <section class="section" id="exceptions" aria-labelledby="exceptions-heading" hidden>

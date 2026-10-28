@@ -12,6 +12,11 @@
       {
         "name": "dismiss", "type": "function", "async": true,
         "parameters": [{ "name": "site", "type": "string", "maxLength": 300 }, { "name": "similar", "type": "string", "maxLength": 300 }]
+      },
+      { "name": "listConfirmed", "type": "function", "async": true, "parameters": [] },
+      {
+        "name": "removeConfirmed", "type": "function", "async": true,
+        "parameters": [{ "name": "site", "type": "string", "maxLength": 300 }, { "name": "similar", "type": "string", "maxLength": 300 }]
       }
     ]
   }

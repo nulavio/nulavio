@@ -296,11 +296,13 @@ function profileRow(profile) {
     del.addEventListener("click", () => run(() => profiles.openCurrentPage("delete")));
     end.push(del);
   } else {
+    // The accessible name keeps the visible words and the state (SPA-10, SB-17): "Abrir Pessoal",
+    // or "Bancos, bloqueado, desbloquear…" next to the visible "Desbloquear…".
     const open = h("button", {
       class: "button button--secondary",
       type: "button",
       text: t("profilesOpen"),
-      "aria-label": t("profilesOpenNamed", [profile.name]),
+      "aria-label": t(profile.locked ? "profilesUnlockNamed" : "profilesOpenNamed", [profile.name]),
       "data-focus-key": `open-${profile.id}`,
     });
     open.addEventListener("click", () =>
@@ -359,6 +361,8 @@ function profileRow(profile) {
         profile.isCurrent ? h("span", { class: "badge", text: t("profilesCurrent") }) : null,
         profile.locked ? h("span", { class: "badge badge--quiet", text: t("profilesLocked") }) : null
       ),
+      // When an open protected profile locks again (SB-14), next to "Bloquear agora".
+      profile.encrypted && !profile.locked ? h("p", { class: "row__note", "data-relock": "", text: t("vaultRelocksWhenClosed") }) : null,
       profile.id === null
         ? null
         : h(
@@ -685,7 +689,7 @@ function providerRow(item, state) {
         if (!ok) {
           return;
         }
-        announce(t("passwordsInstalling", [providerName(item)]));
+        announce(t("passwordsInstalling", [providerName(item)]), "progress");
       }
       run(() => passwords.choose(item.key), { done: t("passwordsChosen", [providerName(item)]) }).then(renderPasswords);
     });
@@ -716,9 +720,60 @@ async function renderPasswords() {
   document.getElementById("engine-logins").textContent = t("passwordsEngineLogins", [String(state.engineLogins)]);
 }
 
-function setUpPasswords() {
+/** Look-alike sites the person chose to continue on (flow D): each can be removed, and the warning returns. */
+function confirmedRow(pair) {
+  const remove = h("button", {
+    class: "button button--quiet",
+    type: "button",
+    text: t("passwordsConfirmedRemove"),
+    "aria-label": t("passwordsConfirmedRemoveNamed", [pair.site]),
+    "data-focus-key": `confirmed-${pair.site} ${pair.similar}`,
+  });
+  remove.addEventListener("click", async () => {
+    const left = await run(() => passwords.removeConfirmed(pair.site, pair.similar), {
+      done: t("passwordsConfirmedRemoved", [pair.site]),
+    });
+    if (left) {
+      renderConfirmed(left);
+      // The row is gone: keep the keyboard here (the next row's button, or the card's heading).
+      const next = document.querySelector("#confirmed-list button");
+      if (next) {
+        next.focus();
+      } else {
+        const heading = document.getElementById("confirmed-heading");
+        heading.tabIndex = -1;
+        heading.focus();
+      }
+    }
+  });
+  return h(
+    "li",
+    { class: "row row--plain", dataset: { site: pair.site, similar: pair.similar } },
+    h(
+      "div",
+      { class: "row__main" },
+      h("p", { class: "row__title", text: pair.site }),
+      h("p", { class: "row__note", text: t("passwordsConfirmedLooksLike", [pair.similar]) })
+    ),
+    h("div", { class: "row__end" }, remove)
+  );
+}
+
+function renderConfirmed(pairs) {
+  const list = document.getElementById("confirmed-list");
+  rerender(list, () => pairs.map(confirmedRow));
+  list.setAttribute("aria-busy", "false");
+  list.hidden = !pairs.length;
+  document.getElementById("confirmed-empty").hidden = Boolean(pairs.length);
+}
+
+async function setUpPasswords() {
   document.getElementById("passwords").hidden = false;
-  return renderPasswords();
+  await renderPasswords();
+  const pairs = await run(() => passwords.listConfirmed());
+  if (pairs) {
+    renderConfirmed(pairs);
+  }
 }
 
 // -- site exceptions --------------------------------------------------------

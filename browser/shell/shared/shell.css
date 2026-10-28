@@ -90,7 +90,7 @@
 .actions[hidden] { display: none; }
 .result { margin: 0; font-weight: var(--nv-font-weight-medium); }
 .result[data-level="ok"]::before { content: "✓ "; color: var(--nv-color-status-secure); }
-.result[data-level="error"]::before { content: "⚠ "; color: var(--nv-color-status-warning); }
+.result[data-level="error"] { color: var(--nv-color-status-criticalText); }
 .why summary { cursor: pointer; color: var(--nv-color-text-secondary); }
 .why ul { margin: var(--nv-space-3) 0 0; padding-left: 1.25rem; display: grid; gap: var(--nv-space-2); color: var(--nv-color-text-secondary); font-size: 0.9375rem; }
 
@@ -113,9 +113,42 @@
 }
 .status { margin: 0; min-height: 1.5em; font-weight: var(--nv-font-weight-medium); }
 .status:empty { min-height: 0; }
+/* Levels set by announce() in lib/ui.js: info has no mark; ✓ only for a result that happened */
 .status[data-level="ok"]::before { content: "✓ "; color: var(--nv-color-status-secure); }
-.status[data-level="error"] { color: var(--nv-color-status-warning); }
-.status[data-level="error"]::before { content: "⚠ "; }
+.status[data-level="warn"] { color: var(--nv-color-status-warning); }
+.status[data-level="warn"]::before { content: "⚠ "; }
+.status[data-level="error"] { color: var(--nv-color-status-criticalText); }
+.status[data-level="error"]::before,
+.result[data-level="error"]::before {
+  content: "";
+  display: inline-block;
+  inline-size: 1em;
+  block-size: 1em;
+  margin-inline-end: 0.4em;
+  vertical-align: -0.15em;
+  background-color: currentColor;
+  mask: url("icon-critical.svg") center / contain no-repeat;
+}
+.status[data-level="progress"]::before {
+  content: "";
+  display: inline-block;
+  box-sizing: border-box;
+  inline-size: 0.9em;
+  block-size: 0.9em;
+  margin-inline-end: 0.5em;
+  vertical-align: -0.1em;
+  border: 2px solid currentColor;
+  border-inline-end-color: transparent;
+  border-radius: 50%;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .status[data-level="progress"]::before { animation: nv-status-spin 0.9s linear infinite; }
+}
+@keyframes nv-status-spin { to { transform: rotate(1turn); } }
+@media (forced-colors: active) {
+  .status[data-level="error"]::before,
+  .result[data-level="error"]::before { background-color: CanvasText; forced-color-adjust: none; }
+}
 .status[data-level]:empty::before { content: none; }
 .form-error { margin: 0; color: var(--nv-color-status-warning); font-size: 0.875rem; }
 .form-error:empty { display: none; }
@@ -389,8 +422,7 @@ body.assistant { padding: var(--nv-space-4); }
 /* -- Assistant panel, UX1 (AI-02, AI-10, AI-12, AI-15) ------------------------------------------
    The included page is an item bound to one tab, with its own remove control; the panel says why
    it left. Off states (private window, emergency stop, paused) replace the composer. Progress text
-   carries no check mark (data-level="busy"): only a finished answer does. */
-.status[data-level="busy"] { color: var(--nv-color-text-secondary); }
+   uses the "progress" status level (no check mark): only a finished answer gets one. */
 .assistant__off { margin: 0; padding: var(--nv-space-4); border-radius: var(--nv-radius-md); background: var(--nv-color-bg-sunken); }
 .assistant__off-title { margin: 0; font-size: 1rem; font-weight: var(--nv-font-weight-semibold); display: flex; gap: var(--nv-space-2); align-items: baseline; }
 .assistant__off p { margin: 0; }
@@ -450,3 +482,31 @@ body.assistant { padding: var(--nv-space-4); }
 @media (forced-colors: active) {
   .callout--critical, .callout--warning, .callout--info, .badge--warning, .badge--outline { border: 1px solid CanvasText; }
 }
+
+/* ==== UX1 pages: consent and honesty fixes (audit 2026-10-27: SB-05, SB-07, SB-10, DS-04, DS-05, DS-11) ==== */
+
+/* Native radios and checkboxes in the brand accent, not the toolkit's blue (DS-11) */
+:root { accent-color: var(--nv-color-accent-default); }
+
+/* A pressed toggle (e.g. the profile templates on vault/create.html) looks pressed: tint, accent edge
+   and a ✓, never colour alone (DS-05) */
+.button[aria-pressed="true"] {
+  background: var(--nv-color-accent-tint);
+  border-color: var(--nv-color-accent-default);
+  color: var(--nv-color-text-primary);
+}
+.button[aria-pressed="true"]::before { content: "✓"; font-weight: var(--nv-font-weight-semibold); }
+@media (forced-colors: active) {
+  .button[aria-pressed="true"] { outline: 2px solid Highlight; outline-offset: 1px; }
+}
+
+/* Download warning (flow E): the critical state has its own colour, icon and headline (SB-05, DS-04) */
+.callout--critical .callout__icon { color: var(--nv-color-status-criticalText); }
+[data-severity="critical"] .file__icon { color: var(--nv-color-status-criticalText); }
+
+/* Phone pairing: the 6 digits take the focus (not an answer), and show it (SB-07) */
+.digits:focus-visible { border-radius: var(--nv-radius-md); }
+
+/* Look-alike login: the consequence of "continue" sits right under the buttons (SB-10) */
+#continue-note:empty { display: none; }
+/* ==== end UX1 pages ==== */

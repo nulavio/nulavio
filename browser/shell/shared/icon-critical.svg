@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" role="img" aria-labelledby="t">
+<title id="t">Critical</title>
+<path d="M8 2.5h8l5.5 5.5v8L16 21.5H8L2.5 16V8z" fill="none" stroke="#000" stroke-width="2" stroke-linejoin="round"/>
+<path d="M12 7.5v5.5M12 16.75v.25" fill="none" stroke="#000" stroke-width="2.25" stroke-linecap="round"/>
+</svg>

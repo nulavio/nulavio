@@ -25,13 +25,17 @@
       </div>
 
       <div class="callout callout--warning" id="callout" role="alert">
-        <svg class="callout__icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 2 21h20z M12 10v5 M12 18v.5" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <!-- Warning: a triangle. Critical (a verdict says the file is dangerous): an octagon, never the same icon -->
+        <svg class="callout__icon" id="icon-warning" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 2 21h20z M12 10v5 M12 18v.5" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <svg class="callout__icon" id="icon-critical" viewBox="0 0 24 24" aria-hidden="true" hidden><path d="M8 2.5h8l5.5 5.5v8L16 21.5H8L2.5 16V8z M12 7.5v5.5 M12 16.75v.25" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></svg>
         <p id="callout-text" data-i18n="warnBody"></p>
       </div>
 
+      <!-- The safe action is the primary one and has focus: "Show in folder" for a program, "Delete file"
+           when a verdict says it is dangerous. There is never an "Open" (flow E) -->
       <div class="actions" id="actions" hidden>
-        <button class="button button--secondary" type="button" id="show" data-i18n="warnShow">Show in folder</button>
-        <button class="button button--quiet" type="button" id="delete" data-i18n="warnDelete">Delete</button>
+        <button class="button button--primary" type="button" id="show" data-i18n="warnShow">Show in folder</button>
+        <button class="button button--secondary" type="button" id="delete" data-i18n="warnDelete">Delete</button>
       </div>
       <p class="result" id="result" role="status" hidden></p>
 

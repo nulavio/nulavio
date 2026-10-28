@@ -92,7 +92,7 @@ async function create(event) {
   for (const control of document.querySelectorAll("#step-protection input, #step-protection button")) {
     control.disabled = true;
   }
-  announce(t("vaultCreating"));
+  announce(t("vaultCreating"), "progress");
   try {
     const result = await vault.createProtected(details);
     state.id = result.id;

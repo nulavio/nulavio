@@ -103,7 +103,7 @@ Fixes from the [UX audit](../design/audit-2026-10-27.md) (AI-01, AI-02, AI-15, A
   - The panel shows "Parada de emergência ativa", "Assistente pausado" or "Assistente revogado", with a button to Settings to resume. The emergency stop's hint in Settings now says it covers the assistant.
   - Saving the assistant's settings after a revocation creates a new Restricted agent; the revoked record stays for the audit. This makes the existing "save again to create another" message true.
 - **Honest task endings (AI-04, today's part).**
-  - Progress carries no ✓ (status `data-level="busy"`).
+  - Progress carries no ✓ (status level `progress`, shared with the other Shell pages).
   - The step limit reads "Parou após 8 passos sem concluir" (`limit` in the result).
   - Sometimes the tools end without an answer: the 10-minute limit kills them, or they crash. The module then answers `task-unfinished`, and the panel says that actions may have happened in the Área de IA, with a button to Atividade. It never says "Nada foi alterado" after a task has started.
   - Permission request pages open with `inBackground: false`. In Firefox 158 and 159, `openTrustedLinkIn` already defaults `forceForeground` to true, so the background tab the audit inferred does not happen there. The explicit option pins the behaviour against later engine changes, and a test guards it.

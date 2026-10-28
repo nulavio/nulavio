@@ -65,9 +65,12 @@ The minimum target is 24×24 CSS px (WCAG 2.5.8); `test_06` measures the real bu
 | Focus | 2 px ring in `focus`, 2 px offset. Never removed |
 | Disabled | 45% opacity plus no hover |
 | Selected (tab) | Raised surface + the **route mark** (16×2 px, `accent.default`, ≥ 3:1) |
-| Error / warning | `status.*` colour + icon + words; never colour alone |
+| Selected (toggle) | `[aria-pressed=true]`: `accent.tint` surface, `accent.default` edge and a ✓; a `Highlight` outline in forced colours |
+| Warning | `status.warning` + ⚠ + words |
+| Error / critical | `status.criticalText` + the octagon icon + words; never the warning triangle, never colour alone |
 | Success | Neutral confirmation text + undo where possible; no green |
 | Loading | Throbber in `accent.default` (`--tab-icon-fill-loading`) |
+| Progress (pages) | A neutral spinner before the words in the status line (static under reduced motion); no ✓ until there is a result |
 
 ## Components (window)
 
@@ -91,7 +94,11 @@ The minimum target is 24×24 CSS px (WCAG 2.5.8); `test_06` measures the real bu
 | Confirmation | `<dialog>` via `confirmDialog()` | Native modal; Cancel focused first; destructive verb in critical text. **Critical variant** (`critical: true`, `.dialog--critical`) for consents that raise what an agent may do (full control, raw automation): critical icon before the title, which names the agent; body in `text.primary`; `role="alertdialog"` with `aria-describedby` on the body; the text is always the Shell's locale key, never text from the tools |
 | Badge | `.badge`, `.badge--quiet` | `accent.tint` / `bg.sunken` with `text.primary`. Agent levels read "Nível: …": `.badge--warning` (Controle total: `status.warningTint`, warning icon), `.badge--outline` (Autônomo: 1 px `status.warning` ring), plain for Restrito and Assistido; Pausado and Revogado are `.badge--quiet` with a pause or blocked icon. Icons come from `icon()` in `lib/ui.js` and sit next to words |
 | Callout | `.callout--critical`, `--warning`, `--info` | Icon (`.callout__icon`) + words + level colour (`status.criticalTint`, `status.warningTint`, `bg.sunken`); a 1 px `CanvasText` border in forced colours. `.callout__action` puts one button at the end, as in the emergency-stop callout ("Retomar") |
-| Status line | `#status[role=status]` | Results in words with ✓ or ⚠; never colour alone. Progress uses `data-level="busy"`: secondary text, no mark until it is done |
+| Status line | `#status[role=status]` | `announce(text, level)`: `info` (no mark), `progress` (spinner), `ok` (✓, only for a result that happened), `warn` (⚠, `status.warning`), `error` (`status.criticalText` + octagon icon). A hint already on the page is not repeated there |
+| Native controls | `:root { accent-color }` | Radios and checkboxes in `accent.default`, not the toolkit's blue |
+| Download warning | `warning/warning.html` | A program: **Show in folder** primary and focused, Delete secondary. A dangerous verdict: **Delete file** primary and focused, `.callout--critical` with the octagon and its own headline. Never Open |
+| Look-alike login | `passwords/lookalike.html` | Go to the real site primary and focused; "Continue and don't warn again for this pair", with what it changes and where to undo it right under the buttons (Settings › Passwords › Sites you confirmed) |
+| Phone comparison | `vault/phone.html` | Focus on the 6 digits (read one by one to screen readers) and their question; both answers secondary, same weight |
 | Held address | `.url` | A link routing held back, shown as text on `bg.sunken` (never a live link); `overflow-wrap: anywhere` |
 | Target profile | `.target` | Chip + profile name on the routing pages |
 | Links | `a` | `accent.default`, underlined; thicker underline on hover |

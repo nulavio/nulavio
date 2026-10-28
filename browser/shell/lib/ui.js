@@ -153,11 +153,16 @@ export function confirmDialog({ title, body, confirm, danger = false, critical =
   });
 }
 
-/** Announce a short result in the page's live region. */
+/* Levels of the status line (shell.css draws each with a mark and words, never colour alone):
+   info (no mark: instructions), progress (a neutral spinner, still under reduced motion), ok (✓, only
+   for a result that happened), warn (⚠, degraded or needs attention), error (critical style and icon). */
+const STATUS_LEVELS = new Set(["info", "progress", "ok", "warn", "error"]);
+
+/** Announce a short result in the page's live region. Do not repeat a hint the page already shows. */
 export function announce(text, level = "ok") {
   const status = document.getElementById("status");
   if (status) {
-    status.dataset.level = level;
+    status.dataset.level = STATUS_LEVELS.has(level) ? level : "info";
     status.textContent = text;
   }
 }

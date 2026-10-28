@@ -26,7 +26,7 @@ function webUrl(raw) {
   }
 }
 
-function setState(state, message = "", level = "ok") {
+function setState(state, message = "", level = "info") {
   document.body.dataset.state = state;
   announce(message, level);
 }
@@ -48,15 +48,16 @@ async function closeSoon() {
   const tab = await browser.tabs.getCurrent();
   const siblings = await browser.tabs.query({ windowId: tab.windowId });
   // Closing the last tab would close the window (and maybe the browser): show a new tab instead.
-  setTimeout(() => (siblings.length > 1 ? browser.tabs.remove(tab.id) : browser.tabs.update(tab.id, { url: "about:newtab" })), 800);
+  // Long enough to read when the profile locks again (the success message says it).
+  setTimeout(() => (siblings.length > 1 ? browser.tabs.remove(tab.id) : browser.tabs.update(tab.id, { url: "about:newtab" })), 2500);
 }
 
 async function attempt(method, secret = null) {
-  setState("unlocking", t("vaultUnlocking"));
+  setState("unlocking", t("vaultUnlocking"), "progress");
   busy(true);
   try {
     await vault.unlock(profileId, method, secret ?? undefined, url?.href);
-    setState("unlocked", t("vaultUnlocked", [profile.name]));
+    setState("unlocked", t("vaultUnlocked", [profile.name]), "ok");
     await closeSoon();
   } catch (e) {
     busy(false);
@@ -89,6 +90,7 @@ const PHONE_ENDINGS = {
   cancelled: "vaultPhoneCancelled",
   gone: "vaultPhoneCancelled",
 };
+const PHONE_LEVELS = { declined: "warn", expired: "warn", cancelled: "info", gone: "info" };
 
 function showPhone(show) {
   byId("phone-panel").hidden = !show;
@@ -104,23 +106,27 @@ function showPhone(show) {
 async function phonePoll() {
   const status = await browser.nulavioVault.phoneSession(phoneSession, "status");
   if (status.state === "approve-on-phone") {
-    byId("phone-qr").hidden = true;
-    byId("phone-hint").textContent = t("vaultPhoneApprove");
-    setState("unlocking", t("vaultPhoneApprove"));
+    if (document.body.dataset.state !== "unlocking") { // polled every second: announce the change once
+      byId("phone-qr").hidden = true;
+      byId("phone-hint").textContent = t("vaultPhoneApprove");
+      setState("unlocking", t("vaultPhoneWaitingApproval"), "progress");
+    }
   } else if (status.state === "unlocked") {
     showPhone(false);
     await vault.phoneOpen(profileId, url?.href);
-    setState("unlocked", t("vaultUnlocked", [profile.name]));
+    setState("unlocked", t("vaultUnlocked", [profile.name]), "ok");
     await closeSoon();
   } else if (PHONE_ENDINGS[status.state] || status.state === "failed") {
     showPhone(false);
     const message = status.state === "failed" ? errorText(new Error(status.error)) : t(PHONE_ENDINGS[status.state]);
-    setState("device-unavailable", message, "error");
+    // Declined or expired on the phone is not a failure of this page; cancelled is just information.
+    const level = PHONE_LEVELS[status.state] ?? "error";
+    setState("device-unavailable", message, level);
   }
 }
 
 async function startPhone() {
-  setState("unlocking", t("vaultPhoneStarting"));
+  setState("unlocking", t("vaultPhoneStarting"), "progress");
   try {
     const started = await vault.phoneStart(profileId, "unlock");
     phoneSession = started.session;
@@ -128,7 +134,7 @@ async function startPhone() {
     byId("phone-qr").hidden = false;
     byId("phone-hint").textContent = t("vaultPhoneScan");
     showPhone(true);
-    setState("waiting", t("vaultPhoneScan"));
+    setState("waiting", t("phoneScanStatus"), "progress"); // the hint above already says what to do
     phoneTimer = setInterval(() => phonePoll().catch(e => setState("error", errorText(e), "error")), 1000);
   } catch (e) {
     setState("error", errorText(e), "error");
@@ -178,7 +184,7 @@ async function render() {
   byId("alternatives").replaceChildren(...alternatives);
   if (!kinds.has("password") && !kinds.has("os-keyring") && !kinds.has("phone")) {
     showRecovery(true);
-    setState("recovery-required", t("vaultRecoveryRequired"));
+    setState("recovery-required", t("vaultRecoveryRequired"), "warn");
     return;
   }
   setState("idle");
