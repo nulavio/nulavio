@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# Git pre-commit hook: refuse a commit whose staged changes contain a secret (gitleaks,
+# pinned; scripts/security/scan.sh staged). CI scans every commit too, but only after the
+# push, when a leaked secret must already be revoked; this catches it before the commit.
+#
+# Off by default. Turn it on in one clone (git's local configuration, nothing on GitHub):
+#   git config core.hooksPath scripts/security/hooks
+# The first commit downloads gitleaks into ~/.cache/nulavio-security-tools.
+set -euo pipefail
+
+exec "$(git rev-parse --show-toplevel)/scripts/security/scan.sh" staged

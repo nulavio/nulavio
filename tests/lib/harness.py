@@ -454,7 +454,7 @@ class GeckoProfileSession:
             raise RuntimeError("GeckoProfileSession needs the Nulavio build (NULAVIO_ENGINE)")
         self.tmp = Path(tempfile.mkdtemp(prefix="nulavio-gps-"))
         home = self.tmp / "home"
-        self.env = {
+        self.env = {  # nosemgrep: nulavio-py-engine-sandbox-env -- tests drive this throwaway session through Marionette
             SYSTEM_ACCESS_ENV: "1",  # test-only, see above
             "HOME": str(home),
             "XDG_CONFIG_HOME": str(home / ".config"),

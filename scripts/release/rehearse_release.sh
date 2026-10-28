@@ -40,6 +40,7 @@ step() {
 
 install_tree() {
     local tarball
+    # shellcheck disable=SC2012 # the newest by time; the build names these files (nulavio-<version>.<locale>.linux-x86_64.tar.xz)
     tarball=$(ls -t "$work/firefox-$version"/obj-nulavio/dist/nulavio-*.tar.xz | head -1)
     rm -rf "$install"
     mkdir -p "$work/install"
@@ -61,8 +62,10 @@ step install install_tree
 step unit-tests python3 -I "$repo/tests/run.py" unit
 step integration-tests env NULAVIO_ENGINE="$install/nulavio" python3 -I "$repo/tests/run.py" integration
 step rpm "$repo/scripts/release/make_rpm.sh" "$out/packages"
+# shellcheck disable=SC2016 # the inner bash expands $0 and $1 (the checker and the package directory)
 step check-rpm bash -c '"$0" "$1"/x86_64/nulavio-*.rpm' "$repo/scripts/release/check_rpm.sh" "$out/packages"
 step deb "$repo/scripts/release/make_deb.sh" "$out/packages"
+# shellcheck disable=SC2016 # as above
 step check-deb bash -c '"$0" "$1"/nulavio_*.deb' "$repo/scripts/release/check_deb.sh" "$out/packages"
 step signed-repository "$repo/scripts/release/test_signed_repo.sh" "$out/packages"
 step sbom sbom

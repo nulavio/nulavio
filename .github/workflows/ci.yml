@@ -1,5 +1,7 @@
 name: ci
 
+# No paths-ignore for documentation-only changes: the unit tests read docs/ (design
+# tokens, links, claims), so such a change can fail them (docs/security/code-scanning.md).
 on:
   push:
     branches: [main]
@@ -50,6 +52,42 @@ jobs:
         with:
           name: sbom
           path: sbom.cdx.json
+          retention-days: 14 # artifacts count against the plan's storage; releases keep their own SBOM
+
+  security:
+    name: security scanners (workflows, secrets, shell scripts, Nulavio rules)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0 # gitleaks reads every commit
+      - name: Fetch the scanners (exact versions, SHA-256 checked; scripts/security/fetch_tools.sh)
+        id: fetch
+        run: scripts/security/fetch_tools.sh "$RUNNER_TEMP/nulavio-security-tools"
+      # Each check runs even when an earlier one failed, so one run shows every finding.
+      - name: Workflows (actionlint, with ShellCheck on run blocks)
+        if: ${{ !cancelled() && steps.fetch.outcome == 'success' }}
+        run: scripts/security/scan.sh actionlint
+      - name: Workflow security audits (zizmor)
+        if: ${{ !cancelled() && steps.fetch.outcome == 'success' }}
+        env:
+          # Read-only job token, only for zizmor's online audits: is each pinned SHA a
+          # commit of the action's own repository, and does the action have a known advisory.
+          GH_TOKEN: ${{ github.token }}
+        run: scripts/security/scan.sh zizmor
+      - name: Secrets in every commit (gitleaks)
+        if: ${{ !cancelled() && steps.fetch.outcome == 'success' }}
+        run: scripts/security/scan.sh gitleaks
+      - name: Shell scripts (ShellCheck)
+        if: ${{ !cancelled() && steps.fetch.outcome == 'success' }}
+        run: scripts/security/scan.sh shellcheck
+      - name: Nulavio rules (Opengrep, ci/sast/nulavio-rules.yml) and their test cases
+        if: ${{ !cancelled() && steps.fetch.outcome == 'success' }}
+        run: scripts/security/scan.sh opengrep-rules opengrep
 
   companion:
     name: Companion app (lint, release build)
@@ -105,3 +143,4 @@ jobs:
           name: integration-artifacts-${{ matrix.image }}
           path: artifacts/
           if-no-files-found: ignore
+          retention-days: 7 # screenshots and logs for debugging a run

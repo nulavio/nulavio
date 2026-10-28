@@ -28,6 +28,13 @@ python3 -m venv .venv && .venv/bin/pip install --require-hashes -r requirements/
 .venv/bin/ruff check . && .venv/bin/ruff format --check .
 ```
 
+Security scanners (workflows, secrets in the history, shell scripts, Nulavio's own rules; pinned release binaries, nothing installed system-wide, Linux x86_64). CI runs the same checks and blocks on findings; see [code scanning](docs/security/code-scanning.md) for what each one checks and how to handle a false positive:
+
+```sh
+scripts/security/scan.sh
+git config core.hooksPath scripts/security/hooks   # optional: refuse a commit that adds a secret
+```
+
 Tests never use your real profile: integration tests set `NULAVIO_HOME` to a temporary directory and use disposable engine profiles. Never put real credentials in tests.
 
 ## Track B (building Nulavio from source)

@@ -1,0 +1,418 @@
+# Nulavio's own static-analysis rules, run by Opengrep (Semgrep rule syntax).
+#
+# Each rule encodes one of this repository's security invariants (CONTRIBUTING.md,
+# "Non-negotiables"; docs/security/code-scanning.md). They complement ruff's S rules
+# and the regex checks in tests/unit/, and they reach what those do not: privileged
+# JavaScript, Java, shell, CI and packaging files.
+#
+#   scripts/security/scan.sh opengrep        # the rules against the repository (CI job "security")
+#   scripts/security/scan.sh opengrep-rules  # the rules against their test cases
+#
+# Every rule has test cases in tests/fixtures/sast/nulavio-rules.*: the line after
+# "ruleid: <id>" must match, the line after "ok: <id>" must not, and no other line may
+# match. Add both kinds when you add or change a rule; tests/unit/test_security_tooling.py
+# checks that they exist. Test mode ignores the "paths:" filters below.
+#
+# A false positive: suppress that one line, with the reason, never a whole rule or file:
+#   call(...)  # nosemgrep: nulavio-py-shell-command -- why this one is safe
+#
+# What is scanned: every file git does not ignore (tracked, or new), tests/ included, minus
+# the paths in .semgrepignore (only the rules' own test cases). The paths: filters below
+# narrow some rules to the code they are about.
+
+rules:
+  # --- Python (launcher, scripts) ---------------------------------------------------------
+
+  - id: nulavio-py-shell-command
+    message: >-
+      This runs a command through a shell, which turns data into code. Pass an argument
+      list to subprocess (shell=False, the default) and validate what goes into it.
+    languages: [python]
+    severity: ERROR
+    metadata:
+      cwe: "CWE-78: OS command injection"
+    pattern-either:
+      - pattern: subprocess.$FUNC(..., shell=True, ...)
+      - pattern: subprocess.getoutput(...)
+      - pattern: subprocess.getstatusoutput(...)
+      - pattern: os.system(...)
+      - pattern: os.popen(...)
+      - pattern: asyncio.create_subprocess_shell(...)
+
+  - id: nulavio-py-cleartext-request
+    message: >-
+      Nulavio code fetches over https:// only (plain http:// is allowed for the loopback
+      interface). A cleartext request can be read and changed on the network.
+    languages: [python]
+    severity: ERROR
+    metadata:
+      cwe: "CWE-319: Cleartext transmission of sensitive information"
+    pattern-either:
+      - patterns:
+          - pattern-either:
+              - pattern: urllib.request.urlopen("$URL", ...)
+              - pattern: urllib.request.urlopen("$URL" + $REST, ...)
+              - pattern: urllib.request.Request("$URL", ...)
+              - pattern: urllib.request.Request("$URL" + $REST, ...)
+              - pattern: urllib.request.urlretrieve("$URL", ...)
+          - metavariable-regex:
+              metavariable: $URL
+              regex: (?i)^(http|ftp|ws)://(?!(127\.0\.0\.1|localhost|\[::1\])([:/]|$))
+      - patterns:
+          - pattern: http.client.HTTPConnection("$HOST", ...)
+          - metavariable-regex:
+              metavariable: $HOST
+              regex: ^(?!(127\.0\.0\.1|localhost|::1)$)
+
+  - id: nulavio-py-tls-verification-off
+    message: >-
+      This switches off or weakens TLS certificate or host-name checks. Use
+      ssl.create_default_context() (or the urllib default) and never relax it, not even in
+      CI or for a test server: give the test server a certificate instead.
+    languages: [python]
+    severity: ERROR
+    metadata:
+      cwe: "CWE-295: Improper certificate validation"
+    pattern-either:
+      - pattern: ssl._create_unverified_context(...)
+      - pattern: ssl._create_stdlib_context(...)
+      - pattern: $CTX.check_hostname = False
+      - pattern: $CTX.verify_mode = ssl.CERT_NONE
+      # Without a protocol, or with the generic one, the context checks nothing.
+      - pattern: ssl.SSLContext()
+      - pattern: ssl.SSLContext(ssl.PROTOCOL_TLS)
+      - pattern: ssl.SSLContext(ssl.PROTOCOL_SSLv23)
+      - pattern: ssl.SSLContext(ssl.PROTOCOL_TLSv1)
+      - pattern: ssl.SSLContext(ssl.PROTOCOL_TLSv1_1)
+      - pattern: $CTX.minimum_version = ssl.TLSVersion.TLSv1
+      - pattern: $CTX.minimum_version = ssl.TLSVersion.TLSv1_1
+      - pattern: $CTX.minimum_version = ssl.TLSVersion.MINIMUM_SUPPORTED
+      - pattern: os.environ["PYTHONHTTPSVERIFY"] = ...
+
+  - id: nulavio-py-secret-in-argv
+    message: >-
+      A secret on a command line can be read by every local user (/proc/<pid>/cmdline,
+      ps). Pass it on stdin, through a pipe or file descriptor, or in a 0600 file, as
+      vault/storage.py does for gocryptfs.
+    languages: [python]
+    severity: ERROR
+    metadata:
+      cwe: "CWE-214: Invocation of process using visible sensitive information"
+    patterns:
+      - pattern-either:
+          - pattern: subprocess.$FUNC([..., $ARG, ...], ...)
+          - patterns:
+              - pattern: os.$EXEC(..., [..., $ARG, ...], ...)
+              - metavariable-regex:
+                  metavariable: $EXEC
+                  regex: ^(exec|spawn)v
+      - metavariable-regex:
+          metavariable: $ARG
+          # A variable or attribute named like a secret (not its file, path or fd), an
+          # f-string that interpolates one, or "--password=" + something.
+          regex: >-
+            (?ix)
+            ^(?:\w+\.)*\w*(?:passw(?:or)?d|passphrase|secret|token|api_?key|private_?key)(?:\w*?)(?<!file|path|fd|dir|name|id|_env|len)$
+            | ^f["'].*\{[^}]*(?:passw(?:or)?d|passphrase|secret|token|api_?key|private_?key)[^}]*\}
+            | ^["']--?(?:passw(?:or)?d|passphrase|secret|token|api-?key)[=:]?["']\s*\+
+
+  - id: nulavio-py-engine-sandbox-env
+    message: >-
+      Never start the engine with variables that switch off or relax its sandboxes, allow a
+      profile downgrade or enable remote control. engine.launch_env() removes them; do not
+      add them back.
+    languages: [python]
+    severity: ERROR
+    metadata:
+      cwe: "CWE-693: Protection mechanism failure"
+    patterns:
+      - pattern-either:
+          - pattern: $ENV["$KEY"] = $VALUE
+          - pattern: $ENV.setdefault("$KEY", ...)
+          - pattern: $ENV.update($KEY=...)
+          - pattern: os.putenv("$KEY", ...)
+          - pattern: |
+              {..., "$KEY": $VALUE, ...}
+          - pattern: dict(..., $KEY=$VALUE, ...)
+      - metavariable-regex:
+          metavariable: $KEY
+          regex: ^MOZ_(\w*SANDBOX\w*|ALLOW_DOWNGRADE|MARIONETTE\w*|REMOTE\w*)$
+
+  # --- JavaScript (Shell, start page, branding modules, pref files) --------------------------
+
+  - id: nulavio-js-html-sink
+    message: >-
+      Shell pages and privileged modules build the DOM with textContent and element APIs
+      (browser/shell/lib/ui.js), never from HTML strings: engine names, URLs and profile
+      names would become markup and script. To empty an element, use replaceChildren().
+    languages: [javascript]
+    severity: ERROR
+    paths:
+      include: ["browser/**"]
+    metadata:
+      cwe: "CWE-79: Cross-site scripting"
+    pattern-either:
+      - pattern: $X.innerHTML = $V
+      - pattern: $X.innerHTML += $V
+      - pattern: $X.outerHTML = $V
+      - pattern: $X.srcdoc = $V
+      - pattern: $X.insertAdjacentHTML(...)
+      - pattern: document.write(...)
+      - pattern: document.writeln(...)
+      - pattern: $R.createContextualFragment(...)
+      - pattern: $X.setHTMLUnsafe(...)
+      - pattern: Document.parseHTMLUnsafe(...)
+      - pattern: $X.setAttribute("srcdoc", ...)
+      - patterns:
+          - pattern: $X.setAttribute("$ATTR", ...)
+          - metavariable-regex:
+              metavariable: $ATTR
+              regex: (?i)^on
+
+  - id: nulavio-js-dynamic-code
+    message: >-
+      Privileged code never compiles code from strings or loads it from a computed URL.
+      Import modules with a literal resource:// or moz-src:// URL.
+    languages: [javascript]
+    severity: ERROR
+    paths:
+      include: ["browser/**"]
+    metadata:
+      cwe: "CWE-95: Eval injection"
+    pattern-either:
+      - pattern: eval(...)
+      - pattern: new Function(...)
+      - pattern: Function(...)
+      - pattern: setTimeout("...", ...)
+      - pattern: setInterval("...", ...)
+      - pattern: Cu.evalInSandbox(...)
+      - pattern: Components.utils.evalInSandbox(...)
+      - pattern: Services.scriptloader.loadSubScript(...)
+      - pattern: Services.scriptloader.loadSubScriptWithOptions(...)
+      - patterns:
+          - pattern-either:
+              - pattern: ChromeUtils.importESModule($URL, ...)
+              - pattern: ChromeUtils.import($URL, ...)
+              - pattern: import($URL)
+          - pattern-not: ChromeUtils.importESModule("...", ...)
+          - pattern-not: ChromeUtils.import("...", ...)
+          - pattern-not: import("...")
+
+  - id: nulavio-js-weakening-pref
+    message: >-
+      This writes a preference that guards sandboxing, site isolation, extension signatures,
+      TLS or certificate checks, Safe Browsing, Remote Settings, updates or privileged
+      code, or that enables remote control. Nulavio never weakens these (CONTRIBUTING.md);
+      tests/unit/test_prefs_and_guard.py (FORBIDDEN) checks the baseline the same way.
+    languages: [javascript]
+    severity: ERROR
+    paths:
+      include: ["browser/**"]
+    metadata:
+      cwe: "CWE-693: Protection mechanism failure"
+    pattern-either:
+      # Never written at all: sandbox levels, remote control, the update switch and the
+      # Remote Settings server.
+      - patterns:
+          - pattern-either:
+              - pattern: $SET("$NAME", ...)
+              - pattern: $O.$SET("$NAME", ...)
+          - metavariable-regex:
+              metavariable: $SET
+              regex: ^(set(Bool|Int|String|Char)Pref|clearUserPref|lockPref|unlockPref|user_pref|pref|defaultPref|sticky_pref)$
+          - metavariable-regex:
+              metavariable: $NAME
+              regex: ^(security\.sandbox\.|marionette\.|remote\.|app\.update\.enabled$|services\.settings\.server$|network\.dns\.disableIPv6$)
+      # Never switched off.
+      - patterns:
+          - pattern-either:
+              - pattern: $SET("$NAME", false, ...)
+              - pattern: $O.$SET("$NAME", false, ...)
+          - metavariable-regex:
+              metavariable: $SET
+              regex: ^(set(Bool|Int|String|Char)Pref|lockPref|user_pref|pref|defaultPref|sticky_pref)$
+          - metavariable-regex:
+              metavariable: $NAME
+              regex: ^(fission\.autostart|xpinstall\.signatures\.required|extensions\.webextensions\.remote|browser\.safebrowsing\.(phishing|malware|downloads|blockedURIs)\.enabled|extensions\.update\.enabled|extensions\.blocklist\.enabled|security\.mixed_content\.block_active_content|security\.ssl\.require_safe_negotiation|security\.fileuri\.strict_origin_policy|network\.stricttransportsecurity\.preloadlist)$
+      # Never switched on: privileged consoles, remote debugging, unsigned privileged
+      # add-ons and string evaluation with chrome privileges.
+      - patterns:
+          - pattern-either:
+              - pattern: $SET("$NAME", true, ...)
+              - pattern: $O.$SET("$NAME", true, ...)
+          - metavariable-regex:
+              metavariable: $SET
+              regex: ^(set(Bool|Int|String|Char)Pref|lockPref|user_pref|pref|defaultPref|sticky_pref)$
+          - metavariable-regex:
+              metavariable: $NAME
+              regex: ^(devtools\.chrome\.enabled|devtools\.debugger\.remote-enabled|devtools\.debugger\.prompt-connection|xpinstall\.signatures\.dev-root|extensions\.experiments\.enabled|security\.allow_eval_with_system_principal|security\.allow_eval_in_parent_process|security\.allow_parent_unrestricted_js_loads)$
+      # Never lowered below the engine's safe value.
+      - patterns:
+          - pattern-either:
+              - pattern: $SET("$NAME", $V, ...)
+              - pattern: $O.$SET("$NAME", $V, ...)
+          - metavariable-regex:
+              metavariable: $SET
+              regex: ^(set(Bool|Int|String|Char)Pref|lockPref|user_pref|pref|defaultPref|sticky_pref)$
+          - metavariable-regex:
+              metavariable: $NAME
+              regex: ^security\.tls\.version\.min$
+          - metavariable-comparison:
+              metavariable: $V
+              comparison: $V < 3
+      - patterns:
+          - pattern-either:
+              - pattern: $SET("$NAME", $V, ...)
+              - pattern: $O.$SET("$NAME", $V, ...)
+          - metavariable-regex:
+              metavariable: $SET
+              regex: ^(set(Bool|Int|String|Char)Pref|lockPref|user_pref|pref|defaultPref|sticky_pref)$
+          - metavariable-regex:
+              metavariable: $NAME
+              regex: ^(security\.cert_pinning\.enforcement_level|security\.OCSP\.enabled)$
+          - metavariable-comparison:
+              metavariable: $V
+              comparison: $V < 1
+
+  - id: nulavio-js-cleartext-request
+    message: >-
+      Shell code connects over https:// or wss:// only (plain http:// or ws:// is allowed
+      for the loopback interface). A cleartext request can be read and changed on the
+      network.
+    languages: [javascript]
+    severity: ERROR
+    paths:
+      include: ["browser/**"]
+    metadata:
+      cwe: "CWE-319: Cleartext transmission of sensitive information"
+    patterns:
+      - pattern-either:
+          - pattern: fetch("$URL", ...)
+          - pattern: new WebSocket("$URL", ...)
+          - pattern: new EventSource("$URL", ...)
+          - pattern: $XHR.open($METHOD, "$URL", ...)
+      - metavariable-regex:
+          metavariable: $URL
+          regex: (?i)^(http|ws)://(?!(127\.0\.0\.1|localhost|\[::1\])([:/]|$))
+
+  # --- Java (companion app, nv1) ------------------------------------------------------------
+
+  - id: nulavio-java-weak-crypto
+    message: >-
+      Use the nv1 primitives (Tink, Bouncy Castle) or AES/GCM through the Android Keystore:
+      no ECB, DES, RC2, RC4, Blowfish, MD5, SHA-1, provider-default "AES", SHA1PRNG or
+      java.util.Random for anything security-related.
+    languages: [java]
+    severity: ERROR
+    paths:
+      include: ["android/**"]
+    metadata:
+      cwe: "CWE-327: Use of a broken or risky cryptographic algorithm"
+    pattern-either:
+      - pattern: Cipher.getInstance("AES", ...)
+      - patterns:
+          - pattern: Cipher.getInstance("$ALG", ...)
+          - metavariable-regex:
+              metavariable: $ALG
+              regex: (?i).*(ECB|DES|RC2|RC4|ARCFOUR|Blowfish)
+      - patterns:
+          - pattern: MessageDigest.getInstance("$ALG", ...)
+          - metavariable-regex:
+              metavariable: $ALG
+              regex: (?i)^(MD2|MD4|MD5|SHA|SHA-?1)$
+      - pattern: new java.util.Random(...)
+      - pattern: new Random(...)
+      - pattern: SecureRandom.getInstance("SHA1PRNG", ...)
+
+  - id: nulavio-java-tls-verification-off
+    message: >-
+      This accepts any certificate or host name. Keep the platform's TLS checks; the phone
+      link authenticates with nv1 keys instead of trusting the network.
+    languages: [java]
+    severity: ERROR
+    paths:
+      include: ["android/**"]
+    metadata:
+      cwe: "CWE-295: Improper certificate validation"
+    pattern-either:
+      - pattern: |
+          boolean verify(String $HOST, SSLSession $SESSION) { return true; }
+      - pattern: |
+          void checkServerTrusted(...) {}
+      - pattern: |
+          X509Certificate[] getAcceptedIssuers() { return null; }
+      - pattern: $CONN.setHostnameVerifier(...)
+      - pattern: HttpsURLConnection.setDefaultHostnameVerifier(...)
+      - pattern: HttpsURLConnection.setDefaultSSLSocketFactory(...)
+      - pattern: SSLSocketFactory.ALLOW_ALL_HOSTNAME_VERIFIER
+      - pattern: new AllowAllHostnameVerifier()
+      - pattern: NoopHostnameVerifier.INSTANCE
+
+  - id: nulavio-android-unsafe-storage-or-manifest
+    message: >-
+      No world-readable or world-writable files, and no cleartext-traffic, debuggable or
+      backup flags in the manifest (the companion keeps unlock keys).
+    languages: [generic]
+    severity: ERROR
+    paths:
+      include: ["android/**/*.java", "android/**/AndroidManifest.xml", "android/**/res/xml/*.xml"]
+    metadata:
+      cwe: "CWE-732: Incorrect permission assignment for critical resource"
+    pattern-regex: (MODE_WORLD_(READABLE|WRITEABLE)|android:usesCleartextTraffic="true"|android:debuggable="true"|android:allowBackup="true"|cleartextTrafficPermitted="true")
+
+  # --- Shell, CI, containers, packaging, Gradle ---------------------------------------------
+
+  - id: nulavio-verification-bypass
+    message: >-
+      This switches off a TLS, signature or checksum check while fetching or installing
+      something, or runs a download without checking it. Never weaken these, not even in
+      CI or a throwaway container: pin and verify instead (scripts/security/fetch_tools.sh,
+      --require-hashes, Gradle dependency verification).
+    languages: [generic]
+    severity: ERROR
+    paths:
+      include:
+        - "bin/**"
+        - "scripts/**"
+        - "ci/containers/**"
+        - ".github/**"
+        - "packaging/**"
+        - "browser/build/**"
+        - "android/**/*.kts"
+        - "android/**/*.properties"
+        - "android/gradlew"
+      exclude: ["*.md"] # prose that names these flags to forbid them
+    metadata:
+      cwe: "CWE-494: Download of code without integrity check"
+    pattern-either:
+      - pattern-regex: \bcurl\b[^\n|]*\s(--insecure|-[a-zA-Z]*k[a-zA-Z]*)(?=\s|$)
+      - pattern-regex: \b(curl|wget)\b[^\n|]*\|\s*(sudo\s+)?(ba|da|z)?sh\b
+      - pattern-regex: --no-check-certificate
+      - pattern-regex: --tls-verify[= ]false
+      - pattern-regex: (?i)\bssl_?verify\s*[=:]?\s*(false|0|no)\b
+      - pattern-regex: \bGIT_SSL_NO_VERIFY\b
+      - pattern-regex: \bNODE_TLS_REJECT_UNAUTHORIZED\s*[=:]\s*["']?0
+      - pattern-regex: \bPYTHONHTTPSVERIFY\s*[=:]\s*["']?0
+      - pattern-regex: (?i)\b(repo_|localpkg_)?gpgcheck\s*=\s*(0|false|no)\b
+      - pattern-regex: --nogpgcheck|--no-gpg-checks|--allow-unauthenticated|--allow-insecure-repositories
+      - pattern-regex: \[[^\]\n]*trusted=yes[^\]\n]*\]
+      - pattern-regex: Acquire::AllowInsecureRepositories|APT::Get::AllowUnauthenticated
+      - pattern-regex: \brpm\b[^\n]*--no(signature|digest)\b
+      - pattern-regex: --trusted-host\b
+      - pattern-regex: \bpip3?\s+install\b(?![^\n]*--require-hashes)
+      - pattern-regex: \bdependency[.-]verification[= ]+(off|lenient)\b
+
+  - id: nulavio-sh-secret-in-argv
+    message: >-
+      A secret on a command line can be read by every local user (/proc/<pid>/cmdline,
+      ps). Pass it on stdin, with --passphrase-fd/--password-file, or in a 0600 file.
+    languages: [generic]
+    severity: ERROR
+    paths:
+      include: ["bin/**", "scripts/**/*.sh", "ci/containers/**", ".github/**", "packaging/**"]
+      exclude: ["*.md"]
+    metadata:
+      cwe: "CWE-214: Invocation of process using visible sensitive information"
+    pattern-either:
+      - pattern-regex: --(passphrase|password|passwd|token|api-?key|secret)(=|[ \t]+)(?!''|""|-)\S
+      - pattern-regex: \bsshpass\s+-p

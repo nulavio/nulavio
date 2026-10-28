@@ -1,0 +1,42 @@
+# gitleaks configuration: secrets in every commit of the history.
+#   scripts/security/scan.sh gitleaks      (CI job "security"; docs/security/code-scanning.md)
+#
+# gitleaks' default rules, one Nulavio rule, and allowlist entries for documented test
+# fixtures only. Each entry names the exact files, rule and values: never allowlist a
+# whole rule, file type or directory. Any other false positive goes in .gitleaksignore,
+# by fingerprint, with the reason.
+#
+# A real secret that reached a commit stays in the history and in every clone: revoke or
+# rotate it first, then remove it (SECURITY.md).
+
+title = "Nulavio"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "nulavio-key-material-file"
+description = "A private key, keystore or keyring file (signing keys stay outside the repository)"
+path = '''(?i)(\.(jks|keystore|bks|p12|pfx|pem|key|ppk|p8)|(^|/)(id_(rsa|dsa|ecdsa|ed25519)|secring\.gpg|private-keys-v1\.d/.*|google-safebrowsing\.key))$'''
+tags = ["key", "file"]
+
+[[allowlists]]
+description = "nv1 test vectors: the fixed bytes 00 01 02 ... 1f in base64url, never a real key (tests/lib/nv1_vectors.py writes the file)"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''^tests/fixtures/nv1-vectors\.json$''']
+regexes = ['''^AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8$''']
+
+[[allowlists]]
+description = "Artificial API keys of the AI bridge tests: only tests/lib/fake_llm.py accepts them"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''^tests/(unit|integration)/test_assistant(_ui)?\.py$''']
+regexes = ['''^sk-artificial-[a-z]+-key-[0-9]+$''']
+
+[[allowlists]]
+description = "OpenPGP fingerprint of Mozilla's release-signing subkey in the engine fast-path tests: public data, published with Firefox's KEY file"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''^tests/unit/test_upstream_fast_path\.py$''']
+regexes = ['''^827E658608679618CD349F93678E455D76767AA3$''']
