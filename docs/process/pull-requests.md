@@ -21,7 +21,7 @@ Lowercase letters, digits and `._/-`, at most 60 characters. `<type>` is one of 
 
 Once the repository is public, develop fixes for undisclosed vulnerabilities in a GitHub private security advisory fork, not in a public `sec/` branch.
 
-The pre-push hook checks names and refuses pushes to `main`. Turn it on once per clone (worktrees share it):
+The pre-push hook checks names and refuses pushes to `main`; the pre-commit hook next to it refuses a commit that adds a secret ([code scanning](../security/code-scanning.md)). Turn both on once per clone (worktrees share it):
 
 ```sh
 git config core.hooksPath scripts/git-hooks
@@ -46,7 +46,7 @@ Pushes to branches cost no Actions minutes: CI runs on pushes to `main` and on p
 | Control | Today | What enforces it |
 |---|---|---|
 | Changes reach `main` only through a pull request | **Advisory** | Convention; the pre-push hook (opt-in, skipped by `git push --no-verify`); agent permission rules ([proposal](agent-guardrails.md)) |
-| A commit that reached `main` without a merged pull request is reported | **Ready, off** | CI check "main changed only through a merged pull request", on when the repository variable `REQUIRE_PR_FOR_MAIN` is `true` (set it after adopting this flow, or every direct push fails CI) |
+| A commit that reached `main` without a merged pull request is reported | **Ready, off** | CI check "main changed only through merged pull requests", on when the repository variable `REQUIRE_PR_FOR_MAIN` is `true` (set it after adopting this flow, or every direct push fails CI) |
 | CI must pass before merging | **Advisory** | The maintainer reads CI. Required status checks need branch protection, which this plan does not offer for private repositories |
 | A person approves | **Advisory** | Only the maintainer merges. `GITHUB_TOKEN` cannot approve pull requests (repository setting) |
 | Code owners review their paths | **Documentation** | [`.github/CODEOWNERS`](../../.github/CODEOWNERS) has no effect on this plan |
@@ -127,7 +127,7 @@ When Mozilla publishes a security release, the [update policy](../architecture/u
 1. Work on `release/firefox-<version>` and open the pull request as soon as the build passes locally.
 2. The AI review never blocks; add `no-ai-review` if it would only cost time.
 3. Wait for at least the "lint, unit tests, generated files, SBOM" job. If the deadline requires it, merge while the slower jobs still run and watch them on `main`.
-4. Only if GitHub's pull request path itself is unavailable: the maintainer pushes with `NULAVIO_ALLOW_MAIN_PUSH=1 git push origin HEAD:main`. The "main changed only through a merged pull request" check, if on, will fail for that commit; record the reason in a pull request or in the [security changelog](../security/changelog.md) afterwards.
+4. Only if GitHub's pull request path itself is unavailable: the maintainer pushes with `NULAVIO_ALLOW_MAIN_PUSH=1 git push origin HEAD:main`. The "main changed only through merged pull requests" check, if on, will fail for that commit; record the reason in a pull request or in the [security changelog](../security/changelog.md) afterwards.
 5. Never weaken a protection to ship faster.
 
 ## If the plan changes
@@ -154,6 +154,6 @@ When Mozilla publishes a security release, the [update policy](../architecture/u
 ## Next steps
 
 - After the first ten reviews: measure minutes, cost and false findings; tune the instructions; consider `claude-sonnet-5-5` for routine pull requests.
-- On the first squash merge: confirm that GitHub links the merge commit to its pull request, which the "main changed only through a merged pull request" check relies on.
+- On the first squash merge: confirm that GitHub links the merge commit to its pull request, which the "main changed only through merged pull requests" check relies on.
 - Apply the [agent guardrails proposal](agent-guardrails.md), then turn on `REQUIRE_PR_FOR_MAIN`.
 - If the plan changes, apply the matching section above.

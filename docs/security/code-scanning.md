@@ -31,13 +31,13 @@ The tools are cached in `~/.cache/nulavio-security-tools` (or `$NULAVIO_SECURITY
 
 ### Secrets before the commit (optional hook)
 
-Commits go straight to `main`, and the plan has no push protection, so CI finds a secret only after it is on GitHub, when it must already be revoked. The pre-commit hook in `scripts/security/hooks/` runs gitleaks on the staged changes (`scripts/security/scan.sh staged`, under a second) and refuses the commit if it finds one. It is off by default; turn it on in each clone:
+Commits go straight to `main`, and the plan has no push protection, so CI finds a secret only after it is on GitHub, when it must already be revoked. The pre-commit hook in `scripts/git-hooks/` runs gitleaks on the staged changes (`scripts/security/scan.sh staged`, under a second) and refuses the commit if it finds one. It is off by default; turn it on in each clone:
 
 ```sh
-git config core.hooksPath scripts/security/hooks
+git config core.hooksPath scripts/git-hooks
 ```
 
-This is git's local configuration, nothing changes on GitHub. `git commit --no-verify` skips it; CI still scans every commit.
+This is git's local configuration, nothing changes on GitHub. `git commit --no-verify` skips it; CI still scans every commit. Git reads hooks from one directory, so the same command turns on the [pre-push hook](../process/pull-requests.md) that refuses pushes to `main`; while commits still go straight to `main`, push there with `NULAVIO_ALLOW_MAIN_PUSH=1 git push`.
 
 ## Nulavio's rules
 
@@ -89,7 +89,7 @@ Change the version, URL and SHA-256 in `scripts/security/fetch_tools.sh` togethe
 - **No Bandit.** ruff's `S` rules are Bandit's checks and already run on every push.
 - **Dependency vulnerabilities** (OSV.dev) are checked separately, by a standard-library script against the OSV.dev API, not by these scanners.
 - **No SARIF upload.** Uploading results needs GitHub code scanning (Advanced Security on a private repository); the findings are in the job log.
-- **No `paths-ignore` for documentation-only changes.** It applies to a whole workflow, and the unit tests read `docs/` (design tokens, links, the claims in `test_brand_and_docs.py`), so a documentation change can fail them. A secret pasted into a document would also wait for the next code change to be found. The security job costs about a minute per push. Only the engine integration matrix, the most expensive job, is skipped when every changed file is Markdown (`scripts/ci/needs_integration.py`, job `changes`): no integration test reads a Markdown file's content. Anything else, an unknown base, or the weekly scheduled run means it runs.
+- **No `paths-ignore` for documentation-only changes.** It applies to a whole workflow, and the unit tests read `docs/` (design tokens, links, the claims in `test_brand_and_docs.py`), so a documentation change can fail them. A secret pasted into a document would also wait for the next code change to be found. The security job costs about a minute per push. Only the engine integration matrix, the most expensive job, is skipped when every file changed since the last tested tree is Markdown (`scripts/ci/needs_integration.py`, job `changes`): no integration test reads a Markdown file's content. For a pull request the last tested tree is its base; for a push to `main` it is the head of the last successful CI run on `main`, not the previous push, because a newer push cancels the run of the previous one. Anything else, an unknown base, or the weekly scheduled run (which a push never cancels) means it runs.
 - **A separate job, not more steps in `checks`.** The scanners run in parallel with the other jobs and fail on their own, with `contents: read` and a token only in zizmor's step. Each check is its own step. The downloads (about 70 MB of release archives) and their checks take a few seconds.
 - **Artifact retention.** The CI SBOM is kept 14 days and the integration artifacts 7 days (GitHub's default is 90). Artifacts count against the plan's storage, and releases keep their own SBOMs.
 - **Community rule packs only as a manual audit.** On 2026-10-27 the Semgrep registry packs for Python, JavaScript, Java, Android, Bash, Dockerfiles and GitHub Actions gave 47 findings with Opengrep and no true positive; their licence also forbids redistributing them. Before a major release, a maintainer may run them once from a throwaway checkout of `semgrep/semgrep-rules` (never committed) and turn anything worth keeping into a Nulavio rule.

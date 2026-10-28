@@ -163,9 +163,20 @@ class GitleaksConfigTest(unittest.TestCase):
         scan = (SECURITY / "scan.sh").read_text()
         self.assertIn("--ignore-gitleaks-allow", scan)  # "gitleaks:allow" in a line would hide a finding from review
         self.assertIn("run_gitleaks git --pre-commit --staged", scan)
-        hook = SECURITY / "hooks" / "pre-commit"
+        hook = ROOT / "scripts" / "git-hooks" / "pre-commit"
         self.assertTrue(os.access(hook, os.X_OK))
         self.assertIn('/scripts/security/scan.sh" staged', hook.read_text())
+
+    def test_every_documented_hooks_path_is_the_one_directory(self):
+        # core.hooksPath takes one directory: two documented values would turn one hook off.
+        hooks = ROOT / "scripts" / "git-hooks"
+        self.assertTrue((hooks / "pre-commit").is_file() and (hooks / "pre-push").is_file())
+        values = set()
+        for name in git_files():
+            path = ROOT / name
+            if path.suffix in (".md", ".sh", "") and path.is_file() and not path.is_symlink():
+                values.update(re.findall(r"git config core\.hooksPath\s+([^\s`)]+)", path.read_text(errors="replace")))
+        self.assertEqual(values, {"scripts/git-hooks"})
 
     def test_ignored_findings_are_exact_fingerprints(self):
         for line in (ROOT / ".gitleaksignore").read_text().splitlines():

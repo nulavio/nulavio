@@ -103,7 +103,7 @@ git config core.hooksPath scripts/git-hooks
 
 ## 4. Detection after the fact
 
-A step in CI's "lint, unit tests, generated files, SBOM" job, "main changed only through a merged pull request", fails when a commit reaches `main` without a merged pull request, so GitHub's failure email reaches the maintainer. It runs only when the repository variable `REQUIRE_PR_FOR_MAIN` is `true`: set it once the pull request flow is in use, otherwise every direct push fails CI.
+A CI job, "main changed only through merged pull requests", fails when a commit reaches `main` without a merged pull request, so GitHub's failure email reaches the maintainer. It runs only when the repository variable `REQUIRE_PR_FOR_MAIN` is `true`: set it once the pull request flow is in use, otherwise every direct push fails CI.
 
 ## 5. Repository settings
 

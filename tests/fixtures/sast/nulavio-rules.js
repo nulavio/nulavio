@@ -68,8 +68,12 @@ lockPref("extensions.experiments.enabled", true);
 user_pref("security.tls.version.min", 1);
 // ruleid: nulavio-js-weakening-pref
 Services.prefs.setIntPref("security.cert_pinning.enforcement_level", 0);
+// ruleid: nulavio-js-weakening-pref
+user_pref("devtools.debugger.prompt-connection", false);
 // ok: nulavio-js-weakening-pref
 user_pref("xpinstall.signatures.required", true);
+// ok: nulavio-js-weakening-pref
+pref("devtools.debugger.prompt-connection", true, sticky);
 // ok: nulavio-js-weakening-pref
 pref("devtools.chrome.enabled", false, sticky);
 // ok: nulavio-js-weakening-pref

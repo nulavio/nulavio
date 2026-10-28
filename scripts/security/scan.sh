@@ -14,7 +14,7 @@
 #   - opengrep-rules  the same rules on their test cases (tests/fixtures/sast/)
 #
 #   scripts/security/scan.sh staged           secrets in the staged changes only (the pre-commit
-#                                             hook in scripts/security/hooks/; not run by default)
+#                                             hook in scripts/git-hooks/; not run by default)
 #   scripts/security/scan.sh shell-files      list the files the shellcheck check reads
 #
 # Tools live in $NULAVIO_SECURITY_TOOLS, else $RUNNER_TEMP/nulavio-security-tools in

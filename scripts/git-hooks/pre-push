@@ -5,7 +5,8 @@
 # This guards against accidents only: `git push --no-verify` skips it, and
 # nothing on GitHub enforces it on the current plan (no branch protection).
 #
-# Enable once per clone (its worktrees share the setting):
+# Enable once per clone (its worktrees share the setting); this also turns on the
+# secret check in pre-commit next to it (core.hooksPath takes one directory):
 #   git config core.hooksPath scripts/git-hooks
 # Engine security emergency only (the emergency path in the same document):
 #   NULAVIO_ALLOW_MAIN_PUSH=1 git push origin HEAD:main

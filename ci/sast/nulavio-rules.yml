@@ -235,7 +235,7 @@ rules:
               regex: ^(set(Bool|Int|String|Char)Pref|lockPref|user_pref|pref|defaultPref|sticky_pref)$
           - metavariable-regex:
               metavariable: $NAME
-              regex: ^(fission\.autostart|xpinstall\.signatures\.required|extensions\.webextensions\.remote|browser\.safebrowsing\.(phishing|malware|downloads|blockedURIs)\.enabled|extensions\.update\.enabled|extensions\.blocklist\.enabled|security\.mixed_content\.block_active_content|security\.ssl\.require_safe_negotiation|security\.fileuri\.strict_origin_policy|network\.stricttransportsecurity\.preloadlist)$
+              regex: ^(fission\.autostart|xpinstall\.signatures\.required|devtools\.debugger\.prompt-connection|extensions\.webextensions\.remote|browser\.safebrowsing\.(phishing|malware|downloads|blockedURIs)\.enabled|extensions\.update\.enabled|extensions\.blocklist\.enabled|security\.mixed_content\.block_active_content|security\.ssl\.require_safe_negotiation|security\.fileuri\.strict_origin_policy|network\.stricttransportsecurity\.preloadlist)$
       # Never switched on: privileged consoles, remote debugging, unsigned privileged
       # add-ons and string evaluation with chrome privileges.
       - patterns:
@@ -247,7 +247,7 @@ rules:
               regex: ^(set(Bool|Int|String|Char)Pref|lockPref|user_pref|pref|defaultPref|sticky_pref)$
           - metavariable-regex:
               metavariable: $NAME
-              regex: ^(devtools\.chrome\.enabled|devtools\.debugger\.remote-enabled|devtools\.debugger\.prompt-connection|xpinstall\.signatures\.dev-root|extensions\.experiments\.enabled|security\.allow_eval_with_system_principal|security\.allow_eval_in_parent_process|security\.allow_parent_unrestricted_js_loads)$
+              regex: ^(devtools\.chrome\.enabled|devtools\.debugger\.remote-enabled|xpinstall\.signatures\.dev-root|extensions\.experiments\.enabled|security\.allow_eval_with_system_principal|security\.allow_eval_in_parent_process|security\.allow_parent_unrestricted_js_loads)$
       # Never lowered below the engine's safe value.
       - patterns:
           - pattern-either:
