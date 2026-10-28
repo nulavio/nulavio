@@ -24,9 +24,11 @@ ChromeUtils.defineESModuleGetters(lazy, {
 
 /** Identity colour per profile id, shared by every profile of the group (JSON). */
 export const PREF_COLORS = "nulavio.profiles.colors";
+const PREF_COLOR_MIGRATION = "nulavio.profiles.colors.farol";
+const LEGACY_COLORS = ["mint", "sky", "violet", "rose", "sand", "slate"];
 
 /** Colour keys; the values are design tokens (--nv-color-identity-<key>). */
-export const COLORS = Object.freeze(["mint", "sky", "violet", "rose", "sand", "slate"]);
+export const COLORS = Object.freeze(["lima", "sky", "violet", "coral", "sand", "slate"]);
 
 /** Icons the engine ships (SelectableProfile STANDARD_AVATARS) offered by Nulavio. */
 export const AVATARS = Object.freeze([
@@ -47,7 +49,7 @@ export const TEMPORARY_MARKER = "nulavio-temporary.json";
    it. Being its own profile, it has its own extensions: those of the user's
    other profiles never see its pages. */
 export const TEMPLATES = Object.freeze([
-  Object.freeze({ id: "personal", avatar: "heart", color: "mint" }),
+  Object.freeze({ id: "personal", avatar: "heart", color: "lima" }),
   Object.freeze({ id: "work", avatar: "briefcase", color: "sky" }),
   Object.freeze({ id: "banking", avatar: "diamond", color: "sand" }),
   Object.freeze({ id: "research", avatar: "book", color: "violet" }),
@@ -111,6 +113,7 @@ class NulavioProfilesClass {
   #observing = false;
   #avatarCache = new Map();
   #temporary = null;
+  #migratingColors = null;
 
   get #service() {
     return lazy.SelectableProfileService;
@@ -151,7 +154,71 @@ class NulavioProfilesClass {
     }
   }
 
+  #colorMigration() {
+    try {
+      const value = JSON.parse(Services.prefs.getStringPref(PREF_COLOR_MIGRATION, "{}"));
+      if (Number.isInteger(value?.version) && Array.isArray(value.mint)) {
+        return { version: value.version, mint: value.mint.filter(id => Number.isSafeInteger(id) && id > 0) };
+      }
+    } catch {
+      // A missing/invalid record is retried without changing other profile data.
+    }
+    return { version: 0, mint: [] };
+  }
+
+  /** Upgrade legacy colour keys only. The record is shared, and later choices always win. */
+  async #migrateColors(profiles) {
+    if (this.#migratingColors) {
+      return this.#migratingColors;
+    }
+    this.#migratingColors = (async () => {
+      const previous = this.#colorMigration();
+      if (previous.version > 2) {
+        return; // a newer release owns its migration record
+      }
+      let map;
+      try {
+        map = JSON.parse(Services.prefs.getStringPref(PREF_COLORS, "{}"));
+      } catch {
+        return; // do not overwrite malformed or future data
+      }
+      if (!map || typeof map !== "object" || Array.isArray(map)) {
+        return;
+      }
+      const mint = new Set(previous.mint);
+      let changed = false;
+      for (const profile of profiles) {
+        const id = String(profile.id);
+        // The first palette also supplied an implicit colour for profiles with no stored choice.
+        const fallback = previous.version < 2 ? LEGACY_COLORS[(profile.id - 1) % LEGACY_COLORS.length] : null;
+        const old = Object.hasOwn(map, id) ? map[id] : fallback;
+        if (old === "mint" || old === "rose") {
+          map[id] = old === "mint" ? "lima" : "coral";
+          if (old === "mint") {
+            mint.add(profile.id);
+          }
+          changed = true;
+        }
+      }
+      if (previous.version < 2 || mint.size !== previous.mint.length) {
+        // Record the notice first. If interrupted here, legacy keys are still upgraded on retry.
+        Services.prefs.setStringPref(PREF_COLOR_MIGRATION, JSON.stringify({ version: 2, mint: [...mint] }));
+        await this.#service.trackPref(PREF_COLOR_MIGRATION);
+      }
+      if (changed) {
+        Services.prefs.setStringPref(PREF_COLORS, JSON.stringify(map));
+        await this.#service.trackPref(PREF_COLORS);
+      }
+    })();
+    try {
+      await this.#migratingColors;
+    } finally {
+      this.#migratingColors = null;
+    }
+  }
+
   async #setColor(id, color) {
+    await this.#migrateColors(await this.#service.getAllProfiles());
     const map = this.colors();
     if (color === null) {
       delete map[id];
@@ -161,6 +228,12 @@ class NulavioProfilesClass {
     Services.prefs.setStringPref(PREF_COLORS, JSON.stringify(map));
     // The engine copies tracked prefs to the group store, so every profile sees them.
     await this.#service.trackPref(PREF_COLORS);
+    const migration = this.#colorMigration();
+    if (migration.version === 2 && migration.mint.includes(id)) {
+      migration.mint = migration.mint.filter(other => other !== id);
+      Services.prefs.setStringPref(PREF_COLOR_MIGRATION, JSON.stringify(migration));
+      await this.#service.trackPref(PREF_COLOR_MIGRATION);
+    }
   }
 
   #colorFor(profile, map) {
@@ -241,12 +314,14 @@ class NulavioProfilesClass {
 
   async #describe(profile, map, currentId) {
     const lock = await lazy.profileLockState(profile.path).catch(() => "plain");
+    const color = this.#colorFor(profile, map);
     return {
       kind: lock === "locked" ? null : await this.#kind(profile.path),
       id: profile.id,
       name: profile.name,
       avatar: profile.avatar,
-      color: this.#colorFor(profile, map),
+      color,
+      colorMigration: color === "lima" && this.#colorMigration().mint.includes(profile.id) ? "mint-to-lima" : null,
       isCurrent: profile.id === currentId,
       encrypted: lock !== "plain",
       locked: lock === "locked",
@@ -279,8 +354,10 @@ class NulavioProfilesClass {
       const name = service.groupToolkitProfile?.name ?? "";
       return { ...availability, profiles: [{ id: null, name, avatar: "default-favicon", color: COLORS[0], isCurrent: true }] };
     }
+    const all = await service.getAllProfiles();
+    await this.#migrateColors(all);
     const map = this.colors();
-    const profiles = await Promise.all((await service.getAllProfiles()).map(p => this.#describe(p, map, current.id)));
+    const profiles = await Promise.all(all.map(p => this.#describe(p, map, current.id)));
     profiles.sort((a, b) => Number(b.isCurrent) - Number(a.isCurrent));
     return { ...availability, profiles };
   }
@@ -321,7 +398,14 @@ class NulavioProfilesClass {
     avatar = checkAvatar(avatar ?? template?.avatar ?? AVATARS[0]);
     color = checkColor(color ?? template?.color ?? COLORS[0]);
     const service = this.#service;
+    const newGroup = !service.currentProfile;
     await service.maybeSetupDataStore();
+    if (newGroup && !Services.prefs.prefHasUserValue(PREF_COLORS) && this.#colorMigration().version === 0) {
+      // This group has never used the legacy palette; do not describe a migration that did not happen.
+      Services.prefs.setStringPref(PREF_COLOR_MIGRATION, JSON.stringify({ version: 2, mint: [] }));
+      await service.trackPref(PREF_COLOR_MIGRATION);
+    }
+    await this.#migrateColors(await service.getAllProfiles());
     if (await this.#nameTaken(name)) {
       fail("name-taken");
     }
@@ -461,6 +545,7 @@ class NulavioProfilesClass {
     this.#observing = true;
     Services.obs.addObserver(this, "sps-profiles-updated");
     Services.prefs.addObserver(PREF_COLORS, this);
+    Services.prefs.addObserver(PREF_COLOR_MIGRATION, this);
   }
 
   observe() {

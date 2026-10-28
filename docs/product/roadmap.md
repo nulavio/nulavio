@@ -144,7 +144,7 @@ Follow the [execution plan](execution-plan.md): S1 (Connect P0), S2 (unlock rese
 ## Phase 7 — UX redesign (from 2026-10-27) ([programme](execution-plan.md#ux-redesign-programme-from-2026-10-27))
 
 - [x] UX0 Audit (107 findings), three directions with HTML mockups, judged; decision: Farol with Maré's organisation and Névoa's flows ([audit](../design/audit-2026-10-27.md), [direction](../design/visual-directions.md))
-- [ ] UX1 Security, consent and honesty fixes found by the audit
+- [x] UX1 Security, consent and honesty fixes found by the audit ([CI](https://github.com/caiolombello/nulavio/actions/runs/40696267881), `8dd50fe5908aee17df464c21b1e7eafafde11496`; real Track B integration and Fedora/Ubuntu CI green)
 - [ ] UX2 Design system v2 (tokens, components, contrast v2, gallery)
 - [ ] UX3 Window: the band, security states, Horizon v2, layout presets
 - [ ] UX4 Shell pages (Settings, new tab, profile menu, routing, security moments, vault methods)

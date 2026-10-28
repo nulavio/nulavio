@@ -91,6 +91,14 @@ NulavioRouter: pageNavigationRefusal(facts) -> null | reason ; siteOf(url) // M5
 
 Verification: `tests/integration/test_profiles.py` runs a registered profile in a disposable home (`harness.GeckoProfileSession`) and drives the second instance the switch starts: a cookie and `localStorage` set in one profile are absent in the other, a second switch keeps one process, a running profile cannot be deleted, the popup switches with one click, the settings page asks before deleting and the toolbar follows a rename (10/10).
 
+### Farol identity upgrade (UX2, 2026-10-28)
+
+The offered keys are `lima`, `sky`, `violet`, `coral`, `sand`, `slate`. Mint is reserved for the brand and active controls (D-UX3/D-UX15). On an existing group, legacy `mint` becomes `lima` and `rose` becomes `coral`; other entries, profile names, avatars and directories are preserved. Old implicit colours are migrated once too. A new group starts on the new palette without a migration notice.
+
+`nulavio.profiles.colors.farol` is a separate shared JSON record (`version: 2`, `mint: [profile ids]`). It records which profiles need the inline Settings note and prevents reinterpreting later implicit choices as old ones. The notice is recorded before replacing legacy keys, so a retry after interruption can still complete the upgrade; repeated reads only replace legacy keys, never a person's new colour. A newer record version or malformed colour map is left untouched. Saving a colour or deleting the profile clears its notice. `list()` adds `colorMigration: "mint-to-lima" | null`; Settings provides the real colour picker via “Trocar cor”, with keyboard focus on the current choice.
+
+`test_profile_colors` exercises legacy choices, implicit colours, later edits and a process restart, plus the Settings note/picker in both themes, on a disposable registered Track B group. These are colour preferences only; no routing, encryption, permissions or protection settings change.
+
 ## M4a implementation
 
 - **Hook.** `browser/branding/nulavio/components.conf` registers `NulavioCommandLine.sys.mjs` as the command-line handler `l-nulavio-routing`. Handlers run in alphabetical order, so it runs before the browser opens URLs (`m-browser`, `x-default`), both at start-up and for command lines from the remote service. It is registered at build time from Nulavio's branding directory: no Mozilla file is patched, and it works before the Shell add-on starts.

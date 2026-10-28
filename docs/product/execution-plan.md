@@ -132,7 +132,7 @@ The maintainer's brief: make the experience and look of Nulavio exceptional, wit
 | # | Slice | Scope | Done when | Size |
 |---|---|---|---|---|
 | UX0 | **Record** — done 2026-10-27 | Audit and findings, "before" captures, the three directions and the final one (HTML mockups, rationales, renders), the decision, revised UX principles, this programme | Docs tests green | S |
-| UX1 | **Security, consent and honesty fixes** (P0 of the audit, independent of the look) | See the list below | A regression test per fix on the Track B build; contrast and Horizon checks green | M–L |
+| UX1 | **Security, consent and honesty fixes** — **done 2026-10-28** ([CI](https://github.com/caiolombello/nulavio/actions/runs/40696267881), `8dd50fe5908aee17df464c21b1e7eafafde11496`) | See the list below | Real Track B package: 187 integration tests, 13 skips; 586 unit tests, 3 skips; Fedora/Ubuntu CI green | M–L |
 | UX2 | **System** | See the list below | `build_tokens --check`, `contrast.py`, gallery baselines, unit tests | L |
 | UX3 | **Window** | See the list below | Security-visibility matrix: each state × each preset × both themes; on screen, opacity 1, `elementFromPoint`, host not truncated | L |
 | UX4 | **Shell pages** | See the list below | Integration tests per page state, both themes; every `data-state` captured | L |

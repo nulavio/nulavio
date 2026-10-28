@@ -290,6 +290,24 @@ function profileRow(profile) {
     run(() => profiles.update(profile.id, { name, avatar, color }), { form, done: t("doneSaved") });
   });
 
+  const migration = profile.colorMigration === "mint-to-lima"
+    ? h("div", { "data-color-migration": "mint-to-lima" }, h("p", { class: "row__note", text: t("profilesColorMigrated", [profile.name]) }))
+    : null;
+  if (migration) {
+    const change = h("button", {
+      class: "button button--quiet",
+      type: "button",
+      text: t("profilesChangeColor"),
+      "aria-label": t("profilesChangeColorNamed", [profile.name]),
+      "data-focus-key": `change-color-${profile.id}`,
+    });
+    change.addEventListener("click", () => {
+      form.closest("details").open = true;
+      form.querySelector('input[name="color"]:checked')?.focus();
+    });
+    migration.append(change);
+  }
+
   const end = [];
   if (profile.isCurrent) {
     const del = h("button", { class: "button button--quiet", type: "button", text: t("profilesDeleteCurrent") });
@@ -363,6 +381,7 @@ function profileRow(profile) {
       ),
       // When an open protected profile locks again (SB-14), next to "Bloquear agora".
       profile.encrypted && !profile.locked ? h("p", { class: "row__note", "data-relock": "", text: t("vaultRelocksWhenClosed") }) : null,
+      migration,
       profile.id === null
         ? null
         : h(

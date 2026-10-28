@@ -285,7 +285,10 @@ class ProfileTemplatesTest(unittest.TestCase):
     def test_colours_are_design_tokens(self):
         tokens = json.loads((ROOT / "docs" / "brand" / "tokens.json").read_text(encoding="utf-8"))
         for theme in ("light", "dark"):
-            self.assertEqual(set(self.listed("COLORS")) | {"on"}, set(tokens["color"][theme]["identity"]) - {"$description"})
+            self.assertEqual(
+                set(self.listed("COLORS")) | {"on"},
+                set(tokens["color"][theme]["identity"]) - {"$description", "edge", "ring"},
+            )
         for color in self.listed("COLORS"):
             self.assertIn(f"color_{color}", locale("en"))
         for avatar in self.listed("AVATARS"):
