@@ -124,7 +124,14 @@ class VaultUiTest(unittest.TestCase):
 
     def wait_state(self, expected: str, attribute: str = "state", timeout: float = 60) -> None:
         ok = harness.wait_until(lambda: self.state(attribute) == expected, timeout=timeout)
-        self.assertTrue(ok, f"{attribute} is {self.state(attribute)!r}, expected {expected!r}; status: {self.status_text()}")
+        if not ok:
+            errors = self.m.execute(
+                "return ['protection-error','recovery-error'].map(id=>document.getElementById(id)?.textContent ?? '');"
+            )
+            self.fail(
+                f"{attribute} is {self.state(attribute)!r}, expected {expected!r}; "
+                f"status: {self.status_text()}; inline errors: {errors}"
+            )
 
     def status_text(self) -> str:
         return self.m.execute("return document.getElementById('status')?.textContent ?? '';")

@@ -443,3 +443,89 @@ class HorizonGroupsTest(unittest.TestCase):
                         lambda: self.m.chrome("return !document.getElementById('customizationui-widget-panel');"), 5
                     )
                 )
+
+    def test_11_native_urlbar_group_actions_keep_text_and_icon_contrast(self):
+        from contrast import ratio
+
+        original = self.m.chrome("""
+          return {had:Services.prefs.prefHasUserValue('browser.nova.enabled'),
+            value:Services.prefs.getBoolPref('browser.nova.enabled',false)};
+        """)
+        results = []
+        self.m.chrome("""
+          nvGroups[0].collapsed=true;
+          window.nvUrlbarTestTab=gBrowser.addTrustedTab('about:robots');
+          gBrowser.selectedTab=nvUrlbarTestTab;
+        """)
+        self.assertTrue(
+            harness.wait_until(
+                lambda: self.m.chrome("""
+          return nvUrlbarTestTab.linkedBrowser.currentURI.spec==='about:robots'
+            && !nvUrlbarTestTab.linkedBrowser.webProgress.isLoadingDocument;
+        """),
+                10,
+            )
+        )
+        try:
+            for nova in (False, True):
+                self.pref("browser.nova.enabled", nova)
+                for dark in (0, 1):
+                    self.pref("ui.systemUsesDarkTheme", dark)
+                    for color in ALLOWED + LEGACY:
+                        result = chrome_async(
+                            self.m,
+                            """
+                          gURLBar.view.close();
+                          nvGroups[0].color=args[0]; nvGroups[0].label='Research '+args[0];
+                          gURLBar.focus(); gURLBar.search(nvGroups[0].label);
+                          for(let i=0;i<100;i++) {
+                            const button=document.querySelector('.urlbarView-action-btn[data-action^="tabgroup-"]');
+                            if(button && button.style.getPropertyValue('--tab-group-color')
+                              .includes('--tab-group-'+args[0]+')')) return true;
+                            await new Promise(resolve=>setTimeout(resolve,50));
+                          }
+                          throw new Error('native group action did not resolve the current colour: '+JSON.stringify(
+                            [...document.querySelectorAll('.urlbarView-row')].map(row=>({text:row.textContent,
+                              buttons:[...row.querySelectorAll('.urlbarView-action-btn')].map(button=>({
+                                action:button.dataset.action,color:button.style.getPropertyValue('--tab-group-color')}))}))));
+                        """,
+                            [color],
+                        )
+                        self.assertEqual(result, {"ok": True})
+                        for state in ("normal", "hover", "active"):
+                            current = self.m.chrome(
+                                """
+                              const button=document.querySelector('.urlbarView-action-btn[data-action^="tabgroup-"]');
+                              for(const name of [':hover',':active']) InspectorUtils.removePseudoClassLock(button,name);
+                              if(arguments[0]!=='normal') InspectorUtils.addPseudoClassLock(button,':hover');
+                              if(arguments[0]==='active') InspectorUtils.addPseudoClassLock(button,':active');
+                              const label=button.querySelector('.urlbarView-action-btn-label'),icon=button.querySelector('img');
+                              const s=getComputedStyle(button),r=button.getBoundingClientRect();
+                              return {text:label.textContent,fg:getComputedStyle(label).color,bg:s.backgroundColor,
+                                icon:getComputedStyle(icon).fill,opacity:s.opacity,w:r.width,h:r.height};
+                            """,
+                                [state],
+                            )
+                            results.append({"nova": nova, "dark": dark, "color": color, "state": state, **current})
+                            if color == "blue" and state == "normal":
+                                self.capture(f"urlbar-{'nova' if nova else 'proton'}-{'dark' if dark else 'light'}")
+                            self.assertIn("Research", current["text"])
+                            self.assertGreater(current["w"], 0)
+                            self.assertGreater(current["h"], 0)
+                            self.assertEqual(current["opacity"], "1", current)
+                            self.assertGreaterEqual(ratio(rgb(current["fg"]), rgb(current["bg"])), 4.5, current)
+                            self.assertGreaterEqual(ratio(rgb(current["icon"]), rgb(current["bg"])), 3, current)
+                        self.m.chrome("""
+                          const button=document.querySelector('.urlbarView-action-btn[data-action^="tabgroup-"]');
+                          for(const name of [':hover',':active']) InspectorUtils.removePseudoClassLock(button,name);
+                        """)
+        finally:
+            self.m.chrome("""
+              gURLBar.view.close();gURLBar.blur();
+              gBrowser.removeTab(nvUrlbarTestTab);delete window.nvUrlbarTestTab;
+            """)
+            if original["had"]:
+                self.pref("browser.nova.enabled", original["value"])
+            else:
+                self.m.chrome("Services.prefs.clearUserPref('browser.nova.enabled');")
+            (self.capture_dir() / "urlbar-action-contrast.json").write_text(json.dumps(results, indent=2) + "\n")

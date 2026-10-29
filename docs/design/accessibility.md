@@ -4,7 +4,7 @@ Target: WCAG 2.2 AA in both themes, at 100–150 % scaling, with keyboard and sc
 
 | Requirement | How | Evidence |
 |---|---|---|
-| Text contrast ≥ 4.5:1 | Token pairs | `scripts/brand/contrast.py`: 220/220 (original 208 preserved) |
+| Text contrast ≥ 4.5:1 | Token pairs | `scripts/brand/contrast.py`: 256/256 (original 220 preserved) |
 | Text contrast on the real window | Rendered colours of the selected/background tab labels, address text | `test_horizon` 02 (light), 03 (dark) |
 | Non-text contrast ≥ 3:1 (WCAG 1.4.11) | Field boundary `border.control`; focus ring; selected-tab mark (surface tones alone are below 3:1) | `test_horizon` 02, 03 |
 | Focus visible (2.4.7, 2.4.11) | Mint 2 px ring; address bar focus border = focus token | `test_horizon` 08 |
@@ -118,4 +118,17 @@ restore all nine choices and the native default-colour behavior. Forced-colour
 rules use the same guard; real GTK forced colours remain pending. Main-window
 captures exclude native popup widgets, so editor input/accessible-state evidence
 is recorded separately in the [verification inventory](screenshots/ux3b/verification.json).
-No existing contrast or pixel-comparison threshold is reduced.
+No existing contrast or pixel-comparison threshold is reduced. The parent's
+[real-build report](screenshots/ux3b/release-verification.json) adds actual
+native popup pixels from four fresh profiles on an isolated Xvfb screen;
+physical desktop/screen-reader checks remain pending.
+
+The UX3B parent review reproduced a 1:1 text/icon contrast regression in the
+Proton address-bar group action: group ink had replaced both its foreground
+and background roles. The correction keeps native ink, inverse, pale and text
+roles distinct. The native hover surface stays opaque and adds an underline;
+focus/pressed outlines remain native. `test_horizon_groups` 11 measures all nine
+colours, light/dark, Proton/Nova, normal/hover/active: 108 real action states,
+text at least 4.5:1 and icons at least 3:1. Its original 1:1 failure is retained
+in the parent's release evidence. The 36 new token declarations preserve all
+220 previously expanded checks without changing their thresholds.

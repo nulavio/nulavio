@@ -10,7 +10,7 @@ Status per component of the browser window and Nulavio's own pages. "Upstream" m
 | Sound / muted tab | `.tab-audio-button`, `[soundplaying]`, `[muted]` | Upstream icons, Horizon colours | — |
 | Loading tab | `.tab-throbber`, `[busy]` | Throbber in accent | Nulavio loading motion with the symbol's dots (M6, reduced-motion aware) |
 | Crashed tab | `[crashed]` | Upstream | Review copy and icon (M6) |
-| Tab groups | `tab-group`, `.tab-group-line` | Upstream colours; the mark sits above the group line | Group palette aligned with tokens (M2) |
+| Tab groups | Native `tab-group`, editor, list and address-bar actions | UX3B: neutral names, token swatches/thin lines, native semantics; new reserved colours filtered, current legacy value preserved | Physical KDE/Orca checks; see [release evidence](screenshots/ux3b/release-verification.json) |
 | Containers | `.tab-context-line`, usercontext | Upstream | — |
 | Vertical tabs | `sidebar.verticalTabs`, `#tabbrowser-tabs[orient="vertical"]` | **Horizon**; vertical mark | Layout choice in onboarding (M6) |
 | Tab search | List all tabs (`alltabs-button`) | Upstream | Keep; promote in onboarding tips |

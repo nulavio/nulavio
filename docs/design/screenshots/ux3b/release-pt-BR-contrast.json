@@ -1,0 +1,128 @@
+[
+  {
+    "dark": 0,
+    "color": "blue",
+    "swatch": "rgb(47, 95, 174)",
+    "text": "rgb(11, 22, 35)",
+    "bg": "rgb(226, 235, 238)"
+  },
+  {
+    "dark": 0,
+    "color": "cyan",
+    "swatch": "rgb(0, 95, 128)",
+    "text": "rgb(11, 22, 35)",
+    "bg": "rgb(226, 235, 238)"
+  },
+  {
+    "dark": 0,
+    "color": "yellow",
+    "swatch": "rgb(94, 90, 14)",
+    "text": "rgb(11, 22, 35)",
+    "bg": "rgb(226, 235, 238)"
+  },
+  {
+    "dark": 0,
+    "color": "pink",
+    "swatch": "rgb(142, 47, 112)",
+    "text": "rgb(11, 22, 35)",
+    "bg": "rgb(226, 235, 238)"
+  },
+  {
+    "dark": 0,
+    "color": "green",
+    "swatch": "rgb(51, 107, 48)",
+    "text": "rgb(11, 22, 35)",
+    "bg": "rgb(226, 235, 238)"
+  },
+  {
+    "dark": 0,
+    "color": "gray",
+    "swatch": "rgb(78, 90, 97)",
+    "text": "rgb(11, 22, 35)",
+    "bg": "rgb(226, 235, 238)"
+  },
+  {
+    "dark": 0,
+    "color": "orange",
+    "swatch": "rgb(107, 78, 62)",
+    "text": "rgb(11, 22, 35)",
+    "bg": "rgb(226, 235, 238)"
+  },
+  {
+    "dark": 0,
+    "color": "purple",
+    "swatch": "rgb(71, 79, 107)",
+    "text": "rgb(11, 22, 35)",
+    "bg": "rgb(226, 235, 238)"
+  },
+  {
+    "dark": 0,
+    "color": "red",
+    "swatch": "rgb(110, 68, 64)",
+    "text": "rgb(11, 22, 35)",
+    "bg": "rgb(226, 235, 238)"
+  },
+  {
+    "dark": 1,
+    "color": "blue",
+    "swatch": "rgb(134, 165, 236)",
+    "text": "rgb(241, 247, 245)",
+    "bg": "rgb(7, 15, 24)"
+  },
+  {
+    "dark": 1,
+    "color": "cyan",
+    "swatch": "rgb(93, 178, 211)",
+    "text": "rgb(241, 247, 245)",
+    "bg": "rgb(7, 15, 24)"
+  },
+  {
+    "dark": 1,
+    "color": "yellow",
+    "swatch": "rgb(189, 180, 90)",
+    "text": "rgb(241, 247, 245)",
+    "bg": "rgb(7, 15, 24)"
+  },
+  {
+    "dark": 1,
+    "color": "pink",
+    "swatch": "rgb(222, 140, 198)",
+    "text": "rgb(241, 247, 245)",
+    "bg": "rgb(7, 15, 24)"
+  },
+  {
+    "dark": 1,
+    "color": "green",
+    "swatch": "rgb(127, 187, 134)",
+    "text": "rgb(241, 247, 245)",
+    "bg": "rgb(7, 15, 24)"
+  },
+  {
+    "dark": 1,
+    "color": "gray",
+    "swatch": "rgb(165, 175, 180)",
+    "text": "rgb(241, 247, 245)",
+    "bg": "rgb(7, 15, 24)"
+  },
+  {
+    "dark": 1,
+    "color": "orange",
+    "swatch": "rgb(176, 149, 132)",
+    "text": "rgb(241, 247, 245)",
+    "bg": "rgb(7, 15, 24)"
+  },
+  {
+    "dark": 1,
+    "color": "purple",
+    "swatch": "rgb(160, 167, 194)",
+    "text": "rgb(241, 247, 245)",
+    "bg": "rgb(7, 15, 24)"
+  },
+  {
+    "dark": 1,
+    "color": "red",
+    "swatch": "rgb(185, 142, 137)",
+    "text": "rgb(241, 247, 245)",
+    "bg": "rgb(7, 15, 24)"
+  }
+]

@@ -1,0 +1,262 @@
+{
+  "method": "private rootless container Xvfb framebuffer; no host desktop",
+  "browser_omni_sha256": "f3825251f8049908c2a4bc2dba0d92ef37f0b96b8e4993579800a03c6919f21e",
+  "observations": [
+    {
+      "name": "light-allowed",
+      "version": "159.0",
+      "buildID": "20261029093447",
+      "locale": "pt-BR",
+      "color": "blue",
+      "panelState": "open",
+      "swatches": [
+        {
+          "color": "blue",
+          "checked": true,
+          "text": "Azul",
+          "visible": true
+        },
+        {
+          "color": "purple",
+          "checked": false,
+          "text": "Roxo",
+          "visible": false
+        },
+        {
+          "color": "cyan",
+          "checked": false,
+          "text": "Ciano",
+          "visible": true
+        },
+        {
+          "color": "orange",
+          "checked": false,
+          "text": "Laranja",
+          "visible": false
+        },
+        {
+          "color": "yellow",
+          "checked": false,
+          "text": "Amarelo",
+          "visible": true
+        },
+        {
+          "color": "pink",
+          "checked": false,
+          "text": "Rosa",
+          "visible": true
+        },
+        {
+          "color": "green",
+          "checked": false,
+          "text": "Verde",
+          "visible": true
+        },
+        {
+          "color": "gray",
+          "checked": false,
+          "text": "Cinza",
+          "visible": true
+        },
+        {
+          "color": "red",
+          "checked": false,
+          "text": "Vermelho",
+          "visible": false
+        }
+      ]
+    },
+    {
+      "name": "light-legacy",
+      "version": "159.0",
+      "buildID": "20261029093447",
+      "locale": "pt-BR",
+      "color": "red",
+      "panelState": "open",
+      "swatches": [
+        {
+          "color": "blue",
+          "checked": false,
+          "text": "Azul",
+          "visible": true
+        },
+        {
+          "color": "purple",
+          "checked": false,
+          "text": "Roxo",
+          "visible": false
+        },
+        {
+          "color": "cyan",
+          "checked": false,
+          "text": "Ciano",
+          "visible": true
+        },
+        {
+          "color": "orange",
+          "checked": false,
+          "text": "Laranja",
+          "visible": false
+        },
+        {
+          "color": "yellow",
+          "checked": false,
+          "text": "Amarelo",
+          "visible": true
+        },
+        {
+          "color": "pink",
+          "checked": false,
+          "text": "Rosa",
+          "visible": true
+        },
+        {
+          "color": "green",
+          "checked": false,
+          "text": "Verde",
+          "visible": true
+        },
+        {
+          "color": "gray",
+          "checked": false,
+          "text": "Cinza",
+          "visible": true
+        },
+        {
+          "color": "red",
+          "checked": true,
+          "text": "Vermelho",
+          "visible": true
+        }
+      ]
+    },
+    {
+      "name": "dark-allowed",
+      "version": "159.0",
+      "buildID": "20261029093447",
+      "locale": "pt-BR",
+      "color": "blue",
+      "panelState": "open",
+      "swatches": [
+        {
+          "color": "blue",
+          "checked": true,
+          "text": "Azul",
+          "visible": true
+        },
+        {
+          "color": "purple",
+          "checked": false,
+          "text": "Roxo",
+          "visible": false
+        },
+        {
+          "color": "cyan",
+          "checked": false,
+          "text": "Ciano",
+          "visible": true
+        },
+        {
+          "color": "orange",
+          "checked": false,
+          "text": "Laranja",
+          "visible": false
+        },
+        {
+          "color": "yellow",
+          "checked": false,
+          "text": "Amarelo",
+          "visible": true
+        },
+        {
+          "color": "pink",
+          "checked": false,
+          "text": "Rosa",
+          "visible": true
+        },
+        {
+          "color": "green",
+          "checked": false,
+          "text": "Verde",
+          "visible": true
+        },
+        {
+          "color": "gray",
+          "checked": false,
+          "text": "Cinza",
+          "visible": true
+        },
+        {
+          "color": "red",
+          "checked": false,
+          "text": "Vermelho",
+          "visible": false
+        }
+      ]
+    },
+    {
+      "name": "dark-legacy",
+      "version": "159.0",
+      "buildID": "20261029093447",
+      "locale": "pt-BR",
+      "color": "red",
+      "panelState": "open",
+      "swatches": [
+        {
+          "color": "blue",
+          "checked": false,
+          "text": "Azul",
+          "visible": true
+        },
+        {
+          "color": "purple",
+          "checked": false,
+          "text": "Roxo",
+          "visible": false
+        },
+        {
+          "color": "cyan",
+          "checked": false,
+          "text": "Ciano",
+          "visible": true
+        },
+        {
+          "color": "orange",
+          "checked": false,
+          "text": "Laranja",
+          "visible": false
+        },
+        {
+          "color": "yellow",
+          "checked": false,
+          "text": "Amarelo",
+          "visible": true
+        },
+        {
+          "color": "pink",
+          "checked": false,
+          "text": "Rosa",
+          "visible": true
+        },
+        {
+          "color": "green",
+          "checked": false,
+          "text": "Verde",
+          "visible": true
+        },
+        {
+          "color": "gray",
+          "checked": false,
+          "text": "Cinza",
+          "visible": true
+        },
+        {
+          "color": "red",
+          "checked": true,
+          "text": "Vermelho",
+          "visible": true
+        }
+      ]
+    }
+  ]
+}

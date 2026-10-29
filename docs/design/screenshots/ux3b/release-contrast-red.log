@@ -1,0 +1,15 @@
+test_11_native_urlbar_group_actions_keep_text_and_icon_contrast (test_horizon_groups.HorizonGroupsTest.test_11_native_urlbar_group_actions_keep_text_and_icon_contrast) ... FAIL
+
+======================================================================
+FAIL: test_11_native_urlbar_group_actions_keep_text_and_icon_contrast (test_horizon_groups.HorizonGroupsTest.test_11_native_urlbar_group_actions_keep_text_and_icon_contrast)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/caiobarbieri/.t3/scratch/2026-10-24-voc-o-tech-lead-principal-c5c1b438/tests/integration/test_horizon_groups.py", line 511, in test_11_native_urlbar_group_actions_keep_text_and_icon_contrast
+    self.assertGreaterEqual(ratio(rgb(current["fg"]), rgb(current["bg"])), 4.5, current)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 1.0 not greater than or equal to 4.5 : {'text': 'Mudar para Research blue', 'fg': 'rgb(47, 95, 174)', 'bg': 'rgb(47, 95, 174)', 'icon': 'rgb(47, 95, 174)', 'opacity': '1', 'w': 194.13333129882812, 'h': 28.800003051757812}
+
+----------------------------------------------------------------------
+Ran 1 test in 4.507s
+
+FAILED (failures=1)

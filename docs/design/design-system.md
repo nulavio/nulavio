@@ -404,8 +404,10 @@ existing group button as neutral name + small colour swatch + thin native group
 line, in horizontal and vertical tabs, with expanded/collapsed group semantics
 kept by Gecko. The active tab retains its separate mint route mark. All nine
 native colour families map to the already generated `group.*` tokens, including
-the low-chroma legacy orange, purple and red values. Tokens, colour names and
-Fluent resources are unchanged. The native group list uses the same variables.
+the low-chroma legacy orange, purple and red values. Ink, inverse surfaces,
+pale/text and hover roles remain distinct for native action consumers. Token
+values, colour names and Fluent resources are unchanged. The native group list
+uses the same ink variables.
 
 D-UX16 filters both the unavailable native radio **and** its adjacent label.
 Hiding only the label was reproduced as an invisible keyboard destination.
@@ -444,3 +446,40 @@ live Safe Browsing phishing blocking, per the supplied
 `network-engine-verification.json`. These are parent release results, distinct
 from UX3B's new local checks and from distribution-Firefox CI. The committed
 UX3A `release-verification.json` and its original hashes/history are preserved.
+
+The organisation idea drawn from Zen solves the user's need to keep related
+pages together without turning every group into a separate profile. Nulavio
+adapts it through Gecko's existing groups, with neutral names, thin colour lines
+and a separate trusted profile band. Group colour never claims profile
+isolation or a security state. No reference-browser code, assets, labels or
+distinctive layout were reused.
+
+### UX3B parent contrast correction
+
+The independent automated review found one introduced P2: the Proton
+address-bar action for switching to a named group had identical foreground and
+background colours (1:1). A real native-action regression reproduces that
+failure before the correction. Native colour families now retain distinct text
+and surface roles, including Nova and drag-feedback consumers. Hover uses an
+opaque 92% group-ink / 8% canvas mix plus underline; native focus and pressed
+outlines are preserved. All nine colour families are measured in 108 native
+action states (two themes × two native UIs × three interaction states).
+The contrast declaration set grows from 220 to 256 expanded combinations,
+retaining every previous declaration and threshold. No engine patch, behaviour
+JavaScript, security assertion or stored group data changes in this correction.
+The original child verification above remains an immutable pre-correction
+record. The [parent real-build report](screenshots/ux3b/release-verification.json)
+records 94 matching source entries, 218 integration tests (13 skips), the English
+11-test group suite, 15 engine opt-in checks, 256 contrast combinations and
+actual native editor pixels in both themes. Four fresh registered profiles ran
+inside an isolated Xvfb container; the six-colour picker and named current
+legacy colour are visibly captured. These virtual-screen pixels do not certify
+a physical KDE/GTK desktop or Orca.
+
+The first parent full-suite attempt had one Vault creation timeout and three
+cascading errors. The isolated create and all nine Vault tests passed on the
+same package, followed by one green full-suite repeat. Cause remains UNKNOWN;
+only the failed-wait diagnostic now includes inline error text. No production
+Vault code, time limit or state assertion changed. Both the failed run and the
+successful repeat remain hashed evidence. Publication/CI are post-commit gates,
+separate from this local verification snapshot.

@@ -102,37 +102,73 @@
       --urlbarview-text-color-hover: var(--nv-color-text-primary);
     }
 
-    /* UX3B: native groups retain their names, data, label button and navigation.
-     * Revalue every native family, including legacy colours and the native list.
-     * Both variants use the same line/swatch ink; labels are neutral, never fills. */
+    /* UX3B: keep native colour roles distinct. Lines/swatches use group ink;
+     * inverse surfaces and action text must contrast with it in both native UIs. */
     :root:not([lwtheme]) {
+      --tab-group-label-text-dark: var(--nv-color-bg-canvas);
       --tab-group-blue: var(--nv-color-group-blue);
-      --tab-group-blue-invert: var(--nv-color-group-blue);
-      --tab-group-blue-pale: var(--nv-color-group-blue);
+      --tab-group-blue-invert: light-dark(var(--nv-color-bg-canvas), var(--nv-color-group-blue));
+      --tab-group-blue-pale: var(--nv-color-bg-canvas);
+      --tab-group-blue-text: var(--nv-color-bg-canvas);
+      --tab-group-blue-text-invert: light-dark(var(--nv-color-group-blue), var(--nv-color-bg-canvas));
+      --tab-group-blue-hover: color-mix(in srgb, var(--nv-color-group-blue) 92%, var(--nv-color-bg-canvas));
       --tab-group-purple: var(--nv-color-group-purple);
-      --tab-group-purple-invert: var(--nv-color-group-purple);
-      --tab-group-purple-pale: var(--nv-color-group-purple);
+      --tab-group-purple-invert: light-dark(var(--nv-color-bg-canvas), var(--nv-color-group-purple));
+      --tab-group-purple-pale: var(--nv-color-bg-canvas);
+      --tab-group-purple-text: var(--nv-color-bg-canvas);
+      --tab-group-purple-text-invert: light-dark(var(--nv-color-group-purple), var(--nv-color-bg-canvas));
+      --tab-group-purple-hover: color-mix(in srgb, var(--nv-color-group-purple) 92%, var(--nv-color-bg-canvas));
       --tab-group-cyan: var(--nv-color-group-cyan);
-      --tab-group-cyan-invert: var(--nv-color-group-cyan);
-      --tab-group-cyan-pale: var(--nv-color-group-cyan);
+      --tab-group-cyan-invert: light-dark(var(--nv-color-bg-canvas), var(--nv-color-group-cyan));
+      --tab-group-cyan-pale: var(--nv-color-bg-canvas);
+      --tab-group-cyan-text: var(--nv-color-bg-canvas);
+      --tab-group-cyan-text-invert: light-dark(var(--nv-color-group-cyan), var(--nv-color-bg-canvas));
+      --tab-group-cyan-hover: color-mix(in srgb, var(--nv-color-group-cyan) 92%, var(--nv-color-bg-canvas));
       --tab-group-orange: var(--nv-color-group-orange);
-      --tab-group-orange-invert: var(--nv-color-group-orange);
-      --tab-group-orange-pale: var(--nv-color-group-orange);
+      --tab-group-orange-invert: light-dark(var(--nv-color-bg-canvas), var(--nv-color-group-orange));
+      --tab-group-orange-pale: var(--nv-color-bg-canvas);
+      --tab-group-orange-text: var(--nv-color-bg-canvas);
+      --tab-group-orange-text-invert: light-dark(var(--nv-color-group-orange), var(--nv-color-bg-canvas));
+      --tab-group-orange-hover: color-mix(in srgb, var(--nv-color-group-orange) 92%, var(--nv-color-bg-canvas));
       --tab-group-yellow: var(--nv-color-group-yellow);
-      --tab-group-yellow-invert: var(--nv-color-group-yellow);
-      --tab-group-yellow-pale: var(--nv-color-group-yellow);
+      --tab-group-yellow-invert: light-dark(var(--nv-color-bg-canvas), var(--nv-color-group-yellow));
+      --tab-group-yellow-pale: var(--nv-color-bg-canvas);
+      --tab-group-yellow-text: var(--nv-color-bg-canvas);
+      --tab-group-yellow-text-invert: light-dark(var(--nv-color-group-yellow), var(--nv-color-bg-canvas));
+      --tab-group-yellow-hover: color-mix(in srgb, var(--nv-color-group-yellow) 92%, var(--nv-color-bg-canvas));
       --tab-group-pink: var(--nv-color-group-pink);
-      --tab-group-pink-invert: var(--nv-color-group-pink);
-      --tab-group-pink-pale: var(--nv-color-group-pink);
+      --tab-group-pink-invert: light-dark(var(--nv-color-bg-canvas), var(--nv-color-group-pink));
+      --tab-group-pink-pale: var(--nv-color-bg-canvas);
+      --tab-group-pink-text: var(--nv-color-bg-canvas);
+      --tab-group-pink-text-invert: light-dark(var(--nv-color-group-pink), var(--nv-color-bg-canvas));
+      --tab-group-pink-hover: color-mix(in srgb, var(--nv-color-group-pink) 92%, var(--nv-color-bg-canvas));
       --tab-group-green: var(--nv-color-group-green);
-      --tab-group-green-invert: var(--nv-color-group-green);
-      --tab-group-green-pale: var(--nv-color-group-green);
+      --tab-group-green-invert: light-dark(var(--nv-color-bg-canvas), var(--nv-color-group-green));
+      --tab-group-green-pale: var(--nv-color-bg-canvas);
+      --tab-group-green-text: var(--nv-color-bg-canvas);
+      --tab-group-green-text-invert: light-dark(var(--nv-color-group-green), var(--nv-color-bg-canvas));
+      --tab-group-green-hover: color-mix(in srgb, var(--nv-color-group-green) 92%, var(--nv-color-bg-canvas));
       --tab-group-gray: var(--nv-color-group-gray);
-      --tab-group-gray-invert: var(--nv-color-group-gray);
-      --tab-group-gray-pale: var(--nv-color-group-gray);
+      --tab-group-gray-invert: light-dark(var(--nv-color-bg-canvas), var(--nv-color-group-gray));
+      --tab-group-gray-pale: var(--nv-color-bg-canvas);
+      --tab-group-gray-text: var(--nv-color-bg-canvas);
+      --tab-group-gray-text-invert: light-dark(var(--nv-color-group-gray), var(--nv-color-bg-canvas));
+      --tab-group-gray-hover: color-mix(in srgb, var(--nv-color-group-gray) 92%, var(--nv-color-bg-canvas));
       --tab-group-red: var(--nv-color-group-red);
-      --tab-group-red-invert: var(--nv-color-group-red);
-      --tab-group-red-pale: var(--nv-color-group-red);
+      --tab-group-red-invert: light-dark(var(--nv-color-bg-canvas), var(--nv-color-group-red));
+      --tab-group-red-pale: var(--nv-color-bg-canvas);
+      --tab-group-red-text: var(--nv-color-bg-canvas);
+      --tab-group-red-text-invert: light-dark(var(--nv-color-group-red), var(--nv-color-bg-canvas));
+      --tab-group-red-hover: color-mix(in srgb, var(--nv-color-group-red) 92%, var(--nv-color-bg-canvas));
+    }
+
+    /* Proton's translucent hover loses AA contrast with the Farol group ink.
+     * Keep the surface opaque and add a non-colour hover cue. Native focus and
+     * pressed outlines remain untouched. Both native UIs use tonal hover. */
+    :root:not([lwtheme]) .urlbarView-action-btn[data-action^="tabgroup-"]:hover {
+      opacity: 1;
+      background-color: var(--tab-group-background-color-hover);
+      text-decoration: underline;
     }
 
     :root:not([lwtheme]) #tabbrowser-tabs tab-group {

@@ -1,0 +1,350 @@
+{
+  "date_utc": "2026-10-29T10:06:50.147365+00:00",
+  "implementation_commit": "dda7d0d121687e312244c2fffe41d1240a229a35",
+  "correction_snapshot": "working tree on implementation commit; exact production and test hashes below",
+  "package_kind": "real incremental Track B build, never dev_sync; isolated exact copies used for English/network/Xvfb probes",
+  "engine_version": "159.0",
+  "package_build_id": "20261029093450",
+  "runtime_build_ids": [
+    "20261029093447"
+  ],
+  "gecko_source_stamp": "5add844c26613d7e4d84c799d6e23cf987b1240d",
+  "tarball_sha256": "64f7a062ec8ab452d9bf8a9e7512e3967da48a1794d831c2011148a9c6297db2",
+  "install": "/home/caiobarbieri/.cache/nulavio-ux/ux3b-reviewed-fhdwn521/nulavio",
+  "application_binary_sha256": "f2e81bc179a9a33996312b73d144078d4369a87b3ae0e547438f2cf010a9c73e",
+  "browser_omni_sha256": "f3825251f8049908c2a4bc2dba0d92ef37f0b96b8e4993579800a03c6919f21e",
+  "matched_source_entries": 94,
+  "source_entry_mismatches": [],
+  "package_manifest": "/home/caiobarbieri/.cache/nulavio-ux/ux3b-reviewed-fhdwn521/package.json",
+  "package_manifest_sha256": "8e65232f551e2532525dc13013c1d65ec2d8b4dd01a56b380a634867f258794c",
+  "production_files_unchanged_after_build": 102,
+  "production_snapshot": {
+    "file": "/home/caiobarbieri/.cache/nulavio-ux/ux3b-reviewed-fhdwn521/production-source-hashes.json",
+    "sha256": "a33cb92e5b91f39ef433c4ace624f031dbbd5d4e22b0f885d32866400a28fce7"
+  },
+  "correction_source_hashes": [
+    {
+      "file": "browser/branding/nulavio/content/theme/horizon.css",
+      "sha256": "18ba76ecd6a773845aa6f063c32bfe0a6ea6a2967353b978a7fb0eed39aac15c"
+    },
+    {
+      "file": "browser/shell/modules/NulavioWindow.sys.mjs",
+      "sha256": "b71f06ed4aca5a404220dc4bbe3b13ec8e60385a0802194d364d506d9dd051b3"
+    },
+    {
+      "file": "docs/brand/tokens.json",
+      "sha256": "9347ea40995600a18e803cbae7514a8c07499b3ebab3b9a42ab9a5b8dbf22bc1"
+    },
+    {
+      "file": "tests/integration/test_horizon_groups.py",
+      "sha256": "b9a7bd39156f5d34355942515cc9134364b149d75a900f318297de3e52ae93ac"
+    },
+    {
+      "file": "tests/integration/test_vault_ui.py",
+      "sha256": "5af2339c5ae41d9c58409a4b8022e1758b9d8e02061aad52688755a79ac60e79"
+    },
+    {
+      "file": "tests/unit/test_horizon_theme.py",
+      "sha256": "d378670b4f5b1b2e4f0127f71d451837e6cc2f46d52ca334d3a69f15610a0f99"
+    }
+  ],
+  "checks": [
+    {
+      "command": "env -u LC_ALL python3 -I tests/run.py unit",
+      "status": "PASS",
+      "tests": 600,
+      "seconds": 68.524,
+      "skips": 1,
+      "skip_reasons": [
+        "test_through_the_real_avahi (test_phone_link.PhoneApiTest.test_through_the_real_avahi) ... skipped 'NULAVIO_LAN_TESTS=1 with Avahi running and avahi-publish (announces on the local network)'"
+      ],
+      "log": "/home/caiobarbieri/.cache/nulavio-ux/ux3b-reviewed-fhdwn521/unit.log",
+      "log_sha256": "48c383dc42317137abd39b947267a0d57028fce4845712057ecc9013717c2dc7"
+    },
+    {
+      "command": "env -u LC_ALL NULAVIO_ENGINE=/home/caiobarbieri/.cache/nulavio-ux/ux3b-reviewed-fhdwn521/nulavio/nulavio NULAVIO_TEST_ARTIFACTS=/home/caiobarbieri/.cache/nulavio-ux/ux3b-reviewed-fhdwn521/retry-artifacts python3 -I tests/run.py integration",
+      "status": "PASS",
+      "tests": 218,
+      "seconds": 704.902,
+      "skips": 13,
+      "skip_reasons": [
+        "test_claude_code (test_ai_agents_real.RealAgentsTest.test_claude_code) ... skipped 'opt-in: NULAVIO_AGENT_TESTS=1 and a Gecko engine'",
+        "test_codex_cli (test_ai_agents_real.RealAgentsTest.test_codex_cli) ... skipped 'opt-in: NULAVIO_AGENT_TESTS=1 and a Gecko engine'",
+        "test_01_set_up_creates_keys_behind_the_screen_lock (test_companion_emulator.CompanionOnEmulatorTest.test_01_set_up_creates_keys_behind_the_screen_lock) ... skipped 'NULAVIO_EMULATOR=1, a device on adb, the debug APK, gocryptfs and libsodium'",
+        "test_02_pairing_shows_the_same_digits_on_both_sides (test_companion_emulator.CompanionOnEmulatorTest.test_02_pairing_shows_the_same_digits_on_both_sides) ... skipped 'NULAVIO_EMULATOR=1, a device on adb, the debug APK, gocryptfs and libsodium'",
+        "test_03_unlock_with_the_phone_mounts_the_profile (test_companion_emulator.CompanionOnEmulatorTest.test_03_unlock_with_the_phone_mounts_the_profile) ... skipped 'NULAVIO_EMULATOR=1, a device on adb, the debug APK, gocryptfs and libsodium'",
+        "test_04_an_answered_request_is_refused_again (test_companion_emulator.CompanionOnEmulatorTest.test_04_an_answered_request_is_refused_again) ... skipped 'NULAVIO_EMULATOR=1, a device on adb, the debug APK, gocryptfs and libsodium'",
+        "test_05_not_now_sends_nothing (test_companion_emulator.CompanionOnEmulatorTest.test_05_not_now_sends_nothing) ... skipped 'NULAVIO_EMULATOR=1, a device on adb, the debug APK, gocryptfs and libsodium'",
+        "test_14_safe_browsing_blocks_google_test_phishing_page (test_engine_slice.EngineSliceTest.test_14_safe_browsing_blocks_google_test_phishing_page) ... skipped 'set NULAVIO_NETWORK_TESTS=1 (contacts Google Safe Browsing)'",
+        "test_bitwarden (test_password_extensions.PasswordExtensionSmokeTest.test_bitwarden) ... skipped 'set NULAVIO_NETWORK_TESTS=1 (downloads from addons.mozilla.org)'",
+        "test_keepassxc_browser (test_password_extensions.PasswordExtensionSmokeTest.test_keepassxc_browser) ... skipped 'set NULAVIO_NETWORK_TESTS=1 (downloads from addons.mozilla.org)'",
+        "test_proton_pass (test_password_extensions.PasswordExtensionSmokeTest.test_proton_pass) ... skipped 'set NULAVIO_NETWORK_TESTS=1 (downloads from addons.mozilla.org)'",
+        "test_05_choosing_proton_pass_installs_the_pinned_version_and_switching_back_keeps_it (test_passwords.PasswordsTest.test_05_choosing_proton_pass_installs_the_pinned_version_and_switching_back_keeps_it) ... skipped 'downloads Proton Pass from addons.mozilla.org'",
+        "test_run_temporary_deletes_the_profile_after_the_engine_exits (test_temporary.TemporaryFromTheLauncherTest.test_run_temporary_deletes_the_profile_after_the_engine_exits) ... skipped 'opens a visible window (NULAVIO_TEST_HEADFUL=1)'"
+      ],
+      "log": "/home/caiobarbieri/.cache/nulavio-ux/ux3b-reviewed-fhdwn521/integration-retry.log",
+      "log_sha256": "3af56e8e7391aa3682ea7bdda3fb6336046d0ab541b9e6b60e8bd302121d1f55"
+    },
+    {
+      "command": "env -u LC_ALL NULAVIO_GROUP_LOCALE=en-US NULAVIO_ENGINE=/home/caiobarbieri/.cache/nulavio-ux/ux3b-reviewed-fhdwn521/popup/nulavio/nulavio NULAVIO_TEST_ARTIFACTS=/home/caiobarbieri/.cache/nulavio-ux/ux3b-reviewed-fhdwn521/release-en-artifacts python3 -I tests/run.py integration test_horizon_groups.py",
+      "status": "PASS",
+      "tests": 11,
+      "seconds": 33.352,
+      "skips": 0,
+      "skip_reasons": [],
+      "log": "/home/caiobarbieri/.cache/nulavio-ux/ux3b-reviewed-fhdwn521/release-groups-en.log",
+      "log_sha256": "b581a5f17aadbae57673461fc80b45183c4bcb65f64d887dfbdb9300291b2386"
+    },
+    {
+      "command": "env -u LC_ALL NULAVIO_NETWORK_TESTS=1 NULAVIO_ENGINE=/home/caiobarbieri/.cache/nulavio-ux/ux3b-reviewed-fhdwn521/popup/nulavio/nulavio NULAVIO_TEST_ARTIFACTS=/home/caiobarbieri/.cache/nulavio-ux/ux3b-reviewed-fhdwn521/network-artifacts python3 -I tests/run.py integration test_engine_slice.py",
+      "status": "PASS",
+      "tests": 15,
+      "seconds": 14.589,
+      "skips": 0,
+      "skip_reasons": [],
+      "log": "/home/caiobarbieri/.cache/nulavio-ux/ux3b-reviewed-fhdwn521/network-engine.log",
+      "log_sha256": "c39487d011b6d7e8404a4f7b0ca5314bfb8c55888dc3322f5b6d80ac048452df"
+    }
+  ],
+  "contrast": {
+    "expanded_checks": 256,
+    "status": "PASS",
+    "prior_expanded_checks": 220,
+    "all_prior_declarations_and_thresholds_retained": true,
+    "report": "/home/caiobarbieri/.cache/nulavio-ux/ux3b-reviewed-fhdwn521/contrast.json",
+    "report_sha256": "87f2952e22d44e2243409ecf90f075f7e540ffcf39157c06023e1c0d4496ee59"
+  },
+  "native_group_action_matrices": [
+    {
+      "locale": "pt-BR",
+      "states": 108,
+      "text_minimum": 4.873042350847975,
+      "icon_minimum": 4.873042350847975,
+      "opacity_values": [
+        "1"
+      ],
+      "source": "/home/caiobarbieri/.cache/nulavio-ux/ux3b-reviewed-fhdwn521/retry-artifacts/horizon-groups/pt-BR/urlbar-action-contrast.json",
+      "source_sha256": "0cac2ee4f78044a69a1634546e089457d8b4325b4fb61d0fdc61a254b64cbb51"
+    },
+    {
+      "locale": "en-US",
+      "states": 108,
+      "text_minimum": 4.873042350847975,
+      "icon_minimum": 4.873042350847975,
+      "opacity_values": [
+        "1"
+      ],
+      "source": "/home/caiobarbieri/.cache/nulavio-ux/ux3b-reviewed-fhdwn521/release-en-artifacts/horizon-groups/en-US/urlbar-action-contrast.json",
+      "source_sha256": "78601493d8a2502d35c960711a574c3c4ea6918ce9da1931e6bc1ee3d96c176b"
+    }
+  ],
+  "initial_full_suite": {
+    "status": "FAIL",
+    "tests": 218,
+    "skips": 13,
+    "failures": 1,
+    "cascading_errors": 3,
+    "symptom": "Vault UI create stayed at protection, expected recovery, after 90 seconds; no inline-error diagnostic existed",
+    "root_cause": "UNKNOWN; no production fix inferred from the isolated pass",
+    "log": "/home/caiobarbieri/.cache/nulavio-ux/ux3b-reviewed-fhdwn521/integration.log",
+    "log_sha256": "acb796b1e07f146ab97b54ab654c6e1d9140ad281dfc1cd3da052a07020aa2ba",
+    "isolated_create": {
+      "status": "PASS",
+      "tests": 1,
+      "log": "/home/caiobarbieri/.cache/nulavio-ux/ux3b-reviewed-fhdwn521/vault-diagnostic.log",
+      "log_sha256": "482c4750bc220cd3b24af4399cbdd0948193c38783c9300ce9819db5788d2cfb"
+    },
+    "isolated_vault": {
+      "status": "PASS",
+      "tests": 9,
+      "log": "/home/caiobarbieri/.cache/nulavio-ux/ux3b-reviewed-fhdwn521/vault-isolated.log",
+      "log_sha256": "1384b563304b98a3b6de3a6eb54b329059af5c9dd48065219509c43d775b3689"
+    },
+    "test_change": "failed waits now include inline errors; same deadlines and state assertions",
+    "confidence_limit": "initial timeout retained; one bounded full-suite repeat recorded above, not proof of a root-cause fix"
+  },
+  "review": {
+    "kind": "independent automated review, not human approval",
+    "reviewed_commit": "dda7d0d121687e312244c2fffe41d1240a229a35",
+    "finding": "P2: native Proton group-switch action inherited identical foreground/background (1:1)",
+    "red_regression": "/home/caiobarbieri/.cache/nulavio-ux/ux3b-release-sz4ypri1/urlbar-contrast-red.log",
+    "red_regression_sha256": "e50b12e9d4ddec54dcbbf5a48d73234fb91e914086f8e41c613b494a46d5c3fd",
+    "red_package_manifest": "/home/caiobarbieri/.cache/nulavio-ux/ux3b-release-sz4ypri1/package.json",
+    "red_package_manifest_sha256": "b746d46cea5099d10bb0aa843b1de810ac7bd9ea87ab3997663351f69bee743d",
+    "disposition": "corrected by parent: distinct native surface/text roles and opaque tonal hover; measured in new real build",
+    "new_delegate_review": "not requested for the bounded correction; affected native consumers covered by parent runtime tests"
+  },
+  "other_checks": [
+    {
+      "command": "scripts/security/scan.sh",
+      "status": "PASS",
+      "checks": 6,
+      "log": "/home/caiobarbieri/.cache/nulavio-ux/ux3b-reviewed-fhdwn521/security.log",
+      "log_sha256": "df4c93c9f1015e413e3a29f1a44daa7f4ba7eb36c6406834a038c0fbe7b4cd40"
+    },
+    {
+      "command": "cached requirements/dev.txt venv: ruff check .",
+      "status": "PASS",
+      "log": "/home/caiobarbieri/.cache/nulavio-ux/ux3b-reviewed-fhdwn521/ruff-check.log",
+      "log_sha256": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18"
+    },
+    {
+      "command": "cached requirements/dev.txt venv: ruff format --check .",
+      "status": "PASS",
+      "log": "/home/caiobarbieri/.cache/nulavio-ux/ux3b-reviewed-fhdwn521/ruff-format.log",
+      "log_sha256": "aeae85a8ecdbc277c157e3ede65286f01f95a4982c4c743b024aca01cb46ec09"
+    },
+    {
+      "command": "python3 -I scripts/brand/build_tokens.py --check",
+      "status": "PASS",
+      "outputs": 4
+    },
+    {
+      "command": "scripts/build/build_nulavio.sh 159.0",
+      "status": "PASS",
+      "log": "/home/caiobarbieri/.cache/nulavio-ux/ux3b-reviewed-fhdwn521/build.log",
+      "log_sha256": "fd48218543764973189bdd10b80550b40a88090e689f6c0f8b903c03a352fd27"
+    }
+  ],
+  "published_package_delta": {
+    "file": "/home/caiobarbieri/.cache/nulavio-ux/ux3b-reviewed-fhdwn521/published-package-delta.json",
+    "sha256": "accdd51d93753f242ef2f0af1621892af2f03bb8448a044c6bed47968ed973b3"
+  },
+  "native_popup_pixels": {
+    "method": "private rootless Fedora container, Xvfb framebuffer; four fresh registered disposable profiles",
+    "container_image_id": "529180f886dfe59da1080d00e7bfc4fc9f9ee12f6da5b89edc30155ed7f8e5d2",
+    "locale": "pt-BR",
+    "themes": [
+      "light",
+      "dark"
+    ],
+    "cases": [
+      "six available colours",
+      "selected legacy red still named and checked"
+    ],
+    "source": "/home/caiobarbieri/.cache/nulavio-ux/ux3b-reviewed-fhdwn521/popup/capture.json",
+    "source_sha256": "ec86e080b2fd5da90ce1931d75bc0924c61e72d64ad8166cf4d19d4244065758",
+    "capture_script": "/home/caiobarbieri/.cache/nulavio-ux/ux3b-reviewed-fhdwn521/popup/probe.py",
+    "capture_script_sha256": "a1a837cdd7cb9fd1309ef40e2ab136bcc9aae12e9e534db066bd667294022a7b",
+    "pixel_review": "all four original full-frame captures inspected; native popup visibly present and focused in each"
+  },
+  "publication": {
+    "scope": "pre-publication verification snapshot; publication and exact-SHA job-level CI recorded separately",
+    "final_ci_evidence": "/home/caiobarbieri/.cache/nulavio-ux/ux3b-reviewed-fhdwn521/ci-final.json",
+    "ci_engine_scope": "hosted CI uses distribution Firefox; privileged built-in Track B tests are local"
+  },
+  "limits": [
+    "physical KDE/GTK integration",
+    "Orca announcements",
+    "real forced colours",
+    "hardware scaling",
+    "real frame times",
+    "full redesign still has UX3C, presets, Shell pages, assistant, personalisation and motion slices"
+  ],
+  "artifacts": [
+    {
+      "file": "docs/design/screenshots/ux3b/release-contrast-red.log",
+      "sha256": "e50b12e9d4ddec54dcbbf5a48d73234fb91e914086f8e41c613b494a46d5c3fd"
+    },
+    {
+      "file": "docs/design/screenshots/ux3b/release-dark-horizontal-collapsed.png",
+      "sha256": "b658df04ac90988b8b0ff29d0c1a105a29f58cf8e78f3cf2b10ff57f1ede93b2"
+    },
+    {
+      "file": "docs/design/screenshots/ux3b/release-dark-horizontal-expanded.png",
+      "sha256": "7a8761b08e4d0e351e580bb655962f706362bb1ef5b10980640e29c51771bffa"
+    },
+    {
+      "file": "docs/design/screenshots/ux3b/release-dark-vertical-collapsed.png",
+      "sha256": "eac7c41a6880da8f73109c5fae5ad6a763892dc3285a40a379eced118242f6bc"
+    },
+    {
+      "file": "docs/design/screenshots/ux3b/release-dark-vertical-expanded.png",
+      "sha256": "30c88968b5ff458060334642e3227d1136eb05d5c06b129af5577ee8691bbfa2"
+    },
+    {
+      "file": "docs/design/screenshots/ux3b/release-editor-dark-allowed.png",
+      "sha256": "ec85effe65bc5578b87b0962eae8997b1df5b629dd3399972eed22c2e93763be"
+    },
+    {
+      "file": "docs/design/screenshots/ux3b/release-editor-dark-legacy.png",
+      "sha256": "2859c1ed0d1358f2e32971134c90458cb87866a2825354406941a3171b285f20"
+    },
+    {
+      "file": "docs/design/screenshots/ux3b/release-editor-light-allowed.png",
+      "sha256": "b45d3b1a9f75d30f48e8136e1700a5dd383b6f94f5714389a00861019cf92ff3"
+    },
+    {
+      "file": "docs/design/screenshots/ux3b/release-editor-light-legacy.png",
+      "sha256": "5600d0f9d07c23446e50d072595fac440fe574d3aced8e32291d4af0b2ce27d7"
+    },
+    {
+      "file": "docs/design/screenshots/ux3b/release-editor-observations.json",
+      "sha256": "ec86e080b2fd5da90ce1931d75bc0924c61e72d64ad8166cf4d19d4244065758"
+    },
+    {
+      "file": "docs/design/screenshots/ux3b/release-en-US-contrast.json",
+      "sha256": "22756374e5abbc02a557e7288b54ca1bc633a820081452e636d2cb76f5e045a4"
+    },
+    {
+      "file": "docs/design/screenshots/ux3b/release-en-US-urlbar-action-contrast.json",
+      "sha256": "78601493d8a2502d35c960711a574c3c4ea6918ce9da1931e6bc1ee3d96c176b"
+    },
+    {
+      "file": "docs/design/screenshots/ux3b/release-en-US-urlbar-nova-dark.png",
+      "sha256": "70cc33b7cb81bcf69e7df52b4d27c039a24ec3b0a75e1254b325d4d9658adfa8"
+    },
+    {
+      "file": "docs/design/screenshots/ux3b/release-en-US-urlbar-nova-light.png",
+      "sha256": "211f99d35cf91e8957e9f7e5f8eb96c6c425a1ed853fe5d3a54943eab1bbe60d"
+    },
+    {
+      "file": "docs/design/screenshots/ux3b/release-en-US-urlbar-proton-dark.png",
+      "sha256": "f5886491f4ce6101c3a7ef4e7a5aaa2797f74e915ee03988a70ae7d69de5a0cb"
+    },
+    {
+      "file": "docs/design/screenshots/ux3b/release-en-US-urlbar-proton-light.png",
+      "sha256": "edeab80b2a393d72b6b5c621d0ad83c3cfcaf027d759e2aa2f03292880d49531"
+    },
+    {
+      "file": "docs/design/screenshots/ux3b/release-light-horizontal-collapsed.png",
+      "sha256": "eb473f7216c4126a8c27444ea306584d6f945b51fc3c454ecad624a7024b41e6"
+    },
+    {
+      "file": "docs/design/screenshots/ux3b/release-light-horizontal-expanded.png",
+      "sha256": "1eaf039c87c8f1cd58d7ae5d9c459b195ca83bed8905bd5213637d5f6e236e5c"
+    },
+    {
+      "file": "docs/design/screenshots/ux3b/release-light-vertical-collapsed.png",
+      "sha256": "897c89eb1bb1fec372f2d1e42dece8b8fc01618a914d89965d5c3c55e15fffa7"
+    },
+    {
+      "file": "docs/design/screenshots/ux3b/release-light-vertical-expanded.png",
+      "sha256": "80bd56770ff3b001640196d789f5f5422552c199b9fff308eff10fdacbdf2ad3"
+    },
+    {
+      "file": "docs/design/screenshots/ux3b/release-pt-BR-contrast.json",
+      "sha256": "22756374e5abbc02a557e7288b54ca1bc633a820081452e636d2cb76f5e045a4"
+    },
+    {
+      "file": "docs/design/screenshots/ux3b/release-pt-BR-urlbar-action-contrast.json",
+      "sha256": "0cac2ee4f78044a69a1634546e089457d8b4325b4fb61d0fdc61a254b64cbb51"
+    },
+    {
+      "file": "docs/design/screenshots/ux3b/release-pt-BR-urlbar-nova-dark.png",
+      "sha256": "99640d250ab042428fad1be77d5dd983a4286b0f6821db99f7cfb953d7ec2af7"
+    },
+    {
+      "file": "docs/design/screenshots/ux3b/release-pt-BR-urlbar-nova-light.png",
+      "sha256": "9cddb679f950624a8f7713e44698f680908f5b40d3c4b58c4806e8d2f9a4244c"
+    },
+    {
+      "file": "docs/design/screenshots/ux3b/release-pt-BR-urlbar-proton-dark.png",
+      "sha256": "fbb75792a2e8cc42585dcfe9c4714771d5985b59a05d1de25bb3cb6bbe3b3d8f"
+    },
+    {
+      "file": "docs/design/screenshots/ux3b/release-pt-BR-urlbar-proton-light.png",
+      "sha256": "e38f48188348ac8e7b9dd44cee3b42822dfffd9aae44b257047d4c3c0b8b2519"
+    }
+  ]
+}
