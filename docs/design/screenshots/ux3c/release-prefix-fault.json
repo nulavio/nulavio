@@ -1,0 +1,7 @@
+{
+  "name": "TypeError",
+  "code": null,
+  "message": "can't access property \"execute\", this[#connection] is null",
+  "stack": "#setDBPref@resource:///modules/profiles/SelectableProfileService.sys.mjs:2055:5\nflushSharedPrefToDatabase@resource:///modules/profiles/SelectableProfileService.sys.mjs:1232:26\nflushAllSharedPrefsToDatabase@resource:///modules/profiles/SelectableProfileService.sys.mjs:1195:18\nmaybeSetupDataStore@resource:///modules/profiles/SelectableProfileService.sys.mjs:1625:16\n",
+  "elapsed": 2.4779979999993884
+}

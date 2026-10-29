@@ -16,6 +16,7 @@ import unittest
 from pathlib import Path
 
 import harness
+from marionette import MarionetteError
 from test_horizon import rgb
 from test_horizon_groups import KEY
 from test_profiles import chrome_async
@@ -25,6 +26,8 @@ const b=document.getElementById('downloads-button'), badge=b.querySelector('.too
 const s=getComputedStyle(badge), r=b.getBoundingClientRect();
 const a=Cc['@mozilla.org/accessibilityService;1'].getService(Ci.nsIAccessibilityService).getAccessibleFor(b);
 return {program:b.hasAttribute('nulavio-program'), attention:b.getAttribute('attention'),
+  private:ChromeUtils.importESModule('resource://gre/modules/PrivateBrowsingUtils.sys.mjs')
+    .PrivateBrowsingUtils.isWindowPrivate(window),
   progress:b.hasAttribute('progress'), percent:DownloadsIndicatorView._percentComplete,
   description:document.getElementById('nulavio-downloads-program-description')?.textContent ?? '',
   refs:b.getAttribute('aria-describedby'), name:a?.name, accessibleDescription:a?.description,
@@ -235,22 +238,49 @@ class DownloadsIndicatorTest(unittest.TestCase):
         self.m.chrome("DownloadsPanel.hidePanel();")
         self.expect_program(True)
 
+    def open_private_window(self):
+        target = self.run_js("""
+          // Completion warnings can create unrelated public tabs concurrently.
+          // Include one deliberately: the first new tab is not a window identity.
+          gBrowser.addTrustedTab('about:blank');
+          const win=OpenBrowserWindow({private:true});
+          if(!win.gBrowserInit?.delayedStartupFinished) await new Promise(resolve=>{
+            const observer=(subject,topic)=>{
+              if(subject===win){Services.obs.removeObserver(observer,topic);resolve();}
+            };
+            Services.obs.addObserver(observer,'browser-delayed-startup-finished');
+          });
+          return String(win.browsingContext.id);
+        """)
+
+        def find_target():
+            for handle in self.m.window_handles():
+                try:
+                    self.m.switch_to(handle)
+                    if self.m.chrome("return String(window.browsingContext.id)===arguments[0];", [target]):
+                        return handle
+                except MarionetteError as error:
+                    if "no such window" not in str(error):
+                        raise
+            return None
+
+        handle = harness.wait_until(find_target, 15)
+        self.assertTrue(handle, target)
+        self.m.switch_to(handle)
+        self.m.chrome("DownloadsIndicatorView.ensureInitialized();")
+        self.assertTrue(self.state()["private"])
+        return handle
+
     def test_05_private_and_public_lists_do_not_leak(self):
         public_handle = self.main
-        before = set(self.m.window_handles())
-        self.m.chrome("OpenBrowserWindow({private:true});")
-        private = harness.wait_until(lambda: [h for h in self.m.window_handles() if h not in before], 15)
-        self.assertTrue(private)
-        self.m.switch_to(private[0])
-        self.assertTrue(harness.wait_until(lambda: self.m.chrome("return !!window.DownloadsIndicatorView;"), 15))
-        self.m.chrome("DownloadsIndicatorView.ensureInitialized();")
+        private = self.open_private_window()
         self.add(private=True)
         self.expect_program(True)
         self.m.switch_to(public_handle)
         self.expect_program(False)
         self.add()
         self.expect_program(True)
-        self.m.switch_to(private[0])
+        self.m.switch_to(private)
         self.remove()
         self.expect_program(False)
         # Do not queue another completion-warning tab while closing this scope.
@@ -272,13 +302,7 @@ class DownloadsIndicatorTest(unittest.TestCase):
             )
         )
         self.expect_program(True)
-        before = set(self.m.window_handles())
-        self.m.chrome("OpenBrowserWindow({private:true});")
-        fresh = harness.wait_until(lambda: [h for h in self.m.window_handles() if h not in before], 15)
-        self.assertTrue(fresh)
-        self.m.switch_to(fresh[0])
-        self.assertTrue(harness.wait_until(lambda: self.m.chrome("return !!window.DownloadsIndicatorView;"), 15))
-        self.m.chrome("DownloadsIndicatorView.ensureInitialized();")
+        self.open_private_window()
         self.expect_program(False)
         self.add("private-notes.txt", private=True)
         self.expect_program(False)

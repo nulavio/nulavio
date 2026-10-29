@@ -224,10 +224,17 @@ progress and all original patch-0007 guards remain intact. A detached-view
 regression prevents stale indicator weak-map keys from creating a ghost badge.
 [Implementation and lifecycle](../design/design-system.md#ux3c-native-downloads-type-warning-2026-10-29),
 [actual rebuilt-package evidence and retained failed attempts](../design/screenshots/ux3c/verification.json).
-This slice stops at a local commit; its complete-integration gate is blocked
-by two Vault creation failures (cause UNKNOWN), retained in the inventory.
-Integration/publication/CI belong to the
-parent; presets/onboarding, sidebar curation, Shell/assistant flow redesigns and
+The initial candidate stopped at local commit `550e812b059cdcc2fa68d8892fa0c5fb8a08729b`:
+two full runs failed at Vault creation and remain preserved with their original
+UNKNOWN classification. The parent reproduced a first-store initialization
+race before encryption, added real-Gecko regressions and coordinated profile
+and routing writers with identity reads. [Parent verification](../design/screenshots/ux3c/release-verification.json)
+records the final real build: 99 packaged-source matches, 231 integration
+tests (13 skips), 600 unit tests (1 skip), all nine indicator cases per locale,
+15 engine opt-in tests and 256 contrast combinations passed. The full-run
+fixture version and the later exact-private-window fixture strengthening are
+recorded separately. Publication/CI are post-commit gates.
+Presets/onboarding, sidebar curation, Shell/assistant flow redesigns and
 later UX3 work remain open. No D-UX decision is reopened.
 
 **UX4 — Shell pages**

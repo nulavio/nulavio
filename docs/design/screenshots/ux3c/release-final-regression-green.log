@@ -1,0 +1,9 @@
+test_failed_first_setup_does_not_poison_later_creation (test_profile_initialization.ProfileInitializationTest.test_failed_first_setup_does_not_poison_later_creation) ... ok
+test_first_routing_write_and_profile_creation_share_the_store (test_profile_initialization.ProfileInitializationTest.test_first_routing_write_and_profile_creation_share_the_store) ... ok
+test_identity_read_during_first_routing_write_does_not_reset_the_store (test_profile_initialization.ProfileInitializationTest.test_identity_read_during_first_routing_write_does_not_reset_the_store) ... ok
+test_identity_read_during_first_store_creation_does_not_reset_the_store (test_profile_initialization.ProfileInitializationTest.test_identity_read_during_first_store_creation_does_not_reset_the_store) ... ok
+
+----------------------------------------------------------------------
+Ran 4 tests in 14.865s
+
+OK

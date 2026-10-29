@@ -1,0 +1,20 @@
+test_failed_first_setup_does_not_poison_later_creation (test_profile_initialization.ProfileInitializationTest.test_failed_first_setup_does_not_poison_later_creation) ... ok
+test_identity_read_during_first_routing_write_does_not_reset_the_store (test_profile_initialization.ProfileInitializationTest.test_identity_read_during_first_routing_write_does_not_reset_the_store) ... FAIL
+test_identity_read_during_first_store_creation_does_not_reset_the_store (test_profile_initialization.ProfileInitializationTest.test_identity_read_during_first_store_creation_does_not_reset_the_store) ... ok
+
+======================================================================
+FAIL: test_identity_read_during_first_routing_write_does_not_reset_the_store (test_profile_initialization.ProfileInitializationTest.test_identity_read_during_first_routing_write_does_not_reset_the_store)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/caiobarbieri/.t3/scratch/2026-10-24-voc-o-tech-lead-principal-c5c1b438/tests/integration/test_profile_initialization.py", line 28, in test_identity_read_during_first_routing_write_does_not_reset_the_store
+    self.check_read_during_setup("routing")
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^
+  File "/home/caiobarbieri/.t3/scratch/2026-10-24-voc-o-tech-lead-principal-c5c1b438/tests/integration/test_profile_initialization.py", line 73, in check_read_during_setup
+    self.assertNotIn("error", state["creation"], state)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 'error' unexpectedly found in {'error': 'can\'t access property "execute", this[#connection] is null'} : {'creation': {'error': 'can\'t access property "execute", this[#connection] is null'}, 'readHadCurrent': True, 'initialized': False, 'routingEnabled': False, 'profiles': [{'id': None, 'name': 'FirstStore', 'isCurrent': True}]}
+
+----------------------------------------------------------------------
+Ran 3 tests in 9.879s
+
+FAILED (failures=1)

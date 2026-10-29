@@ -560,6 +560,8 @@ remain pending. Local implementation/testing does not close UX3 or constitute
 publication, remote CI, independent review or human approval.
 
 
+### Initial candidate verification (before parent correction)
+
 The first UX3C full integration attempt ran 227 tests (13 existing skips), with
 one Vault creation failure and three dependent errors. The inline diagnostic
 reported the protection step and “Algo deu errado. Nada foi alterado.” All nine
@@ -576,3 +578,52 @@ integration gate is **BLOCKED**, even though the isolated Vault module and all
 nine UX3C tests in both locales pass. Both failed full logs are committed beside
 the inventory. No additional full-suite retry was used to obtain green, and no
 Vault/protection/pixel assertion, deadline or skip was changed.
+
+
+### Parent correction: first profile-store initialization
+
+The parent captured the original exception in a disposable profile while
+running the test prefix: `SelectableProfileService.#setDBPref` attempted to use
+a null connection, about 2.5 ms into `createProtected`, before encryption.
+The 90 s observation was the UI test's wait for recovery, not a demonstrated
+cryptography timeout. The earlier uninstrumented failures retain their original
+UNKNOWN classification; their identical UI text alone does not establish cause.
+
+A short real-Gecko regression forces the same interleaving: pause
+`initProfilesData` after preparing the first store, then read the identity.
+Normal `init(false)` sees an empty database, resets it and leaves the first
+writer without a connection. This reproduced the same exception without a full
+suite. The Shell now coordinates store preparation for profile mutations,
+manager/current-page entry points and routing preference writes. Earlier normal
+initialization finishes first; new readers await the shared setup. The promise
+is cleared on success and failure. This coordinates Shell callers; it does not
+replace the engine service or claim to repair every native caller.
+
+Regressions use the real service and SQLite database, with controlled scheduling
+at public method boundaries: identity reads during first profile creation,
+identity reads during the first routing write, concurrent routing/profile
+writers and retry after a preparation error. No cryptographic method, profile
+availability gate, timeout, state assertion or existing skip changes.
+The independent review found the Routing caller outside the first version of
+the coordinator; a focused RED/GREEN case confirmed and corrected that gap.
+
+The [parent release verification](screenshots/ux3c/release-verification.json)
+records the final package, source/test hashes, retained diagnostic failures,
+review scope and current test gates separately from the initial candidate
+inventory above. Publication and exact-SHA CI remain post-commit gates.
+
+
+The parent final real-package run passed **231 integration tests (13 skips)**,
+including all four store-initialization regressions and the full Vault UI flow.
+The final downloads fixture additionally identifies the exact newly requested
+private Chrome window by browsing-context ID, rather than the first new tab
+handle: a controlled concurrent public-tab reproduction showed that the latter
+can select a public window. It verifies `private=true` explicitly and retains
+the list/badge assertions. All nine cases passed in both locales after this
+fixture strengthening; the full-run fixture snapshot is retained separately.
+The original English failure had no window-identity trace and remains recorded
+without attributing a production privacy defect. No product source changed for
+this test correction. Final local checks also passed 600 unit tests (1 skip),
+15 opt-in engine tests including live phishing blocking, all six security scans
+and 256 contrast combinations. The release report records their exact source,
+package and harness versions; publication/remote CI remain separate gates.

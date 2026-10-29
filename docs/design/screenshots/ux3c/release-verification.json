@@ -1,0 +1,418 @@
+{
+  "date_utc": "2026-10-29T15:34:12.061979+00:00",
+  "status": "PASS: final real-build local gates; publication and exact-SHA remote CI recorded separately",
+  "implementation_commit": "550e812b059cdcc2fa68d8892fa0c5fb8a08729b",
+  "profile_store_fix_commit": "45a9b560c998708e768ea2f5928d9b4f71f98539",
+  "published_base": "957a1bbe0693cc5ba4950b123686ec5d7201712d",
+  "correction_snapshot": "working-tree source/test hashes below; final publication pins these bytes to its commit",
+  "package_kind": "real incremental Track B rebuild from a task-owned source/object/toolchain copy; never dev_sync",
+  "engine_version": "159.0",
+  "package_build_id": "20261029151023",
+  "runtime": {
+    "version": "159.0",
+    "buildID": "20261029151020",
+    "platformBuildID": "20261028012215",
+    "locale": "pt-BR"
+  },
+  "gecko_source_stamp": "5add844c26613d7e4d84c799d6e23cf987b1240d",
+  "tarball": "/home/caiobarbieri/.cache/nulavio-ux/vault-order-2dyla562/build/firefox-159.0/obj-nulavio/dist/nulavio-159.0.en-US.linux-x86_64.tar.xz",
+  "tarball_sha256": "be05d9ca6f81c85c9a57ce85f05d1dd4567719ff114dd26c2e3c351c2643afec",
+  "install": "/home/caiobarbieri/.cache/nulavio-ux/vault-order-2dyla562/final-release/nulavio",
+  "browser_omni_sha256": "d0b9e4dbf92c66efaa073d15ee1fa14a9b11e411506e8b122e34b451e0330602",
+  "omni_sha256": "7565edcefefec2682213efc8deacaab4d5a9c504451e086d3a8b9fe28807deb5",
+  "application_binary_sha256": "cbfcb23ada3b1c463d2bacf184e86db245d8e1e3677bc1c389bca3d1d79316d4",
+  "matched_source_entries": 99,
+  "source_entry_mismatches": [],
+  "native_source_matches": [
+    {
+      "archive": "browser/omni.ja",
+      "entry": "chrome/browser/content/browser/downloads/downloads.js",
+      "source": "browser/components/downloads/content/downloads.js",
+      "sha256": "faeec8fd7e1e21388861cb2c9a408f54f826700d5280010b6635b2f3a82818a5"
+    },
+    {
+      "archive": "browser/omni.ja",
+      "entry": "chrome/browser/content/browser/downloads/indicator.js",
+      "source": "browser/components/downloads/content/indicator.js",
+      "sha256": "673ec6b599ccf04cd51972a90c51558369cffec2c1d7b77597227aa87aee2104"
+    },
+    {
+      "archive": "browser/omni.ja",
+      "entry": "chrome/browser/skin/classic/browser/downloads/indicator.css",
+      "source": "browser/themes/shared/downloads/indicator.css",
+      "sha256": "daea4d4b54e06ab58fca5c21f99a33b9c77cd289386876df09c085d556822f70"
+    },
+    {
+      "archive": "omni.ja",
+      "entry": "moz-src/browser/components/downloads/DownloadsCommon.sys.mjs",
+      "source": "browser/components/downloads/DownloadsCommon.sys.mjs",
+      "sha256": "da0ce56be82929a84ea1571e564fec3c52cc31ba35357f71bf110e2b18ce16dd"
+    },
+    {
+      "archive": "omni.ja",
+      "entry": "moz-src/browser/components/downloads/DownloadsViewUI.sys.mjs",
+      "source": "browser/components/downloads/DownloadsViewUI.sys.mjs",
+      "sha256": "3abb2eb45f1e9907209307f951ac0cf468bc3a9ec56b2e9e2ab080bfa2ebae0c"
+    }
+  ],
+  "package_manifest": "/home/caiobarbieri/.cache/nulavio-ux/vault-order-2dyla562/final-release/package.json",
+  "package_manifest_sha256": "c514e88f74a4186ebdd915cc5717440f9905fdc704bfc2ab1af852818a657487",
+  "production_files_unchanged_after_build": 102,
+  "source_and_test_hashes": [
+    {
+      "file": "browser/shell/modules/NulavioProfiles.sys.mjs",
+      "sha256": "1b9ff6fb3eabd9808d839980a3c452a05dcfe3c14c73fda2d2053650c94e197b"
+    },
+    {
+      "file": "browser/shell/modules/NulavioRouting.sys.mjs",
+      "sha256": "d9373082ed691acdc00f5dc3da4c34e96e80cd4ba4d6edfd06a1139ebfdfd7c2"
+    },
+    {
+      "file": "tests/integration/test_profile_initialization.py",
+      "sha256": "147f94dbb583e8ca4668b1baabfe0e68ec7b92d6746d7571a48b695e31a689e7"
+    },
+    {
+      "file": "tests/integration/test_downloads_indicator.py",
+      "sha256": "981e02131e7162f38b2511a587f63fe18f4a646bd971c5919c07d155ac932cb2"
+    },
+    {
+      "file": "browser/branding/nulavio/NulavioDownloads.sys.mjs",
+      "sha256": "9e50564555847ea4b259433cc662d58f793b765244e42b8e74879e53011bab8f"
+    },
+    {
+      "file": "browser/branding/nulavio/content/theme/horizon.css",
+      "sha256": "7e750da7e9cd997ce8d561239ce426abc404fd483916d1e0856e8b4398a615f6"
+    },
+    {
+      "file": "browser/patches/0007-downloads-never-open-a-program-from-the-downloads-ui.patch",
+      "sha256": "80958504cff7e141075fd45cec76d47522315926ae6874d32d23ab990a0d53b0"
+    },
+    {
+      "file": "docs/brand/tokens.json",
+      "sha256": "9347ea40995600a18e803cbae7514a8c07499b3ebab3b9a42ab9a5b8dbf22bc1"
+    }
+  ],
+  "checks": [
+    {
+      "command": "env -u LC_ALL python3 -I tests/run.py unit",
+      "status": "PASS",
+      "tests": 600,
+      "seconds": 69.393,
+      "skips": 1,
+      "log": "/home/caiobarbieri/.cache/nulavio-ux/vault-order-2dyla562/unit-final-harness.log",
+      "log_sha256": "a1a1a898e776eb5dd7d4f8adc7b127ea650b41db134db05d06251e3a04d8c7ce",
+      "skip_reasons": [
+        "test_through_the_real_avahi (test_phone_link.PhoneApiTest.test_through_the_real_avahi) ... skipped 'NULAVIO_LAN_TESTS=1 with Avahi running and avahi-publish (announces on the local network)'"
+      ]
+    },
+    {
+      "command": "env -u LC_ALL NULAVIO_ENGINE=/home/caiobarbieri/.cache/nulavio-ux/vault-order-2dyla562/final-release/nulavio/nulavio NULAVIO_TEST_ARTIFACTS=/home/caiobarbieri/.cache/nulavio-ux/vault-order-2dyla562/final-release/artifacts python3 -I tests/run.py integration",
+      "status": "PASS",
+      "tests": 231,
+      "seconds": 757.036,
+      "skips": 13,
+      "log": "/home/caiobarbieri/.cache/nulavio-ux/vault-order-2dyla562/final-release/integration.log",
+      "log_sha256": "cc752bb10d0d382ec85b7c35215949a2fbcda991fff1a848b1cfb62cb1b182ab",
+      "skip_reasons": [
+        "test_claude_code (test_ai_agents_real.RealAgentsTest.test_claude_code) ... skipped 'opt-in: NULAVIO_AGENT_TESTS=1 and a Gecko engine'",
+        "test_codex_cli (test_ai_agents_real.RealAgentsTest.test_codex_cli) ... skipped 'opt-in: NULAVIO_AGENT_TESTS=1 and a Gecko engine'",
+        "test_01_set_up_creates_keys_behind_the_screen_lock (test_companion_emulator.CompanionOnEmulatorTest.test_01_set_up_creates_keys_behind_the_screen_lock) ... skipped 'NULAVIO_EMULATOR=1, a device on adb, the debug APK, gocryptfs and libsodium'",
+        "test_02_pairing_shows_the_same_digits_on_both_sides (test_companion_emulator.CompanionOnEmulatorTest.test_02_pairing_shows_the_same_digits_on_both_sides) ... skipped 'NULAVIO_EMULATOR=1, a device on adb, the debug APK, gocryptfs and libsodium'",
+        "test_03_unlock_with_the_phone_mounts_the_profile (test_companion_emulator.CompanionOnEmulatorTest.test_03_unlock_with_the_phone_mounts_the_profile) ... skipped 'NULAVIO_EMULATOR=1, a device on adb, the debug APK, gocryptfs and libsodium'",
+        "test_04_an_answered_request_is_refused_again (test_companion_emulator.CompanionOnEmulatorTest.test_04_an_answered_request_is_refused_again) ... skipped 'NULAVIO_EMULATOR=1, a device on adb, the debug APK, gocryptfs and libsodium'",
+        "test_05_not_now_sends_nothing (test_companion_emulator.CompanionOnEmulatorTest.test_05_not_now_sends_nothing) ... skipped 'NULAVIO_EMULATOR=1, a device on adb, the debug APK, gocryptfs and libsodium'",
+        "test_14_safe_browsing_blocks_google_test_phishing_page (test_engine_slice.EngineSliceTest.test_14_safe_browsing_blocks_google_test_phishing_page) ... skipped 'set NULAVIO_NETWORK_TESTS=1 (contacts Google Safe Browsing)'",
+        "test_bitwarden (test_password_extensions.PasswordExtensionSmokeTest.test_bitwarden) ... skipped 'set NULAVIO_NETWORK_TESTS=1 (downloads from addons.mozilla.org)'",
+        "test_keepassxc_browser (test_password_extensions.PasswordExtensionSmokeTest.test_keepassxc_browser) ... skipped 'set NULAVIO_NETWORK_TESTS=1 (downloads from addons.mozilla.org)'",
+        "test_proton_pass (test_password_extensions.PasswordExtensionSmokeTest.test_proton_pass) ... skipped 'set NULAVIO_NETWORK_TESTS=1 (downloads from addons.mozilla.org)'",
+        "test_05_choosing_proton_pass_installs_the_pinned_version_and_switching_back_keeps_it (test_passwords.PasswordsTest.test_05_choosing_proton_pass_installs_the_pinned_version_and_switching_back_keeps_it) ... skipped 'downloads Proton Pass from addons.mozilla.org'",
+        "test_run_temporary_deletes_the_profile_after_the_engine_exits (test_temporary.TemporaryFromTheLauncherTest.test_run_temporary_deletes_the_profile_after_the_engine_exits) ... skipped 'opens a visible window (NULAVIO_TEST_HEADFUL=1)'"
+      ]
+    },
+    {
+      "command": "env -u LC_ALL NULAVIO_DOWNLOADS_LOCALE=en-US NULAVIO_ENGINE=/home/caiobarbieri/.cache/nulavio-ux/vault-order-2dyla562/final-release/isolated-copy/nulavio NULAVIO_TEST_ARTIFACTS=/home/caiobarbieri/.cache/nulavio-ux/vault-order-2dyla562/final-release/en-fixed-artifacts python3 -I tests/run.py integration test_downloads_indicator.py",
+      "status": "PASS",
+      "tests": 9,
+      "seconds": 16.476,
+      "skips": 0,
+      "log": "/home/caiobarbieri/.cache/nulavio-ux/vault-order-2dyla562/final-release/downloads-en-fixed.log",
+      "log_sha256": "49d73baa9f6c155b14bcd648ce45ef8970995d56433356f05d465d1467c12044",
+      "skip_reasons": []
+    },
+    {
+      "command": "env -u LC_ALL NULAVIO_DOWNLOADS_LOCALE=pt-BR NULAVIO_ENGINE=/home/caiobarbieri/.cache/nulavio-ux/vault-order-2dyla562/final-release/isolated-copy/nulavio NULAVIO_TEST_ARTIFACTS=/home/caiobarbieri/.cache/nulavio-ux/vault-order-2dyla562/final-release/pt-fixed-artifacts python3 -I tests/run.py integration test_downloads_indicator.py",
+      "status": "PASS",
+      "tests": 9,
+      "seconds": 17.647,
+      "skips": 0,
+      "log": "/home/caiobarbieri/.cache/nulavio-ux/vault-order-2dyla562/final-release/downloads-pt-fixed.log",
+      "log_sha256": "5b124971a1d84cbfc9a440a21bdec545af186a85eee07cd0bd79cfe8599331ce",
+      "skip_reasons": []
+    },
+    {
+      "command": "env -u LC_ALL NULAVIO_NETWORK_TESTS=1 NULAVIO_ENGINE=/home/caiobarbieri/.cache/nulavio-ux/vault-order-2dyla562/final-release/isolated-copy/nulavio NULAVIO_TEST_ARTIFACTS=/home/caiobarbieri/.cache/nulavio-ux/vault-order-2dyla562/final-release/network-artifacts python3 -I tests/run.py integration test_engine_slice.py",
+      "status": "PASS",
+      "tests": 15,
+      "seconds": 15.504,
+      "skips": 0,
+      "log": "/home/caiobarbieri/.cache/nulavio-ux/vault-order-2dyla562/final-release/network-engine.log",
+      "log_sha256": "819f6f2a60d6b27f886b1e5ea7d71297fd7ecfce0f45ca2d350d452db3c59a83",
+      "skip_reasons": []
+    }
+  ],
+  "profile_store_correction": {
+    "observed_exception": {
+      "name": "TypeError",
+      "code": null,
+      "message": "can't access property \"execute\", this[#connection] is null",
+      "stack": "#setDBPref@resource:///modules/profiles/SelectableProfileService.sys.mjs:2055:5\nflushSharedPrefToDatabase@resource:///modules/profiles/SelectableProfileService.sys.mjs:1232:26\nflushAllSharedPrefsToDatabase@resource:///modules/profiles/SelectableProfileService.sys.mjs:1195:18\nmaybeSetupDataStore@resource:///modules/profiles/SelectableProfileService.sys.mjs:1625:16\n",
+      "elapsed": 2.4779979999993884
+    },
+    "root_cause": "a normal identity-read init can reset the empty first store while maybeSetupDataStore awaits initialization; the subsequent shared-pref flush has no connection",
+    "scope": "all Shell setup writers use NulavioProfiles.ensureStore; identity readers wait for it; prior normal init finishes first",
+    "native_scope_limit": "this coordinates Shell callers and does not replace or globally patch the native service",
+    "deterministic_regressions": [
+      "identity read during first profile creation",
+      "identity read during first routing write",
+      "concurrent routing/profile writers",
+      "creation after a rejected preparation"
+    ],
+    "red": "regression-red-2.log: real service reproduces the same null-connection error",
+    "review_gap_red": "routing-regression-red.log: routing initially remained outside coordination",
+    "green": "final-regression-green.log: all four cases pass; also included in the final 231-test full run",
+    "historical_limit": "the two child full failures and earlier UX3B failures retain UNKNOWN original classification; identical UI text alone does not prove each earlier cause",
+    "unchanged": [
+      "cryptography",
+      "availability/authorization gates",
+      "90-second UI deadline",
+      "security and pixel thresholds",
+      "existing skips"
+    ],
+    "fixture_error": "regression-red.log used a space in the harness -CreateProfile name; corrected to FirstStore before the actual RED run; not a product failure"
+  },
+  "private_window_fixture": {
+    "initial_english_run": "9 tests, one failure in the fresh-private-window expectation; original window identity was not recorded",
+    "isolated_case": "PASS; did not establish the cause of the original failure",
+    "controlled_reproduction": "an unrelated real public tab makes first-new-handle selection choose a public window; private-concurrent-tab-red.log records private=false and indicatorPrivate=false",
+    "correction": "wait for the requested native window startup and match its exact Chrome browsingContext ID, then assert private=true; retain badge/list assertions and deadlines",
+    "strengthening": "the fixture deliberately creates an unrelated public tab so exact-window selection is exercised",
+    "full_run_harness_snapshot": {
+      "file": "/home/caiobarbieri/.cache/nulavio-ux/vault-order-2dyla562/final-release/full-integration-downloads-test-snapshot.py",
+      "sha256": "a127853493abd66654ebc8ed94e44e44995d159ec03e32fdd4dfa032caca697b"
+    },
+    "sequence_note": "the 231-test full run loaded the initial downloads fixture. Product source bytes are unchanged by the later fixture strengthening; all nine tests in each locale pass on the final fixture.",
+    "claim_limit": "no production privacy defect is inferred from the original uninstrumented English failure"
+  },
+  "automated_reviews": [
+    {
+      "head": "550e812b059cdcc2fa68d8892fa0c5fb8a08729b",
+      "scope": "UX3C badge, native hunks, lifecycle/privacy/attention/a11y; 28 source/evidence hashes and 99 package entries",
+      "findings": 0,
+      "kind": "read-only, no new runtime execution"
+    },
+    {
+      "head": "550e812b059cdcc2fa68d8892fa0c5fb8a08729b plus first coordinator snapshot",
+      "scope": "profile-store coordinator",
+      "findings": 1,
+      "severity": "P2",
+      "disposition": "routing caller coordinated by parent; real routing RED/GREEN and four final regressions verify correction",
+      "kind": "automated review, not human approval"
+    }
+  ],
+  "other_checks": [
+    {
+      "command": "scripts/security/scan.sh",
+      "status": "PASS",
+      "checks": 6,
+      "log": "/home/caiobarbieri/.cache/nulavio-ux/vault-order-2dyla562/security-final-harness.log",
+      "log_sha256": "6d9006199a7f573f3a0f3147dc5040cca4044b6d5563687b9a210badb19c5c30"
+    },
+    {
+      "command": "cached requirements/dev.txt venv: ruff check . and ruff format --check .",
+      "status": "PASS",
+      "log": "/home/caiobarbieri/.cache/nulavio-ux/vault-order-2dyla562/ruff-final-harness.log",
+      "log_sha256": "59d2ae8aeef69fb3031494a6a29f20e41e5526768634a8b89aee224dbfe95e20"
+    },
+    {
+      "command": "python3 -I scripts/brand/build_tokens.py --check",
+      "status": "PASS",
+      "outputs": 4
+    },
+    {
+      "command": "python3 -I scripts/brand/contrast.py --json",
+      "status": "PASS",
+      "expanded_checks": 256,
+      "prior_declarations_unchanged": true,
+      "report": "/home/caiobarbieri/.cache/nulavio-ux/vault-order-2dyla562/contrast.json",
+      "report_sha256": "87f2952e22d44e2243409ecf90f075f7e540ffcf39157c06023e1c0d4496ee59"
+    },
+    {
+      "command": "NULAVIO_BUILD_DIR=/home/caiobarbieri/.cache/nulavio-ux/vault-order-2dyla562/build scripts/build/build_nulavio.sh 159.0",
+      "status": "PASS",
+      "log": "/home/caiobarbieri/.cache/nulavio-ux/vault-order-2dyla562/build-final.log",
+      "log_sha256": "c015dae72a08025754f76b384ad2a807bc43df903aa82a2068870cdff2b8cc03"
+    }
+  ],
+  "retained_diagnostics": [
+    {
+      "file": "/home/caiobarbieri/.cache/nulavio-ux/vault-order-2dyla562/prefix.log",
+      "sha256": "376e706a4ea5a3c9f42df8bf1f0be5fcc2167564b5f4da0269981381f765eb79"
+    },
+    {
+      "file": "/home/caiobarbieri/.cache/nulavio-ux/vault-order-2dyla562/prefix-fault.json",
+      "sha256": "8d4add535b2c7275ab76b448c5dbd0e349d52f228f2af9c2c6d6afeb4fe8efec"
+    },
+    {
+      "file": "/home/caiobarbieri/.cache/nulavio-ux/vault-order-2dyla562/race_probe.py",
+      "sha256": "bbaeb0347896926cbf38b781ada8b5525ea6313ac8fb7893a479ef5f72aae7e4"
+    },
+    {
+      "file": "/home/caiobarbieri/.cache/nulavio-ux/vault-order-2dyla562/race-red.log",
+      "sha256": "30747a114c712c6e3b308a1ed1da79d697e886ef328fd9bea105d344452676ac"
+    },
+    {
+      "file": "/home/caiobarbieri/.cache/nulavio-ux/vault-order-2dyla562/regression-red.log",
+      "sha256": "73130783aad8d79085150e2a5b2d6c5182a30f60edbf0c7bdb9389884020f46f"
+    },
+    {
+      "file": "/home/caiobarbieri/.cache/nulavio-ux/vault-order-2dyla562/regression-red-2.log",
+      "sha256": "78c928240b53d09d3d23533b43a4157a2811aeac565a19bb154602392e746899"
+    },
+    {
+      "file": "/home/caiobarbieri/.cache/nulavio-ux/vault-order-2dyla562/regression-green.log",
+      "sha256": "22d8b773cb8600a33138d2d0cfe4e67cae3c880b9d2085247d1a9b8cf473782c"
+    },
+    {
+      "file": "/home/caiobarbieri/.cache/nulavio-ux/vault-order-2dyla562/routing-regression-red.log",
+      "sha256": "4606d5704ca97e45c4c7e456646464bed0aa26315896d2b07b14d53efa53d0f4"
+    },
+    {
+      "file": "/home/caiobarbieri/.cache/nulavio-ux/vault-order-2dyla562/routing-regression-green.log",
+      "sha256": "cf9cac1596289efce78ea8516b1aaad472edff4045a0414c6591f66ca0b5d199"
+    },
+    {
+      "file": "/home/caiobarbieri/.cache/nulavio-ux/vault-order-2dyla562/final-regression-green.log",
+      "sha256": "8bac715c23a104f2b5a13b084142b5b6b4ca55b1a0567c082c7f4adf1edb1118"
+    },
+    {
+      "file": "/home/caiobarbieri/.cache/nulavio-ux/vault-order-2dyla562/discovery.log",
+      "sha256": "7112462c1fe3352a00c8915ee2028231429286eee8122458c59ad2f4aaa91b2c"
+    },
+    {
+      "file": "/home/caiobarbieri/.cache/nulavio-ux/vault-order-2dyla562/predecessor.log",
+      "sha256": "57de35c755b67d4b6cc0fb3ec035fd0ca1fa75317e6e5f2fcee388ecdd6f8daf"
+    },
+    {
+      "file": "/home/caiobarbieri/.cache/nulavio-ux/vault-order-2dyla562/fixed-vault.log",
+      "sha256": "95cb3d71ae67f2cd98fdf8ef2107db1f3d108216914ad646338298495447582a"
+    },
+    {
+      "file": "/home/caiobarbieri/.cache/nulavio-ux/vault-order-2dyla562/release/integration.log",
+      "sha256": "c004463125878f29431803dc1742ceab35651dbeb8c2e2b3cb5b3fa477dc8dec"
+    },
+    {
+      "file": "/home/caiobarbieri/.cache/nulavio-ux/vault-order-2dyla562/release/interrupted-run-processes.json",
+      "sha256": "39943aa4ac399eca0b6cb51112de05677b398612e13ad77cc6e0378489f3a158"
+    },
+    {
+      "file": "/home/caiobarbieri/.cache/nulavio-ux/vault-order-2dyla562/final-release/downloads-en.log",
+      "sha256": "172ad40411e33b5c165a30c366f6bbae3b92b85b887b179b9c3bbc241e347a6e"
+    },
+    {
+      "file": "/home/caiobarbieri/.cache/nulavio-ux/vault-order-2dyla562/final-release/private-diagnostic.log",
+      "sha256": "de53816a422d76b91129536cf524b5c137eb2f41299cc5d70b587a54f8a7dcd4"
+    },
+    {
+      "file": "/home/caiobarbieri/.cache/nulavio-ux/vault-order-2dyla562/final-release/private-concurrent-tab-red.log",
+      "sha256": "d06db24657e954aa168d09ef6245f3073cdb292bbd1b9c7cf0c7351311a93a88"
+    }
+  ],
+  "initial_candidate_evidence": {
+    "file": "docs/design/screenshots/ux3c/verification.json",
+    "sha256": "3c14264bd7a5dd31427b748084fd6ff4016d75cc42f8212dc58c619e5d2ed8b9",
+    "scope": "immutable initial candidate, including both full failures"
+  },
+  "capture_method": "Marionette main-window pixels on the final real package, inert fixture downloads; no visible host window",
+  "artifacts": [
+    {
+      "file": "docs/design/screenshots/ux3c/release-en-US-active-warning.png",
+      "sha256": "86cd32634ae3ebcffa7e899254835eeec963b8e383a537af777cd1303a743b04"
+    },
+    {
+      "file": "docs/design/screenshots/ux3c/release-en-US-canceled.json",
+      "sha256": "56c9c2da7a34443b064d9ae3e805e1852f2ec77b5edd3e51c18847ed15e7e9a0"
+    },
+    {
+      "file": "docs/design/screenshots/ux3c/release-en-US-completed.json",
+      "sha256": "7e3258c01481836670a37cd3f0931a5ae6532e82720ef44bbf5f6e2319f04d19"
+    },
+    {
+      "file": "docs/design/screenshots/ux3c/release-en-US-dark-completed.png",
+      "sha256": "eddf24bb1fe3f95d4004d723c5ee88f096a0b6ab9370aadbef99cc2475992695"
+    },
+    {
+      "file": "docs/design/screenshots/ux3c/release-en-US-fallbacks.json",
+      "sha256": "46fd3fbec73b060a4bb58cd7978750ae16de1453ad016d94f472ad74e39abf95"
+    },
+    {
+      "file": "docs/design/screenshots/ux3c/release-en-US-light-completed.png",
+      "sha256": "8817a18808329938908f524fd41469a917407dcceec7ae522f6217d21a039fa6"
+    },
+    {
+      "file": "docs/design/screenshots/ux3c/release-final-regression-green.log",
+      "sha256": "8bac715c23a104f2b5a13b084142b5b6b4ca55b1a0567c082c7f4adf1edb1118"
+    },
+    {
+      "file": "docs/design/screenshots/ux3c/release-prefix-fault.json",
+      "sha256": "8d4add535b2c7275ab76b448c5dbd0e349d52f228f2af9c2c6d6afeb4fe8efec"
+    },
+    {
+      "file": "docs/design/screenshots/ux3c/release-pt-BR-active-warning.png",
+      "sha256": "aa850e4dc5b8bc66fb6fd52b2140c5580701f381fc277dfa7dd14324f94096f2"
+    },
+    {
+      "file": "docs/design/screenshots/ux3c/release-pt-BR-canceled.json",
+      "sha256": "56c9c2da7a34443b064d9ae3e805e1852f2ec77b5edd3e51c18847ed15e7e9a0"
+    },
+    {
+      "file": "docs/design/screenshots/ux3c/release-pt-BR-completed.json",
+      "sha256": "c7743e68fc625a859603f3ebe17cfda944e82fb11d32520fdde557286bb843cd"
+    },
+    {
+      "file": "docs/design/screenshots/ux3c/release-pt-BR-dark-completed.png",
+      "sha256": "d5bd808b4a37c55384556fb9a2c7dcaf083f8a2c7a75c2668347a7d24d26dff6"
+    },
+    {
+      "file": "docs/design/screenshots/ux3c/release-pt-BR-fallbacks.json",
+      "sha256": "cf307a472fdf3da489b7403e78770201f6ff6a0d4e389bc52880f064d3771318"
+    },
+    {
+      "file": "docs/design/screenshots/ux3c/release-pt-BR-light-completed.png",
+      "sha256": "03afdcc08c1051053e7af6168d53b29f90bf76d9dc680f2a581b07838739a399"
+    },
+    {
+      "file": "docs/design/screenshots/ux3c/release-race-red.log",
+      "sha256": "30747a114c712c6e3b308a1ed1da79d697e886ef328fd9bea105d344452676ac"
+    },
+    {
+      "file": "docs/design/screenshots/ux3c/release-regression-red-2.log",
+      "sha256": "78c928240b53d09d3d23533b43a4157a2811aeac565a19bb154602392e746899"
+    },
+    {
+      "file": "docs/design/screenshots/ux3c/release-routing-regression-red.log",
+      "sha256": "4606d5704ca97e45c4c7e456646464bed0aa26315896d2b07b14d53efa53d0f4"
+    }
+  ],
+  "publication": {
+    "scope": "pre-publication local verification; exact published SHA and all CI jobs recorded after push",
+    "evidence": "/home/caiobarbieri/.cache/nulavio-ux/vault-order-2dyla562/ci-final.json",
+    "ci_engine_scope": "hosted CI uses distribution Firefox; privileged built-in Track B verification is local"
+  },
+  "pending": [
+    "physical KDE/GTK and forced colours",
+    "Orca announcements",
+    "hardware scaling",
+    "real frame times",
+    "remaining UX3 presets/sidebar curation and UX4-UX7"
+  ]
+}
