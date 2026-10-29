@@ -1,0 +1,740 @@
+[
+  {
+    "preset": "lateral",
+    "dark": 0,
+    "band": {
+      "full": false,
+      "text": "Farol Vault | \u2311 Protegido \u00b7 desbloqueado",
+      "rect": {
+        "x": 0,
+        "y": 0,
+        "w": 1366,
+        "h": 30,
+        "opacity": "1",
+        "visibility": "visible",
+        "hit": true,
+        "hitNode": "div",
+        "bg": "rgb(191, 208, 214)",
+        "color": "rgb(11, 22, 35)",
+        "border": "none",
+        "outline": "none",
+        "outlineWidth": "3px",
+        "animation": "none",
+        "transition": "0s"
+      },
+      "viewport": [
+        1366,
+        900
+      ],
+      "bg": "rgb(191, 208, 214)",
+      "overflow": false,
+      "cues": [
+        {
+          "kind": "nv-band-identity",
+          "text": "Farol Vault",
+          "label": "Perfil: Farol Vault. Trocar de perfil (Alt+Shift+P)",
+          "x": 8,
+          "y": 3,
+          "w": 103.06666564941406,
+          "h": 24,
+          "opacity": "1",
+          "visibility": "visible",
+          "hit": true,
+          "hitNode": "span",
+          "bg": "rgb(253, 207, 139)",
+          "color": "rgb(7, 15, 24)",
+          "border": "solid",
+          "outline": "none",
+          "outlineWidth": "3px",
+          "animation": "none",
+          "transition": "0s"
+        },
+        {
+          "kind": "nv-band-protection",
+          "text": "\u2311 Protegido \u00b7 desbloqueado",
+          "label": "\u2311 Protegido \u00b7 desbloqueado",
+          "x": 119.06666564941406,
+          "y": 3,
+          "w": 190.4499969482422,
+          "h": 24,
+          "opacity": "1",
+          "visibility": "visible",
+          "hit": true,
+          "hitNode": "button",
+          "bg": "rgb(191, 208, 214)",
+          "color": "rgb(11, 22, 35)",
+          "border": "solid",
+          "outline": "none",
+          "outlineWidth": "3px",
+          "animation": "none",
+          "transition": "0s"
+        }
+      ]
+    },
+    "native": {
+      "url": "http://127.0.0.1:43331/page/Layout",
+      "actual": "http://127.0.0.1:43331/page/Layout",
+      "input": {
+        "scroll": 707,
+        "client": 707
+      },
+      "controls": [
+        {
+          "id": "back-button",
+          "w": 36,
+          "h": 44,
+          "opacity": "1",
+          "visibility": "visible",
+          "hit": true
+        },
+        {
+          "id": "forward-button",
+          "w": 36,
+          "h": 44,
+          "opacity": "0.4",
+          "visibility": "visible",
+          "hit": true
+        },
+        {
+          "id": "stop-reload-button",
+          "w": 36,
+          "h": 44,
+          "opacity": "1",
+          "visibility": "visible",
+          "hit": true
+        },
+        {
+          "id": "urlbar",
+          "w": 815.7166748046875,
+          "h": 36,
+          "opacity": "1",
+          "visibility": "visible",
+          "hit": true
+        },
+        {
+          "id": "trust-icon-container",
+          "w": 28,
+          "h": 28,
+          "opacity": "1",
+          "visibility": "visible",
+          "hit": true
+        }
+      ]
+    }
+  },
+  {
+    "preset": "lateral",
+    "dark": 1,
+    "band": {
+      "full": false,
+      "text": "Farol Vault | \u2311 Protegido \u00b7 desbloqueado",
+      "rect": {
+        "x": 0,
+        "y": 0,
+        "w": 1366,
+        "h": 30,
+        "opacity": "1",
+        "visibility": "visible",
+        "hit": true,
+        "hitNode": "div",
+        "bg": "rgb(4, 8, 13)",
+        "color": "rgb(241, 247, 245)",
+        "border": "none",
+        "outline": "none",
+        "outlineWidth": "3px",
+        "animation": "none",
+        "transition": "0s"
+      },
+      "viewport": [
+        1366,
+        900
+      ],
+      "bg": "rgb(4, 8, 13)",
+      "overflow": false,
+      "cues": [
+        {
+          "kind": "nv-band-identity",
+          "text": "Farol Vault",
+          "label": "Perfil: Farol Vault. Trocar de perfil (Alt+Shift+P)",
+          "x": 8,
+          "y": 3,
+          "w": 103.06666564941406,
+          "h": 24,
+          "opacity": "1",
+          "visibility": "visible",
+          "hit": true,
+          "hitNode": "span",
+          "bg": "rgb(253, 207, 139)",
+          "color": "rgb(7, 15, 24)",
+          "border": "solid",
+          "outline": "none",
+          "outlineWidth": "3px",
+          "animation": "none",
+          "transition": "0s"
+        },
+        {
+          "kind": "nv-band-protection",
+          "text": "\u2311 Protegido \u00b7 desbloqueado",
+          "label": "\u2311 Protegido \u00b7 desbloqueado",
+          "x": 119.06666564941406,
+          "y": 3,
+          "w": 190.4499969482422,
+          "h": 24,
+          "opacity": "1",
+          "visibility": "visible",
+          "hit": true,
+          "hitNode": "button",
+          "bg": "rgb(4, 8, 13)",
+          "color": "rgb(241, 247, 245)",
+          "border": "solid",
+          "outline": "none",
+          "outlineWidth": "3px",
+          "animation": "none",
+          "transition": "0s"
+        }
+      ]
+    },
+    "native": {
+      "url": "http://127.0.0.1:43331/page/Layout",
+      "actual": "http://127.0.0.1:43331/page/Layout",
+      "input": {
+        "scroll": 707,
+        "client": 707
+      },
+      "controls": [
+        {
+          "id": "back-button",
+          "w": 36,
+          "h": 44,
+          "opacity": "1",
+          "visibility": "visible",
+          "hit": true
+        },
+        {
+          "id": "forward-button",
+          "w": 36,
+          "h": 44,
+          "opacity": "0.4",
+          "visibility": "visible",
+          "hit": true
+        },
+        {
+          "id": "stop-reload-button",
+          "w": 36,
+          "h": 44,
+          "opacity": "1",
+          "visibility": "visible",
+          "hit": true
+        },
+        {
+          "id": "urlbar",
+          "w": 815.7166748046875,
+          "h": 36,
+          "opacity": "1",
+          "visibility": "visible",
+          "hit": true
+        },
+        {
+          "id": "trust-icon-container",
+          "w": 28,
+          "h": 28,
+          "opacity": "1",
+          "visibility": "visible",
+          "hit": true
+        }
+      ]
+    }
+  },
+  {
+    "preset": "top",
+    "dark": 0,
+    "band": {
+      "full": false,
+      "text": "Farol Vault | \u2311 Protegido \u00b7 desbloqueado",
+      "rect": {
+        "x": 0,
+        "y": 0,
+        "w": 1366,
+        "h": 30,
+        "opacity": "1",
+        "visibility": "visible",
+        "hit": true,
+        "hitNode": "div",
+        "bg": "rgb(191, 208, 214)",
+        "color": "rgb(11, 22, 35)",
+        "border": "none",
+        "outline": "none",
+        "outlineWidth": "3px",
+        "animation": "none",
+        "transition": "0s"
+      },
+      "viewport": [
+        1366,
+        900
+      ],
+      "bg": "rgb(191, 208, 214)",
+      "overflow": false,
+      "cues": [
+        {
+          "kind": "nv-band-identity",
+          "text": "Farol Vault",
+          "label": "Perfil: Farol Vault. Trocar de perfil (Alt+Shift+P)",
+          "x": 8,
+          "y": 3,
+          "w": 103.06666564941406,
+          "h": 24,
+          "opacity": "1",
+          "visibility": "visible",
+          "hit": true,
+          "hitNode": "span",
+          "bg": "rgb(253, 207, 139)",
+          "color": "rgb(7, 15, 24)",
+          "border": "solid",
+          "outline": "none",
+          "outlineWidth": "3px",
+          "animation": "none",
+          "transition": "0s"
+        },
+        {
+          "kind": "nv-band-protection",
+          "text": "\u2311 Protegido \u00b7 desbloqueado",
+          "label": "\u2311 Protegido \u00b7 desbloqueado",
+          "x": 119.06666564941406,
+          "y": 3,
+          "w": 190.4499969482422,
+          "h": 24,
+          "opacity": "1",
+          "visibility": "visible",
+          "hit": true,
+          "hitNode": "button",
+          "bg": "rgb(191, 208, 214)",
+          "color": "rgb(11, 22, 35)",
+          "border": "solid",
+          "outline": "none",
+          "outlineWidth": "3px",
+          "animation": "none",
+          "transition": "0s"
+        }
+      ]
+    },
+    "native": {
+      "url": "http://127.0.0.1:43331/page/Layout",
+      "actual": "http://127.0.0.1:43331/page/Layout",
+      "input": {
+        "scroll": 733,
+        "client": 733
+      },
+      "controls": [
+        {
+          "id": "back-button",
+          "w": 36,
+          "h": 44,
+          "opacity": "1",
+          "visibility": "visible",
+          "hit": true
+        },
+        {
+          "id": "forward-button",
+          "w": 36,
+          "h": 44,
+          "opacity": "0.4",
+          "visibility": "visible",
+          "hit": true
+        },
+        {
+          "id": "stop-reload-button",
+          "w": 36,
+          "h": 44,
+          "opacity": "1",
+          "visibility": "visible",
+          "hit": true
+        },
+        {
+          "id": "urlbar",
+          "w": 841.433349609375,
+          "h": 36,
+          "opacity": "1",
+          "visibility": "visible",
+          "hit": true
+        },
+        {
+          "id": "trust-icon-container",
+          "w": 28,
+          "h": 28,
+          "opacity": "1",
+          "visibility": "visible",
+          "hit": true
+        }
+      ]
+    }
+  },
+  {
+    "preset": "top",
+    "dark": 1,
+    "band": {
+      "full": false,
+      "text": "Farol Vault | \u2311 Protegido \u00b7 desbloqueado",
+      "rect": {
+        "x": 0,
+        "y": 0,
+        "w": 1366,
+        "h": 30,
+        "opacity": "1",
+        "visibility": "visible",
+        "hit": true,
+        "hitNode": "div",
+        "bg": "rgb(4, 8, 13)",
+        "color": "rgb(241, 247, 245)",
+        "border": "none",
+        "outline": "none",
+        "outlineWidth": "3px",
+        "animation": "none",
+        "transition": "0s"
+      },
+      "viewport": [
+        1366,
+        900
+      ],
+      "bg": "rgb(4, 8, 13)",
+      "overflow": false,
+      "cues": [
+        {
+          "kind": "nv-band-identity",
+          "text": "Farol Vault",
+          "label": "Perfil: Farol Vault. Trocar de perfil (Alt+Shift+P)",
+          "x": 8,
+          "y": 3,
+          "w": 103.06666564941406,
+          "h": 24,
+          "opacity": "1",
+          "visibility": "visible",
+          "hit": true,
+          "hitNode": "span",
+          "bg": "rgb(253, 207, 139)",
+          "color": "rgb(7, 15, 24)",
+          "border": "solid",
+          "outline": "none",
+          "outlineWidth": "3px",
+          "animation": "none",
+          "transition": "0s"
+        },
+        {
+          "kind": "nv-band-protection",
+          "text": "\u2311 Protegido \u00b7 desbloqueado",
+          "label": "\u2311 Protegido \u00b7 desbloqueado",
+          "x": 119.06666564941406,
+          "y": 3,
+          "w": 190.4499969482422,
+          "h": 24,
+          "opacity": "1",
+          "visibility": "visible",
+          "hit": true,
+          "hitNode": "button",
+          "bg": "rgb(4, 8, 13)",
+          "color": "rgb(241, 247, 245)",
+          "border": "solid",
+          "outline": "none",
+          "outlineWidth": "3px",
+          "animation": "none",
+          "transition": "0s"
+        }
+      ]
+    },
+    "native": {
+      "url": "http://127.0.0.1:43331/page/Layout",
+      "actual": "http://127.0.0.1:43331/page/Layout",
+      "input": {
+        "scroll": 733,
+        "client": 733
+      },
+      "controls": [
+        {
+          "id": "back-button",
+          "w": 36,
+          "h": 44,
+          "opacity": "1",
+          "visibility": "visible",
+          "hit": true
+        },
+        {
+          "id": "forward-button",
+          "w": 36,
+          "h": 44,
+          "opacity": "0.4",
+          "visibility": "visible",
+          "hit": true
+        },
+        {
+          "id": "stop-reload-button",
+          "w": 36,
+          "h": 44,
+          "opacity": "1",
+          "visibility": "visible",
+          "hit": true
+        },
+        {
+          "id": "urlbar",
+          "w": 841.433349609375,
+          "h": 36,
+          "opacity": "1",
+          "visibility": "visible",
+          "hit": true
+        },
+        {
+          "id": "trust-icon-container",
+          "w": 28,
+          "h": 28,
+          "opacity": "1",
+          "visibility": "visible",
+          "hit": true
+        }
+      ]
+    }
+  },
+  {
+    "preset": "focus",
+    "dark": 0,
+    "band": {
+      "full": false,
+      "text": "Farol Vault | \u2311 Protegido \u00b7 desbloqueado",
+      "rect": {
+        "x": 0,
+        "y": 0,
+        "w": 1366,
+        "h": 30,
+        "opacity": "1",
+        "visibility": "visible",
+        "hit": true,
+        "hitNode": "div",
+        "bg": "rgb(191, 208, 214)",
+        "color": "rgb(11, 22, 35)",
+        "border": "none",
+        "outline": "none",
+        "outlineWidth": "3px",
+        "animation": "none",
+        "transition": "0s"
+      },
+      "viewport": [
+        1366,
+        900
+      ],
+      "bg": "rgb(191, 208, 214)",
+      "overflow": false,
+      "cues": [
+        {
+          "kind": "nv-band-identity",
+          "text": "Farol Vault",
+          "label": "Perfil: Farol Vault. Trocar de perfil (Alt+Shift+P)",
+          "x": 8,
+          "y": 3,
+          "w": 103.06666564941406,
+          "h": 24,
+          "opacity": "1",
+          "visibility": "visible",
+          "hit": true,
+          "hitNode": "span",
+          "bg": "rgb(253, 207, 139)",
+          "color": "rgb(7, 15, 24)",
+          "border": "solid",
+          "outline": "none",
+          "outlineWidth": "3px",
+          "animation": "none",
+          "transition": "0s"
+        },
+        {
+          "kind": "nv-band-protection",
+          "text": "\u2311 Protegido \u00b7 desbloqueado",
+          "label": "\u2311 Protegido \u00b7 desbloqueado",
+          "x": 119.06666564941406,
+          "y": 3,
+          "w": 190.4499969482422,
+          "h": 24,
+          "opacity": "1",
+          "visibility": "visible",
+          "hit": true,
+          "hitNode": "button",
+          "bg": "rgb(191, 208, 214)",
+          "color": "rgb(11, 22, 35)",
+          "border": "solid",
+          "outline": "none",
+          "outlineWidth": "3px",
+          "animation": "none",
+          "transition": "0s"
+        }
+      ]
+    },
+    "native": {
+      "url": "http://127.0.0.1:43331/page/Layout",
+      "actual": "http://127.0.0.1:43331/page/Layout",
+      "input": {
+        "scroll": 707,
+        "client": 707
+      },
+      "controls": [
+        {
+          "id": "back-button",
+          "w": 36,
+          "h": 44,
+          "opacity": "1",
+          "visibility": "visible",
+          "hit": true
+        },
+        {
+          "id": "forward-button",
+          "w": 36,
+          "h": 44,
+          "opacity": "0.4",
+          "visibility": "visible",
+          "hit": true
+        },
+        {
+          "id": "stop-reload-button",
+          "w": 36,
+          "h": 44,
+          "opacity": "1",
+          "visibility": "visible",
+          "hit": true
+        },
+        {
+          "id": "urlbar",
+          "w": 815.7166748046875,
+          "h": 36,
+          "opacity": "1",
+          "visibility": "visible",
+          "hit": true
+        },
+        {
+          "id": "trust-icon-container",
+          "w": 28,
+          "h": 28,
+          "opacity": "1",
+          "visibility": "visible",
+          "hit": true
+        }
+      ]
+    }
+  },
+  {
+    "preset": "focus",
+    "dark": 1,
+    "band": {
+      "full": false,
+      "text": "Farol Vault | \u2311 Protegido \u00b7 desbloqueado",
+      "rect": {
+        "x": 0,
+        "y": 0,
+        "w": 1366,
+        "h": 30,
+        "opacity": "1",
+        "visibility": "visible",
+        "hit": true,
+        "hitNode": "div",
+        "bg": "rgb(4, 8, 13)",
+        "color": "rgb(241, 247, 245)",
+        "border": "none",
+        "outline": "none",
+        "outlineWidth": "3px",
+        "animation": "none",
+        "transition": "0s"
+      },
+      "viewport": [
+        1366,
+        900
+      ],
+      "bg": "rgb(4, 8, 13)",
+      "overflow": false,
+      "cues": [
+        {
+          "kind": "nv-band-identity",
+          "text": "Farol Vault",
+          "label": "Perfil: Farol Vault. Trocar de perfil (Alt+Shift+P)",
+          "x": 8,
+          "y": 3,
+          "w": 103.06666564941406,
+          "h": 24,
+          "opacity": "1",
+          "visibility": "visible",
+          "hit": true,
+          "hitNode": "span",
+          "bg": "rgb(253, 207, 139)",
+          "color": "rgb(7, 15, 24)",
+          "border": "solid",
+          "outline": "none",
+          "outlineWidth": "3px",
+          "animation": "none",
+          "transition": "0s"
+        },
+        {
+          "kind": "nv-band-protection",
+          "text": "\u2311 Protegido \u00b7 desbloqueado",
+          "label": "\u2311 Protegido \u00b7 desbloqueado",
+          "x": 119.06666564941406,
+          "y": 3,
+          "w": 190.4499969482422,
+          "h": 24,
+          "opacity": "1",
+          "visibility": "visible",
+          "hit": true,
+          "hitNode": "button",
+          "bg": "rgb(4, 8, 13)",
+          "color": "rgb(241, 247, 245)",
+          "border": "solid",
+          "outline": "none",
+          "outlineWidth": "3px",
+          "animation": "none",
+          "transition": "0s"
+        }
+      ]
+    },
+    "native": {
+      "url": "http://127.0.0.1:43331/page/Layout",
+      "actual": "http://127.0.0.1:43331/page/Layout",
+      "input": {
+        "scroll": 707,
+        "client": 707
+      },
+      "controls": [
+        {
+          "id": "back-button",
+          "w": 36,
+          "h": 44,
+          "opacity": "1",
+          "visibility": "visible",
+          "hit": true
+        },
+        {
+          "id": "forward-button",
+          "w": 36,
+          "h": 44,
+          "opacity": "0.4",
+          "visibility": "visible",
+          "hit": true
+        },
+        {
+          "id": "stop-reload-button",
+          "w": 36,
+          "h": 44,
+          "opacity": "1",
+          "visibility": "visible",
+          "hit": true
+        },
+        {
+          "id": "urlbar",
+          "w": 815.7166748046875,
+          "h": 36,
+          "opacity": "1",
+          "visibility": "visible",
+          "hit": true
+        },
+        {
+          "id": "trust-icon-container",
+          "w": 28,
+          "h": 28,
+          "opacity": "1",
+          "visibility": "visible",
+          "hit": true
+        }
+      ]
+    }
+  }
+]

@@ -1,0 +1,85 @@
+/* Explicit choices only. The native state is authoritative, including changes
+   made in other windows and in Gecko's sidebar controls. */
+
+import { t } from "../lib/i18n.js";
+import { errorText } from "../lib/ui.js";
+
+export async function setUpLayout() {
+  const api = browser.nulavioLayout;
+  const section = document.getElementById("layout");
+  const group = document.getElementById("layout-choices");
+  const radios = [...group.querySelectorAll('input[name="layout"]')];
+  const current = document.getElementById("layout-current");
+  const error = document.getElementById("layout-error");
+  const retry = document.getElementById("layout-retry");
+  let revision = 0;
+  let busy = false;
+  let closed = false;
+
+  const render = state => {
+    section.dataset.preset = state.preset;
+    current.textContent = !state.available ? t("layoutUnavailable") : state.locked ? t("layoutLocked")
+      : t(`layoutCurrent_${state.preset}`);
+    for (const radio of radios) {
+      radio.checked = radio.value === state.preset;
+      radio.disabled = busy || !state.available || state.locked;
+    }
+  };
+  const refresh = async () => {
+    if (closed || busy) return;
+    const request = ++revision;
+    try {
+      const state = await api.state();
+      if (closed || busy || request !== revision) return;
+      render(state);
+      retry.hidden = true;
+    } catch (e) {
+      if (closed || busy || request !== revision) return;
+      current.textContent = t("layoutUnavailable");
+      error.textContent = errorText(e);
+      for (const radio of radios) radio.disabled = true;
+      retry.hidden = false;
+    }
+  };
+  section.hidden = false;
+  api.onChanged.addListener(refresh);
+  window.addEventListener("pagehide", () => {
+    closed = true;
+    revision++;
+    api.onChanged.removeListener(refresh);
+  });
+  window.addEventListener("pageshow", event => {
+    if (!event.persisted) return;
+    closed = false;
+    group.setAttribute("aria-busy", String(busy));
+    api.onChanged.addListener(refresh);
+    refresh();
+  });
+  group.addEventListener("change", async event => {
+    if (busy || !radios.includes(event.target)) return;
+    busy = true;
+    revision++;
+    group.setAttribute("aria-busy", "true");
+    error.textContent = "";
+    const focused = document.activeElement;
+    for (const radio of radios) radio.disabled = true;
+    current.textContent = t("layoutApplying");
+    try {
+      await api.apply(event.target.value);
+    } catch (e) {
+      if (!closed) error.textContent = errorText(e);
+    } finally {
+      busy = false;
+      if (!closed) {
+        group.setAttribute("aria-busy", "false");
+        await refresh();
+        if (radios.includes(focused) && document.activeElement === document.body && !focused.disabled) focused.focus();
+      }
+    }
+  });
+  retry.addEventListener("click", () => {
+    error.textContent = "";
+    refresh();
+  });
+  await refresh();
+}

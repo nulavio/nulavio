@@ -1,0 +1,6 @@
+test_reading_settings_does_not_change_native_preferences (test_layout_presets.LayoutPresetsTest.test_reading_settings_does_not_change_native_preferences) ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 3.110s
+
+OK

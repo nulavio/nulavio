@@ -1,0 +1,3 @@
+lateral {'ok': {'preset': 'lateral', 'available': True, 'locked': False}} {'current': 'Janela atual: Lateral.', 'error': '', 'html': [['lateral', True, False], ['top', False, False], ['focus', False, False]], 'busy': 'false'}
+focus {'ok': {'preset': 'focus', 'available': True, 'locked': False}} {'current': 'Janela atual: Foco.', 'error': '', 'html': [['lateral', False, False], ['top', False, False], ['focus', True, False]], 'busy': 'false'}
+top {'ok': {'preset': 'top', 'available': True, 'locked': False}} {'current': 'Janela atual: Abas no topo.', 'error': '', 'html': [['lateral', False, False], ['top', True, False], ['focus', False, False]], 'busy': 'false'}

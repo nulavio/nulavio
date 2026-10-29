@@ -111,6 +111,7 @@ def module_text(name: str) -> str:
 
 API_NAMES = ("nulavioSearch", "nulavioProfiles", "nulavioRouting", "nulavioConnect", "nulavioVault", "nulavioAI")
 API_NAMES += ("nulavioGuard", "nulavioPrivacy", "nulavioPasswords")
+API_NAMES += ("nulavioLayout",)
 
 
 class PrivilegedApiTest(unittest.TestCase):
@@ -158,6 +159,14 @@ class PrivilegedApiTest(unittest.TestCase):
                         url,
                     )
                 self.assertNotIn("Services.prefs.set", text)
+
+    def test_layout_exposes_only_fixed_presets_without_a_startup_writer(self):
+        api = self.manifest["experiment_apis"]["nulavioLayout"]
+        self.assertNotIn("events", api["parent"])
+        schema = json.loads((SHELL / api["schema"]).read_text())[0]
+        self.assertEqual({f["name"] for f in schema["functions"]}, {"state", "apply"})
+        apply = next(f for f in schema["functions"] if f["name"] == "apply")
+        self.assertEqual(apply["parameters"], [{"name": "preset", "type": "string", "enum": ["lateral", "top", "focus"]}])
 
     def test_profile_selector_is_on_the_toolbar_with_a_shortcut(self):
         self.assertEqual(self.manifest["action"]["default_area"], "navbar")

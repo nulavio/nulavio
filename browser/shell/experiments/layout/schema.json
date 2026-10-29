@@ -1,0 +1,14 @@
+[
+  {
+    "namespace": "nulavioLayout",
+    "description": "Explicit native layout presets in the current profile. Built-in Shell only; no generic preference writer or startup changes.",
+    "functions": [
+      { "name": "state", "type": "function", "async": true, "parameters": [] },
+      {
+        "name": "apply", "type": "function", "async": true,
+        "parameters": [{ "name": "preset", "type": "string", "enum": ["lateral", "top", "focus"] }]
+      }
+    ],
+    "events": [{ "name": "onChanged", "type": "function", "parameters": [] }]
+  }
+]

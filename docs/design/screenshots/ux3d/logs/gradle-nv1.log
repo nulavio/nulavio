@@ -1,0 +1,16 @@
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':nv1:compileJava' (registered by plugin class 'org.gradle.api.plugins.JavaBasePlugin').
+> Error while evaluating property 'javaCompiler' of task ':nv1:compileJava'.
+   > Failed to calculate the value of task ':nv1:compileJava' property 'javaCompiler'.
+      > Toolchain installation '/usr/lib/jvm/java-25-openjdk' does not provide the required capabilities: [JAVA_COMPILER]
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights from a Build Scan (powered by Develocity).
+> Get more help at https://help.gradle.org.
+
+BUILD FAILED in 15s

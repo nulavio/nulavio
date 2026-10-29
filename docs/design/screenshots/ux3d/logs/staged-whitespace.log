@@ -1,0 +1,18 @@
+docs/design/screenshots/ux3d/logs/build-real-2.log:79: trailing whitespace.
++BUILDSTATUS@browser/installer START_make_sourcestamp_file --output ../../dist//nulavio-159.0.en-US.linux-x86_64.txt --buildid-header ../../buildid.h 
+docs/design/screenshots/ux3d/logs/build-real-2.log:81: trailing whitespace.
++BUILDSTATUS@browser/installer END_make_sourcestamp_file --output ../../dist//nulavio-159.0.en-US.linux-x86_64.txt --buildid-header ../../buildid.h 
+docs/design/screenshots/ux3d/logs/build-real-2.log:91: trailing whitespace.
++Making langpack 
+docs/design/screenshots/ux3d/logs/build-real-3.log:79: trailing whitespace.
++BUILDSTATUS@browser/installer START_make_sourcestamp_file --output ../../dist//nulavio-159.0.en-US.linux-x86_64.txt --buildid-header ../../buildid.h 
+docs/design/screenshots/ux3d/logs/build-real-3.log:82: trailing whitespace.
++BUILDSTATUS@browser/installer END_make_sourcestamp_file --output ../../dist//nulavio-159.0.en-US.linux-x86_64.txt --buildid-header ../../buildid.h 
+docs/design/screenshots/ux3d/logs/build-real-3.log:91: trailing whitespace.
++Making langpack 
+docs/design/screenshots/ux3d/logs/build-real.log:80: trailing whitespace.
++BUILDSTATUS@browser/installer START_make_sourcestamp_file --output ../../dist//nulavio-159.0.en-US.linux-x86_64.txt --buildid-header ../../buildid.h 
+docs/design/screenshots/ux3d/logs/build-real.log:82: trailing whitespace.
++BUILDSTATUS@browser/installer END_make_sourcestamp_file --output ../../dist//nulavio-159.0.en-US.linux-x86_64.txt --buildid-header ../../buildid.h 
+docs/design/screenshots/ux3d/logs/build-real.log:92: trailing whitespace.
++Making langpack 

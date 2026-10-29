@@ -1,0 +1,21 @@
+test_icon_sizes_exist_with_exact_dimensions (test_brand_and_docs.AssetsTest.test_icon_sizes_exist_with_exact_dimensions) ... ok
+test_logo_generator_is_deterministic (test_brand_and_docs.AssetsTest.test_logo_generator_is_deterministic) ... ok
+test_svgs_are_static_and_self_contained (test_brand_and_docs.AssetsTest.test_svgs_are_static_and_self_contained) ... ok
+test_symbolic_icon_follows_desktop_colour (test_brand_and_docs.AssetsTest.test_symbolic_icon_follows_desktop_colour) ... ok
+test_adr_has_required_sections (test_brand_and_docs.DocsTest.test_adr_has_required_sections) ... ok
+test_no_absolute_security_claims (test_brand_and_docs.DocsTest.test_no_absolute_security_claims) ... ok
+test_relative_links_resolve (test_brand_and_docs.DocsTest.test_relative_links_resolve) ... ok
+test_required_documents_exist (test_brand_and_docs.DocsTest.test_required_documents_exist) ... ok
+test_all_contrast_pairs_pass (test_brand_and_docs.TokensTest.test_all_contrast_pairs_pass) ... ok
+test_drawing_palette_preserves_ink_and_excludes_old_identity_names (test_brand_and_docs.TokensTest.test_drawing_palette_preserves_ink_and_excludes_old_identity_names) ... ok
+test_every_token_the_pages_use_exists_in_both_themes (test_brand_and_docs.TokensTest.test_every_token_the_pages_use_exists_in_both_themes) ... ok
+test_frost_floor_and_solid_fallback_are_enforced (test_brand_and_docs.TokensTest.test_frost_floor_and_solid_fallback_are_enforced) ... ok
+test_generated_css_is_current (test_brand_and_docs.TokensTest.test_generated_css_is_current) ... ok
+test_generator_refuses_a_colour_defined_for_one_theme (test_brand_and_docs.TokensTest.test_generator_refuses_a_colour_defined_for_one_theme) ... ok
+test_known_contrast_values (test_brand_and_docs.TokensTest.test_known_contrast_values) ... ok
+test_secure_state_is_not_green (test_brand_and_docs.TokensTest.test_secure_state_is_not_green) ... ok
+
+----------------------------------------------------------------------
+Ran 16 tests in 0.312s
+
+OK

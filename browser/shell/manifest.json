@@ -178,6 +178,20 @@
           "startup"
         ]
       }
+    },
+    "nulavioLayout": {
+      "schema": "experiments/layout/schema.json",
+      "parent": {
+        "scopes": [
+          "addon_parent"
+        ],
+        "script": "experiments/layout/parent.js",
+        "paths": [
+          [
+            "nulavioLayout"
+          ]
+        ]
+      }
     }
   },
   "permissions": [

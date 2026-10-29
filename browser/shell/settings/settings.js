@@ -6,6 +6,7 @@ import { localize, t } from "../lib/i18n.js";
 import { TEMPLATE_NAMES, freeName } from "../lib/names.js";
 import { announce, chip, confirmDialog, errorText, h, rerender, temporaryStorageText } from "../lib/ui.js";
 import { setUpAI } from "./ai.js";
+import { setUpLayout } from "./layout.js";
 
 const search = browser.nulavioSearch;
 const profiles = browser.nulavioProfiles;
@@ -916,6 +917,9 @@ function setUpDns() {
 
 localize();
 const ready = [];
+if (browser.nulavioLayout) {
+  ready.push(setUpLayout());
+}
 if (search && profiles && routing && connect) {
   ready.push(setUpSearch(), setUpProfiles(), setUpRouting(), setUpIntegrations());
   if (browser.nulavioAI) {

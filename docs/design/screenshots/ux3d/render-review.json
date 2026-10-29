@@ -1,0 +1,545 @@
+{
+  "runtime": {
+    "version": "159.0",
+    "buildID": "20261029192930",
+    "platformBuildID": "20261028012215",
+    "locale": "pt-BR"
+  },
+  "package": "/home/caiobarbieri/.cache/nulavio-ux/ux3d-woar3pew/final/package.json",
+  "install_copy": "/home/caiobarbieri/.cache/nulavio-ux/ux3d-woar3pew/final/audit-nulavio",
+  "browser_omni_sha256": "27a50fa137eddb9b6d3e37c6d9f61629ca3f088473005bb633bbbe0d676662d2",
+  "scene": "Settings, real native state, 1366x900; comparable before/after top-of-page use native horizontal tabs",
+  "renderedContrast": [
+    {
+      "preset": "lateral",
+      "dark": 0,
+      "bg": "rgb(255, 255, 255)",
+      "colors": [
+        {
+          "text": "Organização das abas",
+          "color": "rgb(58, 98, 115)",
+          "ratio": 6.6151273372461725
+        },
+        {
+          "text": "LateralLista vertical nativa de abas expandida.",
+          "color": "rgb(11, 22, 35)",
+          "ratio": 18.20920177667684
+        },
+        {
+          "text": "Lateral",
+          "color": "rgb(11, 22, 35)",
+          "ratio": 18.20920177667684
+        },
+        {
+          "text": "Lista vertical nativa de abas expandida.",
+          "color": "rgb(58, 98, 115)",
+          "ratio": 6.6151273372461725
+        },
+        {
+          "text": "Abas no topoFaixa horizontal nativa de abas acima da barra de endereço.",
+          "color": "rgb(11, 22, 35)",
+          "ratio": 18.20920177667684
+        },
+        {
+          "text": "Abas no topo",
+          "color": "rgb(11, 22, 35)",
+          "ratio": 18.20920177667684
+        },
+        {
+          "text": "Faixa horizontal nativa de abas acima da barra de endereço.",
+          "color": "rgb(58, 98, 115)",
+          "ratio": 6.6151273372461725
+        },
+        {
+          "text": "FocoAbas verticais nativas compactas, com expansão ao passar o ponteiro. Use o botão da barra lateral para expandir pelo teclado. A barra de endereço e os sinais de segurança continuam visíveis.",
+          "color": "rgb(11, 22, 35)",
+          "ratio": 18.20920177667684
+        },
+        {
+          "text": "Foco",
+          "color": "rgb(11, 22, 35)",
+          "ratio": 18.20920177667684
+        },
+        {
+          "text": "Abas verticais nativas compactas, com expansão ao passar o ponteiro. Use o botão da barra lateral para expandir pelo teclado. A barra de endereço e os sinais de segurança continuam visíveis.",
+          "color": "rgb(58, 98, 115)",
+          "ratio": 6.6151273372461725
+        },
+        {
+          "text": "Janela atual: Lateral.",
+          "color": "rgb(58, 98, 115)",
+          "ratio": 6.6151273372461725
+        }
+      ],
+      "labels": [
+        {
+          "value": "lateral",
+          "name": "\n            \n            LateralLista vertical nativa de abas expandida.\n          ",
+          "hint": "Lista vertical nativa de abas expandida.",
+          "checked": true
+        },
+        {
+          "value": "top",
+          "name": "\n            \n            Abas no topoFaixa horizontal nativa de abas acima da barra de endereço.\n          ",
+          "hint": "Faixa horizontal nativa de abas acima da barra de endereço.",
+          "checked": false
+        },
+        {
+          "value": "focus",
+          "name": "\n            \n            FocoAbas verticais nativas compactas, com expansão ao passar o ponteiro. Use o botão da barra lateral para expandir pelo teclado. A barra de endereço e os sinais de segurança continuam visíveis.\n          ",
+          "hint": "Abas verticais nativas compactas, com expansão ao passar o ponteiro. Use o botão da barra lateral para expandir pelo teclado. A barra de endereço e os sinais de segurança continuam visíveis.",
+          "checked": false
+        }
+      ],
+      "rootOverflow": false
+    },
+    {
+      "preset": "lateral",
+      "dark": 1,
+      "bg": "rgb(17, 36, 50)",
+      "colors": [
+        {
+          "text": "Organização das abas",
+          "color": "rgb(191, 208, 214)",
+          "ratio": 9.989567749409611
+        },
+        {
+          "text": "LateralLista vertical nativa de abas expandida.",
+          "color": "rgb(241, 247, 245)",
+          "ratio": 14.644041768996251
+        },
+        {
+          "text": "Lateral",
+          "color": "rgb(241, 247, 245)",
+          "ratio": 14.644041768996251
+        },
+        {
+          "text": "Lista vertical nativa de abas expandida.",
+          "color": "rgb(191, 208, 214)",
+          "ratio": 9.989567749409611
+        },
+        {
+          "text": "Abas no topoFaixa horizontal nativa de abas acima da barra de endereço.",
+          "color": "rgb(241, 247, 245)",
+          "ratio": 14.644041768996251
+        },
+        {
+          "text": "Abas no topo",
+          "color": "rgb(241, 247, 245)",
+          "ratio": 14.644041768996251
+        },
+        {
+          "text": "Faixa horizontal nativa de abas acima da barra de endereço.",
+          "color": "rgb(191, 208, 214)",
+          "ratio": 9.989567749409611
+        },
+        {
+          "text": "FocoAbas verticais nativas compactas, com expansão ao passar o ponteiro. Use o botão da barra lateral para expandir pelo teclado. A barra de endereço e os sinais de segurança continuam visíveis.",
+          "color": "rgb(241, 247, 245)",
+          "ratio": 14.644041768996251
+        },
+        {
+          "text": "Foco",
+          "color": "rgb(241, 247, 245)",
+          "ratio": 14.644041768996251
+        },
+        {
+          "text": "Abas verticais nativas compactas, com expansão ao passar o ponteiro. Use o botão da barra lateral para expandir pelo teclado. A barra de endereço e os sinais de segurança continuam visíveis.",
+          "color": "rgb(191, 208, 214)",
+          "ratio": 9.989567749409611
+        },
+        {
+          "text": "Janela atual: Lateral.",
+          "color": "rgb(191, 208, 214)",
+          "ratio": 9.989567749409611
+        }
+      ],
+      "labels": [
+        {
+          "value": "lateral",
+          "name": "\n            \n            LateralLista vertical nativa de abas expandida.\n          ",
+          "hint": "Lista vertical nativa de abas expandida.",
+          "checked": true
+        },
+        {
+          "value": "top",
+          "name": "\n            \n            Abas no topoFaixa horizontal nativa de abas acima da barra de endereço.\n          ",
+          "hint": "Faixa horizontal nativa de abas acima da barra de endereço.",
+          "checked": false
+        },
+        {
+          "value": "focus",
+          "name": "\n            \n            FocoAbas verticais nativas compactas, com expansão ao passar o ponteiro. Use o botão da barra lateral para expandir pelo teclado. A barra de endereço e os sinais de segurança continuam visíveis.\n          ",
+          "hint": "Abas verticais nativas compactas, com expansão ao passar o ponteiro. Use o botão da barra lateral para expandir pelo teclado. A barra de endereço e os sinais de segurança continuam visíveis.",
+          "checked": false
+        }
+      ],
+      "rootOverflow": false
+    },
+    {
+      "preset": "top",
+      "dark": 0,
+      "bg": "rgb(255, 255, 255)",
+      "colors": [
+        {
+          "text": "Organização das abas",
+          "color": "rgb(58, 98, 115)",
+          "ratio": 6.6151273372461725
+        },
+        {
+          "text": "LateralLista vertical nativa de abas expandida.",
+          "color": "rgb(11, 22, 35)",
+          "ratio": 18.20920177667684
+        },
+        {
+          "text": "Lateral",
+          "color": "rgb(11, 22, 35)",
+          "ratio": 18.20920177667684
+        },
+        {
+          "text": "Lista vertical nativa de abas expandida.",
+          "color": "rgb(58, 98, 115)",
+          "ratio": 6.6151273372461725
+        },
+        {
+          "text": "Abas no topoFaixa horizontal nativa de abas acima da barra de endereço.",
+          "color": "rgb(11, 22, 35)",
+          "ratio": 18.20920177667684
+        },
+        {
+          "text": "Abas no topo",
+          "color": "rgb(11, 22, 35)",
+          "ratio": 18.20920177667684
+        },
+        {
+          "text": "Faixa horizontal nativa de abas acima da barra de endereço.",
+          "color": "rgb(58, 98, 115)",
+          "ratio": 6.6151273372461725
+        },
+        {
+          "text": "FocoAbas verticais nativas compactas, com expansão ao passar o ponteiro. Use o botão da barra lateral para expandir pelo teclado. A barra de endereço e os sinais de segurança continuam visíveis.",
+          "color": "rgb(11, 22, 35)",
+          "ratio": 18.20920177667684
+        },
+        {
+          "text": "Foco",
+          "color": "rgb(11, 22, 35)",
+          "ratio": 18.20920177667684
+        },
+        {
+          "text": "Abas verticais nativas compactas, com expansão ao passar o ponteiro. Use o botão da barra lateral para expandir pelo teclado. A barra de endereço e os sinais de segurança continuam visíveis.",
+          "color": "rgb(58, 98, 115)",
+          "ratio": 6.6151273372461725
+        },
+        {
+          "text": "Janela atual: Abas no topo.",
+          "color": "rgb(58, 98, 115)",
+          "ratio": 6.6151273372461725
+        }
+      ],
+      "labels": [
+        {
+          "value": "lateral",
+          "name": "\n            \n            LateralLista vertical nativa de abas expandida.\n          ",
+          "hint": "Lista vertical nativa de abas expandida.",
+          "checked": false
+        },
+        {
+          "value": "top",
+          "name": "\n            \n            Abas no topoFaixa horizontal nativa de abas acima da barra de endereço.\n          ",
+          "hint": "Faixa horizontal nativa de abas acima da barra de endereço.",
+          "checked": true
+        },
+        {
+          "value": "focus",
+          "name": "\n            \n            FocoAbas verticais nativas compactas, com expansão ao passar o ponteiro. Use o botão da barra lateral para expandir pelo teclado. A barra de endereço e os sinais de segurança continuam visíveis.\n          ",
+          "hint": "Abas verticais nativas compactas, com expansão ao passar o ponteiro. Use o botão da barra lateral para expandir pelo teclado. A barra de endereço e os sinais de segurança continuam visíveis.",
+          "checked": false
+        }
+      ],
+      "rootOverflow": false
+    },
+    {
+      "preset": "top",
+      "dark": 1,
+      "bg": "rgb(17, 36, 50)",
+      "colors": [
+        {
+          "text": "Organização das abas",
+          "color": "rgb(191, 208, 214)",
+          "ratio": 9.989567749409611
+        },
+        {
+          "text": "LateralLista vertical nativa de abas expandida.",
+          "color": "rgb(241, 247, 245)",
+          "ratio": 14.644041768996251
+        },
+        {
+          "text": "Lateral",
+          "color": "rgb(241, 247, 245)",
+          "ratio": 14.644041768996251
+        },
+        {
+          "text": "Lista vertical nativa de abas expandida.",
+          "color": "rgb(191, 208, 214)",
+          "ratio": 9.989567749409611
+        },
+        {
+          "text": "Abas no topoFaixa horizontal nativa de abas acima da barra de endereço.",
+          "color": "rgb(241, 247, 245)",
+          "ratio": 14.644041768996251
+        },
+        {
+          "text": "Abas no topo",
+          "color": "rgb(241, 247, 245)",
+          "ratio": 14.644041768996251
+        },
+        {
+          "text": "Faixa horizontal nativa de abas acima da barra de endereço.",
+          "color": "rgb(191, 208, 214)",
+          "ratio": 9.989567749409611
+        },
+        {
+          "text": "FocoAbas verticais nativas compactas, com expansão ao passar o ponteiro. Use o botão da barra lateral para expandir pelo teclado. A barra de endereço e os sinais de segurança continuam visíveis.",
+          "color": "rgb(241, 247, 245)",
+          "ratio": 14.644041768996251
+        },
+        {
+          "text": "Foco",
+          "color": "rgb(241, 247, 245)",
+          "ratio": 14.644041768996251
+        },
+        {
+          "text": "Abas verticais nativas compactas, com expansão ao passar o ponteiro. Use o botão da barra lateral para expandir pelo teclado. A barra de endereço e os sinais de segurança continuam visíveis.",
+          "color": "rgb(191, 208, 214)",
+          "ratio": 9.989567749409611
+        },
+        {
+          "text": "Janela atual: Abas no topo.",
+          "color": "rgb(191, 208, 214)",
+          "ratio": 9.989567749409611
+        }
+      ],
+      "labels": [
+        {
+          "value": "lateral",
+          "name": "\n            \n            LateralLista vertical nativa de abas expandida.\n          ",
+          "hint": "Lista vertical nativa de abas expandida.",
+          "checked": false
+        },
+        {
+          "value": "top",
+          "name": "\n            \n            Abas no topoFaixa horizontal nativa de abas acima da barra de endereço.\n          ",
+          "hint": "Faixa horizontal nativa de abas acima da barra de endereço.",
+          "checked": true
+        },
+        {
+          "value": "focus",
+          "name": "\n            \n            FocoAbas verticais nativas compactas, com expansão ao passar o ponteiro. Use o botão da barra lateral para expandir pelo teclado. A barra de endereço e os sinais de segurança continuam visíveis.\n          ",
+          "hint": "Abas verticais nativas compactas, com expansão ao passar o ponteiro. Use o botão da barra lateral para expandir pelo teclado. A barra de endereço e os sinais de segurança continuam visíveis.",
+          "checked": false
+        }
+      ],
+      "rootOverflow": false
+    },
+    {
+      "preset": "focus",
+      "dark": 0,
+      "bg": "rgb(255, 255, 255)",
+      "colors": [
+        {
+          "text": "Organização das abas",
+          "color": "rgb(58, 98, 115)",
+          "ratio": 6.6151273372461725
+        },
+        {
+          "text": "LateralLista vertical nativa de abas expandida.",
+          "color": "rgb(11, 22, 35)",
+          "ratio": 18.20920177667684
+        },
+        {
+          "text": "Lateral",
+          "color": "rgb(11, 22, 35)",
+          "ratio": 18.20920177667684
+        },
+        {
+          "text": "Lista vertical nativa de abas expandida.",
+          "color": "rgb(58, 98, 115)",
+          "ratio": 6.6151273372461725
+        },
+        {
+          "text": "Abas no topoFaixa horizontal nativa de abas acima da barra de endereço.",
+          "color": "rgb(11, 22, 35)",
+          "ratio": 18.20920177667684
+        },
+        {
+          "text": "Abas no topo",
+          "color": "rgb(11, 22, 35)",
+          "ratio": 18.20920177667684
+        },
+        {
+          "text": "Faixa horizontal nativa de abas acima da barra de endereço.",
+          "color": "rgb(58, 98, 115)",
+          "ratio": 6.6151273372461725
+        },
+        {
+          "text": "FocoAbas verticais nativas compactas, com expansão ao passar o ponteiro. Use o botão da barra lateral para expandir pelo teclado. A barra de endereço e os sinais de segurança continuam visíveis.",
+          "color": "rgb(11, 22, 35)",
+          "ratio": 18.20920177667684
+        },
+        {
+          "text": "Foco",
+          "color": "rgb(11, 22, 35)",
+          "ratio": 18.20920177667684
+        },
+        {
+          "text": "Abas verticais nativas compactas, com expansão ao passar o ponteiro. Use o botão da barra lateral para expandir pelo teclado. A barra de endereço e os sinais de segurança continuam visíveis.",
+          "color": "rgb(58, 98, 115)",
+          "ratio": 6.6151273372461725
+        },
+        {
+          "text": "Janela atual: Foco.",
+          "color": "rgb(58, 98, 115)",
+          "ratio": 6.6151273372461725
+        }
+      ],
+      "labels": [
+        {
+          "value": "lateral",
+          "name": "\n            \n            LateralLista vertical nativa de abas expandida.\n          ",
+          "hint": "Lista vertical nativa de abas expandida.",
+          "checked": false
+        },
+        {
+          "value": "top",
+          "name": "\n            \n            Abas no topoFaixa horizontal nativa de abas acima da barra de endereço.\n          ",
+          "hint": "Faixa horizontal nativa de abas acima da barra de endereço.",
+          "checked": false
+        },
+        {
+          "value": "focus",
+          "name": "\n            \n            FocoAbas verticais nativas compactas, com expansão ao passar o ponteiro. Use o botão da barra lateral para expandir pelo teclado. A barra de endereço e os sinais de segurança continuam visíveis.\n          ",
+          "hint": "Abas verticais nativas compactas, com expansão ao passar o ponteiro. Use o botão da barra lateral para expandir pelo teclado. A barra de endereço e os sinais de segurança continuam visíveis.",
+          "checked": true
+        }
+      ],
+      "rootOverflow": false
+    },
+    {
+      "preset": "focus",
+      "dark": 1,
+      "bg": "rgb(17, 36, 50)",
+      "colors": [
+        {
+          "text": "Organização das abas",
+          "color": "rgb(191, 208, 214)",
+          "ratio": 9.989567749409611
+        },
+        {
+          "text": "LateralLista vertical nativa de abas expandida.",
+          "color": "rgb(241, 247, 245)",
+          "ratio": 14.644041768996251
+        },
+        {
+          "text": "Lateral",
+          "color": "rgb(241, 247, 245)",
+          "ratio": 14.644041768996251
+        },
+        {
+          "text": "Lista vertical nativa de abas expandida.",
+          "color": "rgb(191, 208, 214)",
+          "ratio": 9.989567749409611
+        },
+        {
+          "text": "Abas no topoFaixa horizontal nativa de abas acima da barra de endereço.",
+          "color": "rgb(241, 247, 245)",
+          "ratio": 14.644041768996251
+        },
+        {
+          "text": "Abas no topo",
+          "color": "rgb(241, 247, 245)",
+          "ratio": 14.644041768996251
+        },
+        {
+          "text": "Faixa horizontal nativa de abas acima da barra de endereço.",
+          "color": "rgb(191, 208, 214)",
+          "ratio": 9.989567749409611
+        },
+        {
+          "text": "FocoAbas verticais nativas compactas, com expansão ao passar o ponteiro. Use o botão da barra lateral para expandir pelo teclado. A barra de endereço e os sinais de segurança continuam visíveis.",
+          "color": "rgb(241, 247, 245)",
+          "ratio": 14.644041768996251
+        },
+        {
+          "text": "Foco",
+          "color": "rgb(241, 247, 245)",
+          "ratio": 14.644041768996251
+        },
+        {
+          "text": "Abas verticais nativas compactas, com expansão ao passar o ponteiro. Use o botão da barra lateral para expandir pelo teclado. A barra de endereço e os sinais de segurança continuam visíveis.",
+          "color": "rgb(191, 208, 214)",
+          "ratio": 9.989567749409611
+        },
+        {
+          "text": "Janela atual: Foco.",
+          "color": "rgb(191, 208, 214)",
+          "ratio": 9.989567749409611
+        }
+      ],
+      "labels": [
+        {
+          "value": "lateral",
+          "name": "\n            \n            LateralLista vertical nativa de abas expandida.\n          ",
+          "hint": "Lista vertical nativa de abas expandida.",
+          "checked": false
+        },
+        {
+          "value": "top",
+          "name": "\n            \n            Abas no topoFaixa horizontal nativa de abas acima da barra de endereço.\n          ",
+          "hint": "Faixa horizontal nativa de abas acima da barra de endereço.",
+          "checked": false
+        },
+        {
+          "value": "focus",
+          "name": "\n            \n            FocoAbas verticais nativas compactas, com expansão ao passar o ponteiro. Use o botão da barra lateral para expandir pelo teclado. A barra de endereço e os sinais de segurança continuam visíveis.\n          ",
+          "hint": "Abas verticais nativas compactas, com expansão ao passar o ponteiro. Use o botão da barra lateral para expandir pelo teclado. A barra de endereço e os sinais de segurança continuam visíveis.",
+          "checked": true
+        }
+      ],
+      "rootOverflow": false
+    }
+  ],
+  "contentMedia": {
+    "motion": true,
+    "contrast": true,
+    "transparency": false
+  },
+  "nativeMedia": {
+    "motion": true,
+    "contrast": true,
+    "transparency": true
+  },
+  "rubric": {
+    "hierarchy": 3,
+    "layout": 3,
+    "type": 2,
+    "color": 3,
+    "spacing": 2,
+    "states": 3,
+    "reflow": 3,
+    "accessibility": 2,
+    "copy": 3,
+    "distinctiveness": 2
+  },
+  "limits": [
+    "headless; no Orca speech or physical desktop certification",
+    "Native controls and established Shell CSS/tokens reused",
+    "Reflow/font-200 and keyboard are separately covered by test_layout_presets"
+  ],
+  "mediaExplanation": {
+    "native": "All three real chrome media queries become true after restart with ui.useAccessibilityTheme, ui.prefersReducedMotion and ui.prefersReducedTransparency set.",
+    "content": "Reduced transparency remains false in the Shell document; Gecko159 Gecko_MediaFeatures_PrefersReducedTransparency returns false when its RFP target applies. No protection is disabled to alter this result. Shell surfaces remain opaque.",
+    "source": "Gecko159 layout/style/nsMediaFeatures.cpp:298-304 and 323-343; widget/nsXPLookAndFeel.cpp:145-147."
+  },
+  "visualReview": "Wide light/dark presets preserve native navigation and security controls above the Settings form. Choices and descriptions stay aligned; Focus uses the real compact native tab list. Narrow 320px/200% flows vertically with readable wrapping and scrolling; no section overflow was measured. Native glyphs, typography and existing Shell tokens are retained."
+}

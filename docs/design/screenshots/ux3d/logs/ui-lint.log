@@ -1,0 +1,4 @@
+ui_lint 1.0.0: 95 files · 0 error · 0 warn · 0 info rule types
+
+Signals: 38 distinct font sizes · fonts: JetBrains Mono, Noto Sans · 325 raw colors outside tokens · 0 arbitrary utility values
+24 finding(s) on lines this change did not touch are hidden; run without --changed to list them.

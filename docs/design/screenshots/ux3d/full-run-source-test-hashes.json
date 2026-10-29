@@ -1,0 +1,15 @@
+{
+  "browser/shell/_locales/en/messages.json": "8d0f46e044b81ff0eee24a3a2e029ab1221960f3cbd3387902dd22a824fd8d89",
+  "browser/shell/_locales/pt_BR/messages.json": "1493d73e832caea7bd0444566af199dc3f99ee3acad069bad3ef9b6a77b6c4ef",
+  "browser/shell/manifest.json": "ab32b448cbd1323525e11898270b472a677f54e62f7414bb8ddb40249b70dd73",
+  "browser/shell/settings/settings.html": "59db7ccd47c74036cb19f58dbad7dc73c3289496a8e4e68314a8eae89fdda967",
+  "browser/shell/settings/settings.js": "a42699cc507f78c1d24bb8f7da2ede8a978bd1ff6213c4686b3d6a285ceded6b",
+  "tests/integration/test_temporary.py": "6c36733675555abf0291be0d80d7ab995a95c0ab3db047ec0dde172e4cec041c",
+  "tests/integration/test_window_band.py": "05d205f6ee7ea492af7948161662e5599c8765e3fa628f511872b6ff5f2bc465",
+  "tests/unit/test_shell.py": "6c9160b7a9b1475fb1b05e32694d35830dc4486e28674250bde6b9ba41691bc7",
+  "browser/shell/experiments/layout/parent.js": "02438d16ee42fe1d666b054dccd377074d2a9fe69f3fed6219c1b00a52b045ac",
+  "browser/shell/experiments/layout/schema.json": "4780c6ffea6956a42ce379fd66f0006baf4bccf25631cc87e85c79a388e74800",
+  "browser/shell/modules/NulavioLayout.sys.mjs": "9f8bcbc329caf62d16652cefec2da224e969b7e5600af3c11801342fba4f2baf",
+  "browser/shell/settings/layout.js": "f83c24a050277f343353dace009efea6ca78c833c0e2ed6d535f0b3a0a148552",
+  "tests/integration/test_layout_presets.py": "03d88ca161607d91ef39456c13967b522f25b3446bf31ebb997c31ee3f27e396"
+}

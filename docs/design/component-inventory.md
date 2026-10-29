@@ -12,7 +12,7 @@ Status per component of the browser window and Nulavio's own pages. "Upstream" m
 | Crashed tab | `[crashed]` | Upstream | Review copy and icon (M6) |
 | Tab groups | Native `tab-group`, editor, list and address-bar actions | UX3B: neutral names, token swatches/thin lines, native semantics; new reserved colours filtered, current legacy value preserved | Physical KDE/Orca checks; see [release evidence](screenshots/ux3b/release-verification.json) |
 | Containers | `.tab-context-line`, usercontext | Upstream | — |
-| Vertical tabs | `sidebar.verticalTabs`, `#tabbrowser-tabs[orient="vertical"]` | **Horizon**; vertical mark | Layout choice in onboarding (M6) |
+| Vertical tabs / layout presets | Native Gecko159 sidebar and tab strip; `NulavioLayout` | UX3D: explicit Lateral, Tabs on top and Focus in Settings; live Custom state, native restoration and keyboard access | Safe new-profile adoption and first-run choice; [evidence](screenshots/ux3d/verification.json) |
 | Tab search | List all tabs (`alltabs-button`) | Upstream | Keep; promote in onboarding tips |
 | Workspaces | — (tab groups and containers exist) | Not started | Data model proposal before UI (M4+) |
 | **Toolbar** | `#nav-bar`, CustomizableUI | **Horizon** colours, 10 px buttons | — |

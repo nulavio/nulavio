@@ -1,0 +1,45 @@
+test_explicit_presets_move_real_tabs_and_survive_restart (test_layout_presets.LayoutPresetsTest.test_explicit_presets_move_real_tabs_and_survive_restart) ... ok
+test_native_controls_and_per_window_state_are_observed_and_cleanup_is_idempotent (test_layout_presets.LayoutPresetsTest.test_native_controls_and_per_window_state_are_observed_and_cleanup_is_idempotent) ... ERROR
+test_preserves_position_width_tools_bookmarks_density_and_assistant (test_layout_presets.LayoutPresetsTest.test_preserves_position_width_tools_bookmarks_density_and_assistant) ... ok
+test_profile_preferences_do_not_cross_independent_profiles (test_layout_presets.LayoutPresetsTest.test_profile_preferences_do_not_cross_independent_profiles) ... ok
+test_reading_settings_does_not_change_native_preferences (test_layout_presets.LayoutPresetsTest.test_reading_settings_does_not_change_native_preferences) ... ok
+test_refusals_preserve_preferences_and_the_queue_recovers (test_layout_presets.LayoutPresetsTest.test_refusals_preserve_preferences_and_the_queue_recovers) ... ok
+test_settings_keyboard_native_focus_and_error_recovery (test_layout_presets.LayoutPresetsTest.test_settings_keyboard_native_focus_and_error_recovery) ... FAIL
+test_settings_reflow_200_percent_themes_and_accessibility_preferences (test_layout_presets.LayoutPresetsTest.test_settings_reflow_200_percent_themes_and_accessibility_preferences) ... FAIL
+
+======================================================================
+ERROR: test_native_controls_and_per_window_state_are_observed_and_cleanup_is_idempotent (test_layout_presets.LayoutPresetsTest.test_native_controls_and_per_window_state_are_observed_and_cleanup_is_idempotent)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/caiobarbieri/.t3/worktrees/2026-10-24-voc-o-tech-lead-principal-c5c1b438/t3-60a73356/tests/integration/test_layout_presets.py", line 94, in test_native_controls_and_per_window_state_are_observed_and_cleanup_is_idempotent
+    self.m.switch_to(second)
+    ~~~~~~~~~~~~~~~~^^^^^^^^
+  File "/home/caiobarbieri/.t3/worktrees/2026-10-24-voc-o-tech-lead-principal-c5c1b438/t3-60a73356/tests/lib/marionette.py", line 152, in switch_to
+    self.send("WebDriver:SwitchToWindow", {"handle": handle, "focus": False})
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/caiobarbieri/.t3/worktrees/2026-10-24-voc-o-tech-lead-principal-c5c1b438/t3-60a73356/tests/lib/marionette.py", line 86, in send
+    raise MarionetteError(error)
+marionette.MarionetteError: no such window: Unable to locate window: 16
+
+======================================================================
+FAIL: test_settings_keyboard_native_focus_and_error_recovery (test_layout_presets.LayoutPresetsTest.test_settings_keyboard_native_focus_and_error_recovery)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/caiobarbieri/.t3/worktrees/2026-10-24-voc-o-tech-lead-principal-c5c1b438/t3-60a73356/tests/integration/test_layout_presets.py", line 213, in test_settings_keyboard_native_focus_and_error_recovery
+    self.assertTrue(harness.wait_until(lambda: self.selected() == preset, 10))
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: False is not true
+
+======================================================================
+FAIL: test_settings_reflow_200_percent_themes_and_accessibility_preferences (test_layout_presets.LayoutPresetsTest.test_settings_reflow_200_percent_themes_and_accessibility_preferences)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/caiobarbieri/.t3/worktrees/2026-10-24-voc-o-tech-lead-principal-c5c1b438/t3-60a73356/tests/integration/test_layout_presets.py", line 252, in test_settings_reflow_200_percent_themes_and_accessibility_preferences
+    self.m.send("WebDriver:ElementClick", {"id": self.m.find_element("#layout input[value=top]")})
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 95 not less than or equal to 44 : {'viewport': 79, 'w': 43, 'scroll': 95, 'rootScroll': 258, 'font': '32px', 'labels': [{'w': 70, 'scroll': 70, 'h': 1430}, {'w': 70, 'scroll': 70, 'h': 2246}, {'w': 70, 'scroll': 70, 'h': 5738}]}
+
+----------------------------------------------------------------------
+Ran 8 tests in 50.895s
+
+FAILED (failures=2, errors=1)

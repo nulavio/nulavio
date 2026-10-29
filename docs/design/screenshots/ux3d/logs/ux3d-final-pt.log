@@ -1,0 +1,15 @@
+test_explicit_presets_move_real_tabs_and_survive_restart (test_layout_presets.LayoutPresetsTest.test_explicit_presets_move_real_tabs_and_survive_restart) ... ok
+test_focus_real_pointer_hover_and_custom_state_restore (test_layout_presets.LayoutPresetsTest.test_focus_real_pointer_hover_and_custom_state_restore) ... ok
+test_native_controls_and_per_window_state_are_observed_and_cleanup_is_idempotent (test_layout_presets.LayoutPresetsTest.test_native_controls_and_per_window_state_are_observed_and_cleanup_is_idempotent) ... ok
+test_preserves_position_width_tools_bookmarks_density_and_assistant (test_layout_presets.LayoutPresetsTest.test_preserves_position_width_tools_bookmarks_density_and_assistant) ... ok
+test_private_and_fullscreen_security_matrix (test_layout_presets.LayoutPresetsTest.test_private_and_fullscreen_security_matrix) ... ok
+test_profile_preferences_do_not_cross_independent_profiles (test_layout_presets.LayoutPresetsTest.test_profile_preferences_do_not_cross_independent_profiles) ... ok
+test_reading_settings_does_not_change_native_preferences (test_layout_presets.LayoutPresetsTest.test_reading_settings_does_not_change_native_preferences) ... ok
+test_refusals_preserve_preferences_and_the_queue_recovers (test_layout_presets.LayoutPresetsTest.test_refusals_preserve_preferences_and_the_queue_recovers) ... ok
+test_settings_keyboard_native_focus_and_error_recovery (test_layout_presets.LayoutPresetsTest.test_settings_keyboard_native_focus_and_error_recovery) ... ok
+test_settings_reflow_200_percent_themes_and_accessibility_preferences (test_layout_presets.LayoutPresetsTest.test_settings_reflow_200_percent_themes_and_accessibility_preferences) ... ok
+
+----------------------------------------------------------------------
+Ran 10 tests in 130.443s
+
+OK

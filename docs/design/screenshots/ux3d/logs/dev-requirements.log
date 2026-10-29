@@ -1,0 +1,7 @@
+Collecting ruff==0.17.2 (from -r requirements/dev.txt (line 3))
+  Using cached ruff-0.17.2-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (10.5 MB)
+Installing collected packages: ruff
+Successfully installed ruff-0.17.2
+
+[notice] A new release of pip is available: 26.0.1 -> 26.2.2
+[notice] To update, run: /home/caiobarbieri/.cache/nulavio-ux/ux3d-woar3pew/venv/bin/python3 -m pip install --upgrade pip

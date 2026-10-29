@@ -1,0 +1,982 @@
+[
+  {
+    "sha256": "a2d174166d2c0853e43a0d5f167834ceb77783f60e9d682e1ab0385c036b7e4e",
+    "file": "after-dark.png"
+  },
+  {
+    "sha256": "087df54653e49ab1d48a47b142bbd1a864f810b7bcd1a593af2474a00f5f05bd",
+    "file": "after-light.png"
+  },
+  {
+    "sha256": "a3253c5fc1f3527999be8b170f8a202c9c38c002cf3299db7f2269345795a58f",
+    "file": "audit-initial-FAIL.py.txt"
+  },
+  {
+    "sha256": "7427ffd78280aae37833a6e8aa4c0e0ab94fe5f7a20a9e1b6aa38284e85ad0e6",
+    "file": "before-dark.png"
+  },
+  {
+    "sha256": "9a221718b90a0082a2328fca050345d32b0b90cbd941d2d46b97e79ad32e7d0a",
+    "file": "before-light.png"
+  },
+  {
+    "sha256": "2b57ddaaf3b80ff5b1203cff1bd9222b67ca1768985fc1fd87f3bd13e327d88b",
+    "file": "custom-native-collapsed.png"
+  },
+  {
+    "sha256": "e6fc74d83fef3d3bb2e75897248e4d46f9f905fa36c437ab7059922a1252f411",
+    "file": "en/fullscreen-focus-dark.png"
+  },
+  {
+    "sha256": "0f75586455a71e1d99c7469306fffdee829e7982de0eb530c28d03e76f036044",
+    "file": "en/fullscreen-focus-light.png"
+  },
+  {
+    "sha256": "e6fc74d83fef3d3bb2e75897248e4d46f9f905fa36c437ab7059922a1252f411",
+    "file": "en/fullscreen-lateral-dark.png"
+  },
+  {
+    "sha256": "0f75586455a71e1d99c7469306fffdee829e7982de0eb530c28d03e76f036044",
+    "file": "en/fullscreen-lateral-light.png"
+  },
+  {
+    "sha256": "e6fc74d83fef3d3bb2e75897248e4d46f9f905fa36c437ab7059922a1252f411",
+    "file": "en/fullscreen-top-dark.png"
+  },
+  {
+    "sha256": "0f75586455a71e1d99c7469306fffdee829e7982de0eb530c28d03e76f036044",
+    "file": "en/fullscreen-top-light.png"
+  },
+  {
+    "sha256": "12102c67392b8455615bbc59f599732693a5fe12585afddba2ce653a1a7ca258",
+    "file": "en/fullscreen.json"
+  },
+  {
+    "sha256": "ba810d44c77b02b96b32993cf9c83c27f3c4063e51de570d256c1674a284b9bd",
+    "file": "en/reflow.json"
+  },
+  {
+    "sha256": "b5821d08d80488fb9027044eb8badeb31937cf660df9ee5e81b4c44d38d962d0",
+    "file": "en/restart.json"
+  },
+  {
+    "sha256": "22b92b5e71b74ad28f3ba9f879bc9754d5e638b3417af20cd7579147122c2e9e",
+    "file": "en/section-focus-dark-320-200.png"
+  },
+  {
+    "sha256": "b07a19d9b8ee0c6cac4cafe4b8c73b3d7c521225f1023636dc0a0eae7e388426",
+    "file": "en/section-focus-light-320-200.png"
+  },
+  {
+    "sha256": "97d1cfc2d0153aa09cc479aacc40715b6d36fc80882bebba9d81737b4cce40fc",
+    "file": "en/section-lateral-dark-320-200.png"
+  },
+  {
+    "sha256": "a8d75ee0bffb5a22c8c51eac5b22416c1a283eeb0260ab45ca1167f3e267dbe7",
+    "file": "en/section-lateral-light-320-200.png"
+  },
+  {
+    "sha256": "c91be12e4d7dc6520526d1eb43c2b51a118e2907eb61ff8175b4a431c48d4ab7",
+    "file": "en/section-top-dark-320-200.png"
+  },
+  {
+    "sha256": "625f497f45f896b02835f53abb36719a6d0e26a1fae9a4a8c1485a3e94d348f8",
+    "file": "en/section-top-light-320-200.png"
+  },
+  {
+    "sha256": "9b746df2f8cbc40c6958b5c31f8a0f3bce9981eba4e8461d4c3a48a4b22c916c",
+    "file": "en/settings-accessibility-preferences.png"
+  },
+  {
+    "sha256": "057d8c72377083461558452a3615680d84522903bacb72da0e8477fa7d641e85",
+    "file": "en/settings-focus-dark-1366-100.png"
+  },
+  {
+    "sha256": "e57910e775dcb1ea8a55e0e1746d63712e4f7ac00fdc63fbd8f1bdbb13ac53f6",
+    "file": "en/settings-focus-dark-320-200.png"
+  },
+  {
+    "sha256": "db24a61a9020a33cc6ee0b87a3e16d72978d068a3618bd26a5803ad44b2adbf1",
+    "file": "en/settings-focus-dark-390-100.png"
+  },
+  {
+    "sha256": "ca0b581d08bbcb005077e8416ea087a8f582b8c92a6fb0b643b0fd9e80db40f9",
+    "file": "en/settings-focus-light-1366-100.png"
+  },
+  {
+    "sha256": "fbb6e99f9b58f7b933c73a547985b97aefa362f5ecbe4a6b91b58c71b0115063",
+    "file": "en/settings-focus-light-320-200.png"
+  },
+  {
+    "sha256": "5e35e172d9cc90738300aa9fc2cb9ce6e1add0a7957f82db06bad83d029e0526",
+    "file": "en/settings-focus-light-390-100.png"
+  },
+  {
+    "sha256": "f4f31d69e39ca8080ab2d36a45136dfa4e3badca13674e6d3047abaa6b623740",
+    "file": "en/settings-lateral-dark-1366-100.png"
+  },
+  {
+    "sha256": "7e8a35224c8845807f28575264dab80d0b482aba28a74553479410575151977a",
+    "file": "en/settings-lateral-dark-320-200.png"
+  },
+  {
+    "sha256": "af5edb8699b37d95f97872eac55cfada718a72b8db34af26ca2a78b603f2eb4f",
+    "file": "en/settings-lateral-dark-390-100.png"
+  },
+  {
+    "sha256": "54365a3435ea463c39a20a8067057c1495f0900a41dcec44034c17cfeed16109",
+    "file": "en/settings-lateral-light-1366-100.png"
+  },
+  {
+    "sha256": "173baee151769d631ea69e6eecae607b68b0d08ce811bfb5c69a77bfe87d8200",
+    "file": "en/settings-lateral-light-320-200.png"
+  },
+  {
+    "sha256": "b88b6524e28ce822a8499426379c8512efeb7daec4c4c08ad905b58f8db4c3b9",
+    "file": "en/settings-lateral-light-390-100.png"
+  },
+  {
+    "sha256": "b323cb7dd83efa5d50c043e806577a7a1dfe84b1c2a364993e1b0fe017a93a6a",
+    "file": "en/settings-top-dark-1366-100.png"
+  },
+  {
+    "sha256": "90f37b645a36faaaf9dcd6363a549d25bf786029af4cb655d0d352882944ef78",
+    "file": "en/settings-top-dark-320-200.png"
+  },
+  {
+    "sha256": "551f826b38cce5ccbd5f46b1cad4f75c3907fcca061941ec3b9a0cfa1b2ebae9",
+    "file": "en/settings-top-dark-390-100.png"
+  },
+  {
+    "sha256": "1782bcf9f3fc737379414e16a62c684c9b606745ff11daa765a241c44484a4e6",
+    "file": "en/settings-top-light-1366-100.png"
+  },
+  {
+    "sha256": "ffd77448888b6296633263ed1823066923589c95d9f67323ab1bc710189672d3",
+    "file": "en/settings-top-light-320-200.png"
+  },
+  {
+    "sha256": "9258b8f667f92a5fcc26e8b5887759b94347309b9982b1fedf63b6b994637075",
+    "file": "en/settings-top-light-390-100.png"
+  },
+  {
+    "sha256": "2dd86b8f5358627d85598f659a0d68253045442e8ee84d049b403e96ede334dc",
+    "file": "en-reflow/accessibility-media.json"
+  },
+  {
+    "sha256": "ba810d44c77b02b96b32993cf9c83c27f3c4063e51de570d256c1674a284b9bd",
+    "file": "en-reflow/reflow.json"
+  },
+  {
+    "sha256": "22b92b5e71b74ad28f3ba9f879bc9754d5e638b3417af20cd7579147122c2e9e",
+    "file": "en-reflow/section-focus-dark-320-200.png"
+  },
+  {
+    "sha256": "b07a19d9b8ee0c6cac4cafe4b8c73b3d7c521225f1023636dc0a0eae7e388426",
+    "file": "en-reflow/section-focus-light-320-200.png"
+  },
+  {
+    "sha256": "97d1cfc2d0153aa09cc479aacc40715b6d36fc80882bebba9d81737b4cce40fc",
+    "file": "en-reflow/section-lateral-dark-320-200.png"
+  },
+  {
+    "sha256": "a8d75ee0bffb5a22c8c51eac5b22416c1a283eeb0260ab45ca1167f3e267dbe7",
+    "file": "en-reflow/section-lateral-light-320-200.png"
+  },
+  {
+    "sha256": "c91be12e4d7dc6520526d1eb43c2b51a118e2907eb61ff8175b4a431c48d4ab7",
+    "file": "en-reflow/section-top-dark-320-200.png"
+  },
+  {
+    "sha256": "625f497f45f896b02835f53abb36719a6d0e26a1fae9a4a8c1485a3e94d348f8",
+    "file": "en-reflow/section-top-light-320-200.png"
+  },
+  {
+    "sha256": "4e2ad917d0a766872dc7009363be7f45c3a7cd767b149fb15326341283769a88",
+    "file": "en-reflow/settings-accessibility-preferences.png"
+  },
+  {
+    "sha256": "a650429a2b2035259f5b2d70ed4bd4bee1cb082323d178afb5e4dfa483893754",
+    "file": "en-reflow/settings-focus-dark-1366-100.png"
+  },
+  {
+    "sha256": "e57910e775dcb1ea8a55e0e1746d63712e4f7ac00fdc63fbd8f1bdbb13ac53f6",
+    "file": "en-reflow/settings-focus-dark-320-200.png"
+  },
+  {
+    "sha256": "db24a61a9020a33cc6ee0b87a3e16d72978d068a3618bd26a5803ad44b2adbf1",
+    "file": "en-reflow/settings-focus-dark-390-100.png"
+  },
+  {
+    "sha256": "9cb1982a713dfc26cc66555a2e937cd6b86fb38ba9c75f27ba73b70144513a22",
+    "file": "en-reflow/settings-focus-light-1366-100.png"
+  },
+  {
+    "sha256": "fbb6e99f9b58f7b933c73a547985b97aefa362f5ecbe4a6b91b58c71b0115063",
+    "file": "en-reflow/settings-focus-light-320-200.png"
+  },
+  {
+    "sha256": "5e35e172d9cc90738300aa9fc2cb9ce6e1add0a7957f82db06bad83d029e0526",
+    "file": "en-reflow/settings-focus-light-390-100.png"
+  },
+  {
+    "sha256": "5dc4f1047dfa9a7b493fec771eb39cfcdd67ac38237ce01b91efbc182e7864c6",
+    "file": "en-reflow/settings-lateral-dark-1366-100.png"
+  },
+  {
+    "sha256": "7e8a35224c8845807f28575264dab80d0b482aba28a74553479410575151977a",
+    "file": "en-reflow/settings-lateral-dark-320-200.png"
+  },
+  {
+    "sha256": "7de5b640c3f6d9f1d7240187fe780ac122245658f6e0b6a44d8dd47665c69448",
+    "file": "en-reflow/settings-lateral-dark-390-100.png"
+  },
+  {
+    "sha256": "0bdbfa06df8f35e4369bee1e257e82ffe7becacfb8f4116e6d8d167b8802dca2",
+    "file": "en-reflow/settings-lateral-light-1366-100.png"
+  },
+  {
+    "sha256": "173baee151769d631ea69e6eecae607b68b0d08ce811bfb5c69a77bfe87d8200",
+    "file": "en-reflow/settings-lateral-light-320-200.png"
+  },
+  {
+    "sha256": "84d2ae773d3df3cd7dbe24796ea62612c5dd43cb6ca57289da6bc144b1d473ef",
+    "file": "en-reflow/settings-lateral-light-390-100.png"
+  },
+  {
+    "sha256": "87c194087efeb894f023e4892eec8f079a12e3dcb8c0f64b0afaad1104ff3eda",
+    "file": "en-reflow/settings-top-dark-1366-100.png"
+  },
+  {
+    "sha256": "90f37b645a36faaaf9dcd6363a549d25bf786029af4cb655d0d352882944ef78",
+    "file": "en-reflow/settings-top-dark-320-200.png"
+  },
+  {
+    "sha256": "551f826b38cce5ccbd5f46b1cad4f75c3907fcca061941ec3b9a0cfa1b2ebae9",
+    "file": "en-reflow/settings-top-dark-390-100.png"
+  },
+  {
+    "sha256": "3f6c69e20fdc89fbdc9c824a4814b73a5758c2665c6fa3737dfbff9320d1defc",
+    "file": "en-reflow/settings-top-light-1366-100.png"
+  },
+  {
+    "sha256": "ffd77448888b6296633263ed1823066923589c95d9f67323ab1bc710189672d3",
+    "file": "en-reflow/settings-top-light-320-200.png"
+  },
+  {
+    "sha256": "9258b8f667f92a5fcc26e8b5887759b94347309b9982b1fedf63b6b994637075",
+    "file": "en-reflow/settings-top-light-390-100.png"
+  },
+  {
+    "sha256": "51603bd73ca6a0cfd0946527e53760ee419f5ccfd1769a3fe51e2180b9e1930f",
+    "file": "focus-dark.png"
+  },
+  {
+    "sha256": "4355708f9c77012a75c19ddf104705b0f62650ded355b421fb81a7cb747ad152",
+    "file": "focus-light.png"
+  },
+  {
+    "sha256": "2b70d87e72dba44cf830617d4e268dd39cc8f429a344bce776da6c3e599d774c",
+    "file": "full-run-layout/fullscreen-focus-dark.png"
+  },
+  {
+    "sha256": "97d03ed22a590f7cf45dc95251bf754c705e0333e739d939d10a8a0d37217b04",
+    "file": "full-run-layout/fullscreen-focus-light.png"
+  },
+  {
+    "sha256": "2b70d87e72dba44cf830617d4e268dd39cc8f429a344bce776da6c3e599d774c",
+    "file": "full-run-layout/fullscreen-lateral-dark.png"
+  },
+  {
+    "sha256": "97d03ed22a590f7cf45dc95251bf754c705e0333e739d939d10a8a0d37217b04",
+    "file": "full-run-layout/fullscreen-lateral-light.png"
+  },
+  {
+    "sha256": "2b70d87e72dba44cf830617d4e268dd39cc8f429a344bce776da6c3e599d774c",
+    "file": "full-run-layout/fullscreen-top-dark.png"
+  },
+  {
+    "sha256": "97d03ed22a590f7cf45dc95251bf754c705e0333e739d939d10a8a0d37217b04",
+    "file": "full-run-layout/fullscreen-top-light.png"
+  },
+  {
+    "sha256": "12102c67392b8455615bbc59f599732693a5fe12585afddba2ce653a1a7ca258",
+    "file": "full-run-layout/fullscreen.json"
+  },
+  {
+    "sha256": "984828d6c4dcb7e940388eff6885d424a31d81cd86bb26273cee8a0bd2b43dcd",
+    "file": "full-run-layout/reflow.json"
+  },
+  {
+    "sha256": "d4d1ace06b7915537d89cd071ce1a292b8713f90fb57642eece14392ac3d9527",
+    "file": "full-run-layout/restart.json"
+  },
+  {
+    "sha256": "31cc0e08e3919ddf82a48ba89f64546ed58204ccdd7112998864f15fb07f22a6",
+    "file": "full-run-layout/section-focus-dark-320-200.png"
+  },
+  {
+    "sha256": "9fad44aec8946f4f949a4586549b9ae83f95c5fb38ff27cb0bc3f8b5a9864bcf",
+    "file": "full-run-layout/section-focus-light-320-200.png"
+  },
+  {
+    "sha256": "d0a990332c0f88bbc99e7696ea1bc0ef6dd7b231310cc6fd591be4019faeef0e",
+    "file": "full-run-layout/section-lateral-dark-320-200.png"
+  },
+  {
+    "sha256": "ff16de95d71b6a8cf39f2dd3dd05a6b560e312e665e600d7732cf3e81e2a03ec",
+    "file": "full-run-layout/section-lateral-light-320-200.png"
+  },
+  {
+    "sha256": "287d791a6c556a24dfbab6b16422605ad7efba921b87d1e4804a56d3dad7a1cf",
+    "file": "full-run-layout/section-top-dark-320-200.png"
+  },
+  {
+    "sha256": "d255d68a4abe679201b2a68167367bd7058cadb1ab9c0def2e91ddd26c992033",
+    "file": "full-run-layout/section-top-light-320-200.png"
+  },
+  {
+    "sha256": "ee4c650385f627c2030be8d297ec0b4f087c6d3d75c3d8e9f25245e4042be8a5",
+    "file": "full-run-layout/settings-accessibility-preferences.png"
+  },
+  {
+    "sha256": "dc14e7413dc81fd8e423ce258c79f9e68cc724cb9507d19506b6bd9ad88f98d2",
+    "file": "full-run-layout/settings-focus-dark-1366-100.png"
+  },
+  {
+    "sha256": "f9afed82b94d1741c438cbcb5db781084c6af58212d0810e971b7f8a41c6dd3d",
+    "file": "full-run-layout/settings-focus-dark-320-200.png"
+  },
+  {
+    "sha256": "d955bf203651bdc29ca0743a7e21a38a795339ab96603e3602ace1871b390bf7",
+    "file": "full-run-layout/settings-focus-dark-390-100.png"
+  },
+  {
+    "sha256": "3a59c93157193eee365db08691202c9587590ad0725850bad196854a4587c03b",
+    "file": "full-run-layout/settings-focus-light-1366-100.png"
+  },
+  {
+    "sha256": "6aa530e4b117b1c4582dcf04bf86101fe3593de1e825ff6de3201fb0eba23261",
+    "file": "full-run-layout/settings-focus-light-320-200.png"
+  },
+  {
+    "sha256": "3b7e35a342bb8a0fbb854ff381d60585c2daea6dd0ac78582cf9b2ab440ba809",
+    "file": "full-run-layout/settings-focus-light-390-100.png"
+  },
+  {
+    "sha256": "fd0f9fd818b825735bf61500349731e92f0078aca11b9eef4331dc371d051ecb",
+    "file": "full-run-layout/settings-lateral-dark-1366-100.png"
+  },
+  {
+    "sha256": "c971ced00b708dbc221ab8b7e1890a3baaa6b4408fbf054101cac26b2355bee3",
+    "file": "full-run-layout/settings-lateral-dark-320-200.png"
+  },
+  {
+    "sha256": "82793c241108b1bf6aabbedec95984a69c9abad8c266b8c553d31e71be2c87fe",
+    "file": "full-run-layout/settings-lateral-dark-390-100.png"
+  },
+  {
+    "sha256": "0030e31005cf00edb297064c5791364fba47397a5a5abc889ee7486e047b1ce5",
+    "file": "full-run-layout/settings-lateral-light-1366-100.png"
+  },
+  {
+    "sha256": "d8edf42f9ff1880635a080e763795c74ff44192bc74a973feb252acae6a0f91e",
+    "file": "full-run-layout/settings-lateral-light-320-200.png"
+  },
+  {
+    "sha256": "bc6e745b1e13bd710c2d5314f9980fa5e4bfcadc5581d12dfec377566dd65029",
+    "file": "full-run-layout/settings-lateral-light-390-100.png"
+  },
+  {
+    "sha256": "08805c7b5b6a2d93b71353414a675fb83c03b0ca2e3fe6e8cd6cfb435ca82f43",
+    "file": "full-run-layout/settings-top-dark-1366-100.png"
+  },
+  {
+    "sha256": "140014aecb8bcae81a542ebc4e0ec5e0d8392b7d59c608def78c6f4cb0b803e4",
+    "file": "full-run-layout/settings-top-dark-320-200.png"
+  },
+  {
+    "sha256": "4f2576bcb72ad467feb0dc20d9eb01cfb760f65f0374bc0488c5d7c92f7bf2fb",
+    "file": "full-run-layout/settings-top-dark-390-100.png"
+  },
+  {
+    "sha256": "a325cd177e87f302b44d8c6a3be989ee1f13b8b7d32627c462dcab844a6acd6a",
+    "file": "full-run-layout/settings-top-light-1366-100.png"
+  },
+  {
+    "sha256": "6eae74acd86194c35195b9e5aef463efdeb136f70610abd286aa4e599d98bee0",
+    "file": "full-run-layout/settings-top-light-320-200.png"
+  },
+  {
+    "sha256": "f38728a9185016579c8302023cc860c8bd00b7546900aa79d5c2875293eeb514",
+    "file": "full-run-layout/settings-top-light-390-100.png"
+  },
+  {
+    "sha256": "077f6d5fa904c275ce0d4c7e929d80090a26a6600239665e1e3f6dffc6dfeaac",
+    "file": "full-run-source-test-hashes.json"
+  },
+  {
+    "sha256": "03d88ca161607d91ef39456c13967b522f25b3446bf31ebb997c31ee3f27e396",
+    "file": "full-run-test_layout_presets.py.txt"
+  },
+  {
+    "sha256": "e345b09f1fff17d6b5492d222636702d6f0871054323d495404c8aa14234329e",
+    "file": "lateral-dark.png"
+  },
+  {
+    "sha256": "ec89e241fee2835fd068cb2425baf386630cd5b2d2aa726927b19ca953bbe031",
+    "file": "lateral-light.png"
+  },
+  {
+    "sha256": "a15b6c8e1063a96063a0bc239e9c8fb233b5ddad36b081f6ea2d5b0a97860480",
+    "file": "logs/accessibility-final-en.log"
+  },
+  {
+    "sha256": "1f3019a255f63b59efcab366fd4e06a82931845c24369c1ed32bb635c357d03b",
+    "file": "logs/accessibility-final-pt.log"
+  },
+  {
+    "sha256": "eb62b911a1cf9db9016860a0ab1831eefbe45889cd39b3bcbb8ed0208f00cec7",
+    "file": "logs/build-real-2.log"
+  },
+  {
+    "sha256": "21a9cde2a459f62e5786d3e5a09c8e41db150c1383945f0e336b92a475d1f183",
+    "file": "logs/build-real-3.log"
+  },
+  {
+    "sha256": "a78bbb38c3185b113dd2c0661b73f9148064c8fe5a5d665d2163af0ab2682a39",
+    "file": "logs/build-real.log"
+  },
+  {
+    "sha256": "87f2952e22d44e2243409ecf90f075f7e540ffcf39157c06023e1c0d4496ee59",
+    "file": "logs/contrast.json"
+  },
+  {
+    "sha256": "05054b2da53150245dc960bf31e7e86b6c35df7d2ba817af47ac4cc4505f1b54",
+    "file": "logs/dev-requirements.log"
+  },
+  {
+    "sha256": "0f37c97bd878717c104fb36aeb4426e6170887fe515ad2a61ef01d7c97307f98",
+    "file": "logs/docs-check.log"
+  },
+  {
+    "sha256": "a62aa859151ec24e80f596fae44c01564eae3daa826884d9986837f4ba55697a",
+    "file": "logs/docs-final-complete.log"
+  },
+  {
+    "sha256": "67d60e2db92667f5439b6e136a547f7d94afc27adda4e31b45e1f6a415d31fd1",
+    "file": "logs/docs-final.log"
+  },
+  {
+    "sha256": "9b116c38ac92dab232871523671ab98a592fe7a71d51319e412f4e1e1fa6e9de",
+    "file": "logs/final-render-audit-2.log"
+  },
+  {
+    "sha256": "b9dcd022394ce5bcf3408360f0175bd0a869c0bde4e2eb0bebf8cb5c4e292c89",
+    "file": "logs/final-render-audit.log"
+  },
+  {
+    "sha256": "4564038424c964ca1704148f23d129a5893daebfe0017f9f1d967c1961c0bbd9",
+    "file": "logs/generators-final.log"
+  },
+  {
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "file": "logs/gradle-nv1-jdk21.log"
+  },
+  {
+    "sha256": "6110943f9570108eedb34628bbfe95374e7f2eacfcbe6bf1647d45787cbb77cd",
+    "file": "logs/gradle-nv1.log"
+  },
+  {
+    "sha256": "ae26956363cf36a9a44037a9bf560f2a5fa7ca810c172765747ce85d991593d7",
+    "file": "logs/icons-check.log"
+  },
+  {
+    "sha256": "5a616a58a77f8c28e8b6e29061ae0fe50b1582078c5e784b2e91bd939eda72d2",
+    "file": "logs/integration-final.log"
+  },
+  {
+    "sha256": "58d86fb4f39d6cd8dced73548f64c581926a95738da1af11faf1700d714d4daa",
+    "file": "logs/keyboard-probe.log"
+  },
+  {
+    "sha256": "ef26b5cdf3d12e88c91701d7638b3392d825fc0ed948c72935e90fe2b659b081",
+    "file": "logs/layout-current-overlay-en.log"
+  },
+  {
+    "sha256": "0c098c4b369af297f65a389929ffc47be0083d21d0375b6262a647fdaf9bdb69",
+    "file": "logs/layout-current-overlay-pt.log"
+  },
+  {
+    "sha256": "605e913afef80c370ce732961d16e66b4af57de6304eef8e93b42d239e96dbd2",
+    "file": "logs/layout-dev-2.log"
+  },
+  {
+    "sha256": "0f6a282e101dbc918f4ade4673cbcf395adb6182d4c949376f147f1a496a1be9",
+    "file": "logs/layout-dev-3.log"
+  },
+  {
+    "sha256": "3c733b1f8b9549e8c58367d654611b93a1510b6587410cf152f836ec0a4b9fad",
+    "file": "logs/layout-dev-4.log"
+  },
+  {
+    "sha256": "2228e71b4eced8329e1bc89aa424bd731433be23093f6e63d66a37928ae4648e",
+    "file": "logs/layout-dev-5.log"
+  },
+  {
+    "sha256": "cb118d904cdb91f62f3fef3927e275a090216d4209deff38c7d8739328e9e060",
+    "file": "logs/layout-final-pt.log"
+  },
+  {
+    "sha256": "53829e4877bd3ff2aac101d53c3435ab05722b45a487d2dca84888531b81c712",
+    "file": "logs/layout-green-1.log"
+  },
+  {
+    "sha256": "ade82d273d16a1355febe62dcf6ca51328279880862188a17b82a36682036081",
+    "file": "logs/layout-real-pt-1.log"
+  },
+  {
+    "sha256": "a0921532d27d3487434be0fbb8b37b0051dff66b0842f582904fa19ff5f1704d",
+    "file": "logs/layout-red.log"
+  },
+  {
+    "sha256": "f12f4ec7c252a49908386812cead6f12d42d46c25c8a199506ea8db6db03d2e7",
+    "file": "logs/logo-check.log"
+  },
+  {
+    "sha256": "b0286fcd348de09dfcdee0444c1916d7a5f498fec3a9a1fb61bf211ce803f533",
+    "file": "logs/matrix-dev-1.log"
+  },
+  {
+    "sha256": "80798c8861da5aa4f12895cca39dd89da9376a5fed45f3f4f622088c5d737ad3",
+    "file": "logs/matrix-dev-2.log"
+  },
+  {
+    "sha256": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18",
+    "file": "logs/ruff-check.log"
+  },
+  {
+    "sha256": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18",
+    "file": "logs/ruff-final-check.log"
+  },
+  {
+    "sha256": "30c689af56ee22d48140f955e1f13df80526cddcc8deda9c44c1a6b9a9271c51",
+    "file": "logs/ruff-final-format.log"
+  },
+  {
+    "sha256": "30c689af56ee22d48140f955e1f13df80526cddcc8deda9c44c1a6b9a9271c51",
+    "file": "logs/ruff-format.log"
+  },
+  {
+    "sha256": "4f530e5c7da48e9608901a2e7a178d642ace8f2b6e87ad1e8c93e9895d3be1aa",
+    "file": "logs/security.log"
+  },
+  {
+    "sha256": "59c8c99b725d8a24629fcd275c58c3eb1a559b9b4b03ff67e2f0dfb2f6e3a44f",
+    "file": "logs/shell-final.log"
+  },
+  {
+    "sha256": "b5956896d81570eb16582a19eab905b46a361dfd5fea764142eea39bc4c742fb",
+    "file": "logs/shell-unit.log"
+  },
+  {
+    "sha256": "6c14808e7b7957ca94ddd7cab67d83424a4c42a170de05e323333535cb3fd473",
+    "file": "logs/site-check.log"
+  },
+  {
+    "sha256": "b3d74e8957c0995441454faead161956cc22c685e7b11e32c8579948d4ab2360",
+    "file": "logs/staged-security-final.log"
+  },
+  {
+    "sha256": "530997b41640932e6eb2852a1428f61f5bfb3fe231eaf8eea7ee598390994843",
+    "file": "logs/staged-security-initial-FAIL.log"
+  },
+  {
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "file": "logs/staged-source-whitespace.log"
+  },
+  {
+    "sha256": "f49dfe229773e98e4150a0fc1abdf342da57d85b5c8f575ac0be9078e431efb8",
+    "file": "logs/staged-whitespace.log"
+  },
+  {
+    "sha256": "4564038424c964ca1704148f23d129a5893daebfe0017f9f1d967c1961c0bbd9",
+    "file": "logs/tokens-check.log"
+  },
+  {
+    "sha256": "7d58770fd3adfbf46fc0b814ef3c1b34cb05aba96e236a7f2a35e963668ae8d3",
+    "file": "logs/ui-lint-final.log"
+  },
+  {
+    "sha256": "7d58770fd3adfbf46fc0b814ef3c1b34cb05aba96e236a7f2a35e963668ae8d3",
+    "file": "logs/ui-lint.log"
+  },
+  {
+    "sha256": "f02c9a18e85956a6f66c9645e126f522ab04977da8a140a8d22ee4166458d7ae",
+    "file": "logs/ui-probe.log"
+  },
+  {
+    "sha256": "4ad10c8f773e94a14a16eb0a5b0303f87fe182e715dad03f1db1e514f3c13829",
+    "file": "logs/unit-complete.log"
+  },
+  {
+    "sha256": "767f494100ca25440ae29a9fba99d0c8e27047167732bb9e23fc9d06e65bcc80",
+    "file": "logs/unit-final.log"
+  },
+  {
+    "sha256": "031b61201ed318916b2facacf3ebcc256ee4b0f83788f8a65d64f26bb8875c22",
+    "file": "logs/unit.log"
+  },
+  {
+    "sha256": "23055ae105f432a70a2ff7f2fdab3aa81f66624c62542197d91b20ad0a46a94e",
+    "file": "logs/upgrade-probe.log"
+  },
+  {
+    "sha256": "0993a33721bae64bcb5435d5856ff069f652b9f7fd276385a30adb0628d6f480",
+    "file": "logs/ux3d-final-en.log"
+  },
+  {
+    "sha256": "e2878f2f55bc3096dd29496884fc9fee42b89928070084d5dd0160a97adb8495",
+    "file": "logs/ux3d-final-pt.log"
+  },
+  {
+    "sha256": "9eeb6ddb798229d37fb7fed34446e2f20322dea4187ade9b482eecd05df35dff",
+    "file": "package-verification.json"
+  },
+  {
+    "sha256": "c6cce00bdf7973ad86171c9f1bf1f57e247ac99f5a811832ab58a60c54663b2d",
+    "file": "preferences-reduced-and-contrast.png"
+  },
+  {
+    "sha256": "2dd86b8f5358627d85598f659a0d68253045442e8ee84d049b403e96ede334dc",
+    "file": "pt-reflow/accessibility-media.json"
+  },
+  {
+    "sha256": "984828d6c4dcb7e940388eff6885d424a31d81cd86bb26273cee8a0bd2b43dcd",
+    "file": "pt-reflow/reflow.json"
+  },
+  {
+    "sha256": "61a036071aede5a5d685ad1fc3110ce2074540f7835eb31de25cfd962dd4b8e3",
+    "file": "pt-reflow/section-focus-dark-320-200.png"
+  },
+  {
+    "sha256": "d8937851a186093728deb7e49641f55ac6d5b38474b0dfa871905c0b1021a5c2",
+    "file": "pt-reflow/section-focus-light-320-200.png"
+  },
+  {
+    "sha256": "05c06d197762ca74db97d0664e23b2b29358c859dbe962a63d561da97f2ef275",
+    "file": "pt-reflow/section-lateral-dark-320-200.png"
+  },
+  {
+    "sha256": "1c63c02519da4c52f4d8aa885d241e44495346b93a03454293989fede44d56ef",
+    "file": "pt-reflow/section-lateral-light-320-200.png"
+  },
+  {
+    "sha256": "961c5285fb0bab51d6dd6344a90e656ef38c2fcf96f098d556c763f421c6cb42",
+    "file": "pt-reflow/section-top-dark-320-200.png"
+  },
+  {
+    "sha256": "bf982baa5f7ac93eed3e754441f0bc948db6de894874c6a04cf3f45c076f8868",
+    "file": "pt-reflow/section-top-light-320-200.png"
+  },
+  {
+    "sha256": "46380d288926bea487f0eb75085fc84bc8156727560ba4df313678135abaf9f7",
+    "file": "pt-reflow/settings-accessibility-preferences.png"
+  },
+  {
+    "sha256": "160645475f7392702d043deaa8d6465096f602592a35a0c606a3420d6bc927de",
+    "file": "pt-reflow/settings-focus-dark-1366-100.png"
+  },
+  {
+    "sha256": "890b2058617d393df07369651b08749bdf588bd0aa0c33e01d1a2baf651a3abd",
+    "file": "pt-reflow/settings-focus-dark-320-200.png"
+  },
+  {
+    "sha256": "071f8c223336526f19f3be608dea65fb282881e1f3dc6032410015f27f6a6523",
+    "file": "pt-reflow/settings-focus-dark-390-100.png"
+  },
+  {
+    "sha256": "bb82b53b391f2971e1235ec4cb025a31c086df70c3ba5866aea1bd6059729fd8",
+    "file": "pt-reflow/settings-focus-light-1366-100.png"
+  },
+  {
+    "sha256": "43fa2fb610c31ccacd37db993271c90525fe6e22543cdcf72c1f70e404276bc8",
+    "file": "pt-reflow/settings-focus-light-320-200.png"
+  },
+  {
+    "sha256": "ed0ddeb67f404a2b9f7c099d169a455fcfff6f38b742b27d327d993700e5d39a",
+    "file": "pt-reflow/settings-focus-light-390-100.png"
+  },
+  {
+    "sha256": "d7d5ccbff7aaa4ec0c60c3e41f892e01ca9f4aac55df3976ef64e65704f1f8c8",
+    "file": "pt-reflow/settings-lateral-dark-1366-100.png"
+  },
+  {
+    "sha256": "56087046b6d6650a0f8557d78381e07a02b0cc2fc902780f3c4bfd44e58c65e9",
+    "file": "pt-reflow/settings-lateral-dark-320-200.png"
+  },
+  {
+    "sha256": "669ac9a15148d56735cf8a1e360a6c2d2380e0a337bc4d255eb929ce01002867",
+    "file": "pt-reflow/settings-lateral-dark-390-100.png"
+  },
+  {
+    "sha256": "4d45513baac9d689c8da27195e4145a4c3f1e8c7a393b4633e207e2c3da0543c",
+    "file": "pt-reflow/settings-lateral-light-1366-100.png"
+  },
+  {
+    "sha256": "2cadc035e2926af77a94fad866393ab81b119653c528a2e6fcfb8014b25a4809",
+    "file": "pt-reflow/settings-lateral-light-320-200.png"
+  },
+  {
+    "sha256": "86ba926db7e856073d12f14368fa75ceac3376fad8f4edf113f3ef1a6d3cf967",
+    "file": "pt-reflow/settings-lateral-light-390-100.png"
+  },
+  {
+    "sha256": "d8d60a625c1b568bfbd8eec44534ca316696694044d65282e665981a675c767d",
+    "file": "pt-reflow/settings-top-dark-1366-100.png"
+  },
+  {
+    "sha256": "b1c34b8771a5bed0a06a07575e98c71e51649e1664d42c72375c5289f9a77029",
+    "file": "pt-reflow/settings-top-dark-320-200.png"
+  },
+  {
+    "sha256": "c4d3d3aa5e4721f44d1adcc8e66c183d9438a1131daa291b43b843e4c2f95fbc",
+    "file": "pt-reflow/settings-top-dark-390-100.png"
+  },
+  {
+    "sha256": "1efafa1b6bf6ab72362197bc17da1522097ac9386d5fdbc13c092c56b18e0172",
+    "file": "pt-reflow/settings-top-light-1366-100.png"
+  },
+  {
+    "sha256": "2999d53b6118d894cb693f30942385517540ed483862d245c9737d0c44212e9a",
+    "file": "pt-reflow/settings-top-light-320-200.png"
+  },
+  {
+    "sha256": "8e41a67384a2912265efe80b8b2a3ddb73308fe162cd8a32ffc7a1e9b6e2dba1",
+    "file": "pt-reflow/settings-top-light-390-100.png"
+  },
+  {
+    "sha256": "c8e8c8bbe54da651ab6ec3aa17a4b4a3866892c0b14a5171ba459fb830dbcac3",
+    "file": "render-audit.py.txt"
+  },
+  {
+    "sha256": "01ac9c6ec363529008fe8b8d65f7292ae1f0df854b31abb554ebf4df15914187",
+    "file": "render-review.json"
+  },
+  {
+    "sha256": "ccd2f8bf6231cc13f64b791d367434e5fd99e40e5ee4623e8eda950d34722bd4",
+    "file": "security/agent-guard-registry-fixture-focus-dark.png"
+  },
+  {
+    "sha256": "fc54a35b9581d216f8eaf42a1b4dee4252b932b93ba0fdbd7385dc6df003e0b9",
+    "file": "security/agent-guard-registry-fixture-focus-light.png"
+  },
+  {
+    "sha256": "cdfcbd61acf4646b69f236e21938661ffcea7691ea8be4a1fb85d6af01cd202d",
+    "file": "security/agent-guard-registry-fixture-lateral-dark.png"
+  },
+  {
+    "sha256": "e673f2a31b2fbd4d6e7a613975150264ef7fcfec4f75c18d89db75e9541182fe",
+    "file": "security/agent-guard-registry-fixture-lateral-light.png"
+  },
+  {
+    "sha256": "c55d071dd9c5d19c1e35646b7fdb8839d246ba48a0e94f78a326ca9069331901",
+    "file": "security/agent-guard-registry-fixture-top-dark.png"
+  },
+  {
+    "sha256": "e2536aec65c39ccd8a42cb98cf8bcfc8ea6e2c2a8606ba8ac9a2e1ddbb567b18",
+    "file": "security/agent-guard-registry-fixture-top-light.png"
+  },
+  {
+    "sha256": "05fc22ee424b7472a4c762b4c4df10162e3582cc3d8e73d42b784cb64e9c77a0",
+    "file": "security/agent-guard-registry-fixture.json"
+  },
+  {
+    "sha256": "9dd30e64c67c5df4616beb6a572d2cb09a5621cb2fe810f73fed28585deeed5a",
+    "file": "security/guard-focus-dark.png"
+  },
+  {
+    "sha256": "23f4f85c4961d057c5492975a6ac5babdd16d8a36ad81ff3cff1a713b6ce6eba",
+    "file": "security/guard-focus-light.png"
+  },
+  {
+    "sha256": "207d9efd56a909ad50d7dc2e9cc38037480ebfa082e8fde5a9430a752ab58ec0",
+    "file": "security/guard-lateral-dark.png"
+  },
+  {
+    "sha256": "a73902eb11b796331abb1e6790028c40d62e8ae587a13850240dbe7ae5cf6a91",
+    "file": "security/guard-lateral-light.png"
+  },
+  {
+    "sha256": "dc5ccac7ad9ace19c48d74d6ab432ea15611f129c152e233f98ff4d495f97eba",
+    "file": "security/guard-top-dark.png"
+  },
+  {
+    "sha256": "a358296a5c0c5f89160da5918ffb3129fa107b3174ec7e90644c8552f6af7737",
+    "file": "security/guard-top-light.png"
+  },
+  {
+    "sha256": "20733d4c90ba50eab71d9e4fec12b56e8290704fe2a24cd67c04774d78a37af2",
+    "file": "security/guard.json"
+  },
+  {
+    "sha256": "f81114b4f493513e0f31a375496979221b7ec41623720ccac2d6cfd10ba445bb",
+    "file": "security/ordinary-focus-dark.png"
+  },
+  {
+    "sha256": "5a2e42d1c142ecbfa0b76977ef1ae49f0657fa75df8da3868042c5f33ad660ed",
+    "file": "security/ordinary-focus-light.png"
+  },
+  {
+    "sha256": "90d27a3f6639199a0f57f9914bc6eaa5e5c14ed281de5ff8357a0720624027ef",
+    "file": "security/ordinary-lateral-dark.png"
+  },
+  {
+    "sha256": "d9b11de448f805724249d7fe6d3b05089334a781304947e3a9aa298410465072",
+    "file": "security/ordinary-lateral-light.png"
+  },
+  {
+    "sha256": "fbddcb09595ea6d6b02cb00c92d5550a3009882387f946fb75f3265ce5443288",
+    "file": "security/ordinary-top-dark.png"
+  },
+  {
+    "sha256": "40ba132c9e333a8ebb4823824db1a02ffe143acd963be1d354fb1cae3651a3de",
+    "file": "security/ordinary-top-light.png"
+  },
+  {
+    "sha256": "9c7aa90472925828b53958186a082ae23509a12d18cf1533b57c6d0bebb196fc",
+    "file": "security/ordinary.json"
+  },
+  {
+    "sha256": "13e304471eb33d28f89fba76a8df5873abf22aa6cca627c5be2299b8152f1129",
+    "file": "security/private-focus-dark.png"
+  },
+  {
+    "sha256": "87ebeb3b2b2871216f4bc07c2965494dc0723a761738fd5105fdd57daae28230",
+    "file": "security/private-focus-light.png"
+  },
+  {
+    "sha256": "e6c36956f011704fbc4470a0ffba6c36eb849065773b89c84070e9c8f9e753d3",
+    "file": "security/private-lateral-dark.png"
+  },
+  {
+    "sha256": "e6c36956f011704fbc4470a0ffba6c36eb849065773b89c84070e9c8f9e753d3",
+    "file": "security/private-lateral-light.png"
+  },
+  {
+    "sha256": "809dbd5cfb7c8b3dee11a79e4212776bf4aae748bba71abb3b378be068892ded",
+    "file": "security/private-top-dark.png"
+  },
+  {
+    "sha256": "809dbd5cfb7c8b3dee11a79e4212776bf4aae748bba71abb3b378be068892ded",
+    "file": "security/private-top-light.png"
+  },
+  {
+    "sha256": "15cb53f7623217ec781e80f5edacbadb12c02bacadc3e18ecb19a32264e20a73",
+    "file": "security/private.json"
+  },
+  {
+    "sha256": "2e1adb24aea1e1e5f868be25a459597c99bf8b8d5a7c019aecc8657ee3d34baf",
+    "file": "security/protected-unlocked-focus-dark.png"
+  },
+  {
+    "sha256": "81cbc1cab8942770a3a5876cb1a28a626182c96cd09f8ad4ebf401867a7f9431",
+    "file": "security/protected-unlocked-focus-light.png"
+  },
+  {
+    "sha256": "d261054c0b0b2928cd768e595737318fd6282e49a6f02ad444dfd72759d9fa47",
+    "file": "security/protected-unlocked-lateral-dark.png"
+  },
+  {
+    "sha256": "77b8c77ac642ebe080613cc28a5fff43b454a7496d8b5fa8402a43a149835186",
+    "file": "security/protected-unlocked-lateral-light.png"
+  },
+  {
+    "sha256": "19ecfc96427c1594eca276ee33b84077258ff2a9d9344bcf4b98181ac5955065",
+    "file": "security/protected-unlocked-top-dark.png"
+  },
+  {
+    "sha256": "091c0ba895435dc0c2e8b551affa731a7b558d97102723a231fbd77ccea1d8de",
+    "file": "security/protected-unlocked-top-light.png"
+  },
+  {
+    "sha256": "58b4b637c2c75e70df7365df758df2504f0c0f5b5c514854b5e7b4da2fef7930",
+    "file": "security/protected-unlocked.json"
+  },
+  {
+    "sha256": "5db8cc2224dd8427a0bea63f50e76c86647a344b83ca893b760bc960af721047",
+    "file": "security/raw-guard-synthetic-live-pid-focus-dark.png"
+  },
+  {
+    "sha256": "a5b55292ea2f2afbc37532b906893e568711562c165ea1bae7e7db5176f1bcb7",
+    "file": "security/raw-guard-synthetic-live-pid-focus-light.png"
+  },
+  {
+    "sha256": "addffb1b8235dd4b6e93300f3d3985089acca945060f23a4036084aeda907ec2",
+    "file": "security/raw-guard-synthetic-live-pid-lateral-dark.png"
+  },
+  {
+    "sha256": "16dc55640f6e34fde76e461ae90c8f9a2311d523934f40dcbd5d63c67492417d",
+    "file": "security/raw-guard-synthetic-live-pid-lateral-light.png"
+  },
+  {
+    "sha256": "c2258cf41a492b2cc1db1e7aaa37c9b543157754b4a2e6361900ddb60a635438",
+    "file": "security/raw-guard-synthetic-live-pid-top-dark.png"
+  },
+  {
+    "sha256": "1e6d22f6dbb4dc6e77cdb5a23529e843526c0a1485e17f6e7bb954ffea7afb8d",
+    "file": "security/raw-guard-synthetic-live-pid-top-light.png"
+  },
+  {
+    "sha256": "54c36c6aede75c45ec2576cb4b3b852cd90ca7afd723f43a808a58f2b885a2c5",
+    "file": "security/raw-guard-synthetic-live-pid.json"
+  },
+  {
+    "sha256": "02a933a3e455b84e16cece502db825930e83b03ef4c00fdfcbcdb9c493566e64",
+    "file": "security/temporary-focus-dark.png"
+  },
+  {
+    "sha256": "345647a9ddbe8ad417681c3edcb23f5f4ff7f738e5d29a507b40977586c2fc7a",
+    "file": "security/temporary-focus-light.png"
+  },
+  {
+    "sha256": "8d6fbfaeaf4823ec2fede4c15b4e255948ea93c0c0be7b66f56c261ffec7a473",
+    "file": "security/temporary-lateral-dark.png"
+  },
+  {
+    "sha256": "7584698c4070fa705bfa0c4f7f06ce69d2a835ec96cec9370cc9b118fef83a1f",
+    "file": "security/temporary-lateral-light.png"
+  },
+  {
+    "sha256": "59ab0c1e29fc22040e34b04b6ac0f54806bdcfd8dd2d5c758ff9f24e2e65ba7d",
+    "file": "security/temporary-top-dark.png"
+  },
+  {
+    "sha256": "084bf617fa2611cb77477feba34c5d8d32925f8e5af685c98a05fd1575323755",
+    "file": "security/temporary-top-light.png"
+  },
+  {
+    "sha256": "3331095a777852fec6a078892c8e91ae113f3579a9cdf4a78eebb3d3087f8479",
+    "file": "security/temporary.json"
+  },
+  {
+    "sha256": "e3825a7a049dcf90a4007e746de14110a79a98c802050177496efd3f4c487725",
+    "file": "top-dark.png"
+  },
+  {
+    "sha256": "b361c395a6c3e190d3d2a63a6cbbc261f52783e55b0caf92cb582b1d052294f2",
+    "file": "top-light.png"
+  },
+  {
+    "sha256": "ca0000ad7800f1d48a234de89209fe3b027b4912e652ff7ed261c0b172f87349",
+    "file": "upgrade-probe.py.txt"
+  },
+  {
+    "sha256": "96ac5b26b5dea586b941aae5fd29e5b2a4b2cf8defed69cc40f0300e6416612f",
+    "file": "upgrade-verification.json"
+  },
+  {
+    "sha256": "57436344c41a8983e4fbfd7303f7e828e9585ac3ea41ed04559c356158ce5a05",
+    "file": "verification.json"
+  }
+]

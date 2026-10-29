@@ -1,0 +1,15 @@
+test_reading_settings_does_not_change_native_preferences (test_layout_presets.LayoutPresetsTest.test_reading_settings_does_not_change_native_preferences) ... FAIL
+
+======================================================================
+FAIL: test_reading_settings_does_not_change_native_preferences (test_layout_presets.LayoutPresetsTest.test_reading_settings_does_not_change_native_preferences)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/caiobarbieri/.t3/worktrees/2026-10-24-voc-o-tech-lead-principal-c5c1b438/t3-60a73356/tests/integration/test_layout_presets.py", line 28, in test_reading_settings_does_not_change_native_preferences
+    self.assertNotIn("error", result, result)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 'error' unexpectedly found in {'error': 'Error: Failed to load resource://builtin-addons/nulavio-shell/modules/NulavioLayout.sys.mjs'} : {'error': 'Error: Failed to load resource://builtin-addons/nulavio-shell/modules/NulavioLayout.sys.mjs'}
+
+----------------------------------------------------------------------
+Ran 1 test in 3.319s
+
+FAILED (failures=1)

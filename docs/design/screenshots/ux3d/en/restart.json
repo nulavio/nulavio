@@ -1,0 +1,53 @@
+[
+  {
+    "preset": "lateral",
+    "native": {
+      "orientation": "vertical",
+      "parent": "vertical-tabs",
+      "expanded": true,
+      "visible": true,
+      "w": 244,
+      "h": 554.75,
+      "hover": false
+    },
+    "afterRestart": {
+      "preset": "lateral",
+      "available": true,
+      "locked": false
+    }
+  },
+  {
+    "preset": "top",
+    "native": {
+      "orientation": "horizontal",
+      "parent": "TabsToolbar-customization-target",
+      "expanded": false,
+      "visible": true,
+      "w": 1300,
+      "h": 46,
+      "hover": false
+    },
+    "afterRestart": {
+      "preset": "top",
+      "available": true,
+      "locked": false
+    }
+  },
+  {
+    "preset": "focus",
+    "native": {
+      "orientation": "vertical",
+      "parent": "vertical-tabs",
+      "expanded": false,
+      "visible": true,
+      "w": 52,
+      "h": 607,
+      "hover": true
+    },
+    "afterRestart": {
+      "preset": "focus",
+      "available": true,
+      "locked": false
+    }
+  }
+]

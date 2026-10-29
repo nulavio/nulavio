@@ -1,0 +1,104 @@
+nulavio-build: Google Safe Browsing key: present
+signed SHA-256 (subkey 827E658608679618CD349F93678E455D76767AA3): 3d98df785894057fce60603e845828e758a5411ad79aaaaff2b8230597f500d9
+verified /home/caiobarbieri/.cache/nulavio-ux/ux3d-woar3pew/build/downloads/firefox-159.0.source.tar.xz
+source tree already present: /home/caiobarbieri/.cache/nulavio-ux/ux3d-woar3pew/build/firefox-159.0
+pt-BR: firefox-l10n 85df2d126815 + Nulavio overlay
+branding installed at /home/caiobarbieri/.cache/nulavio-ux/ux3d-woar3pew/build/firefox-159.0/browser/branding/nulavio
+= 0001-branding-set-application-vendor.patch (already applied)
+= 0002-l10n-map-nulavio-branding.patch (already applied)
+= 0003-shell-load-the-nulavio-horizon-theme.patch (already applied)
+= 0004-search-require-per-engine-consent-for-suggestions.patch (already applied)
+= 0005-urlbar-let-smart-profile-routing-decide-typed-navigations.patch (already applied)
+= 0006-xre-use-the-system-mozilla-directory-the-distribution-has.patch (already applied)
+= 0007-downloads-never-open-a-program-from-the-downloads-ui.patch (already applied)
+ 0:00.33 W Warnings in third-party code are being suppressed from the terminal output. Use --show-all-warnings or --verbose to see them.
+ 0:00.33 W All warnings will still be dumped to /src/obj-nulavio/.mozbuild/logs/build/warnings_*.json at the end of the build.
+ 0:00.47 Clobber not needed.
+ 0:00.49 /src/obj-nulavio/backend.RecursiveMakeBackend is out of date with respect to /src/browser/branding/nulavio/shell/moz.build
+ 0:00.49 Build configuration changed. Regenerating backend.
+ 0:00.49 /root/.mozbuild/srcdirs/src-56c9e1c4b536/_virtualenvs/build/bin/python /src/obj-nulavio/config.status
+Reticulating splines...
+Finished reading 2469 moz.build files in 2.05s
+Read 58 gyp files in parallel contributing 0.00s to total wall time
+Processed into 19998 build config descriptors in 1.42s
+RecursiveMake backend executed in 2.30s
+  5284 total backend files; 0 created; 2 updated; 5282 unchanged; 0 deleted; 10 -> 2000 Makefile
+FasterMake backend executed in 0.16s
+  94 total backend files; 0 created; 0 updated; 94 unchanged; 0 deleted
+Clangd backend executed in 1.08s
+  1218 total backend files; 0 created; 3 updated; 1215 unchanged; 0 deleted
+Total wall time: 7.30s; CPU time: 6.80s; Efficiency: 93%; Untracked: 0.30s
+ 0:09.02 Parallelism determined by memory: using 16 jobs for 16 cores based on 30.7 GiB RAM and estimated job size of 1.0 GiB
+ 0:09.02 W Adding make options from /src/mozconfig
+    MOZ_OBJDIR=/src/obj-nulavio
+    OBJDIR=/src/obj-nulavio
+    FOUND_MOZCONFIG=/src/mozconfig
+    export FOUND_MOZCONFIG
+ 0:09.02 /usr/bin/gmake -f client.mk -j16 -s
+ 0:09.60 ./buildid.h.stub
+ 0:09.60 ./source-repo.h.stub
+ 0:09.76 ./application.ini.stub
+ 0:09.90 ./application.ini.h.stub
+ 0:10.13 browser/app
+ 0:11.55 browser/app/nulavio
+ 0:11.86 ./newtab-sources.stamp.stub
+ 0:12.27 ./built_in_addons.json.stub
+ 0:12.34 ./buildid.h.stub
+ 0:12.34 ./source-repo.h.stub
+ 0:13.03 ./application.ini.stub
+ 0:13.38 ./application.ini.h.stub
+ 0:15.86 W 0 compiler warnings present.
+ 0:15.88 W Overall system resources - Wall time: 15s; CPU: 38%; Read bytes: 248528896; Write bytes: 2319056896; Read time: 8424; Write time: 67056
+ 0:15.88 To view a profile of the build, run |mach resource-usage|.
+ 0:15.88 Your build was successful!
+ 0:15.88 To take your build for a test drive, run: |mach run|
+ 0:15.88 For more information on what to do now, see https://firefox-source-docs.mozilla.org/setup/contributing_code.html
+Streaming resource usage profile to: /src/obj-nulavio/.mozbuild/logs/build/profile_log_20261029_160044.json
+ 0:00.36 Ensuring that the l10n-central repository exists and is up to date.
+ 0:00.36 Processing chrome Gecko resources for locales ['pt-BR']
+ 0:00.36 Parallelism determined by memory: using 16 jobs for 16 cores based on 30.7 GiB RAM and estimated job size of 1.0 GiB
+ 0:00.36 /usr/bin/gmake -C /src/obj-nulavio -j16 -s chrome-pt-BR
+ 0:00.40 BUILDSTATUS@browser/locales START_l10n_merge --locale=pt-BR --config=/src/browser/locales/l10n.toml --l10n-base=/root/.mozbuild/l10n-central --target=/src/obj-nulavio/browser/locales/merge-dir
+ 0:04.35 BUILDSTATUS@browser/locales END_l10n_merge --locale=pt-BR --config=/src/browser/locales/l10n.toml --l10n-base=/root/.mozbuild/l10n-central --target=/src/obj-nulavio/browser/locales/merge-dir
+ 0:04.35 BUILDSTATUS@browser/locales START_l10n_stage --locale=pt-BR --manifest=../../l10n-manifest.json --merge-tree=/src/obj-nulavio/browser/locales/merge-dir/pt-BR --dest=../../dist/bin --topsrcdir=/src --topobjdir=../.. --mode=chrome
+ 0:04.59 BUILDSTATUS@browser/locales END_l10n_stage --locale=pt-BR --manifest=../../l10n-manifest.json --merge-tree=/src/obj-nulavio/browser/locales/merge-dir/pt-BR --dest=../../dist/bin --topsrcdir=/src --topobjdir=../.. --mode=chrome
+ 0:04.69 Repackaging browser
+ 0:04.69 Parallelism determined by memory: using 16 jobs for 16 cores based on 30.7 GiB RAM and estimated job size of 1.0 GiB
+ 0:04.69 /usr/bin/gmake -C /src/obj-nulavio/browser/app -j16 -s -w tools
+gmake: Entering directory '/src/obj-nulavio/browser/app'
+gmake: Leaving directory '/src/obj-nulavio/browser/app'
+ 0:04.70 Invoking multi-locale `mach package`
+ 0:04.70 Parallelism determined by memory: using 16 jobs for 16 cores based on 30.7 GiB RAM and estimated job size of 1.0 GiB
+ 0:04.70 /usr/bin/gmake -C /src/obj-nulavio -j16 -s -w package
+gmake: Entering directory '/src/obj-nulavio'
+gmake[1]: Entering directory '/src/obj-nulavio/browser/installer'
+gmake[2]: Entering directory '/src/obj-nulavio/browser/installer'
+gmake[3]: Entering directory '/src/obj-nulavio/browser/installer'
+BUILDSTATUS@browser/installer START_file_generate multilocale.txt
+BUILDSTATUS@browser/installer START_locale_manifest --output locale-manifest.in --base-path @RESPATH@ --locales pt-BR en-US --locale-entries @RESPATH@/browser/chrome/ @RESPATH@/chrome/
+BUILDSTATUS@browser/installer START_make_sourcestamp_file --output ../../dist//nulavio-159.0.en-US.linux-x86_64.txt --buildid-header ../../buildid.h 
+BUILDSTATUS@browser/installer END_locale_manifest --output locale-manifest.in --base-path @RESPATH@ --locales pt-BR en-US --locale-entries @RESPATH@/browser/chrome/ @RESPATH@/chrome/
+BUILDSTATUS@browser/installer END_make_sourcestamp_file --output ../../dist//nulavio-159.0.en-US.linux-x86_64.txt --buildid-header ../../buildid.h 
+BUILDSTATUS@browser/installer END_file_generate multilocale.txt
+Generating XPT artifacts archive (nulavio-159.0.en-US.linux-x86_64.xpt_artifacts.zip)
+BUILDSTATUS@browser/installer START_zip nulavio-159.0.en-US.linux-x86_64.xpt_artifacts.zip
+BUILDSTATUS@browser/installer END_zip nulavio-159.0.en-US.linux-x86_64.xpt_artifacts.zip
+Compressing...
+BUILDSTATUS@browser/installer START_package XZ
+BUILDSTATUS@browser/installer END_package XZ
+gmake[3]: Leaving directory '/src/obj-nulavio/browser/installer'
+gmake[3]: Entering directory '/src/obj-nulavio/browser/locales'
+Making langpack 
+gmake[4]: Entering directory '/src/obj-nulavio/browser/locales'
+BUILDSTATUS@browser/locales START_l10n_stage --locale=en-US --manifest=../../l10n-manifest.json --merge-tree=/src/obj-nulavio/browser/locales/merge-dir/en-US --dest=../../dist/xpi-stage/locale-en-US --topsrcdir=/src --topobjdir=../..
+BUILDSTATUS@browser/locales END_l10n_stage --locale=en-US --manifest=../../l10n-manifest.json --merge-tree=/src/obj-nulavio/browser/locales/merge-dir/en-US --dest=../../dist/xpi-stage/locale-en-US --topsrcdir=/src --topobjdir=../..
+gmake[4]: Leaving directory '/src/obj-nulavio/browser/locales'
+gmake[4]: Entering directory '/src/obj-nulavio/browser/locales'
+BUILDSTATUS@browser/locales START_package_langpack --locale=en-US --xpi-stage=../../dist/xpi-stage/locale-en-US --metadata=/src/browser/locales/en-US/langpack-metadata.ftl --output=/src/obj-nulavio/dist/linux-x86_64/xpi/nulavio-159.0.en-US.langpack.xpi --eid=langpack-en-US@firefox.mozilla.org --app-version=159.0 --max-app-ver=159.* --app-name=Nulavio --l10n-basedir=/root/.mozbuild/l10n-central --include=chrome --include=localization --include=browser --include=manifest.json
+BUILDSTATUS@browser/locales END_package_langpack --locale=en-US --xpi-stage=../../dist/xpi-stage/locale-en-US --metadata=/src/browser/locales/en-US/langpack-metadata.ftl --output=/src/obj-nulavio/dist/linux-x86_64/xpi/nulavio-159.0.en-US.langpack.xpi --eid=langpack-en-US@firefox.mozilla.org --app-version=159.0 --max-app-ver=159.* --app-name=Nulavio --l10n-basedir=/root/.mozbuild/l10n-central --include=chrome --include=localization --include=browser --include=manifest.json
+gmake[4]: Leaving directory '/src/obj-nulavio/browser/locales'
+gmake[3]: Leaving directory '/src/obj-nulavio/browser/locales'
+gmake[2]: Leaving directory '/src/obj-nulavio/browser/installer'
+gmake[1]: Leaving directory '/src/obj-nulavio/browser/installer'
+gmake: Leaving directory '/src/obj-nulavio'
+nulavio-build: exit=0 duration_min=0 log=/home/caiobarbieri/.cache/nulavio-ux/ux3d-woar3pew/build/logs/build-159.0-20261029T130039.log

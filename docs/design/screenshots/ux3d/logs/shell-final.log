@@ -1,0 +1,45 @@
+test_the_branding_module_and_the_shell_list_the_same_types (test_shell.DownloadsPanelTest.test_the_branding_module_and_the_shell_list_the_same_types) ... ok
+test_the_patch_only_closes_open_for_programs (test_shell.DownloadsPanelTest.test_the_patch_only_closes_open_for_programs) ... ok
+test_record_lives_in_the_profile_and_nothing_is_sent (test_shell.GuardModuleTest.test_record_lives_in_the_profile_and_nothing_is_sent) ... ok
+test_undo_only_after_a_click (test_shell.GuardModuleTest.test_undo_only_after_a_click) ... ok
+test_watches_every_protective_pref_the_launcher_guard_checks (test_shell.GuardModuleTest.test_watches_every_protective_pref_the_launcher_guard_checks) ... ok
+test_every_referenced_key_exists (test_shell.LocaleTest.test_every_referenced_key_exists) ... ok
+test_same_keys_and_placeholders (test_shell.LocaleTest.test_same_keys_and_placeholders) ... ok
+test_flow_e_has_no_open_action (test_shell.ManifestTest.test_flow_e_has_no_open_action) ... ok
+test_identity (test_shell.ManifestTest.test_identity) ... ok
+test_least_privilege (test_shell.ManifestTest.test_least_privilege) ... ok
+test_no_remote_resources_or_inline_code (test_shell.ManifestTest.test_no_remote_resources_or_inline_code) ... ok
+test_risky_types_cover_flow_e (test_shell.ManifestTest.test_risky_types_cover_flow_e) ... ok
+test_assembled_pages_resolve_every_local_reference (test_shell.PackagingTest.test_assembled_pages_resolve_every_local_reference) ... ok
+test_branding_builds_the_shell (test_shell.PackagingTest.test_branding_builds_the_shell) ... ok
+test_build_files_list_every_file_under_builtin_addons (test_shell.PackagingTest.test_build_files_list_every_file_under_builtin_addons) ... ok
+test_unprivileged_variant_for_temporary_installs (test_shell.PackagingTest.test_unprivileged_variant_for_temporary_installs) ... ok
+test_lookalike_check_reads_nothing_from_pages (test_shell.PasswordsTest.test_lookalike_check_reads_nothing_from_pages) ... ok
+test_provider_data_matches_the_pins (test_shell.PasswordsTest.test_provider_data_matches_the_pins) ... ok
+test_every_module_error_has_a_message (test_shell.PrivilegedApiTest.test_every_module_error_has_a_message) ... ok
+test_layout_exposes_only_fixed_presets_without_a_startup_writer (test_shell.PrivilegedApiTest.test_layout_exposes_only_fixed_presets_without_a_startup_writer) ... ok
+test_only_the_documented_apis (test_shell.PrivilegedApiTest.test_only_the_documented_apis) ... ok
+test_parent_scripts_declare_nothing_at_top_level (test_shell.PrivilegedApiTest.test_parent_scripts_declare_nothing_at_top_level) ... ok
+test_parent_scripts_only_bridge_to_the_modules (test_shell.PrivilegedApiTest.test_parent_scripts_only_bridge_to_the_modules) ... ok
+test_profile_selector_is_on_the_toolbar_with_a_shortcut (test_shell.PrivilegedApiTest.test_profile_selector_is_on_the_toolbar_with_a_shortcut) ... ok
+test_colours_are_design_tokens (test_shell.ProfileTemplatesTest.test_colours_are_design_tokens) ... ok
+test_no_temporary_profile_until_it_exists (test_shell.ProfileTemplatesTest.test_no_temporary_profile_until_it_exists) ... ok
+test_sensitive_template_only_sets_engine_prefs_that_clear_and_block_installs (test_shell.ProfileTemplatesTest.test_sensitive_template_only_sets_engine_prefs_that_clear_and_block_installs) ... ok
+test_templates_use_offered_icons_and_colours (test_shell.ProfileTemplatesTest.test_templates_use_offered_icons_and_colours) ... ok
+test_address_bar_hook_is_small_and_conservative (test_shell.RoutingTest.test_address_bar_hook_is_small_and_conservative) ... ok
+test_handler_only_hands_over (test_shell.RoutingTest.test_handler_only_hands_over) ... ok
+test_handler_runs_before_the_browser_opens_links (test_shell.RoutingTest.test_handler_runs_before_the_browser_opens_links) ... ok
+test_link_menu_is_explicit_and_not_private (test_shell.RoutingTest.test_link_menu_is_explicit_and_not_private) ... ok
+test_never_a_shell_and_never_session_data (test_shell.RoutingTest.test_never_a_shell_and_never_session_data) ... ok
+test_only_plain_url_forms_and_web_schemes_are_routed (test_shell.RoutingTest.test_only_plain_url_forms_and_web_schemes_are_routed) ... ok
+test_rules_are_never_inferred (test_shell.RoutingTest.test_rules_are_never_inferred) ... ok
+test_baseline_turns_remote_suggestions_and_trending_off (test_shell.SearchProvidersTest.test_baseline_turns_remote_suggestions_and_trending_off) ... ok
+test_consent_pref_is_the_one_the_patch_reads (test_shell.SearchProvidersTest.test_consent_pref_is_the_one_the_patch_reads) ... ok
+test_curated_providers (test_shell.SearchProvidersTest.test_curated_providers) ... ok
+test_no_nulavio_endpoint (test_shell.SearchProvidersTest.test_no_nulavio_endpoint) ... ok
+test_paid_service_and_searxng_are_never_added_by_themselves (test_shell.SearchProvidersTest.test_paid_service_and_searxng_are_never_added_by_themselves) ... ok
+
+----------------------------------------------------------------------
+Ran 40 tests in 0.148s
+
+OK

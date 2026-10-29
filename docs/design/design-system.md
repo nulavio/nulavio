@@ -627,3 +627,95 @@ this test correction. Final local checks also passed 600 unit tests (1 skip),
 15 opt-in engine tests including live phishing blocking, all six security scans
 and 256 contrast combinations. The release report records their exact source,
 package and harness versions; publication/remote CI remain separate gates.
+
+## UX3D: explicit native layout presets (2026-10-29)
+
+Base: `419f5ec99137d601a885d66cbaab3780e27908e0`. Settings adds a labelled
+native radio group with three immediate choices and their consequences. It
+reuses Shell `.card`, `.stack`, `.check`, hints, focus and error styles. No new
+Horizon CSS, token, asset, shortcut or native patch is needed. The problem is
+switching tab organisation without hiding browser controls. The organisation
+and focus ideas in the approved references are adapted to Gecko's own tab
+strip and sidebar; no proprietary code or distinctive third-party layout is
+copied.
+
+| Choice | Gecko159 profile configuration | Actual window state |
+|---|---|---|
+| Lateral | `sidebar.verticalTabs=true`, `sidebar.visibility=always-show` | Visible, expanded launcher; hover mode off |
+| Abas no topo / Tabs on top | `sidebar.verticalTabs=false`, `sidebar.visibility=hide-on-close` | Native horizontal tab strip |
+| Foco / Focus | `sidebar.verticalTabs=true`, `sidebar.visibility=expand-on-hover` | Visible compact native launcher with hover expansion enabled |
+| Personalizado / Custom | Any other arrangement | No preset claimed or forced |
+
+`SidebarManager` normalizes orientation-exclusive visibility values; the bridge
+sets orientation before the explicit visibility. `sidebar.expandOnHover` is
+the native customizer's feature gate, not the runtime expansion state, and is
+preserved. Position, dimensions, tools, bookmarks, density, themes, title
+settings, tab/group data and all security/AI policies are outside the writer's
+allowlist. The native service can update its own related state when switching
+orientation; the Shell has no generic preference-writing API.
+
+`NulavioLayout` writes only on an explicit choice, serializes concurrent
+choices, checks the native feature and managed prefs before writing, and
+applies launcher expansion to the profile's open browser windows. It preserves
+an open assistant panel; opening the assistant does not collapse the list
+(D-UX22). Native profile prefs retain orientation/visibility. Gecko session
+restore retains per-window expansion and dimensions, with `sidebar.backupState`
+as fallback. No parallel preset-name pref, startup writer, default change or
+migration pretends to supply that persistence. Independent profiles retain
+their own choices. Native controls can subsequently customize each window.
+
+The read API derives the selection from native prefs, actual tab orientation,
+launcher state and the hover attribute. Native toolbar pinning in Foco disables
+hover, so the window becomes Custom; transient hover expansion remains Foco.
+The native toolbar keyboard path can expand/pin the list, and the compact tab
+strip retains native keyboard navigation. No new shortcut is added: D-UX23
+remains for UX6 after KDE/GNOME/Orca auditing.
+
+Preference observers and narrowly scoped mutation observers update each
+Settings document. The experiment resolves the calling window, never the most
+recent window. Unsubscribe/window unload and page hide remove observers;
+restoring a cached page reconnects and rereads. Late reads cannot override a
+new choice or repaint a departed page. Loading and failures have inline text,
+unavailable/managed controls are disabled, and a failed read offers Retry.
+An interrupted transition can have applied native changes, so its error does
+not claim a rollback; the page rereads actual state.
+
+D-UX2 is still the approved direction: Lateral for **new** profiles with a
+first-run choice. Safe initial adoption/migration/onboarding is the next slice;
+UX3D deliberately leaves Gecko159's horizontal default untouched. UX3 remains
+open, as do D-UX13, D-UX17, D-UX23 and the other excluded personalisation work.
+
+The [verification inventory](screenshots/ux3d/verification.json) records the
+real rebuild, exact packaged/source bytes, locales, captures, full-suite
+results, retained failed attempts and fixture corrections. Real security owners
+are reused for ordinary/private/temporary/protected and Guard states. The
+agent composition uses a real registry and the original explicitly synthetic
+live-PID raw marker, not a new raw-backend claim. Existing Bridge tests cover
+the actual handover separately. The band, native trust/address/navigation
+controls and fullscreen line retain their existing assertions and ownership.
+Headless checks do not establish physical KDE/GTK rendering, Orca speech,
+hardware scaling, frame times, publication, remote CI or human approval.
+
+The final real package is 159.0, package BuildID `20261029192933`, runtime
+BuildID `20261029192930`: 98 Shell/branding entries match source, and all three
+sidebar plus five downloads native entries match the immutable parent.
+Local gates passed: 601 unit tests (1 skip), 241 integration tests (13 skips),
+10 UX3D cases per locale, 256 unchanged contrast pairs and all four generated
+outputs. The inventory preserves the exact full-run harness and separately
+records the two new test-only fixture strengthenings rerun in both locales;
+no production bytes changed after that full run.
+
+A [real same-profile upgrade](screenshots/ux3d/upgrade-verification.json) starts
+with an untouched copy of the parent package, saves a native collapsed/custom
+arrangement and unrelated adjustments, then reopens that artificial profile
+with the final build. All sampled preferences and window expansion/visibility
+are unchanged; the new Settings API is live and correctly shows Custom.
+
+Rendered Settings text has a 6.615:1 minimum (6.62:1 rounded) in the two themes. The actual
+Gecko159 accessibility fixture uses `ui.useAccessibilityTheme` with restart;
+`ui.prefersContrast` is not a native contrast control. All three chrome media
+queries (motion, transparency and contrast) are verified. The Shell document's
+reduced-transparency query remains false under the engine's fingerprinting
+protection; no protection is disabled to change that result. Its surfaces
+remain solid. The [render review](screenshots/ux3d/render-review.json) separates
+native and content measurements, visual critique and pending desktop checks.

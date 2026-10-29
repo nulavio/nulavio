@@ -1,0 +1,76 @@
+import hashlib
+import json
+import os
+import sys
+import time
+from pathlib import Path
+
+repo=Path.cwd()
+sys.path[:0]=[str(repo/'tests/lib'),str(repo/'tests/integration'),str(repo/'scripts/brand')]
+import harness
+from test_profiles import chrome_async
+from test_horizon import rgb
+from contrast import ratio
+from test_layout_presets import LAYOUT
+
+w=Path(__file__).parent
+out=repo/'docs/design/screenshots/ux3d'
+session=harness.GeckoProfileSession(name='Layout')
+rows=[]
+try:
+ m=session.start()
+ runtime=m.chrome("return {version:Services.appinfo.version,buildID:Services.appinfo.appBuildID,platformBuildID:Services.appinfo.platformBuildID,locale:Services.locale.appLocaleAsBCP47};")
+ m.send('WebDriver:SetWindowRect',{'width':1366,'height':900})
+ base=m.chrome("return WebExtensionPolicy.getByID('shell@nulavio.net').getURL('');")
+ def settings(fragment=''):
+  m.navigate(base+'settings/settings.html'+fragment)
+  assert harness.wait_until(lambda:m.execute("return document.documentElement.dataset.ready==='true';"),15)
+ def capture(name):
+  m.set_context('chrome')
+  try:(out/(name+'.png')).write_bytes(m.screenshot_png())
+  finally:m.set_context('content')
+ settings()
+ for dark in (0,1):
+  m.chrome("Services.prefs.setIntPref('ui.systemUsesDarkTheme',arguments[0]);",[dark]);time.sleep(.3)
+  capture('after-'+('dark' if dark else 'light'))
+ for preset in ('lateral','top','focus'):
+  result=chrome_async(m,f'return {LAYOUT}.apply(window,args[0]);',[preset]);assert result['ok']['preset']==preset,result
+  m.execute("document.getElementById('layout').scrollIntoView();")
+  for dark in (0,1):
+   m.chrome("Services.prefs.setIntPref('ui.systemUsesDarkTheme',arguments[0]);",[dark]);time.sleep(.3)
+   colors=m.execute("""
+     const section=document.getElementById('layout'),card=section.querySelector('.card');
+     const bg=getComputedStyle(card).backgroundColor;
+     return {bg,colors:[...section.querySelectorAll('legend,label span,#layout-current')]
+       .filter(e=>e.textContent.trim()).map(e=>({text:e.textContent,color:getComputedStyle(e).color})),
+       labels:[...section.querySelectorAll('input')].map(e=>({value:e.value,name:e.labels[0].textContent,
+         hint:document.getElementById(e.getAttribute('aria-describedby')).textContent,checked:e.checked})),
+       rootOverflow:document.documentElement.scrollWidth>innerWidth};
+   """)
+   assert not colors['rootOverflow'],colors
+   for pair in colors['colors']:
+    pair['ratio']=ratio(rgb(pair['color']),rgb(colors['bg']));assert pair['ratio']>=4.5,pair
+   assert all(e['name'].strip() and e['hint'].strip() for e in colors['labels'])
+   capture(preset+'-'+('dark' if dark else 'light'))
+   rows.append({'preset':preset,'dark':dark,**colors})
+ m.chrome("Services.prefs.setIntPref('ui.prefersReducedMotion',1);Services.prefs.setIntPref('ui.prefersReducedTransparency',1);Services.prefs.setIntPref('ui.useAccessibilityTheme',1);")
+ m=session.restart();settings('#layout')
+ media=m.execute("return {motion:matchMedia('(prefers-reduced-motion: reduce)').matches,contrast:matchMedia('(prefers-contrast: more)').matches,transparency:matchMedia('(prefers-reduced-transparency: reduce)').matches};")
+ native_media=m.chrome("return {motion:matchMedia('(prefers-reduced-motion: reduce)').matches,contrast:matchMedia('(prefers-contrast: more)').matches,transparency:matchMedia('(prefers-reduced-transparency: reduce)').matches};")
+ assert all(native_media.values()),native_media
+ assert media['motion'],media
+ capture('preferences-reduced-and-contrast')
+ for key in ('ui.prefersReducedMotion','ui.prefersReducedTransparency','ui.useAccessibilityTheme'):
+  m.chrome('Services.prefs.clearUserPref(arguments[0]);',[key])
+ chrome_async(m,f"await {LAYOUT}.apply(window,'lateral');await SidebarController.handleToolbarButtonClick();")
+ assert harness.wait_until(lambda:m.execute("return document.getElementById('layout').dataset.preset==='custom';"),10)
+ capture('custom-native-collapsed')
+ report={'runtime':runtime,'package':str(w/'package.json'),'install_copy':str(w/'audit-nulavio'),
+   'browser_omni_sha256':hashlib.sha256((w/'audit-nulavio/browser/omni.ja').read_bytes()).hexdigest(),
+   'scene':'Settings, real native state, 1366x900; comparable before/after top-of-page use native horizontal tabs',
+   'renderedContrast':rows,'contentMedia':media,'nativeMedia':native_media,
+   'rubric':{'hierarchy':3,'layout':3,'type':2,'color':3,'spacing':2,'states':3,'reflow':3,'accessibility':2,'copy':3,'distinctiveness':2},
+   'limits':['headless; no Orca speech or physical desktop certification','Native controls and established Shell CSS/tokens reused','Reflow/font-200 and keyboard are separately covered by test_layout_presets']}
+ (out/'render-review.json').write_text(json.dumps(report,ensure_ascii=False,indent=2)+'\n')
+ print('rendered contrast and captures PASS',runtime,media)
+finally:session.cleanup()

@@ -237,6 +237,22 @@ recorded separately. Publication/CI are post-commit gates.
 Presets/onboarding, sidebar curation, Shell/assistant flow redesigns and
 later UX3 work remain open. No D-UX decision is reopened.
 
+**UX3D — explicit native layout presets (rebuilt and locally verified, 2026-10-29).**
+On base `419f5ec99137d601a885d66cbaab3780e27908e0`, Settings offers real
+Lateral, Abas no topo and Foco through a fixed privileged allowlist. Selection
+comes from Gecko159 prefs and actual per-window state; native controls update
+it, and non-matching arrangements are Personalizado. Native session restore
+and backup state retain expansion; independent profiles keep their own layout.
+No startup/default/migration write, new shortcut, native patch or Horizon CSS
+is added. An open assistant panel is preserved (D-UX22).
+[Mechanisms and scope](../design/design-system.md#ux3d-explicit-native-layout-presets-2026-10-29),
+[build, tests, retained failures and captures](../design/screenshots/ux3d/verification.json).
+The implementation stops at a local commit for parent integration/publication;
+remote CI and human approval are separate. UX3 is not complete. D-UX2's safe
+new-profile adoption/migration and first-run choice belong to the next slice;
+D-UX13, D-UX17, D-UX23, extra sidebar curation, Shell/assistant redesign,
+command palette and split view remain outside this commit.
+
 **UX4 — Shell pages**
 - **Settings.** Two panes, with search, scope labels and inline status.
 - **New tab.** "Você está em …".

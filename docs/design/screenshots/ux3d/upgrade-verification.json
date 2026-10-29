@@ -1,0 +1,82 @@
+{
+  "status": "PASS",
+  "baseline_runtime_build_id": "20261029151020",
+  "final_runtime_build_id": "20261029192930",
+  "scenario": "same artificial profile created with an untouched immutable-parent copy, then reopened with the final build copy; no purge/reset/migration flags",
+  "before": {
+    "prefs": {
+      "sidebar.verticalTabs": {
+        "user": true,
+        "value": true
+      },
+      "sidebar.visibility": {
+        "user": false,
+        "value": "always-show"
+      },
+      "sidebar.revamp": {
+        "user": false,
+        "value": true
+      },
+      "sidebar.main.tools": {
+        "user": true,
+        "value": "bookmarks,passwords"
+      },
+      "sidebar.position_start": {
+        "user": true,
+        "value": false
+      },
+      "browser.uidensity": {
+        "user": true,
+        "value": 1
+      },
+      "browser.toolbars.bookmarks.visibility": {
+        "user": true,
+        "value": "never"
+      }
+    },
+    "expanded": false,
+    "visible": true
+  },
+  "after": {
+    "prefs": {
+      "sidebar.verticalTabs": {
+        "user": true,
+        "value": true
+      },
+      "sidebar.visibility": {
+        "user": false,
+        "value": "always-show"
+      },
+      "sidebar.revamp": {
+        "user": false,
+        "value": true
+      },
+      "sidebar.main.tools": {
+        "user": true,
+        "value": "bookmarks,passwords"
+      },
+      "sidebar.position_start": {
+        "user": true,
+        "value": false
+      },
+      "browser.uidensity": {
+        "user": true,
+        "value": 1
+      },
+      "browser.toolbars.bookmarks.visibility": {
+        "user": true,
+        "value": "never"
+      }
+    },
+    "expanded": false,
+    "visible": true
+  },
+  "new_api_state": {
+    "ok": {
+      "preset": "custom",
+      "available": true,
+      "locked": false
+    }
+  },
+  "source_script": "/home/caiobarbieri/.cache/nulavio-ux/ux3d-woar3pew/final/upgrade_probe.py"
+}

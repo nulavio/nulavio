@@ -55,6 +55,77 @@ def assert_band(test, state):
             test.assertGreaterEqual(cue["w"], 24, cue)
 
 
+def assert_layout_matrix(test, m, label):
+    """Exercise UX3D on the existing real security-state owners/fixtures.
+
+    The raw composition fixture remains explicitly synthetic; this helper
+    does not manufacture any security state or weaken its original assertions.
+    """
+    layout = 'ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioLayout.sys.mjs").NulavioLayout'
+    saved = m.chrome("""
+      const keys=['sidebar.verticalTabs','sidebar.visibility','ui.systemUsesDarkTheme'];
+      return {ui:SidebarController.getUIState(),prefs:keys.map(k=>
+        ({k,user:Services.prefs.prefHasUserValue(k),value:Services.prefs.getPrefType(k)===128 ? Services.prefs.getBoolPref(k) :
+          Services.prefs.getPrefType(k)===64 ? Services.prefs.getIntPref(k):Services.prefs.getStringPref(k,'')}))};
+    """)
+    out = harness.artifacts_dir() / "layout-security"
+    out.mkdir(parents=True, exist_ok=True)
+    rows = []
+    try:
+        with harness.FixtureServer() as server:
+            m.navigate(server.url("/page/Layout"))
+            m.send("WebDriver:SetWindowRect", {"width": 1366, "height": 900})
+            for preset in ("lateral", "top", "focus"):
+                applied = chrome_async(m, f"return {layout}.apply(window,args[0]);", [preset])
+                test.assertNotIn("error", applied, applied)
+                test.assertEqual(applied["ok"]["preset"], preset)
+                for dark in (0, 1):
+                    m.chrome("Services.prefs.setIntPref('ui.systemUsesDarkTheme',arguments[0]);", [dark])
+                    time.sleep(0.25)
+                    band = m.chrome(f"return {BAND_PROBE};")
+                    assert_band(test, band)
+                    native = m.chrome("""
+                      const rect=e=>{const r=e.getBoundingClientRect(),s=getComputedStyle(e);
+                        const hit=document.elementFromPoint(r.x+r.width/2,r.y+r.height/2);
+                        return {w:r.width,h:r.height,opacity:s.opacity,visibility:s.visibility,
+                          hit:!!hit&&(e===hit||e.contains(hit))};};
+                      return {url:gURLBar.value,actual:gBrowser.currentURI.spec,
+                        input:{scroll:gURLBar.inputField.scrollWidth,client:gURLBar.inputField.clientWidth},
+                        controls:['back-button','forward-button','stop-reload-button','urlbar','trust-icon-container'].map(id=>
+                          ({id,...rect(document.getElementById(id))}))};
+                    """)
+                    test.assertIn("127.0.0.1", native["url"], native)
+                    test.assertIn("/page/Layout", native["actual"], native)
+                    test.assertLessEqual(native["input"]["scroll"], native["input"]["client"], native)
+                    for control in native["controls"]:
+                        test.assertGreater(control["w"], 0, control)
+                        test.assertGreater(control["h"], 0, control)
+                        test.assertEqual(control["visibility"], "visible", control)
+                        test.assertTrue(control["hit"], control)
+                    rows.append({"preset": preset, "dark": dark, "band": band, "native": native})
+                    m.set_context("chrome")
+                    try:
+                        (out / f"{label}-{preset}-{'dark' if dark else 'light'}.png").write_bytes(m.screenshot_png())
+                    finally:
+                        m.set_context("content")
+            (out / f"{label}.json").write_text(json.dumps(rows, indent=2) + "\n")
+    finally:
+        result = chrome_async(
+            m,
+            """
+          for (const {k,user,value} of args[0].prefs) {
+            if (!user) Services.prefs.clearUserPref(k);
+            else if(typeof value==='boolean') Services.prefs.setBoolPref(k,value);
+            else if(typeof value==='number') Services.prefs.setIntPref(k,value);
+            else Services.prefs.setStringPref(k,value);
+          }
+          await SidebarController.updateUIState(args[0].ui);
+        """,
+            [saved],
+        )
+        test.assertNotIn("error", result, result)
+
+
 @unittest.skipUnless(harness.nulavio_engine(), "Farol needs the built-in Shell")
 class WindowBandTest(unittest.TestCase):
     @classmethod
@@ -97,6 +168,7 @@ class WindowBandTest(unittest.TestCase):
         self.assertGreater(r["width"], 400)
         self.assertEqual((r["opacity"], r["visibility"], r["placement"]), ("1", "visible", "nulavio-band"))
         self.assertTrue(r["aboveTabs"] and r["aboveNav"] and r["nativeUnchanged"], r)
+        assert_layout_matrix(self, self.m, "ordinary")
 
     def test_02_only_a_selected_top_level_shell_principal_names_the_header(self):
         base = self.m.chrome("return WebExtensionPolicy.getByID('shell@nulavio.net').getURL('');")
@@ -244,6 +316,7 @@ class WindowBandTest(unittest.TestCase):
         self.m.chrome("gNotificationBox.getNotificationWithValue('nulavio-guard')?.close();")
         self.assertIn(str(count), text())
         assert_band(self, self.m.chrome(f"return {BAND_PROBE};"))
+        assert_layout_matrix(self, self.m, "guard")
         result = chrome_async(
             self.m,
             """
@@ -499,6 +572,7 @@ class WindowBandTest(unittest.TestCase):
         self.assertNotIn("error", result, result)
         self.assertTrue(result["ok"]["retained"], result)
         agent_id = result["ok"]["id"]
+        assert_layout_matrix(self, self.m, "agent-guard-registry-fixture")
         state = self.m.chrome(f"return {BAND_PROBE};")
         assert_band(self, state)
         self.assertTrue(any("nv-band-agent" in c["kind"] for c in state["cues"]))
@@ -517,6 +591,7 @@ class WindowBandTest(unittest.TestCase):
         self.assertTrue(
             harness.wait_until(lambda: self.m.chrome("return !document.querySelector('#nulavio-band .nv-band-raw').hidden;"), 10)
         )
+        assert_layout_matrix(self, self.m, "raw-guard-synthetic-live-pid")
         for dark in (0, 1):
             self.m.chrome("Services.prefs.setIntPref('ui.systemUsesDarkTheme',arguments[0]);", [dark])
             time.sleep(0.3)
@@ -607,6 +682,7 @@ class ProtectedWindowBandTest(unittest.TestCase):
                     ),
                     state["text"],
                 )
+            assert_layout_matrix(self, child, "protected-unlocked")
             lock = chrome_async(
                 child,
                 """

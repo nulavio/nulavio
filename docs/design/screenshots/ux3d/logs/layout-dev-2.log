@@ -1,0 +1,21 @@
+test_explicit_presets_move_real_tabs_and_survive_restart (test_layout_presets.LayoutPresetsTest.test_explicit_presets_move_real_tabs_and_survive_restart) ... ok
+test_native_controls_and_per_window_state_are_observed_and_cleanup_is_idempotent (test_layout_presets.LayoutPresetsTest.test_native_controls_and_per_window_state_are_observed_and_cleanup_is_idempotent) ... ERROR
+test_preserves_position_width_tools_bookmarks_density_and_assistant (test_layout_presets.LayoutPresetsTest.test_preserves_position_width_tools_bookmarks_density_and_assistant) ... ok
+test_profile_preferences_do_not_cross_independent_profiles (test_layout_presets.LayoutPresetsTest.test_profile_preferences_do_not_cross_independent_profiles) ... ok
+test_reading_settings_does_not_change_native_preferences (test_layout_presets.LayoutPresetsTest.test_reading_settings_does_not_change_native_preferences) ... ok
+test_refusals_preserve_preferences_and_the_queue_recovers (test_layout_presets.LayoutPresetsTest.test_refusals_preserve_preferences_and_the_queue_recovers) ... ok
+
+======================================================================
+ERROR: test_native_controls_and_per_window_state_are_observed_and_cleanup_is_idempotent (test_layout_presets.LayoutPresetsTest.test_native_controls_and_per_window_state_are_observed_and_cleanup_is_idempotent)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/caiobarbieri/.t3/worktrees/2026-10-24-voc-o-tech-lead-principal-c5c1b438/t3-60a73356/tests/integration/test_layout_presets.py", line 83, in test_native_controls_and_per_window_state_are_observed_and_cleanup_is_idempotent
+    result = self.m.send("WebDriver:NewWindow", {"type": "window", "focus": True})
+  File "/home/caiobarbieri/.t3/worktrees/2026-10-24-voc-o-tech-lead-principal-c5c1b438/t3-60a73356/tests/lib/marionette.py", line 86, in send
+    raise MarionetteError(error)
+marionette.MarionetteError: unsupported operation: openWindow() not supported in Nulavio
+
+----------------------------------------------------------------------
+Ran 6 tests in 29.658s
+
+FAILED (errors=1)

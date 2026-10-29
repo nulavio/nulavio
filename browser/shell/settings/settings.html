@@ -17,6 +17,7 @@
       <h1 class="settings-header__title" data-i18n="settingsTitle">Nulavio settings</h1>
       <p class="settings-header__intro" data-i18n="settingsIntro"></p>
       <nav class="settings-nav" data-i18n-attr="aria-label:settingsNav">
+        <a href="#layout" data-i18n="layoutHeading">Layout</a>
         <a href="#search" data-i18n="searchHeading">Search</a>
         <a href="#profiles" data-i18n="profilesHeading">Profiles</a>
         <a href="#passwords" data-i18n="passwordsHeading">Passwords</a>
@@ -29,6 +30,31 @@
 
     <p class="notice" id="needs-build" hidden data-i18n="settingsNeedsBuild"></p>
     <p class="status" id="status" role="status" aria-live="polite"></p>
+
+    <section class="section" id="layout" aria-labelledby="layout-heading" hidden>
+      <h2 class="section__title" id="layout-heading" data-i18n="layoutHeading">Layout</h2>
+      <div class="card stack">
+        <p class="hint" id="layout-scope" data-i18n="layoutScope"></p>
+        <fieldset class="stack" id="layout-choices" aria-describedby="layout-scope">
+          <legend class="field__label" data-i18n="layoutChoose"></legend>
+          <label class="check">
+            <input type="radio" name="layout" value="lateral" aria-describedby="layout-lateral-hint" disabled>
+            <span><span data-i18n="layoutLateral"></span><span class="hint" id="layout-lateral-hint" data-i18n="layoutLateralHint"></span></span>
+          </label>
+          <label class="check">
+            <input type="radio" name="layout" value="top" aria-describedby="layout-top-hint" disabled>
+            <span><span data-i18n="layoutTop"></span><span class="hint" id="layout-top-hint" data-i18n="layoutTopHint"></span></span>
+          </label>
+          <label class="check">
+            <input type="radio" name="layout" value="focus" aria-describedby="layout-focus-hint" disabled>
+            <span><span data-i18n="layoutFocus"></span><span class="hint" id="layout-focus-hint" data-i18n="layoutFocusHint"></span></span>
+          </label>
+        </fieldset>
+        <p class="hint" id="layout-current" role="status" aria-live="polite" data-i18n="layoutLoading"></p>
+        <p class="form-error" id="layout-error" role="alert"></p>
+        <div class="actions"><button class="button button--secondary" id="layout-retry" type="button" hidden data-i18n="layoutRetry"></button></div>
+      </div>
+    </section>
 
     <section class="section" id="search" aria-labelledby="search-heading" hidden>
       <h2 class="section__title" id="search-heading" data-i18n="searchHeading">Search</h2>

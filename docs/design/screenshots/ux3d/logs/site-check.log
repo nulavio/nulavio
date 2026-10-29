@@ -1,0 +1,2 @@
+usage: build_site.py [-h] [--out OUT]
+build_site.py: error: unrecognized arguments: --check

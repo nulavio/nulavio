@@ -1,0 +1,22 @@
+== actionlint
+== zizmor
+ INFO zizmor: 🌈 zizmor v1.31.1
+ INFO audit: zizmor: 🌈 completed .github/workflows/ai-review.yml
+ INFO audit: zizmor: 🌈 completed .github/workflows/ci.yml
+ INFO audit: zizmor: 🌈 completed .github/workflows/main-via-pr.yml
+ INFO audit: zizmor: 🌈 completed .github/workflows/upstream.yml
+No findings to report. Good job! (1 ignored, 2 suppressed)
+== gitleaks
+4:32PM INF 195 commits scanned.
+4:32PM INF scanned ~90534826 bytes (90.53 MB) in 892ms
+4:32PM INF no leaks found
+4:32PM INF 0 commits scanned.
+4:32PM INF scanned ~0 bytes (0) in 148ms
+4:32PM INF no leaks found
+== shellcheck
+shellcheck: 17 files
+== opengrep
+== opengrep-rules
+16/16: ✓ All tests passed
+No tests for fixes found.
+scan: passed: actionlint zizmor gitleaks shellcheck opengrep opengrep-rules

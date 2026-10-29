@@ -1,0 +1,5 @@
+focus {'preset': 'focus', 'available': True, 'locked': False}
+{'active': '', 'el': 'sidebar-button', 'focused': ''}
+after {'preset': 'focus', 'available': True, 'locked': False} {'active': '', 'ui': {'command': '', 'panelOpen': False, 'bookmarksExpandedFolders': [], 'launcherWidth': 53, 'launcherExpanded': False, 'launcherVisible': True}}
+sidebar-button
+nav-after {'preset': 'custom', 'available': True, 'locked': False}

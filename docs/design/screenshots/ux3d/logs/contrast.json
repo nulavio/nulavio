@@ -1,0 +1,6402 @@
+[
+  {
+    "fg": "color.dark.text.primary",
+    "bg": "color.dark.bg.canvas",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#0B1623",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      241.0,
+      247.0,
+      245.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      11.0,
+      22.0,
+      35.0,
+      1.0
+    ],
+    "foreground": "#F1F7F5",
+    "background": "#0B1623",
+    "ratio": 16.789729121045056,
+    "min": 7,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.text.primary",
+    "bg": "color.dark.bg.raised",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#183746",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      241.0,
+      247.0,
+      245.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      24.0,
+      55.0,
+      70.0,
+      1.0
+    ],
+    "foreground": "#F1F7F5",
+    "background": "#183746",
+    "ratio": 11.568599810095067,
+    "min": 7,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.text.secondary",
+    "bg": "color.dark.bg.raised",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#183746",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      191.0,
+      208.0,
+      214.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      24.0,
+      55.0,
+      70.0,
+      1.0
+    ],
+    "foreground": "#BFD0D6",
+    "background": "#183746",
+    "ratio": 7.891626737464096,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.text.muted",
+    "bg": "color.dark.bg.canvas",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#0B1623",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      143.0,
+      170.0,
+      181.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      11.0,
+      22.0,
+      35.0,
+      1.0
+    ],
+    "foreground": "#8FAAB5",
+    "background": "#0B1623",
+    "ratio": 7.444144775995472,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.text.muted",
+    "bg": "color.dark.bg.surface",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#112432",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      143.0,
+      170.0,
+      181.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      17.0,
+      36.0,
+      50.0,
+      1.0
+    ],
+    "foreground": "#8FAAB5",
+    "background": "#112432",
+    "ratio": 6.492800821753078,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.text.muted",
+    "bg": "color.dark.bg.raised",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#183746",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      143.0,
+      170.0,
+      181.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      24.0,
+      55.0,
+      70.0,
+      1.0
+    ],
+    "foreground": "#8FAAB5",
+    "background": "#183746",
+    "ratio": 5.1292269947319475,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.accent.default",
+    "bg": "color.dark.bg.canvas",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#0B1623",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      111.0,
+      224.0,
+      197.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      11.0,
+      22.0,
+      35.0,
+      1.0
+    ],
+    "foreground": "#6FE0C5",
+    "background": "#0B1623",
+    "ratio": 11.397578846460712,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.accent.default",
+    "bg": "color.dark.bg.raised",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#183746",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      111.0,
+      224.0,
+      197.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      24.0,
+      55.0,
+      70.0,
+      1.0
+    ],
+    "foreground": "#6FE0C5",
+    "background": "#183746",
+    "ratio": 7.853255256717439,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.accent.on",
+    "bg": "color.dark.accent.default",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#6FE0C5",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      11.0,
+      22.0,
+      35.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      111.0,
+      224.0,
+      197.0,
+      1.0
+    ],
+    "foreground": "#0B1623",
+    "background": "#6FE0C5",
+    "ratio": 11.397578846460712,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.status.warning",
+    "bg": "color.dark.bg.raised",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#183746",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      231.0,
+      174.0,
+      97.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      24.0,
+      55.0,
+      70.0,
+      1.0
+    ],
+    "foreground": "#E7AE61",
+    "background": "#183746",
+    "ratio": 6.347902765584087,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.status.critical",
+    "bg": "color.dark.bg.canvas",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#0B1623",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      226.0,
+      109.0,
+      112.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      11.0,
+      22.0,
+      35.0,
+      1.0
+    ],
+    "foreground": "#E26D70",
+    "background": "#0B1623",
+    "ratio": 5.770735615821596,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.status.criticalText",
+    "bg": "color.dark.bg.raised",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#183746",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      238.0,
+      138.0,
+      140.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      24.0,
+      55.0,
+      70.0,
+      1.0
+    ],
+    "foreground": "#EE8A8C",
+    "background": "#183746",
+    "ratio": 5.167734951912565,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.status.critical",
+    "bg": "color.dark.bg.raised",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#183746",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      226.0,
+      109.0,
+      112.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      24.0,
+      55.0,
+      70.0,
+      1.0
+    ],
+    "foreground": "#E26D70",
+    "background": "#183746",
+    "ratio": 3.9762005966864105,
+    "min": 3,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.border.control",
+    "bg": "color.dark.bg.surface",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#112432",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      110.0,
+      147.0,
+      162.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      17.0,
+      36.0,
+      50.0,
+      1.0
+    ],
+    "foreground": "#6E93A2",
+    "background": "#112432",
+    "ratio": 4.808659244899858,
+    "min": 3,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.focus",
+    "bg": "color.dark.bg.canvas",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#0B1623",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      111.0,
+      224.0,
+      197.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      11.0,
+      22.0,
+      35.0,
+      1.0
+    ],
+    "foreground": "#6FE0C5",
+    "background": "#0B1623",
+    "ratio": 11.397578846460712,
+    "min": 3,
+    "pass": true
+  },
+  {
+    "fg": "color.light.text.primary",
+    "bg": "color.light.bg.canvas",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#F1F7F5",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      11.0,
+      22.0,
+      35.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      241.0,
+      247.0,
+      245.0,
+      1.0
+    ],
+    "foreground": "#0B1623",
+    "background": "#F1F7F5",
+    "ratio": 16.789729121045056,
+    "min": 7,
+    "pass": true
+  },
+  {
+    "fg": "color.light.text.secondary",
+    "bg": "color.light.bg.canvas",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#F1F7F5",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      58.0,
+      98.0,
+      115.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      241.0,
+      247.0,
+      245.0,
+      1.0
+    ],
+    "foreground": "#3A6273",
+    "background": "#F1F7F5",
+    "ratio": 6.099454410782678,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.light.text.secondary",
+    "bg": "color.light.bg.surface",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#FFFFFF",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      58.0,
+      98.0,
+      115.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      255.0,
+      255.0,
+      255.0,
+      1.0
+    ],
+    "foreground": "#3A6273",
+    "background": "#FFFFFF",
+    "ratio": 6.6151273372461725,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.light.text.muted",
+    "bg": "color.light.bg.canvas",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#F1F7F5",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      79.0,
+      115.0,
+      131.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      241.0,
+      247.0,
+      245.0,
+      1.0
+    ],
+    "foreground": "#4F7383",
+    "background": "#F1F7F5",
+    "ratio": 4.7083391006049675,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.light.text.muted",
+    "bg": "color.light.bg.surface",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#FFFFFF",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      79.0,
+      115.0,
+      131.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      255.0,
+      255.0,
+      255.0,
+      1.0
+    ],
+    "foreground": "#4F7383",
+    "background": "#FFFFFF",
+    "ratio": 5.106401425408852,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.light.accent.default",
+    "bg": "color.light.bg.canvas",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#F1F7F5",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      15.0,
+      122.0,
+      104.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      241.0,
+      247.0,
+      245.0,
+      1.0
+    ],
+    "foreground": "#0F7A68",
+    "background": "#F1F7F5",
+    "ratio": 4.8358832194369015,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.light.accent.default",
+    "bg": "color.light.bg.surface",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#FFFFFF",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      15.0,
+      122.0,
+      104.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      255.0,
+      255.0,
+      255.0,
+      1.0
+    ],
+    "foreground": "#0F7A68",
+    "background": "#FFFFFF",
+    "ratio": 5.244728647872974,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.light.accent.on",
+    "bg": "color.light.accent.default",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#0F7A68",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      255.0,
+      255.0,
+      255.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      15.0,
+      122.0,
+      104.0,
+      1.0
+    ],
+    "foreground": "#FFFFFF",
+    "background": "#0F7A68",
+    "ratio": 5.244728647872974,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.light.accent.default",
+    "bg": "color.light.accent.tint",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#DDF8F0",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      15.0,
+      122.0,
+      104.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      221.0,
+      248.0,
+      240.0,
+      1.0
+    ],
+    "foreground": "#0F7A68",
+    "background": "#DDF8F0",
+    "ratio": 4.685202311537138,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.light.status.warning",
+    "bg": "color.light.status.warningTint",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#FBEBD3",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      138.0,
+      90.0,
+      16.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      251.0,
+      235.0,
+      211.0,
+      1.0
+    ],
+    "foreground": "#8A5A10",
+    "background": "#FBEBD3",
+    "ratio": 5.048666431728902,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.light.status.critical",
+    "bg": "color.light.status.criticalTint",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#F9DEDF",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      168.0,
+      50.0,
+      58.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      249.0,
+      222.0,
+      223.0,
+      1.0
+    ],
+    "foreground": "#A8323A",
+    "background": "#F9DEDF",
+    "ratio": 5.198119589812823,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.light.status.critical",
+    "bg": "color.light.bg.canvas",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#F1F7F5",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      168.0,
+      50.0,
+      58.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      241.0,
+      247.0,
+      245.0,
+      1.0
+    ],
+    "foreground": "#A8323A",
+    "background": "#F1F7F5",
+    "ratio": 6.08457591937555,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.light.status.criticalText",
+    "bg": "color.light.status.criticalTint",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#F9DEDF",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      168.0,
+      50.0,
+      58.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      249.0,
+      222.0,
+      223.0,
+      1.0
+    ],
+    "foreground": "#A8323A",
+    "background": "#F9DEDF",
+    "ratio": 5.198119589812823,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.light.status.criticalText",
+    "bg": "color.light.bg.raised",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#FFFFFF",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      168.0,
+      50.0,
+      58.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      255.0,
+      255.0,
+      255.0,
+      1.0
+    ],
+    "foreground": "#A8323A",
+    "background": "#FFFFFF",
+    "ratio": 6.598990957069238,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.light.status.criticalText",
+    "bg": "color.light.bg.canvas",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#F1F7F5",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      168.0,
+      50.0,
+      58.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      241.0,
+      247.0,
+      245.0,
+      1.0
+    ],
+    "foreground": "#A8323A",
+    "background": "#F1F7F5",
+    "ratio": 6.08457591937555,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.light.border.control",
+    "bg": "color.light.bg.surface",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#FFFFFF",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      107.0,
+      135.0,
+      148.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      255.0,
+      255.0,
+      255.0,
+      1.0
+    ],
+    "foreground": "#6B8794",
+    "background": "#FFFFFF",
+    "ratio": 3.805469628946753,
+    "min": 3,
+    "pass": true
+  },
+  {
+    "fg": "color.light.focus",
+    "bg": "color.light.bg.surface",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#FFFFFF",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      15.0,
+      122.0,
+      104.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      255.0,
+      255.0,
+      255.0,
+      1.0
+    ],
+    "foreground": "#0F7A68",
+    "background": "#FFFFFF",
+    "ratio": 5.244728647872974,
+    "min": 3,
+    "pass": true
+  },
+  {
+    "fg": "color.light.text.primary",
+    "bg": "color.light.chrome.tabSelected",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#FFFFFF",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      11.0,
+      22.0,
+      35.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      255.0,
+      255.0,
+      255.0,
+      1.0
+    ],
+    "foreground": "#0B1623",
+    "background": "#FFFFFF",
+    "ratio": 18.20920177667684,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.light.chrome.tabText",
+    "bg": "color.light.chrome.toolbox",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#E2EBEE",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      35.0,
+      73.0,
+      90.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      226.0,
+      235.0,
+      238.0,
+      1.0
+    ],
+    "foreground": "#23495A",
+    "background": "#E2EBEE",
+    "ratio": 7.988369070713246,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.light.text.primary",
+    "bg": "color.light.chrome.toolbox",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#E2EBEE",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      11.0,
+      22.0,
+      35.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      226.0,
+      235.0,
+      238.0,
+      1.0
+    ],
+    "foreground": "#0B1623",
+    "background": "#E2EBEE",
+    "ratio": 15.045736087326153,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.light.text.primary",
+    "bg": "color.light.chrome.toolbar",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#F1F7F5",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      11.0,
+      22.0,
+      35.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      241.0,
+      247.0,
+      245.0,
+      1.0
+    ],
+    "foreground": "#0B1623",
+    "background": "#F1F7F5",
+    "ratio": 16.789729121045056,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.light.text.primary",
+    "bg": "color.light.chrome.field",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#FFFFFF",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      11.0,
+      22.0,
+      35.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      255.0,
+      255.0,
+      255.0,
+      1.0
+    ],
+    "foreground": "#0B1623",
+    "background": "#FFFFFF",
+    "ratio": 18.20920177667684,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.light.text.muted",
+    "bg": "color.light.chrome.field",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#FFFFFF",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      79.0,
+      115.0,
+      131.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      255.0,
+      255.0,
+      255.0,
+      1.0
+    ],
+    "foreground": "#4F7383",
+    "background": "#FFFFFF",
+    "ratio": 5.106401425408852,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.light.chrome.icon",
+    "bg": "color.light.chrome.toolbar",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#F1F7F5",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      35.0,
+      73.0,
+      90.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      241.0,
+      247.0,
+      245.0,
+      1.0
+    ],
+    "foreground": "#23495A",
+    "background": "#F1F7F5",
+    "ratio": 8.914323103752205,
+    "min": 3,
+    "pass": true
+  },
+  {
+    "fg": "color.light.chrome.icon",
+    "bg": "color.light.chrome.toolbox",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#E2EBEE",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      35.0,
+      73.0,
+      90.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      226.0,
+      235.0,
+      238.0,
+      1.0
+    ],
+    "foreground": "#23495A",
+    "background": "#E2EBEE",
+    "ratio": 7.988369070713246,
+    "min": 3,
+    "pass": true
+  },
+  {
+    "fg": "color.light.border.control",
+    "bg": "color.light.chrome.toolbar",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#F1F7F5",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      107.0,
+      135.0,
+      148.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      241.0,
+      247.0,
+      245.0,
+      1.0
+    ],
+    "foreground": "#6B8794",
+    "background": "#F1F7F5",
+    "ratio": 3.508819608458433,
+    "min": 3,
+    "pass": true
+  },
+  {
+    "fg": "color.light.focus",
+    "bg": "color.light.chrome.toolbar",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#F1F7F5",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      15.0,
+      122.0,
+      104.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      241.0,
+      247.0,
+      245.0,
+      1.0
+    ],
+    "foreground": "#0F7A68",
+    "background": "#F1F7F5",
+    "ratio": 4.8358832194369015,
+    "min": 3,
+    "pass": true
+  },
+  {
+    "fg": "color.light.focus",
+    "bg": "color.light.chrome.field",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#FFFFFF",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      15.0,
+      122.0,
+      104.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      255.0,
+      255.0,
+      255.0,
+      1.0
+    ],
+    "foreground": "#0F7A68",
+    "background": "#FFFFFF",
+    "ratio": 5.244728647872974,
+    "min": 3,
+    "pass": true
+  },
+  {
+    "fg": "color.light.focus",
+    "bg": "color.light.chrome.toolbox",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#E2EBEE",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      15.0,
+      122.0,
+      104.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      226.0,
+      235.0,
+      238.0,
+      1.0
+    ],
+    "foreground": "#0F7A68",
+    "background": "#E2EBEE",
+    "ratio": 4.333567393745298,
+    "min": 3,
+    "pass": true
+  },
+  {
+    "fg": "color.light.accent.default",
+    "bg": "color.light.chrome.tabSelected",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#FFFFFF",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      15.0,
+      122.0,
+      104.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      255.0,
+      255.0,
+      255.0,
+      1.0
+    ],
+    "foreground": "#0F7A68",
+    "background": "#FFFFFF",
+    "ratio": 5.244728647872974,
+    "min": 3,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.text.primary",
+    "bg": "color.dark.chrome.tabSelected",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#183746",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      241.0,
+      247.0,
+      245.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      24.0,
+      55.0,
+      70.0,
+      1.0
+    ],
+    "foreground": "#F1F7F5",
+    "background": "#183746",
+    "ratio": 11.568599810095067,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.chrome.tabText",
+    "bg": "color.dark.chrome.toolbox",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#070F18",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      191.0,
+      208.0,
+      214.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      7.0,
+      15.0,
+      24.0,
+      1.0
+    ],
+    "foreground": "#BFD0D6",
+    "background": "#070F18",
+    "ratio": 12.111862087112724,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.text.primary",
+    "bg": "color.dark.chrome.toolbox",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#070F18",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      241.0,
+      247.0,
+      245.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      7.0,
+      15.0,
+      24.0,
+      1.0
+    ],
+    "foreground": "#F1F7F5",
+    "background": "#070F18",
+    "ratio": 17.7551840833637,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.text.primary",
+    "bg": "color.dark.chrome.toolbar",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#0B1623",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      241.0,
+      247.0,
+      245.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      11.0,
+      22.0,
+      35.0,
+      1.0
+    ],
+    "foreground": "#F1F7F5",
+    "background": "#0B1623",
+    "ratio": 16.789729121045056,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.text.primary",
+    "bg": "color.dark.chrome.field",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#112432",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      241.0,
+      247.0,
+      245.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      17.0,
+      36.0,
+      50.0,
+      1.0
+    ],
+    "foreground": "#F1F7F5",
+    "background": "#112432",
+    "ratio": 14.644041768996251,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.text.muted",
+    "bg": "color.dark.chrome.field",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#112432",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      143.0,
+      170.0,
+      181.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      17.0,
+      36.0,
+      50.0,
+      1.0
+    ],
+    "foreground": "#8FAAB5",
+    "background": "#112432",
+    "ratio": 6.492800821753078,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.chrome.icon",
+    "bg": "color.dark.chrome.toolbar",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#0B1623",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      191.0,
+      208.0,
+      214.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      11.0,
+      22.0,
+      35.0,
+      1.0
+    ],
+    "foreground": "#BFD0D6",
+    "background": "#0B1623",
+    "ratio": 11.45326810689719,
+    "min": 3,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.chrome.icon",
+    "bg": "color.dark.chrome.toolbox",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#070F18",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      191.0,
+      208.0,
+      214.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      7.0,
+      15.0,
+      24.0,
+      1.0
+    ],
+    "foreground": "#BFD0D6",
+    "background": "#070F18",
+    "ratio": 12.111862087112724,
+    "min": 3,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.border.control",
+    "bg": "color.dark.chrome.toolbar",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#0B1623",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      110.0,
+      147.0,
+      162.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      11.0,
+      22.0,
+      35.0,
+      1.0
+    ],
+    "foreground": "#6E93A2",
+    "background": "#0B1623",
+    "ratio": 5.513237904593301,
+    "min": 3,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.focus",
+    "bg": "color.dark.chrome.toolbar",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#0B1623",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      111.0,
+      224.0,
+      197.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      11.0,
+      22.0,
+      35.0,
+      1.0
+    ],
+    "foreground": "#6FE0C5",
+    "background": "#0B1623",
+    "ratio": 11.397578846460712,
+    "min": 3,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.focus",
+    "bg": "color.dark.chrome.field",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#112432",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      111.0,
+      224.0,
+      197.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      17.0,
+      36.0,
+      50.0,
+      1.0
+    ],
+    "foreground": "#6FE0C5",
+    "background": "#112432",
+    "ratio": 9.940995443684077,
+    "min": 3,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.focus",
+    "bg": "color.dark.chrome.toolbox",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#070F18",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      111.0,
+      224.0,
+      197.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      7.0,
+      15.0,
+      24.0,
+      1.0
+    ],
+    "foreground": "#6FE0C5",
+    "background": "#070F18",
+    "ratio": 12.052970543158233,
+    "min": 3,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.accent.default",
+    "bg": "color.dark.chrome.tabSelected",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#183746",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      111.0,
+      224.0,
+      197.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      24.0,
+      55.0,
+      70.0,
+      1.0
+    ],
+    "foreground": "#6FE0C5",
+    "background": "#183746",
+    "ratio": 7.853255256717439,
+    "min": 3,
+    "pass": true
+  },
+  {
+    "fg": "color.light.identity.on",
+    "bg": "color.light.identity.lima",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#C5E384",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      7.0,
+      15.0,
+      24.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      197.0,
+      227.0,
+      132.0,
+      1.0
+    ],
+    "foreground": "#070F18",
+    "background": "#C5E384",
+    "ratio": 13.47470680285887,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.light.identity.on",
+    "bg": "color.light.identity.sky",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#8CCBF5",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      7.0,
+      15.0,
+      24.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      140.0,
+      203.0,
+      245.0,
+      1.0
+    ],
+    "foreground": "#070F18",
+    "background": "#8CCBF5",
+    "ratio": 10.981561950576959,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.light.identity.on",
+    "bg": "color.light.identity.violet",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#C2B0F7",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      7.0,
+      15.0,
+      24.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      194.0,
+      176.0,
+      247.0,
+      1.0
+    ],
+    "foreground": "#070F18",
+    "background": "#C2B0F7",
+    "ratio": 9.946401036722925,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.light.identity.on",
+    "bg": "color.light.identity.coral",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#F4A8BD",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      7.0,
+      15.0,
+      24.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      244.0,
+      168.0,
+      189.0,
+      1.0
+    ],
+    "foreground": "#070F18",
+    "background": "#F4A8BD",
+    "ratio": 10.253966181671961,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.light.identity.on",
+    "bg": "color.light.identity.sand",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#FDCF8B",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      7.0,
+      15.0,
+      24.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      253.0,
+      207.0,
+      139.0,
+      1.0
+    ],
+    "foreground": "#070F18",
+    "background": "#FDCF8B",
+    "ratio": 13.272597328001067,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.light.identity.on",
+    "bg": "color.light.identity.slate",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#BFD0D6",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      7.0,
+      15.0,
+      24.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      191.0,
+      208.0,
+      214.0,
+      1.0
+    ],
+    "foreground": "#070F18",
+    "background": "#BFD0D6",
+    "ratio": 12.111862087112724,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.identity.on",
+    "bg": "color.dark.identity.lima",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#C5E384",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      7.0,
+      15.0,
+      24.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      197.0,
+      227.0,
+      132.0,
+      1.0
+    ],
+    "foreground": "#070F18",
+    "background": "#C5E384",
+    "ratio": 13.47470680285887,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.identity.on",
+    "bg": "color.dark.identity.sky",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#8CCBF5",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      7.0,
+      15.0,
+      24.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      140.0,
+      203.0,
+      245.0,
+      1.0
+    ],
+    "foreground": "#070F18",
+    "background": "#8CCBF5",
+    "ratio": 10.981561950576959,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.identity.on",
+    "bg": "color.dark.identity.violet",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#C2B0F7",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      7.0,
+      15.0,
+      24.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      194.0,
+      176.0,
+      247.0,
+      1.0
+    ],
+    "foreground": "#070F18",
+    "background": "#C2B0F7",
+    "ratio": 9.946401036722925,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.identity.on",
+    "bg": "color.dark.identity.coral",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#F4A8BD",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      7.0,
+      15.0,
+      24.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      244.0,
+      168.0,
+      189.0,
+      1.0
+    ],
+    "foreground": "#070F18",
+    "background": "#F4A8BD",
+    "ratio": 10.253966181671961,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.identity.on",
+    "bg": "color.dark.identity.sand",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#FDCF8B",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      7.0,
+      15.0,
+      24.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      253.0,
+      207.0,
+      139.0,
+      1.0
+    ],
+    "foreground": "#070F18",
+    "background": "#FDCF8B",
+    "ratio": 13.272597328001067,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.identity.on",
+    "bg": "color.dark.identity.slate",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#BFD0D6",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      7.0,
+      15.0,
+      24.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      191.0,
+      208.0,
+      214.0,
+      1.0
+    ],
+    "foreground": "#070F18",
+    "background": "#BFD0D6",
+    "ratio": 12.111862087112724,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.identity.lima",
+    "bg": "color.dark.chrome.toolbar",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#0B1623",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      197.0,
+      227.0,
+      132.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      11.0,
+      22.0,
+      35.0,
+      1.0
+    ],
+    "foreground": "#C5E384",
+    "background": "#0B1623",
+    "ratio": 12.742006849564762,
+    "min": 3,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.identity.sky",
+    "bg": "color.dark.chrome.toolbar",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#0B1623",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      140.0,
+      203.0,
+      245.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      11.0,
+      22.0,
+      35.0,
+      1.0
+    ],
+    "foreground": "#8CCBF5",
+    "background": "#0B1623",
+    "ratio": 10.384429111547245,
+    "min": 3,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.identity.violet",
+    "bg": "color.dark.chrome.toolbar",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#0B1623",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      194.0,
+      176.0,
+      247.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      11.0,
+      22.0,
+      35.0,
+      1.0
+    ],
+    "foreground": "#C2B0F7",
+    "background": "#0B1623",
+    "ratio": 9.405556053475856,
+    "min": 3,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.identity.coral",
+    "bg": "color.dark.chrome.toolbar",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#0B1623",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      244.0,
+      168.0,
+      189.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      11.0,
+      22.0,
+      35.0,
+      1.0
+    ],
+    "foreground": "#F4A8BD",
+    "background": "#0B1623",
+    "ratio": 9.696397052168052,
+    "min": 3,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.identity.sand",
+    "bg": "color.dark.chrome.toolbar",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#0B1623",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      253.0,
+      207.0,
+      139.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      11.0,
+      22.0,
+      35.0,
+      1.0
+    ],
+    "foreground": "#FDCF8B",
+    "background": "#0B1623",
+    "ratio": 12.550887268955135,
+    "min": 3,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.identity.slate",
+    "bg": "color.dark.chrome.toolbar",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#0B1623",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      191.0,
+      208.0,
+      214.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      11.0,
+      22.0,
+      35.0,
+      1.0
+    ],
+    "foreground": "#BFD0D6",
+    "background": "#0B1623",
+    "ratio": 11.45326810689719,
+    "min": 3,
+    "pass": true
+  },
+  {
+    "fg": "color.light.identity.on",
+    "bg": "color.light.chrome.toolbar",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#F1F7F5",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      7.0,
+      15.0,
+      24.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      241.0,
+      247.0,
+      245.0,
+      1.0
+    ],
+    "foreground": "#070F18",
+    "background": "#F1F7F5",
+    "ratio": 17.7551840833637,
+    "min": 3,
+    "pass": true
+  },
+  {
+    "fg": "color.light.status.critical",
+    "bg": "color.light.bg.raised",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#FFFFFF",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      168.0,
+      50.0,
+      58.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      255.0,
+      255.0,
+      255.0,
+      1.0
+    ],
+    "foreground": "#A8323A",
+    "background": "#FFFFFF",
+    "ratio": 6.598990957069238,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.light.text.primary",
+    "bg": "color.light.accent.tint",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#DDF8F0",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      11.0,
+      22.0,
+      35.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      221.0,
+      248.0,
+      240.0,
+      1.0
+    ],
+    "foreground": "#0B1623",
+    "background": "#DDF8F0",
+    "ratio": 16.2665792614327,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.text.primary",
+    "bg": "color.dark.accent.tint",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#0E3B33",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      241.0,
+      247.0,
+      245.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      14.0,
+      59.0,
+      51.0,
+      1.0
+    ],
+    "foreground": "#F1F7F5",
+    "background": "#0E3B33",
+    "ratio": 11.443422119632679,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.accent.default",
+    "bg": "color.dark.accent.tint",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#0E3B33",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      111.0,
+      224.0,
+      197.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      14.0,
+      59.0,
+      51.0,
+      1.0
+    ],
+    "foreground": "#6FE0C5",
+    "background": "#0E3B33",
+    "ratio": 7.768279341586408,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.light.text.primary",
+    "bg": "color.light.bg.sunken",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#E2EBEE",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      11.0,
+      22.0,
+      35.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      226.0,
+      235.0,
+      238.0,
+      1.0
+    ],
+    "foreground": "#0B1623",
+    "background": "#E2EBEE",
+    "ratio": 15.045736087326153,
+    "min": 7,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.text.primary",
+    "bg": "color.dark.bg.sunken",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#070F18",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      241.0,
+      247.0,
+      245.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      7.0,
+      15.0,
+      24.0,
+      1.0
+    ],
+    "foreground": "#F1F7F5",
+    "background": "#070F18",
+    "ratio": 17.7551840833637,
+    "min": 7,
+    "pass": true
+  },
+  {
+    "fg": "color.light.accent.default",
+    "bg": "color.light.bg.raised",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#FFFFFF",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      15.0,
+      122.0,
+      104.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      255.0,
+      255.0,
+      255.0,
+      1.0
+    ],
+    "foreground": "#0F7A68",
+    "background": "#FFFFFF",
+    "ratio": 5.244728647872974,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.status.warning",
+    "bg": "color.dark.status.warningTint",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#3A2A12",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      231.0,
+      174.0,
+      97.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      58.0,
+      42.0,
+      18.0,
+      1.0
+    ],
+    "foreground": "#E7AE61",
+    "background": "#3A2A12",
+    "ratio": 6.990801859459279,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.text.primary",
+    "bg": "color.dark.status.warningTint",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#3A2A12",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      241.0,
+      247.0,
+      245.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      58.0,
+      42.0,
+      18.0,
+      1.0
+    ],
+    "foreground": "#F1F7F5",
+    "background": "#3A2A12",
+    "ratio": 12.740237532027077,
+    "min": 7,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.status.criticalText",
+    "bg": "color.dark.status.criticalTint",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#3F1A1D",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      238.0,
+      138.0,
+      140.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      63.0,
+      26.0,
+      29.0,
+      1.0
+    ],
+    "foreground": "#EE8A8C",
+    "background": "#3F1A1D",
+    "ratio": 6.282092306044734,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.text.primary",
+    "bg": "color.dark.status.criticalTint",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#3F1A1D",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      241.0,
+      247.0,
+      245.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      63.0,
+      26.0,
+      29.0,
+      1.0
+    ],
+    "foreground": "#F1F7F5",
+    "background": "#3F1A1D",
+    "ratio": 14.063223546674344,
+    "min": 7,
+    "pass": true
+  },
+  {
+    "fg": "color.light.text.primary",
+    "bg": "color.light.status.warningTint",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#FBEBD3",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      11.0,
+      22.0,
+      35.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      251.0,
+      235.0,
+      211.0,
+      1.0
+    ],
+    "foreground": "#0B1623",
+    "background": "#FBEBD3",
+    "ratio": 15.543554980389683,
+    "min": 7,
+    "pass": true
+  },
+  {
+    "fg": "color.light.band.text",
+    "bg": "color.light.band.bg",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#BFD0D6",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      11.0,
+      22.0,
+      35.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      191.0,
+      208.0,
+      214.0,
+      1.0
+    ],
+    "foreground": "#0B1623",
+    "background": "#BFD0D6",
+    "ratio": 11.45326810689719,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.light.band.meta",
+    "bg": "color.light.band.bg",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#BFD0D6",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      35.0,
+      73.0,
+      90.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      191.0,
+      208.0,
+      214.0,
+      1.0
+    ],
+    "foreground": "#23495A",
+    "background": "#BFD0D6",
+    "ratio": 6.0809874753016215,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.light.band.rule",
+    "bg": "color.light.band.bg",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#BFD0D6",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      35.0,
+      73.0,
+      90.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      191.0,
+      208.0,
+      214.0,
+      1.0
+    ],
+    "foreground": "#23495A",
+    "background": "#BFD0D6",
+    "ratio": 6.0809874753016215,
+    "min": 3,
+    "pass": true
+  },
+  {
+    "fg": "color.light.band.lines",
+    "bg": "color.light.band.bg",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#BFD0D6",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      79.0,
+      115.0,
+      131.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      191.0,
+      208.0,
+      214.0,
+      1.0
+    ],
+    "foreground": "#4F7383",
+    "background": "#BFD0D6",
+    "ratio": 3.2118368121748064,
+    "min": 3,
+    "pass": true
+  },
+  {
+    "fg": "color.light.identity.ring",
+    "bg": "color.light.identity.lima",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#C5E384",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      7.0,
+      15.0,
+      24.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      197.0,
+      227.0,
+      132.0,
+      1.0
+    ],
+    "foreground": "#070F18",
+    "background": "#C5E384",
+    "ratio": 13.47470680285887,
+    "min": 3,
+    "pass": true
+  },
+  {
+    "fg": "color.light.identity.edge.lima",
+    "bg": "color.light.bg.surface",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#FFFFFF",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      82.0,
+      112.0,
+      42.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      255.0,
+      255.0,
+      255.0,
+      1.0
+    ],
+    "foreground": "#52702A",
+    "background": "#FFFFFF",
+    "ratio": 5.660576773456369,
+    "min": 3,
+    "pass": true
+  },
+  {
+    "fg": "color.light.identity.ring",
+    "bg": "color.light.identity.sky",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#8CCBF5",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      7.0,
+      15.0,
+      24.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      140.0,
+      203.0,
+      245.0,
+      1.0
+    ],
+    "foreground": "#070F18",
+    "background": "#8CCBF5",
+    "ratio": 10.981561950576959,
+    "min": 3,
+    "pass": true
+  },
+  {
+    "fg": "color.light.identity.edge.sky",
+    "bg": "color.light.bg.surface",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#FFFFFF",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      7.0,
+      15.0,
+      24.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      255.0,
+      255.0,
+      255.0,
+      1.0
+    ],
+    "foreground": "#070F18",
+    "background": "#FFFFFF",
+    "ratio": 19.256280266651896,
+    "min": 3,
+    "pass": true
+  },
+  {
+    "fg": "color.light.identity.ring",
+    "bg": "color.light.identity.violet",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#C2B0F7",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      7.0,
+      15.0,
+      24.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      194.0,
+      176.0,
+      247.0,
+      1.0
+    ],
+    "foreground": "#070F18",
+    "background": "#C2B0F7",
+    "ratio": 9.946401036722925,
+    "min": 3,
+    "pass": true
+  },
+  {
+    "fg": "color.light.identity.edge.violet",
+    "bg": "color.light.bg.surface",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#FFFFFF",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      7.0,
+      15.0,
+      24.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      255.0,
+      255.0,
+      255.0,
+      1.0
+    ],
+    "foreground": "#070F18",
+    "background": "#FFFFFF",
+    "ratio": 19.256280266651896,
+    "min": 3,
+    "pass": true
+  },
+  {
+    "fg": "color.light.identity.ring",
+    "bg": "color.light.identity.coral",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#F4A8BD",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      7.0,
+      15.0,
+      24.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      244.0,
+      168.0,
+      189.0,
+      1.0
+    ],
+    "foreground": "#070F18",
+    "background": "#F4A8BD",
+    "ratio": 10.253966181671961,
+    "min": 3,
+    "pass": true
+  },
+  {
+    "fg": "color.light.identity.edge.coral",
+    "bg": "color.light.bg.surface",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#FFFFFF",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      7.0,
+      15.0,
+      24.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      255.0,
+      255.0,
+      255.0,
+      1.0
+    ],
+    "foreground": "#070F18",
+    "background": "#FFFFFF",
+    "ratio": 19.256280266651896,
+    "min": 3,
+    "pass": true
+  },
+  {
+    "fg": "color.light.identity.ring",
+    "bg": "color.light.identity.sand",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#FDCF8B",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      7.0,
+      15.0,
+      24.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      253.0,
+      207.0,
+      139.0,
+      1.0
+    ],
+    "foreground": "#070F18",
+    "background": "#FDCF8B",
+    "ratio": 13.272597328001067,
+    "min": 3,
+    "pass": true
+  },
+  {
+    "fg": "color.light.identity.edge.sand",
+    "bg": "color.light.bg.surface",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#FFFFFF",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      7.0,
+      15.0,
+      24.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      255.0,
+      255.0,
+      255.0,
+      1.0
+    ],
+    "foreground": "#070F18",
+    "background": "#FFFFFF",
+    "ratio": 19.256280266651896,
+    "min": 3,
+    "pass": true
+  },
+  {
+    "fg": "color.light.identity.ring",
+    "bg": "color.light.identity.slate",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#BFD0D6",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      7.0,
+      15.0,
+      24.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      191.0,
+      208.0,
+      214.0,
+      1.0
+    ],
+    "foreground": "#070F18",
+    "background": "#BFD0D6",
+    "ratio": 12.111862087112724,
+    "min": 3,
+    "pass": true
+  },
+  {
+    "fg": "color.light.identity.edge.slate",
+    "bg": "color.light.bg.surface",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#FFFFFF",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      7.0,
+      15.0,
+      24.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      255.0,
+      255.0,
+      255.0,
+      1.0
+    ],
+    "foreground": "#070F18",
+    "background": "#FFFFFF",
+    "ratio": 19.256280266651896,
+    "min": 3,
+    "pass": true
+  },
+  {
+    "fg": "color.light.identity.ring",
+    "bg": "color.light.band.bg",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#BFD0D6",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      7.0,
+      15.0,
+      24.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      191.0,
+      208.0,
+      214.0,
+      1.0
+    ],
+    "foreground": "#070F18",
+    "background": "#BFD0D6",
+    "ratio": 12.111862087112724,
+    "min": 3,
+    "pass": true
+  },
+  {
+    "fg": "color.light.security.temporary.text",
+    "bg": "color.light.security.temporary.fill",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#F1F7F5",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      11.0,
+      22.0,
+      35.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      241.0,
+      247.0,
+      245.0,
+      1.0
+    ],
+    "foreground": "#0B1623",
+    "background": "#F1F7F5",
+    "ratio": 16.789729121045056,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.light.security.private.text",
+    "bg": "color.light.security.private.fill",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#2A1745",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      241.0,
+      247.0,
+      245.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      42.0,
+      23.0,
+      69.0,
+      1.0
+    ],
+    "foreground": "#F1F7F5",
+    "background": "#2A1745",
+    "ratio": 14.815494671749814,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.light.security.raw.text",
+    "bg": "color.light.security.raw.fill",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#A8323A",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      255.0,
+      255.0,
+      255.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      168.0,
+      50.0,
+      58.0,
+      1.0
+    ],
+    "foreground": "#FFFFFF",
+    "background": "#A8323A",
+    "ratio": 6.598990957069238,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.light.security.guard.text",
+    "bg": "color.light.security.guard.fill",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#FBEBD3",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      138.0,
+      90.0,
+      16.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      251.0,
+      235.0,
+      211.0,
+      1.0
+    ],
+    "foreground": "#8A5A10",
+    "background": "#FBEBD3",
+    "ratio": 5.048666431728902,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.light.security.acting.text",
+    "bg": "color.light.security.acting.fill",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#DDF8F0",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      15.0,
+      122.0,
+      104.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      221.0,
+      248.0,
+      240.0,
+      1.0
+    ],
+    "foreground": "#0F7A68",
+    "background": "#DDF8F0",
+    "ratio": 4.685202311537138,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.light.security.private.meta",
+    "bg": "color.light.security.private.fill",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#2A1745",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      232.0,
+      226.0,
+      238.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      42.0,
+      23.0,
+      69.0,
+      1.0
+    ],
+    "foreground": "#E8E2EE",
+    "background": "#2A1745",
+    "ratio": 12.658808048039255,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.light.security.agent.on",
+    "bg": "color.light.security.agent.ink",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#0B1623",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      241.0,
+      247.0,
+      245.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      11.0,
+      22.0,
+      35.0,
+      1.0
+    ],
+    "foreground": "#F1F7F5",
+    "background": "#0B1623",
+    "ratio": 16.789729121045056,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.light.group.blue",
+    "bg": "color.light.chrome.toolbox",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#E2EBEE",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      47.0,
+      95.0,
+      174.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      226.0,
+      235.0,
+      238.0,
+      1.0
+    ],
+    "foreground": "#2F5FAE",
+    "background": "#E2EBEE",
+    "ratio": 5.150475305631757,
+    "min": 3,
+    "pass": true
+  },
+  {
+    "fg": "color.light.group.cyan",
+    "bg": "color.light.chrome.toolbox",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#E2EBEE",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      0.0,
+      95.0,
+      128.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      226.0,
+      235.0,
+      238.0,
+      1.0
+    ],
+    "foreground": "#005F80",
+    "background": "#E2EBEE",
+    "ratio": 5.884749828663327,
+    "min": 3,
+    "pass": true
+  },
+  {
+    "fg": "color.light.group.green",
+    "bg": "color.light.chrome.toolbox",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#E2EBEE",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      51.0,
+      107.0,
+      48.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      226.0,
+      235.0,
+      238.0,
+      1.0
+    ],
+    "foreground": "#336B30",
+    "background": "#E2EBEE",
+    "ratio": 5.279655739083684,
+    "min": 3,
+    "pass": true
+  },
+  {
+    "fg": "color.light.group.yellow",
+    "bg": "color.light.chrome.toolbox",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#E2EBEE",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      94.0,
+      90.0,
+      14.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      226.0,
+      235.0,
+      238.0,
+      1.0
+    ],
+    "foreground": "#5E5A0E",
+    "background": "#E2EBEE",
+    "ratio": 5.892428594524383,
+    "min": 3,
+    "pass": true
+  },
+  {
+    "fg": "color.light.group.pink",
+    "bg": "color.light.chrome.toolbox",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#E2EBEE",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      142.0,
+      47.0,
+      112.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      226.0,
+      235.0,
+      238.0,
+      1.0
+    ],
+    "foreground": "#8E2F70",
+    "background": "#E2EBEE",
+    "ratio": 6.217610659084236,
+    "min": 3,
+    "pass": true
+  },
+  {
+    "fg": "color.light.group.gray",
+    "bg": "color.light.chrome.toolbox",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#E2EBEE",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      78.0,
+      90.0,
+      97.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      226.0,
+      235.0,
+      238.0,
+      1.0
+    ],
+    "foreground": "#4E5A61",
+    "background": "#E2EBEE",
+    "ratio": 5.864000538683373,
+    "min": 3,
+    "pass": true
+  },
+  {
+    "fg": "color.light.group.orange",
+    "bg": "color.light.chrome.toolbox",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#E2EBEE",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      107.0,
+      78.0,
+      62.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      226.0,
+      235.0,
+      238.0,
+      1.0
+    ],
+    "foreground": "#6B4E3E",
+    "background": "#E2EBEE",
+    "ratio": 6.231583036630545,
+    "min": 3,
+    "pass": true
+  },
+  {
+    "fg": "color.light.group.purple",
+    "bg": "color.light.chrome.toolbox",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#E2EBEE",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      71.0,
+      79.0,
+      107.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      226.0,
+      235.0,
+      238.0,
+      1.0
+    ],
+    "foreground": "#474F6B",
+    "background": "#E2EBEE",
+    "ratio": 6.677274676700167,
+    "min": 3,
+    "pass": true
+  },
+  {
+    "fg": "color.light.group.red",
+    "bg": "color.light.chrome.toolbox",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#E2EBEE",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      110.0,
+      68.0,
+      64.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      226.0,
+      235.0,
+      238.0,
+      1.0
+    ],
+    "foreground": "#6E4440",
+    "background": "#E2EBEE",
+    "ratio": 6.7677438386190065,
+    "min": 3,
+    "pass": true
+  },
+  {
+    "fg": "color.light.control.selected.text",
+    "bg": "color.light.control.selected.fill",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#FFFFFF",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      11.0,
+      22.0,
+      35.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      255.0,
+      255.0,
+      255.0,
+      1.0
+    ],
+    "foreground": "#0B1623",
+    "background": "#FFFFFF",
+    "ratio": 18.20920177667684,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.light.control.selected.edge",
+    "bg": "color.light.control.selected.fill",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#FFFFFF",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      15.0,
+      122.0,
+      104.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      255.0,
+      255.0,
+      255.0,
+      1.0
+    ],
+    "foreground": "#0F7A68",
+    "background": "#FFFFFF",
+    "ratio": 5.244728647872974,
+    "min": 3,
+    "pass": true
+  },
+  {
+    "fg": "color.light.selection.text",
+    "bg": "color.light.selection.bg",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#0F7A68",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      255.0,
+      255.0,
+      255.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      15.0,
+      122.0,
+      104.0,
+      1.0
+    ],
+    "foreground": "#FFFFFF",
+    "background": "#0F7A68",
+    "ratio": 5.244728647872974,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.light.focusOnAccent",
+    "bg": "color.light.accent.default",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#0F7A68",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      255.0,
+      255.0,
+      255.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      15.0,
+      122.0,
+      104.0,
+      1.0
+    ],
+    "foreground": "#FFFFFF",
+    "background": "#0F7A68",
+    "ratio": 5.244728647872974,
+    "min": 3,
+    "pass": true
+  },
+  {
+    "fg": "color.light.downloads.attention.warning",
+    "bg": "color.light.chrome.toolbar",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#F1F7F5",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      138.0,
+      90.0,
+      16.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      241.0,
+      247.0,
+      245.0,
+      1.0
+    ],
+    "foreground": "#8A5A10",
+    "background": "#F1F7F5",
+    "ratio": 5.453433395268003,
+    "min": 3,
+    "pass": true
+  },
+  {
+    "fg": "color.light.text.primary",
+    "bg": "color.light.surface.frost",
+    "backdrop": "color.primitive.backdrop.black",
+    "opacity": 1,
+    "surface": "rgba(255,255,255,0.86)",
+    "backdropColor": "#000000",
+    "foregroundRGBA": [
+      11.0,
+      22.0,
+      35.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      219.29999999999998,
+      219.29999999999998,
+      219.29999999999998,
+      1.0
+    ],
+    "foreground": "#0B1623",
+    "background": "#DBDBDB",
+    "ratio": 13.189817795309917,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.light.text.primary",
+    "bg": "color.light.surface.frost",
+    "backdrop": "color.primitive.backdrop.blue",
+    "opacity": 1,
+    "surface": "rgba(255,255,255,0.86)",
+    "backdropColor": "#0000FF",
+    "foregroundRGBA": [
+      11.0,
+      22.0,
+      35.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      219.29999999999998,
+      219.29999999999998,
+      255.0,
+      1.0
+    ],
+    "foreground": "#0B1623",
+    "background": "#DBDBFF",
+    "ratio": 13.55221731876461,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.light.text.primary",
+    "bg": "color.light.surface.frost",
+    "backdrop": "color.primitive.backdrop.red",
+    "opacity": 1,
+    "surface": "rgba(255,255,255,0.86)",
+    "backdropColor": "#FF0000",
+    "foregroundRGBA": [
+      11.0,
+      22.0,
+      35.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      255.0,
+      219.29999999999998,
+      219.29999999999998,
+      1.0
+    ],
+    "foreground": "#0B1623",
+    "background": "#FFDBDB",
+    "ratio": 14.256938829748524,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.light.text.primary",
+    "bg": "color.light.surface.frost",
+    "backdrop": "color.primitive.backdrop.ambience",
+    "opacity": 1,
+    "surface": "rgba(255,255,255,0.86)",
+    "backdropColor": "#8FAAB5",
+    "foregroundRGBA": [
+      11.0,
+      22.0,
+      35.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      239.32,
+      243.1,
+      244.64,
+      1.0
+    ],
+    "foreground": "#0B1623",
+    "background": "#EFF3F5",
+    "ratio": 16.325525815494945,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.light.text.primary",
+    "bg": "color.light.surface.frost",
+    "backdrop": "color.primitive.navy.900",
+    "opacity": 1,
+    "surface": "rgba(255,255,255,0.86)",
+    "backdropColor": "#0B1623",
+    "foregroundRGBA": [
+      11.0,
+      22.0,
+      35.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      220.83999999999997,
+      222.38,
+      224.2,
+      1.0
+    ],
+    "foreground": "#0B1623",
+    "background": "#DDDEE0",
+    "ratio": 13.558809303367275,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.light.text.primary",
+    "bg": "color.light.surface.frostFallback",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#FFFFFF",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      11.0,
+      22.0,
+      35.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      255.0,
+      255.0,
+      255.0,
+      1.0
+    ],
+    "foreground": "#0B1623",
+    "background": "#FFFFFF",
+    "ratio": 18.20920177667684,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.light.text.secondary",
+    "bg": "color.light.surface.frost",
+    "backdrop": "color.primitive.backdrop.black",
+    "opacity": 1,
+    "surface": "rgba(255,255,255,0.86)",
+    "backdropColor": "#000000",
+    "foregroundRGBA": [
+      58.0,
+      98.0,
+      115.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      219.29999999999998,
+      219.29999999999998,
+      219.29999999999998,
+      1.0
+    ],
+    "foreground": "#3A6273",
+    "background": "#DBDBDB",
+    "ratio": 4.791661125025665,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.light.text.secondary",
+    "bg": "color.light.surface.frost",
+    "backdrop": "color.primitive.backdrop.blue",
+    "opacity": 1,
+    "surface": "rgba(255,255,255,0.86)",
+    "backdropColor": "#0000FF",
+    "foregroundRGBA": [
+      58.0,
+      98.0,
+      115.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      219.29999999999998,
+      219.29999999999998,
+      255.0,
+      1.0
+    ],
+    "foreground": "#3A6273",
+    "background": "#DBDBFF",
+    "ratio": 4.923315385547986,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.light.text.secondary",
+    "bg": "color.light.surface.frost",
+    "backdrop": "color.primitive.backdrop.red",
+    "opacity": 1,
+    "surface": "rgba(255,255,255,0.86)",
+    "backdropColor": "#FF0000",
+    "foregroundRGBA": [
+      58.0,
+      98.0,
+      115.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      255.0,
+      219.29999999999998,
+      219.29999999999998,
+      1.0
+    ],
+    "foreground": "#3A6273",
+    "background": "#FFDBDB",
+    "ratio": 5.179330041743745,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.light.text.secondary",
+    "bg": "color.light.surface.frost",
+    "backdrop": "color.primitive.backdrop.ambience",
+    "opacity": 1,
+    "surface": "rgba(255,255,255,0.86)",
+    "backdropColor": "#8FAAB5",
+    "foregroundRGBA": [
+      58.0,
+      98.0,
+      115.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      239.32,
+      243.1,
+      244.64,
+      1.0
+    ],
+    "foreground": "#3A6273",
+    "background": "#EFF3F5",
+    "ratio": 5.9308163774275995,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.light.text.secondary",
+    "bg": "color.light.surface.frost",
+    "backdrop": "color.primitive.navy.900",
+    "opacity": 1,
+    "surface": "rgba(255,255,255,0.86)",
+    "backdropColor": "#0B1623",
+    "foregroundRGBA": [
+      58.0,
+      98.0,
+      115.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      220.83999999999997,
+      222.38,
+      224.2,
+      1.0
+    ],
+    "foreground": "#3A6273",
+    "background": "#DDDEE0",
+    "ratio": 4.925710153758399,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.light.text.secondary",
+    "bg": "color.light.surface.frostFallback",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#FFFFFF",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      58.0,
+      98.0,
+      115.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      255.0,
+      255.0,
+      255.0,
+      1.0
+    ],
+    "foreground": "#3A6273",
+    "background": "#FFFFFF",
+    "ratio": 6.6151273372461725,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.band.text",
+    "bg": "color.dark.band.bg",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#04080D",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      241.0,
+      247.0,
+      245.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      4.0,
+      8.0,
+      13.0,
+      1.0
+    ],
+    "foreground": "#F1F7F5",
+    "background": "#04080D",
+    "ratio": 18.516629852937175,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.band.meta",
+    "bg": "color.dark.band.bg",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#04080D",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      143.0,
+      170.0,
+      181.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      4.0,
+      8.0,
+      13.0,
+      1.0
+    ],
+    "foreground": "#8FAAB5",
+    "background": "#04080D",
+    "ratio": 8.209809246773862,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.band.rule",
+    "bg": "color.dark.band.bg",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#04080D",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      110.0,
+      147.0,
+      162.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      4.0,
+      8.0,
+      13.0,
+      1.0
+    ],
+    "foreground": "#6E93A2",
+    "background": "#04080D",
+    "ratio": 6.08029973768766,
+    "min": 3,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.band.lines",
+    "bg": "color.dark.band.bg",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#04080D",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      58.0,
+      98.0,
+      115.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      4.0,
+      8.0,
+      13.0,
+      1.0
+    ],
+    "foreground": "#3A6273",
+    "background": "#04080D",
+    "ratio": 3.0357846138178015,
+    "min": 3,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.identity.ring",
+    "bg": "color.dark.identity.lima",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#C5E384",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      7.0,
+      15.0,
+      24.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      197.0,
+      227.0,
+      132.0,
+      1.0
+    ],
+    "foreground": "#070F18",
+    "background": "#C5E384",
+    "ratio": 13.47470680285887,
+    "min": 3,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.identity.edge.lima",
+    "bg": "color.dark.bg.surface",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#112432",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      197.0,
+      227.0,
+      132.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      17.0,
+      36.0,
+      50.0,
+      1.0
+    ],
+    "foreground": "#C5E384",
+    "background": "#112432",
+    "ratio": 11.113608753340527,
+    "min": 3,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.identity.ring",
+    "bg": "color.dark.identity.sky",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#8CCBF5",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      7.0,
+      15.0,
+      24.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      140.0,
+      203.0,
+      245.0,
+      1.0
+    ],
+    "foreground": "#070F18",
+    "background": "#8CCBF5",
+    "ratio": 10.981561950576959,
+    "min": 3,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.identity.edge.sky",
+    "bg": "color.dark.bg.surface",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#112432",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      140.0,
+      203.0,
+      245.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      17.0,
+      36.0,
+      50.0,
+      1.0
+    ],
+    "foreground": "#8CCBF5",
+    "background": "#112432",
+    "ratio": 9.057323829368194,
+    "min": 3,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.identity.ring",
+    "bg": "color.dark.identity.violet",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#C2B0F7",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      7.0,
+      15.0,
+      24.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      194.0,
+      176.0,
+      247.0,
+      1.0
+    ],
+    "foreground": "#070F18",
+    "background": "#C2B0F7",
+    "ratio": 9.946401036722925,
+    "min": 3,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.identity.edge.violet",
+    "bg": "color.dark.bg.surface",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#112432",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      194.0,
+      176.0,
+      247.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      17.0,
+      36.0,
+      50.0,
+      1.0
+    ],
+    "foreground": "#C2B0F7",
+    "background": "#112432",
+    "ratio": 8.203548414315502,
+    "min": 3,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.identity.ring",
+    "bg": "color.dark.identity.coral",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#F4A8BD",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      7.0,
+      15.0,
+      24.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      244.0,
+      168.0,
+      189.0,
+      1.0
+    ],
+    "foreground": "#070F18",
+    "background": "#F4A8BD",
+    "ratio": 10.253966181671961,
+    "min": 3,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.identity.edge.coral",
+    "bg": "color.dark.bg.surface",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#112432",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      244.0,
+      168.0,
+      189.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      17.0,
+      36.0,
+      50.0,
+      1.0
+    ],
+    "foreground": "#F4A8BD",
+    "background": "#112432",
+    "ratio": 8.457220626790125,
+    "min": 3,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.identity.ring",
+    "bg": "color.dark.identity.sand",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#FDCF8B",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      7.0,
+      15.0,
+      24.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      253.0,
+      207.0,
+      139.0,
+      1.0
+    ],
+    "foreground": "#070F18",
+    "background": "#FDCF8B",
+    "ratio": 13.272597328001067,
+    "min": 3,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.identity.edge.sand",
+    "bg": "color.dark.bg.surface",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#112432",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      253.0,
+      207.0,
+      139.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      17.0,
+      36.0,
+      50.0,
+      1.0
+    ],
+    "foreground": "#FDCF8B",
+    "background": "#112432",
+    "ratio": 10.946913799470646,
+    "min": 3,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.identity.ring",
+    "bg": "color.dark.identity.slate",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#BFD0D6",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      7.0,
+      15.0,
+      24.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      191.0,
+      208.0,
+      214.0,
+      1.0
+    ],
+    "foreground": "#070F18",
+    "background": "#BFD0D6",
+    "ratio": 12.111862087112724,
+    "min": 3,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.identity.edge.slate",
+    "bg": "color.dark.bg.surface",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#112432",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      191.0,
+      208.0,
+      214.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      17.0,
+      36.0,
+      50.0,
+      1.0
+    ],
+    "foreground": "#BFD0D6",
+    "background": "#112432",
+    "ratio": 9.989567749409611,
+    "min": 3,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.security.temporary.text",
+    "bg": "color.dark.security.temporary.fill",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#04080D",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      241.0,
+      247.0,
+      245.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      4.0,
+      8.0,
+      13.0,
+      1.0
+    ],
+    "foreground": "#F1F7F5",
+    "background": "#04080D",
+    "ratio": 18.516629852937175,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.security.private.text",
+    "bg": "color.dark.security.private.fill",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#2A1745",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      241.0,
+      247.0,
+      245.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      42.0,
+      23.0,
+      69.0,
+      1.0
+    ],
+    "foreground": "#F1F7F5",
+    "background": "#2A1745",
+    "ratio": 14.815494671749814,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.security.raw.text",
+    "bg": "color.dark.security.raw.fill",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#E26D70",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      11.0,
+      22.0,
+      35.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      226.0,
+      109.0,
+      112.0,
+      1.0
+    ],
+    "foreground": "#0B1623",
+    "background": "#E26D70",
+    "ratio": 5.770735615821596,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.security.guard.text",
+    "bg": "color.dark.security.guard.fill",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#3A2A12",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      231.0,
+      174.0,
+      97.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      58.0,
+      42.0,
+      18.0,
+      1.0
+    ],
+    "foreground": "#E7AE61",
+    "background": "#3A2A12",
+    "ratio": 6.990801859459279,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.security.acting.text",
+    "bg": "color.dark.security.acting.fill",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#0E3B33",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      111.0,
+      224.0,
+      197.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      14.0,
+      59.0,
+      51.0,
+      1.0
+    ],
+    "foreground": "#6FE0C5",
+    "background": "#0E3B33",
+    "ratio": 7.768279341586408,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.security.private.meta",
+    "bg": "color.dark.security.private.fill",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#2A1745",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      232.0,
+      226.0,
+      238.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      42.0,
+      23.0,
+      69.0,
+      1.0
+    ],
+    "foreground": "#E8E2EE",
+    "background": "#2A1745",
+    "ratio": 12.658808048039255,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.security.agent.on",
+    "bg": "color.dark.security.agent.ink",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#F1F7F5",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      11.0,
+      22.0,
+      35.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      241.0,
+      247.0,
+      245.0,
+      1.0
+    ],
+    "foreground": "#0B1623",
+    "background": "#F1F7F5",
+    "ratio": 16.789729121045056,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.group.blue",
+    "bg": "color.dark.chrome.toolbox",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#070F18",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      134.0,
+      165.0,
+      236.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      7.0,
+      15.0,
+      24.0,
+      1.0
+    ],
+    "foreground": "#86A5EC",
+    "background": "#070F18",
+    "ratio": 7.892274187956493,
+    "min": 3,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.group.cyan",
+    "bg": "color.dark.chrome.toolbox",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#070F18",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      93.0,
+      178.0,
+      211.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      7.0,
+      15.0,
+      24.0,
+      1.0
+    ],
+    "foreground": "#5DB2D3",
+    "background": "#070F18",
+    "ratio": 8.045657939931614,
+    "min": 3,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.group.green",
+    "bg": "color.dark.chrome.toolbox",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#070F18",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      127.0,
+      187.0,
+      134.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      7.0,
+      15.0,
+      24.0,
+      1.0
+    ],
+    "foreground": "#7FBB86",
+    "background": "#070F18",
+    "ratio": 8.578013412309232,
+    "min": 3,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.group.yellow",
+    "bg": "color.dark.chrome.toolbox",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#070F18",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      189.0,
+      180.0,
+      90.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      7.0,
+      15.0,
+      24.0,
+      1.0
+    ],
+    "foreground": "#BDB45A",
+    "background": "#070F18",
+    "ratio": 9.022854462946357,
+    "min": 3,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.group.pink",
+    "bg": "color.dark.chrome.toolbox",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#070F18",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      222.0,
+      140.0,
+      198.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      7.0,
+      15.0,
+      24.0,
+      1.0
+    ],
+    "foreground": "#DE8CC6",
+    "background": "#070F18",
+    "ratio": 7.952473191812531,
+    "min": 3,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.group.gray",
+    "bg": "color.dark.chrome.toolbox",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#070F18",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      165.0,
+      175.0,
+      180.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      7.0,
+      15.0,
+      24.0,
+      1.0
+    ],
+    "foreground": "#A5AFB4",
+    "background": "#070F18",
+    "ratio": 8.611145300057112,
+    "min": 3,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.group.orange",
+    "bg": "color.dark.chrome.toolbox",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#070F18",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      176.0,
+      149.0,
+      132.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      7.0,
+      15.0,
+      24.0,
+      1.0
+    ],
+    "foreground": "#B09584",
+    "background": "#070F18",
+    "ratio": 6.857242395243167,
+    "min": 3,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.group.purple",
+    "bg": "color.dark.chrome.toolbox",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#070F18",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      160.0,
+      167.0,
+      194.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      7.0,
+      15.0,
+      24.0,
+      1.0
+    ],
+    "foreground": "#A0A7C2",
+    "background": "#070F18",
+    "ratio": 8.070409407891447,
+    "min": 3,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.group.red",
+    "bg": "color.dark.chrome.toolbox",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#070F18",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      185.0,
+      142.0,
+      137.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      7.0,
+      15.0,
+      24.0,
+      1.0
+    ],
+    "foreground": "#B98E89",
+    "background": "#070F18",
+    "ratio": 6.687693767583565,
+    "min": 3,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.control.selected.text",
+    "bg": "color.dark.control.selected.fill",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#112432",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      241.0,
+      247.0,
+      245.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      17.0,
+      36.0,
+      50.0,
+      1.0
+    ],
+    "foreground": "#F1F7F5",
+    "background": "#112432",
+    "ratio": 14.644041768996251,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.control.selected.edge",
+    "bg": "color.dark.control.selected.fill",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#112432",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      111.0,
+      224.0,
+      197.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      17.0,
+      36.0,
+      50.0,
+      1.0
+    ],
+    "foreground": "#6FE0C5",
+    "background": "#112432",
+    "ratio": 9.940995443684077,
+    "min": 3,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.selection.text",
+    "bg": "color.dark.selection.bg",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#6FE0C5",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      11.0,
+      22.0,
+      35.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      111.0,
+      224.0,
+      197.0,
+      1.0
+    ],
+    "foreground": "#0B1623",
+    "background": "#6FE0C5",
+    "ratio": 11.397578846460712,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.focusOnAccent",
+    "bg": "color.dark.accent.default",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#6FE0C5",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      11.0,
+      22.0,
+      35.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      111.0,
+      224.0,
+      197.0,
+      1.0
+    ],
+    "foreground": "#0B1623",
+    "background": "#6FE0C5",
+    "ratio": 11.397578846460712,
+    "min": 3,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.downloads.attention.warning",
+    "bg": "color.dark.chrome.toolbar",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#0B1623",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      231.0,
+      174.0,
+      97.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      11.0,
+      22.0,
+      35.0,
+      1.0
+    ],
+    "foreground": "#E7AE61",
+    "background": "#0B1623",
+    "ratio": 9.212832120606803,
+    "min": 3,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.text.primary",
+    "bg": "color.dark.surface.frost",
+    "backdrop": "color.primitive.backdrop.yellow",
+    "opacity": 1,
+    "surface": "rgba(17,36,50,0.88)",
+    "backdropColor": "#FFFF00",
+    "foregroundRGBA": [
+      241.0,
+      247.0,
+      245.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      45.56,
+      62.28,
+      44.0,
+      1.0
+    ],
+    "foreground": "#F1F7F5",
+    "background": "#2E3E2C",
+    "ratio": 10.491077732438445,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.text.primary",
+    "bg": "color.dark.surface.frost",
+    "backdrop": "color.primitive.navy.0",
+    "opacity": 1,
+    "surface": "rgba(17,36,50,0.88)",
+    "backdropColor": "#FFFFFF",
+    "foregroundRGBA": [
+      241.0,
+      247.0,
+      245.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      45.56,
+      62.28,
+      74.6,
+      1.0
+    ],
+    "foreground": "#F1F7F5",
+    "background": "#2E3E4B",
+    "ratio": 10.138749222845293,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.text.primary",
+    "bg": "color.dark.surface.frost",
+    "backdrop": "color.light.band.bg",
+    "opacity": 1,
+    "surface": "rgba(17,36,50,0.88)",
+    "backdropColor": "#BFD0D6",
+    "foregroundRGBA": [
+      241.0,
+      247.0,
+      245.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      37.879999999999995,
+      56.64,
+      69.68,
+      1.0
+    ],
+    "foreground": "#F1F7F5",
+    "background": "#263946",
+    "ratio": 11.078812393082602,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.text.primary",
+    "bg": "color.dark.surface.frostFallback",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#112432",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      241.0,
+      247.0,
+      245.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      17.0,
+      36.0,
+      50.0,
+      1.0
+    ],
+    "foreground": "#F1F7F5",
+    "background": "#112432",
+    "ratio": 14.644041768996251,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.text.secondary",
+    "bg": "color.dark.surface.frost",
+    "backdrop": "color.primitive.backdrop.yellow",
+    "opacity": 1,
+    "surface": "rgba(17,36,50,0.88)",
+    "backdropColor": "#FFFF00",
+    "foregroundRGBA": [
+      191.0,
+      208.0,
+      214.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      45.56,
+      62.28,
+      44.0,
+      1.0
+    ],
+    "foreground": "#BFD0D6",
+    "background": "#2E3E2C",
+    "ratio": 7.156585144027475,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.text.secondary",
+    "bg": "color.dark.surface.frost",
+    "backdrop": "color.primitive.navy.0",
+    "opacity": 1,
+    "surface": "rgba(17,36,50,0.88)",
+    "backdropColor": "#FFFFFF",
+    "foregroundRGBA": [
+      191.0,
+      208.0,
+      214.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      45.56,
+      62.28,
+      74.6,
+      1.0
+    ],
+    "foreground": "#BFD0D6",
+    "background": "#2E3E4B",
+    "ratio": 6.916241011434185,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.text.secondary",
+    "bg": "color.dark.surface.frost",
+    "backdrop": "color.light.band.bg",
+    "opacity": 1,
+    "surface": "rgba(17,36,50,0.88)",
+    "backdropColor": "#BFD0D6",
+    "foregroundRGBA": [
+      191.0,
+      208.0,
+      214.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      37.879999999999995,
+      56.64,
+      69.68,
+      1.0
+    ],
+    "foreground": "#BFD0D6",
+    "background": "#263946",
+    "ratio": 7.557513747195719,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.text.secondary",
+    "bg": "color.dark.surface.frostFallback",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#112432",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      191.0,
+      208.0,
+      214.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      17.0,
+      36.0,
+      50.0,
+      1.0
+    ],
+    "foreground": "#BFD0D6",
+    "background": "#112432",
+    "ratio": 9.989567749409611,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.light.accent.on",
+    "bg": "color.light.text.primary",
+    "backdrop": "color.light.accent.default",
+    "opacity": 0.08,
+    "surface": "#0B1623",
+    "backdropColor": "#0F7A68",
+    "foregroundRGBA": [
+      255.0,
+      255.0,
+      255.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      14.680000000000001,
+      114.00000000000001,
+      98.48,
+      1.0
+    ],
+    "foreground": "#FFFFFF",
+    "background": "#0F7262",
+    "ratio": 5.825418363173062,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.light.status.criticalText",
+    "bg": "color.light.bg.canvas",
+    "backdrop": "color.light.bg.raised",
+    "opacity": 0.08,
+    "surface": "#F1F7F5",
+    "backdropColor": "#FFFFFF",
+    "foregroundRGBA": [
+      168.0,
+      50.0,
+      58.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      253.88000000000002,
+      254.36,
+      254.20000000000002,
+      1.0
+    ],
+    "foreground": "#A8323A",
+    "background": "#FEFEFE",
+    "ratio": 6.556827258210142,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.light.text.primary",
+    "bg": "color.light.text.primary",
+    "backdrop": "color.light.bg.raised",
+    "opacity": 0.08,
+    "surface": "#0B1623",
+    "backdropColor": "#FFFFFF",
+    "foregroundRGBA": [
+      11.0,
+      22.0,
+      35.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      235.48000000000002,
+      236.36,
+      237.40000000000003,
+      1.0
+    ],
+    "foreground": "#0B1623",
+    "background": "#EBECED",
+    "ratio": 15.448381610468202,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.light.text.secondary",
+    "bg": "color.light.text.secondary",
+    "backdrop": "color.light.bg.canvas",
+    "opacity": 0.08,
+    "surface": "#3A6273",
+    "backdropColor": "#F1F7F5",
+    "foregroundRGBA": [
+      58.0,
+      98.0,
+      115.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      226.35999999999999,
+      235.08,
+      234.6,
+      1.0
+    ],
+    "foreground": "#3A6273",
+    "background": "#E2EBEB",
+    "ratio": 5.459972221786415,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.light.text.secondary",
+    "bg": "color.light.text.secondary",
+    "backdrop": "color.light.bg.surface",
+    "opacity": 0.08,
+    "surface": "#3A6273",
+    "backdropColor": "#FFFFFF",
+    "foregroundRGBA": [
+      58.0,
+      98.0,
+      115.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      239.24,
+      242.44000000000003,
+      243.8,
+      1.0
+    ],
+    "foreground": "#3A6273",
+    "background": "#EFF2F4",
+    "ratio": 5.901861645605206,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.light.text.secondary",
+    "bg": "color.light.text.secondary",
+    "backdrop": "color.light.bg.raised",
+    "opacity": 0.08,
+    "surface": "#3A6273",
+    "backdropColor": "#FFFFFF",
+    "foregroundRGBA": [
+      58.0,
+      98.0,
+      115.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      239.24,
+      242.44000000000003,
+      243.8,
+      1.0
+    ],
+    "foreground": "#3A6273",
+    "background": "#EFF2F4",
+    "ratio": 5.901861645605206,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.light.accent.on",
+    "bg": "color.light.text.primary",
+    "backdrop": "color.light.accent.default",
+    "opacity": 0.12,
+    "surface": "#0B1623",
+    "backdropColor": "#0F7A68",
+    "foregroundRGBA": [
+      255.0,
+      255.0,
+      255.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      14.52,
+      110.0,
+      95.72,
+      1.0
+    ],
+    "foreground": "#FFFFFF",
+    "background": "#0F6E60",
+    "ratio": 6.14437032909905,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.light.status.criticalText",
+    "bg": "color.light.bg.canvas",
+    "backdrop": "color.light.bg.raised",
+    "opacity": 0.12,
+    "surface": "#F1F7F5",
+    "backdropColor": "#FFFFFF",
+    "foregroundRGBA": [
+      168.0,
+      50.0,
+      58.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      253.32,
+      254.04000000000002,
+      253.8,
+      1.0
+    ],
+    "foreground": "#A8323A",
+    "background": "#FDFEFE",
+    "ratio": 6.535811625189441,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.light.text.primary",
+    "bg": "color.light.text.primary",
+    "backdrop": "color.light.bg.raised",
+    "opacity": 0.12,
+    "surface": "#0B1623",
+    "backdropColor": "#FFFFFF",
+    "foregroundRGBA": [
+      11.0,
+      22.0,
+      35.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      225.72,
+      227.04,
+      228.6,
+      1.0
+    ],
+    "foreground": "#0B1623",
+    "background": "#E2E3E5",
+    "ratio": 14.171683485302387,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.light.text.secondary",
+    "bg": "color.light.text.secondary",
+    "backdrop": "color.light.bg.canvas",
+    "opacity": 0.12,
+    "surface": "#3A6273",
+    "backdropColor": "#F1F7F5",
+    "foregroundRGBA": [
+      58.0,
+      98.0,
+      115.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      219.04000000000002,
+      229.12,
+      229.4,
+      1.0
+    ],
+    "foreground": "#3A6273",
+    "background": "#DBE5E5",
+    "ratio": 5.156702485884731,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.light.text.secondary",
+    "bg": "color.light.text.secondary",
+    "backdrop": "color.light.bg.surface",
+    "opacity": 0.12,
+    "surface": "#3A6273",
+    "backdropColor": "#FFFFFF",
+    "foregroundRGBA": [
+      58.0,
+      98.0,
+      115.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      231.36,
+      236.16,
+      238.20000000000002,
+      1.0
+    ],
+    "foreground": "#3A6273",
+    "background": "#E7ECEE",
+    "ratio": 5.564064577254323,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.light.text.secondary",
+    "bg": "color.light.text.secondary",
+    "backdrop": "color.light.bg.raised",
+    "opacity": 0.12,
+    "surface": "#3A6273",
+    "backdropColor": "#FFFFFF",
+    "foregroundRGBA": [
+      58.0,
+      98.0,
+      115.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      231.36,
+      236.16,
+      238.20000000000002,
+      1.0
+    ],
+    "foreground": "#3A6273",
+    "background": "#E7ECEE",
+    "ratio": 5.564064577254323,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.accent.on",
+    "bg": "color.dark.text.primary",
+    "backdrop": "color.dark.accent.default",
+    "opacity": 0.08,
+    "surface": "#F1F7F5",
+    "backdropColor": "#6FE0C5",
+    "foregroundRGBA": [
+      11.0,
+      22.0,
+      35.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      121.4,
+      225.84,
+      200.84,
+      1.0
+    ],
+    "foreground": "#0B1623",
+    "background": "#79E2C9",
+    "ratio": 11.724846357080928,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.status.criticalText",
+    "bg": "color.dark.bg.canvas",
+    "backdrop": "color.dark.bg.raised",
+    "opacity": 0.08,
+    "surface": "#0B1623",
+    "backdropColor": "#183746",
+    "foregroundRGBA": [
+      238.0,
+      138.0,
+      140.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      22.96,
+      52.36,
+      67.2,
+      1.0
+    ],
+    "foreground": "#EE8A8C",
+    "background": "#173443",
+    "ratio": 5.354020779929852,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.text.primary",
+    "bg": "color.dark.text.primary",
+    "backdrop": "color.dark.bg.raised",
+    "opacity": 0.08,
+    "surface": "#F1F7F5",
+    "backdropColor": "#183746",
+    "foregroundRGBA": [
+      241.0,
+      247.0,
+      245.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      41.36,
+      70.36,
+      84.0,
+      1.0
+    ],
+    "foreground": "#F1F7F5",
+    "background": "#294654",
+    "ratio": 9.181603641779953,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.text.secondary",
+    "bg": "color.dark.text.secondary",
+    "backdrop": "color.dark.bg.canvas",
+    "opacity": 0.08,
+    "surface": "#BFD0D6",
+    "backdropColor": "#0B1623",
+    "foregroundRGBA": [
+      191.0,
+      208.0,
+      214.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      25.400000000000002,
+      36.88,
+      49.32000000000001,
+      1.0
+    ],
+    "foreground": "#BFD0D6",
+    "background": "#192531",
+    "ratio": 9.781365207489145,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.text.secondary",
+    "bg": "color.dark.text.secondary",
+    "backdrop": "color.dark.bg.surface",
+    "opacity": 0.08,
+    "surface": "#BFD0D6",
+    "backdropColor": "#112432",
+    "foregroundRGBA": [
+      191.0,
+      208.0,
+      214.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      30.92,
+      49.760000000000005,
+      63.120000000000005,
+      1.0
+    ],
+    "foreground": "#BFD0D6",
+    "background": "#1F323F",
+    "ratio": 8.348241913190295,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.text.secondary",
+    "bg": "color.dark.text.secondary",
+    "backdrop": "color.dark.bg.raised",
+    "opacity": 0.08,
+    "surface": "#BFD0D6",
+    "backdropColor": "#183746",
+    "foregroundRGBA": [
+      191.0,
+      208.0,
+      214.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      37.36,
+      67.24000000000001,
+      81.52000000000001,
+      1.0
+    ],
+    "foreground": "#BFD0D6",
+    "background": "#254352",
+    "ratio": 6.574842475752535,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.accent.on",
+    "bg": "color.dark.text.primary",
+    "backdrop": "color.dark.accent.default",
+    "opacity": 0.12,
+    "surface": "#F1F7F5",
+    "backdropColor": "#6FE0C5",
+    "foregroundRGBA": [
+      11.0,
+      22.0,
+      35.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      126.60000000000001,
+      226.76,
+      202.76000000000002,
+      1.0
+    ],
+    "foreground": "#0B1623",
+    "background": "#7FE3CB",
+    "ratio": 11.894719660310725,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.status.criticalText",
+    "bg": "color.dark.bg.canvas",
+    "backdrop": "color.dark.bg.raised",
+    "opacity": 0.12,
+    "surface": "#0B1623",
+    "backdropColor": "#183746",
+    "foregroundRGBA": [
+      238.0,
+      138.0,
+      140.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      22.44,
+      51.04,
+      65.8,
+      1.0
+    ],
+    "foreground": "#EE8A8C",
+    "background": "#163342",
+    "ratio": 5.448333064184154,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.text.primary",
+    "bg": "color.dark.text.primary",
+    "backdrop": "color.dark.bg.raised",
+    "opacity": 0.12,
+    "surface": "#F1F7F5",
+    "backdropColor": "#183746",
+    "foregroundRGBA": [
+      241.0,
+      247.0,
+      245.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      50.04,
+      78.03999999999999,
+      91.0,
+      1.0
+    ],
+    "foreground": "#F1F7F5",
+    "background": "#324E5B",
+    "ratio": 8.143284231709107,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.text.secondary",
+    "bg": "color.dark.text.secondary",
+    "backdrop": "color.dark.bg.canvas",
+    "opacity": 0.12,
+    "surface": "#BFD0D6",
+    "backdropColor": "#0B1623",
+    "foregroundRGBA": [
+      191.0,
+      208.0,
+      214.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      32.599999999999994,
+      44.32,
+      56.480000000000004,
+      1.0
+    ],
+    "foreground": "#BFD0D6",
+    "background": "#212C38",
+    "ratio": 8.885948351913479,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.text.secondary",
+    "bg": "color.dark.text.secondary",
+    "backdrop": "color.dark.bg.surface",
+    "opacity": 0.12,
+    "surface": "#BFD0D6",
+    "backdropColor": "#112432",
+    "foregroundRGBA": [
+      191.0,
+      208.0,
+      214.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      37.879999999999995,
+      56.64,
+      69.68,
+      1.0
+    ],
+    "foreground": "#BFD0D6",
+    "background": "#263946",
+    "ratio": 7.557513747195719,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.text.secondary",
+    "bg": "color.dark.text.secondary",
+    "backdrop": "color.dark.bg.raised",
+    "opacity": 0.12,
+    "surface": "#BFD0D6",
+    "backdropColor": "#183746",
+    "foregroundRGBA": [
+      191.0,
+      208.0,
+      214.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      44.04,
+      73.36,
+      87.28,
+      1.0
+    ],
+    "foreground": "#BFD0D6",
+    "background": "#2C4957",
+    "ratio": 5.9813042127103735,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.light.security.private.dots",
+    "bg": "color.light.security.private.fill",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#2A1745",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      158.0,
+      134.0,
+      201.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      42.0,
+      23.0,
+      69.0,
+      1.0
+    ],
+    "foreground": "#9E86C9",
+    "background": "#2A1745",
+    "ratio": 5.132036750236744,
+    "min": 3,
+    "pass": true
+  },
+  {
+    "fg": "color.light.security.agent.ink",
+    "bg": "color.light.band.bg",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#BFD0D6",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      11.0,
+      22.0,
+      35.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      191.0,
+      208.0,
+      214.0,
+      1.0
+    ],
+    "foreground": "#0B1623",
+    "background": "#BFD0D6",
+    "ratio": 11.45326810689719,
+    "min": 3,
+    "pass": true
+  },
+  {
+    "fg": "color.light.fullscreen.foreground",
+    "bg": "color.light.fullscreen.ink",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#0B1623",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      241.0,
+      247.0,
+      245.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      11.0,
+      22.0,
+      35.0,
+      1.0
+    ],
+    "foreground": "#F1F7F5",
+    "background": "#0B1623",
+    "ratio": 16.789729121045056,
+    "min": 3,
+    "pass": true
+  },
+  {
+    "fg": "color.light.fullscreen.foreground",
+    "bg": "color.light.fullscreen.private",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#2A1745",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      241.0,
+      247.0,
+      245.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      42.0,
+      23.0,
+      69.0,
+      1.0
+    ],
+    "foreground": "#F1F7F5",
+    "background": "#2A1745",
+    "ratio": 14.815494671749814,
+    "min": 3,
+    "pass": true
+  },
+  {
+    "fg": "color.light.fullscreen.automation",
+    "bg": "color.light.fullscreen.ink",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#0B1623",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      226.0,
+      109.0,
+      112.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      11.0,
+      22.0,
+      35.0,
+      1.0
+    ],
+    "foreground": "#E26D70",
+    "background": "#0B1623",
+    "ratio": 5.770735615821596,
+    "min": 3,
+    "pass": true
+  },
+  {
+    "fg": "color.light.fullscreen.ink",
+    "bg": "color.light.security.guard.edge",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#8A5A10",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      11.0,
+      22.0,
+      35.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      138.0,
+      90.0,
+      16.0,
+      1.0
+    ],
+    "foreground": "#0B1623",
+    "background": "#8A5A10",
+    "ratio": 3.0787446924012434,
+    "min": 3,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.security.private.dots",
+    "bg": "color.dark.security.private.fill",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#2A1745",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      158.0,
+      134.0,
+      201.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      42.0,
+      23.0,
+      69.0,
+      1.0
+    ],
+    "foreground": "#9E86C9",
+    "background": "#2A1745",
+    "ratio": 5.132036750236744,
+    "min": 3,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.security.agent.ink",
+    "bg": "color.dark.band.bg",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#04080D",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      241.0,
+      247.0,
+      245.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      4.0,
+      8.0,
+      13.0,
+      1.0
+    ],
+    "foreground": "#F1F7F5",
+    "background": "#04080D",
+    "ratio": 18.516629852937175,
+    "min": 3,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.fullscreen.foreground",
+    "bg": "color.dark.fullscreen.ink",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#0B1623",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      241.0,
+      247.0,
+      245.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      11.0,
+      22.0,
+      35.0,
+      1.0
+    ],
+    "foreground": "#F1F7F5",
+    "background": "#0B1623",
+    "ratio": 16.789729121045056,
+    "min": 3,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.fullscreen.foreground",
+    "bg": "color.dark.fullscreen.private",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#2A1745",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      241.0,
+      247.0,
+      245.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      42.0,
+      23.0,
+      69.0,
+      1.0
+    ],
+    "foreground": "#F1F7F5",
+    "background": "#2A1745",
+    "ratio": 14.815494671749814,
+    "min": 3,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.fullscreen.automation",
+    "bg": "color.dark.fullscreen.ink",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#0B1623",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      226.0,
+      109.0,
+      112.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      11.0,
+      22.0,
+      35.0,
+      1.0
+    ],
+    "foreground": "#E26D70",
+    "background": "#0B1623",
+    "ratio": 5.770735615821596,
+    "min": 3,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.fullscreen.ink",
+    "bg": "color.dark.security.guard.edge",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#E7AE61",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      11.0,
+      22.0,
+      35.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      231.0,
+      174.0,
+      97.0,
+      1.0
+    ],
+    "foreground": "#0B1623",
+    "background": "#E7AE61",
+    "ratio": 9.212832120606803,
+    "min": 3,
+    "pass": true
+  },
+  {
+    "fg": "color.light.bg.canvas",
+    "bg": "color.light.group.blue",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#2F5FAE",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      241.0,
+      247.0,
+      245.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      47.0,
+      95.0,
+      174.0,
+      1.0
+    ],
+    "foreground": "#F1F7F5",
+    "background": "#2F5FAE",
+    "ratio": 5.747481194956732,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.light.bg.canvas",
+    "bg": "color.light.group.blue",
+    "backdrop": "color.light.bg.canvas",
+    "opacity": 0.92,
+    "surface": "#2F5FAE",
+    "backdropColor": "#F1F7F5",
+    "foregroundRGBA": [
+      241.0,
+      247.0,
+      245.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      62.519999999999996,
+      107.16,
+      179.68,
+      1.0
+    ],
+    "foreground": "#F1F7F5",
+    "background": "#3F6BB4",
+    "ratio": 4.871906884491276,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.light.bg.canvas",
+    "bg": "color.light.group.purple",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#474F6B",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      241.0,
+      247.0,
+      245.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      71.0,
+      79.0,
+      107.0,
+      1.0
+    ],
+    "foreground": "#F1F7F5",
+    "background": "#474F6B",
+    "ratio": 7.451256119203472,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.light.bg.canvas",
+    "bg": "color.light.group.purple",
+    "backdrop": "color.light.bg.canvas",
+    "opacity": 0.92,
+    "surface": "#474F6B",
+    "backdropColor": "#F1F7F5",
+    "foregroundRGBA": [
+      241.0,
+      247.0,
+      245.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      84.6,
+      92.44,
+      118.03999999999999,
+      1.0
+    ],
+    "foreground": "#F1F7F5",
+    "background": "#555C76",
+    "ratio": 6.069010713611545,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.light.bg.canvas",
+    "bg": "color.light.group.cyan",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#005F80",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      241.0,
+      247.0,
+      245.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      0.0,
+      95.0,
+      128.0,
+      1.0
+    ],
+    "foreground": "#F1F7F5",
+    "background": "#005F80",
+    "ratio": 6.566867516146388,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.light.bg.canvas",
+    "bg": "color.light.group.cyan",
+    "backdrop": "color.light.bg.canvas",
+    "opacity": 0.92,
+    "surface": "#005F80",
+    "backdropColor": "#F1F7F5",
+    "foregroundRGBA": [
+      241.0,
+      247.0,
+      245.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      19.27999999999999,
+      107.16,
+      137.35999999999999,
+      1.0
+    ],
+    "foreground": "#F1F7F5",
+    "background": "#136B89",
+    "ratio": 5.53020573020708,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.light.bg.canvas",
+    "bg": "color.light.group.orange",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#6B4E3E",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      241.0,
+      247.0,
+      245.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      107.0,
+      78.0,
+      62.0,
+      1.0
+    ],
+    "foreground": "#F1F7F5",
+    "background": "#6B4E3E",
+    "ratio": 6.9539031239860005,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.light.bg.canvas",
+    "bg": "color.light.group.orange",
+    "backdrop": "color.light.bg.canvas",
+    "opacity": 0.92,
+    "surface": "#6B4E3E",
+    "backdropColor": "#F1F7F5",
+    "foregroundRGBA": [
+      241.0,
+      247.0,
+      245.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      117.71999999999998,
+      91.52,
+      76.63999999999999,
+      1.0
+    ],
+    "foreground": "#F1F7F5",
+    "background": "#765C4D",
+    "ratio": 5.717149551896805,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.light.bg.canvas",
+    "bg": "color.light.group.yellow",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#5E5A0E",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      241.0,
+      247.0,
+      245.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      94.0,
+      90.0,
+      14.0,
+      1.0
+    ],
+    "foreground": "#F1F7F5",
+    "background": "#5E5A0E",
+    "ratio": 6.575436349073057,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.light.bg.canvas",
+    "bg": "color.light.group.yellow",
+    "backdrop": "color.light.bg.canvas",
+    "opacity": 0.92,
+    "surface": "#5E5A0E",
+    "backdropColor": "#F1F7F5",
+    "foregroundRGBA": [
+      241.0,
+      247.0,
+      245.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      105.75999999999999,
+      102.55999999999999,
+      32.47999999999999,
+      1.0
+    ],
+    "foreground": "#F1F7F5",
+    "background": "#6A6720",
+    "ratio": 5.44834520949614,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.light.bg.canvas",
+    "bg": "color.light.group.pink",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#8E2F70",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      241.0,
+      247.0,
+      245.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      142.0,
+      47.0,
+      112.0,
+      1.0
+    ],
+    "foreground": "#F1F7F5",
+    "background": "#8E2F70",
+    "ratio": 6.938311169373883,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.light.bg.canvas",
+    "bg": "color.light.group.pink",
+    "backdrop": "color.light.bg.canvas",
+    "opacity": 0.92,
+    "surface": "#8E2F70",
+    "backdropColor": "#F1F7F5",
+    "foregroundRGBA": [
+      241.0,
+      247.0,
+      245.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      149.92000000000002,
+      62.99999999999999,
+      122.64,
+      1.0
+    ],
+    "foreground": "#F1F7F5",
+    "background": "#963F7B",
+    "ratio": 5.88450240440724,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.light.bg.canvas",
+    "bg": "color.light.group.green",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#336B30",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      241.0,
+      247.0,
+      245.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      51.0,
+      107.0,
+      48.0,
+      1.0
+    ],
+    "foreground": "#F1F7F5",
+    "background": "#336B30",
+    "ratio": 5.891635291028112,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.light.bg.canvas",
+    "bg": "color.light.group.green",
+    "backdrop": "color.light.bg.canvas",
+    "opacity": 0.92,
+    "surface": "#336B30",
+    "backdropColor": "#F1F7F5",
+    "foregroundRGBA": [
+      241.0,
+      247.0,
+      245.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      66.19999999999999,
+      118.19999999999999,
+      63.75999999999999,
+      1.0
+    ],
+    "foreground": "#F1F7F5",
+    "background": "#427640",
+    "ratio": 4.9555456666411715,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.light.bg.canvas",
+    "bg": "color.light.group.gray",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#4E5A61",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      241.0,
+      247.0,
+      245.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      78.0,
+      90.0,
+      97.0,
+      1.0
+    ],
+    "foreground": "#F1F7F5",
+    "background": "#4E5A61",
+    "ratio": 6.543713118369141,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.light.bg.canvas",
+    "bg": "color.light.group.gray",
+    "backdrop": "color.light.bg.canvas",
+    "opacity": 0.92,
+    "surface": "#4E5A61",
+    "backdropColor": "#F1F7F5",
+    "foregroundRGBA": [
+      241.0,
+      247.0,
+      245.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      91.03999999999999,
+      102.55999999999999,
+      108.84,
+      1.0
+    ],
+    "foreground": "#F1F7F5",
+    "background": "#5B676D",
+    "ratio": 5.396576106993122,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.light.bg.canvas",
+    "bg": "color.light.group.red",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#6E4440",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      241.0,
+      247.0,
+      245.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      110.0,
+      68.0,
+      64.0,
+      1.0
+    ],
+    "foreground": "#F1F7F5",
+    "background": "#6E4440",
+    "ratio": 7.552211812803919,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.light.bg.canvas",
+    "bg": "color.light.group.red",
+    "backdrop": "color.light.bg.canvas",
+    "opacity": 0.92,
+    "surface": "#6E4440",
+    "backdropColor": "#F1F7F5",
+    "foregroundRGBA": [
+      241.0,
+      247.0,
+      245.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      120.47999999999999,
+      82.32,
+      78.47999999999999,
+      1.0
+    ],
+    "foreground": "#F1F7F5",
+    "background": "#78524E",
+    "ratio": 6.179379308196952,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.bg.canvas",
+    "bg": "color.dark.group.blue",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#86A5EC",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      11.0,
+      22.0,
+      35.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      134.0,
+      165.0,
+      236.0,
+      1.0
+    ],
+    "foreground": "#0B1623",
+    "background": "#86A5EC",
+    "ratio": 7.463124298945687,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.bg.canvas",
+    "bg": "color.dark.group.blue",
+    "backdrop": "color.dark.bg.canvas",
+    "opacity": 0.92,
+    "surface": "#86A5EC",
+    "backdropColor": "#0B1623",
+    "foregroundRGBA": [
+      11.0,
+      22.0,
+      35.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      124.16,
+      153.56,
+      219.92000000000002,
+      1.0
+    ],
+    "foreground": "#0B1623",
+    "background": "#7C9ADC",
+    "ratio": 6.49050618765755,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.bg.canvas",
+    "bg": "color.dark.group.purple",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#A0A7C2",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      11.0,
+      22.0,
+      35.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      160.0,
+      167.0,
+      194.0,
+      1.0
+    ],
+    "foreground": "#0B1623",
+    "background": "#A0A7C2",
+    "ratio": 7.631573247465913,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.bg.canvas",
+    "bg": "color.dark.group.purple",
+    "backdrop": "color.dark.bg.canvas",
+    "opacity": 0.92,
+    "surface": "#A0A7C2",
+    "backdropColor": "#0B1623",
+    "foregroundRGBA": [
+      11.0,
+      22.0,
+      35.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      148.08,
+      155.4,
+      181.28000000000003,
+      1.0
+    ],
+    "foreground": "#0B1623",
+    "background": "#949BB5",
+    "ratio": 6.629384554225577,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.bg.canvas",
+    "bg": "color.dark.group.cyan",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#5DB2D3",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      11.0,
+      22.0,
+      35.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      93.0,
+      178.0,
+      211.0,
+      1.0
+    ],
+    "foreground": "#0B1623",
+    "background": "#5DB2D3",
+    "ratio": 7.608167664035032,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.bg.canvas",
+    "bg": "color.dark.group.cyan",
+    "backdrop": "color.dark.bg.canvas",
+    "opacity": 0.92,
+    "surface": "#5DB2D3",
+    "backdropColor": "#0B1623",
+    "foregroundRGBA": [
+      11.0,
+      22.0,
+      35.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      86.44,
+      165.52,
+      196.92000000000002,
+      1.0
+    ],
+    "foreground": "#0B1623",
+    "background": "#56A6C5",
+    "ratio": 6.611705381940267,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.bg.canvas",
+    "bg": "color.dark.group.orange",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#B09584",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      11.0,
+      22.0,
+      35.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      176.0,
+      149.0,
+      132.0,
+      1.0
+    ],
+    "foreground": "#0B1623",
+    "background": "#B09584",
+    "ratio": 6.484373340930604,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.bg.canvas",
+    "bg": "color.dark.group.orange",
+    "backdrop": "color.dark.bg.canvas",
+    "opacity": 0.92,
+    "surface": "#B09584",
+    "backdropColor": "#0B1623",
+    "foregroundRGBA": [
+      11.0,
+      22.0,
+      35.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      162.8,
+      138.84,
+      124.24000000000001,
+      1.0
+    ],
+    "foreground": "#0B1623",
+    "background": "#A38B7C",
+    "ratio": 5.661446390979207,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.bg.canvas",
+    "bg": "color.dark.group.yellow",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#BDB45A",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      11.0,
+      22.0,
+      35.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      189.0,
+      180.0,
+      90.0,
+      1.0
+    ],
+    "foreground": "#0B1623",
+    "background": "#BDB45A",
+    "ratio": 8.53222819995578,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.bg.canvas",
+    "bg": "color.dark.group.yellow",
+    "backdrop": "color.dark.bg.canvas",
+    "opacity": 0.92,
+    "surface": "#BDB45A",
+    "backdropColor": "#0B1623",
+    "foregroundRGBA": [
+      11.0,
+      22.0,
+      35.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      174.76,
+      167.35999999999999,
+      85.6,
+      1.0
+    ],
+    "foreground": "#0B1623",
+    "background": "#AFA756",
+    "ratio": 7.374066507269532,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.bg.canvas",
+    "bg": "color.dark.group.pink",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#DE8CC6",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      11.0,
+      22.0,
+      35.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      222.0,
+      140.0,
+      198.0,
+      1.0
+    ],
+    "foreground": "#0B1623",
+    "background": "#DE8CC6",
+    "ratio": 7.520049924912397,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.bg.canvas",
+    "bg": "color.dark.group.pink",
+    "backdrop": "color.dark.bg.canvas",
+    "opacity": 0.92,
+    "surface": "#DE8CC6",
+    "backdropColor": "#0B1623",
+    "foregroundRGBA": [
+      11.0,
+      22.0,
+      35.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      205.12,
+      130.56,
+      184.96,
+      1.0
+    ],
+    "foreground": "#0B1623",
+    "background": "#CD83B9",
+    "ratio": 6.522701622605651,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.bg.canvas",
+    "bg": "color.dark.group.green",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#7FBB86",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      11.0,
+      22.0,
+      35.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      127.0,
+      187.0,
+      134.0,
+      1.0
+    ],
+    "foreground": "#0B1623",
+    "background": "#7FBB86",
+    "ratio": 8.111575803052924,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.bg.canvas",
+    "bg": "color.dark.group.green",
+    "backdrop": "color.dark.bg.canvas",
+    "opacity": 0.92,
+    "surface": "#7FBB86",
+    "backdropColor": "#0B1623",
+    "foregroundRGBA": [
+      11.0,
+      22.0,
+      35.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      117.72,
+      173.8,
+      126.08,
+      1.0
+    ],
+    "foreground": "#0B1623",
+    "background": "#76AE7E",
+    "ratio": 7.029667956566245,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.bg.canvas",
+    "bg": "color.dark.group.gray",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#A5AFB4",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      11.0,
+      22.0,
+      35.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      165.0,
+      175.0,
+      180.0,
+      1.0
+    ],
+    "foreground": "#0B1623",
+    "background": "#A5AFB4",
+    "ratio": 8.142906113003187,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.bg.canvas",
+    "bg": "color.dark.group.gray",
+    "backdrop": "color.dark.bg.canvas",
+    "opacity": 0.92,
+    "surface": "#A5AFB4",
+    "backdropColor": "#0B1623",
+    "foregroundRGBA": [
+      11.0,
+      22.0,
+      35.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      152.68,
+      162.76,
+      168.4,
+      1.0
+    ],
+    "foreground": "#0B1623",
+    "background": "#99A3A8",
+    "ratio": 7.056937799375319,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.bg.canvas",
+    "bg": "color.dark.group.red",
+    "backdrop": null,
+    "opacity": 1,
+    "surface": "#B98E89",
+    "backdropColor": null,
+    "foregroundRGBA": [
+      11.0,
+      22.0,
+      35.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      185.0,
+      142.0,
+      137.0,
+      1.0
+    ],
+    "foreground": "#0B1623",
+    "background": "#B98E89",
+    "ratio": 6.324044080592665,
+    "min": 4.5,
+    "pass": true
+  },
+  {
+    "fg": "color.dark.bg.canvas",
+    "bg": "color.dark.group.red",
+    "backdrop": "color.dark.bg.canvas",
+    "opacity": 0.92,
+    "surface": "#B98E89",
+    "backdropColor": "#0B1623",
+    "foregroundRGBA": [
+      11.0,
+      22.0,
+      35.0,
+      1.0
+    ],
+    "backgroundRGBA": [
+      171.08,
+      132.4,
+      128.84,
+      1.0
+    ],
+    "foreground": "#0B1623",
+    "background": "#AB8481",
+    "ratio": 5.524995869691098,
+    "min": 4.5,
+    "pass": true
+  }
+]

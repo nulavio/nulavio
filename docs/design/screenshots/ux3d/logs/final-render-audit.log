@@ -1,0 +1,5 @@
+Traceback (most recent call last):
+  File "/home/caiobarbieri/.cache/nulavio-ux/ux3d-woar3pew/final/audit.py", line 58, in <module>
+    assert all(media.values()),media
+           ~~~^^^^^^^^^^^^^^^^
+AssertionError: {'motion': True, 'contrast': False, 'transparency': False}

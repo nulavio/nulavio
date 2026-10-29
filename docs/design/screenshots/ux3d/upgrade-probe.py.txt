@@ -1,0 +1,48 @@
+import dataclasses,json,sys
+from pathlib import Path
+sys.path[:0]=[str(Path(p).resolve()) for p in ('tests/lib','tests/integration')]
+import harness
+from test_profiles import chrome_async
+from test_layout_presets import LAYOUT
+w=Path(__file__).parent
+s=harness.GeckoProfileSession(name='UpgradeLayout')
+probe="""
+return {prefs:Object.fromEntries(['sidebar.verticalTabs','sidebar.visibility','sidebar.revamp','sidebar.main.tools',
+ 'sidebar.position_start','browser.uidensity','browser.toolbars.bookmarks.visibility'].map(k=>[k,
+ {user:Services.prefs.prefHasUserValue(k),value:Services.prefs.getPrefType(k)===128?Services.prefs.getBoolPref(k):
+ Services.prefs.getPrefType(k)===64?Services.prefs.getIntPref(k):Services.prefs.getStringPref(k)}])),
+ expanded:SidebarController.getUIState().launcherExpanded,visible:SidebarController.getUIState().launcherVisible};
+"""
+try:
+ m=s.start()
+ old_build=m.chrome('return Services.appinfo.appBuildID;')
+ result=chrome_async(m,"""
+  await SidebarController.promiseInitialized;
+  Services.prefs.setBoolPref('sidebar.verticalTabs',true);
+  Services.prefs.setStringPref('sidebar.visibility','always-show');
+  Services.prefs.setBoolPref('sidebar.position_start',false);
+  Services.prefs.setIntPref('browser.uidensity',1);
+  Services.prefs.setStringPref('browser.toolbars.bookmarks.visibility','never');
+  Services.prefs.setStringPref('sidebar.main.tools','bookmarks,passwords');
+  await SidebarController.waitUntilStable();
+  await SidebarController.toggleExpandOnHover(false);
+  SidebarController._state.updateVisibility(true,false);
+ """)
+ assert 'error' not in result,result
+ before=m.chrome(probe)
+ s.stop()
+ s.engine=dataclasses.replace(s.engine,path=w/'audit-nulavio/nulavio')
+ m=s.restart()
+ state=chrome_async(m,f'return {LAYOUT}.state(window);');assert state['ok']['preset']=='custom',state
+ after=m.chrome(probe);assert before==after,(before,after)
+ base=m.chrome("return WebExtensionPolicy.getByID('shell@nulavio.net').getURL('');")
+ m.navigate(base+'settings/settings.html#layout')
+ assert harness.wait_until(lambda:m.execute("return document.documentElement.dataset.ready==='true';"),15)
+ assert m.execute("return document.getElementById('layout').dataset.preset==='custom' && !document.querySelector('#layout input:checked');")
+ assert m.chrome(probe)==before
+ result={'status':'PASS','baseline_runtime_build_id':old_build,'final_runtime_build_id':m.chrome('return Services.appinfo.appBuildID;'),
+  'scenario':'same artificial profile created with an untouched immutable-parent copy, then reopened with the final build copy; no purge/reset/migration flags',
+  'before':before,'after':after,'new_api_state':state,'source_script':str(Path(__file__))}
+ (Path.cwd()/'docs/design/screenshots/ux3d/upgrade-verification.json').write_text(json.dumps(result,indent=2)+'\n')
+ print('real same-profile upgrade PASS',old_build,result['final_runtime_build_id'])
+finally:s.cleanup()

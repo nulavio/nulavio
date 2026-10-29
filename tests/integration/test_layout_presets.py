@@ -1,0 +1,486 @@
+"""UX3D: explicit presets over Gecko's real profile prefs and per-window state."""
+
+from __future__ import annotations
+
+import unittest
+import json
+import os
+import time
+
+import harness
+from test_profiles import chrome_async
+from test_horizon import rgb
+from contrast import ratio
+from test_horizon_groups import KEY
+from test_window_band import BAND_PROBE, assert_band, assert_layout_matrix
+
+LAYOUT = 'ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioLayout.sys.mjs").NulavioLayout'
+
+
+@unittest.skipUnless(harness.nulavio_engine(), "layout presets need the built-in Shell on Gecko159")
+class LayoutPresetsTest(unittest.TestCase):
+    def setUp(self):
+        self.session = harness.GeckoProfileSession(name="Layout")
+        self.addCleanup(self.session.cleanup)
+        self.m = self.session.start()
+        locale = os.environ.get("NULAVIO_LAYOUT_LOCALE")
+        if locale:
+            self.m.chrome("Services.locale.requestedLocales = [arguments[0]];", [locale])
+            self.m = self.session.restart()
+            self.assertEqual(self.m.chrome("return Services.locale.appLocaleAsBCP47;"), locale)
+        self.artifacts = harness.artifacts_dir() / "layout-presets"
+        self.artifacts.mkdir(parents=True, exist_ok=True)
+
+    def state(self):
+        result = chrome_async(self.m, f"return {LAYOUT}.state(window);")
+        self.assertNotIn("error", result, result)
+        return result["ok"]
+
+    def apply(self, preset):
+        result = chrome_async(self.m, f"return {LAYOUT}.apply(window,args[0]);", [preset])
+        self.assertNotIn("error", result, result)
+        self.assertEqual(result["ok"]["preset"], preset, result)
+        return result["ok"]
+
+    def settings(self):
+        base = self.m.chrome("return WebExtensionPolicy.getByID('shell@nulavio.net').getURL('');")
+        self.m.navigate(base + "settings/settings.html#layout")
+        self.assertTrue(harness.wait_until(lambda: self.m.execute("return document.documentElement.dataset.ready==='true';"), 15))
+
+    def selected(self):
+        return self.m.execute("return document.querySelector('#layout input:checked')?.value || 'custom';")
+
+    def ui_ready(self, preset):
+        return self.m.execute(
+            """
+          return document.getElementById('layout-choices').getAttribute('aria-busy') !== 'true'
+            && !document.querySelector('#layout input').disabled
+            && (document.querySelector('#layout input:checked')?.value || 'custom') === arguments[0];
+        """,
+            [preset],
+        )
+
+    def capture(self, name):
+        self.m.set_context("chrome")
+        try:
+            (self.artifacts / f"{name}.png").write_bytes(self.m.screenshot_png())
+        finally:
+            self.m.set_context("content")
+
+    def test_explicit_presets_move_real_tabs_and_survive_restart(self):
+        measured = []
+        for preset in ("lateral", "top", "focus"):
+            with self.subTest(preset=preset):
+                self.apply(preset)
+                native = self.m.chrome("""
+                  const s=SidebarController.getUIState(), tabs=gBrowser.tabContainer;
+                  const r=tabs.getBoundingClientRect();
+                  return {orientation:tabs.getAttribute('orient'),parent:tabs.parentElement.id,
+                    expanded:s.launcherExpanded,visible:s.launcherVisible,w:r.width,h:r.height,
+                    hover:document.documentElement.hasAttribute('sidebar-expand-on-hover')};
+                """)
+                self.assertEqual(native["orientation"], "horizontal" if preset == "top" else "vertical")
+                self.assertGreater(native["w"], 0)
+                self.assertGreater(native["h"], 0)
+                self.assertEqual(native["expanded"], preset == "lateral")
+                self.assertEqual(native["hover"], preset == "focus")
+                self.m = self.session.restart()
+                self.assertEqual(self.state()["preset"], preset)
+                measured.append({"preset": preset, "native": native, "afterRestart": self.state()})
+        (self.artifacts / "restart.json").write_text(json.dumps(measured, indent=2) + "\n")
+
+    def test_native_controls_and_per_window_state_are_observed_and_cleanup_is_idempotent(self):
+        self.apply("lateral")
+        self.settings()
+        first = self.m.send("WebDriver:GetWindowHandle")["value"]
+        result = chrome_async(
+            self.m,
+            """
+          const w=OpenBrowserWindow();
+          await new Promise(resolve=>{const obs=subject=>{if(subject===w) {
+            Services.obs.removeObserver(obs,'browser-delayed-startup-finished');resolve();
+          }};Services.obs.addObserver(obs,'browser-delayed-startup-finished');});
+          return w.browsingContext.id.toString();
+        """,
+        )
+
+        # Exact browsingContext, not the first new handle (concurrent tabs).
+        def find_second():
+            for handle in self.m.window_handles():
+                self.m.switch_to(handle)
+                if self.m.chrome("return String(window.browsingContext.id)===arguments[0];", [result["ok"]]):
+                    return handle
+            return None
+
+        second = harness.wait_until(find_second, 15)
+        self.assertTrue(second, result)
+        self.m.switch_to(second)
+        self.settings()
+        self.assertEqual(self.selected(), "lateral")
+        self.m.chrome("SidebarController.handleToolbarButtonClick();")
+        self.assertTrue(harness.wait_until(lambda: self.selected() == "custom", 10))
+        self.m.switch_to(first)
+        self.assertEqual(self.selected(), "lateral")
+        # Explicit choice applies to the profile's open windows, even when the
+        # two pref values already match and would emit no preference change.
+        self.apply("lateral")
+        self.m.switch_to(second)
+        self.assertTrue(harness.wait_until(lambda: self.selected() == "lateral", 10))
+        self.m.chrome("SidebarController.toggleVerticalTabs();")
+        self.assertTrue(harness.wait_until(lambda: self.selected() == "top", 10))
+        self.m.switch_to(first)
+        self.assertTrue(harness.wait_until(lambda: self.selected() == "top", 10))
+        result = chrome_async(
+            self.m,
+            f"""
+          window.nvLayoutEvents = 0;
+          const off={LAYOUT}.subscribe(window,()=>window.nvLayoutEvents++);
+          Services.prefs.setStringPref('sidebar.visibility','hide-launcher');
+          await new Promise(resolve=>setTimeout(resolve,100));
+          const count=window.nvLayoutEvents;
+          off(); off();
+          Services.prefs.setStringPref('sidebar.visibility','hide-on-close');
+          await new Promise(resolve=>setTimeout(resolve,100));
+          return {{count,after:window.nvLayoutEvents}};
+        """,
+        )
+        self.assertGreater(result["ok"]["count"], 0)
+        self.assertEqual(result["ok"]["count"], result["ok"]["after"])
+        # Removing a Settings document removes its privileged EventManager subscription.
+        self.m.navigate("about:blank")
+        self.m.switch_to(second)
+        self.m.send("WebDriver:CloseWindow")
+        self.m.switch_to(first)
+        self.apply("focus")
+
+    def test_refusals_preserve_preferences_and_the_queue_recovers(self):
+        for value in ("custom", "__proto__", "constructor", "sidebar.revamp", None, {}):
+            result = chrome_async(self.m, f"return {LAYOUT}.apply(window,args[0]);", [value])
+            self.assertEqual(result, {"error": "layout-invalid"})
+        self.apply("top")
+        for pref in ("sidebar.verticalTabs", "sidebar.visibility"):
+            self.m.chrome("Services.prefs.lockPref(arguments[0]);", [pref])
+            try:
+                result = chrome_async(self.m, f"return {LAYOUT}.apply(window,'focus');")
+                self.assertEqual(result, {"error": "layout-locked"})
+                self.assertTrue(self.state()["locked"])
+            finally:
+                self.m.chrome("Services.prefs.unlockPref(arguments[0]);", [pref])
+        self.assertEqual(self.state()["preset"], "top")
+        self.m.chrome("Services.prefs.setBoolPref('sidebar.revamp',false);")
+        self.assertFalse(self.state()["available"])
+        self.assertEqual(chrome_async(self.m, f"return {LAYOUT}.apply(window,'focus');"), {"error": "layout-unavailable"})
+        self.assertFalse(self.m.chrome("return Services.prefs.getBoolPref('sidebar.revamp');"))
+        self.m.chrome("Services.prefs.setBoolPref('sidebar.revamp',true);")
+        self.apply("focus")
+        self.assertEqual(chrome_async(self.m, f"return {LAYOUT}.state(null);"), {"error": "layout-unavailable"})
+        partial = chrome_async(
+            self.m,
+            f"""
+          const L={LAYOUT}, original=L.state;
+          L.state=()=>{{throw new Error('final-state-read fixture');}};
+          let code;
+          try {{ await L.apply(window,'lateral'); }} catch(e) {{code=e.code;}}
+          finally {{L.state=original;}}
+          return {{code,actual:await L.state(window)}};
+        """,
+        )
+        self.assertEqual(partial["ok"]["code"], "layout-failed")
+        self.assertEqual(partial["ok"]["actual"]["preset"], "lateral")
+        self.apply("top")
+
+    def test_preserves_position_width_tools_bookmarks_density_and_assistant(self):
+        self.apply("lateral")
+        self.m.chrome("""
+          Services.prefs.setBoolPref('sidebar.position_start',false);
+          Services.prefs.setIntPref('browser.uidensity',1);
+          Services.prefs.setStringPref('browser.toolbars.bookmarks.visibility','always');
+          Services.prefs.setStringPref('sidebar.main.tools','bookmarks,history,passwords');
+          Services.prefs.setBoolPref('sidebar.expandOnHover',false);
+          SidebarController._state.expandedLauncherWidth=264;
+        """)
+        opened = chrome_async(
+            self.m,
+            """
+          await SidebarController.show('shell_nulavio_net-sidebar-action');
+          return {command:SidebarController.currentID,expanded:SidebarController.getUIState().launcherExpanded};
+        """,
+        )
+        self.assertTrue(opened["ok"]["expanded"])  # D-UX22
+        for preset in ("focus", "top", "lateral"):
+            self.apply(preset)
+            native = self.m.chrome("""
+              return {position:Services.prefs.getBoolPref('sidebar.position_start'),
+                density:Services.prefs.getIntPref('browser.uidensity'),
+                bookmarks:Services.prefs.getStringPref('browser.toolbars.bookmarks.visibility'),
+                tools:Services.prefs.getStringPref('sidebar.main.tools'),
+                hoverGate:Services.prefs.getBoolPref('sidebar.expandOnHover'),
+                expandedWidth:SidebarController.getUIState().expandedLauncherWidth,
+                panel:SidebarController.currentID,open:SidebarController.isOpen};
+            """)
+            self.assertEqual(
+                native,
+                {
+                    "position": False,
+                    "density": 1,
+                    "bookmarks": "always",
+                    "tools": "bookmarks,history,passwords",
+                    "hoverGate": False,
+                    "expandedWidth": 264,
+                    "panel": "shell_nulavio_net-sidebar-action",
+                    "open": True,
+                },
+            )
+        self.assertTrue(self.m.chrome("return SidebarController.getUIState().launcherExpanded;"))
+
+    def test_profile_preferences_do_not_cross_independent_profiles(self):
+        self.apply("focus")
+        other = harness.GeckoProfileSession(name="Independent")
+        self.addCleanup(other.cleanup)
+        m = other.start()
+        self.assertEqual(chrome_async(m, f"return {LAYOUT}.state(window);")["ok"]["preset"], "top")
+        self.assertFalse(m.chrome("return Services.prefs.prefHasUserValue('sidebar.verticalTabs');"))
+        self.assertEqual(self.state()["preset"], "focus")
+
+    def test_settings_keyboard_native_focus_and_error_recovery(self):
+        self.settings()
+        self.assertEqual(self.selected(), "top")
+        self.assertTrue(self.m.execute("return !!document.querySelector('#layout-choices legend').textContent;"))
+        for preset in ("lateral", "focus", "top"):
+            radio = self.m.find_element(f'#layout input[value="{preset}"]')
+            self.m.send("WebDriver:ElementClick", {"id": radio})
+            self.assertTrue(harness.wait_until(lambda want=preset: self.ui_ready(want), 10))
+            self.assertEqual(self.state()["preset"], preset)
+        # A trusted native arrow event changes a radio and the actual tab layout.
+        self.m.execute("document.querySelector('#layout input[value=top]').focus();")
+        self.m.chrome(KEY, ["ArrowDown", "ArrowDown", 40])
+        self.assertTrue(harness.wait_until(lambda: self.state()["preset"] == "focus", 10))
+        self.assertTrue(harness.wait_until(lambda: self.ui_ready("focus"), 10))
+        self.assertTrue(self.m.execute("return document.activeElement.matches('#layout input[value=focus]');"))
+        focus = self.m.execute("""
+          const e=document.activeElement,s=getComputedStyle(e);
+          return {style:s.outlineStyle,width:s.outlineWidth,color:s.outlineColor,
+            bg:getComputedStyle(e.closest('.card')).backgroundColor};
+        """)
+        self.assertEqual(focus["style"], "solid", focus)
+        self.assertGreaterEqual(float(focus["width"].removesuffix("px")), 2)
+        self.assertGreaterEqual(ratio(rgb(focus["color"]), rgb(focus["bg"])), 3)
+        # Foco retains the native keyboard route to the expanded tab list.
+        self.m.chrome("ToolbarKeyboardNavigator._focusButton(SidebarController.toolbarButton);")
+        self.assertTrue(self.m.chrome("return document.activeElement===SidebarController.toolbarButton;"))
+        self.m.chrome(KEY, ["Enter", "Enter", 13])
+        self.assertTrue(harness.wait_until(lambda: self.state()["preset"] == "custom", 10))
+        self.assertTrue(self.m.chrome("return SidebarController.getUIState().launcherExpanded;"))
+        self.assertTrue(harness.wait_until(lambda: self.selected() == "custom", 10))
+        self.m.chrome(KEY, ["Enter", "Enter", 13])
+        self.assertTrue(harness.wait_until(lambda: self.selected() == "focus", 10))
+        self.m.chrome("Services.focus.setFocus(gBrowser.selectedTab,Ci.nsIFocusManager.FLAG_BYKEY);")
+        self.assertTrue(self.m.chrome("return document.activeElement===gBrowser.selectedTab;"))
+        # Inject a bridge-side operation failure; the UI must reread actual
+        # state and never claim no change or a successful preset.
+        self.m.chrome(f"window.nvLayoutApply={LAYOUT}.apply; {LAYOUT}.apply=()=>{{throw new Error('fixture');}};")
+        try:
+            self.m.send("WebDriver:ElementClick", {"id": self.m.find_element("#layout input[value=top]")})
+            self.assertTrue(
+                harness.wait_until(
+                    lambda: bool(self.m.execute("return document.getElementById('layout-error').textContent;")), 10
+                )
+            )
+            self.assertEqual(self.state()["preset"], "focus")
+            self.assertTrue(harness.wait_until(lambda: self.ui_ready("focus"), 10))
+        finally:
+            self.m.chrome(f"{LAYOUT}.apply=window.nvLayoutApply; delete window.nvLayoutApply;")
+        self.m.send("WebDriver:ElementClick", {"id": self.m.find_element("#layout input[value=top]")})
+        self.assertTrue(harness.wait_until(lambda: self.selected() == "top", 10))
+        self.m.chrome(f"window.nvLayoutState={LAYOUT}.state; {LAYOUT}.state=()=>{{throw new Error('read fixture');}};")
+        try:
+            self.m.navigate("about:blank")
+            self.settings()
+            self.assertFalse(self.m.execute("return document.getElementById('layout-retry').hidden;"))
+            self.assertTrue(self.m.execute("return [...document.querySelectorAll('#layout input')].every(e=>e.disabled);"))
+        finally:
+            self.m.chrome(f"{LAYOUT}.state=window.nvLayoutState;delete window.nvLayoutState;")
+        self.m.send("WebDriver:ElementClick", {"id": self.m.find_element("#layout-retry")})
+        self.assertTrue(harness.wait_until(lambda: self.ui_ready("top"), 10))
+        self.m.navigate("about:blank")
+        self.apply("lateral")
+        self.m.send("WebDriver:Back")
+        self.assertTrue(harness.wait_until(lambda: self.ui_ready("lateral"), 10))
+        self.apply("focus")
+        self.assertTrue(harness.wait_until(lambda: self.ui_ready("focus"), 10))
+
+    def test_focus_real_pointer_hover_and_custom_state_restore(self):
+        self.apply("focus")
+        self.settings()
+        rect = self.m.chrome("""
+          const r=SidebarController.sidebarContainer.getBoundingClientRect();
+          return {x:Math.round(r.x+r.width/2),y:Math.round(r.y+r.height/2)};
+        """)
+        self.m.set_context("chrome")
+        self.m.send(
+            "WebDriver:PerformActions",
+            {
+                "actions": [
+                    {
+                        "type": "pointer",
+                        "id": "layout-mouse",
+                        "parameters": {"pointerType": "mouse"},
+                        "actions": [
+                            {"type": "pointerMove", "origin": "viewport", "x": rect["x"], "y": rect["y"], "duration": 100}
+                        ],
+                    }
+                ]
+            },
+        )
+        self.m.set_context("content")
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome("return SidebarController.getUIState().launcherExpanded;"), 10))
+        self.assertEqual(self.state()["preset"], "focus")
+        self.assertEqual(self.selected(), "focus")
+        self.m.set_context("chrome")
+        self.m.send("WebDriver:ReleaseActions")
+        self.m.set_context("content")
+        self.apply("lateral")
+        self.assertNotIn("error", chrome_async(self.m, "await SidebarController.handleToolbarButtonClick();"))
+        self.assertEqual(self.state()["preset"], "custom")
+        self.m = self.session.restart()
+        self.assertEqual(self.state()["preset"], "custom")
+        self.settings()
+        self.assertEqual(self.selected(), "custom")
+
+    def test_settings_reflow_200_percent_themes_and_accessibility_preferences(self):
+        self.settings()
+        self.m.chrome("document.documentElement.style.minWidth='0px';")
+        measured = []
+        for preset in ("lateral", "top", "focus"):
+            self.apply(preset)
+            for dark in (0, 1):
+                self.m.chrome("Services.prefs.setIntPref('ui.systemUsesDarkTheme',arguments[0]);", [dark])
+                for width, font in ((1366, "100%"), (390, "100%"), (320, "200%")):
+                    # Target the Settings viewport. A 320px *outer window*
+                    # with expanded vertical tabs leaves only ~79px for content.
+                    sidebar_width = self.m.chrome("return innerWidth-gBrowser.selectedBrowser.getBoundingClientRect().width;")
+                    outer = width if width == 1366 else round(width + sidebar_width)
+                    self.m.send("WebDriver:SetWindowRect", {"width": outer, "height": 900})
+                    # Native sidebar max-widths can change after the resize.
+                    # Converge on the requested content width, then assert it.
+                    if width != 1366:
+                        for _ in range(3):
+                            time.sleep(0.2)
+                            actual = self.m.execute("return innerWidth;")
+                            if actual == width:
+                                break
+                            outer += width - actual
+                            self.m.send("WebDriver:SetWindowRect", {"width": outer, "height": 900})
+                    self.m.execute(
+                        "document.documentElement.style.fontSize=arguments[0];document.getElementById('layout').scrollIntoView();",
+                        [font],
+                    )
+                    time.sleep(0.2)
+                    probe = self.m.execute("""
+                      const section=document.getElementById('layout'),r=section.getBoundingClientRect();
+                      return {viewport:innerWidth,w:r.width,scroll:section.scrollWidth,
+                        rootScroll:document.documentElement.scrollWidth,
+                        font:getComputedStyle(document.documentElement).fontSize,
+                        labels:[...section.querySelectorAll('label')].map(e=>({w:e.clientWidth,scroll:e.scrollWidth,h:e.clientHeight}))};
+                    """)
+                    if width != 1366:
+                        self.assertEqual(probe["viewport"], width, probe)
+                    self.assertLessEqual(probe["scroll"], probe["w"] + 1, probe)
+                    for label in probe["labels"]:
+                        self.assertLessEqual(label["scroll"], label["w"] + 1, probe)
+                        self.assertGreaterEqual(label["h"], 24, probe)
+                    measured.append({"preset": preset, "dark": dark, "requestedWidth": width, "font": font, **probe})
+                    self.capture(f"settings-{preset}-{'dark' if dark else 'light'}-{width}-{font.removesuffix('%')}")
+                    if font == "200%":
+                        name = f"section-{preset}-{'dark' if dark else 'light'}-{width}-{font.removesuffix('%')}.png"
+                        (self.artifacts / name).write_bytes(self.m.screenshot_png(element=self.m.find_element("#layout")))
+        self.m.send("WebDriver:SetWindowRect", {"width": 1366, "height": 900})
+        self.m.execute("document.documentElement.style.fontSize='100%';")
+        for pref in ("ui.prefersReducedMotion", "ui.prefersReducedTransparency", "ui.useAccessibilityTheme"):
+            self.m.chrome("Services.prefs.setIntPref(arguments[0],1);", [pref])
+        self.m = self.session.restart()
+        self.settings()
+        self.apply("focus")
+        self.assertTrue(self.m.execute("return matchMedia('(prefers-reduced-motion: reduce)').matches;"))
+        native_media = self.m.chrome("""
+          return {motion:matchMedia('(prefers-reduced-motion: reduce)').matches,
+            contrast:matchMedia('(prefers-contrast: more)').matches,
+            transparency:matchMedia('(prefers-reduced-transparency: reduce)').matches};
+        """)
+        self.assertTrue(all(native_media.values()), native_media)
+        self.capture("settings-accessibility-preferences")
+        (self.artifacts / "accessibility-media.json").write_text(json.dumps(native_media, indent=2) + "\n")
+        (self.artifacts / "reflow.json").write_text(json.dumps(measured, indent=2) + "\n")
+
+    def test_private_and_fullscreen_security_matrix(self):
+        first = self.m.send("WebDriver:GetWindowHandle")["value"]
+        target = chrome_async(
+            self.m,
+            """
+          const w=OpenBrowserWindow({private:true});
+          await new Promise(resolve=>{const obs=subject=>{if(subject===w) {
+            Services.obs.removeObserver(obs,'browser-delayed-startup-finished');resolve();
+          }};Services.obs.addObserver(obs,'browser-delayed-startup-finished');});
+          return String(w.browsingContext.id);
+        """,
+        )["ok"]
+
+        def find_private():
+            for handle in self.m.window_handles():
+                self.m.switch_to(handle)
+                if self.m.chrome("return String(window.browsingContext.id)===arguments[0];", [target]):
+                    return handle
+            return None
+
+        self.assertTrue(harness.wait_until(find_private, 15))
+        self.assertTrue(self.m.chrome("return PrivateBrowsingUtils.isWindowPrivate(window);"))
+        assert_layout_matrix(self, self.m, "private")
+        self.assertTrue(self.m.chrome("return document.querySelector('#nulavio-band .nv-band-row').dataset.private==='true';"))
+        self.m.send("WebDriver:CloseWindow")
+        self.m.switch_to(first)
+        rows = []
+        for preset in ("lateral", "top", "focus"):
+            self.apply(preset)
+            for dark in (0, 1):
+                self.m.chrome("Services.prefs.setIntPref('ui.systemUsesDarkTheme',arguments[0]);window.fullScreen=true;", [dark])
+                self.assertTrue(
+                    harness.wait_until(lambda: self.m.chrome("return document.documentElement.hasAttribute('inFullscreen');"), 10)
+                )
+                time.sleep(0.25)
+                assert_band(self, self.m.chrome(f"return {BAND_PROBE};"))
+                time.sleep(4.3)  # existing native safety-notice interval; no deadline changed
+                line = self.m.chrome("""
+                  const host=document.getElementById('nulavio-fullscreen'),e=host.querySelector('.nv-fullscreen-line');
+                  const r=e.getBoundingClientRect(),s=getComputedStyle(e),hit=document.elementFromPoint(r.x+10,r.y+r.height/2);
+                  return {notice:host.hasAttribute('notice'),h:r.height,w:r.width,opacity:s.opacity,hit:e.contains(hit)};
+                """)
+                self.assertFalse(line["notice"], line)
+                self.assertEqual(line["h"], 3)
+                self.assertEqual(line["opacity"], "1")
+                self.assertTrue(line["hit"], line)
+                self.capture(f"fullscreen-{preset}-{'dark' if dark else 'light'}")
+                rows.append({"preset": preset, "dark": dark, **line})
+                self.m.chrome("window.fullScreen=false;")
+        (self.artifacts / "fullscreen.json").write_text(json.dumps(rows, indent=2) + "\n")
+
+    def test_reading_settings_does_not_change_native_preferences(self):
+        before = self.m.chrome("""
+          return Object.fromEntries(Services.prefs.getChildList('sidebar.').map(k =>
+            [k, [Services.prefs.getPrefType(k), Services.prefs.prefHasUserValue(k),
+              Services.prefs.getPrefType(k) === 128 ? Services.prefs.getBoolPref(k) :
+              Services.prefs.getPrefType(k) === 64 ? Services.prefs.getIntPref(k) : Services.prefs.getStringPref(k)]]));
+        """)
+        result = chrome_async(self.m, f"return {LAYOUT}.state(window);")
+        self.assertNotIn("error", result, result)
+        self.assertEqual(result["ok"]["preset"], "top")
+        self.settings()
+        after = self.m.chrome(
+            """
+          return Object.fromEntries(Object.keys(arguments[0]).map(k =>
+            [k, [Services.prefs.getPrefType(k), Services.prefs.prefHasUserValue(k),
+              Services.prefs.getPrefType(k) === 128 ? Services.prefs.getBoolPref(k) :
+              Services.prefs.getPrefType(k) === 64 ? Services.prefs.getIntPref(k) : Services.prefs.getStringPref(k)]]));
+        """,
+            [before],
+        )
+        self.assertEqual(before, after)

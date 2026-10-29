@@ -27,7 +27,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
 import harness
-from test_window_band import BAND_PROBE, assert_band
+from test_window_band import BAND_PROBE, assert_band, assert_layout_matrix
 
 from nulavio_launcher import temporary
 
@@ -188,6 +188,7 @@ class TemporaryFromTheBrowserTest(unittest.TestCase):
             self.assertTrue(harness.wait_until(lambda: "nada aqui é guardado" in bar(), timeout=20), bar())
             self.assertIn("Apagado quando você fechar", bar())
             assert_band(self, m.chrome(f"return {BAND_PROBE};"))
+            assert_layout_matrix(self, m, "temporary")
             for dark in (0, 1):
                 m.chrome("Services.prefs.setIntPref('ui.systemUsesDarkTheme', arguments[0]);", [dark])
                 time.sleep(0.25)
