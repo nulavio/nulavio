@@ -1,0 +1,1264 @@
+{
+  "base": "957a1bbe0693cc5ba4950b123686ec5d7201712d",
+  "branch": "download-program-warning-badge",
+  "scope": "UX3C only; local commit; no push, PR or merge",
+  "kind": "Actual incremental Track B rebuild in private source/object/toolchain copy; no dev_sync rewrite",
+  "work_dir": "/home/caiobarbieri/.cache/nulavio-ux/ux3c-tbnzluyx",
+  "reference_install": "/home/caiobarbieri/.cache/nulavio-ux/ux3b-reviewed-fhdwn521/nulavio",
+  "reference_browser_omni_sha256": "f3825251f8049908c2a4bc2dba0d92ef37f0b96b8e4993579800a03c6919f21e",
+  "before_install": "/home/caiobarbieri/.cache/nulavio-ux/ux3c-tbnzluyx/before",
+  "tested_install": "/home/caiobarbieri/.cache/nulavio-ux/ux3c-tbnzluyx/final/nulavio",
+  "source_snapshot": {
+    "browser/branding/nulavio/NulavioDownloads.sys.mjs": {
+      "sha256": "9e50564555847ea4b259433cc662d58f793b765244e42b8e74879e53011bab8f"
+    },
+    "browser/branding/nulavio/content/theme/horizon.css": {
+      "sha256": "7e750da7e9cd997ce8d561239ce426abc404fd483916d1e0856e8b4398a615f6"
+    },
+    "browser/patches/0007-downloads-never-open-a-program-from-the-downloads-ui.patch": {
+      "sha256": "80958504cff7e141075fd45cec76d47522315926ae6874d32d23ab990a0d53b0"
+    },
+    "tests/integration/test_downloads_indicator.py": {
+      "sha256": "a127853493abd66654ebc8ed94e44e44995d159ec03e32fdd4dfa032caca697b"
+    },
+    "docs/brand/tokens.json": {
+      "sha256": "9347ea40995600a18e803cbae7514a8c07499b3ebab3b9a42ab9a5b8dbf22bc1"
+    }
+  },
+  "package": {
+    "tarball": "/home/caiobarbieri/.cache/nulavio-ux/ux3c-tbnzluyx/build/firefox-159.0/obj-nulavio/dist/nulavio-159.0.en-US.linux-x86_64.tar.xz",
+    "tarball_sha256": "3919be42e5093b22b8b09bfcfbbc72689073a6d28d569dfb51067e11e3fbfa1c",
+    "archives": {
+      "nulavio": "3b3672504a96eeec5e91a85796d585a4a3bca9b86640d48c781732731f288eb9",
+      "libxul.so": "9218966006d4bc263cec50da7368cdf44673d3f55ddd25a1c336011ba6d864a3",
+      "omni.ja": "9cefd55bdf7e9e88125567d8c855f40bc522d702b44336bbf44c3ad324b6b8f8",
+      "browser/omni.ja": "39aeedc8a5ede9c7176134cf5ad41c15bc1471b220c5bfb31ce3197f91954b50",
+      "application.ini": "26d2a9113cb1faf74e0a68ca6da4a37f254a10c04f4862c8dd64e309a6274b2d",
+      "platform.ini": "f04466df31276fc182dd81a45ff1ca627d79c01f06b5f3aa914a74d408d8e8c4"
+    },
+    "package_buildID": "20261029102951",
+    "runtime_buildID": "20261029102948"
+  },
+  "packaged_source_matches": [
+    {
+      "entry": "chrome/browser/builtin-addons/nulavio-shell/_locales/en/messages.json",
+      "sha256": "5e4f1d7391e5a06347ca0d39f3de418d6cf1dfac7140d6076ee53c3b8be9d7b0",
+      "matches": true
+    },
+    {
+      "entry": "chrome/browser/builtin-addons/nulavio-shell/_locales/pt_BR/messages.json",
+      "sha256": "3fba11436067eb2210d437b41c9be32daef2f58a499681a4c4a9f40fb8270754",
+      "matches": true
+    },
+    {
+      "entry": "chrome/browser/builtin-addons/nulavio-shell/ai/request.html",
+      "sha256": "bf0a4ecc6282ef653e7a5d4733c551c5f28fd14171eb7ba79c6c6e0b46eb858a",
+      "matches": true
+    },
+    {
+      "entry": "chrome/browser/builtin-addons/nulavio-shell/ai/request.js",
+      "sha256": "bd57c41bf49be08115483769bcbe551707d984d29fd9eebcb58f14c5edae7fc6",
+      "matches": true
+    },
+    {
+      "entry": "chrome/browser/builtin-addons/nulavio-shell/assistant/panel.html",
+      "sha256": "a3c22a83bcef73cae4664d37dcf6fbd008c8699aac2997df96d1e2137efd872f",
+      "matches": true
+    },
+    {
+      "entry": "chrome/browser/builtin-addons/nulavio-shell/assistant/panel.js",
+      "sha256": "032fe6c73e1687db636c69e5cdd6a13b3de8c6e75bb800371167068ff391b506",
+      "matches": true
+    },
+    {
+      "entry": "chrome/browser/builtin-addons/nulavio-shell/background.js",
+      "sha256": "0cd657a7758ec8326e3f64d20acfb7345a16c56eba6f11789a231c5b45c42385",
+      "matches": true
+    },
+    {
+      "entry": "chrome/browser/builtin-addons/nulavio-shell/dev/gallery/gallery.css",
+      "sha256": "781f1ca3ff7d40b9c6a36cb721e58d1d03646db4ee5fb3b8564df072296d332d",
+      "matches": true
+    },
+    {
+      "entry": "chrome/browser/builtin-addons/nulavio-shell/dev/gallery/gallery.js",
+      "sha256": "a2aea45274c075495e151f06ddd943ade92169916dd78dd077d62c66235d5ef8",
+      "matches": true
+    },
+    {
+      "entry": "chrome/browser/builtin-addons/nulavio-shell/dev/gallery/index.html",
+      "sha256": "1c78b36e454d9d76ace4e616e2f5aee68df0b81d82f78bbc54119fb26c0caa3d",
+      "matches": true
+    },
+    {
+      "entry": "chrome/browser/builtin-addons/nulavio-shell/experiments/ai/parent.js",
+      "sha256": "88036aec27c499e9f832e05c7398e4b1daf43567d91d005b9c418adcba4c10f6",
+      "matches": true
+    },
+    {
+      "entry": "chrome/browser/builtin-addons/nulavio-shell/experiments/ai/schema.json",
+      "sha256": "9859dc856f68e19bbe28eeb2d3ff2f361f2d221d4a3188eda66f7d0d2de4ce86",
+      "matches": true
+    },
+    {
+      "entry": "chrome/browser/builtin-addons/nulavio-shell/experiments/connect/parent.js",
+      "sha256": "4dbc642f13b7b8f918575bd5aa9a533c5c1fdb9dcd2e0c9cb91ca45d95646d7b",
+      "matches": true
+    },
+    {
+      "entry": "chrome/browser/builtin-addons/nulavio-shell/experiments/connect/schema.json",
+      "sha256": "164d71f03f2d0524450be5832540bae5653b94aea84fa81a1af9c7d2fe657153",
+      "matches": true
+    },
+    {
+      "entry": "chrome/browser/builtin-addons/nulavio-shell/experiments/guard/parent.js",
+      "sha256": "9e1d56f0429b7e4d992104f4f2a866d2a7c4c39f2945ecd7a0c714b9ce830974",
+      "matches": true
+    },
+    {
+      "entry": "chrome/browser/builtin-addons/nulavio-shell/experiments/guard/schema.json",
+      "sha256": "5dbbb66f119582fb6d4980e748942acf76559395e349ba666bd2a1724d424da1",
+      "matches": true
+    },
+    {
+      "entry": "chrome/browser/builtin-addons/nulavio-shell/experiments/passwords/parent.js",
+      "sha256": "4c6d4f8e21f5a2167777cf6246ea476607aa34edc5fbc8652b4dc8a5d82df599",
+      "matches": true
+    },
+    {
+      "entry": "chrome/browser/builtin-addons/nulavio-shell/experiments/passwords/schema.json",
+      "sha256": "18bbc4dfc5167a4669b3aabb4e5a278824e678b6888f32caad38a7e93de9003b",
+      "matches": true
+    },
+    {
+      "entry": "chrome/browser/builtin-addons/nulavio-shell/experiments/privacy/parent.js",
+      "sha256": "56d400c276c5d723620d28848eb136799f2d105f8ebab9331d507f274ee6a792",
+      "matches": true
+    },
+    {
+      "entry": "chrome/browser/builtin-addons/nulavio-shell/experiments/privacy/schema.json",
+      "sha256": "8d271301bd29247a5087b36b6b006ce5d2a2c1b56e44af54e9f1b67a4b5909d6",
+      "matches": true
+    },
+    {
+      "entry": "chrome/browser/builtin-addons/nulavio-shell/experiments/profiles/parent.js",
+      "sha256": "4d6ab4d9c5efbbb19ffe37ac691a7946fc98e3950479e97e71d47a06225db1cb",
+      "matches": true
+    },
+    {
+      "entry": "chrome/browser/builtin-addons/nulavio-shell/experiments/profiles/schema.json",
+      "sha256": "e71c73079926b09644332c84ed47d369cb9d51cbaea86e050103891e5fc2e00a",
+      "matches": true
+    },
+    {
+      "entry": "chrome/browser/builtin-addons/nulavio-shell/experiments/routing/parent.js",
+      "sha256": "06ce010e724a3e95883bb35e6f36229f304977da7a0f771169d547fbb9b3d66b",
+      "matches": true
+    },
+    {
+      "entry": "chrome/browser/builtin-addons/nulavio-shell/experiments/routing/schema.json",
+      "sha256": "e07dcd8ff7abfff0e57fa5385f0eb5d06cbecefada29e53d330767e1df5ed716",
+      "matches": true
+    },
+    {
+      "entry": "chrome/browser/builtin-addons/nulavio-shell/experiments/search/parent.js",
+      "sha256": "da9d74c1fe9c7441d8c229283d816be557c1ef9b2d75f93bdc47b847f835f5a6",
+      "matches": true
+    },
+    {
+      "entry": "chrome/browser/builtin-addons/nulavio-shell/experiments/search/schema.json",
+      "sha256": "d65bbe73930ea0a994c165a726efc5cd385ee7d8955505062ea1fb33a59f53a0",
+      "matches": true
+    },
+    {
+      "entry": "chrome/browser/builtin-addons/nulavio-shell/experiments/vault/parent.js",
+      "sha256": "8a65d3cce7e675142b08f5c232b6ba3bf1a76b3e498fc5fa608d4a9923f7206a",
+      "matches": true
+    },
+    {
+      "entry": "chrome/browser/builtin-addons/nulavio-shell/experiments/vault/schema.json",
+      "sha256": "c1afb4c1b7e8f2c83c4bf3d7a523a91dcd00283b1f68f1a6924eb19b0c3bfa22",
+      "matches": true
+    },
+    {
+      "entry": "chrome/browser/builtin-addons/nulavio-shell/guard/review.html",
+      "sha256": "e4aa8c1e93c6bcbfddaded134a68e0eff1622ccbe1a9dd47ed820735b3a8aa1b",
+      "matches": true
+    },
+    {
+      "entry": "chrome/browser/builtin-addons/nulavio-shell/guard/review.js",
+      "sha256": "cd39710f0713f1086eda3a832c2e152ee0ea834b8202199be3d3ec7d67f2df6a",
+      "matches": true
+    },
+    {
+      "entry": "chrome/browser/builtin-addons/nulavio-shell/lib/agent-texts.js",
+      "sha256": "b5491d20f99c6834c9abbb261e9d44ff6f42cf03870d0b9c865c3a3eb6684644",
+      "matches": true
+    },
+    {
+      "entry": "chrome/browser/builtin-addons/nulavio-shell/lib/i18n.js",
+      "sha256": "6a1176d7704aa358b36fdb510c7159b4c0370ab725b16fbff3b9d9c24220dac4",
+      "matches": true
+    },
+    {
+      "entry": "chrome/browser/builtin-addons/nulavio-shell/lib/identity-colors.js",
+      "sha256": "0c898aa0d510246640f5ef5725ac714b48e8250792432276bb276ec7aefa00d1",
+      "matches": true
+    },
+    {
+      "entry": "chrome/browser/builtin-addons/nulavio-shell/lib/names.js",
+      "sha256": "88fb1b953258e9cf3a56cd51ad3b678291be725a13975bad860e24866b1695f8",
+      "matches": true
+    },
+    {
+      "entry": "chrome/browser/builtin-addons/nulavio-shell/lib/profile-icon.js",
+      "sha256": "c50b0f8ea6500bfff9925c0175eba03aee3cc6b18ee99d448d365045b48821f2",
+      "matches": true
+    },
+    {
+      "entry": "chrome/browser/builtin-addons/nulavio-shell/lib/qr.js",
+      "sha256": "6036ada44203f8b361fb341bee186e7edb5abf3d9f4e7534392e7d97461f053e",
+      "matches": true
+    },
+    {
+      "entry": "chrome/browser/builtin-addons/nulavio-shell/lib/risky.js",
+      "sha256": "cbde42894c6f8ff6847d6c1634ec0d3d2e3596f7c92fa7f2adc1d96712204aae",
+      "matches": true
+    },
+    {
+      "entry": "chrome/browser/builtin-addons/nulavio-shell/lib/ui.js",
+      "sha256": "281eb05e4f9fb706bdcb33be4f2e2450e85c8cf1fc668a8f5a445449131487d4",
+      "matches": true
+    },
+    {
+      "entry": "chrome/browser/builtin-addons/nulavio-shell/manifest.json",
+      "sha256": "33fea33fa74053117ec8938ea72f43fe34e107a04b81c1f2fa6f620d20c0288c",
+      "matches": true
+    },
+    {
+      "entry": "chrome/browser/builtin-addons/nulavio-shell/modules/NulavioAI.sys.mjs",
+      "sha256": "b048c6e596489f6ae7a9e8750cbf901ab7b3a1ccf810c334a1398117c160b07a",
+      "matches": true
+    },
+    {
+      "entry": "chrome/browser/builtin-addons/nulavio-shell/modules/NulavioConnect.sys.mjs",
+      "sha256": "39d7004bdb471b5f2769db6a0d5243436b84476ed61556a50d0dd12ba5111b96",
+      "matches": true
+    },
+    {
+      "entry": "chrome/browser/builtin-addons/nulavio-shell/modules/NulavioGuard.sys.mjs",
+      "sha256": "896f7c3865f2b14b4c239391ff47d8c353639357ba3a89e6329acda180136557",
+      "matches": true
+    },
+    {
+      "entry": "chrome/browser/builtin-addons/nulavio-shell/modules/NulavioLookalikeChild.sys.mjs",
+      "sha256": "1261a52bc4e568a44250e20d65bd31772d79dbd11a7d2b5f659310eb8bdc33d6",
+      "matches": true
+    },
+    {
+      "entry": "chrome/browser/builtin-addons/nulavio-shell/modules/NulavioLookalikeParent.sys.mjs",
+      "sha256": "9cc955e8dc01b6833be955edb4fc0c8607c5969b288ae64b7859136ebfe01604",
+      "matches": true
+    },
+    {
+      "entry": "chrome/browser/builtin-addons/nulavio-shell/modules/NulavioPasswords.sys.mjs",
+      "sha256": "8cddf671c4ef60c15db5e723f8fdc22a3a1af7fc5f112ffcad8ea18663ee8f44",
+      "matches": true
+    },
+    {
+      "entry": "chrome/browser/builtin-addons/nulavio-shell/modules/NulavioPrivacy.sys.mjs",
+      "sha256": "e86b181664bb648008a6fd6849b091c4eaa38227a647b81cf27eeaf76053cf4e",
+      "matches": true
+    },
+    {
+      "entry": "chrome/browser/builtin-addons/nulavio-shell/modules/NulavioProfiles.sys.mjs",
+      "sha256": "cf0d2572d0ec8a4f1fcd7b8029e49e9eeca965cdc81d2cb41b25817120dc0f79",
+      "matches": true
+    },
+    {
+      "entry": "chrome/browser/builtin-addons/nulavio-shell/modules/NulavioRouter.sys.mjs",
+      "sha256": "5daf517090690c1bd4e7d090c21193758d296868ef56b5d60b63a39a52618f70",
+      "matches": true
+    },
+    {
+      "entry": "chrome/browser/builtin-addons/nulavio-shell/modules/NulavioRouting.sys.mjs",
+      "sha256": "282ddd510a1c87200e03115dc61024ca68b443d37b0c9f1509916e54e06c8ef2",
+      "matches": true
+    },
+    {
+      "entry": "chrome/browser/builtin-addons/nulavio-shell/modules/NulavioSearch.sys.mjs",
+      "sha256": "cd2880a1a38f2488b8f7cfcd0c5cb3b542fbf9a3ac632719ecbc7aa5ffcbe096",
+      "matches": true
+    },
+    {
+      "entry": "chrome/browser/builtin-addons/nulavio-shell/modules/NulavioTools.sys.mjs",
+      "sha256": "808fc0c7af9ac105a01a063f0ed265731590aa551556efe98b3229776ddde4c8",
+      "matches": true
+    },
+    {
+      "entry": "chrome/browser/builtin-addons/nulavio-shell/modules/NulavioVault.sys.mjs",
+      "sha256": "ab36344b60c87ff7cacb3076cdd87dd369455f25f1e1012a038cbab587899f82",
+      "matches": true
+    },
+    {
+      "entry": "chrome/browser/builtin-addons/nulavio-shell/modules/NulavioVaultState.sys.mjs",
+      "sha256": "bc9558c72376dc214f94835766d9efe19e8b8789bd3286139912ba86a92a3324",
+      "matches": true
+    },
+    {
+      "entry": "chrome/browser/builtin-addons/nulavio-shell/modules/NulavioWindow.sys.mjs",
+      "sha256": "b71f06ed4aca5a404220dc4bbe3b13ec8e60385a0802194d364d506d9dd051b3",
+      "matches": true
+    },
+    {
+      "entry": "chrome/browser/builtin-addons/nulavio-shell/newtab/newtab.html",
+      "sha256": "5563d108104ccdf217ac9f5abb70b5c5680cf83d469a12338ff090082e8d6718",
+      "matches": true
+    },
+    {
+      "entry": "chrome/browser/builtin-addons/nulavio-shell/newtab/newtab.js",
+      "sha256": "c4155a20ebcc5af2112d2440a9927c9b3ba856e3a9f0bd3ce31cfd0e63f77670",
+      "matches": true
+    },
+    {
+      "entry": "chrome/browser/builtin-addons/nulavio-shell/passwords/lookalike.html",
+      "sha256": "cbc0f3a1f92c1c38d4ecd2e689ca60afea0dc2a5572a3b945b89afed9f8da212",
+      "matches": true
+    },
+    {
+      "entry": "chrome/browser/builtin-addons/nulavio-shell/passwords/lookalike.js",
+      "sha256": "afe7c5b03ee3cf928150b2a1450b2e1a0205e55b2daf42097b88bc149fa8b4f9",
+      "matches": true
+    },
+    {
+      "entry": "chrome/browser/builtin-addons/nulavio-shell/profiles/popup.html",
+      "sha256": "693142b3a0f90ad7da864a87e36b3bd4d9c062d3ae3d8949e411b46d708b359b",
+      "matches": true
+    },
+    {
+      "entry": "chrome/browser/builtin-addons/nulavio-shell/profiles/popup.js",
+      "sha256": "0b85cd6b126d264c6acd535233b3e0ce3f748dbaa5698741e33df811553b68eb",
+      "matches": true
+    },
+    {
+      "entry": "chrome/browser/builtin-addons/nulavio-shell/routing/ask.html",
+      "sha256": "fcb7ab6e42076e1b36ace940c3ae674db04600888ab9f376039ef983bb47bd34",
+      "matches": true
+    },
+    {
+      "entry": "chrome/browser/builtin-addons/nulavio-shell/routing/blocked.html",
+      "sha256": "28bed6f63c12530157424a820d1cb833223d143c04b6e6eacf9ce9029af1f420",
+      "matches": true
+    },
+    {
+      "entry": "chrome/browser/builtin-addons/nulavio-shell/routing/page.js",
+      "sha256": "1ded9b6548d7fa5f41f93348a8f50cbd68b586284a23ba2b5b966045cb5e9a23",
+      "matches": true
+    },
+    {
+      "entry": "chrome/browser/builtin-addons/nulavio-shell/settings/ai.js",
+      "sha256": "0e2cd7e993b52391350316ede3a36c7bb6e49e3beead16f25778d13d2e1be258",
+      "matches": true
+    },
+    {
+      "entry": "chrome/browser/builtin-addons/nulavio-shell/settings/settings.html",
+      "sha256": "ba13fbcbea84c45b99b1e5bb4cc92d4351627dc1ae00cd798cdf810df8ed21a7",
+      "matches": true
+    },
+    {
+      "entry": "chrome/browser/builtin-addons/nulavio-shell/settings/settings.js",
+      "sha256": "3b0ae4bcad0b9539fcc7e736d96ca380cc374ed9e7da348d8981149f6cae3b07",
+      "matches": true
+    },
+    {
+      "entry": "chrome/browser/builtin-addons/nulavio-shell/shared/accessibility.css",
+      "sha256": "07f24e73b92852f3880432146bda02fd9fbbf95490f738168a2fd1dbea365318",
+      "matches": true
+    },
+    {
+      "entry": "chrome/browser/builtin-addons/nulavio-shell/shared/base.css",
+      "sha256": "d6b1d8c417ce9033eab9470c810d507b99cd1977f49f4fee355becdedfe98008",
+      "matches": true
+    },
+    {
+      "entry": "chrome/browser/builtin-addons/nulavio-shell/shared/components.css",
+      "sha256": "36ef8380285fb460fc636912063d35058204c49671e08a171a451343541bf04d",
+      "matches": true
+    },
+    {
+      "entry": "chrome/browser/builtin-addons/nulavio-shell/shared/icon-critical.svg",
+      "sha256": "04ff090280379e89c937bb761494c3cd231a43645294e648e25a2577b1b87f47",
+      "matches": true
+    },
+    {
+      "entry": "chrome/browser/builtin-addons/nulavio-shell/shared/integrations.json",
+      "sha256": "74c858f404d8f23e07935fdbc45dbf96f21c28227118966e811448336a4359b1",
+      "matches": true
+    },
+    {
+      "entry": "chrome/browser/builtin-addons/nulavio-shell/shared/nulavio-symbol-adaptive.svg",
+      "sha256": "f4362788cfb94c5ecad2a8917ec7f0da10b1038adb720ae0c3209b842a40fca4",
+      "matches": true
+    },
+    {
+      "entry": "chrome/browser/builtin-addons/nulavio-shell/shared/nulavio-symbol-dark-on-light.svg",
+      "sha256": "3f3af6be5c1962e8b013583579d2ce59bf582c1ea8ce61c5d700412a07b12642",
+      "matches": true
+    },
+    {
+      "entry": "chrome/browser/builtin-addons/nulavio-shell/shared/nulavio-symbol.svg",
+      "sha256": "c66153bb535ff44fb3cb6af4c23e7412ba2f768aba19b0c1c04ab653e99ba5df",
+      "matches": true
+    },
+    {
+      "entry": "chrome/browser/builtin-addons/nulavio-shell/shared/pages.css",
+      "sha256": "85c9ae6524ccadf1a77dffbbb58c470b8ef007bf51cb215413745f5a3f5e4074",
+      "matches": true
+    },
+    {
+      "entry": "chrome/browser/builtin-addons/nulavio-shell/shared/providers.json",
+      "sha256": "3a4fef5aad016ef968ed64df23f4a764d623fe5d240a40f98349852d0a4d363a",
+      "matches": true
+    },
+    {
+      "entry": "chrome/browser/builtin-addons/nulavio-shell/shared/shell.css",
+      "sha256": "dfc67d50fd5b220424b92006aaa5f3e8efd62c3b7465f9553b5e1e7506641c74",
+      "matches": true
+    },
+    {
+      "entry": "chrome/browser/builtin-addons/nulavio-shell/shared/sidebar-focus.css",
+      "sha256": "e3bd7ac3e16ee0be0e4a63dba34eaf720f6e6f147e04d551573eb95778975274",
+      "matches": true
+    },
+    {
+      "entry": "chrome/browser/builtin-addons/nulavio-shell/shared/tokens.css",
+      "sha256": "eed180784f31378cad1493dc677f9b4d21e89700d6693a225e265b309087dc34",
+      "matches": true
+    },
+    {
+      "entry": "chrome/browser/builtin-addons/nulavio-shell/shared/window-band.css",
+      "sha256": "49a8d104a189483e2bc95e9634acc19a474f16c979909a13b84a4d20212bfb0e",
+      "matches": true
+    },
+    {
+      "entry": "chrome/browser/builtin-addons/nulavio-shell/vault/create.html",
+      "sha256": "774932b1300af8cc65008146cd33fd7a9776239382746d004bf93cf700da5d0c",
+      "matches": true
+    },
+    {
+      "entry": "chrome/browser/builtin-addons/nulavio-shell/vault/create.js",
+      "sha256": "71fde7756521c7acd7e5643c212d19cc5758f93264fb61326f353c901598f6fd",
+      "matches": true
+    },
+    {
+      "entry": "chrome/browser/builtin-addons/nulavio-shell/vault/phone.html",
+      "sha256": "36f2c5f78e3b1591f3bedc977662a82959385cede115d5a1edffcb9cd742b8b7",
+      "matches": true
+    },
+    {
+      "entry": "chrome/browser/builtin-addons/nulavio-shell/vault/phone.js",
+      "sha256": "c9674b3202a7284f775bde9d784a52dabe78667acbfd76b4514982b82307e812",
+      "matches": true
+    },
+    {
+      "entry": "chrome/browser/builtin-addons/nulavio-shell/vault/unlock.html",
+      "sha256": "88b381f89bf52a45740f6e5d5915f3c0a1225a196d8e643a7a13784e2519fecc",
+      "matches": true
+    },
+    {
+      "entry": "chrome/browser/builtin-addons/nulavio-shell/vault/unlock.js",
+      "sha256": "05c58761bbc23fc4e258dd229fcf533ff84a301b72a8219e9f98cace5e29d183",
+      "matches": true
+    },
+    {
+      "entry": "chrome/browser/builtin-addons/nulavio-shell/warning/warning.html",
+      "sha256": "ad4cd64417e908303503f72724b9c3057e637e8e8044bf7edb7f05a5d6ab529c",
+      "matches": true
+    },
+    {
+      "entry": "chrome/browser/builtin-addons/nulavio-shell/warning/warning.js",
+      "sha256": "20adf4bfeb0fb91a8154cbcd73a48c0ef9ffa6914bf1427c620ff490f607fe16",
+      "matches": true
+    },
+    {
+      "entry": "chrome/browser/content/branding/theme/horizon.css",
+      "sha256": "7e750da7e9cd997ce8d561239ce426abc404fd483916d1e0856e8b4398a615f6",
+      "matches": true
+    },
+    {
+      "entry": "chrome/browser/content/branding/theme/tokens.css",
+      "sha256": "d1b649899280b4dfe3f75f7823f8389cb0465f45bad24779f4c508aa018338fb",
+      "matches": true
+    },
+    {
+      "entry": "defaults/preferences/firefox-branding.js",
+      "sha256": "f7794f946d0d3aea3cff776a86e7eaf7cc7f29fe3735d0ff8a374564d11c055d",
+      "matches": true
+    },
+    {
+      "entry": "modules/nulavio/NulavioDownloads.sys.mjs",
+      "sha256": "9e50564555847ea4b259433cc662d58f793b765244e42b8e74879e53011bab8f",
+      "matches": true
+    },
+    {
+      "entry": "modules/nulavio/NulavioUrlbarRouting.sys.mjs",
+      "sha256": "2d07cba06f60120c7227395d5259c6050ef0073f877def3640eefe818688c6ba",
+      "matches": true
+    },
+    {
+      "entry": "modules/nulavio/NulavioCommandLine.sys.mjs",
+      "sha256": "e5483d62f38e5c730b8ef1d822cf83223d966c9e217e325ab7fd054b63b25965",
+      "matches": true
+    },
+    {
+      "archive": "browser/omni.ja",
+      "entry": "chrome/browser/content/browser/downloads/downloads.js",
+      "source": "browser/components/downloads/content/downloads.js",
+      "sha256": "faeec8fd7e1e21388861cb2c9a408f54f826700d5280010b6635b2f3a82818a5",
+      "matches": true
+    },
+    {
+      "archive": "browser/omni.ja",
+      "entry": "chrome/browser/content/browser/downloads/indicator.js",
+      "source": "browser/components/downloads/content/indicator.js",
+      "sha256": "673ec6b599ccf04cd51972a90c51558369cffec2c1d7b77597227aa87aee2104",
+      "matches": true
+    },
+    {
+      "archive": "browser/omni.ja",
+      "entry": "chrome/browser/skin/classic/browser/downloads/indicator.css",
+      "source": "browser/themes/shared/downloads/indicator.css",
+      "sha256": "daea4d4b54e06ab58fca5c21f99a33b9c77cd289386876df09c085d556822f70",
+      "matches": true
+    },
+    {
+      "archive": "omni.ja",
+      "entry": "moz-src/browser/components/downloads/DownloadsCommon.sys.mjs",
+      "source": "browser/components/downloads/DownloadsCommon.sys.mjs",
+      "sha256": "da0ce56be82929a84ea1571e564fec3c52cc31ba35357f71bf110e2b18ce16dd",
+      "matches": true
+    },
+    {
+      "archive": "omni.ja",
+      "entry": "moz-src/browser/components/downloads/DownloadsViewUI.sys.mjs",
+      "source": "browser/components/downloads/DownloadsViewUI.sys.mjs",
+      "sha256": "3abb2eb45f1e9907209307f951ac0cf468bc3a9ec56b2e9e2ab080bfa2ebae0c",
+      "matches": true
+    }
+  ],
+  "patch_validation": [
+    {
+      "command": [
+        "git",
+        "apply",
+        "--reverse",
+        "--check",
+        "/home/caiobarbieri/.t3/worktrees/2026-10-24-voc-o-tech-lead-principal-c5c1b438/t3-f8a4ba0f/browser/patches/0007-downloads-never-open-a-program-from-the-downloads-ui.patch"
+      ],
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "git",
+        "apply",
+        "--reverse",
+        "/home/caiobarbieri/.t3/worktrees/2026-10-24-voc-o-tech-lead-principal-c5c1b438/t3-f8a4ba0f/browser/patches/0007-downloads-never-open-a-program-from-the-downloads-ui.patch"
+      ],
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "git",
+        "apply",
+        "--check",
+        "/home/caiobarbieri/.t3/worktrees/2026-10-24-voc-o-tech-lead-principal-c5c1b438/t3-f8a4ba0f/browser/patches/0007-downloads-never-open-a-program-from-the-downloads-ui.patch"
+      ],
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "python3",
+        "-I",
+        "/home/caiobarbieri/.t3/worktrees/2026-10-24-voc-o-tech-lead-principal-c5c1b438/t3-f8a4ba0f/scripts/build/apply_patches.py",
+        "--source",
+        "/home/caiobarbieri/.cache/nulavio-ux/ux3c-tbnzluyx/build/firefox-159.0"
+      ],
+      "exit": 0,
+      "stdout": "= 0001-branding-set-application-vendor.patch (already applied)\n= 0002-l10n-map-nulavio-branding.patch (already applied)\n= 0003-shell-load-the-nulavio-horizon-theme.patch (already applied)\n= 0004-search-require-per-engine-consent-for-suggestions.patch (already applied)\n= 0005-urlbar-let-smart-profile-routing-decide-typed-navigations.patch (already applied)\n= 0006-xre-use-the-system-mozilla-directory-the-distribution-has.patch (already applied)\n+ 0007-downloads-never-open-a-program-from-the-downloads-ui.patch\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "python3",
+        "-I",
+        "/home/caiobarbieri/.t3/worktrees/2026-10-24-voc-o-tech-lead-principal-c5c1b438/t3-f8a4ba0f/scripts/build/apply_patches.py",
+        "--source",
+        "/home/caiobarbieri/.cache/nulavio-ux/ux3c-tbnzluyx/build/firefox-159.0"
+      ],
+      "exit": 0,
+      "stdout": "= 0001-branding-set-application-vendor.patch (already applied)\n= 0002-l10n-map-nulavio-branding.patch (already applied)\n= 0003-shell-load-the-nulavio-horizon-theme.patch (already applied)\n= 0004-search-require-per-engine-consent-for-suggestions.patch (already applied)\n= 0005-urlbar-let-smart-profile-routing-decide-typed-navigations.patch (already applied)\n= 0006-xre-use-the-system-mozilla-directory-the-distribution-has.patch (already applied)\n= 0007-downloads-never-open-a-program-from-the-downloads-ui.patch (already applied)\n",
+      "stderr": ""
+    }
+  ],
+  "status": "UX3C IMPLEMENTED / FOCUSED CHECKS PASS / FULL INTEGRATION GATE BLOCKED: Vault creation fails in both complete runs; cause UNKNOWN",
+  "capture_method": "Gecko Marionette WebDriver screenshot in chrome context; headless, disposable registered profiles, no host desktop; 1366x768 CSS pixels. Real Downloads API with inert text, never executed. Native security attention seeded explicitly, no reputation backend. Main-window screenshots exclude popup-widget pixels. Native automation stripes retained. Before/after extension UUIDs and transient Shell safe-action focus can differ.",
+  "captures": {
+    "docs/design/screenshots/ux3c/before-light.png": {
+      "sha256": "d0f6a128d72d9775b1b36380aa5f44479fec82e461240982cb493e10238daafe",
+      "origin": "supplied parent package, copied untouched",
+      "source_artifact": "/home/caiobarbieri/.cache/nulavio-ux/ux3c-tbnzluyx/final-before-artifacts/downloads-indicator/pt-BR/light-completed.png",
+      "limits": "Headless main-window pixels; no popup-widget, physical GTK/KDE or Orca certification."
+    },
+    "docs/design/screenshots/ux3c/before-dark.png": {
+      "sha256": "8767e0bb53fd8d40ecb98c247261db18b8bdfd8d314d39df2c1f4c07b8b86c97",
+      "origin": "supplied parent package, copied untouched",
+      "source_artifact": "/home/caiobarbieri/.cache/nulavio-ux/ux3c-tbnzluyx/final-before-artifacts/downloads-indicator/pt-BR/dark-completed.png",
+      "limits": "Headless main-window pixels; no popup-widget, physical GTK/KDE or Orca certification."
+    },
+    "docs/design/screenshots/ux3c/after-light.png": {
+      "sha256": "acf739ebd32e18a097d151703d3fee8186c97075a20fef249530244ff0d5f6d9",
+      "origin": "actual UX3C rebuilt package",
+      "source_artifact": "/home/caiobarbieri/.cache/nulavio-ux/ux3c-tbnzluyx/final-targeted-artifacts/downloads-indicator/pt-BR/light-completed.png",
+      "limits": "Headless main-window pixels; no popup-widget, physical GTK/KDE or Orca certification."
+    },
+    "docs/design/screenshots/ux3c/after-dark.png": {
+      "sha256": "865d1287166a49432a94ca905d900e8a9350469091453ab1741a1f28080b5f8b",
+      "origin": "actual UX3C rebuilt package",
+      "source_artifact": "/home/caiobarbieri/.cache/nulavio-ux/ux3c-tbnzluyx/final-targeted-artifacts/downloads-indicator/pt-BR/dark-completed.png",
+      "limits": "Headless main-window pixels; no popup-widget, physical GTK/KDE or Orca certification."
+    },
+    "docs/design/screenshots/ux3c/active-warning.png": {
+      "sha256": "832ddb6b426957754f69ea0af7b583824ec8b129c66cd16d3c3a23340bd5a889",
+      "origin": "actual UX3C rebuilt package",
+      "source_artifact": "/home/caiobarbieri/.cache/nulavio-ux/ux3c-tbnzluyx/final-targeted-artifacts/downloads-indicator/pt-BR/active-warning.png",
+      "limits": "Headless main-window pixels; no popup-widget, physical GTK/KDE or Orca certification."
+    },
+    "docs/design/screenshots/ux3c/after-en-light.png": {
+      "sha256": "d055d92d7476a6a449a2295c17f259482470108493e74f60aee14bb46d9e8298",
+      "origin": "actual UX3C rebuilt package",
+      "source_artifact": "/home/caiobarbieri/.cache/nulavio-ux/ux3c-tbnzluyx/final-en-artifacts/downloads-indicator/en-US/light-completed.png",
+      "limits": "Headless main-window pixels; no popup-widget, physical GTK/KDE or Orca certification."
+    },
+    "docs/design/screenshots/ux3c/progress-light.png": {
+      "sha256": "1168d1bdc1f013b802a396477d3cd7194386201af2a19848cfbd2874fc7a4c7b",
+      "origin": "actual UX3C rebuilt package",
+      "source_artifact": "/home/caiobarbieri/.cache/nulavio-ux/ux3c-tbnzluyx/current-test-artifacts/downloads-indicator/pt-BR/progress-light.png",
+      "limits": "Headless main-window pixels; no popup-widget, physical GTK/KDE or Orca certification."
+    },
+    "docs/design/screenshots/ux3c/progress-dark.png": {
+      "sha256": "2472f27b2b9adefb6705df5341d5b7ffefa2060d1df57d2d2f455f33da9ecfb1",
+      "origin": "actual UX3C rebuilt package",
+      "source_artifact": "/home/caiobarbieri/.cache/nulavio-ux/ux3c-tbnzluyx/current-test-artifacts/downloads-indicator/pt-BR/progress-dark.png",
+      "limits": "Headless main-window pixels; no popup-widget, physical GTK/KDE or Orca certification."
+    },
+    "docs/design/screenshots/ux3c/narrow-warning.png": {
+      "sha256": "4927396558e03b5e17ba4e140666311e8bd5baa64453ebea4f678b4cfacfbb32",
+      "origin": "actual UX3C rebuilt package",
+      "source_artifact": "/home/caiobarbieri/.cache/nulavio-ux/ux3c-tbnzluyx/current-test-artifacts/downloads-indicator/pt-BR/narrow-warning.png",
+      "limits": "Headless main-window pixels; no popup-widget, physical GTK/KDE or Orca certification."
+    },
+    "docs/design/screenshots/ux3c/native-severe-priority.png": {
+      "sha256": "32d0f3ab8777c8113af255a11af5b570fd968e924652eb32d73f7c77eda6f93d",
+      "origin": "actual UX3C rebuilt package",
+      "source_artifact": "/home/caiobarbieri/.cache/nulavio-ux/ux3c-tbnzluyx/current-test-artifacts/downloads-indicator/pt-BR/native-severe-priority.png",
+      "limits": "Headless main-window pixels; no popup-widget, physical GTK/KDE or Orca certification."
+    }
+  },
+  "limits": [
+    "No publication, remote CI, human or independent review",
+    "No physical KDE/GTK, Orca, hardware scaling, frame-time or real forced-colours certification",
+    "No real download reputation available (R15); severity checks use native attention-state inputs, not fabricated verdicts",
+    "HTTP fixture demonstrates real transfer and cancel; partial-data resumability was not established and is not claimed",
+    "Complete integration did NOT pass: 2 runs of 227 tests each had 1 Vault failure + 3 dependent errors, 13 existing skips. Parent must resolve this gate before treating the slice as fully verified or integrating/publishing it."
+  ],
+  "visual_critique": {
+    "rounds": 1,
+    "observed": "Native 12px triangle at downloads button corner in both themes and transfer notification; original toolbar geometry/content unchanged; no new clipping or overlap. Native action focus checked separately.",
+    "scores_0_to_3": {
+      "purpose_and_hierarchy": 3,
+      "layout_and_composition": 3,
+      "typography": null,
+      "color_and_contrast": 3,
+      "spacing_and_density": 3,
+      "components_and_states": 3,
+      "responsiveness": 2,
+      "accessibility_automated_scope": 3,
+      "content_and_copy": 3,
+      "distinctiveness_and_polish": 2
+    },
+    "manual_screen_reader": "NOT RUN",
+    "native_main_window_pixel_review": "PASS",
+    "notes": "Existing type unchanged (n/a). Native desktop minimum is 638px; tested there, not a 320px web layout. Main-window screenshots, keyboard/accessible DOM and native state checks support the bounded scores; no Orca/physical certification.",
+    "reviewed_states": [
+      "parent/UX3C completed program, both themes, 1366x768",
+      "real active transfer ring + triangle, both themes",
+      "638px native window minimum, dark",
+      "native severe attention + real active progress, 638px dark; explicit priority input"
+    ]
+  },
+  "engine_input": {
+    "comment": "The Firefox release the Nulavio build ships, and the SHA-256 of its source tarball from Mozilla's signed SHA256SUMS. Change both with scripts/release/bump_engine.py <version> (it verifies the signature), in the commit that moves the build to a new release. scripts/release/watch_upstream.py compares the version with Mozilla's releases (update policy, docs/architecture/update-policy.md); scripts/upstream/fetch_firefox_source.py refuses a tarball that differs from this digest.",
+    "firefox": "159.0",
+    "source_sha256": "3d98df785894057fce60603e845828e758a5411ad79aaaaff2b8230597f500d9"
+  },
+  "original_256_contrast_declarations_unchanged": true,
+  "full_integration_test_harness_snapshot": {
+    "sha256": "d1042c7e88e29ab857c249a8eb65501462bafd7a5e397becaaf47fc10c799864",
+    "file": "/home/caiobarbieri/.cache/nulavio-ux/ux3c-tbnzluyx/full-integration-test-snapshot.py",
+    "difference_from_final": "Final fixture cleanup only deletes Python-tracked owned directories. Assertions and production bytes unchanged; final targeted suite rerun separately."
+  },
+  "original_guard_patch_hunks_byte_identical": true,
+  "guarded_engine_files_unchanged_from_supplied_source": {
+    "browser/components/downloads/content/downloads.js": "faeec8fd7e1e21388861cb2c9a408f54f826700d5280010b6635b2f3a82818a5",
+    "browser/components/downloads/DownloadsViewUI.sys.mjs": "3abb2eb45f1e9907209307f951ac0cf468bc3a9ec56b2e9e2ab080bfa2ebae0c"
+  },
+  "rendered_warning_contrast": [
+    {
+      "dark": 0,
+      "ratio": 5.453433395268003,
+      "minimum": 3
+    },
+    {
+      "dark": 1,
+      "ratio": 9.212832120606803,
+      "minimum": 3
+    }
+  ],
+  "full_integration_attempt_1": {
+    "result": "FAIL",
+    "tests": 227,
+    "skips": 13,
+    "failures": 1,
+    "errors": 3,
+    "log": "/home/caiobarbieri/.cache/nulavio-ux/ux3c-tbnzluyx/logs/integration-attempt-1-FAIL.log",
+    "sha256": "34e31a78ce11395cccfea009707adfd6018c27b8b3993c8fe3ed68dc5602def9",
+    "failure": "Vault UI create: protection -> recovery did not complete within original 90s; inline error Algo deu errado. Nada foi alterado.",
+    "cascade": [
+      "test_02 missing created_id",
+      "test_06 missing created_id",
+      "test_07 missing Cofre UI"
+    ],
+    "cause": "UNKNOWN",
+    "vault_fix_claimed": false,
+    "all_9_ux3c_tests": "PASS",
+    "test_harness_sha256": "d1042c7e88e29ab857c249a8eb65501462bafd7a5e397becaaf47fc10c799864",
+    "committed_log": "docs/design/screenshots/ux3c/integration-attempt-1-FAIL.txt"
+  },
+  "reference_metadata": {
+    "version": "159.0",
+    "package_buildID": "20261029093450",
+    "runtime_buildID_supplied_by_parent": "20261029093447",
+    "browser_omni_sha256_verified_current": "f3825251f8049908c2a4bc2dba0d92ef37f0b96b8e4993579800a03c6919f21e"
+  },
+  "review": {
+    "kind": "Author self-review; no subagents or independent review",
+    "scope": "UX3C production diff, native callers/lifecycle/privacy, patch guard preservation, test cleanup and evidence",
+    "resolved": "Stale detached-indicator map could leave type warning after actual removal; regression reproduced on first UX3C rebuild and corrected by reading the linked data owner.",
+    "open_actionable_ux3c_findings": 0,
+    "known_unresolved": "Sporadic Vault create failure, cause UNKNOWN; no change or fix attribution to this slice."
+  },
+  "runtime": {
+    "version": "159.0",
+    "buildID": "20261029102948",
+    "locale": "pt-BR",
+    "attention_suppression_before_panel_close": 1,
+    "severe": {
+      "program": true,
+      "attention": "severe",
+      "progress": true,
+      "percent": 3,
+      "description": "Aviso: há downloads de arquivos de programa. Confira a origem antes de abrir pela pasta.",
+      "refs": "nulavio-downloads-program-description",
+      "name": "Downloads",
+      "accessibleDescription": "Aviso: há downloads de arquivos de programa. Confira a origem antes de abrir pela pasta.",
+      "label": "Downloads",
+      "tooltip": "dynamic-shortcut-tooltip",
+      "badge": {
+        "display": "block",
+        "image": "url(\"chrome://browser/skin/notification-fill-12.svg\")",
+        "fill": "rgb(255, 132, 138)",
+        "opacity": "1",
+        "animation": "none"
+      },
+      "bg": "rgb(11, 22, 35)",
+      "width": 30,
+      "height": 44,
+      "focus": false,
+      "outline": "solid",
+      "outlineWidth": "1px",
+      "hit": true
+    },
+    "progress": [
+      {
+        "dark": 0,
+        "program": true,
+        "attention": "warning",
+        "progress": true,
+        "percent": 3,
+        "description": "Aviso: há downloads de arquivos de programa. Confira a origem antes de abrir pela pasta.",
+        "refs": "nulavio-downloads-program-description",
+        "name": "Downloads",
+        "accessibleDescription": "Aviso: há downloads de arquivos de programa. Confira a origem antes de abrir pela pasta.",
+        "label": "Downloads",
+        "tooltip": "dynamic-shortcut-tooltip",
+        "badge": {
+          "display": "block",
+          "image": "url(\"chrome://global/skin/icons/warning-fill-12.svg\")",
+          "fill": "rgb(138, 90, 16)",
+          "opacity": "1",
+          "animation": "none"
+        },
+        "bg": "rgb(241, 247, 245)",
+        "width": 36,
+        "height": 44,
+        "focus": false,
+        "outline": "solid",
+        "outlineWidth": "1px",
+        "hit": true
+      },
+      {
+        "dark": 1,
+        "program": true,
+        "attention": "warning",
+        "progress": true,
+        "percent": 3,
+        "description": "Aviso: há downloads de arquivos de programa. Confira a origem antes de abrir pela pasta.",
+        "refs": "nulavio-downloads-program-description",
+        "name": "Downloads",
+        "accessibleDescription": "Aviso: há downloads de arquivos de programa. Confira a origem antes de abrir pela pasta.",
+        "label": "Downloads",
+        "tooltip": "dynamic-shortcut-tooltip",
+        "badge": {
+          "display": "block",
+          "image": "url(\"chrome://global/skin/icons/warning-fill-12.svg\")",
+          "fill": "rgb(231, 174, 97)",
+          "opacity": "1",
+          "animation": "none"
+        },
+        "bg": "rgb(11, 22, 35)",
+        "width": 36,
+        "height": 44,
+        "focus": false,
+        "outline": "solid",
+        "outlineWidth": "1px",
+        "hit": true
+      }
+    ]
+  },
+  "native_capture_probe": {
+    "initial_attempt": "FAIL: extra QA asserted severe while the native panel suppressed attention. Retained in post-full-qa-attempt-1-FAIL.log.",
+    "confirmed_suppression_flag_before_normal_panel_close": 1,
+    "final_attempt": "PASS: close native panel normally, wait for native suppression flag NONE, seed native attention and preserve severe icon with real active progress. No flag/pref/security modification.",
+    "kind": "Explicit native attention-state input, not a reputation verdict or backend."
+  },
+  "current_focused_tests": [
+    {
+      "locale": "pt-BR",
+      "tests": 9,
+      "skips": 0,
+      "result": "PASS",
+      "log": "/home/caiobarbieri/.cache/nulavio-ux/ux3c-tbnzluyx/logs/current-targeted-pt-BR.log",
+      "sha256": "deac1caf19898dcefb8e8eefb0c468e3f9c27ad495bcc57d49a5dab5525da609",
+      "test_file_sha256": "a127853493abd66654ebc8ed94e44e44995d159ec03e32fdd4dfa032caca697b"
+    },
+    {
+      "locale": "en-US",
+      "tests": 9,
+      "skips": 0,
+      "result": "PASS",
+      "log": "/home/caiobarbieri/.cache/nulavio-ux/ux3c-tbnzluyx/logs/current-targeted-en-US.log",
+      "sha256": "0bdf01f1ea61fdd78c625ae9cae9aa4d7fb7022543a88bc280319a11d2efd437",
+      "test_file_sha256": "a127853493abd66654ebc8ed94e44e44995d159ec03e32fdd4dfa032caca697b"
+    }
+  ],
+  "isolated_vault": {
+    "command": "LC_ALL=pt_BR.UTF-8 NULAVIO_ENGINE=<final>/nulavio python3 -I tests/run.py integration test_vault_ui.py",
+    "result": "PASS",
+    "tests": 9,
+    "skips": 0,
+    "log": "/home/caiobarbieri/.cache/nulavio-ux/ux3c-tbnzluyx/logs/vault-isolated.log",
+    "sha256": "363682df232aa70bca7ecb9f345406b5b2a7e9c1066321f23811efc91f7939d6",
+    "cause_of_full_run_failure": "UNKNOWN",
+    "vault_code_or_assertions_or_deadline_changed": false
+  },
+  "commands": [
+    {
+      "command": "venv/bin/pip install --require-hashes -r requirements/dev.txt",
+      "result": "PASS",
+      "log": "/home/caiobarbieri/.cache/nulavio-ux/ux3c-tbnzluyx/logs/venv.log"
+    },
+    {
+      "command": "venv/bin/ruff check .",
+      "result": "PASS",
+      "log": "/home/caiobarbieri/.cache/nulavio-ux/ux3c-tbnzluyx/logs/ruff-final-check.log"
+    },
+    {
+      "command": "venv/bin/ruff format --check .",
+      "result": "PASS",
+      "log": "/home/caiobarbieri/.cache/nulavio-ux/ux3c-tbnzluyx/logs/ruff-final-format.log"
+    },
+    {
+      "command": "python3 -I scripts/brand/build_tokens.py --check",
+      "result": "PASS",
+      "log": "/home/caiobarbieri/.cache/nulavio-ux/ux3c-tbnzluyx/logs/tokens-final.log"
+    },
+    {
+      "command": "python3 -I scripts/brand/contrast.py --json",
+      "result": "PASS: 256/256, previous declarations/thresholds unchanged",
+      "output": "/home/caiobarbieri/.cache/nulavio-ux/ux3c-tbnzluyx/contrast-final.json"
+    },
+    {
+      "command": "LC_ALL=pt_BR.UTF-8 python3 -I tests/run.py unit",
+      "result": "PASS: 600 tests, 3 existing skips",
+      "log": "/home/caiobarbieri/.cache/nulavio-ux/ux3c-tbnzluyx/logs/unit-final.log"
+    },
+    {
+      "command": "scripts/security/scan.sh",
+      "result": "PASS: actionlint, zizmor (offline), gitleaks (182 existing commits + octopus pass), shellcheck, opengrep, opengrep-rules",
+      "log": "/home/caiobarbieri/.cache/nulavio-ux/ux3c-tbnzluyx/logs/security-final.log"
+    },
+    {
+      "command": "frontend-design/scripts/ui_lint.py . --changed",
+      "result": "PASS: 0 errors/warnings on changed lines; existing findings hidden",
+      "log": "/home/caiobarbieri/.cache/nulavio-ux/ux3c-tbnzluyx/logs/ui-lint-final.log"
+    },
+    {
+      "command": "python3 -I tests/run.py unit test_brand_and_docs.py",
+      "result": "PASS: 16 tests",
+      "log": "/home/caiobarbieri/.cache/nulavio-ux/ux3c-tbnzluyx/logs/docs-final.log"
+    }
+  ],
+  "extra_exploratory_commands": [
+    {
+      "command": "python3 -I scripts/brand/build_theme.py --check",
+      "result": "INVALID COMMAND: file does not exist; no theme gate claimed",
+      "log": "/home/caiobarbieri/.cache/nulavio-ux/ux3c-tbnzluyx/logs/theme-final.log"
+    },
+    {
+      "command": "python3 -I scripts/brand/build_logo.py --check; python3 -I scripts/brand/build_icons.py --check",
+      "result": "Generators ran; outputs byte-identical in git. Not treated as check-flag validation.",
+      "logs": [
+        "/home/caiobarbieri/.cache/nulavio-ux/ux3c-tbnzluyx/logs/logo-final.log",
+        "/home/caiobarbieri/.cache/nulavio-ux/ux3c-tbnzluyx/logs/icons-final.log"
+      ]
+    }
+  ],
+  "unit_skip_reasons": [
+    "test_pair_unlock_and_refusals (test_companion_protocol.CompanionProtocolTest.test_pair_unlock_and_refusals) ... skipped 'build android/nv1 first (gradle :nv1:test); needs Java, gocryptfs, FUSE and libsodium'",
+    "test_requests_the_phone_must_refuse (test_companion_protocol.CompanionProtocolTest.test_requests_the_phone_must_refuse) ... skipped 'build android/nv1 first (gradle :nv1:test); needs Java, gocryptfs, FUSE and libsodium'",
+    "test_through_the_real_avahi (test_phone_link.PhoneApiTest.test_through_the_real_avahi) ... skipped 'NULAVIO_LAN_TESTS=1 with Avahi running and avahi-publish (announces on the local network)'"
+  ],
+  "integration_skip_reasons": [
+    "test_claude_code (test_ai_agents_real.RealAgentsTest.test_claude_code) ... skipped 'opt-in: NULAVIO_AGENT_TESTS=1 and a Gecko engine'",
+    "test_codex_cli (test_ai_agents_real.RealAgentsTest.test_codex_cli) ... skipped 'opt-in: NULAVIO_AGENT_TESTS=1 and a Gecko engine'",
+    "test_01_set_up_creates_keys_behind_the_screen_lock (test_companion_emulator.CompanionOnEmulatorTest.test_01_set_up_creates_keys_behind_the_screen_lock) ... skipped 'NULAVIO_EMULATOR=1, a device on adb, the debug APK, gocryptfs and libsodium'",
+    "test_02_pairing_shows_the_same_digits_on_both_sides (test_companion_emulator.CompanionOnEmulatorTest.test_02_pairing_shows_the_same_digits_on_both_sides) ... skipped 'NULAVIO_EMULATOR=1, a device on adb, the debug APK, gocryptfs and libsodium'",
+    "test_03_unlock_with_the_phone_mounts_the_profile (test_companion_emulator.CompanionOnEmulatorTest.test_03_unlock_with_the_phone_mounts_the_profile) ... skipped 'NULAVIO_EMULATOR=1, a device on adb, the debug APK, gocryptfs and libsodium'",
+    "test_04_an_answered_request_is_refused_again (test_companion_emulator.CompanionOnEmulatorTest.test_04_an_answered_request_is_refused_again) ... skipped 'NULAVIO_EMULATOR=1, a device on adb, the debug APK, gocryptfs and libsodium'",
+    "test_05_not_now_sends_nothing (test_companion_emulator.CompanionOnEmulatorTest.test_05_not_now_sends_nothing) ... skipped 'NULAVIO_EMULATOR=1, a device on adb, the debug APK, gocryptfs and libsodium'",
+    "test_14_safe_browsing_blocks_google_test_phishing_page (test_engine_slice.EngineSliceTest.test_14_safe_browsing_blocks_google_test_phishing_page) ... skipped 'set NULAVIO_NETWORK_TESTS=1 (contacts Google Safe Browsing)'",
+    "test_bitwarden (test_password_extensions.PasswordExtensionSmokeTest.test_bitwarden) ... skipped 'set NULAVIO_NETWORK_TESTS=1 (downloads from addons.mozilla.org)'",
+    "test_keepassxc_browser (test_password_extensions.PasswordExtensionSmokeTest.test_keepassxc_browser) ... skipped 'set NULAVIO_NETWORK_TESTS=1 (downloads from addons.mozilla.org)'",
+    "test_proton_pass (test_password_extensions.PasswordExtensionSmokeTest.test_proton_pass) ... skipped 'set NULAVIO_NETWORK_TESTS=1 (downloads from addons.mozilla.org)'",
+    "test_05_choosing_proton_pass_installs_the_pinned_version_and_switching_back_keeps_it (test_passwords.PasswordsTest.test_05_choosing_proton_pass_installs_the_pinned_version_and_switching_back_keeps_it) ... skipped 'downloads Proton Pass from addons.mozilla.org'",
+    "test_run_temporary_deletes_the_profile_after_the_engine_exits (test_temporary.TemporaryFromTheLauncherTest.test_run_temporary_deletes_the_profile_after_the_engine_exits) ... skipped 'opens a visible window (NULAVIO_TEST_HEADFUL=1)'"
+  ],
+  "retained_logs": [
+    {
+      "path": "/home/caiobarbieri/.cache/nulavio-ux/ux3c-tbnzluyx/logs/a11y-probe-1.log",
+      "sha256": "b6146b42316ccbd55ed3849b589b2ed3079fec57df8b4d5ad94632c529b48950",
+      "result": "Original output retained; see outcomes above and failure_notes."
+    },
+    {
+      "path": "/home/caiobarbieri/.cache/nulavio-ux/ux3c-tbnzluyx/logs/a11y-probe-2.log",
+      "sha256": "8d222b994fdcbb1d2565a020e454fc4953c762f6d49142b6ea01e8506afc348d",
+      "result": "Original output retained; see outcomes above and failure_notes."
+    },
+    {
+      "path": "/home/caiobarbieri/.cache/nulavio-ux/ux3c-tbnzluyx/logs/active-diagnostic.log",
+      "sha256": "91bf8a98501fc466f5aa1770bb3f9728e727ba89539a47bae1199ecc4f649ce5",
+      "result": "Original output retained; see outcomes above and failure_notes."
+    },
+    {
+      "path": "/home/caiobarbieri/.cache/nulavio-ux/ux3c-tbnzluyx/logs/baseline-red-2.log",
+      "sha256": "0e445054fe4e3120879f17e73251f7ec5f0925025c64999bdd15aa91bfe34589",
+      "result": "Original output retained; see outcomes above and failure_notes."
+    },
+    {
+      "path": "/home/caiobarbieri/.cache/nulavio-ux/ux3c-tbnzluyx/logs/baseline-red-3.log",
+      "sha256": "2209105cfff96d7e8ce653ed7fc3540a6d8e8dc420940e0950d521b1db1df1ec",
+      "result": "Original output retained; see outcomes above and failure_notes."
+    },
+    {
+      "path": "/home/caiobarbieri/.cache/nulavio-ux/ux3c-tbnzluyx/logs/baseline-red-final.log",
+      "sha256": "f4c3fe2f3a0fef7db32c94fa47ed3bb5448cfaca6873cd1ac77e31c53b06f408",
+      "result": "Original output retained; see outcomes above and failure_notes."
+    },
+    {
+      "path": "/home/caiobarbieri/.cache/nulavio-ux/ux3c-tbnzluyx/logs/baseline-red.log",
+      "sha256": "ac271b06029fd157d83c4573ed41058130c7cad107fd6e778a99cc78d012cee9",
+      "result": "Original output retained; see outcomes above and failure_notes."
+    },
+    {
+      "path": "/home/caiobarbieri/.cache/nulavio-ux/ux3c-tbnzluyx/logs/build-attempt-1.log",
+      "sha256": "8407259bb03cf06432d94e97e7623368b61f4b8c4aeeba1cbb6aa33328e5a2de",
+      "result": "Original output retained; see outcomes above and failure_notes."
+    },
+    {
+      "path": "/home/caiobarbieri/.cache/nulavio-ux/ux3c-tbnzluyx/logs/build-attempt-2.log",
+      "sha256": "5d3f191d500b763f7b88bb6f3241ba3fc086c8e8089ec09393c53c19ec5e8c6c",
+      "result": "Original output retained; see outcomes above and failure_notes."
+    },
+    {
+      "path": "/home/caiobarbieri/.cache/nulavio-ux/ux3c-tbnzluyx/logs/contrast.log",
+      "sha256": "0b0f4a866d930ceb7bf2bbeb996219125f784448634d4b632ab409279d6746a4",
+      "result": "Original output retained; see outcomes above and failure_notes."
+    },
+    {
+      "path": "/home/caiobarbieri/.cache/nulavio-ux/ux3c-tbnzluyx/logs/current-targeted-en-US.log",
+      "sha256": "0bdf01f1ea61fdd78c625ae9cae9aa4d7fb7022543a88bc280319a11d2efd437",
+      "result": "Original output retained; see outcomes above and failure_notes."
+    },
+    {
+      "path": "/home/caiobarbieri/.cache/nulavio-ux/ux3c-tbnzluyx/logs/current-targeted-pt-BR.log",
+      "sha256": "deac1caf19898dcefb8e8eefb0c468e3f9c27ad495bcc57d49a5dab5525da609",
+      "result": "Original output retained; see outcomes above and failure_notes."
+    },
+    {
+      "path": "/home/caiobarbieri/.cache/nulavio-ux/ux3c-tbnzluyx/logs/docs-final.log",
+      "sha256": "509c1cb6a9e4709cf0d99c9d68838bebea7ef859c63cb7c09a5aae10ce06bf8f",
+      "result": "Original output retained; see outcomes above and failure_notes."
+    },
+    {
+      "path": "/home/caiobarbieri/.cache/nulavio-ux/ux3c-tbnzluyx/logs/final-engine.log",
+      "sha256": "128a17e56bd9d864def9e6c546ff100cea8e9baf524e319e6e3e84cda4600d54",
+      "result": "Original output retained; see outcomes above and failure_notes."
+    },
+    {
+      "path": "/home/caiobarbieri/.cache/nulavio-ux/ux3c-tbnzluyx/logs/focus-active-diagnostic-2.log",
+      "sha256": "403d72014da3d60d340a68f84775eb32d1323bb09a0bbe4fad4a7766543ff76d",
+      "result": "Original output retained; see outcomes above and failure_notes."
+    },
+    {
+      "path": "/home/caiobarbieri/.cache/nulavio-ux/ux3c-tbnzluyx/logs/icons-final.log",
+      "sha256": "ae26956363cf36a9a44037a9bf560f2a5fa7ca810c172765747ce85d991593d7",
+      "result": "Original output retained; see outcomes above and failure_notes."
+    },
+    {
+      "path": "/home/caiobarbieri/.cache/nulavio-ux/ux3c-tbnzluyx/logs/integration-attempt-1-FAIL.log",
+      "sha256": "34e31a78ce11395cccfea009707adfd6018c27b8b3993c8fe3ed68dc5602def9",
+      "result": "Original output retained; see outcomes above and failure_notes."
+    },
+    {
+      "path": "/home/caiobarbieri/.cache/nulavio-ux/ux3c-tbnzluyx/logs/integration-attempt-2.log",
+      "sha256": "c8990aa3fbef11edbef9915f5e4f798bbf3c89356aa77a9119c5b391ee57e58c",
+      "result": "Original output retained; see outcomes above and failure_notes."
+    },
+    {
+      "path": "/home/caiobarbieri/.cache/nulavio-ux/ux3c-tbnzluyx/logs/integration-repeat-engine.log",
+      "sha256": "92d034e5f53b5a07ad552d7ad99ba9761d4e220d8803d0094c02d6635a302479",
+      "result": "Original output retained; see outcomes above and failure_notes."
+    },
+    {
+      "path": "/home/caiobarbieri/.cache/nulavio-ux/ux3c-tbnzluyx/logs/keyboard-probe.log",
+      "sha256": "4ad5bd8f873fc5c736637c43ef3cd7a39f71021f0eff0eebc32e0a3eafd00d72",
+      "result": "Original output retained; see outcomes above and failure_notes."
+    },
+    {
+      "path": "/home/caiobarbieri/.cache/nulavio-ux/ux3c-tbnzluyx/logs/logo-final.log",
+      "sha256": "f12f4ec7c252a49908386812cead6f12d42d46c25c8a199506ea8db6db03d2e7",
+      "result": "Original output retained; see outcomes above and failure_notes."
+    },
+    {
+      "path": "/home/caiobarbieri/.cache/nulavio-ux/ux3c-tbnzluyx/logs/post-full-qa-attempt-1-FAIL.log",
+      "sha256": "c71cdc552375e8807410570e868adf4007fde7a0231539c2bd5f7911fdcf46e7",
+      "result": "Original output retained; see outcomes above and failure_notes."
+    },
+    {
+      "path": "/home/caiobarbieri/.cache/nulavio-ux/ux3c-tbnzluyx/logs/post-full-qa-attempt-2.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "result": "Original output retained; see outcomes above and failure_notes."
+    },
+    {
+      "path": "/home/caiobarbieri/.cache/nulavio-ux/ux3c-tbnzluyx/logs/private-diagnostic-final-en.log",
+      "sha256": "68e8006245b3f0947235c28557d47bdafaab4631e0d5638b152fb10764c0f4cf",
+      "result": "Original output retained; see outcomes above and failure_notes."
+    },
+    {
+      "path": "/home/caiobarbieri/.cache/nulavio-ux/ux3c-tbnzluyx/logs/private-diagnostic.log",
+      "sha256": "b7ac21158c087b396387aa6de5116155b9f5c7d0b737c568f139cc875ef84cd2",
+      "result": "Original output retained; see outcomes above and failure_notes."
+    },
+    {
+      "path": "/home/caiobarbieri/.cache/nulavio-ux/ux3c-tbnzluyx/logs/repeat-engine.log",
+      "sha256": "c125736aa8231c07972354a8619c69f927c5f050cd9ffad20ff5027898a7886c",
+      "result": "Original output retained; see outcomes above and failure_notes."
+    },
+    {
+      "path": "/home/caiobarbieri/.cache/nulavio-ux/ux3c-tbnzluyx/logs/ruff-check-1.log",
+      "sha256": "425ef6f7e3dfcb38baa1b09792758ed359fc8587ac0dc6b25088cb399269c265",
+      "result": "Original output retained; see outcomes above and failure_notes."
+    },
+    {
+      "path": "/home/caiobarbieri/.cache/nulavio-ux/ux3c-tbnzluyx/logs/ruff-final-check.log",
+      "sha256": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18",
+      "result": "Original output retained; see outcomes above and failure_notes."
+    },
+    {
+      "path": "/home/caiobarbieri/.cache/nulavio-ux/ux3c-tbnzluyx/logs/ruff-final-format.log",
+      "sha256": "92100405e0065b954fa416a1dd6d858c2a46e79ca278425917fcc710495dff8d",
+      "result": "Original output retained; see outcomes above and failure_notes."
+    },
+    {
+      "path": "/home/caiobarbieri/.cache/nulavio-ux/ux3c-tbnzluyx/logs/security-final.log",
+      "sha256": "4ad9e1d7f941a42a095559717c4e2e9d82ceb9a479157c77825f072ea4887c96",
+      "result": "Original output retained; see outcomes above and failure_notes."
+    },
+    {
+      "path": "/home/caiobarbieri/.cache/nulavio-ux/ux3c-tbnzluyx/logs/security-staged.log",
+      "sha256": "bd2d2cdef264fe72824818ad7997da01338f5ca4b0be15f1d3c18c8247ab354e",
+      "result": "Original output retained; see outcomes above and failure_notes."
+    },
+    {
+      "path": "/home/caiobarbieri/.cache/nulavio-ux/ux3c-tbnzluyx/logs/stale-map-red.log",
+      "sha256": "61f612a5e473bde4914f84cd22a03d37d1cc0e4ac00eda821abf9a9364509e76",
+      "result": "Original output retained; see outcomes above and failure_notes."
+    },
+    {
+      "path": "/home/caiobarbieri/.cache/nulavio-ux/ux3c-tbnzluyx/logs/targeted-1.log",
+      "sha256": "a1ad8de90ed0234146c6b80d4f98d8cb325eb4a1800058b0bdb98631213530a5",
+      "result": "Original output retained; see outcomes above and failure_notes."
+    },
+    {
+      "path": "/home/caiobarbieri/.cache/nulavio-ux/ux3c-tbnzluyx/logs/targeted-2.log",
+      "sha256": "5e34e319d1dc73c85db9ed63e500553096d680d0a3dda37fc3a774ebd50624d7",
+      "result": "Original output retained; see outcomes above and failure_notes."
+    },
+    {
+      "path": "/home/caiobarbieri/.cache/nulavio-ux/ux3c-tbnzluyx/logs/targeted-3.log",
+      "sha256": "4941010d719cfb9833072deaa960bdf88b7b8f88e78c7803d333a8953e20eb16",
+      "result": "Original output retained; see outcomes above and failure_notes."
+    },
+    {
+      "path": "/home/caiobarbieri/.cache/nulavio-ux/ux3c-tbnzluyx/logs/targeted-4.log",
+      "sha256": "ca9473ede5d4bdccd75e43833a1567625d361a70e0b0b2a20fa3aa7c7a8e76c8",
+      "result": "Original output retained; see outcomes above and failure_notes."
+    },
+    {
+      "path": "/home/caiobarbieri/.cache/nulavio-ux/ux3c-tbnzluyx/logs/targeted-5.log",
+      "sha256": "f1cf11cf970d0e6db6a56e2cbc581a3556c6662d917e66c0a70618d137c83228",
+      "result": "Original output retained; see outcomes above and failure_notes."
+    },
+    {
+      "path": "/home/caiobarbieri/.cache/nulavio-ux/ux3c-tbnzluyx/logs/targeted-6.log",
+      "sha256": "e5a1d600e46242df19a9d09b7cf6f68985397c408d7c6cfddceb92c13848f21a",
+      "result": "Original output retained; see outcomes above and failure_notes."
+    },
+    {
+      "path": "/home/caiobarbieri/.cache/nulavio-ux/ux3c-tbnzluyx/logs/targeted-final-en-2.log",
+      "sha256": "6c3adc2df4e967e9f75d9ee2f773f433a84e3222bd0b8b41940ad34f354bcb39",
+      "result": "Original output retained; see outcomes above and failure_notes."
+    },
+    {
+      "path": "/home/caiobarbieri/.cache/nulavio-ux/ux3c-tbnzluyx/logs/targeted-final-en.log",
+      "sha256": "9a5101a16c76ef805cf955f91fab26f9f3f19cd7db69407f1ff69c9f97f2eeed",
+      "result": "Original output retained; see outcomes above and failure_notes."
+    },
+    {
+      "path": "/home/caiobarbieri/.cache/nulavio-ux/ux3c-tbnzluyx/logs/targeted-final-pt.log",
+      "sha256": "2fd76d907b65f33b78d969167ea4b34d54ed73762e8f1d67181b299bcc028f27",
+      "result": "Original output retained; see outcomes above and failure_notes."
+    },
+    {
+      "path": "/home/caiobarbieri/.cache/nulavio-ux/ux3c-tbnzluyx/logs/theme-final.log",
+      "sha256": "86f737cf8983a617685c0573003070310558a377059f6f7fc4ba8e00cf1c77c0",
+      "result": "Original output retained; see outcomes above and failure_notes."
+    },
+    {
+      "path": "/home/caiobarbieri/.cache/nulavio-ux/ux3c-tbnzluyx/logs/tokens-final.log",
+      "sha256": "4564038424c964ca1704148f23d129a5893daebfe0017f9f1d967c1961c0bbd9",
+      "result": "Original output retained; see outcomes above and failure_notes."
+    },
+    {
+      "path": "/home/caiobarbieri/.cache/nulavio-ux/ux3c-tbnzluyx/logs/tokens.log",
+      "sha256": "4564038424c964ca1704148f23d129a5893daebfe0017f9f1d967c1961c0bbd9",
+      "result": "Original output retained; see outcomes above and failure_notes."
+    },
+    {
+      "path": "/home/caiobarbieri/.cache/nulavio-ux/ux3c-tbnzluyx/logs/ui-lint-final.log",
+      "sha256": "14c26c72f743eb5a9dca23442f0dbfc276763edc0352ff839acca3d925cf1235",
+      "result": "Original output retained; see outcomes above and failure_notes."
+    },
+    {
+      "path": "/home/caiobarbieri/.cache/nulavio-ux/ux3c-tbnzluyx/logs/ui-lint.log",
+      "sha256": "14c26c72f743eb5a9dca23442f0dbfc276763edc0352ff839acca3d925cf1235",
+      "result": "Original output retained; see outcomes above and failure_notes."
+    },
+    {
+      "path": "/home/caiobarbieri/.cache/nulavio-ux/ux3c-tbnzluyx/logs/unit-1.log",
+      "sha256": "6bd42bc4f5ed04f32b41f6c60442f322967d41854c2e3a3a4898af8b2d97890c",
+      "result": "Original output retained; see outcomes above and failure_notes."
+    },
+    {
+      "path": "/home/caiobarbieri/.cache/nulavio-ux/ux3c-tbnzluyx/logs/unit-final.log",
+      "sha256": "fb7982dd2b0ad8e1bbcf9bb35832a809a726f2d4bd5da15bdecb51a52fbaec19",
+      "result": "Original output retained; see outcomes above and failure_notes."
+    },
+    {
+      "path": "/home/caiobarbieri/.cache/nulavio-ux/ux3c-tbnzluyx/logs/vault-isolated-engine.log",
+      "sha256": "a23f71301ac0c5ab8f31ca7e0e410a93b60308cd19f4751d4c17cfde70867557",
+      "result": "Original output retained; see outcomes above and failure_notes."
+    },
+    {
+      "path": "/home/caiobarbieri/.cache/nulavio-ux/ux3c-tbnzluyx/logs/vault-isolated.log",
+      "sha256": "363682df232aa70bca7ecb9f345406b5b2a7e9c1066321f23811efc91f7939d6",
+      "result": "Original output retained; see outcomes above and failure_notes."
+    },
+    {
+      "path": "/home/caiobarbieri/.cache/nulavio-ux/ux3c-tbnzluyx/logs/venv.log",
+      "sha256": "18a77a8282b048441bb57e3c430b1ec126b5f0c53b892eedd62023afd34c313e",
+      "result": "Original output retained; see outcomes above and failure_notes."
+    }
+  ],
+  "failure_notes": [
+    "baseline-red-final: expected missing-badge failure on the untouched parent-copy build.",
+    "stale-map-red: deterministic ghost-badge regression on the first UX3C rebuild; corrected before final rebuild.",
+    "Initial harness iterations selected b.badge instead of the native badge child, assumed direct focus rather than native tab stops, and read accessibles before asynchronous creation/reframing. Corrected tests retain original security/pixel thresholds.",
+    "An extra HTTP-fixture resumability attempt did not retain partial data. Final tests prove real transfer and cancellation; no paused-partial-data runtime claim is made.",
+    "The first English last-private-window fixture could queue another completed-download warning tab while closing tab handles. Final test closes private windows through native UI, waits for real list cleanup, and tests a fresh private list plus a regular file.",
+    "Full integration attempt 1: real Vault create failure with generic inline error, then 3 dependent errors. Cause UNKNOWN. Isolated Vault 9/9 passed. No Vault code/assertions/90s timeout changed.",
+    "Optional severe capture attempt 1 asserted attention while the native panel suppressed it (flag 1). Final capture closes the panel normally, waits for NONE, then preserves severe appearance. No suppression flag was forced.",
+    "Extra build_theme.py --check was invalid (no such script) and is not a validation gate. Logo/icon generators produced no tracked byte changes."
+  ],
+  "first_ux3c_build_for_regression": {
+    "install": "/home/caiobarbieri/.cache/nulavio-ux/ux3c-tbnzluyx/rebuilt/nulavio",
+    "kind": "actual first UX3C incremental build, before detached-cache correction",
+    "browser_omni_sha256": "39aeedc8a5ede9c7176134cf5ad41c15bc1471b220c5bfb31ce3197f91954b50",
+    "omni_sha256": "ea97ff5a32bdd57e21750ab2d4a256bcf0446291ffcd6846c8d988e8a2448d9a",
+    "expected_red_test": "test_09_removal_while_indicator_detached_uses_current_list",
+    "result_log": "/home/caiobarbieri/.cache/nulavio-ux/ux3c-tbnzluyx/logs/stale-map-red.log"
+  },
+  "full_integration_attempt_2": {
+    "result": "FAIL",
+    "tests": 227,
+    "skips": 13,
+    "failures": 1,
+    "errors": 3,
+    "log": "/home/caiobarbieri/.cache/nulavio-ux/ux3c-tbnzluyx/logs/integration-attempt-2.log",
+    "committed_log": "docs/design/screenshots/ux3c/integration-attempt-2-FAIL.txt",
+    "sha256": "c8990aa3fbef11edbef9915f5e4f798bbf3c89356aa77a9119c5b391ee57e58c",
+    "cause": "UNKNOWN",
+    "vault_fix_claimed": false,
+    "all_9_ux3c_tests": "PASS",
+    "test_harness_sha256": "a127853493abd66654ebc8ed94e44e44995d159ec03e32fdd4dfa032caca697b"
+  },
+  "completed_utc": "2026-10-29T11:11:16.762085+00:00",
+  "no_more_full_retries_in_this_slice": true,
+  "final_package_and_reference_hashes_rechecked_after_both_full_runs": true
+}

@@ -31,6 +31,11 @@ const LABELS = {
   pt: "Arquivo de programa: abra só pela pasta, se confiar na origem",
 };
 
+const INDICATOR_LABELS = {
+  en: "Warning: downloads include program files. Check their origin before opening them from their folder.",
+  pt: "Aviso: há downloads de arquivos de programa. Confira a origem antes de abrir pela pasta.",
+};
+
 export const NulavioDownloads = {
   isProgram(download) {
     try {
@@ -40,6 +45,10 @@ export const NulavioDownloads = {
       console.error("Nulavio downloads", e);
       return false;
     }
+  },
+
+  indicatorLabel() {
+    return Services.locale.appLocaleAsBCP47.startsWith("pt") ? INDICATOR_LABELS.pt : INDICATOR_LABELS.en;
   },
 
   statusLabel() {

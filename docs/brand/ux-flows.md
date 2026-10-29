@@ -78,8 +78,19 @@ Address-bar security states: neutral site-info (HTTPS valid) · **"Not secure"**
 2. For executable or installer types (AppImage, `.sh`, `.run`, `.desktop`, `.deb`, `.rpm`, `.flatpakref`, archives containing them), the panel shows a warning with **Show in folder** and **Delete**. There is no "Open" button for them ([mockup](assets/mockups/download-warning.png)).
 3. Safe Browsing verdicts, when present, replace the generic text with the specific reason.
 
-- **Track B (implemented, Nulavio Shell):** when such a download completes, a Nulavio page opens next to it (in a private window for private downloads) with the file name, size and source, the warning, **Show in folder** (primary, focused) and **Delete**, and "Why am I seeing this?". When a verdict says the file is dangerous, the page turns critical: its own headline, the octagon icon in the critical colour, and **Delete file** as the primary, focused action, before Show in folder. There is no Open action. Firefox's downloads API reports every download as safe today, so the critical state shows only once a verdict reaches the API (no download reputation yet, [R15](../security/residual-risks.md)). The mockup's placement inside the engine's downloads panel needs engine UI changes and is a later step. Archives are not inspected.
+- **Track B (implemented, Nulavio Shell):** when such a download completes, a Nulavio page opens next to it (in a private window for private downloads) with the file name, size and source, the warning, **Show in folder** (primary, focused) and **Delete**, and "Why am I seeing this?". When a verdict says the file is dangerous, the page turns critical: its own headline, the octagon icon in the critical colour, and **Delete file** as the primary, focused action, before Show in folder. There is no Open action. Firefox's downloads API reports every download as safe today, so the critical state shows only once a verdict reaches the API (no download reputation yet, [R15](../security/residual-risks.md)). Patch 0007 also enforces Show in folder / no Open in the native panel and Library, with a program-type status line; native errors and stronger verdicts retain their own paths. Archives are not inspected.
 - **Track A today:** engine downloads panel; files saved privately; Safe Browsing on.
+
+**UX3C / D-UX18 (2026-10-29).** The native downloads button now adds a generic
+warning triangle while its public/private Downloads API list contains a program
+item, whether active, completed, canceled or failed. It is not a malware or
+reputation verdict. Panel acknowledgement does not remove it; removing/clearing
+the last eligible list item does. The last private-window cleanup cannot leave
+a ghost type warning in a fresh private window. Native progress and more severe
+attention keep their priority/appearance. The original localized button name
+and tooltip remain, with an additional honest type description in pt-BR/en-US.
+The panel/Library no-Open guards and safe actions are unchanged.
+[Lifecycle, current-build evidence and limits](../design/design-system.md#ux3c-native-downloads-type-warning-2026-10-29).
 
 ## F. Camera or microphone request
 

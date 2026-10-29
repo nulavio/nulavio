@@ -132,3 +132,25 @@ colours, light/dark, Proton/Nova, normal/hover/active: 108 real action states,
 text at least 4.5:1 and icons at least 3:1. Its original 1:1 failure is retained
 in the parent's release evidence. The 36 new token declarations preserve all
 220 previously expanded checks without changing their thresholds.
+
+
+## UX3C native downloads button
+
+The warning uses Gecko's native triangle, with an additional localized
+`aria-describedby` description and its original native name/shortcut tooltip.
+Other descriptions are preserved, and the owned node/reference are removed
+with the last qualifying list item. The accessible tree is queried after its
+asynchronous update; tests assert the actual name and full description in
+pt-BR/en-US. This does not certify spoken Orca output or an announcement on
+background state changes (no live region is added).
+
+Native toolbar keyboard navigation and Enter activation are tested through
+trusted key input; the focus ring belongs to `.toolbarbutton-badge-stack`,
+not the outer toolbarbutton. The real target measures 36 × 44 CSS px in the
+normal scene. Both themes measure the warning token against the toolbar at
+≥ 3:1; the existing 256 declared checks and thresholds remain unchanged.
+Native severe appearance is preserved. Reduced motion, Horizon off, an
+installed theme, the accessibility-theme preference and 638 px windows keep
+the warning visible and hit-testable. Real GTK forced colours/hardware scaling
+remain unverified; the [inventory](screenshots/ux3c/verification.json) separates
+those limits from the headless rendered/accessible-tree checks.

@@ -483,3 +483,96 @@ only the failed-wait diagnostic now includes inline error text. No production
 Vault code, time limit or state assertion changed. Both the failed run and the
 successful repeat remain hashed evidence. Publication/CI are post-commit gates,
 separate from this local verification snapshot.
+
+
+## UX3C: native downloads type warning (2026-10-29)
+
+D-UX18 adds the native warning triangle to the existing downloads button when
+its public/private **current Downloads API list** contains at least one program
+file. The filename-only extension policy stays identical to the Shell's
+`risky.js`; archives are not inspected. This is a type warning, not a reputation
+verdict, malware classification, critical state or verification claim (R15).
+
+The criterion is list membership, without an expiry or completion requirement:
+in-progress, completed, canceled, paused and failed program items qualify,
+including items Gecko restores into that list. Viewing/closing the panel does
+not dismiss the type warning. Removing the last eligible item, Clear Downloads
+for removable items, or clearing the private list at its last-window close
+clears the marker and supplemental accessible description. An active/paused
+item that Gecko keeps during Clear Downloads keeps the warning too. Deleting
+through the existing Shell warning removes both file and list item. Deleting a
+file externally leaves its list entry until the user removes it; the words
+refer to downloads, never assert that a complete file exists.
+
+Patch 0007 passes membership from the privacy-scoped `DownloadsData` to the
+native indicator view. That data owner stays linked to the real list while no
+indicator is attached. The indicator's own weak-map cache can retain removed
+objects during detachment; a deterministic regression keeps such an object
+alive, removes it while detached, adds a regular item and reconnects. Using
+that stale cache was reproduced as a ghost badge; using the current data
+owner clears it without changing Gecko's native caches or attention algorithm.
+
+The view composes a warning with native attention: none/success/info gain the
+triangle, warning remains warning, **severe remains severe** with its native
+icon and colour. No download's attention, error, verdict or progress is changed.
+Panel acknowledgement keeps its native effect on native attention; only the
+type warning persists. A small native CSS rule keeps the badge visible during
+start/finish notifications, including an overriding native severe badge.
+Progress and its animations keep their native implementation. Horizon uses the
+existing `downloads.attention.warning` token; installed themes, Horizon off and
+increased contrast retain native warning colours. No new token or threshold.
+
+The original localized button name, shortcut tooltip and descriptions are
+retained. A hidden, referenced description adds “Aviso: há downloads de arquivos
+de programa. Confira a origem antes de abrir pela pasta.” / “Warning: downloads
+include program files. Check their origin before opening them from their
+folder.” Other `aria-describedby` references survive activation and cleanup.
+The native panel still supplies the filename, state/error and safe actions.
+All original Open/Always Open guards, Show in folder and Delete remain intact.
+No new picker, parallel list, generic monkeypatch, telemetry or reputation API.
+
+[Before light](screenshots/ux3c/before-light.png),
+[after light](screenshots/ux3c/after-light.png),
+[before dark](screenshots/ux3c/before-dark.png),
+[after dark](screenshots/ux3c/after-dark.png),
+[active light](screenshots/ux3c/progress-light.png),
+[active dark](screenshots/ux3c/progress-dark.png),
+[native severe precedence](screenshots/ux3c/native-severe-priority.png),
+[narrow window](screenshots/ux3c/narrow-warning.png),
+[English](screenshots/ux3c/after-en-light.png).
+The [verification inventory](screenshots/ux3c/verification.json) identifies the
+exact base, package, native/Shell source matches, commands, retained failed
+attempts and limits. Before uses an untouched copy of the supplied UX3B package.
+After uses an actual incremental Track B rebuild from a task-owned source and
+object/toolchain copy; **no `dev_sync.py` rewrite** supplies engine hunks.
+The assembler was used read-only to compare packaged source entries.
+
+The render–critique pass inspected both themes and the active notification:
+the small native triangle is distinct, the original toolbar/control spacing
+stays intact, and no content or native security indicator is occluded. Native
+keyboard navigation reaches the button after any address-bar page actions;
+Enter opens the native panel and focus uses the native badge-stack outline.
+These main-window captures do not contain native popup-widget pixels. The
+fixture downloads contain inert text, never executed; explicit native
+attention-state inputs test precedence without inventing a reputation backend.
+Manual Orca, physical KDE/GTK forced colours, hardware scaling and frame times
+remain pending. Local implementation/testing does not close UX3 or constitute
+publication, remote CI, independent review or human approval.
+
+
+The first UX3C full integration attempt ran 227 tests (13 existing skips), with
+one Vault creation failure and three dependent errors. The inline diagnostic
+reported the protection step and “Algo deu errado. Nada foi alterado.” All nine
+UX3C tests passed in that run. The isolated nine-test Vault module then passed
+on the same package, without changes to its code, assertions or 90 s deadline.
+Cause remains **UNKNOWN**, consistent with the supplied prior symptom but not
+established as the same root cause. Neither this slice nor the repeat is a
+Vault fix. The [inventory](screenshots/ux3c/verification.json) retains failed
+attempts and records the bounded full-repeat result separately.
+
+The single bounded repeat also ran all 227 tests (13 existing skips) and failed at
+the same Vault create step, again with three dependent errors. The full
+integration gate is **BLOCKED**, even though the isolated Vault module and all
+nine UX3C tests in both locales pass. Both failed full logs are committed beside
+the inventory. No additional full-suite retry was used to obtain green, and no
+Vault/protection/pixel assertion, deadline or skip was changed.

@@ -11,6 +11,11 @@ unavailable, and the panel's status line says why. The file-type list lives
 in a module of the branding directory (NulavioDownloads.sys.mjs), kept equal
 to the Shell's by a test.
 
+UX3C: retain a generic native warning triangle while the privacy-scoped
+session list contains program items, independent of completion/attention
+acknowledgement. Native warning/severe and progress are preserved. Removal
+of the last eligible item clears the marker and supplemental description.
+
 Owner: Nulavio maintainers
 Upstream: not applicable (product policy).
 ---
@@ -107,3 +112,138 @@ Upstream: not applicable (product policy).
          }
  
          let file = new FileUtils.File(this.download.target.path);
+--- a/browser/components/downloads/DownloadsCommon.sys.mjs
++++ b/browser/components/downloads/DownloadsCommon.sys.mjs
+@@ -39,6 +39,7 @@
+   DownloadsTaskbar:
+     "moz-src:///browser/components/downloads/DownloadsTaskbar.sys.mjs",
+   NetUtil: "resource://gre/modules/NetUtil.sys.mjs",
++  NulavioDownloads: "resource:///modules/nulavio/NulavioDownloads.sys.mjs",
+   PlacesUtils: "resource://gre/modules/PlacesUtils.sys.mjs",
+   PrivateBrowsingUtils: "resource://gre/modules/PrivateBrowsingUtils.sys.mjs",
+ });
+@@ -1475,6 +1476,17 @@
+   _updateView(aView) {
+     aView.hasDownloads = this._hasDownloads;
+     aView.percentComplete = this._percentComplete;
++    // UX3C: a type warning for retained session-list items, in this privacy scope.
++    // Completion, cancellation and failure do not dismiss it; removal does.
++    // The indicator's WeakMap can retain old keys while it has no views (e.g.
++    // after the last private window closes). DownloadsData stays linked to the
++    // real list, so removals made while no indicator is attached are respected.
++    let downloads = this._isPrivate
++      ? lazy.PrivateDownloadsData._downloads
++      : lazy.DownloadsData._downloads;
++    aView.hasPrograms = downloads.some(download =>
++      lazy.NulavioDownloads.isProgram(download)
++    );
+     aView.attention =
+       this.attentionSuppressed !== DownloadsCommon.SUPPRESS_NONE
+         ? DownloadsCommon.ATTENTION_NONE
+--- a/browser/components/downloads/content/indicator.js
++++ b/browser/components/downloads/content/indicator.js
+@@ -24,6 +24,10 @@
+
+ "use strict";
+
++ChromeUtils.defineESModuleGetters(this, {
++  NulavioDownloads: "resource:///modules/nulavio/NulavioDownloads.sys.mjs",
++});
++
+ // DownloadsButton
+
+ /**
+@@ -293,6 +297,7 @@
+     // Reset the view properties, so that a neutral indicator is displayed if we
+     // are visible only temporarily as an anchor.
+     this.percentComplete = 0;
++    this.hasPrograms = false;
+     this.attention = DownloadsCommon.ATTENTION_NONE;
+   },
+
+@@ -532,26 +537,67 @@
+     }
+   },
+
++  // UX3C is persistent list state, separate from Gecko's dismissible attention.
++  set hasPrograms(aValue) {
++    this._hasPrograms = aValue;
++    if (this._operational) {
++      this._refreshAttention();
++    }
++  },
++  _hasPrograms: false,
++
+   _refreshAttention() {
+     // Check if the downloads button is in the menu panel, to determine which
+     // button needs to get a badge.
+     let widgetGroup = CustomizableUI.getWidget("downloads-button");
+     let inMenu = widgetGroup.areaType == CustomizableUI.TYPE_PANEL;
+
++    let attention = this._attention;
++    if (
++      this._hasPrograms &&
++      attention != DownloadsCommon.ATTENTION_WARNING &&
++      attention != DownloadsCommon.ATTENTION_SEVERE
++    ) {
++      attention = DownloadsCommon.ATTENTION_WARNING;
++    }
++    this.indicator.toggleAttribute("nulavio-program", this._hasPrograms);
++    // Append a description; keep the native name, tooltip and any other description.
++    const id = "nulavio-downloads-program-description";
++    let description = document.getElementById(id);
++    let refs = (this.indicator.getAttribute("aria-describedby") || "")
++      .split(/\s+/).filter(ref => ref && ref != id);
++    if (this._hasPrograms) {
++      if (!description) {
++        description = document.createXULElement("description");
++        description.id = id;
++        description.hidden = true;
++        document.documentElement.appendChild(description);
++      }
++      description.textContent = NulavioDownloads.indicatorLabel();
++      refs.push(id);
++    } else {
++      description?.remove();
++    }
++    if (refs.length) {
++      this.indicator.setAttribute("aria-describedby", refs.join(" "));
++    } else {
++      this.indicator.removeAttribute("aria-describedby");
++    }
++
+     // For arrow-Styled indicator, suppress success attention if we have
+     // progress in toolbar
+     let suppressAttention =
+       !inMenu &&
+-      this._attention == DownloadsCommon.ATTENTION_SUCCESS &&
++      attention == DownloadsCommon.ATTENTION_SUCCESS &&
+       this._percentComplete >= 0;
+
+     if (
+       suppressAttention ||
+-      this._attention == DownloadsCommon.ATTENTION_NONE
++      attention == DownloadsCommon.ATTENTION_NONE
+     ) {
+       this.indicator.removeAttribute("attention");
+     } else {
+-      this.indicator.setAttribute("attention", this._attention);
++      this.indicator.setAttribute("attention", attention);
+     }
+   },
+   _attention: DownloadsCommon.ATTENTION_NONE,
+--- a/browser/themes/shared/downloads/indicator.css
++++ b/browser/themes/shared/downloads/indicator.css
+@@ -120,6 +120,12 @@
+   display: none;
+ }
+
++/* UX3C: a persistent type warning must not disappear during native progress
++   notifications. Keep a more severe native badge visible too. */
++#downloads-button[nulavio-program][attention] > .toolbarbutton-badge-stack > .toolbarbutton-badge {
++  display: block;
++}
++
+ /*** Download notifications (transitions between downloading states) ***/
+
+ #downloads-indicator-start-image {

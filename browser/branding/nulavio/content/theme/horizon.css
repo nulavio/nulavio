@@ -66,6 +66,11 @@
       --link-color-hover: var(--nv-color-accent-default);
       --link-color-active: var(--nv-color-accent-default);
 
+      /* UX3C: native warning triangle; severe retains its own native colour. */
+      #downloads-button[attention="warning"] {
+        --icon-color-warning: var(--nv-color-downloads-attention-warning);
+      }
+
       /* Tab strip */
       --toolbox-background-color: var(--nv-color-chrome-toolbox);
       --toolbox-background-color-inactive: var(--nv-color-chrome-toolbox);

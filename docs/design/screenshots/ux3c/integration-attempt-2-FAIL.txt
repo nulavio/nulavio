@@ -1,0 +1,280 @@
+test_claude_code (test_ai_agents_real.RealAgentsTest.test_claude_code) ... skipped 'opt-in: NULAVIO_AGENT_TESTS=1 and a Gecko engine'
+test_codex_cli (test_ai_agents_real.RealAgentsTest.test_codex_cli) ... skipped 'opt-in: NULAVIO_AGENT_TESTS=1 and a Gecko engine'
+test_01_agent_completes_a_task (test_ai_bridge.AiBridgeTest.test_01_agent_completes_a_task) ... ok
+test_02_restricted_agent_is_limited (test_ai_bridge.AiBridgeTest.test_02_restricted_agent_is_limited) ... ok
+test_03_local_network_needs_permission (test_ai_bridge.AiBridgeTest.test_03_local_network_needs_permission) ... ok
+test_04_site_list (test_ai_bridge.AiBridgeTest.test_04_site_list) ... ok
+test_05_revocation_stops_the_next_call_and_closes_the_workspace (test_ai_bridge.AiBridgeTest.test_05_revocation_stops_the_next_call_and_closes_the_workspace) ... ok
+test_06_emergency_stop (test_ai_bridge.AiBridgeTest.test_06_emergency_stop) ... ok
+test_07_agents_do_not_share_sessions (test_ai_bridge.AiBridgeTest.test_07_agents_do_not_share_sessions) ... ok
+test_08_engine_protections_stay_on (test_ai_bridge.AiBridgeTest.test_08_engine_protections_stay_on) ... ok
+test_09_audit_keeps_actions_not_content (test_ai_bridge.AiBridgeTest.test_09_audit_keeps_actions_not_content) ... ok
+test_10_modern_protocol (test_ai_bridge.AiBridgeTest.test_10_modern_protocol) ... ok
+test_11_grants_persist_and_expire (test_ai_bridge.AiBridgeTest.test_11_grants_persist_and_expire) ... ok
+test_12_page_text_cannot_change_permissions (test_ai_bridge.AiBridgeTest.test_12_page_text_cannot_change_permissions) ... ok
+test_13_disposable_workspace_is_deleted (test_ai_bridge.AiBridgeTest.test_13_disposable_workspace_is_deleted) ... ok
+test_14_downloads_follow_the_files_permission (test_ai_bridge.AiBridgeTest.test_14_downloads_follow_the_files_permission) ... ok
+test_15_page_dialogs_wait_for_the_agent (test_ai_bridge.AiBridgeTest.test_15_page_dialogs_wait_for_the_agent) ... ok
+test_16_uploads_only_from_the_uploads_folder (test_ai_bridge.AiBridgeTest.test_16_uploads_only_from_the_uploads_folder) ... ok
+test_17_authorised_profile_and_routes (test_ai_bridge.AiBridgeTest.test_17_authorised_profile_and_routes) ... ok
+test_18_profiles_the_agent_may_not_use (test_ai_bridge.AiBridgeTest.test_18_profiles_the_agent_may_not_use) ... ok
+test_19_engine_ends_with_a_killed_bridge (test_ai_bridge.AiBridgeTest.test_19_engine_ends_with_a_killed_bridge) ... ok
+test_20_raw_automation_needs_debugging_bypasses_policy_and_still_ends_with_stop (test_ai_bridge.AiBridgeTest.test_20_raw_automation_needs_debugging_bypasses_policy_and_still_ends_with_stop) ... ok
+test_21_the_ai_workspace_window_says_who_drives_it_and_when_nothing_is_checked (test_ai_bridge.AiBridgeTest.test_21_the_ai_workspace_window_says_who_drives_it_and_when_nothing_is_checked) ... ok
+test_22_an_agent_in_the_users_profile_is_named_as_such (test_ai_bridge.AiBridgeTest.test_22_an_agent_in_the_users_profile_is_named_as_such) ... ok
+test_23_farol_emergency_stop_is_global_and_closes_raw_workspaces (test_ai_bridge.AiBridgeTest.test_23_farol_emergency_stop_is_global_and_closes_raw_workspaces) ... ok
+test_01_connect_an_agent_from_settings (test_ai_ui.AiUiTest.test_01_connect_an_agent_from_settings) ... ok
+test_02_full_control_needs_the_warning (test_ai_ui.AiUiTest.test_02_full_control_needs_the_warning) ... ok
+test_03_permission_request_appears_in_the_window_and_answers_the_bridge (test_ai_ui.AiUiTest.test_03_permission_request_appears_in_the_window_and_answers_the_bridge) ... ok
+test_04_pause_revoke_stop_and_permissions_from_settings (test_ai_ui.AiUiTest.test_04_pause_revoke_stop_and_permissions_from_settings) ... ok
+test_05_activity_shows_actions_not_content (test_ai_ui.AiUiTest.test_05_activity_shows_actions_not_content) ... ok
+test_06_an_ai_workspace_never_shows_or_answers_requests (test_ai_ui.AiUiTest.test_06_an_ai_workspace_never_shows_or_answers_requests) ... ok
+test_07_connect_wizard_runs_the_agents_own_cli (test_ai_ui.AiUiTest.test_07_connect_wizard_runs_the_agents_own_cli) ... ok
+test_08_profiles_and_routes_for_an_agent (test_ai_ui.AiUiTest.test_08_profiles_and_routes_for_an_agent) ... ok
+test_09_raw_automation_is_a_separate_switch_with_its_own_warning (test_ai_ui.AiUiTest.test_09_raw_automation_is_a_separate_switch_with_its_own_warning) ... ok
+test_10_the_assistant_appears_as_an_agent_at_once (test_ai_ui.AiUiTest.test_10_the_assistant_appears_as_an_agent_at_once)
+AI-11: its client has a name, and the list refreshes after it is configured. ... ok
+test_01_settings_store_the_key_in_the_keyring_only (test_assistant_ui.AssistantUiTest.test_01_settings_store_the_key_in_the_keyring_only) ... ok
+test_02_page_text_goes_only_for_the_included_tab (test_assistant_ui.AssistantUiTest.test_02_page_text_goes_only_for_the_included_tab) ... ok
+test_03_panel_answers_as_text_and_announces_only_start_and_end (test_assistant_ui.AssistantUiTest.test_03_panel_answers_as_text_and_announces_only_start_and_end) ... ok
+test_04_tasks_obey_the_assistant_agent_policy (test_assistant_ui.AssistantUiTest.test_04_tasks_obey_the_assistant_agent_policy) ... ok
+test_05_the_side_panel_is_registered (test_assistant_ui.AssistantUiTest.test_05_the_side_panel_is_registered) ... ok
+test_06_the_side_panel_includes_the_page_next_to_it_for_one_message (test_assistant_ui.AssistantUiTest.test_06_the_side_panel_includes_the_page_next_to_it_for_one_message) ... ok
+test_07_switching_tabs_or_leaving_the_page_takes_it_out_and_says_so (test_assistant_ui.AssistantUiTest.test_07_switching_tabs_or_leaving_the_page_takes_it_out_and_says_so) ... ok
+test_07b_a_pending_include_cannot_attach_to_the_next_message (test_assistant_ui.AssistantUiTest.test_07b_a_pending_include_cannot_attach_to_the_next_message) ... ok
+test_08_nothing_in_private_windows (test_assistant_ui.AssistantUiTest.test_08_nothing_in_private_windows) ... ok
+test_09_the_emergency_stop_and_a_pause_silence_the_assistant (test_assistant_ui.AssistantUiTest.test_09_the_emergency_stop_and_a_pause_silence_the_assistant) ... ok
+test_10_a_task_never_claims_more_than_it_knows (test_assistant_ui.AssistantUiTest.test_10_a_task_never_claims_more_than_it_knows) ... ok
+test_11_a_permission_request_opens_in_front (test_assistant_ui.AssistantUiTest.test_11_a_permission_request_opens_in_front) ... ok
+test_01_set_up_creates_keys_behind_the_screen_lock (test_companion_emulator.CompanionOnEmulatorTest.test_01_set_up_creates_keys_behind_the_screen_lock) ... skipped 'NULAVIO_EMULATOR=1, a device on adb, the debug APK, gocryptfs and libsodium'
+test_02_pairing_shows_the_same_digits_on_both_sides (test_companion_emulator.CompanionOnEmulatorTest.test_02_pairing_shows_the_same_digits_on_both_sides) ... skipped 'NULAVIO_EMULATOR=1, a device on adb, the debug APK, gocryptfs and libsodium'
+test_03_unlock_with_the_phone_mounts_the_profile (test_companion_emulator.CompanionOnEmulatorTest.test_03_unlock_with_the_phone_mounts_the_profile) ... skipped 'NULAVIO_EMULATOR=1, a device on adb, the debug APK, gocryptfs and libsodium'
+test_04_an_answered_request_is_refused_again (test_companion_emulator.CompanionOnEmulatorTest.test_04_an_answered_request_is_refused_again) ... skipped 'NULAVIO_EMULATOR=1, a device on adb, the debug APK, gocryptfs and libsodium'
+test_05_not_now_sends_nothing (test_companion_emulator.CompanionOnEmulatorTest.test_05_not_now_sends_nothing) ... skipped 'NULAVIO_EMULATOR=1, a device on adb, the debug APK, gocryptfs and libsodium'
+test_gallery_matrix_and_baselines (test_component_gallery.ComponentGalleryTest.test_gallery_matrix_and_baselines) ... ok
+test_narrow_font_scaling_and_contrast_modes (test_component_gallery.ComponentGalleryTest.test_narrow_font_scaling_and_contrast_modes) ... ok
+test_01_started_inside_bubblewrap (test_confined.ConfinedRunTest.test_01_started_inside_bubblewrap) ... ok
+test_02_the_browser_sees_only_its_profile_and_downloads (test_confined.ConfinedRunTest.test_02_the_browser_sees_only_its_profile_and_downloads) ... ok
+test_03_the_engine_sandbox_is_unchanged (test_confined.ConfinedRunTest.test_03_the_engine_sandbox_is_unchanged) ... ok
+test_04_an_open_profile_is_not_reopened_confined (test_confined.ConfinedRunTest.test_04_an_open_profile_is_not_reopened_confined) ... ok
+test_01_nothing_on_the_bus (test_connect.ConnectTest.test_01_nothing_on_the_bus) ... ok
+test_02_services_found_with_evidence (test_connect.ConnectTest.test_02_services_found_with_evidence) ... ok
+test_03_make_default_and_restore (test_connect.ConnectTest.test_03_make_default_and_restore) ... ok
+test_04_settings_page_shows_real_states (test_connect.ConnectTest.test_04_settings_page_shows_real_states) ... ok
+test_05_p1_and_p2_states_from_the_tools (test_connect.ConnectTest.test_05_p1_and_p2_states_from_the_tools) ... ok
+test_06_send_one_link_and_krunner_on_request (test_connect.ConnectTest.test_06_send_one_link_and_krunner_on_request) ... ok
+test_99_real_desktop_settings_untouched (test_connect.ConnectTest.test_99_real_desktop_settings_untouched) ... ok
+test_01_new_tab_asks_once_and_keeping_the_system_resolver_is_explicit (test_dns.DnsChoiceTest.test_01_new_tab_asks_once_and_keeping_the_system_resolver_is_explicit) ... ok
+test_02_encrypted_only_uses_the_chosen_resolver_and_fails_closed (test_dns.DnsChoiceTest.test_02_encrypted_only_uses_the_chosen_resolver_and_fails_closed) ... ok
+test_03_back_to_the_system_resolver_sends_nothing_to_it (test_dns.DnsChoiceTest.test_03_back_to_the_system_resolver_sends_nothing_to_it) ... ok
+test_04_bad_resolver_addresses_are_refused (test_dns.DnsChoiceTest.test_04_bad_resolver_addresses_are_refused) ... ok
+test_05_when_dns_is_already_encrypted_keep_keeps_it_and_the_downgrade_says_so (test_dns.DnsChoiceTest.test_05_when_dns_is_already_encrypted_keep_keeps_it_and_the_downgrade_says_so) ... ok
+test_01_completed_program_render_and_native_names (test_downloads_indicator.DownloadsIndicatorTest.test_01_completed_program_render_and_native_names) ... ok
+test_02_multiple_items_last_removal_and_clear (test_downloads_indicator.DownloadsIndicatorTest.test_02_multiple_items_last_removal_and_clear) ... ok
+test_03_failed_item_retains_type_until_removed (test_downloads_indicator.DownloadsIndicatorTest.test_03_failed_item_retains_type_until_removed) ... ok
+test_04_native_attention_priority_and_suppression (test_downloads_indicator.DownloadsIndicatorTest.test_04_native_attention_priority_and_suppression) ... ok
+test_05_private_and_public_lists_do_not_leak (test_downloads_indicator.DownloadsIndicatorTest.test_05_private_and_public_lists_do_not_leak) ... ok
+test_06_native_keyboard_and_view_reconnect (test_downloads_indicator.DownloadsIndicatorTest.test_06_native_keyboard_and_view_reconnect) ... ok
+test_07_transfer_progress_cancel_and_animation (test_downloads_indicator.DownloadsIndicatorTest.test_07_transfer_progress_cancel_and_animation) ... ok
+test_08_theme_motion_and_narrow_window_keep_warning (test_downloads_indicator.DownloadsIndicatorTest.test_08_theme_motion_and_narrow_window_keep_warning) ... ok
+test_09_removal_while_indicator_detached_uses_current_list (test_downloads_indicator.DownloadsIndicatorTest.test_09_removal_while_indicator_detached_uses_current_list) ... ok
+test_01_start_page_renders_with_brand_and_facts (test_engine_slice.EngineSliceTest.test_01_start_page_renders_with_brand_and_facts) ... ok
+test_02_baseline_prefs_are_applied_and_exist_in_engine (test_engine_slice.EngineSliceTest.test_02_baseline_prefs_are_applied_and_exist_in_engine) ... ok
+test_03_tracking_protection_strict_is_effective (test_engine_slice.EngineSliceTest.test_03_tracking_protection_strict_is_effective) ... ok
+test_04_content_processes_are_sandboxed (test_engine_slice.EngineSliceTest.test_04_content_processes_are_sandboxed) ... ok
+test_05_navigation_and_tabs (test_engine_slice.EngineSliceTest.test_05_navigation_and_tabs) ... ok
+test_06_https_only_upgrades_and_exception_is_revocable (test_engine_slice.EngineSliceTest.test_06_https_only_upgrades_and_exception_is_revocable) ... ok
+test_07_download_lands_privately (test_engine_slice.EngineSliceTest.test_07_download_lands_privately) ... ok
+test_08_ublock_blocks_and_is_reversible (test_engine_slice.EngineSliceTest.test_08_ublock_blocks_and_is_reversible) ... ok
+test_09_profile_files_are_private (test_engine_slice.EngineSliceTest.test_09_profile_files_are_private) ... ok
+test_10_guard_refuses_test_profile (test_engine_slice.EngineSliceTest.test_10_guard_refuses_test_profile) ... ok
+test_11_record_environment (test_engine_slice.EngineSliceTest.test_11_record_environment) ... ok
+test_12_safe_browsing_has_api_key (test_engine_slice.EngineSliceTest.test_12_safe_browsing_has_api_key) ... ok
+test_13_nulavio_build_identity_and_distribution (test_engine_slice.EngineSliceTest.test_13_nulavio_build_identity_and_distribution) ... ok
+test_14_safe_browsing_blocks_google_test_phishing_page (test_engine_slice.EngineSliceTest.test_14_safe_browsing_blocks_google_test_phishing_page) ... skipped 'set NULAVIO_NETWORK_TESTS=1 (contacts Google Safe Browsing)'
+test_15_nulavio_build_speaks_portuguese_with_its_own_brand (test_engine_slice.EngineSliceTest.test_15_nulavio_build_speaks_portuguese_with_its_own_brand) ... ok
+test_01_first_start_records_and_reports_nothing (test_guard.GuardTest.test_01_first_start_records_and_reports_nothing) ... ok
+test_02_changes_made_while_closed_are_reported_and_undone_or_kept (test_guard.GuardTest.test_02_changes_made_while_closed_are_reported_and_undone_or_kept) ... ok
+test_03_changes_made_in_the_browser_are_not_reported (test_guard.GuardTest.test_03_changes_made_in_the_browser_are_not_reported) ... ok
+test_high_contrast_preference_replaces_horizon_colours (test_horizon.HorizonHighContrastTest.test_high_contrast_preference_replaces_horizon_colours) ... ok
+test_01_theme_loaded_and_enabled_by_default (test_horizon.HorizonTest.test_01_theme_loaded_and_enabled_by_default) ... ok
+test_02_light_colours_and_rendered_contrast (test_horizon.HorizonTest.test_02_light_colours_and_rendered_contrast) ... ok
+test_03_dark_colours_and_rendered_contrast (test_horizon.HorizonTest.test_03_dark_colours_and_rendered_contrast) ... ok
+test_04_route_mark_only_on_the_selected_tab (test_horizon.HorizonTest.test_04_route_mark_only_on_the_selected_tab) ... ok
+test_05_densities_keep_their_sizes (test_horizon.HorizonTest.test_05_densities_keep_their_sizes) ... ok
+test_06_controls_meet_the_minimum_target_size (test_horizon.HorizonTest.test_06_controls_meet_the_minimum_target_size) ... ok
+test_07_security_ui_is_untouched (test_horizon.HorizonTest.test_07_security_ui_is_untouched) ... ok
+test_08_keyboard_focus_is_visible_in_the_address_bar (test_horizon.HorizonTest.test_08_keyboard_focus_is_visible_in_the_address_bar) ... ok
+test_09_pref_off_restores_the_upstream_look (test_horizon.HorizonTest.test_09_pref_off_restores_the_upstream_look) ... ok
+test_10_user_theme_keeps_its_colours (test_horizon.HorizonTest.test_10_user_theme_keeps_its_colours) ... ok
+test_12_reduced_motion_disables_the_mark_animation (test_horizon.HorizonTest.test_12_reduced_motion_disables_the_mark_animation) ... ok
+test_13_vertical_tabs_get_a_vertical_mark (test_horizon.HorizonTest.test_13_vertical_tabs_get_a_vertical_mark) ... ok
+test_14_address_bar_results_selected_row_is_readable_and_visible (test_horizon.HorizonTest.test_14_address_bar_results_selected_row_is_readable_and_visible) ... ok
+test_15_the_nulavio_symbol_follows_the_colour_scheme (test_horizon.HorizonTest.test_15_the_nulavio_symbol_follows_the_colour_scheme) ... ok
+test_01_native_default_skips_reserved_including_exhaustion (test_horizon_groups.HorizonGroupsTest.test_01_native_default_skips_reserved_including_exhaustion) ... ok
+test_02_create_edit_native_keyboard_and_pointer (test_horizon_groups.HorizonGroupsTest.test_02_create_edit_native_keyboard_and_pointer) ... ok
+test_03_legacy_current_is_visible_named_checked_and_retained (test_horizon_groups.HorizonGroupsTest.test_03_legacy_current_is_visible_named_checked_and_retained) ... ok
+test_04_groups_both_themes_orientations_and_collapsed (test_horizon_groups.HorizonGroupsTest.test_04_groups_both_themes_orientations_and_collapsed) ... ok
+test_05_guards_restore_native_choices_and_default (test_horizon_groups.HorizonGroupsTest.test_05_guards_restore_native_choices_and_default) ... ok
+test_06_lifecycle_restores_getter (test_horizon_groups.HorizonGroupsTest.test_06_lifecycle_restores_getter) ... ok
+test_07_trust_indicators_band_and_motion_preserved (test_horizon_groups.HorizonGroupsTest.test_07_trust_indicators_band_and_motion_preserved) ... ok
+test_08_native_label_keyboard_collapse_and_focus (test_horizon_groups.HorizonGroupsTest.test_08_native_label_keyboard_collapse_and_focus) ... ok
+test_09_rendered_palette_contrast (test_horizon_groups.HorizonGroupsTest.test_09_rendered_palette_contrast) ... ok
+test_10_native_group_list_uses_the_same_palette (test_horizon_groups.HorizonGroupsTest.test_10_native_group_list_uses_the_same_palette) ... ok
+test_11_native_urlbar_group_actions_keep_text_and_icon_contrast (test_horizon_groups.HorizonGroupsTest.test_11_native_urlbar_group_actions_keep_text_and_icon_contrast) ... ok
+test_01_ai_prefs_are_build_defaults_not_user_values (test_mozilla_features.MozillaFeaturesTest.test_01_ai_prefs_are_build_defaults_not_user_values) ... ok
+test_02_no_chatbot_in_the_sidebar_launcher (test_mozilla_features.MozillaFeaturesTest.test_02_no_chatbot_in_the_sidebar_launcher) ... ok
+test_03_no_chatbot_in_the_page_context_menu_or_over_a_selection (test_mozilla_features.MozillaFeaturesTest.test_03_no_chatbot_in_the_page_context_menu_or_over_a_selection) ... ok
+test_04_no_account_button_or_sync_promo (test_mozilla_features.MozillaFeaturesTest.test_04_no_account_button_or_sync_promo) ... ok
+test_05_engine_home_page_has_no_mozilla_tiles (test_mozilla_features.MozillaFeaturesTest.test_05_engine_home_page_has_no_mozilla_tiles) ... ok
+test_bitwarden (test_password_extensions.PasswordExtensionSmokeTest.test_bitwarden) ... skipped 'set NULAVIO_NETWORK_TESTS=1 (downloads from addons.mozilla.org)'
+test_keepassxc_browser (test_password_extensions.PasswordExtensionSmokeTest.test_keepassxc_browser) ... skipped 'set NULAVIO_NETWORK_TESTS=1 (downloads from addons.mozilla.org)'
+test_proton_pass (test_password_extensions.PasswordExtensionSmokeTest.test_proton_pass) ... skipped 'set NULAVIO_NETWORK_TESTS=1 (downloads from addons.mozilla.org)'
+test_01_lookalike_rules (test_passwords.PasswordsTest.test_01_lookalike_rules) ... ok
+test_02_lookalike_site_shows_the_warning_and_continue_is_remembered (test_passwords.PasswordsTest.test_02_lookalike_site_shows_the_warning_and_continue_is_remembered) ... ok
+test_03_the_real_site_is_never_warned (test_passwords.PasswordsTest.test_03_the_real_site_is_never_warned) ... ok
+test_04_provider_chooser_shows_real_state (test_passwords.PasswordsTest.test_04_provider_chooser_shows_real_state) ... ok
+test_05_choosing_proton_pass_installs_the_pinned_version_and_switching_back_keeps_it (test_passwords.PasswordsTest.test_05_choosing_proton_pass_installs_the_pinned_version_and_switching_back_keeps_it) ... skipped 'downloads Proton Pass from addons.mozilla.org'
+test_06_confirmed_sites_are_listed_in_settings_and_removing_one_brings_the_warning_back (test_passwords.PasswordsTest.test_06_confirmed_sites_are_listed_in_settings_and_removing_one_brings_the_warning_back) ... ok
+test_01_baseline_prefs_are_in_effect_and_tracking_protection_is_strict (test_privacy.PrivacyTest.test_01_baseline_prefs_are_in_effect_and_tracking_protection_is_strict) ... ok
+test_02_tracker_blocked_logged_and_shown_in_the_site_panel (test_privacy.PrivacyTest.test_02_tracker_blocked_logged_and_shown_in_the_site_panel) ... ok
+test_03_per_site_switch_is_listed_in_settings_and_reversible (test_privacy.PrivacyTest.test_03_per_site_switch_is_listed_in_settings_and_reversible) ... ok
+test_04_fingerprinting_surface_measured_in_strict_and_standard (test_privacy.PrivacyTest.test_04_fingerprinting_surface_measured_in_strict_and_standard) ... ok
+test_a_new_group_starts_with_the_new_palette_without_a_migration_notice (test_profile_colors.ProfileColorsTest.test_a_new_group_starts_with_the_new_palette_without_a_migration_notice) ... ok
+test_malformed_or_newer_preferences_are_not_rewritten (test_profile_colors.ProfileColorsTest.test_malformed_or_newer_preferences_are_not_rewritten) ... ok
+test_migrates_legacy_colours_and_keeps_later_choices_after_restart (test_profile_colors.ProfileColorsTest.test_migrates_legacy_colours_and_keeps_later_choices_after_restart) ... ok
+test_retry_finishes_legacy_keys_after_the_notice_was_recorded (test_profile_colors.ProfileColorsTest.test_retry_finishes_legacy_keys_after_the_notice_was_recorded) ... ok
+test_settings_explains_the_change_and_focuses_the_real_colour_picker (test_profile_colors.ProfileColorsTest.test_settings_explains_the_change_and_focuses_the_real_colour_picker) ... ok
+test_01_selector_in_the_toolbar_with_shortcut (test_profiles.ProfilesTest.test_01_selector_in_the_toolbar_with_shortcut) ... ok
+test_02_create_from_template (test_profiles.ProfilesTest.test_02_create_from_template) ... ok
+test_03_validation (test_profiles.ProfilesTest.test_03_validation) ... ok
+test_04_update (test_profiles.ProfilesTest.test_04_update) ... ok
+test_05_switch_isolates_and_never_duplicates (test_profiles.ProfilesTest.test_05_switch_isolates_and_never_duplicates) ... ok
+test_06_current_profile_is_not_deleted_here (test_profiles.ProfilesTest.test_06_current_profile_is_not_deleted_here) ... ok
+test_07_popup_switches_with_one_click (test_profiles.ProfilesTest.test_07_popup_switches_with_one_click) ... ok
+test_08_settings_page_edits_and_deletes_with_confirmation (test_profiles.ProfilesTest.test_08_settings_page_edits_and_deletes_with_confirmation) ... ok
+test_09_toolbar_follows_a_rename (test_profiles.ProfilesTest.test_09_toolbar_follows_a_rename) ... ok
+test_10_delete_after_close (test_profiles.ProfilesTest.test_10_delete_after_close) ... ok
+test_11_sensitive_sites_profile_clears_on_close (test_profiles.ProfilesTest.test_11_sensitive_sites_profile_clears_on_close)
+The "Sensitive sites" template (docs/security/phase5-spikes.md): its own profile, cleared when it closes. ... ok
+test_01_decisions (test_routing.RoutingTest.test_01_decisions) ... ok
+test_02_rule_validation_and_command_lines (test_routing.RoutingTest.test_02_rule_validation_and_command_lines) ... ok
+test_03_rules_are_validated_shared_and_replaceable (test_routing.RoutingTest.test_03_rules_are_validated_shared_and_replaceable) ... ok
+test_04_link_opens_in_the_rule_profile_and_nowhere_else (test_routing.RoutingTest.test_04_link_opens_in_the_rule_profile_and_nowhere_else) ... ok
+test_05_ask_first_loads_nothing_until_the_user_chooses (test_routing.RoutingTest.test_05_ask_first_loads_nothing_until_the_user_chooses) ... ok
+test_06_explicit_and_unsupported_command_lines_are_not_routed (test_routing.RoutingTest.test_06_explicit_and_unsupported_command_lines_are_not_routed) ... ok
+test_07_routing_off_opens_links_where_they_arrive (test_routing.RoutingTest.test_07_routing_off_opens_links_where_they_arrive) ... ok
+test_08_a_missing_profile_never_falls_back_silently (test_routing.RoutingTest.test_08_a_missing_profile_never_falls_back_silently) ... ok
+test_09_a_link_that_starts_the_browser_waits_for_the_rules (test_routing.RoutingTest.test_09_a_link_that_starts_the_browser_waits_for_the_rules)
+Cold start: the receiving profile is not running; the link arrives with it. ... ok
+test_10_rules_editor (test_routing.RoutingTest.test_10_rules_editor) ... ok
+test_11_typed_address_opens_in_the_rule_profile (test_routing.RoutingTest.test_11_typed_address_opens_in_the_rule_profile) ... ok
+test_12_typed_address_can_ask_first (test_routing.RoutingTest.test_12_typed_address_can_ask_first) ... ok
+test_13_never_routed_typed_navigations (test_routing.RoutingTest.test_13_never_routed_typed_navigations) ... ok
+test_14_link_menu_opens_the_link_in_the_chosen_profile (test_routing.RoutingTest.test_14_link_menu_opens_the_link_in_the_chosen_profile) ... ok
+test_15_in_page_routing_is_off_by_default (test_routing.RoutingTest.test_15_in_page_routing_is_off_by_default) ... ok
+test_16_a_clicked_link_opens_in_the_rule_profile_and_the_page_stays (test_routing.RoutingTest.test_16_a_clicked_link_opens_in_the_rule_profile_and_the_page_stays) ... ok
+test_17_a_new_tab_link_is_routed_and_its_empty_tab_closes (test_routing.RoutingTest.test_17_a_new_tab_link_is_routed_and_its_empty_tab_closes) ... ok
+test_18_navigations_that_are_never_routed_load_here (test_routing.RoutingTest.test_18_navigations_that_are_never_routed_load_here) ... ok
+test_19_one_click_moves_one_navigation (test_routing.RoutingTest.test_19_one_click_moves_one_navigation) ... ok
+test_20_private_windows_never_route (test_routing.RoutingTest.test_20_private_windows_never_route) ... ok
+test_21_an_ask_rule_asks_and_loads_nothing (test_routing.RoutingTest.test_21_an_ask_rule_asks_and_loads_nothing) ... ok
+test_22_settings_switch (test_routing.RoutingTest.test_22_settings_switch) ... ok
+test_01_seed_prefs (test_search.SearchPrivacyTest.test_01_seed_prefs) ... ok
+test_02_typing_and_focus_send_nothing (test_search.SearchPrivacyTest.test_02_typing_and_focus_send_nothing) ... ok
+test_03_aliases_send_nothing_while_typing (test_search.SearchPrivacyTest.test_03_aliases_send_nothing_while_typing) ... ok
+test_04_first_run_defaults_and_providers (test_search.SearchPrivacyTest.test_04_first_run_defaults_and_providers) ... ok
+test_05_consent_is_per_provider (test_search.SearchPrivacyTest.test_05_consent_is_per_provider)
+Positive control: a local engine gets typed text only after opting in, and only it. ... ok
+test_06_alias_search_goes_straight_to_its_engine (test_search.SearchPrivacyTest.test_06_alias_search_goes_straight_to_its_engine) ... ok
+test_07_private_default_is_independent (test_search.SearchPrivacyTest.test_07_private_default_is_independent) ... ok
+test_08_validation (test_search.SearchPrivacyTest.test_08_validation) ... ok
+test_09_searxng_kagi_add_and_remove (test_search.SearchPrivacyTest.test_09_searxng_kagi_add_and_remove) ... ok
+test_10_migration_runs_once_and_keeps_a_choice (test_search.SearchPrivacyTest.test_10_migration_runs_once_and_keeps_a_choice) ... ok
+test_11_upstream_switch_is_consent_for_the_default_only (test_search.SearchPrivacyTest.test_11_upstream_switch_is_consent_for_the_default_only) ... ok
+test_12_settings_page_adds_and_removes_through_the_ui (test_search.SearchPrivacyTest.test_12_settings_page_adds_and_removes_through_the_ui) ... ok
+test_01_shell_is_active (test_shell.ShellTest.test_01_shell_is_active) ... ok
+test_02_new_tab_is_nulavio_with_live_status (test_shell.ShellTest.test_02_new_tab_is_nulavio_with_live_status) ... ok
+test_03_executable_download_opens_warning_without_open (test_shell.ShellTest.test_03_executable_download_opens_warning_without_open) ... ok
+test_04_regular_download_does_not_warn (test_shell.ShellTest.test_04_regular_download_does_not_warn) ... ok
+test_05_warning_page_handles_unknown_download (test_shell.ShellTest.test_05_warning_page_handles_unknown_download) ... ok
+test_06_private_download_warns_in_a_private_window (test_shell.ShellTest.test_06_private_download_warns_in_a_private_window) ... ok
+test_focus_contrast_in_native_panels (test_sidebar_focus.SidebarFocusTest.test_focus_contrast_in_native_panels) ... ok
+test_01_new_temporary_window_from_the_selector_is_deleted_when_it_closes (test_temporary.TemporaryFromTheBrowserTest.test_01_new_temporary_window_from_the_selector_is_deleted_when_it_closes) ... ok
+test_02_inside_a_temporary_instance (test_temporary.TemporaryFromTheBrowserTest.test_02_inside_a_temporary_instance) ... ok
+test_03_settings_offers_a_temporary_window (test_temporary.TemporaryFromTheBrowserTest.test_03_settings_offers_a_temporary_window) ... ok
+test_dry_run_prepares_a_temporary_profile_and_leaves_nothing (test_temporary.TemporaryFromTheLauncherTest.test_dry_run_prepares_a_temporary_profile_and_leaves_nothing) ... ok
+test_run_temporary_deletes_the_profile_after_the_engine_exits (test_temporary.TemporaryFromTheLauncherTest.test_run_temporary_deletes_the_profile_after_the_engine_exits) ... skipped 'opens a visible window (NULAVIO_TEST_HEADFUL=1)'
+test_profile_data_is_unreadable_when_locked (test_vault_profiles.EncryptedLauncherProfileTest.test_profile_data_is_unreadable_when_locked) ... ok
+test_routing_to_a_locked_profile_asks_to_unlock_instead_of_starting_it (test_vault_profiles.LockedGroupProfileTest.test_routing_to_a_locked_profile_asks_to_unlock_instead_of_starting_it) ... ok
+test_selector_shows_locked_switching_refuses_and_delete_drops_the_keys (test_vault_profiles.LockedGroupProfileTest.test_selector_shows_locked_switching_refuses_and_delete_drops_the_keys) ... ok
+test_01_create_a_protected_profile_in_three_decisions (test_vault_ui.VaultUiTest.test_01_create_a_protected_profile_in_three_decisions) ... FAIL
+test_02_unlock_page_wrong_then_right_password_opens_the_profile_and_relocks (test_vault_ui.VaultUiTest.test_02_unlock_page_wrong_then_right_password_opens_the_profile_and_relocks) ... ERROR
+test_03_computer_login_unavailable_offers_the_password (test_vault_ui.VaultUiTest.test_03_computer_login_unavailable_offers_the_password) ... ok
+test_04_only_the_recovery_code_left (test_vault_ui.VaultUiTest.test_04_only_the_recovery_code_left) ... ok
+test_05_recovery_required_and_not_locked_states (test_vault_ui.VaultUiTest.test_05_recovery_required_and_not_locked_states) ... ok
+test_06_tools_missing (test_vault_ui.VaultUiTest.test_06_tools_missing) ... ERROR
+test_07_selector_and_settings_lead_to_the_unlock_page (test_vault_ui.VaultUiTest.test_07_selector_and_settings_lead_to_the_unlock_page) ... ERROR
+test_08_connect_a_phone_with_the_six_digits (test_vault_ui.VaultUiTest.test_08_connect_a_phone_with_the_six_digits) ... ok
+test_09_unlock_with_the_phone_opens_the_profile (test_vault_ui.VaultUiTest.test_09_unlock_with_the_phone_opens_the_profile) ... ok
+test_real_unlocked_profile_is_named_protected_and_current_lock_is_not_invented (test_window_band.ProtectedWindowBandTest.test_real_unlocked_profile_is_named_protected_and_current_lock_is_not_invented) ... ok
+test_01_identity_is_above_native_controls_and_cannot_be_hidden (test_window_band.WindowBandTest.test_01_identity_is_above_native_controls_and_cannot_be_hidden) ... ok
+test_02_only_a_selected_top_level_shell_principal_names_the_header (test_window_band.WindowBandTest.test_02_only_a_selected_top_level_shell_principal_names_the_header) ... ok
+test_03_teardown_restart_and_new_windows (test_window_band.WindowBandTest.test_03_teardown_restart_and_new_windows) ... ok
+test_04_themes_orientation_density_narrow_scaling_and_fullscreen (test_window_band.WindowBandTest.test_04_themes_orientation_density_narrow_scaling_and_fullscreen) ... ok
+test_05_guard_count_survives_dismissal_and_private_windows (test_window_band.WindowBandTest.test_05_guard_count_survives_dismissal_and_private_windows) ... ok
+test_06_customization_reset_keeps_native_order_and_safety_targets (test_window_band.WindowBandTest.test_06_customization_reset_keeps_native_order_and_safety_targets) ... ok
+test_07_page_fullscreen_keeps_a_flow_safety_line_and_native_exit_warning (test_window_band.WindowBandTest.test_07_page_fullscreen_keeps_a_flow_safety_line_and_native_exit_warning) ... ok
+test_08_cosmetic_preferences_contrast_keyboard_and_real_profile_identity (test_window_band.WindowBandTest.test_08_cosmetic_preferences_contrast_keyboard_and_real_profile_identity) ... ok
+test_09_profile_selector_is_reached_by_keyboard_and_opens_the_real_popup (test_window_band.WindowBandTest.test_09_profile_selector_is_reached_by_keyboard_and_opens_the_real_popup) ... ok
+test_09_theme_and_forced_colors_keep_the_safety_surface (test_window_band.WindowBandTest.test_09_theme_and_forced_colors_keep_the_safety_surface) ... ok
+test_10_authoritative_agent_and_raw_latches_compose_with_retained_guard_findings (test_window_band.WindowBandTest.test_10_authoritative_agent_and_raw_latches_compose_with_retained_guard_findings) ... ok
+
+======================================================================
+ERROR: test_02_unlock_page_wrong_then_right_password_opens_the_profile_and_relocks (test_vault_ui.VaultUiTest.test_02_unlock_page_wrong_then_right_password_opens_the_profile_and_relocks)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/caiobarbieri/.t3/worktrees/2026-10-24-voc-o-tech-lead-principal-c5c1b438/t3-f8a4ba0f/tests/integration/test_vault_ui.py", line 280, in test_02_unlock_page_wrong_then_right_password_opens_the_profile_and_relocks
+    profile_id = self.created_id
+                 ^^^^^^^^^^^^^^^
+AttributeError: 'VaultUiTest' object has no attribute 'created_id'
+
+======================================================================
+ERROR: test_06_tools_missing (test_vault_ui.VaultUiTest.test_06_tools_missing)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/caiobarbieri/.t3/worktrees/2026-10-24-voc-o-tech-lead-principal-c5c1b438/t3-f8a4ba0f/tests/integration/test_vault_ui.py", line 390, in test_06_tools_missing
+    self.open_page(f"vault/unlock.html?p={self.created_id}")
+                                          ^^^^^^^^^^^^^^^
+AttributeError: 'VaultUiTest' object has no attribute 'created_id'
+
+======================================================================
+ERROR: test_07_selector_and_settings_lead_to_the_unlock_page (test_vault_ui.VaultUiTest.test_07_selector_and_settings_lead_to_the_unlock_page)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/caiobarbieri/.t3/worktrees/2026-10-24-voc-o-tech-lead-principal-c5c1b438/t3-f8a4ba0f/tests/integration/test_vault_ui.py", line 397, in test_07_selector_and_settings_lead_to_the_unlock_page
+    locked = next(p for p in self.call("return (await P.list()).profiles;") if p["name"] == "Cofre UI")
+StopIteration
+
+======================================================================
+FAIL: test_01_create_a_protected_profile_in_three_decisions (test_vault_ui.VaultUiTest.test_01_create_a_protected_profile_in_three_decisions)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/caiobarbieri/.t3/worktrees/2026-10-24-voc-o-tech-lead-principal-c5c1b438/t3-f8a4ba0f/tests/integration/test_vault_ui.py", line 257, in test_01_create_a_protected_profile_in_three_decisions
+    self.wait_state("recovery", "step", timeout=90)
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/caiobarbieri/.t3/worktrees/2026-10-24-voc-o-tech-lead-principal-c5c1b438/t3-f8a4ba0f/tests/integration/test_vault_ui.py", line 131, in wait_state
+    self.fail(
+    ~~~~~~~~~^
+        f"{attribute} is {self.state(attribute)!r}, expected {expected!r}; "
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        f"status: {self.status_text()}; inline errors: {errors}"
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+AssertionError: step is 'protection', expected 'recovery'; status: ; inline errors: ['Algo deu errado. Nada foi alterado.', '']
+
+----------------------------------------------------------------------
+Ran 227 tests in 797.402s
+
+FAILED (failures=1, errors=3, skipped=13)

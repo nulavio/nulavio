@@ -215,6 +215,21 @@ UX3A's separate [publication CI](https://github.com/caiolombello/nulavio/actions
 passed all six jobs, and the parent's additional local engine opt-in run passed
 15/15 including live phishing blocking; its immutable release evidence is retained.
 
+**UX3C — native downloads type badge (local implementation, 2026-10-29).**
+On base `957a1bbe0693cc5ba4950b123686ec5d7201712d`, D-UX18 uses the native
+warning triangle for program entries in the real privacy-scoped Downloads API
+list. Membership persists across completion/cancel/error and panel
+acknowledgement, and clears on last-item removal/list cleanup; native severe,
+progress and all original patch-0007 guards remain intact. A detached-view
+regression prevents stale indicator weak-map keys from creating a ghost badge.
+[Implementation and lifecycle](../design/design-system.md#ux3c-native-downloads-type-warning-2026-10-29),
+[actual rebuilt-package evidence and retained failed attempts](../design/screenshots/ux3c/verification.json).
+This slice stops at a local commit; its complete-integration gate is blocked
+by two Vault creation failures (cause UNKNOWN), retained in the inventory.
+Integration/publication/CI belong to the
+parent; presets/onboarding, sidebar curation, Shell/assistant flow redesigns and
+later UX3 work remain open. No D-UX decision is reopened.
+
 **UX4 — Shell pages**
 - **Settings.** Two panes, with search, scope labels and inline status.
 - **New tab.** "Você está em …".

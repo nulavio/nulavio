@@ -1,0 +1,88 @@
+{
+  "version": "159.0",
+  "buildID": "20261029102948",
+  "locale": "pt-BR",
+  "attention_suppression_before_panel_close": 1,
+  "severe": {
+    "program": true,
+    "attention": "severe",
+    "progress": true,
+    "percent": 3,
+    "description": "Aviso: h\u00e1 downloads de arquivos de programa. Confira a origem antes de abrir pela pasta.",
+    "refs": "nulavio-downloads-program-description",
+    "name": "Downloads",
+    "accessibleDescription": "Aviso: h\u00e1 downloads de arquivos de programa. Confira a origem antes de abrir pela pasta.",
+    "label": "Downloads",
+    "tooltip": "dynamic-shortcut-tooltip",
+    "badge": {
+      "display": "block",
+      "image": "url(\"chrome://browser/skin/notification-fill-12.svg\")",
+      "fill": "rgb(255, 132, 138)",
+      "opacity": "1",
+      "animation": "none"
+    },
+    "bg": "rgb(11, 22, 35)",
+    "width": 30,
+    "height": 44,
+    "focus": false,
+    "outline": "solid",
+    "outlineWidth": "1px",
+    "hit": true
+  },
+  "progress": [
+    {
+      "dark": 0,
+      "program": true,
+      "attention": "warning",
+      "progress": true,
+      "percent": 3,
+      "description": "Aviso: h\u00e1 downloads de arquivos de programa. Confira a origem antes de abrir pela pasta.",
+      "refs": "nulavio-downloads-program-description",
+      "name": "Downloads",
+      "accessibleDescription": "Aviso: h\u00e1 downloads de arquivos de programa. Confira a origem antes de abrir pela pasta.",
+      "label": "Downloads",
+      "tooltip": "dynamic-shortcut-tooltip",
+      "badge": {
+        "display": "block",
+        "image": "url(\"chrome://global/skin/icons/warning-fill-12.svg\")",
+        "fill": "rgb(138, 90, 16)",
+        "opacity": "1",
+        "animation": "none"
+      },
+      "bg": "rgb(241, 247, 245)",
+      "width": 36,
+      "height": 44,
+      "focus": false,
+      "outline": "solid",
+      "outlineWidth": "1px",
+      "hit": true
+    },
+    {
+      "dark": 1,
+      "program": true,
+      "attention": "warning",
+      "progress": true,
+      "percent": 3,
+      "description": "Aviso: h\u00e1 downloads de arquivos de programa. Confira a origem antes de abrir pela pasta.",
+      "refs": "nulavio-downloads-program-description",
+      "name": "Downloads",
+      "accessibleDescription": "Aviso: h\u00e1 downloads de arquivos de programa. Confira a origem antes de abrir pela pasta.",
+      "label": "Downloads",
+      "tooltip": "dynamic-shortcut-tooltip",
+      "badge": {
+        "display": "block",
+        "image": "url(\"chrome://global/skin/icons/warning-fill-12.svg\")",
+        "fill": "rgb(231, 174, 97)",
+        "opacity": "1",
+        "animation": "none"
+      },
+      "bg": "rgb(11, 22, 35)",
+      "width": 36,
+      "height": 44,
+      "focus": false,
+      "outline": "solid",
+      "outlineWidth": "1px",
+      "hit": true
+    }
+  ]
+}
