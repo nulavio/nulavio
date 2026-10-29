@@ -100,7 +100,7 @@ class NulavioRoutingClass {
 
   async #share(pref) {
     // The engine copies tracked prefs to the group store; every profile sees them.
-    await lazy.SelectableProfileService.maybeSetupDataStore();
+    await lazy.NulavioProfiles.ensureStore();
     await lazy.SelectableProfileService.trackPref(pref);
   }
 

@@ -114,6 +114,7 @@ class NulavioProfilesClass {
   #avatarCache = new Map();
   #temporary = null;
   #migratingColors = null;
+  #storeSetup = null;
 
   get #service() {
     return lazy.SelectableProfileService;
@@ -141,6 +142,26 @@ class NulavioProfilesClass {
     if (!available) {
       fail(reason);
     }
+  }
+
+  // Gecko shares one init promise between normal reads and first-store setup.
+  // A normal init in the middle of setup sees an empty database and resets it.
+  // Finish earlier reads first, then hold new readers until setup completes.
+  // Shared by all Shell writers, including routing preferences.
+  ensureStore() {
+    this.#requireAvailable();
+    if (!this.#storeSetup) {
+      const setup = (async () => {
+        await this.#service.init();
+        await this.#service.maybeSetupDataStore();
+      })().finally(() => {
+        if (this.#storeSetup === setup) {
+          this.#storeSetup = null;
+        }
+      });
+      this.#storeSetup = setup;
+    }
+    return this.#storeSetup;
   }
 
   // -- colours (shared across the group) ---------------------------------
@@ -348,7 +369,9 @@ class NulavioProfilesClass {
       return { ...availability, profiles: [] };
     }
     const service = this.#service;
-    if (!service.initialized) {
+    if (this.#storeSetup) {
+      await this.#storeSetup;
+    } else if (!service.initialized) {
       // Idempotent; the Shell can start before the engine has opened the group store.
       await service.init().catch(e => console.error("Nulavio Profiles: profile service", e));
     }
@@ -372,7 +395,7 @@ class NulavioProfilesClass {
 
   async #profile(id) {
     this.#requireAvailable();
-    await this.#service.maybeSetupDataStore();
+    await this.ensureStore();
     const profile = await this.#service.getProfile(Number(id));
     if (!profile) {
       fail("not-found");
@@ -402,7 +425,7 @@ class NulavioProfilesClass {
     color = checkColor(color ?? template?.color ?? COLORS[0]);
     const service = this.#service;
     const newGroup = !service.currentProfile;
-    await service.maybeSetupDataStore();
+    await this.ensureStore();
     if (newGroup && !Services.prefs.prefHasUserValue(PREF_COLORS) && this.#colorMigration().version === 0) {
       // This group has never used the legacy palette; do not describe a migration that did not happen.
       Services.prefs.setStringPref(PREF_COLOR_MIGRATION, JSON.stringify({ version: 2, mint: [] }));
@@ -495,7 +518,7 @@ class NulavioProfilesClass {
 
   async openManager() {
     this.#requireAvailable();
-    await this.#service.maybeSetupDataStore();
+    await this.ensureStore();
     this.#window().toOpenWindowByType("about:profilemanager", "about:profilemanager", "chrome,resizable,toolbar,centerscreen");
   }
 
@@ -504,7 +527,7 @@ class NulavioProfilesClass {
     if (page !== "edit" && page !== "delete") {
       fail("unknown-page");
     }
-    await this.#service.maybeSetupDataStore();
+    await this.ensureStore();
     this.#window().openTrustedLinkIn(page === "edit" ? "about:editprofile" : "about:deleteprofile", "tab");
   }
 
