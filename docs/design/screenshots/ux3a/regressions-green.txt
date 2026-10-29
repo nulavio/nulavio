@@ -1,0 +1,7 @@
+test_22_an_agent_in_the_users_profile_is_named_as_such (test_ai_bridge.AiBridgeTest.test_22_an_agent_in_the_users_profile_is_named_as_such) ... ok
+test_09_profile_selector_is_reached_by_keyboard_and_opens_the_real_popup (test_window_band.WindowBandTest.test_09_profile_selector_is_reached_by_keyboard_and_opens_the_real_popup) ... ok
+
+----------------------------------------------------------------------
+Ran 2 tests in 10.610s
+
+OK

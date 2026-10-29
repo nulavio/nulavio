@@ -27,6 +27,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
 import harness
+from test_window_band import BAND_PROBE, assert_band
 
 from nulavio_launcher import temporary
 
@@ -186,6 +187,39 @@ class TemporaryFromTheBrowserTest(unittest.TestCase):
             )
             self.assertTrue(harness.wait_until(lambda: "nada aqui é guardado" in bar(), timeout=20), bar())
             self.assertIn("Apagado quando você fechar", bar())
+            assert_band(self, m.chrome(f"return {BAND_PROBE};"))
+            for dark in (0, 1):
+                m.chrome("Services.prefs.setIntPref('ui.systemUsesDarkTheme', arguments[0]);", [dark])
+                time.sleep(0.25)
+                state = m.chrome(f"return {BAND_PROBE};")
+                assert_band(self, state)
+                self.assertIn("apagado ao fechar", state["text"])
+                self.assertTrue(any(c["border"] == "dashed" for c in state["cues"]))
+                m.set_context("chrome")
+                try:
+                    (self.shots / f"band-{'dark' if dark else 'light'}.png").write_bytes(m.screenshot_png())
+                finally:
+                    m.set_context("content")
+
+            before = set(m.window_handles())
+            m.chrome("OpenBrowserWindow({private: true});")
+            self.assertTrue(harness.wait_until(lambda: set(m.window_handles()) - before, 15))
+            private = (set(m.window_handles()) - before).pop()
+            m.switch_to(private)
+            self.assertTrue(
+                harness.wait_until(lambda: m.chrome("return !!document.querySelector('#nulavio-band .nv-band-row');"), 15)
+            )
+            state = m.chrome(f"return {BAND_PROBE};")
+            assert_band(self, state)
+            self.assertIn("apagado ao fechar", state["text"])
+            self.assertIn("Janela privativa", state["text"])
+            self.assertTrue(any(c["border"] == "dashed" for c in state["cues"]))
+            self.assertTrue(any(c["border"] == "dotted" for c in state["cues"]))
+            m.chrome("window.fullScreen = true;")
+            time.sleep(0.4)
+            assert_band(self, m.chrome(f"return {BAND_PROBE};"))
+            m.chrome("window.fullScreen = false; window.close();")
+            m.switch_to(next(iter(before)))
 
             m.navigate(self.shell_url_of(m) + "profiles/popup.html")
             self.assertTrue(harness.wait_until(lambda: self.ready(m), timeout=15))

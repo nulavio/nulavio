@@ -1,0 +1,8 @@
+test_21_the_ai_workspace_window_says_who_drives_it_and_when_nothing_is_checked (test_ai_bridge.AiBridgeTest.test_21_the_ai_workspace_window_says_who_drives_it_and_when_nothing_is_checked) ... ok
+test_22_an_agent_in_the_users_profile_is_named_as_such (test_ai_bridge.AiBridgeTest.test_22_an_agent_in_the_users_profile_is_named_as_such) ... ok
+test_23_farol_emergency_stop_is_global_and_closes_raw_workspaces (test_ai_bridge.AiBridgeTest.test_23_farol_emergency_stop_is_global_and_closes_raw_workspaces) ... ok
+
+----------------------------------------------------------------------
+Ran 3 tests in 45.224s
+
+OK

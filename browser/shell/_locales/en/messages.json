@@ -933,5 +933,31 @@
   "galleryPermissionRequestDescription": { "message": "This example illustrates a high-impact permission request. No real permission is requested or granted." },
   "galleryKeepRestricted": { "message": "Keep restricted" },
   "galleryAllowFullControl": { "message": "Allow full control" },
-  "gallerySafeChoiceFirst": { "message": "Safe choice stays first and primary. Security cues are opaque, fixed and never animated." }
+  "gallerySafeChoiceFirst": { "message": "Safe choice stays first and primary. Security cues are opaque, fixed and never animated." },
+
+  "bandLabel": {"message": "Profile and window safety"},
+  "bandProfileUnavailable": {"message": "Profile identity unavailable"},
+  "bandProtected": {"message": "⌑ Protected · unlocked"},
+  "bandUnprotected": {"message": "◇ Unprotected"},
+  "bandProtectionUnknown": {"message": "? Protection unknown"},
+  "bandSystemPage": {"message": "Nulavio · $SURFACE$ · system page", "placeholders": {"surface": {"content": "$1"}}},
+  "bandSurfaceUnlock": {"message": "Unlock"},
+  "bandSurfacePhone": {"message": "Phone unlock"},
+  "bandSurfaceGuard": {"message": "Review changes"},
+  "bandSurfacePermission": {"message": "Agent permission"},
+  "bandSurfaceRouting": {"message": "Profile routing"},
+  "bandSurfaceDownload": {"message": "Download warning"},
+  "bandSurfacePassword": {"message": "Look-alike site warning"},
+
+  "bandTemporary": {"message": "◷ Temporary · deleted on close"},
+  "bandPrivate": {"message": "◈ Private window · no browsing history · assistant off"},
+  "bandLevelUnknown": {"message": "unknown"},
+  "bandAgentWorkspace": {"message": "▤ AI Workspace · $AGENT$ · Level: $LEVEL$", "placeholders": {"agent": {"content": "$1"}, "level": {"content": "$2"}}},
+  "bandAgentProfile": {"message": "▤ $AGENT$ in your profile $PROFILE$ · Level: $LEVEL$", "placeholders": {"agent": {"content": "$1"}, "profile": {"content": "$2"}, "level": {"content": "$3"}}},
+  "bandRaw": {"message": "⯃ Raw automation · Nulavio does not check or log actions"},
+  "bandGuard": {"message": "⚠ Guard · $COUNT$ changes to review", "placeholders": {"count": {"content": "$1"}}},
+  "bandPauseAgent": {"message": "Ⅱ Pause agent $AGENT$", "placeholders": {"agent": {"content": "$1"}}},
+  "bandStopAll": {"message": "■ Stop all agents and assistant"},
+  "bandAgentUnknown": {"message": "? Agent status unavailable · warning retained"},
+  "bandStopFailed": {"message": "⯃ Stop failed · review AI settings"}
 }

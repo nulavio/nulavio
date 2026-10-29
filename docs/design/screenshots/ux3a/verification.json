@@ -1,0 +1,461 @@
+{
+  "scope": "UX3A band and window safety only; local implementation and headless evidence, not a rebuilt release or CI approval",
+  "base": "cf548dfb19868c319f8164c6ba469b5e473fbeee",
+  "branch": "farol-identity-band-safety-states-1",
+  "environment": {
+    "os": "Fedora Linux 44, headless",
+    "python": "3.14.8",
+    "kernel": "7.2.11-200.fc44.x86_64",
+    "headful": false
+  },
+  "engine": {
+    "version": "159.0",
+    "runtime_build_id": "20261028184647",
+    "package_source_stamp": "5add844c26613d7e4d84c799d6e23cf987b1240d",
+    "application_copy": "/home/caiobarbieri/.cache/nulavio-ux/ux3a-a4c92297-k6skwe3_/nulavio",
+    "binary_sha256": "049b4fbcb8653b579ef810198a6384ed3cc97c34500320394e81ee00131c7186",
+    "browser_omni_sha256": "6d387863b87ac2849db4b77a145c23bb83145c9d325030cce803f4f467943e78",
+    "original_source_evidence": {
+      "base": "cf548dfb19868c319f8164c6ba469b5e473fbeee",
+      "source": "/home/caiobarbieri/.cache/nulavio-ux/ux2-reviewed-fuyss0t9/nulavio",
+      "sha256": {
+        "nulavio": "049b4fbcb8653b579ef810198a6384ed3cc97c34500320394e81ee00131c7186",
+        "browser/omni.ja": "84cb3b2c1976d5dbd16a754762be2c715d88c9d1124be26eee1144aecc8a6be6",
+        "application.ini": "953be018011d801f4421f694ed4870d71e70d4a9abb13c47461e36467a3619d5"
+      }
+    },
+    "parent_install_preserved": {
+      "nulavio": true,
+      "browser/omni.ja": true,
+      "application.ini": true
+    },
+    "packaged_source_entries_verified": 94,
+    "packaged_source_mismatches": []
+  },
+  "verified_source_sha256": {
+    "browser/shell/_locales/en/messages.json": "5e4f1d7391e5a06347ca0d39f3de418d6cf1dfac7140d6076ee53c3b8be9d7b0",
+    "browser/shell/_locales/pt_BR/messages.json": "3fba11436067eb2210d437b41c9be32daef2f58a499681a4c4a9f40fb8270754",
+    "browser/shell/modules/NulavioAI.sys.mjs": "b048c6e596489f6ae7a9e8750cbf901ab7b3a1ccf810c334a1398117c160b07a",
+    "browser/shell/modules/NulavioGuard.sys.mjs": "896f7c3865f2b14b4c239391ff47d8c353639357ba3a89e6329acda180136557",
+    "browser/shell/modules/NulavioWindow.sys.mjs": "9601fb0bc1744bfec9c0200d2ef3a3647c9c984e32bd8258a0d50276d337d4e5",
+    "browser/shell/shared/window-band.css": "49a8d104a189483e2bc95e9634acc19a474f16c979909a13b84a4d20212bfb0e",
+    "docs/brand/tokens.json": "e67fc0e1e43664365292318e770a40194084049bf17a43eef49da3404fdd2d1c",
+    "tests/integration/test_ai_bridge.py": "35ce25557f15b63ec91a4bba69ff3c31154a56fcd9819461eb6d08edd5efa5a5",
+    "tests/integration/test_temporary.py": "d0586ba8fd9d8a7395f747b118028ea894019cf8d46750e5be1d23a037482c4b",
+    "tests/integration/test_window_band.py": "755109b4678c0ed341c6b6eb5b8e23b807cf4caf1bd7fdd27c895d33bbf8e597"
+  },
+  "verified_production_digest": "e142ddb180ce74f21f45be0493741505f3f46fedf77ff008ae10cdc3021d9f16",
+  "checks": [
+    {
+      "command": "env -u LC_ALL python3 -I tests/run.py unit",
+      "status": "PASS",
+      "tests": 600,
+      "seconds": 60.386,
+      "skips": 3,
+      "summary": "Ran 600 tests in 60.386s\n\nOK (skipped=3)",
+      "log": "/home/caiobarbieri/.cache/nulavio-ux/ux3a-a4c92297-k6skwe3_/unit-final.log",
+      "browser_omni_sha256": "6d387863b87ac2849db4b77a145c23bb83145c9d325030cce803f4f467943e78"
+    },
+    {
+      "command": "NULAVIO_ENGINE=/home/caiobarbieri/.cache/nulavio-ux/ux3a-a4c92297-k6skwe3_/nulavio/nulavio python3 -I tests/run.py integration",
+      "status": "PASS",
+      "tests": 207,
+      "seconds": 668.976,
+      "skips": 13,
+      "summary": "Ran 207 tests in 668.976s\n\nOK (skipped=13)",
+      "log": "/home/caiobarbieri/.cache/nulavio-ux/ux3a-a4c92297-k6skwe3_/integration-final-v3.log",
+      "browser_omni_sha256": "6d387863b87ac2849db4b77a145c23bb83145c9d325030cce803f4f467943e78"
+    },
+    {
+      "command": "NULAVIO_TEST_LANG=en_US.UTF-8 NULAVIO_ENGINE=/home/caiobarbieri/.cache/nulavio-ux/ux3a-a4c92297-k6skwe3_/nulavio/nulavio python3 -I tests/run.py integration test_window_band.py",
+      "status": "PASS",
+      "tests": 12,
+      "seconds": 38.705,
+      "skips": 0,
+      "summary": "Ran 12 tests in 38.705s\n\nOK",
+      "log": "/home/caiobarbieri/.cache/nulavio-ux/ux3a-a4c92297-k6skwe3_/window-en.log",
+      "browser_omni_sha256": "6d387863b87ac2849db4b77a145c23bb83145c9d325030cce803f4f467943e78"
+    },
+    {
+      "command": "LANG=pt_BR.UTF-8 NULAVIO_TEST_ARTIFACTS=/home/caiobarbieri/.cache/nulavio-ux/ux3a-a4c92297-k6skwe3_/artifacts-ai-pt NULAVIO_ENGINE=/home/caiobarbieri/.cache/nulavio-ux/ux3a-a4c92297-k6skwe3_/nulavio/nulavio python3 - (unittest AiBridgeTest tests 21, 22, 23; full method names and results in ai-pt.log)",
+      "status": "PASS",
+      "tests": 3,
+      "seconds": 45.224,
+      "skips": 0,
+      "summary": "Ran 3 tests in 45.224s\n\nOK",
+      "log": "/home/caiobarbieri/.cache/nulavio-ux/ux3a-a4c92297-k6skwe3_/ai-pt.log",
+      "browser_omni_sha256": "6d387863b87ac2849db4b77a145c23bb83145c9d325030cce803f4f467943e78"
+    },
+    {
+      "command": "/home/caiobarbieri/.cache/nulavio-ux/venv/bin/ruff check .",
+      "status": "PASS"
+    },
+    {
+      "command": "/home/caiobarbieri/.cache/nulavio-ux/venv/bin/ruff format --check .",
+      "status": "PASS",
+      "files": 210
+    },
+    {
+      "command": "python3 -I scripts/brand/build_tokens.py --check",
+      "status": "PASS",
+      "outputs": 4
+    },
+    {
+      "command": "python3 -I scripts/brand/contrast.py",
+      "status": "PASS",
+      "pairs": 220,
+      "original_208_pairs_and_thresholds_preserved": true
+    },
+    {
+      "command": "python3 /home/caiobarbieri/.agents/skills/frontend-design/scripts/ui_lint.py . --changed",
+      "status": "PASS",
+      "errors": 0,
+      "warnings": 0,
+      "info": "backdrop-filter:none matched the glassmorphism heuristic; no blur is applied"
+    }
+  ],
+  "additional_runtime_probes": [
+    {
+      "script": "/home/caiobarbieri/.cache/nulavio-ux/ux3a-a4c92297-k6skwe3_/capture-baseline.py",
+      "script_sha256": "ff0f602e89158d499192784a6df8987385dc08f229108f964e966fd819e413c4",
+      "command": "python3 /home/caiobarbieri/.cache/nulavio-ux/ux3a-a4c92297-k6skwe3_/capture-baseline.py",
+      "status": "PASS",
+      "result": "",
+      "log": "/home/caiobarbieri/.cache/nulavio-ux/ux3a-a4c92297-k6skwe3_/capture-baseline.log"
+    },
+    {
+      "script": "/home/caiobarbieri/.cache/nulavio-ux/ux3a-a4c92297-k6skwe3_/capture-temporary-en.py",
+      "script_sha256": "fb4f07b6ae82fe190ad573a5125e76e3e2c5c683b021de1d5891818ded39c642",
+      "command": "python3 /home/caiobarbieri/.cache/nulavio-ux/ux3a-a4c92297-k6skwe3_/capture-temporary-en.py",
+      "status": "PASS",
+      "result": "PASS: real temporary backend, both English themes, geometry/hit testing, deletion on close",
+      "log": "/home/caiobarbieri/.cache/nulavio-ux/ux3a-a4c92297-k6skwe3_/temporary-en.log"
+    },
+    {
+      "script": "/home/caiobarbieri/.cache/nulavio-ux/ux3a-a4c92297-k6skwe3_/capture-video.py",
+      "script_sha256": "dd7149057f9ab8ae1d28c790f5b113362fe0369eaa2a08a4a301ae28101c901a",
+      "command": "python3 /home/caiobarbieri/.cache/nulavio-ux/ux3a-a4c92297-k6skwe3_/capture-video.py",
+      "status": "PASS",
+      "result": "PASS: synthetic video DOM fullscreen, 3px compact line, trusted pointer reveal",
+      "log": "/home/caiobarbieri/.cache/nulavio-ux/ux3a-a4c92297-k6skwe3_/video.log"
+    },
+    {
+      "script": "/home/caiobarbieri/.cache/nulavio-ux/ux3a-a4c92297-k6skwe3_/probe-protection-failure.py",
+      "script_sha256": "25bfcbb51a56ea94d76493e2d47834dd8cbb5b4d0769aac2cd20be7620df344a",
+      "command": "python3 /home/caiobarbieri/.cache/nulavio-ux/ux3a-a4c92297-k6skwe3_/probe-protection-failure.py",
+      "status": "PASS",
+      "result": "PASS: injected current-profile read failure is unknown; successful read restores truthful unprotected state",
+      "log": "/home/caiobarbieri/.cache/nulavio-ux/ux3a-a4c92297-k6skwe3_/protection-failure.log"
+    },
+    {
+      "script": "/home/caiobarbieri/.cache/nulavio-ux/ux3a-a4c92297-k6skwe3_/capture-private.py",
+      "script_sha256": "d75efed4458b20102c9dd54c7c06584094ce7f7dbdffc9750313e674fc692625",
+      "command": "python3 /home/caiobarbieri/.cache/nulavio-ux/ux3a-a4c92297-k6skwe3_/capture-private.py",
+      "status": "PASS",
+      "result": "PASS: private word/dots/plum band, actual backend state, both themes and hit testing",
+      "log": "/home/caiobarbieri/.cache/nulavio-ux/ux3a-a4c92297-k6skwe3_/private.log"
+    },
+    {
+      "script": "/home/caiobarbieri/.cache/nulavio-ux/ux3a-a4c92297-k6skwe3_/probe-density.py",
+      "script_sha256": "19e55df1326baa0eae2443bff6f7df76edad0dca03d71eab0d4365a4260cc2c1",
+      "command": "python3 /home/caiobarbieri/.cache/nulavio-ux/ux3a-a4c92297-k6skwe3_/probe-density.py",
+      "status": "PASS",
+      "result": "PASS: normal, compact and touch density; band geometry and targets/hit testing",
+      "log": "/home/caiobarbieri/.cache/nulavio-ux/ux3a-a4c92297-k6skwe3_/density.log"
+    },
+    {
+      "script": "/home/caiobarbieri/.cache/nulavio-ux/ux3a-a4c92297-k6skwe3_/probe-contrast.py",
+      "script_sha256": "977ad384ad2fcc8ffb7105e1ec751a971b6a10e068ff3771be8c509ceff64dc8",
+      "command": "python3 /home/caiobarbieri/.cache/nulavio-ux/ux3a-a4c92297-k6skwe3_/probe-contrast.py",
+      "status": "PASS",
+      "result": "PASS: actual profile glyph on increased-contrast dark Canvas: 16.54009959765456",
+      "log": "/home/caiobarbieri/.cache/nulavio-ux/ux3a-a4c92297-k6skwe3_/contrast.log"
+    }
+  ],
+  "composition_fixture": {
+    "registry": "real NulavioAI.add/change, separate raw opt-in explicitly accepted for the synthetic fixture",
+    "guard": "real retained findings from a preceding normal-profile Guard check; not a fresh AI Workspace audit",
+    "raw": "synthetic marker with matching agent and live test PID, validated/latched by NulavioAI; independent real Bridge tests cover actual raw handover, file removal, failure retention and emergency stop"
+  },
+  "capture_notes": {
+    "before_after": "same local fixture server/page, registered profile name, theme, dimensions and native vertical orientation; copies run sequentially. Both retain native automation stripes for the test harness.",
+    "normal_band_min_height_css_px": 30,
+    "fullscreen_compact_height_css_px": 3,
+    "requested_narrow_width_css_px": 630,
+    "actual_scaled_vertical_minimum_css_px": "638 to 638.4; see geometry files",
+    "real-agent-and-real-raw": "actual Bridge-owned windows; real registry identity/level, no CSS-flag certification",
+    "original_notification_bars": "retained, along with their assertions; consolidation is later work"
+  },
+  "visual_review": {
+    "observations": [
+      "Normal band adds 30 px while preserving address-bar width and native controls.",
+      "Narrow raw/Guard states wrap to several rows to keep identity, level, warnings and stop controls visible.",
+      "Temporary and private use separate dashed/dotted worded cues; the compact line keeps independent state segments.",
+      "Native bars remain visible and can duplicate band warnings; this is deliberate scope preservation.",
+      "Increased-contrast dark Canvas now keeps the actual profile glyph at 16.54:1; the removed-action selector opens its existing Shell page without restoring customization."
+    ],
+    "rubric_0_to_3": {
+      "hierarchy": 3,
+      "layout": 2,
+      "typography": 2,
+      "colour": 3,
+      "spacing": 2,
+      "states": 3,
+      "reflow": 3,
+      "accessibility": 2,
+      "copy": 3,
+      "distinctiveness": 2
+    },
+    "mean": 2.5
+  },
+  "pending": [
+    "Parent real rebuild and complete integration/CI on final integrated SHA",
+    "Physical KDE title bar and native desktop checks",
+    "Orca",
+    "Real GTK forced colours/high contrast",
+    "Hardware scaling and frame times",
+    "Later UX3/UX4/UX5/UX6 surfaces explicitly excluded from UX3A"
+  ],
+  "captures": {
+    "after-dark.png": {
+      "sha256": "ddf279cce06cabb981042394e05ef52ddf81f1b28f9cd4808f4ef241a2eaebd7",
+      "bytes": 34721
+    },
+    "after-light.png": {
+      "sha256": "d2fa3fa3d83dd4b68c48d3e4f29fc0b39637ab7f989215ad43f0924a01ea68fc",
+      "bytes": 34264
+    },
+    "before-dark.png": {
+      "sha256": "cb4b39d273d478c9b7d3aed8d39d576f029990ee32ec2c1bd944f0c08bb09727",
+      "bytes": 30956
+    },
+    "before-light.png": {
+      "sha256": "28de2866929736510efd4a424bc341b036b2098661f4e9d2a93a4ddfe6d90c82",
+      "bytes": 30690
+    },
+    "comparison.json": {
+      "sha256": "5e18dff3caf9321c49107f9f518f73e445c421447424a0d5d5190680008954be",
+      "bytes": 1129
+    },
+    "composition-dark.png": {
+      "sha256": "da4595186d4e4d5096b28ea85cbf6eb34ab5232e996a4609f86e31b71faf0008",
+      "bytes": 70834
+    },
+    "composition-light.png": {
+      "sha256": "c987c6f68228bf7b24362336276c8a520779dec5ab6bd1be827912ffaf5dcfa1",
+      "bytes": 70784
+    },
+    "contrast-dark.json": {
+      "sha256": "a03727217350ed960bf28ed3f5a53a5fe4ccc2465aaecaf224fe350e9dbb4c3f",
+      "bytes": 140
+    },
+    "contrast-dark.png": {
+      "sha256": "f83c2eeb0e1d30c9ce4304fca66a4a9b12e4b6e12f6477f95781d34f8c9d1bc2",
+      "bytes": 65480
+    },
+    "density.json": {
+      "sha256": "c0ec48b5907e91ca0000a9ae8c85932c333c10ebcc7c9467f1bbd29eb74c2554",
+      "bytes": 5151
+    },
+    "geometry-en.json": {
+      "sha256": "6d4792aaa03ffaa2617389a27da670f9e2628eabfdac7fd089fb2390fdc1ca77",
+      "bytes": 20775
+    },
+    "geometry-pt.json": {
+      "sha256": "e7355f2289784b4b8d2d9742d495c6e69f74f90c0df6e689fbc3e623d6c33f87",
+      "bytes": 21179
+    },
+    "private-dark.png": {
+      "sha256": "2b5d00f0cb8056c2d2ca2d0fab9818aab1bd47e9196e831d18113fc0dbe70820",
+      "bytes": 90947
+    },
+    "private-light.png": {
+      "sha256": "2b5d00f0cb8056c2d2ca2d0fab9818aab1bd47e9196e831d18113fc0dbe70820",
+      "bytes": 90947
+    },
+    "private.json": {
+      "sha256": "71f73089a6c48e384cd301b4897cb9a2370d94cd270c614ab3549633a834500d",
+      "bytes": 5004
+    },
+    "protection-failure.json": {
+      "sha256": "bd9aac60c079d5cccc8bf81f4978209e7054b7eb649067265da150c2e252c785",
+      "bytes": 215
+    },
+    "pt-real-agent-dark.png": {
+      "sha256": "21f7b1c147114a1e605d72aa5b2874b089553e4513d968187c9b3533e403c127",
+      "bytes": 51552
+    },
+    "pt-real-agent-light.png": {
+      "sha256": "89775dfc5e0c0b607e4f6c46cb8b21a9b8450d588c7aa0252eb3c87b8047ac07",
+      "bytes": 51486
+    },
+    "pt-real-raw-dark.png": {
+      "sha256": "8505763bb5c9d76f77b7f164403a1725465dc726c28c62989d64bebf401a97b6",
+      "bytes": 50695
+    },
+    "pt-real-raw-light.png": {
+      "sha256": "f915dfb860a89f56ce53e3c5b0487951a7f23e7972c34924ca90f921c8bb412f",
+      "bytes": 55107
+    },
+    "raw-guard-compact-dark.png": {
+      "sha256": "3a609ca8778877787479fe937c134892f54d99511c88ed1c4eec29c1d16d5bfe",
+      "bytes": 6199
+    },
+    "raw-guard-compact-light.png": {
+      "sha256": "0e7289d1579677a63ec25397f7ebebd7e57d29ce21063a676c8477a96cfd36d9",
+      "bytes": 6198
+    },
+    "real-agent-dark.png": {
+      "sha256": "3af25cf38698ffa1c38086d04a8593a47ed14e6f51deb10ca279f103a6477a2c",
+      "bytes": 51806
+    },
+    "real-agent-light.png": {
+      "sha256": "eccb3855c687c4ebe41769903fe21d95efb14b9e954822cdc9f6c17625fbb8e2",
+      "bytes": 51695
+    },
+    "real-raw-dark.png": {
+      "sha256": "0cacf857dac4b9b9b962a8aaf73c831973925a6efd1817d9712564d16f9b10a7",
+      "bytes": 50919
+    },
+    "real-raw-light.png": {
+      "sha256": "287060a824859c8a5a6afa1efe5d80c8806f192933fab9a834bc01b7c7396a49",
+      "bytes": 50249
+    },
+    "selector-without-action.png": {
+      "sha256": "020dc94fb2f7d4140a05c6e9529525c3817445a949e8f35fdae2535ead201962",
+      "bytes": 52272
+    },
+    "temporary-en-dark.png": {
+      "sha256": "53964274d94fe35c008ec024dfe0ba6649a757f8d165ff2ab372e2fdf850f4ec",
+      "bytes": 61096
+    },
+    "temporary-en-light.png": {
+      "sha256": "ae21815f16302b68e722d0a722cf5702b7d32686796085a2a3338131dd1ac370",
+      "bytes": 62780
+    },
+    "temporary-en.json": {
+      "sha256": "3000dadf97a8e02bdd7ef0e1ac361e155730685fe988cc7b53f53eae11049f79",
+      "bytes": 4737
+    },
+    "temporary-pt-dark.png": {
+      "sha256": "67defd81ad7d737be50a8b45e153a21a96408c9981b2068bb7e6ab2f42327eff",
+      "bytes": 62260
+    },
+    "temporary-pt-light.png": {
+      "sha256": "703b21d253f6bb6c0c292ff1b5ff44c313f0fd625ece5bfa4377133ea88020e8",
+      "bytes": 63496
+    },
+    "video-fullscreen-compact.png": {
+      "sha256": "62f97d0b64df288a26e813eeb056bb22fb7c9ae7bc369e120653fc2edbea24e2",
+      "bytes": 5900
+    },
+    "video-fullscreen.json": {
+      "sha256": "2f670f4c02a1384dd38c7cd235107b7946a0bb0bf8398f2b67090c463c9d1d8e",
+      "bytes": 1875
+    },
+    "unit-final.txt": {
+      "sha256": "c1571180c69c275e9a5be46f9d7aa05fcd227cf1bda0dcf288bfe67e2a91d67f",
+      "bytes": 75982
+    },
+    "integration-final-v3.txt": {
+      "sha256": "b7da8d6ff65b684437c619c04b1d3d09c14d58270a6ab9be02ae2e8e334ed748",
+      "bytes": 29052
+    },
+    "window-en.txt": {
+      "sha256": "8d22886f19f76e326169f45a1f77942ba13c6d5eb5f854d16e107281dd1e622b",
+      "bytes": 2193
+    },
+    "ai-pt.txt": {
+      "sha256": "0e3d8ea0197d50250bb9738dd978e06116dbb3a5f14123fc91b3860c7a5aa495",
+      "bytes": 608
+    },
+    "regressions-red.txt": {
+      "sha256": "a07bcd639cf555c6ee20049acda651222c59dbaea8c66e5fcc28795b1342a98a",
+      "bytes": 2112
+    },
+    "regressions-green.txt": {
+      "sha256": "aacc9209741b3ddbd709f8ab5cc39fd75864edf5b1878d5729cefe1e2cf12fbe",
+      "bytes": 433
+    },
+    "contrast-red.txt": {
+      "sha256": "290c0400d9fa0f1d14e4ca09fc1af0804d3e1023c626c82aa652dd2049817390",
+      "bytes": 1087
+    }
+  },
+  "regression_evidence": {
+    "customization_and_resume_red": "/home/caiobarbieri/.cache/nulavio-ux/ux3a-a4c92297-k6skwe3_/regressions-red.log",
+    "customization_and_resume_green": "/home/caiobarbieri/.cache/nulavio-ux/ux3a-a4c92297-k6skwe3_/regressions-green.log",
+    "dark_contrast_red": "/home/caiobarbieri/.cache/nulavio-ux/ux3a-a4c92297-k6skwe3_/contrast-red.log",
+    "dark_contrast_original_ratio": 1.1271774595868729,
+    "dark_contrast_final_minimum": 3,
+    "dark_contrast_green": "final complete integration and English window suites",
+    "dark_contrast_final_ratio": 16.54009959765456
+  },
+  "files_changed": [
+    "browser/shell/_locales/en/messages.json",
+    "browser/shell/_locales/pt_BR/messages.json",
+    "browser/shell/modules/NulavioAI.sys.mjs",
+    "browser/shell/modules/NulavioGuard.sys.mjs",
+    "browser/shell/modules/NulavioWindow.sys.mjs",
+    "browser/shell/shared/window-band.css",
+    "docs/brand/tokens.json",
+    "docs/design/accessibility.md",
+    "docs/design/design-system.md",
+    "docs/design/screenshots/ux3a/after-dark.png",
+    "docs/design/screenshots/ux3a/after-light.png",
+    "docs/design/screenshots/ux3a/ai-pt.txt",
+    "docs/design/screenshots/ux3a/before-dark.png",
+    "docs/design/screenshots/ux3a/before-light.png",
+    "docs/design/screenshots/ux3a/comparison.json",
+    "docs/design/screenshots/ux3a/composition-dark.png",
+    "docs/design/screenshots/ux3a/composition-light.png",
+    "docs/design/screenshots/ux3a/contrast-dark.json",
+    "docs/design/screenshots/ux3a/contrast-dark.png",
+    "docs/design/screenshots/ux3a/contrast-red.txt",
+    "docs/design/screenshots/ux3a/density.json",
+    "docs/design/screenshots/ux3a/geometry-en.json",
+    "docs/design/screenshots/ux3a/geometry-pt.json",
+    "docs/design/screenshots/ux3a/integration-final-v3.txt",
+    "docs/design/screenshots/ux3a/private-dark.png",
+    "docs/design/screenshots/ux3a/private-light.png",
+    "docs/design/screenshots/ux3a/private.json",
+    "docs/design/screenshots/ux3a/protection-failure.json",
+    "docs/design/screenshots/ux3a/pt-real-agent-dark.png",
+    "docs/design/screenshots/ux3a/pt-real-agent-light.png",
+    "docs/design/screenshots/ux3a/pt-real-raw-dark.png",
+    "docs/design/screenshots/ux3a/pt-real-raw-light.png",
+    "docs/design/screenshots/ux3a/raw-guard-compact-dark.png",
+    "docs/design/screenshots/ux3a/raw-guard-compact-light.png",
+    "docs/design/screenshots/ux3a/real-agent-dark.png",
+    "docs/design/screenshots/ux3a/real-agent-light.png",
+    "docs/design/screenshots/ux3a/real-raw-dark.png",
+    "docs/design/screenshots/ux3a/real-raw-light.png",
+    "docs/design/screenshots/ux3a/regressions-green.txt",
+    "docs/design/screenshots/ux3a/regressions-red.txt",
+    "docs/design/screenshots/ux3a/selector-without-action.png",
+    "docs/design/screenshots/ux3a/temporary-en-dark.png",
+    "docs/design/screenshots/ux3a/temporary-en-light.png",
+    "docs/design/screenshots/ux3a/temporary-en.json",
+    "docs/design/screenshots/ux3a/temporary-pt-dark.png",
+    "docs/design/screenshots/ux3a/temporary-pt-light.png",
+    "docs/design/screenshots/ux3a/unit-final.txt",
+    "docs/design/screenshots/ux3a/verification.json",
+    "docs/design/screenshots/ux3a/video-fullscreen-compact.png",
+    "docs/design/screenshots/ux3a/video-fullscreen.json",
+    "docs/design/screenshots/ux3a/window-en.txt",
+    "docs/product/execution-plan.md",
+    "tests/integration/test_ai_bridge.py",
+    "tests/integration/test_temporary.py",
+    "tests/integration/test_window_band.py"
+  ],
+  "scope_checks": {
+    "patches_added": false,
+    "backend_grants_or_policy_changed": false,
+    "new_network_service": false,
+    "telemetry_added": false,
+    "personal_profiles_or_agent_configuration_modified": false,
+    "native_controls_reparented": false,
+    "window_title_preferences_changed": false,
+    "original_safety_assertions_removed": false
+  }
+}

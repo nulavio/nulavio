@@ -175,6 +175,16 @@ The maintainer's brief: make the experience and look of Nulavio exceptional, wit
 - **Layout presets.** Set by prefs.
 - **Sidebar tools.** Curated, with the bookmarks bar (D-UX13).
 
+**UX3A — band and safety grammar (local implementation, 2026-10-28).**
+The trusted identity/protection band, principal-derived system-page header,
+composed temporary/private/agent/raw/Guard cues and compact fullscreen line are
+implemented locally on `cf548dfb19868c319f8164c6ba469b5e473fbeee`.
+[Implementation and limits](../design/design-system.md#ux3a-trusted-band-and-window-safety-local-implementation-2026-10-28),
+[verification](../design/screenshots/ux3a/verification.json).
+This does not close UX3: tab groups, downloads badge/patch 0007, presets and
+personalisation, Shell pages and assistant flows remain later work. The parent
+owns the real rebuild, final integration, publication and CI.
+
 **UX4 — Shell pages**
 - **Settings.** Two panes, with search, scope labels and inline status.
 - **New tab.** "Você está em …".

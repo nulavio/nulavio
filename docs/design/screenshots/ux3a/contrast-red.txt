@@ -1,0 +1,15 @@
+test_09_theme_and_forced_colors_keep_the_safety_surface (test_window_band.WindowBandTest.test_09_theme_and_forced_colors_keep_the_safety_surface) ... FAIL
+
+======================================================================
+FAIL: test_09_theme_and_forced_colors_keep_the_safety_surface (test_window_band.WindowBandTest.test_09_theme_and_forced_colors_keep_the_safety_surface)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/caiobarbieri/.t3/worktrees/2026-10-24-voc-o-tech-lead-principal-c5c1b438/t3-a4c92297/tests/integration/test_window_band.py", line 453, in test_09_theme_and_forced_colors_keep_the_safety_surface
+    self.assertGreaterEqual(ratio(rgb(icon["stroke"]),rgb(icon["bg"])),3,icon)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 1.1271774595868729 not greater than or equal to 3 : {'bg': 'rgb(28, 27, 34)', 'stroke': 'rgb(7, 15, 24)'}
+
+----------------------------------------------------------------------
+Ran 1 test in 6.475s
+
+FAILED (failures=1)

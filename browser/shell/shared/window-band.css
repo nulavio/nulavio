@@ -1,0 +1,250 @@
+/* Farol safety UI is always on. Tokens are imported unconditionally by the
+   branding sheet; this agent sheet is scoped strictly to the native window. */
+@-moz-document url("chrome://browser/content/browser.xhtml") {
+  #nulavio-band {
+    /* XUL collapsed/hidden and fullscreen rules must not remove safety UI in
+       ordinary chrome. The separate row below owns fullscreen visibility. */
+    display: flex !important;
+    visibility: visible !important;
+    opacity: var(--nv-security-opacity) !important;
+    min-block-size: var(--nv-size-field-heightCompact);
+    padding: 0;
+    border: 0;
+    border-block-end: 1px solid var(--nv-color-band-rule);
+    background: var(--nv-color-band-bg) !important;
+    color: var(--nv-color-band-text) !important;
+    -moz-window-dragging: drag;
+  }
+  #nulavio-band-widget {
+    display: flex;
+    flex: 1;
+    min-inline-size: 0;
+    padding: 0;
+  }
+  .nv-band-row {
+    box-sizing: border-box;
+    display: flex;
+    flex: 1;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--nv-space-2) var(--nv-space-3);
+    min-inline-size: 0;
+    min-block-size: var(--nv-size-field-heightCompact);
+    padding: var(--nv-space-1) var(--nv-space-3);
+    font-family: var(--nv-font-family-ui);
+    font-size: max(1em, var(--nv-font-size-sm));
+    line-height: var(--nv-font-lineHeight-tight);
+    background-color: var(--nv-color-band-bg);
+    color: var(--nv-color-band-text);
+    opacity: var(--nv-security-opacity);
+  }
+  .nv-band-row button {
+    appearance: none;
+    box-sizing: border-box;
+    min-block-size: var(--nv-space-6);
+    min-inline-size: var(--nv-space-6);
+    max-inline-size: 100%;
+    margin: 0;
+    padding: var(--nv-space-1) var(--nv-space-2);
+    border: 1px solid transparent;
+    border-radius: var(--nv-radius-xs);
+    font: inherit;
+    color: inherit;
+    background: var(--nv-color-band-bg);
+    overflow-wrap: anywhere;
+    -moz-window-dragging: no-drag;
+    cursor: pointer;
+  }
+  .nv-band-row button:hover {
+    text-decoration: underline;
+  }
+  .nv-band-row button:focus-visible {
+    outline: var(--nv-state-focusRingWidth) solid var(--nv-color-band-rule);
+    outline-offset: 0;
+  }
+  .nv-band-row .nv-band-identity {
+    display: flex;
+    align-items: center;
+    gap: var(--nv-space-2);
+    min-inline-size: 0;
+    background: var(--profile-fill, var(--nv-color-identity-slate));
+    color: var(--nv-color-identity-on);
+    border: var(--nv-security-identityRingWidth) solid var(--nv-color-identity-ring);
+    border-radius: var(--nv-radius-sm);
+    font-weight: var(--nv-font-weight-semibold);
+  }
+  .nv-band-flag { display: flex; align-items: center; flex: none; }
+  .nv-band-avatar {
+    inline-size: var(--nv-icon-size-sm);
+    block-size: var(--nv-icon-size-sm);
+    -moz-context-properties: fill, stroke;
+    fill: transparent;
+    stroke: currentColor;
+  }
+  .nv-band-row[data-workspace="true"] .nv-band-identity {
+    color: var(--nv-color-security-agent-on);
+    border-color: var(--nv-color-security-agent-ink);
+  }
+  .nv-band-name { overflow-wrap: anywhere; min-inline-size: 0; }
+  .nv-band-header {
+    flex: 1;
+    text-align: center;
+    overflow-wrap: anywhere;
+    min-inline-size: 0;
+  }
+  #nulavio-fullscreen { display: none; }
+  :root:is([inFullscreen], [inDOMFullscreen]) #nulavio-fullscreen {
+    display: block;
+    flex: none;
+    background: var(--nv-color-band-bg);
+    color: var(--nv-color-band-text);
+  }
+  #nulavio-fullscreen:not([notice]) .nv-band-row { display: none; }
+  #nulavio-fullscreen [hidden] { display: none !important; }
+  .nv-fullscreen-line {
+    display: flex;
+    block-size: var(--nv-security-fullscreenHeight);
+    background: var(--nv-color-fullscreen-ink);
+  }
+  .nv-fullscreen-line > span {
+    box-sizing: border-box;
+    flex: 1;
+    min-inline-size: var(--nv-space-6);
+    background: var(--nv-color-fullscreen-ink);
+    border-block: 1px solid var(--nv-color-fullscreen-foreground);
+  }
+  .nv-fullscreen-line .nv-fullscreen-temporary {
+    border-block: 0;
+    border-block-start: var(--nv-security-fullscreenHeight) dashed var(--nv-color-fullscreen-foreground);
+  }
+  .nv-fullscreen-line .nv-fullscreen-private {
+    background: var(--nv-color-fullscreen-private);
+    border-block: 0;
+    border-block-start: var(--nv-security-fullscreenHeight) dotted var(--nv-color-fullscreen-foreground);
+  }
+  .nv-fullscreen-line .nv-fullscreen-agent {
+    border-block: 0;
+    border-block-start: var(--nv-security-fullscreenHeight) double var(--nv-color-fullscreen-foreground);
+  }
+  .nv-fullscreen-line .nv-fullscreen-raw {
+    border: 0;
+    background: repeating-linear-gradient(135deg, var(--nv-color-fullscreen-automation) 0 3px,
+      var(--nv-color-fullscreen-ink) 3px 6px);
+  }
+  .nv-fullscreen-line .nv-fullscreen-guard {
+    background: var(--nv-color-security-guard-edge);
+    border-color: var(--nv-color-fullscreen-ink);
+  }
+  @media (prefers-contrast) or (forced-colors: active) {
+    #nulavio-band, .nv-band-row, .nv-band-row button {
+      background: Canvas !important;
+      color: CanvasText !important;
+      border-color: CanvasText !important;
+    }
+    .nv-band-row button:focus-visible { outline-color: Highlight; }
+  }
+  .nv-band-row, .nv-band-row *, #nulavio-fullscreen, #nulavio-fullscreen * {
+    animation: none !important;
+    transition: none !important;
+    backdrop-filter: none !important;
+    opacity: var(--nv-security-opacity) !important;
+  }
+}
+
+@-moz-document url("chrome://browser/content/browser.xhtml") {
+  .nv-band-seals {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--nv-space-2);
+    min-inline-size: 0;
+    max-inline-size: 100%;
+  }
+  .nv-band-seal {
+    box-sizing: border-box;
+    border: 1px solid var(--nv-color-band-rule);
+    border-radius: var(--nv-radius-xs);
+    padding: var(--nv-space-1) var(--nv-space-2);
+    overflow-wrap: anywhere;
+    background: var(--nv-color-band-bg);
+    color: var(--nv-color-band-text);
+  }
+  .nv-band-row [hidden] { display: none !important; }
+  .nv-band-row[data-agent="true"] {
+    background-image: repeating-linear-gradient(0deg, transparent 0 5px, var(--nv-color-band-lines) 5px 6px);
+  }
+  .nv-band-row[data-agent="true"] .nv-band-header {
+    background-color: var(--nv-color-band-bg);
+  }
+  .nv-band-row .nv-band-agent {
+    background: var(--nv-color-security-agent-ink);
+    color: var(--nv-color-security-agent-on);
+    border-style: double;
+    border-width: var(--nv-security-fullscreenHeight);
+  }
+  :root[nulavio-window-agent] #browser {
+    border: var(--nv-security-fullscreenHeight) double var(--nv-color-security-agent-ink);
+  }
+  .nv-band-row .nv-band-raw {
+    background: var(--nv-color-security-raw-fill);
+    color: var(--nv-color-security-raw-text);
+    border-color: var(--nv-color-security-raw-text);
+    font-weight: var(--nv-font-weight-semibold);
+  }
+  .nv-band-raw::before {
+    content: "";
+    display: inline-block;
+    inline-size: var(--nv-space-5);
+    block-size: var(--nv-icon-size-sm);
+    margin-inline-end: var(--nv-space-2);
+    vertical-align: middle;
+    background: repeating-linear-gradient(135deg, var(--nv-color-security-raw-text) 0 2px, var(--nv-color-security-raw-fill) 2px 4px);
+  }
+  .nv-band-row .nv-band-temporary {
+    background: var(--nv-color-security-temporary-fill);
+    color: var(--nv-color-security-temporary-text);
+    border: var(--nv-security-temporaryWidth) dashed var(--nv-color-security-temporary-edge);
+  }
+  .nv-band-row[data-temporary="true"] {
+    border-block-end: var(--nv-security-temporaryWidth) dashed var(--nv-color-security-temporary-edge);
+  }
+  .nv-band-row[data-private="true"] {
+    background-color: var(--nv-color-security-private-fill);
+    background-image: radial-gradient(var(--nv-color-security-private-dots) 1px, var(--nv-color-security-private-fill) 1px);
+    background-size: var(--nv-space-3) var(--nv-space-3);
+    border-block-end: var(--nv-security-temporaryWidth) dotted var(--nv-color-security-private-edge);
+    color: var(--nv-color-security-private-text);
+  }
+  .nv-band-row[data-private="true"] :is(.nv-band-protection, .nv-band-header, .nv-band-pause, .nv-band-stop, .nv-band-status),
+  .nv-band-row .nv-band-private {
+    background: var(--nv-color-security-private-fill);
+    color: var(--nv-color-security-private-text);
+    border-color: var(--nv-color-security-private-edge);
+  }
+  .nv-band-row .nv-band-private { border-style: dotted; }
+  .nv-band-row .nv-band-guard {
+    background: var(--nv-color-security-guard-fill);
+    color: var(--nv-color-security-guard-text);
+    border-color: var(--nv-color-security-guard-edge);
+  }
+  :root:is([inFullscreen], [inDOMFullscreen]) #nulavio-fullscreen {
+    /* A flow row reserves space instead of covering content or native controls.
+       Native fullscreen/pointer-lock warnings are top-layer popovers above it. */
+    position: relative;
+    z-index: var(--nv-zIndex-band);
+  }
+  @media (prefers-contrast) or (forced-colors: active) {
+    .nv-band-row, .nv-band-row .nv-band-seal, .nv-band-row .nv-band-header,
+    .nv-band-row .nv-band-identity, #nulavio-fullscreen {
+      background: Canvas !important;
+      color: CanvasText !important;
+      border-color: CanvasText !important;
+    }
+    :root[nulavio-window-agent] #browser { border-color: CanvasText; }
+    .nv-fullscreen-line > span { background: Canvas; border-color: CanvasText; }
+    .nv-fullscreen-line .nv-fullscreen-raw { background: Mark; border-block: 1px double MarkText; }
+    .nv-band-raw::before { border: 3px double Mark; background: Canvas; }
+    .nv-band-row .nv-band-raw { border: 3px double Mark !important; }
+  }
+}

@@ -4,7 +4,7 @@ Target: WCAG 2.2 AA in both themes, at 100–150 % scaling, with keyboard and sc
 
 | Requirement | How | Evidence |
 |---|---|---|
-| Text contrast ≥ 4.5:1 | Token pairs | `scripts/brand/contrast.py`: 208/208 |
+| Text contrast ≥ 4.5:1 | Token pairs | `scripts/brand/contrast.py`: 220/220 (original 208 preserved) |
 | Text contrast on the real window | Rendered colours of the selected/background tab labels, address text | `test_horizon` 02 (light), 03 (dark) |
 | Non-text contrast ≥ 3:1 (WCAG 1.4.11) | Field boundary `border.control`; focus ring; selected-tab mark (surface tones alone are below 3:1) | `test_horizon` 02, 03 |
 | Focus visible (2.4.7, 2.4.11) | Mint 2 px ring; address bar focus border = focus token | `test_horizon` 08 |
@@ -54,3 +54,40 @@ The state inventory also has visually hidden descriptions outside the inert
 specimens, so assistive technology can read the examples without exposing fake
 actions. The existing 11 px small identity initial is retained (a non-body glyph,
 with the profile name beside it); `ui_lint` reports it as the one accepted warning.
+
+
+## UX3A window checks
+
+The band has a 30 px minimum rather than a fixed height. Names and state words
+wrap without removing another warning; interactive controls remain at least
+24 × 24 CSS px. The native toolbar order and address/security controls are
+retained. Tests measure nonzero geometry, opacity 1, bounds, hit testing,
+accessible names, static cues, native keyboard focus/Enter, both themes and
+both native tab orientations. Requested 630 px windows remain 638 px wide in
+some scaled vertical-tab scenes because of Gecko's native minimum; the
+[measurements](screenshots/ux3a/geometry-pt.json) retain actual dimensions.
+
+Temporary/private and agent/raw/Guard combinations are checked through real
+owners. The composition test uses a real registry and retained Guard findings,
+plus a synthetic live-PID raw marker read by the AI owner; separate Bridge
+tests cover actual raw endpoint handover, latch retention, pause and global
+stop. This is not evidence that Guard audits new AI Workspaces. Protection
+includes a real encrypted/unlocked profile that relocks after its window ends.
+The [evidence inventory](screenshots/ux3a/verification.json) distinguishes these
+fixtures from real backend operations and records en/pt-BR checks.
+
+Horizon off and an installed theme retain the safety UI while native controls
+keep their own appearance. Increased contrast selects system colours; profile SVGs follow the identity
+text colour, preserving the glyph on a dark system canvas (the original fixed
+ink measured 1.13:1 in the reproduced case). The rendered glyph regression
+keeps the 3:1 non-text minimum. Forced-
+colour rules preserve border patterns and words. Gecko may exempt chrome from
+document forced-colour preferences, so the headless preference check is not a
+real GTK forced-colour certification. Reduced motion/transparency leave all
+signals opaque and static. Fullscreen's compact line remains visible and
+keyboard focus restores its controls; the native fullscreen exit button is
+separately hit-tested.
+
+Pending: physical KDE title-bar checks, Orca announcements, real GTK forced
+colours/high contrast, hardware scaling and frame-time measurements. The
+parent's rebuild and final package/CI verification are also pending.

@@ -22,6 +22,7 @@ from unittest import mock
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
 import harness
 from mcp_client import McpClient
+from test_window_band import BAND_PROBE, assert_band
 
 from nulavio_launcher import engine as engine_mod
 from nulavio_launcher.ai import audit, registry, tools
@@ -467,6 +468,31 @@ class AiBridgeTest(unittest.TestCase):
                           " window.gNotificationBox.getNotificationWithValue('nulavio-ai-workspace')"
                           ".querySelector('.notification-button').doCommand()")  # fmt: skip
 
+    def farol(self, bidi: Bidi) -> dict:
+        return json.loads(self.chrome(bidi, f"JSON.stringify({BAND_PROBE})"))
+
+    def capture_farol(self, bidi: Bidi, name: str):
+        contexts = bidi.command("browsingContext.getTree", {"moz:scope": "chrome", "maxDepth": 0})["contexts"]
+        context = next(c["context"] for c in contexts if c.get("url", "").endswith("/browser.xhtml"))
+        data = bidi.command("browsingContext.captureScreenshot", {"context": context, "origin": "viewport"})["data"]
+        directory = harness.artifacts_dir() / "window-band"
+        directory.mkdir(parents=True, exist_ok=True)
+        (directory / f"{name}.png").write_bytes(base64.b64decode(data))
+
+    def check_farol(self, bidi: Bidi, agent: dict, raw=False):
+        def ready():
+            state = self.farol(bidi) or {}
+            return (
+                agent["name"] in state.get("text", "") and any("nv-band-raw" in c["kind"] for c in state.get("cues", [])) == raw
+            )
+
+        self.assertTrue(harness.wait_until(ready, 30))
+        state = self.farol(bidi)
+        assert_band(self, state)
+        self.assertIn(agent["name"], state["text"])
+        self.assertEqual(any("nv-band-raw" in c["kind"] for c in state["cues"]), raw, state)
+        return state
+
     @unittest.skipUnless(harness.nulavio_engine(), "the window states come from the Nulavio Shell")
     def test_21_the_ai_workspace_window_says_who_drives_it_and_when_nothing_is_checked(self):
         agent, _ = self.agent("autonomous")
@@ -488,6 +514,11 @@ class AiBridgeTest(unittest.TestCase):
         self.assertEqual(bar["buttons"], [self.message(bidi, "aiStopAgent")])
         self.assertIn("ai", bar["state"])
         self.assertNotIn("raw", bar["state"])
+        self.check_farol(bidi, agent)
+        for dark in (0, 1):
+            self.chrome(bidi, f"Services.prefs.setIntPref('ui.systemUsesDarkTheme', {dark})")
+            time.sleep(0.3)
+            self.capture_farol(bidi, f"real-agent-{dark}")
         # WCS-01: the endpoint goes to the agent's own library; the window says that nothing is checked.
         handed = bridge.call("raw_automation", {})
         self.assertFalse(handed["isError"], handed)
@@ -498,10 +529,34 @@ class AiBridgeTest(unittest.TestCase):
         self.assertEqual(bar["label"], self.message(library, "aiWorkspaceBarRaw"))
         self.assertEqual((bar["type"], bar["dismissable"], bar["count"]), ("critical", False, 1))
         self.assertIn("raw", bar["state"])
+        self.check_farol(library, agent, raw=True)
+        # A real tools-status failure cannot replace a known raw warning/identity with idle UI.
+        module = "ChromeUtils.importESModule('resource://builtin-addons/nulavio-shell/modules/"
+        self.chrome(
+            library,
+            f"""(async () => {{
+          const A = {module}NulavioAI.sys.mjs').NulavioAI;
+          const W = {module}NulavioWindow.sys.mjs').NulavioWindow;
+          const overview = A.overview;
+          try {{ A.overview = () => Promise.reject(new Error('fixture: unavailable')); await W.refresh(); }}
+          finally {{ A.overview = overview; }}
+        }})()""",
+        )
+        self.check_farol(library, agent, raw=True)
+        for dark in (0, 1):
+            self.chrome(library, f"Services.prefs.setIntPref('ui.systemUsesDarkTheme', {dark}); window.resizeTo(630, 768)")
+            time.sleep(0.3)
+            self.check_farol(library, agent, raw=True)
+            self.capture_farol(library, f"real-raw-{dark}")
+            self.chrome(library, "window.fullScreen = true")
+            time.sleep(0.4)
+            self.assertTrue(self.check_farol(library, agent, raw=True)["full"])
+            self.chrome(library, "window.fullScreen = false")
         # Deleting the file (the agent can) does not take the state away.
         (bridge.workspace.profile_dir / RAW_MARKER).unlink()
         time.sleep(2.5)
         self.assertEqual(self.bar(library)["value"], "nulavio-ai-raw")
+        self.check_farol(library, agent, raw=True)
         # "Parar agente" pauses the agent; the bridge's watcher then ends the AI Workspace.
         workspace = bridge.workspace
         self.stop_from_the_bar(library)
@@ -530,11 +585,53 @@ class AiBridgeTest(unittest.TestCase):
         self.assertEqual(bar["label"], self.message(bidi, "aiWorkspaceBarProfile", agent["name"], "Trabalho", level))
         self.assertEqual((bar["type"], bar["dismissable"]), ("warning", False))  # the user's own sessions are there
         self.assertIn("ai-profile", bar["state"])
+        state = self.check_farol(bidi, agent)
+        self.assertIn("Trabalho", state["text"])
+        self.chrome(
+            bidi,
+            """
+          const e=document.querySelector('#nulavio-band .nv-band-pause');
+          Services.focus.setFocus(e,Ci.nsIFocusManager.FLAG_BYKEY); e.click();
+        """,
+        )
+        self.assertTrue(harness.wait_until(lambda: registry.get(agent["id"]).get("paused"), 20))
+        self.assertTrue(harness.wait_until(lambda: self.message(bidi, "aiPaused") in self.farol(bidi)["text"], 20))
+        self.assertEqual(self.chrome(bidi, "document.activeElement.className"), "nv-band-stop")
         self.stop_from_the_bar(bidi)
         self.assertTrue(harness.wait_until(lambda: registry.get(agent["id"]).get("paused"), timeout=30))
         self.assertTrue(harness.wait_until(lambda: self.bar(bidi)["buttons"] == [], timeout=20), self.bar(bidi))
         self.assertEqual(self.bar(bidi)["label"], self.message(bidi, "aiWorkspaceBarPaused", agent["name"]))
+        registry.pause(agent["id"], False)  # an explicit resume through the user's real backend
+        self.assertTrue(
+            harness.wait_until(lambda: self.chrome(bidi, "!document.querySelector('#nulavio-band .nv-band-pause').hidden"), 15)
+        )
+        self.assertNotIn(self.message(bidi, "aiPaused"), self.farol(bidi)["text"])
+        self.chrome(bidi, "document.querySelector('#nulavio-band .nv-band-pause').click()")
+        self.assertTrue(harness.wait_until(lambda: registry.get(agent["id"]).get("paused"), 20))
         self.assertIn("paused", bridge.call("tabs_list", {})["content"][0]["text"])
+
+    @unittest.skipUnless(harness.nulavio_engine(), "the Farol stop uses the real registry")
+    def test_23_farol_emergency_stop_is_global_and_closes_raw_workspaces(self):
+        first, _ = self.agent("full_control")
+        second, _ = self.agent("restricted")
+        registry.set_raw_automation(first["id"], True, accept=True)
+        self.system_access()
+        a = tools.Bridge(first["id"], "s-farol-a", approver=registry.Approver(), headless=True)
+        b = tools.Bridge(second["id"], "s-farol-b", approver=registry.Approver(), headless=True)
+        self.addCleanup(a.close)
+        self.addCleanup(b.close)
+        a.call("tab_new", {"url": self.fx.url("/page/a")})
+        b.call("tab_new", {"url": self.fx.url("/page/b")})
+        handed = a.call("raw_automation", {})
+        raw = Bidi(int(handed["structuredContent"]["endpoint"].split(":")[2].split("/")[0]))
+        self.addCleanup(raw.ws.close)
+        state = self.check_farol(raw, first, raw=True)
+        self.assertIn(self.message(raw, "bandStopAll"), state["text"])
+        wa, wb = a.workspace, b.workspace
+        self.chrome(raw, "document.querySelector('#nulavio-band .nv-band-stop').click()")
+        self.assertTrue(harness.wait_until(registry.stopped, 20))
+        self.assertIn("emergency stop", b.call("tabs_list", {})["content"][0]["text"])
+        self.assertTrue(harness.wait_until(lambda: wa.process is None and wb.process is None, 30))
 
 
 if __name__ == "__main__":

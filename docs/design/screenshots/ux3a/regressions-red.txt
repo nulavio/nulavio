@@ -1,0 +1,27 @@
+test_22_an_agent_in_the_users_profile_is_named_as_such (test_ai_bridge.AiBridgeTest.test_22_an_agent_in_the_users_profile_is_named_as_such) ... FAIL
+test_09_profile_selector_is_reached_by_keyboard_and_opens_the_real_popup (test_window_band.WindowBandTest.test_09_profile_selector_is_reached_by_keyboard_and_opens_the_real_popup) ... FAIL
+
+======================================================================
+FAIL: test_22_an_agent_in_the_users_profile_is_named_as_such (test_ai_bridge.AiBridgeTest.test_22_an_agent_in_the_users_profile_is_named_as_such)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/caiobarbieri/.t3/worktrees/2026-10-24-voc-o-tech-lead-principal-c5c1b438/t3-a4c92297/tests/integration/test_ai_bridge.py", line 605, in test_22_an_agent_in_the_users_profile_is_named_as_such
+    self.assertTrue(harness.wait_until(lambda: self.chrome(bidi,
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        "!document.querySelector('#nulavio-band .nv-band-pause').hidden"), 15))
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: False is not true
+
+======================================================================
+FAIL: test_09_profile_selector_is_reached_by_keyboard_and_opens_the_real_popup (test_window_band.WindowBandTest.test_09_profile_selector_is_reached_by_keyboard_and_opens_the_real_popup)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/caiobarbieri/.t3/worktrees/2026-10-24-voc-o-tech-lead-principal-c5c1b438/t3-a4c92297/tests/integration/test_window_band.py", line 389, in test_09_profile_selector_is_reached_by_keyboard_and_opens_the_real_popup
+    self.assertTrue(harness.wait_until(lambda: set(self.m.window_handles()) - before, 10))
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: set() is not true
+
+----------------------------------------------------------------------
+Ran 2 tests in 33.327s
+
+FAILED (failures=2)

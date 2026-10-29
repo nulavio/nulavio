@@ -414,6 +414,7 @@ class Guard {
       { tmpPath: `${this.#recordPath}.tmp` }
     );
     await IOUtils.setPermissions(this.#recordPath, 0o600).catch(() => {});
+    Services.obs.notifyObservers(null, "nulavio-guard-changed");
   }
 
   /** Why the Guard does not watch this instance: a temporary profile, or one an agent drives right now. */

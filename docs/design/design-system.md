@@ -9,7 +9,7 @@
 | `browser/shell/lib/identity-colors.js` | The profile icon the Shell draws for the toolbar | Same in both themes |
 | `browser/shell/shared/sidebar-focus.css` | Focus rings in native sidebar documents | `light-dark()`, scoped to internal sidebar URLs |
 
-`scripts/brand/contrast.py` checks every declared pair (**208/208 pass**, both themes). `tests/integration/test_horizon.py` re-measures contrast on the rendered window. The generator refuses a semantic colour defined for one theme only (it would fall back to an unrelated value in the other), and a unit test checks that every `var(--nv-*)` in the Shell and start-page sheets exists in both themes.
+`scripts/brand/contrast.py` checks every declared pair (**220/220 pass**, both themes; the original 208 pairs are preserved). `tests/integration/test_horizon.py` re-measures contrast on the rendered window. The generator refuses a semantic colour defined for one theme only (it would fall back to an unrelated value in the other), and a unit test checks that every `var(--nv-*)` in the Shell and start-page sheets exists in both themes.
 
 ## Colour
 
@@ -271,3 +271,85 @@ The independent integration review found one future-schema guard defect: version
 English gallery verification uses a disposable en-US profile: 1280/390 px in both themes and 320/390 px at 200% root font, with no horizontal overflow. [Measurements](screenshots/ux2/english-measurements.json) and [English narrow/dark](screenshots/ux2/gallery-en-390-dark.png).
 
 Final integrated results on the reviewed package: 600 unit tests OK (1 skip), 194 Track B integration tests OK (13 skips), 208 declared contrast combinations, Ruff/generated-file checks and all six security scans. [Capture provenance](screenshots/ux2/capture-provenance.json); archived previous page captures are kept under `screenshots/ux2/before/`.
+
+
+## UX3A: trusted band and window safety (local implementation, 2026-10-28)
+
+This is the band and safety grammar slice of UX3, implemented on base
+`cf548dfb19868c319f8164c6ba469b5e473fbeee`. Tab groups, downloads badge/patch
+0007, layout/personalisation onboarding and Shell/assistant flow redesigns
+remain later slices. This local result does not mark the whole UX3 programme
+complete or establish a rebuilt release/CI result.
+
+`NulavioWindow` owns the `nulavio-band` CustomizableUI toolbar area and its
+non-removable custom widget. It inserts only its own toolbar before
+`TabsToolbar`, leaving the native controls and their parents intact. The widget
+uses a XUL `hbox`, accepted by Gecko 159's custom-widget API: unlike a
+`toolbaritem`, CustomizeMode does not wrap it in a draggable, event-blocking
+palette item. The native-window author sheet keeps this area visible even when
+CustomizableUI sets `collapsed`; it is independent of the cosmetic Horizon
+preference. It neither resets customization nor changes native security icons.
+
+The solid band uses `band.bg` (light `#BFD0D6`, dark `#04080D`), a 30 px minimum
+and wrapping content. The actual profile name, colour and engine avatar (or
+initial) are enclosed by the opaque identity ink ring. An AI Workspace uses
+its actual agent name and the reserved ink flag. Protection comes directly
+from `profileLockState` for the current profile directory: protected/unlocked,
+unprotected, or unknown on read failure. An unavailable profile identity is
+named as such. The identity button opens the existing native Shell action
+popup; if its original action was removed, the same real selector opens as a
+Shell tab without restoring that action. Protection opens the existing
+profile-management page. The current
+Vault API refuses `lock(current)` with `is-current`, so this slice does not
+invent a one-click current-profile lock. The real unlock and relock-on-last-
+window-close workflows remain authoritative.
+
+A trusted system-page label requires the selected top document's
+`principal.addonPolicy.id === "shell@nulavio.net"`, the Shell host, a fixed
+known pathname and the committed current document URI. Loading documents get
+no header. Titles, body text, query parameters and fragments never supply its
+words. Navigation clears text, accessible name and tooltip together; tab
+switches recompute synchronously. Page-title preferences are unchanged,
+retaining native KDE title-bar behaviour per D-UX17, which supersedes the
+older title-hiding proposal in the mockup rationale.
+
+Each warning composes independently: temporary (dashes and deleted-on-close
+words), private (plum/dots and assistant-off words), agent (name, actual level,
+lines and double content frame), raw automation (critical diagonal sample and
+explicit unchecked/unlogged words), and Guard (pending count and real Review
+entry). `NulavioAI.windowWarning()` reads the same raw session latch as the
+original non-dismissible bar; `windowState()` adds registry identity/level and
+an explicit unavailable result. A successful registry read also supersedes the
+old bar's cached paused flag, so an explicit backend resume is reflected. A synchronous warning event and a revision
+check prevent an older idle/status result from erasing a newer warning. Failed
+refreshes preserve known raw/agent identity and label status unavailable.
+Guard changes signal a read of its existing findings; this does not start a
+new Guard audit in an AI Workspace, where the existing backend skips checks.
+
+Pause calls the real per-agent pause API. **Stop all agents and assistant**
+calls the real global emergency stop; both locales and accessible names state
+its scope. Raw opt-in, grants, pause/revoke and backend policy are unchanged.
+The original AI, temporary and Guard notification bars and their safety
+assertions remain in place. This slice adds the band without claiming that
+those bars have been consolidated or redesigned.
+
+Fullscreen has a separate chrome flow element outside the collapsing toolbox,
+above web content and below native security popovers. Its persistent 3 px line
+has independent segments, so one state cannot replace another pattern. The
+worded notice appears for four seconds on entry/state change, on a trusted
+mouse movement at the top edge, or on keyboard focus. Focus inside it retains
+the actionable notice; leaving permits it to compact again. No safety cue
+animates, fades or blurs. Native fullscreen exit warnings keep their own
+popover and input handling.
+
+Lifecycle is idempotent: startup enumerates restored windows and observes new
+ones; unload/stop remove the progress/tab listeners, observers, stylesheet,
+owned elements and notice timers. A generation check rejects work completed
+after stop/restart. The pre-existing scoped sidebar-focus agent stylesheet
+keeps its original registration and theme/accessibility guards.
+
+The [UX3A evidence](screenshots/ux3a/verification.json) records commands,
+results, source/package hashes, fixture provenance and captures. These are
+headless checks of a task-owned application copy with `dev_sync.py`, not a
+fresh engine build or accessibility certification. Final rebuild, integration
+on the merged SHA and Fedora/Ubuntu CI remain the parent's responsibility.

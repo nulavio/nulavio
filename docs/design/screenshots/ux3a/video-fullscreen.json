@@ -1,0 +1,78 @@
+{
+  "element": "video",
+  "source": "synthetic canvas MediaStream",
+  "cold": {
+    "notice": false,
+    "h": 3
+  },
+  "trusted_pointer_reveal": true,
+  "state": {
+    "full": true,
+    "text": "VVideo | \u25c7 Sem prote\u00e7\u00e3o",
+    "rect": {
+      "x": 0,
+      "y": 0,
+      "w": 1366,
+      "h": 33,
+      "opacity": "1",
+      "visibility": "visible",
+      "hit": true,
+      "hitNode": "nulavio-fullscreen-notice",
+      "bg": "rgb(191, 208, 214)",
+      "color": "rgb(11, 22, 35)",
+      "border": "none",
+      "outline": "none",
+      "outlineWidth": "3px",
+      "animation": "none",
+      "transition": "0s"
+    },
+    "viewport": [
+      1366,
+      768
+    ],
+    "bg": "rgb(191, 208, 214)",
+    "overflow": false,
+    "cues": [
+      {
+        "kind": "nv-band-identity",
+        "text": "VVideo",
+        "label": "Perfil: Video. Trocar de perfil (Alt+Shift+P)",
+        "x": 8,
+        "y": 6,
+        "w": 61.23333740234375,
+        "h": 24,
+        "opacity": "1",
+        "visibility": "visible",
+        "hit": true,
+        "hitNode": "span",
+        "bg": "rgb(197, 227, 132)",
+        "color": "rgb(7, 15, 24)",
+        "border": "solid",
+        "outline": "none",
+        "outlineWidth": "3px",
+        "animation": "none",
+        "transition": "0s"
+      },
+      {
+        "kind": "nv-band-protection",
+        "text": "\u25c7 Sem prote\u00e7\u00e3o",
+        "label": "\u25c7 Sem prote\u00e7\u00e3o",
+        "x": 77.23333740234375,
+        "y": 6,
+        "w": 119.21665954589844,
+        "h": 24,
+        "opacity": "1",
+        "visibility": "visible",
+        "hit": true,
+        "hitNode": "button",
+        "bg": "rgb(191, 208, 214)",
+        "color": "rgb(11, 22, 35)",
+        "border": "solid",
+        "outline": "none",
+        "outlineWidth": "3px",
+        "animation": "none",
+        "transition": "0s"
+      }
+    ]
+  }
+}

@@ -355,6 +355,36 @@ class AI {
     return { kind, profile: kind === "profile" ? Services.prefs.getStringPref(TARGET_LABEL_PREF, "") : null };
   }
 
+  /** Synchronous warning snapshot so a slow identity lookup cannot delay a raw warning. */
+  windowWarning() {
+    const bar = this.#bar;
+    return bar ? { id: bar.agent, target: { ...bar.target }, raw: bar.raw, paused: bar.paused, failed: bar.failed } : null;
+  }
+
+  /** Read-only Farol snapshot. Raw is the same session latch as the non-dismissible
+      bar, never inferred from a CSS attribute. Failure is explicit: consumers keep
+      the last identity/level and warning instead of interpreting it as an idle window. */
+  async windowState() {
+    const warning = this.windowWarning();
+    const id = warning?.id || await this.workspaceAgent();
+    if (!id) {
+      return null;
+    }
+    const state = {
+      id, target: warning?.target ?? this.workspaceTarget(), raw: warning?.raw ?? false,
+      paused: warning?.paused ?? false, failed: warning?.failed ?? false,
+    };
+    try {
+      const overview = await this.overview();
+      const agent = overview.agents.find(a => a.id === id);
+      return { ...state, name: agent?.name ?? id, autonomy: agent?.autonomy ?? null,
+        paused: agent ? Boolean(agent.paused) : state.paused, revoked: Boolean(agent?.revoked),
+        stopped: overview.stopped, unavailable: !agent };
+    } catch {
+      return { ...state, name: id, autonomy: null, unavailable: true };
+    }
+  }
+
   /** In a window an agent drives: say plainly who drives it, at which level and where, in every browser
       window, in a bar that cannot be closed, with "Parar agente". The texts come from the Shell's locales:
       text (normal), rawText, pausedText, failedText, stopLabel. */
@@ -377,6 +407,7 @@ class AI {
   }
 
   #renderAll() {
+    Services.obs.notifyObservers(null, "nulavio-ai-window-changed");
     for (const win of Services.wm.getEnumerator("navigator:browser")) {
       this.#render(win);
     }

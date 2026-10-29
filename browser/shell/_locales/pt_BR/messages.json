@@ -933,5 +933,31 @@
   "galleryPermissionRequestDescription": { "message": "Este exemplo ilustra uma solicitação de permissão de alto impacto. Nenhuma permissão real é solicitada ou concedida." },
   "galleryKeepRestricted": { "message": "Manter restrito" },
   "galleryAllowFullControl": { "message": "Permitir controle total" },
-  "gallerySafeChoiceFirst": { "message": "A opção segura permanece primeiro e como ação principal. Os sinais de segurança são opacos, fixos e nunca animados." }
+  "gallerySafeChoiceFirst": { "message": "A opção segura permanece primeiro e como ação principal. Os sinais de segurança são opacos, fixos e nunca animados." },
+
+  "bandLabel": {"message": "Perfil e segurança da janela"},
+  "bandProfileUnavailable": {"message": "Identidade do perfil indisponível"},
+  "bandProtected": {"message": "⌑ Protegido · desbloqueado"},
+  "bandUnprotected": {"message": "◇ Sem proteção"},
+  "bandProtectionUnknown": {"message": "? Proteção desconhecida"},
+  "bandSystemPage": {"message": "Nulavio · $SURFACE$ · página do sistema", "placeholders": {"surface": {"content": "$1"}}},
+  "bandSurfaceUnlock": {"message": "Desbloqueio"},
+  "bandSurfacePhone": {"message": "Desbloqueio por telefone"},
+  "bandSurfaceGuard": {"message": "Revisar mudanças"},
+  "bandSurfacePermission": {"message": "Permissão de agente"},
+  "bandSurfaceRouting": {"message": "Destino do link"},
+  "bandSurfaceDownload": {"message": "Aviso de download"},
+  "bandSurfacePassword": {"message": "Aviso de site parecido"},
+
+  "bandTemporary": {"message": "◷ Temporário · apagado ao fechar"},
+  "bandPrivate": {"message": "◈ Janela privativa · sem histórico · assistente desligado"},
+  "bandLevelUnknown": {"message": "desconhecido"},
+  "bandAgentWorkspace": {"message": "▤ Área de IA · $AGENT$ · Nível: $LEVEL$", "placeholders": {"agent": {"content": "$1"}, "level": {"content": "$2"}}},
+  "bandAgentProfile": {"message": "▤ $AGENT$ no seu perfil $PROFILE$ · Nível: $LEVEL$", "placeholders": {"agent": {"content": "$1"}, "profile": {"content": "$2"}, "level": {"content": "$3"}}},
+  "bandRaw": {"message": "⯃ Automação bruta · o Nulavio não verifica nem registra ações"},
+  "bandGuard": {"message": "⚠ Guard · $COUNT$ mudanças para revisar", "placeholders": {"count": {"content": "$1"}}},
+  "bandPauseAgent": {"message": "Ⅱ Pausar agente $AGENT$", "placeholders": {"agent": {"content": "$1"}}},
+  "bandStopAll": {"message": "■ Parar todos os agentes e assistente"},
+  "bandAgentUnknown": {"message": "? Estado do agente indisponível · aviso mantido"},
+  "bandStopFailed": {"message": "⯃ Falha ao parar · revise as configurações de IA"}
 }
