@@ -396,3 +396,51 @@ Remote CI is tracked separately by the published full SHA. Its Fedora/Ubuntu
 jobs use distribution Firefox; privileged Track B verification is the local
 rebuilt-package run above. Physical KDE/GTK, Orca, hardware scaling and frame
 times remain pending. Later UX3 and UX4–UX7 work is not closed by this slice.
+
+## UX3B: native tab groups (local application-copy verification, 2026-10-29)
+
+Built on `25e591d8ef8184a4aaf0da6b535bf7d86c1248d6`. Horizon renders the
+existing group button as neutral name + small colour swatch + thin native group
+line, in horizontal and vertical tabs, with expanded/collapsed group semantics
+kept by Gecko. The active tab retains its separate mint route mark. All nine
+native colour families map to the already generated `group.*` tokens, including
+the low-chroma legacy orange, purple and red values. Tokens, colour names and
+Fluent resources are unchanged. The native group list uses the same variables.
+
+D-UX16 filters both the unavailable native radio **and** its adjacent label.
+Hiding only the label was reproduced as an invisible keyboard destination.
+The selected native legacy radio is deliberately an explicit current-value
+exception: its original localized name, tooltip, neutral swatch and checked
+state remain visible/accessible until the user chooses an available colour.
+Opening or dismissing the editor preserves the stored colour. Once replaced,
+that legacy colour disappears from the choices and cannot be reached with the
+arrows. No group data is migrated, renamed or rewritten.
+
+CSS cannot affect Gecko 159's `nextUnusedColor` getter: it still picks from all
+nine names, even after hiding inputs. A small per-window adaptation in
+`NulavioWindow` filters the default candidate set, first choosing an unused
+available colour and then reusing an available colour when exhausted. It wraps
+only the existing editor instance and restores its getter on teardown. Explicit
+and restored colours remain native. There is no engine patch, parallel picker
+or keyboard interception. Both the CSS and getter yield immediately to Horizon
+off, installed themes and high/forced contrast. Native focus/ARIA/navigation,
+user placements and all security controls remain owned by Gecko.
+
+[UX3B verification](screenshots/ux3b/verification.json) identifies the exact
+source/package bytes, commands, results, input probes, captures and remaining
+limits. This is a task-owned copy of the parent's UX3A package synchronized with
+`dev_sync.py`, **not** a new production build. The parent owns the rebuild,
+publication and CI. Native popup widgets are absent from the main-window
+headless screenshot surface (also checked with `Capture.canvas`/`drawView`);
+editor evidence is real trusted input, geometry, computed focus and Gecko
+accessibility state, not a claim that those popup pixels were captured. Orca,
+physical KDE/GTK/forced colours, hardware scaling and frame time remain pending.
+
+The parent's UX3A publication is separately recorded at
+`25e591d8ef8184a4aaf0da6b535bf7d86c1248d6`, with all six jobs successful in
+[CI run 40819764438](https://github.com/caiolombello/nulavio/actions/runs/40819764438).
+Its local privileged engine opt-in run passed 15 tests with zero skips, including
+live Safe Browsing phishing blocking, per the supplied
+`network-engine-verification.json`. These are parent release results, distinct
+from UX3B's new local checks and from distribution-Firefox CI. The committed
+UX3A `release-verification.json` and its original hashes/history are preserved.

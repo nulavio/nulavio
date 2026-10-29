@@ -1,0 +1,378 @@
+{
+  "chrome/browser/builtin-addons/nulavio-shell/_locales/en/messages.json": {
+    "source_sha256": "5e4f1d7391e5a06347ca0d39f3de418d6cf1dfac7140d6076ee53c3b8be9d7b0",
+    "package_sha256": "5e4f1d7391e5a06347ca0d39f3de418d6cf1dfac7140d6076ee53c3b8be9d7b0"
+  },
+  "chrome/browser/builtin-addons/nulavio-shell/_locales/pt_BR/messages.json": {
+    "source_sha256": "3fba11436067eb2210d437b41c9be32daef2f58a499681a4c4a9f40fb8270754",
+    "package_sha256": "3fba11436067eb2210d437b41c9be32daef2f58a499681a4c4a9f40fb8270754"
+  },
+  "chrome/browser/builtin-addons/nulavio-shell/ai/request.html": {
+    "source_sha256": "bf0a4ecc6282ef653e7a5d4733c551c5f28fd14171eb7ba79c6c6e0b46eb858a",
+    "package_sha256": "bf0a4ecc6282ef653e7a5d4733c551c5f28fd14171eb7ba79c6c6e0b46eb858a"
+  },
+  "chrome/browser/builtin-addons/nulavio-shell/ai/request.js": {
+    "source_sha256": "bd57c41bf49be08115483769bcbe551707d984d29fd9eebcb58f14c5edae7fc6",
+    "package_sha256": "bd57c41bf49be08115483769bcbe551707d984d29fd9eebcb58f14c5edae7fc6"
+  },
+  "chrome/browser/builtin-addons/nulavio-shell/assistant/panel.html": {
+    "source_sha256": "a3c22a83bcef73cae4664d37dcf6fbd008c8699aac2997df96d1e2137efd872f",
+    "package_sha256": "a3c22a83bcef73cae4664d37dcf6fbd008c8699aac2997df96d1e2137efd872f"
+  },
+  "chrome/browser/builtin-addons/nulavio-shell/assistant/panel.js": {
+    "source_sha256": "032fe6c73e1687db636c69e5cdd6a13b3de8c6e75bb800371167068ff391b506",
+    "package_sha256": "032fe6c73e1687db636c69e5cdd6a13b3de8c6e75bb800371167068ff391b506"
+  },
+  "chrome/browser/builtin-addons/nulavio-shell/background.js": {
+    "source_sha256": "0cd657a7758ec8326e3f64d20acfb7345a16c56eba6f11789a231c5b45c42385",
+    "package_sha256": "0cd657a7758ec8326e3f64d20acfb7345a16c56eba6f11789a231c5b45c42385"
+  },
+  "chrome/browser/builtin-addons/nulavio-shell/dev/gallery/gallery.css": {
+    "source_sha256": "781f1ca3ff7d40b9c6a36cb721e58d1d03646db4ee5fb3b8564df072296d332d",
+    "package_sha256": "781f1ca3ff7d40b9c6a36cb721e58d1d03646db4ee5fb3b8564df072296d332d"
+  },
+  "chrome/browser/builtin-addons/nulavio-shell/dev/gallery/gallery.js": {
+    "source_sha256": "a2aea45274c075495e151f06ddd943ade92169916dd78dd077d62c66235d5ef8",
+    "package_sha256": "a2aea45274c075495e151f06ddd943ade92169916dd78dd077d62c66235d5ef8"
+  },
+  "chrome/browser/builtin-addons/nulavio-shell/dev/gallery/index.html": {
+    "source_sha256": "1c78b36e454d9d76ace4e616e2f5aee68df0b81d82f78bbc54119fb26c0caa3d",
+    "package_sha256": "1c78b36e454d9d76ace4e616e2f5aee68df0b81d82f78bbc54119fb26c0caa3d"
+  },
+  "chrome/browser/builtin-addons/nulavio-shell/experiments/ai/parent.js": {
+    "source_sha256": "88036aec27c499e9f832e05c7398e4b1daf43567d91d005b9c418adcba4c10f6",
+    "package_sha256": "88036aec27c499e9f832e05c7398e4b1daf43567d91d005b9c418adcba4c10f6"
+  },
+  "chrome/browser/builtin-addons/nulavio-shell/experiments/ai/schema.json": {
+    "source_sha256": "9859dc856f68e19bbe28eeb2d3ff2f361f2d221d4a3188eda66f7d0d2de4ce86",
+    "package_sha256": "9859dc856f68e19bbe28eeb2d3ff2f361f2d221d4a3188eda66f7d0d2de4ce86"
+  },
+  "chrome/browser/builtin-addons/nulavio-shell/experiments/connect/parent.js": {
+    "source_sha256": "4dbc642f13b7b8f918575bd5aa9a533c5c1fdb9dcd2e0c9cb91ca45d95646d7b",
+    "package_sha256": "4dbc642f13b7b8f918575bd5aa9a533c5c1fdb9dcd2e0c9cb91ca45d95646d7b"
+  },
+  "chrome/browser/builtin-addons/nulavio-shell/experiments/connect/schema.json": {
+    "source_sha256": "164d71f03f2d0524450be5832540bae5653b94aea84fa81a1af9c7d2fe657153",
+    "package_sha256": "164d71f03f2d0524450be5832540bae5653b94aea84fa81a1af9c7d2fe657153"
+  },
+  "chrome/browser/builtin-addons/nulavio-shell/experiments/guard/parent.js": {
+    "source_sha256": "9e1d56f0429b7e4d992104f4f2a866d2a7c4c39f2945ecd7a0c714b9ce830974",
+    "package_sha256": "9e1d56f0429b7e4d992104f4f2a866d2a7c4c39f2945ecd7a0c714b9ce830974"
+  },
+  "chrome/browser/builtin-addons/nulavio-shell/experiments/guard/schema.json": {
+    "source_sha256": "5dbbb66f119582fb6d4980e748942acf76559395e349ba666bd2a1724d424da1",
+    "package_sha256": "5dbbb66f119582fb6d4980e748942acf76559395e349ba666bd2a1724d424da1"
+  },
+  "chrome/browser/builtin-addons/nulavio-shell/experiments/passwords/parent.js": {
+    "source_sha256": "4c6d4f8e21f5a2167777cf6246ea476607aa34edc5fbc8652b4dc8a5d82df599",
+    "package_sha256": "4c6d4f8e21f5a2167777cf6246ea476607aa34edc5fbc8652b4dc8a5d82df599"
+  },
+  "chrome/browser/builtin-addons/nulavio-shell/experiments/passwords/schema.json": {
+    "source_sha256": "18bbc4dfc5167a4669b3aabb4e5a278824e678b6888f32caad38a7e93de9003b",
+    "package_sha256": "18bbc4dfc5167a4669b3aabb4e5a278824e678b6888f32caad38a7e93de9003b"
+  },
+  "chrome/browser/builtin-addons/nulavio-shell/experiments/privacy/parent.js": {
+    "source_sha256": "56d400c276c5d723620d28848eb136799f2d105f8ebab9331d507f274ee6a792",
+    "package_sha256": "56d400c276c5d723620d28848eb136799f2d105f8ebab9331d507f274ee6a792"
+  },
+  "chrome/browser/builtin-addons/nulavio-shell/experiments/privacy/schema.json": {
+    "source_sha256": "8d271301bd29247a5087b36b6b006ce5d2a2c1b56e44af54e9f1b67a4b5909d6",
+    "package_sha256": "8d271301bd29247a5087b36b6b006ce5d2a2c1b56e44af54e9f1b67a4b5909d6"
+  },
+  "chrome/browser/builtin-addons/nulavio-shell/experiments/profiles/parent.js": {
+    "source_sha256": "4d6ab4d9c5efbbb19ffe37ac691a7946fc98e3950479e97e71d47a06225db1cb",
+    "package_sha256": "4d6ab4d9c5efbbb19ffe37ac691a7946fc98e3950479e97e71d47a06225db1cb"
+  },
+  "chrome/browser/builtin-addons/nulavio-shell/experiments/profiles/schema.json": {
+    "source_sha256": "e71c73079926b09644332c84ed47d369cb9d51cbaea86e050103891e5fc2e00a",
+    "package_sha256": "e71c73079926b09644332c84ed47d369cb9d51cbaea86e050103891e5fc2e00a"
+  },
+  "chrome/browser/builtin-addons/nulavio-shell/experiments/routing/parent.js": {
+    "source_sha256": "06ce010e724a3e95883bb35e6f36229f304977da7a0f771169d547fbb9b3d66b",
+    "package_sha256": "06ce010e724a3e95883bb35e6f36229f304977da7a0f771169d547fbb9b3d66b"
+  },
+  "chrome/browser/builtin-addons/nulavio-shell/experiments/routing/schema.json": {
+    "source_sha256": "e07dcd8ff7abfff0e57fa5385f0eb5d06cbecefada29e53d330767e1df5ed716",
+    "package_sha256": "e07dcd8ff7abfff0e57fa5385f0eb5d06cbecefada29e53d330767e1df5ed716"
+  },
+  "chrome/browser/builtin-addons/nulavio-shell/experiments/search/parent.js": {
+    "source_sha256": "da9d74c1fe9c7441d8c229283d816be557c1ef9b2d75f93bdc47b847f835f5a6",
+    "package_sha256": "da9d74c1fe9c7441d8c229283d816be557c1ef9b2d75f93bdc47b847f835f5a6"
+  },
+  "chrome/browser/builtin-addons/nulavio-shell/experiments/search/schema.json": {
+    "source_sha256": "d65bbe73930ea0a994c165a726efc5cd385ee7d8955505062ea1fb33a59f53a0",
+    "package_sha256": "d65bbe73930ea0a994c165a726efc5cd385ee7d8955505062ea1fb33a59f53a0"
+  },
+  "chrome/browser/builtin-addons/nulavio-shell/experiments/vault/parent.js": {
+    "source_sha256": "8a65d3cce7e675142b08f5c232b6ba3bf1a76b3e498fc5fa608d4a9923f7206a",
+    "package_sha256": "8a65d3cce7e675142b08f5c232b6ba3bf1a76b3e498fc5fa608d4a9923f7206a"
+  },
+  "chrome/browser/builtin-addons/nulavio-shell/experiments/vault/schema.json": {
+    "source_sha256": "c1afb4c1b7e8f2c83c4bf3d7a523a91dcd00283b1f68f1a6924eb19b0c3bfa22",
+    "package_sha256": "c1afb4c1b7e8f2c83c4bf3d7a523a91dcd00283b1f68f1a6924eb19b0c3bfa22"
+  },
+  "chrome/browser/builtin-addons/nulavio-shell/guard/review.html": {
+    "source_sha256": "e4aa8c1e93c6bcbfddaded134a68e0eff1622ccbe1a9dd47ed820735b3a8aa1b",
+    "package_sha256": "e4aa8c1e93c6bcbfddaded134a68e0eff1622ccbe1a9dd47ed820735b3a8aa1b"
+  },
+  "chrome/browser/builtin-addons/nulavio-shell/guard/review.js": {
+    "source_sha256": "cd39710f0713f1086eda3a832c2e152ee0ea834b8202199be3d3ec7d67f2df6a",
+    "package_sha256": "cd39710f0713f1086eda3a832c2e152ee0ea834b8202199be3d3ec7d67f2df6a"
+  },
+  "chrome/browser/builtin-addons/nulavio-shell/lib/agent-texts.js": {
+    "source_sha256": "b5491d20f99c6834c9abbb261e9d44ff6f42cf03870d0b9c865c3a3eb6684644",
+    "package_sha256": "b5491d20f99c6834c9abbb261e9d44ff6f42cf03870d0b9c865c3a3eb6684644"
+  },
+  "chrome/browser/builtin-addons/nulavio-shell/lib/i18n.js": {
+    "source_sha256": "6a1176d7704aa358b36fdb510c7159b4c0370ab725b16fbff3b9d9c24220dac4",
+    "package_sha256": "6a1176d7704aa358b36fdb510c7159b4c0370ab725b16fbff3b9d9c24220dac4"
+  },
+  "chrome/browser/builtin-addons/nulavio-shell/lib/identity-colors.js": {
+    "source_sha256": "0c898aa0d510246640f5ef5725ac714b48e8250792432276bb276ec7aefa00d1",
+    "package_sha256": "0c898aa0d510246640f5ef5725ac714b48e8250792432276bb276ec7aefa00d1"
+  },
+  "chrome/browser/builtin-addons/nulavio-shell/lib/names.js": {
+    "source_sha256": "88fb1b953258e9cf3a56cd51ad3b678291be725a13975bad860e24866b1695f8",
+    "package_sha256": "88fb1b953258e9cf3a56cd51ad3b678291be725a13975bad860e24866b1695f8"
+  },
+  "chrome/browser/builtin-addons/nulavio-shell/lib/profile-icon.js": {
+    "source_sha256": "c50b0f8ea6500bfff9925c0175eba03aee3cc6b18ee99d448d365045b48821f2",
+    "package_sha256": "c50b0f8ea6500bfff9925c0175eba03aee3cc6b18ee99d448d365045b48821f2"
+  },
+  "chrome/browser/builtin-addons/nulavio-shell/lib/qr.js": {
+    "source_sha256": "6036ada44203f8b361fb341bee186e7edb5abf3d9f4e7534392e7d97461f053e",
+    "package_sha256": "6036ada44203f8b361fb341bee186e7edb5abf3d9f4e7534392e7d97461f053e"
+  },
+  "chrome/browser/builtin-addons/nulavio-shell/lib/risky.js": {
+    "source_sha256": "cbde42894c6f8ff6847d6c1634ec0d3d2e3596f7c92fa7f2adc1d96712204aae",
+    "package_sha256": "cbde42894c6f8ff6847d6c1634ec0d3d2e3596f7c92fa7f2adc1d96712204aae"
+  },
+  "chrome/browser/builtin-addons/nulavio-shell/lib/ui.js": {
+    "source_sha256": "281eb05e4f9fb706bdcb33be4f2e2450e85c8cf1fc668a8f5a445449131487d4",
+    "package_sha256": "281eb05e4f9fb706bdcb33be4f2e2450e85c8cf1fc668a8f5a445449131487d4"
+  },
+  "chrome/browser/builtin-addons/nulavio-shell/manifest.json": {
+    "source_sha256": "33fea33fa74053117ec8938ea72f43fe34e107a04b81c1f2fa6f620d20c0288c",
+    "package_sha256": "33fea33fa74053117ec8938ea72f43fe34e107a04b81c1f2fa6f620d20c0288c"
+  },
+  "chrome/browser/builtin-addons/nulavio-shell/modules/NulavioAI.sys.mjs": {
+    "source_sha256": "b048c6e596489f6ae7a9e8750cbf901ab7b3a1ccf810c334a1398117c160b07a",
+    "package_sha256": "b048c6e596489f6ae7a9e8750cbf901ab7b3a1ccf810c334a1398117c160b07a"
+  },
+  "chrome/browser/builtin-addons/nulavio-shell/modules/NulavioConnect.sys.mjs": {
+    "source_sha256": "39d7004bdb471b5f2769db6a0d5243436b84476ed61556a50d0dd12ba5111b96",
+    "package_sha256": "39d7004bdb471b5f2769db6a0d5243436b84476ed61556a50d0dd12ba5111b96"
+  },
+  "chrome/browser/builtin-addons/nulavio-shell/modules/NulavioGuard.sys.mjs": {
+    "source_sha256": "896f7c3865f2b14b4c239391ff47d8c353639357ba3a89e6329acda180136557",
+    "package_sha256": "896f7c3865f2b14b4c239391ff47d8c353639357ba3a89e6329acda180136557"
+  },
+  "chrome/browser/builtin-addons/nulavio-shell/modules/NulavioLookalikeChild.sys.mjs": {
+    "source_sha256": "1261a52bc4e568a44250e20d65bd31772d79dbd11a7d2b5f659310eb8bdc33d6",
+    "package_sha256": "1261a52bc4e568a44250e20d65bd31772d79dbd11a7d2b5f659310eb8bdc33d6"
+  },
+  "chrome/browser/builtin-addons/nulavio-shell/modules/NulavioLookalikeParent.sys.mjs": {
+    "source_sha256": "9cc955e8dc01b6833be955edb4fc0c8607c5969b288ae64b7859136ebfe01604",
+    "package_sha256": "9cc955e8dc01b6833be955edb4fc0c8607c5969b288ae64b7859136ebfe01604"
+  },
+  "chrome/browser/builtin-addons/nulavio-shell/modules/NulavioPasswords.sys.mjs": {
+    "source_sha256": "8cddf671c4ef60c15db5e723f8fdc22a3a1af7fc5f112ffcad8ea18663ee8f44",
+    "package_sha256": "8cddf671c4ef60c15db5e723f8fdc22a3a1af7fc5f112ffcad8ea18663ee8f44"
+  },
+  "chrome/browser/builtin-addons/nulavio-shell/modules/NulavioPrivacy.sys.mjs": {
+    "source_sha256": "e86b181664bb648008a6fd6849b091c4eaa38227a647b81cf27eeaf76053cf4e",
+    "package_sha256": "e86b181664bb648008a6fd6849b091c4eaa38227a647b81cf27eeaf76053cf4e"
+  },
+  "chrome/browser/builtin-addons/nulavio-shell/modules/NulavioProfiles.sys.mjs": {
+    "source_sha256": "cf0d2572d0ec8a4f1fcd7b8029e49e9eeca965cdc81d2cb41b25817120dc0f79",
+    "package_sha256": "cf0d2572d0ec8a4f1fcd7b8029e49e9eeca965cdc81d2cb41b25817120dc0f79"
+  },
+  "chrome/browser/builtin-addons/nulavio-shell/modules/NulavioRouter.sys.mjs": {
+    "source_sha256": "5daf517090690c1bd4e7d090c21193758d296868ef56b5d60b63a39a52618f70",
+    "package_sha256": "5daf517090690c1bd4e7d090c21193758d296868ef56b5d60b63a39a52618f70"
+  },
+  "chrome/browser/builtin-addons/nulavio-shell/modules/NulavioRouting.sys.mjs": {
+    "source_sha256": "282ddd510a1c87200e03115dc61024ca68b443d37b0c9f1509916e54e06c8ef2",
+    "package_sha256": "282ddd510a1c87200e03115dc61024ca68b443d37b0c9f1509916e54e06c8ef2"
+  },
+  "chrome/browser/builtin-addons/nulavio-shell/modules/NulavioSearch.sys.mjs": {
+    "source_sha256": "cd2880a1a38f2488b8f7cfcd0c5cb3b542fbf9a3ac632719ecbc7aa5ffcbe096",
+    "package_sha256": "cd2880a1a38f2488b8f7cfcd0c5cb3b542fbf9a3ac632719ecbc7aa5ffcbe096"
+  },
+  "chrome/browser/builtin-addons/nulavio-shell/modules/NulavioTools.sys.mjs": {
+    "source_sha256": "808fc0c7af9ac105a01a063f0ed265731590aa551556efe98b3229776ddde4c8",
+    "package_sha256": "808fc0c7af9ac105a01a063f0ed265731590aa551556efe98b3229776ddde4c8"
+  },
+  "chrome/browser/builtin-addons/nulavio-shell/modules/NulavioVault.sys.mjs": {
+    "source_sha256": "ab36344b60c87ff7cacb3076cdd87dd369455f25f1e1012a038cbab587899f82",
+    "package_sha256": "ab36344b60c87ff7cacb3076cdd87dd369455f25f1e1012a038cbab587899f82"
+  },
+  "chrome/browser/builtin-addons/nulavio-shell/modules/NulavioVaultState.sys.mjs": {
+    "source_sha256": "bc9558c72376dc214f94835766d9efe19e8b8789bd3286139912ba86a92a3324",
+    "package_sha256": "bc9558c72376dc214f94835766d9efe19e8b8789bd3286139912ba86a92a3324"
+  },
+  "chrome/browser/builtin-addons/nulavio-shell/modules/NulavioWindow.sys.mjs": {
+    "source_sha256": "b71f06ed4aca5a404220dc4bbe3b13ec8e60385a0802194d364d506d9dd051b3",
+    "package_sha256": "b71f06ed4aca5a404220dc4bbe3b13ec8e60385a0802194d364d506d9dd051b3"
+  },
+  "chrome/browser/builtin-addons/nulavio-shell/newtab/newtab.html": {
+    "source_sha256": "5563d108104ccdf217ac9f5abb70b5c5680cf83d469a12338ff090082e8d6718",
+    "package_sha256": "5563d108104ccdf217ac9f5abb70b5c5680cf83d469a12338ff090082e8d6718"
+  },
+  "chrome/browser/builtin-addons/nulavio-shell/newtab/newtab.js": {
+    "source_sha256": "c4155a20ebcc5af2112d2440a9927c9b3ba856e3a9f0bd3ce31cfd0e63f77670",
+    "package_sha256": "c4155a20ebcc5af2112d2440a9927c9b3ba856e3a9f0bd3ce31cfd0e63f77670"
+  },
+  "chrome/browser/builtin-addons/nulavio-shell/passwords/lookalike.html": {
+    "source_sha256": "cbc0f3a1f92c1c38d4ecd2e689ca60afea0dc2a5572a3b945b89afed9f8da212",
+    "package_sha256": "cbc0f3a1f92c1c38d4ecd2e689ca60afea0dc2a5572a3b945b89afed9f8da212"
+  },
+  "chrome/browser/builtin-addons/nulavio-shell/passwords/lookalike.js": {
+    "source_sha256": "afe7c5b03ee3cf928150b2a1450b2e1a0205e55b2daf42097b88bc149fa8b4f9",
+    "package_sha256": "afe7c5b03ee3cf928150b2a1450b2e1a0205e55b2daf42097b88bc149fa8b4f9"
+  },
+  "chrome/browser/builtin-addons/nulavio-shell/profiles/popup.html": {
+    "source_sha256": "693142b3a0f90ad7da864a87e36b3bd4d9c062d3ae3d8949e411b46d708b359b",
+    "package_sha256": "693142b3a0f90ad7da864a87e36b3bd4d9c062d3ae3d8949e411b46d708b359b"
+  },
+  "chrome/browser/builtin-addons/nulavio-shell/profiles/popup.js": {
+    "source_sha256": "0b85cd6b126d264c6acd535233b3e0ce3f748dbaa5698741e33df811553b68eb",
+    "package_sha256": "0b85cd6b126d264c6acd535233b3e0ce3f748dbaa5698741e33df811553b68eb"
+  },
+  "chrome/browser/builtin-addons/nulavio-shell/routing/ask.html": {
+    "source_sha256": "fcb7ab6e42076e1b36ace940c3ae674db04600888ab9f376039ef983bb47bd34",
+    "package_sha256": "fcb7ab6e42076e1b36ace940c3ae674db04600888ab9f376039ef983bb47bd34"
+  },
+  "chrome/browser/builtin-addons/nulavio-shell/routing/blocked.html": {
+    "source_sha256": "28bed6f63c12530157424a820d1cb833223d143c04b6e6eacf9ce9029af1f420",
+    "package_sha256": "28bed6f63c12530157424a820d1cb833223d143c04b6e6eacf9ce9029af1f420"
+  },
+  "chrome/browser/builtin-addons/nulavio-shell/routing/page.js": {
+    "source_sha256": "1ded9b6548d7fa5f41f93348a8f50cbd68b586284a23ba2b5b966045cb5e9a23",
+    "package_sha256": "1ded9b6548d7fa5f41f93348a8f50cbd68b586284a23ba2b5b966045cb5e9a23"
+  },
+  "chrome/browser/builtin-addons/nulavio-shell/settings/ai.js": {
+    "source_sha256": "0e2cd7e993b52391350316ede3a36c7bb6e49e3beead16f25778d13d2e1be258",
+    "package_sha256": "0e2cd7e993b52391350316ede3a36c7bb6e49e3beead16f25778d13d2e1be258"
+  },
+  "chrome/browser/builtin-addons/nulavio-shell/settings/settings.html": {
+    "source_sha256": "ba13fbcbea84c45b99b1e5bb4cc92d4351627dc1ae00cd798cdf810df8ed21a7",
+    "package_sha256": "ba13fbcbea84c45b99b1e5bb4cc92d4351627dc1ae00cd798cdf810df8ed21a7"
+  },
+  "chrome/browser/builtin-addons/nulavio-shell/settings/settings.js": {
+    "source_sha256": "3b0ae4bcad0b9539fcc7e736d96ca380cc374ed9e7da348d8981149f6cae3b07",
+    "package_sha256": "3b0ae4bcad0b9539fcc7e736d96ca380cc374ed9e7da348d8981149f6cae3b07"
+  },
+  "chrome/browser/builtin-addons/nulavio-shell/shared/accessibility.css": {
+    "source_sha256": "07f24e73b92852f3880432146bda02fd9fbbf95490f738168a2fd1dbea365318",
+    "package_sha256": "07f24e73b92852f3880432146bda02fd9fbbf95490f738168a2fd1dbea365318"
+  },
+  "chrome/browser/builtin-addons/nulavio-shell/shared/base.css": {
+    "source_sha256": "d6b1d8c417ce9033eab9470c810d507b99cd1977f49f4fee355becdedfe98008",
+    "package_sha256": "d6b1d8c417ce9033eab9470c810d507b99cd1977f49f4fee355becdedfe98008"
+  },
+  "chrome/browser/builtin-addons/nulavio-shell/shared/components.css": {
+    "source_sha256": "36ef8380285fb460fc636912063d35058204c49671e08a171a451343541bf04d",
+    "package_sha256": "36ef8380285fb460fc636912063d35058204c49671e08a171a451343541bf04d"
+  },
+  "chrome/browser/builtin-addons/nulavio-shell/shared/icon-critical.svg": {
+    "source_sha256": "04ff090280379e89c937bb761494c3cd231a43645294e648e25a2577b1b87f47",
+    "package_sha256": "04ff090280379e89c937bb761494c3cd231a43645294e648e25a2577b1b87f47"
+  },
+  "chrome/browser/builtin-addons/nulavio-shell/shared/integrations.json": {
+    "source_sha256": "74c858f404d8f23e07935fdbc45dbf96f21c28227118966e811448336a4359b1",
+    "package_sha256": "74c858f404d8f23e07935fdbc45dbf96f21c28227118966e811448336a4359b1"
+  },
+  "chrome/browser/builtin-addons/nulavio-shell/shared/nulavio-symbol-adaptive.svg": {
+    "source_sha256": "f4362788cfb94c5ecad2a8917ec7f0da10b1038adb720ae0c3209b842a40fca4",
+    "package_sha256": "f4362788cfb94c5ecad2a8917ec7f0da10b1038adb720ae0c3209b842a40fca4"
+  },
+  "chrome/browser/builtin-addons/nulavio-shell/shared/nulavio-symbol-dark-on-light.svg": {
+    "source_sha256": "3f3af6be5c1962e8b013583579d2ce59bf582c1ea8ce61c5d700412a07b12642",
+    "package_sha256": "3f3af6be5c1962e8b013583579d2ce59bf582c1ea8ce61c5d700412a07b12642"
+  },
+  "chrome/browser/builtin-addons/nulavio-shell/shared/nulavio-symbol.svg": {
+    "source_sha256": "c66153bb535ff44fb3cb6af4c23e7412ba2f768aba19b0c1c04ab653e99ba5df",
+    "package_sha256": "c66153bb535ff44fb3cb6af4c23e7412ba2f768aba19b0c1c04ab653e99ba5df"
+  },
+  "chrome/browser/builtin-addons/nulavio-shell/shared/pages.css": {
+    "source_sha256": "85c9ae6524ccadf1a77dffbbb58c470b8ef007bf51cb215413745f5a3f5e4074",
+    "package_sha256": "85c9ae6524ccadf1a77dffbbb58c470b8ef007bf51cb215413745f5a3f5e4074"
+  },
+  "chrome/browser/builtin-addons/nulavio-shell/shared/providers.json": {
+    "source_sha256": "3a4fef5aad016ef968ed64df23f4a764d623fe5d240a40f98349852d0a4d363a",
+    "package_sha256": "3a4fef5aad016ef968ed64df23f4a764d623fe5d240a40f98349852d0a4d363a"
+  },
+  "chrome/browser/builtin-addons/nulavio-shell/shared/shell.css": {
+    "source_sha256": "dfc67d50fd5b220424b92006aaa5f3e8efd62c3b7465f9553b5e1e7506641c74",
+    "package_sha256": "dfc67d50fd5b220424b92006aaa5f3e8efd62c3b7465f9553b5e1e7506641c74"
+  },
+  "chrome/browser/builtin-addons/nulavio-shell/shared/sidebar-focus.css": {
+    "source_sha256": "e3bd7ac3e16ee0be0e4a63dba34eaf720f6e6f147e04d551573eb95778975274",
+    "package_sha256": "e3bd7ac3e16ee0be0e4a63dba34eaf720f6e6f147e04d551573eb95778975274"
+  },
+  "chrome/browser/builtin-addons/nulavio-shell/shared/tokens.css": {
+    "source_sha256": "eed180784f31378cad1493dc677f9b4d21e89700d6693a225e265b309087dc34",
+    "package_sha256": "eed180784f31378cad1493dc677f9b4d21e89700d6693a225e265b309087dc34"
+  },
+  "chrome/browser/builtin-addons/nulavio-shell/shared/window-band.css": {
+    "source_sha256": "49a8d104a189483e2bc95e9634acc19a474f16c979909a13b84a4d20212bfb0e",
+    "package_sha256": "49a8d104a189483e2bc95e9634acc19a474f16c979909a13b84a4d20212bfb0e"
+  },
+  "chrome/browser/builtin-addons/nulavio-shell/vault/create.html": {
+    "source_sha256": "774932b1300af8cc65008146cd33fd7a9776239382746d004bf93cf700da5d0c",
+    "package_sha256": "774932b1300af8cc65008146cd33fd7a9776239382746d004bf93cf700da5d0c"
+  },
+  "chrome/browser/builtin-addons/nulavio-shell/vault/create.js": {
+    "source_sha256": "71fde7756521c7acd7e5643c212d19cc5758f93264fb61326f353c901598f6fd",
+    "package_sha256": "71fde7756521c7acd7e5643c212d19cc5758f93264fb61326f353c901598f6fd"
+  },
+  "chrome/browser/builtin-addons/nulavio-shell/vault/phone.html": {
+    "source_sha256": "36f2c5f78e3b1591f3bedc977662a82959385cede115d5a1edffcb9cd742b8b7",
+    "package_sha256": "36f2c5f78e3b1591f3bedc977662a82959385cede115d5a1edffcb9cd742b8b7"
+  },
+  "chrome/browser/builtin-addons/nulavio-shell/vault/phone.js": {
+    "source_sha256": "c9674b3202a7284f775bde9d784a52dabe78667acbfd76b4514982b82307e812",
+    "package_sha256": "c9674b3202a7284f775bde9d784a52dabe78667acbfd76b4514982b82307e812"
+  },
+  "chrome/browser/builtin-addons/nulavio-shell/vault/unlock.html": {
+    "source_sha256": "88b381f89bf52a45740f6e5d5915f3c0a1225a196d8e643a7a13784e2519fecc",
+    "package_sha256": "88b381f89bf52a45740f6e5d5915f3c0a1225a196d8e643a7a13784e2519fecc"
+  },
+  "chrome/browser/builtin-addons/nulavio-shell/vault/unlock.js": {
+    "source_sha256": "05c58761bbc23fc4e258dd229fcf533ff84a301b72a8219e9f98cace5e29d183",
+    "package_sha256": "05c58761bbc23fc4e258dd229fcf533ff84a301b72a8219e9f98cace5e29d183"
+  },
+  "chrome/browser/builtin-addons/nulavio-shell/warning/warning.html": {
+    "source_sha256": "ad4cd64417e908303503f72724b9c3057e637e8e8044bf7edb7f05a5d6ab529c",
+    "package_sha256": "ad4cd64417e908303503f72724b9c3057e637e8e8044bf7edb7f05a5d6ab529c"
+  },
+  "chrome/browser/builtin-addons/nulavio-shell/warning/warning.js": {
+    "source_sha256": "20adf4bfeb0fb91a8154cbcd73a48c0ef9ffa6914bf1427c620ff490f607fe16",
+    "package_sha256": "20adf4bfeb0fb91a8154cbcd73a48c0ef9ffa6914bf1427c620ff490f607fe16"
+  },
+  "chrome/browser/content/branding/theme/horizon.css": {
+    "source_sha256": "3aa872596f9a3feca9e33e5ff9a3b1a707d5f1cbf7ee386f8ad09837689c631d",
+    "package_sha256": "3aa872596f9a3feca9e33e5ff9a3b1a707d5f1cbf7ee386f8ad09837689c631d"
+  },
+  "chrome/browser/content/branding/theme/tokens.css": {
+    "source_sha256": "d1b649899280b4dfe3f75f7823f8389cb0465f45bad24779f4c508aa018338fb",
+    "package_sha256": "d1b649899280b4dfe3f75f7823f8389cb0465f45bad24779f4c508aa018338fb"
+  },
+  "defaults/preferences/firefox-branding.js": {
+    "source_sha256": "f7794f946d0d3aea3cff776a86e7eaf7cc7f29fe3735d0ff8a374564d11c055d",
+    "package_sha256": "f7794f946d0d3aea3cff776a86e7eaf7cc7f29fe3735d0ff8a374564d11c055d"
+  },
+  "modules/nulavio/NulavioCommandLine.sys.mjs": {
+    "source_sha256": "e5483d62f38e5c730b8ef1d822cf83223d966c9e217e325ab7fd054b63b25965",
+    "package_sha256": "e5483d62f38e5c730b8ef1d822cf83223d966c9e217e325ab7fd054b63b25965"
+  },
+  "modules/nulavio/NulavioDownloads.sys.mjs": {
+    "source_sha256": "8f39d38382f9d9d38d4c5d36ca0c5b7d4e4677828f8a996fa21b0eaadce3fbc7",
+    "package_sha256": "8f39d38382f9d9d38d4c5d36ca0c5b7d4e4677828f8a996fa21b0eaadce3fbc7"
+  },
+  "modules/nulavio/NulavioUrlbarRouting.sys.mjs": {
+    "source_sha256": "2d07cba06f60120c7227395d5259c6050ef0073f877def3640eefe818688c6ba",
+    "package_sha256": "2d07cba06f60120c7227395d5259c6050ef0073f877def3640eefe818688c6ba"
+  }
+}

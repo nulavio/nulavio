@@ -1,0 +1,17 @@
+[
+  {
+    "name": "Research",
+    "color": "rgb(134, 165, 236)",
+    "expected": "rgb(134, 165, 236)"
+  },
+  {
+    "name": "Legacy",
+    "color": "rgb(185, 142, 137)",
+    "expected": "rgb(185, 142, 137)"
+  },
+  {
+    "name": "Reference",
+    "color": "rgb(93, 178, 211)",
+    "expected": "rgb(93, 178, 211)"
+  }
+]

@@ -1,0 +1,324 @@
+{
+  "date_utc": "2026-10-29T05:24:34.894714+00:00",
+  "base": "25e591d8ef8184a4aaf0da6b535bf7d86c1248d6",
+  "branch": "tab-groups-safe-colour-selection",
+  "scope": "UX3B local implementation; no push, PR, merge, engine patch or rebuild",
+  "package_kind": "Task-owned application-only copy of parent UX3A install, plus dev_sync.py; NOT a rebuilt distribution",
+  "source_install": "/home/caiobarbieri/.cache/nulavio-ux/ux3a-release-clkptb85/nulavio",
+  "tested_install": "/home/caiobarbieri/.cache/nulavio-ux/ux3b-cwqfyoyu/nulavio",
+  "baseline_install": "/home/caiobarbieri/.cache/nulavio-ux/ux3b-cwqfyoyu/baseline-app",
+  "inherited_parent_tarball_sha256": "5b0db884cd414c7a794cf29511bf75b3695367b1f78a2707c6f07d3272c1c55b",
+  "original_browser_omni_sha256": "fd6ec78310e940ffadfcf6c68cbd511ca34de88c53b896756414f874a0e318b1",
+  "synced_browser_omni_sha256": "ce25e5504c4c3baf80bd1a1dfe70a3e2536b4579b41edcead712d594bbb80cfd",
+  "application_binary_sha256": "e2e5d2bf4297ff780d7c87e85231b19f8243249ebcb1c7a7b4801aeb5326f800",
+  "source_entry_count": 94,
+  "source_entry_mismatches": [],
+  "production_source_hashes": {
+    "browser/branding/nulavio/content/theme/horizon.css": "3aa872596f9a3feca9e33e5ff9a3b1a707d5f1cbf7ee386f8ad09837689c631d",
+    "browser/shell/modules/NulavioWindow.sys.mjs": "b71f06ed4aca5a404220dc4bbe3b13ec8e60385a0802194d364d506d9dd051b3"
+  },
+  "full_integration_source_snapshot": {
+    "browser/branding/nulavio/content/theme/horizon.css": "3aa872596f9a3feca9e33e5ff9a3b1a707d5f1cbf7ee386f8ad09837689c631d",
+    "browser/shell/modules/NulavioWindow.sys.mjs": "b71f06ed4aca5a404220dc4bbe3b13ec8e60385a0802194d364d506d9dd051b3",
+    "tests/integration/test_horizon_groups.py": "63e71f1ec2f16630c6cb1dfb2748429b693a4916068b7ca13746d7657d51d17c",
+    "tests/unit/test_horizon_theme.py": "a2becbd213644220848d1ca5624c7e17a6df01b65702fdab337d5a764429c64c"
+  },
+  "final_test_hashes": {
+    "tests/integration/test_horizon_groups.py": "bbafdf267e564da3dc7b6901f14089ae182a796d732dbdf9292796efe0ac5e9f",
+    "tests/unit/test_horizon_theme.py": "d378670b4f5b1b2e4f0127f71d451837e6cc2f46d52ca334d3a69f15610a0f99"
+  },
+  "test_snapshot_note": "After the full run, only fixtures/assertions were strengthened: explicit locale, native Tab entry, guard appearance, settled captures and exact CSS hiding allowlist. Production bytes are identical. Both final locale suites are recorded separately.",
+  "checks": [
+    {
+      "command": "env -u LC_ALL python3 -I tests/run.py unit",
+      "result": "PASS",
+      "tests": 600,
+      "seconds": 60.478,
+      "skips": 3,
+      "log": "/home/caiobarbieri/.cache/nulavio-ux/ux3b-cwqfyoyu/unit-complete.log",
+      "log_sha256": "6bcce4d3a7301a7f1cb4afe80be1c27d2b9429ea2b6960d6544c3408de547b9f",
+      "skip_reasons": [
+        "test_pair_unlock_and_refusals (test_companion_protocol.CompanionProtocolTest.test_pair_unlock_and_refusals) ... skipped 'build android/nv1 first (gradle :nv1:test); needs Java, gocryptfs, FUSE and libsodium'",
+        "test_requests_the_phone_must_refuse (test_companion_protocol.CompanionProtocolTest.test_requests_the_phone_must_refuse) ... skipped 'build android/nv1 first (gradle :nv1:test); needs Java, gocryptfs, FUSE and libsodium'",
+        "test_through_the_real_avahi (test_phone_link.PhoneApiTest.test_through_the_real_avahi) ... skipped 'NULAVIO_LAN_TESTS=1 with Avahi running and avahi-publish (announces on the local network)'"
+      ]
+    },
+    {
+      "command": "env -u LC_ALL NULAVIO_ENGINE=/home/caiobarbieri/.cache/nulavio-ux/ux3b-cwqfyoyu/nulavio/nulavio NULAVIO_TEST_ARTIFACTS=/home/caiobarbieri/.cache/nulavio-ux/ux3b-cwqfyoyu/full-artifacts python3 -I tests/run.py integration",
+      "result": "PASS",
+      "tests": 217,
+      "seconds": 705.383,
+      "skips": 13,
+      "log": "/home/caiobarbieri/.cache/nulavio-ux/ux3b-cwqfyoyu/integration.log",
+      "log_sha256": "7a0a208b905e3a95d06580978585e0e1ca85be8baba0e5dee69560f76f792cba",
+      "skip_reasons": [
+        "test_claude_code (test_ai_agents_real.RealAgentsTest.test_claude_code) ... skipped 'opt-in: NULAVIO_AGENT_TESTS=1 and a Gecko engine'",
+        "test_codex_cli (test_ai_agents_real.RealAgentsTest.test_codex_cli) ... skipped 'opt-in: NULAVIO_AGENT_TESTS=1 and a Gecko engine'",
+        "test_01_set_up_creates_keys_behind_the_screen_lock (test_companion_emulator.CompanionOnEmulatorTest.test_01_set_up_creates_keys_behind_the_screen_lock) ... skipped 'NULAVIO_EMULATOR=1, a device on adb, the debug APK, gocryptfs and libsodium'",
+        "test_02_pairing_shows_the_same_digits_on_both_sides (test_companion_emulator.CompanionOnEmulatorTest.test_02_pairing_shows_the_same_digits_on_both_sides) ... skipped 'NULAVIO_EMULATOR=1, a device on adb, the debug APK, gocryptfs and libsodium'",
+        "test_03_unlock_with_the_phone_mounts_the_profile (test_companion_emulator.CompanionOnEmulatorTest.test_03_unlock_with_the_phone_mounts_the_profile) ... skipped 'NULAVIO_EMULATOR=1, a device on adb, the debug APK, gocryptfs and libsodium'",
+        "test_04_an_answered_request_is_refused_again (test_companion_emulator.CompanionOnEmulatorTest.test_04_an_answered_request_is_refused_again) ... skipped 'NULAVIO_EMULATOR=1, a device on adb, the debug APK, gocryptfs and libsodium'",
+        "test_05_not_now_sends_nothing (test_companion_emulator.CompanionOnEmulatorTest.test_05_not_now_sends_nothing) ... skipped 'NULAVIO_EMULATOR=1, a device on adb, the debug APK, gocryptfs and libsodium'",
+        "test_14_safe_browsing_blocks_google_test_phishing_page (test_engine_slice.EngineSliceTest.test_14_safe_browsing_blocks_google_test_phishing_page) ... skipped 'set NULAVIO_NETWORK_TESTS=1 (contacts Google Safe Browsing)'",
+        "test_bitwarden (test_password_extensions.PasswordExtensionSmokeTest.test_bitwarden) ... skipped 'set NULAVIO_NETWORK_TESTS=1 (downloads from addons.mozilla.org)'",
+        "test_keepassxc_browser (test_password_extensions.PasswordExtensionSmokeTest.test_keepassxc_browser) ... skipped 'set NULAVIO_NETWORK_TESTS=1 (downloads from addons.mozilla.org)'",
+        "test_proton_pass (test_password_extensions.PasswordExtensionSmokeTest.test_proton_pass) ... skipped 'set NULAVIO_NETWORK_TESTS=1 (downloads from addons.mozilla.org)'",
+        "test_05_choosing_proton_pass_installs_the_pinned_version_and_switching_back_keeps_it (test_passwords.PasswordsTest.test_05_choosing_proton_pass_installs_the_pinned_version_and_switching_back_keeps_it) ... skipped 'downloads Proton Pass from addons.mozilla.org'",
+        "test_run_temporary_deletes_the_profile_after_the_engine_exits (test_temporary.TemporaryFromTheLauncherTest.test_run_temporary_deletes_the_profile_after_the_engine_exits) ... skipped 'opens a visible window (NULAVIO_TEST_HEADFUL=1)'"
+      ]
+    },
+    {
+      "command": "env -u LC_ALL NULAVIO_ENGINE=/home/caiobarbieri/.cache/nulavio-ux/ux3b-cwqfyoyu/nulavio/nulavio NULAVIO_TEST_ARTIFACTS=/home/caiobarbieri/.cache/nulavio-ux/ux3b-cwqfyoyu/final-artifacts python3 -I tests/run.py integration test_horizon_groups.py",
+      "result": "PASS",
+      "tests": 10,
+      "seconds": 24.943,
+      "skips": 0,
+      "log": "/home/caiobarbieri/.cache/nulavio-ux/ux3b-cwqfyoyu/groups-pt.log",
+      "log_sha256": "9151826257a82b27b40f293ab82266d9a4b49a7ba65fb81b163394bea61c16a6",
+      "skip_reasons": []
+    },
+    {
+      "command": "env -u LC_ALL NULAVIO_GROUP_LOCALE=en-US NULAVIO_ENGINE=/home/caiobarbieri/.cache/nulavio-ux/ux3b-cwqfyoyu/nulavio/nulavio NULAVIO_TEST_ARTIFACTS=/home/caiobarbieri/.cache/nulavio-ux/ux3b-cwqfyoyu/final-artifacts python3 -I tests/run.py integration test_horizon_groups.py",
+      "result": "PASS",
+      "tests": 10,
+      "seconds": 24.65,
+      "skips": 0,
+      "log": "/home/caiobarbieri/.cache/nulavio-ux/ux3b-cwqfyoyu/groups-en.log",
+      "log_sha256": "26291afbe0ac5e62aff3358d9e69ab540c637c11f6d493fcfae42374fe0a9625",
+      "skip_reasons": []
+    }
+  ],
+  "lint_and_generated": {
+    "ruff_check": "PASS",
+    "ruff_format": "PASS",
+    "build_tokens_check": "4 outputs current",
+    "declared_contrast": "220/220; original thresholds and pairs retained",
+    "rendered_group_contrast": "all nine families in both themes; swatch >=3:1 and text >=4.5:1",
+    "ui_lint_changed": "0 errors, 0 warnings; 24 pre-existing findings outside changed lines hidden"
+  },
+  "fixture": "GeckoProfileSession: disposable registered profiles, private HOME/XDG and D-Bus, headless. FixtureServer pages Research/Reference/Legacy; native groups, one persisted legacy red; native TIP and synthesizeMouseEvent input, native ARIA/a11y tree and SessionStore serialization. No personal data or shared install mutations.",
+  "current_legacy_rule": "Only the currently checked legacy native radio remains visible/named/checked. Leaving it hides it; new/default candidates are the six available native names. Stored data and all nine backend names remain unchanged.",
+  "review": {
+    "base": "25e591d8ef8184a4aaf0da6b535bf7d86c1248d6",
+    "kind": "scoped self-review, not independent/human approval",
+    "files": [
+      "browser/branding/nulavio/content/theme/horizon.css",
+      "browser/shell/modules/NulavioWindow.sys.mjs",
+      "tests/integration/test_horizon_groups.py",
+      "tests/unit/test_horizon_theme.py"
+    ],
+    "actionable_unresolved_findings": 0,
+    "checks": [
+      "native data setters/SessionStore remain unchanged",
+      "native COLORS, Fluent labels, ARIA and keyboard handlers unchanged",
+      "only getter default allocation adapted per window, with restoration and live Horizon/theme/contrast guards",
+      "all colours/presentation behind existing guards; no security selectors or new motion",
+      "exact allowlist for hidden inputs/labels; original contrast/pixel thresholds retained"
+    ],
+    "limits": [
+      "native popup widget pixels unavailable from main-window headless capture",
+      "Orca, physical GTK/KDE, hardware scaling and frame time pending",
+      "production rebuild and remote CI belong to parent"
+    ]
+  },
+  "visual_review": {
+    "kind": "scoped self-review of screenshots, not a certification",
+    "observed": "Neutral names and distinct swatches/thin lines replace coloured label fills. Separate route mark, band, trust and automation stripes remain visible. Expanded/collapsed matrix and compact rail preserve native geometry.",
+    "rubric_0_to_3": {
+      "hierarchy": 3,
+      "layout": 3,
+      "type": 2,
+      "colour": 3,
+      "spacing": 3,
+      "states": 3,
+      "accessibility": 2,
+      "copy": 3,
+      "distinctiveness": 2
+    },
+    "limits": "Native popup surfaces omitted from main-window captures; editor evidence is computed geometry/focus, actual trusted input and native accessibility state. Reflow follows native window geometry; no mobile layout claim."
+  },
+  "baseline_runs": {
+    "log": "/home/caiobarbieri/.cache/nulavio-ux/ux3b-cwqfyoyu/red.log",
+    "log_sha256": "a4f81ddc847be6f963deae9322c946bede76711b817761ae6e5b80a28d65e104",
+    "scope": "Before implementation, core assertions fail on reserved default purple, nine visible choices and filled native labels. Three initial fixture JSON.parse errors and a duplicate imported test class were corrected; those were not product defects."
+  },
+  "intermediate_document_gate": {
+    "log": "/home/caiobarbieri/.cache/nulavio-ux/ux3b-cwqfyoyu/unit-final.log",
+    "scope": "Only three broken links to this then-unwritten inventory; final unit run follows inventory creation."
+  },
+  "parent_evidence": {
+    "kind": "Read-only supplied release/CI evidence; not new UX3B results",
+    "ci_run": "https://github.com/caiolombello/nulavio/actions/runs/40819764438",
+    "head": "25e591d8ef8184a4aaf0da6b535bf7d86c1248d6",
+    "ci_jobs": [
+      {
+        "name": "lint, unit tests, generated files, SBOM",
+        "conclusion": "success"
+      },
+      {
+        "name": "Companion app (lint, release build)",
+        "conclusion": "success"
+      },
+      {
+        "name": "security scanners (workflows, secrets, shell scripts, Nulavio rules)",
+        "conclusion": "success"
+      },
+      {
+        "name": "does this change need the engine integration run",
+        "conclusion": "success"
+      },
+      {
+        "name": "engine integration (ubuntu-itest, headless)",
+        "conclusion": "success"
+      },
+      {
+        "name": "engine integration (fedora-itest, headless)",
+        "conclusion": "success"
+      }
+    ],
+    "network_tests": {
+      "published_head": "25e591d8ef8184a4aaf0da6b535bf7d86c1248d6",
+      "production_code_commit": "baa432b5b544597ecf908eb4054cb5553691f727",
+      "command": "env -u LC_ALL NULAVIO_NETWORK_TESTS=1 NULAVIO_ENGINE=/home/caiobarbieri/.cache/nulavio-ux/ux3a-release-clkptb85/qa-app/nulavio NULAVIO_TEST_ARTIFACTS=/home/caiobarbieri/.cache/nulavio-ux/ux3a-release-clkptb85/network-artifacts python3 -I tests/run.py integration test_engine_slice.py",
+      "tests": 15,
+      "skips": 0,
+      "seconds": 12.941,
+      "result": "PASS",
+      "safe_browsing_test_14": "PASS on real rebuilt Track B application copy",
+      "log": "/home/caiobarbieri/.cache/nulavio-ux/ux3a-release-clkptb85/network-engine.log",
+      "log_sha256": "da0d641a259f88b3c85d99a65311f525f99bd6626f180cb0329838055753c3c7",
+      "package_tarball_sha256": "5b0db884cd414c7a794cf29511bf75b3695367b1f78a2707c6f07d3272c1c55b",
+      "application_copy_browser_omni_sha256": "fd6ec78310e940ffadfcf6c68cbd511ca34de88c53b896756414f874a0e318b1",
+      "original_browser_omni_sha256": "fd6ec78310e940ffadfcf6c68cbd511ca34de88c53b896756414f874a0e318b1"
+    },
+    "immutable_release_report_sha256": "59ea9445523b3f1f4140f993a195b15088e13fdf9966b2c6aa854582cc8472a5"
+  },
+  "pending": [
+    "parent production rebuild and packaged verification",
+    "UX3B publication and remote CI",
+    "Orca announcements",
+    "physical KDE/GTK, real forced colours and hardware scaling",
+    "frame-time measurements"
+  ],
+  "artifact_sha256": {
+    "after-dark-horizontal.png": "122a4a465811372640cde968479a46ad3c775af910488cd174175cd3e117807d",
+    "after-dark-vertical.png": "0c7aeec8ae036d62190cfcea1e8b4b760ab09f0bdbd1f04fd0ce63066a46c82d",
+    "after-light-horizontal.png": "84eef283f4b1d8bdd3a23ce7d358007a4e57bd93f21ac5ce4c85879a7e3d30cd",
+    "after-light-vertical.png": "a968e8cb04a033ac4135e55e01c31dab32ecbda13961fb0d174c4ce995a1504f",
+    "before-dark-horizontal.png": "cacce8f8d78b9aa94f3b31a71f4af32650cd220ec697fb6fd87f36d53c93d6d4",
+    "before-dark-vertical.png": "443db4041282c624c1c0598b08694b79779331da9ab61d01c19abaed0f6f5b16",
+    "before-light-horizontal.png": "b057337536d8deed171904966e902f8c6fba628543c5970c25d8821a04540310",
+    "before-light-vertical.png": "61857da14fb85669867d9cdc92a018ae7c9b2316cee4590b7c30cf31df6a791d",
+    "en-US/contrast.json": "22756374e5abbc02a557e7288b54ca1bc633a820081452e636d2cb76f5e045a4",
+    "en-US/dark-horizontal-collapsed.png": "1b8ab59dc556022367dde5f1a33cbbc7df318f8e0ab1d95c75190e213921acc1",
+    "en-US/dark-horizontal-expanded.png": "953ce8f370ef16082e6731b49348215eb270c1efcf34050c3f472393284ec99d",
+    "en-US/dark-vertical-collapsed.png": "44e3dce819168a2d8c894710554589263e8cc19c7fc884d8364e98af48b8d5a6",
+    "en-US/dark-vertical-expanded.png": "bd9ab7178d9e784e1055fbdf70104f5b410b97de33765c6b2392937719bd9783",
+    "en-US/editor-False-horizontal.json": "47c36b4e359aea28326dfa6b430fe043f9faf4d75ec66bc76f4f5d4d942f8b47",
+    "en-US/editor-False-vertical.json": "47c36b4e359aea28326dfa6b430fe043f9faf4d75ec66bc76f4f5d4d942f8b47",
+    "en-US/editor-True-horizontal.json": "69a888bfce7eabfa732535a73ca38fdb73bd0374d99cb5552e1018f6f32fad44",
+    "en-US/editor-True-vertical.json": "69a888bfce7eabfa732535a73ca38fdb73bd0374d99cb5552e1018f6f32fad44",
+    "en-US/guard-contrast.json": "d0bdb652d23788eaaddddf46a87753bf990d6155c414dd3b75a80628f7e50154",
+    "en-US/guard-pref.json": "d0bdb652d23788eaaddddf46a87753bf990d6155c414dd3b75a80628f7e50154",
+    "en-US/guard-theme.json": "1629f4432223ba293d7ee45aa2975f228f547b1ecd33b18216dbb3ba7e5d815f",
+    "en-US/legacy-orange.json": "9fc3c7643e0864d31ff7cc863b3a0072a83bffe45817e9637a9a6ec261c84b32",
+    "en-US/legacy-purple.json": "17000b49787bc4df6faf27d732f3e167e418f879fb993fdad95daf5fc00dbddb",
+    "en-US/legacy-red.json": "078f4e096c9f19ad6efdf0fab0d30a274b6893e514666466ca280fc5d9c77ebb",
+    "en-US/light-horizontal-collapsed.png": "f52ca8638aea1a1f912894f3fd3783a2254a247d678437d4a4f5dafbd49b8e75",
+    "en-US/light-horizontal-expanded.png": "8eaf030e6bb495c35ab9dbc016e60411598178c9eb66a93aa6d4f4e5dbb7992f",
+    "en-US/light-vertical-collapsed.png": "d7a6fa25f6d3b0cb4bcc92ad34393222d3231a7796fd54fb010a9d88be78fab2",
+    "en-US/light-vertical-expanded.png": "90381d5157b11755a10c2cd8f51a0fc606065f0bd9474430cd67805e6def4042",
+    "en-US/list-0.json": "e7d8f0bcde2be9eaa7e217b91f0cbb8731640f7b4e1c30fdb199c3b0ebe4c9d6",
+    "en-US/list-1.json": "9cd9b02e3748865c612d2c55e1bf59f340468c42ce2a7abeed4ff42e8d72c5c1",
+    "en-US/measurements.json": "9309855cc572392d51c57b13f7833310fa3a525df5bfb3deb4b571eae4f0ad3d",
+    "package-entries.json": "365b8f73aca6a7e05ba3b0b5e1f10ab5d4b94de8871f3171bbe31bb37be367ce",
+    "probe-compact-0.png": "6d4d82a1138f5f85bfbd6ab17f38187ef8e5527ad98274ea0410593dce212c6d",
+    "probe-compact-1.png": "280ced3bcf9cb6c4d4dfe9c5298af2695a9428fb5424b2ab1d6a8e961a1ef5b1",
+    "probe-editor-geometry.json": "f82100432f59093d331250d842c522aa05242cc0dcac8cfaa1393960614e64db",
+    "probe-measurements.json": "46f6ee0c89d4b2a5479e6a32d6cee8d049d7df06574bcd2e890a1a8a9e74f772",
+    "pt-BR/contrast.json": "22756374e5abbc02a557e7288b54ca1bc633a820081452e636d2cb76f5e045a4",
+    "pt-BR/dark-horizontal-collapsed.png": "1fcbc8a2448bde5d8b6f5cb9542daaedbf91ca025e68009fbc678686b35c73bd",
+    "pt-BR/dark-horizontal-expanded.png": "0b7cf17b860a6dbf346e4b5beeb90373570db35cd60e9cce905b5d0595ea1a52",
+    "pt-BR/dark-vertical-collapsed.png": "0d81ca9a026e01d9c49f4e6be0e43fa3168d107fbf918e711ae9ab8f0387529b",
+    "pt-BR/dark-vertical-expanded.png": "603850b90e2f187c89cb41c66e0dfe10ec16d9cd3402f4f49968a220abe73877",
+    "pt-BR/editor-False-horizontal.json": "dd1ca747431b1dbfa923add2ed96dba9ea186a671f42e8ed34d5086cffd98ec0",
+    "pt-BR/editor-False-vertical.json": "dd1ca747431b1dbfa923add2ed96dba9ea186a671f42e8ed34d5086cffd98ec0",
+    "pt-BR/editor-True-horizontal.json": "08fc785a1047dab8fe86f3ce3518f39994f5945b23e17bacc4369e2328420d26",
+    "pt-BR/editor-True-vertical.json": "08fc785a1047dab8fe86f3ce3518f39994f5945b23e17bacc4369e2328420d26",
+    "pt-BR/guard-contrast.json": "f4eaba3ce42a12837e56280035933b93767b46024dc788893c4f6e143964076d",
+    "pt-BR/guard-pref.json": "f4eaba3ce42a12837e56280035933b93767b46024dc788893c4f6e143964076d",
+    "pt-BR/guard-theme.json": "24958ca36f28bd0fb7d4ef52004cdcc8af8009efd9364f336bc3c0ae1a29ebc3",
+    "pt-BR/legacy-orange.json": "ce8ed9934c24a2615696a2b1b655f71f1613b4e88cb9ded72c69cf9c40e5e0c5",
+    "pt-BR/legacy-purple.json": "5df1ee84fd070b261dfe4c48c3fa6cd0ca2293946304ddc67153132b69afcb6e",
+    "pt-BR/legacy-red.json": "16f274b333a0f4353095630c6c370b37c0df9218921ab958a4973e304783becb",
+    "pt-BR/light-horizontal-collapsed.png": "7043943d3216ad26d66ccffa5c4e79b1979c69a439c627739974696cd0883a49",
+    "pt-BR/light-horizontal-expanded.png": "5bacd8eb409369b8a750b2205a377d38238513f7bbb2c2764010258f2af32386",
+    "pt-BR/light-vertical-collapsed.png": "235391b2fc08cb796ebb72cf82a0ca1faf55ce400d939946f6b021664518f0eb",
+    "pt-BR/light-vertical-expanded.png": "0e8adaddcec4e94029d2dafa5f1761bfa38bc4e0e046cb7d71fa65579591872b",
+    "pt-BR/list-0.json": "e7d8f0bcde2be9eaa7e217b91f0cbb8731640f7b4e1c30fdb199c3b0ebe4c9d6",
+    "pt-BR/list-1.json": "9cd9b02e3748865c612d2c55e1bf59f340468c42ce2a7abeed4ff42e8d72c5c1",
+    "pt-BR/measurements.json": "9309855cc572392d51c57b13f7833310fa3a525df5bfb3deb4b571eae4f0ad3d",
+    "source-research.json": "92c638997f6fc052861de936095db6ed9e8518919ced8a215b3f5a6b04fbd586"
+  },
+  "observed_runtime": {
+    "name": "Nulavio",
+    "version": "159.0",
+    "appBuildID": "20261029043250",
+    "platformBuildID": "20261028012215",
+    "platformVersion": "159.0"
+  },
+  "status": "LOCAL_VALIDATION_PASS; parent rebuild/publication pending",
+  "lint_logs": {
+    "ruff.log": {
+      "path": "/home/caiobarbieri/.cache/nulavio-ux/ux3b-cwqfyoyu/ruff.log",
+      "sha256": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18"
+    },
+    "ruff-format.log": {
+      "path": "/home/caiobarbieri/.cache/nulavio-ux/ux3b-cwqfyoyu/ruff-format.log",
+      "sha256": "a8f2267c8f86187fe855b6c5b72db28a98f8d05a5aaddb426317a28f387455d8"
+    },
+    "tokens.log": {
+      "path": "/home/caiobarbieri/.cache/nulavio-ux/ux3b-cwqfyoyu/tokens.log",
+      "sha256": "4564038424c964ca1704148f23d129a5893daebfe0017f9f1d967c1961c0bbd9"
+    },
+    "contrast.log": {
+      "path": "/home/caiobarbieri/.cache/nulavio-ux/ux3b-cwqfyoyu/contrast.log",
+      "sha256": "cd9fe30257b32cdff795cd99d6ca568f0a2e135903d5a9488c82e8f68cb7b4bb"
+    },
+    "ui-lint.log": {
+      "path": "/home/caiobarbieri/.cache/nulavio-ux/ux3b-cwqfyoyu/ui-lint.log",
+      "sha256": "14c26c72f743eb5a9dca23442f0dbfc276763edc0352ff839acca3d925cf1235"
+    }
+  },
+  "package_build_id": "20261029043253",
+  "raw_fixture_trace_sha256": {
+    "pt-BR/editor-False-horizontal.json": "5e0331751fd28bd6efc7d0bc7e2bae8fc93e71dc2acff957e2aff4bab707df72",
+    "pt-BR/editor-False-vertical.json": "5e0331751fd28bd6efc7d0bc7e2bae8fc93e71dc2acff957e2aff4bab707df72",
+    "pt-BR/editor-True-horizontal.json": "f9ba6245ec5f9b491ec711802c13d84f31fe5271db59df8c25739b97a7f1f405",
+    "pt-BR/editor-True-vertical.json": "f9ba6245ec5f9b491ec711802c13d84f31fe5271db59df8c25739b97a7f1f405",
+    "pt-BR/legacy-orange.json": "46e4e0bd934e99a6c621090b511dc585101beae9bffe79917226e06da022f90a",
+    "pt-BR/legacy-purple.json": "7c8c610df9c5a66027b7419cc12c9de01c463965d51361fab57fc5e67320a169",
+    "pt-BR/legacy-red.json": "a3fcf6521d910982120c3116a227e08d714ec06bbf3924e3761616933368673d",
+    "pt-BR/guard-pref.json": "464d4b42307eb777e26deba439ed2c4b7eed176441b90f5c8335beb77f3e344c",
+    "pt-BR/guard-contrast.json": "464d4b42307eb777e26deba439ed2c4b7eed176441b90f5c8335beb77f3e344c",
+    "pt-BR/guard-theme.json": "6bc8673130956c1b2d6cd3b010eadd5b98e4ef7dd8276df47fb6af927e01da2d",
+    "en-US/editor-False-horizontal.json": "cba1d1c92bd863caf72b8ad793cc54903a47ce3739926e686d99d07cbfafd375",
+    "en-US/editor-False-vertical.json": "cba1d1c92bd863caf72b8ad793cc54903a47ce3739926e686d99d07cbfafd375",
+    "en-US/editor-True-horizontal.json": "355b9008b7f9591f95856a1ff749d1950543fcf3d968ef2270f61b31cb3ae636",
+    "en-US/editor-True-vertical.json": "355b9008b7f9591f95856a1ff749d1950543fcf3d968ef2270f61b31cb3ae636",
+    "en-US/legacy-orange.json": "8d3e152ffbf986251b3c3f0563a5242f18aa8af7e39e4ea7f45f147e93225c60",
+    "en-US/legacy-purple.json": "5d7fb53c9c5578667e6a6444ed1b68112ed41dd82b5b9a7ff4490d6c8892ada4",
+    "en-US/legacy-red.json": "770cb3704d71bc2b93f23311c7d865c74cc35a8d14a69a78ae6aef810163667c",
+    "en-US/guard-pref.json": "65f03b73e813547cf51fb012b1af724196899bbdecc6b310b0375ff38d107a79",
+    "en-US/guard-contrast.json": "65f03b73e813547cf51fb012b1af724196899bbdecc6b310b0375ff38d107a79",
+    "en-US/guard-theme.json": "6a7b1ea906fff4dc8f86f273398cfd7f9e822d41141428512f293c41a3cd979e"
+  },
+  "trace_archive_note": "Native editor/guard/legacy records are archived one object per line for review. JSON values are unchanged; original pretty-printed fixture bytes remain at final-artifacts/horizon-groups/<locale> in the task evidence directory, with hashes above.",
+  "security": {
+    "command": "scripts/security/scan.sh",
+    "result": "PASS: actionlint, zizmor, gitleaks, shellcheck, opengrep and 16/16 rule cases",
+    "log": "/home/caiobarbieri/.cache/nulavio-ux/ux3b-cwqfyoyu/security.log",
+    "log_sha256": "1222c1aa5c316533db57d130c0ee609cf3fafe51407875ac668a5046213c9a4f",
+    "scope": "local source/history/staged scan; no scanner policies or exceptions changed"
+  }
+}

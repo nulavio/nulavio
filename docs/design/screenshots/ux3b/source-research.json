@@ -1,0 +1,57 @@
+{
+  "engine_source": "/home/caiobarbieri/.cache/nulavio-build/firefox-159.0",
+  "files": [
+    {
+      "path": "browser/components/tabbrowser/content/tabgroup-menu.js",
+      "sha256": "c6a8220dd1df143253416433382038f1952b4fc9481b1a6e69fd21cc9dc7b296"
+    },
+    {
+      "path": "browser/components/tabbrowser/content/tabgroup.mjs",
+      "sha256": "3bca21cccb2590ef0d1d852f685520f6a83484ce6d23b5016106a9398c6b0e70"
+    },
+    {
+      "path": "browser/components/tabbrowser/content/tab-groups-list.mjs",
+      "sha256": "16ce00f8fd6b71ec9920471a3defe7d98955ed85ac3c97ebd8381278cf5e93e6"
+    },
+    {
+      "path": "browser/themes/shared/tabbrowser/tabs.css",
+      "sha256": "d414976b2baad054da4a6bd2b85d2ac7851d772481653a5122d2a842080fc159"
+    },
+    {
+      "path": "browser/themes/shared/tabbrowser/tab.tokens.css",
+      "sha256": "86bba5cc7c74a5dfeed1145daee0e2b275a84c17e2c55dab290b20af22396c4b"
+    },
+    {
+      "path": "browser/themes/shared/tabbrowser/tab-groups-list.css",
+      "sha256": "ab14b9698bdbcbedd300a33a78e8a87918fe4e470d0d6aea049a139a60144303"
+    },
+    {
+      "path": "browser/components/tabbrowser/test/browser/tabs/browser_tab_groups.js",
+      "sha256": "a9e2aba16985a6f725ce415aed8f33b8b371ed17a1a71ef17901e8106bd1e0ca"
+    },
+    {
+      "path": "browser/components/tabbrowser/test/browser/tabs/browser_tab_group_menu.js",
+      "sha256": "57e36d500252a7a31adf03531388ca9afe5071f8f8635d563607db18b03d1ffb"
+    },
+    {
+      "path": "browser/components/tabbrowser/test/browser/tabs/browser_tab_groups_a11y.js",
+      "sha256": "3b0f6aafc5c239f1248f954b579a2301104e424722a143aa9f7292b21c160aeb"
+    },
+    {
+      "path": "browser/components/tabbrowser/test/browser/tabs/browser_tab_groups_keyboard_focus.js",
+      "sha256": "5f5ee20ccc3bbf3f29c748fd60f4ed20a9e94581f62340eab488066f77e98eb1"
+    },
+    {
+      "path": "browser/components/tabbrowser/test/browser/tabs/browser_tab_groups_list.js",
+      "sha256": "9b2472738128ea797c47940dc73110212ac3832620b6b87e3f31b0a323c955be"
+    }
+  ],
+  "supplied_probe": {
+    "path": "/home/caiobarbieri/.cache/nulavio-ux/ux3a-release-clkptb85/ux3b-group-probe.json",
+    "sha256": "fcc0b59814bb8f146bcd249d280d45c8459289ab1ba02d743d42fbd655a494ab",
+    "scope": "disposable research only; label-only ArrowRight blue->purple; input+label blue->cyan; legacy red->blue. Not a product test or certification."
+  },
+  "own_runtime": "test_horizon_groups: trusted native TIP arrows and window.synthesizeMouseEvent; nsIAccessibilityService checked/name; native editor and serialized SessionStore groups; actual default allocation and exhaustion; lifecycle and guards.",
+  "css_limit": "The native nextUnusedColor getter enumerates constructor.COLORS independently of DOM/CSS. Its baseline result was purple after a blue group, matching source. A window-instance getter adaptation is needed for default/new groups; no engine patch.",
+  "popup_capture_limit": "Main-window Marionette screenshots and Capture.canvas(drawView=false/true) omit the native popup widget. Do not interpret those window images as editor pixel evidence."
+}

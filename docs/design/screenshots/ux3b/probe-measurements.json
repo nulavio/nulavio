@@ -1,0 +1,68 @@
+[
+  {
+    "dark": false,
+    "expanded": false,
+    "labels": [
+      {
+        "name": "Research",
+        "w": 32,
+        "h": 30,
+        "padding": "24px",
+        "font": "14px",
+        "swatch": "8px",
+        "content": "\"\""
+      },
+      {
+        "name": "Reference",
+        "w": 32,
+        "h": 30,
+        "padding": "24px",
+        "font": "14px",
+        "swatch": "8px",
+        "content": "\"\""
+      },
+      {
+        "name": "Legacy",
+        "w": 32,
+        "h": 30,
+        "padding": "24px",
+        "font": "14px",
+        "swatch": "8px",
+        "content": "\"\""
+      }
+    ]
+  },
+  {
+    "dark": true,
+    "expanded": false,
+    "labels": [
+      {
+        "name": "Research",
+        "w": 32,
+        "h": 30,
+        "padding": "24px",
+        "font": "14px",
+        "swatch": "8px",
+        "content": "\"\""
+      },
+      {
+        "name": "Reference",
+        "w": 32,
+        "h": 30,
+        "padding": "24px",
+        "font": "14px",
+        "swatch": "8px",
+        "content": "\"\""
+      },
+      {
+        "name": "Legacy",
+        "w": 32,
+        "h": 30,
+        "padding": "24px",
+        "font": "14px",
+        "swatch": "8px",
+        "content": "\"\""
+      }
+    ]
+  }
+]

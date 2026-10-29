@@ -207,6 +207,37 @@ class WindowUI {
     await this.refresh();
   }
 
+  // CSS filters the native radio group, but cannot change this default getter.
+  // Override only the editor instance. Explicit/restored colours remain native.
+  #groupPalette(win) {
+    const editor = win.document.getElementById("tab-group-editor");
+    if (!editor) {
+      return () => {};
+    }
+    const own = Object.getOwnPropertyDescriptor(editor, "nextUnusedColor");
+    const native = own?.get || Object.getOwnPropertyDescriptor(Object.getPrototypeOf(editor), "nextUnusedColor").get;
+    const get = () => {
+      if (!Services.prefs.getBoolPref("nulavio.horizon.enabled", true)
+          || win.document.documentElement.hasAttribute("lwtheme")
+          || win.matchMedia("(forced-colors), (prefers-contrast)").matches) {
+        return native.call(editor);
+      }
+      const colors = editor.constructor.COLORS.filter(color => !["orange", "purple", "red"].includes(color));
+      const used = new Set(win.gBrowser.getAllTabGroups().map(group => group.color));
+      return colors.find(color => !used.has(color)) || colors[Math.floor(Math.random() * colors.length)];
+    };
+    Object.defineProperty(editor, "nextUnusedColor", { configurable: true, get });
+    return () => {
+      if (Object.getOwnPropertyDescriptor(editor, "nextUnusedColor")?.get === get) {
+        if (own) {
+          Object.defineProperty(editor, "nextUnusedColor", own);
+        } else {
+          delete editor.nextUnusedColor;
+        }
+      }
+    };
+  }
+
   #attach(win) {
     if (!this.#started || this.#windows.has(win) || !win.gBrowser || win.closed) {
       return;
@@ -272,7 +303,7 @@ class WindowUI {
     const screenObserver = new win.MutationObserver(reveal);
     screenObserver.observe(doc.documentElement, { attributes: true, attributeFilter: ["inFullscreen", "inDOMFullscreen"] });
     this.#windows.set(win, { bar, compact, fullscreen, line, sheet, progress, header, unload, pointer, screenObserver,
-      noticeTimer: null, safety: null });
+      noticeTimer: null, safety: null, restoreGroupPalette: this.#groupPalette(win) });
     this.#paint(win);
   }
 
@@ -464,6 +495,7 @@ class WindowUI {
       return;
     }
     this.#windows.delete(win);
+    state.restoreGroupPalette();
     win.gBrowser.removeProgressListener(state.progress);
     win.gBrowser.tabContainer.removeEventListener("TabSelect", state.header);
     win.removeEventListener("unload", state.unload);

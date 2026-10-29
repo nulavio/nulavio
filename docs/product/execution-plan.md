@@ -189,6 +189,22 @@ actionable findings. Publication and remote CI are separate gates.
 This does not close UX3: tab groups, downloads badge/patch 0007, presets and
 personalisation, Shell pages and assistant flows remain later work.
 
+**UX3B — native groups (implemented locally, 2026-10-29).**
+On the exact published UX3A base `25e591d8ef8184a4aaf0da6b535bf7d86c1248d6`,
+Horizon uses native group names, swatches and thin lines, preserving the active
+route mark, native ARIA/navigation and stored colours. D-UX16 filters new
+orange/purple/red choices; a selected legacy colour remains visibly named and
+checked until replaced. A lifecycle-scoped editor getter limits default/new
+colour selection; CSS alone cannot change its native nine-name candidate set.
+[Implementation and limits](../design/design-system.md#ux3b-native-tab-groups-local-application-copy-verification-2026-10-29),
+[local evidence](../design/screenshots/ux3b/verification.json).
+The parent still owns the production rebuild, main publication and UX3B CI.
+Downloads/patch 0007, presets/onboarding, sidebar curation, Shell pages,
+assistant flows and broad motion remain later slices; UX3 is not complete.
+UX3A's separate [publication CI](https://github.com/caiolombello/nulavio/actions/runs/40819764438)
+passed all six jobs, and the parent's additional local engine opt-in run passed
+15/15 including live phishing blocking; its immutable release evidence is retained.
+
 **UX4 — Shell pages**
 - **Settings.** Two panes, with search, scope labels and inline status.
 - **New tab.** "Você está em …".

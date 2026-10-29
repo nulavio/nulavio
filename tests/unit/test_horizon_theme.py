@@ -62,7 +62,14 @@ class HorizonThemeTest(unittest.TestCase):
         for ident in SECURITY_IDS:
             with self.subTest(ident=ident):
                 self.assertNotIn(f"#{ident}", code)
-        self.assertNotRegex(code, r"display\s*:\s*none|visibility\s*:\s*hidden")
+        self.assertNotRegex(code, r"visibility\s*:\s*hidden")
+        # UX3B hides only the three unavailable native radios and adjacent labels.
+        # No broad hiding rule can accidentally target browser/security controls.
+        hidden = re.findall(r"([^{}]+)\{[^{}]*display\s*:\s*none[^{}]*\}", code)
+        self.assertEqual(len(hidden), 1)
+        swatches = ", ".join(f"#tab-group-editor-swatch-{color}" for color in ("orange", "purple", "red"))
+        selector = f":root:not([lwtheme]) #tab-group-editor :is({swatches}):not(:checked)"
+        self.assertEqual(re.sub(r"\s+", " ", hidden[0]).strip(), f"{selector}, {selector} + label")
 
     def test_rtl_safe_geometry(self):
         code = without_comments(CSS)

@@ -93,3 +93,29 @@ colours/high contrast, hardware scaling and frame-time measurements.
 The [rebuilt-package report](screenshots/ux3a/release-verification.json)
 records the parent's 207-test local integration run (13 skips) and its
 scope; remote CI on distribution Firefox is separate from that evidence.
+
+## UX3B native group checks
+
+The group name remains Gecko's labelled button, with its existing
+`aria-expanded`, tab visibility, keyboard collapse/expand and context menu.
+A decorative swatch and thin group line do not replace the selected-tab route
+mark. Neutral text uses the existing primary-text tokens; all nine group
+line/swatch colours use the existing contrast-checked group tokens.
+
+The unavailable orange/purple/red radios and labels are removed together from
+the rendered choice set. The currently selected legacy radio remains an honest
+visible current-value exception with the original native localized colour name
+and tooltip; it is never silently recoloured. Trusted native arrow input skips
+unavailable colours, including wraparound and leaving a current legacy value.
+The native checked accessible is queried through `nsIAccessibilityService`,
+after its asynchronous tree update; focus-visible and the original label/title
+are checked too. Native pointer selection, group-label keyboard navigation,
+both tab orientations/themes and en-US/pt-BR are covered by
+`test_horizon_groups.py`. This does not certify Orca announcements.
+
+Horizon off, an installed theme and the engine accessibility-theme preference
+restore all nine choices and the native default-colour behavior. Forced-colour
+rules use the same guard; real GTK forced colours remain pending. Main-window
+captures exclude native popup widgets, so editor input/accessible-state evidence
+is recorded separately in the [verification inventory](screenshots/ux3b/verification.json).
+No existing contrast or pixel-comparison threshold is reduced.

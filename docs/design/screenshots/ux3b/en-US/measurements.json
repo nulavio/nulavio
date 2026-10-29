@@ -1,0 +1,202 @@
+[
+  {
+    "collapsed": false,
+    "dark": false,
+    "orient": "horizontal",
+    "expanded": "true",
+    "role": "button",
+    "name": "Research",
+    "bg": "rgba(0, 0, 0, 0)",
+    "text": "rgb(11, 22, 35)",
+    "swatch": "rgb(47, 95, 174)",
+    "swatchContent": "\"\"",
+    "line": "rgb(47, 95, 174)",
+    "lineWidth": "136.517px",
+    "lineHeight": "2px",
+    "mark": {
+      "content": "\"\"",
+      "w": "16px",
+      "h": "2px",
+      "color": "rgb(15, 122, 104)"
+    },
+    "hidden": [
+      false,
+      false
+    ]
+  },
+  {
+    "collapsed": true,
+    "dark": false,
+    "orient": "horizontal",
+    "expanded": "false",
+    "role": "button",
+    "name": "Research",
+    "bg": "rgba(0, 0, 0, 0)",
+    "text": "rgb(11, 22, 35)",
+    "swatch": "rgb(47, 95, 174)",
+    "swatchContent": "\"\"",
+    "line": "rgb(47, 95, 174)",
+    "lineWidth": "154.017px",
+    "lineHeight": "2px",
+    "mark": {
+      "content": "\"\"",
+      "w": "16px",
+      "h": "2px",
+      "color": "rgb(15, 122, 104)"
+    },
+    "hidden": [
+      false,
+      true
+    ]
+  },
+  {
+    "collapsed": false,
+    "dark": false,
+    "orient": "vertical",
+    "expanded": "true",
+    "role": "button",
+    "name": "Research",
+    "bg": "rgba(0, 0, 0, 0)",
+    "text": "rgb(11, 22, 35)",
+    "swatch": "rgb(47, 95, 174)",
+    "swatchContent": "\"\"",
+    "line": "rgb(47, 95, 174)",
+    "lineWidth": "2px",
+    "lineHeight": "37px",
+    "mark": {
+      "content": "\"\"",
+      "w": "2px",
+      "h": "16px",
+      "color": "rgb(15, 122, 104)"
+    },
+    "hidden": [
+      false,
+      false
+    ]
+  },
+  {
+    "collapsed": true,
+    "dark": false,
+    "orient": "vertical",
+    "expanded": "false",
+    "role": "button",
+    "name": "Research",
+    "bg": "rgba(0, 0, 0, 0)",
+    "text": "rgb(11, 22, 35)",
+    "swatch": "rgb(47, 95, 174)",
+    "swatchContent": "\"\"",
+    "line": "rgb(47, 95, 174)",
+    "lineWidth": "2px",
+    "lineHeight": "37px",
+    "mark": {
+      "content": "\"\"",
+      "w": "2px",
+      "h": "16px",
+      "color": "rgb(15, 122, 104)"
+    },
+    "hidden": [
+      false,
+      true
+    ]
+  },
+  {
+    "collapsed": false,
+    "dark": true,
+    "orient": "horizontal",
+    "expanded": "true",
+    "role": "button",
+    "name": "Research",
+    "bg": "rgba(0, 0, 0, 0)",
+    "text": "rgb(241, 247, 245)",
+    "swatch": "rgb(134, 165, 236)",
+    "swatchContent": "\"\"",
+    "line": "rgb(134, 165, 236)",
+    "lineWidth": "136.517px",
+    "lineHeight": "2px",
+    "mark": {
+      "content": "\"\"",
+      "w": "16px",
+      "h": "2px",
+      "color": "rgb(111, 224, 197)"
+    },
+    "hidden": [
+      false,
+      false
+    ]
+  },
+  {
+    "collapsed": true,
+    "dark": true,
+    "orient": "horizontal",
+    "expanded": "false",
+    "role": "button",
+    "name": "Research",
+    "bg": "rgba(0, 0, 0, 0)",
+    "text": "rgb(241, 247, 245)",
+    "swatch": "rgb(134, 165, 236)",
+    "swatchContent": "\"\"",
+    "line": "rgb(134, 165, 236)",
+    "lineWidth": "154.017px",
+    "lineHeight": "2px",
+    "mark": {
+      "content": "\"\"",
+      "w": "16px",
+      "h": "2px",
+      "color": "rgb(111, 224, 197)"
+    },
+    "hidden": [
+      false,
+      true
+    ]
+  },
+  {
+    "collapsed": false,
+    "dark": true,
+    "orient": "vertical",
+    "expanded": "true",
+    "role": "button",
+    "name": "Research",
+    "bg": "rgba(0, 0, 0, 0)",
+    "text": "rgb(241, 247, 245)",
+    "swatch": "rgb(134, 165, 236)",
+    "swatchContent": "\"\"",
+    "line": "rgb(134, 165, 236)",
+    "lineWidth": "2px",
+    "lineHeight": "37px",
+    "mark": {
+      "content": "\"\"",
+      "w": "2px",
+      "h": "16px",
+      "color": "rgb(111, 224, 197)"
+    },
+    "hidden": [
+      false,
+      false
+    ]
+  },
+  {
+    "collapsed": true,
+    "dark": true,
+    "orient": "vertical",
+    "expanded": "false",
+    "role": "button",
+    "name": "Research",
+    "bg": "rgba(0, 0, 0, 0)",
+    "text": "rgb(241, 247, 245)",
+    "swatch": "rgb(134, 165, 236)",
+    "swatchContent": "\"\"",
+    "line": "rgb(134, 165, 236)",
+    "lineWidth": "2px",
+    "lineHeight": "37px",
+    "mark": {
+      "content": "\"\"",
+      "w": "2px",
+      "h": "16px",
+      "color": "rgb(111, 224, 197)"
+    },
+    "hidden": [
+      false,
+      true
+    ]
+  }
+]

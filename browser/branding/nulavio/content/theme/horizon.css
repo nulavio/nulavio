@@ -102,6 +102,118 @@
       --urlbarview-text-color-hover: var(--nv-color-text-primary);
     }
 
+    /* UX3B: native groups retain their names, data, label button and navigation.
+     * Revalue every native family, including legacy colours and the native list.
+     * Both variants use the same line/swatch ink; labels are neutral, never fills. */
+    :root:not([lwtheme]) {
+      --tab-group-blue: var(--nv-color-group-blue);
+      --tab-group-blue-invert: var(--nv-color-group-blue);
+      --tab-group-blue-pale: var(--nv-color-group-blue);
+      --tab-group-purple: var(--nv-color-group-purple);
+      --tab-group-purple-invert: var(--nv-color-group-purple);
+      --tab-group-purple-pale: var(--nv-color-group-purple);
+      --tab-group-cyan: var(--nv-color-group-cyan);
+      --tab-group-cyan-invert: var(--nv-color-group-cyan);
+      --tab-group-cyan-pale: var(--nv-color-group-cyan);
+      --tab-group-orange: var(--nv-color-group-orange);
+      --tab-group-orange-invert: var(--nv-color-group-orange);
+      --tab-group-orange-pale: var(--nv-color-group-orange);
+      --tab-group-yellow: var(--nv-color-group-yellow);
+      --tab-group-yellow-invert: var(--nv-color-group-yellow);
+      --tab-group-yellow-pale: var(--nv-color-group-yellow);
+      --tab-group-pink: var(--nv-color-group-pink);
+      --tab-group-pink-invert: var(--nv-color-group-pink);
+      --tab-group-pink-pale: var(--nv-color-group-pink);
+      --tab-group-green: var(--nv-color-group-green);
+      --tab-group-green-invert: var(--nv-color-group-green);
+      --tab-group-green-pale: var(--nv-color-group-green);
+      --tab-group-gray: var(--nv-color-group-gray);
+      --tab-group-gray-invert: var(--nv-color-group-gray);
+      --tab-group-gray-pale: var(--nv-color-group-gray);
+      --tab-group-red: var(--nv-color-group-red);
+      --tab-group-red-invert: var(--nv-color-group-red);
+      --tab-group-red-pale: var(--nv-color-group-red);
+    }
+
+    :root:not([lwtheme]) #tabbrowser-tabs tab-group {
+      --tab-group-line-color: var(--tab-group-color);
+    }
+
+    :root:not([lwtheme]) #tabbrowser-tabs tab-group > .tab-group-label-container .tab-group-label {
+      position: relative;
+      color: var(--nv-color-text-primary);
+      background-color: transparent;
+      border-radius: var(--nv-radius-sm);
+      /* Native tab-list keyboard focus still supplies its own outline. */
+      outline-color: var(--focus-outline-color);
+      padding-inline-start: var(--nv-space-6);
+    }
+
+    :root:not([lwtheme]) #tabbrowser-tabs .tab-group-label::before {
+      content: "";
+      position: absolute;
+      inset-inline-start: var(--nv-space-2);
+      inset-block-start: calc(50% - var(--nv-space-3) / 2);
+      inline-size: var(--nv-space-3);
+      block-size: var(--nv-space-3);
+      border-radius: var(--nv-space-1);
+      background-color: var(--tab-group-color);
+      pointer-events: none;
+    }
+
+    /* A collapsed group without an active tab still has a thin group line.
+     * Native geometry connects the remaining group/tab segments. */
+    :root:not([lwtheme]) #tabbrowser-tabs tab-group > .tab-group-label-container::after {
+      content: "";
+      position: absolute;
+      background-color: var(--tab-group-color);
+    }
+
+    :root:not([lwtheme]) #tabbrowser-tabs[orient="horizontal"] tab-group > .tab-group-label-container::after {
+      block-size: var(--nv-size-indicator-thickness);
+      inset-inline: 0;
+      inset-block-end: var(--tab-group-line-toolbar-border-distance);
+    }
+
+    :root:not([lwtheme]) #tabbrowser-tabs[orient="vertical"] tab-group > .tab-group-label-container::after {
+      inline-size: var(--nv-size-indicator-thickness);
+      inset-block: 0;
+      inset-inline-start: var(--nv-space-1);
+    }
+
+    /* Filter the radio too: a hidden label alone remains an invisible arrow-key
+     * destination. The native checked legacy radio is an explicit current-value
+     * exception, not a new choice. Keep its original Fluent text and tooltip
+     * visible until the user chooses an available colour; never rewrite data. */
+    :root:not([lwtheme]) #tab-group-editor :is(#tab-group-editor-swatch-orange,
+      #tab-group-editor-swatch-purple, #tab-group-editor-swatch-red):not(:checked),
+    :root:not([lwtheme]) #tab-group-editor :is(#tab-group-editor-swatch-orange,
+      #tab-group-editor-swatch-purple, #tab-group-editor-swatch-red):not(:checked) + label {
+      display: none;
+    }
+
+    :root:not([lwtheme]) #tab-group-editor :is(#tab-group-editor-swatch-orange,
+      #tab-group-editor-swatch-purple, #tab-group-editor-swatch-red):checked + label {
+      font-size: inherit;
+      inline-size: auto;
+      block-size: auto;
+      padding-inline: var(--nv-space-2);
+      color: var(--nv-color-text-primary);
+      background-color: transparent;
+      border-color: var(--focus-outline-color);
+      display: flex;
+      align-items: center;
+      gap: var(--nv-space-2);
+
+      &::before {
+        content: "";
+        inline-size: var(--nv-space-3);
+        block-size: var(--nv-space-3);
+        border-radius: var(--nv-space-1);
+        background-color: var(--tabgroup-swatch-color);
+      }
+    }
+
     /* The tint alone sits below 3:1 against the results panel, so the selected
      * row (what Enter opens) also carries the focus ring, drawn in the row's
      * gutter around its background (>= 3:1, WCAG 1.4.11 and 2.4.7). */
