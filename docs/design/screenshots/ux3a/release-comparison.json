@@ -1,0 +1,42 @@
+[
+  {
+    "kind": "before",
+    "dark": false,
+    "engine": "/home/caiobarbieri/.cache/nulavio-ux/ux3a-release-clkptb85/baseline-app/nulavio",
+    "url": "http://127.0.0.1:37995/page/farol-fixture",
+    "version": {
+      "version": "159.0",
+      "build": "20261028184644"
+    }
+  },
+  {
+    "kind": "before",
+    "dark": true,
+    "engine": "/home/caiobarbieri/.cache/nulavio-ux/ux3a-release-clkptb85/baseline-app/nulavio",
+    "url": "http://127.0.0.1:37995/page/farol-fixture",
+    "version": {
+      "version": "159.0",
+      "build": "20261028184644"
+    }
+  },
+  {
+    "kind": "after",
+    "dark": false,
+    "engine": "/home/caiobarbieri/.cache/nulavio-ux/ux3a-release-clkptb85/qa-app/nulavio",
+    "url": "http://127.0.0.1:37995/page/farol-fixture",
+    "version": {
+      "version": "159.0",
+      "build": "20261029043250"
+    }
+  },
+  {
+    "kind": "after",
+    "dark": true,
+    "engine": "/home/caiobarbieri/.cache/nulavio-ux/ux3a-release-clkptb85/qa-app/nulavio",
+    "url": "http://127.0.0.1:37995/page/farol-fixture",
+    "version": {
+      "version": "159.0",
+      "build": "20261029043250"
+    }
+  }
+]

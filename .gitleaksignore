@@ -16,3 +16,9 @@ affda58fa96bdfaa8cfe97273a40952a8a142a34:tests/integration/test_engine_slice.py:
 4aa5392c3765975dc66bc4f4c28d53400ed8132c:tests/integration/test_engine_slice.py:generic-api-key:303
 d5073086c46f9900cf38d45b23f8ee67e73f8e5a:browser/build/mozconfig:generic-api-key:34
 d5073086c46f9900cf38d45b23f8ee67e73f8e5a:tests/integration/test_engine_slice.py:generic-api-key:321
+
+# UX3A evidence: the value under docs/brand/tokens.json is exactly that public
+# file's SHA-256, verified against its bytes. "tokens" triggered generic-api-key.
+# The first fingerprint is the local T3 checkpoint; the second is the delivery.
+d1c909d12586c7c00d59f443c8ae945a12a8a7cf:docs/design/screenshots/ux3a/verification.json:generic-api-key:42
+baa432b5b544597ecf908eb4054cb5553691f727:docs/design/screenshots/ux3a/verification.json:generic-api-key:42

@@ -1,0 +1,116 @@
+{
+  "date": "2026-10-29",
+  "production_code_commit": "baa432b5b544597ecf908eb4054cb5553691f727",
+  "package_kind": "real incremental Track B build; never dev_sync",
+  "engine_version": "159.0",
+  "package_build_id": "20261029043253",
+  "runtime_build_ids": [
+    "20261029043250"
+  ],
+  "gecko_source_stamp": "5add844c26613d7e4d84c799d6e23cf987b1240d",
+  "tarball_sha256": "5b0db884cd414c7a794cf29511bf75b3695367b1f78a2707c6f07d3272c1c55b",
+  "install": "/home/caiobarbieri/.cache/nulavio-ux/ux3a-release-clkptb85/nulavio",
+  "matched_source_entries": 94,
+  "source_entry_mismatches": [],
+  "package_manifest": "/home/caiobarbieri/.cache/nulavio-ux/ux3a-release-clkptb85/package.json",
+  "package_manifest_sha256": "2c68f588c418ab71f258686328888e9d4978744c9e373bd2cddaf8e9deb6b175",
+  "production_files_unchanged_after_build": 103,
+  "checks": [
+    {
+      "command": "env -u LC_ALL python3 -I tests/run.py unit",
+      "status": "PASS",
+      "tests": 600,
+      "skips": 1,
+      "seconds": 67.152,
+      "log": "/home/caiobarbieri/.cache/nulavio-ux/ux3a-release-clkptb85/unit.log",
+      "log_sha256": "7306b0b413ac96b9b084fc8eb65a30f21cf467dd3b61adc5e95e3dd3bd5a47bd",
+      "skip_reasons": [
+        "test_through_the_real_avahi (test_phone_link.PhoneApiTest.test_through_the_real_avahi) ... skipped 'NULAVIO_LAN_TESTS=1 with Avahi running and avahi-publish (announces on the local network)'"
+      ]
+    },
+    {
+      "command": "env -u LC_ALL NULAVIO_ENGINE=/home/caiobarbieri/.cache/nulavio-ux/ux3a-release-clkptb85/nulavio/nulavio NULAVIO_TEST_ARTIFACTS=/home/caiobarbieri/.cache/nulavio-ux/ux3a-release-clkptb85/artifacts python3 -I tests/run.py integration",
+      "status": "PASS",
+      "tests": 207,
+      "skips": 13,
+      "seconds": 678.449,
+      "log": "/home/caiobarbieri/.cache/nulavio-ux/ux3a-release-clkptb85/integration.log",
+      "log_sha256": "9ab56380d031307e62611544f5cdbc122e629a330deca134f9474861ae1ef9d5",
+      "skip_reasons": [
+        "test_claude_code (test_ai_agents_real.RealAgentsTest.test_claude_code) ... skipped 'opt-in: NULAVIO_AGENT_TESTS=1 and a Gecko engine'",
+        "test_codex_cli (test_ai_agents_real.RealAgentsTest.test_codex_cli) ... skipped 'opt-in: NULAVIO_AGENT_TESTS=1 and a Gecko engine'",
+        "test_01_set_up_creates_keys_behind_the_screen_lock (test_companion_emulator.CompanionOnEmulatorTest.test_01_set_up_creates_keys_behind_the_screen_lock) ... skipped 'NULAVIO_EMULATOR=1, a device on adb, the debug APK, gocryptfs and libsodium'",
+        "test_02_pairing_shows_the_same_digits_on_both_sides (test_companion_emulator.CompanionOnEmulatorTest.test_02_pairing_shows_the_same_digits_on_both_sides) ... skipped 'NULAVIO_EMULATOR=1, a device on adb, the debug APK, gocryptfs and libsodium'",
+        "test_03_unlock_with_the_phone_mounts_the_profile (test_companion_emulator.CompanionOnEmulatorTest.test_03_unlock_with_the_phone_mounts_the_profile) ... skipped 'NULAVIO_EMULATOR=1, a device on adb, the debug APK, gocryptfs and libsodium'",
+        "test_04_an_answered_request_is_refused_again (test_companion_emulator.CompanionOnEmulatorTest.test_04_an_answered_request_is_refused_again) ... skipped 'NULAVIO_EMULATOR=1, a device on adb, the debug APK, gocryptfs and libsodium'",
+        "test_05_not_now_sends_nothing (test_companion_emulator.CompanionOnEmulatorTest.test_05_not_now_sends_nothing) ... skipped 'NULAVIO_EMULATOR=1, a device on adb, the debug APK, gocryptfs and libsodium'",
+        "test_14_safe_browsing_blocks_google_test_phishing_page (test_engine_slice.EngineSliceTest.test_14_safe_browsing_blocks_google_test_phishing_page) ... skipped 'set NULAVIO_NETWORK_TESTS=1 (contacts Google Safe Browsing)'",
+        "test_bitwarden (test_password_extensions.PasswordExtensionSmokeTest.test_bitwarden) ... skipped 'set NULAVIO_NETWORK_TESTS=1 (downloads from addons.mozilla.org)'",
+        "test_keepassxc_browser (test_password_extensions.PasswordExtensionSmokeTest.test_keepassxc_browser) ... skipped 'set NULAVIO_NETWORK_TESTS=1 (downloads from addons.mozilla.org)'",
+        "test_proton_pass (test_password_extensions.PasswordExtensionSmokeTest.test_proton_pass) ... skipped 'set NULAVIO_NETWORK_TESTS=1 (downloads from addons.mozilla.org)'",
+        "test_05_choosing_proton_pass_installs_the_pinned_version_and_switching_back_keeps_it (test_passwords.PasswordsTest.test_05_choosing_proton_pass_installs_the_pinned_version_and_switching_back_keeps_it) ... skipped 'downloads Proton Pass from addons.mozilla.org'",
+        "test_run_temporary_deletes_the_profile_after_the_engine_exits (test_temporary.TemporaryFromTheLauncherTest.test_run_temporary_deletes_the_profile_after_the_engine_exits) ... skipped 'opens a visible window (NULAVIO_TEST_HEADFUL=1)'"
+      ]
+    },
+    {
+      "command": "env -u LC_ALL python3 -I tests/run.py unit test_security_tooling.py",
+      "status": "PASS",
+      "tests": 23,
+      "skips": 0,
+      "seconds": 7.031,
+      "log": "/home/caiobarbieri/.cache/nulavio-ux/ux3a-release-clkptb85/security-unit.log",
+      "log_sha256": "d35cb30dae9e688995ad7d594b1bf7b3e356a586521e3b638a87cc32771cb988",
+      "skip_reasons": []
+    }
+  ],
+  "lint_and_tokens": {
+    "ruff_check": "PASS",
+    "ruff_format": "PASS",
+    "generated_outputs": 4,
+    "contrast_pairs": 220,
+    "original_208_preserved": true
+  },
+  "security": {
+    "actionlint": "PASS",
+    "zizmor": "PASS",
+    "gitleaks": "PASS after confirming two exact public file-digest false positives",
+    "shellcheck": "PASS",
+    "opengrep": "PASS",
+    "opengrep_rule_cases": "16/16",
+    "initial_log": "/home/caiobarbieri/.cache/nulavio-ux/ux3a-release-clkptb85/security.log",
+    "gitleaks_retry_log": "/home/caiobarbieri/.cache/nulavio-ux/ux3a-release-clkptb85/gitleaks-green.log",
+    "exception_scope": "two commit:file:rule:line fingerprints only; existing policies/thresholds retained"
+  },
+  "independent_review": {
+    "kind": "automated AI review; not human approval",
+    "base": "cf548dfb19868c319f8164c6ba469b5e473fbeee",
+    "head": "baa432b5b544597ecf908eb4054cb5553691f727",
+    "actionable_findings": 0,
+    "stale_refresh_after_stop_restart_assertions": 6,
+    "scope": "source contracts, evidence hashes and bounded headless lifecycle probe; full suites not repeated by reviewer"
+  },
+  "captures": {
+    "release-after-dark.png": "cc1bd3fbdab88d12eecf1ca779bb1eddb1a7616ff8d411cf20499cca2af2a09d",
+    "release-after-light.png": "ce79f380ba0af666a1ba42593f903c51ea6cb03c19978f8d2b1ed97b395736ef",
+    "release-before-dark.png": "111135ff9109b67245cd9a20a42aaa44dd703a27e7aff69866f85a1ff48bbf82",
+    "release-before-light.png": "2382d740d67f1fb69c4e622a44102d71221aeb6081cbc02cab1a26eeb3c4fecd",
+    "release-compact-dark.png": "3a609ca8778877787479fe937c134892f54d99511c88ed1c4eec29c1d16d5bfe",
+    "release-compact-light.png": "0e7289d1579677a63ec25397f7ebebd7e57d29ce21063a676c8477a96cfd36d9",
+    "release-comparison.json": "29724875367ffe3b1cdde28a9852c70669b828d8e7e548b909240ca5eca93747",
+    "release-composition-dark.png": "da4595186d4e4d5096b28ea85cbf6eb34ab5232e996a4609f86e31b71faf0008",
+    "release-composition-light.png": "c987c6f68228bf7b24362336276c8a520779dec5ab6bd1be827912ffaf5dcfa1",
+    "release-geometry.json": "e7355f2289784b4b8d2d9742d495c6e69f74f90c0df6e689fbc3e623d6c33f87",
+    "release-real-agent-dark.png": "1a7fc16fe98e14464c39445413a2d428cb658aba7f41ee4cb39bdaae345a947e",
+    "release-real-agent-light.png": "f8d924e21081bd8006c535c38deb676559898c9fd0db306d5b81e2e57eb4aacf",
+    "release-real-raw-dark.png": "f0d69cc0f0a9dd07a18a0f095bc7d75cd8d042c8045393d190bc011e2b6c123d",
+    "release-real-raw-light.png": "bf713518ab8dde932cc8cac0f21ebd897aead3a2f7372aa211023f4b45633939"
+  },
+  "ci_scope": "tracked separately for the published full SHA; Fedora/Ubuntu CI uses distribution Firefox, while the built-in privileged Track B checks in this report ran locally",
+  "not_certified": [
+    "physical KDE title bar",
+    "Orca announcements",
+    "real GTK forced colours/high contrast",
+    "hardware scaling and frame times"
+  ],
+  "scope_limit": "UX3A band and safety grammar only; UX3 groups/downloads/presets and UX4-UX7 remain later slices"
+}

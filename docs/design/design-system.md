@@ -278,8 +278,9 @@ Final integrated results on the reviewed package: 600 unit tests OK (1 skip), 19
 This is the band and safety grammar slice of UX3, implemented on base
 `cf548dfb19868c319f8164c6ba469b5e473fbeee`. Tab groups, downloads badge/patch
 0007, layout/personalisation onboarding and Shell/assistant flow redesigns
-remain later slices. This local result does not mark the whole UX3 programme
-complete or establish a rebuilt release/CI result.
+remain later slices. This slice does not mark the whole UX3 programme complete.
+The initial task-copy evidence is preserved below; the parent's rebuilt-package
+result follows it. Local checks and remote CI are separate evidence.
 
 `NulavioWindow` owns the `nulavio-band` CustomizableUI toolbar area and its
 non-removable custom widget. It inserts only its own toolbar before
@@ -351,5 +352,47 @@ keeps its original registration and theme/accessibility guards.
 The [UX3A evidence](screenshots/ux3a/verification.json) records commands,
 results, source/package hashes, fixture provenance and captures. These are
 headless checks of a task-owned application copy with `dev_sync.py`, not a
-fresh engine build or accessibility certification. Final rebuild, integration
-on the merged SHA and Fedora/Ubuntu CI remain the parent's responsibility.
+fresh engine build or accessibility certification. The parent subsequently
+performed the rebuild and complete integration recorded below.
+
+## UX3A rebuilt-package verification (2026-10-29)
+
+The production sources at `baa432b5b544597ecf908eb4054cb5553691f727` were
+rebuilt through `build_nulavio.sh 159.0`, extracted into a disposable install
+and populated with the real distribution and Nulavio tools. This package was
+not modified with `dev_sync.py`. All 94 checked Shell, theme, preference and
+branding-module entries match their source bytes. Package BuildID:
+`20261029043253`; runtime BuildID: `20261029043250`. Tarball SHA-256:
+`5b0db884cd414c7a794cf29511bf75b3695367b1f78a2707c6f07d3272c1c55b`.
+
+The complete local suites passed: **600 unit tests (1 skip)** and **207 Track B
+integration tests (13 skips)**. Ruff, all four generated-file checks and
+**220/220** contrast pairs passed. The 23 security-tooling tests also passed
+after recording two exact Gitleaks fingerprints: both flagged the public
+SHA-256 of `docs/brand/tokens.json`, verified against that file. The remaining
+scanners passed; no rule, scan scope or security threshold was relaxed.
+The [release report](screenshots/ux3a/release-verification.json) records exact
+commands, logs, hashes and skip reasons. External agents, real Android,
+network opt-ins and visible-window cases are not claimed as executed.
+
+An independent automated review of the base/head found no actionable defect
+in this scope. Its bounded stop/restart probe passed six assertions that an
+old agent/raw refresh cannot repaint after teardown. This is an AI review,
+not human approval or desktop accessibility certification.
+
+Fresh captures on the rebuilt package preserve the original task evidence:
+[light](screenshots/ux3a/release-after-light.png),
+[dark](screenshots/ux3a/release-after-dark.png),
+[composed warnings](screenshots/ux3a/release-composition-dark.png),
+[real raw handover](screenshots/ux3a/release-real-raw-dark.png) and
+[fullscreen line](screenshots/ux3a/release-compact-dark.png).
+The composed scene uses a real registry, retained Guard findings and a
+synthetic live-PID marker read by the AI owner; the raw-handover scene comes
+from an actual Bridge-owned endpoint. The normal before/after captures use
+the same local page, profile name, native vertical tabs and 1366 × 768 window.
+Native automation stripes remain visible.
+
+Remote CI is tracked separately by the published full SHA. Its Fedora/Ubuntu
+jobs use distribution Firefox; privileged Track B verification is the local
+rebuilt-package run above. Physical KDE/GTK, Orca, hardware scaling and frame
+times remain pending. Later UX3 and UX4–UX7 work is not closed by this slice.

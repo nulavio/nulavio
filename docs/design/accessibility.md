@@ -89,5 +89,7 @@ keyboard focus restores its controls; the native fullscreen exit button is
 separately hit-tested.
 
 Pending: physical KDE title-bar checks, Orca announcements, real GTK forced
-colours/high contrast, hardware scaling and frame-time measurements. The
-parent's rebuild and final package/CI verification are also pending.
+colours/high contrast, hardware scaling and frame-time measurements.
+The [rebuilt-package report](screenshots/ux3a/release-verification.json)
+records the parent's 207-test local integration run (13 skips) and its
+scope; remote CI on distribution Firefox is separate from that evidence.

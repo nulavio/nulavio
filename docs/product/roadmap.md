@@ -146,7 +146,7 @@ Follow the [execution plan](execution-plan.md): S1 (Connect P0), S2 (unlock rese
 - [x] UX0 Audit (107 findings), three directions with HTML mockups, judged; decision: Farol with Maré's organisation and Névoa's flows ([audit](../design/audit-2026-10-27.md), [direction](../design/visual-directions.md))
 - [x] UX1 Security, consent and honesty fixes found by the audit ([CI](https://github.com/caiolombello/nulavio/actions/runs/40696267881), `8dd50fe5908aee17df464c21b1e7eafafde11496`; real Track B integration and Fedora/Ubuntu CI green)
 - [x] UX2 Design system v2 (tokens, component layers, 208 composited contrast checks, real gallery and identity migration; [CI](https://github.com/caiolombello/nulavio/actions/runs/40751057936), `0dd29501fff5156c1c3e10837ed7a12202f439c5`)
-- [ ] UX3 Window: the band, security states, Horizon v2, layout presets
+- [ ] UX3 Window: band and security grammar locally verified on a rebuilt Track B package (UX3A, `baa432b5b544597ecf908eb4054cb5553691f727`; [report](../design/screenshots/ux3a/release-verification.json)); native groups, remaining Horizon v2 and layout presets are pending
 - [ ] UX4 Shell pages (Settings, new tab, profile menu, routing, security moments, vault methods)
 - [ ] UX5 Assistant (tab-bound context, streaming, runs, entry points)
 - [ ] UX6 Safe personalisation
