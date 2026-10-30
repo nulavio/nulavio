@@ -1,0 +1,270 @@
+{
+  "date_utc": "2026-10-30T00:19:11.400691+00:00",
+  "status": "PASS: parent-side real-build local gates on the integrated main; publication and exact-SHA remote CI recorded separately",
+  "implementation_commit": "1165765b7c2564602ce800ccf838dc9d413619d0",
+  "implementation_branch": "ux3d-shell-layout-presets, fast-forward merged into main",
+  "published_base": "419f5ec99137d601a885d66cbaab3780e27908e0",
+  "package_kind": "parent-side real incremental Track B rebuild of the integrated main in the main checkout build tree; no dev_sync",
+  "engine_version": "159.0",
+  "package_build_id": "20261029205320",
+  "gecko_source_stamp": "5add844c26613d7e4d84c799d6e23cf987b1240d",
+  "tarball": "/home/caiobarbieri/.cache/nulavio-build/firefox-159.0/obj-nulavio/dist/nulavio-159.0.en-US.linux-x86_64.tar.xz",
+  "tarball_sha256": "ac6e8961bcbd78f201d082bf2c317c048d125f97d0836ca08c404a9294689cbd",
+  "install": "/home/caiobarbieri/.cache/nulavio-build/install/nulavio",
+  "browser_omni_sha256": "27a50fa137eddb9b6d3e37c6d9f61629ca3f088473005bb633bbbe0d676662d2",
+  "omni_sha256": "50495ac1a57036b1ad93b63ef12c284a5482c85efda87473666c99570203dff4",
+  "application_binary_sha256": "dd751d78c0c35e7b846b9570b8ca82884ad4e86a4c768e897350069e5fa9a138",
+  "child_final_browser_omni_sha256": "27a50fa137eddb9b6d3e37c6d9f61629ca3f088473005bb633bbbe0d676662d2",
+  "browser_omni_byte_identical_to_child_final": true,
+  "matched_source_entries": 98,
+  "entries_same_as_child_final": 98,
+  "source_entry_mismatches": [],
+  "native_all_match_source": true,
+  "native_all_same_as_child_final": true,
+  "package_detail": "/home/caiobarbieri/.cache/nulavio-ux/ux3d-release-r04ek51d/package-parent.json",
+  "package_detail_sha256": "805819fd4a2805cf9451995f6a154d93f6cd1432771cbe055c93f72ca164908d",
+  "stale_patch_correction": {
+    "what": "the main checkout's source tree still carried the pre-UX3C 0007 downloads patch (last parent build 2026-10-29 06:35); apply_patches.py correctly refused the amended patch",
+    "fix": "reversed the old 0007 (git apply --reverse, f768a1c version) restoring upstream bytes, then the rebuild applied the current 0007 cleanly",
+    "verification": "all five native downloads entries match the patched source tree and the child final build byte for byte"
+  },
+  "checks": [
+    {
+      "command": "env -u LC_ALL python3 -I tests/run.py unit",
+      "status": "PASS",
+      "tests": 601,
+      "seconds": 76.118,
+      "skips": 1,
+      "log": "/home/caiobarbieri/.cache/nulavio-ux/ux3d-release-r04ek51d/logs/unit-parent.log",
+      "log_sha256": "5d7a04e3bf3202ffa343699ef3bec9b9a9114d866ed15710a6df209abace5d64",
+      "skip_reasons": [
+        "test_through_the_real_avahi (test_phone_link.PhoneApiTest.test_through_the_real_avahi) ... skipped 'NULAVIO_LAN_TESTS=1 with Avahi running and avahi-publish (announces on the local network)'"
+      ]
+    },
+    {
+      "command": "env -u LC_ALL NULAVIO_ENGINE=/home/caiobarbieri/.cache/nulavio-build/install/nulavio/nulavio NULAVIO_TEST_ARTIFACTS=/home/caiobarbieri/.cache/nulavio-ux/ux3d-release-r04ek51d/full-integration-artifacts python3 -I tests/run.py integration",
+      "status": "PASS",
+      "tests": 241,
+      "seconds": 895.875,
+      "skips": 13,
+      "log": "/home/caiobarbieri/.cache/nulavio-ux/ux3d-release-r04ek51d/logs/integration-full.log",
+      "log_sha256": "5b906a3ee206e3b15bdb9851c4375497ea5431cf805675ff011089dd9187ea14",
+      "skip_reasons": [
+        "test_claude_code (test_ai_agents_real.RealAgentsTest.test_claude_code) ... skipped 'opt-in: NULAVIO_AGENT_TESTS=1 and a Gecko engine'",
+        "test_codex_cli (test_ai_agents_real.RealAgentsTest.test_codex_cli) ... skipped 'opt-in: NULAVIO_AGENT_TESTS=1 and a Gecko engine'",
+        "test_01_set_up_creates_keys_behind_the_screen_lock (test_companion_emulator.CompanionOnEmulatorTest.test_01_set_up_creates_keys_behind_the_screen_lock) ... skipped 'NULAVIO_EMULATOR=1, a device on adb, the debug APK, gocryptfs and libsodium'",
+        "test_02_pairing_shows_the_same_digits_on_both_sides (test_companion_emulator.CompanionOnEmulatorTest.test_02_pairing_shows_the_same_digits_on_both_sides) ... skipped 'NULAVIO_EMULATOR=1, a device on adb, the debug APK, gocryptfs and libsodium'",
+        "test_03_unlock_with_the_phone_mounts_the_profile (test_companion_emulator.CompanionOnEmulatorTest.test_03_unlock_with_the_phone_mounts_the_profile) ... skipped 'NULAVIO_EMULATOR=1, a device on adb, the debug APK, gocryptfs and libsodium'",
+        "test_04_an_answered_request_is_refused_again (test_companion_emulator.CompanionOnEmulatorTest.test_04_an_answered_request_is_refused_again) ... skipped 'NULAVIO_EMULATOR=1, a device on adb, the debug APK, gocryptfs and libsodium'",
+        "test_05_not_now_sends_nothing (test_companion_emulator.CompanionOnEmulatorTest.test_05_not_now_sends_nothing) ... skipped 'NULAVIO_EMULATOR=1, a device on adb, the debug APK, gocryptfs and libsodium'",
+        "test_14_safe_browsing_blocks_google_test_phishing_page (test_engine_slice.EngineSliceTest.test_14_safe_browsing_blocks_google_test_phishing_page) ... skipped 'set NULAVIO_NETWORK_TESTS=1 (contacts Google Safe Browsing)'",
+        "test_bitwarden (test_password_extensions.PasswordExtensionSmokeTest.test_bitwarden) ... skipped 'set NULAVIO_NETWORK_TESTS=1 (downloads from addons.mozilla.org)'",
+        "test_keepassxc_browser (test_password_extensions.PasswordExtensionSmokeTest.test_keepassxc_browser) ... skipped 'set NULAVIO_NETWORK_TESTS=1 (downloads from addons.mozilla.org)'",
+        "test_proton_pass (test_password_extensions.PasswordExtensionSmokeTest.test_proton_pass) ... skipped 'set NULAVIO_NETWORK_TESTS=1 (downloads from addons.mozilla.org)'",
+        "test_05_choosing_proton_pass_installs_the_pinned_version_and_switching_back_keeps_it (test_passwords.PasswordsTest.test_05_choosing_proton_pass_installs_the_pinned_version_and_switching_back_keeps_it) ... skipped 'downloads Proton Pass from addons.mozilla.org'",
+        "test_run_temporary_deletes_the_profile_after_the_engine_exits (test_temporary.TemporaryFromTheLauncherTest.test_run_temporary_deletes_the_profile_after_the_engine_exits) ... skipped 'opens a visible window (NULAVIO_TEST_HEADFUL=1)'"
+      ]
+    },
+    {
+      "command": "env -u LC_ALL NULAVIO_LAYOUT_LOCALE=pt-BR NULAVIO_ENGINE=/home/caiobarbieri/.cache/nulavio-build/install/nulavio/nulavio NULAVIO_TEST_ARTIFACTS=/home/caiobarbieri/.cache/nulavio-ux/ux3d-release-r04ek51d/layout-pt-artifacts python3 -I tests/run.py integration test_layout_presets.py",
+      "status": "PASS",
+      "tests": 10,
+      "seconds": 136.049,
+      "skips": 0,
+      "log": "/home/caiobarbieri/.cache/nulavio-ux/ux3d-release-r04ek51d/logs/layout-pt.log",
+      "log_sha256": "d7303113402aa15b90fb61a8f601846610d42e544145e3c975d5dfbb74571d10",
+      "skip_reasons": []
+    },
+    {
+      "command": "env -u LC_ALL NULAVIO_LAYOUT_LOCALE=en-US NULAVIO_ENGINE=/home/caiobarbieri/.cache/nulavio-build/install/nulavio/nulavio NULAVIO_TEST_ARTIFACTS=/home/caiobarbieri/.cache/nulavio-ux/ux3d-release-r04ek51d/layout-en-artifacts python3 -I tests/run.py integration test_layout_presets.py",
+      "status": "PASS",
+      "tests": 10,
+      "seconds": 139.214,
+      "skips": 0,
+      "log": "/home/caiobarbieri/.cache/nulavio-ux/ux3d-release-r04ek51d/logs/layout-en.log",
+      "log_sha256": "db15a43455e1e975e85b2b7b65dfed4b8aa0ab388981ec5fbdf8c7ca3d8571fc",
+      "skip_reasons": []
+    },
+    {
+      "command": "env -u LC_ALL NULAVIO_NETWORK_TESTS=1 NULAVIO_ENGINE=/home/caiobarbieri/.cache/nulavio-build/install/nulavio/nulavio NULAVIO_TEST_ARTIFACTS=/home/caiobarbieri/.cache/nulavio-ux/ux3d-release-r04ek51d/network-artifacts python3 -I tests/run.py integration test_engine_slice.py",
+      "status": "PASS",
+      "tests": 15,
+      "seconds": 13.072,
+      "skips": 0,
+      "log": "/home/caiobarbieri/.cache/nulavio-ux/ux3d-release-r04ek51d/logs/network-engine.log",
+      "log_sha256": "729a8f8143627df6b32192c929cdc99d2d638857b438dc07ea5e18e3a7159196",
+      "skip_reasons": []
+    },
+    {
+      "command": "requirements/dev.txt hash-pinned venv: ruff check . and ruff format --check .",
+      "status": "PASS",
+      "log": "/home/caiobarbieri/.cache/nulavio-ux/ux3d-release-r04ek51d/logs/ruff-parent.log",
+      "log_sha256": "069191a35079e2a4adde74762181b6eabd792da8d65421f88f13616835bfa5ce"
+    },
+    {
+      "command": "python3 -I scripts/brand/build_tokens.py --check",
+      "status": "PASS",
+      "outputs": 4,
+      "log": "/home/caiobarbieri/.cache/nulavio-ux/ux3d-release-r04ek51d/logs/tokens-parent.log",
+      "log_sha256": "52647eb83b17ca51dc429498a6b80ad28966d30f5073ca02a8e3161ed35a6f25"
+    },
+    {
+      "command": "python3 -I scripts/brand/contrast.py --json",
+      "status": "PASS",
+      "pairs": 256,
+      "report": "/home/caiobarbieri/.cache/nulavio-ux/ux3d-release-r04ek51d/contrast-parent.json",
+      "report_sha256": "87f2952e22d44e2243409ecf90f075f7e540ffcf39157c06023e1c0d4496ee59"
+    },
+    {
+      "command": "scripts/security/scan.sh",
+      "status": "PASS",
+      "log": "/home/caiobarbieri/.cache/nulavio-ux/ux3d-release-r04ek51d/logs/security-parent.log",
+      "log_sha256": "faebad12ed0037b6967712d3bfe3ca1e165cf35a4534410c9be9ba7bec4a7abd"
+    },
+    {
+      "command": "scripts/build/build_nulavio.sh 159.0 (parent checkout at the integrated HEAD; stale pre-UX3C patch 0007 reversed to upstream first)",
+      "status": "PASS",
+      "log": "/home/caiobarbieri/.cache/nulavio-ux/ux3d-parent-rebuild.log",
+      "log_sha256": "6be0c030214467ad5c74be61cbb514bb6110865df2b5f1aeeae9b4c3cda93098"
+    },
+    {
+      "command": "scripts/build/make_distribution.py --out install/nulavio/distribution; scripts/build/make_tools.py --out install/nulavio/nulavio-tools",
+      "status": "PASS"
+    }
+  ],
+  "independent_review": {
+    "kind": "separate-context static review of the UX3D delta (read-only), after the original reviewer was interrupted by a usage limit",
+    "base_head": [
+      "419f5ec99137d601a885d66cbaab3780e27908e0",
+      "1165765b7c2564602ce800ccf838dc9d413619d0"
+    ],
+    "findings": "0 P1, 0 P2, 4 P3",
+    "p3_findings": [
+      {
+        "id": "P3-1",
+        "finding": "if nulavioLayout.onChanged.addListener throws (window without toolbar/closing at load), setUpLayout rejects before its first refresh and the section stays in the loading text without error or retry",
+        "precondition": "Settings hosted in a chromeless window or one closing at that instant; recoverable by reloading the page",
+        "disposition": "deferred to the next UX3 slice; no in-product path opens Settings in such a window today"
+      },
+      {
+        "id": "P3-2",
+        "finding": "onChanged observers bind to the window resolved at registration; dragging the Settings tab to another window leaves observers on the old window until the next interaction, and closing the old window unsubscribes for good",
+        "impact": "the Current-window line can be stale; radios keep working; pref observers still fire; no leak",
+        "disposition": "deferred with the D-UX2 adoption work"
+      },
+      {
+        "id": "P3-3",
+        "finding": "state() is not serialized with the applying queue, so another Settings window can transiently render Custom mid-transition",
+        "impact": "self-corrects on the next notification; the applying window is guarded by its busy state",
+        "disposition": "accepted: reporting the actual (mixed) state honestly is the intended behaviour"
+      },
+      {
+        "id": "P3-4",
+        "finding": "tests never lock sidebar.revamp (the third observed pref), simulate a real window closing inside apply's window loop, or assert the hover attribute on a window opened after a Foco apply",
+        "disposition": "deferred to the next UX3 slice alongside P3-1/P3-2 coverage"
+      }
+    ],
+    "verified_without_findings": [
+      "caller-window resolution in experiments/layout/parent.js (never most-recent-window)",
+      "the only preference writes are sidebar.verticalTabs and the literal sidebar.visibility preset values",
+      "observer lifecycles: every exit path removes all MutationObservers and pref observers; EventManager unregister is returned",
+      "native calls match Gecko159 signatures (SidebarState.updateVisibility, toggleExpandOnHover) and do not close panels or lose widths/position",
+      "locale key parity en/pt_BR with honest error and managed-pref texts",
+      "no engine patch, default, Horizon CSS, token, Vault/AI/Guard/downloads or ensureStore change in the delta",
+      "verification.json production/test hashes match the checkout byte for byte"
+    ]
+  },
+  "implementation_evidence": {
+    "file": "docs/design/screenshots/ux3d/verification.json",
+    "sha256": "57436344c41a8983e4fbfd7303f7e828e9585ac3ea41ed04559c356158ce5a05",
+    "scope": "child-side build, full suites, retained failures, upgrade verification; declares parent integration/publication as separate (this report)"
+  },
+  "captures": [
+    {
+      "file": "docs/design/screenshots/ux3d/release-pt-BR-lateral-light.png",
+      "sha256": "1edd5d691c2218090670d88e7fdbc4329fddc80b4a829a346f7d07a94adf8df2",
+      "source": "parent-rebuilt integrated package; Settings layout section at 1366x100% with the preset applied",
+      "browser_omni_sha256": "27a50fa137eddb9b6d3e37c6d9f61629ca3f088473005bb633bbbe0d676662d2"
+    },
+    {
+      "file": "docs/design/screenshots/ux3d/release-pt-BR-lateral-dark.png",
+      "sha256": "25cf66e11ab7a1a7f27e876454e34d5ee58fe7bc64cbaf854b0d45fbd3543cb2",
+      "source": "parent-rebuilt integrated package; Settings layout section at 1366x100% with the preset applied",
+      "browser_omni_sha256": "27a50fa137eddb9b6d3e37c6d9f61629ca3f088473005bb633bbbe0d676662d2"
+    },
+    {
+      "file": "docs/design/screenshots/ux3d/release-pt-BR-top-light.png",
+      "sha256": "bf46bae1803c5e55b02aa65187c5f138bab2dc6b07bc06844a83e169f77e437f",
+      "source": "parent-rebuilt integrated package; Settings layout section at 1366x100% with the preset applied",
+      "browser_omni_sha256": "27a50fa137eddb9b6d3e37c6d9f61629ca3f088473005bb633bbbe0d676662d2"
+    },
+    {
+      "file": "docs/design/screenshots/ux3d/release-pt-BR-top-dark.png",
+      "sha256": "9f4178292bdb1bf9adec5788f9a50419e26e831f918825e124ccad54804e4cd1",
+      "source": "parent-rebuilt integrated package; Settings layout section at 1366x100% with the preset applied",
+      "browser_omni_sha256": "27a50fa137eddb9b6d3e37c6d9f61629ca3f088473005bb633bbbe0d676662d2"
+    },
+    {
+      "file": "docs/design/screenshots/ux3d/release-pt-BR-focus-light.png",
+      "sha256": "0015a0be3072ad4760674ca4c69bb02d61d02baa7f918099cf65867e9015ff09",
+      "source": "parent-rebuilt integrated package; Settings layout section at 1366x100% with the preset applied",
+      "browser_omni_sha256": "27a50fa137eddb9b6d3e37c6d9f61629ca3f088473005bb633bbbe0d676662d2"
+    },
+    {
+      "file": "docs/design/screenshots/ux3d/release-pt-BR-focus-dark.png",
+      "sha256": "aa546806fc16d29a457780472d8e468bbb0294bacb09a1b073fea99f136559c6",
+      "source": "parent-rebuilt integrated package; Settings layout section at 1366x100% with the preset applied",
+      "browser_omni_sha256": "27a50fa137eddb9b6d3e37c6d9f61629ca3f088473005bb633bbbe0d676662d2"
+    },
+    {
+      "file": "docs/design/screenshots/ux3d/release-en-US-lateral-light.png",
+      "sha256": "b7728dbb2e2497602cc3f2ec7865fbe2f2351ff1484de1dcb35030ebb0373f17",
+      "source": "parent-rebuilt integrated package; Settings layout section at 1366x100% with the preset applied",
+      "browser_omni_sha256": "27a50fa137eddb9b6d3e37c6d9f61629ca3f088473005bb633bbbe0d676662d2"
+    },
+    {
+      "file": "docs/design/screenshots/ux3d/release-en-US-lateral-dark.png",
+      "sha256": "66d7634ed4aeeceb8590079b553b3ebc13904a694caa8c1f910b5d922d743489",
+      "source": "parent-rebuilt integrated package; Settings layout section at 1366x100% with the preset applied",
+      "browser_omni_sha256": "27a50fa137eddb9b6d3e37c6d9f61629ca3f088473005bb633bbbe0d676662d2"
+    },
+    {
+      "file": "docs/design/screenshots/ux3d/release-en-US-top-light.png",
+      "sha256": "2c3336c862df86823b4d72b8e71c55cd6e8fc1235ead561f7250aee2c2273579",
+      "source": "parent-rebuilt integrated package; Settings layout section at 1366x100% with the preset applied",
+      "browser_omni_sha256": "27a50fa137eddb9b6d3e37c6d9f61629ca3f088473005bb633bbbe0d676662d2"
+    },
+    {
+      "file": "docs/design/screenshots/ux3d/release-en-US-top-dark.png",
+      "sha256": "f75a8cdc6d4c997dfb5226dd5edcea444e646aa50d4d3c50bba78cf3d821a632",
+      "source": "parent-rebuilt integrated package; Settings layout section at 1366x100% with the preset applied",
+      "browser_omni_sha256": "27a50fa137eddb9b6d3e37c6d9f61629ca3f088473005bb633bbbe0d676662d2"
+    },
+    {
+      "file": "docs/design/screenshots/ux3d/release-en-US-focus-light.png",
+      "sha256": "f7938a8369ec3355c17d94d40b9d1edbea0749a4e9ec1cf0d52315018b5c8c63",
+      "source": "parent-rebuilt integrated package; Settings layout section at 1366x100% with the preset applied",
+      "browser_omni_sha256": "27a50fa137eddb9b6d3e37c6d9f61629ca3f088473005bb633bbbe0d676662d2"
+    },
+    {
+      "file": "docs/design/screenshots/ux3d/release-en-US-focus-dark.png",
+      "sha256": "63eb21664bbfc7ce3be176fe134e3012346d7a1eddaaea61fd2360c0ee215ac5",
+      "source": "parent-rebuilt integrated package; Settings layout section at 1366x100% with the preset applied",
+      "browser_omni_sha256": "27a50fa137eddb9b6d3e37c6d9f61629ca3f088473005bb633bbbe0d676662d2"
+    }
+  ],
+  "capture_method": "integration-test Marionette captures on the parent-rebuilt integrated package, both locales and themes; no visible host window",
+  "publication": {
+    "scope": "pre-publication local verification on the integrated main; exact published SHA and all CI jobs recorded after push",
+    "ci_engine_scope": "hosted CI uses distribution Firefox; privileged built-in Track B verification is local"
+  },
+  "pending": [
+    "exact-SHA remote CI after push",
+    "Orca announcements",
+    "physical KDE/GNOME/GTK title bar, forced colors and high contrast",
+    "physical 125/150% scaling",
+    "hardware frame times",
+    "P3-1/P3-2/P3-4 follow-ups in the next UX3 slice",
+    "D-UX2 safe new-profile adoption/migration and first-run choice"
+  ]
+}

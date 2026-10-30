@@ -719,3 +719,13 @@ reduced-transparency query remains false under the engine's fingerprinting
 protection; no protection is disabled to change that result. Its surfaces
 remain solid. The [render review](screenshots/ux3d/render-review.json) separates
 native and content measurements, visual critique and pending desktop checks.
+
+[Parent release verification](screenshots/ux3d/release-verification.json)
+records the integrated `main` rebuild (`1165765b7c2564602ce800ccf838dc9d413619d0`,
+package BuildID `20261029205320`, `browser/omni.ja` byte-identical to the child
+final build across all 98 Shell/branding entries and all eight native entries):
+241 integration tests (13 skips), 601 unit tests (1 skip), 10 UX3D cases per
+locale, 15 opt-in engine tests including live phishing blocking, all six
+security scans, 256 contrast pairs, 12 canonical release captures and an
+independent static review (0 P1, 0 P2, 4 P3 deferred). Publication and
+exact-SHA remote CI remain separate post-commit gates.

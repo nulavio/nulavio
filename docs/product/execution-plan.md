@@ -247,11 +247,20 @@ No startup/default/migration write, new shortcut, native patch or Horizon CSS
 is added. An open assistant panel is preserved (D-UX22).
 [Mechanisms and scope](../design/design-system.md#ux3d-explicit-native-layout-presets-2026-10-29),
 [build, tests, retained failures and captures](../design/screenshots/ux3d/verification.json).
-The implementation stops at a local commit for parent integration/publication;
-remote CI and human approval are separate. UX3 is not complete. D-UX2's safe
-new-profile adoption/migration and first-run choice belong to the next slice;
-D-UX13, D-UX17, D-UX23, extra sidebar curation, Shell/assistant redesign,
-command palette and split view remain outside this commit.
+UX3C's separate [publication CI](https://github.com/caiolombello/nulavio/actions/runs/40903066116)
+on `419f5ec99137d601a885d66cbaab3780e27908e0` passed all six jobs. For UX3D, the
+parent fast-forward integrated `1165765b7c2564602ce800ccf838dc9d413619d0`,
+rebuilt Track B 159.0 cleanly after reversing the stale pre-UX3C patch `0007` in
+the main build tree, matched 98 packaged-source entries (`browser/omni.ja`
+byte-identical to the child final build), and passed 241 integration tests
+(13 skips), 601 unit tests (1 skip), 10 layout-preset tests per locale, 15
+engine opt-in tests including live phishing blocking, all six security scans and
+256 contrast combinations; an independent static review reported 0 P1/P2 and 4
+P3 follow-ups ([parent verification](../design/screenshots/ux3d/release-verification.json)).
+Publication/exact-SHA remote CI and human approval are separate gates. UX3 is
+not complete: D-UX2's safe new-profile adoption/migration and first-run choice
+belong to the next slice; D-UX13, D-UX17, D-UX23, extra sidebar curation,
+Shell/assistant redesign, command palette and split view remain open.
 
 **UX4 — Shell pages**
 - **Settings.** Two panes, with search, scope labels and inline status.
