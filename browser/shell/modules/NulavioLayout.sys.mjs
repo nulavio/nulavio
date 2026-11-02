@@ -530,7 +530,9 @@ export const NulavioLayout = {
         preset = "top";
       } else if (vertical && ui.launcherVisible && visibility === PRESETS.lateral && ui.launcherExpanded && !hover) {
         preset = "lateral";
-      } else if (vertical && ui.launcherVisible && visibility === PRESETS.focus && hover) {
+      } else if (vertical && ui.launcherVisible && visibility === PRESETS.focus && (hover || ui.launcherExpanded)) {
+        // QA M-3: the sidebar button is Foco's keyboard route (its hint says so). Natively it
+        // pins the launcher open and pauses hover until pressed again; that is still Foco.
         preset = "focus";
       }
     }

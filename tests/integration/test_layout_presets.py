@@ -497,11 +497,24 @@ class LayoutPresetsTest(unittest.TestCase):
         # Foco retains the native keyboard route to the expanded tab list.
         self.m.chrome("ToolbarKeyboardNavigator._focusButton(SidebarController.toolbarButton);")
         self.assertTrue(self.m.chrome("return document.activeElement===SidebarController.toolbarButton;"))
+        # QA M-3 (WCAG 2.1.1): that route is what Foco's hint recommends, so expanding with it keeps
+        # Foco. Natively the button pins the launcher open and pauses hover until pressed again.
+        native = (
+            "return [SidebarController.getUIState().launcherExpanded,"
+            " document.documentElement.hasAttribute('sidebar-expand-on-hover')];"
+        )
         self.m.chrome(KEY, ["Enter", "Enter", 13])
-        self.assertTrue(harness.wait_until(lambda: self.state()["preset"] == "custom", 10))
-        self.assertTrue(self.m.chrome("return SidebarController.getUIState().launcherExpanded;"))
-        self.assertTrue(harness.wait_until(lambda: self.selected() == "custom", 10))
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome(native) == [True, False], 10))
+        time.sleep(0.5)
+        self.assertEqual(self.state()["preset"], "focus")
+        self.assertEqual(self.selected(), "focus")
+        self.assertIn(
+            self.m.execute("return document.getElementById('layout-current').textContent;"),
+            ("Janela atual: Foco.", "Current window: Focus."),
+        )
         self.m.chrome(KEY, ["Enter", "Enter", 13])
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome(native) == [False, True], 10))
+        self.assertEqual(self.state()["preset"], "focus")
         self.assertTrue(harness.wait_until(lambda: self.selected() == "focus", 10))
         self.m.chrome("Services.focus.setFocus(gBrowser.selectedTab,Ci.nsIFocusManager.FLAG_BYKEY);")
         self.assertTrue(self.m.chrome("return document.activeElement===gBrowser.selectedTab;"))
