@@ -170,6 +170,12 @@
       }
     }
 
+    /* UX3G B2: the profiles button uses the monochrome Nulavio glyph like its
+       neighbours; the accent only marks it while its panel is open. */
+    :root:not([lwtheme]) #shell_nulavio_net-browser-action[open] {
+      --toolbarbutton-icon-fill: var(--nv-color-accent-default);
+    }
+
     /* UX3B: keep native colour roles distinct. Lines/swatches use group ink;
      * inverse surfaces and action text must contrast with it in both native UIs. */
     :root:not([lwtheme]) {
@@ -391,6 +397,56 @@
 
   :root[lwtheme] .tabbrowser-tab[visuallyselected] > .tab-stack > .tab-background::after {
     background-color: currentColor;
+  }
+
+  /* UX3G N2: private windows. The engine swaps the default theme for its
+     violet "Nova Private Window" theme ([lwtheme] with [theme-in-app]; a theme
+     the person installed never has [theme-in-app]). Keep its dark scheme but
+     paint it with Nulavio's private chrome. The identity band keeps the strong
+     private alert (window-band.css), so the window still reads as private. */
+  @media not ((forced-colors) or (prefers-contrast)) {
+    :root[privatebrowsingmode="temporary"][lwtheme][theme-in-app] {
+      --lwt-accent-color: var(--nv-color-chrome-private-toolbox) !important;
+      --lwt-accent-color-inactive: var(--nv-color-chrome-private-toolbox) !important;
+      --lwt-text-color: var(--nv-color-chrome-private-text) !important;
+      --toolbar-background-color: var(--nv-color-chrome-private-toolbar) !important;
+      --toolbar-text-color: var(--nv-color-chrome-private-text) !important;
+      --toolbarbutton-icon-fill: var(--nv-color-chrome-private-icon) !important;
+      --toolbarbutton-icon-fill-attention: var(--nv-color-chrome-private-accent) !important;
+      --toolbarbutton-background-color-hover: color-mix(in srgb, currentColor calc(var(--nv-state-hoverOverlay) * 100%), transparent) !important;
+      --toolbarbutton-background-color-active: color-mix(in srgb, currentColor calc(var(--nv-state-pressedOverlay) * 100%), transparent) !important;
+      --toolbar-field-background-color: var(--nv-color-chrome-private-field) !important;
+      --toolbar-field-background-color-focus: var(--nv-color-chrome-private-field) !important;
+      --toolbar-field-text-color: var(--nv-color-chrome-private-text) !important;
+      --toolbar-field-text-color-focus: var(--nv-color-chrome-private-text) !important;
+      --toolbar-field-border-color: var(--nv-color-chrome-private-control) !important;
+      --toolbar-field-border-color-focus: var(--nv-color-chrome-private-accent) !important;
+      --lwt-toolbar-field-highlight: color-mix(in srgb, var(--nv-color-chrome-private-accent) 35%, transparent) !important;
+      --lwt-toolbar-field-highlight-text: var(--nv-color-chrome-private-text) !important;
+      --panel-background-color: var(--nv-color-chrome-private-raised) !important;
+      --panel-text-color: var(--nv-color-chrome-private-text) !important;
+      --panel-border-color: var(--nv-color-chrome-private-border) !important;
+      --tab-background-color-selected: var(--nv-color-chrome-private-tabSelected) !important;
+      --tab-text-color-selected: var(--nv-color-chrome-private-text) !important;
+      --tab-icon-fill-loading: var(--nv-color-chrome-private-accent) !important;
+      --lwt-tab-line-color: transparent !important;
+      --lwt-background-tab-separator-color: var(--nv-color-chrome-private-border) !important;
+      --tabs-navbar-separator-color: var(--nv-color-chrome-private-border) !important;
+      --toolbarseparator-color: var(--nv-color-chrome-private-border) !important;
+      --chrome-content-separator-color: var(--nv-color-chrome-private-border) !important;
+      --urlbarview-background-color-selected: var(--nv-color-chrome-private-tabSelected) !important;
+      --urlbarview-text-color-selected: var(--nv-color-chrome-private-text) !important;
+      --sidebar-background-color: var(--nv-color-chrome-private-toolbox) !important;
+      --sidebar-text-color: var(--nv-color-chrome-private-text) !important;
+      --sidebar-border-color: var(--nv-color-chrome-private-border) !important;
+      --tabpanel-background-color: var(--nv-color-chrome-private-toolbox) !important;
+      --focus-outline-color: var(--nv-color-chrome-private-accent);
+
+      /* UX3G N8: the open sidebar reads as the accent here too, not a grey block. */
+      #sidebar-button:is([checked], [open]) {
+        --toolbarbutton-icon-fill: var(--nv-color-chrome-private-accent) !important;
+      }
+    }
   }
 
   @media (forced-colors) {

@@ -1,0 +1,23 @@
+<!-- This Source Code Form is subject to the terms of the Mozilla Public
+   - License, v. 2.0. If a copy of the MPL was not distributed with this
+   - file, You can obtain one at http://mozilla.org/MPL/2.0/. -->
+<!-- UX3G N2: Nulavio's shield for the Settings privacy status ("on guard"),
+     replacing the engine's Firefox-coloured shield through a chrome override.
+     Colours from docs/brand/tokens.json (mint scale, accent.default). -->
+<svg xmlns="http://www.w3.org/2000/svg" width="100" height="106" viewBox="0 0 100 106" fill="none">
+  <style>
+    .wash { fill: #DDF8F0; }
+    .shield { fill: #A6EEDC; stroke: #0F7A68; }
+    .mark { stroke: #0F7A68; }
+    @media (prefers-color-scheme: dark) {
+      .wash { fill: #0E3B33; }
+      .shield { fill: #0E3B33; stroke: #6FE0C5; }
+      .mark { stroke: #6FE0C5; }
+    }
+  </style>
+  <circle class="wash" cx="56" cy="58" r="44"/>
+  <path class="shield" stroke-width="4" stroke-linejoin="round"
+        d="M50 10 L84 22 V50 C84 72 70 88 50 96 C30 88 16 72 16 50 V22 Z"/>
+  <path class="mark" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" fill="none"
+        d="M34 54 L46 66 L68 40"/>
+</svg>

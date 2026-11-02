@@ -49,8 +49,17 @@
         --link-color-active: light-dark(#0F7A68, #6FE0C5) !important;
         --background-color-canvas: light-dark(#F1F7F5, #0B1623) !important;
         --background-color-box: light-dark(#FFFFFF, #112432) !important;
+        --table-background-color: light-dark(#FFFFFF, #112432) !important;
+        --border-color: light-dark(#BFD0D6, #23495A) !important;
+        --border-color-card: light-dark(#BFD0D6, #23495A) !important;
       }
     }
     }
+  }
+}
+@-moz-document url-prefix("about:preferences"), url-prefix("about:settings") {
+  #category-experimental,
+  #category-more-from-mozilla {
+    display: none !important;
   }
 }

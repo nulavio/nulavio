@@ -28,6 +28,17 @@ browser.jar:
 % override chrome://global/skin/illustrations/kit-holding-lock.svg chrome://branding/content/illustration-promo.svg
 % override chrome://global/skin/illustrations/kit-in-circle.svg chrome://branding/content/illustration-promo.svg
 % override chrome://global/skin/illustrations/kit-sympathetic.svg chrome://branding/content/illustration-promo.svg
+# UX3G N2: Nulavio's shield on the Settings privacy status, a neutral account
+# icon instead of Mozilla's logo, and the Nulavio glyph instead of the Firefox
+# logo on "About Nulavio". Artwork only; no behaviour changes.
+  content/branding/illustration-shield-ok.svg    (illustration-shield-ok.svg)
+  content/branding/illustration-shield-alert.svg (illustration-shield-alert.svg)
+  content/branding/nulavio-glyph-16.svg          (nulavio-glyph-16.svg)
+% override chrome://global/skin/illustrations/shield-check.svg chrome://branding/content/illustration-shield-ok.svg
+% override chrome://global/skin/illustrations/shield-alert.svg chrome://branding/content/illustration-shield-alert.svg
+% override chrome://browser/skin/preferences/mozilla-logo.svg chrome://browser/skin/fxa/avatar-empty.svg
+% override chrome://browser/skin/preferences/mozilla-16.svg chrome://browser/skin/fxa/avatar-empty.svg
+% override chrome://browser/skin/sidebar/firefox.svg chrome://branding/content/nulavio-glyph-16.svg
 # Nulavio Horizon window theme (loaded by browser.xhtml, browser/patches/0003)
   content/branding/theme/tokens.css              (theme/tokens.css)
   content/branding/theme/horizon.css             (theme/horizon.css)

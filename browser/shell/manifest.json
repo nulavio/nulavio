@@ -27,7 +27,7 @@
     "default_title": "__MSG_profilesButton__",
     "default_popup": "profiles/popup.html",
     "default_area": "navbar",
-    "default_icon": "shared/nulavio-symbol-adaptive.svg"
+    "default_icon": "shared/nulavio-symbol-mono.svg"
   },
   "commands": {
     "_execute_action": {

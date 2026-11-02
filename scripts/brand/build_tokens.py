@@ -250,6 +250,20 @@ def _mix(a: str, b: str, weight: float) -> str:
     return "#" + "".join(f"{round(x * weight + y * (1 - weight)):02X}" for x, y in zip(ca, cb, strict=True))
 
 
+# UX3G N2: Mozilla's own experiments and products are not part of Nulavio's
+# Settings. The panes still open by URL; only their navigation entries are hidden
+# (the browser.preferences.experimental.hidden pref alone did not hide Labs).
+# Independent of the theme: this is naming, not colour.
+BRAND_RULES = (
+    '@-moz-document url-prefix("about:preferences"), url-prefix("about:settings") {\n'
+    "  #category-experimental,\n"
+    "  #category-more-from-mozilla {\n"
+    "    display: none !important;\n"
+    "  }\n"
+    "}\n"
+)
+
+
 def build_in_content(data: dict) -> str:
     """Internal about: pages: the engine's accent, focus, link and canvas in Nulavio's colours.
 
@@ -281,6 +295,10 @@ def build_in_content(data: dict) -> str:
         f"--link-color-active: {accent}",
         f"--background-color-canvas: {pair('bg.canvas')}",
         f"--background-color-box: {pair('bg.surface')}",
+        # UX3G N2: about:profiles and the other info pages (tables, the "Restart" box).
+        f"--table-background-color: {pair('bg.surface')}",
+        f"--border-color: {pair('border.subtle')}",
+        f"--border-color-card: {pair('border.subtle')}",
     ]
     body = "".join(f"        {line} !important;\n" for line in lines)
     urls = ",\n  ".join(f'url-prefix("{page}")' for page in IN_CONTENT_PAGES)
@@ -295,6 +313,7 @@ def build_in_content(data: dict) -> str:
         + "      :root:not([lwtheme]) {\n"
         + body
         + "      }\n    }\n    }\n  }\n}\n"
+        + BRAND_RULES
     )
 
 

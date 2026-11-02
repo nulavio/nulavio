@@ -119,3 +119,12 @@ pref("browser.toolbars.bookmarks.visibility", "never");
 // lists Mozilla's remote experiments, starts hidden (Nimbus rollouts are off).
 pref("browser.urlbar.groupLabels.enabled", false);
 pref("browser.preferences.experimental.hidden", true);
+
+// UX3G N2: about:addons opens on the person's own extensions, without the
+// "Recommendations" pane (AMO picks that Firefox recommends, "by Firefox"
+// themes) and without its per-extension recommendation cards. Add-ons are still
+// one search away on the same page. Settings drops "More from Mozilla"
+// (Mozilla's product promotions).
+pref("extensions.getAddons.showPane", false);
+pref("extensions.htmlaboutaddons.recommendations.enabled", false);
+pref("browser.preferences.moreFromMozilla", false);

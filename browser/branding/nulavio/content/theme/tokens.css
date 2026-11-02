@@ -127,6 +127,15 @@
   --nv-color-chrome-icon: light-dark(#23495A, #BFD0D6);
   --nv-color-chrome-private-toolbar: light-dark(#0F1C2A, #0F1C2A);
   --nv-color-chrome-private-toolbox: light-dark(#060C14, #060C14);
+  --nv-color-chrome-private-tabSelected: light-dark(#1E4252, #1E4252);
+  --nv-color-chrome-private-field: light-dark(#15293A, #15293A);
+  --nv-color-chrome-private-raised: light-dark(#183746, #183746);
+  --nv-color-chrome-private-text: light-dark(#F1F7F5, #F1F7F5);
+  --nv-color-chrome-private-tabText: light-dark(#BFD0D6, #BFD0D6);
+  --nv-color-chrome-private-icon: light-dark(#BFD0D6, #BFD0D6);
+  --nv-color-chrome-private-border: light-dark(#23495A, #23495A);
+  --nv-color-chrome-private-control: light-dark(#6E93A2, #6E93A2);
+  --nv-color-chrome-private-accent: light-dark(#6FE0C5, #6FE0C5);
   --nv-color-identity-sky: light-dark(#8CCBF5, #8CCBF5);
   --nv-color-identity-violet: light-dark(#C2B0F7, #C2B0F7);
   --nv-color-identity-sand: light-dark(#FDCF8B, #FDCF8B);
