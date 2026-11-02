@@ -13,6 +13,7 @@ ChromeUtils.defineESModuleGetters(lazy, {
   ExtensionSettingsStore: "resource://gre/modules/ExtensionSettingsStore.sys.mjs",
   NulavioAI: "resource://builtin-addons/nulavio-shell/modules/NulavioAI.sys.mjs",
   NulavioGuard: "resource://builtin-addons/nulavio-shell/modules/NulavioGuard.sys.mjs",
+  NulavioLayout: "resource://builtin-addons/nulavio-shell/modules/NulavioLayout.sys.mjs",
   AVATARS: "resource://builtin-addons/nulavio-shell/modules/NulavioProfiles.sys.mjs",
   NulavioProfiles: "resource://builtin-addons/nulavio-shell/modules/NulavioProfiles.sys.mjs",
   PrivateBrowsingUtils: "resource://gre/modules/PrivateBrowsingUtils.sys.mjs",
@@ -352,7 +353,9 @@ class WindowUI {
     Promise.resolve(win.gBrowserInit?.uriToLoadPromise).then(uri => {
       const start = Array.isArray(uri) ? (uri.length === 1 ? uri[0] : null) : uri;
       const browser = win.gBrowser?.selectedBrowser;
+      // UX3G N-4 (provisional): only new profiles; profiles from earlier builds keep about:home.
       if (start !== "about:home" || win.closed || !this.#windows.has(win) || win.gBrowser.tabs.length !== 1
+          || !lazy.NulavioLayout.startsOnShellTab()
           || lazy.AboutNewTab.newTabURL !== url || browser.canGoBack || browser.canGoForward
           || !["about:home", "about:blank"].includes(browser.currentURI?.spec)) {
         return;

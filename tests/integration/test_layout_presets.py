@@ -1519,3 +1519,89 @@ class LayoutPresetsTest(unittest.TestCase):
             except subprocess.TimeoutExpired:
                 proc_ai.kill()
                 proc_ai.wait(timeout=10)
+
+    # UX3G N-4 (provisional decision, may change before release): the Shell's new tab is the
+    # first tab only on new profiles; profiles that came from main keep about:home.
+    def test_new_profile_first_tab_is_the_shell_new_tab_with_the_card(self):
+        url = self.shell_url("newtab/newtab.html")
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome("return gBrowser.currentURI.spec;") == url, 15))
+        self.assertTrue(self.m.chrome("return Services.prefs.getBoolPref('nulavio.startpage.shellFirstTab', false);"))
+        self.assertTrue(harness.wait_until(lambda: self.m.execute("return document.documentElement.dataset.ready==='true';"), 15))
+        self.assertFalse(self.m.execute("return document.getElementById('layout-choice').hidden;"))
+
+    def test_profile_upgraded_from_5a98bd7_keeps_about_home_as_first_tab(self):
+        reference = os.environ.get("NULAVIO_REFERENCE_ENGINE", "")
+        if not reference:
+            self.skipTest("needs NULAVIO_REFERENCE_ENGINE (a 5a98bd7 build) for a real upgrade")
+        ref_path = Path(reference)
+        self.assertTrue(ref_path.is_file(), f"NULAVIO_REFERENCE_ENGINE does not exist: {reference}")
+        tmp = Path(tempfile.mkdtemp(prefix="nulavio-ux3g-n4-"))
+        self.addCleanup(shutil.rmtree, tmp, True)
+        home, run_dir = tmp / "home", tmp / "run"
+        run_dir.mkdir(mode=0o700)
+        env = {  # nosemgrep: nulavio-py-engine-sandbox-env -- disposable upgrade verification profile
+            harness.SYSTEM_ACCESS_ENV: "1",
+            "HOME": str(home),
+            "XDG_CONFIG_HOME": str(home / ".config"),
+            "XDG_DATA_HOME": str(home / ".local" / "share"),
+            "XDG_CACHE_HOME": str(home / ".cache"),
+            "XDG_RUNTIME_DIR": str(run_dir),
+            "PATH": "/usr/bin:/bin",
+            "LANG": os.environ.get("NULAVIO_TEST_LANG", "pt_BR.UTF-8"),
+            "MOZ_MARIONETTE": "1",
+            "MOZ_HEADLESS": "1",
+        }
+        profile = tmp / "profiles" / "from-main"
+        profile.parent.mkdir(parents=True)
+        subprocess.run(
+            [str(ref_path), "--headless", "-CreateProfile", f"FromMain {profile}"],
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=120,
+            check=True,
+        )
+        harness.GeckoProfileSession.enable_marionette(profile)
+
+        def run(engine: Path, check):
+            proc = subprocess.Popen(
+                [str(engine), "-P", "FromMain"],
+                env=env,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                preexec_fn=lambda: os.umask(0o077),
+                start_new_session=True,
+            )
+            try:
+                m = harness.GeckoProfileSession.connect(profile, proc)
+                result = check(m)
+                m.chrome("Services.prefs.savePrefFile(null);")
+                m.quit()
+                return result
+            finally:
+                try:
+                    proc.wait(timeout=30)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
+                    proc.wait(timeout=10)
+                (profile / "MarionetteActivePort").unlink(missing_ok=True)
+
+        seeded = run(
+            ref_path,
+            lambda m: harness.wait_until(
+                lambda: m.chrome("return Services.prefs.getIntPref('nulavio.privacy.seeded', 0);") >= 1, 15
+            ),
+        )
+        self.assertTrue(seeded, "the 5a98bd7 build did not seed the profile")
+
+        def first_tab(m):
+            # Give the Shell the time it takes to replace a start page on a new profile.
+            harness.wait_until(lambda: m.chrome("return Services.prefs.prefHasUserValue('nulavio.startpage.shellFirstTab');"), 15)
+            time.sleep(3)
+            return m.chrome("""
+              return {tabs: gBrowser.tabs.length, first: gBrowser.tabs[0].linkedBrowser.currentURI.spec,
+                shellStart: Services.prefs.getBoolPref('nulavio.startpage.shellFirstTab', true)};
+            """)
+
+        state = run(self.session.engine.path, first_tab)
+        self.assertEqual(state, {"tabs": 1, "first": "about:home", "shellStart": False})

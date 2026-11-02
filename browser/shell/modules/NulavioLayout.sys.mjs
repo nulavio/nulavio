@@ -8,6 +8,9 @@
 
 export const PREF_ADOPTION_VERSION = "nulavio.layout.adoptionVersion";
 export const PREF_CHOICE_PENDING = "nulavio.layout.choicePending";
+// UX3G N-4 (provisional decision): only profiles this build sees as new start on the Shell's
+// new tab; profiles that came from earlier builds keep about:home. Written once, with adoption.
+export const PREF_SHELL_START = "nulavio.startpage.shellFirstTab";
 
 // UX3F (QA A5): Lateral's launcher width on adoption, in CSS pixels (engine default ~246).
 export const ADOPTED_LAUNCHER_WIDTH = 224;
@@ -154,6 +157,12 @@ function adoptionUnavailable() {
   return !Services.prefs.getBoolPref("sidebar.revamp", true)
     || SIDEBAR_PREFS.some(pref => Services.prefs.prefIsLocked(pref))
     || policyManagesSidebar();
+}
+
+function setShellStart(isNew) {
+  if (!Services.prefs.prefIsLocked(PREF_SHELL_START)) {
+    Services.prefs.setBoolPref(PREF_SHELL_START, isNew);
+  }
 }
 
 function setAdoptionMarkers(choicePending) {
@@ -500,8 +509,10 @@ export const NulavioLayout = {
     }
     if (hasExistingProfileState()) {
       setAdoptionMarkers(false);
+      setShellStart(false);
       return "existing";
     }
+    setShellStart(true);
     if (adoptionUnavailable()) {
       setAdoptionMarkers(false);
       return "unavailable";
@@ -511,6 +522,16 @@ export const NulavioLayout = {
     setAdoptionMarkers(!nonInteractive);
     scheduleInitialLateralCommit();
     return "adopted";
+  },
+
+  /**
+   * UX3G N-4: whether the session's first window may open on the Shell's new tab. Decided with
+   * the layout adoption (the same new-profile rule); a profile from an earlier build, or one
+   * adopted before this flag existed, keeps about:home.
+   */
+  startsOnShellTab() {
+    this.adoptInitialLayout();
+    return Services.prefs.getBoolPref(PREF_SHELL_START, false);
   },
 
   dismissChoice() {
