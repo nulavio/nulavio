@@ -226,6 +226,8 @@ async function showLayoutChoice() {
     if (radios.includes(event.target)) {
       editingInThisTab = true;
       revision++;
+      // UX3E QA N-1: the action names the selected layout at once, not after it applies.
+      done.textContent = doneLabel(event.target.value);
     }
   });
   keyboard = settleRadioChanges(group, async event => {

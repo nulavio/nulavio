@@ -146,8 +146,11 @@ async function ready(win) {
 function policyManagesSidebar() {
   try {
     const prefs = Services.policies?.getActivePolicies?.()?.Preferences;
+    // UX3E QA N-2: only a policy over the layout itself (orientation, visibility, the
+    // revamped sidebar) keeps a new profile out of adoption; tool lists or the
+    // sidebar's side do not.
     return Boolean(prefs) && typeof prefs === "object"
-      && Object.keys(prefs).some(name => name.startsWith("sidebar."));
+      && Object.keys(prefs).some(name => SIDEBAR_PREFS.includes(name));
   } catch {
     return false;
   }
