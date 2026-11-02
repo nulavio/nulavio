@@ -774,7 +774,7 @@ The functional QA of build `20261102120448` found 1 high, 3 medium and 11 low is
 
 Recorded, not changed here:
 - **B-1** (`this._openPopups is undefined` in the console on adopted profiles): the engine's own `sidebar.visibility` observer runs before the first window's sidebar has started. Avoiding it means committing Lateral after the first paint (a visible horizontal-to-vertical switch) or patching the engine; no visible effect was observed.
-- **B-11** (card below the fold at 150 %): addressed by UX3F A4, which compacts the hero and the card while the choice is open.
+- **B-11** (card below the fold at 150 %): open. UX3F A4, which compacts the hero and the card while the choice is open, brings "Manter …" above the fold at 100 % (1280 x 800); at 150 % it still ends below the first screen (598 px in a 487 px viewport on the rebased UX3F build).
 - **B-4, B-5, B-6** (product decisions): a profile returns to Lateral when an admin lock written after the first run is removed; adoption is evaluated by two callers (harmless once the marker is written); "Abas no topo" keeps the collapsed launcher visible.
 - **B-10, B-12** (native sidebar panel and its "Manage … settings" link), **B-13** (address-bar placeholder on about:home, which the first window no longer shows on a fresh start) and **B-14** (`platform.ini` carries the app BuildID in a repack) are outside the Shell.
 - Whether "Lateral" needs another English name is open.
