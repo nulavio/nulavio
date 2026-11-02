@@ -1172,8 +1172,8 @@ class LayoutPresetsTest(unittest.TestCase):
         self.newtab()
         self.assertTrue(harness.wait_until(lambda: self.newtab_ui_ready("lateral"), 10))
         body = "return document.getElementById('layout-choice-body').textContent;"
-        lateral_body = self.m.execute(body)
-        self.assertIn("Lateral", lateral_body)
+        message = "return browser.i18n.getMessage(arguments[0]);"
+        self.assertEqual(self.m.execute(body), self.m.execute(message, ["layoutChoiceBody"]))
         self.m.chrome(
             f"window.nvApplied=[]; window.nvApply={LAYOUT}.apply;"
             f"{LAYOUT}.apply=function(t,p){{window.nvApplied.push(p); return window.nvApply.call(this,t,p);}};"
@@ -1195,12 +1195,12 @@ class LayoutPresetsTest(unittest.TestCase):
             self.assertTrue(harness.wait_until(lambda: self.state()["preset"] == "lateral", 10))
             self.assertTrue(harness.wait_until(lambda: self.newtab_ui_ready("lateral"), 10))
             self.assertEqual(self.m.chrome("return window.nvApplied;"), ["focus", "lateral"])
-            # B-2: outside Lateral the card no longer says "you can keep this layout" about Lateral.
+            # B-2: outside Lateral the card no longer says it started in Lateral and can be kept.
             self.m.send("WebDriver:ElementClick", {"id": self.m.find_element("#layout-choice input[value=top]")})
             self.assertTrue(harness.wait_until(lambda: self.newtab_ui_ready("top"), 10))
-            open_body = self.m.execute(body)
-            self.assertNotIn("Lateral", open_body)
-            self.assertNotEqual(open_body, lateral_body)
+            open_body = self.m.execute(message, ["layoutChoiceBodyOpen"])
+            self.assertTrue(open_body)
+            self.assertEqual(self.m.execute(body), open_body)
             self.assertEqual(self.m.chrome("return window.nvApplied;"), ["focus", "lateral", "top"])
         finally:
             self.m.chrome(f"{LAYOUT}.apply=window.nvApply; delete window.nvApply; delete window.nvApplied;")
