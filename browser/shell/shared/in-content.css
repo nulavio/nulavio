@@ -7,7 +7,8 @@
   url-prefix("about:profiles"),
   url-prefix("about:editprofile"),
   url-prefix("about:newprofile"),
-  url-prefix("about:deleteprofile") {
+  url-prefix("about:deleteprofile"),
+  url-prefix("about:privatebrowsing") {
   #category-experimental,
   #category-more-from-mozilla {
     display: none !important;
@@ -58,6 +59,13 @@
         --border-color-card: light-dark(#BFD0D6, #23495A) !important;
         --page-nav-button-background-color-selected: light-dark(#0F7A68, #0E3B33) !important;
         --page-nav-button-text-color-selected: light-dark(#FFFFFF, #6FE0C5) !important;
+      }
+      html.private {
+        --background-color-canvas: #060C14 !important;
+      }
+      content-search-handoff-ui {
+        --content-search-handoff-ui-background-color: #15293A !important;
+        --content-search-handoff-ui-unfocused-border-color: #6E93A2 !important;
       }
     }
     }

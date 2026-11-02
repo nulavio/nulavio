@@ -42,6 +42,7 @@ IN_CONTENT_PAGES = (
     "about:editprofile",
     "about:newprofile",
     "about:deleteprofile",
+    "about:privatebrowsing",
 )
 # The engine's Nova palette re-valued with Nulavio's: violet (its accent) -> mint,
 # desaturated violet (its tinted neutrals) -> navy, and its violet-tinted light/dark
@@ -271,12 +272,7 @@ def _mix(a: str, b: str, weight: float) -> str:
 # (the browser.preferences.experimental.hidden pref alone did not hide Labs).
 # Independent of the theme: this is naming, not colour.
 # These ids exist only in Settings, so the rule shares the internal-pages scope.
-BRAND_RULES = (
-    "  #category-experimental,\n"
-    "  #category-more-from-mozilla {\n"
-    "    display: none !important;\n"
-    "  }\n"
-)
+BRAND_RULES = "  #category-experimental,\n  #category-more-from-mozilla {\n    display: none !important;\n  }\n"
 
 
 def build_in_content(data: dict) -> str:
@@ -322,6 +318,20 @@ def build_in_content(data: dict) -> str:
         f"{resolve(tokens, 'color.dark.accent.default')})",
     ]
     body = "".join(f"        {line} !important;\n" for line in lines)
+
+    # UX3G A2: the private-browsing page on the private chrome's navy, not the engine's violet.
+    def dark(path: str) -> str:
+        return resolve(tokens, f"color.dark.{path}")
+
+    private = (
+        "      html.private {\n"
+        f"        --background-color-canvas: {dark('chrome.private.toolbox')} !important;\n"
+        "      }\n"
+        "      content-search-handoff-ui {\n"
+        f"        --content-search-handoff-ui-background-color: {dark('chrome.private.field')} !important;\n"
+        f"        --content-search-handoff-ui-unfocused-border-color: {dark('chrome.private.control')} !important;\n"
+        "      }\n"
+    )
     urls = ",\n  ".join(f'url-prefix("{page}")' for page in IN_CONTENT_PAGES)
     return (
         HEADER
@@ -334,7 +344,9 @@ def build_in_content(data: dict) -> str:
         + "    @media not ((forced-colors) or (prefers-contrast)) {\n"
         + "      :root:not([lwtheme]) {\n"
         + body
-        + "      }\n    }\n    }\n  }\n}\n"
+        + "      }\n"
+        + private
+        + "    }\n    }\n  }\n}\n"
     )
 
 
