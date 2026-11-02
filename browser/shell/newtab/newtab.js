@@ -65,21 +65,44 @@ async function refresh() {
   else show("passwords", t("passwordsNone"), "warn");
 }
 
-document.getElementById("search").addEventListener("submit", event => {
+// UX3G N5: the label and the search use the same engine. The engine is read
+// only after the profile's first-run search migration has settled, and a
+// search made before then waits for it instead of guessing.
+let shownEngine = null;
+
+async function defaultEngineName() {
+  const managed = browser.nulavioSearch;
+  if (managed) {
+    // state() waits for the first-run migration, so the default is final.
+    const { engines } = await managed.state();
+    const key = browser.extension.inIncognitoContext ? "isDefaultPrivate" : "isDefault";
+    return (engines.find(engine => engine[key]) ?? engines.find(engine => engine.isDefault))?.name ?? null;
+  }
+  const engines = await browser.search.get();
+  return engines.find(engine => engine.isDefault)?.name ?? null;
+}
+
+async function showEngine() {
+  const name = await defaultEngineName();
+  shownEngine = name;
+  const input = document.getElementById("search-input");
+  input.placeholder = name ? t("searchWith", [name]) : t("searchPlaceholder");
+}
+const engineShown = showEngine().catch(() => {});
+
+document.getElementById("search").addEventListener("submit", async event => {
   event.preventDefault();
   const text = document.getElementById("search-input").value.trim();
-  if (text) {
+  if (!text) {
+    return;
+  }
+  await engineShown;
+  if (shownEngine) {
+    browser.search.search({ query: text, engine: shownEngine, disposition: "CURRENT_TAB" });
+  } else {
     browser.search.query({ text, disposition: "CURRENT_TAB" });
   }
 });
-
-async function showEngine() {
-  const engines = await browser.search.get();
-  const current = engines.find(engine => engine.isDefault);
-  if (current) {
-    document.getElementById("search-input").placeholder = t("searchWith", [current.name]);
-  }
-}
 
 // First-run layout choice (D-UX2): shown only on genuinely new profiles,
 // synced live with Settings and native sidebar changes.
@@ -311,7 +334,14 @@ async function showDns() {
 document.getElementById("search-settings").hidden = !browser.nulavioSearch;
 
 localize();
-showEngine().catch(() => {});
-Promise.allSettled([refresh(), showDns(), showLayoutChoice()]).then(() => {
+// UX3G N1: paint once, in the final shape. The page stays invisible (pages.css)
+// until the first-run cards and the engine label are known, so the hero never
+// shrinks after the first frame; a slow API never holds it longer than 400 ms.
+const shaped = Promise.allSettled([engineShown, showDns(), showLayoutChoice()]);
+Promise.race([shaped, new Promise(resolve => setTimeout(resolve, 400))]).then(() => {
+  document.documentElement.dataset.painted = "true";
+});
+browser.nulavioSearch?.onChanged.addListener(() => showEngine().catch(() => {}));
+Promise.allSettled([refresh(), shaped]).then(() => {
   document.documentElement.dataset.ready = "true";
 });

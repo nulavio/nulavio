@@ -108,6 +108,22 @@
 /* Guard review: one card per change; long values (paths, fingerprints) wrap */
 .finding__detail { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: var(--nv-type-caption-size); color: var(--nv-color-text-secondary); }
 
+/* UX3G N1: the new tab paints once, in its final shape. newtab.js sets
+   data-painted when the first-run cards and the engine label are known, so the
+   hero never shrinks after the first frame. If the script never runs, the
+   animation below still reveals the page after 600 ms. */
+html[data-page="newtab"]:not([data-painted]) .page {
+  visibility: hidden;
+  animation: nv-reveal-fallback 0s 600ms forwards;
+}
+@keyframes nv-reveal-fallback { to { visibility: visible; } }
+@media (prefers-reduced-motion: no-preference) {
+  html[data-page="newtab"][data-painted] .page {
+    animation: nv-page-in var(--nv-motion-duration-fast) var(--nv-motion-easing-enter);
+  }
+}
+@keyframes nv-page-in { from { opacity: 0; } }
+
 /* New tab: one-time first-run choices (layout, DNS), above the facts */
 .layout-choice, .dns-choice { max-width: 52rem; margin-inline: auto; width: 100%; }
 
