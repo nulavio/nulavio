@@ -184,8 +184,11 @@
       --sidebar-border-color: var(--nv-color-border-subtle);
     }
 
+    /* UX3G M2: a clearer step from rest to focus. The rest edge stays the
+       control colour (>= 3:1); focus adds a soft accent halo to the engine's
+       accent ring and elevation 1. */
     :root:not([lwtheme]) #urlbar[focused]:not([open]) > .urlbar-background {
-      box-shadow: var(--nv-elevation-1);
+      box-shadow: 0 0 0 var(--nv-space-1) color-mix(in srgb, var(--nv-color-focus) 22%, transparent), var(--nv-elevation-1);
     }
 
     :root:not([lwtheme]) #tabbrowser-tabs[orient="vertical"] .tabbrowser-tab[visuallyselected] > .tab-stack > .tab-background::after {
