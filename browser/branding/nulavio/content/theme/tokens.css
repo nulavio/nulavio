@@ -102,8 +102,8 @@
   --nv-control-selected-weight: 700;
   --nv-route-vertical-width: 3px;
   --nv-route-vertical-height: 20px;
-  --nv-color-bg-canvas: light-dark(#F1F7F5, #0B1623);
-  --nv-color-bg-surface: light-dark(#FFFFFF, #112432);
+  --nv-color-bg-canvas: light-dark(#F1F7F5, #0F1C2A);
+  --nv-color-bg-surface: light-dark(#FFFFFF, #15293A);
   --nv-color-bg-raised: light-dark(#FFFFFF, #183746);
   --nv-color-bg-sunken: light-dark(#E2EBEE, #070F18);
   --nv-color-text-primary: light-dark(#0B1623, #F1F7F5);
@@ -186,7 +186,7 @@
   --nv-color-group-orange: light-dark(#6B4E3E, #B09584);
   --nv-color-group-purple: light-dark(#474F6B, #A0A7C2);
   --nv-color-group-red: light-dark(#6E4440, #B98E89);
-  --nv-color-control-selected-fill: light-dark(#FFFFFF, #112432);
+  --nv-color-control-selected-fill: light-dark(#FFFFFF, #15293A);
   --nv-color-control-selected-edge: light-dark(#0F7A68, #6FE0C5);
   --nv-color-control-selected-text: light-dark(#0B1623, #F1F7F5);
   --nv-color-selection-bg: light-dark(#0F7A68, #6FE0C5);
@@ -194,7 +194,7 @@
   --nv-color-focusOnAccent: light-dark(#FFFFFF, #0B1623);
   --nv-color-scrim: light-dark(rgba(7,15,24,0.55), rgba(0,0,0,0.55));
   --nv-color-surface-frost: light-dark(rgba(255,255,255,0.86), rgba(17,36,50,0.88));
-  --nv-color-surface-frostFallback: light-dark(#FFFFFF, #112432);
+  --nv-color-surface-frostFallback: light-dark(#FFFFFF, #15293A);
   --nv-color-downloads-attention-warning: light-dark(#8A5A10, #E7AE61);
   --nv-color-route-vertical: light-dark(#0F7A68, #6FE0C5);
   --nv-color-fullscreen-ink: light-dark(#0B1623, #0B1623);

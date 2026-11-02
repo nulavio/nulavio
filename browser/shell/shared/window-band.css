@@ -76,7 +76,8 @@
     background: transparent;
     color: var(--nv-color-band-text);
     border: var(--nv-security-identityRingWidth) solid var(--nv-color-border-control);
-    border-radius: var(--nv-radius-pill);
+    /* UX3G M3: the same 6px corner as the alert chip; only colour and fill change. */
+    border-radius: var(--nv-radius-sm);
     font-weight: var(--nv-font-weight-medium);
   }
   .nv-band-flag {

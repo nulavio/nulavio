@@ -51,9 +51,9 @@
         --link-color: light-dark(#0F7A68, #6FE0C5) !important;
         --link-color-hover: light-dark(#0F7A68, #6FE0C5) !important;
         --link-color-active: light-dark(#0F7A68, #6FE0C5) !important;
-        --background-color-canvas: light-dark(#F1F7F5, #0B1623) !important;
-        --background-color-box: light-dark(#FFFFFF, #112432) !important;
-        --table-background-color: light-dark(#FFFFFF, #112432) !important;
+        --background-color-canvas: light-dark(#F1F7F5, #0F1C2A) !important;
+        --background-color-box: light-dark(#FFFFFF, #15293A) !important;
+        --table-background-color: light-dark(#FFFFFF, #15293A) !important;
         --border-color: light-dark(#BFD0D6, #23495A) !important;
         --border-color-card: light-dark(#BFD0D6, #23495A) !important;
         --page-nav-button-background-color-selected: light-dark(#0F7A68, #0E3B33) !important;

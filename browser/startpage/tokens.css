@@ -213,8 +213,8 @@
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --nv-color-bg-canvas: #0B1623;
-    --nv-color-bg-surface: #112432;
+    --nv-color-bg-canvas: #0F1C2A;
+    --nv-color-bg-surface: #15293A;
     --nv-color-bg-raised: #183746;
     --nv-color-bg-sunken: #070F18;
     --nv-color-text-primary: #F1F7F5;
@@ -297,7 +297,7 @@
     --nv-color-group-orange: #B09584;
     --nv-color-group-purple: #A0A7C2;
     --nv-color-group-red: #B98E89;
-    --nv-color-control-selected-fill: #112432;
+    --nv-color-control-selected-fill: #15293A;
     --nv-color-control-selected-edge: #6FE0C5;
     --nv-color-control-selected-text: #F1F7F5;
     --nv-color-selection-bg: #6FE0C5;
@@ -305,7 +305,7 @@
     --nv-color-focusOnAccent: #0B1623;
     --nv-color-scrim: rgba(0,0,0,0.55);
     --nv-color-surface-frost: rgba(17,36,50,0.88);
-    --nv-color-surface-frostFallback: #112432;
+    --nv-color-surface-frostFallback: #15293A;
     --nv-color-downloads-attention-warning: #E7AE61;
     --nv-color-route-vertical: #6FE0C5;
     --nv-color-fullscreen-ink: #0B1623;
@@ -323,8 +323,8 @@
 
 [data-theme="dark"] {
   color-scheme: dark;
-  --nv-color-bg-canvas: #0B1623;
-  --nv-color-bg-surface: #112432;
+  --nv-color-bg-canvas: #0F1C2A;
+  --nv-color-bg-surface: #15293A;
   --nv-color-bg-raised: #183746;
   --nv-color-bg-sunken: #070F18;
   --nv-color-text-primary: #F1F7F5;
@@ -407,7 +407,7 @@
   --nv-color-group-orange: #B09584;
   --nv-color-group-purple: #A0A7C2;
   --nv-color-group-red: #B98E89;
-  --nv-color-control-selected-fill: #112432;
+  --nv-color-control-selected-fill: #15293A;
   --nv-color-control-selected-edge: #6FE0C5;
   --nv-color-control-selected-text: #F1F7F5;
   --nv-color-selection-bg: #6FE0C5;
@@ -415,7 +415,7 @@
   --nv-color-focusOnAccent: #0B1623;
   --nv-color-scrim: rgba(0,0,0,0.55);
   --nv-color-surface-frost: rgba(17,36,50,0.88);
-  --nv-color-surface-frostFallback: #112432;
+  --nv-color-surface-frostFallback: #15293A;
   --nv-color-downloads-attention-warning: #E7AE61;
   --nv-color-route-vertical: #6FE0C5;
   --nv-color-fullscreen-ink: #0B1623;
