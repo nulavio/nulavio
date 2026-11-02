@@ -158,14 +158,22 @@ class WindowBandTest(unittest.TestCase):
             visibility: cs.visibility, placement: C.getPlacementOfWidget('nulavio-band-widget')?.area,
             aboveTabs: !!(bar.compareDocumentPosition(document.getElementById('TabsToolbar')) & Node.DOCUMENT_POSITION_FOLLOWING),
             aboveNav: !!(bar.compareDocumentPosition(document.getElementById('nav-bar')) & Node.DOCUMENT_POSITION_FOLLOWING),
-            nativeUnchanged: native.join() === [...gNavToolbox.children].filter(e => e !== bar).map(e => e.id).join()};
+            nativeUnchanged: native.join() === [...gNavToolbox.children].filter(e => e !== bar).map(e => e.id).join(),
+            // UX3G A1: a neutral band may open the navigation row instead of a row of its own.
+            fused: getComputedStyle(gNavToolbox).display === 'grid',
+            sameRowAsNav: Math.round(r.top) === Math.round(document.getElementById('nav-bar').getBoundingClientRect().top)};
         """,
         )
         self.assertNotIn("error", result, result)
         r = result["ok"]
         self.assertIn("Farol", r["name"])
         self.assertGreaterEqual(r["height"], 24)
-        self.assertGreater(r["width"], 400)
+        if r["fused"]:
+            # UX3G A1: in the navigation row the band is as wide as its cues, never collapsed.
+            self.assertTrue(r["sameRowAsNav"], r)
+            self.assertGreater(r["width"], 200)
+        else:
+            self.assertGreater(r["width"], 400)
         self.assertEqual((r["opacity"], r["visibility"], r["placement"]), ("1", "visible", "nulavio-band"))
         self.assertTrue(r["aboveTabs"] and r["aboveNav"] and r["nativeUnchanged"], r)
         assert_layout_matrix(self, self.m, "ordinary")
@@ -273,8 +281,14 @@ class WindowBandTest(unittest.TestCase):
                     time.sleep(0.25)
                     state = self.m.chrome(f"return {BAND_PROBE};")
                     assert_band(self, state)
-                    # UX3F A1: the neutral band sits on the toolbox surface.
-                    self.assertEqual(state["bg"], "rgb(6, 12, 20)" if dark else "rgb(226, 235, 238)")
+                    # UX3F A1: the neutral band sits on the toolbox surface; UX3G A1: in a wide window with
+                    # vertical tabs it opens the navigation row and shows the toolbar through (transparent row).
+                    fused = self.m.chrome("return getComputedStyle(gNavToolbox).display === 'grid';")
+                    self.assertEqual(fused, vertical and width / float(scale) >= 1024, (vertical, width, scale))
+                    if fused:
+                        self.assertEqual(state["bg"], "rgba(0, 0, 0, 0)")
+                    else:
+                        self.assertEqual(state["bg"], "rgb(6, 12, 20)" if dark else "rgb(226, 235, 238)")
                     rows.append({"dark": dark, "vertical": vertical, "width": width, "scale": scale, **state})
                     self.m.set_context("chrome")
                     try:
