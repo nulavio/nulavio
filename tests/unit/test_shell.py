@@ -507,7 +507,14 @@ class LayoutModuleTest(unittest.TestCase):
         writes = set(re.findall(r"Services\.prefs\.set(?:Bool|Int|String)Pref\(([^,]+),", source))
         self.assertEqual(
             writes,
-            {'"sidebar.verticalTabs"', '"sidebar.visibility"', "PREF_ADOPTION_VERSION", "PREF_CHOICE_PENDING"},
+            # UX3G N-4 (provisional): the new-profile start-page flag is written with the adoption markers.
+            {
+                '"sidebar.verticalTabs"',
+                '"sidebar.visibility"',
+                "PREF_ADOPTION_VERSION",
+                "PREF_CHOICE_PENDING",
+                "PREF_SHELL_START",
+            },
         )
         self.assertIn('"SwapDocShells"', source)
         self.assertIn('"EndSwapDocShells"', source)
