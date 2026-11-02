@@ -12,7 +12,7 @@ Status per component of the browser window and Nulavio's own pages. "Upstream" m
 | Crashed tab | `[crashed]` | Upstream | Review copy and icon (M6) |
 | Tab groups | Native `tab-group`, editor, list and address-bar actions | UX3B: neutral names, token swatches/thin lines, native semantics; new reserved colours filtered, current legacy value preserved | Physical KDE/Orca checks; see [release evidence](screenshots/ux3b/release-verification.json) |
 | Containers | `.tab-context-line`, usercontext | Upstream | — |
-| Vertical tabs / layout presets | Native Gecko159 sidebar and tab strip; `NulavioLayout` | UX3D: explicit Lateral, Tabs on top and Focus in Settings; live Custom state, native restoration and keyboard access | Safe new-profile adoption and first-run choice; [evidence](screenshots/ux3d/verification.json) |
+| Vertical tabs / layout presets | Native Gecko159 sidebar and tab strip; `NulavioLayout` | UX3D: explicit Lateral, Tabs on top and Focus in Settings; live Custom state, native restoration and keyboard access. UX3E: Lateral adopted once on genuinely new profiles, one-time choice card on the new tab synced with Settings | [UX3D evidence](screenshots/ux3d/verification.json); UX3E in [design-system](design-system.md#ux3e-lateral-for-new-profiles-and-the-first-run-choice-2026-11-02) |
 | Tab search | List all tabs (`alltabs-button`) | Upstream | Keep; promote in onboarding tips |
 | Workspaces | — (tab groups and containers exist) | Not started | Data model proposal before UI (M4+) |
 | **Toolbar** | `#nav-bar`, CustomizableUI | **Horizon** colours, 10 px buttons | — |

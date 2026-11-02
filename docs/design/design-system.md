@@ -729,3 +729,35 @@ locale, 15 opt-in engine tests including live phishing blocking, all six
 security scans, 256 contrast pairs, 12 canonical release captures and an
 independent static review (0 P1, 0 P2, 4 P3 deferred). Publication and
 exact-SHA remote CI remain separate post-commit gates.
+
+## UX3E: Lateral for new profiles and the first-run choice (2026-11-02)
+
+D-UX2 rolled out without touching existing profiles.
+
+**Who is adopted.** At Shell startup, `NulavioLayout.adoptInitialLayout()` runs once per profile (`nulavio.layout.adoptionVersion`). It runs before the privacy seeding marks the profile as used. It treats the profile as existing, and changes nothing, when any of these signals predates this start:
+- the privacy seed (`nulavio.privacy.seeded`);
+- a user value for `sidebar.verticalTabs`, `sidebar.backupState` or `sidebar.new-sidebar.has-used`, or a `sidebar.visibility` other than the engine's own normalisation;
+- `nulavio-guard.json`, `xulstore.json` or `sessionstore.jsonlz4`;
+- `times.json` `firstUse`;
+- `browser.migration.version` or `sidebar.*` in `prefs.js`/`user.js`.
+
+File checks compare with the time this process locked the profile, so files written during the first start do not count.
+
+**What it writes.** On a genuinely new profile it writes `sidebar.verticalTabs = true` and `sidebar.visibility = "always-show"`. It waits until both tab-strip areas are registered, so the first switch back to horizontal tabs works, and then expands the launcher natively. Locked prefs or a disabled sidebar revamp mean no adoption. If Lateral can no longer be written when the commit runs, the choice is not offered either, so the card never claims a start that did not happen. Only those two native prefs and the two `nulavio.layout.*` markers are ever written; a unit test pins that list.
+
+**The choice.** The first new tab shows "Escolha como organizar as abas" (en: "Choose how tabs are arranged"):
+- the three presets apply live, through the same serialised queue as Settings, and stay in sync with Settings and the native sidebar controls;
+- "Manter Lateral" / "Manter Abas no topo" / "Manter Foco" closes it (`dismissChoice()`), and so does choosing in Settings;
+- it is never shown in private windows, temporary profiles or Áreas de IA, or when the layout is locked or unavailable;
+- keyboard focus stays on the radio being previewed and returns to the search field when the card closes.
+
+**UX3D follow-ups.**
+- **Event registration.** Settings and the new tab register `onChanged` defensively; a failure shows Retry instead of a dead page.
+- **Tabs moved between windows.** The API resolves the caller's live `<browser>`, and subscriptions follow `SwapDocShells`. A tab moved to another window reads, applies and listens to its new window.
+
+**Tests.**
+- **Real upgrade.** `test_layout_presets` upgrades a profile created by the 5a98bd7 build (`NULAVIO_REFERENCE_ENGINE`; a missing binary fails the test, and only an unset variable falls back to a persisted-prefs fixture). The profile keeps "Abas no topo" and no prompt.
+- **Customised profile.** A pre-existing customised profile keeps Personalizado.
+- **First run.** The choice is covered by keyboard, sync, persistence across restart and 200 % reflow tests, in pt-BR and en-US.
+
+Not covered by a deterministic test: the race in which Lateral becomes unwritable between adoption and commit. Physical KDE/GTK, Orca and hardware scaling checks remain manual, as in earlier slices.

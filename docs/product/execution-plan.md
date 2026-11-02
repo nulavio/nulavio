@@ -262,6 +262,29 @@ not complete: D-UX2's safe new-profile adoption/migration and first-run choice
 belong to the next slice; D-UX13, D-UX17, D-UX23, extra sidebar curation,
 Shell/assistant redesign, command palette and split view remain open.
 
+**UX3E — Lateral for new profiles and the first-run choice (locally verified, 2026-11-02).** On base `5a98bd703233` (D-UX2):
+- **New profiles.** A genuinely new profile starts in Lateral, and its first new tab asks once, in pt-BR and en-US, whether to keep it, with the three presets live and synced with Settings.
+- **Existing profiles.** A profile with any earlier sign of use keeps its layout untouched and is never asked. Private windows, temporary profiles and Áreas de IA are never asked either.
+- **Writes.** Only `sidebar.verticalTabs`, `sidebar.visibility` and two `nulavio.layout.*` markers, never over a locked pref.
+- **UX3D follow-ups closed.** Resilient `onChanged` registration, and tabs moved between windows.
+- **No patch.** No new patch, no new manifest permission, and no change to Vault, AI, Guard or downloads.
+
+[Mechanisms](../design/design-system.md#ux3e-lateral-for-new-profiles-and-the-first-run-choice-2026-11-02).
+
+Verified on a real incremental Track B 159.0 build (BuildID `20261102120448`), whose 98 Shell/branding entries match the source:
+
+| Check | Result |
+|---|---|
+| Unit tests | 603 (3 skips) |
+| Integration tests | 245 (13 skips) |
+| `test_layout_presets` per locale | 14, including a real upgrade of a profile created by the 5a98bd7 build: it keeps Abas no topo, with no prompt |
+| Contrast pairs | 256 |
+| Generated tokens | current |
+| ruff | clean |
+| Security scans | all six |
+
+Physical desktop checks, publication and exact-SHA CI are separate gates.
+
 **UX4 — Shell pages**
 - **Settings.** Two panes, with search, scope labels and inline status.
 - **New tab.** "Você está em …".
