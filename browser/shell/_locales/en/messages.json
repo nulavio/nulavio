@@ -988,5 +988,6 @@
   "layoutChoiceKeep_lateral": {"message": "Keep Lateral"},
   "layoutChoiceKeep_top": {"message": "Keep Tabs on top"},
   "layoutChoiceKeep_focus": {"message": "Keep Focus"},
-  "layoutChoiceSettings": {"message": "Layout in Settings"}
+  "layoutChoiceSettings": {"message": "Layout in Settings"},
+  "layoutPendingHint": {"message": "The first-run layout choice is still open. Keep the current layout or pick another above."}
 }

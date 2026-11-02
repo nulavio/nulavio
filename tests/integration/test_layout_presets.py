@@ -39,6 +39,10 @@ class LayoutPresetsTest(unittest.TestCase):
             self.assertEqual(self.m.chrome("return Services.locale.appLocaleAsBCP47;"), locale)
         self.artifacts = harness.artifacts_dir() / "layout-presets"
         self.artifacts.mkdir(parents=True, exist_ok=True)
+        # The session's first window replaces about:home with the Shell's new tab (QA M-2); let
+        # that load finish so later window handles and navigations are stable.
+        newtab_url = self.shell_url("newtab/newtab.html")
+        harness.wait_until(lambda: self.m.chrome("return gBrowser.currentURI.spec;") == newtab_url, 15)
 
     def state(self):
         result = chrome_async(self.m, f"return {LAYOUT}.state(window);")
@@ -80,7 +84,7 @@ class LayoutPresetsTest(unittest.TestCase):
         return self.m.execute(
             """
           const card = document.getElementById('layout-choice');
-          return !card.hidden
+          return !!card && !card.hidden
             && document.getElementById('layout-choice-options').getAttribute('aria-busy') !== 'true'
             && !document.querySelector('#layout-choice input').disabled
             && (document.querySelector('#layout-choice input:checked')?.value || 'custom') === arguments[0];
@@ -1081,6 +1085,70 @@ class LayoutPresetsTest(unittest.TestCase):
             chrome_async(m2, f"return {LAYOUT}.state(window);")["ok"],
             {"preset": "lateral", "available": True, "locked": False, "choicePending": False},
         )
+
+    def test_first_window_offers_the_choice_without_the_new_tab_notice_and_settings_keeps_it(self):
+        # QA M-2: the first real window opened on about:home, so the card was only met on the first
+        # Ctrl+T, where the engine's "Your new tab has changed" notice took the keyboard focus.
+        url = self.shell_url("newtab/newtab.html")
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome("return gBrowser.currentURI.spec;") == url, 15))
+        chrome_state = """
+          return {tabs: gBrowser.tabs.length, back: gBrowser.canGoBack, urlbar: gURLBar.value,
+            notice: !!PopupNotifications.getNotification('extension-new-tab-notification')};
+        """
+        self.assertEqual(self.m.chrome(chrome_state), {"tabs": 1, "back": False, "urlbar": "", "notice": False})
+        self.assertTrue(harness.wait_until(lambda: self.m.execute("return document.documentElement.dataset.ready==='true';"), 15))
+        self.assertTrue(harness.wait_until(lambda: self.newtab_ui_ready("lateral"), 10))
+        # Ctrl+T opens the same page, without the notice: the Shell, and only the Shell, carries
+        # the confirmation the notice's own "Keep changes" button records.
+        self.m.chrome("BrowserCommands.openTab();")
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome("return gBrowser.currentURI.spec;") == url, 15))
+        time.sleep(0.5)
+        self.assertFalse(self.m.chrome("return !!PopupNotifications.getNotification('extension-new-tab-notification');"))
+        confirmed = chrome_async(
+            self.m,
+            """
+          const {ExtensionSettingsStore}=ChromeUtils.importESModule('resource://gre/modules/ExtensionSettingsStore.sys.mjs');
+          await ExtensionSettingsStore.initialize();
+          return {shell: !!ExtensionSettingsStore.getSetting('newTabNotification','shell@nulavio.net')?.value,
+            other: !!ExtensionSettingsStore.getSetting('newTabNotification','other@example.org')?.value};
+        """,
+        )
+        self.assertEqual(confirmed, {"ok": {"shell": True, "other": False}})
+        # Later windows keep their own start page; only the session's first window is unified.
+        first = self.m.send("WebDriver:GetWindowHandle")["value"]
+        second, _ = self.open_secondary_window()
+        self.m.switch_to(second)
+        time.sleep(0.5)
+        self.assertNotEqual(self.m.chrome("return gBrowser.currentURI.spec;"), url)
+        self.m.send("WebDriver:CloseWindow")
+        self.m.switch_to(first)
+        # While the choice is open, Settings offers it too, so it is never pending out of reach
+        # (for example after the new tab is handed to another page).
+        self.settings()
+        self.assertTrue(harness.wait_until(lambda: self.ui_ready("lateral"), 10))
+        locale = self.m.chrome("return Services.locale.appLocaleAsBCP47;")
+        keep = self.m.execute("""
+          const k=document.getElementById('layout-keep'), p=document.getElementById('layout-pending');
+          return {hidden:k.hidden, text:k.textContent.trim(), hint:!p.hidden && !!p.textContent.trim(),
+            describedBy:k.getAttribute('aria-describedby')};
+        """)
+        self.assertEqual(
+            keep,
+            {
+                "hidden": False,
+                "text": "Keep Lateral" if locale.startswith("en") else "Manter Lateral",
+                "hint": True,
+                "describedBy": "layout-pending",
+            },
+        )
+        self.m.execute("document.getElementById('layout-keep').focus();")
+        self.m.send("WebDriver:ElementClick", {"id": self.m.find_element("#layout-keep")})
+        self.assertTrue(harness.wait_until(lambda: self.m.execute("return document.getElementById('layout-keep').hidden;"), 10))
+        self.assertTrue(self.m.execute("return document.getElementById('layout-pending').hidden;"))
+        self.assertTrue(self.m.execute("return document.activeElement.matches('#layout input[value=lateral]');"))
+        self.assertEqual(self.state(), {"preset": "lateral", "available": True, "locked": False, "choicePending": False})
+        self.newtab()
+        self.assertTrue(self.m.execute("return document.getElementById('layout-choice').hidden;"))
 
     def test_a_sidebar_policy_keeps_a_new_profile_out_of_adoption_on_every_run(self):
         # QA M-1: a "Preferences" policy on sidebar.verticalTabs that is not locked was ignored

@@ -7,8 +7,10 @@
    after customization; no reset of the user's placements or preferences. */
 const lazy = {};
 ChromeUtils.defineESModuleGetters(lazy, {
+  AboutNewTab: "resource:///modules/AboutNewTab.sys.mjs",
   CustomizableUI: "moz-src:///browser/components/customizableui/CustomizableUI.sys.mjs",
   ExtensionParent: "resource://gre/modules/ExtensionParent.sys.mjs",
+  ExtensionSettingsStore: "resource://gre/modules/ExtensionSettingsStore.sys.mjs",
   NulavioAI: "resource://builtin-addons/nulavio-shell/modules/NulavioAI.sys.mjs",
   NulavioGuard: "resource://builtin-addons/nulavio-shell/modules/NulavioGuard.sys.mjs",
   AVATARS: "resource://builtin-addons/nulavio-shell/modules/NulavioProfiles.sys.mjs",
@@ -83,6 +85,7 @@ class WindowUI {
   #agentUnavailable = false;
   #guardCount = 0;
   #actionError = false;
+  #startPageChecked = false;
 
   start() {
     if (this.#started) {
@@ -118,6 +121,7 @@ class WindowUI {
         this.#attach(win);
       }
     }
+    this.#confirmOwnNewTab();
     this.#timer = Cc["@mozilla.org/timer;1"].createInstance(Ci.nsITimer);
     this.#timer.initWithCallback(() => this.refresh(), 1500, Ci.nsITimer.TYPE_REPEATING_SLACK);
     this.refresh();
@@ -305,6 +309,60 @@ class WindowUI {
     this.#windows.set(win, { bar, compact, fullscreen, line, sheet, progress, header, unload, pointer, screenObserver,
       noticeTimer: null, safety: null, restoreGroupPalette: this.#groupPalette(win) });
     this.#paint(win);
+    this.#unifyStartPage(win);
+  }
+
+  // QA M-2 (UX3E; UX3F A3): the Shell's new tab is the browser's own, so the engine's "Your new tab has
+  // changed" notice must not cover it. This records, for the Shell's id only, the same
+  // confirmation the notice's "Keep changes" button writes (ExtensionControlledPopup,
+  // type "newTabNotification"); the notice re-checks it before opening. Any other add-on
+  // that takes over the new tab still gets the notice, and nothing else is affected.
+  #confirmOwnNewTab() {
+    const store = lazy.ExtensionSettingsStore;
+    store.initialize().then(() => {
+      if (this.#started && !store.getSetting("newTabNotification", SHELL)?.value) {
+        return store.addSetting(SHELL, "newTabNotification", SHELL, true, () => false);
+      }
+      return null;
+    }).catch(console.error);
+  }
+
+  // QA M-2 (UX3E; UX3F A3): one new tab. The session's first window, when it starts on the
+  // engine's default home page, shows the Shell's new tab in that same tab, so the
+  // first window of a new profile already offers the one-time choices, and startup
+  // and Ctrl+T look the same. Only the first window, and only an untouched start:
+  // a single tab, no history, the home page pref at its default, the Shell's page
+  // still the new tab, a non-private window. Later windows (Ctrl+N), links from
+  // other apps, session restore and a home page the person set are left alone,
+  // and the address bar stays empty (the new tab is an initial page).
+  #unifyStartPage(win) {
+    if (this.#startPageChecked) {
+      return;
+    }
+    this.#startPageChecked = true;
+    const url = policy()?.getURL("newtab/newtab.html");
+    if (!url || lazy.PrivateBrowsingUtils.isWindowPrivate(win)
+        || Services.prefs.prefHasUserValue("browser.startup.homepage")) {
+      return;
+    }
+    Promise.resolve(win.gBrowserInit?.uriToLoadPromise).then(uri => {
+      const start = Array.isArray(uri) ? (uri.length === 1 ? uri[0] : null) : uri;
+      const browser = win.gBrowser?.selectedBrowser;
+      if (start !== "about:home" || win.closed || !this.#windows.has(win) || win.gBrowser.tabs.length !== 1
+          || lazy.AboutNewTab.newTabURL !== url || browser.canGoBack || browser.canGoForward
+          || !["about:home", "about:blank"].includes(browser.currentURI?.spec)) {
+        return;
+      }
+      // Least privilege: the Shell page loads with the Shell's own principal, not the system's.
+      const principal = policy()?.extension?.principal;
+      if (!principal) {
+        return;
+      }
+      browser.fixupAndLoadURIString(url, {
+        triggeringPrincipal: principal,
+        loadFlags: Ci.nsIWebNavigation.LOAD_FLAGS_REPLACE_HISTORY,
+      });
+    }).catch(console.error);
   }
 
   #showNotice(win) {

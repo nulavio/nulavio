@@ -52,7 +52,12 @@
         </fieldset>
         <p class="hint" id="layout-current" role="status" aria-live="polite" data-i18n="layoutLoading"></p>
         <p class="form-error" id="layout-error" role="alert"></p>
-        <div class="actions"><button class="button button--secondary" id="layout-retry" type="button" hidden data-i18n="layoutRetry"></button></div>
+        <!-- QA M-2: the first-run choice stays reachable here when the new tab card is not shown -->
+        <p class="hint" id="layout-pending" hidden data-i18n="layoutPendingHint"></p>
+        <div class="actions">
+          <button class="button button--primary" id="layout-keep" type="button" hidden aria-describedby="layout-pending"></button>
+          <button class="button button--secondary" id="layout-retry" type="button" hidden data-i18n="layoutRetry"></button>
+        </div>
       </div>
     </section>
 
