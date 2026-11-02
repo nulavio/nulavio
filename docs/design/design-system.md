@@ -761,3 +761,20 @@ File checks compare with the time this process locked the profile, so files writ
 - **First run.** The choice is covered by keyboard, sync, persistence across restart and 200 % reflow tests, in pt-BR and en-US.
 
 Not covered by a deterministic test: the race in which Lateral becomes unwritable between adoption and commit. Physical KDE/GTK, Orca and hardware scaling checks remain manual, as in earlier slices.
+
+### UX3E QA follow-up (2026-11-02)
+
+The functional QA of build `20261102120448` found 1 high, 3 medium and 11 low issues (verdict "not fit"). Fixed on this branch:
+
+- **A-1, the queue.** Closing another window up to ~200 ms after a choice left Settings or the card on "Aplicando layout…" and every later choice queued behind it. Each window step now ends when it finishes, when its window unloads, or after 4 s (`WINDOW_STEP_TIMEOUT_MS`); a window that goes away is left out, and the whole apply has a 20 s deadline after which it writes nothing. The first-run expansion uses the same bound.
+- **M-1, policies.** Any enterprise `Preferences` policy on a `sidebar.*` pref, in any Status (`default`, `user`, `clear` or locked), now means no adoption and no card, on every run. A policy that is not locked still lets the person choose in Settings.
+- **M-2, the first contact.** The session's first window, on an untouched start, shows the Shell's new tab with the card, and the engine's "Your new tab has changed" notice no longer covers it: the Shell records, for its own id only, the confirmation the notice's "Keep changes" button writes. This is the functional part of UX3F A3, taken unchanged so that branch rebases without a second copy. While the choice is pending, Settings > Layout also offers "Manter …", so it never stays pending out of reach.
+- **M-3, Foco by keyboard.** Expanding Foco with the sidebar button (the route its hint gives) stays Foco; natively the button pins the launcher open and pauses hover until pressed again (WCAG 2.1.1).
+- **Lows.** B-2: outside Lateral the card no longer claims "you can keep this layout" about Lateral. B-3: a locked `choicePending` marker never shows a card that cannot close. B-7: "Manter …" stays focusable while a preset applies, so Tab follows the visual order. B-8: a keyboard change applies once the person pauses (500 ms), radios and checkboxes get a 3 px focus ring. B-9: the hints use the engine's own terms ("Abas na vertical/horizontal") and the link names "Configurações do Nulavio".
+
+Recorded, not changed here:
+- **B-1** (`this._openPopups is undefined` in the console on adopted profiles): the engine's own `sidebar.visibility` observer runs before the first window's sidebar has started. Avoiding it means committing Lateral after the first paint (a visible horizontal-to-vertical switch) or patching the engine; no visible effect was observed.
+- **B-11** (card below the fold at 150 %): addressed by UX3F A4, which compacts the hero and the card while the choice is open.
+- **B-4, B-5, B-6** (product decisions): a profile returns to Lateral when an admin lock written after the first run is removed; adoption is evaluated by two callers (harmless once the marker is written); "Abas no topo" keeps the collapsed launcher visible.
+- **B-10, B-12** (native sidebar panel and its "Manage … settings" link), **B-13** (address-bar placeholder on about:home, which the first window no longer shows on a fresh start) and **B-14** (`platform.ini` carries the app BuildID in a repack) are outside the Shell.
+- Whether "Lateral" needs another English name is open.

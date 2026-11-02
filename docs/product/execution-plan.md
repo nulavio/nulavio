@@ -285,6 +285,20 @@ Verified on a real incremental Track B 159.0 build (BuildID `20261102120448`), w
 
 Physical desktop checks, publication and exact-SHA CI are separate gates.
 
+**UX3E QA follow-up (locally verified, 2026-11-02).** The functional QA of `20261102120448` (not fit: 1 high, 3 medium, 11 low) is answered on the same branch: a window closing mid-transition no longer wedges the layout queue (A-1); a `sidebar.*` policy keeps new profiles out of adoption on every run (M-1); the first window shows the choice and the "new tab has changed" notice no longer covers it, with Settings offering the pending choice too (M-2, the functional part of UX3F A3 taken unchanged); Foco expanded with the sidebar button stays Foco (M-3); lows B-2, B-3, B-7, B-8 and B-9. B-1, B-4 to B-6, B-10 to B-14 are recorded with reasons ([details](../design/design-system.md#ux3e-qa-follow-up-2026-11-02)). No new permission, pref writer or patch.
+
+Verified on a real incremental Track B 159.0 build of `f3dfa89` (BuildID `20261102164518`, tarball sha256 `d61608f3…29edda2`), installed as a full application copy (distribution and tools), every suite run alone:
+
+| Check | Result |
+|---|---|
+| Unit tests | 604 (3 skips) |
+| Integration tests | 250 (13 skips); 3 failures: `test_ai_bridge` 13 and `test_horizon_groups` 11 fail the same way on the 8880bdd build here (environment), `test_temporary` 01 is intermittent under full-suite load (passes alone, 3 of 3) |
+| `test_layout_presets` per locale | 19 in pt-BR and en-US, including the real upgrade from 5a98bd7; the new A-1, M-1, M-2, M-3 and low-severity tests fail on the 8880bdd build |
+| Contrast pairs | 256 |
+| Generated tokens | current |
+| ruff | clean |
+| Security scans | all six |
+
 **UX4 — Shell pages**
 - **Settings.** Two panes, with search, scope labels and inline status.
 - **New tab.** "Você está em …".
