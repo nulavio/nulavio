@@ -437,8 +437,9 @@ class HorizonTest(unittest.TestCase):
         # light and mint in dark (one SVG with a colour-scheme query) on the tab, the toolbar button and the
         # sidebar launcher, and stays >= 3:1 where it sits, including the launcher's pressed (open) state.
         expected = {0: "#0F7A68", 1: "#6FE0C5"}
-        # UX3F B2: in the launcher the assistant is a tool glyph in the chrome icon colour.
-        launcher_expected = {0: "#23495A", 1: "#BFD0D6"}
+        # UX3F B2 / UX3G: on the toolbar and in the launcher the Nulavio mark is a 16px tool glyph painted
+        # by its context (context-fill): the chrome icon or text colour, or the accent while it is open.
+        tool_colours = {0: {"#23495A", "#0B1623", "#0F7A68"}, 1: {"#BFD0D6", "#F1F7F5", "#6FE0C5"}}
         try:
             for dark, vertical in ((0, False), (0, True), (1, False), (1, True)):
                 self.set_pref("ui.systemUsesDarkTheme", dark)
@@ -460,8 +461,10 @@ class HorizonTest(unittest.TestCase):
                         state = {"tab": tab_state, "launcher": launcher_state}.get(where, "")
                         with self.subTest(scheme="dark" if dark else "light", vertical=vertical, where=where, state=state):
                             symbol, surface = symbol_on_surface(png, boxes[where], boxes["dpr"])
-                            want = launcher_expected[dark] if where == "launcher" else expected[dark]
-                            self.assertEqual(symbol, want, f"symbol {symbol} on {surface}")
+                            if where == "tab":
+                                self.assertEqual(symbol, expected[dark], f"symbol {symbol} on {surface}")
+                            else:
+                                self.assertIn(symbol, tool_colours[dark], f"symbol {symbol} on {surface}")
                             self.assertGreaterEqual(ratio(symbol, surface), 3.0, f"{symbol} on {surface}")
         finally:
             self.m.chrome("SidebarController.hide();")

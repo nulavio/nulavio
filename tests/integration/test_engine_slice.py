@@ -129,7 +129,7 @@ class EngineSliceTest(unittest.TestCase):
             dark_symbol = current()
             self.assertTrue(dark_symbol.endswith("/nulavio-symbol.svg"), dark_symbol)
             canvas = self.m.execute("return getComputedStyle(document.documentElement).backgroundColor;")
-            self.assertEqual(canvas, "rgb(11, 22, 35)")  # color.dark.bg.canvas #0B1623
+            self.assertEqual(canvas, "rgb(15, 28, 42)")  # color.dark.bg.canvas #0F1C2A (UX3G dark scale)
             (self.artifacts / "startpage-dark.png").write_bytes(self.m.screenshot_png())
         finally:
             self.m.chrome("Services.prefs.clearUserPref('layout.css.prefers-color-scheme.content-override');")
