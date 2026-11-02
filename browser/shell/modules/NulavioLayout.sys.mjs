@@ -539,7 +539,10 @@ export const NulavioLayout = {
     const nonInteractive = lazy.PrivateBrowsingUtils.isWindowPrivate(win)
       || Boolean(Services.prefs.getStringPref("nulavio.ai.workspace", ""))
       || Services.prefs.getBoolPref("nulavio.profile.temporary", false);
+    // QA B-3: a marker pinned by the administrator (autoconfig) is not a choice the person can
+    // close, so it never shows the one-time card.
     const choicePending = available && !locked && !nonInteractive
+      && !Services.prefs.prefIsLocked(PREF_CHOICE_PENDING)
       && Services.prefs.getBoolPref(PREF_CHOICE_PENDING, false);
     return { preset, available, locked, choicePending };
   },

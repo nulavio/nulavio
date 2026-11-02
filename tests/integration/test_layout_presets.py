@@ -1150,6 +1150,23 @@ class LayoutPresetsTest(unittest.TestCase):
         self.newtab()
         self.assertTrue(self.m.execute("return document.getElementById('layout-choice').hidden;"))
 
+    def test_a_locked_choice_marker_never_shows_a_card_that_cannot_close(self):
+        # QA B-3: with nulavio.layout.choicePending locked to true (autoconfig) the card never
+        # went away and "Manter …" said the layout was managed by the administrator.
+        self.assertTrue(self.state()["choicePending"])
+        self.m.chrome("Services.prefs.lockPref('nulavio.layout.choicePending');")
+        try:
+            self.assertEqual(self.state(), {"preset": "lateral", "available": True, "locked": False, "choicePending": False})
+            self.newtab()
+            self.assertTrue(self.m.execute("return document.getElementById('layout-choice').hidden;"))
+            self.settings()
+            self.assertTrue(harness.wait_until(lambda: self.ui_ready("lateral"), 10))
+            self.assertTrue(self.m.execute("return document.getElementById('layout-keep').hidden;"))
+            # The presets themselves still work; only the marker is pinned.
+            self.assertEqual(self.apply("top")["preset"], "top")
+        finally:
+            self.m.chrome("Services.prefs.unlockPref('nulavio.layout.choicePending');")
+
     def test_card_text_tab_order_and_arrow_keys_settle_before_applying(self):
         # QA B-2, B-7, B-8 on the first-run card.
         self.newtab()
