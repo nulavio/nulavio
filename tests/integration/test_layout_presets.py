@@ -18,7 +18,10 @@ from test_horizon_groups import KEY
 from test_profiles import chrome_async
 from test_window_band import BAND_PROBE, assert_band, assert_layout_matrix
 
-LAYOUT = 'ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioLayout.sys.mjs").NulavioLayout'
+LAYOUT_MODULE = "resource://builtin-addons/nulavio-shell/modules/NulavioLayout.sys.mjs"
+LAYOUT = f'ChromeUtils.importESModule("{LAYOUT_MODULE}").NulavioLayout'
+# Choice group -> its live status line (new tab card, Settings section).
+SURFACE_STATUS = {"layout-choice-options": "#layout-choice-current", "layout-choices": "#layout-current"}
 # A build of the previous release (5a98bd7) for the real upgrade check, from NULAVIO_REFERENCE_ENGINE.
 
 
@@ -256,7 +259,9 @@ class LayoutPresetsTest(unittest.TestCase):
             [second_ctx],
         )
         self.assertNotIn("error", closing_mid_apply, closing_mid_apply)
-        self.assertEqual(closing_mid_apply["ok"]["code"], "layout-failed", closing_mid_apply)
+        # QA A-1: another window closing is left out; the choice still applies to this one.
+        self.assertIsNone(closing_mid_apply["ok"]["code"], closing_mid_apply)
+        self.assertEqual(self.state()["preset"], "lateral")
         self.assertGreaterEqual(closing_mid_apply["ok"]["calls"], 2, closing_mid_apply)
         self.assertTrue(closing_mid_apply["ok"]["w2Closed"], closing_mid_apply)
         # Queue recovers cleanly on the surviving window.
@@ -275,6 +280,131 @@ class LayoutPresetsTest(unittest.TestCase):
         self.assertEqual(partial["ok"]["code"], "layout-failed")
         self.assertEqual(partial["ok"]["actual"]["preset"], "lateral")
         self.apply("top")
+
+    def close_window_after_layout_write(self, context_id, delay_ms):
+        # Close the window delay_ms after apply's first native write: the QA's 0-200 ms window.
+        self.m.chrome(
+            """
+          const [ctx, delay] = arguments;
+          const w2 = [...Services.wm.getEnumerator('navigator:browser')].find(w => String(w.browsingContext.id) === ctx);
+          const prefs = ['sidebar.verticalTabs', 'sidebar.visibility'];
+          const once = () => {
+            for (const p of prefs) Services.prefs.removeObserver(p, once);
+            window.setTimeout(() => w2.close(), delay);
+          };
+          for (const p of prefs) Services.prefs.addObserver(p, once);
+        """,
+            [context_id, delay_ms],
+        )
+
+    def surface_settled(self, group, preset):
+        return self.m.execute(
+            """
+          const [group, current, inputs, want] = arguments;
+          const radios = [...document.querySelectorAll(inputs)];
+          return document.querySelector(group).getAttribute('aria-busy') !== 'true'
+            && radios.every(r => !r.disabled)
+            && (radios.find(r => r.checked)?.value || 'custom') === want
+            && !/Aplicando|Applying/.test(document.querySelector(current).textContent);
+        """,
+            [f"#{group}", SURFACE_STATUS[group], f"#{group} input", preset],
+        )
+
+    def test_closing_a_window_mid_apply_never_wedges_settings_newtab_or_the_queue(self):
+        # QA A-1: closing another window up to ~200 ms after a choice left Settings on
+        # "Applying layout…" (aria-busy, radios disabled) and every later choice queued behind it.
+        # The new tab's card shares the queue, so both surfaces are covered, at 0, 50 and 200 ms.
+        first = self.m.send("WebDriver:GetWindowHandle")["value"]
+        rounds = [("top", 0), ("focus", 50), ("lateral", 200)]
+        measured = []
+        for surface, group in (("newtab", "layout-choice-options"), ("settings", "layout-choices")):
+            self.m.switch_to(first)
+            if surface == "newtab":
+                self.newtab()
+            else:
+                self.settings()
+            self.assertTrue(harness.wait_until(lambda g=group: self.surface_settled(g, "lateral"), 15))
+            for preset, delay in rounds:
+                with self.subTest(surface=surface, preset=preset, delay_ms=delay):
+                    _second, ctx = self.open_secondary_window()
+                    self.m.switch_to(first)
+                    self.close_window_after_layout_write(ctx, delay)
+                    start = time.monotonic()
+                    radio = self.m.find_element(f"#{group} input[value={preset}]")
+                    self.m.send("WebDriver:ElementClick", {"id": radio})
+                    self.assertTrue(
+                        harness.wait_until(lambda g=group, p=preset: self.surface_settled(g, p), 10),
+                        self.m.execute(
+                            "return [document.querySelector(arguments[0]).getAttribute('aria-busy'),"
+                            " document.querySelector(arguments[1]).textContent];",
+                            [f"#{group}", SURFACE_STATUS[group]],
+                        ),
+                    )
+                    measured.append(
+                        {"surface": surface, "preset": preset, "delay_ms": delay, "settled_s": round(time.monotonic() - start, 2)}
+                    )
+                    self.assertEqual(self.state()["preset"], preset)
+                    self.assertEqual(
+                        self.m.chrome("return [...Services.wm.getEnumerator('navigator:browser')].filter(w=>!w.closed).length;"),
+                        1,
+                    )
+                    error = SURFACE_STATUS[group].replace("-current", "-error")
+                    self.assertEqual(
+                        self.m.execute("return document.querySelector(arguments[0]).textContent.trim();", [error]), ""
+                    )
+        # A later choice with no window closing still applies through the same queue.
+        self.m.send("WebDriver:ElementClick", {"id": self.m.find_element("#layout-choices input[value=top]")})
+        self.assertTrue(harness.wait_until(lambda: self.surface_settled("layout-choices", "top"), 10))
+        self.assertEqual(self.apply("focus")["preset"], "focus")
+        (self.artifacts / "close-race.json").write_text(json.dumps(measured, indent=2) + "\n")
+
+        step_ms = self.m.chrome(f"return ChromeUtils.importESModule({LAYOUT_MODULE!r}).WINDOW_STEP_TIMEOUT_MS;")
+        self.assertIsInstance(step_ms, int)
+        # Deterministic: a window step that never settles (a destroyed document's Lit update or
+        # animation) ends when that window unloads, well before the per-window deadline...
+        _second, ctx = self.open_secondary_window()
+        self.m.switch_to(first)
+        hung = chrome_async(
+            self.m,
+            f"""
+          const L={LAYOUT};
+          const w2=[...Services.wm.getEnumerator('navigator:browser')].find(w=>String(w.browsingContext.id)===args[0]);
+          w2.SidebarController.toggleExpandOnHover=()=>new Promise(()=>{{}});
+          const t0=Date.now();
+          window.setTimeout(()=>w2.close(),100);
+          const st=await L.apply(window,'lateral');
+          return {{ms:Date.now()-t0,preset:st.preset,closed:w2.closed,limit:args[1]}};
+        """,
+            [ctx, step_ms],
+        )
+        self.assertNotIn("error", hung, hung)
+        self.assertEqual(hung["ok"]["preset"], "lateral", hung)
+        self.assertTrue(hung["ok"]["closed"], hung)
+        self.assertLess(hung["ok"]["ms"], hung["ok"]["limit"], hung)
+        # ...and a window that stays open but never settles is given up on at that deadline.
+        _second, ctx = self.open_secondary_window()
+        self.m.switch_to(first)
+        stuck = chrome_async(
+            self.m,
+            f"""
+          const L={LAYOUT};
+          const w2=[...Services.wm.getEnumerator('navigator:browser')].find(w=>String(w.browsingContext.id)===args[0]);
+          w2.SidebarController.toggleExpandOnHover=()=>new Promise(()=>{{}});
+          const t0=Date.now();
+          let preset=null, code=null;
+          try {{ preset=(await L.apply(window,'top')).preset; }} catch(e) {{ code=e.code; }}
+          const ms=Date.now()-t0;
+          w2.close();
+          return {{ms,preset,code}};
+        """,
+            [ctx],
+        )
+        self.assertNotIn("error", stuck, stuck)
+        self.assertEqual((stuck["ok"]["preset"], stuck["ok"]["code"]), ("top", None), stuck)
+        self.assertGreaterEqual(stuck["ok"]["ms"], step_ms - 100, stuck)
+        self.assertLess(stuck["ok"]["ms"], step_ms * 3, stuck)
+        # The queue is free: the next choice applies at once.
+        self.assertEqual(self.apply("lateral")["preset"], "lateral")
 
     def test_preserves_position_width_tools_bookmarks_density_and_assistant(self):
         self.apply("lateral")

@@ -21,6 +21,14 @@ const EXISTING_PROFILE_PREFS = [
 ];
 // Files written only after a browser session has already run (never before profile lock on first boot).
 const EXISTING_PROFILE_FILES = ["nulavio-guard.json", "xulstore.json", "sessionstore.jsonlz4"];
+// QA A-1: one window's native step (Lit update, animation, hover measurement) settles well
+// under a second. A window that closes mid-step can leave those promises pending forever,
+// so each step ends when it finishes, when its window unloads, or at this deadline.
+export const WINDOW_STEP_TIMEOUT_MS = 4000;
+// Whole-apply safety net: the queue always moves on, even if something unforeseen hangs.
+export const APPLY_DEADLINE_MS = 20000;
+const GONE = Symbol("window-gone");
+const TIMED_OUT = Symbol("window-timed-out");
 
 const lazy = {};
 ChromeUtils.defineESModuleGetters(lazy, {
@@ -32,10 +40,14 @@ ChromeUtils.defineESModuleGetters(lazy, {
 let applying = Promise.resolve();
 let pendingInitialAdoption = null;
 
-function fail(code) {
+function layoutError(code) {
   const error = new Error(code);
   error.code = code;
-  throw error;
+  return error;
+}
+
+function fail(code) {
+  throw layoutError(code);
 }
 
 function resolveTarget(target) {
@@ -62,16 +74,66 @@ function controller(win) {
   return win.SidebarController;
 }
 
+function windowGone(win) {
+  try {
+    return !win || win.closed || !win.SidebarController || win.SidebarController.uninitializing;
+  } catch {
+    return true;
+  }
+}
+
+function startTimer(ms, callback) {
+  const timer = Cc["@mozilla.org/timer;1"].createInstance(Ci.nsITimer);
+  timer.initWithCallback(callback, ms, Ci.nsITimer.TYPE_ONE_SHOT);
+  return timer;
+}
+
+// Run one native step for `win`. It settles with the step's result, with GONE as soon as the
+// window unloads (or the step fails because it closed), or with TIMED_OUT at the deadline.
+function settleInWindow(win, step, ms = WINDOW_STEP_TIMEOUT_MS) {
+  if (windowGone(win)) {
+    return Promise.resolve(GONE);
+  }
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    let timer = null;
+    const finish = (settle, value) => {
+      if (settled) return;
+      settled = true;
+      timer?.cancel();
+      try {
+        win.removeEventListener("unload", onGone);
+      } catch {
+        // The window is already gone.
+      }
+      settle(value);
+    };
+    const onGone = () => finish(resolve, GONE);
+    win.addEventListener("unload", onGone, { once: true });
+    timer = startTimer(ms, () => finish(resolve, windowGone(win) ? GONE : TIMED_OUT));
+    Promise.resolve().then(step).then(
+      value => finish(resolve, value),
+      error => (windowGone(win) ? finish(resolve, GONE) : finish(reject, error))
+    );
+  });
+}
+
 async function ready(win) {
   const sidebar = controller(win);
-  await sidebar.promiseInitialized;
+  const started = await settleInWindow(win, () => sidebar.promiseInitialized);
+  if (started === GONE || started === TIMED_OUT) {
+    // Closed, or its sidebar never finished starting: nothing reliable to read or change.
+    fail("layout-unavailable");
+  }
   if (pendingInitialAdoption) {
     await pendingInitialAdoption;
   }
   controller(win);
-  await sidebar.waitUntilStable();
-  controller(win);
-  return sidebar;
+  // Waiting for animations is best effort; only a window that went away is an error.
+  if (await settleInWindow(win, () => sidebar.waitUntilStable()) === GONE) {
+    fail("layout-unavailable");
+  }
+  return controller(win);
 }
 
 function setAdoptionMarkers(choicePending) {
@@ -221,11 +283,13 @@ function expandAdoptedWindows() {
     if (w.closed || !w.toolbar?.visible || w.SidebarController?.uninitializing) {
       continue;
     }
+    // Bounded per window (QA A-1): the layout queue waits for this adoption.
     tasks.push(
-      Promise.resolve(w.SidebarController?.promiseInitialized).then(async () => {
-        if (!w.closed && w.toolbar?.visible && !w.SidebarController?.uninitializing) {
+      settleInWindow(w, async () => {
+        await w.SidebarController.promiseInitialized;
+        if (!windowGone(w) && w.toolbar?.visible) {
           await w.SidebarController.waitUntilStable();
-          if (!w.closed && w.toolbar?.visible && !w.SidebarController?.uninitializing) {
+          if (!windowGone(w) && w.toolbar?.visible) {
             w.SidebarController._state?.updateVisibility(true, true);
             await w.SidebarController.waitUntilStable();
           }
@@ -344,6 +408,64 @@ function scheduleInitialLateralCommit() {
   Services.obs?.addObserver?.(shutdownObserver, "quit-application-granted");
 }
 
+function liveBrowserWindows() {
+  return [...Services.wm.getEnumerator("navigator:browser")]
+    .filter(w => !windowGone(w) && w.toolbar.visible);
+}
+
+async function applyPreset(target, preset, ticket) {
+  if (typeof preset !== "string" || !Object.hasOwn(PRESETS, preset)) {
+    fail("layout-invalid");
+  }
+  await ready(windowOf(target));
+  if (!Services.prefs.getBoolPref("sidebar.revamp")) {
+    fail("layout-unavailable");
+  }
+  if (SIDEBAR_PREFS.some(pref => Services.prefs.prefIsLocked(pref))) {
+    fail("layout-locked");
+  }
+  // Another window that closes or never settles is left out; it reads the native prefs
+  // itself when it starts. Only the caller's window has to be ready.
+  const windows = (await Promise.all(liveBrowserWindows().map(w => ready(w).then(() => w, () => null))))
+    .filter(Boolean);
+  controller(windowOf(target));
+  if (!Services.prefs.getBoolPref("sidebar.revamp")) fail("layout-unavailable");
+  if (SIDEBAR_PREFS.some(pref => Services.prefs.prefIsLocked(pref))) fail("layout-locked");
+  if (ticket.cancelled) fail("layout-failed");
+  // Orientation first: SidebarManager normalizes visibility synchronously.
+  // The final explicit visibility then wins, including re-selecting a
+  // preset whose prefs already match but whose window was collapsed.
+  try {
+    Services.prefs.setBoolPref("sidebar.verticalTabs", preset !== "top");
+    Services.prefs.setStringPref("sidebar.visibility", PRESETS[preset]);
+    if (!Services.prefs.prefIsLocked(PREF_CHOICE_PENDING)) {
+      Services.prefs.setBoolPref(PREF_CHOICE_PENDING, false);
+    }
+    await Promise.all(windows.map(async w => {
+      const result = await settleInWindow(w, async () => {
+        const sidebar = controller(w);
+        await sidebar.waitUntilStable();
+        controller(w);
+        // updateVisibility affects only launcher expansion/visibility, keeping
+        // open panels, widths, position, tools and tab/group data intact.
+        sidebar._state.updateVisibility(true, preset === "lateral");
+        await sidebar.toggleExpandOnHover(preset === "focus");
+        await sidebar.waitUntilStable();
+        controller(w);
+      });
+      if (result === TIMED_OUT) {
+        console.warn("Nulavio layout: a window did not settle in time; its native state is reported as it is");
+      }
+    }));
+    return await NulavioLayout.state(target);
+  } catch (e) {
+    // After a native write, changes may already exist. Never promise a rollback
+    // or "nothing changed".
+    console.error("Nulavio layout transition", e);
+    fail("layout-failed");
+  }
+}
+
 export const NulavioLayout = {
   /**
    * Adopt Lateral on genuinely brand-new profiles (D-UX2) once on first run,
@@ -406,53 +528,20 @@ export const NulavioLayout = {
   },
 
   apply(target, preset) {
-    // Serialize explicit choices across Settings/Newtab tabs and windows,
-    // including the async native hover measurement. A rejection must not poison the queue.
-    const pending = applying.then(async () => {
-      if (typeof preset !== "string" || !Object.hasOwn(PRESETS, preset)) {
-        fail("layout-invalid");
-      }
-      await ready(windowOf(target));
-      if (!Services.prefs.getBoolPref("sidebar.revamp")) {
-        fail("layout-unavailable");
-      }
-      if (SIDEBAR_PREFS.some(pref => Services.prefs.prefIsLocked(pref))) {
-        fail("layout-locked");
-      }
-      const windows = [...Services.wm.getEnumerator("navigator:browser")]
-        .filter(w => !w.closed && w.toolbar.visible && !w.SidebarController?.uninitializing);
-      await Promise.all(windows.map(ready));
-      controller(windowOf(target));
-      if (!Services.prefs.getBoolPref("sidebar.revamp")) fail("layout-unavailable");
-      if (SIDEBAR_PREFS.some(pref => Services.prefs.prefIsLocked(pref))) fail("layout-locked");
-      // Orientation first: SidebarManager normalizes visibility synchronously.
-      // The final explicit visibility then wins, including re-selecting a
-      // preset whose prefs already match but whose window was collapsed.
-      try {
-        Services.prefs.setBoolPref("sidebar.verticalTabs", preset !== "top");
-        Services.prefs.setStringPref("sidebar.visibility", PRESETS[preset]);
-        if (!Services.prefs.prefIsLocked(PREF_CHOICE_PENDING)) {
-          Services.prefs.setBoolPref(PREF_CHOICE_PENDING, false);
-        }
-        await Promise.all(windows.map(async w => {
-          const sidebar = controller(w);
-          await sidebar.waitUntilStable();
-          controller(w);
-          // updateVisibility affects only launcher expansion/visibility, keeping
-          // open panels, widths, position, tools and tab/group data intact.
-          sidebar._state.updateVisibility(true, preset === "lateral");
-          await sidebar.toggleExpandOnHover(preset === "focus");
-          await sidebar.waitUntilStable();
-          controller(w);
-        }));
-        return await this.state(target);
-      } catch (e) {
-        // After a native write (e.g. a window closing mid-transition), changes
-        // may already exist. Never promise a rollback or "nothing changed".
-        console.error("Nulavio layout transition", e);
-        fail("layout-failed");
-      }
-    });
+    // Serialize explicit choices across Settings/Newtab tabs and windows, including the
+    // async native hover measurement. Neither a rejection nor a step that never settles
+    // (a window closing mid-transition, QA A-1) may hold the queue: every window step is
+    // bounded and cancelled when its window unloads, and the whole apply has a deadline
+    // after which it stops before writing anything.
+    const pending = applying.then(() => new Promise((resolve, reject) => {
+      const ticket = { cancelled: false };
+      const timer = startTimer(APPLY_DEADLINE_MS, () => {
+        ticket.cancelled = true;
+        console.error("Nulavio layout transition did not settle in time");
+        reject(layoutError("layout-failed"));
+      });
+      applyPreset(target, preset, ticket).then(resolve, reject).finally(() => timer.cancel());
+    }));
     applying = pending.catch(() => {});
     return pending;
   },
