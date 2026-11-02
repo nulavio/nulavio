@@ -989,5 +989,6 @@
   "layoutChoiceKeep_top": {"message": "Manter Abas no topo"},
   "layoutChoiceKeep_focus": {"message": "Manter Foco"},
   "layoutChoiceSettings": {"message": "Layout nas Configurações"},
-  "layoutPendingHint": {"message": "A escolha de layout do primeiro uso ainda está aberta. Mantenha o layout atual ou escolha outro acima."}
+  "layoutPendingHint": {"message": "A escolha de layout do primeiro uso ainda está aberta. Mantenha o layout atual ou escolha outro acima."},
+  "layoutChoiceBodyOpen": {"message": "Escolha como as abas ficam neste perfil. Dá para mudar quando quiser nas Configurações do Nulavio."}
 }

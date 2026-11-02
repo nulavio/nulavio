@@ -2,7 +2,7 @@
    settings (no counters, no network). */
 
 import { localize, t } from "../lib/i18n.js";
-import { errorText } from "../lib/ui.js";
+import { errorText, settleRadioChanges } from "../lib/ui.js";
 
 const UBLOCK_ID = "uBlock0@raymondhill.net";
 // Official extensions of the supported credential providers (browser/config/providers.json).
@@ -92,6 +92,7 @@ async function showLayoutChoice() {
   const group = document.getElementById("layout-choice-options");
   const radios = [...group.querySelectorAll('input[name="newtab-layout"]')];
   const current = document.getElementById("layout-choice-current");
+  const body = document.getElementById("layout-choice-body");
   const error = document.getElementById("layout-choice-error");
   const done = document.getElementById("layout-choice-done");
   const retry = document.getElementById("layout-choice-retry");
@@ -103,6 +104,7 @@ async function showLayoutChoice() {
   // keyboard or pointer so ArrowDown/ArrowUp never collapses the active control.
   let editingInThisTab = false;
   let dismissedInThisTab = false;
+  let keyboard = null;
 
   const doneLabel = preset => (
     preset === "lateral" || preset === "top" || preset === "focus"
@@ -124,10 +126,15 @@ async function showLayoutChoice() {
     }
     card.hidden = false;
     card.dataset.preset = state.preset;
+    // QA B-2: "start with Lateral, you can keep it" only while the window is in Lateral.
+    body.textContent = t(state.preset === "lateral" ? "layoutChoiceBody" : "layoutChoiceBodyOpen");
     current.textContent = !state.available ? t("layoutUnavailable") : state.locked ? t("layoutLocked")
       : t(`layoutCurrent_${state.preset}`);
     done.textContent = doneLabel(state.preset);
-    done.disabled = busy || !state.available || state.locked;
+    // QA B-7: never disabled while a preset applies, so Tab from the radios still lands on it
+    // (in visual order) instead of skipping to the next link; clicks wait on `busy`.
+    done.disabled = !state.available || state.locked;
+    done.setAttribute("aria-disabled", String(busy));
     done.hidden = false;
     retry.hidden = true;
     for (const radio of radios) {
@@ -136,11 +143,11 @@ async function showLayoutChoice() {
     }
   };
   const refreshLayout = async () => {
-    if (closed || busy) return;
+    if (closed || busy || keyboard?.pending()) return;
     const request = ++revision;
     try {
       const state = await api.state();
-      if (closed || busy || request !== revision) return;
+      if (closed || busy || keyboard?.pending() || request !== revision) return;
       render(state);
     } catch (e) {
       if (closed || busy || request !== revision) return;
@@ -192,8 +199,15 @@ async function showLayoutChoice() {
     group.setAttribute("aria-busy", String(busy));
     if (await listen()) await refreshLayout();
   });
-  group.addEventListener("change", async event => {
-    if (busy || !radios.includes(event.target)) return;
+  group.addEventListener("change", event => {
+    if (radios.includes(event.target)) {
+      editingInThisTab = true;
+      revision++;
+    }
+  });
+  keyboard = settleRadioChanges(group, async event => {
+    const chosen = radios.find(radio => radio.checked);
+    if (busy || !radios.includes(event.target) || !chosen) return;
     editingInThisTab = true;
     busy = true;
     revision++;
@@ -201,10 +215,10 @@ async function showLayoutChoice() {
     error.textContent = "";
     const focused = document.activeElement;
     for (const radio of radios) radio.disabled = true;
-    done.disabled = true;
+    done.setAttribute("aria-disabled", "true");
     current.textContent = t("layoutApplying");
     try {
-      await api.apply(event.target.value);
+      await api.apply(chosen.value);
     } catch (e) {
       if (!closed) error.textContent = errorText(e);
     } finally {
@@ -219,11 +233,13 @@ async function showLayoutChoice() {
     }
   });
   done.addEventListener("click", async () => {
+    // A keyboard choice still waiting applies first, so "Manter …" keeps what is selected.
+    if (keyboard?.pending()) await keyboard.flush();
     if (busy) return;
     busy = true;
     revision++;
     error.textContent = "";
-    done.disabled = true;
+    done.setAttribute("aria-disabled", "true");
     for (const radio of radios) radio.disabled = true;
     const hadFocusInside = card.contains(document.activeElement);
     try {

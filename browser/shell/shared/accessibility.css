@@ -8,6 +8,8 @@
   outline: var(--nv-state-focusRingWidth) solid var(--nv-color-focus);
   outline-offset: var(--nv-state-focusRingOffset);
 }
+/* QA B-8: on an 18 px radio or checkbox a 2 px ring reads as thin; give it 3 px */
+input:is([type="radio"], [type="checkbox"]):focus-visible { outline-width: max(3px, var(--nv-state-focusRingWidth)); }
 [hidden] { display: none !important; }
 :where(button, input, select, textarea) { max-inline-size: 100%; }
 :where(p, h1, h2, h3, label, legend) { overflow-wrap: anywhere; }

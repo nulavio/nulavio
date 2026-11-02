@@ -1150,6 +1150,49 @@ class LayoutPresetsTest(unittest.TestCase):
         self.newtab()
         self.assertTrue(self.m.execute("return document.getElementById('layout-choice').hidden;"))
 
+    def test_card_text_tab_order_and_arrow_keys_settle_before_applying(self):
+        # QA B-2, B-7, B-8 on the first-run card.
+        self.newtab()
+        self.assertTrue(harness.wait_until(lambda: self.newtab_ui_ready("lateral"), 10))
+        body = "return document.getElementById('layout-choice-body').textContent;"
+        lateral_body = self.m.execute(body)
+        self.assertIn("Lateral", lateral_body)
+        self.m.chrome(
+            f"window.nvApplied=[]; window.nvApply={LAYOUT}.apply;"
+            f"{LAYOUT}.apply=function(t,p){{window.nvApplied.push(p); return window.nvApply.call(this,t,p);}};"
+        )
+        try:
+            # B-8: two quick arrow steps rearrange the window once, for the radio the person stops on.
+            self.m.execute("document.querySelector('#layout-choice input[value=lateral]').focus();")
+            self.m.chrome(KEY, ["ArrowDown", "ArrowDown", 40])
+            self.m.chrome(KEY, ["ArrowDown", "ArrowDown", 40])
+            self.assertTrue(harness.wait_until(lambda: self.state()["preset"] == "focus", 10))
+            self.assertTrue(harness.wait_until(lambda: self.newtab_ui_ready("focus"), 10))
+            self.assertEqual(self.m.chrome("return window.nvApplied;"), ["focus"])
+            self.assertTrue(self.m.execute("return document.activeElement.matches('#layout-choice input[value=focus]');"))
+            # B-7: Tab right after a keyboard choice, while it applies, reaches "Manter …" first,
+            # in visual order, never the Settings link after it.
+            self.m.chrome(KEY, ["ArrowDown", "ArrowDown", 40])
+            self.m.chrome(KEY, ["Tab", "Tab", 9])
+            self.assertEqual(self.m.execute("return document.activeElement.id;"), "layout-choice-done")
+            self.assertTrue(harness.wait_until(lambda: self.state()["preset"] == "lateral", 10))
+            self.assertTrue(harness.wait_until(lambda: self.newtab_ui_ready("lateral"), 10))
+            self.assertEqual(self.m.chrome("return window.nvApplied;"), ["focus", "lateral"])
+            # B-2: outside Lateral the card no longer says "you can keep this layout" about Lateral.
+            self.m.send("WebDriver:ElementClick", {"id": self.m.find_element("#layout-choice input[value=top]")})
+            self.assertTrue(harness.wait_until(lambda: self.newtab_ui_ready("top"), 10))
+            open_body = self.m.execute(body)
+            self.assertNotIn("Lateral", open_body)
+            self.assertNotEqual(open_body, lateral_body)
+            self.assertEqual(self.m.chrome("return window.nvApplied;"), ["focus", "lateral", "top"])
+        finally:
+            self.m.chrome(f"{LAYOUT}.apply=window.nvApply; delete window.nvApply; delete window.nvApplied;")
+        # B-8: radios get a 3 px focus ring.
+        self.m.execute("document.querySelector('#layout-choice input[value=top]').focus();")
+        self.m.chrome(KEY, ["ArrowUp", "ArrowUp", 38])
+        ring = self.m.execute("return getComputedStyle(document.activeElement).outlineWidth;")
+        self.assertGreaterEqual(float(ring.removesuffix("px")), 3, ring)
+
     def test_a_sidebar_policy_keeps_a_new_profile_out_of_adoption_on_every_run(self):
         # QA M-1: a "Preferences" policy on sidebar.verticalTabs that is not locked was ignored
         # (Status "default") or flip-flopped between runs ("user"/"clear": Lateral with the card

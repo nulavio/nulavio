@@ -176,3 +176,34 @@ export function temporaryStorageText(state) {
   }
   return t(state.swapOnDisk ? "profilesTemporarySwap" : "profilesTemporaryMemory");
 }
+
+// Layout radios (QA B-8): arrow keys move through a radio group natively and fire "change" on
+// every step. A change made from the keyboard calls `apply` once the person pauses, so each
+// step does not rearrange the whole window; a pointer change calls it at once.
+// `pending()` is true while a keyboard change waits; `flush()` runs it now.
+export function settleRadioChanges(group, apply, delay = 500) {
+  const KEYS = ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Home", "End", " "];
+  let keyAt = -Infinity;
+  let timer = null;
+  let waiting = null;
+  const run = () => {
+    clearTimeout(timer);
+    timer = null;
+    const event = waiting;
+    waiting = null;
+    return event ? apply(event) : Promise.resolve();
+  };
+  group.addEventListener("keydown", event => {
+    if (KEYS.includes(event.key)) keyAt = performance.now();
+  });
+  group.addEventListener("change", event => {
+    clearTimeout(timer);
+    waiting = event;
+    if (performance.now() - keyAt < 250) {
+      timer = setTimeout(run, delay);
+    } else {
+      run();
+    }
+  });
+  return { pending: () => waiting !== null, flush: run };
+}

@@ -2,7 +2,7 @@
    made in other windows and in Gecko's sidebar controls. */
 
 import { t } from "../lib/i18n.js";
-import { errorText } from "../lib/ui.js";
+import { errorText, settleRadioChanges } from "../lib/ui.js";
 
 export async function setUpLayout() {
   const api = browser.nulavioLayout;
@@ -20,6 +20,7 @@ export async function setUpLayout() {
   let busy = false;
   let closed = false;
   let listening = false;
+  let keyboard = null;
 
   const showUnavailable = err => {
     current.textContent = t("layoutUnavailable");
@@ -42,11 +43,11 @@ export async function setUpLayout() {
     keep.disabled = busy;
   };
   const refresh = async () => {
-    if (closed || busy) return;
+    if (closed || busy || keyboard?.pending()) return;
     const request = ++revision;
     try {
       const state = await api.state();
-      if (closed || busy || request !== revision) return;
+      if (closed || busy || keyboard?.pending() || request !== revision) return;
       render(state);
       retry.hidden = true;
     } catch (e) {
@@ -84,8 +85,12 @@ export async function setUpLayout() {
     group.setAttribute("aria-busy", String(busy));
     if (listen()) refresh();
   });
-  group.addEventListener("change", async event => {
-    if (busy || !radios.includes(event.target)) return;
+  group.addEventListener("change", event => {
+    if (radios.includes(event.target)) revision++;
+  });
+  keyboard = settleRadioChanges(group, async event => {
+    const chosen = radios.find(radio => radio.checked);
+    if (busy || !radios.includes(event.target) || !chosen) return;
     busy = true;
     revision++;
     group.setAttribute("aria-busy", "true");
@@ -95,7 +100,7 @@ export async function setUpLayout() {
     keep.disabled = true;
     current.textContent = t("layoutApplying");
     try {
-      await api.apply(event.target.value);
+      await api.apply(chosen.value);
     } catch (e) {
       if (!closed) error.textContent = errorText(e);
     } finally {
@@ -108,6 +113,7 @@ export async function setUpLayout() {
     }
   });
   keep.addEventListener("click", async () => {
+    if (keyboard?.pending()) await keyboard.flush();
     if (busy) return;
     busy = true;
     revision++;
