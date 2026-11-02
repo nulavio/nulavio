@@ -50,7 +50,7 @@ class HorizonThemeTest(unittest.TestCase):
         """UX3G N2: the only !important rules repaint the engine's own private theme (inline
         variables), never a theme the person installed, forced colours or a contrast preference."""
         block = private_block(without_comments(CSS))
-        self.assertIn('@media not ((forced-colors) or (prefers-contrast))', block)
+        self.assertIn("@media not ((forced-colors) or (prefers-contrast))", block)
         selectors = re.findall(r"^\s*([^{}\n]+)\{", block, flags=re.M)
         self.assertEqual(selectors[1].strip(), ':root[privatebrowsingmode="temporary"][lwtheme][theme-in-app]')
         self.assertTrue(all(":root" not in s or "[theme-in-app]" in s for s in selectors), selectors)
