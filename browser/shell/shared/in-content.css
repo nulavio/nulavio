@@ -8,6 +8,10 @@
   url-prefix("about:editprofile"),
   url-prefix("about:newprofile"),
   url-prefix("about:deleteprofile") {
+  #category-experimental,
+  #category-more-from-mozilla {
+    display: none !important;
+  }
   @media -moz-pref("nulavio.horizon.enabled") {
     @media -moz-pref("extensions.activeThemeID", "default-theme@mozilla.org") or
       -moz-pref("extensions.activeThemeID", "firefox-compact-light@mozilla.org") or
@@ -57,11 +61,5 @@
       }
     }
     }
-  }
-}
-@-moz-document url-prefix("about:preferences"), url-prefix("about:settings") {
-  #category-experimental,
-  #category-more-from-mozilla {
-    display: none !important;
   }
 }

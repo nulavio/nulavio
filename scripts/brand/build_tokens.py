@@ -270,13 +270,12 @@ def _mix(a: str, b: str, weight: float) -> str:
 # Settings. The panes still open by URL; only their navigation entries are hidden
 # (the browser.preferences.experimental.hidden pref alone did not hide Labs).
 # Independent of the theme: this is naming, not colour.
+# These ids exist only in Settings, so the rule shares the internal-pages scope.
 BRAND_RULES = (
-    '@-moz-document url-prefix("about:preferences"), url-prefix("about:settings") {\n'
     "  #category-experimental,\n"
     "  #category-more-from-mozilla {\n"
     "    display: none !important;\n"
     "  }\n"
-    "}\n"
 )
 
 
@@ -327,6 +326,7 @@ def build_in_content(data: dict) -> str:
     return (
         HEADER
         + f"@-moz-document {urls} {{\n"
+        + BRAND_RULES
         + '  @media -moz-pref("nulavio.horizon.enabled") {\n'
         + '    @media -moz-pref("extensions.activeThemeID", "default-theme@mozilla.org") or\n'
         + '      -moz-pref("extensions.activeThemeID", "firefox-compact-light@mozilla.org") or\n'
@@ -335,7 +335,6 @@ def build_in_content(data: dict) -> str:
         + "      :root:not([lwtheme]) {\n"
         + body
         + "      }\n    }\n    }\n  }\n}\n"
-        + BRAND_RULES
     )
 
 

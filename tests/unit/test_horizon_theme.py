@@ -24,12 +24,39 @@ def without_comments(css: str) -> str:
     return re.sub(r"/\*.*?\*/", "", css, flags=re.S)
 
 
+def private_block(css: str) -> str:
+    """The UX3G private-window block: from its media query to the matching close brace."""
+    start = css.index('@media not ((forced-colors) or (prefers-contrast)) {\n    :root[privatebrowsingmode="temporary"]')
+    depth = 0
+    for i in range(start, len(css)):
+        if css[i] == "{":
+            depth += 1
+        elif css[i] == "}":
+            depth -= 1
+            if depth == 0:
+                return css[start : i + 1]
+    raise AssertionError("unbalanced private block")
+
+
 class HorizonThemeTest(unittest.TestCase):
     def test_values_come_from_tokens(self):
         code = without_comments(CSS)
         self.assertNotRegex(code, r"#[0-9a-fA-F]{3,8}\b", "literal colour: add a token to docs/brand/tokens.json")
         self.assertNotRegex(code, r"\brgba?\(|\bhsla?\(", "literal colour function")
-        self.assertNotIn("!important", code, "author !important breaks user themes and accessibility overrides")
+        outside = code.replace(private_block(code), "")
+        self.assertNotIn("!important", outside, "author !important breaks user themes and accessibility overrides")
+
+    def test_private_window_override_is_scoped_to_the_engine_substitute(self):
+        """UX3G N2: the only !important rules repaint the engine's own private theme (inline
+        variables), never a theme the person installed, forced colours or a contrast preference."""
+        block = private_block(without_comments(CSS))
+        self.assertIn('@media not ((forced-colors) or (prefers-contrast))', block)
+        selectors = re.findall(r"^\s*([^{}\n]+)\{", block, flags=re.M)
+        self.assertEqual(selectors[1].strip(), ':root[privatebrowsingmode="temporary"][lwtheme][theme-in-app]')
+        self.assertTrue(all(":root" not in s or "[theme-in-app]" in s for s in selectors), selectors)
+        values = re.findall(r"!important", block)
+        self.assertGreater(len(values), 10)
+        self.assertNotRegex(block, r"#[0-9a-fA-F]{3,8}\b")
 
     def test_everything_is_behind_the_pref(self):
         code = without_comments(CSS)

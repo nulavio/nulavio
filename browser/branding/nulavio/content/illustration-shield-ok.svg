@@ -2,7 +2,7 @@
    - License, v. 2.0. If a copy of the MPL was not distributed with this
    - file, You can obtain one at http://mozilla.org/MPL/2.0/. -->
 <!-- UX3G N2: Nulavio's shield for the Settings privacy status ("on guard"),
-     replacing the engine's Firefox-coloured shield through a chrome override.
+     replacing the engine's own shield artwork through a chrome override.
      Colours from docs/brand/tokens.json (mint scale, accent.default). -->
 <svg xmlns="http://www.w3.org/2000/svg" width="100" height="106" viewBox="0 0 100 106" fill="none">
   <style>
