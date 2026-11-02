@@ -138,6 +138,8 @@ html[data-page="newtab"]:not([data-painted]) .page {
   .hero__headline { font-size: var(--nv-font-size-2xl); }
 }
 .layout-choice { display: grid; gap: var(--nv-space-4); }
+/* UX3G N6: one card style on the new tab; the DNS choice reads like the layout one. */
+.dns-choice.stack { gap: var(--nv-space-4); }
 .layout-choice__title {
   margin: 0;
   font-size: var(--nv-type-section-size);

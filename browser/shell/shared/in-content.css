@@ -52,6 +52,8 @@
         --table-background-color: light-dark(#FFFFFF, #112432) !important;
         --border-color: light-dark(#BFD0D6, #23495A) !important;
         --border-color-card: light-dark(#BFD0D6, #23495A) !important;
+        --page-nav-button-background-color-selected: light-dark(#0F7A68, #0E3B33) !important;
+        --page-nav-button-text-color-selected: light-dark(#FFFFFF, #6FE0C5) !important;
       }
     }
     }

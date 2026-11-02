@@ -485,9 +485,11 @@
 
     /* UX3F A5/M4: while the launcher animates, labels fade instead of being cut,
        and the controls answer hover with short, quiet transitions. */
+    /* UX3G: the fade-out is short enough (80ms, no delay) to end as the width
+       starts moving, so the collapse has no empty beat. */
     #sidebar-main[sidebar-ongoing-animations] #tabbrowser-tabs[orient="vertical"] .tab-label-container {
       opacity: 0;
-      transition: opacity var(--nv-motion-duration-fast) var(--nv-motion-easing-exit);
+      transition: opacity var(--nv-motion-duration-fade) var(--nv-motion-easing-exit) 0s;
     }
 
     #tabbrowser-tabs[orient="vertical"][expanded] .tab-label-container {

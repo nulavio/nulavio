@@ -222,6 +222,21 @@ def build_identity(data: dict) -> str:
     )
 
 
+# UX3G N3: the launcher's tools and its settings button share one row at the
+# 224px width: an 8px gap (the engine's Nova gap is 12.5px, which pushed the
+# gear to a second row). The footer lives in sidebar-main's shadow tree, which
+# only an agent sheet reaches; geometry only, in every theme.
+SIDEBAR_FOOTER = (
+    '@-moz-document url("chrome://browser/content/browser.xhtml") {{\n'
+    '  @media -moz-pref("nulavio.horizon.enabled") {{\n'
+    '    .tools-and-extensions[orientation="horizontal"] {{\n'
+    "      gap: {gap} !important;\n"
+    "    }}\n"
+    "  }}\n"
+    "}}\n"
+)
+
+
 def build_sidebar_focus(data: dict) -> str:
     """Only native sidebar documents: restore focus contrast without styling web pages."""
     require_both_themes(data)
@@ -241,6 +256,7 @@ def build_sidebar_focus(data: dict) -> str:
         + "    @media not ((forced-colors) or (prefers-contrast)) {\n"
         + f"      :root:not([lwtheme]) {{ --focus-outline-color: light-dark({light}, {dark}) !important; }}\n"
         + "    }\n    }\n  }\n}\n"
+        + SIDEBAR_FOOTER.format(gap=resolve(tokens, "space.3"))
     )
 
 
@@ -299,6 +315,12 @@ def build_in_content(data: dict) -> str:
         f"--table-background-color: {pair('bg.surface')}",
         f"--border-color: {pair('border.subtle')}",
         f"--border-color-card: {pair('border.subtle')}",
+        # UX3G polish: the active Settings entry is the accent in light, and in dark
+        # a tint with accent text (7.8:1) instead of the brightest block on screen.
+        f"--page-nav-button-background-color-selected: light-dark({resolve(tokens, 'color.light.accent.default')}, "
+        f"{resolve(tokens, 'color.dark.accent.tint')})",
+        f"--page-nav-button-text-color-selected: light-dark({resolve(tokens, 'color.light.accent.on')}, "
+        f"{resolve(tokens, 'color.dark.accent.default')})",
     ]
     body = "".join(f"        {line} !important;\n" for line in lines)
     urls = ",\n  ".join(f'url-prefix("{page}")' for page in IN_CONTENT_PAGES)

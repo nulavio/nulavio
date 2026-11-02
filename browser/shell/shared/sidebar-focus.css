@@ -13,3 +13,10 @@
     }
   }
 }
+@-moz-document url("chrome://browser/content/browser.xhtml") {
+  @media -moz-pref("nulavio.horizon.enabled") {
+    .tools-and-extensions[orientation="horizontal"] {
+      gap: 8px !important;
+    }
+  }
+}
