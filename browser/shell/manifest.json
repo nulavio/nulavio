@@ -213,7 +213,7 @@
   "sidebar_action": {
     "default_panel": "assistant/panel.html",
     "default_title": "__MSG_assistantTitle__",
-    "default_icon": "shared/nulavio-symbol-adaptive.svg",
+    "default_icon": "shared/nulavio-symbol-mono.svg",
     "open_at_install": false
   }
 }

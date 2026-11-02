@@ -165,12 +165,6 @@
       opacity: 1;
     }
 
-    /* UX3F B3: "Switch to tab" and other row actions get a quiet edge; the
-       selected row's tint and ring above stay as they are. */
-    :root:not([lwtheme]) .urlbarView-action-btn {
-      border-color: var(--nv-color-border-subtle);
-    }
-
     /* UX3F M1: the open sidebar is the button's own state; show it in the
        accent (icon and tint), not as a grey block outside the palette. */
     :root:not([lwtheme]) #sidebar-button:is([checked], [open]) {
