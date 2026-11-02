@@ -36,7 +36,9 @@
     :root {
       --tab-border-radius: var(--nv-radius-md);
       --toolbarbutton-border-radius: var(--nv-radius-md);
-      --urlbar-border-radius: var(--nv-radius-lg);
+      /* UX3F M3: three steps. sm 6 (chips), md 10 (tabs, buttons, address bar), lg 14 (cards, panels). */
+      --urlbar-border-radius: var(--nv-radius-md);
+      --panel-border-radius: var(--nv-radius-md);
     }
   }
 
@@ -52,6 +54,26 @@
     &[uidensity="touch"] {
       --tab-min-height: var(--nv-size-tab-heightTouch);
       --urlbar-height: max(var(--nv-size-field-heightTouch), 1.4em);
+    }
+
+    /* UX3F A5: vertical tabs on a 40px step (34 + 2 x 2 margin + 2 x 1 padding),
+       the rhythm the rest of the chrome uses (4px grid). */
+    @media -moz-pref("sidebar.verticalTabs") {
+      --tab-height-with-margin-padding: calc(2px + var(--tab-min-height) + (2 * var(--tab-margin-block)));
+    }
+  }
+
+  #tabbrowser-tabs[orient="vertical"] {
+    --tab-padding-block-start: 1px;
+    --tab-padding-block-end: 1px;
+  }
+
+  /* UX3F M7: pinned tabs are compact 40px tiles that start at the edge,
+     not one full-width bar per row; a hairline separates them from the list. */
+  #tabbrowser-tabs[orient="vertical"][expanded] > #pinned-tabs-container[orient="vertical"] {
+    &::part(items-wrapper) {
+      grid-template-columns: repeat(auto-fill, var(--tab-pinned-min-width-expanded));
+      justify-content: start;
     }
   }
 
@@ -105,6 +127,58 @@
       --urlbarview-text-color-selected: var(--nv-color-text-primary);
       --urlbarview-background-color-hover: color-mix(in srgb, currentColor calc(var(--nv-state-hoverOverlay) * 100%), transparent);
       --urlbarview-text-color-hover: var(--nv-color-text-primary);
+
+      /* UX3F M2: a calm field at rest (the placeholder and identity icon name it),
+         the control edge on hover, the accent ring when focused. */
+      --toolbar-field-border-color: var(--nv-color-border-subtle);
+
+      /* UX3F M5: menus and panels on the Nulavio surfaces, not GTK grey. */
+      --menu-background-color: var(--nv-color-bg-raised);
+      --menu-color: var(--nv-color-text-primary);
+      --menu-border-color: var(--nv-color-border-subtle);
+      --menuitem-hover-background-color: color-mix(in srgb, currentColor calc(var(--nv-state-hoverOverlay) * 100%), transparent);
+      --menuitem-disabled-hover-background-color: color-mix(in srgb, currentColor 4%, transparent);
+      --menu-disabled-color: color-mix(in srgb, currentColor 55%, transparent);
+      --arrowpanel-background: var(--nv-color-bg-raised);
+      --arrowpanel-color: var(--nv-color-text-primary);
+      --arrowpanel-border-color: var(--nv-color-border-subtle);
+      --panel-separator-color: var(--nv-color-border-subtle);
+      --sidebar-border-color: var(--nv-color-border-subtle);
+    }
+
+    :root:not([lwtheme]) #urlbar:not([focused]):hover > .urlbar-background {
+      border-color: var(--nv-color-border-control);
+    }
+
+    :root:not([lwtheme]) #urlbar[focused]:not([open]) > .urlbar-background {
+      box-shadow: var(--nv-elevation-1);
+    }
+
+    :root:not([lwtheme]) #tabbrowser-tabs[orient="vertical"] .tabbrowser-tab[visuallyselected] > .tab-stack > .tab-background::after {
+      background-color: var(--nv-color-route-vertical);
+    }
+
+    /* UX3F M8: the placeholder reads at >= 4.5:1 on the field in both themes. */
+    :root:not([lwtheme]) #urlbar-input::placeholder,
+    :root:not([lwtheme]) .searchbar-textbox::placeholder {
+      color: var(--nv-color-text-muted);
+      opacity: 1;
+    }
+
+    /* UX3F B3: "Switch to tab" and other row actions get a quiet edge; the
+       selected row's tint and ring above stay as they are. */
+    :root:not([lwtheme]) .urlbarView-action-btn {
+      border-color: var(--nv-color-border-subtle);
+    }
+
+    /* UX3F M1: the open sidebar is the button's own state; show it in the
+       accent (icon and tint), not as a grey block outside the palette. */
+    :root:not([lwtheme]) #sidebar-button:is([checked], [open]) {
+      --toolbarbutton-icon-fill: var(--nv-color-accent-default);
+
+      &:not(:hover:active) > :is(.toolbarbutton-icon, .toolbarbutton-badge-stack) {
+        background-color: var(--nv-color-accent-tint);
+      }
     }
 
     /* UX3B: keep native colour roles distinct. Lines/swatches use group ink;
@@ -309,12 +383,22 @@
     inset-inline-start: calc(50% - var(--nv-size-indicator-length) / 2);
   }
 
+  /* UX3F A5: in the vertical strip the mark is an edge, not a glyph: 3 x 20,
+     flush with the tab's inner edge (>= 9px clear of the icon), rounded on the
+     content side only. In the collapsed strip it sits outside the tile. */
   #tabbrowser-tabs[orient="vertical"] .tabbrowser-tab[visuallyselected] > .tab-stack > .tab-background::after {
-    inset-block-end: calc(50% - var(--nv-size-indicator-length) / 2);
-    inset-inline-start: var(--nv-size-indicator-thickness);
-    inline-size: var(--nv-size-indicator-thickness);
-    block-size: var(--nv-size-indicator-length);
+    inset-block-end: calc(50% - var(--nv-route-vertical-height) / 2);
+    inset-inline-start: 0;
+    inline-size: var(--nv-route-vertical-width);
+    block-size: var(--nv-route-vertical-height);
+    border-radius: 0 var(--nv-radius-xs) var(--nv-radius-xs) 0;
   }
+
+  #tabbrowser-tabs[orient="vertical"]:not([expanded]) .tabbrowser-tab[visuallyselected] > .tab-stack > .tab-background::after {
+    inset-inline-start: calc(-1 * var(--nv-space-2) - var(--nv-route-vertical-width) / 2);
+    border-radius: var(--nv-radius-xs);
+  }
+
 
   :root[lwtheme] .tabbrowser-tab[visuallyselected] > .tab-stack > .tab-background::after {
     background-color: currentColor;
@@ -330,12 +414,75 @@
     .tabbrowser-tab[visuallyselected] > .tab-stack > .tab-background::after {
       animation: nulavio-route-in var(--nv-motion-duration-fast) var(--nv-motion-easing-standard);
     }
+
+    /* UX3F B4: the vertical mark grows along its own axis. */
+    #tabbrowser-tabs[orient="vertical"] .tabbrowser-tab[visuallyselected] > .tab-stack > .tab-background::after {
+      animation-name: nulavio-route-in-v;
+    }
+
+    /* UX3F A5/M4: while the launcher animates, labels fade instead of being cut,
+       and the controls answer hover with short, quiet transitions. */
+    #sidebar-main[sidebar-ongoing-animations] #tabbrowser-tabs[orient="vertical"] .tab-label-container {
+      opacity: 0;
+      transition: opacity var(--nv-motion-duration-fast) var(--nv-motion-easing-exit);
+    }
+
+    #tabbrowser-tabs[orient="vertical"][expanded] .tab-label-container {
+      transition: opacity var(--nv-motion-duration-base) var(--nv-motion-easing-enter);
+    }
+
+    .tabbrowser-tab > .tab-stack > .tab-background,
+    toolbarbutton > :is(.toolbarbutton-icon, .toolbarbutton-badge-stack),
+    #urlbar > .urlbar-background {
+      transition: background-color var(--nv-motion-duration-fast) var(--nv-motion-easing-standard),
+        border-color var(--nv-motion-duration-fast) var(--nv-motion-easing-standard),
+        box-shadow var(--nv-motion-duration-fast) var(--nv-motion-easing-standard);
+    }
   }
+
+  /* UX3F B5: the main menu scans faster with the engine's own 16px glyphs. */
+  #appMenu-mainView .subviewbutton:not(.subviewbutton-iconic, #appMenu-zoom-controls, .toolbaritem-combined-buttons *) {
+    -moz-context-properties: fill, fill-opacity;
+    fill: currentColor;
+    fill-opacity: 0.85;
+
+    > .toolbarbutton-icon {
+      display: flex;
+      inline-size: var(--nv-icon-size-sm);
+      block-size: var(--nv-icon-size-sm);
+      margin-inline-end: var(--nv-space-3);
+    }
+  }
+  #appMenu-new-tab-button2 { list-style-image: url("chrome://browser/skin/new-tab.svg"); }
+  #appMenu-new-window-button2 { list-style-image: url("chrome://browser/skin/window.svg"); }
+  #appMenu-new-private-window-button2 { list-style-image: url("chrome://browser/skin/privateBrowsing.svg"); }
+  #appMenu-history-button { list-style-image: url("chrome://browser/skin/history.svg"); }
+  #appMenu-bookmarks-button { list-style-image: url("chrome://browser/skin/bookmark-hollow.svg"); }
+  #appMenu-tab-groups-button { list-style-image: url("chrome://browser/skin/tabs.svg"); }
+  #appMenu-downloads-button { list-style-image: url("chrome://browser/skin/downloads/downloads.svg"); }
+  #appMenu-passwords-button { list-style-image: url("chrome://browser/skin/login.svg"); }
+  #appMenu-extensions-themes-button,
+  #appMenu-unified-extensions-button { list-style-image: url("chrome://mozapps/skin/extensions/extension.svg"); }
+  #appMenu-print-button2 { list-style-image: url("chrome://global/skin/icons/print.svg"); }
+  #appMenu-save-file-button2 { list-style-image: url("chrome://browser/skin/save.svg"); }
+  #appMenu-find-button2 { list-style-image: url("chrome://global/skin/icons/search-glass.svg"); }
+  #appMenu-translate-button { list-style-image: url("chrome://browser/skin/translations.svg"); }
+  #appMenu-settings-button { list-style-image: url("chrome://global/skin/icons/settings.svg"); }
+  #appMenu-more-button2 { list-style-image: url("chrome://global/skin/icons/developer.svg"); }
+  #appMenu-help-button2 { list-style-image: url("chrome://global/skin/icons/help.svg"); }
+  #appMenu-fullscreen-button2 { list-style-image: url("chrome://browser/skin/fullscreen.svg"); }
 }
 
 @keyframes nulavio-route-in {
   from {
     opacity: 0;
     transform: scaleX(0.4);
+  }
+}
+
+@keyframes nulavio-route-in-v {
+  from {
+    opacity: 0;
+    transform: scaleY(0.4);
   }
 }

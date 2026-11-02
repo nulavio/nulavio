@@ -9,6 +9,8 @@
 export const PREF_ADOPTION_VERSION = "nulavio.layout.adoptionVersion";
 export const PREF_CHOICE_PENDING = "nulavio.layout.choicePending";
 
+// UX3F (QA A5): Lateral's launcher width on adoption, in CSS pixels (engine default ~246).
+export const ADOPTED_LAUNCHER_WIDTH = 224;
 const PRESETS = Object.freeze({ lateral: "always-show", top: "hide-on-close", focus: "expand-on-hover" });
 const SIDEBAR_PREFS = ["sidebar.verticalTabs", "sidebar.visibility", "sidebar.revamp"];
 const OBSERVED_PREFS = [...SIDEBAR_PREFS, PREF_CHOICE_PENDING];
@@ -309,6 +311,11 @@ function expandAdoptedWindows() {
           await w.SidebarController.waitUntilStable();
           if (!windowGone(w) && w.toolbar?.visible) {
             w.SidebarController._state?.updateVisibility(true, true);
+            // Native per-window sidebar state (saved with the window), never a pref;
+            // a width the person dragged is kept.
+            if (w.SidebarController._state && !w.SidebarController._state.expandedLauncherWidth) {
+              w.SidebarController._state.expandedLauncherWidth = ADOPTED_LAUNCHER_WIDTH;
+            }
             await w.SidebarController.waitUntilStable();
           }
         }

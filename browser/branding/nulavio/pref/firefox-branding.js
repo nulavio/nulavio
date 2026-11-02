@@ -100,3 +100,10 @@ pref("browser.aboutaddons.novaThemesPickerEnabled", false);
 // visits still appear there.
 pref("browser.topsites.useRemoteSetting", false);
 pref("browser.newtabpage.activity-stream.default.sites", "");
+
+// UX3F (QA A5/M4): the sidebar launcher moves on Nulavio's standard motion
+// curve and narrows faster than it widens (browser/patches/0008). Reduced
+// motion still turns the animation off.
+pref("sidebar.animation.duration-ms", 220);
+pref("sidebar.animation.collapse-duration-ms", 160);
+pref("sidebar.animation.easing", "cubic-bezier(0.2, 0, 0, 1)");
