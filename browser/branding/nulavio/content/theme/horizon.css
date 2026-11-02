@@ -106,6 +106,10 @@
       --tab-icon-fill-loading: var(--nv-color-accent-default);
       --tab-attention-dot-color: var(--nv-color-accent-default);
 
+      /* UX3G: the page area before a document paints is the new tab's canvas,
+         not the engine's #F9F9FB (the flash between Ctrl+T and the new tab). */
+      --tabpanel-background-color: var(--nv-color-bg-canvas);
+
       /* Navigation toolbar */
       --toolbar-background-color: var(--nv-color-chrome-toolbar);
       --toolbar-text-color: var(--nv-color-text-primary);

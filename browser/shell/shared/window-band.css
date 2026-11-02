@@ -291,3 +291,10 @@
     .nv-band-row .nv-band-raw { border: 3px double Mark !important; }
   }
 }
+
+/* UX3G: no "Not Secure" over the transient empty document that precedes the
+   Shell's own new tab (NulavioWindow #markOwnPagePending). Web pages never
+   carry this attribute; their indicator is untouched. */
+:root[nulavio-own-page-pending] #identity-box.notSecure {
+  visibility: hidden;
+}

@@ -288,6 +288,7 @@ class WindowUI {
           for (const node of this.#rows(win)) {
             named(node.querySelector(".nv-band-header"), "");
           }
+          this.#markOwnPagePending(win);
         } else if (flags & Ci.nsIWebProgressListener.STATE_STOP) {
           header();
         }
@@ -409,6 +410,27 @@ class WindowUI {
     for (const row of this.#rows(win)) {
       named(row.querySelector(".nv-band-header"), text);
     }
+    this.#markOwnPagePending(win);
+  }
+
+  // UX3G: for a moment after Ctrl+T the address bar already holds the Shell's new tab URL
+  // while the tab still shows its initial, empty about:blank, and the identity box calls
+  // that "Not Secure". Mark only that state: the Shell's exact URL over an initial empty
+  // document with no web origin. Any committed page (web, error or the Shell's own) clears
+  // it, so a web page's security indicator is never affected (window-band.css).
+  #markOwnPagePending(win) {
+    let pending = false;
+    try {
+      const browser = win.gBrowser.selectedBrowser;
+      const global = browser.browsingContext.currentWindowGlobal;
+      const own = policy()?.getURL("newtab/newtab.html");
+      pending = Boolean(own && global) && browser.currentURI?.spec === own
+        && global.isInitialDocument && global.documentURI?.spec === "about:blank"
+        && global.documentPrincipal?.addonPolicy?.id !== SHELL;
+    } catch {
+      pending = false;
+    }
+    win.document.documentElement.toggleAttribute("nulavio-own-page-pending", pending);
   }
 
   #paint(win) {
