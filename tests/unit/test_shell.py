@@ -514,6 +514,22 @@ class LayoutModuleTest(unittest.TestCase):
         privacy = module_text("NulavioPrivacy.sys.mjs")
         self.assertLess(privacy.index("lazy.NulavioLayout.adoptInitialLayout()"), privacy.index("setIntPref(PREF_SEEDED"))
 
+    def test_layout_names_bridge_to_the_engine_settings(self):
+        # QA B-9: about:preferences > Browser layout says "Vertical/Horizontal tabs" and has no Focus;
+        # the presets name that native term, and the card's link says which Settings it opens.
+        for name, vertical, horizontal, nulavio in (
+            ("pt_BR", "Abas na vertical", "Abas na horizontal", "Nulavio"),
+            ("en", "Vertical tabs", "Horizontal tabs", "Nulavio"),
+        ):
+            with self.subTest(locale=name):
+                msg = {k: v["message"] for k, v in locale(name).items()}
+                self.assertIn(vertical.lower(), msg["layoutLateralHint"].lower())
+                self.assertIn(vertical.lower(), msg["layoutFocusHint"].lower())
+                self.assertIn(horizontal.lower(), msg["layoutTopHint"].lower())
+                self.assertIn(vertical, msg["layoutScope"])
+                self.assertIn(horizontal, msg["layoutScope"])
+                self.assertIn(nulavio, msg["layoutChoiceSettings"])
+
     def test_layout_surfaces_guard_listener_registration(self):
         for rel in ("settings/layout.js", "newtab/newtab.js"):
             with self.subTest(script=rel):
