@@ -937,6 +937,7 @@
 
   "bandLabel": {"message": "Perfil e segurança da janela"},
   "bandProfileUnavailable": {"message": "Identidade do perfil indisponível"},
+  "bandProfileDefault": {"message": "Perfil padrão"},
   "bandProtected": {"message": "⌑ Protegido · desbloqueado"},
   "bandUnprotected": {"message": "◇ Sem proteção"},
   "bandProtectionUnknown": {"message": "? Proteção desconhecida"},

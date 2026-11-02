@@ -38,7 +38,7 @@ BAND_PROBE = """(() => {
 def assert_band(test, state):
     test.assertIsNotNone(state)
     test.assertFalse(state["overflow"], state)
-    test.assertGreaterEqual(state["rect"]["h"], 3 if state["full"] else 30)
+    test.assertGreaterEqual(state["rect"]["h"], 3 if state["full"] else 24)  # UX3F A1: 24px neutral band
     for cue in state["cues"]:
         test.assertGreaterEqual(cue["h"], 20, cue)  # text seals; interactive targets below are >=24
         test.assertGreater(cue["w"], 0, cue)
@@ -164,7 +164,7 @@ class WindowBandTest(unittest.TestCase):
         self.assertNotIn("error", result, result)
         r = result["ok"]
         self.assertIn("Farol", r["name"])
-        self.assertGreaterEqual(r["height"], 30)
+        self.assertGreaterEqual(r["height"], 24)
         self.assertGreater(r["width"], 400)
         self.assertEqual((r["opacity"], r["visibility"], r["placement"]), ("1", "visible", "nulavio-band"))
         self.assertTrue(r["aboveTabs"] and r["aboveNav"] and r["nativeUnchanged"], r)
@@ -528,7 +528,8 @@ class WindowBandTest(unittest.TestCase):
             harness.wait_until(lambda: self.m.chrome("return !!document.querySelector('#nulavio-band .nv-band-avatar');"), 10)
         )
         icon = self.m.chrome("""
-          const e=document.querySelector('#nulavio-band .nv-band-identity'), i=e.querySelector('img');
+          // UX3F A1: the avatar sits on the profile-colour disc inside the neutral chip.
+          const e=document.querySelector('#nulavio-band .nv-band-flag'), i=e.querySelector('img');
           return {bg:getComputedStyle(e).backgroundColor,stroke:getComputedStyle(i).stroke};
         """)
         self.assertGreaterEqual(ratio(rgb(icon["stroke"]), rgb(icon["bg"])), 3, icon)

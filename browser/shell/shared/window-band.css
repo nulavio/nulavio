@@ -7,10 +7,13 @@
     display: flex !important;
     visibility: visible !important;
     opacity: var(--nv-security-opacity) !important;
-    min-block-size: var(--nv-size-field-heightCompact);
+    /* UX3F A1: the neutral band is a quiet 24px row on the window surface.
+       Alert states (private, temporary, agent, raw, Guard) keep their strong
+       fills, patterns and edges below, so a strong band now always means one. */
+    min-block-size: var(--nv-space-6);
     padding: 0;
     border: 0;
-    border-block-end: 1px solid var(--nv-color-band-rule);
+    border-block-end: 1px solid var(--nv-color-border-subtle);
     background: var(--nv-color-band-bg) !important;
     color: var(--nv-color-band-text) !important;
     -moz-window-dragging: drag;
@@ -29,10 +32,10 @@
     align-items: center;
     gap: var(--nv-space-2) var(--nv-space-3);
     min-inline-size: 0;
-    min-block-size: var(--nv-size-field-heightCompact);
-    padding: var(--nv-space-1) var(--nv-space-3);
+    min-block-size: var(--nv-space-6);
+    padding: 0 var(--nv-space-3);
     font-family: var(--nv-font-family-ui);
-    font-size: max(1em, var(--nv-font-size-sm));
+    font-size: max(0.92em, var(--nv-font-size-xs));
     line-height: var(--nv-font-lineHeight-tight);
     background-color: var(--nv-color-band-bg);
     color: var(--nv-color-band-text);
@@ -45,12 +48,12 @@
     min-inline-size: var(--nv-space-6);
     max-inline-size: 100%;
     margin: 0;
-    padding: var(--nv-space-1) var(--nv-space-2);
+    padding: 0 var(--nv-space-2);
     border: 1px solid transparent;
-    border-radius: var(--nv-radius-xs);
+    border-radius: var(--nv-radius-sm);
     font: inherit;
     color: inherit;
-    background: var(--nv-color-band-bg);
+    background: transparent;
     overflow-wrap: anywhere;
     -moz-window-dragging: no-drag;
     cursor: pointer;
@@ -59,31 +62,70 @@
     text-decoration: underline;
   }
   .nv-band-row button:focus-visible {
-    outline: var(--nv-state-focusRingWidth) solid var(--nv-color-band-rule);
-    outline-offset: 0;
+    outline: var(--nv-state-focusRingWidth) solid var(--nv-color-focus);
+    outline-offset: calc(-1 * var(--nv-state-focusRingWidth));
   }
+  /* Neutral identity: a quiet outlined chip; the profile colour stays as a
+     filled disc with the initial or avatar (colour is never the only cue). */
   .nv-band-row .nv-band-identity {
     display: flex;
     align-items: center;
     gap: var(--nv-space-2);
     min-inline-size: 0;
-    background: var(--profile-fill, var(--nv-color-identity-slate));
-    color: var(--nv-color-identity-on);
-    border: var(--nv-security-identityRingWidth) solid var(--nv-color-identity-ring);
-    border-radius: var(--nv-radius-sm);
-    font-weight: var(--nv-font-weight-semibold);
+    padding-inline: var(--nv-space-1) var(--nv-space-3);
+    background: transparent;
+    color: var(--nv-color-band-text);
+    border: var(--nv-security-identityRingWidth) solid var(--nv-color-border-control);
+    border-radius: var(--nv-radius-pill);
+    font-weight: var(--nv-font-weight-medium);
   }
-  .nv-band-flag { display: flex; align-items: center; flex: none; }
-  .nv-band-avatar {
+  .nv-band-flag {
+    display: inline-grid;
+    place-items: center;
+    flex: none;
     inline-size: var(--nv-icon-size-sm);
     block-size: var(--nv-icon-size-sm);
+    border-radius: 50%;
+    background: var(--profile-fill, var(--nv-color-identity-slate));
+    color: var(--nv-color-identity-on);
+    box-shadow: inset 0 0 0 1px var(--nv-color-identity-ring);
+    font-size: 10px;
+    font-weight: var(--nv-font-weight-semibold);
+    line-height: 1;
+  }
+  .nv-band-avatar {
+    inline-size: var(--nv-space-4);
+    block-size: var(--nv-space-4);
     -moz-context-properties: fill, stroke;
     fill: transparent;
     stroke: currentColor;
   }
+  .nv-band-row .nv-band-protection { color: var(--nv-color-text-secondary); }
+  /* Alert rows keep the pre-UX3F filled chip, exactly as strong as before. */
+  .nv-band-row:is([data-private="true"], [data-agent="true"], [data-raw="true"], [data-temporary="true"]) .nv-band-identity {
+    padding-inline: var(--nv-space-2);
+    background: var(--profile-fill, var(--nv-color-identity-slate));
+    color: var(--nv-color-identity-on);
+    border-color: var(--nv-color-identity-ring);
+    border-radius: var(--nv-radius-sm);
+    font-weight: var(--nv-font-weight-semibold);
+  }
+  .nv-band-row:is([data-private="true"], [data-agent="true"], [data-raw="true"], [data-temporary="true"]) .nv-band-flag {
+    background: transparent;
+    color: inherit;
+    box-shadow: none;
+  }
+  /* An AI area replaces the profile: it keeps the strong filled chip. */
   .nv-band-row[data-workspace="true"] .nv-band-identity {
+    background: var(--profile-fill);
     color: var(--nv-color-security-agent-on);
     border-color: var(--nv-color-security-agent-ink);
+    font-weight: var(--nv-font-weight-semibold);
+  }
+  .nv-band-row[data-workspace="true"] .nv-band-flag {
+    background: transparent;
+    color: inherit;
+    box-shadow: none;
   }
   .nv-band-name { overflow-wrap: anywhere; min-inline-size: 0; }
   .nv-band-header {
@@ -91,6 +133,7 @@
     text-align: center;
     overflow-wrap: anywhere;
     min-inline-size: 0;
+    color: var(--nv-color-band-meta);
   }
   #nulavio-fullscreen { display: none; }
   :root:is([inFullscreen], [inDOMFullscreen]) #nulavio-fullscreen {

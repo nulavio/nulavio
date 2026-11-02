@@ -414,7 +414,9 @@ class WindowUI {
     const workspace = agent?.target.kind === "workspace";
     const name = this.#temporary ? t("profilesTemporaryShort") : workspace ? agent.name
       : this.#profileUnavailable && profile?.name ? `? ${profile.name}`
-        : profile?.name || agent?.target.profile || t("bandProfileUnavailable");
+        : profile?.name || agent?.target.profile
+          // No registered profile is the ordinary default profile; only a failed read is "unavailable".
+          || t(this.#profileUnavailable ? "bandProfileUnavailable" : "bandProfileDefault");
     const protection = t(this.#protection === "unlocked" ? "bandProtected" : this.#protection === "plain" ? "bandUnprotected" : "bandProtectionUnknown");
     const privateWindow = lazy.PrivateBrowsingUtils.isWindowPrivate(win);
     const root = win.document.documentElement;
