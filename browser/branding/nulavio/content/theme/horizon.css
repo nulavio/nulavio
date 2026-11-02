@@ -63,6 +63,25 @@
     }
   }
 
+  /* UX3G N4: the launcher is 224px from the first frame (the width the Lateral
+     layout adopts), not the engine's 246px narrowing after start-up. A width the
+     person dragged is an inline style on the launcher and still wins. */
+  :root,
+  :root[uidensity] {
+    --sidebar-expanded-launcher-width: var(--nv-size-sidebar-launcherExpanded);
+  }
+
+  /* UX3G N4: hold the identity band's row from the first paint, so the toolbars
+     do not move down when the Shell mounts the band after the window loads. */
+  #navigator-toolbox:not(:has(> #nulavio-band))::before {
+    content: "";
+    display: block;
+    order: -1;
+    min-block-size: var(--nv-space-6);
+    border-block-end: 1px solid var(--nv-color-border-subtle);
+    background-color: var(--nv-color-band-bg);
+  }
+
   #tabbrowser-tabs[orient="vertical"] {
     --tab-padding-block-start: 1px;
     --tab-padding-block-end: 1px;
