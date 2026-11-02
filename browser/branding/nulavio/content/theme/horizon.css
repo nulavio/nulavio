@@ -132,16 +132,15 @@
          focus adds elevation 1 to the accent ring (below). */
 
       /* UX3F M5: menus and panels on the Nulavio surfaces, not GTK grey. */
-      --menu-background-color: var(--nv-color-bg-raised);
-      --menu-color: var(--nv-color-text-primary);
-      --menu-border-color: var(--nv-color-border-subtle);
+      /* UX3G M5/N7: the engine (159) paints panels from --panel-*-color; the
+         older --menu-*/--arrowpanel-* names no longer reach them. */
+      --panel-background-color: var(--nv-color-bg-raised);
+      --panel-text-color: var(--nv-color-text-primary);
+      --panel-border-color: var(--nv-color-border-subtle);
+      --panel-separator-color: var(--nv-color-border-separator);
       --menuitem-hover-background-color: color-mix(in srgb, currentColor calc(var(--nv-state-hoverOverlay) * 100%), transparent);
       --menuitem-disabled-hover-background-color: color-mix(in srgb, currentColor 4%, transparent);
       --menu-disabled-color: color-mix(in srgb, currentColor 55%, transparent);
-      --arrowpanel-background: var(--nv-color-bg-raised);
-      --arrowpanel-color: var(--nv-color-text-primary);
-      --arrowpanel-border-color: var(--nv-color-border-subtle);
-      --panel-separator-color: var(--nv-color-border-subtle);
       --sidebar-border-color: var(--nv-color-border-subtle);
     }
 
@@ -168,6 +167,16 @@
       &:not(:hover:active) > :is(.toolbarbutton-icon, .toolbarbutton-badge-stack) {
         background-color: var(--nv-color-accent-tint);
       }
+    }
+
+    /* UX3G M5/N7: menus (context, toolbar, tab) set their own system Menu
+       colours on the element, so the theme has to be set there too. The
+       autoscroll popup keeps its own (an id selector wins). */
+    :root:not([lwtheme]) :is(menupopup, panel):where(:not([type="arrow"])) {
+      --panel-background-color: var(--nv-color-bg-raised);
+      --panel-text-color: var(--nv-color-text-primary);
+      --panel-border-color: var(--nv-color-border-subtle);
+      --panel-separator-color: var(--nv-color-border-separator);
     }
 
     /* UX3G B2: the profiles button uses the monochrome Nulavio glyph like its

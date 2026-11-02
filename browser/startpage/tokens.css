@@ -111,6 +111,7 @@
   --nv-color-text-muted: #4F7383;
   --nv-color-border-subtle: #BFD0D6;
   --nv-color-border-control: #6B8794;
+  --nv-color-border-separator: #8FAAB5;
   --nv-color-accent-default: #0F7A68;
   --nv-color-accent-on: #FFFFFF;
   --nv-color-accent-tint: #DDF8F0;
@@ -219,6 +220,7 @@
     --nv-color-text-muted: #8FAAB5;
     --nv-color-border-subtle: #23495A;
     --nv-color-border-control: #6E93A2;
+    --nv-color-border-separator: #4F7383;
     --nv-color-accent-default: #6FE0C5;
     --nv-color-accent-on: #0B1623;
     --nv-color-accent-tint: #0E3B33;
@@ -328,6 +330,7 @@
   --nv-color-text-muted: #8FAAB5;
   --nv-color-border-subtle: #23495A;
   --nv-color-border-control: #6E93A2;
+  --nv-color-border-separator: #4F7383;
   --nv-color-accent-default: #6FE0C5;
   --nv-color-accent-on: #0B1623;
   --nv-color-accent-tint: #0E3B33;
@@ -436,6 +439,7 @@
   --nv-color-text-muted: #4F7383;
   --nv-color-border-subtle: #BFD0D6;
   --nv-color-border-control: #6B8794;
+  --nv-color-border-separator: #8FAAB5;
   --nv-color-accent-default: #0F7A68;
   --nv-color-accent-on: #FFFFFF;
   --nv-color-accent-tint: #DDF8F0;

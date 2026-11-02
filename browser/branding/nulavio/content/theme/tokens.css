@@ -109,6 +109,7 @@
   --nv-color-text-muted: light-dark(#4F7383, #8FAAB5);
   --nv-color-border-subtle: light-dark(#BFD0D6, #23495A);
   --nv-color-border-control: light-dark(#6B8794, #6E93A2);
+  --nv-color-border-separator: light-dark(#8FAAB5, #4F7383);
   --nv-color-accent-default: light-dark(#0F7A68, #6FE0C5);
   --nv-color-accent-on: light-dark(#FFFFFF, #0B1623);
   --nv-color-accent-tint: light-dark(#DDF8F0, #0E3B33);
