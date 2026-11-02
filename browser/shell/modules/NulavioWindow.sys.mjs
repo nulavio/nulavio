@@ -456,6 +456,11 @@ class WindowUI {
     for (const [kind, visible] of Object.entries(kinds)) {
       state.line.querySelector(`.nv-fullscreen-${kind}`).hidden = !visible;
     }
+    // UX3G A1: a window with no alert (not private, temporary, agent, Guard or a failed
+    // action) may carry the band inside the navigation row (window-band.css); any alert
+    // gives it back its own strong row at once.
+    state.bar.toggleAttribute("nv-neutral", !this.#temporary && !privateWindow && !agent
+      && this.#guardCount === 0 && !this.#actionError);
     const safety = JSON.stringify([name, this.#protection, privateWindow, this.#temporary, agent, this.#guardCount, this.#actionError]);
     if (state.safety !== safety) {
       state.safety = safety;

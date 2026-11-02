@@ -296,6 +296,38 @@
   }
 }
 
+/* UX3G A1: with tabs down the side, a neutral band is not a row of its own:
+   it opens the navigation row, on the toolbar surface, so the chrome above the
+   page is one 44px row (was 70px). Alerts (private, temporary, agent, Guard, a
+   failed action) drop [nv-neutral] and get their strong full-width row back.
+   The band stays first in the toolbox, outside page content, never hidden. */
+@-moz-document url("chrome://browser/content/browser.xhtml") {
+  @media -moz-pref("sidebar.verticalTabs") {
+    #navigator-toolbox:has(> #nulavio-band[nv-neutral]) {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+
+      > * {
+        grid-column: 1 / -1;
+      }
+      > #nulavio-band[nv-neutral] {
+        grid-row: 1;
+        grid-column: 1;
+        border-block-end: 0;
+        padding-inline-start: var(--nv-space-2);
+        background: var(--toolbar-background-color) !important;
+      }
+      > #nav-bar {
+        grid-row: 1;
+        grid-column: 2;
+      }
+    }
+    #nulavio-band[nv-neutral] .nv-band-row {
+      background-color: transparent;
+    }
+  }
+}
+
 /* UX3G: no "Not Secure" over the transient empty document that precedes the
    Shell's own new tab (NulavioWindow #markOwnPagePending). Web pages never
    carry this attribute; their indicator is untouched. */

@@ -73,13 +73,17 @@
 
   /* UX3G N4: hold the identity band's row from the first paint, so the toolbars
      do not move down when the Shell mounts the band after the window loads. */
-  #navigator-toolbox:not(:has(> #nulavio-band))::before {
-    content: "";
-    display: block;
-    order: -1;
-    min-block-size: var(--nv-space-6);
-    border-block-end: 1px solid var(--nv-color-border-subtle);
-    background-color: var(--nv-color-band-bg);
+  /* With vertical tabs a neutral band joins the navigation row (A1), so the
+     row is held only for the horizontal strip. */
+  @media not -moz-pref("sidebar.verticalTabs") {
+    #navigator-toolbox:not(:has(> #nulavio-band))::before {
+      content: "";
+      display: block;
+      order: -1;
+      min-block-size: var(--nv-space-6);
+      border-block-end: 1px solid var(--nv-color-border-subtle);
+      background-color: var(--nv-color-band-bg);
+    }
   }
 
   /* UX3G M7 and polish: on the 4px grid. Tabs sit 8px from the strip edges
