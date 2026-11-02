@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import os
 import shutil
@@ -1067,6 +1068,65 @@ class LayoutPresetsTest(unittest.TestCase):
             chrome_async(m2, f"return {LAYOUT}.state(window);")["ok"],
             {"preset": "lateral", "available": True, "locked": False, "choicePending": False},
         )
+
+    def test_a_sidebar_policy_keeps_a_new_profile_out_of_adoption_on_every_run(self):
+        # QA M-1: a "Preferences" policy on sidebar.verticalTabs that is not locked was ignored
+        # (Status "default") or flip-flopped between runs ("user"/"clear": Lateral with the card
+        # on the first run, Abas no topo with the card still pending on the second). Any policy on
+        # sidebar.* now means the administrator manages the sidebar: no adoption and no card, on
+        # both runs. The policy lives in a disposable copy of the application (distribution/).
+        install = Path(self.session.engine.path).resolve().parent
+        tmp = Path(tempfile.mkdtemp(prefix="nulavio-ux3e-policy-"))
+        self.addCleanup(shutil.rmtree, tmp, True)
+        copy = tmp / "app"
+        subprocess.run(["cp", "-a", "--reflink=auto", str(install), str(copy)], check=True, timeout=300)
+        policies_file = copy / "distribution" / "policies.json"
+        shipped = json.loads(policies_file.read_text(encoding="utf-8")) if policies_file.exists() else {"policies": {}}
+        engine = dataclasses.replace(self.session.engine, path=copy / Path(self.session.engine.path).name)
+        results = {}
+        for status in ("default", "user", "clear", "locked"):
+            with self.subTest(status=status):
+                policy = dict(shipped["policies"])
+                policy["Preferences"] = {"sidebar.verticalTabs": {"Value": False, "Status": status}}
+                policies_file.parent.mkdir(exist_ok=True)
+                policies_file.write_text(json.dumps({"policies": policy}, indent=2) + "\n", encoding="utf-8")
+                session = harness.GeckoProfileSession(name=f"Policy{status}")
+                session.engine = engine
+                self.addCleanup(session.cleanup)
+                m = session.start()
+                runs = []
+                for run in (1, 2):
+                    if run == 2:
+                        m = session.restart()
+                    self.assertTrue(
+                        m.chrome(
+                            "return Object.hasOwn(Services.policies.getActivePolicies()?.Preferences ?? {}, arguments[0]);",
+                            ["sidebar.verticalTabs"],
+                        ),
+                        status,
+                    )
+                    st = chrome_async(m, f"return {LAYOUT}.state(window);")["ok"]
+                    prefs = m.chrome("""
+                      return {orient: gBrowser.tabContainer.getAttribute('orient'),
+                        vertical: Services.prefs.getBoolPref('sidebar.verticalTabs'),
+                        adoption: Services.prefs.getIntPref('nulavio.layout.adoptionVersion', 0),
+                        pending: Services.prefs.getBoolPref('nulavio.layout.choicePending', true)};
+                    """)
+                    base = m.chrome("return WebExtensionPolicy.getByID('shell@nulavio.net').getURL('');")
+                    m.navigate(base + "newtab/newtab.html")
+                    self.assertTrue(
+                        harness.wait_until(lambda m=m: m.execute("return document.documentElement.dataset.ready==='true';"), 15)
+                    )
+                    card_hidden = m.execute("return document.getElementById('layout-choice').hidden;")
+                    runs.append({"state": st, "prefs": prefs, "cardHidden": card_hidden})
+                    self.assertEqual(st["preset"], "top", runs)
+                    self.assertFalse(st["choicePending"], runs)
+                    self.assertEqual(st["locked"], status == "locked", runs)
+                    self.assertEqual(prefs, {"orient": "horizontal", "vertical": False, "adoption": 1, "pending": False}, runs)
+                    self.assertTrue(card_hidden, runs)
+                results[status] = runs
+                session.cleanup()
+        (self.artifacts / "policy-adoption.json").write_text(json.dumps(results, indent=2) + "\n")
 
     def test_upgraded_5a98bd7_and_custom_profiles_preserve_layout_without_prompt(self):
         # 1. Real upgrade from immutable 5a98bd7 reference binary (when available) -> UX3E:

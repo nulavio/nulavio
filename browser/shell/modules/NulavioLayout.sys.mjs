@@ -136,6 +136,24 @@ async function ready(win) {
   return controller(win);
 }
 
+// QA M-1: a "Preferences" policy on any sidebar.* pref (Status default, user, clear or
+// locked) means the administrator manages the sidebar. First-run adoption never overrides it.
+function policyManagesSidebar() {
+  try {
+    const prefs = Services.policies?.getActivePolicies?.()?.Preferences;
+    return Boolean(prefs) && typeof prefs === "object"
+      && Object.keys(prefs).some(name => name.startsWith("sidebar."));
+  } catch {
+    return false;
+  }
+}
+
+function adoptionUnavailable() {
+  return !Services.prefs.getBoolPref("sidebar.revamp", true)
+    || SIDEBAR_PREFS.some(pref => Services.prefs.prefIsLocked(pref))
+    || policyManagesSidebar();
+}
+
 function setAdoptionMarkers(choicePending) {
   if (!Services.prefs.prefIsLocked(PREF_ADOPTION_VERSION)) {
     Services.prefs.setIntPref(PREF_ADOPTION_VERSION, 1);
@@ -301,9 +319,7 @@ function expandAdoptedWindows() {
 }
 
 function writeAdoptedLateralPrefs() {
-  if (!Services.prefs.getBoolPref("sidebar.revamp", true)
-      || SIDEBAR_PREFS.some(pref => Services.prefs.prefIsLocked(pref))
-      || Services.prefs.prefHasUserValue("sidebar.verticalTabs")) {
+  if (adoptionUnavailable() || Services.prefs.prefHasUserValue("sidebar.verticalTabs")) {
     return false;
   }
   Services.prefs.setBoolPref("sidebar.verticalTabs", true);
@@ -479,8 +495,7 @@ export const NulavioLayout = {
       setAdoptionMarkers(false);
       return "existing";
     }
-    if (!Services.prefs.getBoolPref("sidebar.revamp", true)
-        || SIDEBAR_PREFS.some(pref => Services.prefs.prefIsLocked(pref))) {
+    if (adoptionUnavailable()) {
       setAdoptionMarkers(false);
       return "unavailable";
     }
