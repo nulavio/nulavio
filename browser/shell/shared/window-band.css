@@ -35,7 +35,10 @@
     min-block-size: var(--nv-space-6);
     padding: 0 var(--nv-space-3);
     font-family: var(--nv-font-family-ui);
-    font-size: max(0.92em, var(--nv-font-size-xs));
+    /* UX3G N10: one quiet size for the band (12px, medium, a little tracking). */
+    font-size: var(--nv-font-size-xs);
+    font-weight: var(--nv-font-weight-medium);
+    letter-spacing: 0.01em;
     line-height: var(--nv-font-lineHeight-tight);
     background-color: var(--nv-color-band-bg);
     color: var(--nv-color-band-text);
@@ -90,7 +93,7 @@
     background: var(--profile-fill, var(--nv-color-identity-slate));
     color: var(--nv-color-identity-on);
     box-shadow: inset 0 0 0 1px var(--nv-color-identity-ring);
-    font-size: 10px;
+    font-size: calc(var(--nv-font-size-xs) * 0.75);
     font-weight: var(--nv-font-weight-semibold);
     line-height: 1;
   }
