@@ -137,8 +137,9 @@ html[data-page="newtab"]:not([data-painted]) .page {
 }
 .layout-choice { display: grid; gap: var(--nv-space-4); }
 /* UX3G A4/B-11: on short viewports (1280x800 at 150 % is ~490px tall) the
-   card gives up the headline and part of the previews so its main action
-   stays on the first screen. Search and every option text stay. */
+   card gives up the headline and the option hints (both kept for assistive
+   technology), shortens the previews and puts the three options on one row,
+   so its main action stays on the first screen. */
 @media (max-height: 40rem) {
   .page:has(> .layout-choice:not([hidden])) {
     padding-top: var(--nv-space-4);
@@ -150,7 +151,13 @@ html[data-page="newtab"]:not([data-painted]) .page {
       clip-path: inset(50%); white-space: nowrap;
     }
     .layout-choice { gap: var(--nv-space-3); padding-block: var(--nv-space-4); }
-    .layout-option__preview { block-size: 3.5rem; inline-size: auto; }
+    .layout-options { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--nv-space-3); }
+    .layout-option__preview { block-size: 2.5rem; inline-size: auto; }
+    /* Each hint still describes its radio (aria-describedby), off screen. */
+    .layout-option__hint {
+      position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden;
+      clip-path: inset(50%); white-space: nowrap;
+    }
   }
 }
 

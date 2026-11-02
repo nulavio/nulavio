@@ -302,7 +302,8 @@
    failed action) drop [nv-neutral] and get their strong full-width row back.
    The band stays first in the toolbox, outside page content, never hidden. */
 @-moz-document url("chrome://browser/content/browser.xhtml") {
-  @media -moz-pref("sidebar.verticalTabs") {
+  /* Only in wide windows: in a narrow one the address bar keeps the width. */
+  @media -moz-pref("sidebar.verticalTabs") and (min-width: 64rem) {
     #navigator-toolbox:has(> #nulavio-band[nv-neutral]) {
       display: grid;
       grid-template-columns: auto minmax(0, 1fr);
