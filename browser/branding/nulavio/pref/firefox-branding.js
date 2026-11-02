@@ -107,3 +107,8 @@ pref("browser.newtabpage.activity-stream.default.sites", "");
 pref("sidebar.animation.duration-ms", 220);
 pref("sidebar.animation.collapse-duration-ms", 160);
 pref("sidebar.animation.easing", "cubic-bezier(0.2, 0, 0, 1)");
+
+// UX3F (QA A3): no empty bookmarks toolbar sliding in under a new tab and
+// pushing it down. The toolbar stays one shortcut away (Ctrl+Shift+B), and the
+// person's choice in the toolbar menu is kept.
+pref("browser.toolbars.bookmarks.visibility", "never");

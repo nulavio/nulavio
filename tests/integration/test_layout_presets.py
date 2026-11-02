@@ -1150,6 +1150,33 @@ class LayoutPresetsTest(unittest.TestCase):
         self.newtab()
         self.assertTrue(self.m.execute("return document.getElementById('layout-choice').hidden;"))
 
+    def test_first_window_choice_is_visual_and_above_the_fold(self):
+        # UX3F A3/A4 (the first window and the notice are covered by the QA M-2 test): no empty
+        # bookmarks bar, three visual options, a hidden live status, and the main action above
+        # the fold at 1280 x 800.
+        url = self.shell_url("newtab/newtab.html")
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome("return gBrowser.currentURI.spec;") == url, 15))
+        self.m.send("WebDriver:SetWindowRect", {"width": 1280, "height": 800})
+        self.assertTrue(self.m.chrome("return document.getElementById('PersonalToolbar').collapsed;"))
+        self.assertTrue(harness.wait_until(lambda: self.m.execute("return document.documentElement.dataset.ready==='true';"), 15))
+        self.assertTrue(harness.wait_until(lambda: self.newtab_ui_ready("lateral"), 10))
+        card = self.m.execute("""
+          const done = document.getElementById('layout-choice-done').getBoundingClientRect();
+          const options = [...document.querySelectorAll('#layout-choice .layout-option')];
+          const checked = options.find(o => o.querySelector('input:checked'));
+          const live = document.getElementById('layout-choice-current');
+          return {doneBottom: done.bottom, viewport: innerHeight, options: options.length,
+            previews: document.querySelectorAll('#layout-choice svg.layout-option__preview').length,
+            checkedEdge: getComputedStyle(checked).borderTopColor,
+            accent: getComputedStyle(document.documentElement).getPropertyValue('--nv-color-accent-default').trim(),
+            liveRole: live.getAttribute('aria-live'), liveVisible: live.getBoundingClientRect().width > 1,
+            title: document.title};
+        """)
+        self.assertLessEqual(card["doneBottom"], 600, card)
+        self.assertEqual((card["options"], card["previews"], card["liveRole"], card["liveVisible"]), (3, 3, "polite", False), card)
+        self.assertNotEqual(card["checkedEdge"], "rgba(0, 0, 0, 0)", card)
+        self.assertIn(card["title"], ("Nova aba", "New Tab"))
+
     def test_a_locked_choice_marker_never_shows_a_card_that_cannot_close(self):
         # QA B-3: with nulavio.layout.choicePending locked to true (autoconfig) the card never
         # went away and "Manter …" said the layout was managed by the administrator.

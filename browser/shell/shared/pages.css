@@ -111,6 +111,80 @@
 /* New tab: one-time first-run choices (layout, DNS), above the facts */
 .layout-choice, .dns-choice { max-width: 52rem; margin-inline: auto; width: 100%; }
 
+/* UX3F A4: the layout choice is a visual question. While it is open the hero
+   steps back (no symbol, a smaller headline), so the whole card and its main
+   action fit the first screen at 1280x800. */
+.page:has(> .layout-choice:not([hidden])) {
+  padding-top: var(--nv-space-7);
+  gap: var(--nv-space-6);
+  .hero { gap: var(--nv-space-3); }
+  .hero picture { display: none; }
+  .hero__headline { font-size: var(--nv-font-size-2xl); }
+}
+.layout-choice { display: grid; gap: var(--nv-space-4); }
+.layout-choice__title {
+  margin: 0;
+  font-size: var(--nv-type-section-size);
+  font-weight: var(--nv-type-section-weight);
+  line-height: var(--nv-type-section-lineHeight);
+}
+.layout-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(11rem, 100%), 1fr));
+  gap: var(--nv-space-4);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+.layout-option {
+  display: grid;
+  align-content: start;
+  gap: var(--nv-space-2);
+  padding: var(--nv-space-4);
+  border: 1px solid var(--nv-color-border-subtle);
+  border-radius: var(--nv-radius-md);
+  background: var(--nv-color-bg-surface);
+  cursor: pointer;
+}
+.layout-option:hover { border-color: var(--nv-color-border-control); }
+.layout-option:has(input:checked) {
+  border-color: var(--nv-color-accent-default);
+  box-shadow: inset 0 0 0 1px var(--nv-color-accent-default);
+  background: var(--nv-color-accent-tint);
+}
+.layout-option:has(input:disabled) { cursor: default; }
+.layout-option__preview {
+  inline-size: 100%;
+  max-inline-size: 160px;
+  block-size: auto;
+  justify-self: center;
+  margin-block-end: var(--nv-space-2);
+}
+.layout-option__name {
+  display: flex;
+  align-items: center;
+  gap: var(--nv-space-3);
+  font-size: var(--nv-type-body-size);
+  font-weight: var(--nv-font-weight-semibold);
+}
+.layout-option__name input { margin: 0; width: 1.125rem; height: 1.125rem; flex: none; accent-color: var(--nv-color-accent-default); }
+.layout-option__hint { padding-inline-start: calc(1.125rem + var(--nv-space-3)); }
+/* Miniatures drawn from tokens, so they follow the theme */
+.lp-frame { fill: var(--nv-color-chrome-toolbox); stroke: var(--nv-color-border-subtle); }
+.lp-content { fill: var(--nv-color-bg-surface); stroke: var(--nv-color-border-subtle); }
+.lp-item { fill: var(--nv-color-border-subtle); }
+.lp-item--on { fill: var(--nv-color-chrome-tabSelected); stroke: var(--nv-color-border-control); stroke-width: 0.75; }
+.lp-mark { fill: var(--nv-color-accent-default); }
+@media (prefers-reduced-motion: no-preference) {
+  .layout-option { transition: border-color var(--nv-motion-duration-fast) var(--nv-motion-easing-standard), background-color var(--nv-motion-duration-fast) var(--nv-motion-easing-standard); }
+}
+@media (forced-colors: active) {
+  .layout-option:has(input:checked) { border: 2px solid Highlight; }
+  .lp-frame, .lp-content { fill: Canvas; stroke: CanvasText; }
+  .lp-item, .lp-item--on, .lp-mark { fill: CanvasText; }
+}
+
 /* Assistant side panel: narrow, plain-text answers */
 body.assistant { padding: var(--nv-space-4); }
 .segmented { display: flex; gap: var(--nv-space-3); border: 0; padding: 0; margin: 0; }
