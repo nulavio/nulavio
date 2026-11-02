@@ -192,10 +192,11 @@
       }
     }
 
-    /* UX3G M5/N7: menus (context, toolbar, tab) set their own system Menu
-       colours on the element, so the theme has to be set there too. The
-       autoscroll popup keeps its own (an id selector wins). */
-    :root:not([lwtheme]) :is(menupopup, panel):where(:not([type="arrow"])) {
+    /* UX3G M5/N7: menus (context, toolbar, tab) and panels (the main menu)
+       get system colours (Menu, Field) on or above the element, so the theme
+       is set on the element too. The autoscroll popup keeps its own (an id
+       selector wins). */
+    :root:not([lwtheme]) :is(menupopup, panel) {
       --panel-background-color: var(--nv-color-bg-raised);
       --panel-text-color: var(--nv-color-text-primary);
       --panel-border-color: var(--nv-color-border-subtle);
