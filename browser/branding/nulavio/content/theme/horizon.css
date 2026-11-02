@@ -82,6 +82,23 @@
     background-color: var(--nv-color-band-bg);
   }
 
+  /* UX3G M7 and polish: on the 4px grid. Tabs sit 8px from the strip edges
+     (the engine's Nova value is 9px), and pinned tiles are 36px, 8px apart. */
+  @media -moz-pref("sidebar.verticalTabs") {
+    :root:not([uidensity="touch"], [uidensity="compact"]) {
+      --tab-margin-inline-inner: var(--nv-space-3);
+    }
+  }
+  :root {
+    --tab-background-width-pinned-expanded: var(--nv-size-tab-pinned);
+    --tab-margin-inline-pinned-expanded: var(--nv-space-2);
+  }
+  #tabbrowser-tabs[orient="vertical"][expanded] > #pinned-tabs-container[orient="vertical"]:not(:empty) {
+    margin-block-end: var(--nv-space-3);
+    padding-block-end: var(--nv-space-3);
+    border-block-end: 1px solid var(--nv-color-border-subtle);
+  }
+
   #tabbrowser-tabs[orient="vertical"] {
     --tab-padding-block-start: 1px;
     --tab-padding-block-end: 1px;
@@ -187,8 +204,16 @@
     :root:not([lwtheme]) #sidebar-button:is([checked], [open]) {
       --toolbarbutton-icon-fill: var(--nv-color-accent-default);
 
+      /* UX3G: the open state keeps the outline glyph (the only filled icon on the
+         toolbar was the open sidebar); colour and tint carry the state. Hover
+         still previews the action. Left-to-right, sidebar on the left only. */
+      &[expanded]:not(:hover, [sidebar-positionend]):-moz-locale-dir(ltr) {
+        list-style-image: url("chrome://browser/skin/sidebar-collapsed.svg");
+      }
+
+      /* UX3G: a 12% accent tint, so the state reads without a solid block. */
       &:not(:hover:active) > :is(.toolbarbutton-icon, .toolbarbutton-badge-stack) {
-        background-color: var(--nv-color-accent-tint);
+        background-color: color-mix(in srgb, var(--nv-color-accent-default) 12%, transparent);
       }
     }
 

@@ -941,7 +941,7 @@
   "bandProtected": {"message": "⌑ Protected · unlocked"},
   "bandUnprotected": {"message": "◇ Unprotected"},
   "bandProtectionUnknown": {"message": "? Protection unknown"},
-  "bandSystemPage": {"message": "Nulavio · $SURFACE$ · system page", "placeholders": {"surface": {"content": "$1"}}},
+  "bandSystemPage": {"message": "Nulavio · $SURFACE$", "placeholders": {"surface": {"content": "$1"}}},
   "bandSurfaceUnlock": {"message": "Unlock"},
   "bandSurfacePhone": {"message": "Phone unlock"},
   "bandSurfaceGuard": {"message": "Review changes"},

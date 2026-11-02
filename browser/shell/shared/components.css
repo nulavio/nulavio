@@ -7,13 +7,14 @@
   padding: var(--nv-space-6);
   box-shadow: var(--nv-elevation-1);
 }
+/* UX3G N9: one title convention in sentence case (no small caps), a step
+   below the first-run cards' section title. */
 .card__title {
-  margin: 0 0 var(--nv-space-5);
-  font-size: var(--nv-type-caption-size);
+  margin: 0 0 var(--nv-space-4);
+  font-size: var(--nv-type-body-size);
   font-weight: var(--nv-font-weight-semibold);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--nv-color-text-muted);
+  line-height: var(--nv-type-section-lineHeight);
+  color: var(--nv-color-text-primary);
 }
 
 kbd {
