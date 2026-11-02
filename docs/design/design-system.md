@@ -778,3 +778,66 @@ Recorded, not changed here:
 - **B-4, B-5, B-6** (product decisions): a profile returns to Lateral when an admin lock written after the first run is removed; adoption is evaluated by two callers (harmless once the marker is written); "Abas no topo" keeps the collapsed launcher visible.
 - **B-10, B-12** (native sidebar panel and its "Manage … settings" link), **B-13** (address-bar placeholder on about:home, which the first window no longer shows on a fresh start) and **B-14** (`platform.ini` carries the app BuildID in a repack) are outside the Shell.
 - Whether "Lateral" needs another English name is open.
+
+## UX3F: visual review against Zen, and polish (2026-11-02)
+
+Input: the visual QA of build 20261102120448 (Nulavio 159 next to Zen 1.24b), with 18 items (5 high, 8 medium, 5 low). Zen was a reference for patterns only: no Zen asset, icon, CSS or brand was copied or reused.
+
+| QA item | State | What changed |
+|---|---|---|
+| A1 identity band | Done | 24 px neutral row on the window surface, subtle bottom edge; outlined identity chip (control edge, medium weight) with the profile colour as a disc; "Perfil padrão" when no profile is registered. Private, temporary, agent and raw rows keep the filled chip and every fill, pattern and seal |
+| A2 internal pages | Done, two parts open | `shared/in-content.css` (generated, agent sheet like `sidebar-focus.css`) re-values Nova's violet and tinted neutrals with mint and navy on exact about: URLs; Nulavio artwork replaces the Kit fox (chrome overrides); no "Firefox Suggest" heading (`browser.urlbar.groupLabels.enabled`), Labs pane hidden by default. Open: the Fluent terms themselves, the grey `moz-promo` surface (shadow DOM) |
+| A3 one new tab | Mostly done | The session's first window shows the Shell's new tab (so the choice appears at first use), no "Your new tab has changed" notice over it, no bookmarks bar, color-scheme + inline canvas colour; Ctrl+T paints the page at ~137 ms. Open: serving it as an internal about: page. Until then the address bar keeps the "Extensão (Nulavio Shell)" chip, and the engine's initial about:blank frame (~60 ms after Ctrl+T) is white with "Não seguro"; later windows (Ctrl+N) and the Home button still open about:home |
+| A4 layout choice | Done | Three option cards with 160 x 96 token-drawn miniatures, plain-language lines, accent edge + tint when selected, hidden live status, compact hero; CTA ends <= 600 px at 1280 x 800 |
+| A5 vertical tabs | Done | 40 px step; 3 x 20 route mark on the inner edge (outside the tile when collapsed); 224 px Lateral on adoption; label fade; patch 0008 for the curve and collapse time |
+| M1 sidebar button | Done | Accent icon on accent tint |
+| M2 address bar | Partly | Accent ring + elevation 1 when focused; radius 10. The rest edge stays at the control colour (3.5:1): the subtle edge suggested by the QA fails WCAG 1.4.11, which `test_horizon` asserts |
+| M3 radius scale | Partly | 6 / 10 / 14; address bar and panels at 10. Open: the content area still gains a radius only while the sidebar animates (engine clip) |
+| M4 sidebar motion | Done | `cubic-bezier(0.2, 0, 0, 1)`, 220 ms expand / 160 ms collapse; reduced motion: none |
+| M5 menus and panels | Done (chrome side) | Raised surface, primary text, subtle edges, shared hover. Native GTK menus on Linux may still draw their own colours; radii and shadows need a compositor to check |
+| M6 dark surfaces | Done | Toolbox #060C14, toolbar #0F1C2A, field #15293A, selected tab #1E4252 |
+| M7 pinned tab | Done | 40 px tiles from the start edge |
+| M8 placeholder | Done | `text.muted`, >= 4.5:1 |
+| B1 titles | Partly | English title "New Tab". The band still names system pages ("Nulavio · Nova aba · página do sistema"): it is the trusted-surface label and stays |
+| B2 sidebar logo | Done | Monochrome route-mark glyph in the chrome icon colours |
+| B3 result pills | Open | Nova draws the pill without a border; a rule on `border-color` had no effect and was removed |
+| B4 vertical mark motion | Done | `nulavio-route-in-v` (scaleY) |
+| B5 main menu icons | Done | The engine's own 16 px glyphs, context-fill |
+
+**Kept (QA section 7).** The selected result row (tint + 2 px ring, 11:1), toolbar icons (>= 8.9:1), the 2 px focus ring, the tab hover preview and the explicit security UI are unchanged.
+
+### Polish
+
+- **Icons.** One family: the engine's own 16 px glyphs, drawn with `-moz-context-properties` in the chrome icon colour, now also in the main menu; the assistant tool in the sidebar is a monochrome route mark instead of the brand mint; promo cards use Nulavio artwork.
+- **Colour.** Accent, focus, links and canvas are the same teal and navy in the window, Settings, the add-ons manager and about:home; the dark theme has four distinct surface steps.
+- **Spacing.** A 4 px rhythm: 24 px band, 40 px tab step, 40 px pinned tiles, card padding 12–24.
+- **Type.** The band uses the 12 px step at medium weight; the choice card uses the section title (20/600) in sentence case instead of small caps.
+- **Corners and shadows.** Three radii (6 / 10 / 14); only the focused address bar gains elevation 1.
+- **Motion.** Motion tokens only: 120 ms hover transitions, label fades, 220/160 ms sidebar on the standard curve, scaleY route mark; all off under reduced motion. The security band and seals never animate (unchanged).
+
+### Mechanisms and security notes
+
+- **No new permission, CSP unchanged.** The manifest only changes the sidebar icon path. The new tab's inline `<style>` is allowed by the extension CSP, which restricts scripts.
+- **The "new tab changed" notice.** At startup the Shell records, for its own id only, the confirmation that the notice's "Keep changes" button writes (`ExtensionSettingsStore`, type `newTabNotification`); the notice re-checks it before opening. Other add-ons that take over the new tab still get it. A first draft used the distribution-add-on pref `extensions.installedDistroAddon.shell@nulavio.net`; review found that `XPIInstall.installDistributionAddon` also reads that pref's effective (default) value and would skip a distribution XPI with that id, and that it silences the home-page and hidden-tabs notices too, so it was replaced by this narrower record before release.
+- **Start page.** Only the session's first window, and only an untouched start: one tab, no history, the home-page pref at its default, the Shell page still the new tab, not private. It loads with the Shell's own principal (not the system principal). Later windows, session restore, links from other apps and a chosen home page are untouched; the Home button still opens about:home. Applying it to every new window raced the native sidebar (a collapse right after switching to Lateral was undone in `test_layout_presets`), so it was narrowed to the first window.
+- **Security indicators.** No identity or security code was changed. The new tab is still identified as the Shell extension page; the transient "Não seguro" on the engine's initial about:blank is unchanged. No web page or third-party extension page loses or changes an indicator.
+- **If the person restores the engine's new tab** (another new-tab page or add-on), the first-run card is no longer reachable from Ctrl+T; Settings → Layout still offers the same three presets. Left to the UX3E round (functional QA M-2).
+- **`in-content.css`** uses literal values and no `--nv-*` names, scoped by `@-moz-document` to exact about: prefixes, so web pages never see it (no fingerprinting surface); it steps aside for forced colours, a contrast preference, installed themes and `nulavio.horizon.enabled=false`.
+- **Patch 0008** is the minimum for the motion fix: two prefs read by `browser-sidebar.js` (curve, validated with a fallback, and collapse duration). Reduced motion keeps the engine's no-animation path.
+- **Not touched:** Vault, AI, Guard and downloads beyond colours. The UX3E functional QA findings (A-1 "Aplicando layout…" hang, M-1 policy) are left to the UX3E round.
+
+Captures (outside the repository, 1280 x 800, light and dark, Xvfb without a compositor; Marionette's remote-control stripes removed only for the capture): `before-*` from 8880bdd (BuildID 20261102120448) and `after-*` from the UX3F build (BuildID 20261102153026, commit 02c691f).
+
+**Verification** on a real incremental Track B 159.0 build (BuildID 20261102153026), installed as an application copy (tarball + `make_distribution.py` + `make_tools.py`), each suite run alone:
+
+| Check | Result |
+|---|---|
+| Integration | 246 run, 13 skips, 1 failure: `test_ai_bridge` 13, which fails identically on the 8880bdd build in this run's environment (the test looks for the disposable workspace under the test process's TMPDIR, set to `/var/tmp` here, while the bridge, started with only PATH and HOME, creates it under `/tmp`). No new failure |
+| `test_layout_presets` | 15/15 in pt-BR and 15/15 in en-US (14 UX3E cases + the UX3F first-window case) |
+| Unit | 607 (3 skips) |
+| Contrast pairs | 266 |
+| Generated tokens | current (5 outputs) |
+| ruff | clean |
+| Security scans | all six |
+
+A first integration attempt used a bare tarball without the distribution and tools; its AI failures were environmental and are not counted. A second, on the intermediate build 1300efa, found intended-value test updates and one real regression (start-page replacement in every new window), fixed in 02c691f.
