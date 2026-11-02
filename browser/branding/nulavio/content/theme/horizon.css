@@ -179,6 +179,15 @@
       --panel-separator-color: var(--nv-color-border-separator);
     }
 
+    /* UX3G B3: "Switch to Tab" and the other action chips in address-bar
+       results are a soft tint, not a 1px currentColor outline on every row.
+       Container chips keep their colour edge; forced colours keep the border. */
+    :root:not([lwtheme]) .urlbarView-row:is([type="switchtab"], [type="remotetab"], [type="clipboard"])
+      .urlbarView-action:not(.urlbarView-userContext, .urlbarView-tabGroup) {
+      border-color: transparent;
+      background-color: color-mix(in srgb, currentColor calc(var(--nv-state-hoverOverlay) * 100%), transparent);
+    }
+
     /* UX3G B2: the profiles button uses the monochrome Nulavio glyph like its
        neighbours; the accent only marks it while its panel is open. */
     :root:not([lwtheme]) #shell_nulavio_net-browser-action[open] {
