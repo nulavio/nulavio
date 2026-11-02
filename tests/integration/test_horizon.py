@@ -234,11 +234,34 @@ class HorizonTest(unittest.TestCase):
             self.set_pref("ui.systemUsesDarkTheme", 0)
 
     def test_04_route_mark_only_on_the_selected_tab(self):
+        # D-UX2: a fresh Nulavio profile starts in Lateral (vertical tabs, 2px x 16px mark);
+        # switching to horizontal tabs yields the 16px x 2px mark, still only on the selected tab.
+        self.assertEqual(self.m.chrome("return document.getElementById('tabbrowser-tabs').getAttribute('orient');"), "vertical")
         s = self.state()
         self.assertEqual(s["mark"]["content"], '""')
-        self.assertEqual((s["mark"]["w"], s["mark"]["h"]), ("16px", "2px"))
+        self.assertEqual((s["mark"]["w"], s["mark"]["h"]), ("2px", "16px"))
         self.assertEqual(rgb(s["mark"]["color"]), rgb(s["accent"]))
         self.assertEqual(s["otherMark"], "none")
+        self.set_pref("sidebar.verticalTabs", False)
+        try:
+            horizontal = harness.wait_until(
+                lambda: (
+                    self.m.chrome("return document.getElementById('tabbrowser-tabs').getAttribute('orient');") == "horizontal"
+                ),
+                timeout=10,
+            )
+            self.assertTrue(horizontal, "horizontal tabs did not engage")
+            s_horiz = self.state()
+            self.assertEqual(s_horiz["mark"]["content"], '""')
+            self.assertEqual((s_horiz["mark"]["w"], s_horiz["mark"]["h"]), ("16px", "2px"))
+            self.assertEqual(rgb(s_horiz["mark"]["color"]), rgb(s_horiz["accent"]))
+            self.assertEqual(s_horiz["otherMark"], "none")
+        finally:
+            self.set_pref("sidebar.verticalTabs", True)
+            harness.wait_until(
+                lambda: self.m.chrome("return document.getElementById('tabbrowser-tabs').getAttribute('orient');") == "vertical",
+                timeout=10,
+            )
 
     def test_05_densities_keep_their_sizes(self):
         # Computed custom properties come back with var() already substituted.
@@ -347,8 +370,17 @@ class HorizonTest(unittest.TestCase):
             self.clear_pref("ui.prefersReducedMotion")
 
     def test_13_vertical_tabs_get_a_vertical_mark(self):
-        self.set_pref("sidebar.verticalTabs", True)
         try:
+            self.set_pref("sidebar.verticalTabs", False)
+            horizontal = harness.wait_until(
+                lambda: (
+                    self.m.chrome("return document.getElementById('tabbrowser-tabs').getAttribute('orient');") == "horizontal"
+                ),
+                timeout=10,
+            )
+            self.assertTrue(horizontal, "horizontal tabs did not engage")
+            self.assertEqual((self.state()["mark"]["w"], self.state()["mark"]["h"]), ("16px", "2px"))
+            self.set_pref("sidebar.verticalTabs", True)
             vertical = harness.wait_until(
                 lambda: self.m.chrome("return document.getElementById('tabbrowser-tabs').getAttribute('orient');") == "vertical",
                 timeout=10,
@@ -356,8 +388,13 @@ class HorizonTest(unittest.TestCase):
             self.assertTrue(vertical, "vertical tabs did not engage")
             s = self.state()
             self.assertEqual((s["mark"]["w"], s["mark"]["h"]), ("2px", "16px"))
+            self.assertEqual(rgb(s["mark"]["color"]), rgb(s["accent"]))
         finally:
-            self.set_pref("sidebar.verticalTabs", False)
+            self.set_pref("sidebar.verticalTabs", True)
+            harness.wait_until(
+                lambda: self.m.chrome("return document.getElementById('tabbrowser-tabs').getAttribute('orient');") == "vertical",
+                timeout=10,
+            )
 
     def results_row(self) -> dict:
         """Open the address-bar results for the fixture server and select the second row (keyboard selection)."""

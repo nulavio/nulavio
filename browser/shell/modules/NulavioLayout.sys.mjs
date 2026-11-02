@@ -3,17 +3,55 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 /* Gecko159 owns tab orientation, hover, sizing and session persistence.
-   No startup defaults/migration and no shadow "selected preset" preference.
-   The only writable profile prefs are the two literal names in apply(). */
+   D-UX2 adopts Lateral once on genuinely brand-new profiles while keeping
+   pre-existing profiles untouched; no shadow "selected preset" preference. */
+
+export const PREF_ADOPTION_VERSION = "nulavio.layout.adoptionVersion";
+export const PREF_CHOICE_PENDING = "nulavio.layout.choicePending";
 
 const PRESETS = Object.freeze({ lateral: "always-show", top: "hide-on-close", focus: "expand-on-hover" });
-const OBSERVED_PREFS = ["sidebar.verticalTabs", "sidebar.visibility", "sidebar.revamp"];
+const SIDEBAR_PREFS = ["sidebar.verticalTabs", "sidebar.visibility", "sidebar.revamp"];
+const OBSERVED_PREFS = [...SIDEBAR_PREFS, PREF_CHOICE_PENDING];
+// Note: SidebarManager.init() automatically writes sidebar.visibility="hide-on-close"
+// when verticalTabs is false, so "hide-on-close" in memory alone is not a prior-session signal.
+const EXISTING_PROFILE_PREFS = [
+  "sidebar.verticalTabs",
+  "sidebar.backupState",
+  "sidebar.new-sidebar.has-used",
+];
+// Files written only after a browser session has already run (never before profile lock on first boot).
+const EXISTING_PROFILE_FILES = ["nulavio-guard.json", "xulstore.json", "sessionstore.jsonlz4"];
+
+const lazy = {};
+ChromeUtils.defineESModuleGetters(lazy, {
+  CustomizableUI: "moz-src:///browser/components/customizableui/CustomizableUI.sys.mjs",
+  NetUtil: "resource://gre/modules/NetUtil.sys.mjs",
+  PrivateBrowsingUtils: "resource://gre/modules/PrivateBrowsingUtils.sys.mjs",
+});
+
 let applying = Promise.resolve();
+let pendingInitialAdoption = null;
 
 function fail(code) {
   const error = new Error(code);
   error.code = code;
   throw error;
+}
+
+function resolveTarget(target) {
+  return typeof target === "function" ? target() : target;
+}
+
+function isWindowObject(target) {
+  return Boolean(target && typeof target.closed === "boolean" && target.document);
+}
+
+function windowOf(target) {
+  const resolved = resolveTarget(target);
+  if (!resolved) return null;
+  if (isWindowObject(resolved)) return resolved;
+  const global = resolved.documentGlobal ?? resolved.ownerGlobal;
+  return global?.browsingContext?.topChromeWindow ?? null;
 }
 
 function controller(win) {
@@ -27,20 +65,326 @@ function controller(win) {
 async function ready(win) {
   const sidebar = controller(win);
   await sidebar.promiseInitialized;
+  if (pendingInitialAdoption) {
+    await pendingInitialAdoption;
+  }
   controller(win);
   await sidebar.waitUntilStable();
+  controller(win);
   return sidebar;
 }
 
+function setAdoptionMarkers(choicePending) {
+  if (!Services.prefs.prefIsLocked(PREF_ADOPTION_VERSION)) {
+    Services.prefs.setIntPref(PREF_ADOPTION_VERSION, 1);
+  }
+  if (!Services.prefs.prefIsLocked(PREF_CHOICE_PENDING)) {
+    Services.prefs.setBoolPref(PREF_CHOICE_PENDING, choicePending);
+  }
+}
+
+function startupCutoffMs() {
+  try {
+    const info = Services.startup?.getStartupInfo?.();
+    const stamp = info?.afterProfileLocked ?? info?.process;
+    const ms = stamp?.getTime?.();
+    return typeof ms === "number" && Number.isFinite(ms) ? ms : null;
+  } catch {
+    return null;
+  }
+}
+
+function readSmallUtf8File(file) {
+  if (!file.exists()) {
+    return null;
+  }
+  const stream = Cc["@mozilla.org/network/file-input-stream;1"].createInstance(Ci.nsIFileInputStream);
+  stream.init(file, -1, 0, 0);
+  try {
+    const avail = stream.available();
+    if (!avail) {
+      return null;
+    }
+    return lazy.NetUtil.readInputStreamToString(stream, avail, { charset: "UTF-8" });
+  } finally {
+    stream.close();
+  }
+}
+
+function fileExistedBeforeStartup(file, cutoff) {
+  try {
+    if (!file.exists()) {
+      return false;
+    }
+    return cutoff === null || file.lastModifiedTime < cutoff;
+  } catch {
+    return false;
+  }
+}
+
+function timesFileHasPriorUse(dir, cutoff) {
+  try {
+    const timesFile = dir.clone();
+    timesFile.append("times.json");
+    const text = readSmallUtf8File(timesFile);
+    if (!text) {
+      return false;
+    }
+    const times = JSON.parse(text);
+    if (typeof times?.firstUse === "number" && times.firstUse > 0) {
+      return cutoff === null || times.firstUse < cutoff;
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+function prefFilesHavePriorState(dir, cutoff) {
+  for (const name of ["prefs.js", "user.js"]) {
+    try {
+      const file = dir.clone();
+      file.append(name);
+      if (!fileExistedBeforeStartup(file, cutoff)) {
+        continue;
+      }
+      const text = readSmallUtf8File(file);
+      if (text && /^\s*user_pref\(\s*"(?:browser\.migration\.version|sidebar\.)/m.test(text)) {
+        return true;
+      }
+    } catch {
+      // Ignore unreadable pref files and continue checking other markers.
+    }
+  }
+  return false;
+}
+
+function hasExistingProfileState() {
+  if (Services.prefs.getIntPref("nulavio.privacy.seeded", 0) >= 1) {
+    return true;
+  }
+  if (EXISTING_PROFILE_PREFS.some(pref => Services.prefs.prefHasUserValue(pref))) {
+    return true;
+  }
+  if (Services.prefs.prefHasUserValue("sidebar.visibility")
+      && Services.prefs.getStringPref("sidebar.visibility", "") !== PRESETS.top) {
+    return true;
+  }
+  let dir = null;
+  try {
+    dir = Services.dirsvc.get("ProfD", Ci.nsIFile);
+  } catch {
+    // No profile directory bound: fall back to the migration preference.
+    return Services.prefs.getIntPref("browser.migration.version", -1) > 0;
+  }
+  const cutoff = startupCutoffMs();
+  for (const name of EXISTING_PROFILE_FILES) {
+    const file = dir.clone();
+    file.append(name);
+    if (fileExistedBeforeStartup(file, cutoff)) {
+      return true;
+    }
+  }
+  if (timesFileHasPriorUse(dir, cutoff)) {
+    return true;
+  }
+  // BrowserGlue._beforeUIStartup sets browser.migration.version in memory and
+  // XPIProvider may flush prefs.js during this startup; only pref files written
+  // before this process locked the profile reflect prior state.
+  return prefFilesHavePriorState(dir, cutoff);
+}
+
+function hasRegisteredTabstrips(cui) {
+  try {
+    for (const win of cui.windows) {
+      if (win.closed) {
+        continue;
+      }
+      const horizNode = win.document.getElementById(cui.AREA_TABSTRIP);
+      const vertNode = win.document.getElementById(cui.AREA_VERTICAL_TABSTRIP);
+      const horiz = horizNode && cui.getCustomizationTarget(horizNode);
+      const vert = vertNode && cui.getCustomizationTarget(vertNode);
+      if (horiz?.classList?.contains("customization-target")
+          && vert?.classList?.contains("customization-target")) {
+        return true;
+      }
+    }
+  } catch {
+    // Fall back to listener registration while CustomizableUI finishes starting.
+  }
+  return false;
+}
+
+function expandAdoptedWindows() {
+  const tasks = [];
+  for (const w of Services.wm.getEnumerator("navigator:browser")) {
+    if (w.closed || !w.toolbar?.visible || w.SidebarController?.uninitializing) {
+      continue;
+    }
+    tasks.push(
+      Promise.resolve(w.SidebarController?.promiseInitialized).then(async () => {
+        if (!w.closed && w.toolbar?.visible && !w.SidebarController?.uninitializing) {
+          await w.SidebarController.waitUntilStable();
+          if (!w.closed && w.toolbar?.visible && !w.SidebarController?.uninitializing) {
+            w.SidebarController._state?.updateVisibility(true, true);
+            await w.SidebarController.waitUntilStable();
+          }
+        }
+      }).catch(() => {})
+    );
+  }
+  return Promise.all(tasks);
+}
+
+function writeAdoptedLateralPrefs() {
+  if (!Services.prefs.getBoolPref("sidebar.revamp", true)
+      || SIDEBAR_PREFS.some(pref => Services.prefs.prefIsLocked(pref))
+      || Services.prefs.prefHasUserValue("sidebar.verticalTabs")) {
+    return false;
+  }
+  Services.prefs.setBoolPref("sidebar.verticalTabs", true);
+  Services.prefs.setStringPref("sidebar.visibility", PRESETS.lateral);
+  return true;
+}
+
+// Write Lateral; when that is no longer possible (a lock, the user's own choice, the native
+// sidebar off), the first-run card must not claim the profile started in Lateral.
+function commitAdoptedLateral() {
+  const written = writeAdoptedLateralPrefs();
+  if (!written && !Services.prefs.prefIsLocked(PREF_CHOICE_PENDING)) {
+    Services.prefs.setBoolPref(PREF_CHOICE_PENDING, false);
+  }
+  return written;
+}
+
+function scheduleInitialLateralCommit() {
+  let cui = null;
+  try {
+    cui = lazy.CustomizableUI;
+  } catch {
+    cui = null;
+  }
+  // CustomizableUI.initialize() runs before extension startup with verticalTabs=false
+  // (gCurrentVerticalTabs=false). Setting sidebar.verticalTabs=true before the first
+  // window registers TabsToolbar + vertical-tabs makes updateTabStripOrientation()
+  // bail out on !tabstripAreasReady, leaving gCurrentVerticalTabs=false and breaking
+  // the first switch back to horizontal tabs. Waiting for both areas avoids that.
+  if (!cui?.addListener || hasRegisteredTabstrips(cui)) {
+    commitAdoptedLateral();
+    const done = expandAdoptedWindows().finally(() => {
+      if (pendingInitialAdoption === done) {
+        pendingInitialAdoption = null;
+      }
+    });
+    pendingInitialAdoption = done;
+    return;
+  }
+  let settled = false;
+  let resolveDone;
+  const done = new Promise(resolve => {
+    resolveDone = resolve;
+  });
+  pendingInitialAdoption = done;
+  const detachHooks = () => {
+    cui.removeListener(areaListener);
+    for (const [obs, topic] of [
+      [delayedStartupObserver, "browser-delayed-startup-finished"],
+      [shutdownObserver, "quit-application-granted"],
+    ]) {
+      try {
+        Services.obs?.removeObserver?.(obs, topic);
+      } catch {
+        // Observer may already be removed.
+      }
+    }
+  };
+  const finish = async () => {
+    if (settled) {
+      return;
+    }
+    settled = true;
+    detachHooks();
+    try {
+      if (commitAdoptedLateral()) {
+        await expandAdoptedWindows();
+      }
+    } finally {
+      if (pendingInitialAdoption === done) {
+        pendingInitialAdoption = null;
+      }
+      resolveDone();
+    }
+  };
+  const maybeFinish = () => {
+    if (!settled && hasRegisteredTabstrips(cui)) {
+      Promise.resolve().then(finish);
+    }
+  };
+  const areaListener = {
+    onAreaNodeRegistered: maybeFinish,
+  };
+  const delayedStartupObserver = {
+    observe: maybeFinish,
+  };
+  const shutdownObserver = {
+    observe() {
+      if (!settled) {
+        settled = true;
+        detachHooks();
+        commitAdoptedLateral();
+        if (pendingInitialAdoption === done) {
+          pendingInitialAdoption = null;
+        }
+        resolveDone();
+      }
+    },
+  };
+  cui.addListener(areaListener);
+  Services.obs?.addObserver?.(delayedStartupObserver, "browser-delayed-startup-finished");
+  Services.obs?.addObserver?.(shutdownObserver, "quit-application-granted");
+}
+
 export const NulavioLayout = {
-  async state(win) {
+  /**
+   * Adopt Lateral on genuinely brand-new profiles (D-UX2) once on first run,
+   * while keeping every pre-existing profile's layout intact.
+   */
+  adoptInitialLayout() {
+    if (Services.prefs.getIntPref(PREF_ADOPTION_VERSION, 0) >= 1) {
+      return "already";
+    }
+    if (hasExistingProfileState()) {
+      setAdoptionMarkers(false);
+      return "existing";
+    }
+    if (!Services.prefs.getBoolPref("sidebar.revamp", true)
+        || SIDEBAR_PREFS.some(pref => Services.prefs.prefIsLocked(pref))) {
+      setAdoptionMarkers(false);
+      return "unavailable";
+    }
+    const nonInteractive = Boolean(Services.prefs.getStringPref("nulavio.ai.workspace", ""))
+      || Services.prefs.getBoolPref("nulavio.profile.temporary", false);
+    setAdoptionMarkers(!nonInteractive);
+    scheduleInitialLateralCommit();
+    return "adopted";
+  },
+
+  dismissChoice() {
+    if (Services.prefs.prefIsLocked(PREF_CHOICE_PENDING)) {
+      fail("layout-locked");
+    }
+    Services.prefs.setBoolPref(PREF_CHOICE_PENDING, false);
+  },
+
+  async state(target) {
+    const win = windowOf(target);
     const sidebar = await ready(win);
     const vertical = Services.prefs.getBoolPref("sidebar.verticalTabs");
     const visibility = Services.prefs.getStringPref("sidebar.visibility");
     const ui = sidebar.getUIState();
     const hover = win.document.documentElement.hasAttribute("sidebar-expand-on-hover");
     const available = Services.prefs.getBoolPref("sidebar.revamp") && !!ui;
-    const locked = OBSERVED_PREFS.some(pref => Services.prefs.prefIsLocked(pref));
+    const locked = SIDEBAR_PREFS.some(pref => Services.prefs.prefIsLocked(pref));
     let preset = "custom";
     // Use both the native configuration and actual window state. Temporary
     // hover expansion is Foco; explicitly pinning it open disables hover.
@@ -53,45 +397,55 @@ export const NulavioLayout = {
         preset = "focus";
       }
     }
-    return { preset, available, locked };
+    const nonInteractive = lazy.PrivateBrowsingUtils.isWindowPrivate(win)
+      || Boolean(Services.prefs.getStringPref("nulavio.ai.workspace", ""))
+      || Services.prefs.getBoolPref("nulavio.profile.temporary", false);
+    const choicePending = available && !locked && !nonInteractive
+      && Services.prefs.getBoolPref(PREF_CHOICE_PENDING, false);
+    return { preset, available, locked, choicePending };
   },
 
-  apply(win, preset) {
-    // Serialize explicit choices across Settings tabs/windows, including the
-    // async native hover measurement. A rejection must not poison the queue.
+  apply(target, preset) {
+    // Serialize explicit choices across Settings/Newtab tabs and windows,
+    // including the async native hover measurement. A rejection must not poison the queue.
     const pending = applying.then(async () => {
       if (typeof preset !== "string" || !Object.hasOwn(PRESETS, preset)) {
         fail("layout-invalid");
       }
-      await ready(win);
+      await ready(windowOf(target));
       if (!Services.prefs.getBoolPref("sidebar.revamp")) {
         fail("layout-unavailable");
       }
-      if (OBSERVED_PREFS.some(pref => Services.prefs.prefIsLocked(pref))) {
+      if (SIDEBAR_PREFS.some(pref => Services.prefs.prefIsLocked(pref))) {
         fail("layout-locked");
       }
       const windows = [...Services.wm.getEnumerator("navigator:browser")]
         .filter(w => !w.closed && w.toolbar.visible && !w.SidebarController?.uninitializing);
       await Promise.all(windows.map(ready));
-      controller(win);
+      controller(windowOf(target));
       if (!Services.prefs.getBoolPref("sidebar.revamp")) fail("layout-unavailable");
-      if (OBSERVED_PREFS.some(pref => Services.prefs.prefIsLocked(pref))) fail("layout-locked");
+      if (SIDEBAR_PREFS.some(pref => Services.prefs.prefIsLocked(pref))) fail("layout-locked");
       // Orientation first: SidebarManager normalizes visibility synchronously.
       // The final explicit visibility then wins, including re-selecting a
       // preset whose prefs already match but whose window was collapsed.
       try {
         Services.prefs.setBoolPref("sidebar.verticalTabs", preset !== "top");
         Services.prefs.setStringPref("sidebar.visibility", PRESETS[preset]);
+        if (!Services.prefs.prefIsLocked(PREF_CHOICE_PENDING)) {
+          Services.prefs.setBoolPref(PREF_CHOICE_PENDING, false);
+        }
         await Promise.all(windows.map(async w => {
           const sidebar = controller(w);
           await sidebar.waitUntilStable();
+          controller(w);
           // updateVisibility affects only launcher expansion/visibility, keeping
           // open panels, widths, position, tools and tab/group data intact.
           sidebar._state.updateVisibility(true, preset === "lateral");
           await sidebar.toggleExpandOnHover(preset === "focus");
           await sidebar.waitUntilStable();
+          controller(w);
         }));
-        return await this.state(win);
+        return await this.state(target);
       } catch (e) {
         // After a native write (e.g. a window closing mid-transition), changes
         // may already exist. Never promise a rollback or "nothing changed".
@@ -103,25 +457,96 @@ export const NulavioLayout = {
     return pending;
   },
 
-  subscribe(win, listener) {
-    controller(win);
+  subscribe(target, listener) {
+    const initial = resolveTarget(target);
+    if (!initial) {
+      fail("layout-unavailable");
+    }
+    const browserTarget = isWindowObject(initial) ? null : initial;
+    const initialWin = windowOf(initial);
+    if (!browserTarget) {
+      controller(initialWin);
+    }
     let active = true;
-    const changed = () => { if (active) listener(); };
-    const observer = new win.MutationObserver(changed);
-    observer.observe(win.document.documentElement, { attributes: true, attributeFilter: ["sidebar-expand-on-hover"] });
-    observer.observe(win.document.getElementById("sidebar-container"), {
-      attributes: true, attributeFilter: ["hidden", "sidebar-launcher-expanded"],
-    });
-    observer.observe(win.gBrowser.tabContainer, { attributes: true, attributeFilter: ["orient", "expanded"] });
-    for (const pref of OBSERVED_PREFS) Services.prefs.addObserver(pref, changed);
-    const unsubscribe = () => {
+    let currentBrowser = browserTarget;
+    let currentWin = null;
+    let observer = null;
+    let cancelPendingSwap = null;
+    const changed = () => {
+      if (active) listener();
+    };
+    const onWindowUnload = () => {
+      unsubscribe();
+    };
+    const detachWindow = () => {
+      if (observer) {
+        observer.disconnect();
+        observer = null;
+      }
+      if (currentWin) {
+        currentWin.removeEventListener("unload", onWindowUnload);
+        currentWin = null;
+      }
+    };
+    const attachWindow = win => {
+      controller(win);
+      currentWin = win;
+      observer = new win.MutationObserver(changed);
+      observer.observe(win.document.documentElement, { attributes: true, attributeFilter: ["sidebar-expand-on-hover"] });
+      observer.observe(win.document.getElementById("sidebar-container"), {
+        attributes: true, attributeFilter: ["hidden", "sidebar-launcher-expanded"],
+      });
+      observer.observe(win.gBrowser.tabContainer, { attributes: true, attributeFilter: ["orient", "expanded"] });
+      win.addEventListener("unload", onWindowUnload, { once: true });
+    };
+    const onSwapDocShells = event => {
+      if (!active || !currentBrowser) return;
+      const swappingFrom = currentBrowser;
+      const nextBrowser = event.detail;
+      swappingFrom.removeEventListener("SwapDocShells", onSwapDocShells);
+      detachWindow();
+      const onEndSwap = () => {
+        cancelPendingSwap = null;
+        if (!active) return;
+        currentBrowser = nextBrowser;
+        if (currentBrowser) {
+          currentBrowser.addEventListener("SwapDocShells", onSwapDocShells);
+          try {
+            attachWindow(windowOf(currentBrowser));
+          } catch {
+            // Host window is a popup or closing; state() reports unavailable.
+          }
+        }
+        changed();
+      };
+      cancelPendingSwap = () => swappingFrom.removeEventListener("EndSwapDocShells", onEndSwap);
+      swappingFrom.addEventListener("EndSwapDocShells", onEndSwap, { once: true });
+    };
+    function unsubscribe() {
       if (!active) return;
       active = false;
-      observer.disconnect();
+      if (cancelPendingSwap) {
+        cancelPendingSwap();
+        cancelPendingSwap = null;
+      }
+      if (currentBrowser) {
+        currentBrowser.removeEventListener("SwapDocShells", onSwapDocShells);
+        currentBrowser = null;
+      }
+      detachWindow();
       for (const pref of OBSERVED_PREFS) Services.prefs.removeObserver(pref, changed);
-      win.removeEventListener("unload", unsubscribe);
-    };
-    win.addEventListener("unload", unsubscribe, { once: true });
+    }
+    if (currentBrowser) {
+      currentBrowser.addEventListener("SwapDocShells", onSwapDocShells);
+      try {
+        attachWindow(initialWin);
+      } catch {
+        // Chromeless/popup or closing host window; keep pref and swap listeners alive.
+      }
+    } else {
+      attachWindow(initialWin);
+    }
+    for (const pref of OBSERVED_PREFS) Services.prefs.addObserver(pref, changed);
     return unsubscribe;
   },
 };

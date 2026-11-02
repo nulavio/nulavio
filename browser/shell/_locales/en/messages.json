@@ -981,5 +981,12 @@
   "err_layout_invalid": {"message": "Choose one of the available layouts."},
   "err_layout_unavailable": {"message": "The native sidebar is unavailable in this window. Your layout was not changed."},
   "err_layout_locked": {"message": "The layout is managed by your administrator. Your layout was not changed."},
-  "err_layout_failed": { "message": "The layout could not be applied completely. Check the current window and try again." }
+  "err_layout_failed": { "message": "The layout could not be applied completely. Check the current window and try again." },
+  "layoutChoiceHeading": {"message": "Choose how tabs are arranged"},
+  "layoutChoiceBody": {"message": "New profiles start with Lateral vertical tabs. You can keep this layout or switch now — you can change it anytime in Settings."},
+  "layoutChoiceDone": {"message": "Keep current layout"},
+  "layoutChoiceKeep_lateral": {"message": "Keep Lateral"},
+  "layoutChoiceKeep_top": {"message": "Keep Tabs on top"},
+  "layoutChoiceKeep_focus": {"message": "Keep Focus"},
+  "layoutChoiceSettings": {"message": "Layout in Settings"}
 }

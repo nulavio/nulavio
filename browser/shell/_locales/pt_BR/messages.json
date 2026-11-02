@@ -981,5 +981,12 @@
   "err_layout_invalid": {"message": "Escolha um dos layouts disponíveis."},
   "err_layout_unavailable": {"message": "A barra lateral nativa não está disponível nesta janela. Seu layout não foi alterado."},
   "err_layout_locked": {"message": "O layout é gerenciado pelo administrador. Seu layout não foi alterado."},
-  "err_layout_failed": { "message": "Não foi possível concluir a mudança de layout. Confira a janela atual e tente novamente." }
+  "err_layout_failed": { "message": "Não foi possível concluir a mudança de layout. Confira a janela atual e tente novamente." },
+  "layoutChoiceHeading": {"message": "Escolha como organizar as abas"},
+  "layoutChoiceBody": {"message": "Novos perfis começam com abas verticais no modo Lateral. Você pode manter este layout ou trocar agora — e mudar quando quiser nas Configurações."},
+  "layoutChoiceDone": {"message": "Manter layout atual"},
+  "layoutChoiceKeep_lateral": {"message": "Manter Lateral"},
+  "layoutChoiceKeep_top": {"message": "Manter Abas no topo"},
+  "layoutChoiceKeep_focus": {"message": "Manter Foco"},
+  "layoutChoiceSettings": {"message": "Layout nas Configurações"}
 }

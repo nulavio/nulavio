@@ -2,6 +2,7 @@
    settings (no counters, no network). */
 
 import { localize, t } from "../lib/i18n.js";
+import { errorText } from "../lib/ui.js";
 
 const UBLOCK_ID = "uBlock0@raymondhill.net";
 // Official extensions of the supported credential providers (browser/config/providers.json).
@@ -80,6 +81,179 @@ async function showEngine() {
   }
 }
 
+// First-run layout choice (D-UX2): shown only on genuinely new profiles,
+// synced live with Settings and native sidebar changes.
+async function showLayoutChoice() {
+  const api = browser.nulavioLayout;
+  if (!api) {
+    return;
+  }
+  const card = document.getElementById("layout-choice");
+  const group = document.getElementById("layout-choice-options");
+  const radios = [...group.querySelectorAll('input[name="newtab-layout"]')];
+  const current = document.getElementById("layout-choice-current");
+  const error = document.getElementById("layout-choice-error");
+  const done = document.getElementById("layout-choice-done");
+  const retry = document.getElementById("layout-choice-retry");
+  let revision = 0;
+  let busy = false;
+  let closed = false;
+  let listening = false;
+  // Keep the card mounted in this tab while the user previews presets by
+  // keyboard or pointer so ArrowDown/ArrowUp never collapses the active control.
+  let editingInThisTab = false;
+  let dismissedInThisTab = false;
+
+  const doneLabel = preset => (
+    preset === "lateral" || preset === "top" || preset === "focus"
+      ? t(`layoutChoiceKeep_${preset}`)
+      : t("layoutChoiceDone")
+  );
+  const showUnavailable = err => {
+    card.hidden = false;
+    current.textContent = t("layoutUnavailable");
+    error.textContent = errorText(err);
+    for (const radio of radios) radio.disabled = true;
+    done.hidden = true;
+    retry.hidden = false;
+  };
+  const render = state => {
+    if (dismissedInThisTab || (!state.choicePending && !editingInThisTab)) {
+      card.hidden = true;
+      return;
+    }
+    card.hidden = false;
+    card.dataset.preset = state.preset;
+    current.textContent = !state.available ? t("layoutUnavailable") : state.locked ? t("layoutLocked")
+      : t(`layoutCurrent_${state.preset}`);
+    done.textContent = doneLabel(state.preset);
+    done.disabled = busy || !state.available || state.locked;
+    done.hidden = false;
+    retry.hidden = true;
+    for (const radio of radios) {
+      radio.checked = radio.value === state.preset;
+      radio.disabled = busy || !state.available || state.locked;
+    }
+  };
+  const refreshLayout = async () => {
+    if (closed || busy) return;
+    const request = ++revision;
+    try {
+      const state = await api.state();
+      if (closed || busy || request !== revision) return;
+      render(state);
+    } catch (e) {
+      if (closed || busy || request !== revision) return;
+      if (!card.hidden || editingInThisTab) {
+        showUnavailable(e);
+      }
+    }
+  };
+  const listen = async () => {
+    if (listening) return true;
+    try {
+      api.onChanged.addListener(refreshLayout);
+      listening = true;
+      return true;
+    } catch (e) {
+      let shouldSurface = !card.hidden || editingInThisTab;
+      if (!shouldSurface && !dismissedInThisTab) {
+        try {
+          const state = await api.state();
+          shouldSurface = Boolean(state?.choicePending);
+        } catch {
+          shouldSurface = true;
+        }
+      }
+      if (!closed && shouldSurface) {
+        showUnavailable(e);
+      } else if (!closed) {
+        card.hidden = true;
+      }
+      return false;
+    }
+  };
+
+  window.addEventListener("pagehide", () => {
+    closed = true;
+    revision++;
+    if (listening) {
+      try {
+        api.onChanged.removeListener(refreshLayout);
+      } catch {
+        // Context already tearing down.
+      }
+      listening = false;
+    }
+  });
+  window.addEventListener("pageshow", async event => {
+    if (!event.persisted) return;
+    closed = false;
+    group.setAttribute("aria-busy", String(busy));
+    if (await listen()) await refreshLayout();
+  });
+  group.addEventListener("change", async event => {
+    if (busy || !radios.includes(event.target)) return;
+    editingInThisTab = true;
+    busy = true;
+    revision++;
+    group.setAttribute("aria-busy", "true");
+    error.textContent = "";
+    const focused = document.activeElement;
+    for (const radio of radios) radio.disabled = true;
+    done.disabled = true;
+    current.textContent = t("layoutApplying");
+    try {
+      await api.apply(event.target.value);
+    } catch (e) {
+      if (!closed) error.textContent = errorText(e);
+    } finally {
+      busy = false;
+      if (!closed) {
+        group.setAttribute("aria-busy", "false");
+        await refreshLayout();
+        if (radios.includes(focused) && document.activeElement === document.body && !focused.disabled) {
+          focused.focus();
+        }
+      }
+    }
+  });
+  done.addEventListener("click", async () => {
+    if (busy) return;
+    busy = true;
+    revision++;
+    error.textContent = "";
+    done.disabled = true;
+    for (const radio of radios) radio.disabled = true;
+    const hadFocusInside = card.contains(document.activeElement);
+    try {
+      await api.dismissChoice();
+      dismissedInThisTab = true;
+      editingInThisTab = false;
+      card.hidden = true;
+      if (hadFocusInside) {
+        document.getElementById("search-input")?.focus();
+      }
+    } catch (e) {
+      if (!closed) {
+        error.textContent = errorText(e);
+        busy = false;
+        await refreshLayout();
+        return;
+      }
+    }
+    busy = false;
+  });
+  retry.addEventListener("click", async () => {
+    error.textContent = "";
+    if (await listen()) await refreshLayout();
+  });
+
+  if (await listen()) {
+    await refreshLayout();
+  }
+}
+
 // DNS (Nulavio build): how site names are looked up, and the one-time choice.
 async function showDns() {
   const privacy = browser.nulavioPrivacy;
@@ -122,6 +296,6 @@ document.getElementById("search-settings").hidden = !browser.nulavioSearch;
 
 localize();
 showEngine().catch(() => {});
-Promise.allSettled([refresh(), showDns()]).then(() => {
+Promise.allSettled([refresh(), showDns(), showLayoutChoice()]).then(() => {
   document.documentElement.dataset.ready = "true";
 });

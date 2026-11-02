@@ -31,6 +31,7 @@ const lazy = {};
 ChromeUtils.defineESModuleGetters(lazy, {
   NetUtil: "resource://gre/modules/NetUtil.sys.mjs",
   NulavioGuard: "resource://builtin-addons/nulavio-shell/modules/NulavioGuard.sys.mjs",
+  NulavioLayout: "resource://builtin-addons/nulavio-shell/modules/NulavioLayout.sys.mjs",
 });
 
 /* The engine's own default permissions (permissions.manager.defaultsUrl): shown as built into the browser. */
@@ -180,6 +181,12 @@ class Privacy {
    * Returns what was done.
    */
   seedDefaults() {
+    // Evaluate initial layout adoption before PREF_SEEDED is recorded on first boot.
+    try {
+      lazy.NulavioLayout.adoptInitialLayout();
+    } catch (e) {
+      console.error("Nulavio layout startup", e);
+    }
     if (Services.prefs.getIntPref(PREF_SEEDED, 0) >= 1) {
       return "already";
     }

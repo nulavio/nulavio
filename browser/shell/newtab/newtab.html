@@ -29,6 +29,33 @@
         <a class="hero__link" id="search-settings" href="../settings/settings.html#search" hidden data-i18n="searchSettingsLink">Search settings</a></p>
     </header>
 
+    <section class="card stack layout-choice" id="layout-choice" aria-labelledby="layout-choice-heading" hidden>
+      <h2 class="card__title" id="layout-choice-heading" data-i18n="layoutChoiceHeading"></h2>
+      <p class="hint" id="layout-choice-body" data-i18n="layoutChoiceBody"></p>
+      <fieldset class="stack" id="layout-choice-options" aria-describedby="layout-choice-body">
+        <legend class="field__label" data-i18n="layoutChoose"></legend>
+        <label class="check">
+          <input type="radio" name="newtab-layout" value="lateral" aria-describedby="newtab-layout-lateral-hint" disabled>
+          <span><span data-i18n="layoutLateral"></span><span class="hint" id="newtab-layout-lateral-hint" data-i18n="layoutLateralHint"></span></span>
+        </label>
+        <label class="check">
+          <input type="radio" name="newtab-layout" value="top" aria-describedby="newtab-layout-top-hint" disabled>
+          <span><span data-i18n="layoutTop"></span><span class="hint" id="newtab-layout-top-hint" data-i18n="layoutTopHint"></span></span>
+        </label>
+        <label class="check">
+          <input type="radio" name="newtab-layout" value="focus" aria-describedby="newtab-layout-focus-hint" disabled>
+          <span><span data-i18n="layoutFocus"></span><span class="hint" id="newtab-layout-focus-hint" data-i18n="layoutFocusHint"></span></span>
+        </label>
+      </fieldset>
+      <p class="hint" id="layout-choice-current" role="status" aria-live="polite" data-i18n="layoutLoading"></p>
+      <p class="form-error" id="layout-choice-error" role="alert"></p>
+      <div class="actions">
+        <button class="button button--primary" type="button" id="layout-choice-done" data-i18n="layoutChoiceDone"></button>
+        <button class="button button--secondary" type="button" id="layout-choice-retry" hidden data-i18n="layoutRetry"></button>
+        <a class="button button--quiet" id="layout-choice-settings" href="../settings/settings.html#layout" data-i18n="layoutChoiceSettings"></a>
+      </div>
+    </section>
+
     <section class="card stack dns-choice" id="dns-choice" aria-labelledby="dns-choice-heading" hidden>
       <h2 class="card__title" id="dns-choice-heading" data-i18n="dnsChoiceHeading"></h2>
       <p></p>

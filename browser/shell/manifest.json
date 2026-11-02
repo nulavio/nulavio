@@ -38,6 +38,23 @@
     }
   },
   "experiment_apis": {
+    "nulavioLayout": {
+      "schema": "experiments/layout/schema.json",
+      "parent": {
+        "scopes": [
+          "addon_parent"
+        ],
+        "script": "experiments/layout/parent.js",
+        "events": [
+          "startup"
+        ],
+        "paths": [
+          [
+            "nulavioLayout"
+          ]
+        ]
+      }
+    },
     "nulavioSearch": {
       "schema": "experiments/search/schema.json",
       "parent": {
@@ -176,20 +193,6 @@
         ],
         "events": [
           "startup"
-        ]
-      }
-    },
-    "nulavioLayout": {
-      "schema": "experiments/layout/schema.json",
-      "parent": {
-        "scopes": [
-          "addon_parent"
-        ],
-        "script": "experiments/layout/parent.js",
-        "paths": [
-          [
-            "nulavioLayout"
-          ]
         ]
       }
     }

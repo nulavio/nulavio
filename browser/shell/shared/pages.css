@@ -108,8 +108,8 @@
 /* Guard review: one card per change; long values (paths, fingerprints) wrap */
 .finding__detail { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: var(--nv-type-caption-size); color: var(--nv-color-text-secondary); }
 
-/* New tab: the one-time DNS question, above the facts */
-.dns-choice { max-width: 52rem; margin-inline: auto; width: 100%; }
+/* New tab: one-time first-run choices (layout, DNS), above the facts */
+.layout-choice, .dns-choice { max-width: 52rem; margin-inline: auto; width: 100%; }
 
 /* Assistant side panel: narrow, plain-text answers */
 body.assistant { padding: var(--nv-space-4); }

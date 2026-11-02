@@ -160,11 +160,16 @@ class PrivilegedApiTest(unittest.TestCase):
                     )
                 self.assertNotIn("Services.prefs.set", text)
 
-    def test_layout_exposes_only_fixed_presets_without_a_startup_writer(self):
+    def test_layout_exposes_only_fixed_presets_and_first_run_dismissal(self):
+        apis = list(self.manifest["experiment_apis"])
+        self.assertLess(apis.index("nulavioLayout"), apis.index("nulavioPrivacy"))
         api = self.manifest["experiment_apis"]["nulavioLayout"]
-        self.assertNotIn("events", api["parent"])
+        self.assertEqual(api["parent"]["events"], ["startup"])
         schema = json.loads((SHELL / api["schema"]).read_text())[0]
-        self.assertEqual({f["name"] for f in schema["functions"]}, {"state", "apply"})
+        self.assertEqual({f["name"] for f in schema["functions"]}, {"state", "apply", "dismissChoice"})
+        for name in ("state", "dismissChoice"):
+            fn = next(f for f in schema["functions"] if f["name"] == name)
+            self.assertEqual(fn["parameters"], [])
         apply = next(f for f in schema["functions"] if f["name"] == "apply")
         self.assertEqual(apply["parameters"], [{"name": "preset", "type": "string", "enum": ["lateral", "top", "focus"]}])
 
@@ -492,6 +497,28 @@ class PasswordsTest(unittest.TestCase):
         self.assertIn("this.manager.documentURI", parent)  # the address comes from the engine
         self.assertNotIn("message.data", parent)
         self.assertNotIn("content_scripts", make_shell.manifest())
+
+
+class LayoutModuleTest(unittest.TestCase):
+    """D-UX2 and UX3E: safe new-profile Lateral adoption, P3-1 listener safety and P3-2 window swap."""
+
+    def test_layout_module_writes_only_sidebar_presets_and_adoption_markers(self):
+        source = module_text("NulavioLayout.sys.mjs")
+        writes = set(re.findall(r"Services\.prefs\.set(?:Bool|Int|String)Pref\(([^,]+),", source))
+        self.assertEqual(
+            writes,
+            {'"sidebar.verticalTabs"', '"sidebar.visibility"', "PREF_ADOPTION_VERSION", "PREF_CHOICE_PENDING"},
+        )
+        self.assertIn('"SwapDocShells"', source)
+        self.assertIn('"EndSwapDocShells"', source)
+        privacy = module_text("NulavioPrivacy.sys.mjs")
+        self.assertLess(privacy.index("lazy.NulavioLayout.adoptInitialLayout()"), privacy.index("setIntPref(PREF_SEEDED"))
+
+    def test_layout_surfaces_guard_listener_registration(self):
+        for rel in ("settings/layout.js", "newtab/newtab.js"):
+            with self.subTest(script=rel):
+                source = (SHELL / rel).read_text(encoding="utf-8")
+                self.assertRegex(source, r"try\s*\{\s*api\.onChanged\.addListener\(")
 
 
 if __name__ == "__main__":

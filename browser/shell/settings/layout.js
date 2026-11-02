@@ -15,7 +15,14 @@ export async function setUpLayout() {
   let revision = 0;
   let busy = false;
   let closed = false;
+  let listening = false;
 
+  const showUnavailable = err => {
+    current.textContent = t("layoutUnavailable");
+    error.textContent = errorText(err);
+    for (const radio of radios) radio.disabled = true;
+    retry.hidden = false;
+  };
   const render = state => {
     section.dataset.preset = state.preset;
     current.textContent = !state.available ? t("layoutUnavailable") : state.locked ? t("layoutLocked")
@@ -35,25 +42,38 @@ export async function setUpLayout() {
       retry.hidden = true;
     } catch (e) {
       if (closed || busy || request !== revision) return;
-      current.textContent = t("layoutUnavailable");
-      error.textContent = errorText(e);
-      for (const radio of radios) radio.disabled = true;
-      retry.hidden = false;
+      showUnavailable(e);
+    }
+  };
+  const listen = () => {
+    if (listening) return true;
+    try {
+      api.onChanged.addListener(refresh);
+      listening = true;
+      return true;
+    } catch (e) {
+      showUnavailable(e);
+      return false;
     }
   };
   section.hidden = false;
-  api.onChanged.addListener(refresh);
   window.addEventListener("pagehide", () => {
     closed = true;
     revision++;
-    api.onChanged.removeListener(refresh);
+    if (listening) {
+      try {
+        api.onChanged.removeListener(refresh);
+      } catch {
+        // Context already tearing down.
+      }
+      listening = false;
+    }
   });
   window.addEventListener("pageshow", event => {
     if (!event.persisted) return;
     closed = false;
     group.setAttribute("aria-busy", String(busy));
-    api.onChanged.addListener(refresh);
-    refresh();
+    if (listen()) refresh();
   });
   group.addEventListener("change", async event => {
     if (busy || !radios.includes(event.target)) return;
@@ -79,7 +99,7 @@ export async function setUpLayout() {
   });
   retry.addEventListener("click", () => {
     error.textContent = "";
-    refresh();
+    if (listen()) refresh();
   });
-  await refresh();
+  if (listen()) await refresh();
 }
