@@ -1,0 +1,56 @@
+/* Generated from docs/brand/tokens.json by scripts/brand/build_tokens.py. Do not edit. */
+@-moz-document url-prefix("about:preferences"),
+  url-prefix("about:settings"),
+  url-prefix("about:addons"),
+  url-prefix("about:home"),
+  url-prefix("about:newtab"),
+  url-prefix("about:profiles"),
+  url-prefix("about:editprofile"),
+  url-prefix("about:newprofile"),
+  url-prefix("about:deleteprofile") {
+  @media -moz-pref("nulavio.horizon.enabled") {
+    @media -moz-pref("extensions.activeThemeID", "default-theme@mozilla.org") or
+      -moz-pref("extensions.activeThemeID", "firefox-compact-light@mozilla.org") or
+      -moz-pref("extensions.activeThemeID", "firefox-compact-dark@mozilla.org") {
+    @media not ((forced-colors) or (prefers-contrast)) {
+      :root:not([lwtheme]) {
+        --color-violet-0: #EEFCF8 !important;
+        --color-violet-10: #DDF8F0 !important;
+        --color-violet-20: #A6EEDC !important;
+        --color-violet-30: #6FE0C5 !important;
+        --color-violet-40: #3FAD96 !important;
+        --color-violet-50: #0F7A68 !important;
+        --color-violet-60: #0F6153 !important;
+        --color-violet-70: #0E4E43 !important;
+        --color-violet-80: #0E3B33 !important;
+        --color-violet-90: #092220 !important;
+        --color-violet-desaturated-0: #F1F7F5 !important;
+        --color-violet-desaturated-10: #E2EBEE !important;
+        --color-violet-desaturated-20: #BFD0D6 !important;
+        --color-violet-desaturated-30: #8FAAB5 !important;
+        --color-violet-desaturated-40: #6E93A2 !important;
+        --color-violet-desaturated-50: #4F7383 !important;
+        --color-violet-desaturated-60: #3A6273 !important;
+        --color-violet-desaturated-70: #23495A !important;
+        --color-violet-desaturated-80: #183746 !important;
+        --color-violet-desaturated-90: #0B1623 !important;
+        --color-gray-0: #F1F7F5 !important;
+        --color-gray-05: #EAF1F2 !important;
+        --color-gray-10: #E2EBEE !important;
+        --color-gray-80: #112432 !important;
+        --color-gray-85: #0F1C2A !important;
+        --color-gray-90: #0B1623 !important;
+        --color-accent-primary: light-dark(#0F7A68, #6FE0C5) !important;
+        --color-accent-primary-hover: light-dark(#0F6153, #A6EEDC) !important;
+        --color-accent-primary-active: light-dark(#0E4E43, #DDF8F0) !important;
+        --focus-outline-color: light-dark(#0F7A68, #6FE0C5) !important;
+        --link-color: light-dark(#0F7A68, #6FE0C5) !important;
+        --link-color-hover: light-dark(#0F7A68, #6FE0C5) !important;
+        --link-color-active: light-dark(#0F7A68, #6FE0C5) !important;
+        --background-color-canvas: light-dark(#F1F7F5, #0B1623) !important;
+        --background-color-box: light-dark(#FFFFFF, #112432) !important;
+      }
+    }
+    }
+  }
+}

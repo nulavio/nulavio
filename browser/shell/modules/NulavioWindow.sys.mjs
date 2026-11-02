@@ -21,6 +21,9 @@ ChromeUtils.defineESModuleGetters(lazy, {
 const sheets = Cc["@mozilla.org/content/style-sheet-service;1"].getService(Ci.nsIStyleSheetService);
 const sidebarFocus = Services.io.newURI("resource://builtin-addons/nulavio-shell/shared/sidebar-focus.css");
 const bandSheet = Services.io.newURI("resource://builtin-addons/nulavio-shell/shared/window-band.css");
+// UX3F A2: the engine's internal pages (Settings, add-ons, home) in Nulavio's colours. Scoped by exact
+// about: URLs inside the sheet, so web pages never see it.
+const inContent = Services.io.newURI("resource://builtin-addons/nulavio-shell/shared/in-content.css");
 const AREA = "nulavio-band";
 const WIDGET = "nulavio-band-widget";
 const SHELL = "shell@nulavio.net";
@@ -93,7 +96,7 @@ class WindowUI {
     }
     this.#started = true;
     this.#generation++;
-    for (const uri of [sidebarFocus]) {
+    for (const uri of [sidebarFocus, inContent]) {
       if (!sheets.sheetRegistered(uri, sheets.AGENT_SHEET)) {
         sheets.loadAndRegisterSheet(uri, sheets.AGENT_SHEET);
       }
@@ -589,7 +592,7 @@ class WindowUI {
     }
     lazy.CustomizableUI.destroyWidget(WIDGET);
     lazy.CustomizableUI.unregisterArea(AREA);
-    for (const uri of [sidebarFocus]) {
+    for (const uri of [sidebarFocus, inContent]) {
       if (sheets.sheetRegistered(uri, sheets.AGENT_SHEET)) {
         sheets.unregisterSheet(uri, sheets.AGENT_SHEET);
       }

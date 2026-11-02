@@ -30,6 +30,50 @@ OUTPUT = ROOT / "browser" / "startpage" / "tokens.css"
 CHROME_OUTPUT = ROOT / "browser" / "branding" / "nulavio" / "content" / "theme" / "tokens.css"
 IDENTITY_OUTPUT = ROOT / "browser" / "shell" / "lib" / "identity-colors.js"
 SIDEBAR_OUTPUT = ROOT / "browser" / "shell" / "shared" / "sidebar-focus.css"
+IN_CONTENT_OUTPUT = ROOT / "browser" / "shell" / "shared" / "in-content.css"
+# Internal pages that use the engine's design tokens (UX3F A2). Exact about: URLs only.
+IN_CONTENT_PAGES = (
+    "about:preferences",
+    "about:settings",
+    "about:addons",
+    "about:home",
+    "about:newtab",
+    "about:profiles",
+    "about:editprofile",
+    "about:newprofile",
+    "about:deleteprofile",
+)
+# The engine's Nova palette re-valued with Nulavio's: violet (its accent) -> mint,
+# desaturated violet (its tinted neutrals) -> navy, and its violet-tinted light/dark
+# surfaces. Each value is a primitive token or a mix of two (weight of the first).
+NOVA_TO_NULAVIO = {
+    "--color-violet-0": ("mint.100", "navy.0", 0.5),
+    "--color-violet-10": "mint.100",
+    "--color-violet-20": "mint.200",
+    "--color-violet-30": "mint.400",
+    "--color-violet-40": ("mint.400", "mint.700", 0.5),
+    "--color-violet-50": "mint.700",
+    "--color-violet-60": ("mint.700", "mint.900", 0.6),
+    "--color-violet-70": ("mint.700", "mint.900", 0.3),
+    "--color-violet-80": "mint.900",
+    "--color-violet-90": ("mint.900", "navy.1000", 0.5),
+    "--color-violet-desaturated-0": "navy.50",
+    "--color-violet-desaturated-10": "navy.100",
+    "--color-violet-desaturated-20": "navy.200",
+    "--color-violet-desaturated-30": "navy.300",
+    "--color-violet-desaturated-40": "navy.400",
+    "--color-violet-desaturated-50": "navy.500",
+    "--color-violet-desaturated-60": "navy.600",
+    "--color-violet-desaturated-70": "navy.700",
+    "--color-violet-desaturated-80": "navy.800",
+    "--color-violet-desaturated-90": "navy.900",
+    "--color-gray-0": "navy.50",
+    "--color-gray-05": ("navy.50", "navy.100", 0.5),
+    "--color-gray-10": "navy.100",
+    "--color-gray-80": "navy.850",
+    "--color-gray-85": "navy.875",
+    "--color-gray-90": "navy.900",
+}
 HEADER = "/* Generated from docs/brand/tokens.json by scripts/brand/build_tokens.py. Do not edit. */\n"
 
 
@@ -200,6 +244,60 @@ def build_sidebar_focus(data: dict) -> str:
     )
 
 
+def _mix(a: str, b: str, weight: float) -> str:
+    ca = [int(a[i : i + 2], 16) for i in (1, 3, 5)]
+    cb = [int(b[i : i + 2], 16) for i in (1, 3, 5)]
+    return "#" + "".join(f"{round(x * weight + y * (1 - weight)):02X}" for x, y in zip(ca, cb, strict=True))
+
+
+def build_in_content(data: dict) -> str:
+    """Internal about: pages: the engine's accent, focus, link and canvas in Nulavio's colours.
+
+    An agent sheet scoped by exact about: URLs: web pages never see --nv-* or any of these
+    values (no fingerprinting surface). It steps aside for forced colours, a contrast
+    preference, an installed theme and nulavio.horizon.enabled=false, like sidebar-focus.css.
+    """
+    require_both_themes(data)
+    tokens = flatten(data)
+
+    def prim(name: str) -> str:
+        return resolve(tokens, f"color.primitive.{name}")
+
+    def pair(path: str) -> str:
+        return f"light-dark({resolve(tokens, f'color.light.{path}')}, {resolve(tokens, f'color.dark.{path}')})"
+
+    lines = []
+    for var, spec in NOVA_TO_NULAVIO.items():
+        value = prim(spec) if isinstance(spec, str) else _mix(prim(spec[0]), prim(spec[1]), spec[2])
+        lines.append(f"{var}: {value}")
+    accent = pair("accent.default")
+    lines += [
+        f"--color-accent-primary: {accent}",
+        f"--color-accent-primary-hover: light-dark({_mix(prim('mint.700'), prim('mint.900'), 0.6)}, {prim('mint.200')})",
+        f"--color-accent-primary-active: light-dark({_mix(prim('mint.700'), prim('mint.900'), 0.3)}, {prim('mint.100')})",
+        f"--focus-outline-color: {pair('focus')}",
+        f"--link-color: {accent}",
+        f"--link-color-hover: {accent}",
+        f"--link-color-active: {accent}",
+        f"--background-color-canvas: {pair('bg.canvas')}",
+        f"--background-color-box: {pair('bg.surface')}",
+    ]
+    body = "".join(f"        {line} !important;\n" for line in lines)
+    urls = ",\n  ".join(f'url-prefix("{page}")' for page in IN_CONTENT_PAGES)
+    return (
+        HEADER
+        + f"@-moz-document {urls} {{\n"
+        + '  @media -moz-pref("nulavio.horizon.enabled") {\n'
+        + '    @media -moz-pref("extensions.activeThemeID", "default-theme@mozilla.org") or\n'
+        + '      -moz-pref("extensions.activeThemeID", "firefox-compact-light@mozilla.org") or\n'
+        + '      -moz-pref("extensions.activeThemeID", "firefox-compact-dark@mozilla.org") {\n'
+        + "    @media not ((forced-colors) or (prefers-contrast)) {\n"
+        + "      :root:not([lwtheme]) {\n"
+        + body
+        + "      }\n    }\n    }\n  }\n}\n"
+    )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--check", action="store_true")
@@ -211,6 +309,7 @@ def main() -> int:
             (CHROME_OUTPUT, build_chrome(data)),
             (IDENTITY_OUTPUT, build_identity(data)),
             (SIDEBAR_OUTPUT, build_sidebar_focus(data)),
+            (IN_CONTENT_OUTPUT, build_in_content(data)),
         )
     except ValueError as error:
         print(f"{TOKENS.relative_to(ROOT)}: {error}", file=sys.stderr)

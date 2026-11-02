@@ -112,3 +112,10 @@ pref("sidebar.animation.easing", "cubic-bezier(0.2, 0, 0, 1)");
 // pushing it down. The toolbar stays one shortcut away (Ctrl+Shift+B), and the
 // person's choice in the toolbar menu is kept.
 pref("browser.toolbars.bookmarks.visibility", "never");
+
+// UX3F (QA A2): no Mozilla product names in Nulavio's own UI. Address-bar
+// results are not grouped under a "Firefox Suggest" heading (the results
+// and their order are unchanged), and the "Firefox Labs" Settings pane, which
+// lists Mozilla's remote experiments, starts hidden (Nimbus rollouts are off).
+pref("browser.urlbar.groupLabels.enabled", false);
+pref("browser.preferences.experimental.hidden", true);

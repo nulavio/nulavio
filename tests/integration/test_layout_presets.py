@@ -1173,7 +1173,8 @@ class LayoutPresetsTest(unittest.TestCase):
             title: document.title};
         """)
         self.assertLessEqual(card["doneBottom"], 600, card)
-        self.assertEqual((card["options"], card["previews"], card["liveRole"], card["liveVisible"]), (3, 3, "polite", False), card)
+        shape = (card["options"], card["previews"], card["liveRole"], card["liveVisible"])
+        self.assertEqual(shape, (3, 3, "polite", False), card)
         self.assertNotEqual(card["checkedEdge"], "rgba(0, 0, 0, 0)", card)
         self.assertIn(card["title"], ("Nova aba", "New Tab"))
 

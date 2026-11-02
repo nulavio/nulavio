@@ -92,3 +92,42 @@ class HorizonThemeTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class InContentPagesTest(unittest.TestCase):
+    """UX3F A2: the engine's internal pages in Nulavio's colours, never reaching web pages."""
+
+    SHEET = (ROOT / "browser" / "shell" / "shared" / "in-content.css").read_text(encoding="utf-8")
+
+    def test_scoped_to_exact_internal_pages(self):
+        code = without_comments(self.SHEET)
+        head = code[: code.index("{")]
+        self.assertTrue(head.strip().startswith("@-moz-document"), head)
+        targets = re.findall(r'url-prefix\("([^"]+)"\)', head)
+        self.assertTrue(targets)
+        self.assertTrue(all(t.startswith("about:") and t[6:].isalpha() for t in targets), targets)
+        self.assertNotRegex(head, r"url\(|domain\(|regexp\(", "only about: prefixes")
+        self.assertEqual(code.count("@-moz-document"), 1)
+
+    def test_no_nulavio_variables_and_steps_aside(self):
+        code = without_comments(self.SHEET)
+        self.assertNotIn("--nv-", code, "Nulavio token names would be visible to the page")
+        self.assertIn('@media -moz-pref("nulavio.horizon.enabled")', code)
+        self.assertIn("@media not ((forced-colors) or (prefers-contrast))", code)
+        self.assertIn(":root:not([lwtheme])", code)
+        self.assertIn('"default-theme@mozilla.org"', code)
+
+    def test_registered_like_the_sidebar_focus_sheet(self):
+        window = (ROOT / "browser" / "shell" / "modules" / "NulavioWindow.sys.mjs").read_text(encoding="utf-8")
+        self.assertIn("shared/in-content.css", window)
+        self.assertEqual(window.count("for (const uri of [sidebarFocus, inContent])"), 2)
+
+    def test_kit_artwork_is_replaced_by_nulavio_artwork(self):
+        jar = (ROOT / "browser" / "branding" / "nulavio" / "content" / "jar.mn").read_text(encoding="utf-8")
+        art = ROOT / "browser" / "branding" / "nulavio" / "content" / "illustration-promo.svg"
+        self.assertTrue(art.is_file())
+        for kit in ("kit-happy", "kit-concerned"):
+            self.assertIn(
+                f"% override chrome://global/skin/illustrations/{kit}.svg chrome://branding/content/illustration-promo.svg",
+                jar,
+            )

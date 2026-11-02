@@ -20,6 +20,14 @@ browser.jar:
   content/branding/icon64.png                    (../default64.png)
   content/branding/icon128.png                   (../default128.png)
   content/branding/aboutDialog.css
+# UX3F A2: Nulavio's own artwork instead of the engine's "Kit" fox on promo cards
+  content/branding/illustration-promo.svg       (illustration-promo.svg)
+% override chrome://global/skin/illustrations/kit-happy.svg chrome://branding/content/illustration-promo.svg
+% override chrome://global/skin/illustrations/kit-concerned.svg chrome://branding/content/illustration-promo.svg
+% override chrome://global/skin/illustrations/kit-confetti.svg chrome://branding/content/illustration-promo.svg
+% override chrome://global/skin/illustrations/kit-holding-lock.svg chrome://branding/content/illustration-promo.svg
+% override chrome://global/skin/illustrations/kit-in-circle.svg chrome://branding/content/illustration-promo.svg
+% override chrome://global/skin/illustrations/kit-sympathetic.svg chrome://branding/content/illustration-promo.svg
 # Nulavio Horizon window theme (loaded by browser.xhtml, browser/patches/0003)
   content/branding/theme/tokens.css              (theme/tokens.css)
   content/branding/theme/horizon.css             (theme/horizon.css)
