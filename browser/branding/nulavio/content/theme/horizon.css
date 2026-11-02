@@ -128,9 +128,8 @@
       --urlbarview-background-color-hover: color-mix(in srgb, currentColor calc(var(--nv-state-hoverOverlay) * 100%), transparent);
       --urlbarview-text-color-hover: var(--nv-color-text-primary);
 
-      /* UX3F M2: a calm field at rest (the placeholder and identity icon name it),
-         the control edge on hover, the accent ring when focused. */
-      --toolbar-field-border-color: var(--nv-color-border-subtle);
+      /* UX3F M2: the rest edge keeps the control colour (>= 3:1, WCAG 1.4.11);
+         focus adds elevation 1 to the accent ring (below). */
 
       /* UX3F M5: menus and panels on the Nulavio surfaces, not GTK grey. */
       --menu-background-color: var(--nv-color-bg-raised);
@@ -144,10 +143,6 @@
       --arrowpanel-border-color: var(--nv-color-border-subtle);
       --panel-separator-color: var(--nv-color-border-subtle);
       --sidebar-border-color: var(--nv-color-border-subtle);
-    }
-
-    :root:not([lwtheme]) #urlbar:not([focused]):hover > .urlbar-background {
-      border-color: var(--nv-color-border-control);
     }
 
     :root:not([lwtheme]) #urlbar[focused]:not([open]) > .urlbar-background {

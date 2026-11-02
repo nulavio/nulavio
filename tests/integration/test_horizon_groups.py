@@ -283,7 +283,7 @@ class HorizonGroupsTest(unittest.TestCase):
                     self.assertEqual(r["bg"], "rgba(0, 0, 0, 0)")
                     self.assertEqual(r["swatchContent"], '""')
                     self.assertNotEqual(rgb(r["swatch"]), rgb(r["mark"]["color"]))
-                    self.assertEqual((r["mark"]["w"], r["mark"]["h"]), ("2px", "16px") if vertical else ("16px", "2px"))
+                    self.assertEqual((r["mark"]["w"], r["mark"]["h"]), ("3px", "20px") if vertical else ("16px", "2px"))
                     self.assertEqual(r["hidden"], [False, collapsed])
                     measurements.append({"collapsed": collapsed, **r})
                     self.capture(

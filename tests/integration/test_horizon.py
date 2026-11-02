@@ -223,8 +223,9 @@ class HorizonTest(unittest.TestCase):
         try:
             self.assertTrue(harness.wait_until(lambda: self.state()["dark"], timeout=10), "dark scheme not applied")
             s = self.state()
-            self.assertEqual(rgb(s["navbar"]), "#0B1623")
-            self.assertEqual(rgb(s["selectedBg"]), "#183746")
+            # UX3F M6: distinct dark surface steps (toolbar navy.875, selected tab navy.750).
+            self.assertEqual(rgb(s["navbar"]), "#0F1C2A")
+            self.assertEqual(rgb(s["selectedBg"]), "#1E4252")
             self.assert_contrast(s["selectedText"], s["selectedBg"], 4.5, "selected tab label")
             self.assert_contrast(s["otherText"], s["toolbox"], 4.5, "background tab label")
             self.assert_contrast(s["fieldText"], s["fieldBg"], 4.5, "address text")
@@ -234,12 +235,12 @@ class HorizonTest(unittest.TestCase):
             self.set_pref("ui.systemUsesDarkTheme", 0)
 
     def test_04_route_mark_only_on_the_selected_tab(self):
-        # D-UX2: a fresh Nulavio profile starts in Lateral (vertical tabs, 2px x 16px mark);
+        # D-UX2: a fresh Nulavio profile starts in Lateral (vertical tabs, 3px x 20px edge mark, UX3F A5);
         # switching to horizontal tabs yields the 16px x 2px mark, still only on the selected tab.
         self.assertEqual(self.m.chrome("return document.getElementById('tabbrowser-tabs').getAttribute('orient');"), "vertical")
         s = self.state()
         self.assertEqual(s["mark"]["content"], '""')
-        self.assertEqual((s["mark"]["w"], s["mark"]["h"]), ("2px", "16px"))
+        self.assertEqual((s["mark"]["w"], s["mark"]["h"]), ("3px", "20px"))
         self.assertEqual(rgb(s["mark"]["color"]), rgb(s["accent"]))
         self.assertEqual(s["otherMark"], "none")
         self.set_pref("sidebar.verticalTabs", False)
@@ -350,19 +351,20 @@ class HorizonTest(unittest.TestCase):
             self.skipTest("built-in themes not available")
         try:
             self.assertTrue(
-                harness.wait_until(lambda: rgb(self.state()["navbar"]) == "#0B1623", timeout=10), "Dark != Horizon dark"
+                harness.wait_until(lambda: rgb(self.state()["navbar"]) == "#0F1C2A", timeout=10), "Dark != Horizon dark"
             )
             self.assertTrue(self.enable_theme("firefox-alpenglow@mozilla.org"))
             self.assertTrue(harness.wait_until(lambda: self.state()["lwtheme"], timeout=10), "theme not applied")
             s = self.state()
-            self.assertNotIn(rgb(s["navbar"]), ("#0B1623", "#F1F7F5"), "Horizon colours leaked into a user theme")
+            self.assertNotIn(rgb(s["navbar"]), ("#0F1C2A", "#F1F7F5"), "Horizon colours leaked into a user theme")
             self.assertEqual(rgb(s["mark"]["color"]), rgb(s["selectedText"]), "mark follows the theme's text colour")
         finally:
             self.enable_theme("default-theme@mozilla.org")
             harness.wait_until(lambda: not self.state()["lwtheme"], timeout=10)
 
     def test_12_reduced_motion_disables_the_mark_animation(self):
-        self.assertEqual(self.state()["mark"]["animation"], "nulavio-route-in")
+        # The default Lateral strip uses the vertical keyframes (UX3F B4).
+        self.assertIn(self.state()["mark"]["animation"], ("nulavio-route-in", "nulavio-route-in-v"))
         self.set_pref("ui.prefersReducedMotion", 1)
         try:
             self.assertEqual(self.state()["mark"]["animation"], "none")
@@ -387,7 +389,7 @@ class HorizonTest(unittest.TestCase):
             )
             self.assertTrue(vertical, "vertical tabs did not engage")
             s = self.state()
-            self.assertEqual((s["mark"]["w"], s["mark"]["h"]), ("2px", "16px"))
+            self.assertEqual((s["mark"]["w"], s["mark"]["h"]), ("3px", "20px"))
             self.assertEqual(rgb(s["mark"]["color"]), rgb(s["accent"]))
         finally:
             self.set_pref("sidebar.verticalTabs", True)
@@ -435,6 +437,8 @@ class HorizonTest(unittest.TestCase):
         # light and mint in dark (one SVG with a colour-scheme query) on the tab, the toolbar button and the
         # sidebar launcher, and stays >= 3:1 where it sits, including the launcher's pressed (open) state.
         expected = {0: "#0F7A68", 1: "#6FE0C5"}
+        # UX3F B2: in the launcher the assistant is a tool glyph in the chrome icon colour.
+        launcher_expected = {0: "#23495A", 1: "#BFD0D6"}
         try:
             for dark, vertical in ((0, False), (0, True), (1, False), (1, True)):
                 self.set_pref("ui.systemUsesDarkTheme", dark)
@@ -456,7 +460,8 @@ class HorizonTest(unittest.TestCase):
                         state = {"tab": tab_state, "launcher": launcher_state}.get(where, "")
                         with self.subTest(scheme="dark" if dark else "light", vertical=vertical, where=where, state=state):
                             symbol, surface = symbol_on_surface(png, boxes[where], boxes["dpr"])
-                            self.assertEqual(symbol, expected[dark], f"symbol {symbol} on {surface}")
+                            want = launcher_expected[dark] if where == "launcher" else expected[dark]
+                            self.assertEqual(symbol, want, f"symbol {symbol} on {surface}")
                             self.assertGreaterEqual(ratio(symbol, surface), 3.0, f"{symbol} on {surface}")
         finally:
             self.m.chrome("SidebarController.hide();")

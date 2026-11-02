@@ -273,7 +273,8 @@ class WindowBandTest(unittest.TestCase):
                     time.sleep(0.25)
                     state = self.m.chrome(f"return {BAND_PROBE};")
                     assert_band(self, state)
-                    self.assertEqual(state["bg"], "rgb(4, 8, 13)" if dark else "rgb(191, 208, 214)")
+                    # UX3F A1: the neutral band sits on the toolbox surface.
+                    self.assertEqual(state["bg"], "rgb(6, 12, 20)" if dark else "rgb(226, 235, 238)")
                     rows.append({"dark": dark, "vertical": vertical, "width": width, "scale": scale, **state})
                     self.m.set_context("chrome")
                     try:
