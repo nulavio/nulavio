@@ -336,14 +336,23 @@ class RoutingTest(unittest.TestCase):
         mine = (set(bank.window_handles()) - before).pop()
         bank.switch_to(mine)
         bank.navigate(self.local("/page/mine"))
+        self.assertTrue(harness.wait_until(lambda: bank.current_url().endswith("/page/mine"), timeout=10))
         self.deliver("Trabalho", [self.local("/page/routed-again")])
         self.assertTrue(harness.wait_until(lambda: any(u.endswith("/page/routed-again") for u in self.tabs(bank)), timeout=30))
         select = (
             "const t = gBrowser.tabs.find(t => t.linkedBrowser.currentURI.spec.endsWith(arguments[0]));"
             "if (t) { gBrowser.selectedTab = t; } return Boolean(t);"
         )
-        bank.switch_to(mine)
-        self.assertTrue(bank.chrome(select, ["/page/mine"]))
+
+        # Select the person's own tab wherever the browser put the windows, then read that window's band.
+        def select_anywhere(path: str) -> bool:
+            for handle in bank.window_handles():
+                bank.switch_to(handle)
+                if bank.chrome(select, [path]):
+                    return True
+            return False
+
+        self.assertTrue(harness.wait_until(lambda: select_anywhere("/page/mine"), timeout=10), "the person's own tab is gone")
         time.sleep(2)  # more than one band refresh
         self.assertIsNone(bank.chrome(notice), "the person's own tab took the notice")
         for handle in bank.window_handles():
