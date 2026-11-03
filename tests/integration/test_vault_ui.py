@@ -393,6 +393,9 @@ class VaultUiTest(unittest.TestCase):
         try:
             self.open_page(f"vault/unlock.html?p={self.created_id}")
             self.wait_state("storage-unavailable")
+            # SB-19: the state says what to do next; "Tentar de novo" reads it again.
+            retry = self.m.execute("return document.querySelector('.moment__retry button')?.textContent ?? null;")
+            self.assertEqual(retry, self.m.execute("return browser.i18n.getMessage('momentRetry');"))
             self.shoot("unlock-storage-unavailable")
         finally:
             os.rename(hidden, tools)

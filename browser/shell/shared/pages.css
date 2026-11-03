@@ -392,6 +392,24 @@ body.assistant { padding: var(--nv-space-4); }
 .moment__kind { font-weight: var(--nv-font-weight-semibold); }
 .moment__profile { display: inline-flex; align-items: center; gap: var(--nv-space-2); color: var(--nv-color-text-primary); }
 .moment__context .badge { margin-inline-start: 0; }
+/* The level, in the same place on every page: glyph and word, from the page's own callout */
+.moment__severity {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nv-space-1);
+  margin-inline-start: auto;
+  font-weight: var(--nv-font-weight-semibold);
+}
+.moment__severity[data-level="warning"] { color: var(--nv-color-status-warning); }
+.moment__severity[data-level="critical"] { color: var(--nv-color-status-criticalText, var(--nv-color-status-critical)); }
+.moment__severity-icon { width: 1rem; height: 1rem; flex: none; }
+/* Still loading after 400 ms: say so (nothing flashes for a fast page) */
+body[data-state="loading"] .moment__context::after {
+  content: attr(data-loading);
+  margin-inline-start: auto;
+  visibility: hidden;
+  animation: nv-reveal-fallback 0s 400ms forwards;
+}
 
 /* The recovery code (UX4, audit SB-08): 7 numbered groups; printing shows only them */
 .code-grid {

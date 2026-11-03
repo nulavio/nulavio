@@ -151,6 +151,7 @@ class ShellTest(unittest.TestCase):
             " icon: [...document.querySelectorAll('.callout__icon')].filter(i => !i.hasAttribute('hidden'))"
             ".map(i => i.id).join(),"
             " headline: document.getElementById('warn-headline').textContent,"
+            " moment: document.querySelector('.moment__severity')?.dataset.level ?? null,"
             " deleteFile: browser.i18n.getMessage('warnDeleteFile')};"
         )
 
@@ -249,6 +250,14 @@ class ShellTest(unittest.TestCase):
         finally:
             self.force_danger(None)
         self.assertEqual(critical["severity"], "critical", critical)
+        # UX4 (SB-24): the level is also in the security moment's context line, glyph and word.
+        level = self.m.execute(
+            "const s = document.querySelector('.moment__context .moment__severity');"
+            "return s && {level: s.dataset.level, icon: Boolean(s.querySelector('svg')), word: s.textContent};"
+        )
+        self.assertEqual((level["level"], level["icon"]), ("critical", True), level)
+        self.assertEqual(level["word"], self.m.execute("return browser.i18n.getMessage('momentCritical');"))
+        self.assertEqual(warning["moment"], "warning", warning)
         self.assertEqual([b[0] for b in critical["buttons"]], ["delete", "show"], critical)
         self.assertEqual([b[2] for b in critical["buttons"]], ["primary", "secondary"], critical)
         self.assertEqual((critical["focused"], critical["icon"]), ("delete", "icon-critical"))

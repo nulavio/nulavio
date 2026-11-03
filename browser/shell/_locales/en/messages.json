@@ -1075,5 +1075,9 @@
   "vaultLockCurrentClosing": {"message": "Closing the windows; the profile locks as soon as they are closed."},
   "vaultLockCurrentKept": {"message": "The windows stay open. The profile locks when you close the last one."},
   "profilesFilter": {"message": "Filter profiles"},
-  "profilesFilterNone": {"message": "No profile matches “$TEXT$”.", "placeholders": {"text": {"content": "$1"}}}
+  "profilesFilterNone": {"message": "No profile matches “$TEXT$”.", "placeholders": {"text": {"content": "$1"}}},
+  "momentWarning": {"message": "Attention"},
+  "momentCritical": {"message": "Critical"},
+  "momentRetry": {"message": "Try again"},
+  "momentLoading": {"message": "Loading…"}
 }

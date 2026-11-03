@@ -1075,5 +1075,9 @@
   "vaultLockCurrentClosing": {"message": "Fechando as janelas; o perfil bloqueia assim que elas fecharem."},
   "vaultLockCurrentKept": {"message": "As janelas continuam abertas. O perfil bloqueia quando você fechar a última."},
   "profilesFilter": {"message": "Filtrar perfis"},
-  "profilesFilterNone": {"message": "Nenhum perfil com “$TEXT$”.", "placeholders": {"text": {"content": "$1"}}}
+  "profilesFilterNone": {"message": "Nenhum perfil com “$TEXT$”.", "placeholders": {"text": {"content": "$1"}}},
+  "momentWarning": {"message": "Atenção"},
+  "momentCritical": {"message": "Crítico"},
+  "momentRetry": {"message": "Tentar de novo"},
+  "momentLoading": {"message": "Carregando…"}
 }

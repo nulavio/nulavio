@@ -137,6 +137,7 @@ guard
   .then(render)
   .catch(e => {
     document.body.dataset.state = "error";
+    document.getElementById("findings").removeAttribute("aria-busy"); // nothing is loading any more (SB-19)
     announce(errorText(e), "error");
   })
   .finally(() => {
