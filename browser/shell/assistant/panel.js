@@ -411,11 +411,94 @@ function showSources(list) {
   $("sources-section").hidden = !list?.length;
 }
 
+/** A tool's name in the person's language, never a raw id. */
+const toolName = id => browser.i18n.getMessage(`aiTool_${String(id).replace(/[^a-z0-9_]/gi, "_")}`) || String(id);
+const STEP_STATES = new Set(["started", "ok", "denied", "error", "cancelled"]);
+
+/** The run's timeline (UX5-F): each step, by its tool's name, and what happened to it. */
 function showSteps(steps) {
+  $("steps").setAttribute("aria-label", t("assistantStepsLabel"));
   $("steps").replaceChildren(
-    ...(steps ?? []).map(s => h("li", { text: `${s.tool}${s.error ? ` — ${t("assistantStepFailed")}` : ""}` }))
+    ...(steps ?? []).map(step => {
+      const state = STEP_STATES.has(step.state) ? step.state : step.error ? "error" : "ok";
+      return h("li", { "data-state": state }, h("span", { text: toolName(step.tool) }), " ", h("span", { class: "hint", text: t(`assistantStep_${state}`) }));
+    })
   );
   $("steps").hidden = !steps?.length;
+}
+
+// -- the permission card (UX5-F, Q9): a request of this panel's run, answered here ------------------
+let approval = null; // {id, timer}
+const RISKS = new Set(["critical", "warning", "info"]);
+
+function hideApproval() {
+  if (approval) {
+    clearTimeout(approval.timer);
+    clearTimeout(approval.arm);
+  }
+  approval = null;
+  $("approval").hidden = true;
+}
+
+async function showApproval(id) {
+  const request = await ai.request(id).catch(() => null);
+  if (!request || !run || approval?.id === id) {
+    return;
+  }
+  hideApproval();
+  approval = { id };
+  // An unknown tier is shown as the highest: the card never understates a request.
+  const tier = RISKS.has(request.risk) ? request.risk : "critical";
+  $("approval").className = `callout callout--${tier} assistant__approval`;
+  $("approval-icon").replaceChildren(icon(tier, "callout__icon"));
+  $("approval-who").textContent = t("aiRequestFrom", [request.agent, t(`aiLevel_${request.autonomy}`)]);
+  $("approval-headline").textContent = t("aiRequestWants", [request.agent, t(`aiCap_${request.capability}`)]);
+  $("approval-risk").textContent = t(`aiRisk_${tier}`);
+  $("approval-target").textContent = request.target ?? "";
+  $("approval-target").hidden = !request.target;
+  const place = request.place ?? { kind: "workspace" };
+  $("approval-where").textContent =
+    place.kind === "profile" ? t("aiRequestWhereProfile", [String(place.profile ?? "")]) : t("aiRequestWhereWorkspace", [request.agent]);
+  const expires = new Date(request.expires);
+  $("approval-expires").hidden = Number.isNaN(expires.getTime());
+  if (!$("approval-expires").hidden) {
+    const time = expires.toLocaleTimeString(browser.i18n.getUILanguage(), { hour: "2-digit", minute: "2-digit" });
+    $("approval-expires").textContent = t("aiRequestExpires", [time]);
+    approval.timer = setTimeout(() => {
+      hideApproval();
+      announce(t("aiRequestExpired"), "warn");
+    }, Math.max(0, expires.getTime() - Date.now()));
+  }
+  // "Negar" is the first, filled and focused answer; the two that allow wait a moment before they work.
+  for (const button of [$("approval-once"), $("approval-session")]) {
+    button.disabled = true;
+  }
+  $("approval-deny").disabled = false;
+  approval.arm = setTimeout(() => {
+    $("approval-once").disabled = false;
+    $("approval-session").disabled = false;
+  }, 1000);
+  $("approval").hidden = false;
+  $("approval-elsewhere").hidden = true;
+  $("approval-deny").focus();
+  announce(t("aiRequestWants", [request.agent, t(`aiCap_${request.capability}`)]), "warn");
+}
+
+async function answerApproval(value) {
+  const id = approval?.id;
+  if (!id) {
+    return;
+  }
+  for (const button of $("approval").querySelectorAll("button")) {
+    button.disabled = true;
+  }
+  try {
+    await ai.answer(id, value);
+    announce(t(value === "deny" ? "aiAnsweredDeny" : value === "session" ? "assistantAnsweredTask" : "aiAnsweredOnce"));
+  } catch (e) {
+    announce(e?.message === "invalid" || e?.message === "expired" ? t("aiRequestExpired") : errorText(e), "warn");
+  }
+  hideApproval();
 }
 
 function showResult(result, task) {
@@ -508,10 +591,29 @@ function onRunEvent(event) {
   if (event.type === "delta") {
     run.text += event.text;
     paint ||= requestAnimationFrame(showPartial);
-  } else if (event.type === "step" && event.state !== "started") {
-    run.steps.push({ tool: event.tool, error: event.state !== "ok" });
+  } else if (event.type === "step") {
+    // The timeline: a step appears when it starts and says what happened when it ends.
+    const at = run.steps.findIndex(step => step.index === event.index);
+    const step = { index: event.index, tool: event.tool, state: event.state };
+    if (at < 0) {
+      run.steps.push(step);
+    } else {
+      run.steps[at] = step;
+    }
+    if (event.state !== "started") {
+      hideApproval(); // the call that waited for an answer is over
+    }
     showSteps(run.steps);
     $("answer-section").hidden = false;
+  } else if (event.type === "approval") {
+    if (event.place === "panel") {
+      showApproval(event.id);
+    } else if (event.place === "tab" || event.place === "elsewhere") {
+      hideApproval();
+      $("approval-elsewhere").textContent = t(event.place === "tab" ? "assistantApprovalInTab" : "assistantApprovalElsewhere");
+      $("approval-elsewhere").hidden = false;
+      announce($("approval-elsewhere").textContent, "warn");
+    }
   } else if (event.type === "done") {
     finishRun(event);
   } else if (event.type === "error") {
@@ -531,6 +633,8 @@ function onRunEvent(event) {
 }
 
 function endRun() {
+  hideApproval();
+  $("approval-elsewhere").hidden = true;
   cancelAnimationFrame(paint);
   paint = 0;
   run = null;
@@ -539,7 +643,10 @@ function endRun() {
 }
 
 async function finishRun(result) {
-  const { kind, text, stopping } = run;
+  const { kind, text, stopping, steps } = run;
+  if (steps.length) {
+    result = { ...result, steps }; // the timeline as it went, with what happened to each step
+  }
   const task = kind === "task";
   endRun();
   // The conversation first, so the panel is whole when it says the answer is ready.
@@ -688,6 +795,9 @@ $("summarize").addEventListener("click", async () => {
     $("send").focus();
   }
 });
+$("approval-deny").addEventListener("click", () => answerApproval("deny"));
+$("approval-once").addEventListener("click", () => answerApproval("once"));
+$("approval-session").addEventListener("click", () => answerApproval("session"));
 $("retry").addEventListener("click", () => {
   if (!run) {
     send("", { retry: true });

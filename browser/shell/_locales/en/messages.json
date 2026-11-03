@@ -762,7 +762,6 @@
   "assistantNoAnswer": {"message": "The model returned no text."},
   "assistantAnswerHeading": {"message": "Answer"},
   "assistantAnswerReady": {"message": "Answer ready."},
-  "assistantStepFailed": {"message": "not allowed or failed"},
   "assistantSentPage": {"message": "$CHARS$ characters of this page were sent to $RECIPIENT$, $TOTAL$ in all.", "placeholders": {"chars": {"content": "$1"}, "recipient": {"content": "$2"}, "total": {"content": "$3"}}},
   "assistantSentQuestionOnly": {"message": "Only the question was sent to $RECIPIENT$: $TOTAL$ characters in all, with Nulavio's instructions.", "placeholders": {"recipient": {"content": "$1"}, "total": {"content": "$2"}}},
   "assistantSentTask": {"message": "The task, and what the assistant read in its AI Workspace, went to $RECIPIENT$.", "placeholders": {"recipient": {"content": "$1"}}},
@@ -1142,5 +1141,15 @@
   "assistantSourceHeading": {"message": "Under “$HEADING$”", "placeholders": {"heading": {"content": "$1"}}},
   "assistantSourceShow": {"message": "Show the tab"},
   "assistantSourceShown": {"message": "“$TITLE$” is the selected tab.", "placeholders": {"title": {"content": "$1"}}},
-  "assistantSourceGone": {"message": "“$TITLE$” is no longer open at that address in this window.", "placeholders": {"title": {"content": "$1"}}}
+  "assistantSourceGone": {"message": "“$TITLE$” is no longer open at that address in this window.", "placeholders": {"title": {"content": "$1"}}},
+  "assistantAllowTask": {"message": "Allow until this task ends"},
+  "assistantAnsweredTask": {"message": "Allowed until this task ends."},
+  "assistantApprovalInTab": {"message": "The permission request is open in a tab of this window."},
+  "assistantApprovalElsewhere": {"message": "The permission request is shown in another Nulavio window."},
+  "assistantStepsLabel": {"message": "Steps of the task"},
+  "assistantStep_started": {"message": "in progress"},
+  "assistantStep_ok": {"message": "done"},
+  "assistantStep_denied": {"message": "denied"},
+  "assistantStep_error": {"message": "did not work"},
+  "assistantStep_cancelled": {"message": "stopped"}
 }

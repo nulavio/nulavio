@@ -76,11 +76,12 @@ this.nulavioAI = class extends ExtensionAPI {
         onAssistantEvent: new ExtensionCommon.EventManager({
           context,
           name: "nulavioAI.onAssistantEvent",
-          register: fire => ai.subscribeAssistant((win, event) => {
-            if (win === windowOf()) {
-              fire.async(event);
-            }
-          }),
+          register: fire =>
+            ai.subscribeAssistant((win, event) => {
+              if (win === windowOf()) {
+                fire.async(event);
+              }
+            }, () => (context.unloaded ? null : windowOf())),
         }).api(),
       },
     };

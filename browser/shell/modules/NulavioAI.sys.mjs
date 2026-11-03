@@ -32,6 +32,7 @@ ChromeUtils.defineESModuleGetters(lazy, {
 });
 
 const SHELL_ID = "shell@nulavio.net";
+const SIDEBAR_ID = "shell_nulavio_net-sidebar-action"; // the assistant panel in the side panel
 const WORKSPACE_PREF = "nulavio.ai.workspace";
 const TARGET_PREF = "nulavio.ai.target";
 const TARGET_LABEL_PREF = "nulavio.ai.target.label";
@@ -348,10 +349,11 @@ class AI {
       if (!ID_RE.test(id) || this.#shown.has(id) || (await IOUtils.exists(PathUtils.join(dir, `${id}.seen`)))) {
         continue;
       }
+      if (this.#runs.size && (await IOUtils.readJSON(path).catch(() => null))?.client === "nulavio-assistant") {
+        continue; // the assistant's own run shows it, in its panel or its window (#onRunEvent)
+      }
       // First Nulavio window to see it takes it; the bridge then waits for the answer.
-      try {
-        await IOUtils.writeUTF8(PathUtils.join(dir, `${id}.seen`), "", { mode: "create" });
-      } catch {
+      if (!(await this.#claim(id))) {
         continue; // another Nulavio instance took it
       }
       this.#shown.add(id);
@@ -359,8 +361,18 @@ class AI {
     }
   }
 
-  #open(page) {
-    const win = Services.wm.getMostRecentBrowserWindow();
+  /** Mark a request as seen by this browser (the bridge then waits for the answer); false if another took it. */
+  async #claim(id) {
+    try {
+      await IOUtils.writeUTF8(PathUtils.join(this.#requestsDir(), `${id}.seen`), "", { mode: "create" });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  #open(page, where = null) {
+    const win = where && !where.closed ? where : Services.wm.getMostRecentBrowserWindow();
     const policy = WebExtensionPolicy.getByID(SHELL_ID);
     if (!win || !policy) {
       return;
@@ -621,13 +633,24 @@ class AI {
 
   // -- runs in stream mode (UX5-C2) ----------------------------------------------------------------
 
-  subscribeAssistant(listener) {
-    this.#runListeners.add(listener);
-    return () => this.#runListeners.delete(listener);
+  /** `windowOf`: the window of the page that listens; a window with one counts as having its panel open. */
+  subscribeAssistant(listener, windowOf = () => null) {
+    const entry = { listener, windowOf };
+    this.#runListeners.add(entry);
+    return () => this.#runListeners.delete(entry);
+  }
+
+  /** The run's panel is open: this window's side panel shows the assistant, and that page listens. */
+  #panelOpen(win) {
+    const sidebar = win.SidebarController;
+    if (!sidebar?.isOpen || sidebar.currentID !== SIDEBAR_ID) {
+      return false;
+    }
+    return [...this.#runListeners].some(entry => entry.windowOf() === win);
   }
 
   #emit(run, event) {
-    for (const listener of this.#runListeners) {
+    for (const { listener } of this.#runListeners) {
       try {
         listener(run.win, event);
       } catch (e) {
@@ -706,8 +729,31 @@ class AI {
       if (Number.isFinite(expires)) {
         run.handle.holdIdle(expires + 10000);
       }
+      event = this.#placeApproval(run, runId, event);
     }
     this.#emit(run, { ...event, runId });
+  }
+
+  /** A permission request of a run is shown once (UX5-F, Q9): as a card in the run's panel when it is
+      open, else as the request page in front in the run's own window; never both, never in another window. */
+  #placeApproval(run, runId, event) {
+    const id = String(event.id ?? "");
+    if (!ID_RE.test(id)) {
+      return { ...event, place: "none" };
+    }
+    if (this.#shown.has(id)) {
+      return { ...event, place: "tab" }; // a tab shows it already
+    }
+    this.#shown.add(id); // at once, so the request watcher never opens a tab for it as well
+    const inPanel = this.#panelOpen(run.win);
+    this.#claim(id).then(claimed => {
+      if (!claimed) {
+        this.#emit(run, { type: "approval", runId, id, place: "elsewhere" }); // another Nulavio took it
+      } else if (!inPanel) {
+        this.#open(`ai/request.html?id=${id}`, run.win);
+      }
+    });
+    return { ...event, place: inPanel ? "panel" : "tab" };
   }
 
   #finishRun(runId, run, terminal) {

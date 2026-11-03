@@ -514,6 +514,13 @@ a.button { display: inline-flex; align-items: center; text-decoration: none; }
 .assistant__source { display: grid; gap: var(--nv-space-1); }
 .assistant__source > .button { justify-self: start; }
 .assistant__source-quote { margin: 0; padding-inline-start: var(--nv-space-3); border-inline-start: 3px solid var(--nv-color-accent-default); overflow-wrap: anywhere; }
+/* A run's timeline and its permission card (UX5-F). */
+.assistant__steps { margin: 0; padding-inline-start: 1.25rem; display: grid; gap: var(--nv-space-1); }
+.assistant__steps li[data-state="denied"] .hint, .assistant__steps li[data-state="error"] .hint { color: var(--nv-color-status-criticalText); }
+.assistant__approval[hidden] { display: none; }
+.assistant__approval { flex-wrap: nowrap; }
+.assistant__approval > .stack { flex: 1; min-width: 0; }
+.assistant__approval .assistant__answer-title { font-size: var(--nv-type-body-size); }
 /* Where the answer is still arriving: a still block, no animation (UX5-C2). */
 .assistant__cursor { display: inline-block; width: 0.5em; height: 1em; margin-inline-start: 1px; vertical-align: text-bottom; background: currentColor; opacity: 0.55; }
 .assistant__chips { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--nv-space-2); }

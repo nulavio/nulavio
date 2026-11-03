@@ -80,6 +80,24 @@
     </form>
 
     <p class="status" id="status" role="status" aria-live="polite"></p>
+    <section class="callout assistant__approval" id="approval" aria-labelledby="approval-headline" hidden>
+      <span id="approval-icon"></span>
+      <div class="stack stack--tight">
+        <p class="hint" id="approval-who"></p>
+        <h2 class="assistant__answer-title" id="approval-headline"></h2>
+        <p id="approval-risk"></p>
+        <p class="hint" id="approval-target" hidden></p>
+        <p class="hint" id="approval-where"></p>
+        <p class="hint" data-i18n="aiRequestOnlyIf"></p>
+        <p class="hint" id="approval-expires" hidden></p>
+        <div class="actions">
+          <button class="button button--primary" type="button" id="approval-deny" data-i18n="aiDeny"></button>
+          <button class="button button--secondary" type="button" id="approval-once" data-i18n="aiAllowOnce"></button>
+          <button class="button button--quiet" type="button" id="approval-session" data-i18n="assistantAllowTask"></button>
+        </div>
+      </div>
+    </section>
+    <p class="hint" id="approval-elsewhere" hidden></p>
     <div class="actions" id="retry-actions" hidden>
       <button class="button button--secondary" type="button" id="retry" data-i18n="assistantRetry" aria-describedby="retry-hint"></button>
       <p class="hint" id="retry-hint"></p>
@@ -115,7 +133,7 @@
         <ul class="assistant__sources" id="sources"></ul>
       </section>
       <p class="hint" id="receipt"></p>
-      <ol class="hint" id="steps" hidden></ol>
+      <ol class="assistant__steps" id="steps" aria-label="" hidden></ol>
       <div class="actions">
         <button class="button button--quiet" type="button" id="copy-answer" data-i18n="assistantCopy" hidden></button>
       </div>

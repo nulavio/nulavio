@@ -453,7 +453,9 @@ class AssistantUiTest(unittest.TestCase):
             {"choices": [{"message": {"content": "Não pude abrir."}}]},
         ]
         result = chrome_async(self.m, f"return await {AI}.assistantTask('Abra a página local', null, window);")["ok"]
-        self.assertEqual(result["steps"], [{"tool": "tab_new", "error": True}])  # restricted: no local addresses
+        self.assertEqual(
+            result["steps"], [{"tool": "tab_new", "error": True, "state": "denied"}]
+        )  # restricted: no local addresses
         self.assertEqual(result["answer"], "Não pude abrir.")
         denied = [m for m in self.provider.requests[-1][2]["messages"] if m.get("role") == "tool"]
         self.assertIn("Denied by Nulavio", denied[-1]["content"])
@@ -1230,6 +1232,124 @@ class AssistantUiTest(unittest.TestCase):
         self.ask_panel("E resumindo?")
         self.assertTrue(self.panel("return document.getElementById('sources-section').hidden;"))
         self.close_other_tabs()
+
+    # -- the run timeline and the permission card (UX5-F) -----------------------------------------
+
+    def card(self) -> dict:
+        return self.panel(
+            "const $ = id => document.getElementById(id);"
+            "return { shown: !$('approval').hidden, focused: document.activeElement?.id ?? null,"
+            " headline: $('approval-headline').textContent, once: $('approval-once').disabled,"
+            " steps: [...$('steps').children].map(li => li.dataset.state),"
+            " elsewhere: $('approval-elsewhere').hidden ? null : $('approval-elsewhere').textContent };"
+        )
+
+    def audit(self) -> list[dict]:
+        log = Path(self.session.env["HOME"]) / ".local" / "state" / "nulavio" / "ai" / "audit.jsonl"
+        return [json.loads(line) for line in log.read_text().splitlines() if line.strip()] if log.exists() else []
+
+    def ask_first(self, agent: str) -> None:
+        chrome_async(self.m, f"return await {AI}.change(args[0], 'grant', {{capability: 'navigate', mode: 'ask'}});", [agent])
+        self.addCleanup(
+            chrome_async, self.m, f"return await {AI}.change(args[0], 'clear-grant', {{capability: 'navigate'}});", [agent]
+        )
+
+    def test_26_a_permission_request_is_a_card_in_the_panel_with_deny_first(self):
+        self.close_other_tabs()
+        self.ask_first(self.assistant_agent())
+        call = {"id": "c1", "type": "function", "function": {"name": "tab_new", "arguments": json.dumps({"url": "about:blank"})}}
+        self.show_sidebar(reload=True)
+        self.wait_view(lambda v: v["state"] == "ready")
+        self.mode("task")
+        self.addCleanup(self.mode, "ask")
+        for answer in ("deny", "once"):
+            with self.subTest(answer=answer):
+                self.provider.replies += [{"choices": [{"message": {"content": None, "tool_calls": [call]}}]},
+                                          {"choices": [{"message": {"content": "Feito."}}]}]  # fmt: skip
+                self.submit("Abra uma aba")
+                self.assertTrue(harness.wait_until(lambda: self.card()["shown"], 30))
+                card = self.card()
+                self.assertEqual(card["focused"], "approval-deny")  # the safe answer is the keyboard's default
+                self.assertIn(MESSAGES["aiCap_navigate"]["message"], card["headline"])
+                self.assertTrue(card["once"])  # "Permitir" waits a moment before it works
+                if answer == "deny":
+                    self.assertTrue(harness.wait_until(lambda: not self.card()["once"], 5))
+                    self.shoot_window("sidebar-approval")
+                self.assertEqual(card["steps"], ["started"])
+                self.assertFalse(
+                    any("ai/request.html" in u for u in self.m.chrome("return gBrowser.browsers.map(b => b.currentURI.spec);"))
+                )
+                if answer == "once":
+                    self.assertTrue(harness.wait_until(lambda: not self.card()["once"], 5))
+                self.panel(f"document.getElementById('approval-{answer}').click();")
+                # Allowed, the call goes on and starts the AI Workspace. This harness has no display for it
+                # (the tools never pass MOZ_HEADLESS on), so that ends as workspace-failed here.
+                view = self.wait_view(lambda v: v["answered"] or v["level"] == "error", timeout=90)
+                self.assertFalse(self.card()["shown"])
+                steps = self.card()["steps"]
+                calls = [e for e in self.audit() if e.get("tool") == "tab_new"]
+                if answer == "deny":
+                    self.assertEqual(steps, ["denied"])
+                    self.assertEqual(view["status"], "Resposta pronta.")
+                    self.assertEqual(calls[-1]["outcome"], "denied")
+                else:
+                    self.assertNotIn("denied", steps)  # it went on past the permission
+                    self.assertNotEqual(calls[-1]["outcome"], "denied")
+
+    def test_27_with_the_panel_closed_the_request_opens_in_front_in_its_window(self):
+        self.close_other_tabs()
+        self.ask_first(self.assistant_agent())
+        call = {"id": "c1", "type": "function", "function": {"name": "tab_new", "arguments": json.dumps({"url": "about:blank"})}}
+        self.provider.replies += [{"choices": [{"message": {"content": None, "tool_calls": [call]}}]},
+                                  {"choices": [{"message": {"content": "Feito."}}]}]  # fmt: skip
+        self.provider.delay = 2.0  # time to close the panel while the model thinks
+        self.m.chrome(
+            "window.nvPlaces = [];"
+            f"window.nvOff = {AI}.subscribeAssistant((w, e) => e.type === 'approval' && window.nvPlaces.push(e.place));"
+        )
+        self.addCleanup(self.m.chrome, "window.nvOff?.();")
+        self.show_sidebar(reload=True)
+        self.wait_view(lambda v: v["state"] == "ready")
+        self.mode("task")
+        self.submit("Abra uma aba")
+        self.assertTrue(harness.wait_until(self.tools_process, 10))  # the run started; the panel closes now
+        chrome_async(self.m, f"const w = {WINDOW}; w.SidebarController.hide(); return true;", [None])
+        shown = "const spec = gBrowser.selectedBrowser.currentURI.spec; return spec.includes('ai/request.html') ? spec : null;"
+        try:
+            found = harness.wait_until(lambda: self.m.chrome(shown), 30)
+            self.assertTrue(found, self.m.chrome("return window.nvPlaces;"))  # in front, in the window the task belongs to
+            self.assertEqual(self.m.chrome("return window.nvPlaces;"), ["tab"])  # never also a card
+            chrome_async(self.m, f"return await {AI}.answer(args[0], 'deny');", [found.split("id=")[1]])
+        finally:
+            self.provider.delay = 0.0
+            requests = Path(self.session.env["HOME"]) / ".local" / "state" / "nulavio" / "ai" / "requests"
+            for pending in requests.glob("*.json"):
+                chrome_async(self.m, f"return await {AI}.answer(args[0], 'deny');", [pending.stem])
+            self.assertTrue(harness.wait_until(lambda: self.tools_process() is None, 60))
+            self.show_sidebar(reload=True)
+            self.mode("ask")
+            self.close_other_tabs()
+
+    def test_28_stop_with_the_card_open_removes_it_and_denies(self):
+        self.close_other_tabs()
+        self.ask_first(self.assistant_agent())
+        call = {"id": "c1", "type": "function", "function": {"name": "tab_new", "arguments": json.dumps({"url": "about:blank"})}}
+        self.provider.replies.append({"choices": [{"message": {"content": None, "tool_calls": [call]}}]})
+        self.show_sidebar(reload=True)
+        self.wait_view(lambda v: v["state"] == "ready")
+        self.mode("task")
+        self.addCleanup(self.mode, "ask")
+        before = self.provider.count
+        self.submit("Abra uma aba")
+        self.assertTrue(harness.wait_until(lambda: self.card()["shown"], 30))
+        self.panel("document.getElementById('send').click();")
+        view = self.wait_view(lambda v: v["answered"], timeout=40)
+        self.assertFalse(self.card()["shown"])
+        self.assertIn(self.card()["steps"], (["cancelled"], ["denied"]))
+        requests = Path(self.session.env["HOME"]) / ".local" / "state" / "nulavio" / "ai" / "requests"
+        self.assertEqual(list(requests.glob("*.json")), [])
+        self.assertEqual(self.provider.count, before + 1)
+        self.assertTrue(view["activity"])
 
 
 if __name__ == "__main__":
