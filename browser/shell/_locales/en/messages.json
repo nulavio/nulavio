@@ -57,7 +57,7 @@
   "warnDeleted": { "message": "File deleted from your computer." },
   "warnDeleteFailed": { "message": "Could not delete the file. It may already have been moved or removed." },
   "warnMissing": { "message": "This download was not found. It may have been removed from the downloads list." },
-  "warnWhy": { "message": "Why am I seeing this?" },
+  "warnWhy": {"message": "Why am I seeing this?"},
   "warnWhy1": { "message": "Installers and scripts (AppImage, .sh, .run, .deb, .rpm, Flatpak and others) run with your account's permissions and can read your files and open sessions." },
   "warnWhy2": { "message": "Nulavio never opens these files by itself and saves them without execute permission." },
   "warnWhy3": { "message": "This browser does not check download reputation with Google. Before opening, check the source and, if the author publishes one, the signature or checksum." },
@@ -1077,5 +1077,10 @@
   "momentLoading": {"message": "Loading…"},
   "methodsLastConfirmer": {"message": "Kept: a password or the recovery code is what confirms any change here."},
   "methodsNoConfirmer": {"message": "This profile no longer has a password or a recovery code, and those are what confirm changes here. It still opens with the computer login or the phone."},
-  "routingRememberHintLocked": {"message": "Unlock and open $TARGET$: next time it opens there without asking. Open in $CURRENT$: $SITE$ stops switching profiles.", "placeholders": {"target": {"content": "$1"}, "current": {"content": "$2"}, "site": {"content": "$3"}}}
+  "routingRememberHintLocked": {"message": "Unlock and open $TARGET$: next time it opens there without asking. Open in $CURRENT$: $SITE$ stops switching profiles.", "placeholders": {"target": {"content": "$1"}, "current": {"content": "$2"}, "site": {"content": "$3"}}},
+  "momentWhy": {"message": "Why am I seeing this?"},
+  "unlockWhy": {"message": "This profile is protected: its files stay encrypted on disk while it is locked. Nothing of it is read, not even a link that asked for it, until you unlock it here. Nulavio has no master key."},
+  "phoneWhy": {"message": "Connecting a phone adds one more way to unlock this profile; the password and the recovery code keep working. The same 6 digits on both screens show that nobody else read the code."},
+  "methodsWhy": {"message": "Each method holds the same profile key, encrypted its own way, so any one of them opens the profile. Nulavio keeps no copy and has no master key: if every method is lost, nobody can open the data."},
+  "aiRequestWhy": {"message": "A connected agent asked for something its autonomy level says to ask about first. Nothing happens until you answer; without an answer, the request is denied when it expires."}
 }

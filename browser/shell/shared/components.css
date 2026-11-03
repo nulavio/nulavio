@@ -95,6 +95,7 @@ kbd {
 .result[data-level="ok"]::before { content: "✓ "; color: var(--nv-color-status-secure); }
 .result[data-level="error"] { color: var(--nv-color-status-criticalText); }
 .why summary { cursor: pointer; color: var(--nv-color-text-secondary); }
+.why p { margin: var(--nv-space-3) 0 0; color: var(--nv-color-text-secondary); font-size: var(--nv-type-label-size); }
 .why ul { margin: var(--nv-space-3) 0 0; padding-left: 1.25rem; display: grid; gap: var(--nv-space-2); color: var(--nv-color-text-secondary); font-size: var(--nv-type-label-size); }
 
 

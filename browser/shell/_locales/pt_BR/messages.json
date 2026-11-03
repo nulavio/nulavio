@@ -57,7 +57,7 @@
   "warnDeleted": { "message": "Arquivo excluído do seu computador." },
   "warnDeleteFailed": { "message": "Não foi possível excluir o arquivo. Ele pode já ter sido movido ou removido." },
   "warnMissing": { "message": "Não encontramos este download. Ele pode ter sido removido da lista de downloads." },
-  "warnWhy": { "message": "Por que estou vendo isso?" },
+  "warnWhy": {"message": "Por que isto apareceu?"},
   "warnWhy1": { "message": "Instaladores e scripts (AppImage, .sh, .run, .deb, .rpm, Flatpak e outros) rodam com as permissões da sua conta e podem ler seus arquivos e sessões abertas." },
   "warnWhy2": { "message": "O Nulavio nunca abre esses arquivos sozinho e os salva sem permissão de execução." },
   "warnWhy3": { "message": "Este navegador não consulta a reputação de downloads no Google. Antes de abrir, confira a origem e, se o autor publicar, a assinatura ou o checksum." },
@@ -710,7 +710,7 @@
   "lookalikeContinue": {"message": "Continuar e não avisar de novo para este par"},
   "lookalikeContinueNote": {"message": "O Nulavio não vai avisar de novo sobre $SITE$ e $SIMILAR$ neste perfil. Você pode desfazer em Configurações › Senhas.", "placeholders": {"site": {"content": "$1"}, "similar": {"content": "$2"}}},
   "lookalikeDismissFailed": {"message": "Não foi possível guardar sua escolha, então o site não foi aberto. Nada foi alterado."},
-  "lookalikeWhy": {"message": "Por que estou vendo isto?"},
+  "lookalikeWhy": {"message": "Por que isto apareceu?"},
   "lookalikeWhy1": {"message": "Você clicou num campo de senha. O Nulavio comparou o nome deste site com os sites dos logins salvos neste perfil, neste computador; nada foi enviado a lugar nenhum."},
   "lookalikeWhy2": {"message": "Os nomes diferem por caracteres parecidos, uma ou duas letras, ou um nome conhecido com palavras como \"login\" ou \"seguro\"."},
   "lookalikeWhy3": {"message": "Se for um site em que você confia, você pode continuar: o Nulavio deixa de avisar para este par de sites neste perfil, até você removê-lo em Configurações › Senhas."},
@@ -1077,5 +1077,10 @@
   "momentLoading": {"message": "Carregando…"},
   "methodsLastConfirmer": {"message": "Fica: é com uma senha ou com o código de recuperação que se confirma qualquer mudança aqui."},
   "methodsNoConfirmer": {"message": "Este perfil não tem mais senha nem código de recuperação, e é com eles que se confirmam as mudanças aqui. Ele ainda abre com o login do computador ou o celular."},
-  "routingRememberHintLocked": {"message": "Desbloquear e abrir em $TARGET$: da próxima vez abre lá, sem perguntar. Abrir em $CURRENT$: $SITE$ deixa de trocar de perfil.", "placeholders": {"target": {"content": "$1"}, "current": {"content": "$2"}, "site": {"content": "$3"}}}
+  "routingRememberHintLocked": {"message": "Desbloquear e abrir em $TARGET$: da próxima vez abre lá, sem perguntar. Abrir em $CURRENT$: $SITE$ deixa de trocar de perfil.", "placeholders": {"target": {"content": "$1"}, "current": {"content": "$2"}, "site": {"content": "$3"}}},
+  "momentWhy": {"message": "Por que isto apareceu?"},
+  "unlockWhy": {"message": "Este perfil é protegido: os arquivos dele ficam criptografados no disco enquanto ele está bloqueado. Nada dele é lido, nem um link que pediu para abri-lo, até você desbloquear aqui. O Nulavio não tem chave mestra."},
+  "phoneWhy": {"message": "Conectar um celular soma mais um jeito de desbloquear este perfil; a senha e o código de recuperação continuam valendo. Os mesmos 6 dígitos nas duas telas mostram que ninguém mais leu o código."},
+  "methodsWhy": {"message": "Cada método guarda a mesma chave do perfil, cifrada de um jeito próprio, então qualquer um deles abre o perfil. O Nulavio não guarda cópia nem tem chave mestra: se todos se perderem, ninguém abre os dados."},
+  "aiRequestWhy": {"message": "Um agente conectado pediu algo que o nível de autonomia dele manda perguntar antes. Nada acontece até você responder; sem resposta, o pedido é negado quando expira."}
 }
