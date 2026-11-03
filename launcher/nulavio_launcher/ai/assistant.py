@@ -25,8 +25,12 @@ Plain HTTP is accepted only for a model on this computer (loopback).
 from __future__ import annotations
 
 import contextlib
+import email.utils
+import http.client
 import json
 import secrets
+import ssl
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -35,6 +39,7 @@ from pathlib import Path
 from .. import paths
 from . import audit, registry
 from .tools import TOOLS, Bridge
+from .workspace import WorkspaceError
 
 SCHEMA = 1
 KINDS = ("openai", "anthropic")
@@ -43,6 +48,8 @@ MAX_PAGE_CHARS = 60_000
 MAX_QUESTION_CHARS = 8_000
 MAX_STEPS = 8
 TIMEOUT = 120
+ANTHROPIC_MAX_TOKENS = 4096  # Anthropic needs a limit; OpenAI-compatible requests set none (Q14)
+TRUNCATED = {"max_tokens", "length"}  # stop reasons that mean the provider's limit cut the answer
 AGENT_NAME = "Nulavio Assistant"
 SYSTEM = (
     "You are Nulavio Assistant, inside the Nulavio browser. Answer briefly and plainly, in the user's language. "
@@ -52,9 +59,15 @@ SYSTEM = (
 
 
 class AssistantError(RuntimeError):
-    def __init__(self, code: str, detail: str = ""):
+    """`sent`: the request reached the provider (it answered, or it may have read it before failing)."""
+
+    def __init__(self, code: str, detail: str = "", *, sent: bool = False, status: int | None = None,
+                 retry_after: int | None = None):  # fmt: skip
         super().__init__(detail or code)
         self.code = code
+        self.sent = sent
+        self.status = status
+        self.retry_after = retry_after
 
 
 def _config_path() -> Path:
@@ -176,16 +189,65 @@ def _key() -> str | None:
     return bytes(found).decode() if found else None
 
 
+def _retry_after(value: str | None) -> int | None:
+    """Retry-After in seconds (a number or an HTTP date), or None."""
+    if not value:
+        return None
+    value = value.strip()
+    if value.isdigit():
+        return min(int(value), 86_400)
+    try:
+        when = email.utils.parsedate_to_datetime(value)
+    except (TypeError, ValueError):
+        return None
+    return max(0, min(int(when.timestamp() - time.time()), 86_400))
+
+
+def _http_error(status: int, retry_after: str | None) -> AssistantError:
+    """The provider answered with an error: the request reached it."""
+    if status in (401, 403):
+        code = "provider-auth"
+    elif status == 404:
+        code = "provider-not-found"
+    elif status == 429:
+        code = "provider-rate-limited"
+    elif status in (408, 504):
+        code = "provider-timeout"
+    elif status >= 500:  # 529: Anthropic overloaded
+        code = "provider-unavailable"
+    elif 400 <= status < 500:
+        code = "provider-bad-request"
+    else:
+        code = "provider-bad-reply"
+    return AssistantError(code, f"HTTP {status}", sent=True, status=status,
+                          retry_after=_retry_after(retry_after) if status == 429 else None)  # fmt: skip
+
+
 def _post(url: str, body: dict, headers: dict) -> dict:
+    """One request; an error says why, by cause (AI-09), and whether the request reached the provider."""
     headers = {"Content-Type": "application/json", **headers}
     request = urllib.request.Request(url, json.dumps(body).encode(), headers)  # noqa: S310 - checked endpoint
     try:
         with urllib.request.urlopen(request, timeout=TIMEOUT) as response:  # noqa: S310 - checked endpoint
-            return json.load(response)
+            reply = json.load(response)
     except urllib.error.HTTPError as exc:
-        raise AssistantError("provider-refused", f"HTTP {exc.code}") from None
-    except (urllib.error.URLError, TimeoutError, OSError, ValueError) as exc:
-        raise AssistantError("provider-unreachable", type(exc).__name__) from None
+        raise _http_error(exc.code, exc.headers.get("Retry-After") if exc.headers else None) from None
+    except urllib.error.URLError as exc:  # while connecting or sending: nothing reached the provider
+        reason = exc.reason
+        if isinstance(reason, ssl.SSLError | ssl.CertificateError):
+            raise AssistantError("provider-tls", type(reason).__name__) from None
+        if isinstance(reason, TimeoutError):
+            raise AssistantError("provider-timeout", "connect") from None
+        raise AssistantError("provider-unreachable", type(reason).__name__) from None
+    except TimeoutError:  # sent, then no answer in time
+        raise AssistantError("provider-timeout", "read", sent=True) from None
+    except (ValueError, UnicodeDecodeError, http.client.IncompleteRead):
+        raise AssistantError("provider-bad-reply", "not JSON", sent=True) from None
+    except (http.client.HTTPException, OSError) as exc:  # sent, then the connection ended without an answer
+        raise AssistantError("provider-unavailable", type(exc).__name__, sent=True) from None
+    if not isinstance(reply, dict):
+        raise AssistantError("provider-bad-reply", "not an object", sent=True)
+    return reply
 
 
 # The assistant works through the bridge's own tools; it has no use for handing the raw endpoint over.
@@ -201,36 +263,42 @@ def _tool_specs(kind: str) -> list[dict]:
     ]
 
 
-def _complete(provider: dict, messages: list[dict], tools: bool) -> tuple[str, list[dict]]:
-    """One model turn: (text, tool calls as {"id", "name", "arguments"})."""
+def _complete(provider: dict, messages: list[dict], tools: bool) -> tuple[str, list[dict], bool]:
+    """One model turn: (text, tool calls as {"id", "name", "arguments"}, cut by the provider's limit)."""
     key = _key()
     if provider["kind"] == "anthropic":
         headers = {"anthropic-version": "2023-06-01", **({"x-api-key": key} if key else {})}
-        body = {"model": provider["model"], "max_tokens": 1024, "system": SYSTEM, "messages": messages}
+        body = {"model": provider["model"], "max_tokens": ANTHROPIC_MAX_TOKENS, "system": SYSTEM, "messages": messages}
         if tools:
             body["tools"] = _tool_specs("anthropic")
         reply = _post(provider["base_url"] + "/v1/messages", body, headers)
-        blocks = reply.get("content") or []
-        text = "".join(b.get("text", "") for b in blocks if b.get("type") == "text")
-        calls = [
-            {"id": b["id"], "name": b["name"], "arguments": b.get("input") or {}} for b in blocks if b.get("type") == "tool_use"
-        ]
-        return text, calls
+        try:
+            blocks = reply.get("content") or []
+            text = "".join(str(b.get("text", "")) for b in blocks if b.get("type") == "text")
+            calls = [{"id": b["id"], "name": b["name"], "arguments": b.get("input") or {}}
+                     for b in blocks if b.get("type") == "tool_use"]  # fmt: skip
+            return text, calls, reply.get("stop_reason") in TRUNCATED
+        except (KeyError, TypeError, AttributeError):
+            raise AssistantError("provider-bad-reply", "unexpected shape", sent=True) from None
     headers = {"Authorization": f"Bearer {key}"} if key else {}
     body = {"model": provider["model"], "messages": [{"role": "system", "content": SYSTEM}, *messages]}
     if tools:
         body["tools"] = _tool_specs("openai")
     reply = _post(provider["base_url"] + "/chat/completions", body, headers)
-    message = ((reply.get("choices") or [{}])[0]).get("message") or {}
-    calls = []
-    for call in message.get("tool_calls") or []:
-        function = call.get("function") or {}
-        try:
-            arguments = json.loads(function.get("arguments") or "{}")
-        except ValueError:
-            arguments = {}
-        calls.append({"id": call.get("id", ""), "name": function.get("name", ""), "arguments": arguments, "raw": call})
-    return message.get("content") or "", calls
+    try:
+        choice = (reply.get("choices") or [{}])[0]
+        message = choice.get("message") or {}
+        calls = []
+        for call in message.get("tool_calls") or []:
+            function = call.get("function") or {}
+            try:
+                arguments = json.loads(function.get("arguments") or "{}")
+            except ValueError:
+                arguments = {}
+            calls.append({"id": call.get("id", ""), "name": function.get("name", ""), "arguments": arguments, "raw": call})
+        return str(message.get("content") or ""), calls, choice.get("finish_reason") in TRUNCATED
+    except (KeyError, TypeError, AttributeError):
+        raise AssistantError("provider-bad-reply", "unexpected shape", sent=True) from None
 
 
 def _page_block(page: dict) -> str:
@@ -273,13 +341,22 @@ def ask(question: str, profile: str, page: dict | None = None) -> dict:
     data = _require_ready(profile)
     provider = data["provider"]
     content = question if page is None else f"{_page_block(page)}\n\nQuestion: {question}"
-    text, _calls = _complete(provider, [{"role": "user", "content": content}], tools=False)
     sent_page = min(len(str(page.get("text") or "")), MAX_PAGE_CHARS) if page else 0
-    audit.record(agent=data["agent"], client="nulavio-assistant", tool="assistant.ask",
-                 target=_origin(page.get("url")) if page else None, outcome="ok",
-                 input_chars=len(question) + sent_page)  # fmt: skip
+
+    def record(outcome: str) -> None:
+        audit.record(agent=data["agent"], client="nulavio-assistant", tool="assistant.ask",
+                     target=_origin(page.get("url")) if page else None, outcome=outcome,
+                     input_chars=len(question) + sent_page)  # fmt: skip
+
+    try:
+        text, _calls, truncated = _complete(provider, [{"role": "user", "content": content}], tools=False)
+    except AssistantError as exc:
+        if exc.sent:  # it reached the provider: the activity says so, with the sizes, as for an answer
+            record(f"error:{exc.code}")
+        raise
+    record("ok")
     return {"answer": text.strip(), "recipient": urllib.parse.urlsplit(provider["base_url"]).hostname,
-            "model": provider["model"], "pageChars": sent_page}  # fmt: skip
+            "model": provider["model"], "pageChars": sent_page, "truncated": truncated}  # fmt: skip
 
 
 def _origin(url: str | None) -> str | None:
@@ -308,9 +385,9 @@ def run_task(task: str, profile: str, *, headless: bool = False, bridge: Bridge 
             reason = _blocked(data) if turn else None
             if reason:  # stopped, paused or revoked during the run: no further model turn
                 return {"answer": "", "steps": steps, "stopped": reason}
-            text, calls = _complete(provider, messages, tools=True)
+            text, calls, truncated = _complete(provider, messages, tools=True)
             if not calls:
-                return {"answer": text.strip(), "steps": steps}
+                return {"answer": text.strip(), "steps": steps, "truncated": truncated}
             if provider["kind"] == "anthropic":
                 messages.append({"role": "assistant", "content": [
                     *([{"type": "text", "text": text}] if text else []),
@@ -323,7 +400,10 @@ def run_task(task: str, profile: str, *, headless: bool = False, bridge: Bridge 
                 if call["name"] not in {t.name for t in ASSISTANT_TOOLS}:
                     result = {"content": [{"type": "text", "text": f"No tool named {call['name']!r}."}], "isError": True}
                 else:
-                    result = bridge.call(call["name"], call["arguments"])
+                    try:
+                        result = bridge.call(call["name"], call["arguments"])
+                    except WorkspaceError as exc:  # the AI Workspace did not start, or its engine ended
+                        raise AssistantError("workspace-failed", type(exc).__name__) from None
                 steps.append({"tool": call["name"], "error": bool(result.get("isError"))})
                 results.append((call, _tool_text(result)))
             if provider["kind"] == "anthropic":

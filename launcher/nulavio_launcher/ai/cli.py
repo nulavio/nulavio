@@ -366,7 +366,9 @@ def _assistant(args) -> int:
             raise assistant.AssistantError("bad-request")
         result = assistant.api_request(request)
     except assistant.AssistantError as exc:
-        result = {"error": exc.code, "detail": str(exc)[:200] if str(exc) != exc.code else None}
+        result = {"error": exc.code, "detail": str(exc)[:200] if str(exc) != exc.code else None, "sent": exc.sent}
+        if exc.retry_after is not None:
+            result["retryAfter"] = exc.retry_after
     except VaultError as exc:  # the system keyring
         result = {"error": exc.code}
     except registry.RegistryError:

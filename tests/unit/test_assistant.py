@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import email.utils
 import io
 import json
 import os
 import shutil
 import sys
 import tempfile
+import time
 import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
@@ -21,7 +23,7 @@ from nulavio_launcher.ai import assistant, audit, registry  # noqa: E402
 from test_vault_storage import FAKE_SECRET_TOOL  # noqa: E402
 
 sys.path.insert(0, str(ROOT / "tests" / "lib"))
-from fake_llm import FakeProvider  # noqa: E402
+from fake_llm import FakeProvider, Reply  # noqa: E402
 
 PROFILE = "/home/u/.local/share/nulavio/profiles/pessoal"
 KEY = "sk-artificial-test-key-123"
@@ -108,6 +110,72 @@ class AssistantTest(unittest.TestCase):
         assistant.allow_profile(PROFILE, False)
         with self.assertRaises(assistant.AssistantError):
             assistant.ask("Hello?", PROFILE)
+
+    def test_provider_errors_by_cause(self):
+        """AI-09 / UX5-A: each status gives its own code; a 429 keeps Retry-After; the request reached it."""
+        self.configure()
+        assistant.allow_profile(PROFILE, True)
+        cases = (
+            (401, "provider-auth"), (403, "provider-auth"), (404, "provider-not-found"),
+            (429, "provider-rate-limited"), (408, "provider-timeout"), (504, "provider-timeout"),
+            (500, "provider-unavailable"), (503, "provider-unavailable"), (529, "provider-unavailable"),
+            (400, "provider-bad-request"), (422, "provider-bad-request"),
+        )  # fmt: skip
+        for status, code in cases:
+            with self.subTest(status=status):
+                self.provider.replies.append(Reply(status=status, headers={"Retry-After": "30"}))
+                with self.assertRaises(assistant.AssistantError) as caught:
+                    assistant.ask("Hello?", PROFILE)
+                error = caught.exception
+                self.assertEqual((error.code, error.sent, error.status), (code, True, status))
+                self.assertEqual(error.retry_after, 30 if status == 429 else None)
+        entries = audit.read(agent=assistant.load()["agent"])
+        self.assertEqual(entries[-1]["outcome"], "error:provider-bad-request")  # it left the computer: recorded
+        self.assertEqual(entries[-1]["input_chars"], len("Hello?"))
+
+    def test_malformed_and_missing_replies(self):
+        self.configure()
+        assistant.allow_profile(PROFILE, True)
+        for reply in ({"choices": "nope"}, {"choices": [{"message": "nope"}]}, Reply(body=[1, 2])):  # type: ignore[arg-type]
+            with self.subTest(reply=reply):
+                self.provider.replies.append(reply)
+                with self.assertRaises(assistant.AssistantError) as caught:
+                    assistant.ask("Hello?", PROFILE)
+                self.assertEqual((caught.exception.code, caught.exception.sent), ("provider-bad-reply", True))
+        self.provider.close()  # nobody listens there now: nothing was sent, and the activity has no entry for it
+        before = len(audit.read())
+        with self.assertRaises(assistant.AssistantError) as caught:
+            assistant.ask("Hello?", PROFILE)
+        self.assertEqual((caught.exception.code, caught.exception.sent), ("provider-unreachable", False))
+        self.assertEqual(len(audit.read()), before)
+
+    def test_a_slow_provider_is_a_timeout(self):
+        self.configure()
+        assistant.allow_profile(PROFILE, True)
+        self.provider.replies.append(Reply(hang=True))
+        with mock.patch.object(assistant, "TIMEOUT", 0.5), self.assertRaises(assistant.AssistantError) as caught:
+            assistant.ask("Hello?", PROFILE)
+        self.assertEqual((caught.exception.code, caught.exception.sent), ("provider-timeout", True))
+
+    def test_retry_after_as_a_date(self):
+        later = email.utils.formatdate(time.time() + 120, usegmt=True)
+        self.assertIn(assistant._retry_after(later), range(110, 121))
+        self.assertIsNone(assistant._retry_after("soon"))
+        self.assertEqual(assistant._retry_after("999999"), 86_400)
+
+    def test_a_cut_answer_says_so(self):
+        """AI-08: the provider's limit stopped the answer (finish_reason length, stop_reason max_tokens)."""
+        assistant.allow_profile(PROFILE, True)
+        for kind, reply in (
+            ("openai", {"choices": [{"message": {"content": "Metade"}, "finish_reason": "length"}]}),
+            ("anthropic", {"content": [{"type": "text", "text": "Metade"}], "stop_reason": "max_tokens"}),
+        ):
+            with self.subTest(kind):
+                self.configure(kind)
+                self.provider.replies.append(reply)
+                self.assertEqual(assistant.ask("Hello?", PROFILE)["truncated"], True)
+                self.assertFalse(assistant.ask("Hello?", PROFILE)["truncated"])
+        self.assertEqual(self.provider.requests[-1][2]["max_tokens"], assistant.ANTHROPIC_MAX_TOKENS)
 
     def test_page_text_is_sent_only_when_given_and_marked_untrusted(self):
         self.configure()
