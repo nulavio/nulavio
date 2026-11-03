@@ -209,3 +209,46 @@ if (browser.nulavioConnect && browser.menus) {
     }
   });
 }
+
+// -- Nulavio Assistant: "Perguntar ao assistente" on a selection, and its shortcut (UX5-G) --
+// Both only put something in the panel of that window (the selection as an item, or the focus on
+// the question) and open it; nothing is sent until Send. Never in private windows, and none of it
+// is offered where an agent drives the browser (its AI Workspace). The label never repeats the
+// selection itself. The listeners are added at once, so the event page wakes for them.
+
+const ASK_MENU = "nulavio-ask-selection";
+
+if (browser.nulavioAI && browser.menus) {
+  browser.nulavioAI
+    .workspaceAgent()
+    .then(agent => {
+      if (!agent) {
+        browser.menus.create({ id: ASK_MENU, title: t("menuAskSelection"), contexts: ["selection"] }, () => void browser.runtime.lastError);
+      }
+    })
+    .catch(console.error);
+  browser.menus.onShown.addListener(async (info, tab) => {
+    if (info.contexts.includes("selection")) {
+      await browser.menus.update(ASK_MENU, { visible: !tab?.incognito }).catch(() => {});
+      browser.menus.refresh();
+    }
+  });
+  browser.menus.onClicked.addListener((info, tab) => {
+    if (info.menuItemId === ASK_MENU && tab && !tab.incognito) {
+      const offer = { kind: "selection", pageUrl: info.pageUrl ?? "", frameUrl: info.frameUrl ?? "", text: info.selectionText ?? "" };
+      browser.nulavioAI.assistantOffer(offer, tab.id).catch(console.error);
+    }
+  });
+}
+
+if (browser.nulavioAI && browser.commands) {
+  browser.commands.onCommand.addListener(async (command, tab) => {
+    if (command !== "open-assistant") {
+      return;
+    }
+    const target = tab ?? (await browser.tabs.query({ active: true, currentWindow: true }))[0];
+    if (target && !target.incognito) {
+      browser.nulavioAI.assistantOffer({ kind: "composer" }, target.id).catch(console.error);
+    }
+  });
+}

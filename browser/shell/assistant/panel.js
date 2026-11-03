@@ -203,26 +203,31 @@ async function copy(text) {
 }
 
 function chipItem(chip) {
+  const selection = chip.kind === "selection";
+  const size = selection
+    ? chip.truncated
+      ? t("assistantSelectionMayBeCut", [count(chip.chars)])
+      : t("assistantPageChars", [count(chip.chars)])
+    : chip.truncated
+      ? t("assistantPageLong", [count(MAX_PAGE_CHARS)])
+      : t("assistantPageChars", [count(chip.chars)]);
   return h(
     "li",
-    { class: "assistant__chip", "data-chip-id": chip.chipId },
+    { class: "assistant__chip", "data-chip-id": chip.chipId, "data-kind": chip.kind },
     h(
       "span",
       { class: "assistant__chip-text" },
-      h("span", { text: t("assistantAttachedPage") }),
+      h("span", { text: t(selection ? "assistantAttachedSelection" : "assistantAttachedPage") }),
       h("span", { class: "hint", "data-part": "binding", text: t("assistantAttachedBinding", [chip.title, chip.host]) }),
-      h("span", {
-        class: "hint",
-        "data-part": "size",
-        text: chip.truncated ? t("assistantPageLong", [count(MAX_PAGE_CHARS)]) : t("assistantPageChars", [count(chip.chars)]),
-      })
+      chip.frameHost ? h("span", { class: "hint", "data-part": "frame", text: t("assistantSelectionFrame", [chip.frameHost]) }) : null,
+      h("span", { class: "hint", "data-part": "size", text: size })
     ),
     h(
       "button",
       {
         class: "assistant__chip-remove",
         type: "button",
-        "aria-label": t("assistantRemovePage", [chip.title]),
+        "aria-label": t(selection ? "assistantRemoveSelection" : "assistantRemovePage", [chip.title]),
         onclick: () => removeChip(chip),
       },
       h("span", { "aria-hidden": "true", text: "×" })
@@ -305,8 +310,8 @@ async function refreshPage(changedTab = null) {
   if (version !== contextVersion) {
     return;
   }
-  const attached = pageChip();
-  if (attached) {
+  // Every item is bound to the tab it came from (a page, or a selection in it).
+  for (const attached of [...chips]) {
     const sameTab = page?.tabId === attached.tabId;
     if (!sameTab && changedTab !== attached.tabId) {
       drop(attached, "assistantDriftTab"); // another tab is selected now
@@ -364,6 +369,7 @@ async function render() {
     await refreshPage();
     syncMode();
     renderThread();
+    await takeOffer();
     if (!run) {
       // A Task goes on while the panel is closed (Q18): this panel shows it, with "Parar". An Ask that
       // was open when the panel closed is being stopped: it is not shown as going on.
@@ -581,7 +587,33 @@ function showPartial() {
   $("answer").replaceChildren(document.createTextNode(run.text), h("span", { class: "assistant__cursor", "aria-hidden": "true" }));
 }
 
+/** What an entry point left for this window (the selection menu, the shortcut): its item is already
+    in the browser's context; the panel shows it and puts the person in the question. */
+async function takeOffer() {
+  if (document.body.dataset.state !== "ready") {
+    return;
+  }
+  const delivery = await ai.assistantTakeOffer().catch(() => null);
+  if (!delivery) {
+    return;
+  }
+  chips = await ai.assistantChips().catch(() => chips);
+  $("drift").hidden = true;
+  showContext();
+  const added = chips.find(c => c.chipId === delivery.chipId);
+  if (added) {
+    announce(t("assistantSelectionAdded", [added.title]));
+  }
+  if (!run) {
+    $("prompt").focus();
+  }
+}
+
 function onRunEvent(event) {
+  if (event.type === "offer") {
+    takeOffer();
+    return;
+  }
   if (!run || event.runId !== run.runId) {
     if (run && !run.runId) {
       early.push(event); // assistantStart has not answered yet
@@ -887,12 +919,12 @@ browser.tabs.onUpdated.addListener((tabId, _info, tab) => {
   // Without the "tabs" permission the event carries no address or title, but it does say which tab
   // is selected where: re-read for the included tab and for this window's selected tab.
   const here = tab?.active && (windowId === null || tab.windowId === windowId);
-  if (document.body.dataset.state === "ready" && (tabId === pageChip()?.tabId || here)) {
+  if (document.body.dataset.state === "ready" && (chips.some(c => c.tabId === tabId) || here)) {
     refreshPage(tabId);
   }
 });
 browser.tabs.onRemoved.addListener(tabId => {
-  if (document.body.dataset.state === "ready" && tabId === pageChip()?.tabId) {
+  if (document.body.dataset.state === "ready" && chips.some(c => c.tabId === tabId)) {
     refreshPage(tabId);
   }
 });

@@ -588,6 +588,53 @@
             "maxLength": 1048576
           }
         ]
+      },
+      {
+        "name": "assistantOffer",
+        "type": "function",
+        "async": true,
+        "description": "An entry point (the selection menu, the shortcut) for the window of tabId: opens its side panel; sends nothing.",
+        "parameters": [
+          {
+            "name": "offer",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "selection",
+                  "composer"
+                ]
+              },
+              "pageUrl": {
+                "type": "string",
+                "maxLength": 1048576,
+                "optional": true
+              },
+              "frameUrl": {
+                "type": "string",
+                "maxLength": 1048576,
+                "optional": true
+              },
+              "text": {
+                "type": "string",
+                "maxLength": 65536,
+                "optional": true
+              }
+            }
+          },
+          {
+            "name": "tabId",
+            "type": "integer",
+            "minimum": 0
+          }
+        ]
+      },
+      {
+        "name": "assistantTakeOffer",
+        "type": "function",
+        "async": true,
+        "parameters": []
       }
     ],
     "events": [

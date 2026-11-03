@@ -1151,5 +1151,12 @@
   "assistantStep_ok": {"message": "done"},
   "assistantStep_denied": {"message": "denied"},
   "assistantStep_error": {"message": "did not work"},
-  "assistantStep_cancelled": {"message": "stopped"}
+  "assistantStep_cancelled": {"message": "stopped"},
+  "menuAskSelection": {"message": "Ask the assistant about the selection"},
+  "commandOpenAssistant": {"message": "Open the assistant and write a question"},
+  "assistantAttachedSelection": {"message": "Selected text"},
+  "assistantSelectionFrame": {"message": "from a frame of $HOST$", "placeholders": {"host": {"content": "$1"}}},
+  "assistantSelectionMayBeCut": {"message": "$CHARS$ characters; it may be cut (the limit for a selection)", "placeholders": {"chars": {"content": "$1"}}},
+  "assistantRemoveSelection": {"message": "Remove the selected text of “$TITLE$” from the message", "placeholders": {"title": {"content": "$1"}}},
+  "assistantSelectionAdded": {"message": "The selected text of “$TITLE$” goes with the next message. Nothing was sent.", "placeholders": {"title": {"content": "$1"}}}
 }

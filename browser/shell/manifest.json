@@ -35,6 +35,12 @@
         "default": "Alt+Shift+P"
       },
       "description": "__MSG_profilesShortcut__"
+    },
+    "open-assistant": {
+      "suggested_key": {
+        "default": "Alt+Shift+A"
+      },
+      "description": "__MSG_commandOpenAssistant__"
     }
   },
   "experiment_apis": {

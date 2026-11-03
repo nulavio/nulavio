@@ -69,6 +69,9 @@ this.nulavioAI = class extends ExtensionAPI {
         assistantRuns: call(async () => ai.assistantRuns(windowOf())),
         assistantThread: call(async () => ai.assistantThread(windowOf())),
         assistantShowSource: call(async url => ai.assistantShowSource(url, windowOf())),
+        // From the background page: the window is the tab's, not the caller's.
+        assistantOffer: call((offer, tabId) => ai.assistantOffer(offer, tabId)),
+        assistantTakeOffer: call(async () => ai.assistantTakeOffer(windowOf())),
         assistantThreadClear: call(async () => ai.assistantThreadClear(windowOf())),
         assistantThreadLeavePage: call(async () => ai.assistantThreadLeavePage(windowOf())),
         assistantThreadCarry: call(async recipient => ai.assistantThreadCarry(recipient, windowOf())),

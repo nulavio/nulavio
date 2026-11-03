@@ -1351,6 +1351,117 @@ class AssistantUiTest(unittest.TestCase):
         self.assertEqual(self.provider.count, before + 1)
         self.assertTrue(view["activity"])
 
+    # -- entry points (UX5-G) ------------------------------------------------------------------------
+
+    def select_first_paragraph(self) -> str:
+        return self.m.execute(
+            "const p = document.querySelector('p'); const r = document.createRange(); r.selectNodeContents(p);"
+            "getSelection().removeAllRanges(); getSelection().addRange(r); return getSelection().toString();"
+        )
+
+    def ask_menu_item(self) -> bool | None:
+        """The "Perguntar ao assistente" item of the open page menu: True shown, False hidden, None absent."""
+        return self.m.chrome(
+            "const item = document.querySelector(\"[id$='nulavio-ask-selection']\");return item ? !item.hidden : null;"
+        )
+
+    def focused_in_panel(self) -> str | None:
+        try:
+            return self.panel("return document.documentElement.dataset.ready === 'true' ? document.activeElement.id : null;")
+        except AssertionError:
+            return None  # the panel's page is still loading
+
+    def sidebar_shows_assistant(self, which: str | None = None) -> bool:
+        return chrome_async(self.m, f"const w = {WINDOW}; return w.SidebarController.isOpen && w.SidebarController.currentID;",
+                            [which])["ok"] == SIDEBAR  # fmt: skip
+
+    def test_29_the_selection_menu_opens_the_panel_with_the_selection_and_sends_nothing(self):
+        url = self.server.url("/long-page?n=200")
+        self.close_other_tabs()
+        self.m.switch_to(self.m.window_handles()[0])
+        self.m.navigate(url)  # in the tab Marionette drives, so the right click lands on it
+        self.wait_loaded(url)
+        chrome_async(self.m, f"const w = {WINDOW}; w.SidebarController.hide(); return true;", [None])
+        selected = self.select_first_paragraph()
+        before = self.provider.count
+        self.m.context_click("p")
+        self.assertTrue(harness.wait_until(self.m.menu_open))
+        self.assertTrue(harness.wait_until(lambda: self.ask_menu_item() is True, 10))
+        label = self.m.chrome("return document.querySelector(\"[id$='nulavio-ask-selection']\").getAttribute('label');")
+        self.assertEqual(label, "Perguntar ao assistente sobre a seleção")  # never the selected text in the label
+        self.m.chrome(
+            "const m = document.getElementById('contentAreaContextMenu');"
+            "m.activateItem(document.querySelector(\"[id$='nulavio-ask-selection']\"));"
+        )
+        self.assertTrue(harness.wait_until(self.sidebar_shows_assistant, 10))  # opened in this window
+        view = self.wait_view(lambda v: v["attached"])
+        self.assertTrue(self.panel("return document.querySelector('#chips li[data-kind=selection]') !== null;"))
+        self.assertEqual(view["attached"], f"só da aba “long-page” · {url.split('/')[2]}")
+        self.assertTrue(harness.wait_until(lambda: self.focused_in_panel() == "prompt", 10))
+        self.assertEqual(self.provider.count, before)  # nothing went
+        self.type("O que diz a seleção?")
+        line = self.view()["sendLine"]
+        self.submit("O que diz a seleção?")
+        self.wait_view(lambda v: v["answered"] and self.provider.count == before + 1)
+        content = self.provider.requests[-1][2]["messages"][-1]["content"]
+        self.assertIn("<<<SELECTION", content)
+        self.assertIn(" ".join(selected.split())[:40], " ".join(content.split()))
+        self.assertEqual(self.shown_chars(line), self.provider.chars[-1])
+        # A selection whose tab goes elsewhere leaves the message, like a page.
+        self.panel("document.getElementById('new-thread').click();")
+        self.select_first_paragraph()
+        tab = chrome_async(self.m, f"return {TABS}.getId(gBrowser.selectedTab);")["ok"]
+        text = self.m.execute("return getSelection().toString();")
+        chrome_async(
+            self.m,
+            f"return await {AI}.assistantOffer({{kind: 'selection', pageUrl: args[0], text: args[1]}}, args[2]);",
+            [url, text, tab],
+        )
+        self.wait_view(lambda v: v["attached"])
+        self.go(self.server.url("/page/Outra"))
+        view = self.wait_view(lambda v: v["drift"])
+        self.assertIsNone(view["attached"])
+        self.close_other_tabs()
+
+    def test_30_no_selection_menu_or_delivery_in_a_private_window(self):
+        url = self.server.url("/long-page?n=200")
+        handles = set(self.m.window_handles())
+        main = self.m.send("WebDriver:GetWindowHandle")["value"]
+        self.m.chrome("OpenBrowserWindow({private: true});")
+        self.assertTrue(harness.wait_until(lambda: set(self.m.window_handles()) - handles, timeout=20))
+        private = (set(self.m.window_handles()) - handles).pop()
+        self.m.switch_to(private)
+        try:
+            harness.wait_until(lambda: self.m.current_url() == "about:privatebrowsing", timeout=20)
+            self.m.navigate(url)
+            self.select_first_paragraph()
+            self.m.context_click("p")
+            self.assertTrue(harness.wait_until(self.m.menu_open))
+            time.sleep(1)
+            self.assertIn(self.ask_menu_item(), (False, None))  # hidden by its context
+            self.m.close_menu()
+            tab = self.m.chrome(f"return {TABS}.getId(gBrowser.selectedTab);")
+            refused = chrome_async(self.m, f"return await {AI}.assistantOffer({{kind: 'composer'}}, args[0]);", [tab])
+            self.assertEqual(refused, {"error": "private-window"})
+        finally:
+            self.m.send("WebDriver:CloseWindow")
+            self.m.switch_to(main)
+
+    def test_31_the_shortcut_opens_the_panel_on_the_question_and_keeps_it_open(self):
+        """Alt+Shift+A (Q8): the extension's key in the window; it opens and never toggles the panel."""
+        self.close_other_tabs()
+        self.select_new_tab(self.server.url("/page/Atalho"))
+        chrome_async(self.m, f"const w = {WINDOW}; w.SidebarController.hide(); return true;", [None])
+        # The engine adds one <key> per command to the extension's keyset (no id): the assistant's is Alt+Shift+A.
+        key = "[...document.querySelectorAll('#ext-keyset-id-shell_nulavio_net key')].find(k => k.getAttribute('key') === 'A')"
+        self.assertEqual(self.m.chrome(f"const k = {key}; return k && [k.getAttribute('modifiers'), k.getAttribute('key')];"),
+                         ["alt,shift", "A"])  # fmt: skip
+        for _ in range(2):  # pressed again, the panel stays open
+            self.m.chrome(f"{key}.doCommand();")
+            self.assertTrue(harness.wait_until(self.sidebar_shows_assistant, 10))
+            self.assertTrue(harness.wait_until(lambda: self.focused_in_panel() == "prompt", 10))
+        self.close_other_tabs()
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -101,6 +101,7 @@ const RUN_WATCH_MS = 500;
 // The page text that goes with a message: the first MAX_PAGE_CHARS code points, as the tools
 // (launcher/nulavio_launcher/ai/assistant.py MAX_PAGE_CHARS) would cut it.
 const MAX_PAGE_CHARS = 60000;
+const MAX_SELECTION_CHARS = 16384; // assistant.py MAX_SELECTION_CHARS: the engine's limit for a menu's selection
 
 /** Code points, as the tools count them (Python's len), not UTF-16 units. */
 function codePoints(text) {
@@ -131,6 +132,14 @@ function pageBlockChars({ url, title, chars }) {
   return codePoints(`Page content (untrusted, from ${url}, title "${title}"):\n<<<PAGE\n`) + chars + codePoints("\nPAGE>>>\n\n");
 }
 
+/** What a selection adds: its block (assistant.py _selection_block) and the blank line after it. */
+function selectionBlockChars({ url, frameUrl, title, chars }) {
+  const where = frameUrl && frameUrl !== url ? `${url}, in a frame from ${frameUrl}` : url;
+  return codePoints(`Selected text (untrusted, from ${where}, title "${title}"):\n<<<SELECTION\n`) + chars + codePoints("\nSELECTION>>>\n\n");
+}
+
+const blockChars = item => (item.kind === "selection" ? selectionBlockChars(item) : pageBlockChars(item));
+
 /** A web page a tab shows (address and title only), or null for anything else. */
 function pageOf(browser) {
   const url = browser?.currentURI?.spec ?? "";
@@ -151,6 +160,8 @@ class AI {
   // Assistant runs (UX5-C2): runId -> {win, kind, owner, handle, state, sent, steps, cutBy}. Events go
   // only to the pages of the run's window (the panel there); a run never starts in a private window.
   #runs = new Map();
+  // What an entry point asked the panel of a window to do when it opens (UX5-G): {focus, chipId}.
+  #offers = new WeakMap();
   // Conversations (UX5-D, Q16): per window, in memory only, never on disk or in the activity. Gone when the
   // window closes or on "Começar conversa nova". {turns, recipient, model, pageLeftOut}
   #threads = new WeakMap();
@@ -487,8 +498,9 @@ class AI {
 
   /** What a turn's question adds to a request: its page block (unless left out) and the question. */
   static #userChars(turn, leftOut) {
-    const page = turn.page && !leftOut ? pageBlockChars({ ...turn.page, chars: codePoints(turn.page.text) }) + codePoints("Question: ") : 0;
-    return page + codePoints(turn.question);
+    const page = turn.page && !leftOut ? pageBlockChars({ ...turn.page, chars: codePoints(turn.page.text) }) : 0;
+    const selection = turn.selection && !leftOut ? selectionBlockChars({ ...turn.selection, chars: codePoints(turn.selection.text) }) : 0;
+    return page + selection + (page || selection ? codePoints("Question: ") : 0) + codePoints(turn.question);
   }
 
   /** The earlier turns that go with the next Ask: the answered ones, each with the page copy that went
@@ -496,7 +508,12 @@ class AI {
   static #history(thread) {
     return thread.turns
       .filter(turn => turn.state === "done" && turn.answer)
-      .map(turn => ({ question: turn.question, page: thread.pageLeftOut ? null : turn.page, answer: turn.answer }));
+      .map(turn => ({
+        question: turn.question,
+        page: thread.pageLeftOut ? null : turn.page,
+        selection: thread.pageLeftOut ? null : (turn.selection ?? null),
+        answer: turn.answer,
+      }));
   }
 
   /** The conversation of this window, as the panel shows it: no page text, sizes only. */
@@ -504,7 +521,7 @@ class AI {
     const thread = this.#threadOf(this.#userWindow(win));
     const history = AI.#history(thread);
     const historyChars = history.reduce((n, turn) => n + AI.#userChars(turn, false) + codePoints(turn.answer), 0);
-    const withPage = history.find(turn => turn.page);
+    const withPage = history.find(turn => turn.page) ?? history.find(turn => turn.selection);
     const last = thread.turns.at(-1);
     return {
       turns: thread.turns.map(turn => ({
@@ -522,8 +539,8 @@ class AI {
       model: thread.model,
       historyTurns: history.length,
       historyChars,
-      page: withPage ? { title: withPage.page.title } : null,
-      pageLeftOut: thread.pageLeftOut && thread.turns.some(turn => turn.page),
+      page: withPage ? { title: (withPage.page ?? withPage.selection).title } : null,
+      pageLeftOut: thread.pageLeftOut && thread.turns.some(turn => turn.page || turn.selection),
       // "Tentar de novo" sends the last question again, as it went (Q17): what it adds to the conversation.
       retryChars: last && last.state !== "done" ? AI.#userChars(last, false) : null,
     };
@@ -559,7 +576,9 @@ class AI {
 
   static #chipView(chipId, item) {
     const { kind, tabId, url, title, chars, truncated } = item;
-    return { chipId, kind, tabId, url, title, host: URL.parse(url)?.host ?? "", chars, truncated, blockChars: pageBlockChars(item) };
+    const frameHost = item.frameUrl ? (URL.parse(item.frameUrl)?.host ?? "") : "";
+    const host = URL.parse(url)?.host ?? "";
+    return { chipId, kind, tabId, url, title, host, frameHost: frameHost !== host ? frameHost : "", chars, truncated, blockChars: blockChars(item) };
   }
 
   /** "Incluir esta página": read the visible text of the tab the user named, now, and keep it for the
@@ -616,8 +635,63 @@ class AI {
       this.#includedBrowser(item, win); // that tab went elsewhere or closed: nothing is sent
     }
     const page = used.find(item => item.kind === "page");
+    const selected = used.find(item => item.kind === "selection");
     const sent = page ? { url: page.url, title: page.title, text: page.text } : null;
-    return { op: "ask", question: String(question), page: sent, expected };
+    const selection = selected ? { url: selected.url, frameUrl: selected.frameUrl, title: selected.title, text: selected.text } : null;
+    return { op: "ask", question: String(question), page: sent, selection, expected };
+  }
+
+  /** An entry point outside the panel (UX5-G): the selection menu ({kind: "selection", pageUrl, frameUrl,
+      text}) or the shortcut ({kind: "composer"}), for the window of `tabId`. A selection becomes an item of
+      that window's next message (read here, never sent to the panel); the side panel opens there, and the
+      panel focuses its question. Nothing is sent. Never in a private window or an AI Workspace. */
+  async assistantOffer(offer, tabId) {
+    const tab = Number.isInteger(tabId) ? tabTracker().getTab(tabId, null) : null;
+    const win = this.#userWindow(tab ? (tab.documentGlobal ?? tab.ownerGlobal) : null);
+    if (await this.workspaceAgent()) {
+      fail("ai-workspace");
+    }
+    const delivery = { focus: true, chipId: null };
+    if (offer?.kind === "selection") {
+      const browser = tab.linkedBrowser;
+      if (lazy.PrivateBrowsingUtils.isBrowserPrivate(browser)) {
+        fail("private-window");
+      }
+      const page = pageOf(browser);
+      if (!page || page.url !== offer.pageUrl) {
+        fail("page-changed"); // the tab went elsewhere since the menu opened
+      }
+      const raw = String(offer.text ?? "");
+      const [text] = cutCodePoints(raw, MAX_SELECTION_CHARS);
+      if (!text.trim()) {
+        fail("bad-request");
+      }
+      const items = this.#contextOf(win);
+      for (const [id, item] of items) {
+        if (item.kind === "selection") {
+          items.delete(id); // one selection per message: the new one replaces it
+        }
+      }
+      delivery.chipId = Services.uuid.generateUUID().toString().slice(1, -1);
+      const frameUrl = typeof offer.frameUrl === "string" && /^https?:/.test(offer.frameUrl) ? offer.frameUrl : null;
+      // At the engine's limit the selection may have been longer: the item says it may be cut.
+      items.set(delivery.chipId, { kind: "selection", tabId, url: page.url, frameUrl, title: page.title, text, chars: codePoints(text),
+        truncated: raw.length >= MAX_SELECTION_CHARS });
+    } else if (offer?.kind !== "composer") {
+      fail("bad-request");
+    }
+    this.#offers.set(win, delivery);
+    // Opened by the module in that window: no user-input rule, and never another window's side panel.
+    await win.SidebarController.show(SIDEBAR_ID);
+    this.#emit({ win }, { type: "offer" });
+    return { done: true };
+  }
+
+  /** The panel takes what an entry point left for its window, once. */
+  assistantTakeOffer(win) {
+    const delivery = this.#offers.get(this.#userWindow(win)) ?? null;
+    this.#offers.delete(win);
+    return delivery;
   }
 
   /** Ask, answered in one piece. `chips`: the items the user included in this message. `expected`: where
@@ -681,7 +755,8 @@ class AI {
           fail("bad-request");
         }
         thread.turns.pop();
-        request = { op: "ask", question: last.question, page: last.page, expected: details?.expected ?? fail("bad-request") };
+        request = { op: "ask", question: last.question, page: last.page, selection: last.selection ?? null,
+          expected: details?.expected ?? fail("bad-request") };
         if (!Number.isInteger(request.expected.chars)) {
           fail("bad-request");
         }
@@ -689,7 +764,7 @@ class AI {
         request = this.#askRequest(details?.question ?? "", details, win);
       }
       request.history = AI.#history(thread);
-      turn = { question: request.question.trim(), page: request.page };
+      turn = { question: request.question.trim(), page: request.page, selection: request.selection ?? null };
     } else if (kind === "task") {
       request = { op: "task", task: String(details?.task ?? ""), expected: details?.expected ?? null };
     } else {
