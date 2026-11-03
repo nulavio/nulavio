@@ -286,12 +286,40 @@ $("resume-settings").addEventListener("click", event => openShell(event.currentT
 $("open-activity").addEventListener("click", () => openShell("settings/settings.html#ai-activity-card"));
 $("allow-profile").addEventListener("click", () => ai.assistantAllow(true).then(render, e => announce(errorText(e), "error")));
 
+// While blocked (paused, emergency stop), the panel checks again whether it was resumed in
+// Settings when the person comes back to it. Each check runs the Nulavio tools (and a
+// keyring lookup), so tab switches and focus changes share one check every few seconds,
+// with a final one at the end of a burst; the tools still refuse while blocked.
+const BLOCKED_RECHECK_MS = 3000;
+let rendering = null;
+let lastBlockedCheck = 0;
+let blockedTimer = null;
+function renderShared() {
+  rendering ??= render().finally(() => {
+    rendering = null;
+  });
+  return rendering;
+}
+function recheckBlocked() {
+  if (blockedTimer) {
+    return;
+  }
+  const wait = Math.max(0, lastBlockedCheck + BLOCKED_RECHECK_MS - Date.now());
+  blockedTimer = setTimeout(() => {
+    blockedTimer = null;
+    lastBlockedCheck = Date.now();
+    if (document.body.dataset.state === "blocked") {
+      renderShared().catch(() => {});
+    }
+  }, wait);
+}
+
 browser.tabs.onActivated.addListener(info => {
   if (!state || (windowId !== null && info.windowId !== windowId)) {
     return;
   }
   if (document.body.dataset.state === "blocked") {
-    render().catch(() => {}); // resumed in Settings?
+    recheckBlocked(); // resumed in Settings?
   } else if (document.body.dataset.state === "ready") {
     refreshPage();
   }
@@ -311,7 +339,7 @@ browser.tabs.onRemoved.addListener(tabId => {
 });
 window.addEventListener("focus", () => {
   if (document.body.dataset.state === "blocked") {
-    render().catch(() => {});
+    recheckBlocked();
   }
 });
 

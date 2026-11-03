@@ -42,24 +42,27 @@ async function extension(id) {
 }
 
 async function refresh() {
-  show("tracking", ...mode(await setting(browser.privacy.websites.trackingProtectionMode)));
-  show("https", ...mode(await setting(browser.privacy.network.httpsOnlyMode)));
+  // Every new tab reads these; they are independent, so they go out together
+  // (one round trip of latency instead of eight). Display order is unchanged.
+  const [tracking, https, gpc, ublock, providers, engineSaving] = await Promise.all([
+    setting(browser.privacy.websites.trackingProtectionMode),
+    setting(browser.privacy.network.httpsOnlyMode),
+    setting(browser.privacy.network.globalPrivacyControl),
+    extension(UBLOCK_ID),
+    Promise.all(PROVIDERS.map(([id]) => extension(id))),
+    setting(browser.privacy.services.passwordSavingEnabled),
+  ]);
+  show("tracking", ...mode(tracking));
+  show("https", ...mode(https));
 
-  const gpc = await setting(browser.privacy.network.globalPrivacyControl);
   show("gpc", gpc === undefined ? t("stateUnknown") : gpc ? t("gpcSent") : t("gpcNotSent"),
        gpc === undefined ? "unknown" : gpc ? "ok" : "warn");
 
-  const ublock = await extension(UBLOCK_ID);
   if (!ublock) show("filter", t("filterMissing"), "warn");
   else if (!ublock.enabled) show("filter", t("filterDisabled"), "warn");
   else show("filter", t("filterActive", [ublock.version]), "ok");
 
-  const active = [];
-  for (const [id, name] of PROVIDERS) {
-    const ext = await extension(id);
-    if (ext?.enabled) active.push(name);
-  }
-  const engineSaving = await setting(browser.privacy.services.passwordSavingEnabled);
+  const active = PROVIDERS.filter((_, i) => providers[i]?.enabled).map(([, name]) => name);
   if (active.length) show("passwords", active.map(name => t("passwordsProvider", [name])).join(", "), "ok");
   else if (engineSaving) show("passwords", t("passwordsEngine"), "ok");
   else show("passwords", t("passwordsNone"), "warn");
@@ -145,6 +148,11 @@ async function showLayoutChoice() {
   const render = state => {
     if (dismissedInThisTab || (!state.choicePending && !editingInThisTab)) {
       card.hidden = true;
+      // The choice is settled: this tab no longer follows layout changes (every
+      // open new tab used to answer each one with a privileged state() call).
+      if (!busy && !keyboard?.pending()) {
+        unlisten();
+      }
       return;
     }
     card.hidden = false;
@@ -178,6 +186,15 @@ async function showLayoutChoice() {
         showUnavailable(e);
       }
     }
+  };
+  const unlisten = () => {
+    if (!listening) return;
+    try {
+      api.onChanged.removeListener(refreshLayout);
+    } catch {
+      // Context already tearing down.
+    }
+    listening = false;
   };
   const listen = async () => {
     if (listening) return true;
