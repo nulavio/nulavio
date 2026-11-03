@@ -34,6 +34,7 @@ class Reply:
     chunk_delay: float | None = None
     hang: bool = False  # read the request and never answer (until the provider closes)
     error: str | None = None  # a stream that breaks with this provider error after its pieces
+    raw: list[str] | None = None  # streamed as these data lines, verbatim (malformed events)
 
 
 def _anthropic(path: str) -> bool:
@@ -154,6 +155,10 @@ class FakeProvider:
                     self.wfile.write(raw)
                     self.wfile.flush()
 
+                if reply.raw is not None:
+                    for line in reply.raw:
+                        event(None, line)
+                    return
                 if anthropic:
                     event("message_start", {"type": "message_start", "message": {"role": "assistant", "content": []}})
                     event("content_block_start", {"type": "content_block_start", "index": 0,

@@ -310,6 +310,15 @@ class Bridge:
             result, outcome, decision, reason = self._error(str(exc)), "error:tool", "allow", None
         except BidiError as exc:
             result, outcome, decision, reason = self._error(f"Browser error: {exc}"), f"error:{exc.error}", "allow", None
+        except BaseException as exc:
+            # A cancel (the assistant's stream mode) or another failure in the middle of the call: it may have
+            # acted, so the activity records it before the exception goes on.
+            self.last_call = None
+            with contextlib.suppress(Exception):
+                audit.record(agent=self.agent_id, session=self.session_id, tool=name, capability=",".join(checked) or None,
+                             target=policy.origin(self._target), ms=int((time.monotonic() - started) * 1000),
+                             outcome="cancelled" if not isinstance(exc, Exception) else "error:failed")  # fmt: skip
+            raise
         target_url = target_url or self._target
         agent = self._agent() or {}
         typed = arguments.get("text") if name == "type" else arguments.get("expression") if name == "evaluate" else None

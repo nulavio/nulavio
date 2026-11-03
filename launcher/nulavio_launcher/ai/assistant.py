@@ -88,6 +88,8 @@ class Stream:
 
     def __init__(self, write):
         self._write = write
+        self.cancellable = True  # False once the answer is in or the AI Workspace is closing: a cancel then waits
+        self.cancel_requested = False
         self.sent = False
         self.answered = 0
         self.steps: list[dict] = []
@@ -445,32 +447,35 @@ def _complete_stream(provider: dict, messages: list[dict], on_text, on_send=None
             event = json.loads(data)
             if not isinstance(event, dict):
                 raise AssistantError("provider-bad-reply", "not an object", sent=True)
-            if kind == "anthropic":
-                kind_of = name or event.get("type")
-                if kind_of == "error":
-                    raise _stream_error(event.get("error"))
-                if kind_of == "content_block_delta" and (event.get("delta") or {}).get("type") == "text_delta":
-                    piece = str(event["delta"].get("text") or "")
-                elif kind_of == "message_delta":
-                    stop = (event.get("delta") or {}).get("stop_reason") or stop
-                    piece = ""
-                elif kind_of == "message_stop":
-                    finished = True
-                    break
-                else:
-                    piece = ""
-            else:
-                if "error" in event:
-                    raise _stream_error(event.get("error"))
-                choice = (event.get("choices") or [{}])[0]
-                piece = str((choice.get("delta") or {}).get("content") or "")
-                stop = choice.get("finish_reason") or stop
+            try:
+                piece, stop, finished = _stream_event(kind, name, event, stop)
+            except (KeyError, TypeError, AttributeError, IndexError):
+                raise AssistantError("provider-bad-reply", "unexpected shape", sent=True) from None
+            if finished:
+                break
             if piece:
                 text.append(piece)
                 on_text(piece)
     if not finished and stop is None:
         raise AssistantError("provider-unavailable", "the stream ended early", sent=True)
     return "".join(text), stop in TRUNCATED
+
+
+def _stream_event(kind: str, name: str | None, event: dict, stop):
+    """(text piece, stop reason, finished) of one streamed event; raises the provider's error event."""
+    if kind == "anthropic":
+        kind_of = name or event.get("type")
+        if kind_of == "error":
+            raise _stream_error(event.get("error"))
+        if kind_of == "content_block_delta" and (event.get("delta") or {}).get("type") == "text_delta":
+            return str(event["delta"].get("text") or ""), stop, False
+        if kind_of == "message_delta":
+            return "", (event.get("delta") or {}).get("stop_reason") or stop, False
+        return "", stop, kind_of == "message_stop"
+    if "error" in event:
+        raise _stream_error(event.get("error"))
+    choice = (event.get("choices") or [{}])[0]
+    return str((choice.get("delta") or {}).get("content") or ""), choice.get("finish_reason") or stop, False
 
 
 def _page_block(page: dict) -> str:
@@ -582,15 +587,20 @@ def ask(question: str, profile: str, page: dict | None = None, expected: dict | 
         else:
             out.event("start", recipient=recipient(provider), model=provider["model"], chars=chars)
             text, truncated = _complete_stream(provider, messages, out.text, on_send=lambda: out.sending(0))
+            out.cancellable = False  # the answer is in: a stop now does not throw it away
             out.flush()
             out.answered += 1
     except AssistantError as exc:
+        if out is not None:
+            out.flush()  # what came before the error stays with the person
         if exc.sent:  # it reached the provider: the activity says so, with the sizes, as for an answer
             record(f"error:{exc.code}")
         raise
     except Cancelled:
-        if out is not None and out.sent:
-            record("cancelled")  # stopped by the person after it may have left
+        if out is not None:
+            out.flush()
+            if out.sent:
+                record("cancelled")  # stopped by the person after it may have left
         raise
     record("ok")
     return {"answer": text.strip(), "recipient": recipient(provider), "model": provider["model"],
@@ -651,6 +661,7 @@ def run_task(task: str, profile: str, *, headless: bool = False, bridge: Bridge 
                 index = len(steps)
                 if out is not None:
                     out.step(index=index, tool=call["name"], state="started")
+                meta = None
                 if call["name"] not in {t.name for t in ASSISTANT_TOOLS}:
                     result = {"content": [{"type": "text", "text": f"No tool named {call['name']!r}."}], "isError": True}
                 else:
@@ -658,9 +669,16 @@ def run_task(task: str, profile: str, *, headless: bool = False, bridge: Bridge 
                         result = bridge.call(call["name"], call["arguments"])
                     except WorkspaceError as exc:  # the AI Workspace did not start, or its engine ended
                         raise AssistantError("workspace-failed", type(exc).__name__) from None
+                    except Cancelled:
+                        # Stopped in the middle of this call: it may have acted; the step list says so.
+                        steps.append({"tool": call["name"], "error": True})
+                        if out is not None:
+                            out.step(index=index, tool=call["name"], state="cancelled")
+                        raise
+                    meta = getattr(bridge, "last_call", None)  # this call's, never the one before
                 steps.append({"tool": call["name"], "error": bool(result.get("isError"))})
                 if out is not None:
-                    out.step(index=index, tool=call["name"], **_step_state(result, getattr(bridge, "last_call", None)))
+                    out.step(index=index, tool=call["name"], **_step_state(result, meta))
                 results.append((call, _tool_text(result)))
             if provider["kind"] == "anthropic":
                 messages.append({"role": "user", "content": [
@@ -670,6 +688,8 @@ def run_task(task: str, profile: str, *, headless: bool = False, bridge: Bridge 
                 messages += [{"role": "tool", "tool_call_id": c["id"], "content": reply} for c, reply in results]
         return {"answer": "", "steps": steps, "stopped": "step-limit", "limit": MAX_STEPS}
     finally:
+        if out is not None:
+            out.cancellable = False  # closing the AI Workspace is never cut (only SIGKILL can)
         bridge.close()
         with contextlib.suppress(registry.RegistryError, OSError, ValueError):
             registry.end_session(agent_id, bridge.session_id)  # "until it disconnects" ends with the task

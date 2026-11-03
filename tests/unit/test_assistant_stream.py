@@ -31,6 +31,17 @@ from nulavio_launcher.ai import assistant, audit, registry  # noqa: E402
 from test_vault_storage import FAKE_SECRET_TOOL  # noqa: E402
 
 PROFILE = "/home/u/.local/share/nulavio/profiles/pessoal"
+
+
+def wait(predicate, timeout: float = 20) -> bool:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if predicate():
+            return True
+        time.sleep(0.05)
+    return False
+
+
 TERMINAL = ("done", "error")
 
 
@@ -38,14 +49,16 @@ class Run:
     """One `nulavio ai assistant` process; its lines are read as they come, with the provider's
     count of streamed pieces at that moment."""
 
-    def __init__(self, request: dict, provider: FakeProvider, env: dict):
+    def __init__(self, request: dict, provider: FakeProvider, env: dict, argv: list[str] | None = None):
         self.provider = provider
         self.proc = subprocess.Popen(
-            [str(ROOT / "bin" / "nulavio"), "ai", "assistant"],
+            argv or [str(ROOT / "bin" / "nulavio"), "ai", "assistant"],
             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env, text=True,
         )  # fmt: skip
         self.lines: queue.Queue = queue.Queue()
+        self.stderr: list[str] = []
         threading.Thread(target=self._read, daemon=True).start()
+        threading.Thread(target=lambda: self.stderr.extend(self.proc.stderr), daemon=True).start()
         self.proc.stdin.write(json.dumps({**request, "stream": True, "profile": PROFILE}) + "\n")
         self.proc.stdin.flush()
         self.events: list[dict] = []
@@ -104,8 +117,15 @@ class StreamTest(unittest.TestCase):
         self.state = assistant.configure("openai", self.provider.base, "test-model", "Local", "sk-test")
         assistant.allow_profile(PROFILE, True)
 
-    def run_(self, request: dict, env: dict | None = None) -> Run:
-        run = Run(request, self.provider, env or self.env)
+    def run_(self, request: dict, env: dict | None = None, patch: str | None = None) -> Run:
+        # `patch`: Python run in the tools' process before they start (a slow step to stop in the middle of).
+        argv = None
+        if patch:
+            launcher = str(ROOT / "launcher")
+            code = f"import sys; sys.path.insert(0, {launcher!r})\n{patch}\n"
+            code += "from nulavio_launcher.cli import main\nsys.exit(main(['ai', 'assistant']))"
+            argv = [sys.executable, "-I", "-c", code]
+        run = Run(request, self.provider, env or self.env, argv)
         self.addCleanup(run.close)
         return run
 
@@ -238,6 +258,70 @@ class StreamTest(unittest.TestCase):
         self.assertNotIn("Denied by Nulavio", json.dumps(steps))  # the tool's text is the model's, not the panel's
         self.assertEqual([e["turn"] for e in run.events if e["type"] == "sending"], [0, 1])
         self.assertEqual((done["answer"], done["steps"]), ("Não deu.", [{"tool": "tab_new", "error": True}]))
+
+    def test_a_stop_while_the_ai_workspace_closes_does_not_cut_it(self):
+        """Review F1: the answer is in and the AI Workspace is closing; "Parar" now lets both finish."""
+        patch = (
+            "import time\nfrom nulavio_launcher.ai import tools\nclose = tools.Bridge.close\n"
+            "def slow(self):\n    print('close-start', file=sys.stderr, flush=True); time.sleep(2); close(self)\n"
+            "    print('close-end', file=sys.stderr, flush=True)\ntools.Bridge.close = slow"
+        )
+        self.provider.replies.append({"choices": [{"message": {"content": "Feito."}}]})
+        run = self.run_({"op": "task", "task": "Faça"}, patch=patch)
+        self.assertTrue(wait(lambda: "close-start\n" in run.stderr))
+        run.proc.send_signal(signal.SIGTERM)
+        done = self.terminal(run.finish())
+        self.assertEqual((done["type"], done["cancelled"], done["answer"]), ("done", False, "Feito."))
+        self.assertIn("close-end\n", run.stderr)  # the closing went to the end
+
+    def test_a_call_stopped_in_the_middle_is_in_the_activity_and_the_steps(self):
+        """Review F2: the call may have acted; the activity and the step list say so."""
+        patch = (
+            "import time\nfrom nulavio_launcher.ai import tools\n"
+            "def slow(self, args, cancel, checked):\n    print('in-call', file=sys.stderr, flush=True); time.sleep(5)\n"
+            "tools.Bridge._t_tabs_list = slow"
+        )
+        call = {"id": "c1", "type": "function", "function": {"name": "tabs_list", "arguments": "{}"}}
+        self.provider.replies.append({"choices": [{"message": {"content": None, "tool_calls": [call]}}]})
+        run = self.run_({"op": "task", "task": "Liste"}, patch=patch)
+        self.assertTrue(wait(lambda: "in-call\n" in run.stderr))
+        run.proc.send_signal(signal.SIGTERM)
+        done = self.terminal(run.finish())
+        self.assertEqual((done["cancelled"], done["steps"]), (True, [{"tool": "tabs_list", "error": True}]))
+        states = [e["state"] for e in run.events if e["type"] == "step"]
+        self.assertEqual(states, ["started", "cancelled"])
+        entries = [e for e in audit.read(agent=self.state["agent"]["id"]) if e.get("tool") == "tabs_list"]
+        self.assertEqual([e["outcome"] for e in entries], ["cancelled"])
+
+    def test_a_tool_that_was_not_offered_is_not_reported_as_the_call_before(self):
+        """Review F3: each step says what happened to that call."""
+        local = {
+            "id": "c1",
+            "type": "function",
+            "function": {"name": "tab_new", "arguments": json.dumps({"url": "http://127.0.0.1:9/"})},
+        }
+        raw = {"id": "c2", "type": "function", "function": {"name": "raw_automation", "arguments": "{}"}}
+        self.provider.replies += [{"choices": [{"message": {"content": None, "tool_calls": [local, raw]}}]},
+                                  {"choices": [{"message": {"content": "Fim."}}]}]  # fmt: skip
+        run = self.run_({"op": "task", "task": "Tente"})
+        self.terminal(run.finish())
+        ended = [e for e in run.events if e["type"] == "step" and e["state"] != "started"]
+        self.assertEqual([(e["tool"], e["state"], e["capability"]) for e in ended],
+                         [("tab_new", "denied", "navigate,local_resources"), ("raw_automation", "error", None)])  # fmt: skip
+
+    def test_the_text_before_an_error_is_kept_whole(self):
+        """Review F5: the pieces gathered for the next delta are sent before the error line."""
+        self.provider.replies.append(Reply(chunks=list("começo"), chunk_delay=0, error="overloaded_error"))
+        run = self.run_({"op": "ask", "question": "Oi"})
+        self.assertEqual(self.terminal(run.finish())["code"], "provider-unavailable")
+        self.assertEqual("".join(e["text"] for e in run.events if e["type"] == "delta"), "começo")
+
+    def test_a_malformed_streamed_event_is_a_bad_reply_and_recorded(self):
+        """Review F6: the same as a malformed JSON answer."""
+        self.provider.replies.append(Reply(raw=['{"choices": [null]}']))
+        error = self.terminal(self.run_({"op": "ask", "question": "Oi"}).finish())
+        self.assertEqual((error["code"], error["sent"]), ("provider-bad-reply", True))
+        self.assertEqual(audit.read(agent=self.state["agent"]["id"])[-1]["outcome"], "error:provider-bad-reply")
 
     def test_without_stream_the_contract_is_unchanged(self):
         proc = subprocess.run(

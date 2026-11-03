@@ -379,9 +379,14 @@ def _assistant(args) -> int:
     start, sending, delta (Ask), step and approval (Task), then exactly one terminal line, done or error.
     The browser keeps stdin open until then: its end, or SIGTERM, cancels; the answer then is
     done {cancelled: true, sent}, where sent says whether a request may have reached the provider."""
+    import signal
+
     from . import assistant
     from ..vault.core import VaultError
 
+    # A SIGTERM that comes before stream mode is set up waits (and is then a cancel), instead of
+    # ending the process without its terminal line.
+    signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGTERM})
     raw = sys.stdin.readline(ASSISTANT_LIMIT + 1)
     try:
         request = json.loads(raw) if len(raw) <= ASSISTANT_LIMIT else None
@@ -389,6 +394,7 @@ def _assistant(args) -> int:
         request = None
     if isinstance(request, dict) and request.get("stream") is True and request.get("op") in ("ask", "task"):
         return _assistant_stream(request)
+    signal.pthread_sigmask(signal.SIG_UNBLOCK, {signal.SIGTERM})  # one answer: SIGTERM ends it as before
     try:
         if not isinstance(request, dict):
             raise assistant.AssistantError("bad-request")
@@ -418,6 +424,11 @@ def _assistant_stream(request: dict) -> int:
     out = assistant.Stream(write)
 
     def cancel(_signum, _frame):
+        if not out.cancellable:
+            # The answer is in, or the AI Workspace is closing: that finishes, and the browser says the
+            # answer arrived before the stop.
+            out.cancel_requested = True
+            return
         signal.signal(signal.SIGTERM, signal.SIG_IGN)  # once: the unwinding (closing the AI Workspace) is not cut
         raise assistant.Cancelled()
 
@@ -431,9 +442,10 @@ def _assistant_stream(request: dict) -> int:
                 pass
         signal.pthread_kill(main, signal.SIGTERM)
 
-    threading.Thread(target=watch_stdin, name="stdin-watch", daemon=True).start()
     try:
         try:
+            threading.Thread(target=watch_stdin, name="stdin-watch", daemon=True).start()
+            signal.pthread_sigmask(signal.SIG_UNBLOCK, {signal.SIGTERM})  # a cancel can come from here on
             result = assistant.api_request(request, out=out)
         finally:
             signal.signal(signal.SIGTERM, signal.SIG_IGN)  # the terminal line is never cut in half
