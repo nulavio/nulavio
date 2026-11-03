@@ -215,6 +215,45 @@ class AssistantTest(unittest.TestCase):
         self.assertEqual(caught.exception.code, "recipient-changed")
         self.assertEqual(self.provider.count, before)  # nothing left the computer
 
+    def test_a_conversation_carries_its_earlier_turns(self):
+        """UX5-D: the browser keeps the conversation; each request carries it, in both APIs, and the
+        size counts all of it. A page that went in a turn goes again only as the browser sends it (Q1)."""
+        assistant.allow_profile(PROFILE, True)
+        page = {"url": "https://ex.example/a", "title": "Artigo", "text": "PAGE-WORDS"}
+        for kind in ("openai", "anthropic"):
+            with self.subTest(kind):
+                self.configure(kind)
+                history = [
+                    {"question": "Primeira?", "page": page, "answer": "Um."},
+                    {"question": "Segunda?", "page": None, "answer": "Dois."},
+                ]
+                result = assistant.ask("Terceira?", PROFILE, None, None, None, history)
+                body = self.provider.requests[-1][2]
+                turns = [m for m in body["messages"] if m["role"] != "system"]
+                self.assertEqual([m["role"] for m in turns], ["user", "assistant", "user", "assistant", "user"])
+                self.assertIn("PAGE-WORDS", turns[0]["content"] if isinstance(turns[0]["content"], str) else "")
+                self.assertEqual((turns[1]["content"], turns[3]["content"], turns[4]["content"]), ("Um.", "Dois.", "Terceira?"))
+                self.assertEqual(result["chars"], self.provider.chars[-1])
+                left_out = [{**history[0], "page": None}, history[1]]
+                assistant.ask("Terceira?", PROFILE, None, None, None, left_out)
+                self.assertNotIn("PAGE-WORDS", json.dumps(self.provider.requests[-1][2]))  # "Deixar a página de fora"
+
+    def test_a_bad_or_too_long_conversation_is_refused_before_sending(self):
+        self.configure()
+        assistant.allow_profile(PROFILE, True)
+        before = self.provider.count
+        bad = ("x", [{"question": "", "answer": "a"}], [{"question": "q", "answer": ""}], [{"question": "q", "answer": 1}],
+               [{"question": "q", "answer": "a", "page": "text"}], [{"question": "q", "answer": "a"}] * 51)  # fmt: skip
+        for history in bad:
+            with self.subTest(history=str(history)[:40]), self.assertRaises(assistant.AssistantError) as caught:
+                assistant.ask("Oi", PROFILE, None, None, None, history)
+            self.assertEqual(caught.exception.code, "bad-history")
+        long = [{"question": "q", "answer": "a" * 100_000}, {"question": "q", "answer": "a" * 100_000}]
+        with self.assertRaises(assistant.AssistantError) as caught:
+            assistant.ask("Oi", PROFILE, None, None, None, long)
+        self.assertEqual(caught.exception.code, "too-large")  # never cut silently (Q20)
+        self.assertEqual(self.provider.count, before)
+
     def test_page_text_is_sent_only_when_given_and_marked_untrusted(self):
         self.configure()
         assistant.allow_profile(PROFILE, True)

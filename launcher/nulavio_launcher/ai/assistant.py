@@ -46,6 +46,8 @@ KINDS = ("openai", "anthropic")
 KEY_ATTRIBUTES = {"application": "nulavio", "nulavio-assistant": "api-key"}
 MAX_PAGE_CHARS = 60_000
 MAX_QUESTION_CHARS = 8_000
+MAX_REQUEST_CHARS = 200_000  # a conversation above this is refused, never cut silently (Q20)
+MAX_TURNS = 50
 MAX_STEPS = 8
 TIMEOUT = 120
 ANTHROPIC_MAX_TOKENS = 4096  # Anthropic needs a limit; OpenAI-compatible requests set none (Q14)
@@ -485,6 +487,29 @@ def _content(question: str, page: dict | None) -> str:
     return "".join(f"{b}\n\n" for b in blocks) + f"Question: {question}" if blocks else question
 
 
+def _history(history) -> list[dict]:
+    """Earlier turns of this conversation, as the browser keeps them (in memory, per window; Q16):
+    [{question, page or null, answer}]. The tools keep nothing between calls (ADR 0007, decision 4).
+    A page goes again only as the browser sends it: the copy that went before, to the same recipient (Q1)."""
+    if history is None:
+        return []
+    if not isinstance(history, list) or len(history) > MAX_TURNS:
+        raise AssistantError("bad-history")
+    messages = []
+    for turn in history:
+        if not isinstance(turn, dict):
+            raise AssistantError("bad-history")
+        question, answer, page = turn.get("question"), turn.get("answer"), turn.get("page")
+        if not isinstance(question, str) or not question.strip() or len(question) > MAX_QUESTION_CHARS:
+            raise AssistantError("bad-history")
+        if not isinstance(answer, str) or not answer or len(answer) > MAX_REQUEST_CHARS:
+            raise AssistantError("bad-history")
+        if page is not None and not (isinstance(page, dict) and isinstance(page.get("text", ""), str)):
+            raise AssistantError("bad-history")
+        messages += [{"role": "user", "content": _content(question.strip(), page)}, {"role": "assistant", "content": answer}]
+    return messages
+
+
 def request_chars(messages: list[dict]) -> int:
     """The size of a request in code points: Nulavio's fixed instructions and every message's text.
     The panel shows this number before Send, and the request is refused if they differ."""
@@ -529,24 +554,27 @@ def _require_ready(profile: str) -> dict:
 
 
 def ask(question: str, profile: str, page: dict | None = None, expected: dict | None = None,
-        out: Stream | None = None) -> dict:  # fmt: skip
+        out: Stream | None = None, history: list | None = None) -> dict:  # fmt: skip
     """Answer a question; the page's text goes along only when `page` is given (the user's choice).
     `expected`: {recipient, model, chars} as the panel showed them; any difference refuses the request.
-    `out`: stream mode, the answer's text as it arrives (UX5-C1)."""
+    `out`: stream mode, the answer's text as it arrives (UX5-C1). `history`: the conversation so far."""
     question = str(question or "").strip()
     if not question or len(question) > MAX_QUESTION_CHARS:
         raise AssistantError("bad-question")
     data = _require_ready(profile)
     provider = data["provider"]
-    messages = [{"role": "user", "content": _content(question, page)}]
+    messages = [*_history(history), {"role": "user", "content": _content(question, page)}]
     chars = request_chars(messages)
+    if chars > MAX_REQUEST_CHARS:
+        raise AssistantError("too-large")
     _check_expected(provider, expected, chars)
     sent_page = min(len(str(page.get("text") or "")), MAX_PAGE_CHARS) if page else 0
 
     def record(outcome: str) -> None:
+        # Sizes only, never text: everything this request carried (the conversation too), less the fixed instructions.
         audit.record(agent=data["agent"], client="nulavio-assistant", tool="assistant.ask",
                      target=_origin(page.get("url")) if page else None, outcome=outcome,
-                     input_chars=len(question) + sent_page)  # fmt: skip
+                     input_chars=chars - len(SYSTEM))  # fmt: skip
 
     try:
         if out is None:
@@ -675,7 +703,7 @@ def api_request(request: dict, out: Stream | None = None) -> dict:
     if op == "ask":
         page = request.get("page")
         return ask(str(request.get("question", "")), str(profile or ""), page if isinstance(page, dict) else None,
-                   expected, out)  # fmt: skip
+                   expected, out, request.get("history"))  # fmt: skip
     if op == "task":
         return run_task(str(request.get("task", "")), str(profile or ""), expected=expected, out=out)
     raise AssistantError("bad-request")
