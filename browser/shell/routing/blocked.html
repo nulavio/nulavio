@@ -10,10 +10,12 @@
   <link rel="stylesheet" href="../shared/base.css">
   <link rel="stylesheet" href="../shared/shell.css">
   <script type="module" src="page.js"></script>
+  <script type="module" src="../lib/moment.js"></script>
 </head>
 <body data-mode="blocked">
   <main class="page page--narrow">
     <section class="card stack" aria-labelledby="headline">
+      <header class="moment__context" data-kind="routing"></header>
       <h1 class="warning__headline" id="headline" data-i18n="routing_blocked_headline"></h1>
       <p id="explain"></p>
       <!-- UX4 (audit SPA-07/08/24): where you are → where the rule sends the link, each with its

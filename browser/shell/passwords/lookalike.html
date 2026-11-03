@@ -10,10 +10,12 @@
   <link rel="stylesheet" href="../shared/base.css">
   <link rel="stylesheet" href="../shared/shell.css">
   <script type="module" src="lookalike.js"></script>
+  <script type="module" src="../lib/moment.js"></script>
 </head>
 <body data-state="loading">
   <main class="page page--narrow">
     <article class="card warning stack" aria-labelledby="headline">
+      <header class="moment__context" data-kind="lookalike" data-profile="current"></header>
       <h1 class="warning__headline" id="headline" data-i18n="lookalikeHeadline"></h1>
       <div class="callout callout--warning" role="alert">
         <svg class="callout__icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 2 21h20z M12 10v5 M12 18v.5" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></svg>

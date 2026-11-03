@@ -10,10 +10,12 @@
   <link rel="stylesheet" href="../shared/base.css">
   <link rel="stylesheet" href="../shared/shell.css">
   <script type="module" src="warning.js"></script>
+  <script type="module" src="../lib/moment.js"></script>
 </head>
 <body>
   <main class="page page--narrow">
     <article class="card warning" aria-labelledby="warn-headline">
+      <header class="moment__context" data-kind="download" data-profile="current"></header>
       <h1 class="warning__headline" id="warn-headline" data-i18n="warnHeadline">This download can run programs</h1>
 
       <div class="file" id="file" hidden>

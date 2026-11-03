@@ -10,10 +10,12 @@
   <link rel="stylesheet" href="../shared/base.css">
   <link rel="stylesheet" href="../shared/shell.css">
   <script type="module" src="request.js"></script>
+  <script type="module" src="../lib/moment.js"></script>
 </head>
 <body data-state="loading">
   <main class="page page--narrow">
     <section class="card stack" aria-labelledby="headline">
+      <header class="moment__context" data-kind="request"></header>
       <p class="hint" id="who"></p>
       <h1 class="warning__headline" id="headline"></h1>
       <!-- Risk by capability (policy.RISK): callout--critical / --warning / --info, icon + words -->

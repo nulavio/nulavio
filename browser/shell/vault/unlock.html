@@ -10,10 +10,12 @@
   <link rel="stylesheet" href="../shared/base.css">
   <link rel="stylesheet" href="../shared/shell.css">
   <script type="module" src="unlock.js"></script>
+  <script type="module" src="../lib/moment.js"></script>
 </head>
 <body data-state="loading">
   <main class="page page--narrow">
     <section class="card stack" aria-labelledby="headline">
+      <header class="moment__context" data-kind="unlock"></header>
       <div class="target" id="who"></div>
       <h1 class="warning__headline" id="headline" data-i18n="vaultLockedHeadline"></h1>
       <p id="explain"></p>
