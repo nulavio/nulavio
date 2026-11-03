@@ -620,6 +620,21 @@ class VaultUiTest(unittest.TestCase):
                 lambda: self.m.execute("return document.querySelectorAll('#methods > li[data-method=password]').length;") == 1, 30
             )
         )
+        # Down to one method: the page says what that means, and the last one cannot be removed.
+        self.type_into("current", new_code)
+        self.click("#methods > li[data-method=password] button")
+        self.click("dialog[open] button[value=confirm]")
+        self.assertTrue(
+            harness.wait_until(lambda: self.m.execute("return document.querySelectorAll('#methods > li').length;") == 1, 30)
+        )
+        last = self.m.execute(
+            "const b = document.querySelector('#methods > li button');"
+            "return {disabled: b.disabled, why: document.getElementById('last-method-note')?.textContent ?? null,"
+            " few: !document.getElementById('few').hidden, kind: document.querySelector('#methods > li').dataset.method};"
+        )
+        self.assertEqual((last["disabled"], last["few"], last["kind"]), (True, True, "recovery-code"))
+        self.assertTrue(last["why"])
+        self.shoot("methods-last")
 
 
 if __name__ == "__main__":
