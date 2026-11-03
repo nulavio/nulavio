@@ -149,6 +149,29 @@ class InContentPagesTest(unittest.TestCase):
         self.assertIn("shared/in-content.css", window)
         self.assertEqual(window.count("for (const uri of [sidebarFocus, inContent])"), 2)
 
+    def test_about_home_search_field_is_readable_in_light(self):
+        """UX3H A-2: the about:home field was navy in light (placeholder 1.12:1)."""
+        import importlib.util
+
+        spec = importlib.util.spec_from_file_location("contrast", ROOT / "scripts" / "brand" / "contrast.py")
+        contrast = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(contrast)
+        code = without_comments(self.SHEET)
+        rule = re.search(r"\n\s*content-search-handoff-ui \{([^}]*)\}", code).group(1)
+        field = re.search(r"--content-search-handoff-ui-background-color: light-dark\((#\w{6}), (#\w{6})\)", rule)
+        edge = re.search(r"--content-search-handoff-ui-unfocused-border-color: light-dark\((#\w{6}), (#\w{6})\)", rule)
+        self.assertTrue(field and edge, rule)
+        canvas = re.search(r"--background-color-canvas: light-dark\((#\w{6}), (#\w{6})\)", code)
+        light_text, dark_text = "#0B1623", "#F1F7F5"  # text.primary (FieldText follows the scheme)
+        self.assertGreaterEqual(contrast.ratio(light_text, field.group(1)), 7)
+        self.assertGreaterEqual(contrast.ratio(dark_text, field.group(2)), 7)
+        self.assertGreaterEqual(contrast.ratio(edge.group(1), canvas.group(1)), 3)
+        self.assertGreaterEqual(contrast.ratio(edge.group(2), canvas.group(2)), 3)
+        # The private page (always navy) keeps the private field.
+        private = re.search(r"html\.private content-search-handoff-ui \{([^}]*)\}", code).group(1)
+        self.assertIn("#15293A", private)
+        self.assertNotIn("light-dark", private)
+
     def test_kit_artwork_is_replaced_by_nulavio_artwork(self):
         jar = (ROOT / "browser" / "branding" / "nulavio" / "content" / "jar.mn").read_text(encoding="utf-8")
         art = ROOT / "browser" / "branding" / "nulavio" / "content" / "illustration-promo.svg"

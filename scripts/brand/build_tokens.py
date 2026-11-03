@@ -323,11 +323,17 @@ def build_in_content(data: dict) -> str:
     def dark(path: str) -> str:
         return resolve(tokens, f"color.dark.{path}")
 
+    # UX3H A-2: about:home's search field follows the theme (white in light, navy in
+    # dark); only the private page, always navy, keeps the private field.
     private = (
         "      html.private {\n"
         f"        --background-color-canvas: {dark('chrome.private.toolbox')} !important;\n"
         "      }\n"
         "      content-search-handoff-ui {\n"
+        f"        --content-search-handoff-ui-background-color: {pair('chrome.field')} !important;\n"
+        f"        --content-search-handoff-ui-unfocused-border-color: {pair('border.control')} !important;\n"
+        "      }\n"
+        "      html.private content-search-handoff-ui {\n"
         f"        --content-search-handoff-ui-background-color: {dark('chrome.private.field')} !important;\n"
         f"        --content-search-handoff-ui-unfocused-border-color: {dark('chrome.private.control')} !important;\n"
         "      }\n"
