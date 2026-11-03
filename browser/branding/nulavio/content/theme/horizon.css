@@ -186,6 +186,11 @@
       --menuitem-disabled-hover-background-color: color-mix(in srgb, currentColor 4%, transparent);
       --menu-disabled-color: color-mix(in srgb, currentColor 55%, transparent);
       --sidebar-border-color: var(--nv-color-border-subtle);
+      /* UX3H M-3: the sidebar panel (its header with the title and close
+         button, and built-in panels) on Nulavio's surface instead of the
+         system's -moz-sidebar grey (#36363A dark, #FAFAFB light on GTK). */
+      --sidebar-background-color: var(--nv-color-bg-surface);
+      --sidebar-text-color: var(--nv-color-text-primary);
     }
 
     /* UX3G M2: a clearer step from rest to focus. The rest edge stays the
