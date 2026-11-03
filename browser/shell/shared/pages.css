@@ -143,7 +143,13 @@
     border-bottom: 1px solid var(--nv-color-border-subtle);
     background: var(--nv-color-bg-canvas);
   }
-  .settings-nav { display: flex; overflow-x: auto; gap: var(--nv-space-1); }
+  .settings-nav { display: flex; overflow-x: auto; gap: var(--nv-space-1); scrollbar-width: thin; }
+  /* More entries past an edge (QA R2-1): the row fades there, so it reads as scrollable */
+  .settings-nav[data-more-end] { mask-image: linear-gradient(to right, #000 calc(100% - 2.5rem), transparent); }
+  .settings-nav[data-more-start] { mask-image: linear-gradient(to left, #000 calc(100% - 2.5rem), transparent); }
+  .settings-nav[data-more-start][data-more-end] {
+    mask-image: linear-gradient(to right, transparent, #000 2.5rem, #000 calc(100% - 2.5rem), transparent);
+  }
   .settings-nav ul { display: flex; }
   .settings-nav__group { display: none; }
   .settings-nav a { white-space: nowrap; }
@@ -363,8 +369,7 @@ body.assistant { padding: var(--nv-space-4); }
 /* Solid canvas is the default. New-tab ambience/preferences belong to UX6. */
 @media (max-width: 30rem) {
   .page { padding-inline: var(--nv-space-4); }
-  .row, .row--plain { grid-template-columns: minmax(0, 1fr); }
-  .row__end { justify-content: flex-start; }
+  /* Rows follow the width of their list (components.css, container query), not the window. */
   .callout { flex-wrap: wrap; }
   .callout__action { margin-inline-start: 0; }
 }

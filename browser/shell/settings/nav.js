@@ -32,6 +32,27 @@ function firstAvailable() {
   return null;
 }
 
+const rail = document.querySelector(".settings-nav");
+
+/* In a narrow window the rail is one scrolling row (QA R2-1): bring the open section's entry
+   into it, and mark the sides where more entries are hidden (pages.css draws a fade there). */
+function revealInRail(link) {
+  if (link && rail.scrollWidth > rail.clientWidth) {
+    const box = rail.getBoundingClientRect();
+    const item = link.getBoundingClientRect();
+    if (item.left < box.left || item.right > box.right) {
+      rail.scrollLeft += item.left - box.left - (box.width - item.width) / 2;
+    }
+  }
+  markRailEdges();
+}
+
+function markRailEdges() {
+  const scrollable = rail.scrollWidth > rail.clientWidth + 1;
+  rail.toggleAttribute("data-more-start", scrollable && rail.scrollLeft > 1);
+  rail.toggleAttribute("data-more-end", scrollable && rail.scrollLeft + rail.clientWidth < rail.scrollWidth - 1);
+}
+
 function syncLinks() {
   for (const link of links) {
     link.parentElement.hidden = Boolean(document.getElementById(link.dataset.section)?.hidden);
@@ -57,6 +78,7 @@ function show(id, { focus = false } = {}) {
   if (!section) {
     return;
   }
+  revealInRail(links.find(link => link.dataset.section === section.id));
   const target = document.getElementById(id);
   if (target && target !== section && section.contains(target)) {
     target.scrollIntoView({ block: "start" });
@@ -149,6 +171,8 @@ export function setUpNav() {
       }
     });
   }
+  rail.addEventListener("scroll", markRailEdges, { passive: true });
+  window.addEventListener("resize", () => revealInRail(links.find(link => link.hasAttribute("aria-current"))));
   let timer = null;
   search.addEventListener("input", () => {
     clearTimeout(timer);

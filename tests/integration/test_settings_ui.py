@@ -127,9 +127,19 @@ class SettingsPanesTest(unittest.TestCase):
         self.assertEqual(state["current"], [])  # results span sections: the rail marks none
         self.assertTrue(state["results"])
         self.shoot("search-results")
-        self.type_search("zzzz-nada")
+        # Several words: each must be found, in any order.
+        two = self.m.execute(
+            "return browser.i18n.getMessage('dnsStrict').normalize('NFD').replace(/\\p{M}/gu, '').toLowerCase()"
+            ".split(' ').filter(w => w.length > 3).reverse().join(' ');"
+        )
+        self.type_search(two)
+        self.assertTrue(harness.wait_until(lambda: "dns" in self.view()["shown"], 5), two)
+        self.type_search(f"{two} zzzz")
         self.assertTrue(harness.wait_until(lambda: self.view()["shown"] == [], 5))
-        self.assertEqual(self.view()["results"], self.message("settingsSearchNone", "zzzz-nada"))
+        self.type_search("zzzz-nada")
+        none = self.message("settingsSearchNone", "zzzz-nada")
+        self.assertTrue(harness.wait_until(lambda: self.view()["results"] == none, 5), self.view())
+        self.assertEqual(self.view()["shown"], [])
         # Escape leaves the search and returns to the section of the address.
         self.m.send("WebDriver:ElementSendKeys", {"id": self.m.find_element("#settings-search"), "text": ""})
         self.assertTrue(harness.wait_until(lambda: self.view()["shown"] == ["layout"], 5))
@@ -205,6 +215,20 @@ class SettingsPanesTest(unittest.TestCase):
             )
             self.assertEqual(self.view()["current"], ["dns"])
             self.shoot("narrow-dns")
+            # QA R2-1: a section near the end keeps its entry in the visible part of the row.
+            self.open("#integrations")
+            self.assertTrue(harness.wait_until(lambda: self.view()["shown"] == ["integrations"], 10))
+            seen = self.m.execute(
+                "const nav = document.querySelector('.settings-nav').getBoundingClientRect();"
+                "const a = document.querySelector('.settings-nav a[aria-current]').getBoundingClientRect();"
+                "const n = document.querySelector('.settings-nav');"
+                "return {inside: a.left >= nav.left - 1 && a.right <= nav.right + 1,"
+                " scrollable: n.scrollWidth > n.clientWidth, marked: n.hasAttribute('data-more-start')};"
+            )
+            self.assertTrue(seen["inside"], seen)
+            if seen["scrollable"]:
+                self.assertTrue(seen["marked"], seen)  # entries before it are hidden: the row says so
+            self.shoot("narrow-integrations")
         finally:
             self.m.send("WebDriver:SetWindowRect", {"width": rect["width"], "height": rect["height"]})
 

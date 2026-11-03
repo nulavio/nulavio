@@ -278,6 +278,15 @@ kbd {
   border-top: 1px solid var(--nv-color-border-subtle);
 }
 .row:first-child { border-top: 0; padding-top: 0; }
+/* A narrow list (a narrow window, the popup): the actions go under the text instead of squeezing
+   it to a few letters per line. The list is the container, so this follows the column, not the window. */
+.list { container-type: inline-size; }
+@container (max-width: 32rem) {
+  .row { grid-template-columns: auto minmax(0, 1fr); }
+  .row > .row__end { grid-column: 2; justify-content: flex-start; }
+  .row--plain { grid-template-columns: minmax(0, 1fr); }
+  .row--plain > .row__end { grid-column: 1; }
+}
 .row__main { display: grid; gap: var(--nv-space-3); min-width: 0; }
 .row__title { margin: 0; font-weight: var(--nv-font-weight-semibold); overflow-wrap: anywhere; }
 .row__meta { margin: 0; font-size: var(--nv-type-label-size); color: var(--nv-color-text-secondary); font-family: var(--nv-font-family-mono); overflow-wrap: anywhere; }
