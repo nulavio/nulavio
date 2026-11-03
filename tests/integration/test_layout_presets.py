@@ -1219,7 +1219,11 @@ class LayoutPresetsTest(unittest.TestCase):
             # in visual order, never the Settings link after it.
             self.m.chrome(KEY, ["ArrowDown", "ArrowDown", 40])
             self.m.chrome(KEY, ["Tab", "Tab", 9])
-            self.assertEqual(self.m.execute("return document.activeElement.id;"), "layout-choice-done")
+            # The key reaches the page through the content process: wait for the focus to land
+            # (reading at once could still see the radio). Any other target still fails.
+            focused = lambda: self.m.execute("return document.activeElement.id;")  # noqa: E731
+            harness.wait_until(lambda: focused() not in ("", None), timeout=3)
+            self.assertEqual(focused(), "layout-choice-done")
             self.assertTrue(harness.wait_until(lambda: self.state()["preset"] == "lateral", 10))
             self.assertTrue(harness.wait_until(lambda: self.newtab_ui_ready("lateral"), 10))
             self.assertEqual(self.m.chrome("return window.nvApplied;"), ["focus", "lateral"])
