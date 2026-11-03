@@ -29,7 +29,9 @@ const AREA = "nulavio-band";
 const WIDGET = "nulavio-band-widget";
 const SHELL = "shell@nulavio.net";
 const HTML = "http://www.w3.org/1999/xhtml";
-const TOPICS = ["browser-delayed-startup-finished", "nulavio-ai-window-changed", "nulavio-guard-changed"];
+// nulavio-ai-agent-files-changed: the driving agent's registry or the emergency stop changed (NulavioAI).
+const TOPICS = ["browser-delayed-startup-finished", "nulavio-ai-window-changed", "nulavio-guard-changed",
+  "nulavio-ai-agent-files-changed"];
 // Fixed paths only. Query strings, fragments, titles and page text never name a trusted surface.
 const SURFACES = Object.freeze({
   "/newtab/newtab.html": "newtabTitle",
@@ -166,6 +168,11 @@ class WindowUI {
             this.#paint(window);
           }
         }
+      }
+      if (topic === "nulavio-ai-agent-files-changed") {
+        // A refresh already under way may have read the agent's state before the change.
+        this.refresh().finally(() => this.refresh());
+        return;
       }
       this.refresh();
     }

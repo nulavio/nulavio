@@ -43,6 +43,11 @@ const POLL_MS = 1500;
 // <state>/ai/agents.json and <state>/ai/STOP, so the tools run again only when one of
 // them changes, after a change made here, or every OVERVIEW_TTL_MS as a safety net.
 const OVERVIEW_TTL_MS = 15000;
+// While an agent drives a window, a change to those files (a pause, revoke or emergency
+// stop from the command line) is noticed within this interval and the band refreshed at
+// once, instead of waiting for its next 1.5 s tick. Two stats; no process is started.
+const AGENT_FILES_MS = 500;
+export const AGENT_FILES_TOPIC = "nulavio-ai-agent-files-changed";
 const RAW_POLL_MS = 1000;
 const ID_RE = /^[0-9a-f]{16}$/;
 const AGENT_RE = /^ag-[0-9a-f]{12}$/;
@@ -94,6 +99,7 @@ class AI {
   #observing = false;
   #renders = new WeakMap(); // window -> the last bar update, so updates never overlap
   #overviewCache = null; // { key, at, overview } for windowState(); a failed read is never kept
+  #filesTimer = null;
 
   /** The agent driving this window, if any. "agent:pid" (one of the user's profiles, opened for an agent)
       counts only while that bridge process lives; a bare agent id is an AI Workspace. */
@@ -133,6 +139,35 @@ class AI {
     const overview = await this.overview();
     this.#overviewCache = key ? { key, at: Date.now(), overview } : null;
     return overview;
+  }
+
+  #watchAgentFiles(active) {
+    if (!active) {
+      this.#filesTimer?.cancel();
+      this.#filesTimer = null;
+      return;
+    }
+    if (this.#filesTimer) {
+      return;
+    }
+    this.#filesTimer = Cc["@mozilla.org/timer;1"].createInstance(Ci.nsITimer);
+    this.#filesTimer.initWithCallback(() => this.#checkAgentFiles().catch(() => {}), AGENT_FILES_MS,
+      Ci.nsITimer.TYPE_REPEATING_SLACK);
+  }
+
+  async #checkAgentFiles() {
+    if (!this.#bar && !(await this.workspaceAgent())) {
+      this.#watchAgentFiles(false); // no agent drives this window any more
+      return;
+    }
+    const cached = this.#overviewCache;
+    if (!cached) {
+      return; // the next band tick asks the tools anyway
+    }
+    if ((await this.#agentFilesKey()) !== cached.key && this.#overviewCache === cached) {
+      this.#overviewCache = null;
+      Services.obs.notifyObservers(null, AGENT_FILES_TOPIC);
+    }
   }
 
   /** Whatever this browser changes is shown at the next tick, not after the file check. */
@@ -402,6 +437,7 @@ class AI {
   async windowState() {
     const warning = this.windowWarning();
     const id = warning?.id || await this.workspaceAgent();
+    this.#watchAgentFiles(Boolean(id));
     if (!id) {
       return null;
     }
