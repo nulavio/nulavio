@@ -28,6 +28,11 @@ browser.jar:
 % override chrome://global/skin/illustrations/kit-holding-lock.svg chrome://branding/content/illustration-promo.svg
 % override chrome://global/skin/illustrations/kit-in-circle.svg chrome://branding/content/illustration-promo.svg
 % override chrome://global/skin/illustrations/kit-sympathetic.svg chrome://branding/content/illustration-promo.svg
+# UX3H M-1: the same artwork instead of the fox on about:addons' empty list and
+# about:logins / the passwords panel.
+% override chrome://mozapps/skin/extensions/kit-addons.svg chrome://branding/content/illustration-promo.svg
+% override chrome://mozapps/skin/extensions/kit-themes.svg chrome://branding/content/illustration-promo.svg
+% override chrome://global/content/megalist/icons/cpm-fox-illustration.svg chrome://branding/content/illustration-promo.svg
 # UX3G N2: Nulavio's shield on the Settings privacy status, a neutral account
 # icon instead of Mozilla's logo, and the Nulavio glyph instead of the Firefox
 # logo on "About Nulavio". Artwork only; no behaviour changes.

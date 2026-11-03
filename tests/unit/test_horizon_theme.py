@@ -189,3 +189,10 @@ class InContentPagesTest(unittest.TestCase):
                 f"% override chrome://global/skin/illustrations/{kit}.svg chrome://branding/content/illustration-promo.svg",
                 jar,
             )
+        # UX3H M-1: the fox on about:addons' empty list and on about:logins.
+        for fox in (
+            "chrome://mozapps/skin/extensions/kit-addons.svg",
+            "chrome://mozapps/skin/extensions/kit-themes.svg",
+            "chrome://global/content/megalist/icons/cpm-fox-illustration.svg",
+        ):
+            self.assertIn(f"% override {fox} chrome://branding/content/illustration-promo.svg", jar)
