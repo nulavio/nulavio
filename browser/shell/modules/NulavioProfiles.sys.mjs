@@ -20,6 +20,10 @@ ChromeUtils.defineESModuleGetters(lazy, {
   profileLockState: "resource://builtin-addons/nulavio-shell/modules/NulavioVaultState.sys.mjs",
   vaultHelper: "resource://builtin-addons/nulavio-shell/modules/NulavioVault.sys.mjs",
   SelectableProfileService: "resource:///modules/profiles/SelectableProfileService.sys.mjs",
+  ENABLED_PREF: "resource://builtin-addons/nulavio-shell/modules/NulavioRouter.sys.mjs",
+  RULES_PREF: "resource://builtin-addons/nulavio-shell/modules/NulavioRouter.sys.mjs",
+  normalizeHost: "resource://builtin-addons/nulavio-shell/modules/NulavioRouter.sys.mjs",
+  parseRules: "resource://builtin-addons/nulavio-shell/modules/NulavioRouter.sys.mjs",
 });
 
 /** Identity colour per profile id, shared by every profile of the group (JSON). */
@@ -160,6 +164,9 @@ class NulavioProfilesClass {
       const setup = (async () => {
         await this.#service.init();
         await this.#service.maybeSetupDataStore();
+        // Setting up the store can give this profile its id and group name: the band's cached
+        // summary (and the new tab's rules here) must not wait 30 s to see them.
+        this.#band = null;
       })().finally(() => {
         if (this.#storeSetup === setup) {
           this.#storeSetup = null;
@@ -407,6 +414,41 @@ class NulavioProfilesClass {
    * reports a change (sps-profiles-updated, from this or another instance), the
    * colours change, or BAND_CACHE_MS have passed. A failed read is not kept.
    */
+  /** The new tab's "Você está em" line (UX4): the band's cached summary of this profile, its
+      protection in the Vault's words ("plain", "unlocked" or "unknown") and the rules that open
+      sites here. Reads no other profile, so a new tab stays cheap. */
+  async here() {
+    const [band, protection] = await Promise.all([
+      this.currentForBand(),
+      lazy.profileLockState(Services.dirsvc.get("ProfD", Ci.nsIFile).path).catch(() => "unknown"),
+    ]);
+    if (!band) {
+      return null;
+    }
+    let routes = [];
+    if (band.id !== null && Services.prefs.getBoolPref(lazy.ENABLED_PREF, true)) {
+      routes = lazy
+        .parseRules(Services.prefs.getStringPref(lazy.RULES_PREF, "[]"))
+        .filter(rule => rule.profileId === band.id && rule.action === "open-in")
+        .map(rule => {
+          try {
+            return lazy.normalizeHost(rule.value).display;
+          } catch {
+            return rule.value;
+          }
+        });
+    }
+    return {
+      name: band.name,
+      color: band.color,
+      avatar: band.avatar,
+      temporary: Boolean(band.temporary),
+      protection: band.temporary ? "plain" : protection,
+      routeCount: routes.length,
+      routes: routes.slice(0, 5),
+    };
+  }
+
   currentForBand() {
     this.#observe();
     if (this.#band && Date.now() - this.#bandAt < BAND_CACHE_MS) {

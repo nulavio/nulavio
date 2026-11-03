@@ -43,6 +43,27 @@
 .facts dd[data-level="unknown"]::before { content: "?"; }
 .card__note { margin: var(--nv-space-5) 0 0; font-size: var(--nv-type-caption-size); color: var(--nv-color-text-muted); }
 
+/* New tab (UX4, audit SPA-14): "Você está em …" and the facts in one line; the rest in Details */
+.here { display: grid; gap: var(--nv-space-4); }
+.here__line { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: var(--nv-space-3) var(--nv-space-5); }
+.here__who { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--nv-space-3); }
+.here__who[hidden], .here__routes[hidden], .here__settings[hidden] { display: none; }
+.here__label, .here__plain, .here__routes { color: var(--nv-color-text-secondary); }
+.here__who .badge { margin-inline-start: 0; }
+.here__summary { display: inline-flex; align-items: baseline; gap: var(--nv-space-2); font-weight: var(--nv-font-weight-medium); }
+.here__summary::before { font-weight: var(--nv-font-weight-semibold); flex: none; }
+.here__summary[data-level="ok"]::before { content: "✓"; color: var(--nv-color-status-secure); }
+.here__summary[data-level="warn"] { color: var(--nv-color-status-warning); }
+.here__summary[data-level="warn"]::before { content: "⚠"; }
+.here__summary[data-level="unknown"] { color: var(--nv-color-text-secondary); }
+.here__summary[data-level="unknown"]::before { content: "?"; }
+.here__settings { margin-inline-start: auto; font-size: var(--nv-type-label-size); color: var(--nv-color-text-secondary); }
+.here__settings:hover { color: var(--nv-color-text-primary); }
+.here__details .facts { margin-top: var(--nv-space-3); grid-template-columns: repeat(auto-fit, minmax(min(14rem, 100%), 1fr)); }
+.here__sites { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--nv-space-2) var(--nv-space-5); }
+.help__body { margin-top: var(--nv-space-4); }
+.help .footer { margin-top: var(--nv-space-6); }
+
 /* Settings page (UX4, audit SPA-04/05/06): a sticky rail grouped by how far a change reaches,
    one section at a time, and results next to the control that made them. */
 .settings { display: grid; grid-template-columns: 15rem minmax(0, 1fr); align-items: start; min-height: 100vh; }
@@ -193,7 +214,7 @@ html[data-page="newtab"]:not([data-painted]) .page {
 @keyframes nv-page-in { from { opacity: 0; } }
 
 /* New tab: one-time first-run choices (layout, DNS), above the facts */
-.layout-choice, .dns-choice { max-width: 52rem; margin-inline: auto; width: 100%; }
+.layout-choice, .dns-choice, .here, .help { max-width: 52rem; margin-inline: auto; width: 100%; }
 
 /* UX3F A4: the layout choice is a visual question. While it is open the hero
    steps back (no symbol, a smaller headline), so the whole card and its main

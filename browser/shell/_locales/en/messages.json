@@ -1004,5 +1004,14 @@
   "statusNamed": {"message": "$NAME$: $TEXT$", "placeholders": {"name": {"content": "$1"}, "text": {"content": "$2"}}},
   "stateAiWorkspace": {"message": "AI Workspace"},
   "settingsAiInWorkspace": {"message": "This window is $AGENT$'s AI Workspace. Manage agents, and the emergency stop, from one of your own windows.", "placeholders": {"agent": {"content": "$1"}}},
-  "whereLabel": {"message": "You are in"}
+  "whereLabel": {"message": "You are in"},
+  "protectionsOn": {"message": "Protections on in this profile"},
+  "protectionsAttention": {"message": "Needs attention: $LIST$", "placeholders": {"list": {"content": "$1"}}},
+  "protectionsUnknown": {"message": "Could not read: $LIST$", "placeholders": {"list": {"content": "$1"}}},
+  "routesHere": {"message": "Rules that open sites here: $COUNT$", "placeholders": {"count": {"content": "$1"}}},
+  "routesHereHeading": {"message": "Open straight here, by your rules"},
+  "newtabDetails": {"message": "Details"},
+  "newtabHelp": {"message": "Shortcuts and help"},
+  "profileUnprotected": {"message": "No protection"},
+  "statePrivateWindow": {"message": "Private window"}
 }

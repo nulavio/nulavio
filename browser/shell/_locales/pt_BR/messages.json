@@ -1004,5 +1004,14 @@
   "statusNamed": {"message": "$NAME$: $TEXT$", "placeholders": {"name": {"content": "$1"}, "text": {"content": "$2"}}},
   "stateAiWorkspace": {"message": "Área de IA"},
   "settingsAiInWorkspace": {"message": "Esta janela é a Área de IA de $AGENT$. Gerencie os agentes, e a parada de emergência, numa janela sua.", "placeholders": {"agent": {"content": "$1"}}},
-  "whereLabel": {"message": "Você está em"}
+  "whereLabel": {"message": "Você está em"},
+  "protectionsOn": {"message": "Proteções ativas neste perfil"},
+  "protectionsAttention": {"message": "Precisa de atenção: $LIST$", "placeholders": {"list": {"content": "$1"}}},
+  "protectionsUnknown": {"message": "Não foi possível ler: $LIST$", "placeholders": {"list": {"content": "$1"}}},
+  "routesHere": {"message": "Regras que abrem sites aqui: $COUNT$", "placeholders": {"count": {"content": "$1"}}},
+  "routesHereHeading": {"message": "Abrem direto aqui, pelas suas regras"},
+  "newtabDetails": {"message": "Detalhes"},
+  "newtabHelp": {"message": "Atalhos e ajuda"},
+  "profileUnprotected": {"message": "Sem proteção"},
+  "statePrivateWindow": {"message": "Janela privativa"}
 }

@@ -40,6 +40,7 @@ this.nulavioProfiles = class extends ExtensionAPI {
         openManager: call(() => profiles.openManager()),
         openCurrentPage: call(page => profiles.openCurrentPage(page)),
         temporaryState: call(() => profiles.temporaryState()),
+        here: call(() => profiles.here()),
         openTemporary: call(() => profiles.openTemporary()),
         markTemporary: call(text => profiles.markTemporary(text)),
         avatarSvg: call((avatar, ink) => profiles.avatarSvg(avatar, ink)),

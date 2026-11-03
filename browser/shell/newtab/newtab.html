@@ -21,7 +21,8 @@
         <source srcset="../shared/nulavio-symbol.svg" media="(prefers-color-scheme: dark)">
         <img class="hero__symbol" src="../shared/nulavio-symbol-dark-on-light.svg" alt="" width="56" height="64">
       </picture>
-      <h1 class="hero__headline" data-i18n="headline">The web is yours. So is your data.</h1>
+      <!-- UX4 (audit SPA-14): no slogan; the page says where you are and what is true now -->
+      <h1 class="visually-hidden" data-i18n="newtabTitle">New Tab</h1>
       <form class="search" id="search" role="search">
         <label class="visually-hidden" for="search-input" data-i18n="searchLabel">Search the web</label>
         <input class="search__input" id="search-input" type="search" name="q" autocomplete="off"
@@ -103,10 +104,19 @@
       </div>
     </section>
 
-    <section class="grid">
-      <article class="card card--facts" aria-labelledby="status-heading">
-        <h2 class="card__title" id="status-heading" data-i18n="statusHeading">Protections right now</h2>
-        <dl class="facts" id="status" aria-live="polite">
+    <!-- UX4: "Você está em …" with the facts in one line; "Detalhes" opens the rest. The line
+         is filled before the page paints and is not a live region (SPA-23). -->
+    <section class="card here" id="here" aria-labelledby="status-heading">
+      <h2 class="visually-hidden" id="status-heading" data-i18n="statusHeading">Protections right now</h2>
+      <p class="here__line">
+        <span class="here__who" id="here-who" hidden></span>
+        <span class="here__summary" id="here-summary" data-level="unknown">…</span>
+        <span class="here__routes" id="here-routes" hidden></span>
+        <a class="here__settings" id="open-settings" href="../settings/settings.html" hidden data-i18n="settingsTitle"></a>
+      </p>
+      <details class="more here__details" id="here-details">
+        <summary data-i18n="newtabDetails">Details</summary>
+        <dl class="facts" id="status">
           <div><dt data-i18n="statusTracking">Tracking protection</dt><dd data-status="tracking">…</dd></div>
           <div><dt data-i18n="statusHttps">HTTPS-Only</dt><dd data-status="https">…</dd></div>
           <div><dt data-i18n="statusGpc">Global Privacy Control signal</dt><dd data-status="gpc">…</dd></div>
@@ -114,34 +124,42 @@
           <div><dt data-i18n="statusPasswords">Passwords</dt><dd data-status="passwords">…</dd></div>
           <div id="dns-status" hidden><dt data-i18n="dnsHeading">DNS</dt><dd data-status="dns">…</dd></div>
         </dl>
+        <div class="stack stack--tight" id="here-route-list" hidden>
+          <h3 class="subhead" data-i18n="routesHereHeading"></h3>
+          <ul class="here__sites" id="here-sites"></ul>
+        </div>
         <p class="card__note" data-i18n="statusNote">Read just now from the browser settings. Nothing is sent to Nulavio.</p>
-      </article>
-
-      <article class="card" aria-labelledby="keys-heading">
-        <h2 class="card__title" id="keys-heading" data-i18n="keysHeading">Shortcuts</h2>
-        <ul class="keys">
-          <li><span data-i18n="keyAddress">Address bar</span><span><kbd>Ctrl</kbd> <kbd>L</kbd></span></li>
-          <li><span data-i18n="keyTab">New tab</span><span><kbd>Ctrl</kbd> <kbd>T</kbd></span></li>
-          <li><span data-i18n="keyPrivate">Private window</span><span><kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>P</kbd></span></li>
-          <li><span data-i18n="keyDownloads">Downloads</span><span><kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>Y</kbd></span></li>
-          <li><span data-i18n="keyAddons">Add-ons</span><span><kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>A</kbd></span></li>
-        </ul>
-      </article>
-
-      <article class="card" aria-labelledby="broken-heading">
-        <h2 class="card__title" id="broken-heading" data-i18n="brokenHeading">If a site breaks</h2>
-        <ol class="steps">
-          <li data-i18n="broken1"></li>
-          <li data-i18n="broken2"></li>
-          <li data-i18n="broken3"></li>
-        </ol>
-      </article>
+      </details>
     </section>
 
-    <footer class="footer">
-      <p data-i18n="footer"></p>
-      <p data-i18n="footerLimits"></p>
-    </footer>
+    <!-- Shortcuts, help and the engine note are one click away, not on every tab (SPA-14) -->
+    <details class="card more help" id="help">
+      <summary class="help__summary" data-i18n="newtabHelp">Shortcuts and help</summary>
+      <div class="grid help__body">
+        <div aria-labelledby="keys-heading">
+          <h2 class="card__title" id="keys-heading" data-i18n="keysHeading">Shortcuts</h2>
+          <ul class="keys">
+            <li><span data-i18n="keyAddress">Address bar</span><span><kbd>Ctrl</kbd> <kbd>L</kbd></span></li>
+            <li><span data-i18n="keyTab">New tab</span><span><kbd>Ctrl</kbd> <kbd>T</kbd></span></li>
+            <li><span data-i18n="keyPrivate">Private window</span><span><kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>P</kbd></span></li>
+            <li><span data-i18n="keyDownloads">Downloads</span><span><kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>Y</kbd></span></li>
+            <li><span data-i18n="keyAddons">Add-ons</span><span><kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>A</kbd></span></li>
+          </ul>
+        </div>
+        <div aria-labelledby="broken-heading">
+          <h2 class="card__title" id="broken-heading" data-i18n="brokenHeading">If a site breaks</h2>
+          <ol class="steps">
+            <li data-i18n="broken1"></li>
+            <li data-i18n="broken2"></li>
+            <li data-i18n="broken3"></li>
+          </ol>
+        </div>
+      </div>
+      <footer class="footer">
+        <p data-i18n="footer"></p>
+        <p data-i18n="footerLimits"></p>
+      </footer>
+    </details>
   </main>
 </body>
 </html>

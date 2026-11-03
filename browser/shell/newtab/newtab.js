@@ -2,7 +2,7 @@
    settings (no counters, no network). */
 
 import { localize, t } from "../lib/i18n.js";
-import { errorText, settleRadioChanges } from "../lib/ui.js";
+import { chip, errorText, h, settleRadioChanges, stateBadge } from "../lib/ui.js";
 
 const UBLOCK_ID = "uBlock0@raymondhill.net";
 // Official extensions of the supported credential providers (browser/config/providers.json).
@@ -66,6 +66,59 @@ async function refresh() {
   if (active.length) show("passwords", active.map(name => t("passwordsProvider", [name])).join(", "), "ok");
   else if (engineSaving) show("passwords", t("passwordsEngine"), "ok");
   else show("passwords", t("passwordsNone"), "warn");
+}
+
+/* One line of facts (UX4): what needs attention, by name, or that the protections are on. No
+   "tudo certo": a fact that could not be read says so. Details open by themselves when
+   something needs attention. */
+function summarise() {
+  const facts = [...document.querySelectorAll("#status [data-status]")].filter(dd => !dd.closest("[hidden]"));
+  const named = level => facts.filter(dd => dd.dataset.level === level).map(dd => dd.previousElementSibling.textContent);
+  const [warn, unknown] = [named("warn"), named("unknown")];
+  const summary = document.getElementById("here-summary");
+  if (warn.length) {
+    summary.dataset.level = "warn";
+    summary.textContent = t("protectionsAttention", [warn.join(", ")]);
+    document.getElementById("here-details").open = true;
+  } else if (unknown.length) {
+    summary.dataset.level = "unknown";
+    summary.textContent = t("protectionsUnknown", [unknown.join(", ")]);
+  } else {
+    summary.dataset.level = "ok";
+    summary.textContent = t("protectionsOn");
+  }
+}
+
+// "Você está em …" (Track B): this profile, its state in words and the rules that open sites here.
+async function showHere() {
+  const here = await browser.nulavioProfiles?.here?.();
+  if (!here) {
+    return;
+  }
+  const states = browser.extension.inIncognitoContext
+    ? ["private"]
+    : here.temporary
+      ? ["temporary"]
+      : here.protection === "unlocked"
+        ? ["protected"]
+        : [];
+  const who = document.getElementById("here-who");
+  const plain = !states.length && here.protection === "plain";
+  who.replaceChildren(
+    chip(here, "md"),
+    h("span", { class: "here__label", text: t("whereLabel") }),
+    h("strong", { class: "here__name", text: here.temporary ? t("profilesTemporary") : here.name }),
+    ...states.map(stateBadge),
+    ...(plain ? [h("span", { class: "here__plain", text: t("profileUnprotected") })] : [])
+  );
+  who.hidden = false;
+  if (here.routeCount) {
+    const routes = document.getElementById("here-routes");
+    routes.textContent = t("routesHere", [String(here.routeCount)]);
+    routes.hidden = false;
+    document.getElementById("here-sites").replaceChildren(...here.routes.map(site => h("li", { class: "mono", text: site })));
+    document.getElementById("here-route-list").hidden = false;
+  }
 }
 
 // UX3G N5: the label and the search use the same engine. The engine is read
@@ -353,18 +406,20 @@ async function showDns() {
   document.getElementById("dns-use-system").onclick = toSystem;
 }
 
-// Search settings exist only where the Shell is built in (privileged API).
+// Search settings and Nulavio settings exist only where the Shell is built in (privileged API).
 document.getElementById("search-settings").hidden = !browser.nulavioSearch;
+document.getElementById("open-settings").hidden = !browser.nulavioSearch;
 
 localize();
 // UX3G N1: paint once, in the final shape. The page stays invisible (pages.css)
-// until the first-run cards and the engine label are known, so the hero never
-// shrinks after the first frame; a slow API never holds it longer than 400 ms.
-const shaped = Promise.allSettled([engineShown, showDns(), showLayoutChoice()]);
+// until the first-run cards, the engine label and the "Você está em" line are
+// known, so nothing moves after the first frame; a slow API never holds it longer than 400 ms.
+const facts = Promise.allSettled([refresh(), showDns()]).then(summarise);
+const shaped = Promise.allSettled([engineShown, facts, showHere(), showLayoutChoice()]);
 Promise.race([shaped, new Promise(resolve => setTimeout(resolve, 400))]).then(() => {
   document.documentElement.dataset.painted = "true";
 });
 browser.nulavioSearch?.onChanged.addListener(() => showEngine().catch(() => {}));
-Promise.allSettled([refresh(), shaped]).then(() => {
+shaped.then(() => {
   document.documentElement.dataset.ready = "true";
 });

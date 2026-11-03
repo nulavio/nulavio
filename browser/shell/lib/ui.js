@@ -98,6 +98,7 @@ const ICONS = {
   unlocked: "M7.5 11V8a4.5 4.5 0 0 1 8.7-1.6 M5.5 11h13v9.5h-13z",
   temporary: "M7.2 3.6h9.6 M7.2 20.4h9.6 M8.4 3.6v3.1L12 12l3.6-5.3V3.6 M8.4 20.4v-3.1L12 12l3.6 5.3v3.1",
   agent: "M6 8.5h12v10.5H6z M12 4.5v4 M9.5 15.5h5 M9.5 12v.5 M14.5 12v.5",
+  private: "M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6z M9.5 12a2.5 2.5 0 1 0 5 0a2.5 2.5 0 0 0-5 0 M4 4l16 16",
 };
 
 /** A decorative icon (hidden from assistive technology), built without markup strings. */
@@ -129,6 +130,7 @@ const PROFILE_STATES = {
   locked: ["lock", "profilesLocked"],
   temporary: ["temporary", "profilesTemporaryShort"],
   workspace: ["agent", "stateAiWorkspace"],
+  private: ["private", "statePrivateWindow"],
 };
 
 export function stateBadge(state) {
