@@ -1132,5 +1132,7 @@
   "err_too_large": {"message": "The conversation is over the 200,000 character limit, so nothing was sent. Start a new conversation or leave the page out."},
   "err_bad_history": {"message": "The conversation kept in this window could not be used, so nothing was sent. Start a new conversation."},
   "assistantThreadLineOne": {"message": "Conversation: 1 answer goes with the next question"},
-  "assistantThreadLinePageOne": {"message": "Conversation: 1 answer goes with the next question, with the page “$TITLE$”", "placeholders": {"title": {"content": "$1"}}}
+  "assistantThreadLinePageOne": {"message": "Conversation: 1 answer goes with the next question, with the page “$TITLE$”", "placeholders": {"title": {"content": "$1"}}},
+  "assistantIncomplete": {"message": "Answer incomplete: it stopped before the end"},
+  "assistantTaskStopping": {"message": "The task is stopping: the AI Workspace is closing."}
 }

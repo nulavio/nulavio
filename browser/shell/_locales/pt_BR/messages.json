@@ -1132,5 +1132,7 @@
   "err_too_large": {"message": "A conversa passou do limite de 200.000 caracteres, então nada foi enviado. Comece uma conversa nova ou deixe a página de fora."},
   "err_bad_history": {"message": "A conversa guardada nesta janela não pôde ser usada, então nada foi enviado. Comece uma conversa nova."},
   "assistantThreadLineOne": {"message": "Conversa: 1 resposta vai junto com a próxima pergunta"},
-  "assistantThreadLinePageOne": {"message": "Conversa: 1 resposta vai junto com a próxima pergunta, com a página “$TITLE$”", "placeholders": {"title": {"content": "$1"}}}
+  "assistantThreadLinePageOne": {"message": "Conversa: 1 resposta vai junto com a próxima pergunta, com a página “$TITLE$”", "placeholders": {"title": {"content": "$1"}}},
+  "assistantIncomplete": {"message": "Resposta incompleta: parou antes do fim"},
+  "assistantTaskStopping": {"message": "A tarefa está parando: a Área de IA está fechando."}
 }

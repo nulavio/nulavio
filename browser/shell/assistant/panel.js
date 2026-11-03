@@ -352,14 +352,17 @@ async function render() {
     syncMode();
     renderThread();
     if (!run) {
-      const [going] = await ai.assistantRuns().catch(() => []);
+      // A Task goes on while the panel is closed (Q18): this panel shows it, with "Parar". An Ask that
+      // was open when the panel closed is being stopped: it is not shown as going on.
+      const going = (await ai.assistantRuns().catch(() => [])).find(r => r.kind === "task");
       if (going) {
-        // A Task goes on while the panel is closed (Q18): this panel shows it, with "Parar".
-        run = { runId: going.runId, kind: going.kind, text: "", stopping: going.state === "cancelling", steps: [...going.steps] };
+        const stopping = going.state === "cancelling";
+        run = { runId: going.runId, kind: "task", text: "", stopping, steps: [...going.steps] };
         setRunning(true);
+        $("send").disabled = stopping; // a stop already asked for: it ends by itself
         showSteps(run.steps);
         $("answer-section").hidden = !run.steps.length;
-        announce(t("assistantTaskGoesOn"), "progress");
+        announce(t(stopping ? "assistantTaskStopping" : "assistantTaskGoesOn"), "progress");
       }
     }
   } else {
@@ -465,8 +468,16 @@ function onRunEvent(event) {
   } else if (event.type === "done") {
     finishRun(event);
   } else if (event.type === "error") {
-    const kind = run.kind;
+    const { kind, text } = run;
     endRun();
+    if (kind === "ask" && text) {
+      // What came before the error stays, said to be incomplete, without the "still arriving" cursor.
+      $("answer-section").hidden = false;
+      $("answer").textContent = text;
+      $("answer").hidden = false;
+      $("interrupted-text").textContent = t("assistantIncomplete");
+      $("interrupted").hidden = false;
+    }
     showError({ message: event.code }, kind === "task").then(refreshThread);
   }
 }
@@ -533,7 +544,9 @@ async function send(question, { retry = false } = {}) {
   $("activity-actions").hidden = true;
   $("interrupted").hidden = true;
   $("truncated").hidden = true;
+  $("steps").replaceChildren();
   $("steps").hidden = true;
+  $("receipt").textContent = ""; // the receipt of the message before never stands under this one
   $("answer").replaceChildren();
   $("copy-answer").hidden = true;
   delete document.body.dataset.answered;

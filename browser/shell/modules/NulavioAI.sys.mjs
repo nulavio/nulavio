@@ -671,12 +671,14 @@ class AI {
       // The idle limit can be shortened for tests (never under 1 s); nothing else reads this pref.
       idleMs: Math.max(1000, Services.prefs.getIntPref(IDLE_PREF, IDLE_MS)),
       totalMs: kind === "ask" ? ASK_TOTAL_MS : TASK_TOTAL_MS,
+      graceMs: kind === "ask" ? ASK_GRACE_MS : TASK_GRACE_MS,
     });
     run.handle.result.then(
       terminal => this.#finishRun(runId, run, terminal),
       e => this.#finishRun(runId, run, { type: "error", code: e?.code ?? "helper-failed" })
     );
-    win.addEventListener("unload", () => this.#cancelRun(run), { once: true }); // the window closed
+    run.onUnload = () => this.#cancelRun(run); // the window closed
+    win.addEventListener("unload", run.onUnload, { once: true });
     this.#watchRuns();
     return { runId };
   }
@@ -703,8 +705,9 @@ class AI {
     run.state = "done";
     let event = { ...terminal, runId };
     if (run.cancelling && terminal.type === "error" && terminal.code === "helper-failed") {
-      // Cancelled and ended hard (SIGKILL) before saying so: it may have reached the provider.
-      event = { type: "done", runId, cancelled: true, sent: true, steps: run.steps };
+      // Cancelled and ended hard (SIGKILL) before saying so. Whether a request may have gone is what the
+      // tools said before ("sending" comes just before each request).
+      event = { type: "done", runId, cancelled: true, sent: run.sent, steps: run.steps };
     } else if (run.kind === "task" && terminal.type === "error" && terminal.code === "helper-failed") {
       event = { ...event, code: "task-unfinished" }; // the run may have acted already
     }
@@ -715,6 +718,10 @@ class AI {
       this.#keepTurn(run, event);
     }
     this.#emit(run, event);
+    // Nothing of the run stays: its page text and the page that started it go with it.
+    run.win.removeEventListener("unload", run.onUnload);
+    run.owner = run.handle = run.turn = run.onUnload = null;
+    run.text = "";
     if (!this.#runs.size) {
       this.#runWatch?.cancel();
       this.#runWatch = null;
@@ -802,7 +809,8 @@ class AI {
       const config = await IOUtils.readJSON(PathUtils.join(dir, "assistant.json")).catch(() => null);
       const registry = await IOUtils.readJSON(PathUtils.join(dir, "agents.json")).catch(() => null);
       const agent = config?.agent ? registry?.agents?.[config.agent] : null;
-      if (config?.agent && registry && (!agent || agent.revoked)) {
+      // As the tools decide (assistant.py _blocked): no agent any more ("Remover assistente"), or revoked.
+      if ((config && !config.agent) || (config?.agent && registry && (!agent || agent.revoked))) {
         cutBy = "assistant-revoked";
       } else if (agent?.paused) {
         cutBy = "assistant-paused";

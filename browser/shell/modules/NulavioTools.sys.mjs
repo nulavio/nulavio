@@ -79,7 +79,7 @@ const MAX_LINE = 1024 * 1024;
     timeout (no line for `idleMs`, or longer than `totalMs` in all). `cancel(graceMs)` sends SIGTERM,
     then SIGKILL after `graceMs`; `holdIdle(untilMs)` lets the idle timer wait until then (a person
     answering a permission request). */
-export function callToolStream(args, request, { onEvent = () => {}, idleMs = 150000, totalMs = 600000 } = {}) {
+export function callToolStream(args, request, { onEvent = () => {}, idleMs = 150000, totalMs = 600000, graceMs = 2000 } = {}) {
   let proc = null;
   let finished = false;
   let cancelGrace = null;
@@ -88,11 +88,13 @@ export function callToolStream(args, request, { onEvent = () => {}, idleMs = 150
   let holdUntil = 0;
   let fail;
   const failed = new Promise((_resolve, reject) => {
-    fail = code => {
+    // A time limit lets the tools unwind (SIGTERM, then SIGKILL after the grace): a Task closes its AI
+    // Workspace and removes a pending request. Malformed output ends them at once.
+    fail = (code, hard = false) => {
       if (!finished) {
         finished = true;
         reject(new ToolError(code));
-        proc?.kill(0);
+        proc?.kill(hard ? 0 : graceMs);
       }
     };
   });
@@ -105,6 +107,9 @@ export function callToolStream(args, request, { onEvent = () => {}, idleMs = 150
     const tool = toolPath();
     if (!(await IOUtils.exists(tool))) {
       throw new ToolError("tools-missing");
+    }
+    if (cancelGrace !== null) {
+      return { type: "done", cancelled: true, sent: false }; // stopped before it started: nothing went
     }
     proc = await lazy.Subprocess.call({ command: tool, arguments: args, stderr: "pipe" });
     if (cancelGrace !== null) {
@@ -159,8 +164,10 @@ export function callToolStream(args, request, { onEvent = () => {}, idleMs = 150
       return event;
     },
     e => {
+      if (!finished) {
+        proc?.kill(0); // the output could not be read: fail closed
+      }
       finished = true;
-      proc?.kill(0);
       throw e?.code ? e : new ToolError("helper-failed");
     }
   );

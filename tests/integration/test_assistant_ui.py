@@ -864,9 +864,14 @@ class AssistantUiTest(unittest.TestCase):
         self.close_other_tabs()
         self.show_sidebar(reload=True)
         self.wait_view(lambda v: v["state"] == "ready")
+        self.provider.replies.append({"choices": [{"message": {"content": "Antes."}}]})
+        self.ask_panel("Uma antes?")
+        self.assertTrue(self.view()["receipt"])
         pieces = ["Primeiro ", "segundo ", "terceiro ", "quarto ", "quinto ", "fim."]
         self.provider.replies.append(Reply(chunks=pieces, chunk_delay=0.5))
         self.submit("Conte devagar")
+        self.assertTrue(harness.wait_until(lambda: self.answer_text(), 20))
+        self.assertEqual(self.view()["receipt"], "")  # the receipt before never stands under this answer
         lengths = []
         seen_cursor = False
         while not self.view()["answered"]:
@@ -1099,6 +1104,55 @@ class AssistantUiTest(unittest.TestCase):
             chrome_async(self.m, f"return await {AI}.assistantConfigure(args[0]);", [restore])
             other.close()
             self.show_sidebar(reload=True)
+
+    def test_21_an_error_mid_answer_keeps_it_marked_incomplete(self):
+        self.close_other_tabs()
+        self.show_sidebar(reload=True)
+        self.wait_view(lambda v: v["state"] == "ready")
+        self.provider.replies.append(Reply(chunks=["Metade ", "do ", "texto"], chunk_delay=0.3, error="overloaded_error"))
+        self.submit("Fale")
+        view = self.wait_view(lambda v: v["level"] == "error")
+        self.assertEqual(view["status"], MESSAGES["err_provider_unavailable"]["message"])
+        self.assertEqual(self.answer_text(), "Metade do texto")  # everything that came
+        self.assertFalse(self.panel("return !!document.querySelector('#answer .assistant__cursor');"))
+        self.assertEqual(
+            self.panel(
+                "return [document.getElementById('interrupted').hidden, document.getElementById('interrupted-text').textContent];"
+            ),
+            [False, "Resposta incompleta: parou antes do fim"],
+        )
+
+    def test_22_a_stop_at_once_says_nothing_left(self):
+        self.close_other_tabs()
+        self.show_sidebar(reload=True)
+        self.wait_view(lambda v: v["state"] == "ready")
+        before = self.provider.count
+        self.panel(
+            "const p = document.getElementById('prompt'); p.value = 'Ops'; document.getElementById('ask').requestSubmit();"
+            "document.getElementById('send').click();"
+        )
+        view = self.wait_view(lambda v: v["answered"] or v["level"] == "error")
+        self.assertEqual(view["status"], "Cancelado antes de enviar: nada saiu deste computador.")
+        time.sleep(0.5)
+        self.assertEqual(self.provider.count, before)
+
+    def test_23_removing_the_assistant_cuts_an_answer(self):
+        self.close_other_tabs()
+        self.show_sidebar(reload=True)
+        self.wait_view(lambda v: v["state"] == "ready")
+        self.provider.replies.append(Reply(chunks=[f"parte {i} " for i in range(20)], chunk_delay=0.4))
+        self.submit("Fale bastante")
+        self.assertTrue(harness.wait_until(lambda: self.answer_text(), 20))
+        restore = {"kind": "openai", "baseUrl": self.provider.base, "model": "test-model", "key": KEY}
+        try:
+            chrome_async(self.m, f"return await {AI}.assistantForget();")
+            self.assertTrue(harness.wait_until(lambda: self.tools_process() is None, 5))
+            self.assertNotIn("parte 19", self.answer_text())
+        finally:
+            chrome_async(self.m, f"return await {AI}.assistantConfigure(args[0]);", [restore])
+            chrome_async(self.m, f"return await {AI}.assistantAllow(true);")
+            self.show_sidebar(reload=True)
+            self.wait_view(lambda v: v["state"] == "ready")
 
 
 if __name__ == "__main__":
