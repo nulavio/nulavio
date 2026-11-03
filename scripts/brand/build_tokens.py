@@ -276,7 +276,12 @@ def _mix(a: str, b: str, weight: float) -> str:
 # (the browser.preferences.experimental.hidden pref alone did not hide Labs).
 # Independent of the theme: this is naming, not colour.
 # These ids exist only in Settings, so the rule shares the internal-pages scope.
-BRAND_RULES = "  #category-experimental,\n  #category-more-from-mozilla {\n    display: none !important;\n  }\n"
+BRAND_RULES = (
+    "  #category-experimental,\n  #category-more-from-mozilla {\n    display: none !important;\n  }\n"
+    # UX3G Q-1: an empty about:logins does not tell people to sign in to an account and
+    # turn on Sync, which Nulavio does not offer; the breach note and import stay.
+    '  ul:has(> li[data-l10n-id^="login-intro-instructions-fxa"]) {\n    display: none !important;\n  }\n'
+)
 
 
 def build_in_content(data: dict) -> str:
@@ -340,6 +345,11 @@ def build_in_content(data: dict) -> str:
         "      content-search-handoff-ui {\n"
         f"        --content-search-handoff-ui-background-color: {pair('chrome.field')} !important;\n"
         f"        --content-search-handoff-ui-unfocused-border-color: {pair('border.control')} !important;\n"
+        "      }\n"
+        # UX3G Q-2: the page's mask logo (context-fill) in the private dots colour, not violet.
+        "      html.private .logo {\n"
+        "        -moz-context-properties: fill;\n"
+        f"        fill: {dark('security.private.dots')} !important;\n"
         "      }\n"
         "      html.private content-search-handoff-ui {\n"
         f"        --content-search-handoff-ui-background-color: {dark('chrome.private.field')} !important;\n"

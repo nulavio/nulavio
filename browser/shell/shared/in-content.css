@@ -16,6 +16,9 @@
   #category-more-from-mozilla {
     display: none !important;
   }
+  ul:has(> li[data-l10n-id^="login-intro-instructions-fxa"]) {
+    display: none !important;
+  }
   @media -moz-pref("nulavio.horizon.enabled") {
     @media -moz-pref("extensions.activeThemeID", "default-theme@mozilla.org") or
       -moz-pref("extensions.activeThemeID", "firefox-compact-light@mozilla.org") or
@@ -73,6 +76,10 @@
       content-search-handoff-ui {
         --content-search-handoff-ui-background-color: light-dark(#FFFFFF, #15293A) !important;
         --content-search-handoff-ui-unfocused-border-color: light-dark(#6B8794, #6E93A2) !important;
+      }
+      html.private .logo {
+        -moz-context-properties: fill;
+        fill: #9E86C9 !important;
       }
       html.private content-search-handoff-ui {
         --content-search-handoff-ui-background-color: #15293A !important;

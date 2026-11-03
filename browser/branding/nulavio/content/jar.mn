@@ -44,6 +44,9 @@ browser.jar:
 % override chrome://browser/skin/preferences/mozilla-logo.svg chrome://browser/skin/fxa/avatar-empty.svg
 % override chrome://browser/skin/preferences/mozilla-16.svg chrome://browser/skin/fxa/avatar-empty.svg
 % override chrome://browser/skin/sidebar/firefox.svg chrome://branding/content/nulavio-glyph-16.svg
+# UX3G Q-2: the private-browsing tab icon in Nulavio's private colours.
+  content/branding/private-favicon.svg           (private-favicon.svg)
+% override chrome://browser/skin/privatebrowsing/favicon.svg chrome://branding/content/private-favicon.svg
 # Nulavio Horizon window theme (loaded by browser.xhtml, browser/patches/0003)
   content/branding/theme/tokens.css              (theme/tokens.css)
   content/branding/theme/horizon.css             (theme/horizon.css)
