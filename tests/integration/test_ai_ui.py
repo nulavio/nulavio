@@ -503,6 +503,71 @@ class AiUiTest(unittest.TestCase):
         self.assertFalse(self.js(f"return !!document.querySelector(\"[data-focus-key='raw-{assistant['id']}']\");"))
         self.assertTrue(re.search(re.escape(self.msg("aiLevelBadge", self.msg("aiLevel_restricted"))), listed))
 
+    def test_11_an_ai_workspace_can_only_stop_pause_or_revoke(self):
+        """UX5-0: in a window an agent drives, the Shell API refuses everything that loosens a setting or
+        hides what was done; the emergency stop, pause and revoke still work there."""
+        agent, _ = registry.add("Inside", "other", "restricted")
+        other, _ = registry.add("Other", "other", "restricted")
+        self.m.chrome("Services.prefs.setStringPref('nulavio.ai.workspace', arguments[0]);", [agent["id"]])
+        try:
+            self.open_page("settings/settings.html#ai")
+
+            def call(expression: str) -> str:
+                return self.m.execute_async(
+                    "const done = arguments[arguments.length - 1];"
+                    f"Promise.resolve().then(() => {expression}).then(() => done('ok'), e => done('error:' + e.message));"
+                )
+
+            a, o = agent["id"], other["id"]
+            refused = {
+                "autonomy": f"browser.nulavioAI.change('{a}', 'autonomy', {{level: 'full-control', acceptFullControl: true}})",
+                "grant": f"browser.nulavioAI.change('{o}', 'grant', {{capability: 'execute_js', mode: 'allow'}})",
+                "resume agent": f"browser.nulavioAI.change('{a}', 'pause', {{paused: false}})",
+                "sites": f"browser.nulavioAI.change('{a}', 'domains', {{domains: []}})",
+                "add": "browser.nulavioAI.add({name: 'New', client: 'other', autonomy: 'restricted'})",
+                "install": f"browser.nulavioAI.install('{a}', 'codex', false)",
+                "clear activity": "browser.nulavioAI.clearActivity()",
+                "lift stop": "browser.nulavioAI.setStopped(false)",
+            }
+            before = json.dumps(self.agents(), sort_keys=True)
+            for name, expression in refused.items():
+                self.assertEqual(call(expression), "error:workspace-change", name)
+            self.assertEqual(json.dumps(self.agents(), sort_keys=True), before)  # nothing changed, nothing added
+            # The same message for the person: a localised text, never the code.
+            self.assertNotIn("err_", self.msg("err_workspace_change"))
+            self.assertEqual(call(f"browser.nulavioAI.change('{o}', 'pause', {{paused: true}})"), "ok")
+            self.assertTrue(self.agents()[o]["paused"])
+            self.assertEqual(call("browser.nulavioAI.setStopped(true)"), "ok")
+            self.assertTrue(registry.stopped())
+            self.assertEqual(call(f"browser.nulavioAI.change('{a}', 'revoke')"), "ok")
+            self.assertTrue(self.agents()[a]["revoked"])
+        finally:
+            self.m.chrome("Services.prefs.clearUserPref('nulavio.ai.workspace');")
+            registry.set_stopped(False)
+            self.m.send("WebDriver:CloseWindow", {})
+            self.m.switch_to(self.m.window_handles()[0])
+
+    def test_12_an_answer_for_this_session_shows_beside_the_users_choice(self):
+        """UX5-0: "allow until the agent disconnects" is shown while that session is connected, and the
+        menu keeps the user's own choice, which is what applies once the session ends."""
+        agent, _ = registry.add("Sessao", "other", "autonomous")
+        registry.grant(agent["id"], "interact", "ask")
+        registry.grant_session(agent["id"], "interact", "s-live")
+        audit.record(agent=agent["id"], client="other", session="s-live", event="connected")
+        try:
+            self.open_page("settings/settings.html#ai")
+            row = f"[data-agent-id='{agent['id']}']"
+            self.assertTrue(harness.wait_until(lambda: self.js(f'return !!document.querySelector("{row}");'), timeout=20))
+            self.js(f'document.querySelector("{row} details").open = true;')
+            shown = self.js(
+                f"const s = document.querySelector(\"[data-focus-key='mode-{agent['id']}-interact']\");"
+                "return {mode: s.value, note: s.closest('li').querySelector('.row__note').textContent};"
+            )
+            self.assertEqual(shown, {"mode": "ask", "note": self.msg("aiGrantSession")})
+        finally:
+            audit.record(agent=agent["id"], client="other", session="s-live", event="disconnected")
+            registry.end_session(agent["id"], "s-live")
+
 
 if __name__ == "__main__":
     unittest.main()

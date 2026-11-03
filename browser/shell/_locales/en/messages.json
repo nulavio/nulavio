@@ -1082,5 +1082,6 @@
   "unlockWhy": {"message": "This profile is protected: its files stay encrypted on disk while it is locked. Nothing of it is read, not even a link that asked for it, until you unlock it here. Nulavio has no master key."},
   "phoneWhy": {"message": "Connecting a phone adds one more way to unlock this profile; the password and the recovery code keep working. The same 6 digits on both screens show that nobody else read the code."},
   "methodsWhy": {"message": "Each method holds the same profile key, encrypted its own way, so any one of them opens the profile. Nulavio keeps no copy and has no master key: if every method is lost, nobody can open the data."},
-  "aiRequestWhy": {"message": "A connected agent asked for something its autonomy level says to ask about first. Nothing happens until you answer; without an answer, the request is denied when it expires."}
+  "aiRequestWhy": {"message": "A connected agent asked for something its autonomy level says to ask about first. Nothing happens until you answer; without an answer, the request is denied when it expires."},
+  "err_workspace_change": {"message": "Not from the AI Workspace: change this in your own Nulavio window. Here you can only stop, pause or revoke the agent."}
 }

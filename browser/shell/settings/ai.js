@@ -85,14 +85,20 @@ function capabilityRow(agent, capability) {
       await renderAgents();
     }, t("doneSaved"))
   );
-  const meta = grant
-    ? grant.until
-      ? t("aiGrantUntil", [when(grant.until)])
-      : grant.session
-        ? t("aiGrantSession")
-        : t("aiGrantSet")
-    : t("aiGrantFromLevel");
-  const reset = grant
+  // "Allow until the agent disconnects" is kept apart from the user's own choice (UX5-0): it is
+  // in effect only while that session is connected, and the menu keeps showing the user's choice.
+  const answered = agent.session_grants?.[capability];
+  const live = Boolean(answered) && (agent.active_sessions ?? []).some(s => s.session === answered.session);
+  const meta = live
+    ? t("aiGrantSession")
+    : grant
+      ? grant.until
+        ? t("aiGrantUntil", [when(grant.until)])
+        : grant.session
+          ? t("aiGrantSession")
+          : t("aiGrantSet")
+      : t("aiGrantFromLevel");
+  const reset = grant || live
     ? h("button", {
         class: "button button--quiet",
         type: "button",

@@ -178,11 +178,20 @@ class AI {
     });
   }
 
-  add({ name, client, autonomy, domains = [], disposable = false, acceptFullControl = false }) {
+  /** In a window an agent drives, nothing may loosen a setting or hide what was done there: only the
+      emergency stop, pausing and revoking (the user's own window does the rest; UX5-0). */
+  async #onlyTightens(tightens) {
+    if (!tightens && (await this.workspaceAgent())) {
+      fail("workspace-change");
+    }
+  }
+
+  async add({ name, client, autonomy, domains = [], disposable = false, acceptFullControl = false }) {
+    await this.#onlyTightens(false);
     return this.#changed(api({ op: "add", name, client, autonomy, domains, disposable, acceptFullControl }));
   }
 
-  change(id, op, details = {}) {
+  async change(id, op, details = {}) {
     const allowed = [
       "autonomy",
       "grant",
@@ -199,6 +208,7 @@ class AI {
     if (!allowed.includes(op)) {
       fail("bad-request");
     }
+    await this.#onlyTightens(op === "revoke" || (op === "pause" && details?.paused === true));
     return this.#changed(api({ ...details, op, agent: agentId(id) }));
   }
 
@@ -211,11 +221,13 @@ class AI {
     return api({ op: "plan", agent: agentId(id), client });
   }
 
-  install(id, client, replace = false) {
+  async install(id, client, replace = false) {
+    await this.#onlyTightens(false); // it writes another program's settings
     return api({ op: "install", agent: agentId(id), client, replace: Boolean(replace) });
   }
 
-  setStopped(stopped) {
+  async setStopped(stopped) {
+    await this.#onlyTightens(Boolean(stopped));
     return this.#changed(api({ op: "stop", stopped: Boolean(stopped) }));
   }
 
@@ -223,7 +235,8 @@ class AI {
     return api({ op: "audit", limit, agent: agent ? agentId(agent) : null });
   }
 
-  clearActivity() {
+  async clearActivity() {
+    await this.#onlyTightens(false);
     return api({ op: "audit-clear" });
   }
 
