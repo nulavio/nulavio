@@ -7,6 +7,7 @@ edit Claude Code, Codex or any other program's settings (brief, phase 4).
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import os
 import secrets
@@ -220,6 +221,8 @@ def _serve(args) -> int:
     try:
         Server(Bridge(agent["id"], session, headless=args.headless)).serve()
     finally:
+        with contextlib.suppress(registry.RegistryError, OSError, ValueError):
+            registry.end_session(agent["id"], session)
         audit.record(agent=agent["id"], client=agent.get("client"), session=session, event="disconnected")
     return 0
 

@@ -24,6 +24,7 @@ Plain HTTP is accepted only for a model on this computer (loopback).
 
 from __future__ import annotations
 
+import contextlib
 import json
 import secrets
 import urllib.error
@@ -334,6 +335,8 @@ def run_task(task: str, profile: str, *, headless: bool = False, bridge: Bridge 
         return {"answer": "", "steps": steps, "stopped": "step-limit", "limit": MAX_STEPS}
     finally:
         bridge.close()
+        with contextlib.suppress(registry.RegistryError, OSError, ValueError):
+            registry.end_session(agent_id, bridge.session_id)  # "until it disconnects" ends with the task
 
 
 def api_request(request: dict) -> dict:

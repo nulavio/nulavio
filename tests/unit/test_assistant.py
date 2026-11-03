@@ -30,6 +30,7 @@ KEY = "sk-artificial-test-key-123"
 class FakeBridge:
     def __init__(self, agent_id):
         self.agent_id = agent_id
+        self.session_id = "s"
         self.calls = []
         self.closed = False
 

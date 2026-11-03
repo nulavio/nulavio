@@ -228,14 +228,17 @@ class AddressTest(unittest.TestCase):
 
 
 class Approve(registry.Approver):
-    def __init__(self, answer):
+    def __init__(self, answer, meanwhile=None):
         self.answer = answer
         self.asked = []
         self.places = []
+        self.meanwhile = meanwhile  # what the user does while the prompt is open
 
-    def ask(self, agent, capability, target, place=""):
+    def ask(self, agent, capability, target, place="", cancel=None):
         self.asked.append((capability, target))
         self.places.append(place)
+        if self.meanwhile:
+            self.meanwhile()
         return self.answer
 
 
@@ -272,8 +275,48 @@ class PolicyTest(Home):
         self.assertTrue(self.decide(agent["id"], "interact", Approve("once")).allowed)
         self.assertEqual(self.decide(agent["id"], "interact").reason, "no-approver")  # once means once
         self.assertTrue(self.decide(agent["id"], "interact", Approve("session"), session="s-1").allowed)
-        self.assertEqual(self.decide(agent["id"], "interact", session="s-1").reason, "grant")
+        self.assertEqual(self.decide(agent["id"], "interact", session="s-1").reason, "session-grant")
         self.assertEqual(self.decide(agent["id"], "interact", session="s-2").reason, "no-approver")  # another session
+
+    def test_session_answers_never_replace_the_users_grant(self):
+        """UX5-0: an explicit "ask", then "allow until the agent disconnects", then a new session asks again."""
+        agent, _ = registry.add("keep", "other", "autonomous")  # its level allows interact
+        registry.grant(agent["id"], "interact", "ask")
+        self.assertTrue(self.decide(agent["id"], "interact", Approve("session"), session="s-1").allowed)
+        self.assertEqual(registry.get(agent["id"])["grants"]["interact"]["mode"], "ask")  # untouched
+        self.assertEqual(self.decide(agent["id"], "interact", session="s-1").reason, "session-grant")
+        later = Approve("deny")
+        self.assertEqual(self.decide(agent["id"], "interact", later, session="s-2").reason, "denied")
+        self.assertEqual(later.asked, [("interact", None)])  # asked again, not the level's "allow"
+        # The bridge's end takes the session's answers with it; what the user sets replaces them.
+        registry.end_session(agent["id"], "s-1")
+        self.assertEqual(registry.get(agent["id"])["session_grants"], {})
+        self.assertTrue(self.decide(agent["id"], "interact", Approve("session"), session="s-3").allowed)
+        registry.grant(agent["id"], "interact", "block")
+        self.assertEqual(self.decide(agent["id"], "interact", session="s-3").reason, "grant")
+        registry.grant(agent["id"], "interact", "ask")
+        self.assertTrue(self.decide(agent["id"], "interact", Approve("session"), session="s-3").allowed)
+        registry.set_autonomy(agent["id"], "restricted")
+        self.assertEqual(self.decide(agent["id"], "interact", session="s-3").reason, "no-approver")
+
+    def test_answers_after_a_stop_pause_or_revoke_do_nothing(self):
+        """UX5-0: the prompt was open when the user stopped, paused, revoked or blocked: "allow" does nothing."""
+        cases = (
+            ("stopped", lambda a: registry.set_stopped(True)),
+            ("paused", lambda a: registry.pause(a, True)),
+            ("revoked", lambda a: registry.revoke(a)),
+            ("grant", lambda a: registry.grant(a, "interact", "block")),
+            ("out-of-scope", lambda a: registry.set_domains(a, ["other.example"])),
+        )
+        for reason, act in cases:
+            for answer in ("once", "session"):
+                with self.subTest(reason=reason, answer=answer):
+                    agent, _ = registry.add("late", "other", "restricted")
+                    approver = Approve(answer, meanwhile=lambda a=agent["id"], act=act: act(a))
+                    decision = self.decide(agent["id"], "interact", approver, host="example.org")
+                    self.assertEqual((decision.allowed, decision.reason), (False, reason))
+                    self.assertNotIn("interact", registry.get(agent["id"]).get("session_grants", {}))
+                    registry.set_stopped(False)
 
     def test_grants_override_presets_and_persist(self):
         agent, _ = registry.add("g", "other", "assisted")
@@ -762,6 +805,39 @@ class AutonomyControlsTest(Home):
         approver = registry.BrowserApprover(notice=3, timeout=0.5, poll=0.05)
         self.assertEqual(approver.ask(registry.get(agent["id"]), "interact", None), "deny")
         thread.join()
+
+    def test_pending_request_is_denied_at_once_when_called_off(self):
+        """UX5-0: a stop, pause, revoke or cancelled call ends a pending request now, not at its expiry."""
+
+        def mark_seen():
+            for _ in range(100):
+                pending = list(registry.requests_dir().glob("*.json"))
+                if pending:
+                    pending[0].with_suffix(".seen").touch()
+                    return
+                time.sleep(0.05)
+
+        cancel = threading.Event()
+        cases = (
+            ("stop", lambda a: registry.set_stopped(True)),
+            ("pause", lambda a: registry.pause(a, True)),
+            ("revoke", lambda a: registry.revoke(a)),
+            ("cancel", lambda a: cancel.set()),
+        )
+        for name, act in cases:
+            with self.subTest(name):
+                agent, _ = registry.add("w", "other", "restricted")
+                cancel.clear()
+                seen = threading.Thread(target=mark_seen)
+                seen.start()
+                threading.Timer(0.4, act, [agent["id"]]).start()
+                approver = registry.BrowserApprover(fallback=Approve("once"), notice=3, timeout=30, poll=0.05)
+                started = time.monotonic()
+                self.assertEqual(approver.ask(registry.get(agent["id"]), "interact", None, cancel=cancel), "deny")
+                self.assertLess(time.monotonic() - started, 5)
+                seen.join()
+                self.assertEqual(list(registry.requests_dir().iterdir()), [])
+                registry.set_stopped(False)
 
     def test_answers_are_validated(self):
         for request_id, answer in (("../../x", "once"), ("0123456789abcdef", "always"), ("0123456789abcdef", "once")):

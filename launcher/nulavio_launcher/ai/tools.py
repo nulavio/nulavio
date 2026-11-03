@@ -230,6 +230,7 @@ class Bridge:
         self._target: str | None = None  # the address the current call acts on (for the audit)
         self._downloads_mode: dict[str, bool] = {}
         self._args: dict = {}  # the current call's arguments (where it acts, for permission requests)
+        self._cancel: threading.Event | None = None  # the current call's cancel: a pending request is denied
         self.raw = False  # the AI Workspace's endpoint was handed over (raw_automation)
 
     # -- policy ----------------------------------------------------------------------
@@ -253,7 +254,8 @@ class Bridge:
             self._target = url
         host = urllib.parse.urlsplit(url).hostname if url else None
         decision = registry.decide(self.agent_id, capability, host=host, target=policy.origin(url),
-                                   session_id=self.session_id, approver=self.approver, place=self._place())  # fmt: skip
+                                   session_id=self.session_id, approver=self.approver, place=self._place(),
+                                   cancel=self._cancel)  # fmt: skip
         checked.append(capability)
         if not decision.allowed:
             if decision.reason in ("revoked", "stopped"):
@@ -294,6 +296,7 @@ class Bridge:
             validate(tool.schema, arguments)
             with self._lock:
                 self._args = arguments
+                self._cancel = cancel
                 self._sync_downloads()
                 result, target_url = getattr(self, "_t_" + name)(arguments, cancel, checked)
             outcome, decision, reason = "ok", "allow", None

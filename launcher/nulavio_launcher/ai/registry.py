@@ -21,6 +21,7 @@ import re
 import secrets
 import shutil
 import subprocess
+import threading
 import time
 from pathlib import Path
 
@@ -215,15 +216,17 @@ def set_autonomy(agent_id: str, autonomy: str, accept_full_control: bool = False
         if agent is None:
             raise RegistryError(f"no agent {agent_id}")
         agent["autonomy"] = autonomy
+        agent.pop("session_grants", None)  # answers given under the old level do not outlive it
         if autonomy == "full_control":
             agent["full_control_accepted"] = now().isoformat(timespec="seconds")
 
     _update(apply)
 
 
-def grant(agent_id: str, capability: str, mode: str, *, minutes: int | None = None, session: str | None = None,
+def grant(agent_id: str, capability: str, mode: str, *, minutes: int | None = None,
           accept_raw_automation: bool = False) -> dict:  # fmt: skip
-    """Set one capability to allow/ask/block, forever, for N minutes or for one bridge session.
+    """The user sets one capability to allow/ask/block, forever or for N minutes. It replaces an
+    "allow for this session" answer for that capability (grant_session), so what the user sets wins.
 
     Raw automation (policy.RAW_CAPABILITY) is a separate opt-in: allowing or asking for it needs
     `accept_raw_automation` (the user saw its own warning) unless the agent already has it on;
@@ -233,7 +236,7 @@ def grant(agent_id: str, capability: str, mode: str, *, minutes: int | None = No
         raise RegistryError(f"unknown capability {capability}")
     if mode not in MODES:
         raise RegistryError(f"mode must be one of {', '.join(MODES)}")
-    entry = {"mode": mode, "set": now().isoformat(timespec="seconds"), "until": None, "session": session}
+    entry = {"mode": mode, "set": now().isoformat(timespec="seconds"), "until": None, "session": None}
     if minutes is not None:
         if not 1 <= minutes <= 60 * 24 * 365:
             raise RegistryError("minutes out of range")
@@ -252,9 +255,36 @@ def grant(agent_id: str, capability: str, mode: str, *, minutes: int | None = No
                 raise RegistryError("raw automation needs an explicit acceptance: " + RAW_AUTOMATION_WARNING,
                                     "raw-automation-not-accepted")  # fmt: skip
         agent["grants"][capability] = entry
+        agent.get("session_grants", {}).pop(capability, None)
 
     _update(apply)
     return entry
+
+
+def grant_session(agent_id: str, capability: str, session_id: str) -> None:
+    """The answer "allow until the agent disconnects": kept apart from the user's grants, never over them."""
+    if capability not in CAPABILITIES or not session_id:
+        raise RegistryError("bad session grant")
+
+    def apply(data):
+        agent = data["agents"].get(agent_id)
+        if agent is None:
+            raise RegistryError(f"no agent {agent_id}")
+        held = agent.setdefault("session_grants", {})
+        held[capability] = {"session": session_id, "set": now().isoformat(timespec="seconds")}
+
+    _update(apply)
+
+
+def end_session(agent_id: str, session_id: str) -> None:
+    """The bridge session ended: its "allow until the agent disconnects" answers go with it."""
+
+    def apply(data):
+        held = (data["agents"].get(agent_id) or {}).get("session_grants") or {}
+        for capability in [c for c, g in held.items() if g.get("session") == session_id]:
+            del held[capability]
+
+    _update(apply)
 
 
 def set_raw_automation(agent_id: str, enabled: bool, accept: bool = False) -> None:
@@ -357,6 +387,7 @@ def clear_grant(agent_id: str, capability: str) -> None:
     def apply(data):
         agent = data["agents"].get(agent_id, {})
         agent.get("grants", {}).pop(capability, None)
+        agent.get("session_grants", {}).pop(capability, None)
         if capability == RAW_CAPABILITY and agent:
             agent["raw_automation_accepted"] = None  # back to the level's default: off
 
@@ -373,7 +404,8 @@ class Approver:
     user's own profiles the agent was given.
     """
 
-    def ask(self, agent: dict, capability: str, target: str | None, place: str = "") -> str | None:
+    def ask(self, agent: dict, capability: str, target: str | None, place: str = "",
+            cancel: threading.Event | None = None) -> str | None:  # fmt: skip
         return None
 
 
@@ -387,7 +419,9 @@ class KDialogApprover(Approver):
     def available(self) -> bool:
         return bool(self.executable) and bool(os.environ.get("WAYLAND_DISPLAY") or os.environ.get("DISPLAY"))
 
-    def ask(self, agent: dict, capability: str, target: str | None, place: str = "") -> str | None:
+    def ask(self, agent: dict, capability: str, target: str | None, place: str = "",
+            cancel: threading.Event | None = None) -> str | None:  # fmt: skip
+        # The dialog cannot be taken back once shown; decide() checks stop, pause and revoke again after it.
         if not self.available():
             return None
         where = f"in your profile {place}" if place else "in its AI Workspace"
@@ -417,7 +451,10 @@ class BrowserApprover(Approver):
         self.fallback = fallback or Approver()
         self.notice, self.timeout, self.poll = notice, timeout, poll
 
-    def ask(self, agent: dict, capability: str, target: str | None, place: str = "") -> str | None:
+    def ask(self, agent: dict, capability: str, target: str | None, place: str = "",
+            cancel: threading.Event | None = None) -> str | None:  # fmt: skip
+        """Denies as soon as the emergency stop is on, the agent is paused or revoked, or the call was
+        cancelled: the request page then closes as expired, and nothing waits for an answer."""
         folder = requests_dir()
         request_id = secrets.token_hex(8)
         base = folder / request_id
@@ -431,9 +468,11 @@ class BrowserApprover(Approver):
         try:
             deadline = time.monotonic() + self.notice
             while not base.with_suffix(".seen").exists():
+                if _called_off(agent["id"], cancel):
+                    return "deny"
                 if time.monotonic() > deadline:
                     base.with_suffix(".json").unlink(missing_ok=True)
-                    return self.fallback.ask(agent, capability, target, place)
+                    return self.fallback.ask(agent, capability, target, place, cancel)
                 time.sleep(self.poll)
             deadline = time.monotonic() + self.timeout
             while time.monotonic() < deadline:
@@ -441,11 +480,24 @@ class BrowserApprover(Approver):
                 if answer.exists():
                     value = answer.read_text().strip()
                     return value if value in ("once", "session", "deny") else "deny"
+                if _called_off(agent["id"], cancel):
+                    return "deny"
                 time.sleep(self.poll)
             return "deny"
         finally:
             for suffix in (".json", ".seen", ".answer"):
                 base.with_suffix(suffix).unlink(missing_ok=True)
+
+
+def _called_off(agent_id: str, cancel: threading.Event | None) -> bool:
+    """While a request waits: the call was cancelled, the stop is on, or the agent was paused or revoked."""
+    if (cancel is not None and cancel.is_set()) or stopped():
+        return True
+    try:
+        agent = load()["agents"].get(agent_id)
+    except (OSError, ValueError, RegistryError):
+        return True  # the registry cannot be read: fail closed
+    return agent is None or bool(agent.get("revoked") or agent.get("paused"))
 
 
 def requests_dir() -> Path:
@@ -478,28 +530,47 @@ def default_approver() -> Approver:
     return BrowserApprover(fallback=kdialog if kdialog.available() else Approver())
 
 
-def decide(agent_id: str, capability: str, *, host: str | None, target: str | None, session_id: str,
-           approver: Approver, place: str = "") -> Decision:  # fmt: skip
-    """The single decision point: stop switch, revocation, site scope, grant/preset, then a prompt if needed."""
-    agent = load()["agents"].get(agent_id)
+def _held(agent: dict | None, host: str | None) -> str | None:
+    """Why nothing this agent asks for may happen now, or None."""
     if stopped():
-        return Decision(False, "block", capability, "stopped")
+        return "stopped"
     if agent is None or agent.get("revoked"):
-        return Decision(False, "block", capability, "revoked")
+        return "revoked"
     if agent.get("paused"):
-        return Decision(False, "block", capability, "paused")
+        return "paused"
     if not in_scope(agent, host):
-        return Decision(False, "block", capability, "out-of-scope")
+        return "out-of-scope"
+    return None
+
+
+def decide(agent_id: str, capability: str, *, host: str | None, target: str | None, session_id: str,
+           approver: Approver, place: str = "", cancel: threading.Event | None = None) -> Decision:  # fmt: skip
+    """The single decision point: stop switch, revocation, site scope, grant/preset, then a prompt if needed.
+
+    A prompt can stay open for minutes, so everything is checked again after the answer: a stop, a pause,
+    a revocation, a smaller site list or a block set meanwhile wins over "allow" (UX5-0)."""
+    agent = load()["agents"].get(agent_id)
+    held = _held(agent, host)
+    if held:
+        return Decision(False, "block", capability, held)
     mode, source = effective_mode(agent, capability, session_id)
     if mode == "allow":
         return Decision(True, mode, capability, source)
     if mode == "block":
         return Decision(False, mode, capability, source)
-    answer = approver.ask(agent, capability, target, place)
+    answer = approver.ask(agent, capability, target, place, cancel)
     if answer is None:
         return Decision(False, mode, capability, "no-approver")
+    if answer in ("once", "session"):
+        agent = load()["agents"].get(agent_id)
+        held = _held(agent, host)
+        if held:
+            return Decision(False, "block", capability, held)
+        now_mode, now_source = effective_mode(agent, capability, session_id)
+        if now_mode == "block":
+            return Decision(False, now_mode, capability, now_source)
     if answer == "session":
-        grant(agent_id, capability, "allow", session=session_id)
+        grant_session(agent_id, capability, session_id)
         return Decision(True, mode, capability, "approved-session")
     if answer == "once":
         return Decision(True, mode, capability, "approved-once")

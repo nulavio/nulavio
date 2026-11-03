@@ -108,8 +108,8 @@ class Decision:
     allowed: bool
     mode: str  # allow / ask / block (the effective setting before any prompt)
     capability: str
-    # preset:<name>, grant, raw-automation-off, approved-once, approved-session, denied, no-approver, revoked,
-    # stopped, out-of-scope
+    # preset:<name>, grant, session-grant, raw-automation-off, approved-once, approved-session, denied,
+    # no-approver, revoked, paused, stopped, out-of-scope
     reason: str
 
 
@@ -127,12 +127,17 @@ def grant_active(grant: dict, session_id: str, at: _dt.datetime | None = None) -
 
 
 def effective_mode(agent: dict, capability: str, session_id: str, at: _dt.datetime | None = None) -> tuple[str, str]:
-    """(mode, source) for one capability: an active explicit grant wins over the preset."""
+    """(mode, source) for one capability: an "allow for this session" answer, then an active explicit
+    grant, then the preset. A session answer is kept apart from the user's own grants (UX5-0), so when
+    the session ends the capability goes back to what the user set, never to the preset."""
     if capability not in CAPABILITIES:
         return "block", "unknown-capability"
     if capability == RAW_CAPABILITY and not agent.get("raw_automation_accepted"):
         # Only the separate opt-in turns it on; a grant given without that confirmation does not count.
         return "block", "raw-automation-off"
+    held = agent.get("session_grants", {}).get(capability)
+    if held and session_id and held.get("session") == session_id:
+        return "allow", "session-grant"
     grant = agent.get("grants", {}).get(capability)
     if grant and grant_active(grant, session_id, at):
         return grant["mode"], "grant"

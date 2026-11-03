@@ -31,7 +31,7 @@ class Approve(registry.Approver):
         self.answer = answer
         self.asked = 0
 
-    def ask(self, agent, capability, target, place=""):
+    def ask(self, agent, capability, target, place="", cancel=None):
         self.asked += 1
         return self.answer
 
