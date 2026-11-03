@@ -39,6 +39,10 @@ const BAR = "nulavio-ai-workspace";
 const RAW_BAR = "nulavio-ai-raw";
 const STATE_ATTR = "nulavio-state";
 const POLL_MS = 1500;
+// The band asks for the driving agent's state every 1.5 s. The answer depends only on
+// <state>/ai/agents.json and <state>/ai/STOP, so the tools run again only when one of
+// them changes, after a change made here, or every OVERVIEW_TTL_MS as a safety net.
+const OVERVIEW_TTL_MS = 15000;
 const RAW_POLL_MS = 1000;
 const ID_RE = /^[0-9a-f]{16}$/;
 const AGENT_RE = /^ag-[0-9a-f]{12}$/;
@@ -89,6 +93,7 @@ class AI {
   #rawTimer = null;
   #observing = false;
   #renders = new WeakMap(); // window -> the last bar update, so updates never overlap
+  #overviewCache = null; // { key, at, overview } for windowState(); a failed read is never kept
 
   /** The agent driving this window, if any. "agent:pid" (one of the user's profiles, opened for an agent)
       counts only while that bridge process lives; a bare agent id is an AI Workspace. */
@@ -108,8 +113,38 @@ class AI {
     return api({ op: "overview" });
   }
 
+  /** The registry's and the emergency stop's file state: what windowState()'s answer depends on. */
+  async #agentFilesKey() {
+    const dir = PathUtils.join(lazy.stateDir(), "ai");
+    const [registry, stop] = await Promise.all([
+      IOUtils.stat(PathUtils.join(dir, "agents.json")).catch(() => null),
+      IOUtils.exists(PathUtils.join(dir, "STOP")),
+    ]);
+    return `${registry?.lastModified ?? 0}:${registry?.size ?? -1}:${stop}`;
+  }
+
+  async #bandOverview() {
+    const key = await this.#agentFilesKey().catch(() => null);
+    const cached = this.#overviewCache;
+    if (key && cached?.key === key && Date.now() - cached.at < OVERVIEW_TTL_MS) {
+      return cached.overview;
+    }
+    this.#overviewCache = null;
+    const overview = await this.overview();
+    this.#overviewCache = key ? { key, at: Date.now(), overview } : null;
+    return overview;
+  }
+
+  /** Whatever this browser changes is shown at the next tick, not after the file check. */
+  #changed(promise) {
+    this.#overviewCache = null;
+    return promise.finally(() => {
+      this.#overviewCache = null;
+    });
+  }
+
   add({ name, client, autonomy, domains = [], disposable = false, acceptFullControl = false }) {
-    return api({ op: "add", name, client, autonomy, domains, disposable, acceptFullControl });
+    return this.#changed(api({ op: "add", name, client, autonomy, domains, disposable, acceptFullControl }));
   }
 
   change(id, op, details = {}) {
@@ -129,7 +164,7 @@ class AI {
     if (!allowed.includes(op)) {
       fail("bad-request");
     }
-    return api({ ...details, op, agent: agentId(id) });
+    return this.#changed(api({ ...details, op, agent: agentId(id) }));
   }
 
   /** The connect wizard: which agents are installed, the exact command, then run it after approval. */
@@ -146,7 +181,7 @@ class AI {
   }
 
   setStopped(stopped) {
-    return api({ op: "stop", stopped: Boolean(stopped) });
+    return this.#changed(api({ op: "stop", stopped: Boolean(stopped) }));
   }
 
   activity(limit = 100, agent = null) {
@@ -375,7 +410,7 @@ class AI {
       paused: warning?.paused ?? false, failed: warning?.failed ?? false,
     };
     try {
-      const overview = await this.overview();
+      const overview = await this.#bandOverview();
       const agent = overview.agents.find(a => a.id === id);
       return { ...state, name: agent?.name ?? id, autonomy: agent?.autonomy ?? null,
         paused: agent ? Boolean(agent.paused) : state.paused, revoked: Boolean(agent?.revoked),
