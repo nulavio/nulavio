@@ -784,8 +784,7 @@
   "err_bad_model": {"message": "Enter the model's name."},
   "err_bad_kind": {"message": "Choose the provider type."},
   "err_bad_question": {"message": "Write a question (up to 8000 characters)."},
-  "err_provider_refused": {"message": "The provider refused the request (check the key and the model)."},
-  "err_provider_unreachable": {"message": "The provider could not be reached."},
+  "err_provider_unreachable": {"message": "The provider could not be reached, so nothing was sent. Check the address and the connection."},
   "err_assistant_revoked": {"message": "The assistant's agent was revoked. Save the settings again to create a new one."},
   "err_no_page": {"message": "There is no web page in this tab to include."},
   "err_ai_workspace": {"message": "An agent drives this window; use the assistant in your own window."},
@@ -1083,5 +1082,15 @@
   "phoneWhy": {"message": "Connecting a phone adds one more way to unlock this profile; the password and the recovery code keep working. The same 6 digits on both screens show that nobody else read the code."},
   "methodsWhy": {"message": "Each method holds the same profile key, encrypted its own way, so any one of them opens the profile. Nulavio keeps no copy and has no master key: if every method is lost, nobody can open the data."},
   "aiRequestWhy": {"message": "A connected agent asked for something its autonomy level says to ask about first. Nothing happens until you answer; without an answer, the request is denied when it expires."},
-  "err_workspace_change": {"message": "Not from the AI Workspace: change this in your own Nulavio window. Here you can only stop, pause or revoke the agent."}
+  "err_workspace_change": {"message": "Not from the AI Workspace: change this in your own Nulavio window. Here you can only stop, pause or revoke the agent."},
+  "err_provider_auth": {"message": "The provider refused the API key. The request reached it, but the key was not accepted: check the key in Settings."},
+  "err_provider_not_found": {"message": "The provider does not know this address or model. The request reached it: check the address and the model name in Settings."},
+  "err_provider_rate_limited": {"message": "The provider is limiting requests right now. The request reached it but was not answered. Try again in a moment."},
+  "err_provider_timeout": {"message": "The provider took too long to answer. The request may have reached it."},
+  "err_provider_unavailable": {"message": "The provider is unavailable or overloaded. The request reached it but was not answered. Try again later."},
+  "err_provider_bad_request": {"message": "The provider refused the request as invalid. It reached the provider: check the model and the kind of API in Settings."},
+  "err_provider_tls": {"message": "The secure connection to the provider failed (certificate or TLS), so nothing was sent. Check the address."},
+  "err_provider_bad_reply": {"message": "The provider answered in a form Nulavio does not understand. The request reached it: check the kind of API in Settings."},
+  "err_workspace_failed": {"message": "The AI Workspace did not start, or it closed during the task."},
+  "assistantTruncated": {"message": "Answer cut off by the provider's limit."}
 }

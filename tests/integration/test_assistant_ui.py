@@ -34,7 +34,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
 import harness
-from fake_llm import FakeProvider
+from fake_llm import FakeProvider, Reply
 from fake_keyring import FAKE_SECRET_TOOL
 
 AI = 'ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioAI.sys.mjs").NulavioAI'
@@ -657,6 +657,48 @@ class AssistantUiTest(unittest.TestCase):
             self.m.chrome("return gBrowser.selectedBrowser.currentURI.spec;"),
         )
         self.close_other_tabs()
+
+    def test_12_errors_by_cause_and_a_cut_answer(self):
+        """AI-08 / AI-09 (UX5-A): a 429 and a 401 read differently, the 429 never sends the person to the
+        key, each Send makes one request, and an answer the provider's limit cut says so."""
+        self.open("assistant/panel.html")
+        msg = lambda key: self.m.execute("return browser.i18n.getMessage(arguments[0]);", [key])  # noqa: E731
+        status = "const s = document.getElementById('status'); return [s.dataset.level, s.textContent];"
+
+        def ask_and_wait(reply) -> list:
+            before = self.provider.count
+            self.provider.replies.append(reply)
+            self.m.execute("document.getElementById('status').textContent = '';")
+            self.m.execute(
+                "const p = document.getElementById('prompt'); p.value = 'Olá?'; document.getElementById('ask').requestSubmit();"
+            )
+            done = harness.wait_until(
+                lambda: (lambda v: v if v[0] in ("ok", "error") and v[1] else None)(self.m.execute(status)), 20
+            )
+            self.assertTrue(done, self.m.execute(status))
+            self.assertEqual(self.provider.count, before + 1)  # one click, one request: no retry behind the person
+            return done
+
+        limited = ask_and_wait(Reply(status=429, headers={"Retry-After": "30"}))
+        self.assertEqual(limited, ["error", msg("err_provider_rate_limited")])
+        refused = ask_and_wait(Reply(status=401))
+        self.assertEqual(refused, ["error", msg("err_provider_auth")])
+        self.assertNotEqual(limited[1], refused[1])
+        self.assertNotIn("chave", limited[1])
+        self.assertIn("chave", refused[1])
+        for reply in (
+            {"choices": [{"message": {"content": "Metade da"}, "finish_reason": "length"}]},
+            Reply(chunks=["Metade da"], stop="length"),
+        ):
+            self.assertEqual(ask_and_wait(reply)[0], "ok")
+            cut = self.m.execute(
+                "const c = document.getElementById('truncated');"
+                "return [c.hidden, c.textContent, !!c.querySelector('svg[data-icon=warning]')];"
+            )
+            self.assertEqual(cut, [False, msg("assistantTruncated"), True])
+        self.shoot("answer-cut")
+        self.assertEqual(ask_and_wait({"choices": [{"message": {"content": "Inteira."}}]})[0], "ok")
+        self.assertTrue(self.m.execute("return document.getElementById('truncated').hidden;"))
 
 
 if __name__ == "__main__":

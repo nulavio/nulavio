@@ -7,7 +7,7 @@
    gave it. Answers are shown as plain text. */
 
 import { localize, t } from "../lib/i18n.js";
-import { announce, errorText, h } from "../lib/ui.js";
+import { announce, errorText, h, icon } from "../lib/ui.js";
 
 const ai = browser.nulavioAI;
 let state = null;
@@ -23,6 +23,7 @@ const count = n => new Intl.NumberFormat(browser.i18n.getUILanguage()).format(n)
 const code = error => String(error?.message ?? error);
 
 // Refusals that come before anything is sent or done (so "Nada foi alterado" style texts hold).
+// The provider's own errors are not here: their texts say whether the request reached it (AI-09).
 const BEFORE_START = new Set([
   "not-configured",
   "profile-not-allowed",
@@ -156,6 +157,8 @@ function showResult(result, task) {
   const text = result.answer || (halted ? "" : t("assistantNoAnswer"));
   $("answer").textContent = text;
   $("answer").hidden = !text;
+  // The provider's limit stopped the answer (AI-08): said where the answer ends, not only announced.
+  $("truncated").hidden = !result.truncated;
   $("receipt").textContent = task
     ? t("assistantSentTask", [result.recipient ?? state.recipient])
     : result.pageChars
@@ -179,7 +182,9 @@ async function showError(error, task) {
   if (task && !BEFORE_START.has(reason)) {
     // The run may have acted before it ended (a time limit, the tools ending, the provider failing):
     // never "nothing was changed" here.
-    text = reason.startsWith("provider-") ? `${text} ${t("assistantTaskMayHaveActed")}` : errorText("task-unfinished");
+    text = reason.startsWith("provider-") || reason === "workspace-failed"
+      ? `${text} ${t("assistantTaskMayHaveActed")}`
+      : errorText("task-unfinished");
     $("activity-actions").hidden = false;
   }
   announce(text, "error");
@@ -357,6 +362,7 @@ window.addEventListener("focus", () => {
 });
 
 localize();
+$("truncated").prepend(icon("warning", "callout__icon"));
 browser.windows
   .getCurrent()
   .then(win => (windowId = win.id))
