@@ -322,7 +322,10 @@ async function renderAgents() {
   // The latest call wins: an older answer that arrives late (the stop switch toggled twice quickly)
   // must not put back a state that is no longer true.
   const turn = ++renders;
-  const next = await ai.overview();
+  const next = await ai.overview().catch(e => {
+    document.getElementById("ai-agents").setAttribute("aria-busy", "false"); // nothing is loading any more
+    throw e;
+  });
   const profiles = browser.nulavioProfiles ? (await browser.nulavioProfiles.list()).profiles.filter(p => p.path) : [];
   if (turn !== renders) {
     return;
@@ -336,6 +339,7 @@ async function renderAgents() {
   rerender(document.getElementById("ai-agents"), () =>
     state.agents.length ? state.agents.map(agentRow) : [h("li", { class: "popup__empty", text: t("aiNoAgents") })]
   );
+  document.getElementById("ai-agents").setAttribute("aria-busy", "false");
 }
 
 function renderLevels() {
@@ -443,7 +447,8 @@ function activityTitle(entry) {
 }
 
 async function renderActivity() {
-  const { entries } = await ai.activity(30);
+  const list = document.getElementById("ai-activity");
+  const { entries } = await ai.activity(30).finally(() => list.setAttribute("aria-busy", "false"));
   const names = Object.fromEntries((state?.agents ?? []).map(a => [a.id, a.name]));
   rerender(document.getElementById("ai-activity"), () =>
     entries.length

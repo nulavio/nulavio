@@ -356,7 +356,7 @@
           <input type="checkbox" role="switch" id="ai-stop">
           <span><span data-i18n="aiStopLabel"></span><span class="hint" data-i18n="aiStopHint"></span></span>
         </label>
-        <ul class="list" id="ai-agents"></ul>
+        <ul class="list" id="ai-agents" aria-busy="true"></ul>
       </div>
 
       <form class="card stack" id="ai-assistant" novalidate>
@@ -433,7 +433,7 @@
       <div class="card stack" id="ai-activity-card">
         <h3 class="card__title" data-i18n="aiActivityTitle"></h3>
         <p class="hint" data-i18n="aiActivityHint"></p>
-        <ul class="list" id="ai-activity"></ul>
+        <ul class="list" id="ai-activity" aria-busy="true"></ul>
         <div class="actions"><button class="button button--quiet" type="button" id="ai-activity-clear" data-i18n="aiActivityClear"></button></div>
       </div>
     </section>

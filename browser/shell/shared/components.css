@@ -291,6 +291,19 @@ kbd {
 /* A narrow list (a narrow window, the popup): the actions go under the text instead of squeezing
    it to a few letters per line. The list is the container, so this follows the column, not the window. */
 .list { container-type: inline-size; }
+/* A list still being read (aria-busy, SPA-26): after 400 ms, three still placeholder rows on the
+   sunken surface, so a slow check (integrations, passwords, Guard, agents) does not look broken.
+   No shimmer, no motion; a fast list never shows them. Assistive technology hears aria-busy. */
+.list[aria-busy="true"]:empty {
+  min-block-size: 7.5rem;
+  visibility: hidden;
+  background:
+    linear-gradient(var(--nv-color-bg-sunken) 0 0) 0 0.5rem / 62% 1rem no-repeat,
+    linear-gradient(var(--nv-color-bg-sunken) 0 0) 0 3rem / 84% 1rem no-repeat,
+    linear-gradient(var(--nv-color-bg-sunken) 0 0) 0 5.5rem / 48% 1rem no-repeat;
+  animation: nv-skeleton-in 0s 400ms forwards;
+}
+@keyframes nv-skeleton-in { to { visibility: visible; } }
 @container (max-width: 32rem) {
   .row { grid-template-columns: auto minmax(0, 1fr); }
   .row > .row__end { grid-column: 2; justify-content: flex-start; }

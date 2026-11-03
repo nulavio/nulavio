@@ -250,6 +250,28 @@ class SettingsPanesTest(unittest.TestCase):
         time.sleep(0.5)
         self.assertEqual(self.m.execute("return document.querySelectorAll('#profile-list > li').length;"), count)
 
+    def test_09_slow_lists_show_placeholder_rows_and_never_stay_busy(self):
+        """Audit SPA-26: a list still being read shows still placeholder rows after 400 ms, not before;
+        once every section has answered, no list is left busy."""
+        self.open("#integrations")
+        self.assertTrue(
+            harness.wait_until(lambda: not self.m.execute("return document.querySelector('.list[aria-busy=\"true\"]');"), 30),
+            self.m.execute("return [...document.querySelectorAll('.list[aria-busy=\"true\"]')].map(l => l.id);"),
+        )
+        probe = (
+            "const ul = document.createElement('ul'); ul.className = 'list'; ul.id = 'probe';"
+            "ul.setAttribute('aria-busy', 'true'); document.querySelector('#integrations .card').append(ul);"
+            "return getComputedStyle(ul).visibility;"
+        )
+        self.assertEqual(self.m.execute(probe), "hidden")  # a fast list never flashes them
+        time.sleep(0.6)
+        late = self.m.execute(
+            "const s = getComputedStyle(document.getElementById('probe'));"
+            "return {visibility: s.visibility, rows: s.backgroundImage.split('linear-gradient').length - 1};"
+        )
+        self.assertEqual((late["visibility"], late["rows"]), ("visible", 3), late)
+        self.shoot("busy-list", full=False)
+
     def shoot(self, name: str, full: bool = True) -> None:
         for dark in (0, 1):
             self.m.chrome("Services.prefs.setIntPref('ui.systemUsesDarkTheme', arguments[0]);", [dark])

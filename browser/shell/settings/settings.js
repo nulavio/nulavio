@@ -803,10 +803,11 @@ function providerRow(item, state) {
 
 async function renderPasswords() {
   const state = await run(() => passwords.state(), { background: true });
+  const list = document.getElementById("provider-list");
+  list.setAttribute("aria-busy", "false"); // also when the read failed: nothing is loading any more
   if (!state) {
     return;
   }
-  const list = document.getElementById("provider-list");
   rerender(list, () => state.providers.map(item => providerRow(item, state)));
   list.setAttribute("aria-busy", "false");
   list.dataset.current = state.current;
@@ -866,6 +867,8 @@ async function setUpPasswords() {
   const pairs = await run(() => passwords.listConfirmed(), { background: true });
   if (pairs) {
     renderConfirmed(pairs);
+  } else {
+    document.getElementById("confirmed-list").setAttribute("aria-busy", "false");
   }
 }
 
@@ -913,6 +916,7 @@ function exceptionRow(entry) {
 async function renderExceptions() {
   const list = document.getElementById("exception-list");
   const [entries, filter] = await Promise.all([run(() => privacy.exceptions(), { background: true }), run(() => privacy.filter(), { background: true })]);
+  list.setAttribute("aria-busy", "false");
   if (entries) {
     rerender(list, () => entries.map(exceptionRow));
     list.setAttribute("aria-busy", "false");
