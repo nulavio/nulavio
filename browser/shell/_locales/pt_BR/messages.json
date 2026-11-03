@@ -3,7 +3,6 @@
   "extDescription": { "message": "Componentes internos do Nulavio: nova aba, configurações de busca e de perfis e aviso de downloads perigosos." },
 
   "newtabTitle": { "message": "Nova aba" },
-  "headline": { "message": "A web é sua. Seus dados também." },
   "searchLabel": { "message": "Pesquisar na web" },
   "searchPlaceholder": { "message": "Pesquisar com o seu buscador padrão" },
   "searchButton": { "message": "Pesquisar" },
@@ -131,7 +130,6 @@
   "profilesShortcut": {"message": "Abrir o seletor de perfis"},
   "profilesHeading": {"message": "Perfis"},
   "profilesCurrent": {"message": "Perfil atual"},
-  "profilesOthers": {"message": "Trocar para"},
   "profilesNone": {"message": "Nenhum outro perfil ainda."},
   "profilesNew": {"message": "Novo perfil"},
   "profilesManage": {"message": "Gerenciar perfis"},
@@ -216,7 +214,6 @@
   "routing_blocked_title": {"message": "Link não aberto"},
   "routing_blocked_headline": {"message": "Este link não foi aberto"},
   "routingNothingLoaded": {"message": "Nada foi carregado deste endereço ainda."},
-  "routingRemember": {"message": "Lembrar para este site"},
   "routingEditRules": {"message": "Editar regras de roteamento"},
   "routingBadLink": {"message": "Esta página foi aberta sem um endereço web válido."},
   "routingAskExplain": {"message": "Um link de outro aplicativo leva a $HOST$. Sua regra pede para perguntar antes de abrir no perfil $PROFILE$.", "placeholders": {"host": {"content": "$1"}, "profile": {"content": "$2"}}},
@@ -866,8 +863,6 @@
   "vaultPhoneCancelled": {"message": "Cancelado."},
   "vaultPhoneStarting": {"message": "Preparando o pedido…"},
   "vaultUsePhone": {"message": "Desbloquear com o celular"},
-  "vaultPhones": {"message": "Celulares"}
-,
 
   "galleryPageTitle": { "message": "Nulavio · Galeria de componentes · Exemplos artificiais" },
   "galleryEyebrow": { "message": "Nulavio · Galeria de desenvolvimento · Farol / Horizon" },
@@ -1012,7 +1007,7 @@
   "routesHereHeading": {"message": "Abrem direto aqui, pelas suas regras"},
   "newtabDetails": {"message": "Detalhes"},
   "newtabHelp": {"message": "Atalhos e ajuda"},
-  "profileUnprotected": {"message": "Sem proteção"},
+  "profileUnprotected": {"message": "Sem senha"},
   "statePrivateWindow": {"message": "Janela privativa"},
   "profilesThisWindow": {"message": "Esta janela"},
   "profilesOpenProfile": {"message": "Abrir perfil"},

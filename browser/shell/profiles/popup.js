@@ -221,8 +221,11 @@ function closeSheet() {
   document.getElementById("new-profile").focus();
 }
 
+let createdId = null; // made already: a second "Criar e abrir" only opens it (review F15)
+
 sheet.addEventListener("submit", async event => {
   event.preventDefault();
+  // Inside the sheet, errors are said in the sheet (the menu's status line is hidden behind it).
   const error = sheet.querySelector(".form-error");
   error.textContent = "";
   const values = Object.fromEntries(new FormData(sheet));
@@ -232,17 +235,30 @@ sheet.addEventListener("submit", async event => {
     sheet.elements.name.focus();
     return;
   }
-  if (values.protect) {
-    // A protected profile is made in the Vault's own steps (password, recovery code), prefilled here.
-    const query = new URLSearchParams({ name, ...(chosenTemplate ? { template: chosenTemplate } : {}) });
-    await act(() => browser.tabs.create({ url: browser.runtime.getURL(`vault/create.html?${query}`) }));
-    return;
-  }
   try {
-    const id = await profiles.create({ name, avatar: values.avatar, color: values.color, ...(chosenTemplate ? { templateId: chosenTemplate } : {}) });
-    await act(() => profiles.switchTo(id), t("profilesCreated"));
+    if (values.protect && createdId === null) {
+      // A protected profile is made in the Vault's own steps (password, recovery code), with what was
+      // chosen here: name, template, icon and colour.
+      const query = new URLSearchParams({
+        name,
+        avatar: values.avatar,
+        color: values.color,
+        ...(chosenTemplate ? { template: chosenTemplate } : {}),
+      });
+      await browser.tabs.create({ url: browser.runtime.getURL(`vault/create.html?${query}`) });
+      window.close();
+      return;
+    }
+    if (createdId === null) {
+      createdId = await profiles.create({ name, avatar: values.avatar, color: values.color, ...(chosenTemplate ? { templateId: chosenTemplate } : {}) });
+    }
+    await profiles.switchTo(createdId);
+    window.close();
   } catch (e) {
     error.textContent = errorText(e);
+    if (createdId !== null) {
+      document.getElementById("sheet-create").textContent = t("profilesOpenNamed", [name]);
+    }
   }
 });
 document.getElementById("sheet-back").addEventListener("click", closeSheet);

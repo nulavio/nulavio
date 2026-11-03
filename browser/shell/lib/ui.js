@@ -261,14 +261,26 @@ function showInline(host, text, level) {
   mark.timer = setTimeout(() => mark.remove(), INLINE_MS);
 }
 
-/** Announce a short result in the page's live region. Do not repeat a hint the page already shows. */
-export function announce(text, level = "ok") {
+/** The control a result belongs to: the one given, or the same control after a re-render. */
+function stillThere(control) {
+  if (!control || control.isConnected) {
+    return control;
+  }
+  const key = control.dataset?.focusKey;
+  return key ? document.querySelector(`[data-focus-key="${CSS.escape(key)}"]`) : null;
+}
+
+/** Announce a short result in the page's live region. Do not repeat a hint the page already shows.
+    `control`: the control that started the action, read before it awaited anything (the person may
+    have moved on since; review F13). Without it, the focused control; null: no control (a
+    background read), so the result goes to the status line only. */
+export function announce(text, level = "ok", { control } = {}) {
   const status = document.getElementById("status");
   if (!status) {
     return;
   }
   const kind = STATUS_LEVELS.has(level) ? level : "info";
-  const control = document.activeElement;
+  control = control === undefined ? document.activeElement : stillThere(control);
   const host = status.hasAttribute("data-inline-anchor") && ["ok", "warn", "error"].includes(kind) ? inlineHost(control) : null;
   status.dataset.level = kind;
   if (host) {

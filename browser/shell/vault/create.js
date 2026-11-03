@@ -45,7 +45,7 @@ function chooseTemplate(id) {
     button.setAttribute("aria-pressed", String(button.dataset.template === id));
   }
   const name = byId("name");
-  if (!name.dataset.touched) {
+  if (!name.dataset.touched && id) {
     name.value = t(TEMPLATE_NAMES[id]);
   }
 }
@@ -64,14 +64,22 @@ async function renderTemplates() {
       );
     })
   );
-  // From the profile menu's create sheet (UX4): the template and name chosen there.
+  // From the profile menu's create sheet (UX4): the name, template, icon and colour chosen there.
+  // The Vault module checks the icon and colour like any other; unknown values are dropped here.
   const asked = new URLSearchParams(location.search);
   const name = byId("name");
   if (asked.get("name") && !name.dataset.touched) {
     name.value = asked.get("name").slice(0, 60);
     name.dataset.touched = "1";
   }
-  chooseTemplate(options.templates.some(template => template.id === asked.get("template")) ? asked.get("template") : state.templateId);
+  if (options.avatars.includes(asked.get("avatar"))) {
+    state.avatar = asked.get("avatar");
+  }
+  if (options.colors.includes(asked.get("color"))) {
+    state.color = asked.get("color");
+  }
+  const template = asked.get("template");
+  chooseTemplate(options.templates.some(t => t.id === template) ? template : asked.has("name") ? null : state.templateId);
 }
 
 function method() {
@@ -88,7 +96,12 @@ async function create(event) {
   event.preventDefault();
   const error = byId("protection-error");
   error.textContent = "";
-  const details = { name: state.name, templateId: state.templateId };
+  const details = {
+    name: state.name,
+    ...(state.templateId ? { templateId: state.templateId } : {}),
+    ...(state.avatar ? { avatar: state.avatar } : {}),
+    ...(state.color ? { color: state.color } : {}),
+  };
   if (method() === "password") {
     const password = byId("password").value;
     if (password.length < 8) {

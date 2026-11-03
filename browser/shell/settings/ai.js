@@ -18,14 +18,15 @@ const DURATIONS = [
 let state = null;
 
 async function run(action, done = null) {
+  const control = document.activeElement; // the result is shown next to the control that started it
   try {
     const result = await action();
     if (done) {
-      announce(done);
+      announce(done, "ok", { control });
     }
     return result;
   } catch (e) {
-    announce(errorText(e), "error");
+    announce(errorText(e), "error", { control });
     return null;
   }
 }
@@ -493,10 +494,10 @@ function setUpAssistant() {
     const box = event.target;
     try {
       await ai.assistantAllow(box.checked);
-      announce(t("doneSaved"));
+      announce(t("doneSaved"), "ok", { control: box });
     } catch (e) {
       box.checked = !box.checked; // the switch keeps showing what is in force
-      announce(errorText(e), "error");
+      announce(errorText(e), "error", { control: box });
     }
   });
   form.addEventListener("submit", async event => {

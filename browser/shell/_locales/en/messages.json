@@ -3,7 +3,6 @@
   "extDescription": { "message": "Nulavio built-in components: new tab, search and profile settings, and the dangerous-download warning." },
 
   "newtabTitle": { "message": "New Tab" },
-  "headline": { "message": "The web is yours. So is your data." },
   "searchLabel": { "message": "Search the web" },
   "searchPlaceholder": { "message": "Search with your default search engine" },
   "searchButton": { "message": "Search" },
@@ -131,7 +130,6 @@
   "profilesShortcut": {"message": "Open the profile selector"},
   "profilesHeading": {"message": "Profiles"},
   "profilesCurrent": {"message": "Current profile"},
-  "profilesOthers": {"message": "Switch to"},
   "profilesNone": {"message": "No other profiles yet."},
   "profilesNew": {"message": "New profile"},
   "profilesManage": {"message": "Manage profiles"},
@@ -216,7 +214,6 @@
   "routing_blocked_title": {"message": "Link not opened"},
   "routing_blocked_headline": {"message": "This link was not opened"},
   "routingNothingLoaded": {"message": "Nothing has been loaded from this address yet."},
-  "routingRemember": {"message": "Remember for this site"},
   "routingEditRules": {"message": "Edit routing rules"},
   "routingBadLink": {"message": "This page was opened without a valid web address."},
   "routingAskExplain": {"message": "A link from another app goes to $HOST$. Your rule says to ask before opening it in $PROFILE$.", "placeholders": {"host": {"content": "$1"}, "profile": {"content": "$2"}}},
@@ -866,8 +863,6 @@
   "vaultPhoneCancelled": {"message": "Cancelled."},
   "vaultPhoneStarting": {"message": "Preparing the request…"},
   "vaultUsePhone": {"message": "Unlock with phone"},
-  "vaultPhones": {"message": "Phones"}
-,
 
   "galleryPageTitle": { "message": "Nulavio · Component gallery · Artificial examples" },
   "galleryEyebrow": { "message": "Nulavio · Development gallery · Farol / Horizon" },
@@ -1012,7 +1007,7 @@
   "routesHereHeading": {"message": "Open straight here, by your rules"},
   "newtabDetails": {"message": "Details"},
   "newtabHelp": {"message": "Shortcuts and help"},
-  "profileUnprotected": {"message": "No protection"},
+  "profileUnprotected": {"message": "No password"},
   "statePrivateWindow": {"message": "Private window"},
   "profilesThisWindow": {"message": "This window"},
   "profilesOpenProfile": {"message": "Open a profile"},

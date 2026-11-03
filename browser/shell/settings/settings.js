@@ -31,8 +31,10 @@ function debounce(fn, ms = 60) {
   };
 }
 
-/** Run an action; show errors next to the form (or in the status line). */
-async function run(action, { form = null, done = null } = {}) {
+/** Run an action; show errors next to the form (or in the status line). The result is shown next to
+    the control that started it; `background` reads (re-rendering a list) belong to no control. */
+async function run(action, { form = null, done = null, background = false } = {}) {
+  const control = background ? null : document.activeElement;
   const error = form?.querySelector(".form-error");
   if (error) {
     error.textContent = "";
@@ -40,14 +42,14 @@ async function run(action, { form = null, done = null } = {}) {
   try {
     const result = await action();
     if (done) {
-      announce(done);
+      announce(done, "ok", { control });
     }
     return result;
   } catch (e) {
     if (error) {
       error.textContent = errorText(e);
     } else {
-      announce(errorText(e), "error");
+      announce(errorText(e), "error", { control });
     }
     return undefined;
   }
@@ -159,7 +161,7 @@ function engineRow(engine) {
 }
 
 async function renderSearch() {
-  const state = await run(() => search.state());
+  const state = await run(() => search.state(), { background: true });
   if (!state) {
     return;
   }
@@ -453,7 +455,7 @@ async function renderWhere(state) {
 }
 
 async function renderProfiles() {
-  const state = await run(() => profiles.list());
+  const state = await run(() => profiles.list(), { background: true });
   if (!state) {
     return;
   }
@@ -565,7 +567,7 @@ function ruleRow(rule) {
 }
 
 async function renderRouting() {
-  const [state, people] = await Promise.all([run(() => routing.state()), run(() => profiles.list())]);
+  const [state, people] = await Promise.all([run(() => routing.state(), { background: true }), run(() => profiles.list(), { background: true })]);
   if (!state || !people) {
     return;
   }
@@ -716,7 +718,7 @@ function integrationRow(item) {
 async function renderIntegrations() {
   const list = document.getElementById("integration-list");
   list.setAttribute("aria-busy", "true");
-  const items = await run(() => connect.discover());
+  const items = await run(() => connect.discover(), { background: true });
   list.setAttribute("aria-busy", "false");
   if (items) {
     rerender(list, () => items.map(integrationRow));
@@ -800,7 +802,7 @@ function providerRow(item, state) {
 }
 
 async function renderPasswords() {
-  const state = await run(() => passwords.state());
+  const state = await run(() => passwords.state(), { background: true });
   if (!state) {
     return;
   }
@@ -861,7 +863,7 @@ function renderConfirmed(pairs) {
 async function setUpPasswords() {
   document.getElementById("passwords").hidden = false;
   await renderPasswords();
-  const pairs = await run(() => passwords.listConfirmed());
+  const pairs = await run(() => passwords.listConfirmed(), { background: true });
   if (pairs) {
     renderConfirmed(pairs);
   }
@@ -910,7 +912,7 @@ function exceptionRow(entry) {
 
 async function renderExceptions() {
   const list = document.getElementById("exception-list");
-  const [entries, filter] = await Promise.all([run(() => privacy.exceptions()), run(() => privacy.filter())]);
+  const [entries, filter] = await Promise.all([run(() => privacy.exceptions(), { background: true }), run(() => privacy.filter(), { background: true })]);
   if (entries) {
     rerender(list, () => entries.map(exceptionRow));
     list.setAttribute("aria-busy", "false");
@@ -951,7 +953,7 @@ function syncDnsForm(form) {
 }
 
 async function renderDns() {
-  const state = await run(() => privacy.dns());
+  const state = await run(() => privacy.dns(), { background: true });
   if (!state) {
     return;
   }

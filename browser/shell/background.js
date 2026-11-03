@@ -166,9 +166,12 @@ if (browser.nulavioConnect && browser.menus) {
     if (known && Date.now() - knownAt < FRESH_MS) {
       return known;
     }
-    known = await browser.nulavioConnect.kdeDevices().catch(() => []);
+    const found = await browser.nulavioConnect.kdeDevices().catch(() => null);
+    // Only a list with devices is kept: a failure or an empty answer (KDE Connect still starting,
+    // a phone not connected yet) is asked again at the next menu (review F14).
+    known = found?.length ? found : null;
     knownAt = Date.now();
-    return known;
+    return found ?? [];
   };
   browser.menus.onHidden.addListener(() => {
     opened++;

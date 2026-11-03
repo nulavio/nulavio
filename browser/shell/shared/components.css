@@ -155,7 +155,17 @@ kbd {
 .inline-status[data-level="warn"] { color: var(--nv-color-status-warning); }
 .inline-status[data-level="warn"]::before { content: "⚠ "; }
 .inline-status[data-level="error"] { color: var(--nv-color-status-criticalText); }
-.inline-status[data-level="error"]::before { content: "! "; font-weight: var(--nv-font-weight-semibold); }
+.inline-status[data-level="error"]::before {
+  /* the same octagon as every other error (design-system States), never a second glyph */
+  content: "";
+  display: inline-block;
+  inline-size: 1em;
+  block-size: 1em;
+  margin-inline-end: 0.3em;
+  vertical-align: -0.15em;
+  background-color: currentColor;
+  mask: url("icon-critical.svg") center / contain no-repeat;
+}
 /* The status line as a toast: at the bottom of the page, only when not shown next to a control */
 .status--toast {
   position: sticky;
