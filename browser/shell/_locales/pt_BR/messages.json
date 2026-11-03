@@ -1061,11 +1061,11 @@
   "methodPhone": {"message": "Celular"},
   "methodOther": {"message": "Outro método"},
   "methodRemove": {"message": "Remover"},
-  "methodRemoveNamed": {"message": "Remover $METHOD$", "placeholders": {"method": {"content": "$1"}}},
-  "methodRemoveTitle": {"message": "Remover $METHOD$ de $PROFILE$?", "placeholders": {"method": {"content": "$1"}, "profile": {"content": "$2"}}},
-  "methodRemoveBody": {"message": "$METHOD$ deixa de abrir este perfil. Os outros métodos continuam valendo.", "placeholders": {"method": {"content": "$1"}}},
-  "methodRemoveLeavesOne": {"message": "$METHOD$ deixa de abrir este perfil, e só um método vai sobrar. Se você perder esse, os dados não voltam.", "placeholders": {"method": {"content": "$1"}}},
-  "methodRemoved": {"message": "$METHOD$ removido.", "placeholders": {"method": {"content": "$1"}}},
+  "methodRemoveNamed": {"message": "Remover: $METHOD$", "placeholders": {"method": {"content": "$1"}}},
+  "methodRemoveTitle": {"message": "Remover “$METHOD$” de $PROFILE$?", "placeholders": {"method": {"content": "$1"}, "profile": {"content": "$2"}}},
+  "methodRemoveBody": {"message": "“$METHOD$” deixa de abrir este perfil. Os outros métodos continuam valendo.", "placeholders": {"method": {"content": "$1"}}},
+  "methodRemoveLeavesOne": {"message": "“$METHOD$” deixa de abrir este perfil, e só um método vai sobrar. Se você perder esse, os dados não voltam.", "placeholders": {"method": {"content": "$1"}}},
+  "methodRemoved": {"message": "Removido: $METHOD$.", "placeholders": {"method": {"content": "$1"}}},
   "bandRouted": {"message": "Aberto pela sua regra · Mudar"},
   "bandRoutedNamed": {"message": "Aberto em $PROFILE$ pela sua regra de roteamento. Mudar as regras", "placeholders": {"profile": {"content": "$1"}}},
   "vaultLockCurrent": {"message": "Bloquear $PROFILE$ agora", "placeholders": {"profile": {"content": "$1"}}},
@@ -1079,5 +1079,7 @@
   "momentWarning": {"message": "Atenção"},
   "momentCritical": {"message": "Crítico"},
   "momentRetry": {"message": "Tentar de novo"},
-  "momentLoading": {"message": "Carregando…"}
+  "momentLoading": {"message": "Carregando…"},
+  "methodsLastConfirmer": {"message": "Fica: é com uma senha ou com o código de recuperação que se confirma qualquer mudança aqui."},
+  "methodsNoConfirmer": {"message": "Este perfil não tem mais senha nem código de recuperação, e é com eles que se confirmam as mudanças aqui. Ele ainda abre com o login do computador ou o celular."}
 }

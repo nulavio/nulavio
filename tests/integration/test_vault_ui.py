@@ -632,7 +632,7 @@ class VaultUiTest(unittest.TestCase):
         )
         last = self.m.execute(
             "const b = document.querySelector('#methods > li button');"
-            "return {disabled: b.disabled, why: document.getElementById('last-method-note')?.textContent ?? null,"
+            "return {disabled: b.disabled, why: document.querySelector('#methods [id^=keep-]')?.textContent ?? null,"
             " few: !document.getElementById('few').hidden, kind: document.querySelector('#methods > li').dataset.method};"
         )
         self.assertEqual((last["disabled"], last["few"], last["kind"]), (True, True, "recovery-code"))
@@ -676,6 +676,24 @@ class VaultUiTest(unittest.TestCase):
             )
         finally:
             self.call("delete P.list; delete P.nvRealList; delete P.nvLockCalls; delete V.lockCurrent;")
+
+    def test_12_the_last_password_or_recovery_code_stays(self):
+        """Review F1: changes are confirmed with a password or the recovery code; with the computer login and
+        the code, the code cannot be removed (nothing could confirm a change after it)."""
+        profile_id, _ = self.create_via_api("SoChave", password=None, keyring=True)
+        self.open_page(f"vault/methods.html?p={profile_id}")
+        self.wait_state("idle")
+        rows = self.m.execute(
+            "return Object.fromEntries([...document.querySelectorAll('#methods > li')].map(li => [li.dataset.method,"
+            " {disabled: li.querySelector('button').disabled, note: li.querySelector('[id^=keep-]')?.textContent ?? null,"
+            " label: [...li.querySelectorAll('.row__note')].map(n => n.textContent)}]));"
+        )
+        self.assertEqual(sorted(rows), ["os-keyring", "recovery-code"])
+        self.assertTrue(rows["recovery-code"]["disabled"])
+        self.assertEqual(rows["recovery-code"]["note"], self.m.execute("return browser.i18n.getMessage('methodsLastConfirmer');"))
+        self.assertFalse(rows["os-keyring"]["disabled"])
+        self.assertEqual(rows["os-keyring"]["label"], [])  # the tools' own "computer login" label is not shown
+        self.shoot("methods-keyring")
 
 
 if __name__ == "__main__":

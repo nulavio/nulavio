@@ -20,7 +20,7 @@ const kindName = method => t(KINDS[method.method] ?? "methodOther");
 function setState(state) {
   document.body.dataset.state = state;
   for (const control of document.querySelectorAll("#add-actions button, #methods button")) {
-    control.disabled = state === "busy" || control.dataset.keep === "disabled";
+    control.disabled = state === "busy" || control.dataset.keep === "disabled" || control.hasAttribute("data-no-confirmer");
   }
 }
 
@@ -45,7 +45,7 @@ async function change(op, extra = {}) {
   } catch (e) {
     announce("");
     if (String(e?.message) === "wrong-secret") {
-      error.textContent = t("vaultWrongPassword");
+      error.textContent = t("err_wrong_secret"); // a password or a recovery code: the field takes both
       field.setAttribute("aria-invalid", "true");
       field.focus();
     } else {
@@ -58,17 +58,24 @@ async function change(op, extra = {}) {
   }
 }
 
-function methodRow(method, count) {
+// Changes here are confirmed with a password or the recovery code (the tools accept nothing else),
+// so the last of those two can never go: without it no change could be confirmed again (review F1).
+const CONFIRMS = new Set(["password", "recovery-code"]);
+
+function methodRow(method, count, confirmers) {
   const name = kindName(method);
+  const last = count <= 1;
+  const lastConfirmer = !last && CONFIRMS.has(method.method) && confirmers <= 1;
+  const kept = last || lastConfirmer;
   const remove = h("button", {
     class: "button button--quiet",
     type: "button",
     text: t("methodRemove"),
     "aria-label": t("methodRemoveNamed", [name]),
-    "aria-describedby": count <= 1 ? "last-method-note" : null,
-    dataset: { keep: count <= 1 ? "disabled" : "" },
+    "aria-describedby": kept ? `keep-${method.id}` : null,
+    dataset: { keep: kept ? "disabled" : "" },
   });
-  remove.disabled = count <= 1;
+  remove.disabled = kept;
   remove.addEventListener("click", async () => {
     const ok = await confirmDialog({
       title: t("methodRemoveTitle", [name, profile.name]),
@@ -89,8 +96,11 @@ function methodRow(method, count) {
       "div",
       { class: "row__main" },
       h("p", { class: "row__title", text: name }),
-      method.label ? h("p", { class: "row__note", text: method.label }) : null,
-      count <= 1 ? h("p", { class: "row__note", id: "last-method-note", text: t("err_last_method") }) : null
+      // Only a name the person or the device gave (a phone's); the tools' own labels are not shown.
+      method.method === "phone" && method.label ? h("p", { class: "row__note", text: method.label }) : null,
+      kept
+        ? h("p", { class: "row__note", id: `keep-${method.id}`, text: t(last ? "err_last_method" : "methodsLastConfirmer") })
+        : null
     ),
     h("div", { class: "row__end" }, remove)
   );
@@ -108,8 +118,16 @@ async function render() {
   }
   byId("who").replaceChildren(chip(profile, "lg"), h("span", { class: "popup__name", text: profile.name }), ...profileStates(profile).map(stateBadge));
   const methods = profile.methods;
-  byId("methods").replaceChildren(...methods.map(method => methodRow(method, methods.length)));
-  byId("few").hidden = methods.length >= 2;
+  const confirmers = methods.filter(m => CONFIRMS.has(m.method)).length;
+  byId("methods").replaceChildren(...methods.map(method => methodRow(method, methods.length, confirmers)));
+  // Below two methods, say what that means; with nothing left that can confirm a change (a profile
+  // made that way before this page existed), say that instead of offering what cannot work.
+  byId("few").hidden = methods.length >= 2 && confirmers > 0;
+  byId("few").querySelector("p").textContent = t(confirmers ? "methodsFew" : "methodsNoConfirmer");
+  for (const control of document.querySelectorAll("#add-actions button, #current")) {
+    control.toggleAttribute("data-no-confirmer", !confirmers);
+  }
+  byId("current").disabled = !confirmers;
   byId("add-keyring").hidden = !capabilities.keyring || methods.some(m => m.method === "os-keyring");
   byId("phones").href = `phone.html?p=${profileId}`;
   setState(byId("code-step").hidden ? "idle" : "code");
@@ -146,22 +164,29 @@ byId("code-step").addEventListener("submit", event => {
   }
   byId("code-error").textContent = "";
   byId("code-step").hidden = true;
+  making = false;
   setState("idle");
   announce(t("methodsCodeReplaced"), "ok");
   byId("new-code").focus();
 });
 byId("print-code").addEventListener("click", printCode);
-guardLeaving(() => document.body.dataset.state === "code");
+let making = false;
+guardLeaving(() => making || document.body.dataset.state === "code");
 
 byId("new-code").addEventListener("click", async () => {
   const ok = await confirmDialog({ title: t("methodsNewCodeTitle", [profile.name]), body: t("methodsNewCodeBody"), confirm: t("methodsNewCode") });
   if (!ok) {
     return;
   }
+  // From the moment it is asked for, the old code may already be gone: leaving asks first until the
+  // new one has been typed back, and the code is shown before anything else can fail (review F12).
+  making = true;
   const result = await change("new-recovery-code");
   if (result?.recoveryCode) {
-    await render();
     showNewCode(result.recoveryCode);
+    render().catch(e => announce(errorText(e), "error"));
+  } else {
+    making = false;
   }
 });
 
