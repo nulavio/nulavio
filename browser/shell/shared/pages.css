@@ -182,8 +182,21 @@
 .popup__empty { color: var(--nv-color-text-secondary); font-size: var(--nv-type-label-size); }
 .popup__templates { display: flex; flex-wrap: wrap; gap: var(--nv-space-3); }
 .popup__note { margin: 0; font-size: var(--nv-type-caption-size); color: var(--nv-color-text-secondary); }
-.popup__footer { display: flex; align-items: center; justify-content: space-between; gap: var(--nv-space-3); flex-wrap: wrap; }
+.popup__footer { display: grid; justify-items: start; gap: var(--nv-space-1); }
+.popup__footer #new-profile { justify-self: stretch; margin-bottom: var(--nv-space-2); }
 .popup__keys { margin: 0; font-size: var(--nv-type-caption-size); color: var(--nv-color-text-muted); }
+/* UX4: state in words on each row, and "aberto" for a profile open now (a dot and the word) */
+.popup__item .badge, .popup__current .badge { margin-inline-start: 0; }
+.popup__running { flex: none; font-size: var(--nv-type-caption-size); color: var(--nv-color-text-secondary); }
+.popup__running::before { content: "●"; margin-inline-end: var(--nv-space-1); color: var(--nv-color-accent-default); }
+.popup__item kbd { flex: none; }
+.popup__current { flex-wrap: wrap; }
+.popup__main[hidden] { display: none; }
+.popup__title { margin: 0; font-size: var(--nv-type-section-size); font-weight: var(--nv-type-section-weight); line-height: var(--nv-type-section-lineHeight); }
+.popup__sheet .popup__templates { gap: var(--nv-space-2); }
+.popup__why > summary { cursor: pointer; font-size: var(--nv-type-label-size); color: var(--nv-color-text-secondary); }
+.popup__why[open] > summary { margin-bottom: var(--nv-space-2); }
+.popup__why { display: grid; gap: var(--nv-space-2); }
 
 @media (prefers-reduced-motion: no-preference) {
   .popup__item, .button { transition: background-color var(--nv-motion-duration-fast) var(--nv-motion-easing-standard); }

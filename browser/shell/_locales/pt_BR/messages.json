@@ -1013,5 +1013,14 @@
   "newtabDetails": {"message": "Detalhes"},
   "newtabHelp": {"message": "Atalhos e ajuda"},
   "profileUnprotected": {"message": "Sem proteção"},
-  "statePrivateWindow": {"message": "Janela privativa"}
+  "statePrivateWindow": {"message": "Janela privativa"},
+  "profilesThisWindow": {"message": "Esta janela"},
+  "profilesOpenProfile": {"message": "Abrir perfil"},
+  "profileRunning": {"message": "aberto"},
+  "profilesNewSheet": {"message": "Novo perfil…"},
+  "profilesWhy": {"message": "Por que perfis?"},
+  "profilesProtectLabel": {"message": "Proteger com senha"},
+  "profilesProtectHint": {"message": "Continua nos passos do perfil protegido: senha e código de recuperação."},
+  "profilesCreateOpen": {"message": "Criar e abrir"},
+  "profilesBack": {"message": "Voltar"}
 }

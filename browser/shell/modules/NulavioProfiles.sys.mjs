@@ -349,17 +349,36 @@ class NulavioProfilesClass {
     }
   }
 
+  /** Whether an instance has this profile open now (UX4 profile menu). The engine's lock symlink
+      names its process, "<ip>:+<pid>", on Linux, as the launcher reads it (profile.py); a lock
+      left by a crash names a process that is gone. Elsewhere: not known, so not shown. */
+  async #running(path) {
+    try {
+      const lock = Cc["@mozilla.org/file/local;1"].createInstance(Ci.nsIFile);
+      lock.initWithPath(PathUtils.join(path, "lock"));
+      if (!lock.isSymlink()) {
+        return false;
+      }
+      const pid = /:\+(\d+)$/.exec(lock.target)?.[1];
+      return Boolean(pid) && (await IOUtils.exists(`/proc/${pid}`));
+    } catch {
+      return false;
+    }
+  }
+
   async #describe(profile, map, currentId) {
     const lock = await lazy.profileLockState(profile.path).catch(() => "plain");
     const color = this.#colorFor(profile, map);
+    const isCurrent = profile.id === currentId;
     return {
+      running: isCurrent || (lock !== "locked" && (await this.#running(profile.path))),
       kind: lock === "locked" ? null : await this.#kind(profile.path),
       id: profile.id,
       name: profile.name,
       avatar: profile.avatar,
       color,
       colorMigration: color === "lima" && this.#colorMigration().mint.includes(profile.id) ? "mint-to-lima" : null,
-      isCurrent: profile.id === currentId,
+      isCurrent,
       encrypted: lock !== "plain",
       locked: lock === "locked",
       path: profile.path,

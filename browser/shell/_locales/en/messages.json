@@ -1013,5 +1013,14 @@
   "newtabDetails": {"message": "Details"},
   "newtabHelp": {"message": "Shortcuts and help"},
   "profileUnprotected": {"message": "No protection"},
-  "statePrivateWindow": {"message": "Private window"}
+  "statePrivateWindow": {"message": "Private window"},
+  "profilesThisWindow": {"message": "This window"},
+  "profilesOpenProfile": {"message": "Open a profile"},
+  "profileRunning": {"message": "running"},
+  "profilesNewSheet": {"message": "New profile…"},
+  "profilesWhy": {"message": "Why profiles?"},
+  "profilesProtectLabel": {"message": "Protect with a password"},
+  "profilesProtectHint": {"message": "Continues in the protected profile steps: password and recovery code."},
+  "profilesCreateOpen": {"message": "Create and open"},
+  "profilesBack": {"message": "Back"}
 }

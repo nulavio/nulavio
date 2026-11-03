@@ -189,7 +189,20 @@ class ProfilesTest(unittest.TestCase):
         path = self.path_of(self.work)
         item = self.m.find_element(f'#others .popup__item[data-profile-id="{self.work}"]')
         other = self.open_instance(path, lambda: self.m.send("WebDriver:ElementClick", {"id": item}))
+        # UX4: an open profile says so, in words and in its name (the engine's lock names its process).
+        self.assertEqual(self.popup_row(self.work), {"running": "true", "label": "Abrir Trabalho, aberto", "mark": "aberto"})
         self.close_instance(other, path)
+        self.assertEqual(self.popup_row(self.work), {"running": "false", "label": "Abrir Trabalho", "mark": None})
+
+    def popup_row(self, profile_id: int) -> dict:
+        self.m.navigate(self.shell_url + "profiles/popup.html")
+        self.assertTrue(harness.wait_until(self.ready, timeout=15))
+        return self.m.execute(
+            "const b = document.querySelector(`#others .popup__item[data-profile-id='${arguments[0]}']`);"
+            "return {running: b.dataset.running, label: b.getAttribute('aria-label'),"
+            " mark: b.querySelector('.popup__running')?.textContent ?? null};",
+            [profile_id],
+        )
 
     def test_08_settings_page_edits_and_deletes_with_confirmation(self):
         research = self.profiles("return P.create({templateId: 'research', name: 'Pesquisa'});")
@@ -280,6 +293,54 @@ class ProfilesTest(unittest.TestCase):
         self.assertTrue(harness.wait_until(self.ready, timeout=15))
         hint = f'#profile-list > li[data-profile-id="{sensitive}"] [data-kind="sensitive"]'
         self.assertTrue(harness.wait_until(lambda: self.m.execute(f"return Boolean(document.querySelector('{hint}'));"), 10))
+
+    def test_12_create_sheet_fills_and_creates_only_on_submit(self):
+        """UX4 (audit SPA-09): "Novo perfil…" opens a sheet; a template only fills it."""
+        before = set(self.listed())
+        self.m.navigate(self.shell_url + "profiles/popup.html")
+        self.assertTrue(harness.wait_until(self.ready, timeout=15))
+        self.m.send("WebDriver:ElementClick", {"id": self.m.find_element("#new-profile")})
+        self.assertEqual(
+            self.m.execute(
+                "const $ = id => document.getElementById(id);"
+                "return [$('menu').hidden, $('sheet').hidden, document.activeElement.id];"
+            ),
+            [True, False, "sheet-name"],
+        )
+        self.m.send("WebDriver:ElementClick", {"id": self.m.find_element('#templates button[data-template="research"]')})
+        filled = self.m.execute(
+            "const f = document.getElementById('sheet');"
+            "return {name: f.elements.name.value, avatar: f.elements.avatar.value, color: f.elements.color.value,"
+            " pressed: [...document.querySelectorAll('#templates button[aria-pressed=true]')].map(b => b.dataset.template)};"
+        )
+        self.assertEqual(filled, {"name": "Pesquisa", "avatar": "book", "color": "violet", "pressed": ["research"]})
+        time.sleep(0.5)
+        self.assertEqual(set(self.listed()), before, "a template created a profile before Criar")
+        # Back returns to the menu with nothing created.
+        self.m.send("WebDriver:ElementClick", {"id": self.m.find_element("#sheet-back")})
+        self.assertEqual(
+            self.m.execute("return [document.getElementById('menu').hidden, document.activeElement.id];"), [False, "new-profile"]
+        )
+        # "Proteger com senha" continues in the Vault's own steps, prefilled; nothing is created here.
+        self.m.send("WebDriver:ElementClick", {"id": self.m.find_element("#new-profile")})
+        self.m.execute(
+            "const f = document.getElementById('sheet');"
+            "f.elements.name.value = 'Banco seguro'; f.elements.protect.checked = true;"
+        )
+        self.m.send("WebDriver:ElementClick", {"id": self.m.find_element("#sheet-create")})
+        vault = harness.wait_until(
+            lambda: next(
+                (u for u in self.m.chrome("return gBrowser.browsers.map(b => b.currentURI.spec);") if "/vault/create.html?" in u),
+                None,
+            ),
+            timeout=10,
+        )
+        self.assertTrue(vault, "the protected steps did not open")
+        self.assertIn("name=Banco+seguro", vault)
+        self.assertEqual(set(self.listed()), before)
+        self.m.navigate(vault)
+        harness.wait_until(lambda: self.m.execute("return document.querySelectorAll('#templates button').length;"), timeout=10)
+        self.assertEqual(self.m.execute("return document.getElementById('name').value;"), "Banco seguro")
 
 
 if __name__ == "__main__":

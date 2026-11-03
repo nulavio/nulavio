@@ -54,7 +54,14 @@ async function renderTemplates() {
       );
     })
   );
-  chooseTemplate(state.templateId);
+  // From the profile menu's create sheet (UX4): the template and name chosen there.
+  const asked = new URLSearchParams(location.search);
+  const name = byId("name");
+  if (asked.get("name") && !name.dataset.touched) {
+    name.value = asked.get("name").slice(0, 60);
+    name.dataset.touched = "1";
+  }
+  chooseTemplate(options.templates.some(template => template.id === asked.get("template")) ? asked.get("template") : state.templateId);
 }
 
 function method() {

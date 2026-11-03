@@ -10,16 +10,18 @@
   <script type="module" src="popup.js"></script>
 </head>
 <body class="popup">
-  <main class="popup__main">
+  <!-- UX4 (audit SPA-02/09/17): this window's profile and its state, the others with their
+       state and whether they are open, one "Novo perfil…" that opens a create sheet. -->
+  <main class="popup__main" id="menu">
     <section aria-labelledby="current-label">
-      <h1 class="popup__label" id="current-label" data-i18n="profilesCurrent">Current profile</h1>
+      <h1 class="popup__label" id="current-label" data-i18n="profilesThisWindow">This window</h1>
       <div class="popup__current" id="current"></div>
     </section>
 
     <p class="notice" id="unavailable" hidden></p>
 
     <section id="others-section" aria-labelledby="others-label" hidden>
-      <h2 class="popup__label" id="others-label" data-i18n="profilesOthers">Switch to</h2>
+      <h2 class="popup__label" id="others-label" data-i18n="profilesOpenProfile">Open a profile</h2>
       <ul class="popup__list" id="others"></ul>
     </section>
 
@@ -29,20 +31,44 @@
       <div class="popup__templates" id="site-actions"></div>
     </section>
 
-    <section id="new-section" aria-labelledby="new-label" hidden>
-      <h2 class="popup__label" id="new-label" data-i18n="profilesNew">New profile</h2>
-      <div class="popup__templates" id="templates"></div>
-    </section>
-
     <p class="status" id="status" role="status" aria-live="polite"></p>
-    <p class="popup__note" data-i18n="profilesIsolation"></p>
 
     <footer class="popup__footer">
-      <button class="button button--quiet" type="button" id="manage" data-i18n="profilesManage">Manage profiles</button>
-      <button class="button button--quiet" type="button" id="new-protected" data-i18n="vaultNewProtected"></button>
+      <button class="button button--secondary" type="button" id="new-profile" hidden data-i18n="profilesNewSheet">New profile…</button>
       <button class="button button--quiet" type="button" id="new-temporary" data-i18n="profilesTemporaryNew"></button>
-      <p class="popup__keys" data-i18n="profilesKeyHint"></p>
+      <button class="button button--quiet" type="button" id="manage" data-i18n="profilesManage">Manage profiles</button>
+      <button class="button button--quiet" type="button" id="settings" data-i18n="settingsTitle">Nulavio settings</button>
     </footer>
+    <details class="popup__why">
+      <summary data-i18n="profilesWhy">Why profiles?</summary>
+      <p class="popup__note" data-i18n="profilesIsolation"></p>
+      <p class="popup__keys" data-i18n="profilesKeyHint"></p>
+    </details>
   </main>
+
+  <!-- The create sheet: a template only fills the fields; nothing is created before "Criar". -->
+  <form class="popup__main popup__sheet" id="sheet" aria-labelledby="sheet-title" novalidate hidden>
+    <h1 class="popup__title" id="sheet-title" data-i18n="profilesNew">New profile</h1>
+    <fieldset class="stack stack--tight">
+      <legend class="popup__label" data-i18n="profilesTemplates"></legend>
+      <div class="popup__templates" id="templates"></div>
+    </fieldset>
+    <label class="field"><span class="field__label" data-i18n="profilesNameLabel"></span>
+      <input class="input" name="name" id="sheet-name" autocomplete="off" maxlength="60" required></label>
+    <label class="field"><span class="field__label" data-i18n="profilesIconLabel"></span>
+      <select class="select" name="avatar" id="sheet-avatar"></select></label>
+    <fieldset class="swatches" id="sheet-colors">
+      <legend class="field__label" data-i18n="profilesColorLabel"></legend>
+    </fieldset>
+    <label class="check">
+      <input type="checkbox" name="protect" id="sheet-protect" aria-describedby="sheet-protect-hint">
+      <span><span data-i18n="profilesProtectLabel"></span><span class="hint" id="sheet-protect-hint" data-i18n="profilesProtectHint"></span></span>
+    </label>
+    <p class="form-error" role="alert"></p>
+    <div class="actions">
+      <button class="button button--primary" type="submit" id="sheet-create" data-i18n="profilesCreateOpen"></button>
+      <button class="button button--quiet" type="button" id="sheet-back" data-i18n="profilesBack"></button>
+    </div>
+  </form>
 </body>
 </html>

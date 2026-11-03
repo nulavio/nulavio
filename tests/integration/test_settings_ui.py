@@ -208,6 +208,24 @@ class SettingsPanesTest(unittest.TestCase):
         finally:
             self.m.send("WebDriver:SetWindowRect", {"width": rect["width"], "height": rect["height"]})
 
+    def test_08_a_template_only_fills_the_new_profile_form(self):
+        """Audit SPA-09: the copy says a template fills name, icon and colour; nothing is created before "Criar"."""
+        self.open("#profiles")
+        self.assertTrue(
+            harness.wait_until(lambda: self.m.execute("return document.querySelectorAll('#templates button').length;"), 10)
+        )
+        count = self.m.execute("return document.querySelectorAll('#profile-list > li').length;")
+        self.m.send("WebDriver:ElementClick", {"id": self.m.find_element('#templates button[data-template="work"]')})
+        state = self.m.execute(
+            "const f = document.getElementById('create-profile');"
+            "return {name: f.elements.name.value, template: f.dataset.template,"
+            " focused: document.activeElement === f.elements.name,"
+            " pressed: [...document.querySelectorAll('#templates button[aria-pressed=true]')].map(b => b.dataset.template)};"
+        )
+        self.assertEqual(state, {"name": self.message("templateWork"), "template": "work", "focused": True, "pressed": ["work"]})
+        time.sleep(0.5)
+        self.assertEqual(self.m.execute("return document.querySelectorAll('#profile-list > li').length;"), count)
+
     def shoot(self, name: str, full: bool = True) -> None:
         for dark in (0, 1):
             self.m.chrome("Services.prefs.setIntPref('ui.systemUsesDarkTheme', arguments[0]);", [dark])

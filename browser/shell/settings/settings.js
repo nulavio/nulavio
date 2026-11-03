@@ -441,21 +441,27 @@ async function renderProfiles() {
     return;
   }
   rerender(document.getElementById("profile-list"), () => state.profiles.map(profileRow));
+  // A template only fills the form below (audit SPA-09): nothing is created before "Criar perfil".
+  const form = document.getElementById("create-profile");
   rerender(document.getElementById("templates"), () =>
     profileOptions.templates.map(template => {
       const name = t(TEMPLATE_NAMES[template.id]);
-      const button = h("button", { class: "button button--secondary button--with-chip", type: "button", "data-focus-key": `template-${template.id}` });
+      const button = h("button", {
+        class: "button button--secondary button--with-chip",
+        type: "button",
+        "aria-pressed": String(form.dataset.template === template.id),
+        "data-focus-key": `template-${template.id}`,
+        dataset: { template: template.id },
+      });
       button.append(chip({ name, avatar: template.avatar, color: template.color }, "sm"), h("span", { text: name }));
-      button.addEventListener("click", () =>
-        run(
-          () =>
-            profiles.create({
-              templateId: template.id,
-              name: freeName(name, state.profiles.map(p => p.name)),
-            }),
-          { done: t("profilesCreated") }
-        )
-      );
+      button.addEventListener("click", () => {
+        form.dataset.template = template.id;
+        form.elements.name.value = freeName(name, state.profiles.map(p => p.name));
+        for (const each of document.querySelectorAll("#templates button")) {
+          each.setAttribute("aria-pressed", String(each === button));
+        }
+        form.elements.name.focus();
+      });
       return button;
     })
   );
@@ -471,9 +477,17 @@ async function setUpProfiles() {
   const form = document.getElementById("create-profile");
   form.addEventListener("submit", async event => {
     event.preventDefault();
-    const created = await run(() => profiles.create({ name: form.elements.name.value }), { form, done: t("profilesCreated") });
+    const templateId = form.dataset.template;
+    const created = await run(() => profiles.create({ name: form.elements.name.value, ...(templateId ? { templateId } : {}) }), {
+      form,
+      done: t("profilesCreated"),
+    });
     if (created !== undefined) {
       form.reset();
+      delete form.dataset.template;
+      for (const each of document.querySelectorAll("#templates button")) {
+        each.setAttribute("aria-pressed", "false");
+      }
     }
   });
   profiles.onChanged.addListener(debounce(renderProfiles));
