@@ -218,9 +218,14 @@ def _serve(args) -> int:
     audit.record(agent=agent["id"], client=agent.get("client"), session=session, event="connected", client_exe=executable,
                  outcome="ok" if matches else "client-mismatch")  # fmt: skip
     print(f"nulavio ai serve: agent {agent['id']} session {session}", file=sys.stderr)
+    marker = None
     try:
+        with contextlib.suppress(OSError):
+            marker = registry.mark_session(agent, session)
         Server(Bridge(agent["id"], session, headless=args.headless)).serve()
     finally:
+        if marker is not None:
+            marker.unlink(missing_ok=True)
         with contextlib.suppress(registry.RegistryError, OSError, ValueError):
             registry.end_session(agent["id"], session)
         audit.record(agent=agent["id"], client=agent.get("client"), session=session, event="disconnected")

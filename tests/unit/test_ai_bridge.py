@@ -839,6 +839,27 @@ class AutonomyControlsTest(Home):
                 self.assertEqual(list(registry.requests_dir().iterdir()), [])
                 registry.set_stopped(False)
 
+    def test_a_session_marker_says_who_is_connected_only_while_it_runs(self):
+        """UX5-I2: the bridge writes <state>/ai/sessions/<id>.json (0600) with its pid, removed at the end."""
+        agent, token = registry.add("Marcado", "claude-code", "restricted")
+        seen = {}
+
+        class Probe:
+            def __init__(self, *_a, **_k):
+                pass
+
+            def serve(self):
+                files = list(registry.sessions_dir().glob("*.json"))
+                seen["files"] = [json.loads(f.read_text()) for f in files]
+                seen["modes"] = [f.stat().st_mode & 0o777 for f in files]
+
+        with mock.patch.dict(os.environ, {"NULAVIO_AGENT_TOKEN": token}), mock.patch("nulavio_launcher.ai.mcp.Server", Probe), \
+                mock.patch("nulavio_launcher.ai.tools.Bridge", lambda *a, **k: None):  # fmt: skip
+            self.assertEqual(ai_cli._serve(mock.Mock(headless=True)), 0)
+        self.assertEqual([(f["agent"], f["name"], f["pid"]) for f in seen["files"]], [(agent["id"], "Marcado", os.getpid())])
+        self.assertEqual(seen["modes"], [0o600])
+        self.assertEqual(list(registry.sessions_dir().glob("*.json")), [])  # gone when the session ends
+
     def test_answers_are_validated(self):
         for request_id, answer in (("../../x", "once"), ("0123456789abcdef", "always"), ("0123456789abcdef", "once")):
             with self.assertRaises(registry.RegistryError):

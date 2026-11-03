@@ -508,6 +508,20 @@ def requests_dir() -> Path:
     return paths.ensure_private_dir(ai_state() / "requests")
 
 
+def sessions_dir() -> Path:
+    return paths.ensure_private_dir(ai_state() / "sessions")
+
+
+def mark_session(agent: dict, session_id: str) -> Path:
+    """While a bridge session runs: who is connected and the process that serves it (UX5-I2). The band
+    of the user's windows reads these files (never a process) and checks that the pid still lives; a
+    file left by a process that was killed is then ignored."""
+    marker = sessions_dir() / f"{session_id}.json"
+    paths.write_private_file(marker, json.dumps({"agent": agent["id"], "name": agent["name"], "client": agent.get("client"),
+                                                 "pid": os.getpid(), "since": now().isoformat(timespec="seconds")}))  # fmt: skip
+    return marker
+
+
 def pending_requests() -> list[dict]:
     out = []
     for item in sorted(requests_dir().glob("*.json")):
