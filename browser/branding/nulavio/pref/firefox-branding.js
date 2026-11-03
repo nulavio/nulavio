@@ -128,3 +128,16 @@ pref("browser.preferences.experimental.hidden", true);
 pref("extensions.getAddons.showPane", false);
 pref("extensions.htmlaboutaddons.recommendations.enabled", false);
 pref("browser.preferences.moreFromMozilla", false);
+
+// UX3H M-1: no Mozilla privacy-notice tab (mozilla.org) on the first launch.
+// The engine opens it to tell people that data is sent to Mozilla; Nulavio
+// sends none unless the person opts in (browser/config/prefs/baseline.js sets
+// the same master switch for profiles the launcher seeds). Off here too, so a
+// plain package and a profile created without the launcher behave the same:
+// no data submission, no notice and no request to mozilla.org at startup.
+pref("datareporting.policy.dataSubmissionEnabled", false);
+pref("datareporting.policy.firstRunURL", "");
+// No "Suggest Firefox Relay email masks" offer: Relay needs a Mozilla account,
+// which Nulavio 1.0 does not offer (D-UX8). An empty value hides the option in
+// Settings and every Relay prompt; saved logins are unaffected.
+pref("signon.firefoxRelay.feature", "");
