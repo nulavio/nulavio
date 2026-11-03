@@ -96,6 +96,11 @@ def _keyring():
     return keyring()
 
 
+def recipient(provider: dict | None) -> str | None:
+    """Where requests go, as the panel shows it: host[:port] (a port can be another program)."""
+    return urllib.parse.urlsplit(provider["base_url"]).netloc if provider else None
+
+
 def check_endpoint(raw: str) -> str:
     """An https:// base address, or http:// on this computer only (local models)."""
     url = urllib.parse.urlsplit(str(raw or "").strip())
@@ -131,7 +136,9 @@ def state(profile: str | None = None) -> dict:
     return {
         "configured": bool(provider),
         "provider": provider,
-        "recipient": urllib.parse.urlsplit(provider["base_url"]).hostname if provider else None,
+        "recipient": recipient(provider),
+        # The panel adds this to what it shows, so its size line is the whole request (Q3, UX5-B).
+        "systemChars": len(SYSTEM),
         "hasKey": has_key,
         "profileAllowed": bool(profile) and profile in data["profiles"],
         "agent": summary,
@@ -302,8 +309,33 @@ def _complete(provider: dict, messages: list[dict], tools: bool) -> tuple[str, l
 
 
 def _page_block(page: dict) -> str:
+    """The page as the model gets it. The Shell counts the same text (NulavioAI.sys.mjs, pageBlockChars):
+    keep the two in step, or every Send is refused as size-changed."""
     text = str(page.get("text") or "")[:MAX_PAGE_CHARS]
-    return f"Page content (untrusted, from {page.get('url', '')!s}, title {page.get('title', '')!r}):\n<<<PAGE\n{text}\nPAGE>>>"
+    return f'Page content (untrusted, from {page.get("url", "")}, title "{page.get("title", "")}"):\n<<<PAGE\n{text}\nPAGE>>>'
+
+
+def _content(question: str, page: dict | None) -> str:
+    """The message: each included block followed by a blank line, then the question. The Shell counts a
+    block with its blank line, and "Question: " once (assistant/panel.js QUESTION_PREFIX)."""
+    blocks = [_page_block(page)] if page is not None else []
+    return "".join(f"{b}\n\n" for b in blocks) + f"Question: {question}" if blocks else question
+
+
+def request_chars(messages: list[dict]) -> int:
+    """The size of a request in code points: Nulavio's fixed instructions and every message's text.
+    The panel shows this number before Send, and the request is refused if they differ."""
+    return len(SYSTEM) + sum(len(m["content"]) for m in messages if isinstance(m.get("content"), str))
+
+
+def _check_expected(provider: dict, expected, chars: int | None) -> None:
+    """The panel showed where the request goes and how big it is: refuse if that is no longer true."""
+    if not isinstance(expected, dict):
+        return
+    if expected.get("recipient") != recipient(provider) or expected.get("model") != provider["model"]:
+        raise AssistantError("recipient-changed")  # the provider changed in Settings since the panel showed it
+    if chars is not None and expected.get("chars") != chars:
+        raise AssistantError("size-changed")
 
 
 def _blocked(data: dict) -> str | None:
@@ -333,14 +365,17 @@ def _require_ready(profile: str) -> dict:
     return data
 
 
-def ask(question: str, profile: str, page: dict | None = None) -> dict:
-    """Answer a question; the page's text goes along only when `page` is given (the user's choice)."""
+def ask(question: str, profile: str, page: dict | None = None, expected: dict | None = None) -> dict:
+    """Answer a question; the page's text goes along only when `page` is given (the user's choice).
+    `expected`: {recipient, model, chars} as the panel showed them; any difference refuses the request."""
     question = str(question or "").strip()
     if not question or len(question) > MAX_QUESTION_CHARS:
         raise AssistantError("bad-question")
     data = _require_ready(profile)
     provider = data["provider"]
-    content = question if page is None else f"{_page_block(page)}\n\nQuestion: {question}"
+    messages = [{"role": "user", "content": _content(question, page)}]
+    chars = request_chars(messages)
+    _check_expected(provider, expected, chars)
     sent_page = min(len(str(page.get("text") or "")), MAX_PAGE_CHARS) if page else 0
 
     def record(outcome: str) -> None:
@@ -349,14 +384,14 @@ def ask(question: str, profile: str, page: dict | None = None) -> dict:
                      input_chars=len(question) + sent_page)  # fmt: skip
 
     try:
-        text, _calls, truncated = _complete(provider, [{"role": "user", "content": content}], tools=False)
+        text, _calls, truncated = _complete(provider, messages, tools=False)
     except AssistantError as exc:
         if exc.sent:  # it reached the provider: the activity says so, with the sizes, as for an answer
             record(f"error:{exc.code}")
         raise
     record("ok")
-    return {"answer": text.strip(), "recipient": urllib.parse.urlsplit(provider["base_url"]).hostname,
-            "model": provider["model"], "pageChars": sent_page, "truncated": truncated}  # fmt: skip
+    return {"answer": text.strip(), "recipient": recipient(provider), "model": provider["model"],
+            "pageChars": sent_page, "chars": chars, "truncated": truncated}  # fmt: skip
 
 
 def _origin(url: str | None) -> str | None:
@@ -370,13 +405,16 @@ def _tool_text(result: dict) -> str:
     return "\n".join(texts)[:20_000] or json.dumps(result.get("structuredContent", {}))[:20_000]
 
 
-def run_task(task: str, profile: str, *, headless: bool = False, bridge: Bridge | None = None) -> dict:
-    """Let the model work in its AI Workspace through the Bridge: every action passes the agent's policy."""
+def run_task(task: str, profile: str, *, headless: bool = False, bridge: Bridge | None = None,
+             expected: dict | None = None) -> dict:  # fmt: skip
+    """Let the model work in its AI Workspace through the Bridge: every action passes the agent's policy.
+    Its size is known only afterwards (what it reads there goes too), so only the recipient is checked."""
     task = str(task or "").strip()
     if not task or len(task) > MAX_QUESTION_CHARS:
         raise AssistantError("bad-question")
     data = _require_ready(profile)  # stopped, paused or revoked: refused before anything is sent
     provider, agent_id = data["provider"], data["agent"]
+    _check_expected(provider, expected, None)
     bridge = bridge or Bridge(agent_id, "assistant-" + secrets.token_hex(6), headless=headless)
     messages: list[dict] = [{"role": "user", "content": task}]
     steps: list[dict] = []
@@ -433,9 +471,11 @@ def api_request(request: dict) -> dict:
     if op == "forget":
         forget()
         return {"forgotten": True}
+    expected = request.get("expected") if isinstance(request.get("expected"), dict) else None
     if op == "ask":
         page = request.get("page")
-        return ask(str(request.get("question", "")), str(profile or ""), page if isinstance(page, dict) else None)
+        return ask(str(request.get("question", "")), str(profile or ""), page if isinstance(page, dict) else None,
+                   expected)  # fmt: skip
     if op == "task":
-        return run_task(str(request.get("task", "")), str(profile or ""))
+        return run_task(str(request.get("task", "")), str(profile or ""), expected=expected)
     raise AssistantError("bad-request")

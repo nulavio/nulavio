@@ -177,6 +177,44 @@ class AssistantTest(unittest.TestCase):
                 self.assertFalse(assistant.ask("Hello?", PROFILE)["truncated"])
         self.assertEqual(self.provider.requests[-1][2]["max_tokens"], assistant.ANTHROPIC_MAX_TOKENS)
 
+    def test_the_size_shown_is_what_the_provider_gets(self):
+        """UX5-B / Q3: request_chars counts code points of everything sent, accents and emoji included,
+        for both APIs; the panel's formula (systemChars + each block + "Question: " + question) matches."""
+        assistant.allow_profile(PROFILE, True)
+        page = {"url": "https://ex.example/á", "title": 'Título 🙂 "aspas"', "text": "Ção 👩‍💻 texto\n" * 50}
+        for kind in ("openai", "anthropic"):
+            for given in (None, page):
+                with self.subTest(kind=kind, page=bool(given)):
+                    state = self.configure(kind)
+                    question = "Qual é a ideia? 🙂"
+                    result = assistant.ask(question, PROFILE, given)
+                    self.assertEqual(result["chars"], self.provider.chars[-1])
+                    block = len(f'Page content (untrusted, from {page["url"]}, title "{page["title"]}"):\n<<<PAGE\n')
+                    block += len(page["text"]) + len("\nPAGE>>>\n\n")
+                    panel = state["systemChars"] + (block + len("Question: ") if given else 0) + len(question)
+                    self.assertEqual(panel, result["chars"])
+
+    def test_send_is_refused_when_what_the_panel_showed_changed(self):
+        """UX5-B: another provider or model since the panel showed it, or another size: nothing is sent."""
+        state = self.configure()
+        assistant.allow_profile(PROFILE, True)
+        good = {"recipient": state["recipient"], "model": "test-model"}
+        size = assistant.request_chars([{"role": "user", "content": "Oi"}])
+        self.assertEqual(assistant.ask("Oi", PROFILE, None, {**good, "chars": size})["chars"], size)
+        before = self.provider.count
+        for expected, code in (
+            ({**good, "chars": size + 1}, "size-changed"),
+            ({**good, "recipient": "127.0.0.1:1", "chars": size}, "recipient-changed"),
+            ({**good, "model": "other", "chars": size}, "recipient-changed"),
+        ):
+            with self.subTest(code=code), self.assertRaises(assistant.AssistantError) as caught:
+                assistant.ask("Oi", PROFILE, None, expected)
+            self.assertEqual(caught.exception.code, code)
+        with self.assertRaises(assistant.AssistantError) as caught:
+            assistant.run_task("Abra algo", PROFILE, expected={**good, "recipient": "elsewhere"}, bridge=FakeBridge("x"))
+        self.assertEqual(caught.exception.code, "recipient-changed")
+        self.assertEqual(self.provider.count, before)  # nothing left the computer
+
     def test_page_text_is_sent_only_when_given_and_marked_untrusted(self):
         self.configure()
         assistant.allow_profile(PROFILE, True)
@@ -192,7 +230,7 @@ class AssistantTest(unittest.TestCase):
         self.assertIn("SECRET-PAGE-WORDS", sent)
         self.assertIn("untrusted", sent)
         self.assertEqual(result["pageChars"], len(page["text"]))
-        self.assertEqual(result["recipient"], "127.0.0.1")
+        self.assertEqual(result["recipient"], self.provider.base.split("/")[2])  # host and port: a port is another program
         entries = audit.read(agent=assistant.load()["agent"])
         self.assertEqual(entries[-1]["target"], "https://news.example")
         self.assertNotIn("SECRET-PAGE-WORDS", json.dumps(entries))  # the audit keeps sizes, never text
