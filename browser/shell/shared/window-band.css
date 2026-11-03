@@ -300,22 +300,29 @@
    it opens the navigation row, on the toolbar surface, so the chrome above the
    page is one 44px row (was 70px). Alerts (private, temporary, agent, Guard, a
    failed action) drop [nv-neutral] and get their strong full-width row back.
-   The band stays first in the toolbox, outside page content, never hidden. */
+   The band stays first in the toolbox, outside page content, never hidden.
+   UX3H A-1: a Shell page that asks for trust (unlock, Guard, a permission, a
+   download or password warning: [nv-named], NulavioWindow #header) gets the
+   full row back too, so its "Nulavio · <page>" name stays on screen. */
 @-moz-document url("chrome://browser/content/browser.xhtml") {
   /* Only in wide windows: in a narrow one the address bar keeps the width. */
   @media -moz-pref("sidebar.verticalTabs") and (min-width: 64rem) {
-    #navigator-toolbox:has(> #nulavio-band[nv-neutral]) {
+    #navigator-toolbox:has(> #nulavio-band[nv-neutral]:not([nv-named])) {
       display: grid;
-      grid-template-columns: auto minmax(0, 1fr);
+      /* UX3H A-1: a fixed first column, the launcher's own width, so the
+         navigation row never moves when the band's content changes (a Shell
+         page, a longer profile name) and lines up with the sidebar's edge. */
+      grid-template-columns: var(--nv-size-sidebar-launcherExpanded, 224px) minmax(0, 1fr);
 
       > * {
         grid-column: 1 / -1;
       }
-      > #nulavio-band[nv-neutral] {
+      > #nulavio-band[nv-neutral]:not([nv-named]) {
         grid-row: 1;
         grid-column: 1;
         border-block-end: 0;
-        padding-inline-start: var(--nv-space-2);
+        min-inline-size: 0;
+        overflow: hidden;
         background: var(--toolbar-background-color) !important;
       }
       > #nav-bar {
@@ -323,8 +330,32 @@
         grid-column: 2;
       }
     }
-    #nulavio-band[nv-neutral] .nv-band-row {
+    #nulavio-band[nv-neutral]:not([nv-named]) .nv-band-row {
+      flex-wrap: nowrap;
+      gap: var(--nv-space-2);
+      padding-inline: var(--nv-space-2);
       background-color: transparent;
+    }
+    /* The page name ("Nulavio · New Tab") is already on the tab and in the
+       window title; in this row it only pushed the navigation sideways. */
+    #nulavio-band[nv-neutral]:not([nv-named]) .nv-band-header {
+      display: none;
+    }
+    /* The protection state is never cut; a long profile name ends in an
+       ellipsis and keeps its full name in the chip's tooltip and label. */
+    #nulavio-band[nv-neutral]:not([nv-named]) .nv-band-protection {
+      flex: none;
+      white-space: nowrap;
+    }
+    #nulavio-band[nv-neutral]:not([nv-named]) .nv-band-identity {
+      flex: 0 1 auto;
+      overflow: hidden;
+    }
+    #nulavio-band[nv-neutral]:not([nv-named]) .nv-band-name {
+      overflow: hidden;
+      overflow-wrap: normal;
+      white-space: nowrap;
+      text-overflow: ellipsis;
     }
   }
 }

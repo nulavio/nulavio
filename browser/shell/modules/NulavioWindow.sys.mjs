@@ -45,6 +45,10 @@ const SURFACES = Object.freeze({
   "/warning/warning.html": "bandSurfaceDownload",
   "/passwords/lookalike.html": "bandSurfacePassword",
 });
+// UX3H A-1: ordinary Shell pages. Their name is on the tab, so in the navigation row
+// (window-band.css) the band does not repeat it. Every other surface asks for trust
+// and keeps its name in a full band row ([nv-named]).
+const PLAIN_SURFACES = Object.freeze(new Set(["newtabTitle", "settingsTitle", "profilesButton"]));
 
 function policy() {
   return WebExtensionPolicy.getByID(SHELL);
@@ -289,6 +293,7 @@ class WindowUI {
           for (const node of this.#rows(win)) {
             named(node.querySelector(".nv-band-header"), "");
           }
+          this.#windows.get(win)?.bar.removeAttribute("nv-named");
           this.#markOwnPagePending(win);
         } else if (flags & Ci.nsIWebProgressListener.STATE_STOP) {
           header();
@@ -395,6 +400,7 @@ class WindowUI {
 
   #header(win) {
     let text = "";
+    let trust = false;
     try {
       const browser = win.gBrowser.selectedBrowser;
       const global = browser.browsingContext.currentWindowGlobal;
@@ -405,6 +411,7 @@ class WindowUI {
         if (key && url.protocol === "moz-extension:" && url.host === new URL(policy().getURL("")).host
             && browser.currentURI.spec === global.documentURI.spec) {
           text = t("bandSystemPage", [t(key)]);
+          trust = !PLAIN_SURFACES.has(key);
         }
       }
     } catch {
@@ -413,6 +420,7 @@ class WindowUI {
     for (const row of this.#rows(win)) {
       named(row.querySelector(".nv-band-header"), text);
     }
+    this.#windows.get(win)?.bar.toggleAttribute("nv-named", trust);
     this.#markOwnPagePending(win);
   }
 
