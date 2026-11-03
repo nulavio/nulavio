@@ -47,6 +47,7 @@ SCHEMA = 1
 KINDS = ("openai", "anthropic")
 KEY_ATTRIBUTES = {"application": "nulavio", "nulavio-assistant": "api-key"}
 MAX_PAGE_CHARS = 60_000
+MAX_SELECTION_CHARS = 16_384  # the engine's own limit for a menu's selection text
 MAX_QUESTION_CHARS = 8_000
 MAX_REQUEST_CHARS = 200_000  # a conversation above this is refused, never cut silently (Q20)
 MAX_TURNS = 50
@@ -487,10 +488,23 @@ def _page_block(page: dict) -> str:
     return f'Page content (untrusted, from {page.get("url", "")}, title "{page.get("title", "")}"):\n<<<PAGE\n{text}\nPAGE>>>'
 
 
-def _content(question: str, page: dict | None) -> str:
-    """The message: each included block followed by a blank line, then the question. The Shell counts a
-    block with its blank line, and "Question: " once (assistant/panel.js QUESTION_PREFIX)."""
+def _selection_block(selection: dict) -> str:
+    """Text the person selected (from the selection menu, UX5-G), marked untrusted like a page. Counted the
+    same way by the Shell (NulavioAI.sys.mjs, selectionBlockChars)."""
+    text = str(selection.get("text") or "")[:MAX_SELECTION_CHARS]
+    where = str(selection.get("url", ""))
+    frame = str(selection.get("frameUrl") or "")
+    if frame and frame != where:
+        where = f"{where}, in a frame from {frame}"
+    return f'Selected text (untrusted, from {where}, title "{selection.get("title", "")}"):\n<<<SELECTION\n{text}\nSELECTION>>>'
+
+
+def _content(question: str, page: dict | None, selection: dict | None = None) -> str:
+    """The message: each included block (the page, then the selection) followed by a blank line, then the
+    question. The Shell counts a block with its blank line, and "Question: " once (panel.js QUESTION_PREFIX)."""
     blocks = [_page_block(page)] if page is not None else []
+    if selection is not None:
+        blocks.append(_selection_block(selection))
     return "".join(f"{b}\n\n" for b in blocks) + f"Question: {question}" if blocks else question
 
 
@@ -506,14 +520,16 @@ def _history(history) -> list[dict]:
     for turn in history:
         if not isinstance(turn, dict):
             raise AssistantError("bad-history")
-        question, answer, page = turn.get("question"), turn.get("answer"), turn.get("page")
+        question, answer, page, selection = turn.get("question"), turn.get("answer"), turn.get("page"), turn.get("selection")
         if not isinstance(question, str) or not question.strip() or len(question) > MAX_QUESTION_CHARS:
             raise AssistantError("bad-history")
         if not isinstance(answer, str) or not answer or len(answer) > MAX_REQUEST_CHARS:
             raise AssistantError("bad-history")
-        if page is not None and not (isinstance(page, dict) and isinstance(page.get("text", ""), str)):
-            raise AssistantError("bad-history")
-        messages += [{"role": "user", "content": _content(question.strip(), page)}, {"role": "assistant", "content": answer}]
+        for block in (page, selection):
+            if block is not None and not (isinstance(block, dict) and isinstance(block.get("text", ""), str)):
+                raise AssistantError("bad-history")
+        user = _content(question.strip(), page, selection)
+        messages += [{"role": "user", "content": user}, {"role": "assistant", "content": answer}]
     return messages
 
 
@@ -561,7 +577,7 @@ def _require_ready(profile: str) -> dict:
 
 
 def ask(question: str, profile: str, page: dict | None = None, expected: dict | None = None,
-        out: Stream | None = None, history: list | None = None) -> dict:  # fmt: skip
+        out: Stream | None = None, history: list | None = None, selection: dict | None = None) -> dict:  # fmt: skip
     """Answer a question; the page's text goes along only when `page` is given (the user's choice).
     `expected`: {recipient, model, chars} as the panel showed them; any difference refuses the request.
     `out`: stream mode, the answer's text as it arrives (UX5-C1). `history`: the conversation so far."""
@@ -570,7 +586,7 @@ def ask(question: str, profile: str, page: dict | None = None, expected: dict | 
         raise AssistantError("bad-question")
     data = _require_ready(profile)
     provider = data["provider"]
-    messages = [*_history(history), {"role": "user", "content": _content(question, page)}]
+    messages = [*_history(history), {"role": "user", "content": _content(question, page, selection)}]
     chars = request_chars(messages)
     if chars > MAX_REQUEST_CHARS:
         raise AssistantError("too-large")
@@ -797,8 +813,9 @@ def api_request(request: dict, out: Stream | None = None) -> dict:
     expected = request.get("expected") if isinstance(request.get("expected"), dict) else None
     if op == "ask":
         page = request.get("page")
+        selection = request.get("selection")
         return ask(str(request.get("question", "")), str(profile or ""), page if isinstance(page, dict) else None,
-                   expected, out, request.get("history"))  # fmt: skip
+                   expected, out, request.get("history"), selection if isinstance(selection, dict) else None)  # fmt: skip
     if op == "task":
         return run_task(str(request.get("task", "")), str(profile or ""), expected=expected, out=out)
     raise AssistantError("bad-request")

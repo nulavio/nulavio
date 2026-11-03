@@ -291,6 +291,28 @@ class AssistantTest(unittest.TestCase):
         self.provider.replies.append({"choices": [{"message": {"content": "Termina no fim de novembro."}}]})
         self.assertEqual(assistant.ask("E aí?", PROFILE)["sources"], [])
 
+    def test_a_selection_goes_as_its_own_untrusted_block_and_counts(self):
+        """UX5-G: the selection menu's text, cut at the engine's limit, after the page if both went."""
+        self.configure()
+        assistant.allow_profile(PROFILE, True)
+        page = {"url": "https://ex.example/a", "title": "A", "text": "Texto da página."}
+        selection = {
+            "url": "https://ex.example/a",
+            "frameUrl": "https://frame.example/x",
+            "title": "A",
+            "text": "Seleção 🙂" + "x" * 20_000,
+        }
+        result = assistant.ask("O que é isso?", PROFILE, page, None, None, None, selection)
+        content = self.provider.requests[-1][2]["messages"][-1]["content"]
+        self.assertLess(content.index("<<<PAGE"), content.index("<<<SELECTION"))
+        self.assertIn("untrusted, from https://ex.example/a, in a frame from https://frame.example/x", content)
+        inside = content.split("<<<SELECTION\n", 1)[1].split("\nSELECTION>>>", 1)[0]
+        self.assertEqual(len(inside), assistant.MAX_SELECTION_CHARS)
+        self.assertEqual(result["chars"], self.provider.chars[-1])
+        history = [{"question": "Antes?", "page": None, "selection": selection, "answer": "Sim."}]
+        assistant.ask("E agora?", PROFILE, None, None, None, history)
+        self.assertIn("<<<SELECTION", self.provider.requests[-1][2]["messages"][1]["content"])
+
     def test_page_text_is_sent_only_when_given_and_marked_untrusted(self):
         self.configure()
         assistant.allow_profile(PROFILE, True)
