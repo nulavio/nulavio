@@ -71,10 +71,26 @@ function button(doc, className, action) {
   return node;
 }
 
+// The band repaints on every refresh tick (1.5 s) in every window. In browser.xhtml a
+// textContent write always replaces the text node (the document has mutation observers),
+// which reconstructs frames, reflows the toolbox and fires accessibility events. So the
+// band writes only what changed: the result is the same DOM, by construction.
+function setText(node, text) {
+  if (node.textContent !== text) {
+    node.textContent = text;
+  }
+}
+
+function setAttr(node, name, value) {
+  if (node.getAttribute(name) !== value) {
+    node.setAttribute(name, value);
+  }
+}
+
 function named(node, text) {
-  node.textContent = text;
-  node.setAttribute("aria-label", text);
-  node.title = text;
+  setText(node, text);
+  setAttr(node, "aria-label", text);
+  setAttr(node, "title", text);
 }
 
 class WindowUI {
@@ -491,26 +507,38 @@ class WindowUI {
       row.dataset.workspace = String(Boolean(workspace));
       row.dataset.raw = String(Boolean(agent?.raw));
       const identity = row.querySelector(".nv-band-identity");
-      identity.style.setProperty("--profile-fill", workspace
-        ? "var(--nv-color-security-agent-ink)" : `var(--nv-color-identity-${profile?.color ?? "slate"})`);
-      identity.setAttribute("aria-label", t("profilesButtonNamed", [name]));
-      identity.title = name;
+      const fill = workspace
+        ? "var(--nv-color-security-agent-ink)" : `var(--nv-color-identity-${profile?.color ?? "slate"})`;
+      if (identity.style.getPropertyValue("--profile-fill") !== fill) {
+        identity.style.setProperty("--profile-fill", fill);
+      }
+      setAttr(identity, "aria-label", t("profilesButtonNamed", [name]));
+      setAttr(identity, "title", name);
       const glyph = row.querySelector(".nv-band-flag");
       if (!workspace && !this.#temporary && lazy.AVATARS.includes(profile?.avatar)) {
-        const image = element(win.document, "img", "nv-band-avatar");
-        image.src = `chrome://browser/content/profiles/assets/16_${profile.avatar}.svg`;
-        image.alt = "";
-        glyph.replaceChildren(image);
+        const src = `chrome://browser/content/profiles/assets/16_${profile.avatar}.svg`;
+        const current = glyph.firstElementChild;
+        if (glyph.childElementCount !== 1 || current.localName !== "img" || current.getAttribute("src") !== src) {
+          const image = element(win.document, "img", "nv-band-avatar");
+          image.src = src;
+          image.alt = "";
+          glyph.replaceChildren(image);
+        }
       } else {
-        glyph.textContent = workspace ? "▤" : [...name][0]?.toLocaleUpperCase() || "?";
+        const letter = workspace ? "▤" : [...name][0]?.toLocaleUpperCase() || "?";
+        if (glyph.firstElementChild || glyph.textContent !== letter) {
+          glyph.textContent = letter;
+        }
       }
-      glyph.setAttribute("aria-hidden", "true");
-      row.querySelector(".nv-band-name").textContent = name;
+      setAttr(glyph, "aria-hidden", "true");
+      setText(row.querySelector(".nv-band-name"), name);
       named(row.querySelector(".nv-band-protection"), protection);
       const seal = (kind, visible, text) => {
         const node = row.querySelector(`.nv-band-${kind}`);
         const hadFocus = node === win.document.activeElement;
-        node.hidden = !visible;
+        if (node.hidden !== !visible) {
+          node.hidden = !visible;
+        }
         named(node, text);
         if (!visible && hadFocus) {
           row.querySelector(".nv-band-stop").focus();
@@ -545,7 +573,7 @@ class WindowUI {
     const agentRevision = this.#agentRevision;
     const refresh = (async () => {
       const [profile, temporary, protection, agent] = await Promise.allSettled([
-        lazy.NulavioProfiles.current(), lazy.NulavioProfiles.temporaryState(),
+        lazy.NulavioProfiles.currentForBand(), lazy.NulavioProfiles.temporaryState(),
         lazy.profileLockState(Services.dirsvc.get("ProfD", Ci.nsIFile).path),
         lazy.NulavioAI.windowState(),
       ]);

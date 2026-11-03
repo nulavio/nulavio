@@ -24,6 +24,8 @@ ChromeUtils.defineESModuleGetters(lazy, {
 
 /** Identity colour per profile id, shared by every profile of the group (JSON). */
 export const PREF_COLORS = "nulavio.profiles.colors";
+// The band's profile summary is rebuilt at least this often, even without a change notice.
+const BAND_CACHE_MS = 30000;
 const PREF_COLOR_MIGRATION = "nulavio.profiles.colors.farol";
 const LEGACY_COLORS = ["mint", "sky", "violet", "rose", "sand", "slate"];
 
@@ -114,6 +116,10 @@ class NulavioProfilesClass {
   #avatarCache = new Map();
   #temporary = null;
   #migratingColors = null;
+  // The band's view of the current profile (name, colour, avatar), rebuilt only
+  // when the group store or the colours change, or after BAND_CACHE_MS at most.
+  #band = null;
+  #bandAt = 0;
   #storeSetup = null;
 
   get #service() {
@@ -393,6 +399,53 @@ class NulavioProfilesClass {
     return profiles.find(p => p.isCurrent) ?? null;
   }
 
+  /**
+   * What the identity band shows for this instance: name, colour and avatar of
+   * the current profile. The band asks every 1.5 s in every window; list()
+   * reads every profile of the group (database, lock state, user.js) to answer
+   * that, so this keeps one summary, rebuilt from the database when the engine
+   * reports a change (sps-profiles-updated, from this or another instance), the
+   * colours change, or BAND_CACHE_MS have passed. A failed read is not kept.
+   */
+  currentForBand() {
+    this.#observe();
+    if (this.#band && Date.now() - this.#bandAt < BAND_CACHE_MS) {
+      return this.#band;
+    }
+    const pending = this.#readBand();
+    this.#band = pending;
+    this.#bandAt = Date.now();
+    pending.catch(() => {
+      if (this.#band === pending) {
+        this.#band = null;
+      }
+    });
+    return pending;
+  }
+
+  async #readBand() {
+    if ((await this.temporaryState()).temporary) {
+      return { id: null, name: "", avatar: null, color: "slate", isCurrent: true, temporary: true };
+    }
+    if (!this.availability().available) {
+      return null;
+    }
+    const service = this.#service;
+    if (this.#storeSetup) {
+      await this.#storeSetup;
+    } else if (!service.initialized) {
+      await service.init().catch(e => console.error("Nulavio Profiles: profile service", e));
+    }
+    const current = service.currentProfile;
+    if (!current) {
+      const name = service.groupToolkitProfile?.name ?? "";
+      return { id: null, name, avatar: "default-favicon", color: COLORS[0], isCurrent: true };
+    }
+    // currentProfile is not refreshed when another instance renames the profile; the database is.
+    const profile = (await service.getProfile(current.id)) ?? current;
+    return { id: profile.id, name: profile.name, avatar: profile.avatar, color: this.#colorFor(profile, this.colors()), isCurrent: true };
+  }
+
   async #profile(id) {
     this.#requireAvailable();
     await this.ensureStore();
@@ -575,6 +628,7 @@ class NulavioProfilesClass {
   }
 
   observe() {
+    this.#band = null;
     for (const listener of this.#listeners) {
       try {
         listener();
