@@ -1022,5 +1022,14 @@
   "profilesProtectLabel": {"message": "Proteger com senha"},
   "profilesProtectHint": {"message": "Continua nos passos do perfil protegido: senha e código de recuperação."},
   "profilesCreateOpen": {"message": "Criar e abrir"},
-  "profilesBack": {"message": "Voltar"}
+  "profilesBack": {"message": "Voltar"},
+  "routingRememberFor": {"message": "Lembrar minha escolha para $SITE$", "placeholders": {"site": {"content": "$1"}}},
+  "routingRememberHint": {"message": "Abrir em $TARGET$: sempre direto, sem perguntar. Abrir em $CURRENT$: $SITE$ deixa de trocar de perfil.", "placeholders": {"target": {"content": "$1"}, "current": {"content": "$2"}, "site": {"content": "$3"}}},
+  "routingUnlockAndOpen": {"message": "Desbloquear $PROFILE$ e abrir", "placeholders": {"profile": {"content": "$1"}}},
+  "routingOpenInAnyway": {"message": "Abrir em $PROFILE$ mesmo assim", "placeholders": {"profile": {"content": "$1"}}},
+  "routingDontOpen": {"message": "Não abrir"},
+  "routingWhy": {"message": "Por que isto apareceu?"},
+  "routingWhyAsk": {"message": "A sua regra para $SITE$ abre em $PROFILE$ e pergunta antes. As regras ficam nas Configurações do Nulavio, em Roteamento inteligente.", "placeholders": {"site": {"content": "$1"}, "profile": {"content": "$2"}}},
+  "routingWhyOpen": {"message": "A sua regra para $SITE$ abre em $PROFILE$. As regras ficam nas Configurações do Nulavio, em Roteamento inteligente.", "placeholders": {"site": {"content": "$1"}, "profile": {"content": "$2"}}},
+  "routingThisProfile": {"message": "este perfil"}
 }

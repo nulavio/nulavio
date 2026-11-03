@@ -4,7 +4,7 @@
    it anywhere is an explicit choice. */
 
 import { localize, t } from "../lib/i18n.js";
-import { announce, chip, errorText, h } from "../lib/ui.js";
+import { announce, chip, errorText, h, profileStates, stateBadge } from "../lib/ui.js";
 
 const routing = browser.nulavioRouting;
 const mode = document.body.dataset.mode;
@@ -58,6 +58,24 @@ function button(label, kind, action) {
   return el;
 }
 
+async function unlockThere(url, rule, remember) {
+  if (remember && rule && rule.action === "ask") {
+    await routing.setRuleAction(rule.id, "open-in");
+  }
+  // The Vault's own page unlocks it and then opens the link there; nothing loads here.
+  await browser.nulavioVault.openUnlockPage(rule.profileId, url.href);
+  await closeThisTab();
+}
+
+function routeEnd(profile, note) {
+  return [
+    chip(profile, "md"),
+    h("span", { class: "route__name", text: profile.name }),
+    ...profileStates(profile).map(stateBadge),
+    note ? h("span", { class: "route__note", text: note }) : null,
+  ].filter(Boolean);
+}
+
 async function render() {
   const url = webUrl(params.get("u"));
   if (!url) {
@@ -65,29 +83,47 @@ async function render() {
     return;
   }
   document.getElementById("url").textContent = url.href;
-  const state = await routing.state();
+  const [state, people] = await Promise.all([routing.state(), browser.nulavioProfiles.list().catch(() => null)]);
   const rule = state.rules.find(r => r.id === params.get("r")) ?? null;
   const host = url.hostname;
-  const target = rule && rule.profileName ? { name: rule.profileName, color: rule.profileColor, avatar: null } : null;
+  const record = rule ? people?.profiles.find(p => p.id === rule.profileId) : null;
+  const target = record ?? (rule && rule.profileName ? { name: rule.profileName, color: rule.profileColor, avatar: null } : null);
+  const current = people?.profiles.find(p => p.isCurrent) ?? null;
 
-  if (target) {
-    const box = document.getElementById("target");
-    box.hidden = false;
-    box.replaceChildren(chip(target, "md"), h("span", { class: "popup__name", text: target.name }));
+  // Where you are → where the rule sends the link (SPA-07).
+  if (target && current) {
+    document.getElementById("route-from").replaceChildren(...routeEnd(current, t("routingThisProfile")));
+    document.getElementById("route-to").replaceChildren(...routeEnd(target));
+    document.getElementById("route").hidden = false;
+  }
+  if (rule && target) {
+    const why = document.getElementById("why");
+    why.hidden = false;
+    document.getElementById("why-text").textContent = t(rule.action === "ask" ? "routingWhyAsk" : "routingWhyOpen", [rule.display, target.name]);
+    document.getElementById("edit-rules").hidden = true;
   }
 
   const actions = [];
   const remember = () => document.getElementById("remember").checked;
+  const here = current ? t(mode === "ask" ? "routingOpenIn" : "routingOpenInAnyway", [current.name]) : null;
+  // A locked target is unlocked first, from here (SPA-08): never a dead end that pushes "open here".
+  const toTarget = record?.locked
+    ? button(t("routingUnlockAndOpen", [target.name]), "button--primary", () => unlockThere(url, rule, mode === "ask" && remember()))
+    : null;
   if (mode === "ask") {
     const explain = { typed: "routingAskExplainTyped", page: "routingAskExplainPage" }[params.get("src")] ?? "routingAskExplain";
     document.getElementById("explain").textContent = target
       ? t(explain, [host, target.name])
       : t("routingRuleGone", [host]);
     if (target) {
-      actions.push(button(t("routingOpenIn", [target.name]), "button--primary", () => openThere(url, rule, remember())));
+      actions.push(toTarget ?? button(t("routingOpenIn", [target.name]), "button--primary", () => openThere(url, rule, remember())));
+      document.getElementById("remember-label").textContent = t("routingRememberFor", [rule.display]);
+      document.getElementById("remember-hint").textContent = current
+        ? t("routingRememberHint", [target.name, current.name, rule.display])
+        : "";
       document.getElementById("remember-field").hidden = false;
     }
-    actions.push(button(t("routingOpenHere"), "button--secondary", () => openHere(url, rule, remember())));
+    actions.push(button(here ?? t("routingOpenHere"), "button--secondary", () => openHere(url, rule, remember())));
   } else {
     const why = params.get("why");
     const name = rule?.profileName;
@@ -100,10 +136,12 @@ async function render() {
             ? t("routingBlockedLocked", [host, name])
             : t("routingBlockedError", [host]);
     if (rule && name) {
-      actions.push(button(t("routingTryAgain", [name]), "button--primary", () => openThere(url, rule, false)));
+      actions.push(toTarget ?? button(t("routingTryAgain", [name]), "button--primary", () => openThere(url, rule, false)));
     }
-    actions.push(button(t("routingOpenHereAnyway"), "button--secondary", () => openHere(url, null, false)));
+    actions.push(button(here ?? t("routingOpenHereAnyway"), "button--secondary", () => openHere(url, null, false)));
   }
+  actions.push(button(t("routingDontOpen"), "button--quiet", closeThisTab));
+  actions[0].setAttribute("aria-describedby", "explain");
   document.getElementById("actions").replaceChildren(...actions);
 }
 

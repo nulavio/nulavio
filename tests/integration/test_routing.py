@@ -319,6 +319,35 @@ class RoutingTest(unittest.TestCase):
                 break
         harness.wait_until(lambda: work.execute("return document.documentElement.dataset.ready === 'true';"), timeout=10)
         self.assertIn("/page/asked", work.execute("return document.getElementById('url').textContent;"))
+        # UX4 (SPA-07/24): here → there, both named; "remember" above the buttons it changes; why.
+        page = work.execute(
+            "const $ = id => document.getElementById(id);"
+            "return {from: document.querySelector('#route-from .route__name')?.textContent,"
+            " to: document.querySelector('#route-to .route__name')?.textContent, route: !$('route').hidden,"
+            " buttons: [...document.querySelectorAll('#actions button')].map(b => [b.className.split(' ')[1], b.textContent]),"
+            " remember: !$('remember-field').hidden,"
+            " rememberFirst: Boolean($('remember-field').compareDocumentPosition($('actions')) & 4),"
+            " why: !$('why').hidden,"
+            " described: document.querySelector('#actions .button--primary').getAttribute('aria-describedby')};"
+        )
+        dont = work.execute("return browser.i18n.getMessage('routingDontOpen');")
+        self.assertEqual(
+            page,
+            {
+                "from": "Trabalho",
+                "to": "Bancos",
+                "route": True,
+                "buttons": [
+                    ["button--primary", "Abrir em Bancos"],
+                    ["button--secondary", "Abrir em Trabalho"],
+                    ["button--quiet", dont],
+                ],
+                "remember": True,
+                "rememberFirst": True,
+                "why": True,
+                "described": "explain",
+            },
+        )
         work.send("WebDriver:ElementClick", {"id": work.find_element("#actions .button--primary")})
         self.assertTrue(harness.wait_until(lambda: self.hits("/page/asked"), timeout=30))
         self.assertTrue(

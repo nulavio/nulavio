@@ -205,6 +205,22 @@
 /* Routing pages: the held address is shown as text only */
 .target { display: flex; align-items: center; gap: var(--nv-space-3); font-weight: var(--nv-font-weight-medium); }
 .target[hidden] { display: none; }
+/* UX4 (SPA-07): where you are → where the rule sends the link, each with its state in words */
+.route {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nv-space-3) var(--nv-space-4);
+  padding: var(--nv-space-4);
+  border-radius: var(--nv-radius-md);
+  background: var(--nv-color-bg-sunken);
+}
+.route[hidden] { display: none; }
+.route__end { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--nv-space-3); }
+.route__name { font-weight: var(--nv-font-weight-medium); }
+.route__note { color: var(--nv-color-text-secondary); font-size: var(--nv-type-label-size); }
+.route__arrow { color: var(--nv-color-text-secondary); font-size: var(--nv-type-section-size); }
+.route .badge { margin-inline-start: 0; }
 .url { margin: 0; padding: var(--nv-space-3) var(--nv-space-4); border-radius: var(--nv-radius-sm); background: var(--nv-color-bg-sunken); overflow-wrap: anywhere; }
 
 /* Guard review: one card per change; long values (paths, fingerprints) wrap */

@@ -16,16 +16,27 @@
     <section class="card stack" aria-labelledby="headline">
       <h1 class="warning__headline" id="headline" data-i18n="routing_blocked_headline"></h1>
       <p id="explain"></p>
-      <div class="target" id="target" hidden></div>
+      <!-- UX4 (audit SPA-07/08/24): where you are → where the rule sends the link, each with its
+           state; the address as text; the option to remember above the buttons it changes. -->
+      <div class="route" id="route" hidden>
+        <span class="route__end" id="route-from"></span>
+        <span class="route__arrow" aria-hidden="true">→</span>
+        <span class="route__end" id="route-to"></span>
+      </div>
       <p class="url mono" id="url"></p>
       <p class="hint" data-i18n="routingNothingLoaded"></p>
-      <div class="actions" id="actions"></div>
       <label class="check" id="remember-field" hidden>
-        <input type="checkbox" id="remember">
-        <span data-i18n="routingRemember"></span>
+        <input type="checkbox" id="remember" aria-describedby="remember-hint">
+        <span><span id="remember-label"></span><span class="hint" id="remember-hint"></span></span>
       </label>
+      <div class="actions" id="actions"></div>
       <p class="status" id="status" role="status" aria-live="polite"></p>
-      <p class="hint"><a href="../settings/settings.html#routing" data-i18n="routingEditRules"></a></p>
+      <details class="more" id="why" hidden>
+        <summary data-i18n="routingWhy"></summary>
+        <p class="hint" id="why-text"></p>
+        <p class="hint"><a href="../settings/settings.html#routing" data-i18n="routingEditRules"></a></p>
+      </details>
+      <p class="hint" id="edit-rules"><a href="../settings/settings.html#routing" data-i18n="routingEditRules"></a></p>
     </section>
   </main>
 </body>
