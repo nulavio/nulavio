@@ -255,10 +255,20 @@ class WindowUI {
       return;
     }
     const doc = win.document;
-    const sheet = element(doc, "link");
-    sheet.rel = "stylesheet";
-    sheet.href = bandSheet.spec;
-    doc.head.append(sheet);
+    // UX3H (QA M-2): load the band's sheet synchronously, before the band exists, so the
+    // band's first frame is already its final one. A <link> loads asynchronously: on the
+    // first launch the band showed for ~100 ms as a separate row (+54 px) before it joined
+    // the navigation row. The <link> stays only as a fallback.
+    let sheet = null;
+    try {
+      win.windowUtils.loadSheetUsingURIString(bandSheet.spec, win.windowUtils.AUTHOR_SHEET);
+    } catch (e) {
+      console.error(e);
+      sheet = element(doc, "link");
+      sheet.rel = "stylesheet";
+      sheet.href = bandSheet.spec;
+      doc.head.append(sheet);
+    }
     const bar = doc.createXULElement("toolbar");
     bar.id = AREA;
     bar.setAttribute("customizable", "true");
@@ -605,7 +615,15 @@ class WindowUI {
     state.screenObserver.disconnect();
     state.bar.remove();
     state.fullscreen.remove();
-    state.sheet.remove();
+    if (state.sheet) {
+      state.sheet.remove();
+    } else {
+      try {
+        win.windowUtils.removeSheetUsingURIString(bandSheet.spec, win.windowUtils.AUTHOR_SHEET);
+      } catch {
+        // The window is already gone.
+      }
+    }
     win.document.documentElement.removeAttribute("nulavio-window-agent");
     win.document.documentElement.removeAttribute("nulavio-window-raw");
   }
