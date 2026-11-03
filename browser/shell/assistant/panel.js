@@ -384,6 +384,33 @@ async function render() {
   }
 }
 
+/** Passages the answer quoted word for word from a page that went (UX5-E): the label says where
+    from; "Mostrar a aba" only selects that tab while it still shows that address (no scrolling in v1). */
+function showSources(list) {
+  $("sources").replaceChildren(
+    ...(list ?? []).map(source =>
+      h(
+        "li",
+        { class: "assistant__source" },
+        h("p", { class: "hint", text: t("assistantSourceLabel", [source.title, URL.parse(source.url)?.host ?? ""]) }),
+        source.heading ? h("p", { class: "hint", text: t("assistantSourceHeading", [source.heading]) }) : null,
+        h("blockquote", { class: "assistant__source-quote", text: source.quote }),
+        h("button", {
+          class: "button button--quiet",
+          type: "button",
+          text: t("assistantSourceShow"),
+          onclick: () =>
+            ai.assistantShowSource(source.url).then(
+              shown => announce(shown ? t("assistantSourceShown", [source.title]) : t("assistantSourceGone", [source.title]), shown ? "ok" : "error"),
+              e => announce(errorText(e), "error")
+            ),
+        })
+      )
+    )
+  );
+  $("sources-section").hidden = !list?.length;
+}
+
 function showSteps(steps) {
   $("steps").replaceChildren(
     ...(steps ?? []).map(s => h("li", { text: `${s.tool}${s.error ? ` — ${t("assistantStepFailed")}` : ""}` }))
@@ -410,6 +437,7 @@ function showResult(result, task) {
       ? t("assistantSentPage", [count(result.pageChars), result.recipient, count(result.chars)])
       : t("assistantSentQuestionOnly", [result.recipient, count(result.chars)]);
   showSteps(result.steps);
+  showSources(task ? [] : result.sources);
   $("answer-section").hidden = false;
   if (halted) {
     const why = result.stopped === "step-limit" ? t("assistantStoppedStepLimit", [count(result.limit ?? 8)]) : errorText(result.stopped);
@@ -568,6 +596,7 @@ async function send(question, { retry = false } = {}) {
   $("steps").replaceChildren();
   $("steps").hidden = true;
   $("receipt").textContent = ""; // the receipt of the message before never stands under this one
+  showSources([]);
   $("answer").replaceChildren();
   $("copy-answer").hidden = true;
   delete document.body.dataset.answered;

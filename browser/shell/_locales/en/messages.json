@@ -1136,5 +1136,11 @@
   "assistantIncomplete": {"message": "Answer incomplete: it stopped before the end"},
   "assistantTaskStopping": {"message": "The task is stopping: the AI Workspace is closing."},
   "assistantContinue": {"message": "Continue"},
-  "assistantContinuePrompt": {"message": "Continue from where you stopped."}
+  "assistantContinuePrompt": {"message": "Continue from where you stopped."},
+  "assistantSources": {"message": "Sources"},
+  "assistantSourceLabel": {"message": "Passage quoted from the page “$TITLE$” · $HOST$", "placeholders": {"title": {"content": "$1"}, "host": {"content": "$2"}}},
+  "assistantSourceHeading": {"message": "Under “$HEADING$”", "placeholders": {"heading": {"content": "$1"}}},
+  "assistantSourceShow": {"message": "Show the tab"},
+  "assistantSourceShown": {"message": "“$TITLE$” is the selected tab.", "placeholders": {"title": {"content": "$1"}}},
+  "assistantSourceGone": {"message": "“$TITLE$” is no longer open at that address in this window.", "placeholders": {"title": {"content": "$1"}}}
 }

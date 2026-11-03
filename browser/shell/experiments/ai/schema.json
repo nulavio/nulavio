@@ -575,6 +575,19 @@
             "maxLength": 300
           }
         ]
+      },
+      {
+        "name": "assistantShowSource",
+        "type": "function",
+        "async": true,
+        "description": "Select the tab of this window that shows exactly this address (a source's page); false if none.",
+        "parameters": [
+          {
+            "name": "url",
+            "type": "string",
+            "maxLength": 1048576
+          }
+        ]
       }
     ],
     "events": [

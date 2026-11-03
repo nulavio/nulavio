@@ -517,6 +517,16 @@ class AI {
     };
   }
 
+  /** "Mostrar a aba" for a source: selects the tab of this window that shows exactly that address, if any. */
+  assistantShowSource(url, win) {
+    this.#userWindow(win);
+    const tab = [...win.gBrowser.tabs].find(t => pageOf(t.linkedBrowser)?.url === String(url));
+    if (tab) {
+      win.gBrowser.selectedTab = tab;
+    }
+    return Boolean(tab);
+  }
+
   /** "Começar conversa nova". */
   assistantThreadClear(win) {
     this.#threads.delete(this.#userWindow(win));

@@ -1136,5 +1136,11 @@
   "assistantIncomplete": {"message": "Resposta incompleta: parou antes do fim"},
   "assistantTaskStopping": {"message": "A tarefa está parando: a Área de IA está fechando."},
   "assistantContinue": {"message": "Continuar"},
-  "assistantContinuePrompt": {"message": "Continue de onde parou."}
+  "assistantContinuePrompt": {"message": "Continue de onde parou."},
+  "assistantSources": {"message": "Fontes"},
+  "assistantSourceLabel": {"message": "Trecho citado da página “$TITLE$” · $HOST$", "placeholders": {"title": {"content": "$1"}, "host": {"content": "$2"}}},
+  "assistantSourceHeading": {"message": "Em “$HEADING$”", "placeholders": {"heading": {"content": "$1"}}},
+  "assistantSourceShow": {"message": "Mostrar a aba"},
+  "assistantSourceShown": {"message": "“$TITLE$” é a aba selecionada.", "placeholders": {"title": {"content": "$1"}}},
+  "assistantSourceGone": {"message": "“$TITLE$” não está mais aberta nesse endereço nesta janela.", "placeholders": {"title": {"content": "$1"}}}
 }

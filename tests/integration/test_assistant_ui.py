@@ -1199,6 +1199,38 @@ class AssistantUiTest(unittest.TestCase):
         self.assertFalse([h for h in self.server.hits[hits:] if h.startswith("/leak")])  # nothing was requested
         self.shoot_window("sidebar-markdown")
 
+    def test_25_a_word_for_word_quote_is_a_source_that_shows_its_tab(self):
+        """UX5-E / Q13: the source names the page; "Mostrar a aba" selects it only while it shows that address."""
+        url = self.server.url("/long-page?n=1000")
+        self.close_other_tabs()
+        self.select_new_tab(url)
+        self.show_sidebar(reload=True)
+        self.wait_view(lambda v: v["offer"])
+        self.panel("document.getElementById('include-page').click();")
+        self.wait_view(lambda v: v["attached"])
+        quote = "Ção é um parágrafo longo de teste. Ção é um parágrafo longo"
+        self.provider.replies.append(
+            {"choices": [{"message": {"content": f"A página repete “{quote}”, e também diz outras coisas."}}]}
+        )
+        self.ask_panel("O que a página diz?")
+        sources = self.panel(
+            "return [...document.querySelectorAll('#sources li')].map(li => ({label: li.querySelector('p').textContent,"
+            " quote: li.querySelector('blockquote').textContent}));"
+        )
+        self.assertEqual(sources, [{"label": f"Trecho citado da página “long-page” · {url.split('/')[2]}", "quote": quote}])
+        self.select_new_tab(self.server.url("/page/Outra"))
+        self.panel("document.querySelector('#sources li button').click();")
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome("return gBrowser.selectedBrowser.currentURI.spec;") == url, 10))
+        self.go(self.server.url("/page/Mudou"))
+        self.panel("document.querySelector('#sources li button').click();")
+        view = self.wait_view(lambda v: v["level"] == "error")
+        self.assertEqual(view["status"], "“long-page” não está mais aberta nesse endereço nesta janela.")
+        # An answer that only paraphrases has no sources, and the section is gone.
+        self.provider.replies.append({"choices": [{"message": {"content": "Fala de um parágrafo de teste."}}]})
+        self.ask_panel("E resumindo?")
+        self.assertTrue(self.panel("return document.getElementById('sources-section').hidden;"))
+        self.close_other_tabs()
+
 
 if __name__ == "__main__":
     unittest.main()
