@@ -8,6 +8,7 @@
    assistant's Área de IA under the permissions the user gave it. Answers are shown as plain text. */
 
 import { localize, t } from "../lib/i18n.js";
+import { renderMarkdown } from "../lib/markdown.js";
 import { announce, errorText, h, icon } from "../lib/ui.js";
 
 const ai = browser.nulavioAI;
@@ -23,6 +24,7 @@ let early = [];
 let paint = 0;
 // This window's conversation, as the browser keeps it (UX5-D, Q16): turns, sizes, no page text.
 let thread = null;
+let shownAnswer = ""; // the latest answer as the model wrote it (for "Copiar")
 const MAX_REQUEST_CHARS = 200000; // assistant.py MAX_REQUEST_CHARS (Q20)
 let contextVersion = 0; // late page replies cannot restore consent after a send or context change
 
@@ -166,12 +168,23 @@ function turnItem(turn) {
     { class: "assistant__turn", "data-state": turn.state },
     h("p", { class: "assistant__turn-question", text: turn.question }),
     turn.page ? h("p", { class: "hint", text: t("assistantTurnPage", [turn.page.title, turn.page.host]) }) : null,
-    h("p", { class: "assistant__turn-answer", text: said }),
+    turnAnswer(turn.state === "done" ? said : "", turn.state === "done" ? "" : said),
     h("p", { class: "hint", text: receipt }),
     turn.state === "done" && turn.answer
       ? h("button", { class: "button button--quiet", type: "button", text: t("assistantCopy"), onclick: () => copy(turn.answer) })
       : null
   );
+}
+
+/** An earlier answer, in the same safe Markdown as the latest one; other states as plain text. */
+function turnAnswer(markdown, plain) {
+  const box = h("div", { class: "assistant__turn-answer" });
+  if (markdown) {
+    renderMarkdown(box, markdown);
+  } else {
+    box.textContent = plain;
+  }
+  return box;
 }
 
 async function refreshThread() {
@@ -381,7 +394,12 @@ function showSteps(steps) {
 function showResult(result, task) {
   const halted = task && result.stopped;
   const text = result.answer || (halted ? "" : t("assistantNoAnswer"));
-  $("answer").textContent = text;
+  shownAnswer = result.answer || "";
+  if (result.answer) {
+    renderMarkdown($("answer"), result.answer); // when it is whole: safe Markdown, nothing that loads (UX5-E)
+  } else {
+    $("answer").textContent = text;
+  }
   $("answer").hidden = !text;
   // The provider's limit stopped the answer (AI-08): said where the answer ends, not only announced.
   $("truncated").hidden = !result.truncated;
@@ -474,7 +492,8 @@ function onRunEvent(event) {
     if (kind === "ask" && text) {
       // What came before the error stays, said to be incomplete, without the "still arriving" cursor.
       $("answer-section").hidden = false;
-      $("answer").textContent = text;
+      shownAnswer = text;
+      renderMarkdown($("answer"), text);
       $("answer").hidden = false;
       $("interrupted-text").textContent = t("assistantIncomplete");
       $("interrupted").hidden = false;
@@ -510,7 +529,8 @@ async function finishRun(result) {
   }
   // Stopped: say what may have left, never "nothing changed" once a request went (UX5-C2).
   $("answer-section").hidden = false;
-  $("answer").textContent = text;
+  shownAnswer = text;
+  renderMarkdown($("answer"), text); // what came before the stop, in the same form
   $("answer").hidden = !text;
   $("truncated").hidden = true;
   $("interrupted").hidden = task;
@@ -644,7 +664,7 @@ $("retry").addEventListener("click", () => {
     send("", { retry: true });
   }
 });
-$("copy-answer").addEventListener("click", () => copy($("answer").textContent));
+$("copy-answer").addEventListener("click", () => copy(shownAnswer)); // the answer as written, Markdown included
 const newThread = async () => {
   await ai.assistantThreadClear().catch(() => {});
   $("answer-section").hidden = true;

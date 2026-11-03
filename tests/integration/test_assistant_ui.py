@@ -433,12 +433,13 @@ class AssistantUiTest(unittest.TestCase):
         answer = self.m.execute(
             "const a = document.getElementById('answer'), s = document.getElementById('answer-section');"
             "const h = document.getElementById(s.getAttribute('aria-labelledby'));"
-            "return [a.textContent, a.children.length, a.hasAttribute('aria-live'), h.tagName, h.textContent,"
-            " document.getElementById('receipt').textContent];"
+            "return [a.textContent, [...a.querySelectorAll('*')].map(e => e.localName).join(','), a.hasAttribute('aria-live'),"
+            " h.tagName, h.textContent, document.getElementById('receipt').textContent];"
         )
         total = self.provider.chars[-1]
         receipt = f"Só a pergunta foi enviada para {self.recipient()}: {total} caracteres no total, com as instruções do Nulavio."
-        self.assertEqual(answer, ["<b>Resposta</b> em texto", 0, False, "H2", "Resposta", receipt])
+        # HTML in an answer is text (UX5-E): one paragraph, the <b> shown as written.
+        self.assertEqual(answer, ["<b>Resposta</b> em texto", "p", False, "H2", "Resposta", receipt])
         self.shoot("panel")
 
     def test_04_tasks_obey_the_assistant_agent_policy(self):
@@ -1165,6 +1166,38 @@ class AssistantUiTest(unittest.TestCase):
             chrome_async(self.m, f"return await {AI}.assistantAllow(true);")
             self.show_sidebar(reload=True)
             self.wait_view(lambda v: v["state"] == "ready")
+
+    def test_24_answers_in_safe_markdown_load_nothing(self):
+        """UX5-E: only p, br, strong, em, code, pre, ul, ol, li, blockquote; links are text with their host;
+        images, raw HTML and javascript: links never become elements, and nothing is requested."""
+        self.close_other_tabs()
+        self.show_sidebar(reload=True)
+        self.wait_view(lambda v: v["state"] == "ready")
+        leak = self.server.url("/leak")
+        answer = (
+            "# Título do modelo\n\n**forte** e *ênfase*, `código <b>`\n\n- um\n- dois\n\n1. a\n2. b\n\n> citação\n\n"
+            "```\nx<y && z\n```\n\n"
+            f'[leia](https://ex.example/p) ![img]({leak}?img) <img src="{leak}?tag" onerror="alert(1)"> [js](javascript:alert(1))'
+        )
+        hits = len(self.server.hits)
+        self.provider.replies.append({"choices": [{"message": {"content": answer}}]})
+        self.ask_panel("Formate?")
+        shape = self.panel(
+            "const a = document.getElementById('answer');"
+            "return { tags: [...new Set([...a.querySelectorAll('*')].map(e => e.localName))].sort(),"
+            " attrs: [...a.querySelectorAll('*')].flatMap(e => [...e.attributes].map(x => x.name)),"
+            " text: a.textContent, headings: a.querySelectorAll('h1,h2,h3,h4,h5,h6').length };"
+        )
+        self.assertTrue(set(shape["tags"]) <= {"p", "br", "strong", "em", "code", "pre", "ul", "ol", "li", "blockquote"}, shape)
+        self.assertEqual(shape["attrs"], [])  # no href, src, style or on* anywhere
+        self.assertEqual(shape["headings"], 0)  # the model's heading is a bold paragraph
+        self.assertIn("leia (ex.example)", shape["text"])
+        self.assertIn("<img src=", shape["text"])  # raw HTML shows as text
+        self.assertIn("![img](", shape["text"])
+        self.assertNotIn("javascript", shape["text"])
+        time.sleep(1)
+        self.assertFalse([h for h in self.server.hits[hits:] if h.startswith("/leak")])  # nothing was requested
+        self.shoot_window("sidebar-markdown")
 
 
 if __name__ == "__main__":
