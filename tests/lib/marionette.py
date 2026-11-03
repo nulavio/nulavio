@@ -156,6 +156,36 @@ class Marionette:
         value = self.send("WebDriver:FindElement", {"using": "css selector", "value": css})["value"]
         return next(iter(value.values()))
 
+    def context_click(self, css: str) -> None:
+        """A real right click on an element (trusted input: the page's context menu opens)."""
+        element = self.find_element(css)
+        pointer = [
+            {"type": "pointerMove", "origin": {"element-6066-11e4-a52e-4f735466cecf": element}, "x": 0, "y": 0},
+            {"type": "pointerDown", "button": 2},
+            {"type": "pointerUp", "button": 2},
+        ]
+        self.send(
+            "WebDriver:PerformActions",
+            {"actions": [{"type": "pointer", "id": "mouse", "parameters": {"pointerType": "mouse"}, "actions": pointer}]},
+        )
+        self.send("WebDriver:ReleaseActions")
+
+    def menu_entries(self, id_suffix: str) -> list[str] | None:
+        """Labels under a shown extension item of the open page menu (by id suffix), or None."""
+        return self.chrome(
+            "const m = document.getElementById('contentAreaContextMenu');"
+            "const item = document.querySelector(`[id$='${arguments[0]}']`);"
+            "if (m.state !== 'open' || !item || item.hidden) { return null; }"
+            "return [...item.querySelectorAll('menuitem')].map(i => i.getAttribute('label'));",
+            [id_suffix],
+        )
+
+    def menu_open(self) -> bool:
+        return self.chrome("return document.getElementById('contentAreaContextMenu').state;") == "open"
+
+    def close_menu(self) -> None:
+        self.chrome("document.getElementById('contentAreaContextMenu').hidePopup();")
+
     def install_addon(self, path: str, temporary: bool = False) -> str:
         return self.send("Addon:Install", {"path": path, "temporary": temporary})["value"]
 

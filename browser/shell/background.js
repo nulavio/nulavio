@@ -71,8 +71,10 @@ if (browser.nulavioProfiles && browser.action) {
 
 const LINK_MENU = "nulavio-open-link-in";
 let menuBuild = null;
+let linkMenu = false; // the item exists (there are other profiles)
 
 async function buildLinkMenu() {
+  linkMenu = false;
   await browser.menus.remove(LINK_MENU).catch(() => {}); // only this menu: others (send link) stay
   const state = await browser.nulavioProfiles.list();
   const others = state.available ? state.profiles.filter(p => !p.isCurrent && p.id !== null) : [];
@@ -84,6 +86,7 @@ async function buildLinkMenu() {
   for (const profile of others) {
     browser.menus.create({ id: `${LINK_MENU}:${profile.id}`, parentId: LINK_MENU, title: profile.name, ...scope });
   }
+  linkMenu = true;
 }
 
 function rebuildLinkMenu() {
@@ -105,9 +108,11 @@ if (browser.nulavioProfiles && browser.nulavioRouting && browser.menus) {
       console.error(e);
     });
   });
+  // A hidden item is left out of onShown's menuIds, so the link context decides here:
+  // checking menuIds kept the item hidden everywhere after one private window.
   browser.menus.onShown.addListener(async (info, tab) => {
-    if (info.menuIds.includes(LINK_MENU)) {
-      await browser.menus.update(LINK_MENU, { visible: !tab?.incognito });
+    if (linkMenu && info.contexts.includes("link")) {
+      await browser.menus.update(LINK_MENU, { visible: !tab?.incognito }).catch(() => {});
       browser.menus.refresh();
     }
   });
@@ -139,6 +144,9 @@ if (browser.nulavioAI) {
 
 // -- Nulavio Connect: send one link to a KDE Connect device, on the user's click --
 // The menu lists the devices reachable when it opens; never offered in private windows.
+// The item is hidden until then, and the engine leaves hidden items out of onShown's
+// menuIds, so a link menu is recognised by its context (the item's URL patterns still
+// keep it off non-web links).
 
 const SEND_MENU = "nulavio-send-link";
 
@@ -146,18 +154,35 @@ if (browser.nulavioConnect && browser.menus) {
   const scope = { contexts: ["link"], targetUrlPatterns: ["http://*/*", "https://*/*"] };
   browser.menus.create({ id: SEND_MENU, title: t("menuSendLink"), visible: false, ...scope });
   let shown = [];
+  let visible = false;
+  let opened = 0; // the menu that is open now: answers for one already closed are dropped
+  browser.menus.onHidden.addListener(() => {
+    opened++;
+    if (visible) {
+      visible = false; // each menu starts without it: no stale devices, nothing in private windows
+      browser.menus.update(SEND_MENU, { visible: false }).catch(() => {});
+    }
+  });
   browser.menus.onShown.addListener(async (info, tab) => {
-    if (!info.menuIds.includes(SEND_MENU)) {
+    const menu = ++opened;
+    if (!info.contexts.includes("link") || tab?.incognito) {
       return;
     }
-    const devices = tab?.incognito ? [] : await browser.nulavioConnect.kdeDevices().catch(() => []);
+    const devices = await browser.nulavioConnect.kdeDevices().catch(() => []);
+    if (menu !== opened) {
+      return;
+    }
     await Promise.all(shown.map(id => browser.menus.remove(id).catch(() => {})));
     shown = devices.map(device => {
       const id = `${SEND_MENU}:${device.id}`;
       browser.menus.create({ id, parentId: SEND_MENU, title: device.name, ...scope });
       return id;
     });
-    await browser.menus.update(SEND_MENU, { visible: devices.length > 0 });
+    if (menu !== opened) {
+      return;
+    }
+    visible = devices.length > 0;
+    await browser.menus.update(SEND_MENU, { visible });
     browser.menus.refresh();
   });
   browser.menus.onClicked.addListener((info, tab) => {

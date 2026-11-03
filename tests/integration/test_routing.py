@@ -532,6 +532,32 @@ class RoutingTest(unittest.TestCase):
         self.assertEqual(self.hits("/page/from-menu"), 1)
         self.assertFalse(any("/page/from-menu" in u for u in self.own_tabs()))
 
+    def test_14b_link_menu_comes_back_after_a_private_window(self):
+        # Hidden in a private window. The engine leaves hidden items out of onShown's
+        # menuIds, so the item once stayed hidden in every window after that.
+        handles = set(self.m.window_handles())
+        main = self.m.send("WebDriver:GetWindowHandle")["value"]
+        self.m.chrome("OpenBrowserWindow({private: true});")
+        self.assertTrue(harness.wait_until(lambda: set(self.m.window_handles()) - handles, timeout=20))
+        private = (set(self.m.window_handles()) - handles).pop()
+        self.m.switch_to(private)
+        try:
+            harness.wait_until(lambda: self.m.current_url() == "about:privatebrowsing", timeout=20)
+            self.m.navigate(self.server.url("/links"))
+            self.m.context_click("#go")
+            self.assertTrue(harness.wait_until(self.m.menu_open))
+            time.sleep(1)
+            self.assertIsNone(self.m.menu_entries("nulavio-open-link-in"), "offered in a private window")
+            self.m.close_menu()
+        finally:
+            self.m.send("WebDriver:CloseWindow")
+            self.m.switch_to(main)
+        self.m.navigate(self.server.url("/links"))
+        self.m.context_click("#go")
+        entries = harness.wait_until(lambda: self.m.menu_entries("nulavio-open-link-in") or None, timeout=10)
+        self.assertIn("Trabalho", entries or [], "'Open link in profile' did not come back")
+        self.m.close_menu()
+
     # -- M5: links clicked in pages (docs/security/routing-m5-review.md) -------
 
     def m5_setup(self) -> None:

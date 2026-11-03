@@ -230,6 +230,52 @@ class ConnectTest(unittest.TestCase):
         self.call("return C.setKrunner(false);")
         self.assertFalse((data / "krunner" / "dbusplugins" / "net.nulavio.krunner.desktop").exists())
 
+    def test_07_link_menu_offers_reachable_devices_and_sends_one_link(self):
+        # The item starts hidden and appears once the reachable devices are known; the
+        # engine leaves hidden items out of onShown's menuIds, so it once never appeared.
+        page = 'data:text/html,<a id="go" href="https://example.org/from-menu">link</a>'
+        self.m.navigate(page)
+        self.m.context_click("#go")
+        devices = harness.wait_until(lambda: self.m.menu_entries("nulavio-send-link") or None, timeout=15)
+        self.assertEqual(devices, ["Pixel", "Tablet"], "the link menu has no 'Send link to device' item")
+        clicked = self.m.chrome(
+            "const item = document.querySelector(`[id$='nulavio-send-link']`);"
+            "[...item.querySelectorAll('menuitem')].find(i => i.getAttribute('label') === 'Pixel').click();"
+            "document.getElementById('contentAreaContextMenu').hidePopup(); return 'clicked';"
+        )
+        self.assertEqual(clicked, "clicked")
+        self.assertTrue(
+            harness.wait_until(
+                lambda: "--device abc123_def --share https://example.org/from-menu" in self.kdeconnect_log.read_text(),
+                timeout=15,
+            ),
+            "the link was not sent to the chosen device",
+        )
+
+        # Never offered in a private window, and back in the normal window afterwards.
+        handles = set(self.m.window_handles())
+        main = self.m.send("WebDriver:GetWindowHandle")["value"]
+        self.m.chrome("OpenBrowserWindow({private: true});")
+        self.assertTrue(harness.wait_until(lambda: set(self.m.window_handles()) - handles, timeout=20))
+        private = (set(self.m.window_handles()) - handles).pop()
+        self.m.switch_to(private)
+        try:
+            harness.wait_until(lambda: self.m.current_url() == "about:privatebrowsing", timeout=20)
+            self.m.navigate(page)
+            self.m.context_click("#go")
+            self.assertTrue(harness.wait_until(self.m.menu_open))
+            time.sleep(2)  # longer than the device lookup takes in the normal window
+            self.assertIsNone(self.m.menu_entries("nulavio-send-link"), "offered in a private window")
+            self.m.close_menu()
+        finally:
+            self.m.send("WebDriver:CloseWindow")
+            self.m.switch_to(main)
+        self.m.context_click("#go")
+        self.assertEqual(
+            harness.wait_until(lambda: self.m.menu_entries("nulavio-send-link") or None, timeout=15), ["Pixel", "Tablet"]
+        )
+        self.m.close_menu()
+
     def test_99_real_desktop_settings_untouched(self):
         time.sleep(0.5)
         self.assertEqual(digest(REAL_SETTINGS), self.real_before, "the real desktop settings changed")
