@@ -494,6 +494,13 @@ a.button { display: inline-flex; align-items: center; text-decoration: none; }
   background: var(--nv-color-accent-tint);
   color: var(--nv-color-text-primary);
 }
+/* The conversation of this window (UX5-D): earlier turns, oldest first. */
+.assistant__thread-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--nv-space-2); }
+.assistant__turns { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--nv-space-3); }
+.assistant__turn { display: grid; gap: var(--nv-space-1); padding: var(--nv-space-3); border-radius: var(--nv-radius-md); background: var(--nv-color-bg-sunken); }
+.assistant__turn > .button { justify-self: start; }
+.assistant__turn-question { margin: 0; font-weight: var(--nv-font-weight-semibold); overflow-wrap: anywhere; }
+.assistant__turn-answer { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 /* Where the answer is still arriving: a still block, no animation (UX5-C2). */
 .assistant__cursor { display: inline-block; width: 0.5em; height: 1em; margin-inline-start: 1px; vertical-align: text-bottom; background: currentColor; opacity: 0.55; }
 .assistant__chips { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--nv-space-2); }

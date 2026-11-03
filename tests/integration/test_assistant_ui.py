@@ -141,6 +141,11 @@ class AssistantUiTest(unittest.TestCase):
     def setUp(self):
         self.provider.delay = 0.0
         self.provider.replies.clear()
+        # Each test starts a new conversation (UX5-D keeps one per window, in memory).
+        try:
+            self.panel("document.getElementById('new-thread').click();")
+        except AssertionError:
+            chrome_async(self.m, f"return {AI}.assistantThreadClear(window);")
 
     # -- helpers ---------------------------------------------------------------------------
 
@@ -493,9 +498,12 @@ class AssistantUiTest(unittest.TestCase):
             view["receipt"],
             rf"^\d+ caracteres desta página foram enviados para {re.escape(self.recipient())}, [\d.]+ no total\.$",
         )
-        # Consent is per message: the item left with the message, and the next one goes without it.
+        # Consent is per message: the item left with the message. The conversation keeps the copy that went,
+        # for the same recipient, and says so (Q1); a new conversation goes without it.
         self.assertIsNone(view["attached"])
         self.assertEqual(view["offer"], "+ Incluir esta página: Artigo")
+        self.assertIn("com a página “Artigo”", self.panel("return document.getElementById('thread-line').textContent;"))
+        self.panel("document.getElementById('new-thread').click();")
         before = self.provider.count
         self.type("E depois?")
         line = self.view()["sendLine"]
@@ -526,6 +534,7 @@ class AssistantUiTest(unittest.TestCase):
         view = self.wait_view(lambda v: v["answered"] and "desta página" in v["receipt"])
         self.assertIn("<<<PAGE", self.sent_since(before))
         self.assertIsNone(view["attached"])
+        self.panel("document.getElementById('new-thread').click();")
         before = self.provider.count
         self.submit("E mais?")
         self.wait_view(lambda v: v["answered"] and v["receipt"].startswith("Só a pergunta"))
@@ -964,6 +973,132 @@ class AssistantUiTest(unittest.TestCase):
         view = self.wait_view(lambda v: v["level"] == "error", timeout=15)
         self.assertEqual(view["status"], MESSAGES["err_timeout"]["message"])
         self.assertTrue(harness.wait_until(lambda: self.tools_process() is None, 5))
+
+    # -- the conversation (UX5-D) -----------------------------------------------------------------
+
+    def thread_view(self) -> dict:
+        return self.panel(
+            "const $ = id => document.getElementById(id);"
+            "return { line: $('thread-line').textContent, turns: $('thread').children.length, shown: !$('thread-section').hidden,"
+            " leave: !$('leave-page').hidden, moved: $('thread-moved').hidden ? null : $('thread-moved-text').textContent,"
+            " large: $('too-large').hidden ? null : $('too-large-text').textContent, send: $('send').disabled,"
+            " retry: $('retry-actions').hidden ? null : $('retry-hint').textContent, empty: !$('thread-empty').hidden };"
+        )
+
+    def user_turns(self) -> list[dict]:
+        return [m for m in self.provider.requests[-1][2]["messages"] if m["role"] != "system"]
+
+    def ask_panel(self, text: str) -> dict:
+        self.type(text)
+        line = self.view()["sendLine"]
+        before = self.provider.count
+        self.submit(text)
+        view = self.wait_view(lambda v: v["answered"] and self.provider.count > before)
+        self.assertEqual(self.shown_chars(line), self.provider.chars[-1])  # the line counted the conversation too
+        return view
+
+    def test_18_a_conversation_carries_its_turns_and_the_page_copy(self):
+        url = self.server.url("/page/Conversa")
+        self.close_other_tabs()
+        self.select_new_tab(url)
+        self.show_sidebar(reload=True)
+        self.wait_view(lambda v: v["offer"])
+        self.panel("document.getElementById('new-thread').click();")
+        self.assertTrue(harness.wait_until(lambda: self.thread_view()["empty"], 10))
+        self.panel("document.getElementById('include-page').click();")
+        self.wait_view(lambda v: v["attached"])
+        self.provider.replies += [{"choices": [{"message": {"content": f"Resposta {i}."}}]} for i in (1, 2, 3, 4, 5)]
+        self.ask_panel("PERGUNTA-UM sobre a página?")
+        self.ask_panel("PERGUNTA-DOIS?")
+        thread = self.thread_view()
+        self.assertEqual(thread["line"], "Conversa: 2 respostas vão junto com a próxima pergunta, com a página “Conversa”")
+        self.assertEqual(thread["turns"], 1)  # the latest is the answer below
+        self.ask_panel("PERGUNTA-TRES?")
+        turns = self.user_turns()
+        self.assertEqual([m["role"] for m in turns], ["user", "assistant", "user", "assistant", "user"])
+        self.assertIn("<<<PAGE", turns[0]["content"])  # the copy that went, to the same recipient (Q1)
+        self.assertEqual((turns[1]["content"], turns[3]["content"]), ("Resposta 1.", "Resposta 2."))
+        self.shoot_window("sidebar-thread")
+        # The panel closes and opens again: the conversation is still there (Q16).
+        self.show_sidebar(reload=True)
+        self.assertTrue(harness.wait_until(lambda: self.thread_view()["turns"] == 3, 10))
+        # "Deixar a página de fora": from now on the page copy stays here.
+        self.panel("document.getElementById('leave-page').click();")
+        self.assertTrue(harness.wait_until(lambda: not self.thread_view()["leave"], 10))
+        self.ask_panel("PERGUNTA-QUATRO?")
+        self.assertNotIn("<<<PAGE", json.dumps(self.provider.requests[-1][2]))
+        self.assertEqual(len(self.user_turns()), 7)
+        # Nothing of it is written to the profile or the state directory.
+        for root in (self.session.profile_dir, Path(self.session.env["HOME"]) / ".local" / "state"):
+            for path in root.rglob("*"):
+                if path.is_file() and path.stat().st_size < 20_000_000:
+                    self.assertNotIn(b"PERGUNTA-DOIS", path.read_bytes(), f"the conversation is in {path}")
+        # "Começar conversa nova": nothing from before goes.
+        self.panel("document.getElementById('new-thread').click();")
+        self.assertTrue(harness.wait_until(lambda: not self.thread_view()["shown"], 10))
+        self.ask_panel("PERGUNTA-CINCO?")
+        self.assertEqual(len(self.user_turns()), 1)
+        self.close_other_tabs()
+
+    def test_19_try_again_sends_what_it_says_and_the_limit_stops_send(self):
+        self.close_other_tabs()
+        self.show_sidebar(reload=True)
+        self.wait_view(lambda v: v["state"] == "ready")
+        self.panel("document.getElementById('new-thread').click();")
+        self.provider.replies += [{"choices": [{"message": {"content": "Primeira."}}]}, Reply(status=503)]
+        self.ask_panel("Uma pergunta?")
+        self.submit("Outra pergunta?")
+        self.wait_view(lambda v: v["level"] == "error")
+        self.assertTrue(harness.wait_until(lambda: self.thread_view()["retry"], 10))  # after the error is shown
+        hint = self.thread_view()["retry"]
+        announced = int(re.search(r"Reenvia ([\d.]+) caracteres", hint).group(1).replace(".", ""))
+        self.provider.replies.append({"choices": [{"message": {"content": "Agora sim."}}]})
+        before = self.provider.count
+        self.panel("document.getElementById('retry').click();")
+        self.wait_view(lambda v: v["answered"] and self.provider.count == before + 1)
+        self.assertEqual(self.provider.chars[-1], announced)  # exactly what it said (Q17)
+        self.assertEqual(self.user_turns()[-1]["content"], "Outra pergunta?")
+        self.assertEqual(self.answer_text(), "Agora sim.")
+        # A conversation above 200 000 characters: Send waits for a choice, and nothing goes.
+        self.provider.replies.append({"choices": [{"message": {"content": "x" * 199_900}}]})
+        self.ask_panel("Longa?")
+        self.type("E agora?")
+        thread = self.thread_view()
+        self.assertTrue(thread["large"] and thread["send"], thread)
+        before = self.provider.count
+        self.panel("document.getElementById('ask').requestSubmit();")
+        time.sleep(0.5)
+        self.assertEqual(self.provider.count, before)
+        self.panel("document.getElementById('large-new').click();")
+        self.assertTrue(harness.wait_until(lambda: not self.thread_view()["large"] and not self.thread_view()["send"], 10))
+
+    def test_20_another_recipient_does_not_get_the_conversation_unless_chosen(self):
+        self.close_other_tabs()
+        self.show_sidebar(reload=True)
+        self.wait_view(lambda v: v["state"] == "ready")
+        self.panel("document.getElementById('new-thread').click();")
+        self.provider.replies.append({"choices": [{"message": {"content": "Com o primeiro."}}]})
+        self.ask_panel("SEGREDO-DA-CONVERSA?")
+        other = FakeProvider()
+        restore = {"kind": "openai", "baseUrl": self.provider.base, "model": "test-model"}
+        try:
+            chrome_async(self.m, f"return await {AI}.assistantConfigure(args[0]);", [{**restore, "baseUrl": other.base}])
+            self.show_sidebar(reload=True)
+            moved = harness.wait_until(lambda: self.thread_view()["moved"], 10)
+            self.assertIn(other.base.split("/")[2], moved)
+            self.assertTrue(self.thread_view()["send"])  # Send waits for the choice
+            self.panel("document.getElementById('moved-carry').click();")
+            self.assertTrue(harness.wait_until(lambda: not self.thread_view()["moved"], 10))
+            other.replies.append({"choices": [{"message": {"content": "Com o segundo."}}]})
+            self.type("Continua?")
+            self.submit("Continua?")
+            self.wait_view(lambda v: v["answered"] and other.count == 1)
+            sent = [m for m in other.requests[-1][2]["messages"] if m["role"] != "system"]
+            self.assertEqual([m["content"] for m in sent], ["SEGREDO-DA-CONVERSA?", "Com o primeiro.", "Continua?"])
+        finally:
+            chrome_async(self.m, f"return await {AI}.assistantConfigure(args[0]);", [restore])
+            other.close()
+            self.show_sidebar(reload=True)
 
 
 if __name__ == "__main__":

@@ -21,6 +21,9 @@ let busy = false;
 let run = null;
 let early = [];
 let paint = 0;
+// This window's conversation, as the browser keeps it (UX5-D, Q16): turns, sizes, no page text.
+let thread = null;
+const MAX_REQUEST_CHARS = 200000; // assistant.py MAX_REQUEST_CHARS (Q20)
 let contextVersion = 0; // late page replies cannot restore consent after a send or context change
 
 const $ = id => document.getElementById(id);
@@ -45,6 +48,9 @@ const BEFORE_START = new Set([
   "page-changed",
   "recipient-changed",
   "size-changed",
+  "thread-recipient",
+  "too-large",
+  "bad-history",
   "bad-question",
   "bad-request",
   "tools-missing",
@@ -76,8 +82,11 @@ const pageChip = () => chips.find(c => c.kind === "page") ?? null;
 function requestChars() {
   const question = codePoints($("prompt").value.trim());
   const items = chips.reduce((sum, c) => sum + c.blockChars, 0);
-  return (state?.systemChars ?? 0) + items + (chips.length ? codePoints(QUESTION_PREFIX) : 0) + question;
+  return (state?.systemChars ?? 0) + (thread?.historyChars ?? 0) + items + (chips.length ? codePoints(QUESTION_PREFIX) : 0) + question;
 }
+
+/** The conversation went to another recipient than the one the assistant uses now (Q2). */
+const threadMoved = () => Boolean(thread?.historyTurns && thread.recipient && thread.recipient !== state?.recipient);
 
 /** Above Send: where the message goes and how big it is, all of it (Q3). In Task mode the size is
     known only afterwards, since what the assistant reads in its Área de IA goes too (AI-14). */
@@ -85,10 +94,99 @@ function showSendLine() {
   if (!state?.configured) {
     return;
   }
-  $("send-line").textContent =
-    mode() === "task"
-      ? t("assistantSendLineTask", [state.recipient])
-      : t("assistantSendLine", [state.recipient, state.provider.model, count(requestChars())]);
+  const task = mode() === "task";
+  const total = requestChars();
+  $("send-line").textContent = task
+    ? t("assistantSendLineTask", [state.recipient])
+    : t("assistantSendLine", [state.recipient, state.provider.model, count(total)]);
+  // Above the limit, Send waits for an explicit choice: never a silent cut (Q20).
+  const tooLarge = !task && total > MAX_REQUEST_CHARS;
+  $("too-large").hidden = !tooLarge;
+  if (tooLarge) {
+    $("too-large-text").textContent = t("assistantTooLarge", [count(total), count(MAX_REQUEST_CHARS)]);
+    $("large-leave").hidden = !thread?.page || thread.pageLeftOut;
+  }
+  const moved = !task && threadMoved();
+  $("thread-moved").hidden = !moved;
+  if (moved) {
+    $("thread-moved-text").textContent = t("assistantThreadMoved", [thread.recipient, state.recipient]);
+    $("moved-carry").textContent = t("assistantCarryThread", [state.recipient]);
+  }
+  if (!run) {
+    $("send").disabled = tooLarge || moved;
+  }
+}
+
+/** The earlier turns of this conversation, and the line that says what goes with the next message. */
+function renderThread() {
+  const turns = thread?.turns ?? [];
+  // The latest turn is the answer below while it is shown there; the list has the ones before it.
+  const shown = !$("answer-section").hidden && turns.length ? turns.slice(0, -1) : turns;
+  $("thread").replaceChildren(...shown.map(turnItem));
+  $("thread-section").hidden = !turns.length;
+  $("thread-empty").hidden = Boolean(turns.length) || mode() === "task";
+  const n = thread?.historyTurns ?? 0;
+  const withPage = thread?.page && !thread.pageLeftOut;
+  $("thread-line").textContent = !n
+    ? t("assistantThreadNone")
+    : n === 1
+      ? withPage
+        ? t("assistantThreadLinePageOne", [thread.page.title])
+        : t("assistantThreadLineOne")
+      : withPage
+        ? t("assistantThreadLinePage", [count(n), thread.page.title])
+        : t("assistantThreadLine", [count(n)]);
+  $("leave-page").hidden = !thread?.page || thread.pageLeftOut;
+  const last = turns.at(-1);
+  $("retry-actions").hidden = run || mode() === "task" || thread?.retryChars == null || threadMoved();
+  if (!$("retry-actions").hidden) {
+    const chars = (state?.systemChars ?? 0) + thread.historyChars + thread.retryChars;
+    $("retry-hint").textContent = t("assistantRetryHint", [count(chars), state.recipient]);
+    $("retry").dataset.chars = String(chars);
+  }
+  $("copy-answer").hidden = !(last?.state === "done" && last.answer) || $("answer-section").hidden;
+  showSendLine();
+}
+
+function turnItem(turn) {
+  const said =
+    turn.state === "done"
+      ? turn.answer
+      : turn.state === "cancelled"
+        ? [turn.answer, t("assistantInterrupted")].filter(Boolean).join("\n")
+        : errorText(turn.code);
+  const receipt =
+    turn.state === "done"
+      ? t("assistantTurnReceipt", [count(turn.chars ?? 0), turn.recipient])
+      : turn.sent
+        ? t("assistantTurnMayHaveGone")
+        : t("assistantTurnNotSent");
+  return h(
+    "li",
+    { class: "assistant__turn", "data-state": turn.state },
+    h("p", { class: "assistant__turn-question", text: turn.question }),
+    turn.page ? h("p", { class: "hint", text: t("assistantTurnPage", [turn.page.title, turn.page.host]) }) : null,
+    h("p", { class: "assistant__turn-answer", text: said }),
+    h("p", { class: "hint", text: receipt }),
+    turn.state === "done" && turn.answer
+      ? h("button", { class: "button button--quiet", type: "button", text: t("assistantCopy"), onclick: () => copy(turn.answer) })
+      : null
+  );
+}
+
+async function refreshThread() {
+  thread = await ai.assistantThread().catch(() => null);
+  renderThread();
+}
+
+/** "Copiar": the answer's text only, on the person's click. */
+async function copy(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    announce(t("assistantCopied"));
+  } catch {
+    announce(t("assistantCopyFailed"), "error");
+  }
 }
 
 function chipItem(chip) {
@@ -214,6 +312,9 @@ function syncMode() {
   const level = state?.agent?.autonomy ?? "restricted";
   $("task-note").textContent = t("assistantTaskNote", [t(`aiLevel_${level.replace("-", "_")}`) || level]);
   showContext();
+  if (thread) {
+    renderThread();
+  }
 }
 
 async function render() {
@@ -246,8 +347,10 @@ async function render() {
   }
   if (view === "ready") {
     chips = await ai.assistantChips().catch(() => []); // kept by the browser while the panel was closed
+    thread = await ai.assistantThread().catch(() => null);
     await refreshPage();
     syncMode();
+    renderThread();
     if (!run) {
       const [going] = await ai.assistantRuns().catch(() => []);
       if (going) {
@@ -326,7 +429,9 @@ function setRunning(on) {
   $("summarize").disabled = on;
   $("include-page").disabled = on;
   $("prompt").readOnly = on;
-  if (!on) {
+  if (on) {
+    $("retry-actions").hidden = true;
+  } else {
     showSendLine();
   }
 }
@@ -362,7 +467,7 @@ function onRunEvent(event) {
   } else if (event.type === "error") {
     const kind = run.kind;
     endRun();
-    showError({ message: event.code }, kind === "task");
+    showError({ message: event.code }, kind === "task").then(refreshThread);
   }
 }
 
@@ -378,8 +483,14 @@ async function finishRun(result) {
   const { kind, text, stopping } = run;
   const task = kind === "task";
   endRun();
+  // The conversation first, so the panel is whole when it says the answer is ready.
+  thread = await ai.assistantThread().catch(() => thread);
   if (!result.cancelled) {
+    if (!task) {
+      $("prompt").value = ""; // the question is in the conversation now; after an error or a stop it stays
+    }
     showResult(result, task);
+    renderThread();
     if (stopping) {
       announce(t("assistantArrivedBeforeStop")); // the answer came before the stop reached the tools
     }
@@ -394,6 +505,7 @@ async function finishRun(result) {
   $("interrupted-text").textContent = result.cutBy ? errorText(result.cutBy) : t("assistantInterrupted");
   $("receipt").textContent = "";
   showSteps(result.steps);
+  renderThread();
   document.body.dataset.answered = "true";
   let why = !result.sent ? t("assistantCancelledNothing") : task ? t("assistantTaskCancelled") : t("assistantCancelledSent", [state.recipient]);
   if (task && result.sent) {
@@ -406,12 +518,12 @@ async function finishRun(result) {
   }
 }
 
-async function send(question) {
+async function send(question, { retry = false } = {}) {
   const task = mode() === "task";
   // What the line above Send says now is what the tools check: where it goes, and its size.
   const expected = { recipient: state.recipient, model: state.provider.model };
-  const items = task ? [] : chips.map(c => c.chipId);
-  const chars = requestChars();
+  const items = task || retry ? [] : chips.map(c => c.chipId);
+  const chars = retry ? Number($("retry").dataset.chars) : requestChars();
   ++contextVersion;
   // Consent is per message: what was included goes with this one only (the browser drops it too).
   chips = [];
@@ -423,15 +535,19 @@ async function send(question) {
   $("truncated").hidden = true;
   $("steps").hidden = true;
   $("answer").replaceChildren();
+  $("copy-answer").hidden = true;
   delete document.body.dataset.answered;
   run = { runId: null, kind: task ? "task" : "ask", text: "", stopping: false, steps: [] };
   setRunning(true);
+  renderThread(); // the turn that was below joins the list above
   // One polite announcement now, one when it ends (AI-12); no check mark until then.
   announce(t(task ? "assistantWorking" : "assistantAsking", [state.recipient]), "progress");
   try {
     const { runId } = task
       ? await ai.assistantStart("task", { task: question, expected })
-      : await ai.assistantStart("ask", { question, chips: items, expected: { ...expected, chars } });
+      : retry
+        ? await ai.assistantStart("ask", { retry: true, expected: { ...expected, chars } })
+        : await ai.assistantStart("ask", { question, chips: items, expected: { ...expected, chars } });
     run.runId = runId;
     if (run.stopping) {
       ai.assistantCancel(runId).catch(() => {}); // "Parar" came before the run had an id
@@ -442,6 +558,7 @@ async function send(question) {
   } catch (e) {
     endRun();
     await showError(e, task);
+    await refreshThread();
   }
 }
 
@@ -507,6 +624,34 @@ $("summarize").addEventListener("click", async () => {
     showSendLine();
     $("send").focus();
   }
+});
+$("retry").addEventListener("click", () => {
+  if (!run) {
+    send("", { retry: true });
+  }
+});
+$("copy-answer").addEventListener("click", () => copy($("answer").textContent));
+const newThread = async () => {
+  await ai.assistantThreadClear().catch(() => {});
+  $("answer-section").hidden = true;
+  await refreshThread();
+  announce(t("assistantThreadCleared"));
+  $("prompt").focus();
+};
+$("new-thread").addEventListener("click", newThread);
+$("moved-new").addEventListener("click", newThread);
+$("large-new").addEventListener("click", newThread);
+const leavePage = async () => {
+  await ai.assistantThreadLeavePage().catch(() => {});
+  await refreshThread();
+  announce(t("assistantPageLeftOut"));
+};
+$("leave-page").addEventListener("click", leavePage);
+$("large-leave").addEventListener("click", leavePage);
+$("moved-carry").addEventListener("click", async () => {
+  await ai.assistantThreadCarry(state.recipient).catch(() => {});
+  await refreshThread();
+  announce(t("assistantThreadCarried", [state.recipient]));
 });
 const openShell = page => browser.tabs.create({ url: browser.runtime.getURL(page) });
 $("open-settings").addEventListener("click", () => openShell("settings/settings.html#ai-assistant"));

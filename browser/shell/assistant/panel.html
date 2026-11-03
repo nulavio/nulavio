@@ -54,6 +54,24 @@
         <textarea class="input" id="prompt" rows="4" maxlength="8000" required aria-describedby="send-shortcut"></textarea></label>
       <p class="hint" id="task-note" hidden></p>
       <p class="hint hint--on" id="send-line"></p>
+      <div class="callout callout--warning" id="thread-moved" hidden>
+        <div class="stack stack--tight">
+          <p id="thread-moved-text"></p>
+          <div class="actions">
+            <button class="button button--primary" type="button" id="moved-new" data-i18n="assistantNewThread"></button>
+            <button class="button button--secondary" type="button" id="moved-carry"></button>
+          </div>
+        </div>
+      </div>
+      <div class="callout callout--warning" id="too-large" hidden>
+        <div class="stack stack--tight">
+          <p id="too-large-text"></p>
+          <div class="actions">
+            <button class="button button--secondary" type="button" id="large-new" data-i18n="assistantNewThread"></button>
+            <button class="button button--secondary" type="button" id="large-leave" data-i18n="assistantLeavePage" hidden></button>
+          </div>
+        </div>
+      </div>
       <div class="actions">
         <button class="button button--primary" type="submit" id="send" data-i18n="assistantSend" aria-keyshortcuts="Control+Enter"></button>
         <button class="button button--quiet" type="button" id="summarize" data-i18n="assistantSummarize" hidden></button>
@@ -62,9 +80,25 @@
     </form>
 
     <p class="status" id="status" role="status" aria-live="polite"></p>
+    <div class="actions" id="retry-actions" hidden>
+      <button class="button button--secondary" type="button" id="retry" data-i18n="assistantRetry" aria-describedby="retry-hint"></button>
+      <p class="hint" id="retry-hint"></p>
+    </div>
     <div class="actions" id="activity-actions" hidden>
       <button class="button button--secondary" type="button" id="open-activity" data-i18n="assistantOpenActivity"></button>
     </div>
+
+    <section class="stack stack--tight" id="thread-section" aria-labelledby="thread-line" hidden>
+      <div class="assistant__thread-head">
+        <p class="hint hint--on" id="thread-line"></p>
+        <div class="actions">
+          <button class="button button--quiet" type="button" id="leave-page" data-i18n="assistantLeavePage" hidden></button>
+          <button class="button button--quiet" type="button" id="new-thread" data-i18n="assistantNewThread"></button>
+        </div>
+      </div>
+      <ol class="assistant__turns" id="thread"></ol>
+    </section>
+    <p class="hint" id="thread-empty" data-i18n="assistantThreadEmpty" hidden></p>
 
     <section class="stack stack--tight" id="answer-section" aria-labelledby="answer-heading" hidden>
       <h2 class="assistant__answer-title" id="answer-heading" data-i18n="assistantAnswerHeading"></h2>
@@ -73,6 +107,9 @@
       <div class="callout callout--warning" id="interrupted" hidden><p id="interrupted-text"></p></div>
       <p class="hint" id="receipt"></p>
       <ol class="hint" id="steps" hidden></ol>
+      <div class="actions">
+        <button class="button button--quiet" type="button" id="copy-answer" data-i18n="assistantCopy" hidden></button>
+      </div>
     </section>
 
     <p class="hint" id="footer"></p>

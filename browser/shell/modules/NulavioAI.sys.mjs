@@ -150,6 +150,9 @@ class AI {
   // Assistant runs (UX5-C2): runId -> {win, kind, owner, handle, state, sent, steps, cutBy}. Events go
   // only to the pages of the run's window (the panel there); a run never starts in a private window.
   #runs = new Map();
+  // Conversations (UX5-D, Q16): per window, in memory only, never on disk or in the activity. Gone when the
+  // window closes or on "Começar conversa nova". {turns, recipient, model, pageLeftOut}
+  #threads = new WeakMap();
   #runListeners = new Set();
   #runWatch = null;
   #filesTimer = null;
@@ -461,6 +464,77 @@ class AI {
     return items;
   }
 
+  #threadOf(win) {
+    let thread = this.#threads.get(win);
+    if (!thread) {
+      thread = { turns: [], recipient: null, model: null, pageLeftOut: false };
+      this.#threads.set(win, thread);
+    }
+    return thread;
+  }
+
+  /** What a turn's question adds to a request: its page block (unless left out) and the question. */
+  static #userChars(turn, leftOut) {
+    const page = turn.page && !leftOut ? pageBlockChars({ ...turn.page, chars: codePoints(turn.page.text) }) + codePoints("Question: ") : 0;
+    return page + codePoints(turn.question);
+  }
+
+  /** The earlier turns that go with the next Ask: the answered ones, each with the page copy that went
+      with it, to the same recipient (Q1), unless the person left the page out. */
+  static #history(thread) {
+    return thread.turns
+      .filter(turn => turn.state === "done" && turn.answer)
+      .map(turn => ({ question: turn.question, page: thread.pageLeftOut ? null : turn.page, answer: turn.answer }));
+  }
+
+  /** The conversation of this window, as the panel shows it: no page text, sizes only. */
+  assistantThread(win) {
+    const thread = this.#threadOf(this.#userWindow(win));
+    const history = AI.#history(thread);
+    const historyChars = history.reduce((n, turn) => n + AI.#userChars(turn, false) + codePoints(turn.answer), 0);
+    const withPage = history.find(turn => turn.page);
+    const last = thread.turns.at(-1);
+    return {
+      turns: thread.turns.map(turn => ({
+        state: turn.state,
+        question: turn.question,
+        answer: turn.answer ?? "",
+        chars: turn.chars ?? null,
+        recipient: turn.recipient,
+        truncated: Boolean(turn.truncated),
+        code: turn.code ?? null,
+        sent: Boolean(turn.sent),
+        page: turn.page ? { title: turn.page.title, host: URL.parse(turn.page.url)?.host ?? "" } : null,
+      })),
+      recipient: thread.recipient,
+      model: thread.model,
+      historyTurns: history.length,
+      historyChars,
+      page: withPage ? { title: withPage.page.title } : null,
+      pageLeftOut: thread.pageLeftOut && thread.turns.some(turn => turn.page),
+      // "Tentar de novo" sends the last question again, as it went (Q17): what it adds to the conversation.
+      retryChars: last && last.state !== "done" ? AI.#userChars(last, false) : null,
+    };
+  }
+
+  /** "Começar conversa nova". */
+  assistantThreadClear(win) {
+    this.#threads.delete(this.#userWindow(win));
+  }
+
+  /** "Deixar a página de fora": the conversation goes on without the page copies it carried. */
+  assistantThreadLeavePage(win) {
+    this.#threadOf(this.#userWindow(win)).pageLeftOut = true;
+  }
+
+  /** "Levar a conversa" to the recipient the assistant uses now (Q2): its questions and answers go
+      there, the page copies do not. */
+  assistantThreadCarry(recipient, win) {
+    const thread = this.#threadOf(this.#userWindow(win));
+    thread.recipient = String(recipient);
+    thread.pageLeftOut = true;
+  }
+
   static #chipView(chipId, item) {
     const { kind, tabId, url, title, chars, truncated } = item;
     return { chipId, kind, tabId, url, title, host: URL.parse(url)?.host ?? "", chars, truncated, blockChars: pageBlockChars(item) };
@@ -561,8 +635,28 @@ class AI {
       fail("ai-workspace");
     }
     let request;
+    let turn = null;
     if (kind === "ask") {
-      request = this.#askRequest(details?.question ?? "", details, win);
+      const thread = this.#threadOf(win);
+      if (thread.recipient && thread.recipient !== details?.expected?.recipient && AI.#history(thread).length) {
+        fail("thread-recipient"); // the conversation went elsewhere: the person chooses first (Q2)
+      }
+      const last = thread.turns.at(-1);
+      if (details?.retry) {
+        // "Tentar de novo": the last question that did not get an answer, with the page copy it had.
+        if (!last || last.state === "done") {
+          fail("bad-request");
+        }
+        thread.turns.pop();
+        request = { op: "ask", question: last.question, page: last.page, expected: details?.expected ?? fail("bad-request") };
+        if (!Number.isInteger(request.expected.chars)) {
+          fail("bad-request");
+        }
+      } else {
+        request = this.#askRequest(details?.question ?? "", details, win);
+      }
+      request.history = AI.#history(thread);
+      turn = { question: request.question.trim(), page: request.page };
     } else if (kind === "task") {
       request = { op: "task", task: String(details?.task ?? ""), expected: details?.expected ?? null };
     } else {
@@ -570,7 +664,7 @@ class AI {
     }
     request.profile = Services.dirsvc.get("ProfD", Ci.nsIFile).path;
     const runId = Services.uuid.generateUUID().toString().slice(1, -1);
-    const run = { win, kind, owner, state: "running", sent: false, steps: [], cutBy: null };
+    const run = { win, kind, owner, state: "running", sent: false, steps: [], cutBy: null, turn, text: "" };
     this.#runs.set(runId, run);
     run.handle = lazy.callToolStream(["ai", "assistant"], request, {
       onEvent: event => this.#onRunEvent(runId, run, event),
@@ -590,6 +684,8 @@ class AI {
   #onRunEvent(runId, run, event) {
     if (event.type === "sending") {
       run.sent = true;
+    } else if (event.type === "delta") {
+      run.text += event.text;
     } else if (event.type === "step" && event.state !== "started") {
       run.steps.push({ tool: event.tool, error: event.state !== "ok" });
     } else if (event.type === "approval") {
@@ -615,11 +711,34 @@ class AI {
     if (run.cutBy) {
       event.cutBy = run.cutBy; // the emergency stop, a pause or a revocation ended it
     }
+    if (run.turn) {
+      this.#keepTurn(run, event);
+    }
     this.#emit(run, event);
     if (!this.#runs.size) {
       this.#runWatch?.cancel();
       this.#runWatch = null;
     }
+  }
+
+  /** The Ask's turn joins its window's conversation (in memory), answered or not. */
+  #keepTurn(run, event) {
+    if (run.win.closed) {
+      return;
+    }
+    const thread = this.#threadOf(run.win);
+    const turn = { ...run.turn, sent: Boolean(event.sent ?? run.sent) };
+    if (event.type === "done" && !event.cancelled) {
+      Object.assign(turn, { state: "done", answer: String(event.answer ?? ""), chars: event.chars, recipient: event.recipient,
+        truncated: Boolean(event.truncated) });
+      thread.recipient = event.recipient;
+      thread.model = event.model;
+    } else if (event.type === "done") {
+      Object.assign(turn, { state: "cancelled", answer: run.text });
+    } else {
+      Object.assign(turn, { state: "error", code: event.code });
+    }
+    thread.turns.push(turn);
   }
 
   #cancelRun(run, cutBy = null) {

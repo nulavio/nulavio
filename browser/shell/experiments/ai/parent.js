@@ -67,6 +67,10 @@ this.nulavioAI = class extends ExtensionAPI {
         assistantStart: call((kind, details) => ai.assistantStart(kind, details ?? {}, windowOf(), context)),
         assistantCancel: call(async runId => ai.assistantCancel(runId, windowOf())),
         assistantRuns: call(async () => ai.assistantRuns(windowOf())),
+        assistantThread: call(async () => ai.assistantThread(windowOf())),
+        assistantThreadClear: call(async () => ai.assistantThreadClear(windowOf())),
+        assistantThreadLeavePage: call(async () => ai.assistantThreadLeavePage(windowOf())),
+        assistantThreadCarry: call(async recipient => ai.assistantThreadCarry(recipient, windowOf())),
         // Only the events of runs in this page's own window reach it.
         onAssistantEvent: new ExtensionCommon.EventManager({
           context,

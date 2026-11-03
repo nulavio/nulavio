@@ -518,6 +518,10 @@
                     "optional": true
                   }
                 }
+              },
+              "retry": {
+                "type": "boolean",
+                "optional": true
               }
             }
           }
@@ -540,6 +544,37 @@
         "type": "function",
         "async": true,
         "parameters": []
+      },
+      {
+        "name": "assistantThread",
+        "type": "function",
+        "async": true,
+        "description": "This window's conversation, as the panel shows it (no page text).",
+        "parameters": []
+      },
+      {
+        "name": "assistantThreadClear",
+        "type": "function",
+        "async": true,
+        "parameters": []
+      },
+      {
+        "name": "assistantThreadLeavePage",
+        "type": "function",
+        "async": true,
+        "parameters": []
+      },
+      {
+        "name": "assistantThreadCarry",
+        "type": "function",
+        "async": true,
+        "parameters": [
+          {
+            "name": "recipient",
+            "type": "string",
+            "maxLength": 300
+          }
+        ]
       }
     ],
     "events": [
