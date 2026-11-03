@@ -8,7 +8,10 @@
   url-prefix("about:editprofile"),
   url-prefix("about:newprofile"),
   url-prefix("about:deleteprofile"),
-  url-prefix("about:privatebrowsing") {
+  url-prefix("about:privatebrowsing"),
+  url-prefix("about:logins"),
+  url-prefix("about:policies"),
+  url-prefix("about:welcome") {
   #category-experimental,
   #category-more-from-mozilla {
     display: none !important;

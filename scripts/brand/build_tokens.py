@@ -43,6 +43,10 @@ IN_CONTENT_PAGES = (
     "about:newprofile",
     "about:deleteprofile",
     "about:privatebrowsing",
+    # UX3H M-1: these painted the engine's #131215 in dark.
+    "about:logins",
+    "about:policies",
+    "about:welcome",
 )
 # The engine's Nova palette re-valued with Nulavio's: violet (its accent) -> mint,
 # desaturated violet (its tinted neutrals) -> navy, and its violet-tinted light/dark
