@@ -141,3 +141,10 @@ pref("datareporting.policy.firstRunURL", "");
 // which Nulavio 1.0 does not offer (D-UX8). An empty value hides the option in
 // Settings and every Relay prompt; saved logins are unaffected.
 pref("signon.firefoxRelay.feature", "");
+
+// Performance and privacy: about:home (still the start page of profiles that
+// came from earlier builds) does not fetch the weather or stories in the
+// background. Defaults only: a person who turns them on keeps that choice.
+pref("browser.newtabpage.activity-stream.showWeather", false);
+pref("browser.newtabpage.activity-stream.widgets.weather.enabled", false);
+pref("browser.newtabpage.activity-stream.feeds.section.topstories", false);
