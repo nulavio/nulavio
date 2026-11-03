@@ -67,7 +67,7 @@
   "searchSettingsLink": {"message": "Search settings"},
   "settingsTitle": {"message": "Nulavio settings"},
   "settingsNav": {"message": "Sections"},
-  "settingsIntro": {"message": "These settings belong to this profile. Nothing is sent to Nulavio."},
+  "settingsIntro": {"message": "Each section says how far a change reaches: this profile, all profiles or this computer. Nothing is sent to Nulavio."},
   "settingsNeedsBuild": {"message": "These settings need the Nulavio build. In this browser, use Settings → Search."},
   "searchHeading": {"message": "Search"},
   "searchDefaultLabel": {"message": "Default search engine"},
@@ -994,5 +994,15 @@
   "layoutChoiceKeep_focus": {"message": "Keep Focus"},
   "layoutChoiceSettings": {"message": "Layout in Nulavio Settings"},
   "layoutPendingHint": {"message": "The first-run layout choice is still open. Keep the current layout or pick another above."},
-  "layoutChoiceBodyOpen": {"message": "Choose how tabs are arranged in this profile. You can change it anytime in Nulavio Settings."}
+  "layoutChoiceBodyOpen": {"message": "Choose how tabs are arranged in this profile. You can change it anytime in Nulavio Settings."},
+  "settingsSearchLabel": {"message": "Search settings"},
+  "settingsSearchFound": {"message": "Results: $COUNT$", "placeholders": {"count": {"content": "$1"}}},
+  "settingsSearchNone": {"message": "Nothing found for “$QUERY$”.", "placeholders": {"query": {"content": "$1"}}},
+  "scopeProfile": {"message": "This profile"},
+  "scopeAllProfiles": {"message": "All profiles"},
+  "scopeComputer": {"message": "This computer"},
+  "statusNamed": {"message": "$NAME$: $TEXT$", "placeholders": {"name": {"content": "$1"}, "text": {"content": "$2"}}},
+  "stateAiWorkspace": {"message": "AI Workspace"},
+  "settingsAiInWorkspace": {"message": "This window is $AGENT$'s AI Workspace. Manage agents, and the emergency stop, from one of your own windows.", "placeholders": {"agent": {"content": "$1"}}},
+  "whereLabel": {"message": "You are in"}
 }

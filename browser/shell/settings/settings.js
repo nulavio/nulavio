@@ -4,9 +4,10 @@
 
 import { localize, t } from "../lib/i18n.js";
 import { TEMPLATE_NAMES, freeName } from "../lib/names.js";
-import { announce, chip, confirmDialog, errorText, h, rerender, temporaryStorageText } from "../lib/ui.js";
+import { announce, chip, confirmDialog, errorText, h, profileStates, rerender, stateBadge, temporaryStorageText } from "../lib/ui.js";
 import { setUpAI } from "./ai.js";
 import { setUpLayout } from "./layout.js";
+import { setUpNav } from "./nav.js";
 
 const search = browser.nulavioSearch;
 const profiles = browser.nulavioProfiles;
@@ -378,7 +379,7 @@ function profileRow(profile) {
         { class: "row__title" },
         h("span", { text: profile.name }),
         profile.isCurrent ? h("span", { class: "badge", text: t("profilesCurrent") }) : null,
-        profile.locked ? h("span", { class: "badge badge--quiet", text: t("profilesLocked") }) : null
+        ...profileStates(profile).map(stateBadge)
       ),
       // When an open protected profile locks again (SB-14), next to "Bloquear agora".
       profile.encrypted && !profile.locked ? h("p", { class: "row__note", "data-relock": "", text: t("vaultRelocksWhenClosed") }) : null,
@@ -396,11 +397,35 @@ function profileRow(profile) {
   );
 }
 
+/** The header names the profile being configured, with its state in words (SPA-05). */
+async function renderWhere(state) {
+  const where = document.getElementById("settings-where");
+  const workspace = browser.nulavioAI ? await browser.nulavioAI.workspaceAgent().catch(() => null) : null;
+  const current =
+    state.reason === "temporary"
+      ? { name: t("profilesTemporaryShort"), color: "slate", avatar: null, temporary: true }
+      : state.available
+        ? state.profiles.find(p => p.isCurrent)
+        : null;
+  where.hidden = !current;
+  if (!current) {
+    return;
+  }
+  const states = [...(workspace ? ["workspace"] : []), ...profileStates(current)];
+  where.replaceChildren(
+    chip(current, "md"),
+    h("span", { class: "settings-where__label", text: t("whereLabel") }),
+    h("strong", { class: "settings-where__name", text: current.temporary ? t("profilesTemporary") : current.name }),
+    ...states.map(stateBadge)
+  );
+}
+
 async function renderProfiles() {
   const state = await run(() => profiles.list());
   if (!state) {
     return;
   }
+  renderWhere(state);
   const unavailable = document.getElementById("profiles-unavailable");
   const usable = state.available;
   unavailable.hidden = usable;
@@ -934,7 +959,7 @@ if (search && profiles && routing && connect) {
 } else {
   document.getElementById("needs-build").hidden = false;
 }
+setUpNav();
 Promise.allSettled(ready).then(() => {
   document.documentElement.dataset.ready = "true";
-  document.getElementById(location.hash.slice(1))?.scrollIntoView();
 });

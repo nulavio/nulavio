@@ -361,7 +361,7 @@ class SearchPrivacyTest(unittest.TestCase):
 
     def test_12_settings_page_adds_and_removes_through_the_ui(self):
         self.require_nulavio()
-        url = self.m.chrome("return WebExtensionPolicy.getByID('shell@nulavio.net').getURL('settings/settings.html');")
+        url = self.m.chrome("return WebExtensionPolicy.getByID('shell@nulavio.net').getURL('settings/settings.html#search');")
         self.m.navigate(url)
         harness.wait_until(lambda: self.root_ready(), timeout=15)
         rows = self.m.execute("return document.querySelectorAll('#engines li').length;")

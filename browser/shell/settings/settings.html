@@ -12,27 +12,53 @@
   <script type="module" src="settings.js"></script>
 </head>
 <body>
-  <main class="page page--settings">
+  <div class="settings">
+    <!-- UX4 (SPA-04): two panes. The rail lists one section per address (#dns, #routing…),
+         grouped by how far a change reaches; the search filters the cards of every section. -->
+    <aside class="settings-rail">
+      <label class="settings-search">
+        <span class="visually-hidden" data-i18n="settingsSearchLabel"></span>
+        <input class="input settings-search__input" type="search" id="settings-search" autocomplete="off"
+               spellcheck="false" maxlength="80" aria-controls="settings-main" data-i18n-attr="placeholder:settingsSearchLabel">
+      </label>
+      <nav class="settings-nav" data-i18n-attr="aria-label:settingsNav">
+        <p class="settings-nav__group" id="nav-profile" data-i18n="scopeProfile"></p>
+        <ul aria-labelledby="nav-profile">
+          <li><a href="#layout" data-section="layout" data-i18n="layoutHeading">Layout</a></li>
+          <li><a href="#search" data-section="search" data-i18n="searchHeading">Search</a></li>
+          <li><a href="#passwords" data-section="passwords" data-i18n="passwordsHeading">Passwords</a></li>
+          <li><a href="#exceptions" data-section="exceptions" data-i18n="exceptionsHeading">Site exceptions</a></li>
+          <li><a href="#dns" data-section="dns" data-i18n="dnsHeading">DNS</a></li>
+        </ul>
+        <p class="settings-nav__group" id="nav-all" data-i18n="scopeAllProfiles"></p>
+        <ul aria-labelledby="nav-all">
+          <li><a href="#profiles" data-section="profiles" data-i18n="profilesHeading">Profiles</a></li>
+          <li><a href="#routing" data-section="routing" data-i18n="routingHeading">Smart routing</a></li>
+          <li><a href="#ai" data-section="ai" data-i18n="aiHeading">AI &amp; Automation</a></li>
+        </ul>
+        <p class="settings-nav__group" id="nav-computer" data-i18n="scopeComputer"></p>
+        <ul aria-labelledby="nav-computer">
+          <li><a href="#integrations" data-section="integrations" data-i18n="connectHeading">Integrations</a></li>
+        </ul>
+      </nav>
+    </aside>
+
+  <main class="page page--settings settings-main" id="settings-main">
     <header class="settings-header">
       <h1 class="settings-header__title" data-i18n="settingsTitle">Nulavio settings</h1>
+      <!-- SPA-05: which profile is being configured, with its state in words -->
+      <p class="settings-where" id="settings-where" hidden></p>
       <p class="settings-header__intro" data-i18n="settingsIntro"></p>
-      <nav class="settings-nav" data-i18n-attr="aria-label:settingsNav">
-        <a href="#layout" data-i18n="layoutHeading">Layout</a>
-        <a href="#search" data-i18n="searchHeading">Search</a>
-        <a href="#profiles" data-i18n="profilesHeading">Profiles</a>
-        <a href="#passwords" data-i18n="passwordsHeading">Passwords</a>
-        <a href="#exceptions" data-i18n="exceptionsHeading">Site exceptions</a>
-        <a href="#dns" data-i18n="dnsHeading">DNS</a>
-        <a href="#integrations" data-i18n="connectHeading">Integrations</a>
-        <a href="#ai" data-i18n="aiHeading">AI &amp; Automation</a>
-      </nav>
     </header>
 
     <p class="notice" id="needs-build" hidden data-i18n="settingsNeedsBuild"></p>
-    <p class="status" id="status" role="status" aria-live="polite"></p>
+    <p class="settings-results" id="settings-results" role="status" aria-live="polite" hidden></p>
 
     <section class="section" id="layout" aria-labelledby="layout-heading" hidden>
-      <h2 class="section__title" id="layout-heading" data-i18n="layoutHeading">Layout</h2>
+      <div class="section__head">
+        <h2 class="section__title" id="layout-heading" data-i18n="layoutHeading">Layout</h2>
+        <p class="scope" data-i18n="scopeProfile"></p>
+      </div>
       <div class="card stack">
         <p class="hint" id="layout-scope" data-i18n="layoutScope"></p>
         <fieldset class="stack" id="layout-choices" aria-describedby="layout-scope">
@@ -62,7 +88,10 @@
     </section>
 
     <section class="section" id="search" aria-labelledby="search-heading" hidden>
-      <h2 class="section__title" id="search-heading" data-i18n="searchHeading">Search</h2>
+      <div class="section__head">
+        <h2 class="section__title" id="search-heading" data-i18n="searchHeading">Search</h2>
+        <p class="scope" data-i18n="scopeProfile"></p>
+      </div>
 
       <div class="card stack">
         <div class="field-row">
@@ -139,7 +168,10 @@
     </section>
 
     <section class="section" id="profiles" aria-labelledby="profiles-heading" hidden>
-      <h2 class="section__title" id="profiles-heading" data-i18n="profilesHeading">Profiles</h2>
+      <div class="section__head">
+        <h2 class="section__title" id="profiles-heading" data-i18n="profilesHeading">Profiles</h2>
+        <p class="scope" data-i18n="scopeAllProfiles"></p>
+      </div>
       <p class="notice" id="profiles-unavailable" hidden></p>
 
       <div class="card stack" id="profiles-card">
@@ -174,8 +206,19 @@
         </div>
       </div>
 
-      <div class="card stack" id="routing" hidden>
-        <h3 class="card__title" data-i18n="routingHeading"></h3>
+
+      <details class="card why">
+        <summary data-i18n="profilesVsContainers"></summary>
+        <p data-i18n="profilesVsContainersBody"></p>
+      </details>
+    </section>
+
+    <section class="section" id="routing" aria-labelledby="routing-heading" hidden>
+      <div class="section__head">
+        <h2 class="section__title" id="routing-heading" data-i18n="routingHeading">Smart routing</h2>
+        <p class="scope" data-i18n="scopeAllProfiles"></p>
+      </div>
+      <div class="card stack">
         <p class="hint" data-i18n="routingIntro"></p>
         <label class="check check--switch">
           <input type="checkbox" role="switch" id="routing-enabled" data-focus-key="routing-enabled">
@@ -213,15 +256,13 @@
           <div class="actions"><button class="button button--secondary" type="submit" data-i18n="routingAddButton"></button></div>
         </form>
       </div>
-
-      <details class="card why">
-        <summary data-i18n="profilesVsContainers"></summary>
-        <p data-i18n="profilesVsContainersBody"></p>
-      </details>
     </section>
 
     <section class="section" id="passwords" aria-labelledby="passwords-heading" hidden>
-      <h2 class="section__title" id="passwords-heading" data-i18n="passwordsHeading">Passwords</h2>
+      <div class="section__head">
+        <h2 class="section__title" id="passwords-heading" data-i18n="passwordsHeading">Passwords</h2>
+        <p class="scope" data-i18n="scopeProfile"></p>
+      </div>
       <div class="card stack">
         <p class="hint" data-i18n="passwordsIntro"></p>
         <ul class="list" id="provider-list" aria-busy="true"></ul>
@@ -237,7 +278,10 @@
     </section>
 
     <section class="section" id="exceptions" aria-labelledby="exceptions-heading" hidden>
-      <h2 class="section__title" id="exceptions-heading" data-i18n="exceptionsHeading">Site exceptions</h2>
+      <div class="section__head">
+        <h2 class="section__title" id="exceptions-heading" data-i18n="exceptionsHeading">Site exceptions</h2>
+        <p class="scope" data-i18n="scopeProfile"></p>
+      </div>
       <div class="card stack">
         <p class="hint" data-i18n="exceptionsIntro"></p>
         <ul class="list" id="exception-list" aria-busy="true"></ul>
@@ -253,7 +297,10 @@
     </section>
 
     <section class="section" id="dns" aria-labelledby="dns-heading" hidden>
-      <h2 class="section__title" id="dns-heading" data-i18n="dnsHeading">DNS</h2>
+      <div class="section__head">
+        <h2 class="section__title" id="dns-heading" data-i18n="dnsHeading">DNS</h2>
+        <p class="scope" data-i18n="scopeProfile"></p>
+      </div>
       <form class="card stack" id="dns-form" novalidate>
         <p class="hint" data-i18n="dnsIntro"></p>
         <p class="notice" id="dns-current" role="status"></p>
@@ -281,7 +328,10 @@
     </section>
 
     <section class="section" id="integrations" aria-labelledby="integrations-heading" hidden>
-      <h2 class="section__title" id="integrations-heading" data-i18n="connectHeading">Integrations</h2>
+      <div class="section__head">
+        <h2 class="section__title" id="integrations-heading" data-i18n="connectHeading">Integrations</h2>
+        <p class="scope" data-i18n="scopeComputer"></p>
+      </div>
       <div class="card stack">
         <p class="hint" data-i18n="connectIntro"></p>
         <ul class="list" id="integration-list" aria-busy="true"></ul>
@@ -291,7 +341,10 @@
       </div>
     </section>
     <section class="section" id="ai" aria-labelledby="ai-heading" hidden>
-      <h2 class="section__title" id="ai-heading" data-i18n="aiHeading">AI &amp; Automation</h2>
+      <div class="section__head">
+        <h2 class="section__title" id="ai-heading" data-i18n="aiHeading">AI &amp; Automation</h2>
+        <p class="scope" data-i18n="scopeAllProfiles"></p>
+      </div>
       <div class="callout callout--warning" id="ai-stopped" hidden>
         <p data-i18n="aiStoppedBanner"></p>
         <button class="button button--secondary callout__action" type="button" id="ai-resume" data-i18n="aiResume"></button>
@@ -384,6 +437,11 @@
         <div class="actions"><button class="button button--quiet" type="button" id="ai-activity-clear" data-i18n="aiActivityClear"></button></div>
       </div>
     </section>
+
+    <!-- One polite live region. A confirmation tied to a control is shown next to it and only
+         spoken here, with the control's name (SPA-06); anything else shows here as a toast. -->
+    <p class="status status--toast" id="status" role="status" aria-live="polite" data-inline-anchor></p>
   </main>
+  </div>
 </body>
 </html>

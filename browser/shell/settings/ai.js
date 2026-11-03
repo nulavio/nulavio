@@ -487,6 +487,18 @@ async function renderAssistant() {
 
 function setUpAssistant() {
   const form = document.getElementById("ai-assistant");
+  // A switch saves when it changes, like every other switch here (audit SPA-15); "Salvar" is for
+  // the provider fields, which also keep this choice.
+  form.elements.allowed.addEventListener("change", async event => {
+    const box = event.target;
+    try {
+      await ai.assistantAllow(box.checked);
+      announce(t("doneSaved"));
+    } catch (e) {
+      box.checked = !box.checked; // the switch keeps showing what is in force
+      announce(errorText(e), "error");
+    }
+  });
   form.addEventListener("submit", async event => {
     event.preventDefault();
     const error = form.querySelector(".form-error");
@@ -515,8 +527,19 @@ function setUpAssistant() {
 }
 
 export async function setUpAI() {
-  if (await ai.workspaceAgent()) {
-    return; // an agent drives this window: its settings are managed from the user's own window
+  const agent = await ai.workspaceAgent();
+  if (agent) {
+    // An agent drives this window: say so, where the controls would be, and leave none of them
+    // in the page (audit SPA-27). They are managed from one of the user's own windows.
+    const { agents } = await ai.overview().catch(() => ({ agents: [] }));
+    const section = document.getElementById("ai");
+    for (const child of section.querySelectorAll(":scope > :not(.section__head)")) {
+      child.remove();
+    }
+    const name = agents.find(a => a.id === agent)?.name ?? agent;
+    section.append(h("p", { class: "notice", id: "ai-workspace-notice", text: t("settingsAiInWorkspace", [name]) }));
+    section.hidden = false;
+    return;
   }
   document.getElementById("ai").hidden = false;
   renderLevels();

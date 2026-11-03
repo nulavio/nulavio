@@ -94,6 +94,10 @@ const ICONS = {
   info: "M12 21.5a9.5 9.5 0 1 0 0-19a9.5 9.5 0 0 0 0 19z M12 11v6 M12 7.5v.5",
   pause: "M9 5v14 M15 5v14",
   revoked: "M12 21.5a9.5 9.5 0 1 0 0-19a9.5 9.5 0 0 0 0 19z M5.3 5.3l13.4 13.4",
+  lock: "M7.5 11V8a4.5 4.5 0 0 1 9 0v3 M5.5 11h13v9.5h-13z",
+  unlocked: "M7.5 11V8a4.5 4.5 0 0 1 8.7-1.6 M5.5 11h13v9.5h-13z",
+  temporary: "M7.2 3.6h9.6 M7.2 20.4h9.6 M8.4 3.6v3.1L12 12l3.6-5.3V3.6 M8.4 20.4v-3.1L12 12l3.6 5.3v3.1",
+  agent: "M6 8.5h12v10.5H6z M12 4.5v4 M9.5 15.5h5 M9.5 12v.5 M14.5 12v.5",
 };
 
 /** A decorative icon (hidden from assistive technology), built without markup strings. */
@@ -116,6 +120,28 @@ export function icon(name, className = "icon") {
   }
   svg.append(path);
   return svg;
+}
+
+/* One look for a profile's state on every Shell page (audit SPA-02): a glyph and the word,
+   never colour alone. The word is the accessible text. */
+const PROFILE_STATES = {
+  protected: ["unlocked", "vaultProtectedBadge"],
+  locked: ["lock", "profilesLocked"],
+  temporary: ["temporary", "profilesTemporaryShort"],
+  workspace: ["agent", "stateAiWorkspace"],
+};
+
+export function stateBadge(state) {
+  const [glyph, key] = PROFILE_STATES[state];
+  return h("span", { class: "badge badge--security", dataset: { state } }, icon(glyph, "badge__icon"), h("span", { text: t(key) }));
+}
+
+/** The states a profile record shows, in a fixed order. */
+export function profileStates(profile) {
+  return [
+    profile.temporary ? "temporary" : null,
+    profile.locked ? "locked" : profile.encrypted ? "protected" : null,
+  ].filter(Boolean);
 }
 
 /** Ask for confirmation with a native modal <dialog>. Resolves true when confirmed.
@@ -160,12 +186,87 @@ export function confirmDialog({ title, body, confirm, danger = false, critical =
    for a result that happened), warn (⚠, degraded or needs attention), error (critical style and icon). */
 const STATUS_LEVELS = new Set(["info", "progress", "ok", "warn", "error"]);
 
+/** The words that name a control: its own label (without the hint under it), or its button text. */
+export function controlName(control) {
+  const own = control.getAttribute("aria-label");
+  if (own) {
+    return own.trim();
+  }
+  const label = control.labels?.[0];
+  if (label) {
+    const named = [".field__label", ":scope > span > span:not(.hint)", ":scope > span > strong", ":scope > span:not(.hint)"]
+      .map(selector => label.querySelector(selector))
+      .find(Boolean);
+    return [...(named ?? label).childNodes]
+      .filter(node => !node.classList?.contains("inline-status"))
+      .map(node => node.textContent)
+      .join("")
+      .trim();
+  }
+  return control.textContent.trim();
+}
+
+/* UX4 (SPA-06): on a page whose status line has data-inline-anchor, a result of what the
+   person just did is shown next to the control that still has the keyboard (an aria-hidden
+   mark that does not change the control's name) and spoken once, with the control's name.
+   Errors also stay in the status line, shown at the bottom of the page. */
+const INLINE_MS = 4000;
+let toastTimer = null;
+
+function inlineHost(control) {
+  if (!control || control === document.body || !control.closest?.("main")) {
+    return null;
+  }
+  const field = control.closest(".field");
+  if (field) {
+    return field.querySelector(".field__label") ?? field;
+  }
+  return control.closest(".check, .inline-form") ?? control;
+}
+
+function showInline(host, text, level) {
+  const after = host.matches("button, a, input, select");
+  let mark = after ? host.nextElementSibling : host.querySelector(":scope > .inline-status");
+  if (!mark?.classList.contains("inline-status")) {
+    mark = h("span", { class: "inline-status", "aria-hidden": "true" });
+    if (after) {
+      host.after(mark);
+    } else {
+      host.append(mark);
+    }
+  }
+  mark.dataset.level = level;
+  mark.textContent = text;
+  clearTimeout(mark.timer);
+  mark.timer = setTimeout(() => mark.remove(), INLINE_MS);
+}
+
 /** Announce a short result in the page's live region. Do not repeat a hint the page already shows. */
 export function announce(text, level = "ok") {
   const status = document.getElementById("status");
-  if (status) {
-    status.dataset.level = STATUS_LEVELS.has(level) ? level : "info";
+  if (!status) {
+    return;
+  }
+  const kind = STATUS_LEVELS.has(level) ? level : "info";
+  const control = document.activeElement;
+  const host = status.hasAttribute("data-inline-anchor") && ["ok", "warn", "error"].includes(kind) ? inlineHost(control) : null;
+  status.dataset.level = kind;
+  if (host) {
+    const name = controlName(control);
+    status.textContent = name ? t("statusNamed", [name, text]) : text;
+    showInline(host, text, kind);
+  } else {
     status.textContent = text;
+  }
+  // Shown at the bottom only when it is not already next to the control (errors always are).
+  status.toggleAttribute("data-inline", Boolean(host) && kind !== "error");
+  if (status.hasAttribute("data-inline-anchor")) {
+    clearTimeout(toastTimer);
+    if (kind !== "progress") {
+      toastTimer = setTimeout(() => {
+        status.textContent = "";
+      }, kind === "error" ? 3 * INLINE_MS : INLINE_MS);
+    }
   }
 }
 

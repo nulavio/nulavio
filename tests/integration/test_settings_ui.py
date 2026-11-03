@@ -1,0 +1,221 @@
+"""Nulavio settings in two panes (UX4, audit SPA-04/05/06). Nulavio build only.
+
+One section per address, a rail grouped by how far a change reaches, a filter over every
+section, the profile being configured in the header, and results shown next to the control
+that made them (spoken once, with the control's name). Captures of every section in light
+and dark go to the test artifacts.
+"""
+
+from __future__ import annotations
+
+import sys
+import time
+import unittest
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
+import harness
+
+SCOPES = {
+    "layout": "scopeProfile",
+    "search": "scopeProfile",
+    "passwords": "scopeProfile",
+    "exceptions": "scopeProfile",
+    "dns": "scopeProfile",
+    "profiles": "scopeAllProfiles",
+    "routing": "scopeAllProfiles",
+    "ai": "scopeAllProfiles",
+    "integrations": "scopeComputer",
+}
+
+VIEW = """
+const main = document.getElementById('settings-main');
+const shown = [...main.querySelectorAll(':scope > .section')].filter(s => getComputedStyle(s).display !== 'none');
+return {
+  view: main.dataset.view,
+  shown: shown.map(s => s.id),
+  current: [...document.querySelectorAll('.settings-nav a[aria-current="page"]')].map(a => a.dataset.section),
+  focused: document.activeElement?.id || document.activeElement?.localName,
+  results: document.getElementById('settings-results').hidden ? null : document.getElementById('settings-results').textContent,
+};
+"""
+
+
+@unittest.skipUnless(harness.nulavio_engine(), "the Nulavio build's Shell (NULAVIO_ENGINE)")
+class SettingsPanesTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.session = harness.GeckoProfileSession(name="Pessoal")
+        cls.m = cls.session.start()
+        cls.base = cls.m.chrome("return WebExtensionPolicy.getByID('shell@nulavio.net').getURL('');")
+        cls.shots = harness.artifacts_dir() / "settings-ux4"
+        cls.shots.mkdir(parents=True, exist_ok=True)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.m.chrome("Services.prefs.clearUserPref('ui.systemUsesDarkTheme');")
+        cls.session.cleanup()
+
+    def open(self, address: str = "") -> None:
+        self.m.navigate(self.base + "settings/settings.html" + address)
+        self.assertTrue(
+            harness.wait_until(lambda: self.m.execute("return document.documentElement.dataset.ready === 'true';"), 20)
+        )
+
+    def view(self) -> dict:
+        return self.m.execute(VIEW)
+
+    def message(self, key: str, *args: str) -> str:
+        return self.m.execute("return browser.i18n.getMessage(arguments[0], arguments[1]);", [key, list(args)])
+
+    def type_search(self, text: str) -> None:
+        self.m.execute(
+            "const s = document.getElementById('settings-search'); s.value = arguments[0];"
+            "s.dispatchEvent(new Event('input', {bubbles: true}));",
+            [text],
+        )
+
+    def test_01_one_section_per_address(self):
+        self.open()
+        state = self.view()
+        self.assertEqual(state["view"], "section")
+        self.assertEqual(len(state["shown"]), 1, state)
+        self.assertEqual(state["current"], state["shown"])  # the rail marks the section on screen
+        for address, section in (("#dns", "dns"), ("#routing", "routing"), ("#ai-assistant", "ai"), ("#profiles", "profiles")):
+            self.open(address)
+            self.assertTrue(
+                harness.wait_until(lambda section=section: self.view()["shown"] == [section], 10), (address, self.view())
+            )
+            self.assertEqual(self.view()["current"], [section])
+        # A card's own address (the assistant panel links there) scrolls it into view.
+        self.open("#ai-assistant")
+        harness.wait_until(lambda: self.view()["shown"] == ["ai"], 10)
+        top = self.m.execute("return document.getElementById('ai-assistant').getBoundingClientRect().top;")
+        self.assertLess(top, self.m.execute("return innerHeight;"))
+
+    def test_02_rail_link_moves_the_keyboard_to_the_section(self):
+        self.open("#search")
+        self.m.send("WebDriver:ElementClick", {"id": self.m.find_element('.settings-nav a[data-section="dns"]')})
+        self.assertTrue(harness.wait_until(lambda: self.view()["shown"] == ["dns"], 10))
+        self.assertEqual(self.view()["focused"], "dns-heading")
+        self.assertEqual(self.m.execute("return location.hash;"), "#dns")
+
+    def test_03_every_section_says_how_far_it_reaches(self):
+        self.open()
+        found = self.m.execute(
+            "return Object.fromEntries([...document.querySelectorAll('.settings-main > .section')]"
+            ".map(s => [s.id, s.querySelector('.section__head .scope')?.textContent]));"
+        )
+        for section, key in SCOPES.items():
+            self.assertEqual(found.get(section), self.message(key), section)
+        groups = self.m.execute("return [...document.querySelectorAll('.settings-nav__group')].map(g => g.textContent);")
+        self.assertEqual(groups, [self.message(k) for k in ("scopeProfile", "scopeAllProfiles", "scopeComputer")])
+        # Every entry of the rail points to a section that exists, in the order of its group.
+        entries = self.m.execute("return [...document.querySelectorAll('.settings-nav a')].map(a => a.dataset.section);")
+        self.assertEqual(entries, list(SCOPES))
+        self.assertNotIn(self.message("settingsIntro"), ["", "settingsIntro"])
+
+    def test_04_search_filters_the_cards_of_every_section(self):
+        self.open("#layout")
+        word = max(self.message("dnsSystem").split(), key=len)  # "resolvedor": typed without accents, in lower case
+        query = self.m.execute("return arguments[0].normalize('NFD').replace(/\\p{M}/gu, '').toLowerCase();", [word])
+        self.type_search(query)
+        self.assertTrue(harness.wait_until(lambda: self.view()["view"] == "search", 5))
+        state = self.view()
+        self.assertIn("dns", state["shown"])
+        self.assertNotIn("layout", state["shown"])
+        self.assertEqual(state["current"], [])  # results span sections: the rail marks none
+        self.assertTrue(state["results"])
+        self.shoot("search-results")
+        self.type_search("zzzz-nada")
+        self.assertTrue(harness.wait_until(lambda: self.view()["shown"] == [], 5))
+        self.assertEqual(self.view()["results"], self.message("settingsSearchNone", "zzzz-nada"))
+        # Escape leaves the search and returns to the section of the address.
+        self.m.send("WebDriver:ElementSendKeys", {"id": self.m.find_element("#settings-search"), "text": ""})
+        self.assertTrue(harness.wait_until(lambda: self.view()["shown"] == ["layout"], 5))
+        self.assertIsNone(self.view()["results"])
+
+    def test_05_header_names_the_profile_being_configured(self):
+        self.open()
+        self.assertTrue(
+            harness.wait_until(lambda: not self.m.execute("return document.getElementById('settings-where').hidden;"), 10)
+        )
+        where = self.m.execute(
+            "const w = document.getElementById('settings-where');"
+            "return {label: w.querySelector('.settings-where__label').textContent,"
+            " name: w.querySelector('.settings-where__name').textContent, chip: Boolean(w.querySelector('.chip'))};"
+        )
+        self.assertEqual(where, {"label": self.message("whereLabel"), "name": "Pessoal", "chip": True})
+
+    def test_06_a_result_is_shown_next_to_its_control(self):
+        self.open("#routing")
+        self.assertTrue(harness.wait_until(lambda: self.view()["shown"] == ["routing"], 10))
+        switch = self.m.find_element("#routing-enabled")
+        before = self.m.execute("return document.getElementById('routing-enabled').checked;")
+        self.m.send("WebDriver:ElementClick", {"id": switch})
+        try:
+            mark = harness.wait_until(
+                lambda: self.m.execute(
+                    "const m = document.querySelector('#routing-enabled').closest('.check').querySelector('.inline-status');"
+                    "return m && {text: m.textContent, level: m.dataset.level, hidden: m.getAttribute('aria-hidden')};"
+                ),
+                10,
+            )
+            self.assertEqual(mark, {"text": self.message("doneSaved"), "level": "ok", "hidden": "true"})
+            status = self.m.execute(
+                "const s = document.getElementById('status');"
+                "return {text: s.textContent, inline: s.hasAttribute('data-inline'), clip: getComputedStyle(s).clipPath};"
+            )
+            name = self.message("routingEnabledLabel")
+            self.assertEqual(status["text"], self.message("statusNamed", name, self.message("doneSaved")))
+            self.assertTrue(status["inline"])  # spoken, not shown twice
+            self.assertNotEqual(status["clip"], "none")
+            # The switch keeps its own name: the mark is not part of it.
+            label = self.m.execute(
+                "return document.getElementById('routing-enabled').labels[0].querySelector('span').textContent;"
+            )
+            self.assertEqual(label, name)
+            self.shoot("inline-saved", full=False)
+        finally:
+            if self.m.execute("return document.getElementById('routing-enabled').checked;") != before:
+                self.m.send("WebDriver:ElementClick", {"id": self.m.find_element("#routing-enabled")})
+                time.sleep(0.5)
+
+    def test_07_captures_every_section_in_both_themes(self):
+        self.open()
+        sections = self.m.execute(
+            "return [...document.querySelectorAll('.settings-nav li:not([hidden]) a')].map(a => a.dataset.section);"
+        )
+        self.assertGreaterEqual(len(sections), 7)
+        for section in sections:
+            self.open(f"#{section}")
+            self.assertTrue(harness.wait_until(lambda section=section: self.view()["shown"] == [section], 10))
+            self.shoot(section)
+        # A narrow window: the rail becomes a row above the page, and still marks the section.
+        rect = self.m.send("WebDriver:GetWindowRect")
+        self.m.send("WebDriver:SetWindowRect", {"width": 760, "height": 900})
+        try:
+            self.open("#dns")
+            self.assertTrue(harness.wait_until(lambda: self.view()["shown"] == ["dns"], 10))
+            self.assertEqual(
+                self.m.execute(
+                    "return getComputedStyle(document.querySelector('.settings')).gridTemplateColumns.split(' ').length;"
+                ),
+                1,
+            )
+            self.assertEqual(self.view()["current"], ["dns"])
+            self.shoot("narrow-dns")
+        finally:
+            self.m.send("WebDriver:SetWindowRect", {"width": rect["width"], "height": rect["height"]})
+
+    def shoot(self, name: str, full: bool = True) -> None:
+        for dark in (0, 1):
+            self.m.chrome("Services.prefs.setIntPref('ui.systemUsesDarkTheme', arguments[0]);", [dark])
+            time.sleep(0.4)
+            scheme = "dark" if dark else "light"
+            (self.shots / f"{name}-{scheme}.png").write_bytes(self.m.screenshot_png(full=full))
+        self.m.chrome("Services.prefs.clearUserPref('ui.systemUsesDarkTheme');")
+
+
+if __name__ == "__main__":
+    unittest.main()

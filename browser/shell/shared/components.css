@@ -148,6 +148,36 @@ kbd {
 @keyframes nv-status-spin { to { transform: rotate(1turn); } }
 
 .status[data-level]:empty::before { content: none; }
+/* The result of what was just done, next to the control (lib/ui.js announce) */
+.inline-status { margin-inline-start: var(--nv-space-3); font-size: var(--nv-type-label-size); font-weight: var(--nv-font-weight-medium); white-space: nowrap; }
+.check > .inline-status { display: inline-block; align-self: center; }
+.inline-status[data-level="ok"]::before { content: "✓ "; color: var(--nv-color-status-secure); }
+.inline-status[data-level="warn"] { color: var(--nv-color-status-warning); }
+.inline-status[data-level="warn"]::before { content: "⚠ "; }
+.inline-status[data-level="error"] { color: var(--nv-color-status-criticalText); }
+.inline-status[data-level="error"]::before { content: "! "; font-weight: var(--nv-font-weight-semibold); }
+/* The status line as a toast: at the bottom of the page, only when not shown next to a control */
+.status--toast {
+  position: sticky;
+  bottom: var(--nv-space-5);
+  align-self: flex-start;
+  z-index: var(--nv-zIndex-popover);
+  max-inline-size: 100%;
+  padding: var(--nv-space-3) var(--nv-space-5);
+  border-radius: var(--nv-radius-md);
+  background: var(--nv-color-bg-raised);
+  box-shadow: var(--nv-elevation-2), inset 0 0 0 1px var(--nv-color-border-subtle);
+}
+.status--toast:empty { display: none; }
+.status--toast[data-inline] {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
 .form-error { margin: 0; color: var(--nv-color-status-criticalText); font-size: var(--nv-type-label-size); }
 .form-error:empty { display: none; }
 .form-error::before {
@@ -201,6 +231,14 @@ kbd {
   vertical-align: middle;
 }
 .badge--quiet { background: var(--nv-color-bg-sunken); }
+/* A profile's state (Protegido, Bloqueado, Temporário, Área de IA): glyph and word, the same everywhere (SPA-02) */
+.badge--security {
+  display: inline-flex;
+  align-items: center;
+  background: var(--nv-color-bg-sunken);
+  box-shadow: inset 0 0 0 1px var(--nv-color-border-subtle);
+}
+.badge--security .badge__icon { color: var(--nv-color-text-secondary); }
 
 /* Identity chip: a profile's colour with its icon or initial; never colour alone */
 .chip {

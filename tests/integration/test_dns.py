@@ -78,13 +78,8 @@ class DnsChoiceTest(unittest.TestCase):
 
     def shoot(self, name: str, keep: str | None = None) -> None:
         for scheme in ("light", "dark"):
-            self.m.execute(
-                "document.documentElement.dataset.theme = arguments[0]; document.body.style.display = 'none';"
-                "document.body.offsetHeight; document.body.style.display = '';"
-                "for (const s of arguments[1] ? document.querySelectorAll('section.section') : []) {"
-                " s.hidden = s.id !== arguments[1]; }",
-                [scheme, keep],
-            )
+            # Settings shows one section per address (UX4): `keep` needs no hiding by hand.
+            self.m.execute("document.documentElement.dataset.theme = arguments[0];", [scheme])
             time.sleep(0.3)
             (self.shots / f"{name}-{scheme}.png").write_bytes(self.m.screenshot_png(full=True))
         self.m.execute("delete document.documentElement.dataset.theme;")

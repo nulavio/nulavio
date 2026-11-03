@@ -78,15 +78,11 @@ class AiUiTest(unittest.TestCase):
         return self.m.execute(script, list(args))
 
     def shoot(self, name: str, section: str | None = None) -> None:
+        # Settings shows one section per address (UX4), so `section` only says which one this is.
+        # The page is not re-laid out by hand: hiding <body> under an open modal dialog left the
+        # next scrollIntoView without effect.
         for scheme in ("light", "dark"):
-            self.js(
-                "document.documentElement.dataset.theme = arguments[0];"
-                "if (arguments[1]) { const keep = document.getElementById(arguments[1]);"
-                "  for (const s of document.querySelectorAll('section.section')) { s.hidden = s !== keep; } }"
-                "document.body.style.display = 'none'; document.body.offsetHeight; document.body.style.display = '';",
-                scheme,
-                section,
-            )
+            self.js("document.documentElement.dataset.theme = arguments[0];", scheme)
             time.sleep(0.3)
             (self.shots / f"{name}-{scheme}.png").write_bytes(self.m.screenshot_png(full=True))
         self.js("delete document.documentElement.dataset.theme;")

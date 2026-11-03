@@ -67,7 +67,7 @@
   "searchSettingsLink": {"message": "Configurações de busca"},
   "settingsTitle": {"message": "Configurações do Nulavio"},
   "settingsNav": {"message": "Seções"},
-  "settingsIntro": {"message": "Estas configurações pertencem a este perfil. Nada é enviado ao Nulavio."},
+  "settingsIntro": {"message": "Cada seção diz até onde uma mudança vale: este perfil, todos os perfis ou este computador. Nada é enviado ao Nulavio."},
   "settingsNeedsBuild": {"message": "Estas configurações precisam do build do Nulavio. Neste navegador, use Configurações → Pesquisa."},
   "searchHeading": {"message": "Busca"},
   "searchDefaultLabel": {"message": "Mecanismo de busca padrão"},
@@ -994,5 +994,15 @@
   "layoutChoiceKeep_focus": {"message": "Manter Foco"},
   "layoutChoiceSettings": {"message": "Layout nas Configurações do Nulavio"},
   "layoutPendingHint": {"message": "A escolha de layout do primeiro uso ainda está aberta. Mantenha o layout atual ou escolha outro acima."},
-  "layoutChoiceBodyOpen": {"message": "Escolha como as abas ficam neste perfil. Dá para mudar quando quiser nas Configurações do Nulavio."}
+  "layoutChoiceBodyOpen": {"message": "Escolha como as abas ficam neste perfil. Dá para mudar quando quiser nas Configurações do Nulavio."},
+  "settingsSearchLabel": {"message": "Buscar nas configurações"},
+  "settingsSearchFound": {"message": "Resultados: $COUNT$", "placeholders": {"count": {"content": "$1"}}},
+  "settingsSearchNone": {"message": "Nada encontrado para “$QUERY$”.", "placeholders": {"query": {"content": "$1"}}},
+  "scopeProfile": {"message": "Este perfil"},
+  "scopeAllProfiles": {"message": "Todos os perfis"},
+  "scopeComputer": {"message": "Este computador"},
+  "statusNamed": {"message": "$NAME$: $TEXT$", "placeholders": {"name": {"content": "$1"}, "text": {"content": "$2"}}},
+  "stateAiWorkspace": {"message": "Área de IA"},
+  "settingsAiInWorkspace": {"message": "Esta janela é a Área de IA de $AGENT$. Gerencie os agentes, e a parada de emergência, numa janela sua.", "placeholders": {"agent": {"content": "$1"}}},
+  "whereLabel": {"message": "Você está em"}
 }
