@@ -91,8 +91,8 @@ class NulavioRoutingClass {
   #pageWatch = false; // M5: preference observers installed
   #pageObserving = false; // M5: the request observer is installed
   #pageRoutes = new Map(); // M5: inner window id of a page -> when it last had a navigation routed
-  // D-UX19: links another profile sent here, waiting for their tab; and the tabs showing one.
-  #arriving = [];
+  // D-UX19: the tabs a routed command line opened (each with its links), and the tabs showing one.
+  #opened = new WeakMap(); // a tab's <browser> -> {urls, at}
   #arrived = new WeakMap(); // a tab's <browser> -> the rule that sent its site here
 
   // -- rules (shared by every profile of the group) -------------------------
@@ -301,21 +301,44 @@ class NulavioRoutingClass {
   // -- the band's notice (D-UX19): "Aberto em {perfil} pela sua regra · Mudar" ----------------
 
   /**
-   * A routed command line: remember its links for a moment. Which rule (if any) sent each one is
-   * decided when a tab shows it, because a link that starts this instance arrives before the
-   * profile service knows which profile this is.
+   * A routed command line: note the tabs it opens (review F3: the notice belongs to those tabs, not
+   * to any tab that shows a site of the same rule). The browser opens them right after this handler
+   * returns: as new tabs of a window that is open, or as the first tab of the first window when the
+   * link starts this instance. Which rule (if any) sent each link is decided when its tab shows it.
    */
   #expectArrivals(cmdLine) {
     try {
       const args = Array.from({ length: cmdLine.length }, (_, i) => cmdLine.getArgument(i));
-      const now = Date.now();
-      this.#arriving = this.#arriving.filter(a => now - a.at < ARRIVAL_MS);
-      for (const item of parseCommandLine(args).items) {
-        const url = this.#resolve(cmdLine, item.value);
-        if (url) {
-          this.#arriving.push({ url, at: now });
-        }
+      const urls = parseCommandLine(args).items.map(item => this.#resolve(cmdLine, item.value)).filter(Boolean);
+      if (!urls.length) {
+        return;
       }
+      const arrival = { urls, at: Date.now() };
+      const windows = [...Services.wm.getEnumerator("navigator:browser")].filter(w => !w.closed && w.gBrowser);
+      if (!windows.length) {
+        const first = subject => {
+          Services.obs.removeObserver(first, "browser-delayed-startup-finished");
+          this.#opened.set(subject.gBrowser.selectedBrowser, arrival);
+        };
+        Services.obs.addObserver(first, "browser-delayed-startup-finished");
+        return;
+      }
+      let left = urls.length;
+      const stop = () => {
+        for (const win of windows) {
+          win.gBrowser?.tabContainer.removeEventListener("TabOpen", onOpen);
+        }
+      };
+      const onOpen = event => {
+        this.#opened.set(event.target.linkedBrowser, arrival);
+        if (--left === 0) {
+          stop();
+        }
+      };
+      for (const win of windows) {
+        win.gBrowser.tabContainer.addEventListener("TabOpen", onOpen);
+      }
+      sleep(10000).then(stop); // the tabs open at once; a later tab is the person's own
     } catch (e) {
       console.error("Nulavio routing: arrival notice", e);
     }
@@ -332,8 +355,9 @@ class NulavioRoutingClass {
 
   /**
    * The rule that sent the site of this tab here, while the tab still shows a site of that rule;
-   * null otherwise. A tab claims a link another profile sent here (within a minute) when it shows
-   * a site of the same rule. Only this group's own rules count: an explicit choice gets no notice.
+   * null otherwise. Only a tab that a routed command line opened (within a minute) can say so, and
+   * only for a site whose rule also covers one of the links it was sent. Only this group's own
+   * rules count: an explicit choice gets no notice.
    */
   arrivedBy(browser) {
     const url = browser?.currentURI?.spec;
@@ -343,15 +367,11 @@ class NulavioRoutingClass {
       return ruleId;
     }
     this.#arrived.delete(browser);
-    if (!ruleId) {
+    const arrival = this.#opened.get(browser);
+    if (!ruleId || !arrival || Date.now() - arrival.at > ARRIVAL_MS || !arrival.urls.some(u => this.#ruleHere(u) === ruleId)) {
       return null;
     }
-    const now = Date.now();
-    const waiting = this.#arriving.findIndex(a => now - a.at < ARRIVAL_MS && this.#ruleHere(a.url) === ruleId);
-    if (waiting === -1) {
-      return null;
-    }
-    this.#arriving.splice(waiting, 1);
+    this.#opened.delete(browser);
     this.#arrived.set(browser, ruleId);
     return ruleId;
   }

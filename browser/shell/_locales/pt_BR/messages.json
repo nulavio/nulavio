@@ -1067,7 +1067,7 @@
   "methodRemoveLeavesOne": {"message": "“$METHOD$” deixa de abrir este perfil, e só um método vai sobrar. Se você perder esse, os dados não voltam.", "placeholders": {"method": {"content": "$1"}}},
   "methodRemoved": {"message": "Removido: $METHOD$.", "placeholders": {"method": {"content": "$1"}}},
   "bandRouted": {"message": "Aberto pela sua regra · Mudar"},
-  "bandRoutedNamed": {"message": "Aberto em $PROFILE$ pela sua regra de roteamento. Mudar as regras", "placeholders": {"profile": {"content": "$1"}}},
+  "bandRoutedNamed": {"message": "Aberto pela sua regra · Mudar: uma regra de roteamento abriu este site em $PROFILE$. Mudar as regras", "placeholders": {"profile": {"content": "$1"}}},
   "vaultLockCurrent": {"message": "Bloquear $PROFILE$ agora", "placeholders": {"profile": {"content": "$1"}}},
   "vaultLockCurrentTitle": {"message": "Bloquear $PROFILE$ agora?", "placeholders": {"profile": {"content": "$1"}}},
   "vaultLockCurrentBody": {"message": "Todas as janelas deste perfil fecham e ele volta a bloquear. Antes, o navegador ainda pergunta sobre o que não foi salvo."},
@@ -1081,5 +1081,6 @@
   "momentRetry": {"message": "Tentar de novo"},
   "momentLoading": {"message": "Carregando…"},
   "methodsLastConfirmer": {"message": "Fica: é com uma senha ou com o código de recuperação que se confirma qualquer mudança aqui."},
-  "methodsNoConfirmer": {"message": "Este perfil não tem mais senha nem código de recuperação, e é com eles que se confirmam as mudanças aqui. Ele ainda abre com o login do computador ou o celular."}
+  "methodsNoConfirmer": {"message": "Este perfil não tem mais senha nem código de recuperação, e é com eles que se confirmam as mudanças aqui. Ele ainda abre com o login do computador ou o celular."},
+  "routingRememberHintLocked": {"message": "Desbloquear e abrir em $TARGET$: da próxima vez abre lá, sem perguntar. Abrir em $CURRENT$: $SITE$ deixa de trocar de perfil.", "placeholders": {"target": {"content": "$1"}, "current": {"content": "$2"}, "site": {"content": "$3"}}}
 }

@@ -463,6 +463,13 @@ class WindowUI {
     this.#routeNotice(win);
   }
 
+  /** A window with no alert may carry the band inside the navigation row (UX3G A1). A routing notice
+      also gives it back its own row, so the notice never squeezes the profile out (review F16). */
+  #neutral(win) {
+    return !this.#temporary && !lazy.PrivateBrowsingUtils.isWindowPrivate(win) && !this.#agent
+      && this.#guardCount === 0 && !this.#actionError && !this.#windows.get(win)?.routed;
+  }
+
   /** "Aberto pela sua regra · Mudar" (D-UX19): only what the group's own rules say about this tab. */
   #routeNotice(win) {
     let ruleId = null;
@@ -470,6 +477,11 @@ class WindowUI {
       ruleId = lazy.PrivateBrowsingUtils.isWindowPrivate(win) ? null : lazy.NulavioRouting.arrivedBy(win.gBrowser.selectedBrowser);
     } catch (e) {
       console.error(e);
+    }
+    const state = this.#windows.get(win);
+    if (state && state.routed !== Boolean(ruleId)) {
+      state.routed = Boolean(ruleId);
+      state.bar.toggleAttribute("nv-neutral", this.#neutral(win));
     }
     const label = ruleId ? t("bandRoutedNamed", [this.#profile?.name || t("bandProfileDefault")]) : "";
     for (const row of this.#rows(win)) {
@@ -526,8 +538,7 @@ class WindowUI {
     // UX3G A1: a window with no alert (not private, temporary, agent, Guard or a failed
     // action) may carry the band inside the navigation row (window-band.css); any alert
     // gives it back its own strong row at once.
-    state.bar.toggleAttribute("nv-neutral", !this.#temporary && !privateWindow && !agent
-      && this.#guardCount === 0 && !this.#actionError);
+    state.bar.toggleAttribute("nv-neutral", this.#neutral(win));
     const safety = JSON.stringify([name, this.#protection, privateWindow, this.#temporary, agent, this.#guardCount, this.#actionError]);
     if (state.safety !== safety) {
       state.safety = safety;

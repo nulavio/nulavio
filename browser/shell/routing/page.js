@@ -118,8 +118,9 @@ async function render() {
     if (target) {
       actions.push(toTarget ?? button(t("routingOpenIn", [target.name]), "button--primary", () => openThere(url, rule, remember())));
       document.getElementById("remember-label").textContent = t("routingRememberFor", [rule.display]);
+      // The hint names the buttons on the page: "Desbloquear e abrir" when the target is locked.
       document.getElementById("remember-hint").textContent = current
-        ? t("routingRememberHint", [target.name, current.name, rule.display])
+        ? t(record?.locked ? "routingRememberHintLocked" : "routingRememberHint", [target.name, current.name, rule.display])
         : "";
       document.getElementById("remember-field").hidden = false;
     }

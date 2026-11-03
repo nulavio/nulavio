@@ -1067,7 +1067,7 @@
   "methodRemoveLeavesOne": {"message": "“$METHOD$” stops opening this profile, and only one method is left. If you lose that one, the data cannot be recovered.", "placeholders": {"method": {"content": "$1"}}},
   "methodRemoved": {"message": "Removed: $METHOD$.", "placeholders": {"method": {"content": "$1"}}},
   "bandRouted": {"message": "Opened by your rule · Change"},
-  "bandRoutedNamed": {"message": "Opened in $PROFILE$ by your routing rule. Change the rules", "placeholders": {"profile": {"content": "$1"}}},
+  "bandRoutedNamed": {"message": "Opened by your rule · Change: a routing rule opened this site in $PROFILE$. Change the rules", "placeholders": {"profile": {"content": "$1"}}},
   "vaultLockCurrent": {"message": "Lock $PROFILE$ now", "placeholders": {"profile": {"content": "$1"}}},
   "vaultLockCurrentTitle": {"message": "Lock $PROFILE$ now?", "placeholders": {"profile": {"content": "$1"}}},
   "vaultLockCurrentBody": {"message": "Every window of this profile closes and it locks again. The browser still asks about anything unsaved first."},
@@ -1081,5 +1081,6 @@
   "momentRetry": {"message": "Try again"},
   "momentLoading": {"message": "Loading…"},
   "methodsLastConfirmer": {"message": "Kept: a password or the recovery code is what confirms any change here."},
-  "methodsNoConfirmer": {"message": "This profile no longer has a password or a recovery code, and those are what confirm changes here. It still opens with the computer login or the phone."}
+  "methodsNoConfirmer": {"message": "This profile no longer has a password or a recovery code, and those are what confirm changes here. It still opens with the computer login or the phone."},
+  "routingRememberHintLocked": {"message": "Unlock and open $TARGET$: next time it opens there without asking. Open in $CURRENT$: $SITE$ stops switching profiles.", "placeholders": {"target": {"content": "$1"}, "current": {"content": "$2"}, "site": {"content": "$3"}}}
 }

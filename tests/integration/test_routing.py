@@ -320,6 +320,7 @@ class RoutingTest(unittest.TestCase):
         self.assertTrue(shown, "no notice for a link the rule sent here")
         self.assertIn("pela sua regra", shown["text"])
         self.assertIn("Bancos", shown["label"])
+        self.assertTrue(shown["label"].startswith(shown["text"]), shown)  # WCAG 2.5.3: the visible words lead the name
         # The same tab on a site no rule sends here: the notice goes.
         bank.navigate(f"http://127.0.0.1:{self.server.port}/page/not-routed")
         self.assertTrue(harness.wait_until(lambda: bank.chrome(notice) is None, timeout=15))
@@ -327,6 +328,33 @@ class RoutingTest(unittest.TestCase):
         bank.navigate(self.local("/page/typed-here"))
         time.sleep(1)
         self.assertIsNone(bank.chrome(notice))
+        # Review F3: the person's own tab on a site of the rule, selected in another window, never takes
+        # the notice of a link routed meanwhile; only the tab that link opened shows it.
+        before = set(bank.window_handles())
+        bank.chrome("OpenBrowserWindow();")
+        self.assertTrue(harness.wait_until(lambda: set(bank.window_handles()) - before, timeout=20))
+        mine = (set(bank.window_handles()) - before).pop()
+        bank.switch_to(mine)
+        bank.navigate(self.local("/page/mine"))
+        self.deliver("Trabalho", [self.local("/page/routed-again")])
+        self.assertTrue(harness.wait_until(lambda: any(u.endswith("/page/routed-again") for u in self.tabs(bank)), timeout=30))
+        select = (
+            "const t = gBrowser.tabs.find(t => t.linkedBrowser.currentURI.spec.endsWith(arguments[0]));"
+            "if (t) { gBrowser.selectedTab = t; } return Boolean(t);"
+        )
+        bank.switch_to(mine)
+        self.assertTrue(bank.chrome(select, ["/page/mine"]))
+        time.sleep(2)  # more than one band refresh
+        self.assertIsNone(bank.chrome(notice), "the person's own tab took the notice")
+        for handle in bank.window_handles():
+            bank.switch_to(handle)
+            if bank.chrome(select, ["/page/routed-again"]):
+                self.assertTrue(harness.wait_until(lambda: bank.chrome(notice), timeout=10), "the routed tab has no notice")
+                break
+        else:
+            self.fail("the routed tab was not found")
+        bank.switch_to(mine)
+        bank.send("WebDriver:CloseWindow")
 
     def test_05_ask_first_loads_nothing_until_the_user_chooses(self):
         self.call("await R.setRuleAction(args[0], 'ask');", self.bank_rule)
