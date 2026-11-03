@@ -447,9 +447,11 @@ class BrowserApprover(Approver):
     picks it up quickly, the next approver is asked (the KDE dialog, or no).
     """
 
-    def __init__(self, fallback: Approver | None = None, notice: float = 4.0, timeout: float = 120.0, poll: float = 0.2):
+    def __init__(self, fallback: Approver | None = None, notice: float = 4.0, timeout: float = 120.0, poll: float = 0.2,
+                 on_request=None):  # fmt: skip
         self.fallback = fallback or Approver()
         self.notice, self.timeout, self.poll = notice, timeout, poll
+        self.on_request = on_request  # told about each request written (the assistant's stream, UX5-C1)
 
     def ask(self, agent: dict, capability: str, target: str | None, place: str = "",
             cancel: threading.Event | None = None) -> str | None:  # fmt: skip
@@ -466,6 +468,8 @@ class BrowserApprover(Approver):
                 "expires": (now() + _dt.timedelta(seconds=self.timeout)).isoformat(timespec="seconds")}  # fmt: skip
         paths.write_private_file(base.with_suffix(".json"), json.dumps(body))
         try:
+            if self.on_request:
+                self.on_request(body)
             deadline = time.monotonic() + self.notice
             while not base.with_suffix(".seen").exists():
                 if _called_off(agent["id"], cancel):

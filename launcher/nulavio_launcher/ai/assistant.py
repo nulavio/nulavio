@@ -70,6 +70,54 @@ class AssistantError(RuntimeError):
         self.retry_after = retry_after
 
 
+class Cancelled(BaseException):
+    """Stream mode: the browser asked to stop (SIGTERM, or its end of stdin closed). A BaseException, so
+    no `except Exception` on the way swallows it; `finally` blocks still close the AI Workspace."""
+
+
+class Stream:
+    """Events of one streamed request, one JSON object per line (ai/cli.py writes and flushes them).
+
+    `sent`: a request may have reached the provider (a "sending" event went out). `answered`: turns the
+    provider answered. Text pieces are gathered for about 50 ms or 256 characters before each "delta"."""
+
+    DELTA_SECONDS = 0.05
+    DELTA_CHARS = 256
+
+    def __init__(self, write):
+        self._write = write
+        self.sent = False
+        self.answered = 0
+        self.steps: list[dict] = []
+        self._pieces: list[str] = []
+        self._size = 0
+        self._last = 0.0
+
+    def event(self, kind: str, **data) -> None:
+        self._write(json.dumps({"type": kind, **data}, ensure_ascii=False))
+
+    def sending(self, turn: int) -> None:
+        self.sent = True  # from here on the request may have reached the provider
+        self.event("sending", turn=turn)
+
+    def text(self, piece: str) -> None:
+        self._pieces.append(piece)
+        self._size += len(piece)
+        if self._size >= self.DELTA_CHARS or time.monotonic() - self._last >= self.DELTA_SECONDS:
+            self.flush()
+
+    def flush(self) -> None:
+        if self._pieces:
+            self.event("delta", text="".join(self._pieces))
+            self._pieces, self._size = [], 0
+        self._last = time.monotonic()
+
+    def step(self, **data) -> None:
+        if data.get("state") != "started":
+            self.steps.append({"tool": data.get("tool"), "error": data.get("state") != "ok"})
+        self.event("step", **data)
+
+
 def _config_path() -> Path:
     return paths.state_home() / "ai" / "assistant.json"
 
@@ -230,13 +278,11 @@ def _http_error(status: int, retry_after: str | None) -> AssistantError:
                           retry_after=_retry_after(retry_after) if status == 429 else None)  # fmt: skip
 
 
-def _post(url: str, body: dict, headers: dict) -> dict:
-    """One request; an error says why, by cause (AI-09), and whether the request reached the provider."""
-    headers = {"Content-Type": "application/json", **headers}
-    request = urllib.request.Request(url, json.dumps(body).encode(), headers)  # noqa: S310 - checked endpoint
+@contextlib.contextmanager
+def _provider_errors():
+    """Errors talking to the provider, by cause (AI-09), and whether the request reached it."""
     try:
-        with urllib.request.urlopen(request, timeout=TIMEOUT) as response:  # noqa: S310 - checked endpoint
-            reply = json.load(response)
+        yield
     except urllib.error.HTTPError as exc:
         raise _http_error(exc.code, exc.headers.get("Retry-After") if exc.headers else None) from None
     except urllib.error.URLError as exc:  # while connecting or sending: nothing reached the provider
@@ -246,12 +292,24 @@ def _post(url: str, body: dict, headers: dict) -> dict:
         if isinstance(reason, TimeoutError):
             raise AssistantError("provider-timeout", "connect") from None
         raise AssistantError("provider-unreachable", type(reason).__name__) from None
-    except TimeoutError:  # sent, then no answer in time
+    except TimeoutError:  # sent, then no answer (or no next piece) in time
         raise AssistantError("provider-timeout", "read", sent=True) from None
     except (ValueError, UnicodeDecodeError, http.client.IncompleteRead):
         raise AssistantError("provider-bad-reply", "not JSON", sent=True) from None
     except (http.client.HTTPException, OSError) as exc:  # sent, then the connection ended without an answer
         raise AssistantError("provider-unavailable", type(exc).__name__, sent=True) from None
+
+
+def _open(url: str, body: dict, headers: dict):
+    headers = {"Content-Type": "application/json", **headers}
+    request = urllib.request.Request(url, json.dumps(body).encode(), headers)  # noqa: S310 - checked endpoint
+    return urllib.request.urlopen(request, timeout=TIMEOUT)  # noqa: S310 - checked endpoint
+
+
+def _post(url: str, body: dict, headers: dict) -> dict:
+    """One request and its JSON answer."""
+    with _provider_errors(), _open(url, body, headers) as response:
+        reply = json.load(response)
     if not isinstance(reply, dict):
         raise AssistantError("provider-bad-reply", "not an object", sent=True)
     return reply
@@ -270,29 +328,35 @@ def _tool_specs(kind: str) -> list[dict]:
     ]
 
 
-def _complete(provider: dict, messages: list[dict], tools: bool) -> tuple[str, list[dict], bool]:
-    """One model turn: (text, tool calls as {"id", "name", "arguments"}, cut by the provider's limit)."""
+def _request(provider: dict, messages: list[dict], tools: bool, stream: bool = False) -> tuple[str, dict, dict]:
+    """(url, body, headers) of one model turn."""
     key = _key()
     if provider["kind"] == "anthropic":
         headers = {"anthropic-version": "2023-06-01", **({"x-api-key": key} if key else {})}
         body = {"model": provider["model"], "max_tokens": ANTHROPIC_MAX_TOKENS, "system": SYSTEM, "messages": messages}
         if tools:
             body["tools"] = _tool_specs("anthropic")
-        reply = _post(provider["base_url"] + "/v1/messages", body, headers)
-        try:
+        url = provider["base_url"] + "/v1/messages"
+    else:
+        headers = {"Authorization": f"Bearer {key}"} if key else {}
+        body = {"model": provider["model"], "messages": [{"role": "system", "content": SYSTEM}, *messages]}
+        if tools:
+            body["tools"] = _tool_specs("openai")
+        url = provider["base_url"] + "/chat/completions"
+    if stream:
+        body["stream"] = True
+    return url, body, headers
+
+
+def _parse(kind: str, reply: dict) -> tuple[str, list[dict], bool]:
+    """(text, tool calls as {"id", "name", "arguments"}, cut by the provider's limit) of a JSON reply."""
+    try:
+        if kind == "anthropic":
             blocks = reply.get("content") or []
             text = "".join(str(b.get("text", "")) for b in blocks if b.get("type") == "text")
             calls = [{"id": b["id"], "name": b["name"], "arguments": b.get("input") or {}}
                      for b in blocks if b.get("type") == "tool_use"]  # fmt: skip
             return text, calls, reply.get("stop_reason") in TRUNCATED
-        except (KeyError, TypeError, AttributeError):
-            raise AssistantError("provider-bad-reply", "unexpected shape", sent=True) from None
-    headers = {"Authorization": f"Bearer {key}"} if key else {}
-    body = {"model": provider["model"], "messages": [{"role": "system", "content": SYSTEM}, *messages]}
-    if tools:
-        body["tools"] = _tool_specs("openai")
-    reply = _post(provider["base_url"] + "/chat/completions", body, headers)
-    try:
         choice = (reply.get("choices") or [{}])[0]
         message = choice.get("message") or {}
         calls = []
@@ -306,6 +370,105 @@ def _complete(provider: dict, messages: list[dict], tools: bool) -> tuple[str, l
         return str(message.get("content") or ""), calls, choice.get("finish_reason") in TRUNCATED
     except (KeyError, TypeError, AttributeError):
         raise AssistantError("provider-bad-reply", "unexpected shape", sent=True) from None
+
+
+def _complete(provider: dict, messages: list[dict], tools: bool, on_send=None) -> tuple[str, list[dict], bool]:
+    """One model turn, answered as one JSON reply. `on_send` runs just before the request goes."""
+    request = _request(provider, messages, tools)
+    if on_send:
+        on_send()
+    return _parse(provider["kind"], _post(*request))
+
+
+# An error event in the middle of a stream (Anthropic's error types; OpenAI-compatible servers vary).
+STREAM_ERRORS = {
+    "authentication_error": "provider-auth",
+    "permission_error": "provider-auth",
+    "not_found_error": "provider-not-found",
+    "rate_limit_error": "provider-rate-limited",
+    "invalid_request_error": "provider-bad-request",
+}
+
+
+def _stream_error(error) -> AssistantError:
+    kind = str((error or {}).get("type") or "") if isinstance(error, dict) else ""
+    return AssistantError(STREAM_ERRORS.get(kind, "provider-unavailable"), kind or "stream error", sent=True)
+
+
+def _events(response):
+    """Server-Sent Events as (event name or None, data) pairs, line by line as they arrive."""
+    name, data = None, []
+    for raw in response:
+        line = raw.decode("utf-8").rstrip("\r\n")
+        if not line:
+            if data:
+                yield name, "\n".join(data)
+            name, data = None, []
+        elif line.startswith(":"):
+            continue  # a comment (keep-alive)
+        else:
+            field, _, value = line.partition(":")
+            value = value.removeprefix(" ")
+            if field == "event":
+                name = value
+            elif field == "data":
+                data.append(value)
+    if data:
+        yield name, "\n".join(data)
+
+
+def _complete_stream(provider: dict, messages: list[dict], on_text, on_send=None) -> tuple[str, bool]:
+    """One Ask turn whose text arrives piece by piece (`on_text`): (text, cut by the provider's limit).
+    A server that ignores "stream" answers JSON; that works too, as one piece."""
+    kind = provider["kind"]
+    text: list[str] = []
+    stop = None
+    finished = False
+    request = _request(provider, messages, tools=False, stream=True)
+    if on_send:
+        on_send()
+    with _provider_errors(), _open(*request) as response:
+        if response.headers.get_content_type() != "text/event-stream":
+            reply = json.load(response)
+            if not isinstance(reply, dict):
+                raise AssistantError("provider-bad-reply", "not an object", sent=True)
+            whole, _calls, truncated = _parse(kind, reply)
+            if whole:
+                on_text(whole)
+            return whole, truncated
+        for name, data in _events(response):
+            if kind != "anthropic" and data == "[DONE]":
+                finished = True
+                break
+            event = json.loads(data)
+            if not isinstance(event, dict):
+                raise AssistantError("provider-bad-reply", "not an object", sent=True)
+            if kind == "anthropic":
+                kind_of = name or event.get("type")
+                if kind_of == "error":
+                    raise _stream_error(event.get("error"))
+                if kind_of == "content_block_delta" and (event.get("delta") or {}).get("type") == "text_delta":
+                    piece = str(event["delta"].get("text") or "")
+                elif kind_of == "message_delta":
+                    stop = (event.get("delta") or {}).get("stop_reason") or stop
+                    piece = ""
+                elif kind_of == "message_stop":
+                    finished = True
+                    break
+                else:
+                    piece = ""
+            else:
+                if "error" in event:
+                    raise _stream_error(event.get("error"))
+                choice = (event.get("choices") or [{}])[0]
+                piece = str((choice.get("delta") or {}).get("content") or "")
+                stop = choice.get("finish_reason") or stop
+            if piece:
+                text.append(piece)
+                on_text(piece)
+    if not finished and stop is None:
+        raise AssistantError("provider-unavailable", "the stream ended early", sent=True)
+    return "".join(text), stop in TRUNCATED
 
 
 def _page_block(page: dict) -> str:
@@ -365,9 +528,11 @@ def _require_ready(profile: str) -> dict:
     return data
 
 
-def ask(question: str, profile: str, page: dict | None = None, expected: dict | None = None) -> dict:
+def ask(question: str, profile: str, page: dict | None = None, expected: dict | None = None,
+        out: Stream | None = None) -> dict:  # fmt: skip
     """Answer a question; the page's text goes along only when `page` is given (the user's choice).
-    `expected`: {recipient, model, chars} as the panel showed them; any difference refuses the request."""
+    `expected`: {recipient, model, chars} as the panel showed them; any difference refuses the request.
+    `out`: stream mode, the answer's text as it arrives (UX5-C1)."""
     question = str(question or "").strip()
     if not question or len(question) > MAX_QUESTION_CHARS:
         raise AssistantError("bad-question")
@@ -384,10 +549,20 @@ def ask(question: str, profile: str, page: dict | None = None, expected: dict | 
                      input_chars=len(question) + sent_page)  # fmt: skip
 
     try:
-        text, _calls, truncated = _complete(provider, messages, tools=False)
+        if out is None:
+            text, _calls, truncated = _complete(provider, messages, tools=False)
+        else:
+            out.event("start", recipient=recipient(provider), model=provider["model"], chars=chars)
+            text, truncated = _complete_stream(provider, messages, out.text, on_send=lambda: out.sending(0))
+            out.flush()
+            out.answered += 1
     except AssistantError as exc:
         if exc.sent:  # it reached the provider: the activity says so, with the sizes, as for an answer
             record(f"error:{exc.code}")
+        raise
+    except Cancelled:
+        if out is not None and out.sent:
+            record("cancelled")  # stopped by the person after it may have left
         raise
     record("ok")
     return {"answer": text.strip(), "recipient": recipient(provider), "model": provider["model"],
@@ -406,7 +581,7 @@ def _tool_text(result: dict) -> str:
 
 
 def run_task(task: str, profile: str, *, headless: bool = False, bridge: Bridge | None = None,
-             expected: dict | None = None) -> dict:  # fmt: skip
+             expected: dict | None = None, out: Stream | None = None) -> dict:  # fmt: skip
     """Let the model work in its AI Workspace through the Bridge: every action passes the agent's policy.
     Its size is known only afterwards (what it reads there goes too), so only the recipient is checked."""
     task = str(task or "").strip()
@@ -416,14 +591,24 @@ def run_task(task: str, profile: str, *, headless: bool = False, bridge: Bridge 
     provider, agent_id = data["provider"], data["agent"]
     _check_expected(provider, expected, None)
     bridge = bridge or Bridge(agent_id, "assistant-" + secrets.token_hex(6), headless=headless)
+    approver = getattr(bridge, "approver", None)
+    if out is not None and isinstance(approver, registry.BrowserApprover):
+        # A permission request the run waits for: the panel can show it (its id; the request file says the rest).
+        approver.on_request = lambda body: out.event("approval", id=body["id"], capability=body["capability"],
+                                                     expires=body["expires"])  # fmt: skip
     messages: list[dict] = [{"role": "user", "content": task}]
     steps: list[dict] = []
+    if out is not None:
+        out.event("start", recipient=recipient(provider), model=provider["model"], chars=None)  # known afterwards
     try:
         for turn in range(MAX_STEPS):
             reason = _blocked(data) if turn else None
             if reason:  # stopped, paused or revoked during the run: no further model turn
                 return {"answer": "", "steps": steps, "stopped": reason}
-            text, calls, truncated = _complete(provider, messages, tools=True)
+            on_send = (lambda turn=turn: out.sending(turn)) if out is not None else None
+            text, calls, truncated = _complete(provider, messages, tools=True, on_send=on_send)
+            if out is not None:
+                out.answered += 1
             if not calls:
                 return {"answer": text.strip(), "steps": steps, "truncated": truncated}
             if provider["kind"] == "anthropic":
@@ -435,6 +620,9 @@ def run_task(task: str, profile: str, *, headless: bool = False, bridge: Bridge 
                 messages.append({"role": "assistant", "content": text or None, "tool_calls": [c["raw"] for c in calls]})
             results = []
             for call in calls:
+                index = len(steps)
+                if out is not None:
+                    out.step(index=index, tool=call["name"], state="started")
                 if call["name"] not in {t.name for t in ASSISTANT_TOOLS}:
                     result = {"content": [{"type": "text", "text": f"No tool named {call['name']!r}."}], "isError": True}
                 else:
@@ -443,13 +631,15 @@ def run_task(task: str, profile: str, *, headless: bool = False, bridge: Bridge 
                     except WorkspaceError as exc:  # the AI Workspace did not start, or its engine ended
                         raise AssistantError("workspace-failed", type(exc).__name__) from None
                 steps.append({"tool": call["name"], "error": bool(result.get("isError"))})
+                if out is not None:
+                    out.step(index=index, tool=call["name"], **_step_state(result, getattr(bridge, "last_call", None)))
                 results.append((call, _tool_text(result)))
             if provider["kind"] == "anthropic":
                 messages.append({"role": "user", "content": [
-                    {"type": "tool_result", "tool_use_id": c["id"], "content": out} for c, out in results
+                    {"type": "tool_result", "tool_use_id": c["id"], "content": reply} for c, reply in results
                 ]})  # fmt: skip
             else:
-                messages += [{"role": "tool", "tool_call_id": c["id"], "content": out} for c, out in results]
+                messages += [{"role": "tool", "tool_call_id": c["id"], "content": reply} for c, reply in results]
         return {"answer": "", "steps": steps, "stopped": "step-limit", "limit": MAX_STEPS}
     finally:
         bridge.close()
@@ -457,7 +647,17 @@ def run_task(task: str, profile: str, *, headless: bool = False, bridge: Bridge 
             registry.end_session(agent_id, bridge.session_id)  # "until it disconnects" ends with the task
 
 
-def api_request(request: dict) -> dict:
+def _step_state(result: dict, meta: dict | None) -> dict:
+    """What a step event says about a finished tool call: the activity log's fields, never its output."""
+    meta = meta or {}
+    outcome = str(meta.get("outcome") or ("error" if result.get("isError") else "ok"))
+    state = "ok" if outcome == "ok" else "denied" if outcome == "denied" else "error"
+    return {"state": state, "capability": meta.get("capability"), "reason": meta.get("reason"),
+            "origin": meta.get("origin"), "ms": meta.get("ms")}  # fmt: skip
+
+
+def api_request(request: dict, out: Stream | None = None) -> dict:
+    """One request from the browser. `out`: stream mode (only ask and task stream)."""
     op = request.get("op")
     profile = request.get("profile")
     if op == "state":
@@ -475,7 +675,7 @@ def api_request(request: dict) -> dict:
     if op == "ask":
         page = request.get("page")
         return ask(str(request.get("question", "")), str(profile or ""), page if isinstance(page, dict) else None,
-                   expected)  # fmt: skip
+                   expected, out)  # fmt: skip
     if op == "task":
-        return run_task(str(request.get("task", "")), str(profile or ""), expected=expected)
+        return run_task(str(request.get("task", "")), str(profile or ""), expected=expected, out=out)
     raise AssistantError("bad-request")

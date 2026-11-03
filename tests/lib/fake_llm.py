@@ -90,6 +90,7 @@ class FakeProvider:
         self.delay = 0.0
         self.chunk_delay = 0.0
         self.ignore_stream = False
+        self.split_lines = False  # write each streamed event in two parts, as TCP may deliver it
         self.pieces_sent = 0
         self._closed = threading.Event()
         outer = self
@@ -112,7 +113,10 @@ class FakeProvider:
                 if reply.status != 200:
                     self.send(reply.status, reply.body or _error_body(self.path, reply.status), reply.headers)
                 elif body.get("stream") and not outer.ignore_stream:
-                    self.stream(reply)
+                    try:
+                        self.stream(reply)
+                    except (BrokenPipeError, ConnectionResetError):
+                        pass  # the client stopped reading (a cancel): nothing more to send
                 else:
                     text = "".join(reply.chunks or [])
                     self.send(200, reply.body or _json_body(self.path, text, reply.stop), reply.headers)
@@ -140,7 +144,14 @@ class FakeProvider:
 
                 def event(name: str | None, data) -> None:
                     line = data if isinstance(data, str) else json.dumps(data)
-                    self.wfile.write(((f"event: {name}\n" if name else "") + f"data: {line}\n\n").encode())
+                    raw = ((f"event: {name}\n" if name else "") + f"data: {line}\n\n").encode()
+                    if outer.split_lines:
+                        half = len(raw) // 2
+                        self.wfile.write(raw[:half])
+                        self.wfile.flush()
+                        time.sleep(0.02)
+                        raw = raw[half:]
+                    self.wfile.write(raw)
                     self.wfile.flush()
 
                 if anthropic:

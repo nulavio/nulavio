@@ -232,6 +232,7 @@ class Bridge:
         self._args: dict = {}  # the current call's arguments (where it acts, for permission requests)
         self._cancel: threading.Event | None = None  # the current call's cancel: a pending request is denied
         self.raw = False  # the AI Workspace's endpoint was handed over (raw_automation)
+        self.last_call: dict | None = None
 
     # -- policy ----------------------------------------------------------------------
 
@@ -312,6 +313,9 @@ class Bridge:
         target_url = target_url or self._target
         agent = self._agent() or {}
         typed = arguments.get("text") if name == "type" else arguments.get("expression") if name == "evaluate" else None
+        # What the call was, without its output (the assistant's step events, UX5-C1): the audit's own fields.
+        self.last_call = {"capability": ",".join(checked) or None, "reason": reason, "origin": policy.origin(target_url),
+                          "outcome": outcome.split(":", 1)[0], "ms": int((time.monotonic() - started) * 1000)}  # fmt: skip
         audit.record(
             agent=self.agent_id, client=agent.get("client"), session=self.session_id, tool=name,
             capability=",".join(checked) or None, decision=decision, reason=reason, target=policy.origin(target_url),
