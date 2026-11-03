@@ -303,6 +303,31 @@ class RoutingTest(unittest.TestCase):
         self.assertEqual(self.session.processes_for(self.paths["Bancos"]), before)
         self.assertTrue(harness.wait_until(lambda: any(u.endswith("/page/routed-2") for u in self.tabs(bank)), timeout=10))
 
+    def test_04b_the_band_says_the_rule_opened_it_here(self):
+        """D-UX19: "Aberto pela sua regra · Mudar" next to the profile, only while the tab shows that rule's site."""
+        bank = self.instance("Bancos")
+        self.deliver("Trabalho", [self.local("/page/routed-notice")])
+        self.assertTrue(harness.wait_until(lambda: any(u.endswith("/page/routed-notice") for u in self.tabs(bank)), timeout=30))
+        for handle in bank.window_handles():
+            bank.switch_to(handle)
+            if bank.current_url().endswith("/page/routed-notice"):
+                break
+        notice = (
+            "const n = document.querySelector('#nulavio-band-widget .nv-band-route');"
+            "return n && !n.hidden ? {text: n.textContent, label: n.getAttribute('aria-label')} : null;"
+        )
+        shown = harness.wait_until(lambda: bank.chrome(notice), timeout=15)
+        self.assertTrue(shown, "no notice for a link the rule sent here")
+        self.assertIn("pela sua regra", shown["text"])
+        self.assertIn("Bancos", shown["label"])
+        # The same tab on a site no rule sends here: the notice goes.
+        bank.navigate(f"http://127.0.0.1:{self.server.port}/page/not-routed")
+        self.assertTrue(harness.wait_until(lambda: bank.chrome(notice) is None, timeout=15))
+        # A site of the rule typed here (not sent by another profile) gets no notice.
+        bank.navigate(self.local("/page/typed-here"))
+        time.sleep(1)
+        self.assertIsNone(bank.chrome(notice))
+
     def test_05_ask_first_loads_nothing_until_the_user_chooses(self):
         self.call("await R.setRuleAction(args[0], 'ask');", self.bank_rule)
         time.sleep(1.5)

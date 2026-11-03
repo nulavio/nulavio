@@ -105,6 +105,8 @@
     stroke: currentColor;
   }
   .nv-band-row .nv-band-protection { color: var(--nv-color-text-secondary); }
+  /* D-UX19: "Aberto pela sua regra · Mudar", next to the profile; calm text, never a seal */
+  .nv-band-row .nv-band-route { flex: none; white-space: nowrap; color: var(--nv-color-text-secondary); }
   /* Alert rows keep the pre-UX3F filled chip, exactly as strong as before. */
   .nv-band-row:is([data-private="true"], [data-agent="true"], [data-raw="true"], [data-temporary="true"]) .nv-band-identity {
     padding-inline: var(--nv-space-2);

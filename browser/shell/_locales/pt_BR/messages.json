@@ -1065,5 +1065,7 @@
   "methodRemoveTitle": {"message": "Remover $METHOD$ de $PROFILE$?", "placeholders": {"method": {"content": "$1"}, "profile": {"content": "$2"}}},
   "methodRemoveBody": {"message": "$METHOD$ deixa de abrir este perfil. Os outros métodos continuam valendo.", "placeholders": {"method": {"content": "$1"}}},
   "methodRemoveLeavesOne": {"message": "$METHOD$ deixa de abrir este perfil, e só um método vai sobrar. Se você perder esse, os dados não voltam.", "placeholders": {"method": {"content": "$1"}}},
-  "methodRemoved": {"message": "$METHOD$ removido.", "placeholders": {"method": {"content": "$1"}}}
+  "methodRemoved": {"message": "$METHOD$ removido.", "placeholders": {"method": {"content": "$1"}}},
+  "bandRouted": {"message": "Aberto pela sua regra · Mudar"},
+  "bandRoutedNamed": {"message": "Aberto em $PROFILE$ pela sua regra de roteamento. Mudar as regras", "placeholders": {"profile": {"content": "$1"}}}
 }

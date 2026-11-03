@@ -16,6 +16,7 @@ ChromeUtils.defineESModuleGetters(lazy, {
   NulavioLayout: "resource://builtin-addons/nulavio-shell/modules/NulavioLayout.sys.mjs",
   AVATARS: "resource://builtin-addons/nulavio-shell/modules/NulavioProfiles.sys.mjs",
   NulavioProfiles: "resource://builtin-addons/nulavio-shell/modules/NulavioProfiles.sys.mjs",
+  NulavioRouting: "resource://builtin-addons/nulavio-shell/modules/NulavioRouting.sys.mjs",
   PrivateBrowsingUtils: "resource://gre/modules/PrivateBrowsingUtils.sys.mjs",
   profileLockState: "resource://builtin-addons/nulavio-shell/modules/NulavioVaultState.sys.mjs",
 });
@@ -209,8 +210,11 @@ class WindowUI {
     const identity = button(doc, "nv-band-identity", () => this.#profiles(win));
     identity.append(element(doc, "span", "nv-band-flag"), element(doc, "span", "nv-band-name"));
     const protection = button(doc, "nv-band-protection", () => this.#open(win, "settings/settings.html#profiles"));
+    // D-UX19: next to the profile, while this tab shows a site one of the group's rules sent here.
+    const route = button(doc, "nv-band-route", () => this.#open(win, "settings/settings.html#routing"));
+    route.hidden = true;
     const header = element(doc, "span", "nv-band-header");
-    row.append(identity, protection, header);
+    row.append(identity, protection, route, header);
     const seals = element(doc, "div", "nv-band-seals");
     for (const kind of ["temporary", "private", "agent", "raw", "status"]) {
       const seal = element(doc, "span", `nv-band-seal nv-band-${kind}`);
@@ -456,6 +460,27 @@ class WindowUI {
     }
     this.#windows.get(win)?.bar.toggleAttribute("nv-named", trust);
     this.#markOwnPagePending(win);
+    this.#routeNotice(win);
+  }
+
+  /** "Aberto pela sua regra · Mudar" (D-UX19): only what the group's own rules say about this tab. */
+  #routeNotice(win) {
+    let ruleId = null;
+    try {
+      ruleId = lazy.PrivateBrowsingUtils.isWindowPrivate(win) ? null : lazy.NulavioRouting.arrivedBy(win.gBrowser.selectedBrowser);
+    } catch (e) {
+      console.error(e);
+    }
+    const label = ruleId ? t("bandRoutedNamed", [this.#profile?.name || t("bandProfileDefault")]) : "";
+    for (const row of this.#rows(win)) {
+      const node = row.querySelector(".nv-band-route");
+      if (node.hidden !== !ruleId) {
+        node.hidden = !ruleId;
+      }
+      setText(node, ruleId ? t("bandRouted") : "");
+      setAttr(node, "aria-label", label);
+      setAttr(node, "title", label);
+    }
   }
 
   // UX3G: for a moment after Ctrl+T the address bar already holds the Shell's new tab URL

@@ -77,12 +77,23 @@ function webUrl(url) {
   return uri.spec;
 }
 
+// How long a link another profile sent here waits for its tab to show it (D-UX19).
+const ARRIVAL_MS = 60000;
+
+/** The rule that sends a site to this very profile (a decision to stay "already here"), or null. */
+function hereBy(decision) {
+  return decision.reason === "already-here" ? decision.ruleId : null;
+}
+
 class NulavioRoutingClass {
   #listeners = new Set();
   #observing = false;
   #pageWatch = false; // M5: preference observers installed
   #pageObserving = false; // M5: the request observer is installed
   #pageRoutes = new Map(); // M5: inner window id of a page -> when it last had a navigation routed
+  // D-UX19: links another profile sent here, waiting for their tab; and the tabs showing one.
+  #arriving = [];
+  #arrived = new WeakMap(); // a tab's <browser> -> the rule that sent its site here
 
   // -- rules (shared by every profile of the group) -------------------------
 
@@ -240,6 +251,7 @@ class NulavioRoutingClass {
    */
   handleCommandLine(cmdLine) {
     if (cmdLine.handleFlag(ROUTED_FLAG, false)) {
+      this.#expectArrivals(cmdLine);
       return; // sent by routing or by an explicit choice: open here
     }
     if (!this.enabled() || !Services.prefs.getBoolPref(GROUPED_PREF, false)) {
@@ -284,6 +296,64 @@ class NulavioRoutingClass {
       cmdLine.preventDefault = true; // no extra empty window in this instance
     }
     this.#dispatch(take.map(c => c.url), { initial }).catch(e => console.error("Nulavio routing: dispatch failed", e));
+  }
+
+  // -- the band's notice (D-UX19): "Aberto em {perfil} pela sua regra · Mudar" ----------------
+
+  /**
+   * A routed command line: remember its links for a moment. Which rule (if any) sent each one is
+   * decided when a tab shows it, because a link that starts this instance arrives before the
+   * profile service knows which profile this is.
+   */
+  #expectArrivals(cmdLine) {
+    try {
+      const args = Array.from({ length: cmdLine.length }, (_, i) => cmdLine.getArgument(i));
+      const now = Date.now();
+      this.#arriving = this.#arriving.filter(a => now - a.at < ARRIVAL_MS);
+      for (const item of parseCommandLine(args).items) {
+        const url = this.#resolve(cmdLine, item.value);
+        if (url) {
+          this.#arriving.push({ url, at: now });
+        }
+      }
+    } catch (e) {
+      console.error("Nulavio routing: arrival notice", e);
+    }
+  }
+
+  /** The rule that sends this URL to this very profile, or null. */
+  #ruleHere(url) {
+    const current = lazy.SelectableProfileService.currentProfile?.id ?? null;
+    if (current === null) {
+      return null;
+    }
+    return hereBy(decide({ url, rules: this.rules(), enabled: this.enabled(), currentProfileId: current }));
+  }
+
+  /**
+   * The rule that sent the site of this tab here, while the tab still shows a site of that rule;
+   * null otherwise. A tab claims a link another profile sent here (within a minute) when it shows
+   * a site of the same rule. Only this group's own rules count: an explicit choice gets no notice.
+   */
+  arrivedBy(browser) {
+    const url = browser?.currentURI?.spec;
+    const ruleId = url && /^https?:/.test(url) ? this.#ruleHere(url) : null;
+    const held = this.#arrived.get(browser);
+    if (held && held === ruleId) {
+      return ruleId;
+    }
+    this.#arrived.delete(browser);
+    if (!ruleId) {
+      return null;
+    }
+    const now = Date.now();
+    const waiting = this.#arriving.findIndex(a => now - a.at < ARRIVAL_MS && this.#ruleHere(a.url) === ruleId);
+    if (waiting === -1) {
+      return null;
+    }
+    this.#arriving.splice(waiting, 1);
+    this.#arrived.set(browser, ruleId);
+    return ruleId;
   }
 
   /**

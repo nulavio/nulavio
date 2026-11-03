@@ -1065,5 +1065,7 @@
   "methodRemoveTitle": {"message": "Remove $METHOD$ from $PROFILE$?", "placeholders": {"method": {"content": "$1"}, "profile": {"content": "$2"}}},
   "methodRemoveBody": {"message": "$METHOD$ stops opening this profile. The other methods still do.", "placeholders": {"method": {"content": "$1"}}},
   "methodRemoveLeavesOne": {"message": "$METHOD$ stops opening this profile, and only one method is left. If you lose that one, the data cannot be recovered.", "placeholders": {"method": {"content": "$1"}}},
-  "methodRemoved": {"message": "$METHOD$ removed.", "placeholders": {"method": {"content": "$1"}}}
+  "methodRemoved": {"message": "$METHOD$ removed.", "placeholders": {"method": {"content": "$1"}}},
+  "bandRouted": {"message": "Opened by your rule · Change"},
+  "bandRoutedNamed": {"message": "Opened in $PROFILE$ by your routing rule. Change the rules", "placeholders": {"profile": {"content": "$1"}}}
 }
