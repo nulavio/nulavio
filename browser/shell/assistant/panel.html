@@ -12,7 +12,7 @@
 </head>
 <body class="assistant" data-state="loading">
   <main class="stack">
-    <h1 class="card__title" data-i18n="assistantTitle"></h1>
+    <h1 class="card__title" id="title" data-i18n="assistantTitle"></h1>
 
     <section class="stack stack--tight assistant__off" id="private" aria-labelledby="private-title" hidden>
       <h2 class="assistant__off-title" id="private-title"><span aria-hidden="true">⊘</span> <span data-i18n="assistantPrivateTitle"></span></h2>
@@ -103,7 +103,12 @@
     <section class="stack stack--tight" id="answer-section" aria-labelledby="answer-heading" hidden>
       <h2 class="assistant__answer-title" id="answer-heading" data-i18n="assistantAnswerHeading"></h2>
       <div class="assistant__answer" id="answer"></div>
-      <div class="callout callout--warning" id="truncated" hidden><p data-i18n="assistantTruncated"></p></div>
+      <div class="callout callout--warning" id="truncated" hidden>
+        <div class="stack stack--tight">
+          <p data-i18n="assistantTruncated"></p>
+          <div class="actions"><button class="button button--secondary" type="button" id="continue" data-i18n="assistantContinue"></button></div>
+        </div>
+      </div>
       <div class="callout callout--warning" id="interrupted" hidden><p id="interrupted-text"></p></div>
       <p class="hint" id="receipt"></p>
       <ol class="hint" id="steps" hidden></ol>

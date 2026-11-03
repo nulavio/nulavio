@@ -468,6 +468,12 @@ class AssistantUiTest(unittest.TestCase):
         self.select_new_tab(url)
         view = self.show_sidebar()
         self.assertEqual(view["state"], "ready")
+        # The side panel's header names it already; the page title stays for screen readers (R4 visual note).
+        self.assertTrue(
+            harness.wait_until(
+                lambda: self.panel("return document.getElementById('title').classList.contains('visually-hidden');"), 10
+            )
+        )
         # AI-01: the panel in the sidebar finds the page in its window (Gecko 158+ renamed ownerGlobal).
         view = self.wait_view(lambda v: v["offer"])
         self.assertEqual(view["offer"], "+ Incluir esta página: Artigo")
@@ -839,10 +845,16 @@ class AssistantUiTest(unittest.TestCase):
             self.assertEqual(ask_and_wait(reply)[0], "ok")
             cut = self.m.execute(
                 "const c = document.getElementById('truncated');"
-                "return [c.hidden, c.textContent, !!c.querySelector('svg[data-icon=warning]')];"
+                "return [c.hidden, c.querySelector('p').textContent, !!c.querySelector('svg[data-icon=warning]')];"
             )
             self.assertEqual(cut, [False, msg("assistantTruncated"), True])
         self.shoot("answer-cut")
+        # "Continuar" writes the next turn and leaves Send to the person (Q14).
+        before = self.provider.count
+        self.m.execute("document.getElementById('continue').click();")
+        self.assertEqual(self.m.execute("return [document.getElementById('prompt').value, document.activeElement.id];"),
+                         [msg("assistantContinuePrompt"), "send"])  # fmt: skip
+        self.assertEqual(self.provider.count, before)
         self.assertEqual(ask_and_wait({"choices": [{"message": {"content": "Inteira."}}]})[0], "ok")
         self.assertTrue(self.m.execute("return document.getElementById('truncated').hidden;"))
 

@@ -1134,5 +1134,7 @@
   "assistantThreadLineOne": {"message": "Conversation: 1 answer goes with the next question"},
   "assistantThreadLinePageOne": {"message": "Conversation: 1 answer goes with the next question, with the page “$TITLE$”", "placeholders": {"title": {"content": "$1"}}},
   "assistantIncomplete": {"message": "Answer incomplete: it stopped before the end"},
-  "assistantTaskStopping": {"message": "The task is stopping: the AI Workspace is closing."}
+  "assistantTaskStopping": {"message": "The task is stopping: the AI Workspace is closing."},
+  "assistantContinue": {"message": "Continue"},
+  "assistantContinuePrompt": {"message": "Continue from where you stopped."}
 }

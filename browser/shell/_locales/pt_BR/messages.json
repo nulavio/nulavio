@@ -1134,5 +1134,7 @@
   "assistantThreadLineOne": {"message": "Conversa: 1 resposta vai junto com a próxima pergunta"},
   "assistantThreadLinePageOne": {"message": "Conversa: 1 resposta vai junto com a próxima pergunta, com a página “$TITLE$”", "placeholders": {"title": {"content": "$1"}}},
   "assistantIncomplete": {"message": "Resposta incompleta: parou antes do fim"},
-  "assistantTaskStopping": {"message": "A tarefa está parando: a Área de IA está fechando."}
+  "assistantTaskStopping": {"message": "A tarefa está parando: a Área de IA está fechando."},
+  "assistantContinue": {"message": "Continuar"},
+  "assistantContinuePrompt": {"message": "Continue de onde parou."}
 }

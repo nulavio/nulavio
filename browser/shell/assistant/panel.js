@@ -385,6 +385,7 @@ function showResult(result, task) {
   $("answer").hidden = !text;
   // The provider's limit stopped the answer (AI-08): said where the answer ends, not only announced.
   $("truncated").hidden = !result.truncated;
+  $("continue").hidden = task;
   $("receipt").textContent = task
     ? t("assistantSentTask", [result.recipient ?? state.recipient])
     : result.pageChars
@@ -744,6 +745,17 @@ window.addEventListener("focus", () => {
 
 localize();
 $("truncated").prepend(icon("warning", "callout__icon"));
+// "Continuar" after a cut answer is an ordinary next turn: written for the person, the size shown, Send theirs (Q14).
+$("continue").addEventListener("click", () => {
+  $("prompt").value = t("assistantContinuePrompt");
+  showSendLine();
+  $("send").focus();
+});
+// In the side panel its header already names the assistant: the page's own title stays for screen readers only.
+browser.tabs
+  .getCurrent()
+  .then(tab => $("title").classList.toggle("visually-hidden", !tab))
+  .catch(() => {});
 $("interrupted").prepend(icon("warning", "callout__icon"));
 browser.windows
   .getCurrent()
