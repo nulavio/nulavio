@@ -342,6 +342,35 @@ class ProfilesTest(unittest.TestCase):
         harness.wait_until(lambda: self.m.execute("return document.querySelectorAll('#templates button').length;"), timeout=10)
         self.assertEqual(self.m.execute("return document.getElementById('name').value;"), "Banco seguro")
 
+    def test_13_typing_filters_the_profile_menu(self):
+        """UX4 (audit SPA-17): letters filter the list by name (accents ignored), Escape clears it."""
+        made = [self.profiles("return P.create({name: args[0]});", name) for name in ("Álbum", "Bolsa")]
+        try:
+            self.m.navigate(self.shell_url + "profiles/popup.html")
+            self.assertTrue(harness.wait_until(self.ready, timeout=15))
+            self.m.execute("document.querySelector('#others .popup__item').focus();")
+            self.m.send("WebDriver:ElementSendKeys", {"id": self.m.find_element("#others .popup__item"), "text": "alb"})
+            shown = lambda: self.m.execute(  # noqa: E731
+                "return [...document.querySelectorAll('#others li:not([hidden]) .popup__name')].map(n => n.textContent);"
+            )
+            self.assertTrue(harness.wait_until(lambda: shown() == ["Álbum"], 5), shown())
+            self.assertEqual(
+                self.m.execute("return [document.activeElement.id, document.getElementById('filter').value];"), ["filter", "alb"]
+            )
+            self.m.send("WebDriver:ElementSendKeys", {"id": self.m.find_element("#filter"), "text": "zz"})
+            self.assertTrue(
+                harness.wait_until(lambda: not self.m.execute("return document.getElementById('filter-none').hidden;"), 5)
+            )
+            self.m.send("WebDriver:ElementSendKeys", {"id": self.m.find_element("#filter"), "text": "\ue00c"})  # Escape
+            self.assertTrue(
+                harness.wait_until(
+                    lambda: len(shown()) >= 2 and self.m.execute("return document.getElementById('filter').hidden;"), 5
+                )
+            )
+        finally:
+            for profile_id in made:
+                self.profiles("await P.remove(args[0]);", profile_id)
+
 
 if __name__ == "__main__":
     unittest.main()

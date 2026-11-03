@@ -21,6 +21,7 @@ ChromeUtils.defineESModuleGetters(lazy, {
   NulavioRouting: "resource://builtin-addons/nulavio-shell/modules/NulavioRouting.sys.mjs",
   SelectableProfileService: "resource:///modules/profiles/SelectableProfileService.sys.mjs",
   callTool: "resource://builtin-addons/nulavio-shell/modules/NulavioTools.sys.mjs",
+  profileLockState: "resource://builtin-addons/nulavio-shell/modules/NulavioVaultState.sys.mjs",
 });
 
 const SHELL_ID = "shell@nulavio.net";
@@ -128,6 +129,28 @@ class Vault {
       fail("is-current"); // a profile cannot lock itself while it is open
     }
     return helper({ op: "lock", path });
+  }
+
+  /**
+   * "Bloquear agora" for this browser's own profile (UX4): a profile cannot lock itself while it
+   * is open, so the tools first start a watcher that locks it once this instance has exited, and
+   * then the browser quits the way the person would. The engine still asks about unsaved work
+   * and many open tabs; if the person keeps the windows, nothing closes and the watcher locks
+   * the profile at the next exit instead.
+   */
+  async lockCurrent() {
+    const path = Services.dirsvc.get("ProfD", Ci.nsIFile).path;
+    if ((await lazy.profileLockState(path)) !== "unlocked") {
+      fail("not-encrypted");
+    }
+    await helper({ op: "lock-on-exit", path });
+    const cancel = Cc["@mozilla.org/supports-PRBool;1"].createInstance(Ci.nsISupportsPRBool);
+    Services.obs.notifyObservers(cancel, "quit-application-requested");
+    if (cancel.data) {
+      return { quit: false };
+    }
+    Services.startup.quit(Ci.nsIAppStartup.eAttemptQuit);
+    return { quit: true };
   }
 
   /** Create a profile that is encrypted from the start; returns its id and the recovery code (shown once). */

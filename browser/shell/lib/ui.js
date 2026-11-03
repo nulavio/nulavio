@@ -148,6 +148,22 @@ export function profileStates(profile) {
   ].filter(Boolean);
 }
 
+/** "Bloquear agora" for this browser's own protected profile (UX4): it closes every window of
+    the profile, so it asks first, with Cancel as the focused primary. Returns the announcement. */
+export async function lockCurrentProfile(name) {
+  const ok = await confirmDialog({
+    title: t("vaultLockCurrentTitle", [name]),
+    body: t("vaultLockCurrentBody"),
+    confirm: t("vaultLockCurrentConfirm"),
+    danger: true,
+  });
+  if (!ok) {
+    return null;
+  }
+  const { quit } = await browser.nulavioVault.lockCurrent();
+  return quit ? t("vaultLockCurrentClosing") : t("vaultLockCurrentKept");
+}
+
 /** Ask for confirmation with a native modal <dialog>. Resolves true when confirmed.
     `critical`: a consent that raises what an agent may do (full control, raw automation): a critical
     icon in the title, the body in primary text, announced as an alert dialog.

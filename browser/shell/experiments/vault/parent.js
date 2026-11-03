@@ -33,6 +33,7 @@ this.nulavioVault = class extends ExtensionAPI {
         status: call(id => vault.status(id)),
         unlock: call((id, method, secret, url) => vault.unlock(id, method, secret ?? null, url ?? null)),
         lock: call(id => vault.lock(id)),
+        lockCurrent: call(() => vault.lockCurrent()),
         createProtected: call(details => vault.createProtected(details)),
         change: call((id, op, details) => vault.change(id, op, details)),
         openUnlockPage: call((id, url) => vault.openUnlockPage(id, url ?? null, "selector")),

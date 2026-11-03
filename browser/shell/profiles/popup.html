@@ -16,13 +16,19 @@
     <section aria-labelledby="current-label">
       <h1 class="popup__label" id="current-label" data-i18n="profilesThisWindow">This window</h1>
       <div class="popup__current" id="current"></div>
+      <div class="actions" id="current-actions" hidden></div>
     </section>
 
     <p class="notice" id="unavailable" hidden></p>
 
     <section id="others-section" aria-labelledby="others-label" hidden>
       <h2 class="popup__label" id="others-label" data-i18n="profilesOpenProfile">Open a profile</h2>
+      <!-- Typing a name filters the list (SPA-17); Enter opens the first match, Escape clears -->
+      <label class="visually-hidden" for="filter" data-i18n="profilesFilter">Filter profiles</label>
+      <input class="input popup__filter" type="search" id="filter" hidden autocomplete="off" spellcheck="false"
+             aria-controls="others" data-i18n-attr="placeholder:profilesFilter">
       <ul class="popup__list" id="others"></ul>
+      <p class="popup__empty" id="filter-none" role="status" hidden></p>
     </section>
 
     <section id="site-section" aria-labelledby="site-label" hidden>

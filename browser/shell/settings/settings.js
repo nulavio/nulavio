@@ -4,7 +4,18 @@
 
 import { localize, t } from "../lib/i18n.js";
 import { TEMPLATE_NAMES, freeName } from "../lib/names.js";
-import { announce, chip, confirmDialog, errorText, h, profileStates, rerender, stateBadge, temporaryStorageText } from "../lib/ui.js";
+import {
+  announce,
+  chip,
+  confirmDialog,
+  errorText,
+  h,
+  lockCurrentProfile,
+  profileStates,
+  rerender,
+  stateBadge,
+  temporaryStorageText,
+} from "../lib/ui.js";
 import { setUpAI } from "./ai.js";
 import { setUpLayout } from "./layout.js";
 import { setUpNav } from "./nav.js";
@@ -312,6 +323,21 @@ function profileRow(profile) {
 
   const end = [];
   if (profile.isCurrent) {
+    if (profile.encrypted && !profile.locked && browser.nulavioVault) {
+      const lock = h("button", {
+        class: "button button--secondary",
+        type: "button",
+        text: t("vaultLockCurrent", [profile.name]),
+        "data-focus-key": `lock-current-${profile.id}`,
+      });
+      lock.addEventListener("click", async () => {
+        const said = await run(() => lockCurrentProfile(profile.name));
+        if (said) {
+          announce(said, "info");
+        }
+      });
+      end.push(lock);
+    }
     const del = h("button", { class: "button button--quiet", type: "button", text: t("profilesDeleteCurrent") });
     del.addEventListener("click", () => run(() => profiles.openCurrentPage("delete")));
     end.push(del);

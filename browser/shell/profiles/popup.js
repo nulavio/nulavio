@@ -5,7 +5,7 @@
    and nothing is created before "Criar e abrir" (UX4, audit SPA-02/09/17). */
 
 import { localize, t } from "../lib/i18n.js";
-import { announce, chip, errorText, h, profileStates, stateBadge, temporaryStorageText } from "../lib/ui.js";
+import { announce, chip, errorText, h, lockCurrentProfile, profileStates, stateBadge, temporaryStorageText } from "../lib/ui.js";
 import { TEMPLATE_NAMES, freeName } from "../lib/names.js";
 
 const profiles = browser.nulavioProfiles;
@@ -74,6 +74,23 @@ function render(state) {
       : [])
   );
   document.querySelector(".popup__keys").hidden = temporary;
+  // A protected profile open in this window can be locked from here: it closes its windows (UX4).
+  const actions = document.getElementById("current-actions");
+  actions.hidden = !(current?.encrypted && !current.locked && browser.nulavioVault);
+  if (!actions.hidden) {
+    const lock = h("button", { class: "button button--secondary", type: "button", id: "lock-current", text: t("vaultLockCurrent", [current.name]) });
+    lock.addEventListener("click", async () => {
+      try {
+        const said = await lockCurrentProfile(current.name);
+        if (said) {
+          announce(said, "info");
+        }
+      } catch (e) {
+        announce(errorText(e), "error");
+      }
+    });
+    actions.replaceChildren(lock);
+  }
 
   const unavailable = document.getElementById("unavailable");
   unavailable.hidden = state.available;
@@ -236,13 +253,62 @@ document.addEventListener("keydown", event => {
   }
 });
 
-// -- keyboard: 1–9 open a profile, arrows move between the rows ------------------
+// -- typing filters the list -------------------------------------------------------
+
+const filter = document.getElementById("filter");
+const fold = text => String(text).normalize("NFD").replace(/\p{M}/gu, "").toLocaleLowerCase();
+const visibleItems = () => [...document.querySelectorAll("#others li:not([hidden]) .popup__item")];
+
+function applyFilter() {
+  const query = fold(filter.value.trim());
+  let shown = 0;
+  for (const item of document.querySelectorAll("#others .popup__item")) {
+    const hit = !query || fold(item.querySelector(".popup__name").textContent).includes(query);
+    item.parentElement.hidden = !hit;
+    shown += hit ? 1 : 0;
+  }
+  const none = document.getElementById("filter-none");
+  none.hidden = shown > 0 || !query;
+  none.textContent = none.hidden ? "" : t("profilesFilterNone", [filter.value.trim()]);
+}
+
+function clearFilter() {
+  filter.value = "";
+  filter.hidden = true;
+  applyFilter();
+}
+
+filter.addEventListener("input", applyFilter);
+filter.addEventListener("keydown", event => {
+  if (event.key === "Escape") {
+    event.preventDefault();
+    event.stopPropagation();
+    clearFilter();
+    document.querySelector("#others .popup__item")?.focus();
+  } else if (event.key === "Enter") {
+    event.preventDefault();
+    visibleItems()[0]?.click();
+  } else if (event.key === "ArrowDown") {
+    event.preventDefault();
+    visibleItems()[0]?.focus();
+  }
+});
+
+// -- keyboard: 1–9 open a profile, arrows move between the rows, letters filter -----
 
 document.addEventListener("keydown", event => {
   if (!sheet.hidden || event.altKey || event.ctrlKey || event.metaKey || event.target.closest?.("input, select, textarea")) {
     return;
   }
-  const items = [...document.querySelectorAll("#others .popup__item")];
+  const items = visibleItems();
+  if (/^\p{L}$/u.test(event.key) && document.querySelectorAll("#others .popup__item").length > 1) {
+    event.preventDefault();
+    filter.hidden = false;
+    filter.value += event.key;
+    filter.focus();
+    applyFilter();
+    return;
+  }
   if (/^[1-9]$/.test(event.key)) {
     const item = items[Number(event.key) - 1];
     if (item) {

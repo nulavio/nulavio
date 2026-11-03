@@ -636,6 +636,44 @@ class VaultUiTest(unittest.TestCase):
         self.assertTrue(last["why"])
         self.shoot("methods-last")
 
+    def test_11_lock_now_for_the_profile_in_this_window(self):
+        """UX4: "Bloquear agora" for this window's protected profile asks first and only then calls the Vault.
+        The Vault call quits the browser, so here it is replaced by a recorder (the tools part is a unit test)."""
+        self.call(
+            "const real = await P.list(); const me = real.profiles.find(p => p.isCurrent);"
+            "P.nvRealList = P.list; P.nvLockCalls = 0;"
+            "const shown = real.profiles.map(p => (p.isCurrent ? {...p, encrypted: true, locked: false} : p));"
+            "P.list = async () => ({...real, profiles: shown});"
+            "V.lockCurrent = async () => { P.nvLockCalls++; return {quit: false}; };"
+            "return me.name;"
+        )
+        try:
+            self.open_page("profiles/popup.html")
+            name = self.call("return (await P.nvRealList.call(P)).profiles.find(p => p.isCurrent).name;")
+            self.assertEqual(
+                self.m.execute("return document.getElementById('lock-current')?.textContent;"),
+                self.m.execute("return browser.i18n.getMessage('vaultLockCurrent', [arguments[0]]);", [name]),
+            )
+            self.click("#lock-current")
+            dialog = self.m.execute(
+                "const d = document.querySelector('dialog[open]');"
+                "return d && {focused: document.activeElement.value, primary: d.querySelector('.button--primary').value};"
+            )
+            self.assertEqual(dialog, {"focused": "cancel", "primary": "cancel"})  # closing windows: Cancel first
+            self.click("dialog[open] button[value=cancel]")
+            time.sleep(0.5)
+            self.assertEqual(self.call("return P.nvLockCalls;"), 0)
+            self.click("#lock-current")
+            self.click("dialog[open] button[value=confirm]")
+            self.assertTrue(harness.wait_until(lambda: self.call("return P.nvLockCalls;") == 1, 10))
+            self.assertTrue(
+                harness.wait_until(
+                    lambda: self.status_text() == self.m.execute("return browser.i18n.getMessage('vaultLockCurrentKept');"), 10
+                )
+            )
+        finally:
+            self.call("delete P.list; delete P.nvRealList; delete P.nvLockCalls; delete V.lockCurrent;")
+
 
 if __name__ == "__main__":
     unittest.main()

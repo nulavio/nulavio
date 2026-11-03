@@ -371,6 +371,21 @@ class HelperApiTest(StorageCase):
         )
         self.api({"op": "lock", "path": str(path)})
 
+    def test_lock_on_exit_watches_only_a_protected_profile(self):
+        """UX4 "Bloquear agora" for the profile open in the browser: a watcher locks it once the engine is gone."""
+        plain = self.tmp / "plain"
+        plain.mkdir()
+        self.assertEqual(self.api({"op": "lock-on-exit", "path": str(plain)}), {"error": "not-encrypted"})
+        path = self.tmp / "aberto"
+        path.mkdir()
+        self.api({"op": "encrypt", "path": str(path), "password": PASSWORD})
+        from nulavio_launcher.vault import cli as vault_cli
+
+        with mock.patch.object(vault_cli, "spawn_autolock") as spawn:
+            self.assertEqual(vault_cli.api_request({"op": "lock-on-exit", "path": str(path)}), {"watching": True})
+        spawn.assert_called_once()
+        self.assertEqual(spawn.call_args.args[0].path, path)
+
     def test_forget_before_deletion(self):
         path = self.tmp / "gone"
         path.mkdir()

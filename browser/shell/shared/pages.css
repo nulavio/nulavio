@@ -60,6 +60,8 @@
 .here__settings { margin-inline-start: auto; font-size: var(--nv-type-label-size); color: var(--nv-color-text-secondary); }
 .here__settings:hover { color: var(--nv-color-text-primary); }
 .here__details .facts { margin-top: var(--nv-space-3); grid-template-columns: repeat(auto-fit, minmax(min(14rem, 100%), 1fr)); }
+.popup__filter { inline-size: 100%; margin-bottom: var(--nv-space-2); }
+.popup__filter[hidden] { display: none; }
 .here__sites { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--nv-space-2) var(--nv-space-5); }
 .help__body { margin-top: var(--nv-space-4); }
 .help .footer { margin-top: var(--nv-space-6); }
