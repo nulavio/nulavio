@@ -527,7 +527,7 @@
       }
 
       /* UX3H M-1: the private-window indicator on Nulavio's private fill (the
-         band's colour) instead of Firefox's purple #7338E2; the mask glyph
+         band's colour) instead of the engine's fixed purple #7338E2; the mask glyph
          stays light on it, so the indicator is as visible as before. */
       .private-browsing-indicator-button > .toolbarbutton-icon {
         fill: var(--nv-color-security-private-fill) !important;
