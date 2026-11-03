@@ -254,6 +254,43 @@ class AssistantTest(unittest.TestCase):
         self.assertEqual(caught.exception.code, "too-large")  # never cut silently (Q20)
         self.assertEqual(self.provider.count, before)
 
+    def test_sources_only_for_passages_quoted_word_for_word(self):
+        """UX5-E / Q13: a literal quote of 24+ code points from a page sent is a source, with the heading
+        above it; a paraphrase, an invented quote, a short one or a bare address never is."""
+        text = "# Introdução\nTexto.\n\n## Resultados\nA taxa de **adoção** caiu 12% no último trimestre, segundo o relatório.\n"
+        page = {"url": "https://ex.example/artigo", "title": "Artigo", "text": text}
+        cases = (
+            ("Diz que “A taxa de adoção caiu 12% no último trimestre”.", 1),
+            ('Diz que "a taxa de adoção caiu 12% no último trimestre".', 0),  # not the page's own words (case)
+            ("> A taxa de adoção caiu 12%\n> no último trimestre, segundo o relatório.", 1),
+            ("A adoção diminuiu cerca de doze por cento no trimestre passado.", 0),  # a paraphrase, no quote
+            ("Diz que “A taxa de adoção subiu 40% no último trimestre”.", 0),  # invented
+            ("“A taxa de adoção”", 0),  # under 24 code points
+            ("“https://ex.example/artigo”", 0),
+        )
+        for answer, count in cases:
+            with self.subTest(answer=answer):
+                found = assistant.sources(answer, [page])
+                self.assertEqual(len(found), count, found)
+                if count:
+                    self.assertEqual(
+                        (found[0]["heading"], found[0]["title"], found[0]["url"]), ("Resultados", "Artigo", page["url"])
+                    )
+        decomposed = "Diz que “A taxa de ado\u0063\u0327a\u0303o caiu 12% no último trimestre”."  # NFD in the answer
+        self.assertEqual(len(assistant.sources(decomposed, [page])), 1)
+
+    def test_an_answer_carries_its_sources(self):
+        self.configure()
+        assistant.allow_profile(PROFILE, True)
+        page = {"url": "https://ex.example/a", "title": "A", "text": "O prazo de inscrição termina em 30 de novembro de 2026."}
+        self.provider.replies.append(
+            {"choices": [{"message": {"content": "Segundo a página, “O prazo de inscrição termina em 30 de novembro”."}}]}
+        )
+        result = assistant.ask("Quando acaba?", PROFILE, page)
+        self.assertEqual([x["quote"] for x in result["sources"]], ["O prazo de inscrição termina em 30 de novembro"])
+        self.provider.replies.append({"choices": [{"message": {"content": "Termina no fim de novembro."}}]})
+        self.assertEqual(assistant.ask("E aí?", PROFILE)["sources"], [])
+
     def test_page_text_is_sent_only_when_given_and_marked_untrusted(self):
         self.configure()
         assistant.allow_profile(PROFILE, True)

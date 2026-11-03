@@ -28,12 +28,14 @@ import contextlib
 import email.utils
 import http.client
 import json
+import re
 import secrets
 import ssl
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
+import unicodedata
 from pathlib import Path
 
 from .. import paths
@@ -603,8 +605,80 @@ def ask(question: str, profile: str, page: dict | None = None, expected: dict | 
                 record("cancelled")  # stopped by the person after it may have left
         raise
     record("ok")
+    pages = [p for p in [page, *(t.get("page") for t in history or [] if isinstance(t, dict))] if isinstance(p, dict)]
     return {"answer": text.strip(), "recipient": recipient(provider), "model": provider["model"],
-            "pageChars": sent_page, "chars": chars, "truncated": truncated}  # fmt: skip
+            "pageChars": sent_page, "chars": chars, "truncated": truncated,
+            "sources": sources(text, pages)}  # fmt: skip
+
+
+# -- sources (UX5-E, Q13) --------------------------------------------------------------------------
+# A source is a passage the answer quotes word for word from a page that went with the request: at
+# least SOURCE_MIN code points, compared after NFC, collapsed spaces and Markdown marks removed on
+# both sides. A paraphrase, an invented quote or a bare address never makes one.
+
+SOURCE_MIN = 24
+MAX_SOURCES = 5
+QUOTED = re.compile(r'“([^”]+)”|"([^"\n]+)"|«([^»]+)»|„([^“”]+)[“”]')
+LINK = re.compile(r"!?\[([^\]]*)\]\([^)]*\)")
+MARKS = re.compile(r"[*_`#>~|]+")
+HEADING = re.compile(r"^\s{0,3}#{1,6}\s+(.+?)\s*#*\s*$")
+
+
+def _plain(text: str) -> str:
+    text = unicodedata.normalize("NFC", text)
+    text = LINK.sub(r"\1", text)
+    text = MARKS.sub(" ", text)
+    return " ".join(text.split())
+
+
+def _quotes(answer: str) -> list[str]:
+    """What the answer presents as quoted: text in quotation marks, and Markdown quote blocks."""
+    found = ["".join(groups) for groups in (m.groups("") for m in QUOTED.finditer(answer))]
+    block: list[str] = []
+    for line in [*answer.splitlines(), ""]:
+        if line.lstrip().startswith(">"):
+            block.append(line.lstrip()[1:])
+        elif block:
+            found.append(" ".join(block))
+            block = []
+    return found
+
+
+def _indexed(page_text: str) -> tuple[str, list[tuple[int, str | None]]]:
+    """The page's plain text, and for each line where it starts there, the heading above it."""
+    plain, starts, heading = "", [], None
+    for line in page_text.splitlines():
+        found = HEADING.match(line)
+        if found:
+            heading = _plain(found.group(1)) or heading
+        piece = _plain(line)
+        if piece:
+            starts.append((len(plain) + (1 if plain else 0), heading))
+            plain = f"{plain} {piece}" if plain else piece
+    return plain, starts
+
+
+def sources(answer: str, pages: list[dict]) -> list[dict]:
+    """Passages of `answer` quoted literally from one of `pages` ({url, title, text})."""
+    out: list[dict] = []
+    indexed = [(page, *_indexed(str(page.get("text") or ""))) for page in pages]
+    for quote in _quotes(answer):
+        wanted = _plain(quote)
+        if len(wanted) < SOURCE_MIN or re.fullmatch(r"\S+://\S+", wanted):
+            continue
+        for page, plain, starts in indexed:
+            at = plain.find(wanted)
+            if at < 0:
+                continue
+            heading = next((h for start, h in reversed(starts) if start <= at), None)
+            entry = {"quote": wanted, "heading": heading, "title": str(page.get("title") or ""),
+                     "url": str(page.get("url") or "")}  # fmt: skip
+            if entry not in out:
+                out.append(entry)
+            break
+        if len(out) == MAX_SOURCES:
+            break
+    return out
 
 
 def _origin(url: str | None) -> str | None:
