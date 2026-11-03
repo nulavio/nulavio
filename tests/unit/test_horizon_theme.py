@@ -149,6 +149,14 @@ class InContentPagesTest(unittest.TestCase):
         self.assertIn("shared/in-content.css", window)
         self.assertEqual(window.count("for (const uri of [sidebarFocus, inContent])"), 2)
 
+    def test_settings_active_entry_is_set_on_the_nav_button_itself(self):
+        """UX3H: the :host of moz-page-nav-button re-declares the variables; :root alone never reached it."""
+        code = without_comments(self.SHEET)
+        rule = re.search(r":root:not\(\[lwtheme\]\) moz-page-nav-button \{([^}]*)\}", code)
+        self.assertTrue(rule, "no rule on moz-page-nav-button")
+        self.assertIn("--page-nav-button-background-color-selected: light-dark(#0F7A68, #0E3B33) !important", rule.group(1))
+        self.assertIn("--page-nav-button-text-color-selected: light-dark(#FFFFFF, #6FE0C5) !important", rule.group(1))
+
     def test_about_home_search_field_is_readable_in_light(self):
         """UX3H A-2: the about:home field was navy in light (placeholder 1.12:1)."""
         import importlib.util

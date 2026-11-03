@@ -318,6 +318,10 @@ def build_in_content(data: dict) -> str:
         f"{resolve(tokens, 'color.dark.accent.default')})",
     ]
     body = "".join(f"        {line} !important;\n" for line in lines)
+    # UX3H: moz-page-nav-button re-declares the two selected-entry variables on its own
+    # :host, so a value on :root never reached Settings' active entry (still solid mint in
+    # dark). Set them on the element itself; the agent sheet's !important wins over :host.
+    nav = "".join(f"        {line} !important;\n" for line in lines if line.startswith("--page-nav-button-"))
 
     # UX3G A2: the private-browsing page on the private chrome's navy, not the engine's violet.
     def dark(path: str) -> str:
@@ -350,6 +354,9 @@ def build_in_content(data: dict) -> str:
         + "    @media not ((forced-colors) or (prefers-contrast)) {\n"
         + "      :root:not([lwtheme]) {\n"
         + body
+        + "      }\n"
+        + "      :root:not([lwtheme]) moz-page-nav-button {\n"
+        + nav
         + "      }\n"
         + private
         + "    }\n    }\n  }\n}\n"
