@@ -27,6 +27,17 @@ Urgency: <urgent | standard> (<reasons>). Source SHA-256 <digest> (Mozilla's sig
 **Nulavio fixes**: <none, or the table above>.
 ```
 
+## Unreleased (development, Firefox 159.0.1)
+
+**Upstream**: Firefox 159.0.1, released by Mozilla on 2026-11-03 14:09:02 UTC ([mfsa2026-123](https://www.mozilla.org/security/advisories/mfsa2026-123/), [update issue #4](https://github.com/caiolombello/nulavio/issues/4)).
+Urgency: urgent (impact high: CVE-2026-120572, incorrect boundary conditions in Layout: Block and Inline). Source SHA-256 b5fe407199685f8bddf3b2c81feb8b805429e6f3d307c9430f53456f85b6e063 (Mozilla's signed SHA256SUMS, verified against the pinned release key).
+
+| Mozilla's release | Detected | Ready to sign | Published | Target | Deadline |
+|---|---|---|---|---|---|
+| 2026-11-03 14:09:02 UTC | published, by 20:39:45 UTC (+6.5 h; upstream issue) | initial rehearsal failed during compilation; guarded retry pending | not published | 2026-11-04 14:09:02 UTC (24 h): open | 2026-11-06 14:09:02 UTC (72 h): open |
+
+**Nulavio fixes**: engine pin and signed source digest updated from Firefox 159.0 to 159.0.1. The initial release rehearsal failed during compilation (a `rustc` received SIGKILL). Resource containment was then added and checked with controlled cgroup, OOM, signal and disconnect probes; a full guarded rehearsal is still pending. Signing and publishing remain pending; this entry does not certify a distributed package.
+
 ## Unreleased (development, Firefox 159.0)
 
 No package has been published yet (the release key and repository host are pending), so no user has run an affected build.
