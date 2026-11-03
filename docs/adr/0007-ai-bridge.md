@@ -130,3 +130,18 @@ Verified on the Firefox 159 Track B build: `test_assistant` unit, 11 tests. New 
 When `raw_automation` hands the endpoint over, the bridge writes `nulavio-raw.json` (`{"agent", "pid", "since"}`, 0600) into the AI Workspace's profile. It is removed when the workspace starts or stops. The Shell polls it each second. Once it sees the file for its own agent, from a live bridge, it latches the window into raw mode until the window closes, so deleting the file does not undo it. It replaces the bar with a critical one that cannot be closed: "Automação bruta: o Nulavio não verifica nem registra o que acontece nesta janela", with "Parar agente". The root element's `nulavio-state` attribute carries `ai`, `ai-profile` and `raw` for the window theme (UX3). The marker is a cue for the window, not a control: the bridge's own state and its watcher still end the workspace on stop, pause or revoke.
 
 **Verified.** `tests/unit/test_ai_bridge.py` (presets; the opt-in and its refusal without acceptance; legacy registries; risk tiers; place in requests; request file; raw marker; profile-target prefs; CLI flags; API without English consent). On the Track B build: `test_ai_bridge` 20–22 (the opt-in; a real AI Workspace's bar read from the engine's chrome: wording, level, not closable, "Parar agente", the raw bar latched, Stop pausing the agent and ending the workspace; the user's-profile wording) and `test_ai_ui` 02–05 and 09–10 (consent texts from the locale, request page order/classes/focus/risk/place/expiry, level and state badges, the emergency-stop callout with "Retomar", localised activity, the raw-automation switch, the assistant listed at once).
+
+## Amendment 2026-11-03: approvals only tighten (UX5-0)
+
+**Change.**
+- **The answer is checked again.** A permission prompt can stay open for minutes. `registry.decide` now checks the emergency stop, pause, revocation, the site list and a block the user set meanwhile again after "once" or "session". If any of them now refuses, the call is refused with that reason (`stopped`, `paused`, `revoked`, `out-of-scope`, `grant`).
+- **Pending requests end early.** `BrowserApprover` denies a pending request at once when one of these happens: the stop turns on, the agent is paused or revoked, or the call is cancelled. It removes the request files, so the request page reads as expired.
+- **Session answers are kept apart.** "Allow until the agent disconnects" is stored in `session_grants`, apart from the user's `grants`. It used to overwrite them. `policy.effective_mode` reads it first, as `session-grant`. These replace it:
+  - a grant the user sets;
+  - a reset;
+  - a new level.
+
+  The bridge and the assistant's task drop their session's answers when they end.
+- **AI Workspace windows.** In a window an agent drives, the Shell API refuses everything that loosens a setting or hides what was done (`workspace-change`): adding agents, levels, grants, sites, profiles, routes, resuming, lifting the stop, installing a client configuration, clearing the activity. Only the stop, pause and revoke work there.
+
+**Changelog: this only tightens.** A capability the user set to "ask" goes back to "ask" when the session ends, not to the level's default. Nothing that was refused becomes allowed.
