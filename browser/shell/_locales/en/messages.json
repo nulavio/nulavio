@@ -1160,5 +1160,13 @@
   "assistantRemoveSelection": {"message": "Remove the selected text of “$TITLE$” from the message", "placeholders": {"title": {"content": "$1"}}},
   "assistantSelectionAdded": {"message": "The selected text of “$TITLE$” goes with the next message. Nothing was sent.", "placeholders": {"title": {"content": "$1"}}},
   "omniboxDefault": {"message": "Write this as a question to the assistant (opens the panel; nothing is sent)"},
-  "assistantPageAdded": {"message": "The page “$TITLE$” goes with the next message. Nothing was sent.", "placeholders": {"title": {"content": "$1"}}}
+  "assistantPageAdded": {"message": "The page “$TITLE$” goes with the next message. Nothing was sent.", "placeholders": {"title": {"content": "$1"}}},
+  "bandAssistantActing": {"message": "Assistant acting in its AI Workspace · $COUNT$ actions", "placeholders": {"count": {"content": "$1"}}},
+  "bandAssistantActingOne": {"message": "Assistant acting in its AI Workspace · 1 action"},
+  "bandAssistantWaiting": {"message": "Assistant waiting for you: a permission request"},
+  "bandAssistantStopping": {"message": "Assistant stopping its task"},
+  "bandTaskStop": {"message": "Stop task"},
+  "bandAssistantPause": {"message": "Pause assistant"},
+  "bandAgentConnected": {"message": "Agent connected: $NAME$", "placeholders": {"name": {"content": "$1"}}},
+  "bandAgentsConnected": {"message": "$COUNT$ agents connected", "placeholders": {"count": {"content": "$1"}}}
 }

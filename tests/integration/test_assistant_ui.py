@@ -1529,6 +1529,112 @@ class AssistantUiTest(unittest.TestCase):
             self.m.switch_to(main)
         self.close_other_tabs()
 
+    # -- the activity seal in the band (UX5-I) ---------------------------------------------------
+
+    def band_seal(self, kind: str) -> dict | None:
+        """The band's seal in this window: its text, and whether it is really on screen and on top."""
+        return self.m.chrome(
+            "const row = document.querySelector('#nulavio-band .nv-band-row');"
+            "const node = row?.querySelector(`.nv-band-${arguments[0]}`);"
+            "if (!node || node.hidden) { return null; }"
+            "const r = node.getBoundingClientRect();"
+            "const top = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);"
+            "return {text: node.getAttribute('aria-label') || node.textContent, width: r.width,"
+            " opacity: getComputedStyle(node).opacity, onTop: node === top || node.contains(top)};",
+            [kind],
+        )
+
+    def test_34_the_band_counts_a_tasks_steps_and_says_when_it_waits(self):
+        self.close_other_tabs()
+        local = {
+            "id": "c1",
+            "type": "function",
+            "function": {"name": "tab_new", "arguments": json.dumps({"url": "http://127.0.0.1:9/"})},
+        }
+        self.provider.replies += [{"choices": [{"message": {"content": None, "tool_calls": [local]}}]}] * 2
+        self.provider.replies.append({"choices": [{"message": {"content": "Fim."}}]})
+        self.provider.delay = 1.5  # each model turn takes a moment: the seal shows each count
+        self.show_sidebar(reload=True)
+        self.wait_view(lambda v: v["state"] == "ready")
+        self.mode("task")
+        self.addCleanup(self.mode, "ask")
+        self.submit("Tente duas vezes")
+        seen = set()
+        deadline = time.monotonic() + 40
+        while time.monotonic() < deadline and not self.view()["answered"]:
+            seal = self.band_seal("activity")
+            if seal:
+                seen.add(seal["text"])
+                self.assertEqual((seal["opacity"], seal["onTop"]), ("1", True), seal)  # on screen, not covered
+                self.assertGreater(seal["width"], 0)
+            time.sleep(0.1)
+        self.assertIn("Assistente agindo na Área de IA · 1 ação", seen)
+        self.assertIn("Assistente agindo na Área de IA · 2 ações", seen)
+        self.assertTrue(harness.wait_until(lambda: self.band_seal("activity") is None, 10))  # gone when done
+        self.provider.delay = 0.0
+        # Waiting for an answer, and "Parar tarefa" from the band.
+        self.ask_first(self.assistant_agent())
+        call = {"id": "c2", "type": "function", "function": {"name": "tab_new", "arguments": json.dumps({"url": "about:blank"})}}
+        self.provider.replies.append({"choices": [{"message": {"content": None, "tool_calls": [call]}}]})
+        self.submit("Abra uma aba")
+        waiting = harness.wait_until(
+            lambda: (lambda s: s if s and "aguardando" in s["text"] else None)(self.band_seal("activity")), 30
+        )
+        self.assertEqual(waiting["text"], "Assistente aguardando você: um pedido de permissão")
+        self.m.chrome("document.querySelector('#nulavio-band .nv-band-task-stop').click();")
+        self.assertTrue(harness.wait_until(lambda: self.band_seal("activity") is None, 40))
+        self.wait_view(lambda v: v["answered"], timeout=20)
+        # A hard end of the tools (SIGKILL) takes the seal away too.
+        self.provider.replies.append({"choices": [{"message": {"content": None, "tool_calls": [call]}}]})
+        self.submit("Abra outra")
+        self.assertTrue(harness.wait_until(lambda: self.band_seal("activity"), 30))
+        os.kill(harness.wait_until(self.tools_process, 10), signal.SIGKILL)
+        self.assertTrue(harness.wait_until(lambda: self.band_seal("activity") is None, 15))
+
+    def test_35_the_band_names_an_agent_connected_through_the_bridge(self):
+        """UX5-I2: a session marker with a live pid shows; with a dead one, or none, nothing shows."""
+        sessions = Path(self.session.env["HOME"]) / ".local" / "state" / "nulavio" / "ai" / "sessions"
+        sessions.mkdir(parents=True, exist_ok=True)
+        marker = sessions / "s-test.json"
+        marker.write_text(json.dumps({"agent": "ag-0123456789ab", "name": "Claude Code", "pid": os.getpid()}))
+        try:
+            seal = harness.wait_until(lambda: self.band_seal("connected"), 15)
+            self.assertEqual(seal["text"], "Agente conectado: Claude Code")
+
+            # Several band ticks (1.5 s each) read the markers: no process is started for it.
+            def tools():
+                found = []
+                for pid in harness.descendants(self.session.process.pid):
+                    try:
+                        cmd = harness.proc_info(pid)["cmd"]
+                        if "-contentproc" not in cmd and ("nulavio-tools" in cmd or "python" in cmd):
+                            found.append(pid)  # the Nulavio tools (bin/nulavio runs python3), not the engine's processes
+                    except OSError:
+                        continue
+                return found
+
+            started = set()
+            for _ in range(25):
+                started |= set(tools())
+                time.sleep(0.2)
+            self.assertEqual(started, set())
+            # Not in a private window.
+            handles = set(self.m.window_handles())
+            main = self.m.send("WebDriver:GetWindowHandle")["value"]
+            self.m.chrome("OpenBrowserWindow({private: true});")
+            self.assertTrue(harness.wait_until(lambda: set(self.m.window_handles()) - handles, timeout=20))
+            self.m.switch_to((set(self.m.window_handles()) - handles).pop())
+            try:
+                time.sleep(2)  # past a band tick
+                self.assertIsNone(self.band_seal("connected"))
+            finally:
+                self.m.send("WebDriver:CloseWindow")
+                self.m.switch_to(main)
+            marker.write_text(json.dumps({"agent": "ag-0123456789ab", "name": "Claude Code", "pid": 2**22 + 12345}))
+            self.assertTrue(harness.wait_until(lambda: self.band_seal("connected") is None, 15))  # that process is gone
+        finally:
+            marker.unlink(missing_ok=True)
+
 
 if __name__ == "__main__":
     unittest.main()

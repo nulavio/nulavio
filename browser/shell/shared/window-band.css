@@ -235,6 +235,20 @@
   :root[nulavio-window-agent] #browser {
     border: var(--nv-security-fullscreenHeight) double var(--nv-color-security-agent-ink);
   }
+  /* UX5-I: the assistant's task acting in its AI Workspace, for this window (solid, not the agent's double). */
+  .nv-band-row .nv-band-activity {
+    background: var(--nv-color-security-agent-ink);
+    color: var(--nv-color-security-agent-on);
+    font-weight: var(--nv-font-weight-semibold);
+  }
+  .nv-band-row .nv-band-connected {
+    border-color: var(--nv-color-security-agent-ink);
+    border-style: double;
+  }
+  .nv-fullscreen-line .nv-fullscreen-activity {
+    border-block: 0;
+    border-block-start: var(--nv-security-fullscreenHeight) solid var(--nv-color-fullscreen-foreground);
+  }
   .nv-band-row .nv-band-raw {
     background: var(--nv-color-security-raw-fill);
     color: var(--nv-color-security-raw-text);

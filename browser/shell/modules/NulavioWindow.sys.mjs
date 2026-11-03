@@ -34,7 +34,7 @@ const SHELL = "shell@nulavio.net";
 const HTML = "http://www.w3.org/1999/xhtml";
 // nulavio-ai-agent-files-changed: the driving agent's registry or the emergency stop changed (NulavioAI).
 const TOPICS = ["browser-delayed-startup-finished", "nulavio-ai-window-changed", "nulavio-guard-changed",
-  "nulavio-ai-agent-files-changed"];
+  "nulavio-ai-agent-files-changed", "nulavio-ai-activity-changed"];
 // Fixed paths only. Query strings, fragments, titles and page text never name a trusted surface.
 const SURFACES = Object.freeze({
   "/newtab/newtab.html": "newtabTitle",
@@ -114,6 +114,7 @@ class WindowUI {
   #agentRevision = 0;
   #agentUnavailable = false;
   #guardCount = 0;
+  #connected = []; // agents connected through the bridge now (UX5-I2)
   #actionError = false;
   #startPageChecked = false;
 
@@ -161,6 +162,10 @@ class WindowUI {
   observe(win, topic) {
     if (topic === "browser-delayed-startup-finished") {
       this.#attach(win);
+    } else if (topic === "nulavio-ai-activity-changed") {
+      if (this.#windows.has(win)) {
+        this.#paint(win); // the assistant's task in this window (memory only: nothing is read or started)
+      }
     } else {
       if (topic === "nulavio-ai-window-changed") {
         this.#agentRevision++;
@@ -219,18 +224,23 @@ class WindowUI {
     const header = element(doc, "span", "nv-band-header");
     row.append(identity, protection, route, header);
     const seals = element(doc, "div", "nv-band-seals");
-    for (const kind of ["temporary", "private", "agent", "raw", "status"]) {
+    for (const kind of ["temporary", "private", "agent", "raw", "status", "activity"]) {
       const seal = element(doc, "span", `nv-band-seal nv-band-${kind}`);
       seal.hidden = true;
       seals.append(seal);
     }
     const guard = button(doc, "nv-band-seal nv-band-guard", () => this.#open(win, "guard/review.html"));
+    // UX5-I2: an agent connected through the bridge, acting in its own AI Workspace (Settings say more).
+    const connected = button(doc, "nv-band-seal nv-band-connected", () => this.#open(win, "settings/settings.html#ai"));
     const pause = button(doc, "nv-band-pause", () => this.#agentAction("pause"));
     const stop = button(doc, "nv-band-stop", () => this.#agentAction("stop"));
-    for (const control of [guard, pause, stop]) {
+    // UX5-I (Q10): the assistant's task in this window. These only tighten; resuming stays in Settings.
+    const taskStop = button(doc, "nv-band-task-stop", () => lazy.NulavioAI.assistantStopTask(win));
+    const assistantPause = button(doc, "nv-band-assistant-pause", () => lazy.NulavioAI.pauseAssistant().catch(console.error));
+    for (const control of [guard, connected, pause, stop, taskStop, assistantPause]) {
       control.hidden = true;
     }
-    seals.append(guard, pause, stop);
+    seals.append(guard, connected, pause, stop, taskStop, assistantPause);
     row.append(seals);
     return row;
   }
@@ -317,7 +327,7 @@ class WindowUI {
     fullscreen.setAttribute("aria-label", t("bandLabel"));
     const line = element(doc, "div", "nv-fullscreen-line");
     line.setAttribute("aria-hidden", "true");
-    for (const kind of ["normal", "temporary", "private", "agent", "raw", "guard"]) {
+    for (const kind of ["normal", "temporary", "private", "agent", "raw", "guard", "activity"]) {
       const segment = element(doc, "span", `nv-fullscreen-${kind}`);
       segment.hidden = kind !== "normal";
       line.append(segment);
@@ -470,7 +480,8 @@ class WindowUI {
       also gives it back its own row, so the notice never squeezes the profile out (review F16). */
   #neutral(win) {
     return !this.#temporary && !lazy.PrivateBrowsingUtils.isWindowPrivate(win) && !this.#agent
-      && this.#guardCount === 0 && !this.#actionError && !this.#windows.get(win)?.routed;
+      && this.#guardCount === 0 && !this.#actionError && !this.#windows.get(win)?.routed
+      && !lazy.NulavioAI.activityState(win) && !this.#connected.some(c => c.agent !== this.#agent?.id);
   }
 
   /** "Aberto pela sua regra · Mudar" (D-UX19): only what the group's own rules say about this tab. */
@@ -533,8 +544,9 @@ class WindowUI {
     root.toggleAttribute("nulavio-window-agent", Boolean(agent));
     root.toggleAttribute("nulavio-window-raw", Boolean(agent?.raw));
     const state = this.#windows.get(win);
+    const activity = lazy.NulavioAI.activityState(win);
     const kinds = { normal: true, temporary: this.#temporary, private: privateWindow,
-      agent: Boolean(agent), raw: Boolean(agent?.raw), guard: this.#guardCount > 0 };
+      agent: Boolean(agent), raw: Boolean(agent?.raw), guard: this.#guardCount > 0, activity: Boolean(activity) };
     for (const [kind, visible] of Object.entries(kinds)) {
       state.line.querySelector(`.nv-fullscreen-${kind}`).hidden = !visible;
     }
@@ -605,6 +617,14 @@ class WindowUI {
       seal("guard", this.#guardCount > 0, t("bandGuard", [String(this.#guardCount)]));
       seal("pause", Boolean(agent && !agent.paused && !agent.stopped && !agent.revoked), t("bandPauseAgent", [agentName]));
       seal("stop", Boolean(agent), t("bandStopAll"));
+      const acting = activity?.steps === 1 ? t("bandAssistantActingOne") : t("bandAssistantActing", [String(activity?.steps ?? 0)]);
+      seal("activity", Boolean(activity), activity?.stopping ? t("bandAssistantStopping") : activity?.waiting ? t("bandAssistantWaiting") : acting);
+      row.dataset.activity = String(Boolean(activity));
+      const others = privateWindow ? [] : this.#connected.filter(c => c.agent !== agent?.id);
+      seal("connected", others.length > 0, others.length === 1 ? t("bandAgentConnected", [others[0].name])
+        : t("bandAgentsConnected", [String(others.length)]));  // prettier-ignore
+      seal("task-stop", Boolean(activity && !activity.stopping), t("bandTaskStop"));
+      seal("assistant-pause", Boolean(activity && !activity.stopping), t("bandAssistantPause"));
     }
     this.#header(win);
   }
@@ -624,6 +644,7 @@ class WindowUI {
         lazy.profileLockState(Services.dirsvc.get("ProfD", Ci.nsIFile).path),
         lazy.NulavioAI.windowState(),
       ]);
+      const connected = await lazy.NulavioAI.connectedAgents().catch(() => []);
       if (!this.#started || generation !== this.#generation) {
         return;
       }
@@ -650,6 +671,7 @@ class WindowUI {
         }
       }
       this.#guardCount = lazy.NulavioGuard.findings().length;
+      this.#connected = connected;
       for (const win of this.#windows.keys()) {
         this.#paint(win);
       }

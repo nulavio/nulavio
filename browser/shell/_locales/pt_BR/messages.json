@@ -1160,5 +1160,13 @@
   "assistantRemoveSelection": {"message": "Remover o texto selecionado de “$TITLE$” da mensagem", "placeholders": {"title": {"content": "$1"}}},
   "assistantSelectionAdded": {"message": "O texto selecionado de “$TITLE$” vai junto com a próxima mensagem. Nada foi enviado.", "placeholders": {"title": {"content": "$1"}}},
   "omniboxDefault": {"message": "Escrever isto como pergunta ao assistente (abre o painel; nada é enviado)"},
-  "assistantPageAdded": {"message": "A página “$TITLE$” vai junto com a próxima mensagem. Nada foi enviado.", "placeholders": {"title": {"content": "$1"}}}
+  "assistantPageAdded": {"message": "A página “$TITLE$” vai junto com a próxima mensagem. Nada foi enviado.", "placeholders": {"title": {"content": "$1"}}},
+  "bandAssistantActing": {"message": "Assistente agindo na Área de IA · $COUNT$ ações", "placeholders": {"count": {"content": "$1"}}},
+  "bandAssistantActingOne": {"message": "Assistente agindo na Área de IA · 1 ação"},
+  "bandAssistantWaiting": {"message": "Assistente aguardando você: um pedido de permissão"},
+  "bandAssistantStopping": {"message": "Assistente parando a tarefa"},
+  "bandTaskStop": {"message": "Parar tarefa"},
+  "bandAssistantPause": {"message": "Pausar assistente"},
+  "bandAgentConnected": {"message": "Agente conectado: $NAME$", "placeholders": {"name": {"content": "$1"}}},
+  "bandAgentsConnected": {"message": "$COUNT$ agentes conectados", "placeholders": {"count": {"content": "$1"}}}
 }

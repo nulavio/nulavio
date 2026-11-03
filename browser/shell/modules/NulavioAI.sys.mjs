@@ -50,6 +50,8 @@ const OVERVIEW_TTL_MS = 15000;
 // once, instead of waiting for its next 1.5 s tick. Two stats; no process is started.
 const AGENT_FILES_MS = 500;
 export const AGENT_FILES_TOPIC = "nulavio-ai-agent-files-changed";
+// A task of the assistant started, did a step, waits for an answer or ended (UX5-I): the band repaints.
+export const ACTIVITY_TOPIC = "nulavio-ai-activity-changed";
 const RAW_POLL_MS = 1000;
 const ID_RE = /^[0-9a-f]{16}$/;
 const AGENT_RE = /^ag-[0-9a-f]{12}$/;
@@ -794,7 +796,61 @@ class AI {
     run.onUnload = () => this.#cancelRun(run); // the window closed
     win.addEventListener("unload", run.onUnload, { once: true });
     this.#watchRuns();
+    this.#activity(run);
     return { runId };
+  }
+
+  /** The band's view of this window's task (UX5-I): how many steps it did and whether it waits for
+      the person. Read from the runs in memory: no file, no process. */
+  activityState(win) {
+    for (const [runId, run] of this.#runs) {
+      if (run.win === win && run.kind === "task") {
+        return { runId, steps: run.steps.length, waiting: Boolean(run.waiting), stopping: run.state === "cancelling" };
+      }
+    }
+    return null;
+  }
+
+  #activity(run) {
+    if (run.kind === "task" && !run.win.closed) {
+      Services.obs.notifyObservers(run.win, ACTIVITY_TOPIC);
+    }
+  }
+
+  /** Agents connected through the bridge now (UX5-I2): the markers `nulavio ai serve` leaves while it runs,
+      for a process that still lives. Files only; nothing is started. */
+  async connectedAgents() {
+    const dir = PathUtils.join(lazy.stateDir(), "ai", "sessions");
+    if (!(await IOUtils.exists(dir))) {
+      return [];
+    }
+    const out = [];
+    for (const path of await IOUtils.getChildren(dir)) {
+      if (!path.endsWith(".json")) {
+        continue;
+      }
+      const session = await IOUtils.readJSON(path).catch(() => null);
+      if (Number.isInteger(session?.pid) && AGENT_RE.test(String(session.agent)) && (await IOUtils.exists(`/proc/${session.pid}`))) {
+        out.push({ agent: session.agent, name: String(session.name ?? session.agent).slice(0, 48) });
+      }
+    }
+    return out;
+  }
+
+  /** "Parar tarefa" in the band: this window's task only. */
+  assistantStopTask(win) {
+    const found = this.activityState(win);
+    if (found) {
+      this.#cancelRun(this.#runs.get(found.runId));
+    }
+  }
+
+  /** "Pausar assistente" in the band: the assistant's agent, as Settings would (resume stays there). */
+  async pauseAssistant() {
+    const config = await IOUtils.readJSON(PathUtils.join(lazy.stateDir(), "ai", "assistant.json")).catch(() => null);
+    if (config?.agent) {
+      await this.change(config.agent, "pause", { paused: true });
+    }
   }
 
   #onRunEvent(runId, run, event) {
@@ -804,7 +860,11 @@ class AI {
       run.text += event.text;
     } else if (event.type === "step" && event.state !== "started") {
       run.steps.push({ tool: event.tool, error: event.state !== "ok" });
+      run.waiting = false;
+      this.#activity(run);
     } else if (event.type === "approval") {
+      run.waiting = true;
+      this.#activity(run);
       // Someone has to answer: the idle limit waits until the request expires (Q15).
       const expires = Date.parse(event.expires);
       if (Number.isFinite(expires)) {
@@ -855,6 +915,7 @@ class AI {
       this.#keepTurn(run, event);
     }
     this.#emit(run, event);
+    this.#activity(run);
     // Nothing of the run stays: its page text and the page that started it go with it.
     run.win.removeEventListener("unload", run.onUnload);
     run.owner = run.handle = run.turn = run.onUnload = null;
@@ -891,6 +952,7 @@ class AI {
     }
     run.state = "cancelling";
     run.cancelling = true;
+    this.#activity(run);
     run.cutBy ??= cutBy;
     run.handle.cancel(run.kind === "ask" ? ASK_GRACE_MS : TASK_GRACE_MS);
   }
