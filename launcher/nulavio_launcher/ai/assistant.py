@@ -120,7 +120,7 @@ class Stream:
 
     def step(self, **data) -> None:
         if data.get("state") != "started":
-            self.steps.append({"tool": data.get("tool"), "error": data.get("state") != "ok"})
+            self.steps.append({"tool": data.get("tool"), "error": data.get("state") != "ok", "state": data.get("state")})
         self.event("step", **data)
 
 
@@ -745,14 +745,15 @@ def run_task(task: str, profile: str, *, headless: bool = False, bridge: Bridge 
                         raise AssistantError("workspace-failed", type(exc).__name__) from None
                     except Cancelled:
                         # Stopped in the middle of this call: it may have acted; the step list says so.
-                        steps.append({"tool": call["name"], "error": True})
+                        steps.append({"tool": call["name"], "error": True, "state": "cancelled"})
                         if out is not None:
                             out.step(index=index, tool=call["name"], state="cancelled")
                         raise
                     meta = getattr(bridge, "last_call", None)  # this call's, never the one before
-                steps.append({"tool": call["name"], "error": bool(result.get("isError"))})
+                state = _step_state(result, meta)
+                steps.append({"tool": call["name"], "error": bool(result.get("isError")), "state": state["state"]})
                 if out is not None:
-                    out.step(index=index, tool=call["name"], **_step_state(result, meta))
+                    out.step(index=index, tool=call["name"], **state)
                 results.append((call, _tool_text(result)))
             if provider["kind"] == "anthropic":
                 messages.append({"role": "user", "content": [

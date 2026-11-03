@@ -257,7 +257,7 @@ class StreamTest(unittest.TestCase):
         self.assertEqual(steps[1]["origin"], "http://127.0.0.1:9")
         self.assertNotIn("Denied by Nulavio", json.dumps(steps))  # the tool's text is the model's, not the panel's
         self.assertEqual([e["turn"] for e in run.events if e["type"] == "sending"], [0, 1])
-        self.assertEqual((done["answer"], done["steps"]), ("Não deu.", [{"tool": "tab_new", "error": True}]))
+        self.assertEqual((done["answer"], done["steps"]), ("Não deu.", [{"tool": "tab_new", "error": True, "state": "denied"}]))
 
     def test_a_stop_while_the_ai_workspace_closes_does_not_cut_it(self):
         """Review F1: the answer is in and the AI Workspace is closing; "Parar" now lets both finish."""
@@ -287,7 +287,7 @@ class StreamTest(unittest.TestCase):
         self.assertTrue(wait(lambda: "in-call\n" in run.stderr))
         run.proc.send_signal(signal.SIGTERM)
         done = self.terminal(run.finish())
-        self.assertEqual((done["cancelled"], done["steps"]), (True, [{"tool": "tabs_list", "error": True}]))
+        self.assertEqual((done["cancelled"], done["steps"]), (True, [{"tool": "tabs_list", "error": True, "state": "cancelled"}]))
         states = [e["state"] for e in run.events if e["type"] == "step"]
         self.assertEqual(states, ["started", "cancelled"])
         entries = [e for e in audit.read(agent=self.state["agent"]["id"]) if e.get("tool") == "tabs_list"]

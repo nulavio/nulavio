@@ -339,7 +339,9 @@ class AssistantTest(unittest.TestCase):
         bridge = FakeBridge(state["agent"]["id"])
         result = assistant.run_task("Open example.org", PROFILE, bridge=bridge)
         self.assertEqual(result["answer"], "Done.")
-        self.assertEqual(result["steps"], [{"tool": "tab_new", "error": False}])  # restricted may open public pages
+        self.assertEqual(
+            result["steps"], [{"tool": "tab_new", "error": False, "state": "ok"}]
+        )  # restricted may open public pages
         self.assertTrue(bridge.closed)
         sent_tools = {t["function"]["name"] for t in self.provider.requests[0][2]["tools"]}
         self.assertIn("click", sent_tools)
@@ -434,7 +436,7 @@ class AssistantTest(unittest.TestCase):
                 bridge = ActsDuringTheStep(agent_id, act)
                 result = assistant.run_task("Open something", PROFILE, bridge=bridge)
                 self.assertEqual(result["stopped"], code)
-                self.assertEqual(result["steps"], [{"tool": "tab_new", "error": True}])
+                self.assertEqual(result["steps"], [{"tool": "tab_new", "error": True, "state": "error"}])
                 self.assertFalse(bridge.calls[0][2])  # the step itself was refused by the policy
                 self.assertEqual(len(self.provider.requests), 1)  # and no second model turn
                 self.assertTrue(bridge.closed)
