@@ -156,6 +156,20 @@ if (browser.nulavioConnect && browser.menus) {
   let shown = [];
   let visible = false;
   let opened = 0; // the menu that is open now: answers for one already closed are dropped
+  // The device list comes from KDE Connect's own tool (a helper process, ~1-2 s): a recent answer
+  // is used at once, so only the first link menu in a while waits for it. A phone that left in the
+  // last 30 s can still be listed; sending to it fails as for any unreachable device.
+  const FRESH_MS = 30000;
+  let known = null;
+  let knownAt = 0;
+  const devices = async () => {
+    if (known && Date.now() - knownAt < FRESH_MS) {
+      return known;
+    }
+    known = await browser.nulavioConnect.kdeDevices().catch(() => []);
+    knownAt = Date.now();
+    return known;
+  };
   browser.menus.onHidden.addListener(() => {
     opened++;
     if (visible) {
@@ -168,12 +182,12 @@ if (browser.nulavioConnect && browser.menus) {
     if (!info.contexts.includes("link") || tab?.incognito) {
       return;
     }
-    const devices = await browser.nulavioConnect.kdeDevices().catch(() => []);
+    const reachable = await devices();
     if (menu !== opened) {
       return;
     }
     await Promise.all(shown.map(id => browser.menus.remove(id).catch(() => {})));
-    shown = devices.map(device => {
+    shown = reachable.map(device => {
       const id = `${SEND_MENU}:${device.id}`;
       browser.menus.create({ id, parentId: SEND_MENU, title: device.name, ...scope });
       return id;
@@ -181,7 +195,7 @@ if (browser.nulavioConnect && browser.menus) {
     if (menu !== opened) {
       return;
     }
-    visible = devices.length > 0;
+    visible = reachable.length > 0;
     await browser.menus.update(SEND_MENU, { visible });
     browser.menus.refresh();
   });

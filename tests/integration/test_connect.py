@@ -270,11 +270,14 @@ class ConnectTest(unittest.TestCase):
         finally:
             self.m.send("WebDriver:CloseWindow")
             self.m.switch_to(main)
+        listed = self.kdeconnect_log.read_text().count("--list-available")
         self.m.context_click("#go")
         self.assertEqual(
             harness.wait_until(lambda: self.m.menu_entries("nulavio-send-link") or None, timeout=15), ["Pixel", "Tablet"]
         )
         self.m.close_menu()
+        # A recent answer is reused: the next menus do not wait for KDE Connect's tool again.
+        self.assertEqual(self.kdeconnect_log.read_text().count("--list-available"), listed)
 
     def test_99_real_desktop_settings_untouched(self):
         time.sleep(0.5)
