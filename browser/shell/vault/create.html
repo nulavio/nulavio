@@ -61,7 +61,9 @@
 
       <form class="stack" id="step-recovery" hidden>
         <p data-i18n="vaultRecoveryIntro"></p>
-        <p class="notice mono" id="code"></p>
+        <!-- UX4 (audit SB-08): 7 numbered groups, read one by one; print is the only copy offered -->
+        <ol class="code-grid code-print" id="code" data-i18n-attr="aria-label:vaultCodeLabel"></ol>
+        <div class="actions"><button class="button button--secondary" type="button" id="print-code" data-i18n="vaultCodePrint"></button></div>
         <p class="hint" data-i18n="vaultRecoveryKeep"></p>
         <div class="field-row">
           <label class="field">

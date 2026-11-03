@@ -386,6 +386,27 @@ body.assistant { padding: var(--nv-space-4); }
 .moment__profile { display: inline-flex; align-items: center; gap: var(--nv-space-2); color: var(--nv-color-text-primary); }
 .moment__context .badge { margin-inline-start: 0; }
 
+/* The recovery code (UX4, audit SB-08): 7 numbered groups; printing shows only them */
+.code-grid {
+  list-style: none;
+  margin: 0;
+  padding: var(--nv-space-4);
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(6.5rem, 1fr));
+  gap: var(--nv-space-3) var(--nv-space-5);
+  border-radius: var(--nv-radius-md);
+  background: var(--nv-color-bg-sunken);
+}
+.code-grid:empty { display: none; }
+.code-grid__group { display: flex; align-items: baseline; gap: var(--nv-space-2); }
+.code-grid__n { min-inline-size: 1.25rem; font-size: var(--nv-type-caption-size); color: var(--nv-color-text-secondary); text-align: end; }
+.code-grid__value { font-size: var(--nv-type-section-size); letter-spacing: 0.08em; }
+@media print {
+  body[data-printing="code"] * { visibility: hidden; }
+  body[data-printing="code"] .code-print, body[data-printing="code"] .code-print * { visibility: visible; }
+  body[data-printing="code"] .code-print { position: absolute; inset: 0 auto auto 0; background: none; }
+}
+
 /* Download warning (flow E) */
 .page--narrow { max-width: 40rem; }
 .warning { display: grid; gap: var(--nv-space-5); }

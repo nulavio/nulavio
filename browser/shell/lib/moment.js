@@ -19,6 +19,7 @@ const KINDS = {
   guard: "bandSurfaceGuard",
   request: "bandSurfacePermission",
   routing: "bandSurfaceRouting",
+  methods: "bandSurfaceMethods",
 };
 
 async function here() {

@@ -255,7 +255,10 @@ class VaultUiTest(unittest.TestCase):
         self.shoot("create-2-protection")
         self.click("#step-protection button[type=submit]")
         self.wait_state("recovery", "step", timeout=90)
-        code = self.m.execute("return document.getElementById('code').textContent;")
+        code = self.m.execute("return document.getElementById('code').dataset.code;")
+        # UX4 (SB-08): 7 numbered groups, and the heading (not a field below the code) has the keyboard.
+        self.assertEqual(self.m.execute("return document.querySelectorAll('#code > li').length;"), 7)
+        self.assertEqual(self.m.execute("return document.activeElement.id;"), "headline")
         self.assertRegex(code, r"^([0-9A-HJKMNP-TV-Z]{4}-){6}[0-9A-HJKMNP-TV-Z]{4}$")
         self.shoot("create-3-recovery")
         groups = code.split("-")
@@ -268,6 +271,7 @@ class VaultUiTest(unittest.TestCase):
         self.click("#step-recovery button[type=submit]")
         self.wait_state("done", "step")
         self.assertEqual(self.m.execute("return document.getElementById('code').textContent;"), "")  # no longer on screen
+        self.assertIsNone(self.m.execute("return document.getElementById('code').dataset.code ?? null;"))
         self.shoot("create-4-done")
         profile = next(p for p in self.call("return (await P.list()).profiles;") if p["name"] == "Cofre UI")
         self.assertEqual((profile["encrypted"], profile["locked"]), (True, True))
@@ -542,6 +546,80 @@ class VaultUiTest(unittest.TestCase):
         self.stop_instance(path)
         box = storage.Container(path)
         self.assertTrue(harness.wait_until(lambda: not box.mounted(), timeout=30), "not locked after the window closed")
+
+    def test_10_unlock_methods_page(self):
+        """UX4 (audit SB-09, SB-16): every method by kind; each change confirmed with a current secret."""
+        profile_id, code = self.create_via_api("Metodos", password=PASSWORD, keyring=False)
+        self.open_page(f"vault/methods.html?p={profile_id}")
+        self.wait_state("idle")
+        rows = self.m.execute("return [...document.querySelectorAll('#methods > li')].map(li => li.dataset.method);")
+        self.assertEqual(sorted(rows), ["password", "recovery-code"])
+        self.assertTrue(self.m.execute("return document.getElementById('few').hidden;"))  # two methods: no warning
+        self.shoot("methods-idle")
+        # A change without the current secret is refused next to the field, and nothing changes.
+        self.click("#add-password")
+        self.type_into("new-password", "second pass 22")
+        self.type_into("new-password2", "second pass 22")
+        self.click("#password-form button[type=submit]")
+        self.assertTrue(self.m.execute("return document.getElementById('current-error').textContent.length > 0;"))
+        self.assertEqual(self.m.execute("return document.activeElement.id;"), "current")
+        # With the wrong secret: refused, the field is cleared and marked.
+        self.type_into("new-password", "second pass 22")
+        self.type_into("new-password2", "second pass 22")
+        self.type_into("current", "not the password")
+        self.click("#password-form button[type=submit]")
+        self.assertTrue(
+            harness.wait_until(
+                lambda: self.m.execute("return document.getElementById('current').getAttribute('aria-invalid');") == "true", 30
+            )
+        )
+        self.assertEqual(self.m.execute("return document.getElementById('current').value;"), "")
+        # With the password: a second password is added.
+        self.type_into("new-password", "second pass 22")
+        self.type_into("new-password2", "second pass 22")
+        self.type_into("current", PASSWORD)
+        self.click("#password-form button[type=submit]")
+        self.assertTrue(
+            harness.wait_until(
+                lambda: self.m.execute("return document.querySelectorAll('#methods > li[data-method=password]').length;") == 2, 30
+            )
+        )
+        # A new recovery code: confirmed, shown once as 7 groups, two typed back; the old one stops working.
+        self.type_into("current", "second pass 22")
+        self.click("#new-code")
+        self.click("dialog[open] button[value=confirm]")
+        self.wait_state("code")
+        new_code = self.m.execute("return document.getElementById('code').dataset.code;")
+        self.assertNotEqual(new_code, code)
+        self.assertEqual(self.m.execute("return document.querySelectorAll('#code > li').length;"), 7)
+        self.assertEqual(self.m.execute("return document.activeElement.id;"), "code-heading")
+        self.shoot("methods-new-code")
+        groups = new_code.split("-")
+        index = lambda label: int(self.m.execute(f"return document.getElementById('{label}').textContent.match(/\\d+/)[0];")) - 1  # noqa: E731
+        self.type_into("group-a", groups[index("group-a-label")])
+        self.type_into("group-b", groups[index("group-b-label")])
+        self.click("#code-step button[type=submit]")
+        self.wait_state("idle")
+        self.assertEqual(self.m.execute("return document.getElementById('code').textContent;"), "")
+        # Removing a method asks first; the old code no longer confirms anything.
+        self.type_into("current", code)
+        first = self.m.execute("return document.querySelector('#methods > li[data-method=password]').dataset.envelope;")
+        self.click(f"#methods > li[data-envelope='{first}'] button")
+        self.click("dialog[open] button[value=confirm]")
+        self.assertTrue(
+            harness.wait_until(
+                lambda: self.m.execute("return document.getElementById('current-error').textContent.length > 0;"), 30
+            )
+        )
+        self.assertEqual(self.m.execute("return document.querySelectorAll('#methods > li[data-method=password]').length;"), 2)
+        self.type_into("current", new_code)
+        self.click(f"#methods > li[data-envelope='{first}'] button")
+        self.click("dialog[open] button[value=confirm]")
+        self.assertTrue(
+            harness.wait_until(
+                lambda: self.m.execute("return document.querySelectorAll('#methods > li[data-method=password]').length;") == 1, 30
+            )
+        )
 
 
 if __name__ == "__main__":

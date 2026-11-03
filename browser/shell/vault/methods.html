@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title data-i18n="bandSurfaceMethods"></title>
+  <link rel="icon" href="../shared/nulavio-symbol-adaptive.svg">
+  <link rel="stylesheet" href="../shared/tokens.css">
+  <link rel="stylesheet" href="../shared/base.css">
+  <link rel="stylesheet" href="../shared/shell.css">
+  <script type="module" src="methods.js"></script>
+  <script type="module" src="../lib/moment.js"></script>
+</head>
+<!-- UX4 (audit SB-09, SB-16): every way a protected profile unlocks, and add, replace or remove,
+     each confirmed with a current secret. States on <body data-state>: loading, idle, busy, code,
+     unavailable. -->
+<body data-state="loading">
+  <main class="page page--narrow">
+    <section class="card stack" aria-labelledby="headline">
+      <header class="moment__context" data-kind="methods"></header>
+      <div class="target" id="who"></div>
+      <h1 class="warning__headline" id="headline" data-i18n="bandSurfaceMethods"></h1>
+      <p id="explain" data-i18n="methodsExplain"></p>
+      <div class="callout callout--warning" id="few" hidden>
+        <p data-i18n="methodsFew"></p>
+      </div>
+      <ul class="list" id="methods" aria-labelledby="headline"></ul>
+
+      <!-- One confirmation for each change: the current password or recovery code -->
+      <label class="field">
+        <span class="field__label" data-i18n="methodsCurrentLabel"></span>
+        <input class="input" id="current" type="password" autocomplete="current-password" maxlength="1024"
+               aria-describedby="current-hint current-error">
+        <span class="hint" id="current-hint" data-i18n="methodsCurrentHint"></span>
+      </label>
+      <p class="form-error" id="current-error" role="alert"></p>
+
+      <div class="actions" id="add-actions">
+        <button class="button button--secondary" type="button" id="new-code" data-i18n="methodsNewCode"></button>
+        <button class="button button--secondary" type="button" id="add-password" data-i18n="methodsAddPassword"></button>
+        <button class="button button--secondary" type="button" id="add-keyring" hidden data-i18n="methodsAddKeyring"></button>
+        <a class="button button--quiet" id="phones" data-i18n="methodsPhones"></a>
+      </div>
+
+      <form class="stack stack--tight" id="password-form" hidden novalidate>
+        <label class="field"><span class="field__label" data-i18n="vaultNewPassword"></span>
+          <input class="input" id="new-password" type="password" autocomplete="new-password" maxlength="1024"></label>
+        <label class="field"><span class="field__label" data-i18n="vaultRepeatPassword"></span>
+          <input class="input" id="new-password2" type="password" autocomplete="new-password" maxlength="1024"></label>
+        <p class="form-error" id="password-error" role="alert"></p>
+        <div class="actions">
+          <button class="button button--primary" type="submit" data-i18n="methodsSavePassword"></button>
+          <button class="button button--quiet" type="button" id="password-cancel" data-i18n="vaultBack"></button>
+        </div>
+      </form>
+
+      <!-- The new recovery code, shown once: the old one stops working now -->
+      <form class="stack" id="code-step" hidden novalidate>
+        <h2 class="section__title" id="code-heading" tabindex="-1" data-i18n="methodsCodeHeading"></h2>
+        <p data-i18n="methodsCodeIntro"></p>
+        <ol class="code-grid code-print" id="code" data-i18n-attr="aria-label:vaultCodeLabel"></ol>
+        <div class="actions"><button class="button button--secondary" type="button" id="print-code" data-i18n="vaultCodePrint"></button></div>
+        <p class="hint" data-i18n="vaultRecoveryKeep"></p>
+        <div class="field-row">
+          <label class="field"><span class="field__label" id="group-a-label"></span>
+            <input class="input mono input--short" id="group-a" maxlength="4" autocomplete="off" spellcheck="false"></label>
+          <label class="field"><span class="field__label" id="group-b-label"></span>
+            <input class="input mono input--short" id="group-b" maxlength="4" autocomplete="off" spellcheck="false"></label>
+        </div>
+        <p class="form-error" id="code-error" role="alert"></p>
+        <div class="actions"><button class="button button--primary" type="submit" data-i18n="vaultFinish"></button></div>
+      </form>
+
+      <p class="status" id="status" role="status" aria-live="polite"></p>
+      <p class="hint" data-i18n="vaultNoMasterKey"></p>
+    </section>
+  </main>
+</body>
+</html>

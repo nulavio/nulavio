@@ -6,6 +6,7 @@
 
 import { localize, t } from "../lib/i18n.js";
 import { TEMPLATE_NAMES } from "../lib/names.js";
+import { clearCode, guardLeaving, printCode, showCode } from "../lib/recovery.js";
 import { announce, chip, errorText, h } from "../lib/ui.js";
 
 const vault = browser.nulavioVault;
@@ -26,8 +27,17 @@ function step(name) {
     { profile: "vaultStepProfile", protection: "vaultStepProtection", recovery: "vaultStepRecovery", done: "vaultStepDone" }[name]
   );
   announce("");
+  if (name === "recovery") {
+    // The code comes first (SB-08): the heading takes the keyboard, then the numbered groups.
+    byId("headline").tabIndex = -1;
+    byId("headline").focus();
+    return;
+  }
   document.querySelector(`#step-${name} input, #step-${name} button`)?.focus();
 }
+
+// The profile exists once the code is shown: leaving before typing it back would lose the code.
+guardLeaving(() => document.body.dataset.step === "recovery");
 
 function chooseTemplate(id) {
   state.templateId = id;
@@ -122,7 +132,7 @@ function showRecovery() {
   const a = 1 + Math.floor(Math.random() * 3);
   const b = 4 + Math.floor(Math.random() * 3);
   state.groups = [a, b];
-  byId("code").textContent = state.code;
+  showCode(byId("code"), state.code);
   byId("group-a-label").textContent = t("vaultTypeGroup", [String(a + 1)]);
   byId("group-b-label").textContent = t("vaultTypeGroup", [String(b + 1)]);
   byId("group-a").dataset.expected = groups[a];
@@ -140,7 +150,7 @@ function finish(event) {
     return;
   }
   state.code = "";
-  byId("code").textContent = "";
+  clearCode(byId("code"));
   byId("done-text").textContent = t("vaultCreated", [state.name]);
   byId("done-actions").replaceChildren(
     h("button", { class: "button button--primary", type: "button", text: t("vaultOpenProfile", [state.name]),
@@ -153,6 +163,7 @@ function finish(event) {
 byId("name").addEventListener("input", () => {
   byId("name").dataset.touched = "1";
 });
+byId("print-code").addEventListener("click", printCode);
 byId("step-profile").addEventListener("submit", event => {
   event.preventDefault();
   state.name = byId("name").value.trim();

@@ -362,9 +362,15 @@ function profileRow(profile) {
     end.push(del);
   }
   if (profile.encrypted) {
-    const phones = h("button", { class: "button button--quiet", type: "button", text: t("vaultPhones"), "data-focus-key": `phones-${profile.id}` });
-    phones.addEventListener("click", () => run(() => browser.nulavioVault.openPhonePage(profile.id)));
-    end.push(phones);
+    // Every way it unlocks, with add, replace and remove (UX4, audit SB-09); phones are one of them.
+    const methods = h("a", {
+      class: "button button--quiet",
+      href: `../vault/methods.html?p=${profile.id}`,
+      text: t("bandSurfaceMethods"),
+      "aria-label": t("methodsNamed", [profile.name]),
+      "data-focus-key": `methods-${profile.id}`,
+    });
+    end.push(methods);
   }
 
   return h(

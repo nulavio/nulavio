@@ -40,6 +40,7 @@ const SURFACES = Object.freeze({
   "/vault/unlock.html": "bandSurfaceUnlock",
   "/vault/create.html": "vaultNewProtected",
   "/vault/phone.html": "bandSurfacePhone",
+  "/vault/methods.html": "bandSurfaceMethods",
   "/guard/review.html": "bandSurfaceGuard",
   "/ai/request.html": "bandSurfacePermission",
   "/routing/ask.html": "bandSurfaceRouting",
