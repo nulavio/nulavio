@@ -16,6 +16,11 @@ let windowId = null; // the browser window this panel lives in
 let current = null; // what "Incluir esta página" would include now: {tabId, url, title}
 let chips = []; // the items of the next message, as the browser keeps them: {chipId, kind, tabId, url, title, host, chars, truncated, blockChars}
 let busy = false;
+// The run this panel shows (UX5-C2): {runId, kind, text, stopping, steps}. Its events arrive through
+// onAssistantEvent; ones that come before assistantStart answers wait in `early`.
+let run = null;
+let early = [];
+let paint = 0;
 let contextVersion = 0; // late page replies cannot restore consent after a send or context change
 
 const $ = id => document.getElementById(id);
@@ -243,6 +248,17 @@ async function render() {
     chips = await ai.assistantChips().catch(() => []); // kept by the browser while the panel was closed
     await refreshPage();
     syncMode();
+    if (!run) {
+      const [going] = await ai.assistantRuns().catch(() => []);
+      if (going) {
+        // A Task goes on while the panel is closed (Q18): this panel shows it, with "Parar".
+        run = { runId: going.runId, kind: going.kind, text: "", stopping: going.state === "cancelling", steps: [...going.steps] };
+        setRunning(true);
+        showSteps(run.steps);
+        $("answer-section").hidden = !run.steps.length;
+        announce(t("assistantTaskGoesOn"), "progress");
+      }
+    }
   } else {
     ++contextVersion;
     chips = [];
@@ -299,13 +315,103 @@ async function showError(error, task) {
   }
 }
 
+function setRunning(on) {
+  busy = on;
+  // While a run goes, Send is "Parar" (Esc too); nothing else changes the message.
+  $("send").textContent = t(on ? "assistantStop" : "assistantSend");
+  $("send").setAttribute("aria-keyshortcuts", on ? "Escape" : "Control+Enter");
+  $("send").classList.toggle("button--primary", !on);
+  $("send").classList.toggle("button--secondary", on);
+  $("send").disabled = false;
+  $("summarize").disabled = on;
+  $("include-page").disabled = on;
+  $("prompt").readOnly = on;
+  if (!on) {
+    showSendLine();
+  }
+}
+
+/** The answer as it arrives: plain text in one node, painted once per frame, with a still block cursor.
+    The region is not live: a screen reader hears the start and the end (AI-12), not every piece. */
+function showPartial() {
+  paint = 0;
+  if (!run) {
+    return;
+  }
+  $("answer-section").hidden = false;
+  $("answer").hidden = false;
+  $("answer").replaceChildren(document.createTextNode(run.text), h("span", { class: "assistant__cursor", "aria-hidden": "true" }));
+}
+
+function onRunEvent(event) {
+  if (!run || event.runId !== run.runId) {
+    if (run && !run.runId) {
+      early.push(event); // assistantStart has not answered yet
+    }
+    return;
+  }
+  if (event.type === "delta") {
+    run.text += event.text;
+    paint ||= requestAnimationFrame(showPartial);
+  } else if (event.type === "step" && event.state !== "started") {
+    run.steps.push({ tool: event.tool, error: event.state !== "ok" });
+    showSteps(run.steps);
+    $("answer-section").hidden = false;
+  } else if (event.type === "done") {
+    finishRun(event);
+  } else if (event.type === "error") {
+    const kind = run.kind;
+    endRun();
+    showError({ message: event.code }, kind === "task");
+  }
+}
+
+function endRun() {
+  cancelAnimationFrame(paint);
+  paint = 0;
+  run = null;
+  early = [];
+  setRunning(false);
+}
+
+async function finishRun(result) {
+  const { kind, text, stopping } = run;
+  const task = kind === "task";
+  endRun();
+  if (!result.cancelled) {
+    showResult(result, task);
+    if (stopping) {
+      announce(t("assistantArrivedBeforeStop")); // the answer came before the stop reached the tools
+    }
+    return;
+  }
+  // Stopped: say what may have left, never "nothing changed" once a request went (UX5-C2).
+  $("answer-section").hidden = false;
+  $("answer").textContent = text;
+  $("answer").hidden = !text;
+  $("truncated").hidden = true;
+  $("interrupted").hidden = task;
+  $("interrupted-text").textContent = result.cutBy ? errorText(result.cutBy) : t("assistantInterrupted");
+  $("receipt").textContent = "";
+  showSteps(result.steps);
+  document.body.dataset.answered = "true";
+  let why = !result.sent ? t("assistantCancelledNothing") : task ? t("assistantTaskCancelled") : t("assistantCancelledSent", [state.recipient]);
+  if (task && result.sent) {
+    why = `${why} ${t("assistantTaskMayHaveActed")}`;
+    $("activity-actions").hidden = false;
+  }
+  announce(result.cutBy ? `${errorText(result.cutBy)} ${why}` : why, "error");
+  if (result.cutBy) {
+    await render().catch(() => {});
+  }
+}
+
 async function send(question) {
   const task = mode() === "task";
   // What the line above Send says now is what the tools check: where it goes, and its size.
   const expected = { recipient: state.recipient, model: state.provider.model };
   const items = task ? [] : chips.map(c => c.chipId);
   const chars = requestChars();
-  busy = true;
   ++contextVersion;
   // Consent is per message: what was included goes with this one only (the browser drops it too).
   chips = [];
@@ -313,40 +419,69 @@ async function send(question) {
   showContext();
   $("answer-section").hidden = true;
   $("activity-actions").hidden = true;
+  $("interrupted").hidden = true;
+  $("truncated").hidden = true;
+  $("steps").hidden = true;
+  $("answer").replaceChildren();
   delete document.body.dataset.answered;
-  $("send").disabled = true;
-  $("summarize").disabled = true;
-  $("include-page").disabled = true;
+  run = { runId: null, kind: task ? "task" : "ask", text: "", stopping: false, steps: [] };
+  setRunning(true);
   // One polite announcement now, one when it ends (AI-12); no check mark until then.
   announce(t(task ? "assistantWorking" : "assistantAsking", [state.recipient]), "progress");
   try {
-    const result = task
-      ? await ai.assistantTask(question, expected)
-      : await ai.assistantAsk(question, { chips: items, expected: { ...expected, chars } });
-    showResult(result, task);
+    const { runId } = task
+      ? await ai.assistantStart("task", { task: question, expected })
+      : await ai.assistantStart("ask", { question, chips: items, expected: { ...expected, chars } });
+    run.runId = runId;
+    if (run.stopping) {
+      ai.assistantCancel(runId).catch(() => {}); // "Parar" came before the run had an id
+    }
+    const waiting = early;
+    early = [];
+    waiting.forEach(onRunEvent);
   } catch (e) {
+    endRun();
     await showError(e, task);
-  } finally {
-    busy = false;
-    $("send").disabled = false;
-    $("summarize").disabled = false;
-    $("include-page").disabled = false;
-    showSendLine();
+  }
+}
+
+/** "Parar": the tools are asked to stop; what they say then (done, cancelled or not) ends the run. */
+function stop() {
+  if (!run || run.stopping) {
+    return;
+  }
+  run.stopping = true;
+  $("send").disabled = true; // until the run ends: one stop is enough
+  if (run.runId) {
+    ai.assistantCancel(run.runId).catch(() => {});
   }
 }
 
 $("ask").addEventListener("submit", event => {
   event.preventDefault();
+  if (run) {
+    stop();
+    return;
+  }
   const question = $("prompt").value.trim();
   if (question && !busy) {
     send(question);
   }
 });
+document.addEventListener("keydown", event => {
+  if (event.key === "Escape" && run && !event.defaultPrevented) {
+    event.preventDefault();
+    stop();
+  }
+});
+ai.onAssistantEvent.addListener(onRunEvent);
 $("prompt").addEventListener("input", showSendLine);
 $("prompt").addEventListener("keydown", event => {
   if (event.key === "Enter" && (event.ctrlKey || event.metaKey) && !event.isComposing) {
     event.preventDefault();
-    $("ask").requestSubmit();
+    if (!run) {
+      $("ask").requestSubmit(); // never a stop by the send shortcut
+    }
   }
 });
 $("ask").addEventListener("change", event => {
@@ -451,6 +586,7 @@ window.addEventListener("focus", () => {
 
 localize();
 $("truncated").prepend(icon("warning", "callout__icon"));
+$("interrupted").prepend(icon("warning", "callout__icon"));
 browser.windows
   .getCurrent()
   .then(win => (windowId = win.id))

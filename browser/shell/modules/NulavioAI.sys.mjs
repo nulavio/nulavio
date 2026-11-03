@@ -25,6 +25,7 @@
 const lazy = {};
 ChromeUtils.defineESModuleGetters(lazy, {
   callTool: "resource://builtin-addons/nulavio-shell/modules/NulavioTools.sys.mjs",
+  callToolStream: "resource://builtin-addons/nulavio-shell/modules/NulavioTools.sys.mjs",
   ExtensionParent: "resource://gre/modules/ExtensionParent.sys.mjs",
   PrivateBrowsingUtils: "resource://gre/modules/PrivateBrowsingUtils.sys.mjs",
   stateDir: "resource://builtin-addons/nulavio-shell/modules/NulavioTools.sys.mjs",
@@ -85,6 +86,17 @@ function tabTracker() {
   return lazy.ExtensionParent.apiManager.global.tabTracker ?? fail("unexpected");
 }
 
+// Assistant runs in stream mode (UX5-C2, Q15): no line for IDLE_MS ends a run (except while a
+// permission request waits), and a run never lasts longer than its cap. Cancelling gives the tools
+// ASK_GRACE_MS (Ask) or TASK_GRACE_MS (a Task closes its AI Workspace) before SIGKILL.
+const IDLE_MS = 150000;
+const IDLE_PREF = "nulavio.assistant.idle_ms";
+const ASK_TOTAL_MS = 10 * 60000;
+const TASK_TOTAL_MS = 30 * 60000;
+const ASK_GRACE_MS = 2000;
+const TASK_GRACE_MS = 20000;
+const RUN_WATCH_MS = 500;
+
 // The page text that goes with a message: the first MAX_PAGE_CHARS code points, as the tools
 // (launcher/nulavio_launcher/ai/assistant.py MAX_PAGE_CHARS) would cut it.
 const MAX_PAGE_CHARS = 60000;
@@ -135,6 +147,11 @@ class AI {
   // The assistant's context items, per window (UX5-B): what was read at "Incluir", kept in memory
   // only, until it is sent, removed, or the window closes. The panel gets sizes, never the text.
   #contexts = new WeakMap(); // window -> Map<chipId, {kind, tabId, url, title, text, chars, truncated}>
+  // Assistant runs (UX5-C2): runId -> {win, kind, owner, handle, state, sent, steps, cutBy}. Events go
+  // only to the pages of the run's window (the panel there); a run never starts in a private window.
+  #runs = new Map();
+  #runListeners = new Set();
+  #runWatch = null;
   #filesTimer = null;
 
   /** The agent driving this window, if any. "agent:pid" (one of the user's profiles, opened for an agent)
@@ -487,14 +504,9 @@ class AI {
     return [...this.#contextOf(this.#userWindow(win))].map(([id, item]) => AI.#chipView(id, item));
   }
 
-  /** Ask. `chips`: the items the user included in this message; each page item goes only while its tab
-      still shows that address. `expected`: where the panel said it goes and its size; the tools refuse
-      the request if either is no longer true. The selected tab at Send is never read. */
-  async assistantAsk(question, options, win) {
-    this.#userWindow(win);
-    if (await this.workspaceAgent()) {
-      fail("ai-workspace");
-    }
+  /** The tools' request for an Ask: the included items (each page only while its tab still shows that
+      address) and what the panel showed. The items leave the window's context: consent is per message. */
+  #askRequest(question, options, win) {
     const { chips = [], expected = null } = options ?? {};
     if (!expected || typeof expected.recipient !== "string" || !Number.isInteger(expected.chars)) {
       fail("bad-request");
@@ -509,7 +521,179 @@ class AI {
     }
     const page = used.find(item => item.kind === "page");
     const sent = page ? { url: page.url, title: page.title, text: page.text } : null;
-    return this.#assistant({ op: "ask", question: String(question), page: sent, expected }, 180000);
+    return { op: "ask", question: String(question), page: sent, expected };
+  }
+
+  /** Ask, answered in one piece. `chips`: the items the user included in this message. `expected`: where
+      the panel said it goes and its size; the tools refuse the request if either is no longer true. The
+      selected tab at Send is never read. The panel streams instead (assistantStart). */
+  async assistantAsk(question, options, win) {
+    this.#userWindow(win);
+    if (await this.workspaceAgent()) {
+      fail("ai-workspace");
+    }
+    return this.#assistant(this.#askRequest(question, options, win), 180000);
+  }
+
+  // -- runs in stream mode (UX5-C2) ----------------------------------------------------------------
+
+  subscribeAssistant(listener) {
+    this.#runListeners.add(listener);
+    return () => this.#runListeners.delete(listener);
+  }
+
+  #emit(run, event) {
+    for (const listener of this.#runListeners) {
+      try {
+        listener(run.win, event);
+      } catch (e) {
+        console.error(e);
+      }
+    }
+  }
+
+  /** Start an Ask or a Task whose events reach this window's panel (onAssistantEvent): start, sending,
+      delta, step, approval, then exactly one done or error. `owner`: the page that started it; an Ask
+      ends with it (Q18), a Task goes on and the panel finds it again with assistantRuns. */
+  async assistantStart(kind, details, win, owner = null) {
+    this.#userWindow(win);
+    if (await this.workspaceAgent()) {
+      fail("ai-workspace");
+    }
+    let request;
+    if (kind === "ask") {
+      request = this.#askRequest(details?.question ?? "", details, win);
+    } else if (kind === "task") {
+      request = { op: "task", task: String(details?.task ?? ""), expected: details?.expected ?? null };
+    } else {
+      fail("bad-request");
+    }
+    request.profile = Services.dirsvc.get("ProfD", Ci.nsIFile).path;
+    const runId = Services.uuid.generateUUID().toString().slice(1, -1);
+    const run = { win, kind, owner, state: "running", sent: false, steps: [], cutBy: null };
+    this.#runs.set(runId, run);
+    run.handle = lazy.callToolStream(["ai", "assistant"], request, {
+      onEvent: event => this.#onRunEvent(runId, run, event),
+      // The idle limit can be shortened for tests (never under 1 s); nothing else reads this pref.
+      idleMs: Math.max(1000, Services.prefs.getIntPref(IDLE_PREF, IDLE_MS)),
+      totalMs: kind === "ask" ? ASK_TOTAL_MS : TASK_TOTAL_MS,
+    });
+    run.handle.result.then(
+      terminal => this.#finishRun(runId, run, terminal),
+      e => this.#finishRun(runId, run, { type: "error", code: e?.code ?? "helper-failed" })
+    );
+    win.addEventListener("unload", () => this.#cancelRun(run), { once: true }); // the window closed
+    this.#watchRuns();
+    return { runId };
+  }
+
+  #onRunEvent(runId, run, event) {
+    if (event.type === "sending") {
+      run.sent = true;
+    } else if (event.type === "step" && event.state !== "started") {
+      run.steps.push({ tool: event.tool, error: event.state !== "ok" });
+    } else if (event.type === "approval") {
+      // Someone has to answer: the idle limit waits until the request expires (Q15).
+      const expires = Date.parse(event.expires);
+      if (Number.isFinite(expires)) {
+        run.handle.holdIdle(expires + 10000);
+      }
+    }
+    this.#emit(run, { ...event, runId });
+  }
+
+  #finishRun(runId, run, terminal) {
+    this.#runs.delete(runId);
+    run.state = "done";
+    let event = { ...terminal, runId };
+    if (run.cancelling && terminal.type === "error" && terminal.code === "helper-failed") {
+      // Cancelled and ended hard (SIGKILL) before saying so: it may have reached the provider.
+      event = { type: "done", runId, cancelled: true, sent: true, steps: run.steps };
+    } else if (run.kind === "task" && terminal.type === "error" && terminal.code === "helper-failed") {
+      event = { ...event, code: "task-unfinished" }; // the run may have acted already
+    }
+    if (run.cutBy) {
+      event.cutBy = run.cutBy; // the emergency stop, a pause or a revocation ended it
+    }
+    this.#emit(run, event);
+    if (!this.#runs.size) {
+      this.#runWatch?.cancel();
+      this.#runWatch = null;
+    }
+  }
+
+  #cancelRun(run, cutBy = null) {
+    if (run.state !== "running") {
+      return;
+    }
+    run.state = "cancelling";
+    run.cancelling = true;
+    run.cutBy ??= cutBy;
+    run.handle.cancel(run.kind === "ask" ? ASK_GRACE_MS : TASK_GRACE_MS);
+  }
+
+  /** "Parar" or Esc in the panel: only for a run of the calling window. */
+  assistantCancel(runId, win) {
+    const run = this.#runs.get(String(runId));
+    if (run && run.win !== win) {
+      fail("bad-request");
+    }
+    if (run) {
+      this.#cancelRun(run);
+    }
+    return { state: run ? run.state : "done" };
+  }
+
+  /** This window's runs (a Task goes on when the panel closes; the panel shows it again). */
+  assistantRuns(win) {
+    this.#userWindow(win);
+    return [...this.#runs]
+      .filter(([, run]) => run.win === win)
+      .map(([runId, run]) => ({ runId, kind: run.kind, state: run.state, sent: run.sent, steps: run.steps }));
+  }
+
+  /** The page that started an Ask went away (the panel closed): its Asks stop (Q18). */
+  assistantOwnerClosed(owner) {
+    for (const run of this.#runs.values()) {
+      if (run.owner === owner && run.kind === "ask") {
+        this.#cancelRun(run);
+      }
+    }
+  }
+
+  /** While runs go on, the emergency stop, a pause or a revocation of the assistant cuts them at once
+      (Q19, D-UX5): two file reads every RUN_WATCH_MS, no process. */
+  #watchRuns() {
+    if (this.#runWatch) {
+      return;
+    }
+    this.#runWatch = Cc["@mozilla.org/timer;1"].createInstance(Ci.nsITimer);
+    this.#runWatch.initWithCallback(() => this.#checkRuns().catch(() => {}), RUN_WATCH_MS, Ci.nsITimer.TYPE_REPEATING_SLACK);
+  }
+
+  async #checkRuns() {
+    if (!this.#runs.size) {
+      return;
+    }
+    const dir = PathUtils.join(lazy.stateDir(), "ai");
+    let cutBy = null;
+    if (await IOUtils.exists(PathUtils.join(dir, "STOP"))) {
+      cutBy = "emergency-stop";
+    } else {
+      const config = await IOUtils.readJSON(PathUtils.join(dir, "assistant.json")).catch(() => null);
+      const registry = await IOUtils.readJSON(PathUtils.join(dir, "agents.json")).catch(() => null);
+      const agent = config?.agent ? registry?.agents?.[config.agent] : null;
+      if (config?.agent && registry && (!agent || agent.revoked)) {
+        cutBy = "assistant-revoked";
+      } else if (agent?.paused) {
+        cutBy = "assistant-paused";
+      }
+    }
+    if (cutBy) {
+      for (const run of this.#runs.values()) {
+        this.#cancelRun(run, cutBy);
+      }
+    }
   }
 
   /** A task in the assistant's AI Workspace, under its agent permissions; never from a private window. */

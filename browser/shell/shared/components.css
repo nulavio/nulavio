@@ -494,6 +494,8 @@ a.button { display: inline-flex; align-items: center; text-decoration: none; }
   background: var(--nv-color-accent-tint);
   color: var(--nv-color-text-primary);
 }
+/* Where the answer is still arriving: a still block, no animation (UX5-C2). */
+.assistant__cursor { display: inline-block; width: 0.5em; height: 1em; margin-inline-start: 1px; vertical-align: text-bottom; background: currentColor; opacity: 0.55; }
 .assistant__chips { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--nv-space-2); }
 .assistant__chip-text { flex: 1; min-width: 0; display: grid; gap: 2px; font-weight: var(--nv-font-weight-semibold); overflow-wrap: anywhere; }
 .assistant__chip-text .hint { font-weight: var(--nv-font-weight-regular); color: var(--nv-color-text-primary); }

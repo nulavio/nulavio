@@ -652,6 +652,7 @@ class AssistantUiTest(unittest.TestCase):
             f"return {AI}.assistantChips(w);",
             f"return await {AI}.assistantAsk('Oi', {{chips: []}}, w);",
             f"return await {AI}.assistantTask('Abra algo', null, w);",
+            f"return await {AI}.assistantStart('task', {{task: 'Abra algo'}}, w);",
         ):
             with self.subTest(call=call):
                 result = chrome_async(self.m, f"const w = {WINDOW};" + call, [url, "private"])
@@ -835,6 +836,134 @@ class AssistantUiTest(unittest.TestCase):
         self.shoot("answer-cut")
         self.assertEqual(ask_and_wait({"choices": [{"message": {"content": "Inteira."}}]})[0], "ok")
         self.assertTrue(self.m.execute("return document.getElementById('truncated').hidden;"))
+
+    # -- stream and stop (UX5-C2) ----------------------------------------------------------------
+
+    def tools_process(self):
+        for pid in harness.descendants(self.session.process.pid):
+            try:
+                if "ai assistant" in harness.proc_info(pid)["cmd"]:
+                    return pid
+            except OSError:
+                continue
+        return None
+
+    def answer_text(self) -> str:
+        return self.panel("return document.getElementById('answer').textContent;")
+
+    def test_13_the_answer_arrives_in_pieces(self):
+        self.close_other_tabs()
+        self.show_sidebar(reload=True)
+        self.wait_view(lambda v: v["state"] == "ready")
+        pieces = ["Primeiro ", "segundo ", "terceiro ", "quarto ", "quinto ", "fim."]
+        self.provider.replies.append(Reply(chunks=pieces, chunk_delay=0.5))
+        self.submit("Conte devagar")
+        lengths = []
+        seen_cursor = False
+        while not self.view()["answered"]:
+            text = self.answer_text()
+            if text and (not lengths or lengths[-1] != len(text)):
+                lengths.append(len(text))
+                seen_cursor = seen_cursor or self.panel("return !!document.querySelector('#answer .assistant__cursor');")
+            time.sleep(0.1)
+        final = "".join(pieces)
+        self.assertGreaterEqual(len([n for n in lengths if n < len(final)]), 2, lengths)  # pieces shown on the way
+        self.assertEqual(self.answer_text(), final)
+        self.assertTrue(seen_cursor)
+        self.assertFalse(self.panel("return !!document.querySelector('#answer .assistant__cursor');"))
+        self.assertFalse(self.panel("return document.getElementById('answer').hasAttribute('aria-live');"))
+        self.assertEqual(self.view()["status"], "Resposta pronta.")
+        self.assertTrue(self.provider.requests[-1][2]["stream"])
+
+    def test_14_stop_and_esc_end_an_answer_and_say_what_may_have_left(self):
+        self.close_other_tabs()
+        self.show_sidebar(reload=True)
+        self.wait_view(lambda v: v["state"] == "ready")
+        for how in ("button", "escape"):
+            with self.subTest(how=how):
+                self.provider.replies.append(Reply(chunks=[f"parte {i} " for i in range(20)], chunk_delay=0.4))
+                before = self.provider.count
+                self.submit("Fale bastante")
+                self.assertTrue(harness.wait_until(lambda: self.answer_text(), 20))
+                self.assertEqual(self.panel("return document.getElementById('send').textContent;"), "Parar")
+                if how == "button":
+                    self.panel("document.getElementById('send').click();")
+                else:
+                    # An event of the page's own realm, as a key press would be (one made in the frame script is not
+                    # seen by the page's listeners).
+                    self.panel(
+                        "const target = document.activeElement ?? document;"
+                        "target.dispatchEvent(new content.KeyboardEvent('keydown', {key: 'Escape', bubbles: true}));"
+                    )
+                stopped = time.monotonic()
+                view = self.wait_view(lambda v: v["answered"])
+                self.assertEqual(
+                    view["status"], f"Resposta interrompida por você. A pergunta pode já ter chegado a {self.recipient()}."
+                )
+                self.assertEqual(self.panel("return document.getElementById('interrupted').hidden;"), False)
+                self.assertTrue(self.answer_text().startswith("parte 0"))  # what came stays
+                self.assertNotIn("parte 19", self.answer_text())
+                self.assertTrue(harness.wait_until(lambda: self.tools_process() is None, 5))
+                self.assertLess(time.monotonic() - stopped, 5)
+                self.assertEqual(self.provider.count, before + 1)  # no request after "Parar"
+                self.assertEqual(self.panel("return document.getElementById('send').textContent;"), "Enviar")
+
+    def test_15_the_emergency_stop_cuts_an_answer_at_once(self):
+        self.close_other_tabs()
+        self.show_sidebar(reload=True)
+        self.wait_view(lambda v: v["state"] == "ready")
+        self.provider.replies.append(Reply(chunks=[f"parte {i} " for i in range(20)], chunk_delay=0.4))
+        self.submit("Fale bastante")
+        self.assertTrue(harness.wait_until(lambda: self.answer_text(), 20))
+        self.addCleanup(chrome_async, self.m, f"return await {AI}.setStopped(false);")
+        chrome_async(self.m, f"return await {AI}.setStopped(true);")
+        view = self.wait_view(lambda v: v["state"] == "blocked", timeout=10)
+        self.assertIn(MESSAGES["err_emergency_stop"]["message"], view["status"])
+        self.assertTrue(harness.wait_until(lambda: self.tools_process() is None, 5))
+        chrome_async(self.m, f"return await {AI}.setStopped(false);")
+        self.show_sidebar(reload=True)
+        self.wait_view(lambda v: v["state"] == "ready")
+
+    def test_16_a_stopped_task_waiting_for_permission_ends_and_its_request_goes(self):
+        self.close_other_tabs()
+        agent = self.assistant_agent()
+        chrome_async(self.m, f"return await {AI}.change(args[0], 'grant', {{capability: 'navigate', mode: 'ask'}});", [agent])
+        self.addCleanup(
+            chrome_async, self.m, f"return await {AI}.change(args[0], 'clear-grant', {{capability: 'navigate'}});", [agent]
+        )
+        call = {"id": "c1", "type": "function",
+                "function": {"name": "tab_new", "arguments": json.dumps({"url": "https://example.invalid/"})}}  # fmt: skip
+        self.provider.replies.append({"choices": [{"message": {"content": None, "tool_calls": [call]}}]})
+        self.show_sidebar(reload=True)
+        self.wait_view(lambda v: v["state"] == "ready")
+        self.mode("task")
+        self.addCleanup(self.mode, "ask")
+        before = self.provider.count
+        self.submit("Abra um site")
+        requests = Path(self.session.env["HOME"]) / ".local" / "state" / "nulavio" / "ai" / "requests"
+        self.assertTrue(harness.wait_until(lambda: list(requests.glob("*.json")), 30))
+        self.panel("document.getElementById('send').click();")
+        view = self.wait_view(lambda v: v["answered"], timeout=40)
+        self.assertEqual(
+            view["status"], "Tarefa parada por você. Ações podem ter acontecido na Área de IA antes disso: veja em Atividade."
+        )
+        self.assertTrue(view["activity"])
+        self.assertEqual(list(requests.glob("*.json")), [])  # the request page can no longer answer for it
+        self.assertEqual(self.provider.count, before + 1)  # no next model turn
+        self.assertTrue(harness.wait_until(lambda: self.tools_process() is None, 25))
+        self.close_other_tabs()
+
+    def test_17_no_line_for_too_long_ends_the_run(self):
+        self.close_other_tabs()
+        self.m.chrome("Services.prefs.setIntPref('nulavio.assistant.idle_ms', 2000);")
+        self.addCleanup(self.m.chrome, "Services.prefs.clearUserPref('nulavio.assistant.idle_ms');")
+        self.show_sidebar(reload=True)
+        self.wait_view(lambda v: v["state"] == "ready")
+        self.provider.replies.append(Reply(hang=True))
+        self.submit("Oi?")
+        view = self.wait_view(lambda v: v["level"] == "error", timeout=15)
+        self.assertEqual(view["status"], MESSAGES["err_timeout"]["message"])
+        self.assertTrue(harness.wait_until(lambda: self.tools_process() is None, 5))
 
 
 if __name__ == "__main__":

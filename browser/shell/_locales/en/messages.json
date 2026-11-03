@@ -1098,5 +1098,13 @@
   "assistantPageChars": {"message": "$CHARS$ characters", "placeholders": {"chars": {"content": "$1"}}},
   "assistantPageLong": {"message": "Long page: only the first $MAX$ characters go", "placeholders": {"max": {"content": "$1"}}},
   "err_recipient_changed": {"message": "The provider changed in Settings, so nothing was sent. Check where it goes now, include the page again if you want, and send again."},
-  "err_size_changed": {"message": "The size of the request changed before it went, so nothing was sent. Include the page again and send again."}
+  "err_size_changed": {"message": "The size of the request changed before it went, so nothing was sent. Include the page again and send again."},
+  "assistantStop": {"message": "Stop"},
+  "assistantInterrupted": {"message": "Answer stopped by you"},
+  "assistantCancelledNothing": {"message": "Cancelled before sending: nothing left this computer."},
+  "assistantCancelledSent": {"message": "Answer stopped by you. The question may already have reached $RECIPIENT$.", "placeholders": {"recipient": {"content": "$1"}}},
+  "assistantArrivedBeforeStop": {"message": "The answer arrived before it could stop."},
+  "assistantTaskCancelled": {"message": "Task stopped by you."},
+  "assistantTaskGoesOn": {"message": "The task goes on in the AI Workspace. You can stop it here."},
+  "err_timeout": {"message": "No answer for too long, so the assistant stopped. The request may already have reached the provider."}
 }

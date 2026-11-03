@@ -1098,5 +1098,13 @@
   "assistantPageChars": {"message": "$CHARS$ caracteres", "placeholders": {"chars": {"content": "$1"}}},
   "assistantPageLong": {"message": "Página longa: vão só os primeiros $MAX$ caracteres", "placeholders": {"max": {"content": "$1"}}},
   "err_recipient_changed": {"message": "O provedor mudou nas Configurações, então nada foi enviado. Confira o novo destino, inclua a página de novo se quiser e envie outra vez."},
-  "err_size_changed": {"message": "O tamanho do pedido mudou antes do envio, então nada foi enviado. Inclua a página de novo e envie outra vez."}
+  "err_size_changed": {"message": "O tamanho do pedido mudou antes do envio, então nada foi enviado. Inclua a página de novo e envie outra vez."},
+  "assistantStop": {"message": "Parar"},
+  "assistantInterrupted": {"message": "Resposta interrompida por você"},
+  "assistantCancelledNothing": {"message": "Cancelado antes de enviar: nada saiu deste computador."},
+  "assistantCancelledSent": {"message": "Resposta interrompida por você. A pergunta pode já ter chegado a $RECIPIENT$.", "placeholders": {"recipient": {"content": "$1"}}},
+  "assistantArrivedBeforeStop": {"message": "A resposta chegou antes de parar."},
+  "assistantTaskCancelled": {"message": "Tarefa parada por você."},
+  "assistantTaskGoesOn": {"message": "A tarefa continua na Área de IA. Você pode pará-la aqui."},
+  "err_timeout": {"message": "Sem resposta por tempo demais, então o assistente parou. O pedido pode já ter chegado ao provedor."}
 }

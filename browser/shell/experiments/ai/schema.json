@@ -461,6 +461,101 @@
             "optional": true
           }
         ]
+      },
+      {
+        "name": "assistantStart",
+        "type": "function",
+        "async": true,
+        "description": "Start an Ask or a Task in stream mode; its events come through onAssistantEvent. Returns {runId}.",
+        "parameters": [
+          {
+            "name": "kind",
+            "type": "string",
+            "enum": [
+              "ask",
+              "task"
+            ]
+          },
+          {
+            "name": "details",
+            "type": "object",
+            "properties": {
+              "question": {
+                "type": "string",
+                "maxLength": 8000,
+                "optional": true
+              },
+              "task": {
+                "type": "string",
+                "maxLength": 8000,
+                "optional": true
+              },
+              "chips": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "maxLength": 64
+                },
+                "maxItems": 4,
+                "optional": true
+              },
+              "expected": {
+                "type": "object",
+                "optional": true,
+                "description": "Where the panel said the request goes, and its size: the tools refuse it if either changed.",
+                "properties": {
+                  "recipient": {
+                    "type": "string",
+                    "maxLength": 300
+                  },
+                  "model": {
+                    "type": "string",
+                    "maxLength": 200
+                  },
+                  "chars": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "optional": true
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      {
+        "name": "assistantCancel",
+        "type": "function",
+        "async": true,
+        "parameters": [
+          {
+            "name": "runId",
+            "type": "string",
+            "maxLength": 64
+          }
+        ]
+      },
+      {
+        "name": "assistantRuns",
+        "type": "function",
+        "async": true,
+        "parameters": []
+      }
+    ],
+    "events": [
+      {
+        "name": "onAssistantEvent",
+        "type": "function",
+        "description": "An event of a run in this window: start, sending, delta, step, approval, then done or error.",
+        "parameters": [
+          {
+            "name": "event",
+            "type": "object",
+            "additionalProperties": {
+              "type": "any"
+            }
+          }
+        ]
       }
     ]
   }

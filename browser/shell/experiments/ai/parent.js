@@ -4,7 +4,7 @@
 
 "use strict";
 
-/* global ExtensionAPI, ExtensionUtils, ChromeUtils */
+/* global ExtensionAPI, ExtensionCommon, ExtensionUtils, ChromeUtils */
 
 /* Thin bridge: the logic lives in modules/NulavioAI.sys.mjs so it can be
    tested directly. Errors cross to the page as their stable code only. */
@@ -34,6 +34,8 @@ this.nulavioAI = class extends ExtensionAPI {
         throw new ExtensionUtils.ExtensionError("unexpected");
       }
     };
+    // An Ask started from this page stops when the page goes away (the side panel closed: Q18).
+    context.callOnClose({ close: () => ai.assistantOwnerClosed(context) });
     return {
       nulavioAI: {
         workspaceAgent: call(() => ai.workspaceAgent()),
@@ -62,6 +64,19 @@ this.nulavioAI = class extends ExtensionAPI {
         // `options.chips`: the items included in this message (AI-02, UX5-B); `options.expected`: what the panel showed.
         assistantAsk: call((question, options) => ai.assistantAsk(question, options ?? {}, windowOf())),
         assistantTask: call((task, expected) => ai.assistantTask(task, expected ?? null, windowOf())),
+        assistantStart: call((kind, details) => ai.assistantStart(kind, details ?? {}, windowOf(), context)),
+        assistantCancel: call(async runId => ai.assistantCancel(runId, windowOf())),
+        assistantRuns: call(async () => ai.assistantRuns(windowOf())),
+        // Only the events of runs in this page's own window reach it.
+        onAssistantEvent: new ExtensionCommon.EventManager({
+          context,
+          name: "nulavioAI.onAssistantEvent",
+          register: fire => ai.subscribeAssistant((win, event) => {
+            if (win === windowOf()) {
+              fire.async(event);
+            }
+          }),
+        }).api(),
       },
     };
   }
