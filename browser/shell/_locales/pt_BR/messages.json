@@ -763,8 +763,8 @@
   "assistantAnswerHeading": {"message": "Resposta"},
   "assistantAnswerReady": {"message": "Resposta pronta."},
   "assistantStepFailed": {"message": "não permitido ou falhou"},
-  "assistantSentPage": {"message": "$CHARS$ caracteres desta página foram enviados para $RECIPIENT$.", "placeholders": {"chars": {"content": "$1"}, "recipient": {"content": "$2"}}},
-  "assistantSentQuestionOnly": {"message": "Só a pergunta foi enviada para $RECIPIENT$.", "placeholders": {"recipient": {"content": "$1"}}},
+  "assistantSentPage": {"message": "$CHARS$ caracteres desta página foram enviados para $RECIPIENT$, $TOTAL$ no total.", "placeholders": {"chars": {"content": "$1"}, "recipient": {"content": "$2"}, "total": {"content": "$3"}}},
+  "assistantSentQuestionOnly": {"message": "Só a pergunta foi enviada para $RECIPIENT$: $TOTAL$ caracteres no total, com as instruções do Nulavio.", "placeholders": {"recipient": {"content": "$1"}, "total": {"content": "$2"}}},
   "assistantSentTask": {"message": "A tarefa e o que o assistente leu na Área de IA dele foram enviados para $RECIPIENT$.", "placeholders": {"recipient": {"content": "$1"}}},
   "assistantStoppedStepLimit": {"message": "Parou após $STEPS$ passos sem concluir.", "placeholders": {"steps": {"content": "$1"}}},
   "assistantTaskMayHaveActed": {"message": "Ações podem ter acontecido na Área de IA antes disso: veja em Atividade."},
@@ -1092,5 +1092,11 @@
   "err_provider_tls": {"message": "A conexão segura com o provedor falhou (certificado ou TLS), então nada foi enviado. Confira o endereço."},
   "err_provider_bad_reply": {"message": "O provedor respondeu num formato que o Nulavio não entende. O pedido chegou a ele: confira o tipo de API nas Configurações."},
   "err_workspace_failed": {"message": "A Área de IA não abriu, ou fechou durante a tarefa."},
-  "assistantTruncated": {"message": "Resposta cortada pelo limite do provedor."}
+  "assistantTruncated": {"message": "Resposta cortada pelo limite do provedor."},
+  "assistantSendLine": {"message": "Vai para $RECIPIENT$ · $MODEL$ · $CHARS$ caracteres, contando as instruções do Nulavio", "placeholders": {"recipient": {"content": "$1"}, "model": {"content": "$2"}, "chars": {"content": "$3"}}},
+  "assistantSendLineTask": {"message": "O que o assistente ler na Área de IA vai para $RECIPIENT$; suas abas não. O tamanho só se sabe depois.", "placeholders": {"recipient": {"content": "$1"}}},
+  "assistantPageChars": {"message": "$CHARS$ caracteres", "placeholders": {"chars": {"content": "$1"}}},
+  "assistantPageLong": {"message": "Página longa: vão só os primeiros $MAX$ caracteres", "placeholders": {"max": {"content": "$1"}}},
+  "err_recipient_changed": {"message": "O provedor mudou nas Configurações, então nada foi enviado. Confira o novo destino, inclua a página de novo se quiser e envie outra vez."},
+  "err_size_changed": {"message": "O tamanho do pedido mudou antes do envio, então nada foi enviado. Inclua a página de novo e envie outra vez."}
 }

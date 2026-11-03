@@ -45,13 +45,7 @@
         <p class="assistant__drift" id="drift" hidden><span aria-hidden="true">ⓘ</span> <span id="drift-text"></span></p>
         <div class="stack stack--tight" id="attached" hidden>
           <p class="hint" id="attached-heading"></p>
-          <div class="assistant__chip" id="attached-chip">
-            <span class="assistant__chip-text">
-              <span data-i18n="assistantAttachedPage"></span>
-              <span class="hint" id="attached-binding"></span>
-            </span>
-            <button class="assistant__chip-remove" type="button" id="remove-page"><span aria-hidden="true">×</span></button>
-          </div>
+          <ul class="assistant__chips" id="chips" aria-labelledby="attached-heading"></ul>
         </div>
         <button class="button button--secondary assistant__offer" type="button" id="include-page" hidden></button>
         <p class="hint" id="no-page" data-i18n="assistantNoPage" hidden></p>
@@ -59,6 +53,7 @@
       <label class="field"><span class="field__label" id="prompt-label" data-i18n="assistantQuestion"></span>
         <textarea class="input" id="prompt" rows="4" maxlength="8000" required aria-describedby="send-shortcut"></textarea></label>
       <p class="hint" id="task-note" hidden></p>
+      <p class="hint hint--on" id="send-line"></p>
       <div class="actions">
         <button class="button button--primary" type="submit" id="send" data-i18n="assistantSend" aria-keyshortcuts="Control+Enter"></button>
         <button class="button button--quiet" type="button" id="summarize" data-i18n="assistantSummarize" hidden></button>

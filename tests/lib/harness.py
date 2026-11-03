@@ -141,6 +141,13 @@ class FixtureServer:
         if path.startswith("/page/"):
             name = path.rsplit("/", 1)[-1]
             return f"<!doctype html><title>{name}</title><p id=name>{name}</p>".encode(), html, {}
+        if path == "/long-page":
+            # Assistant fixture (tests/integration/test_assistant_ui.py): about `n` characters of visible
+            # text in paragraphs, accents included, to check where an included page is cut.
+            n = min(int(query.get("n", "1000")), 2_000_000)
+            para = ("Ção é um parágrafo longo de teste. " * 30).strip()
+            body = "".join(f"<p>{i} {para}</p>" for i in range(n // len(para) + 1))
+            return f"<!doctype html><title>long-page</title>{body}".encode(), html, {}
         if path == "/login":
             # Fixture for password-manager certification. Throwaway credentials only.
             page = (

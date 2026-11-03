@@ -25,6 +25,7 @@ from __future__ import annotations
 import base64
 import json
 import os
+import re
 import secrets
 import signal
 import sys
@@ -40,6 +41,12 @@ from fake_keyring import FAKE_SECRET_TOOL
 AI = 'ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioAI.sys.mjs").NulavioAI'
 TABS = 'ChromeUtils.importESModule("resource://gre/modules/ExtensionParent.sys.mjs").ExtensionParent.apiManager.global.tabTracker'
 KEY = "sk-artificial-ui-key-456"
+# The Shell's pt-BR texts (the session runs in pt-BR), for messages the panel shows.
+MESSAGES = json.loads(
+    (Path(__file__).resolve().parents[2] / "browser" / "shell" / "_locales" / "pt_BR" / "messages.json").read_text(
+        encoding="utf-8"
+    )
+)
 SIDEBAR = "shell_nulavio_net-sidebar-action"
 # The browser window a helper acts on: the private one when its argument says "private".
 WINDOW = (
@@ -66,16 +73,30 @@ PANEL = (
     "mm.loadFrameScript('data:,' + encodeURIComponent(script), false);"
 )
 VIEW = (
-    "const $ = id => document.getElementById(id);"
+    "const $ = id => document.getElementById(id); const chip = $('chips').querySelector('.assistant__chip');"
     "return { state: document.body.dataset.state, answered: document.body.dataset.answered === 'true',"
     " offer: $('include-page').hidden ? null : $('include-page').textContent,"
-    " attached: $('attached').hidden ? null : $('attached-binding').textContent,"
-    " heading: $('attached-heading').textContent, remove: $('remove-page').getAttribute('aria-label'),"
+    " attached: $('attached').hidden || !chip ? null : chip.querySelector('[data-part=binding]').textContent,"
+    " size: chip ? chip.querySelector('[data-part=size]').textContent : null,"
+    " heading: $('attached-heading').textContent, remove: chip?.querySelector('button').getAttribute('aria-label') ?? null,"
+    " sendLine: $('send-line').textContent,"
     " drift: $('drift').hidden ? null : $('drift-text').textContent, noPage: !$('no-page').hidden,"
     " summarize: !$('summarize').hidden, status: $('status').textContent, level: $('status').dataset.level ?? null,"
     " receipt: $('receipt').textContent, activity: !$('activity-actions').hidden,"
     " blocked: $('blocked').hidden ? null : [$('blocked-title').textContent, $('blocked-text').textContent],"
     " private: !$('private').hidden, composer: !$('ask').hidden };"
+)
+
+# Include a tab ({tabId, url}) in this window's next message, as "Incluir esta página" does.
+INCLUDE = f"const w = {WINDOW}; return await {AI}.assistantInclude({{kind: 'page', ...args[0]}}, w);"
+# Ask as the panel does: the items by id, and what the panel would show (recipient, model, whole size).
+ASK = (
+    f"const ai = {AI}; const w = {WINDOW}; const [question, ids] = args; const st = await ai.assistantState(w);"
+    "let chips = []; try { chips = ai.assistantChips(w).filter(c => ids.includes(c.chipId)); } catch {}"
+    "const chars = st.systemChars + chips.reduce((n, c) => n + c.blockChars, 0) + (chips.length ? 10 : 0)"
+    " + [...question].length;"
+    "return await ai.assistantAsk(question, {chips: ids, expected: {recipient: st.recipient, model: st.provider?.model ?? '',"
+    " chars}}, w);"
 )
 
 
@@ -245,6 +266,24 @@ class AssistantUiTest(unittest.TestCase):
     def sent_since(self, before: int) -> str:
         return json.dumps([body for _path, _headers, body in self.provider.requests[before:]], ensure_ascii=False)
 
+    def type(self, text: str) -> None:
+        """Write in the question field as a person would (the send line follows the input events)."""
+        self.panel(
+            "const p = document.getElementById('prompt'); p.value = " + json.dumps(text) + ";"
+            " p.dispatchEvent(new Event('input', {bubbles: true}));"
+        )
+
+    @staticmethod
+    def shown_chars(line: str) -> int:
+        """The number of characters a send line shows (pt-BR digits, '.' between thousands)."""
+        found = re.search(r"· ([\d.]+) caracteres", line)
+        assert found, line
+        return int(found.group(1).replace(".", ""))
+
+    def recipient(self) -> str:
+        """Where the assistant sends, as the panel names it: host and port."""
+        return self.provider.base.split("/")[2]
+
     def assistant_agent(self) -> str:
         return chrome_async(self.m, f"return (await {AI}.assistantState(window)).agent.id;")["ok"]
 
@@ -279,36 +318,84 @@ class AssistantUiTest(unittest.TestCase):
         self.assertEqual((page["url"], page["title"]), (url, "agent-task"))
         self.assertIsInstance(page["tabId"], int)
         binding = {"tabId": page["tabId"], "url": page["url"]}
-        ask = f"return await {AI}.assistantAsk('Qual é a palavra?', args[0], window);"
-        before = len(self.provider.requests)
-        self.assertEqual(chrome_async(self.m, ask, [None])["ok"]["pageChars"], 0)
+        before = self.provider.count
+        self.assertEqual(chrome_async(self.m, ASK, ["Qual é a palavra?", []])["ok"]["pageChars"], 0)
         self.assertNotIn("OBSIDIAN", self.sent_since(before))
-        result = chrome_async(self.m, ask, [binding])
-        self.assertGreater(result["ok"]["pageChars"], 0)
+        # Including reads the page now and keeps it in the browser (UX5-B): the panel gets its size, not its text.
+        before = self.provider.count
+        chip = chrome_async(self.m, INCLUDE, [binding])["ok"]
+        self.assertEqual(
+            (chip["kind"], chip["title"], chip["host"], chip["truncated"]), ("page", "agent-task", url.split("/")[2], False)
+        )
+        self.assertNotIn("text", chip)
+        self.assertGreater(chip["chars"], 0)
+        self.assertEqual(self.provider.count, before)  # including sends nothing
+        result = chrome_async(self.m, ASK, ["Qual é a palavra?", [chip["chipId"]]])
+        self.assertEqual(result["ok"]["pageChars"], chip["chars"])
+        self.assertEqual(result["ok"]["chars"], self.provider.chars[-1])  # the size the panel computed is what went
         sent = self.sent_since(before)
         self.assertIn("OBSIDIAN", sent)  # the visible text, extracted by the engine
         self.assertIn("untrusted", sent)
         self.assertEqual(self.provider.requests[-1][1]["authorization"], f"Bearer {KEY}")
+        # Consent is per message: the item went with that one and is gone from the browser.
+        self.assertEqual(chrome_async(self.m, f"return {AI}.assistantChips(window);")["ok"], [])
+        self.assertEqual(chrome_async(self.m, ASK, ["De novo", [chip["chipId"]]]), {"error": "page-changed"})
         # Bound to that tab: another selected tab is never read in its place.
+        chip = chrome_async(self.m, INCLUDE, [binding])["ok"]
         other = self.server.url("/agent-task?word=QUARTZ")
         self.select_new_tab(other)
-        before = len(self.provider.requests)
-        self.assertGreater(chrome_async(self.m, ask, [binding])["ok"]["pageChars"], 0)
+        before = self.provider.count
+        self.assertGreater(chrome_async(self.m, ASK, ["Qual é a palavra?", [chip["chipId"]]])["ok"]["pageChars"], 0)
         self.assertIn("OBSIDIAN", self.sent_since(before))
         self.assertNotIn("QUARTZ", self.sent_since(before))
         self.close_other_tabs()
         # That tab went to another address: refused, nothing sent (the consent was for the page before).
+        chip = chrome_async(self.m, INCLUDE, [binding])["ok"]
         moved = self.server.url("/agent-task?word=JASPER")
         self.m.navigate(moved)
-        before = len(self.provider.requests)
-        self.assertEqual(chrome_async(self.m, ask, [binding]), {"error": "page-changed"})
-        self.assertEqual(chrome_async(self.m, ask, [{"tabId": page["tabId"], "url": url + "#more"}]), {"error": "page-changed"})
-        self.assertEqual(chrome_async(self.m, ask, [{"tabId": 999999, "url": moved}]), {"error": "page-changed"})
-        self.assertEqual(len(self.provider.requests), before)
+        before = self.provider.count
+        self.assertEqual(chrome_async(self.m, ASK, ["Qual é a palavra?", [chip["chipId"]]]), {"error": "page-changed"})
+        for stale in ({"tabId": page["tabId"], "url": url}, {"tabId": page["tabId"], "url": moved + "#more"},
+                      {"tabId": 999999, "url": moved}):  # fmt: skip
+            self.assertEqual(chrome_async(self.m, INCLUDE, [stale]), {"error": "page-changed"})
+        self.assertEqual(self.provider.count, before)
         # Without a window around the caller, the assistant does nothing.
         self.assertEqual(chrome_async(self.m, f"return await {AI}.assistantAsk('Oi', null, null);"), {"error": "no-window"})
-        self.assertEqual(chrome_async(self.m, f"return await {AI}.assistantTask('Oi', null);"), {"error": "no-window"})
-        self.assertEqual(len(self.provider.requests), before)
+        self.assertEqual(chrome_async(self.m, f"return await {AI}.assistantTask('Oi', null, null);"), {"error": "no-window"})
+        self.assertEqual(
+            chrome_async(self.m, f"return await {AI}.assistantInclude({{kind: 'page'}}, null);"), {"error": "no-window"}
+        )
+        # The panel's line must match: an Ask whose size differs is refused before anything goes.
+        st = chrome_async(self.m, f"return await {AI}.assistantState(window);")["ok"]
+        wrong = {"recipient": st["recipient"], "model": st["provider"]["model"], "chars": 1}
+        refused = chrome_async(
+            self.m, f"return await {AI}.assistantAsk('Oi', {{chips: [], expected: args[0]}}, window);", [wrong]
+        )
+        self.assertEqual(refused, {"error": "size-changed"})
+        self.assertEqual(
+            chrome_async(self.m, f"return await {AI}.assistantAsk('Oi', {{chips: []}}, window);"), {"error": "bad-request"}
+        )
+        self.assertEqual(self.provider.count, before)
+
+    def test_02b_a_long_page_is_cut_before_send_and_the_cut_is_what_goes(self):
+        """UX5-B: 70 000 characters show "Página longa…" on the item before Send; exactly 60 000 go. A page
+        far above the 512 KiB request limit is cut the same way, not refused."""
+        for n in (70_000, 700_000):
+            with self.subTest(n=n):
+                url = self.server.url(f"/long-page?n={n}")
+                self.m.navigate(url)
+                page = chrome_async(self.m, f"return {AI}.assistantPage(window);")["ok"]
+                chip = chrome_async(self.m, INCLUDE, [{"tabId": page["tabId"], "url": url}])["ok"]
+                self.assertEqual((chip["chars"], chip["truncated"]), (60_000, True))
+                before = self.provider.count
+                result = chrome_async(self.m, ASK, ["Resuma", [chip["chipId"]]])["ok"]
+                self.assertEqual(result["pageChars"], 60_000)
+                body = self.provider.requests[-1][2]
+                text = body["messages"][-1]["content"]
+                inside = text.split("<<<PAGE\n", 1)[1].rsplit("\nPAGE>>>", 1)[0]
+                self.assertEqual(len(inside), 60_000)  # code points, as counted
+                self.assertEqual(self.provider.count, before + 1)
+                self.assertEqual(result["chars"], self.provider.chars[-1])
 
     def test_03_panel_answers_as_text_and_announces_only_start_and_end(self):
         self.provider.replies.append({"choices": [{"message": {"content": "<b>Resposta</b> em texto"}}]})
@@ -332,7 +419,7 @@ class AssistantUiTest(unittest.TestCase):
         )
         busy = harness.wait_until(lambda: (lambda v: v if v[0] == "progress" else None)(self.m.execute(status)), 10)
         self.assertTrue(busy, self.m.execute(status))
-        self.assertEqual(busy[1], "Enviado para 127.0.0.1. Aguardando a resposta…")
+        self.assertEqual(busy[1], f"Enviado para {self.recipient()}. Aguardando a resposta…")
         self.assertNotIn("✓", busy[2])  # a progress mark, never a check mark while waiting
         self.assertTrue(harness.wait_until(lambda: self.m.execute("return document.body.dataset.answered === 'true';"), 20))
         level, text, mark = self.m.execute(status)
@@ -344,9 +431,9 @@ class AssistantUiTest(unittest.TestCase):
             "return [a.textContent, a.children.length, a.hasAttribute('aria-live'), h.tagName, h.textContent,"
             " document.getElementById('receipt').textContent];"
         )
-        self.assertEqual(
-            answer, ["<b>Resposta</b> em texto", 0, False, "H2", "Resposta", "Só a pergunta foi enviada para 127.0.0.1."]
-        )
+        total = self.provider.chars[-1]
+        receipt = f"Só a pergunta foi enviada para {self.recipient()}: {total} caracteres no total, com as instruções do Nulavio."
+        self.assertEqual(answer, ["<b>Resposta</b> em texto", 0, False, "H2", "Resposta", receipt])
         self.shoot("panel")
 
     def test_04_tasks_obey_the_assistant_agent_policy(self):
@@ -359,7 +446,7 @@ class AssistantUiTest(unittest.TestCase):
             {"choices": [{"message": {"content": None, "tool_calls": [call]}}]},
             {"choices": [{"message": {"content": "Não pude abrir."}}]},
         ]
-        result = chrome_async(self.m, f"return await {AI}.assistantTask('Abra a página local', window);")["ok"]
+        result = chrome_async(self.m, f"return await {AI}.assistantTask('Abra a página local', null, window);")["ok"]
         self.assertEqual(result["steps"], [{"tool": "tab_new", "error": True}])  # restricted: no local addresses
         self.assertEqual(result["answer"], "Não pude abrir.")
         denied = [m for m in self.provider.requests[-1][2]["messages"] if m.get("role") == "tool"]
@@ -382,47 +469,95 @@ class AssistantUiTest(unittest.TestCase):
         self.assertTrue(view["summarize"])
         self.assertFalse(view["noPage"])
         self.assertIsNone(view["attached"])  # nothing is included until the user says so
-        # Including binds this tab, and the item says so.
+        # Including binds this tab and reads it now; the item says which tab and how much (UX5-B).
+        before = self.provider.count
         self.panel("document.getElementById('include-page').click();")
         view = self.wait_view(lambda v: v["attached"])
+        self.assertEqual(self.provider.count, before)  # nothing leaves before Send
         self.assertEqual(view["attached"], f"só da aba “Artigo” · {host}")
-        self.assertEqual(view["heading"], "Vai junto com a próxima mensagem, para 127.0.0.1")
+        self.assertRegex(view["size"], r"^\d+ caracteres$")
+        self.assertEqual(view["heading"], f"Vai junto com a próxima mensagem, para {self.recipient()}")
         self.assertEqual(view["remove"], "Remover a página “Artigo” da mensagem")
         self.assertIsNone(view["offer"])
+        # The line above Send: where it goes and the whole size, which is what the provider then gets.
+        self.type("Do que trata a página?")
+        line = self.view()["sendLine"]
+        self.assertTrue(line.startswith(f"Vai para {self.recipient()} · test-model · "), line)
         self.shoot_window("sidebar-attached")
-        before = len(self.provider.requests)
         self.submit("Do que trata a página?")
         view = self.wait_view(lambda v: v["answered"])
+        self.assertEqual(self.shown_chars(line), self.provider.chars[-1])
         self.assertIn("<<<PAGE", self.sent_since(before))
         self.assertIn("Artigo", self.sent_since(before))
-        self.assertRegex(view["receipt"], r"^\d+ caracteres desta página foram enviados para 127\.0\.0\.1\.$")
+        self.assertRegex(
+            view["receipt"],
+            rf"^\d+ caracteres desta página foram enviados para {re.escape(self.recipient())}, [\d.]+ no total\.$",
+        )
         # Consent is per message: the item left with the message, and the next one goes without it.
         self.assertIsNone(view["attached"])
         self.assertEqual(view["offer"], "+ Incluir esta página: Artigo")
-        before = len(self.provider.requests)
+        before = self.provider.count
+        self.type("E depois?")
+        line = self.view()["sendLine"]
         self.submit("E depois?")
         view = self.wait_view(lambda v: v["answered"] and v["receipt"].startswith("Só a pergunta"))
+        self.assertEqual(self.shown_chars(line), self.provider.chars[-1])  # the question alone, too
         self.assertNotIn("<<<PAGE", self.sent_since(before))
         # The remove control takes it out before Send.
         self.panel("document.getElementById('include-page').click();")
         self.wait_view(lambda v: v["attached"])
-        self.panel("document.getElementById('remove-page').click();")
+        self.panel("document.querySelector('#chips button').click();")
         view = self.wait_view(lambda v: not v["attached"] and v["offer"])
         self.assertTrue(self.panel("return document.activeElement.id === 'include-page';"))
-        before = len(self.provider.requests)
+        self.assertEqual(chrome_async(self.m, f"return {AI}.assistantChips(window);")["ok"], [])  # gone from the browser too
+        before = self.provider.count
         self.submit("Sem a página?")
         self.wait_view(lambda v: v["answered"] and v["receipt"].startswith("Só a pergunta"))
         self.assertNotIn("<<<PAGE", self.sent_since(before))
-        # Summarise sends this page, by that explicit action, and nothing stays included after it.
-        before = len(self.provider.requests)
+        # Summarise includes this page and writes the request; Send stays with the person (Q5).
+        before = self.provider.count
         self.panel("document.getElementById('summarize').click();")
+        view = self.wait_view(lambda v: v["attached"])
+        self.assertEqual(self.panel("return [document.getElementById('prompt').value, document.activeElement.id];"),
+                         ["Resuma esta página em poucos pontos curtos.", "send"])  # fmt: skip
+        time.sleep(0.5)
+        self.assertEqual(self.provider.count, before)
+        self.panel("document.getElementById('ask').requestSubmit();")
         view = self.wait_view(lambda v: v["answered"] and "desta página" in v["receipt"])
         self.assertIn("<<<PAGE", self.sent_since(before))
         self.assertIsNone(view["attached"])
-        before = len(self.provider.requests)
+        before = self.provider.count
         self.submit("E mais?")
         self.wait_view(lambda v: v["answered"] and v["receipt"].startswith("Só a pergunta"))
         self.assertNotIn("<<<PAGE", self.sent_since(before))
+
+    def test_06b_a_provider_changed_in_settings_is_refused_at_send(self):
+        """UX5-B: the panel shows one recipient; Settings change it meanwhile: Send sends nothing and says so."""
+        url = self.server.url("/page/Destino")
+        self.select_new_tab(url)
+        self.show_sidebar(reload=True)
+        self.wait_view(lambda v: v["offer"])
+        self.panel("document.getElementById('include-page').click();")
+        self.wait_view(lambda v: v["attached"])
+        other = FakeProvider()
+        restore = {"kind": "openai", "baseUrl": self.provider.base, "model": "test-model"}
+        try:
+            changed = chrome_async(
+                self.m, f"return await {AI}.assistantConfigure(args[0]);", [{**restore, "baseUrl": other.base}]
+            )
+            self.assertNotIn("error", changed)
+            before = (self.provider.count, other.count)
+            self.submit("Para onde vai?")
+            view = self.wait_view(lambda v: v["level"] == "error")
+            self.assertEqual(view["status"], MESSAGES["err_recipient_changed"]["message"])
+            self.assertEqual((self.provider.count, other.count), before)  # nothing went anywhere
+            self.assertIsNone(view["attached"])  # the page has to be included again, for the new recipient
+            self.wait_view(lambda v: other.base.split("/")[2] in v["sendLine"])  # the line names the new one now
+        finally:
+            chrome_async(self.m, f"return await {AI}.assistantConfigure(args[0]);", [restore])
+            other.close()
+            self.show_sidebar(reload=True)  # the panel shows the restored provider again
+            self.close_other_tabs()
 
     def test_07_switching_tabs_or_leaving_the_page_takes_it_out_and_says_so(self):
         first, second, third = (self.server.url(f"/page/{name}") for name in ("Artigo", "Quadro", "Painel"))
@@ -438,7 +573,9 @@ class AssistantUiTest(unittest.TestCase):
         self.select_tab(second)
         view = self.wait_view(lambda v: v["drift"])
         self.assertEqual(view["drift"], "“Artigo” era de outra aba e saiu da mensagem.")
+        self.assertEqual(view["status"], view["drift"])  # said once to a screen reader as well (UX5-B)
         self.assertIsNone(view["attached"])
+        self.assertTrue(harness.wait_until(lambda: chrome_async(self.m, f"return {AI}.assistantChips(window);")["ok"] == [], 10))
         self.assertEqual(view["offer"], "+ Incluir esta página: Quadro")
         self.shoot_window("sidebar-drift")
         before = len(self.provider.requests)
@@ -508,19 +645,20 @@ class AssistantUiTest(unittest.TestCase):
         )
         self.assertTrue(harness.wait_until(lambda: self.m.chrome(loaded, [url]), 20))
         before = len(self.provider.requests)
-        private_tab = f"{{tabId: {TABS}.getId(w.gBrowser.selectedTab), url: args[0]}}"
+        private_tab = f"{{kind: 'page', tabId: {TABS}.getId(w.gBrowser.selectedTab), url: args[0]}}"
         for call in (
             f"return {AI}.assistantPage(w);",
-            f"return await {AI}.assistantAsk('Oi', null, w);",
-            f"return await {AI}.assistantAsk('Qual é a palavra?', {private_tab}, w);",
-            f"return await {AI}.assistantTask('Abra algo', w);",
+            f"return await {AI}.assistantInclude({private_tab}, w);",
+            f"return {AI}.assistantChips(w);",
+            f"return await {AI}.assistantAsk('Oi', {{chips: []}}, w);",
+            f"return await {AI}.assistantTask('Abra algo', null, w);",
         ):
             with self.subTest(call=call):
                 result = chrome_async(self.m, f"const w = {WINDOW};" + call, [url, "private"])
                 self.assertEqual(result, {"error": "private-window"})
         # A private tab named from a normal window is not "this window's page" either.
         result = chrome_async(
-            self.m, f"const w = {WINDOW}; return await {AI}.assistantAsk('Oi', {private_tab}, window);", [url, "private"]
+            self.m, f"const w = {WINDOW}; return await {AI}.assistantInclude({private_tab}, window);", [url, "private"]
         )
         self.assertEqual(result, {"error": "page-changed"})
         self.assertEqual(len(self.provider.requests), before)
@@ -553,9 +691,7 @@ class AssistantUiTest(unittest.TestCase):
         self.assertEqual(view["status"], "A parada de emergência está ativa: o assistente não envia nada.")
         self.assertTrue(self.panel("return !document.getElementById('resume-settings').hidden;"))
         self.assertEqual(len(self.provider.requests), before)  # neither the question nor the page left
-        self.assertEqual(
-            chrome_async(self.m, f"return await {AI}.assistantAsk('Oi', null, window);"), {"error": "emergency-stop"}
-        )
+        self.assertEqual(chrome_async(self.m, ASK, ["Oi", []]), {"error": "emergency-stop"})
         self.shoot_window("sidebar-stopped")
         # Turned off in Settings: the panel offers the composer again when the user comes back to it.
         chrome_async(self.m, f"return await {AI}.setStopped(false);")
@@ -566,9 +702,7 @@ class AssistantUiTest(unittest.TestCase):
         agent = self.assistant_agent()
         chrome_async(self.m, f"return await {AI}.change(args[0], 'pause', {{paused: true}});", [agent])
         self.addCleanup(chrome_async, self.m, f"return await {AI}.change(args[0], 'pause', {{paused: false}});", [agent])
-        self.assertEqual(
-            chrome_async(self.m, f"return await {AI}.assistantAsk('Oi', null, window);"), {"error": "assistant-paused"}
-        )
+        self.assertEqual(chrome_async(self.m, ASK, ["Oi", []]), {"error": "assistant-paused"})
         view = self.show_sidebar(reload=True)
         view = self.wait_view(lambda v: v["state"] == "blocked")
         self.assertEqual(view["blocked"][0], "Assistente pausado")
@@ -604,7 +738,9 @@ class AssistantUiTest(unittest.TestCase):
         self.submit("Faça devagar")
         self.wait_view(lambda v: v["level"] == "progress")
         busy = self.view()
-        self.assertEqual(busy["status"], "Tarefa enviada para 127.0.0.1. O assistente está trabalhando na Área de IA dele…")
+        self.assertEqual(
+            busy["status"], f"Tarefa enviada para {self.recipient()}. O assistente está trabalhando na Área de IA dele…"
+        )
         self.assertNotIn("✓", busy["status"])
 
         def tools():

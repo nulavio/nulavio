@@ -1,10 +1,11 @@
 /* Nulavio Assistant panel (A12). The question goes to the model the user chose; a page's text only
    when the user included that page in this message. Consent is per message and bound to one tab
-   (AI-02): including captures {tabId, url, title}, the item shows that binding, and it leaves the
-   message after every Send or Summarise, or when that tab goes elsewhere or another tab is selected.
-   Off in private windows (D-UX6) and while the emergency stop is on or the assistant's agent is
-   paused or revoked (D-UX5). Tasks run in the assistant's Área de IA under the permissions the user
-   gave it. Answers are shown as plain text. */
+   (AI-02): "Incluir" reads that tab's text at once and keeps it in the browser (UX5-B, Q4), the item
+   shows the tab, its size and whether it was cut, and it leaves the message after every Send, or when
+   that tab goes elsewhere or another tab is selected. The line above Send says where the message goes
+   and its whole size; the tools refuse it if either changed. Off in private windows (D-UX6) and while
+   the emergency stop is on or the assistant's agent is paused or revoked (D-UX5). Tasks run in the
+   assistant's Área de IA under the permissions the user gave it. Answers are shown as plain text. */
 
 import { localize, t } from "../lib/i18n.js";
 import { announce, errorText, h, icon } from "../lib/ui.js";
@@ -13,14 +14,17 @@ const ai = browser.nulavioAI;
 let state = null;
 let windowId = null; // the browser window this panel lives in
 let current = null; // what "Incluir esta página" would include now: {tabId, url, title}
-let attached = null; // the page included in the next message, captured when the user included it
+let chips = []; // the items of the next message, as the browser keeps them: {chipId, kind, tabId, url, title, host, chars, truncated, blockChars}
 let busy = false;
 let contextVersion = 0; // late page replies cannot restore consent after a send or context change
 
 const $ = id => document.getElementById(id);
-const hostOf = url => URL.parse(url)?.host || url;
 const count = n => new Intl.NumberFormat(browser.i18n.getUILanguage()).format(n);
 const code = error => String(error?.message ?? error);
+const codePoints = text => [...text].length; // as the tools count (Python's len), not UTF-16 units
+// The message is each item's block, then "Question: " and the question (assistant.py _content).
+const QUESTION_PREFIX = "Question: ";
+const MAX_PAGE_CHARS = 60000;
 
 // Refusals that come before anything is sent or done (so "Nada foi alterado" style texts hold).
 // The provider's own errors are not here: their texts say whether the request reached it (AI-09).
@@ -34,12 +38,22 @@ const BEFORE_START = new Set([
   "private-window",
   "no-window",
   "page-changed",
+  "recipient-changed",
+  "size-changed",
   "bad-question",
   "bad-request",
   "tools-missing",
 ]);
 // Refusals that mean the panel itself should show another state.
-const STATE_CHANGED = new Set(["emergency-stop", "assistant-paused", "assistant-revoked", "private-window", "profile-not-allowed", "not-configured"]);
+const STATE_CHANGED = new Set([
+  "emergency-stop",
+  "assistant-paused",
+  "assistant-revoked",
+  "private-window",
+  "profile-not-allowed",
+  "not-configured",
+  "recipient-changed",
+]);
 
 const BLOCKED = {
   "emergency-stop": () => [t("assistantStoppedTitle"), t("assistantStoppedText"), "settings/settings.html#ai-agents-card"],
@@ -51,33 +65,121 @@ function mode() {
   return $("ask").elements.mode.value;
 }
 
-/** The included item, the offer to include the current page, and the reason one left. */
+const pageChip = () => chips.find(c => c.kind === "page") ?? null;
+
+/** The whole request as the tools will count it: Nulavio's instructions, each item, the question. */
+function requestChars() {
+  const question = codePoints($("prompt").value.trim());
+  const items = chips.reduce((sum, c) => sum + c.blockChars, 0);
+  return (state?.systemChars ?? 0) + items + (chips.length ? codePoints(QUESTION_PREFIX) : 0) + question;
+}
+
+/** Above Send: where the message goes and how big it is, all of it (Q3). In Task mode the size is
+    known only afterwards, since what the assistant reads in its Área de IA goes too (AI-14). */
+function showSendLine() {
+  if (!state?.configured) {
+    return;
+  }
+  $("send-line").textContent =
+    mode() === "task"
+      ? t("assistantSendLineTask", [state.recipient])
+      : t("assistantSendLine", [state.recipient, state.provider.model, count(requestChars())]);
+}
+
+function chipItem(chip) {
+  return h(
+    "li",
+    { class: "assistant__chip", "data-chip-id": chip.chipId },
+    h(
+      "span",
+      { class: "assistant__chip-text" },
+      h("span", { text: t("assistantAttachedPage") }),
+      h("span", { class: "hint", "data-part": "binding", text: t("assistantAttachedBinding", [chip.title, chip.host]) }),
+      h("span", {
+        class: "hint",
+        "data-part": "size",
+        text: chip.truncated ? t("assistantPageLong", [count(MAX_PAGE_CHARS)]) : t("assistantPageChars", [count(chip.chars)]),
+      })
+    ),
+    h(
+      "button",
+      {
+        class: "assistant__chip-remove",
+        type: "button",
+        "aria-label": t("assistantRemovePage", [chip.title]),
+        onclick: () => removeChip(chip),
+      },
+      h("span", { "aria-hidden": "true", text: "×" })
+    )
+  );
+}
+
+/** The included items, the offer to include the current page, and the reason one left. */
 function showContext() {
   const task = mode() === "task";
   $("context").hidden = task;
-  $("attached").hidden = !attached;
-  if (attached) {
+  $("attached").hidden = !chips.length;
+  if (chips.length) {
     $("attached-heading").textContent = t("assistantAttachedHeading", [state.recipient]);
-    $("attached-binding").textContent = t("assistantAttachedBinding", [attached.title, hostOf(attached.url)]);
-    $("remove-page").setAttribute("aria-label", t("assistantRemovePage", [attached.title]));
   }
-  const offer = !attached && current;
+  $("chips").replaceChildren(...chips.map(chipItem));
+  const offer = !pageChip() && current;
   $("include-page").hidden = !offer;
   if (offer) {
     $("include-page").replaceChildren(h("span", { "aria-hidden": "true", text: "+" }), " ", t("assistantIncludePage", [current.title]));
   }
-  $("no-page").hidden = Boolean(attached || current);
+  $("no-page").hidden = Boolean(pageChip() || current);
   $("summarize").hidden = task || !current;
+  showSendLine();
 }
 
-/** The included page leaves the message, and the panel says why (`key` names the reason). */
-function drop(key) {
-  if (!attached) {
-    return;
-  }
-  $("drift-text").textContent = t(key, [attached.title]);
+/** An item leaves the message, here and in the browser, and the panel says why (`key` names it). */
+function drop(chip, key) {
+  chips = chips.filter(c => c !== chip);
+  ai.assistantRemove(chip.chipId).catch(() => {});
+  const text = t(key, [chip.title]);
+  $("drift-text").textContent = text;
   $("drift").hidden = false;
-  attached = null;
+  announce(text, "info");
+}
+
+function removeChip(chip) {
+  ++contextVersion;
+  chips = chips.filter(c => c !== chip);
+  ai.assistantRemove(chip.chipId).catch(() => {});
+  showContext();
+  $("include-page").focus();
+}
+
+/** "Incluir esta página" and "Resumir": the tab shown now is read and kept for the next message.
+    Resolves to true when the page is in the message. */
+async function includeCurrent() {
+  const version = ++contextVersion;
+  const page = await ai.assistantPage().catch(() => null); // what the tab shows at this moment
+  if (version !== contextVersion || document.body.dataset.state !== "ready") {
+    return false;
+  }
+  current = page;
+  if (!page) {
+    showContext();
+    return false;
+  }
+  let chip;
+  try {
+    chip = await ai.assistantInclude({ kind: "page", tabId: page.tabId, url: page.url });
+  } catch (e) {
+    announce(errorText(e), "error");
+    await refreshPage();
+    return false;
+  }
+  if (version !== contextVersion || document.body.dataset.state !== "ready") {
+    ai.assistantRemove(chip.chipId).catch(() => {}); // a Send or a change came first: it is not for that one
+    return false;
+  }
+  chips = [...chips.filter(c => c.kind !== "page"), chip];
+  $("drift").hidden = true;
+  showContext();
+  return true;
 }
 
 /** Re-read this window's selected tab. `changedTab`: the tab an update or removal was about. */
@@ -87,12 +189,13 @@ async function refreshPage(changedTab = null) {
   if (version !== contextVersion) {
     return;
   }
+  const attached = pageChip();
   if (attached) {
     const sameTab = page?.tabId === attached.tabId;
     if (!sameTab && changedTab !== attached.tabId) {
-      drop("assistantDriftTab"); // another tab is selected now
+      drop(attached, "assistantDriftTab"); // another tab is selected now
     } else if (!sameTab || page.url !== attached.url) {
-      drop("assistantDriftGone"); // that tab went to another address, or closed
+      drop(attached, "assistantDriftGone"); // that tab went to another address, or closed
     }
   }
   current = page;
@@ -137,11 +240,12 @@ async function render() {
     $("footer").textContent = t("assistantFooter", [state.provider.model, state.recipient]);
   }
   if (view === "ready") {
+    chips = await ai.assistantChips().catch(() => []); // kept by the browser while the panel was closed
     await refreshPage();
     syncMode();
   } else {
     ++contextVersion;
-    attached = null;
+    chips = [];
   }
 }
 
@@ -162,8 +266,8 @@ function showResult(result, task) {
   $("receipt").textContent = task
     ? t("assistantSentTask", [result.recipient ?? state.recipient])
     : result.pageChars
-      ? t("assistantSentPage", [count(result.pageChars), result.recipient])
-      : t("assistantSentQuestionOnly", [result.recipient]);
+      ? t("assistantSentPage", [count(result.pageChars), result.recipient, count(result.chars)])
+      : t("assistantSentQuestionOnly", [result.recipient, count(result.chars)]);
   showSteps(result.steps);
   $("answer-section").hidden = false;
   if (halted) {
@@ -195,12 +299,16 @@ async function showError(error, task) {
   }
 }
 
-async function send(question, page) {
+async function send(question) {
   const task = mode() === "task";
+  // What the line above Send says now is what the tools check: where it goes, and its size.
+  const expected = { recipient: state.recipient, model: state.provider.model };
+  const items = task ? [] : chips.map(c => c.chipId);
+  const chars = requestChars();
   busy = true;
   ++contextVersion;
-  // Consent is per message: what was included goes with this one only.
-  attached = null;
+  // Consent is per message: what was included goes with this one only (the browser drops it too).
+  chips = [];
   $("drift").hidden = true;
   showContext();
   $("answer-section").hidden = true;
@@ -213,8 +321,8 @@ async function send(question, page) {
   announce(t(task ? "assistantWorking" : "assistantAsking", [state.recipient]), "progress");
   try {
     const result = task
-      ? await ai.assistantTask(question)
-      : await ai.assistantAsk(question, page ? { tabId: page.tabId, url: page.url } : null);
+      ? await ai.assistantTask(question, expected)
+      : await ai.assistantAsk(question, { chips: items, expected: { ...expected, chars } });
     showResult(result, task);
   } catch (e) {
     await showError(e, task);
@@ -223,6 +331,7 @@ async function send(question, page) {
     $("send").disabled = false;
     $("summarize").disabled = false;
     $("include-page").disabled = false;
+    showSendLine();
   }
 }
 
@@ -230,9 +339,10 @@ $("ask").addEventListener("submit", event => {
   event.preventDefault();
   const question = $("prompt").value.trim();
   if (question && !busy) {
-    send(question, mode() === "ask" ? attached : null);
+    send(question);
   }
 });
+$("prompt").addEventListener("input", showSendLine);
 $("prompt").addEventListener("keydown", event => {
   if (event.key === "Enter" && (event.ctrlKey || event.metaKey) && !event.isComposing) {
     event.preventDefault();
@@ -249,41 +359,19 @@ $("include-page").addEventListener("click", async () => {
   if (busy) {
     return;
   }
-  const version = ++contextVersion;
-  const page = await ai.assistantPage().catch(() => null); // what the tab shows at this moment
-  if (version !== contextVersion || document.body.dataset.state !== "ready") {
-    return;
-  }
-  if (page) {
-    attached = page;
-    $("drift").hidden = true;
-  }
-  current = page;
-  showContext();
+  await includeCurrent();
   $("prompt").focus(); // the offer button is gone either way; the question comes next
 });
-$("remove-page").addEventListener("click", () => {
-  ++contextVersion;
-  attached = null;
-  showContext();
-  $("include-page").focus();
-});
+// "Resumir" includes this page and writes the request; Send stays the person's (Q5).
 $("summarize").addEventListener("click", async () => {
   if (busy) {
     return;
   }
-  const version = ++contextVersion;
-  const question = t("assistantSummarizePrompt");
-  $("prompt").value = question;
-  const page = await ai.assistantPage().catch(() => null); // this explicit action includes the page shown now
-  if (version !== contextVersion || document.body.dataset.state !== "ready") {
-    return;
+  if (await includeCurrent()) {
+    $("prompt").value = t("assistantSummarizePrompt");
+    showSendLine();
+    $("send").focus();
   }
-  if (!page) {
-    refreshPage();
-    return;
-  }
-  send(question, page);
 });
 const openShell = page => browser.tabs.create({ url: browser.runtime.getURL(page) });
 $("open-settings").addEventListener("click", () => openShell("settings/settings.html#ai-assistant"));
@@ -346,12 +434,12 @@ browser.tabs.onUpdated.addListener((tabId, _info, tab) => {
   // Without the "tabs" permission the event carries no address or title, but it does say which tab
   // is selected where: re-read for the included tab and for this window's selected tab.
   const here = tab?.active && (windowId === null || tab.windowId === windowId);
-  if (document.body.dataset.state === "ready" && (tabId === attached?.tabId || here)) {
+  if (document.body.dataset.state === "ready" && (tabId === pageChip()?.tabId || here)) {
     refreshPage(tabId);
   }
 });
 browser.tabs.onRemoved.addListener(tabId => {
-  if (document.body.dataset.state === "ready" && tabId === attached?.tabId) {
+  if (document.body.dataset.state === "ready" && tabId === pageChip()?.tabId) {
     refreshPage(tabId);
   }
 });

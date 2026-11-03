@@ -56,9 +56,12 @@ this.nulavioAI = class extends ExtensionAPI {
         assistantAllow: call(allowed => ai.assistantAllow(allowed)),
         assistantForget: call(() => ai.assistantForget()),
         assistantPage: call(async () => ai.assistantPage(windowOf())),
-        // `page`: the {tabId, url} the user included in this message, or null (AI-02).
-        assistantAsk: call((question, page) => ai.assistantAsk(question, page ?? null, windowOf())),
-        assistantTask: call(task => ai.assistantTask(task, windowOf())),
+        assistantInclude: call(source => ai.assistantInclude(source, windowOf())),
+        assistantRemove: call(async chipId => ai.assistantRemove(chipId, windowOf())),
+        assistantChips: call(async () => ai.assistantChips(windowOf())),
+        // `options.chips`: the items included in this message (AI-02, UX5-B); `options.expected`: what the panel showed.
+        assistantAsk: call((question, options) => ai.assistantAsk(question, options ?? {}, windowOf())),
+        assistantTask: call((task, expected) => ai.assistantTask(task, expected ?? null, windowOf())),
       },
     };
   }

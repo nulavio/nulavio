@@ -85,6 +85,39 @@ function tabTracker() {
   return lazy.ExtensionParent.apiManager.global.tabTracker ?? fail("unexpected");
 }
 
+// The page text that goes with a message: the first MAX_PAGE_CHARS code points, as the tools
+// (launcher/nulavio_launcher/ai/assistant.py MAX_PAGE_CHARS) would cut it.
+const MAX_PAGE_CHARS = 60000;
+
+/** Code points, as the tools count them (Python's len), not UTF-16 units. */
+function codePoints(text) {
+  let n = 0;
+  for (const _ of text) {
+    n++;
+  }
+  return n;
+}
+
+/** [text cut to `max` code points, whether it was longer]. */
+function cutCodePoints(text, max) {
+  let n = 0;
+  let end = 0;
+  for (const ch of text) {
+    if (n === max) {
+      return [text.slice(0, end), true];
+    }
+    n++;
+    end += ch.length;
+  }
+  return [text, false];
+}
+
+/** What a page adds to the request, in code points: its block and the blank line after it.
+    Mirrors assistant.py _page_block and _content; the tools refuse a Send whose size differs. */
+function pageBlockChars({ url, title, chars }) {
+  return codePoints(`Page content (untrusted, from ${url}, title "${title}"):\n<<<PAGE\n`) + chars + codePoints("\nPAGE>>>\n\n");
+}
+
 /** A web page a tab shows (address and title only), or null for anything else. */
 function pageOf(browser) {
   const url = browser?.currentURI?.spec ?? "";
@@ -99,6 +132,9 @@ class AI {
   #observing = false;
   #renders = new WeakMap(); // window -> the last bar update, so updates never overlap
   #overviewCache = null; // { key, at, overview } for windowState(); a failed read is never kept
+  // The assistant's context items, per window (UX5-B): what was read at "Incluir", kept in memory
+  // only, until it is sent, removed, or the window closes. The panel gets sizes, never the text.
+  #contexts = new WeakMap(); // window -> Map<chipId, {kind, tabId, url, title, text, chars, truncated}>
   #filesTimer = null;
 
   /** The agent driving this window, if any. "agent:pid" (one of the user's profiles, opened for an agent)
@@ -399,29 +435,88 @@ class AI {
     return page && { tabId: tabTracker().getId(tab), ...page };
   }
 
-  /** Ask. `page` is null, or the {tabId, url} the user included in this message: that tab's visible
-      text goes along only while it still shows that address. The selected tab at Send is never read. */
-  async assistantAsk(question, page, win) {
+  #contextOf(win) {
+    let items = this.#contexts.get(win);
+    if (!items) {
+      items = new Map();
+      this.#contexts.set(win, items);
+    }
+    return items;
+  }
+
+  static #chipView(chipId, item) {
+    const { kind, tabId, url, title, chars, truncated } = item;
+    return { chipId, kind, tabId, url, title, host: URL.parse(url)?.host ?? "", chars, truncated, blockChars: pageBlockChars(item) };
+  }
+
+  /** "Incluir esta página": read the visible text of the tab the user named, now, and keep it for the
+      next message (the size shown is what goes: Q4). A later Send sends this copy, not the page then. */
+  async assistantInclude(source, win) {
     this.#userWindow(win);
     if (await this.workspaceAgent()) {
       fail("ai-workspace");
     }
-    let sent = null;
-    if (page) {
-      const browser = this.#includedBrowser(page, win);
-      // The engine's own extractor (visible text, as reader-like features use); no script in the page.
-      const extracted = await browser.browsingContext.currentWindowGlobal.getActor("PageExtractor").getText({});
-      this.#includedBrowser(page, win); // it navigated while being read: refuse rather than send another page
-      sent = { url: browser.currentURI.spec, title: browser.contentTitle, text: String(extracted?.text ?? "") };
+    if (source?.kind !== "page") {
+      fail("bad-request");
     }
-    return this.#assistant({ op: "ask", question: String(question), page: sent }, 180000);
+    const browser = this.#includedBrowser(source, win);
+    // The engine's own extractor (visible text, as reader-like features use); no script in the page.
+    const extracted = await browser.browsingContext.currentWindowGlobal
+      .getActor("PageExtractor")
+      .getText({ sufficientLength: MAX_PAGE_CHARS + 1 });
+    this.#includedBrowser(source, win); // it navigated while being read: refuse rather than keep another page
+    const [text, truncated] = cutCodePoints(String(extracted?.text ?? ""), MAX_PAGE_CHARS);
+    const items = this.#contextOf(win);
+    for (const [id, item] of items) {
+      if (item.kind === "page") {
+        items.delete(id); // one page per message: the new one replaces it
+      }
+    }
+    const chipId = Services.uuid.generateUUID().toString().slice(1, -1);
+    const item = { kind: "page", tabId: source.tabId, url: source.url, title: browser.contentTitle || source.url, text, chars: codePoints(text), truncated };
+    items.set(chipId, item);
+    return AI.#chipView(chipId, item);
+  }
+
+  assistantRemove(chipId, win) {
+    this.#contextOf(this.#userWindow(win)).delete(String(chipId));
+  }
+
+  /** The items waiting for this window's next message (the panel shows them again when it reopens). */
+  assistantChips(win) {
+    return [...this.#contextOf(this.#userWindow(win))].map(([id, item]) => AI.#chipView(id, item));
+  }
+
+  /** Ask. `chips`: the items the user included in this message; each page item goes only while its tab
+      still shows that address. `expected`: where the panel said it goes and its size; the tools refuse
+      the request if either is no longer true. The selected tab at Send is never read. */
+  async assistantAsk(question, options, win) {
+    this.#userWindow(win);
+    if (await this.workspaceAgent()) {
+      fail("ai-workspace");
+    }
+    const { chips = [], expected = null } = options ?? {};
+    if (!expected || typeof expected.recipient !== "string" || !Number.isInteger(expected.chars)) {
+      fail("bad-request");
+    }
+    const items = this.#contextOf(win);
+    const used = (chips ?? []).map(id => items.get(String(id)) ?? fail("page-changed"));
+    for (const id of chips ?? []) {
+      items.delete(String(id)); // consent is per message: the items go with this one only
+    }
+    for (const item of used) {
+      this.#includedBrowser(item, win); // that tab went elsewhere or closed: nothing is sent
+    }
+    const page = used.find(item => item.kind === "page");
+    const sent = page ? { url: page.url, title: page.title, text: page.text } : null;
+    return this.#assistant({ op: "ask", question: String(question), page: sent, expected }, 180000);
   }
 
   /** A task in the assistant's AI Workspace, under its agent permissions; never from a private window. */
-  async assistantTask(task, win) {
+  async assistantTask(task, expected, win) {
     this.#userWindow(win);
     try {
-      return await this.#assistant({ op: "task", task: String(task) }, 600000);
+      return await this.#assistant({ op: "task", task: String(task), expected: expected ?? null }, 600000);
     } catch (e) {
       if (e?.code === "helper-failed") {
         fail("task-unfinished"); // no answer in time (or the tools ended): the run may have acted already

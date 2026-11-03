@@ -763,8 +763,8 @@
   "assistantAnswerHeading": {"message": "Answer"},
   "assistantAnswerReady": {"message": "Answer ready."},
   "assistantStepFailed": {"message": "not allowed or failed"},
-  "assistantSentPage": {"message": "$CHARS$ characters of this page were sent to $RECIPIENT$.", "placeholders": {"chars": {"content": "$1"}, "recipient": {"content": "$2"}}},
-  "assistantSentQuestionOnly": {"message": "Only the question was sent to $RECIPIENT$.", "placeholders": {"recipient": {"content": "$1"}}},
+  "assistantSentPage": {"message": "$CHARS$ characters of this page were sent to $RECIPIENT$, $TOTAL$ in all.", "placeholders": {"chars": {"content": "$1"}, "recipient": {"content": "$2"}, "total": {"content": "$3"}}},
+  "assistantSentQuestionOnly": {"message": "Only the question was sent to $RECIPIENT$: $TOTAL$ characters in all, with Nulavio's instructions.", "placeholders": {"recipient": {"content": "$1"}, "total": {"content": "$2"}}},
   "assistantSentTask": {"message": "The task, and what the assistant read in its AI Workspace, went to $RECIPIENT$.", "placeholders": {"recipient": {"content": "$1"}}},
   "assistantStoppedStepLimit": {"message": "Stopped after $STEPS$ steps without finishing.", "placeholders": {"steps": {"content": "$1"}}},
   "assistantTaskMayHaveActed": {"message": "Actions may have happened in the AI Workspace before that: see Activity."},
@@ -1092,5 +1092,11 @@
   "err_provider_tls": {"message": "The secure connection to the provider failed (certificate or TLS), so nothing was sent. Check the address."},
   "err_provider_bad_reply": {"message": "The provider answered in a form Nulavio does not understand. The request reached it: check the kind of API in Settings."},
   "err_workspace_failed": {"message": "The AI Workspace did not start, or it closed during the task."},
-  "assistantTruncated": {"message": "Answer cut off by the provider's limit."}
+  "assistantTruncated": {"message": "Answer cut off by the provider's limit."},
+  "assistantSendLine": {"message": "Goes to $RECIPIENT$ · $MODEL$ · $CHARS$ characters, counting Nulavio's instructions", "placeholders": {"recipient": {"content": "$1"}, "model": {"content": "$2"}, "chars": {"content": "$3"}}},
+  "assistantSendLineTask": {"message": "What the assistant reads in its AI Workspace goes to $RECIPIENT$; your tabs do not. The size is known only afterwards.", "placeholders": {"recipient": {"content": "$1"}}},
+  "assistantPageChars": {"message": "$CHARS$ characters", "placeholders": {"chars": {"content": "$1"}}},
+  "assistantPageLong": {"message": "Long page: only the first $MAX$ characters go", "placeholders": {"max": {"content": "$1"}}},
+  "err_recipient_changed": {"message": "The provider changed in Settings, so nothing was sent. Check where it goes now, include the page again if you want, and send again."},
+  "err_size_changed": {"message": "The size of the request changed before it went, so nothing was sent. Include the page again and send again."}
 }

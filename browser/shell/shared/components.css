@@ -494,6 +494,7 @@ a.button { display: inline-flex; align-items: center; text-decoration: none; }
   background: var(--nv-color-accent-tint);
   color: var(--nv-color-text-primary);
 }
+.assistant__chips { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--nv-space-2); }
 .assistant__chip-text { flex: 1; min-width: 0; display: grid; gap: 2px; font-weight: var(--nv-font-weight-semibold); overflow-wrap: anywhere; }
 .assistant__chip-text .hint { font-weight: var(--nv-font-weight-regular); color: var(--nv-color-text-primary); }
 .assistant__chip-remove {
