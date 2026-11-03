@@ -38,6 +38,20 @@ import harness
 from fake_llm import FakeProvider, Reply
 from fake_keyring import FAKE_SECRET_TOOL
 
+# Type into the address bar with trusted key events, as tests/integration/test_search.py does.
+TYPE_JS = """
+const [text] = arguments;
+const tip = Cc["@mozilla.org/text-input-processor;1"].createInstance(Ci.nsITextInputProcessor);
+if (!tip.beginInputTransactionForTests(window)) {
+  throw new Error("could not start an input transaction");
+}
+for (const ch of text) {
+  const enter = {key: "Enter", code: "Enter", keyCode: 13};
+  const event = ch === "\\n" ? new KeyboardEvent("", enter) : new KeyboardEvent("", {key: ch});
+  tip.keydown(event);
+  tip.keyup(event);
+}
+"""
 AI = 'ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioAI.sys.mjs").NulavioAI'
 TABS = 'ChromeUtils.importESModule("resource://gre/modules/ExtensionParent.sys.mjs").ExtensionParent.apiManager.global.tabTracker'
 KEY = "sk-artificial-ui-key-456"
@@ -1460,6 +1474,59 @@ class AssistantUiTest(unittest.TestCase):
             self.m.chrome(f"{key}.doCommand();")
             self.assertTrue(harness.wait_until(self.sidebar_shows_assistant, 10))
             self.assertTrue(harness.wait_until(lambda: self.focused_in_panel() == "prompt", 10))
+        self.close_other_tabs()
+
+    def test_32_ia_in_the_address_bar_only_writes_the_question(self):
+        """UX5-H, Q7: "@ia …" then Enter opens this window's panel with the text in the question; nothing is sent."""
+        self.close_other_tabs()
+        chrome_async(self.m, f"const w = {WINDOW}; w.SidebarController.hide(); return true;", [None])
+        before = self.provider.count
+        self.m.chrome("if (window.gDialogBox?.isOpen) { window.gDialogBox.dialog?.close(); } gURLBar.focus(); gURLBar.select();")
+        self.m.chrome(TYPE_JS, ["@ia Qual é a capital do Peru?\n"])
+        self.assertTrue(harness.wait_until(self.sidebar_shows_assistant, 10))
+        self.assertTrue(harness.wait_until(lambda: self.focused_in_panel() == "prompt", 10))
+        self.assertEqual(self.panel("return document.getElementById('prompt').value;"), "Qual é a capital do Peru?")
+        self.assertEqual(self.provider.count, before)  # written, not sent
+        self.close_other_tabs()
+
+    def test_33_the_quick_action_includes_this_page_and_is_not_in_private_windows(self):
+        """UX5-H, Q6: the address bar action (moz-src ActionsProviderQuickActions, pinned here)."""
+        url = self.server.url("/page/Acao")
+        self.close_other_tabs()
+        self.select_new_tab(url)
+        chrome_async(self.m, f"const w = {WINDOW}; w.SidebarController.hide(); return true;", [None])
+        actions = (
+            "const {ActionsProviderQuickActions: Q} = ChromeUtils.importESModule("
+            "'moz-src:///browser/components/urlbar/ActionsProviderQuickActions.sys.mjs');"
+        )
+        # As typed: a prefix of one of its words (the whole word is matched in the phrase).
+        found = chrome_async(self.m, actions + "return [...await Q.getActions({input: 'assis'})];")["ok"]
+        self.assertIn("nulavio-assistant", found)
+        label = chrome_async(self.m, "return await document.l10n.formatValue('nulavio-quickaction-assistant');")["ok"]
+        self.assertEqual(label, "Perguntar ao assistente sobre esta página")  # the branding's Fluent text, in this window
+        self.assertFalse(self.m.chrome(actions + "return Q.getAction('nulavio-assistant').isUnsupported();"))
+        before = self.provider.count
+        self.m.chrome(actions + "Q.getAction('nulavio-assistant').onPick(null, {browserWindow: window});")
+        self.assertTrue(harness.wait_until(self.sidebar_shows_assistant, 10))
+        view = self.wait_view(lambda v: v["attached"])
+        self.assertEqual(view["attached"], f"só da aba “Acao” · {url.split('/')[2]}")
+        self.assertEqual(self.provider.count, before)
+        # With a private window in front, the action is not offered.
+        handles = set(self.m.window_handles())
+        main = self.m.send("WebDriver:GetWindowHandle")["value"]
+        self.m.chrome("OpenBrowserWindow({private: true});")
+        self.assertTrue(harness.wait_until(lambda: set(self.m.window_handles()) - handles, timeout=20))
+        private = (set(self.m.window_handles()) - handles).pop()
+        self.m.switch_to(private)
+        try:
+            self.assertTrue(
+                harness.wait_until(
+                    lambda: self.m.chrome(actions + "return Q.getAction('nulavio-assistant').isUnsupported();"), 10
+                )
+            )
+        finally:
+            self.m.send("WebDriver:CloseWindow")
+            self.m.switch_to(main)
         self.close_other_tabs()
 
 

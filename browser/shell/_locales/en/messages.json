@@ -1158,5 +1158,7 @@
   "assistantSelectionFrame": {"message": "from a frame of $HOST$", "placeholders": {"host": {"content": "$1"}}},
   "assistantSelectionMayBeCut": {"message": "$CHARS$ characters; it may be cut (the limit for a selection)", "placeholders": {"chars": {"content": "$1"}}},
   "assistantRemoveSelection": {"message": "Remove the selected text of “$TITLE$” from the message", "placeholders": {"title": {"content": "$1"}}},
-  "assistantSelectionAdded": {"message": "The selected text of “$TITLE$” goes with the next message. Nothing was sent.", "placeholders": {"title": {"content": "$1"}}}
+  "assistantSelectionAdded": {"message": "The selected text of “$TITLE$” goes with the next message. Nothing was sent.", "placeholders": {"title": {"content": "$1"}}},
+  "omniboxDefault": {"message": "Write this as a question to the assistant (opens the panel; nothing is sent)"},
+  "assistantPageAdded": {"message": "The page “$TITLE$” goes with the next message. Nothing was sent.", "placeholders": {"title": {"content": "$1"}}}
 }

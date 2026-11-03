@@ -677,6 +677,12 @@ class AI {
       // At the engine's limit the selection may have been longer: the item says it may be cut.
       items.set(delivery.chipId, { kind: "selection", tabId, url: page.url, frameUrl, title: page.title, text, chars: codePoints(text),
         truncated: raw.length >= MAX_SELECTION_CHARS });
+    } else if (offer?.kind === "draft") {
+      delivery.draft = String(offer.text ?? "").trim().slice(0, 8000); // "@ia …": the question, written, not sent
+    } else if (offer?.kind === "page") {
+      // The address bar's quick action: this tab's page, read now, as "Incluir esta página" would.
+      const page = pageOf(tab.linkedBrowser) ?? fail("page-changed");
+      delivery.chipId = (await this.assistantInclude({ kind: "page", tabId, url: page.url }, win)).chipId;
     } else if (offer?.kind !== "composer") {
       fail("bad-request");
     }

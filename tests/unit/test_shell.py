@@ -405,7 +405,7 @@ class PackagingTest(unittest.TestCase):
         out = self.tmp / "plain"
         files = make_shell.assemble(out, privileged=False)
         manifest = json.loads((out / "manifest.json").read_text(encoding="utf-8"))
-        for key in ("experiment_apis", "action", "commands", "options_ui"):
+        for key in ("experiment_apis", "action", "commands", "omnibox", "options_ui"):
             self.assertNotIn(key, manifest)
         self.assertFalse(
             [f for f in files if f.split("/")[0] in ("experiments", "modules", "settings", "profiles", "routing", "vault")]

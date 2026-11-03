@@ -13,3 +13,8 @@
 -brand-product-name = Nulavio
 -vendor-short-name = Nulavio
 trademarkInfo = O Nulavio é construído sobre o motor Gecko da Mozilla. O Nulavio não é afiliado à Mozilla.
+
+## A ação rápida da barra de endereço para o Assistente Nulavio (Shell modules/NulavioWindow.sys.mjs).
+## Ela inclui a página mostrada na próxima mensagem do painel; nada é enviado.
+
+nulavio-quickaction-assistant = Perguntar ao assistente sobre esta página

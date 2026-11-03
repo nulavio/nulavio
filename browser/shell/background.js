@@ -252,3 +252,20 @@ if (browser.nulavioAI && browser.commands) {
     }
   });
 }
+
+// -- "@ia" in the address bar (UX5-H, Q7): what follows only fills the assistant's question --
+// Nothing is kept while typing, and Enter only opens the panel of that window with the text in the
+// question; Send stays the person's. Search suggestions never get it: the engine skips them for text
+// that starts with "@" and names no search engine (bug 1551049; tests/integration/test_search.py 05b
+// checks it). In a private window the text is dropped.
+
+if (browser.nulavioAI && browser.omnibox) {
+  browser.omnibox.setDefaultSuggestion({ description: t("omniboxDefault") });
+  browser.omnibox.onInputEntered.addListener(async text => {
+    const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
+    if (!tab || tab.incognito || (await browser.nulavioAI.workspaceAgent())) {
+      return;
+    }
+    browser.nulavioAI.assistantOffer({ kind: "draft", text: String(text).slice(0, 8000) }, tab.id).catch(console.error);
+  });
+}

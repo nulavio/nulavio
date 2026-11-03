@@ -599,10 +599,13 @@ async function takeOffer() {
   }
   chips = await ai.assistantChips().catch(() => chips);
   $("drift").hidden = true;
+  if (delivery.draft && !run) {
+    $("prompt").value = delivery.draft; // from "@ia" in the address bar: written here, sent only by Send
+  }
   showContext();
   const added = chips.find(c => c.chipId === delivery.chipId);
   if (added) {
-    announce(t("assistantSelectionAdded", [added.title]));
+    announce(t(added.kind === "selection" ? "assistantSelectionAdded" : "assistantPageAdded", [added.title]));
   }
   if (!run) {
     $("prompt").focus();

@@ -43,6 +43,9 @@
       "description": "__MSG_commandOpenAssistant__"
     }
   },
+  "omnibox": {
+    "keyword": "@ia"
+  },
   "experiment_apis": {
     "nulavioLayout": {
       "schema": "experiments/layout/schema.json",

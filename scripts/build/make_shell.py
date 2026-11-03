@@ -66,7 +66,7 @@ def manifest() -> dict:
 
 # Parts that need the privileges of a built-in add-on (experiment APIs over
 # the engine's Search Service and profile service) and the UI that uses them.
-PRIVILEGED_KEYS = ("experiment_apis", "action", "commands", "options_ui", "sidebar_action")
+PRIVILEGED_KEYS = ("experiment_apis", "action", "commands", "omnibox", "options_ui", "sidebar_action")
 PRIVILEGED_DIRS = ("experiments", "modules", "settings", "profiles", "routing", "vault", "ai", "guard", "passwords", "assistant")
 
 

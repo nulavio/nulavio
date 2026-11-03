@@ -248,6 +248,40 @@ class SearchPrivacyTest(unittest.TestCase):
             self.search("await S.setDefault(args[0]);", previous)
             self.search("await S.remove(args[0]);", fixture)
 
+    def test_05b_text_after_the_assistant_keyword_never_reaches_suggestions(self):
+        """UX5-H gate: with remote suggestions allowed for the default engine, what follows "@ia" (the
+        Nulavio Assistant's keyword) never reaches a suggestion service or any other request. The engine
+        skips suggestions for "@" text that names no engine (bug 1551049); this pins it. The same setup
+        does send ordinary typing, which proves the measurement sees it."""
+        self.require_nulavio()
+        fixture = self.search(
+            "return S.addCustom({name: 'Fixture', url: args[0], suggestUrl: args[1], alias: '@fixture'});",
+            self.server.url("/search?q=%s"),
+            self.server.url("/suggest?q=%s"),
+        )
+        previous = self.search("return (await S.list()).find(e => e.isDefault).id;")
+        self.search("await S.setDefault(args[0]);", fixture)
+        self.search("await S.setSuggestOptIn(args[0], true);", fixture)
+        try:
+            self.m.chrome("gURLBar.blur();")
+            self.m.chrome(NET_START)
+            try:
+                self.type_keys("@ia nvassistantsecret")
+                time.sleep(2.0)
+                typed = self.m.chrome("return gURLBar.value;")
+            finally:
+                seen = self.m.chrome(NET_STOP)
+                self.m.chrome("gURLBar.view.close(); gURLBar.handleRevert(); gURLBar.blur();")
+            self.assertEqual(typed, "@ia nvassistantsecret")
+            self.assertFalse([h for h in self.server.requests_to("/suggest") if "nvassistantsecret" in h])
+            self.assert_nothing_about(seen, "nvassistantsecret")
+            self.type_in_urlbar("nvcontrolafteria")  # the positive control, with the same consent
+            self.assertTrue(any("nvcontrolafteria" in h for h in self.server.requests_to("/suggest")))
+        finally:
+            self.search("await S.setSuggestOptIn(args[0], false);", fixture)
+            self.search("await S.setDefault(args[0]);", previous)
+            self.search("await S.remove(args[0]);", fixture)
+
     def test_06_alias_search_goes_straight_to_its_engine(self):
         self.require_nulavio()
         fixture = self.search(

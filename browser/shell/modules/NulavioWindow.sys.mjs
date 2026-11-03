@@ -8,6 +8,7 @@
 const lazy = {};
 ChromeUtils.defineESModuleGetters(lazy, {
   AboutNewTab: "resource:///modules/AboutNewTab.sys.mjs",
+  ActionsProviderQuickActions: "moz-src:///browser/components/urlbar/ActionsProviderQuickActions.sys.mjs",
   CustomizableUI: "moz-src:///browser/components/customizableui/CustomizableUI.sys.mjs",
   ExtensionParent: "resource://gre/modules/ExtensionParent.sys.mjs",
   ExtensionSettingsStore: "resource://gre/modules/ExtensionSettingsStore.sys.mjs",
@@ -28,6 +29,7 @@ const bandSheet = Services.io.newURI("resource://builtin-addons/nulavio-shell/sh
 const inContent = Services.io.newURI("resource://builtin-addons/nulavio-shell/shared/in-content.css");
 const AREA = "nulavio-band";
 const WIDGET = "nulavio-band-widget";
+const QUICK_ACTION = "nulavio-assistant"; // the address bar quick action (UX5-H)
 const SHELL = "shell@nulavio.net";
 const HTML = "http://www.w3.org/1999/xhtml";
 // nulavio-ai-agent-files-changed: the driving agent's registry or the emergency stop changed (NulavioAI).
@@ -140,6 +142,7 @@ class WindowUI {
       },
     });
     cui.addListener(this);
+    this.#addQuickAction();
     for (const topic of TOPICS) {
       Services.obs.addObserver(this, topic);
     }
@@ -700,6 +703,35 @@ class WindowUI {
     win.document.documentElement.removeAttribute("nulavio-window-raw");
   }
 
+  /** "Perguntar ao assistente sobre esta página" in the address bar (UX5-H, Q6): typing one of its words, or
+      the actions list, offers it; picking it puts this tab's page in the panel's next message and opens the
+      panel. Nothing is sent. Not offered in private windows or where an agent drives the browser. */
+  #addQuickAction() {
+    const top = () => Services.wm.getMostRecentBrowserWindow();
+    try {
+      lazy.ActionsProviderQuickActions.addAction(QUICK_ACTION, {
+        commands: ["assistente", "perguntar ao assistente", "assistant", "ask the assistant"],
+        icon: WebExtensionPolicy.getByID(SHELL)?.getURL("shared/nulavio-symbol-mono.svg") ?? "",
+        label: "nulavio-quickaction-assistant",
+        isUnsupported: () => {
+          const win = top();
+          return !win || lazy.PrivateBrowsingUtils.isWindowPrivate(win) || Boolean(Services.prefs.getStringPref("nulavio.ai.workspace", ""));
+        },
+        onPick: (_queryContext, controller) => {
+          const win = controller?.browserWindow ?? top();
+          if (!win || lazy.PrivateBrowsingUtils.isWindowPrivate(win)) {
+            return null;
+          }
+          const tabId = lazy.ExtensionParent.apiManager.global.tabTracker.getId(win.gBrowser.selectedTab);
+          lazy.NulavioAI.assistantOffer({ kind: "page" }, tabId).catch(console.error);
+          return null;
+        },
+      });
+    } catch (e) {
+      console.error("Nulavio: quick action", e); // an engine without this API: the other entry points remain
+    }
+  }
+
   stop() {
     if (!this.#started) {
       return;
@@ -715,6 +747,11 @@ class WindowUI {
       Services.obs.removeObserver(this, topic);
     }
     lazy.CustomizableUI.removeListener(this);
+    try {
+      lazy.ActionsProviderQuickActions.removeAction(QUICK_ACTION);
+    } catch (e) {
+      console.error("Nulavio: quick action", e);
+    }
     for (const win of this.#windows.keys()) {
       this.#detach(win);
     }

@@ -1158,5 +1158,7 @@
   "assistantSelectionFrame": {"message": "de um quadro de $HOST$", "placeholders": {"host": {"content": "$1"}}},
   "assistantSelectionMayBeCut": {"message": "$CHARS$ caracteres; pode estar cortada (o limite de uma seleção)", "placeholders": {"chars": {"content": "$1"}}},
   "assistantRemoveSelection": {"message": "Remover o texto selecionado de “$TITLE$” da mensagem", "placeholders": {"title": {"content": "$1"}}},
-  "assistantSelectionAdded": {"message": "O texto selecionado de “$TITLE$” vai junto com a próxima mensagem. Nada foi enviado.", "placeholders": {"title": {"content": "$1"}}}
+  "assistantSelectionAdded": {"message": "O texto selecionado de “$TITLE$” vai junto com a próxima mensagem. Nada foi enviado.", "placeholders": {"title": {"content": "$1"}}},
+  "omniboxDefault": {"message": "Escrever isto como pergunta ao assistente (abre o painel; nada é enviado)"},
+  "assistantPageAdded": {"message": "A página “$TITLE$” vai junto com a próxima mensagem. Nada foi enviado.", "placeholders": {"title": {"content": "$1"}}}
 }

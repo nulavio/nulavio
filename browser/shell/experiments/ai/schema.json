@@ -603,7 +603,9 @@
                 "type": "string",
                 "enum": [
                   "selection",
-                  "composer"
+                  "composer",
+                  "draft",
+                  "page"
                 ]
               },
               "pageUrl": {

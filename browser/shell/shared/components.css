@@ -508,7 +508,7 @@ a.button { display: inline-flex; align-items: center; text-decoration: none; }
 :is(.assistant__answer, .assistant__turn-answer) :is(ul, ol) { padding-inline-start: 1.25rem; }
 :is(.assistant__answer, .assistant__turn-answer) blockquote { padding-inline-start: var(--nv-space-3); border-inline-start: 3px solid var(--nv-color-border-subtle); color: var(--nv-color-text-secondary); }
 :is(.assistant__answer, .assistant__turn-answer) pre { padding: var(--nv-space-2); overflow-x: auto; border-radius: var(--nv-radius-sm); background: var(--nv-color-bg-surface); white-space: pre; }
-:is(.assistant__answer, .assistant__turn-answer) code { font-family: var(--nv-font-mono); font-size: 0.92em; overflow-wrap: anywhere; }
+:is(.assistant__answer, .assistant__turn-answer) code { font-family: var(--nv-font-family-mono); font-size: 0.92em; overflow-wrap: anywhere; }
 /* Sources: passages quoted word for word from a page that went (UX5-E). */
 .assistant__sources { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--nv-space-3); }
 .assistant__source { display: grid; gap: var(--nv-space-1); }
