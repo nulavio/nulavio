@@ -148,9 +148,13 @@ async function showLayoutChoice() {
   const render = state => {
     if (dismissedInThisTab || (!state.choicePending && !editingInThisTab)) {
       card.hidden = true;
-      // The choice is settled: this tab no longer follows layout changes (every
-      // open new tab used to answer each one with a privileged state() call).
-      if (!busy && !keyboard?.pending()) {
+      // The choice is settled (dismissed here, or no longer pending while the
+      // sidebar is available and unlocked): this tab no longer follows layout
+      // changes (every open new tab answered each one with a privileged state()
+      // call). A choice hidden only because the sidebar is off or a pref is
+      // locked can come back, so that tab keeps listening.
+      const settled = dismissedInThisTab || (state.available && !state.locked);
+      if (settled && !busy && !keyboard?.pending()) {
         unlisten();
       }
       return;

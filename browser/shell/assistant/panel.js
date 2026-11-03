@@ -292,11 +292,24 @@ $("allow-profile").addEventListener("click", () => ai.assistantAllow(true).then(
 // with a final one at the end of a burst; the tools still refuse while blocked.
 const BLOCKED_RECHECK_MS = 3000;
 let rendering = null;
+let renderAgain = false;
 let lastBlockedCheck = 0;
 let blockedTimer = null;
+// One check at a time; a request that arrives during a check gets one more check that
+// starts after it, so a resume made meanwhile is never answered by an older check.
 function renderShared() {
-  rendering ??= render().finally(() => {
+  if (rendering) {
+    renderAgain = true;
+    return rendering;
+  }
+  rendering = render().finally(() => {
     rendering = null;
+    if (renderAgain) {
+      renderAgain = false;
+      if (document.body.dataset.state === "blocked") {
+        renderShared().catch(() => {});
+      }
+    }
   });
   return rendering;
 }

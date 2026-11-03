@@ -531,17 +531,27 @@ class AiBridgeTest(unittest.TestCase):
         self.assertIn("raw", bar["state"])
         self.check_farol(library, agent, raw=True)
         # A real tools-status failure cannot replace a known raw warning/identity with idle UI.
+        # The band reuses the last answer while agents.json and STOP are unchanged, so the
+        # registry's time is touched to make the band ask again, and the failure must be seen.
         module = "ChromeUtils.importESModule('resource://builtin-addons/nulavio-shell/modules/"
-        self.chrome(
+        calls = self.chrome(
             library,
             f"""(async () => {{
           const A = {module}NulavioAI.sys.mjs').NulavioAI;
           const W = {module}NulavioWindow.sys.mjs').NulavioWindow;
+          const T = {module}NulavioTools.sys.mjs');
           const overview = A.overview;
-          try {{ A.overview = () => Promise.reject(new Error('fixture: unavailable')); await W.refresh(); }}
-          finally {{ A.overview = overview; }}
+          let calls = 0;
+          try {{
+            A.overview = () => {{ calls++; return Promise.reject(new Error('fixture: unavailable')); }};
+            await IOUtils.setModificationTime(PathUtils.join(T.stateDir(), 'ai', 'agents.json'));
+            await W.refresh();
+            await W.refresh();
+          }} finally {{ A.overview = overview; }}
+          return calls;
         }})()""",
         )
+        self.assertGreaterEqual(calls, 1, "the simulated tools failure never reached the band")
         self.check_farol(library, agent, raw=True)
         for dark in (0, 1):
             self.chrome(library, f"Services.prefs.setIntPref('ui.systemUsesDarkTheme', {dark}); window.resizeTo(630, 768)")
