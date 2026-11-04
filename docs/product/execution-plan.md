@@ -370,13 +370,14 @@ Verified on a real incremental Track B 159.0 build of `f3dfa89` (BuildID `202611
   - **I** The band's activity seal (actions that ran, waiting, "Parar tarefa") and the connected-agent seal from the bridge's session markers.
   - **J** ADR 0007 amendment, stream contract in `docs/architecture/ai-bridge.md`, AI-T35–38 in the threat model, the design-system section, the gallery and its baselines.
 - **Reviews.** Adversarial review workflows on C1/C2 (15 findings) and on D–I (16 confirmed, one critical: a retry could resend a page copy after it was left out). All are fixed with tests.
-- **QA.** Terra R4 on 0, 1, A and B confirmed no defects; its two visual notes are fixed. Terra R5 on C–I and the review fixes is running.
+- **QA.** Terra R4 on 0, 1, A and B confirmed no defects; its two visual notes are fixed. Terra R5 on C–I and the review fixes found no defect (partial coverage, not a certification; the integration suite covers what it left out).
 
 *Visual audit and polish (2026-11-04, branch `ux3g-polish`), asked by the maintainer after UX5: Settings, onboarding, the icons and the landing page.*
 - **Audit.** A workflow critiqued 68 real captures (Settings, first run, Shell pages, site; 1280 and 390 px, light and dark), verified every finding and wrote a plan: 53 findings, 4 high (routing with one profile, a section title hidden under the narrow rail, "Sites sensíveis" changing settings without saying so, the site out of date).
 - **Done (with tests):** the cross-cutting parts (rhythm, disclosures, link buttons, badges, switches, focus, toggles, empty states); Settings (one-sentence intros with "Como funciona", layout pictures, Profiles, Search, Integrations, plainer words); the template hint everywhere a template is chosen; protected profile creation; the missing-download, Guard and assistant first screens; and the new tab's first run, one question at a time (welcome, layout, DNS, passwords, default browser, all set).
 - **Icons and chrome (Calmaria).** A three-direction workflow with two judges chose solid one-tone glyphs on soft tiles for who you are and outline glyphs for state, one source for pages, band and toolbar (`NulavioAvatars.sys.mjs`), new tile/glyph tokens, no Unicode pseudo-icons, a quiet band and a monochrome toolbar button (design-system.md, Calmaria).
 - **Landing page.** A three-direction workflow chose "Recibo": the page as a dated engineering document where each claim says what it costs or where it stops and where to check it, with real captures; implemented in evidence mode `text` (the repository is private). Publishing stays with the maintainer (§13 of its spec: evidence mode, NEL, trademark line).
+- **QA and follow-up.** Terra R6 on the whole round: one medium finding (the first run's DNS step left the keyboard in the search box), fixed with a test (`f41f984`). Its other notes are answered: an "Em poucas palavras" block reads the landing in plain words before the document starts, and a profile's icon is chosen on a grid of glyph tiles (Settings and the create sheet) instead of a list of names.
 
 **UX6 — Safe personalisation**
 - **Presets.** Offered in onboarding and in Settings.
