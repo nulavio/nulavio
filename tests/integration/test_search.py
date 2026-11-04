@@ -430,6 +430,30 @@ class SearchPrivacyTest(unittest.TestCase):
         )
         self.assertEqual(external, [])
 
+    def test_13_a_saved_alias_shows_as_stored(self):
+        """Review UX7: after Salvar the field shows the alias as stored ("@pato"), not the text typed."""
+        self.require_nulavio()
+        url = self.m.chrome("return WebExtensionPolicy.getByID('shell@nulavio.net').getURL('settings/settings.html#search');")
+        self.m.navigate(url)
+        harness.wait_until(lambda: self.root_ready(), timeout=15)
+        ddg = self.m.execute(
+            "return [...document.querySelectorAll('#engines li')]"
+            ".find(li => li.querySelector('.row__title').textContent.startsWith('DuckDuckGo')).dataset.engineId;"
+        )
+        field = f'[data-focus-key="alias-{ddg}"]'
+        value = lambda: self.m.execute("return document.querySelector(arguments[0]).value;", [field])  # noqa: E731
+        before = value()
+        try:
+            self.m.execute("document.querySelector(arguments[0]).closest('details').open = true;", [field])
+            for typed, stored in (("Pato", "@pato"), (before, before)):
+                self.m.execute("const f = document.querySelector(arguments[0]); f.value = arguments[1];", [field, typed])
+                self.m.send("WebDriver:ElementClick", {"id": self.m.find_element(f'[data-focus-key="alias-save-{ddg}"]')})
+                self.assertTrue(harness.wait_until(lambda want=stored: value() == want, timeout=10), value())
+                time.sleep(0.5)  # a later redraw must not bring the typed text back
+                self.assertEqual(value(), stored)
+        finally:
+            self.search("await S.setAlias(args[0], args[1]); return true;", ddg, before)
+
     def root_ready(self):
         try:
             return self.m.execute("return document.documentElement && document.documentElement.dataset.ready === 'true';")

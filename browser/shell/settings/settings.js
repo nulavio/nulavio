@@ -265,7 +265,7 @@ function colorPicker(profile) {
 function profileRow(profile) {
   const form = h(
     "form",
-    { class: "stack stack--tight", novalidate: true },
+    { class: "stack stack--tight", novalidate: true, "data-keep-edits": "" },
     h(
       "label",
       { class: "field" },
