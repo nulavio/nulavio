@@ -55,7 +55,7 @@ Six fills a person picks for a profile: lima `#C5E384`, sky `#8CCBF5`, violet `#
 | Address bar height | 36 px | 30 px | 40 px |
 | Toolbar buttons | upstream sizes (≥ 24 px measured) | upstream | upstream |
 
-The minimum target is 24×24 CSS px (WCAG 2.5.8); `test_06` measures the real buttons. Densities follow `browser.uidensity` (Customize → Density).
+The minimum target is 24×24 CSS px (WCAG 2.5.8); `test_06` measures the real buttons. Densities follow `browser.uidensity`, chosen in Nulavio Settings → Aparência (Automático, Normal, Compacto, Toque) or in about:preferences.
 
 ## States
 
@@ -774,7 +774,7 @@ The functional QA of build `20261102120448` found 1 high, 3 medium and 11 low is
 
 Recorded, not changed here:
 - **B-1** (`this._openPopups is undefined` in the console on adopted profiles): the engine's own `sidebar.visibility` observer runs before the first window's sidebar has started. Avoiding it means committing Lateral after the first paint (a visible horizontal-to-vertical switch) or patching the engine; no visible effect was observed.
-- **B-11** (card below the fold at 150 %): open. UX3F A4, which compacts the hero and the card while the choice is open, brings "Manter …" above the fold at 100 % (1280 x 800); at 150 % it still ends below the first screen (598 px in a 487 px viewport on the rebased UX3F build).
+- **B-11** (card below the fold at 150 %): closed in UX6 (2026-11-04). On short viewports the card also tightens its gaps and padding, and `test_layout_presets` measures "Manter …" inside the first screen at 150 % on 1280 x 800 and 1366 x 768.
 - **B-4, B-5, B-6** (product decisions): a profile returns to Lateral when an admin lock written after the first run is removed; adoption is evaluated by two callers (harmless once the marker is written); "Abas no topo" keeps the collapsed launcher visible.
 - **B-10, B-12** (native sidebar panel and its "Manage … settings" link), **B-13** (address-bar placeholder on about:home, which the first window no longer shows on a fresh start) and **B-14** (`platform.ini` carries the app BuildID in a repack) are outside the Shell.
 - Whether "Lateral" needs another English name is open.
@@ -889,3 +889,54 @@ spec and its measurements are kept with the session evidence). Two grammars, no 
   (`avatarPicker` in `lib/ui.js`, a radio group, seven to a row). The others stay quiet on the sunken
   surface; the chosen one wears the colour chosen next to it (`tintAvatars`, updated before saving)
   and a ring, with its name as the radio's label. Forced colours show the radio and a framed tile.
+
+## UX6: safe personalisation (2026-11-04)
+
+Everything a person can change about Nulavio's look and keys, and where routing sends links from
+other apps, without lowering a protection.
+
+- **One list.** `browser/shell/shared/options.json` declares every option once (id, kind, the pref it
+  writes, values, default, writer, where its control is, marked `data-option`).
+  `tests/unit/test_personalisation.py` proves from it that no option writes a guarded pref (the
+  Guard's lists, the forbidden map, guard-rules.json, the "Sensitive sites" prefs, every non-UI
+  baseline pref, and prefixes for privacy, network, security, search, passwords, extensions,
+  updates, telemetry, the system's `ui.*` LookAndFeel and Nulavio's own AI/Guard/Vault/routing
+  prefs), that the check fails closed, and pins every privileged pref writer by its first argument.
+  `test_appearance` walks every value of every option in the real build and sees no other pref or
+  permission change.
+- **Aparência** (Settings, "Este perfil"), written by `NulavioPersonalise.sys.mjs` through
+  `nulavioPersonalise`:
+  - *Densidade da janela*: the engine's Automático (no user value), Normal, Compacto, Toque.
+  - *Cor de destaque*: Menta (default) or Azul. A token variant (`$extensions["nulavio.variants"]`):
+    the generator re-emits every token whose value changes, for Shell pages as
+    `:root[data-accent="blue"]` and for the window and about: pages behind
+    `-moz-pref("nulavio.appearance.accent", "blue")`. Azul keeps OKLab 0.106 from every identity,
+    status and private colour (mint: 0.082). Focus, the "acting" seal, the private chrome, status,
+    identity, group, fullscreen, band and download tokens never follow a variant (the generator
+    refuses one that reaches them), and the private-browsing page keeps its colours.
+  - *Mais contraste*: text 7:1 or more and borders 3:1 or more on every surface, solid frost, on
+    Nulavio's own surfaces only. It never writes the system's LookAndFeel prefs, which websites
+    see; when the system already asks for high contrast or forces colours, the switch shows that
+    and why.
+  - *Fundo suave na nova aba* (off by default, D-UX10): a gradient from the canvas to the accent's
+    tint with frosted cards, never in a private window; *Reduzir transparência* makes the cards
+    solid, and says why when it cannot change anything (nothing transparent, or already solid by
+    the system or by more contrast).
+  - Every contrast pair passes in every combination (theme × accent × contrast: 1224 rows).
+  - Shell pages load `lib/appearance.js` first; it only sets `data-accent`, `data-contrast`,
+    `data-ambience` and `data-transparency` on `<html>`.
+- **Atalhos** (D-UX23). Ctrl+Alt+F toggles Foco and returns to the preset it came from; Ctrl+Alt+B
+  opens the profile menu with the same "Bloquear agora" confirmation as its button (Cancel focused).
+  Both are free in Firefox 159's Linux chrome, the local Plasma and GNOME keybindings and Orca, and
+  neither is a page access-key combination; Ctrl+Alt+L stays out (screen lock on older KDE and
+  Ubuntu). Settings → Atalhos lists the four commands with their current keys, "Mudar…" opens the
+  engine's extension shortcuts view (which checks clashes; the Shell's card is there as "Nulavio
+  Shell"), "Restaurar" puts the default back, and a link opens about:keyboard. The menu hint and the
+  new tab's "Atalhos e ajuda" read the keys from `commands.getAll()`.
+- **Ações rápidas** after ">": "Abrir as configurações do Nulavio" and "Ligar ou desligar o layout
+  Foco", next to the assistant's; none in an AI Workspace, none that locks, unlocks, resumes, grants
+  or turns anything off.
+- **Destino padrão** for links from other apps with no rule (ADR 0003, step 4 for M4a only): the last
+  profile used (default) or a chosen profile, through the M4a hand-off (unlock page for a locked
+  profile, warning page for a missing one), announced in the target's band.
+

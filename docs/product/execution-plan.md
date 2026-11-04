@@ -385,6 +385,17 @@ Verified on a real incremental Track B 159.0 build of `f3dfa89` (BuildID `202611
 - **Shortcuts.** A link to about:keyboard, Nulavio commands the user can remap, and Nulavio quick actions after ">".
 - **Routing.** The default destination for links from other apps.
 
+*UX6 progress (2026-11-04, branch `ux3g-polish`).*
+- **Plan.** A read-only Understand workflow (5 readers and a synthesis) cut it into S0–S8; the maintainer delegated the decisions, recorded below as D-UX24 to D-UX31 (D-UX23 decided).
+- **Done, each with its tests (unit; integration on the previous package with this tree's Shell, branding and brand.ftl synced by `scripts/build/dev_sync.py`, because another session held the build machine; a real build follows):**
+  - **S0** One list of options (`shared/options.json`) and `tests/unit/test_personalisation.py`: no option writes a guarded pref, the check fails closed, every privileged pref writer is pinned.
+  - **S1** The layout pictures stay equal in Settings and the first run; B-11 closed (the card's main action on the first screen at 150 %).
+  - **S2** Token variants: Azul and "Mais contraste", 1224 contrast rows in every combination; security, private, focus and status tokens never follow one.
+  - **S3–S4** Settings → Aparência: density, accent, "Mais contraste", the new tab's soft background and "Reduzir transparência"; `test_appearance` 11 (walks every option and sees no other pref change).
+  - **S5–S6** Ctrl+Alt+F and Ctrl+Alt+B, Settings → Atalhos, the keys read from the engine, two quick actions after ">"; `test_shortcuts` 10.
+  - **S7** The default destination for links from other apps (ADR 0003 step 4, M4a only); `test_routing` 23–27 and the locked case in `test_vault_profiles`.
+- **Open.** The adversarial review and Terra QA of the slice; the real Track B build and full suites; whether a locked last-used profile loses a link that starts the browser (plan K3, a Vault question).
+
 **UX7 — Motion and finish**
 - **Motion tokens applied.** Profile arrival on the band, the sidebar, sheets, chips and toasts; all off under reduced motion.
 - **Measurement and captures.** A frame-time scene, and the capture matrix at 100/125/150 %.
@@ -406,7 +417,7 @@ Verified on a real incremental Track B 159.0 build of `f3dfa89` (BuildID `202611
 | D-UX10 | Translucency | Solid chrome by default; optional ambience only on the new tab; "Reduzir transparência" setting |
 | D-UX11 | Assistant streaming | Yes (backend change in UX5) |
 | D-UX12 | pt-BR for "AI Workspace" | "Área de IA" |
-| D-UX13 | Bookmarks bar | Shown only when there are bookmarks |
+| D-UX13 | Bookmarks bar | Hidden by default (`never`, UX3F A3); Ctrl+Shift+B shows it and the person's choice is kept (amended in UX6 to what ships) |
 | D-UX14 | Track B rendered tests in CI | A self-hosted runner later (maintainer). Until then each slice runs the Track B suite locally and records it in the commit message |
 | D-UX15 | Identity palette | Mint → lima `#C5E384`, sand → `#FDCF8B`, "rosa" renamed "coral" |
 | D-UX16 | Tab-group colours | Orange, purple and red swatches hidden (too close to warning, private and critical); old groups drawn muted; engine colour names kept |
@@ -416,7 +427,15 @@ Verified on a real incremental Track B 159.0 build of `f3dfa89` (BuildID `202611
 | D-UX20 | Light band tone | navy 200 `#BFD0D6`, with a 1 px ring on identity flags |
 | D-UX21 | Autonomy labels | "Nível: Restrito / Assistido / Autônomo / Controle total" |
 | D-UX22 | Assistant next to the vertical tab list | No automatic collapse; Ctrl+Alt+Z and the Foco preset cover narrow windows |
-| D-UX23 | Shortcuts for Foco and "Bloquear agora" | Chosen in UX6, after checking about:keyboard, KDE/GNOME and Orca |
+| D-UX23 | Shortcuts for Foco and "Bloquear agora" | Ctrl+Alt+F toggles Foco (back to the preset it came from); Ctrl+Alt+B opens the profile menu's "Bloquear agora" confirmation, never locks directly. Both free in Firefox 159's Linux chrome, Plasma, GNOME and Orca; Ctrl+Alt+L excluded (screen lock) |
+| D-UX24 | Where appearance options live | Prefs only, written by `NulavioPersonalise` through a new experiment; no `storage` permission and no new manifest permission |
+| D-UX25 | Density | The engine's `browser.uidensity` with its own four names (Automático clears it), in Settings → Aparência, not in a preset |
+| D-UX26 | Accents | Menta (default) and Azul only; focus stays mint; more accents only through the same separation and contrast tests |
+| D-UX27 | "Mais contraste" | A Nulavio token variant for its own surfaces; never the system's LookAndFeel prefs (websites see them); private chrome unchanged |
+| D-UX28 | "Reduzir transparência" | Ships with the opt-in new-tab ambience (D-UX10); disabled with its reason while nothing is transparent |
+| D-UX29 | Remapping keys | In the engine's extension shortcuts view (`commands.openShortcutSettings`), with "Restaurar" in Settings; no key capture in the Shell |
+| D-UX30 | Quick actions | Nulavio's settings and the Foco toggle only; nothing that locks, unlocks, resumes, grants or raises autonomy |
+| D-UX31 | Default destination for links from other apps | "Último perfil usado" (default) or "Sempre em {perfil}", M4a only, in the group's default instance, through the M4a hand-off; "Perguntar sempre" deferred |
 
 ### UX plan summary
 
