@@ -188,12 +188,13 @@
       <div class="grid help__body">
         <div aria-labelledby="keys-heading">
           <h2 class="card__title" id="keys-heading" data-i18n="keysHeading">Shortcuts</h2>
+          <!-- data-key: the engine's own <key> id; test_newtab_ui checks each line against it. -->
           <ul class="keys">
-            <li><span data-i18n="keyAddress">Address bar</span><span><kbd>Ctrl</kbd> <kbd>L</kbd></span></li>
-            <li><span data-i18n="keyTab">New tab</span><span><kbd>Ctrl</kbd> <kbd>T</kbd></span></li>
-            <li><span data-i18n="keyPrivate">Private window</span><span><kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>P</kbd></span></li>
-            <li><span data-i18n="keyDownloads">Downloads</span><span><kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>Y</kbd></span></li>
-            <li><span data-i18n="keyAddons">Add-ons</span><span><kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>A</kbd></span></li>
+            <li data-key="focusURLBar"><span data-i18n="keyAddress">Address bar</span><span><kbd>Ctrl</kbd> <kbd>L</kbd></span></li>
+            <li data-key="key_newNavigatorTab"><span data-i18n="keyTab">New tab</span><span><kbd>Ctrl</kbd> <kbd>T</kbd></span></li>
+            <li data-key="key_privatebrowsing"><span data-i18n="keyPrivate">Private window</span><span><kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>P</kbd></span></li>
+            <li data-key="key_openDownloads"><span data-i18n="keyDownloads">Downloads</span><span><kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>Y</kbd></span></li>
+            <li data-key="key_openAddons"><span data-i18n="keyAddons">Add-ons</span><span><kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>F</kbd></span></li>
           </ul>
         </div>
         <div aria-labelledby="broken-heading">

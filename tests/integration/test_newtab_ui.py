@@ -137,6 +137,21 @@ class NewTabHereTest(unittest.TestCase):
         footer = self.m.execute("return document.querySelector('#help .footer').innerText;")
         self.assertIn(self.message("footer"), footer)  # the engine is named together with "not affiliated"
         self.assertTrue(self.m.execute("return document.querySelectorAll('#help .keys li').length;") >= 5)
+        # Each line says the engine's own key (159 moved Add-ons to Ctrl+Shift+F; Ctrl+Shift+A searches tabs).
+        shown = self.m.execute(
+            "return [...document.querySelectorAll('#help .keys li')]"
+            ".map(li => [li.dataset.key, [...li.querySelectorAll('kbd')].map(k => k.textContent)]);"
+        )
+        names = {"accel": "Ctrl", "control": "Ctrl", "shift": "Shift", "alt": "Alt"}
+        for key_id, kbds in shown:
+            engine = self.m.chrome(
+                "const k = document.getElementById(arguments[0]);"
+                "return k && [k.getAttribute('modifiers') || '', k.getAttribute('key') || ''];",
+                [key_id],
+            )
+            self.assertIsNotNone(engine, key_id)
+            said = [names[m.strip()] for m in engine[0].split(",") if m.strip()] + [engine[1].upper()]
+            self.assertEqual(kbds, said, key_id)
         self.shoot("help")
 
     def test_04_a_private_window_says_so(self):
