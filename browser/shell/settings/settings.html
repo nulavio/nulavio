@@ -148,6 +148,18 @@
           <p class="hint" id="more-contrast-hint" data-i18n="moreContrastHint"></p>
           <p class="hint" id="more-contrast-system" data-i18n="moreContrastSystem" hidden></p>
         </div>
+        <div class="stack stack--tight" id="appearance-ambience" data-option="newtabAmbience">
+          <label class="check check--switch">
+            <input type="checkbox" role="switch" id="newtab-ambience" aria-describedby="newtab-ambience-hint" data-focus-key="newtab-ambience">
+            <span data-i18n="ambienceLabel"></span>
+          </label>
+          <p class="hint" id="newtab-ambience-hint" data-i18n="ambienceHint"></p>
+        </div>
+        <!-- D5: disabled with its reason while nothing is transparent, so it is never a switch that changes nothing. -->
+        <label class="check" id="appearance-transparency" data-option="reduceTransparency">
+          <input type="checkbox" id="reduce-transparency" aria-describedby="reduce-transparency-why" data-focus-key="reduce-transparency">
+          <span><span data-i18n="reduceTransparencyLabel"></span><span class="hint" id="reduce-transparency-why"></span></span>
+        </label>
         <p class="hint" id="appearance-locked" data-i18n="appearanceLocked" hidden></p>
       </div>
     </section>

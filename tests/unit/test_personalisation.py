@@ -275,14 +275,18 @@ class AppearanceApiTest(unittest.TestCase):
                 self.assertTrue(scripts and scripts[0].endswith("lib/appearance.js"), scripts)
         painter = (SHELL / "lib" / "appearance.js").read_text(encoding="utf-8")
         # Only looks: two attributes on <html>, nothing else on the page.
-        self.assertEqual(set(re.findall(r"root\.dataset\.(\w+) =", painter)), {"accent", "contrast"})
+        self.assertEqual(set(re.findall(r"root\.dataset\.(\w+) =", painter)), {"accent", "contrast", "ambience", "transparency"})
         self.assertNotIn("innerHTML", painter)
 
     def test_the_api_takes_only_declared_values(self):
         schema = json.loads((SHELL / "experiments" / "personalise" / "schema.json").read_text(encoding="utf-8"))[0]
         declared = {o["id"]: o for o in options()}
         functions = {f["name"]: f for f in schema["functions"]}
-        self.assertEqual(set(functions), {"state", "setDensity", "setAccent", "setMoreContrast"})
+        self.assertEqual(
+            set(functions), {"state", "setDensity", "setAccent", "setMoreContrast", "setNewtabAmbience", "setReduceTransparency"}
+        )
+        for name in ("setNewtabAmbience", "setReduceTransparency"):
+            self.assertEqual(functions[name]["parameters"][0]["type"], "boolean")
         self.assertEqual(functions["setDensity"]["parameters"][0]["enum"], declared["density"]["values"])
         self.assertEqual(functions["setAccent"]["parameters"][0]["enum"], declared["accent"]["values"])
         self.assertEqual(functions["setMoreContrast"]["parameters"][0]["type"], "boolean")

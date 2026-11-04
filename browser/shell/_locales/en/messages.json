@@ -1284,5 +1284,12 @@
   "moreContrastLabel": {"message": "More contrast"},
   "moreContrastHint": {"message": "Darker text and stronger borders in Nulavio's windows and pages. For websites, use \"Website contrast\" in the browser's settings."},
   "moreContrastSystem": {"message": "Your system already asks for high contrast, and Nulavio uses its colours."},
-  "appearanceLocked": {"message": "Some of these options are managed by your administrator."}
+  "appearanceLocked": {"message": "Some of these options are managed by your administrator."},
+  "ambienceLabel": {"message": "Soft background on the new tab"},
+  "ambienceHint": {"message": "A coloured background behind the new tab's cards, in your accent. Never in private windows."},
+  "reduceTransparencyLabel": {"message": "Reduce transparency"},
+  "reduceTransparencyHint": {"message": "Makes the new tab's cards solid."},
+  "reduceTransparencyIdle": {"message": "Nothing is transparent now: the soft background is off."},
+  "reduceTransparencySystem": {"message": "Your system already asks for less transparency, so the cards are solid."},
+  "reduceTransparencyContrast": {"message": "\"More contrast\" already makes the cards solid."}
 }

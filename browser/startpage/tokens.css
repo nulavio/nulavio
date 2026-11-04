@@ -219,6 +219,8 @@
   --nv-color-identityGlyph-coral: #721E3F;
   --nv-color-identityGlyph-sand: #593C00;
   --nv-color-identityGlyph-slate: #37454A;
+  --nv-color-ambience-from: #F1F7F5;
+  --nv-color-ambience-to: #DDF8F0;
   --nv-elevation-1: 0 1px 2px rgba(7, 15, 24, 0.14);
   --nv-elevation-2: 0 4px 12px rgba(7, 15, 24, 0.14);
   --nv-elevation-3: 0 12px 32px rgba(7, 15, 24, 0.14);
@@ -340,6 +342,8 @@
     --nv-color-identityGlyph-coral: #F4A8BD;
     --nv-color-identityGlyph-sand: #FDCF8B;
     --nv-color-identityGlyph-slate: #BFD0D6;
+    --nv-color-ambience-from: #0F1C2A;
+    --nv-color-ambience-to: #0E3B33;
     --nv-elevation-1: 0 1px 2px rgba(0, 0, 0, 0.24);
     --nv-elevation-2: 0 4px 12px rgba(0, 0, 0, 0.45);
     --nv-elevation-3: 0 12px 32px rgba(0, 0, 0, 0.5);
@@ -462,6 +466,8 @@
   --nv-color-identityGlyph-coral: #F4A8BD;
   --nv-color-identityGlyph-sand: #FDCF8B;
   --nv-color-identityGlyph-slate: #BFD0D6;
+  --nv-color-ambience-from: #0F1C2A;
+  --nv-color-ambience-to: #0E3B33;
   --nv-elevation-1: 0 1px 2px rgba(0, 0, 0, 0.24);
   --nv-elevation-2: 0 4px 12px rgba(0, 0, 0, 0.45);
   --nv-elevation-3: 0 12px 32px rgba(0, 0, 0, 0.5);
@@ -583,6 +589,8 @@
   --nv-color-identityGlyph-coral: #721E3F;
   --nv-color-identityGlyph-sand: #593C00;
   --nv-color-identityGlyph-slate: #37454A;
+  --nv-color-ambience-from: #F1F7F5;
+  --nv-color-ambience-to: #DDF8F0;
   --nv-elevation-1: 0 1px 2px rgba(7, 15, 24, 0.14);
   --nv-elevation-2: 0 4px 12px rgba(7, 15, 24, 0.14);
   --nv-elevation-3: 0 12px 32px rgba(7, 15, 24, 0.14);
@@ -598,6 +606,7 @@
   --nv-color-control-selected-edge: #2D64B5;
   --nv-color-selection-bg: #2D64B5;
   --nv-color-route-vertical: #2D64B5;
+  --nv-color-ambience-to: #E8F0FB;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -607,6 +616,7 @@
     --nv-color-control-selected-edge: #6AA7F4;
     --nv-color-selection-bg: #6AA7F4;
     --nv-color-route-vertical: #6AA7F4;
+    --nv-color-ambience-to: #172B4D;
   }
 }
 
@@ -617,6 +627,7 @@
   --nv-color-control-selected-edge: #6AA7F4;
   --nv-color-selection-bg: #6AA7F4;
   --nv-color-route-vertical: #6AA7F4;
+  --nv-color-ambience-to: #172B4D;
 }
 
 :root[data-contrast="more"],

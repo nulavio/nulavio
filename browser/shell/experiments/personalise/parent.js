@@ -27,6 +27,8 @@ this.nulavioPersonalise = class extends ExtensionAPI {
         setDensity: call(value => NulavioPersonalise.set("density", value)),
         setAccent: call(value => NulavioPersonalise.set("accent", value)),
         setMoreContrast: call(value => NulavioPersonalise.set("moreContrast", value)),
+        setNewtabAmbience: call(value => NulavioPersonalise.set("newtabAmbience", value)),
+        setReduceTransparency: call(value => NulavioPersonalise.set("reduceTransparency", value)),
         onChanged: new ExtensionCommon.EventManager({
           context,
           name: "nulavioPersonalise.onChanged",

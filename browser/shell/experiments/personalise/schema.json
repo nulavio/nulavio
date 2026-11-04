@@ -1,7 +1,7 @@
 [
   {
     "namespace": "nulavioPersonalise",
-    "description": "Appearance options in the current profile (UX6): density, accent and more contrast. Built-in Shell only; each function takes one of the declared values, and no option can touch a protection.",
+    "description": "Appearance options in the current profile (UX6): density, accent, more contrast, the new tab's ambience and reduced transparency. Built-in Shell only; each function takes one of the declared values, and no option can touch a protection.",
     "functions": [
       { "name": "state", "type": "function", "async": true, "parameters": [] },
       {
@@ -12,10 +12,9 @@
         "name": "setAccent", "type": "function", "async": true,
         "parameters": [{ "name": "accent", "type": "string", "enum": ["mint", "blue"] }]
       },
-      {
-        "name": "setMoreContrast", "type": "function", "async": true,
-        "parameters": [{ "name": "on", "type": "boolean" }]
-      }
+      { "name": "setMoreContrast", "type": "function", "async": true, "parameters": [{ "name": "on", "type": "boolean" }] },
+      { "name": "setNewtabAmbience", "type": "function", "async": true, "parameters": [{ "name": "on", "type": "boolean" }] },
+      { "name": "setReduceTransparency", "type": "function", "async": true, "parameters": [{ "name": "on", "type": "boolean" }] }
     ],
     "events": [{ "name": "onChanged", "type": "function", "parameters": [] }]
   }

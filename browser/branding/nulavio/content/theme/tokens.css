@@ -215,6 +215,8 @@
   --nv-color-identityGlyph-coral: light-dark(#721E3F, #F4A8BD);
   --nv-color-identityGlyph-sand: light-dark(#593C00, #FDCF8B);
   --nv-color-identityGlyph-slate: light-dark(#37454A, #BFD0D6);
+  --nv-color-ambience-from: light-dark(#F1F7F5, #0F1C2A);
+  --nv-color-ambience-to: light-dark(#DDF8F0, #0E3B33);
   --nv-elevation-1: 0 1px 2px rgba(7, 15, 24, 0.14);
   --nv-elevation-2: 0 4px 12px rgba(7, 15, 24, 0.14);
   --nv-elevation-3: 0 12px 32px rgba(7, 15, 24, 0.14);
@@ -237,6 +239,7 @@
     --nv-color-control-selected-edge: light-dark(#2D64B5, #6AA7F4);
     --nv-color-selection-bg: light-dark(#2D64B5, #6AA7F4);
     --nv-color-route-vertical: light-dark(#2D64B5, #6AA7F4);
+    --nv-color-ambience-to: light-dark(#E8F0FB, #172B4D);
   }
 }
 @media -moz-pref("nulavio.appearance.moreContrast") {

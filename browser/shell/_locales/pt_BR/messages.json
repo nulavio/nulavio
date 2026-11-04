@@ -1284,5 +1284,12 @@
   "moreContrastLabel": {"message": "Mais contraste"},
   "moreContrastHint": {"message": "Textos mais escuros e bordas mais fortes nas janelas e páginas do Nulavio. Para os sites, use “Contraste de sites” nas configurações do navegador."},
   "moreContrastSystem": {"message": "O seu sistema já pede alto contraste, e o Nulavio usa as cores dele."},
-  "appearanceLocked": {"message": "Algumas destas opções são gerenciadas pelo administrador."}
+  "appearanceLocked": {"message": "Algumas destas opções são gerenciadas pelo administrador."},
+  "ambienceLabel": {"message": "Fundo suave na nova aba"},
+  "ambienceHint": {"message": "Um fundo colorido atrás dos cartões da nova aba, no tom do destaque. Nunca aparece em janelas privativas."},
+  "reduceTransparencyLabel": {"message": "Reduzir transparência"},
+  "reduceTransparencyHint": {"message": "Deixa sólidos os cartões da nova aba."},
+  "reduceTransparencyIdle": {"message": "Nada está transparente agora: o fundo suave está desligado."},
+  "reduceTransparencySystem": {"message": "O seu sistema já pede menos transparência, então os cartões já ficam sólidos."},
+  "reduceTransparencyContrast": {"message": "“Mais contraste” já deixa os cartões sólidos."}
 }

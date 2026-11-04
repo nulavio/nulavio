@@ -1,4 +1,5 @@
-/* Settings > Aparência (UX6): window density, accent and "Mais contraste". Each change saves at
+/* Settings > Aparência (UX6): window density, accent, "Mais contraste", and the new tab's ambience
+   with "Reduzir transparência". Each change saves at
    once and says so next to its control; the state is read again from the module, so changes made
    elsewhere (another window, about:preferences for density) show here too. */
 
@@ -11,6 +12,9 @@ export async function setUpAppearance() {
   const accent = document.getElementById("appearance-accent");
   const contrast = document.getElementById("more-contrast");
   const system = document.getElementById("more-contrast-system");
+  const ambience = document.getElementById("newtab-ambience");
+  const transparency = document.getElementById("reduce-transparency");
+  const transparencyWhy = document.getElementById("reduce-transparency-why");
   const locked = document.getElementById("appearance-locked");
   document.getElementById("appearance").hidden = false; // the section exists only with the API
 
@@ -29,6 +33,14 @@ export async function setUpAppearance() {
     contrast.checked = state.moreContrast || bySystem;
     contrast.disabled = bySystem || state.locked.moreContrast;
     system.hidden = !bySystem;
+    ambience.checked = state.newtabAmbience;
+    ambience.disabled = state.locked.newtabAmbience;
+    // Solid already: by the system, or by more contrast; nothing to reduce: the ambience is off.
+    const solidBy = state.system.reducedTransparency ? "System"
+      : state.moreContrast || bySystem ? "Contrast" : !state.newtabAmbience ? "Idle" : null;
+    transparency.checked = state.reduceTransparency || ["System", "Contrast"].includes(solidBy);
+    transparency.disabled = Boolean(solidBy) || state.locked.reduceTransparency;
+    transparencyWhy.textContent = t(`reduceTransparency${solidBy ?? "Hint"}`);
     locked.hidden = !Object.values(state.locked).some(Boolean);
   };
   const refresh = async () => render(await api.state());
@@ -45,6 +57,8 @@ export async function setUpAppearance() {
   settleRadioChanges(density, event => save(() => api.setDensity(event.target.value), event.target));
   settleRadioChanges(accent, event => save(() => api.setAccent(event.target.value), event.target));
   contrast.addEventListener("change", event => save(() => api.setMoreContrast(event.target.checked), event.target));
+  ambience.addEventListener("change", event => save(() => api.setNewtabAmbience(event.target.checked), event.target));
+  transparency.addEventListener("change", event => save(() => api.setReduceTransparency(event.target.checked), event.target));
   api.onChanged.addListener(() => refresh().catch(() => {}));
   await refresh();
 }

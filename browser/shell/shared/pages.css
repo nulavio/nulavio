@@ -436,7 +436,21 @@ body.assistant { padding: var(--nv-space-4); }
 /* Look-alike login: the consequence of "continue" sits right under the buttons (SB-10) */
 #continue-note:empty { display: none; }
 
-/* Solid canvas is the default. New-tab ambience/preferences belong to UX6. */
+/* Solid canvas is the default. UX6 (D-UX10): the new tab's optional ambience, a soft gradient from
+   the canvas to the accent's tint with frosted cards on it. lib/appearance.js never turns it on in a
+   private window; the cards turn solid with "Reduzir transparência", the system's request or more
+   contrast. Its pairs are in docs/brand/tokens.json (text and accent on the gradient and on frost). */
+html[data-page="newtab"][data-ambience="on"] body {
+  background: linear-gradient(160deg, var(--nv-color-ambience-from), var(--nv-color-ambience-to)) fixed;
+}
+html[data-page="newtab"][data-ambience="on"] .card {
+  background: var(--nv-color-surface-frost);
+  backdrop-filter: blur(var(--nv-translucency-frost-blur));
+}
+html[data-page="newtab"][data-ambience="on"][data-transparency="reduced"] .card {
+  background: var(--nv-color-surface-frostFallback);
+  backdrop-filter: none;
+}
 @media (max-width: 30rem) {
   .page { padding-inline: var(--nv-space-4); }
   /* Rows follow the width of their list (components.css, container query), not the window. */

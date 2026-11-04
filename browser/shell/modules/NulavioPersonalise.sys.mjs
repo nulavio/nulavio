@@ -2,7 +2,8 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-/* Nulavio's appearance options (UX6): window density, the accent and "Mais contraste".
+/* Nulavio's appearance options (UX6): window density, the accent, "Mais contraste", and the new
+   tab's optional ambience with "Reduzir transparência" (D-UX10: solid everywhere else).
    shared/options.json declares each option once, with the one pref it writes and the pref value
    of each choice; this module writes nothing else, and tests/unit/test_personalisation.py proves
    that no declared pref is a protection. The colours themselves come from the token variants
@@ -20,7 +21,7 @@ ChromeUtils.defineESModuleGetters(lazy, {
 
 const OPTIONS_URL = "resource://builtin-addons/nulavio-shell/shared/options.json";
 /** The options this module writes (the others in the list have their own writers). */
-export const APPEARANCE = Object.freeze(["density", "accent", "moreContrast"]);
+export const APPEARANCE = Object.freeze(["density", "accent", "moreContrast", "newtabAmbience", "reduceTransparency"]);
 const SYSTEM_QUERIES = Object.freeze({
   moreContrast: "(prefers-contrast: more)",
   forcedColors: "(forced-colors: active)",
@@ -147,6 +148,7 @@ export const NulavioPersonalise = {
       for (const pref of prefs) {
         Services.prefs.addObserver(pref, changed);
       }
+      changed(); // whatever changed before the observers were in place is read again
     }, console.error);
     return () => {
       gone = true;

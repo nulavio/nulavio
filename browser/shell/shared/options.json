@@ -91,6 +91,50 @@
       "ui": [
         "settings/settings.html#appearance-contrast"
       ]
+    },
+    {
+      "id": "newtabAmbience",
+      "kind": "cosmetic",
+      "prefs": [
+        "nulavio.appearance.newtabAmbience"
+      ],
+      "prefType": "bool",
+      "values": [
+        false,
+        true
+      ],
+      "prefValues": [
+        null,
+        true
+      ],
+      "default": false,
+      "writer": "NulavioPersonalise",
+      "labelKey": "ambienceLabel",
+      "ui": [
+        "settings/settings.html#appearance-ambience"
+      ]
+    },
+    {
+      "id": "reduceTransparency",
+      "kind": "cosmetic",
+      "prefs": [
+        "nulavio.appearance.reduceTransparency"
+      ],
+      "prefType": "bool",
+      "values": [
+        false,
+        true
+      ],
+      "prefValues": [
+        null,
+        true
+      ],
+      "default": false,
+      "writer": "NulavioPersonalise",
+      "labelKey": "reduceTransparencyLabel",
+      "ui": [
+        "settings/settings.html#appearance-transparency"
+      ]
     }
   ]
 }

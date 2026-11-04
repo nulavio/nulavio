@@ -90,7 +90,7 @@ class AppearanceTest(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        for pref in (*OPTION_PREFS, "ui.systemUsesDarkTheme", "ui.useAccessibilityTheme"):
+        for pref in (*OPTION_PREFS, "ui.systemUsesDarkTheme", "ui.useAccessibilityTheme", "ui.prefersReducedTransparency"):
             cls.m.chrome("Services.prefs.clearUserPref(arguments[0]);", [pref])
         cls.session.cleanup()
 
@@ -216,9 +216,22 @@ class AppearanceTest(unittest.TestCase):
             }
             self.assertLessEqual(changed, OPTION_PREFS, (option, value))
             self.assertEqual(now["permissions"], before["permissions"])
-        for _ in range(2):
-            self.m.send("WebDriver:ElementClick", {"id": self.m.find_element("label:has(> #more-contrast)")})
-            time.sleep(0.4)
+        # The ambience first: "Reduzir transparência" only applies while something is transparent.
+        for switch, pref in (
+            ("#newtab-ambience", "nulavio.appearance.newtabAmbience"),
+            ("#reduce-transparency", "nulavio.appearance.reduceTransparency"),
+            ("#more-contrast", "nulavio.appearance.moreContrast"),
+        ):
+            self.m.send("WebDriver:ElementClick", {"id": self.m.find_element(f"label:has(> {switch})")})
+            self.wait_pref(pref, True)
+            now = self.snapshot()
+            changed = {
+                k for k in set(quiet(now["prefs"])) | set(quiet(before["prefs"])) if now["prefs"].get(k) != before["prefs"].get(k)
+            }
+            self.assertLessEqual(changed, OPTION_PREFS, switch)
+        for switch in ("#more-contrast", "#reduce-transparency", "#newtab-ambience"):
+            self.m.send("WebDriver:ElementClick", {"id": self.m.find_element(f"label:has(> {switch})")})
+            time.sleep(0.3)
         self.choose('input[name="density"][value="auto"]')
         self.choose('input[name="accent"][value="mint"]')
         for pref in OPTION_PREFS:
@@ -275,6 +288,9 @@ class AppearanceTest(unittest.TestCase):
         )
         self.assertTrue(harness.wait_until(lambda: set(self.m.window_handles()) - handles, 10))
         newtab = (set(self.m.window_handles()) - handles).pop()
+        self.m.switch_to(newtab)
+        painted = "return document.documentElement.hasAttribute('data-painted');"
+        self.assertTrue(harness.wait_until(lambda: self.m.execute(painted), 20))
         self.m.switch_to(settings)
         self.m.execute("browser.nulavioPersonalise.setAccent('blue');")
         self.wait_pref("nulavio.appearance.accent", "blue")
@@ -296,6 +312,93 @@ class AppearanceTest(unittest.TestCase):
             self.m.execute("return browser.nulavioPersonalise.setAccent(arguments[0]);", [accent])
             self.assertTrue(harness.wait_until(lambda want=accent: self.m.execute(painted) == want, 10))
             self.shoot(f"settings-appearance-{accent}")
+
+    def newtab(self) -> None:
+        self.m.navigate(self.base + "newtab/newtab.html")
+        painted = "return document.documentElement.hasAttribute('data-painted');"
+        self.assertTrue(harness.wait_until(lambda: self.m.execute(painted), 20))
+
+    def look(self) -> dict:
+        return self.m.execute(
+            "const card = document.querySelector('.card:not([hidden])'), c = getComputedStyle(card);"
+            "const probe = document.createElement('span'); document.body.append(probe);"
+            "probe.style.background = 'var(--nv-color-surface-frostFallback)';"
+            "const solid = getComputedStyle(probe).backgroundColor; probe.remove();"
+            "return {ambience: document.documentElement.dataset.ambience,"
+            " gradient: getComputedStyle(document.body).backgroundImage.includes('linear-gradient'),"
+            " blur: c.backdropFilter, solid: c.backgroundColor === solid};"
+        )
+
+    def test_09_the_ambience_is_opt_in_and_never_in_a_private_window(self):
+        self.newtab()
+        self.assertEqual(self.look(), {"ambience": "off", "gradient": False, "blur": "none", "solid": True})
+        self.m.execute("return browser.nulavioPersonalise.setNewtabAmbience(true);")
+        self.assertTrue(harness.wait_until(lambda: self.look()["gradient"], 10), self.look())
+        on = self.look()
+        self.assertEqual((on["ambience"], on["solid"]), ("on", False), on)
+        self.assertIn("blur", on["blur"])
+        self.shoot("newtab-ambience")
+        main = self.m.send("WebDriver:GetWindowHandle")["value"]
+        handles = set(self.m.window_handles())
+        self.m.chrome("OpenBrowserWindow({private: true});")
+        self.assertTrue(harness.wait_until(lambda: set(self.m.window_handles()) - handles, 20))
+        private = (set(self.m.window_handles()) - handles).pop()
+        self.m.switch_to(private)
+        try:
+            harness.wait_until(lambda: self.m.current_url() == "about:privatebrowsing", 20)
+            self.m.navigate(self.base + "newtab/newtab.html")
+            loaded = "return document.readyState === 'complete' && Boolean(document.querySelector('.card'));"
+            self.assertTrue(harness.wait_until(lambda: self.m.execute(loaded), 20))
+            time.sleep(1)
+            seen = self.look()
+            self.assertNotEqual(seen["ambience"], "on", seen)
+            self.assertFalse(seen["gradient"], seen)
+        finally:
+            self.m.send("WebDriver:CloseWindow")
+            self.m.switch_to(main)
+
+    def test_10_reduce_transparency_the_system_and_more_contrast_make_the_cards_solid(self):
+        self.m.chrome("Services.prefs.setBoolPref('nulavio.appearance.newtabAmbience', true);")
+        self.newtab()
+        self.assertTrue(harness.wait_until(lambda: not self.look()["solid"], 10), self.look())
+        for setup, undo in (
+            (
+                "Services.prefs.setBoolPref('nulavio.appearance.reduceTransparency', true);",
+                "Services.prefs.clearUserPref('nulavio.appearance.reduceTransparency');",
+            ),
+            (
+                "Services.prefs.setBoolPref('nulavio.appearance.moreContrast', true);",
+                "Services.prefs.clearUserPref('nulavio.appearance.moreContrast');",
+            ),
+            (
+                "Services.prefs.setIntPref('ui.prefersReducedTransparency', 1);",
+                "Services.prefs.clearUserPref('ui.prefersReducedTransparency');",
+            ),
+        ):
+            with self.subTest(setup=setup):
+                self.m.chrome(setup)
+                try:
+                    self.assertTrue(harness.wait_until(lambda: self.look()["solid"], 10), self.look())
+                    self.assertEqual(self.look()["blur"], "none")
+                    self.assertTrue(self.look()["gradient"], "the background stays; only the cards turn solid")
+                finally:
+                    self.m.chrome(undo)
+                self.assertTrue(harness.wait_until(lambda: not self.look()["solid"], 10), self.look())
+
+    def test_11_reduce_transparency_says_why_when_it_cannot_change_anything(self):
+        self.open()
+        why = lambda: self.m.execute(  # noqa: E731
+            "const c = document.getElementById('reduce-transparency');"
+            "return [c.disabled, c.checked, document.getElementById('reduce-transparency-why').textContent];"
+        )
+        self.assertEqual(why(), [True, False, self.message("reduceTransparencyIdle")])
+        self.m.send("WebDriver:ElementClick", {"id": self.m.find_element("label:has(> #newtab-ambience)")})
+        self.assertTrue(harness.wait_until(lambda: why() == [False, False, self.message("reduceTransparencyHint")], 10), why())
+        self.m.send("WebDriver:ElementClick", {"id": self.m.find_element("label:has(> #more-contrast)")})
+        self.assertTrue(harness.wait_until(lambda: why() == [True, True, self.message("reduceTransparencyContrast")], 10), why())
+
+    def message(self, key: str) -> str:
+        return self.m.execute("return browser.i18n.getMessage(arguments[0]);", [key])
 
     def shoot(self, name: str) -> None:
         for dark in (0, 1):
