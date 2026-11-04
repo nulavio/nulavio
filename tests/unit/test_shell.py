@@ -521,6 +521,22 @@ class LayoutModuleTest(unittest.TestCase):
         privacy = module_text("NulavioPrivacy.sys.mjs")
         self.assertLess(privacy.index("lazy.NulavioLayout.adoptInitialLayout()"), privacy.index("setIntPref(PREF_SEEDED"))
 
+    def test_layout_pictures_match_between_settings_and_the_first_run(self):
+        """UX6 S1: the two copies of each preset's picture (Settings and the first-run card) stay equal."""
+
+        def pictures(page: str) -> dict[str, str]:
+            html = (SHELL / page).read_text(encoding="utf-8")
+            found = {}
+            for label in re.findall(r'<label class="layout-option">(.*?)</label>', html, re.S):
+                svg = re.search(r"<svg .*?</svg>", label, re.S).group(0)
+                value = re.search(r'type="radio" name="[^"]+" value="([a-z]+)"', label).group(1)
+                found[value] = re.sub(r"\s+", " ", svg).strip()
+            return found
+
+        settings, newtab = pictures("settings/settings.html"), pictures("newtab/newtab.html")
+        self.assertEqual(set(settings), {"lateral", "top", "focus"})
+        self.assertEqual(settings, newtab)
+
     def test_layout_names_bridge_to_the_engine_settings(self):
         # QA B-9: about:preferences > Browser layout says "Vertical/Horizontal tabs" and has no Focus;
         # the presets name that native term, and the card's link says which Settings it opens.
