@@ -229,7 +229,7 @@ kbd {
   border-radius: 50%;
 }
 @media (prefers-reduced-motion: no-preference) {
-  .status[data-level="progress"]::before { animation: nv-status-spin 0.9s linear infinite; }
+  .status[data-level="progress"]::before { animation: nv-status-spin var(--nv-motion-duration-spin) linear infinite; }
 }
 @keyframes nv-status-spin { to { transform: rotate(1turn); } }
 

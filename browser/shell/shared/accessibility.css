@@ -19,8 +19,17 @@ input:is([type="radio"], [type="checkbox"]):focus-visible { outline-width: max(3
 [hidden] { display: none !important; }
 :where(button, input, select, textarea) { max-inline-size: 100%; }
 :where(p, h1, h2, h3, label, legend) { overflow-wrap: anywhere; }
+/* UX7: reduced motion takes the time out of every animation and transition (nothing moves), but
+   keeps their delays, so what appears late on purpose still appears: the new tab's fallback, list
+   placeholders and "still loading" (0 s animations after a delay; animation: none cancelled them). */
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+  *, *::before, *::after, ::backdrop {
+    animation-duration: 0s !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0s !important;
+    transition-delay: 0s !important;
+    scroll-behavior: auto !important;
+  }
 }
 @media (prefers-contrast: more) {
   .card, .notice, .assistant__off, .assistant__drift { border: 1px solid var(--nv-color-text-primary); }

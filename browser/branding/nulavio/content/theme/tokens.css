@@ -39,6 +39,7 @@
   --nv-motion-duration-expand: 220ms;
   --nv-motion-duration-collapse: 160ms;
   --nv-motion-duration-fade: 80ms;
+  --nv-motion-duration-spin: 900ms;
   --nv-motion-easing-standard: cubic-bezier(0.2, 0, 0, 1);
   --nv-motion-easing-enter: cubic-bezier(0, 0, 0, 1);
   --nv-motion-easing-exit: cubic-bezier(0.3, 0, 1, 1);
