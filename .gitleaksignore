@@ -25,4 +25,6 @@ baa432b5b544597ecf908eb4054cb5553691f727:docs/design/screenshots/ux3a/verificati
 
 # Public Mozilla OpenPGP signing-subkey fingerprint in release evidence, also
 # pinned in scripts/upstream/verify_firefox_release.py; no private key material.
+# The second fingerprint is the same line in #5's squash commit on main.
 5a7bdcacc26d9a3df16b5f29e0f48ca1b387689e:docs/research/evidence/release-rehearsal-2026-11-04.md:generic-api-key:21
+f3c8625204633b3f6786d3eb636d48c0096fa601:docs/research/evidence/release-rehearsal-2026-11-04.md:generic-api-key:21
