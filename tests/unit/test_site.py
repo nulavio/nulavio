@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import hashlib
-import html
+import itertools
 import json
 import re
 import shutil
@@ -158,7 +158,6 @@ class SiteTest(unittest.TestCase):
         for page in PAGES:
             self.assertIsNone(absolute.search((self.out / page).read_text(encoding="utf-8")), page)
 
-
     # -- landing page structure (spec §7, §9) ---------------------------------------------
 
     def read(self, page: str) -> str:
@@ -183,7 +182,7 @@ class SiteTest(unittest.TestCase):
             with self.subTest(page=page):
                 self.assertEqual(levels.count(1), 1)
                 self.assertEqual(levels[0], 1)
-                for before, after in zip(levels, levels[1:]):
+                for before, after in itertools.pairwise(levels):
                     self.assertLessEqual(after, before + 1, levels)
 
     def test_images_have_alt_text(self):

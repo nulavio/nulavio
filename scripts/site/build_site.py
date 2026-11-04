@@ -123,7 +123,7 @@ def commit_date(src_commit: str) -> dt.date:
     return dt.date.fromisoformat(git("log", "-1", "--format=%cs", src_commit))
 
 
-@functools.lru_cache(maxsize=None)
+@functools.cache
 def commit_time(src_commit: str) -> dt.datetime:
     return dt.datetime.fromisoformat(git("log", "-1", "--format=%cI", src_commit))
 

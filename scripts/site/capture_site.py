@@ -421,7 +421,8 @@ def scene_protected(out: Output, locale: str, fixtures: Fixtures, meta: dict) ->
         body = f"""
           const V = {VAULT};
           const SPS = ChromeUtils.importESModule('resource:///modules/profiles/SelectableProfileService.sys.mjs').SelectableProfileService;
-          const {{id}} = await V.NulavioVault.createProtected({{name: args[1], avatar: 'briefcase', color: 'sky', password: args[0]}});
+          const {{id}} = await V.NulavioVault.createProtected(
+            {{name: args[1], avatar: 'briefcase', color: 'sky', password: args[0]}});
           const path = (await SPS.getProfile(id)).path;
           await V.vaultHelper({{op: 'unlock', path, method: 'password', secret: args[0]}});
           return {{id, path}};
@@ -510,7 +511,9 @@ def scene_temporary(out: Output, locale: str, fixtures: Fixtures, meta: dict) ->
             lateral(m)
             dismiss_bars(m)
             show_pages(m, fixtures, locale)
-            capture_band(out, m, "temporary", locale, {**meta, "port": fixtures.port, "profile": "temporary (nulavio-tools temporary api)"})
+            capture_band(
+                out, m, "temporary", locale, {**meta, "port": fixtures.port, "profile": "temporary (nulavio-tools temporary api)"}
+            )
         finally:
             m.quit()
     finally:
