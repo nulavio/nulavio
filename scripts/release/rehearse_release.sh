@@ -14,6 +14,8 @@ version=${1:?usage: rehearse_release.sh <firefox-version> [out-dir]}
 repo=$(cd "$(dirname "$0")/../.." && pwd)
 work=${NULAVIO_BUILD_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/nulavio-build}
 install="$work/install/nulavio"
+# Package exactly the tree installed below, including with a private build cache.
+export NULAVIO_INSTALL_DIR="$install"
 out=$(mkdir -p "${2:-$repo/dist/rehearsal-$version}" && cd "${2:-$repo/dist/rehearsal-$version}" && pwd)
 mkdir -p "$out/logs" "$out/packages"
 report="$out/rehearsal.md"
