@@ -34,9 +34,9 @@ Urgency: urgent (impact high: CVE-2026-120572, incorrect boundary conditions in 
 
 | Mozilla's release | Detected | Ready to sign | Published | Target | Deadline |
 |---|---|---|---|---|---|
-| 2026-11-03 14:09:02 UTC | published, by 20:39:45 UTC (+6.5 h; upstream issue) | initial rehearsal failed during compilation; guarded retry pending | not published | 2026-11-04 14:09:02 UTC (24 h): open | 2026-11-06 14:09:02 UTC (72 h): open |
+| 2026-11-03 14:09:02 UTC | published, by 20:39:45 UTC (+6.5 h; upstream issue) | blocked at 2026-11-04 00:15:48 UTC: guarded one-job attempt crossed the 4 GiB host reserve | not published | 2026-11-04 14:09:02 UTC (24 h): open | 2026-11-06 14:09:02 UTC (72 h): open |
 
-**Nulavio fixes**: engine pin and signed source digest updated from Firefox 159.0 to 159.0.1. The initial release rehearsal failed during compilation (a `rustc` received SIGKILL). Resource containment was then added and checked with controlled cgroup, OOM, signal and disconnect probes; a full guarded rehearsal is still pending. Signing and publishing remain pending; this entry does not certify a distributed package.
+**Nulavio fixes**: engine pin and signed source digest updated from Firefox 159.0 to 159.0.1. The initial release rehearsal failed during compilation (a `rustc` received SIGKILL). Resource containment was then added and checked with controlled cgroup, OOM, signal and disconnect probes. Both the two-job guarded build and its single permitted one-job retry were aborted by the host-memory reserve guard, without recorded OOM; the full rehearsal remains blocked ([evidence](../research/evidence/release-rehearsal-2026-11-04.md)). The rehearsal now passes its private install path to RPM/DEB packaging, with a regression test. Signing and publishing remain pending; no ready-to-sign package or distributed build is certified.
 
 ## Unreleased (development, Firefox 159.0)
 
