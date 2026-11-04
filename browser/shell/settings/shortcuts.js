@@ -39,6 +39,8 @@ export async function setUpShortcuts() {
     reset?.addEventListener("click", async () => {
       try {
         await commands.reset(command.name);
+        // Firefox 159's reset fires no commands.onChanged: the background renames the profile button.
+        browser.runtime.sendMessage({ type: "commands-reset" }).catch(() => {});
         // "Restaurar" goes away with the default key: the keyboard stays in the row, on "Mudar…".
         change.focus();
         await render();

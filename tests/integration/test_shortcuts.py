@@ -173,6 +173,24 @@ class ShortcutsTest(unittest.TestCase):
             self.open_settings()
             self.m.execute("return browser.commands.reset('_execute_action');")
 
+    def test_06b_restore_also_renames_the_profile_button(self):
+        """Review: Firefox 159's commands.reset() fires no commands.onChanged, so Settings tells the
+        background; the toolbar button's name (its title) names the key that works again."""
+        self.open_settings()
+        title = lambda: self.m.execute("return browser.action.getTitle({});")  # noqa: E731
+        self.m.execute("return browser.commands.update({name: '_execute_action', shortcut: 'Alt+Shift+O'});")
+        try:
+            self.assertTrue(harness.wait_until(lambda: "Alt+Shift+O" in title(), 10), title())
+            self.m.execute("window.dispatchEvent(new Event('focus'));")
+            restore = '#shortcut-list li[data-command="_execute_action"] .button--quiet'
+            self.assertTrue(
+                harness.wait_until(lambda: self.m.execute("return Boolean(document.querySelector(arguments[0]));", [restore]), 10)
+            )
+            self.m.send("WebDriver:ElementClick", {"id": self.m.find_element(restore)})
+            self.assertTrue(harness.wait_until(lambda: "Alt+Shift+P" in title(), 10), title())
+        finally:
+            self.m.execute("return browser.commands.reset('_execute_action');")
+
     def test_07_change_opens_the_engine_shortcuts_view_with_the_shell_card(self):
         """K1: the hidden built-in Shell has its card in about:addons > Manage Extension Shortcuts."""
         self.open_settings()

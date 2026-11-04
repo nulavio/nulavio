@@ -82,6 +82,12 @@ if (browser.nulavioProfiles && browser.action) {
   browser.nulavioProfiles.onChanged.addListener(() => showCurrentProfile().catch(console.error));
   showCurrentProfile().catch(console.error);
   browser.commands?.onChanged?.addListener(() => showCurrentProfile().catch(console.error));
+  // commands.reset() fires no onChanged in Firefox 159: Settings > Atalhos says when it restored a key.
+  browser.runtime.onMessage.addListener(message => {
+    if (message?.type === "commands-reset") {
+      showCurrentProfile().catch(console.error);
+    }
+  });
   darkTheme.addEventListener("change", () => shownProfile && setProfileIcon(shownProfile).catch(console.error));
   browser.windows.onCreated.addListener(win => {
     if (win.incognito && shownProfile) {
