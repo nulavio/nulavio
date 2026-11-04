@@ -2,10 +2,13 @@
 """UX7 capture matrix: Nulavio's pages inside the real window, at 100/125/150 %, light and dark.
 
 Each shot is the whole window (band, address bar, tabs and the page) on a 1366x768 screen, from a
-throwaway profile of a real Track B build, with reduced motion on (nothing mid-animation). The only
-change to the window is removing the striped address bar the engine draws under automation.
+throwaway profile of a real Track B build, with reduced motion on (nothing mid-animation), taken from
+the X server's pixels (run it under xvfb-run). The only change to the window is removing the striped
+address bar the engine draws under automation.
 
-    NULAVIO_ENGINE=<build>/nulavio/nulavio python3 -I scripts/research/ux7_captures.py --out docs/design/screenshots/ux7
+    env -u WAYLAND_DISPLAY xvfb-run -a -s "-screen 0 1920x1080x24" env GDK_BACKEND=x11 MOZ_ENABLE_WAYLAND=0 \\
+      NULAVIO_TEST_HEADFUL=1 NULAVIO_ENGINE=<build>/nulavio/nulavio \\
+      python3 -I scripts/research/ux7_captures.py --out docs/design/screenshots/ux7
 
 Writes <page>-<theme>@<scale>.png, manifest.json (each file's sha256, page, theme, scale and size, the
 build's BuildID and SourceStamp, the git commit and whether the tree had changes) and, when ImageMagick's
@@ -19,7 +22,9 @@ import base64
 import configparser
 import hashlib
 import json
+import os
 import shutil
+import struct
 import subprocess
 import sys
 import time
@@ -40,6 +45,13 @@ FIRST_RUN = (
     "Services.prefs.setBoolPref('nulavio.layout.choicePending', true);"
     "Services.prefs.setBoolPref('nulavio.dns.chosen', false);"
 )
+# Back to the harness profile's state (first run finished), so the pages after it are not in it.
+FIRST_RUN_OVER = (
+    "Services.prefs.setStringPref('nulavio.firstrun.done', 'finished');"
+    "Services.prefs.clearUserPref('nulavio.startpage.shellFirstTab');"
+    "Services.prefs.clearUserPref('nulavio.layout.choicePending');"
+    "Services.prefs.clearUserPref('nulavio.dns.chosen');"
+)
 
 
 def pages(server) -> dict[str, dict]:
@@ -49,6 +61,7 @@ def pages(server) -> dict[str, dict]:
         "newtab-first-run": {
             "path": "newtab/newtab.html",
             "before": FIRST_RUN,
+            "after": FIRST_RUN_OVER,
             "settled": "return document.documentElement.hasAttribute('data-painted');",
         },
         "settings-layout": {"path": "settings/settings.html#layout", "settled": ready},
@@ -76,12 +89,33 @@ def settle(m, check: str | None) -> None:
 
 
 def window_png(m) -> bytes:
+    """The window as the screen shows it: the X server's pixels (ImageMagick `import`), cropped to the
+    window. WebDriver's chrome screenshot redraws the window itself and drops masked content (the
+    disclosure chevrons, the narrow Settings rail), so it is only the fallback."""
     m.set_context("chrome")
     try:
         m.execute("document.documentElement.removeAttribute('remotecontrol');")
+        if shutil.which("import") and os.environ.get("DISPLAY"):
+            x, y, width, height = m.execute(
+                "const r = window.devicePixelRatio;"
+                "return [screenX, screenY, outerWidth, outerHeight].map(v => Math.round(v * r));"
+            )
+            time.sleep(0.2)  # the frame the removal asked for
+            grab = subprocess.run(
+                ["import", "-window", "root", "-crop", f"{width}x{height}+{x}+{y}", "+repage", "png:-"],
+                capture_output=True,
+                check=True,
+            )
+            return grab.stdout
         return base64.b64decode(m.send("WebDriver:TakeScreenshot", {"full": False})["value"])
     finally:
         m.set_context("content")
+
+
+def capture_method() -> str:
+    if shutil.which("import") and os.environ.get("DISPLAY"):
+        return "X server pixels (ImageMagick import -window root, cropped to the window)"
+    return "WebDriver chrome screenshot (drops masked content: chevrons, the narrow Settings rail)"
 
 
 def provenance(engine: Path) -> dict:
@@ -104,7 +138,13 @@ def main() -> int:
     args = parser.parse_args()
     args.out.mkdir(parents=True, exist_ok=True)
     engine = harness.nulavio_engine().path
-    manifest = {"screen": list(SCREEN), "reducedMotion": True, "build": provenance(Path(engine)), "files": []}
+    manifest = {
+        "screen": list(SCREEN),
+        "reducedMotion": True,
+        "method": capture_method(),
+        "build": provenance(Path(engine)),
+        "files": [],
+    }
     with harness.FixtureServer() as server:
         for theme, dark in THEMES.items():
             for scale in SCALES:
@@ -145,10 +185,14 @@ def main() -> int:
                                 "page": name,
                                 "theme": theme,
                                 "scale": scale,
+                                # Device pixels, from the PNG header.
+                                "size": list(struct.unpack(">II", data[16:24])),
                             }
                         )
                         if page.get("sidebar"):
                             m.chrome("SidebarController.hide();")
+                        if page.get("after"):
+                            m.chrome(page["after"])
                         print(file, flush=True)
                 finally:
                     session.cleanup()
