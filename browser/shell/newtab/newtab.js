@@ -638,6 +638,7 @@ const firstRunShown = Promise.allSettled([facts, layoutShown]).then(() => firstR
 const shaped = Promise.allSettled([engineShown, facts, showHere(), layoutShown, firstRunShown]);
 Promise.race([shaped, new Promise(resolve => setTimeout(resolve, 400))]).then(() => {
   document.documentElement.dataset.painted = "true";
+  performance.mark("nv-painted"); // UX7: the new tab's time to its final shape (scripts/research/frame_scene.py)
 });
 browser.nulavioSearch?.onChanged.addListener(() => showEngine().catch(() => {}));
 shaped.then(() => {

@@ -480,8 +480,12 @@ class GeckoProfileSession:
         (self.tmp / "run").mkdir(mode=0o700)
         if os.environ.get("NULAVIO_TEST_HEADFUL") != "1":
             self.env["MOZ_HEADLESS"] = "1"
-        elif os.environ.get("WAYLAND_DISPLAY"):
-            self.env["WAYLAND_DISPLAY"] = os.environ["WAYLAND_DISPLAY"]
+        else:
+            # Headful: the display the caller chose, a private Xvfb (`env -u WAYLAND_DISPLAY DISPLAY=:n
+            # GDK_BACKEND=x11`) or Wayland. Nothing else of the caller's session is passed.
+            for variable in ("WAYLAND_DISPLAY", "DISPLAY", "GDK_BACKEND", "MOZ_ENABLE_WAYLAND"):
+                if os.environ.get(variable):
+                    self.env[variable] = os.environ[variable]
         self.name = name
         self.profile_dir = self.tmp / "profiles" / "first"
         self.process: subprocess.Popen | None = None
