@@ -120,6 +120,87 @@ class MotionTest(unittest.TestCase):
         finally:
             self.m.chrome("Services.prefs.clearUserPref('ui.prefersReducedMotion');")
 
+    # -- UX7-C: calm surfaces arrive; warnings and critical consent never move ---------------------
+
+    ANIMATIONS = (
+        "return (arguments[0] ? [...document.querySelectorAll(arguments[0])] : [document])"
+        ".flatMap(e => e.getAnimations({subtree: true}))"
+        ".map(a => [a.constructor.name, (a.effect.pseudoElement || '') + (a.transitionProperty || a.animationName),"
+        " a.effect.getComputedTiming().duration,"
+        # A CSS animation's curve is on its keyframes: read it from the element's computed style.
+        " a.animationName ? getComputedStyle(a.effect.target).animationTimingFunction : a.effect.getTiming().easing]);"
+    )
+
+    def animations(self, selector: str = "") -> list:
+        return self.m.execute(self.ANIMATIONS, [selector])
+
+    def test_03_calm_surfaces_arrive_on_the_tokens_and_warnings_never_move(self):
+        self.m.chrome("Services.prefs.setIntPref('ui.prefersReducedMotion', 0);")
+        self.open("settings/settings.html", "return document.documentElement.dataset.ready === 'true';")
+        dialog = (
+            "const d = document.createElement('dialog'); d.className = arguments[0]; d.id = 'probe-dialog';"
+            "d.innerHTML = '<form class=\"dialog__form\"><p>Teste</p></form>'; document.body.append(d); d.showModal();"
+        )
+        enter = "cubic-bezier(0, 0, 0, 1)"
+        self.m.execute(dialog, ["dialog"])
+        moving = sorted(map(tuple, self.animations("#probe-dialog")))
+        self.assertEqual(
+            moving,
+            [
+                ("CSSTransition", "::backdropopacity", 180, enter),
+                ("CSSTransition", "opacity", 180, enter),
+                ("CSSTransition", "translate", 180, enter),
+            ],
+        )
+        self.m.execute("document.getElementById('probe-dialog').remove();")
+        for kind in ("dialog dialog--critical", "dialog dialog--danger"):
+            with self.subTest(kind=kind):
+                self.m.execute(dialog, [kind])
+                self.assertEqual(self.animations("#probe-dialog"), [])
+                self.m.execute("document.getElementById('probe-dialog').remove();")
+        toast = (
+            "const s = document.getElementById('status'); s.removeAttribute('data-inline');"
+            "s.dataset.level = arguments[0]; s.textContent = ''; s.offsetWidth; s.textContent = 'Salvo.';"
+        )
+        self.m.execute(toast, ["ok"])
+        self.assertEqual(
+            sorted(map(tuple, self.animations("#status"))),
+            [("CSSTransition", "opacity", 120, enter), ("CSSTransition", "translate", 120, enter)],
+        )
+        for level in ("warn", "error"):
+            with self.subTest(level=level):
+                self.m.execute("document.getElementById('status').textContent = '';")
+                self.m.execute(toast, [level])
+                self.assertEqual(self.animations("#status"), [])
+        self.m.execute("document.getElementById('status').textContent = '';")
+
+    def test_04_the_profile_arrives_on_the_new_tab_and_nothing_moves_under_reduce(self):
+        self.m.chrome("Services.prefs.setIntPref('ui.prefersReducedMotion', 0);")
+        self.open("newtab/newtab.html", "return document.documentElement.hasAttribute('data-painted');")
+        chip = self.animations(".here__who > .chip")
+        self.assertEqual([tuple(a) for a in chip], [("CSSAnimation", "nv-chip-in", 180, "cubic-bezier(0, 0, 0, 1)")])
+        self.assertEqual(self.animations(".here__who .badge"), [])
+        self.m.chrome("Services.prefs.setIntPref('ui.prefersReducedMotion', 1);")
+        try:
+            self.open("newtab/newtab.html", "return document.documentElement.hasAttribute('data-painted');")
+            self.assertTrue(all(a[2] == 0 for a in self.animations()), self.animations())
+        finally:
+            self.m.chrome("Services.prefs.clearUserPref('ui.prefersReducedMotion');")
+
+    def test_05_the_create_sheet_enters_and_leaves_at_once(self):
+        self.m.chrome("Services.prefs.setIntPref('ui.prefersReducedMotion', 0);")
+        self.open("profiles/popup.html", "return document.documentElement.dataset.ready === 'true';")
+        self.m.send("WebDriver:ElementClick", {"id": self.m.find_element("#new-profile")})
+        self.assertIn(
+            ("CSSTransition", "opacity", 180, "cubic-bezier(0, 0, 0, 1)"), [tuple(a) for a in self.animations("#sheet")]
+        )
+        closed = self.m.execute(
+            "document.getElementById('sheet-back').click();"
+            "return [document.getElementById('sheet').hidden, getComputedStyle(document.getElementById('sheet')).display,"
+            " document.activeElement.id];"
+        )
+        self.assertEqual(closed, [True, "none", "new-profile"])
+
 
 if __name__ == "__main__":
     unittest.main()

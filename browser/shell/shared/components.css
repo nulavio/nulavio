@@ -490,6 +490,32 @@ fieldset.stack > legend { padding: 0; margin-bottom: var(--nv-space-2); }
 }
 .dialog::backdrop { background: var(--nv-color-scrim); }
 .dialog__form { display: grid; gap: var(--nv-space-5); }
+/* UX7: calm surfaces arrive (opening only: closing is instant, so focus never waits); warnings,
+   critical and destructive consent, and security cues never move. Off under reduced motion. */
+@media (prefers-reduced-motion: no-preference) {
+  .dialog:not(.dialog--critical, .dialog--danger)[open], .popup__sheet:not([hidden]) {
+    transition: opacity var(--nv-motion-duration-base) var(--nv-motion-easing-enter),
+      translate var(--nv-motion-duration-base) var(--nv-motion-easing-enter);
+  }
+  .dialog:not(.dialog--critical, .dialog--danger)[open]::backdrop {
+    transition: opacity var(--nv-motion-duration-base) var(--nv-motion-easing-enter);
+  }
+  .status--toast:not(:empty, [data-inline], [data-level="warn"], [data-level="error"]) {
+    transition: opacity var(--nv-motion-duration-fast) var(--nv-motion-easing-enter),
+      translate var(--nv-motion-duration-fast) var(--nv-motion-easing-enter);
+  }
+  @starting-style {
+    .dialog:not(.dialog--critical, .dialog--danger)[open], .popup__sheet:not([hidden]) { opacity: 0; translate: 0 8px; }
+    .dialog:not(.dialog--critical, .dialog--danger)[open]::backdrop { opacity: 0; }
+    .status--toast:not(:empty, [data-inline], [data-level="warn"], [data-level="error"]) { opacity: 0; translate: 0 4px; }
+  }
+  /* The profile's arrival on the new tab ("Você está em"): its chip, once the page paints. */
+  html[data-page="newtab"][data-painted] .here__who > .chip:not(.chip--temporary) {
+    animation: nv-chip-in var(--nv-motion-duration-base) var(--nv-motion-easing-enter);
+  }
+}
+@keyframes nv-chip-in { from { opacity: 0; scale: 0.96; } }
+
 .dialog__title { margin: 0; font-size: var(--nv-type-section-size); font-weight: var(--nv-type-section-weight); line-height: var(--nv-type-section-lineHeight); }
 .dialog__body { margin: 0; color: var(--nv-color-text-secondary); }
 

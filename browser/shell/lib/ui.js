@@ -215,7 +215,8 @@ export function confirmDialog({ title, body, confirm, danger = false, critical =
     const dialog = h(
       "dialog",
       {
-        class: critical ? "dialog dialog--critical" : "dialog",
+        // UX7: a destructive confirmation has its own class, so it never moves (components.css).
+        class: critical ? "dialog dialog--critical" : danger ? "dialog dialog--danger" : "dialog",
         role: critical ? "alertdialog" : null,
         "aria-labelledby": "dialog-title",
         "aria-describedby": body ? "dialog-body" : null,

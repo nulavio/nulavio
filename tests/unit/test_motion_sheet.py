@@ -100,6 +100,27 @@ class MotionSheetTest(unittest.TestCase):
         self.assertNotIn("animation", props, "animation: none would cancel the delayed reveals")
         self.assertNotIn("animation-delay", props)
 
+    def test_security_cues_and_warnings_never_move(self):
+        never = ("nv-band", "nulavio-fullscreen", "callout--warning", "callout--critical", "dialog--critical", "dialog--danger",
+                 "badge--security", "badge--warning", "chip--temporary", 'data-level="warn"', 'data-level="error"')  # fmt: skip
+        selectors = []
+        for sheet, stack, _prop, value in motion():
+            if still(value) or not any(NO_PREFERENCE in prelude for prelude in stack):
+                continue
+            selector = stack[-1]
+            selectors.append(selector)
+            bare = re.sub(r":not\((?:[^()]|\([^()]*\))*\)", "", selector)
+            with self.subTest(sheet=sheet, rule=selector[:80]):
+                for name in never:
+                    self.assertNotIn(name, bare)
+        calm = [s for s in selectors if ".dialog" in s or ".status--toast" in s]
+        self.assertTrue(calm, "the calm-surface motion is gone")
+        for selector in calm:
+            if ".dialog" in selector:
+                self.assertIn(":not(.dialog--critical, .dialog--danger)", selector)
+            else:
+                self.assertIn('[data-level="warn"], [data-level="error"]', selector)
+
     def test_security_and_reduced_durations_are_zero(self):
         tokens = json.loads((ROOT / "docs" / "brand" / "tokens.json").read_text(encoding="utf-8"))
         self.assertEqual(tokens["motion"]["reduced"]["duration"]["$value"], "0ms")
