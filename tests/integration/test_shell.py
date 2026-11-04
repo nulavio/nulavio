@@ -312,9 +312,17 @@ class ShellTest(unittest.TestCase):
         except MarionetteError:
             pass
         state = harness.wait_until(lambda: self.root_data("state"), timeout=10)
-        self.assertEqual(state, "error")
-        buttons = self.m.execute("return [...document.querySelectorAll('button')].filter(b => !b.closest('[hidden]')).length;")
-        self.assertEqual(buttons, 0, "no actions for a download that does not exist")
+        self.assertEqual(state, "missing")
+        # Only the downloads folder and closing the tab: nothing that could open or delete a file (WARN-02).
+        buttons = self.m.execute(
+            "return [...document.querySelectorAll('button')].filter(b => !b.closest('[hidden]')).map(b => b.id);"
+        )
+        self.assertEqual(buttons, ["show", "delete"])
+        texts = self.m.execute("return [...document.querySelectorAll('#actions button')].map(b => b.textContent);")
+        self.assertEqual(
+            texts,
+            [self.m.execute("return browser.i18n.getMessage(arguments[0]);", [k]) for k in ("warnOpenFolder", "warnCloseTab")],
+        )
 
     def test_06_private_download_warns_in_a_private_window(self):
         if self.state.get("temporary"):

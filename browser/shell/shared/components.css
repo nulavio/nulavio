@@ -73,6 +73,18 @@ kbd {
 }
 .button--secondary { border-color: var(--nv-color-border-control); background: var(--nv-color-bg-raised); }
 .button--quiet { color: var(--nv-color-text-secondary); }
+/* Navigation that looks like a link, not a floating button (audit 2026-11 T2); "→" when it goes to
+   another Nulavio page. Underlined, so it is never told apart by colour alone. */
+.button--link {
+  --button-overlay: transparent;
+  min-height: auto;
+  padding-inline: 0;
+  color: var(--nv-color-accent-default);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+.button--link:hover:not(:disabled) { box-shadow: none; text-decoration-thickness: 2px; }
+.button--go::after { content: "→"; margin-inline-start: 0.35em; text-decoration: none; display: inline-block; }
 /* The state tokens are opacities: tint with the button's own text colour. */
 .button:hover:not(:disabled) { box-shadow: inset 0 0 0 100vmax color-mix(in srgb, var(--button-overlay) calc(var(--nv-state-hoverOverlay) * 100%), transparent); }
 .button:active:not(:disabled) { box-shadow: inset 0 0 0 100vmax color-mix(in srgb, var(--button-overlay) calc(var(--nv-state-pressedOverlay) * 100%), transparent); }
@@ -90,11 +102,36 @@ kbd {
 .callout--warning .callout__icon { color: var(--nv-color-status-warning); }
 .callout--critical { background: var(--nv-color-status-criticalTint); color: var(--nv-color-status-criticalText); }
 .actions { display: flex; flex-wrap: wrap; gap: var(--nv-space-3); }
+/* A quiet button that starts a row lines its text up with the content edge; hover and focus keep the padding. */
+.actions:not(.actions--end) > .button--quiet:first-child { margin-inline-start: calc(-1 * var(--nv-space-5)); }
 .actions[hidden] { display: none; }
 .result { margin: 0; font-weight: var(--nv-font-weight-medium); }
 .result[data-level="ok"]::before { content: "✓ "; color: var(--nv-color-status-secure); }
 .result[data-level="error"] { color: var(--nv-color-status-criticalText); }
 .why summary { cursor: pointer; color: var(--nv-color-text-secondary); }
+/* One disclosure mark for "Por quê?" and "Mais": a chevron that turns when open (audit 2026-11 T5). */
+:is(.why, .more) > summary {
+  list-style: none;
+  display: flex;
+  align-items: baseline;
+  gap: var(--nv-space-2);
+  min-block-size: 24px;
+}
+:is(.why, .more) > summary::-webkit-details-marker { display: none; }
+:is(.why, .more) > summary::before {
+  content: "";
+  flex: none;
+  inline-size: 1em;
+  block-size: 1em;
+  align-self: center;
+  background-color: currentColor;
+  mask: url("icon-chevron.svg") center / contain no-repeat;
+}
+:is(.why, .more)[open] > summary::before { transform: rotate(90deg); }
+:dir(rtl):is(.why, .more):not([open]) > summary::before { transform: scaleX(-1); }
+@media (prefers-reduced-motion: no-preference) {
+  :is(.why, .more) > summary::before { transition: transform var(--nv-motion-duration-fast) var(--nv-motion-easing-standard); }
+}
 .why p { margin: var(--nv-space-3) 0 0; color: var(--nv-color-text-secondary); font-size: var(--nv-type-label-size); }
 .why ul { margin: var(--nv-space-3) 0 0; padding-left: 1.25rem; display: grid; gap: var(--nv-space-2); color: var(--nv-color-text-secondary); font-size: var(--nv-type-label-size); }
 
@@ -103,6 +140,24 @@ kbd {
 
 .stack { display: grid; gap: var(--nv-space-5); }
 .stack--tight { gap: var(--nv-space-3); }
+/* In a stack the gap alone sets the rhythm (audit 2026-11 T1): no stray paragraph or title margins. */
+.stack > * { margin-block: 0; }
+/* A card's title with its one-line opening, closer to each other than to the next group. */
+.card__head { display: grid; gap: var(--nv-space-2); }
+/* Rare or destructive actions at the foot of a card, after a rule (audit 2026-11 T2). */
+.card__footer { display: flex; flex-wrap: wrap; gap: var(--nv-space-3); padding-top: var(--nv-space-4); border-top: 1px solid var(--nv-color-border-subtle); }
+.card__footer:empty { display: none; }
+.card__footer > .button--quiet:first-child { margin-inline-start: calc(-1 * var(--nv-space-5)); }
+.list:empty:not([aria-busy="true"]) { display: none; }
+/* An empty state inside a card (audit 2026-11 T6): what is missing, one sentence, one action. */
+.empty-state { display: grid; gap: var(--nv-space-2); justify-items: start; padding: var(--nv-space-5); border-radius: var(--nv-radius-md); background: var(--nv-color-bg-sunken); }
+.empty-state[hidden] { display: none; }
+.empty-state > * { margin: 0; }
+.empty-state__title { font-weight: var(--nv-font-weight-semibold); }
+.empty-state > .actions { margin-top: var(--nv-space-2); }
+/* A whole page with nothing in it: a card with a neutral icon, a title, one sentence and one action. */
+.empty-card { justify-items: start; }
+.empty-card__icon { inline-size: 2rem; block-size: 2rem; color: var(--nv-color-text-secondary); }
 .hint { margin: 0; font-size: var(--nv-type-label-size); color: var(--nv-color-text-secondary); }
 .hint--on { color: var(--nv-color-text-primary); }
 .subhead { margin: 0; font-size: var(--nv-type-label-size); font-weight: var(--nv-font-weight-semibold); }
@@ -242,6 +297,11 @@ kbd {
   vertical-align: middle;
 }
 .badge--quiet { background: var(--nv-color-bg-sunken); }
+/* Integration states (settings.js renderIntegrations): words, and a surface that tells them apart. */
+.badge--enabled { background: var(--nv-color-accent-tint); }
+.badge--available { background: transparent; box-shadow: inset 0 0 0 1px var(--nv-color-border-control); }
+.badge--unavailable, .badge--unknown { background: var(--nv-color-bg-sunken); color: var(--nv-color-text-secondary); }
+.badge--error { background: var(--nv-color-status-warningTint); }
 /* A profile's state (Protegido, Bloqueado, Temporário, Área de IA): glyph and word, the same everywhere (SPA-02) */
 .badge--security {
   display: inline-flex;
@@ -313,6 +373,8 @@ kbd {
 }
 .row__main { display: grid; gap: var(--nv-space-3); min-width: 0; }
 .row__title { margin: 0; font-weight: var(--nv-font-weight-semibold); overflow-wrap: anywhere; }
+p.row__title:has(> .badge) { display: flex; flex-wrap: wrap; align-items: center; gap: var(--nv-space-2) var(--nv-space-3); }
+p.row__title:has(> .badge) > .badge { margin-inline-start: 0; }
 .row__meta { margin: 0; font-size: var(--nv-type-label-size); color: var(--nv-color-text-secondary); font-family: var(--nv-font-family-mono); overflow-wrap: anywhere; }
 .row__end { display: flex; flex-wrap: wrap; gap: var(--nv-space-3); justify-content: flex-end; }
 
@@ -367,13 +429,14 @@ fieldset.stack > legend { padding: 0; margin-bottom: var(--nv-space-2); }
 .more[open] > summary { margin-bottom: var(--nv-space-3); }
 
 /* Switch: a checkbox with role="switch", drawn as a track and knob; the label says what it does */
-.check--switch { align-items: center; }
+/* The switch sits on the label's first line, not in the middle of a long hint (audit 2026-11 T4). */
+.check--switch { align-items: flex-start; }
 .check--switch input[role="switch"] {
   appearance: none;
   position: relative;
   width: 2.25rem;
   height: 1.25rem;
-  margin: 0;
+  margin: 0.1em 0 0;
   border-radius: var(--nv-radius-pill);
   background: var(--nv-color-border-control);
   cursor: pointer;
@@ -461,6 +524,7 @@ a.button { display: inline-flex; align-items: center; text-decoration: none; }
 .input:disabled, .select:disabled, .check input:disabled {
   opacity: var(--nv-state-disabledOpacity); cursor: default;
 }
+.check:has(input:disabled) { color: var(--nv-color-text-muted); cursor: default; }
 .input[readonly] { background: var(--nv-color-bg-sunken); }
 .button[aria-busy="true"] { cursor: progress; }
 .callout--warning, .callout--critical, .dialog--critical {
@@ -546,6 +610,7 @@ a.button { display: inline-flex; align-items: center; text-decoration: none; }
 .assistant__chip-remove:hover { box-shadow: inset 0 0 0 100vmax color-mix(in srgb, currentColor calc(var(--nv-state-hoverOverlay) * 100%), transparent); }
 .assistant__offer { justify-self: start; text-align: start; white-space: normal; overflow-wrap: anywhere; }
 .assistant__answer-title { margin: 0; font-size: var(--nv-type-label-size); font-weight: var(--nv-font-weight-semibold); }
+.assistant__setup-title { margin: 0; font-size: var(--nv-type-body-size); font-weight: var(--nv-font-weight-semibold); }
 
 
 
@@ -556,5 +621,20 @@ a.button { display: inline-flex; align-items: center; text-decoration: none; }
 }
 .check input:hover:not(:disabled) { outline: 1px solid var(--nv-color-text-secondary); outline-offset: 2px; }
 .check input:active:not(:disabled) { outline: 2px solid var(--nv-color-text-primary); }
-.button[aria-pressed="true"] { display: inline-flex; align-items: center; gap: var(--nv-space-2); }
+/* The ✓ of a pressed toggle sits on its corner, so choosing never changes the button's width (audit 2026-11 T9). */
+.button[aria-pressed] { position: relative; display: inline-flex; align-items: center; gap: var(--nv-space-2); }
+.button[aria-pressed="true"]::before {
+  position: absolute;
+  inset-block-start: -0.45rem;
+  inset-inline-end: -0.45rem;
+  display: grid;
+  place-items: center;
+  inline-size: 1.125rem;
+  block-size: 1.125rem;
+  border-radius: 50%;
+  background: var(--nv-color-accent-default);
+  color: var(--nv-color-accent-on);
+  font-size: 0.6875rem;
+  line-height: 1;
+}
 }

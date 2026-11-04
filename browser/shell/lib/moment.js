@@ -20,6 +20,7 @@ const KINDS = {
   request: "bandSurfacePermission",
   routing: "bandSurfaceRouting",
   methods: "bandSurfaceMethods",
+  create: "vaultCreateTitle",
 };
 
 async function here() {

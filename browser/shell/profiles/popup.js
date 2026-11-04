@@ -6,7 +6,7 @@
 
 import { localize, t } from "../lib/i18n.js";
 import { announce, chip, errorText, h, lockCurrentProfile, profileStates, stateBadge, temporaryStorageText } from "../lib/ui.js";
-import { TEMPLATE_NAMES, freeName } from "../lib/names.js";
+import { TEMPLATE_NAMES, freeName, templateHintKey } from "../lib/names.js";
 
 const profiles = browser.nulavioProfiles;
 let known = { profiles: [] };
@@ -164,6 +164,7 @@ function fillSheet(template) {
   for (const button of document.querySelectorAll("#templates button")) {
     button.setAttribute("aria-pressed", String(button.dataset.template === chosenTemplate));
   }
+  document.getElementById("template-hint").textContent = t(templateHintKey(chosenTemplate));
   const name = sheet.elements.name;
   if (template && !name.dataset.touched) {
     name.value = freeName(t(TEMPLATE_NAMES[template.id]), known.profiles.map(p => p.name));

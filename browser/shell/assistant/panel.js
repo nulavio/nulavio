@@ -361,6 +361,11 @@ async function render() {
   $("ask").hidden = view !== "ready";
   $("allow-profile").hidden = view !== "not-allowed";
   $("setup-text").textContent = view === "not-configured" ? t("assistantNotConfigured") : t("assistantProfileNotAllowed", [state.recipient]);
+  // First contact (audit 2026-11 ASSIST-02/03): a title, and setting it up is the one main action.
+  $("setup-title").hidden = view !== "not-configured";
+  $("open-settings").textContent = t(view === "not-configured" ? "assistantConfigureButton" : "assistantOpenSettings");
+  $("open-settings").classList.toggle("button--primary", view === "not-configured");
+  $("open-settings").classList.toggle("button--secondary", view !== "not-configured");
   if (view === "blocked") {
     const [title, text, page] = (BLOCKED[state.blocked] ?? BLOCKED["assistant-paused"])();
     $("blocked-title").textContent = title;

@@ -472,6 +472,7 @@ async function renderActivity() {
         )
       : [h("li", { class: "popup__empty", text: t("aiNoActivity") })]
   );
+  document.getElementById("ai-activity-clear").disabled = !entries.length; // nothing to clear (SET-08)
 }
 
 // -- Nulavio Assistant (A12) -----------------------------------------------------------

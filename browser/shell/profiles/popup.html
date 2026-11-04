@@ -55,9 +55,10 @@
   <!-- The create sheet: a template only fills the fields; nothing is created before "Criar". -->
   <form class="popup__main popup__sheet" id="sheet" aria-labelledby="sheet-title" novalidate hidden>
     <h1 class="popup__title" id="sheet-title" data-i18n="profilesNew">New profile</h1>
-    <fieldset class="stack stack--tight">
+    <fieldset class="stack stack--tight" aria-describedby="template-hint">
       <legend class="popup__label" data-i18n="profilesTemplates"></legend>
       <div class="popup__templates" id="templates"></div>
+      <p class="hint" id="template-hint" aria-live="polite" data-i18n="profilesTemplatesNoteAll"></p>
     </fieldset>
     <label class="field"><span class="field__label" data-i18n="profilesNameLabel"></span>
       <input class="input" name="name" id="sheet-name" autocomplete="off" maxlength="60" required></label>

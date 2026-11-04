@@ -41,7 +41,7 @@ const SURFACES = Object.freeze({
   "/settings/settings.html": "settingsTitle",
   "/profiles/popup.html": "profilesButton",
   "/vault/unlock.html": "bandSurfaceUnlock",
-  "/vault/create.html": "vaultNewProtected",
+  "/vault/create.html": "vaultCreateTitle",
   "/vault/phone.html": "bandSurfacePhone",
   "/vault/methods.html": "bandSurfaceMethods",
   "/guard/review.html": "bandSurfaceGuard",

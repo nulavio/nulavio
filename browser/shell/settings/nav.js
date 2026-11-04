@@ -172,6 +172,18 @@ export function setUpNav() {
     });
   }
   rail.addEventListener("scroll", markRailEdges, { passive: true });
+  // In a narrow window the rail sticks above the page: a section or card reached by its address
+  // stops below it, not under it (audit 2026-11 SET-04). pages.css reads the measured height.
+  const sticky = document.querySelector(".settings-rail");
+  new ResizeObserver(() => {
+    document.documentElement.style.setProperty("--settings-rail-h", `${sticky.offsetHeight}px`);
+  }).observe(sticky);
+  // Lists that arrive late move the page: once everything loaded, the asked-for card is put in view again.
+  window.addEventListener("load", () => {
+    if (location.hash && main.dataset.view === "section") {
+      show(location.hash.slice(1));
+    }
+  }, { once: true });
   window.addEventListener("resize", () => revealInRail(links.find(link => link.hasAttribute("aria-current"))));
   let timer = null;
   search.addEventListener("input", () => {

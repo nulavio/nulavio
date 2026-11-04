@@ -9,6 +9,12 @@ export const TEMPLATE_NAMES = Object.freeze({
   sensitive: "templateSensitive",
 });
 
+/** The message that says what a template does, where it is chosen: "Sites sensíveis" also changes
+    settings, the others only fill the fields (audit 2026-11 FR-02). No template: what they all do. */
+export function templateHintKey(id) {
+  return !id ? "profilesTemplatesNoteAll" : id === "sensitive" ? "profilesSensitiveShort" : "profilesTemplatesNote";
+}
+
 /** A name not used yet: "Work", then "Work 2", "Work 3"... (case-insensitive). */
 export function freeName(base, taken) {
   const lower = new Set(taken.map(n => n.toLocaleLowerCase()));

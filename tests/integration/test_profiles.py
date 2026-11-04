@@ -341,6 +341,12 @@ class ProfilesTest(unittest.TestCase):
         self.m.navigate(vault)
         harness.wait_until(lambda: self.m.execute("return document.querySelectorAll('#templates button').length;"), timeout=10)
         self.assertEqual(self.m.execute("return document.getElementById('name').value;"), "Banco seguro")
+        # The name is not asked twice: the Vault starts at the protection step, showing the profile (FR-06).
+        settled = "const s = document.body.dataset.step; return s === 'protection' || s === 'unavailable' ? s : null;"
+        step = harness.wait_until(lambda: self.m.execute(settled), timeout=10)
+        if step == "protection":
+            self.assertIn("Banco seguro", self.m.execute("return document.getElementById('summary').textContent;"))
+            self.assertEqual(self.m.execute("return document.getElementById('progress').textContent;")[-6:], "1 de 2")
 
     def test_13_typing_filters_the_profile_menu(self):
         """UX4 (audit SPA-17): letters filter the list by name (accents ignored), Escape clears it."""

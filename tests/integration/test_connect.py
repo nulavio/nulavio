@@ -183,7 +183,8 @@ class ConnectTest(unittest.TestCase):
             try:
                 return self.m.execute(
                     "const l = document.getElementById('integration-list');"
-                    "return l.dataset.ready ? [...l.children].map(li => [li.dataset.integration, li.dataset.state]) : null;"
+                    "const rows = [...l.children, ...document.getElementById('integration-unavailable').children];"
+                    "return l.dataset.ready ? rows.map(li => [li.dataset.integration, li.dataset.state]) : null;"
                 )
             except MarionetteError:
                 return None
@@ -191,7 +192,16 @@ class ConnectTest(unittest.TestCase):
         listed = harness.wait_until(rows, timeout=20)
         p0 = ["plasma-browser-integration", "xdg-portals", "secret-service", "default-browser"]
         later = ["kde-connect", "screen-cast", "security-keys", "notifications", "krunner", "activities"]
-        self.assertEqual([r[0] for r in listed], p0 + later)
+        # Every integration is listed once: what works or can be turned on first, in priority order, then
+        # what this computer lacks, folded (audit 2026-11 SET-05).
+        order = p0 + later
+        found = [r[0] for r in listed]
+        self.assertEqual(sorted(found), sorted(order))
+        missing = [r[1] in ("unavailable", "unknown") for r in listed]
+        self.assertEqual(missing, sorted(missing))
+        for part in (False, True):
+            names = [r[0] for r, m in zip(listed, missing, strict=True) if m is part]
+            self.assertEqual(names, [n for n in order if n in names])
         self.assertEqual(dict(listed)["xdg-portals"], "available")
         self.assertTrue(self.m.execute("return Boolean(document.querySelector('[data-focus-key=\"make-default\"]'));"))
         # Nothing on the page reached the network.

@@ -61,19 +61,46 @@
       </div>
       <div class="card stack">
         <p class="hint" id="layout-scope" data-i18n="layoutScope"></p>
-        <fieldset class="stack" id="layout-choices" aria-describedby="layout-scope">
-          <legend class="field__label" data-i18n="layoutChoose"></legend>
-          <label class="check">
-            <input type="radio" name="layout" value="lateral" aria-describedby="layout-lateral-hint" disabled>
-            <span><span data-i18n="layoutLateral"></span><span class="hint" id="layout-lateral-hint" data-i18n="layoutLateralHint"></span></span>
+        <details class="more" data-open-key="layoutScopeMore"><summary data-i18n="howItWorks"></summary><p class="hint" data-i18n="layoutScopeMore"></p></details>
+        <!-- The same pictures as the first-run card (audit 2026-11 SET-12); names, values and ids stay. -->
+        <fieldset class="layout-options" id="layout-choices" aria-describedby="layout-scope">
+          <legend class="visually-hidden" data-i18n="layoutChoose"></legend>
+          <label class="layout-option">
+            <svg class="layout-option__preview" viewBox="0 0 160 96" width="160" height="96" aria-hidden="true" focusable="false">
+              <rect class="lp-frame" x="0.5" y="0.5" width="159" height="95" rx="8"/>
+              <rect class="lp-content" x="50" y="8" width="102" height="80" rx="5"/>
+              <rect class="lp-item lp-item--on" x="8" y="10" width="36" height="10" rx="3"/>
+              <rect class="lp-mark" x="8" y="12" width="2" height="6" rx="1"/>
+              <rect class="lp-item" x="8" y="24" width="36" height="10" rx="3"/>
+              <rect class="lp-item" x="8" y="38" width="36" height="10" rx="3"/>
+              <rect class="lp-item" x="8" y="52" width="28" height="10" rx="3"/>
+            </svg>
+            <span class="layout-option__name"><input type="radio" name="layout" value="lateral" aria-describedby="layout-lateral-hint" disabled><span data-i18n="layoutLateral"></span></span>
+            <span class="hint layout-option__hint" id="layout-lateral-hint" data-i18n="layoutLateralHint"></span>
           </label>
-          <label class="check">
-            <input type="radio" name="layout" value="top" aria-describedby="layout-top-hint" disabled>
-            <span><span data-i18n="layoutTop"></span><span class="hint" id="layout-top-hint" data-i18n="layoutTopHint"></span></span>
+          <label class="layout-option">
+            <svg class="layout-option__preview" viewBox="0 0 160 96" width="160" height="96" aria-hidden="true" focusable="false">
+              <rect class="lp-frame" x="0.5" y="0.5" width="159" height="95" rx="8"/>
+              <rect class="lp-item lp-item--on" x="8" y="7" width="38" height="11" rx="3"/>
+              <rect class="lp-mark" x="12" y="15" width="10" height="2" rx="1"/>
+              <rect class="lp-item" x="50" y="7" width="38" height="11" rx="3"/>
+              <rect class="lp-item" x="92" y="7" width="30" height="11" rx="3"/>
+              <rect class="lp-content" x="8" y="24" width="144" height="64" rx="5"/>
+            </svg>
+            <span class="layout-option__name"><input type="radio" name="layout" value="top" aria-describedby="layout-top-hint" disabled><span data-i18n="layoutTop"></span></span>
+            <span class="hint layout-option__hint" id="layout-top-hint" data-i18n="layoutTopHint"></span>
           </label>
-          <label class="check">
-            <input type="radio" name="layout" value="focus" aria-describedby="layout-focus-hint" disabled>
-            <span><span data-i18n="layoutFocus"></span><span class="hint" id="layout-focus-hint" data-i18n="layoutFocusHint"></span></span>
+          <label class="layout-option">
+            <svg class="layout-option__preview" viewBox="0 0 160 96" width="160" height="96" aria-hidden="true" focusable="false">
+              <rect class="lp-frame" x="0.5" y="0.5" width="159" height="95" rx="8"/>
+              <rect class="lp-content" x="22" y="8" width="130" height="80" rx="5"/>
+              <rect class="lp-item lp-item--on" x="7" y="10" width="10" height="10" rx="3"/>
+              <rect class="lp-mark" x="4" y="12" width="2" height="6" rx="1"/>
+              <rect class="lp-item" x="7" y="24" width="10" height="10" rx="3"/>
+              <rect class="lp-item" x="7" y="38" width="10" height="10" rx="3"/>
+            </svg>
+            <span class="layout-option__name"><input type="radio" name="layout" value="focus" aria-describedby="layout-focus-hint" disabled><span data-i18n="layoutFocus"></span></span>
+            <span class="hint layout-option__hint" id="layout-focus-hint" data-i18n="layoutFocusHint"></span>
           </label>
         </fieldset>
         <p class="hint" id="layout-current" role="status" aria-live="polite" data-i18n="layoutLoading"></p>
@@ -112,7 +139,7 @@
         <ul class="list" id="engines"></ul>
         <label class="check">
           <input type="checkbox" id="suggest-private" data-focus-key="suggest-private">
-          <span><span data-i18n="suggestPrivateLabel"></span><span class="hint" data-i18n="suggestPrivateNote"></span></span>
+          <span><span data-i18n="suggestPrivateLabel"></span><span class="hint" id="suggest-private-note" data-i18n="suggestPrivateNote"></span></span>
         </label>
       </div>
 
@@ -125,6 +152,9 @@
           <p class="hint" data-i18n="addProviderKagiNote"></p>
         </div>
 
+        <details class="more" data-open-key="add-advanced">
+          <summary data-i18n="addAdvancedSummary"></summary>
+          <div class="stack">
         <form class="stack stack--tight" id="add-searxng" novalidate>
           <h4 class="subhead" data-i18n="addSearxngHeading"></h4>
           <label class="field">
@@ -164,6 +194,8 @@
           <p class="form-error" role="alert"></p>
           <div class="actions"><button class="button button--secondary" type="submit" data-i18n="addOpenSearchButton"></button></div>
         </form>
+          </div>
+        </details>
       </div>
     </section>
 
@@ -171,15 +203,14 @@
       <div class="section__head">
         <h2 class="section__title" id="profiles-heading" data-i18n="profilesHeading">Profiles</h2>
         <p class="scope" data-i18n="scopeAllProfiles"></p>
+        <button class="button button--link button--go section__head-end" type="button" id="open-manager" data-i18n="profilesFullManager"></button>
       </div>
       <p class="notice" id="profiles-unavailable" hidden></p>
 
       <div class="card stack" id="profiles-card">
         <p class="hint" data-i18n="profilesIsolation"></p>
         <ul class="list" id="profile-list"></ul>
-        <div class="actions">
-          <button class="button button--quiet" type="button" id="open-manager" data-i18n="profilesFullManager"></button>
-        </div>
+        <div class="card__footer" id="profiles-footer"></div>
       </div>
 
       <div class="card stack" id="profiles-new">
@@ -187,15 +218,17 @@
         <div class="stack stack--tight">
           <h4 class="subhead" data-i18n="profilesTemplates"></h4>
           <div class="actions" id="templates"></div>
-          <p class="hint" data-i18n="profilesTemplatesNote"></p>
+          <p class="hint" id="template-hint" aria-live="polite" data-i18n="profilesTemplatesNoteAll"></p>
         </div>
         <form class="stack stack--tight" id="create-profile" novalidate>
           <label class="field"><span class="field__label" data-i18n="profilesNameLabel"></span>
             <input class="input" name="name" autocomplete="off" maxlength="60" required></label>
           <p class="form-error" role="alert"></p>
-          <div class="actions"><button class="button button--secondary" type="submit" data-i18n="profilesCreateButton"></button></div>
+          <div class="actions">
+            <button class="button button--primary" type="submit" data-i18n="profilesCreateButton"></button>
+            <a class="button button--secondary" href="../vault/create.html" data-i18n="vaultNewProtected"></a>
+          </div>
         </form>
-        <p class="actions"><a class="button button--quiet" href="../vault/create.html" data-i18n="vaultNewProtected"></a></p>
       </div>
 
       <div class="card stack" id="profiles-temporary">
@@ -220,6 +253,7 @@
       </div>
       <div class="card stack">
         <p class="hint" data-i18n="routingIntro"></p>
+        <details class="more" data-open-key="routingIntroMore"><summary data-i18n="howItWorks"></summary><p class="hint" data-i18n="routingIntroMore"></p></details>
         <label class="check check--switch">
           <input type="checkbox" role="switch" id="routing-enabled" data-focus-key="routing-enabled">
           <span data-i18n="routingEnabledLabel"></span>
@@ -230,6 +264,11 @@
         </label>
         <p class="hint" id="routing-in-page-hint" data-i18n="routingInPageHint"></p>
         <ul class="list" id="rules"></ul>
+        <div class="empty-state" id="routing-empty" hidden>
+          <p class="empty-state__title" data-i18n="routingNeedsTwoTitle"></p>
+          <p class="hint" data-i18n="routingNeedsTwoText"></p>
+          <div class="actions"><a class="button button--secondary" href="#profiles-new" data-i18n="routingCreateProfile"></a></div>
+        </div>
         <form class="stack stack--tight" id="add-rule" novalidate>
           <h4 class="subhead" data-i18n="routingAddHeading"></h4>
           <div class="field-row">
@@ -265,6 +304,7 @@
       </div>
       <div class="card stack">
         <p class="hint" data-i18n="passwordsIntro"></p>
+        <details class="more" data-open-key="passwordsIntroMore"><summary data-i18n="howItWorks"></summary><p class="hint" data-i18n="passwordsIntroMore"></p></details>
         <ul class="list" id="provider-list" aria-busy="true"></ul>
         <p class="hint" id="engine-logins"></p>
       </div>
@@ -284,6 +324,7 @@
       </div>
       <div class="card stack">
         <p class="hint" data-i18n="exceptionsIntro"></p>
+        <details class="more" data-open-key="exceptionsIntroMore"><summary data-i18n="howItWorks"></summary><p class="hint" data-i18n="exceptionsIntroMore"></p></details>
         <ul class="list" id="exception-list" aria-busy="true"></ul>
         <p class="hint" id="exceptions-empty" data-i18n="exceptionsEmpty" hidden></p>
       </div>
@@ -303,6 +344,7 @@
       </div>
       <form class="card stack" id="dns-form" novalidate>
         <p class="hint" data-i18n="dnsIntro"></p>
+        <details class="more" data-open-key="dnsIntroMore"><summary data-i18n="howItWorks"></summary><p class="hint" data-i18n="dnsIntroMore"></p></details>
         <p class="notice" id="dns-current" role="status"></p>
         <fieldset class="stack stack--tight">
           <legend class="subhead" data-i18n="dnsChoiceLegend"></legend>
@@ -331,13 +373,16 @@
       <div class="section__head">
         <h2 class="section__title" id="integrations-heading" data-i18n="connectHeading">Integrations</h2>
         <p class="scope" data-i18n="scopeComputer"></p>
+        <button class="button button--secondary section__head-end" type="button" id="connect-refresh" data-i18n="connectRefresh"></button>
       </div>
       <div class="card stack">
         <p class="hint" data-i18n="connectIntro"></p>
         <ul class="list" id="integration-list" aria-busy="true"></ul>
-        <div class="actions">
-          <button class="button button--quiet" type="button" id="connect-refresh" data-i18n="connectRefresh"></button>
-        </div>
+        <!-- What this computer does not have, out of the way but one click from its reasons (audit 2026-11 SET-05). -->
+        <details class="more" id="integration-more" data-open-key="integration-more" hidden>
+          <summary id="integration-more-summary"></summary>
+          <ul class="list" id="integration-unavailable"></ul>
+        </details>
       </div>
     </section>
     <section class="section" id="ai" aria-labelledby="ai-heading" hidden>
@@ -352,6 +397,7 @@
 
       <div class="card stack" id="ai-agents-card">
         <p class="hint" data-i18n="aiIntro"></p>
+        <details class="more" data-open-key="aiIntroMore"><summary data-i18n="howItWorks"></summary><p class="hint" data-i18n="aiIntroMore"></p></details>
         <label class="check check--switch">
           <input type="checkbox" role="switch" id="ai-stop">
           <span><span data-i18n="aiStopLabel"></span><span class="hint" data-i18n="aiStopHint"></span></span>
@@ -362,6 +408,7 @@
       <form class="card stack" id="ai-assistant" novalidate>
         <h3 class="card__title" data-i18n="assistantTitle"></h3>
         <p class="hint" data-i18n="assistantIntro"></p>
+        <details class="more" data-open-key="assistantIntroMore"><summary data-i18n="howItWorks"></summary><p class="hint" data-i18n="assistantIntroMore"></p></details>
         <p class="notice" id="ai-assistant-state" role="status"></p>
         <div class="field-row">
           <label class="field"><span class="field__label" data-i18n="assistantKindLabel"></span>

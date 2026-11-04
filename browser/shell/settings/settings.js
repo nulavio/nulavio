@@ -3,7 +3,7 @@
    Shell's privileged APIs; this page keeps no state of its own. */
 
 import { localize, t } from "../lib/i18n.js";
-import { TEMPLATE_NAMES, freeName } from "../lib/names.js";
+import { TEMPLATE_NAMES, freeName, templateHintKey } from "../lib/names.js";
 import {
   announce,
   chip,
@@ -177,6 +177,8 @@ async function renderSearch() {
   const privateBox = document.getElementById("suggest-private");
   privateBox.checked = state.suggestionsPrivate;
   privateBox.disabled = !anyOptIn;
+  // Off, the option says what turns it on, not only what it would do (audit 2026-11 SET-09).
+  document.getElementById("suggest-private-note").textContent = t(anyOptIn ? "suggestPrivateNote" : "suggestPrivateOff");
 
   const present = new Set(state.engines.map(e => e.provider).filter(Boolean));
   const missing = state.providers.filter(p => !present.has(p.key));
@@ -340,9 +342,12 @@ function profileRow(profile) {
       });
       end.push(lock);
     }
-    const del = h("button", { class: "button button--quiet", type: "button", text: t("profilesDeleteCurrent") });
-    del.addEventListener("click", () => run(() => profiles.openCurrentPage("delete")));
-    end.push(del);
+    if (profile.id === null) {
+      // Not in the profile store yet: no inline editor, so the row's action edits it (audit 2026-11 SET-03).
+      const edit = h("button", { class: "button button--secondary", type: "button", text: t("profilesEditCurrent"), "data-focus-key": "edit-current" });
+      edit.addEventListener("click", () => run(() => profiles.openCurrentPage("edit")));
+      end.push(edit);
+    }
   } else {
     // The accessible name keeps the visible words and the state (SPA-10, SB-17): "Abrir Pessoal",
     // or "Bancos, bloqueado, desbloquear…" next to the visible "Desbloquear…".
@@ -475,6 +480,15 @@ async function renderProfiles() {
     return;
   }
   rerender(document.getElementById("profile-list"), () => state.profiles.map(profileRow));
+  // Deleting the profile you are in is a quiet action in the card's footer, never next to its name (SET-03).
+  rerender(document.getElementById("profiles-footer"), () => {
+    if (!state.profiles.some(p => p.isCurrent)) {
+      return [];
+    }
+    const del = h("button", { class: "button button--quiet", type: "button", text: t("profilesDeleteCurrent"), "data-focus-key": "delete-current" });
+    del.addEventListener("click", () => run(() => profiles.openCurrentPage("delete")));
+    return [del];
+  });
   // A template only fills the form below (audit SPA-09): nothing is created before "Criar perfil".
   const form = document.getElementById("create-profile");
   rerender(document.getElementById("templates"), () =>
@@ -494,6 +508,7 @@ async function renderProfiles() {
         for (const each of document.querySelectorAll("#templates button")) {
           each.setAttribute("aria-pressed", String(each === button));
         }
+        document.getElementById("template-hint").textContent = t(templateHintKey(template.id));
         form.elements.name.focus();
       });
       return button;
@@ -522,6 +537,7 @@ async function setUpProfiles() {
       for (const each of document.querySelectorAll("#templates button")) {
         each.setAttribute("aria-pressed", "false");
       }
+      document.getElementById("template-hint").textContent = t(templateHintKey(null));
     }
   });
   profiles.onChanged.addListener(debounce(renderProfiles));
@@ -580,8 +596,12 @@ async function renderRouting() {
   const inPage = document.getElementById("routing-in-page");
   inPage.checked = state.inPage;
   inPage.disabled = !state.enabled;
+  // With one profile there is nowhere to route to: say so and offer a new profile (audit 2026-11 SET-01).
+  const alone = people.profiles.length < 2 && !state.rules.length;
+  document.getElementById("routing-empty").hidden = !alone;
+  document.getElementById("add-rule").hidden = alone;
   rerender(document.getElementById("rules"), () =>
-    state.rules.length ? state.rules.map(ruleRow) : h("li", { class: "hint", text: t("routingNoRules") })
+    state.rules.length ? state.rules.map(ruleRow) : alone ? [] : h("li", { class: "hint", text: t("routingNoRules") })
   );
   const select = document.getElementById("rule-profile");
   const chosen = select.value;
@@ -721,7 +741,13 @@ async function renderIntegrations() {
   const items = await run(() => connect.discover(), { background: true });
   list.setAttribute("aria-busy", "false");
   if (items) {
-    rerender(list, () => items.map(integrationRow));
+    // What works or can be turned on comes first; what this computer lacks is folded below (SET-05).
+    const missing = item => item.state === "unavailable" || item.state === "unknown";
+    const absent = items.filter(missing);
+    rerender(list, () => items.filter(item => !missing(item)).map(integrationRow));
+    rerender(document.getElementById("integration-unavailable"), () => absent.map(integrationRow));
+    document.getElementById("integration-more").hidden = !absent.length;
+    document.getElementById("integration-more-summary").textContent = t("connectNotFound", [String(absent.length)]);
     list.dataset.ready = "true";
   }
 }
