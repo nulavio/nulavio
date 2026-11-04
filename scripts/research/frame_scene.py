@@ -8,10 +8,14 @@ Runs on a real Track B build in a throwaway profile, headful on a private Xvfb (
       python3 -I scripts/research/frame_scene.py [--baseline-engine <previous>/nulavio/nulavio] --runs 5 --out <dir>
 
 Each run uses a fresh profile with reduced motion off, and alternates the build and the baseline.
+Both must install the same extensions (a package's distribution/; the script refuses otherwise):
+an extracted package without one is compared after copying the build's distribution/ next to it.
 Scenes: the sidebar launcher collapsing and expanding, switching tabs, Ctrl+T to the new tab's
 `nv-painted` mark, a Settings dialog opening, and 60 s idle on a page (chrome reflows, frames
 constructed, paints). Frame intervals come from the compositor's frame-time recording; when it
-records nothing (some Xvfb set-ups), from requestAnimationFrame in the window, and the JSON says so.
+records nothing (some Xvfb set-ups), from requestAnimationFrame in the window. The JSON names the
+source of each scene (the dialog is always timed by requestAnimationFrame in the page) and keeps a
+failed sample's error; a transition scene with no samples fails its budget line.
 Xvfb timings are a regression gate, not a measure of real hardware.
 """
 
@@ -82,8 +86,12 @@ def verdict(scenes: dict) -> dict:
     out = {}
     for name in TRANSITIONS:
         stats = scenes.get(name)
-        if stats and stats["n"]:
-            out[name] = stats["p95"] <= BUDGET["transition_p95_ms"] and stats["max"] <= BUDGET["transition_max_ms"]
+        # A scene that recorded nothing failed to run: no data is not a pass.
+        out[name] = (
+            bool(stats and stats["n"])
+            and stats["p95"] <= BUDGET["transition_p95_ms"]
+            and stats["max"] <= BUDGET["transition_max_ms"]
+        )
     if scenes.get("new_tab", {}).get("n"):
         out["new_tab"] = scenes["new_tab"]["p95"] <= BUDGET["new_tab_p95_ms"]
     idle = scenes.get("idle")
@@ -98,10 +106,11 @@ def verdict(scenes: dict) -> dict:
 RECORD = """
 const done = arguments[arguments.length - 1];
 const settleMs = arguments[0];
+let stop = false;
 (async () => {
   const utils = window.windowUtils;
+  await (async () => { PREPARE })(); // outside the recording: only the measured motion is in it
   const raf = [];
-  let stop = false;
   const tick = t => { raf.push(t); if (!stop) requestAnimationFrame(tick); };
   requestAnimationFrame(tick);
   const start = utils.startFrameTimeRecording();
@@ -110,43 +119,56 @@ const settleMs = arguments[0];
   const frames = Array.from(utils.stopFrameTimeRecording(start) || []);
   stop = true;
   done({frames, raf: raf.slice(1).map((t, i) => t - raf[i])});
-})().catch(e => done({error: String(e)}));
+})().catch(e => { stop = true; done({error: String(e)}); });
 """
 
+# name -> (prepare, outside the recording; the measured action; how long to record after it, ms)
 ACTIONS = {
     "sidebar_collapse": (
         "await SidebarController.waitUntilStable();"
         "if (!SidebarController.getUIState().launcherExpanded) { SidebarController.handleToolbarButtonClick();"
-        " await SidebarController.waitUntilStable(); }"
+        " await SidebarController.waitUntilStable(); }",
         "SidebarController.handleToolbarButtonClick();",
         420,
     ),
     "sidebar_expand": (
         "await SidebarController.waitUntilStable();"
         "if (SidebarController.getUIState().launcherExpanded) { SidebarController.handleToolbarButtonClick();"
-        " await SidebarController.waitUntilStable(); }"
+        " await SidebarController.waitUntilStable(); }",
         "SidebarController.handleToolbarButtonClick();",
         480,
     ),
-    "tab_switch": ("gBrowser.tabContainer.advanceSelectedTab(1, true);", 300),
+    "tab_switch": ("", "gBrowser.tabContainer.advanceSelectedTab(1, true);", 300),
 }
 
 
 def provenance(engine: Path) -> dict:
+    """What the build says about itself (its application.ini), and the extensions its distribution
+    installs (None: no distribution). Builds compared must install the same ones: an extension's
+    first-run work (uBlock Origin downloads and compiles its lists) weighs on every scene."""
     ini = configparser.ConfigParser()
     ini.read(engine.parent / "application.ini")
     app = ini["App"] if ini.has_section("App") else {}
-    dirty = subprocess.run(
-        ["git", "-C", str(ROOT), "status", "--porcelain", "--", "browser", "scripts"], capture_output=True, text=True
-    )
+    policies = engine.parent / "distribution" / "policies.json"
+    extensions = None
+    if policies.is_file():
+        extensions = sorted(json.loads(policies.read_text()).get("policies", {}).get("ExtensionSettings", {}))
     return {
         "engine": str(engine),
         "buildID": app.get("BuildID"),
         "sourceStamp": app.get("SourceStamp"),
         "version": app.get("Version"),
-        "git": subprocess.run(["git", "-C", str(ROOT), "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip(),
-        "gitDirty": bool(dirty.stdout.strip()),
+        "distributionExtensions": extensions,
     }
+
+
+def checkout() -> dict:
+    """The checkout this script ran from (not the builds': each build's Shell is in its omni.ja)."""
+    dirty = subprocess.run(
+        ["git", "-C", str(ROOT), "status", "--porcelain", "--", "browser", "scripts"], capture_output=True, text=True
+    )
+    head = subprocess.run(["git", "-C", str(ROOT), "rev-parse", "HEAD"], capture_output=True, text=True)
+    return {"git": head.stdout.strip(), "gitDirty": bool(dirty.stdout.strip())}
 
 
 def one_run(engine: Path, samples: int) -> dict:
@@ -155,7 +177,7 @@ def one_run(engine: Path, samples: int) -> dict:
 
     session = harness.GeckoProfileSession(name="Pessoal")
     m = session.start()
-    out: dict = {"source": "frame-time recording"}
+    out: dict = {"sources": {}, "errors": {}}
     try:
         m.chrome("Services.prefs.setIntPref('ui.prefersReducedMotion', 0);")
         m.send("WebDriver:SetWindowRect", {"width": 1366, "height": 768})
@@ -170,19 +192,23 @@ def one_run(engine: Path, samples: int) -> dict:
                 )
             time.sleep(1.5)
             raw: dict[str, list[list[float]]] = {}
-            used_raf = False
             m.set_context("chrome")
             try:
-                for name, (action, settle) in ACTIONS.items():
-                    script = RECORD.replace("ACTION", action)
+                for name, (prepare, action, settle) in ACTIONS.items():
+                    script = RECORD.replace("PREPARE", prepare).replace("ACTION", action)
                     m.execute_async(script, [settle])  # warm-up
                     raw[name] = []
                     for _ in range(samples):
                         got = m.execute_async(script, [settle])
+                        if got.get("error"):  # a failed sample is reported, never read as a fallback
+                            out["errors"].setdefault(name, []).append(got["error"])
+                            continue
                         frames = got.get("frames") or []
+                        source = "frame-time recording"
                         if not frames:
-                            used_raf = True
+                            source = "requestAnimationFrame (frame-time recording returned nothing)"
                             frames = got.get("raf") or []
+                        out["sources"].setdefault(name, set()).add(source)
                         raw[name].append(intervals_after_first(frames))
                 # Ctrl+T: from the command to the new tab's nv-painted mark (epoch ms on both sides).
                 new_tab, new_tab_poll = [], []
@@ -248,9 +274,9 @@ def one_run(engine: Path, samples: int) -> dict:
                 )
                 raw["dialog_open"].append(intervals_after_first(got or []))
             raw["dialog_open"] = raw["dialog_open"][1:]
+            out["sources"]["dialog_open"] = {"requestAnimationFrame in the page"}
         out["raw"] = raw
-        if used_raf:
-            out["source"] = "requestAnimationFrame (frame-time recording returned nothing)"
+        out["sources"] = {name: sorted(found) for name, found in out["sources"].items()}
     finally:
         session.cleanup()
     return out
@@ -289,7 +315,15 @@ def main() -> int:
     args = parser.parse_args()
     engine = Path(os.environ["NULAVIO_ENGINE"])
     builds = {"build": engine, **({"baseline": args.baseline_engine} if args.baseline_engine else {})}
-    results = {"budget": BUDGET, "builds": {k: provenance(v) for k, v in builds.items()}, "runs": {k: [] for k in builds}}
+    results = {
+        "budget": BUDGET,
+        "checkout": checkout(),
+        "builds": {k: provenance(v) for k, v in builds.items()},
+        "runs": {k: [] for k in builds},
+    }
+    found = {label: build["distributionExtensions"] for label, build in results["builds"].items()}
+    if len({json.dumps(v) for v in found.values()}) > 1:
+        parser.error(f"the builds install different extensions, so they cannot be compared: {found}")
     args.out.mkdir(parents=True, exist_ok=True)
     for i in range(args.runs):
         order = list(builds.items()) if i % 2 == 0 else list(reversed(builds.items()))

@@ -26,6 +26,8 @@ class FrameSceneTest(unittest.TestCase):
         self.assertTrue(frame_scene.regression([20.0, 21.0, 22.0], [16.0, 16.5, 17.0]))  # >10 % and apart
         self.assertFalse(frame_scene.regression([17.4, 17.5, 17.6], [16.5, 16.6, 16.7]))  # apart but within 10 %
         self.assertFalse(frame_scene.regression([], [16.0]))
+        # Review: more than 10 % worse, but the ranges overlap: not flagged (the clause the name promises).
+        self.assertFalse(frame_scene.regression([16.0, 22.0, 23.0], [16.0, 17.0, 18.0]))
 
     def test_verdict_reads_each_budget_line(self):
         scenes = {
@@ -35,7 +37,15 @@ class FrameSceneTest(unittest.TestCase):
             "idle": {"reflows": 0, "framesConstructed": 2},
         }
         self.assertEqual(
-            frame_scene.verdict(scenes), {"sidebar_collapse": True, "tab_switch": False, "new_tab": True, "idle": False}
+            frame_scene.verdict(scenes),
+            {
+                "sidebar_collapse": True,
+                "sidebar_expand": False,  # no samples: the scene did not run, which is not a pass
+                "tab_switch": False,
+                "dialog_open": False,
+                "new_tab": True,
+                "idle": False,
+            },
         )
 
 
