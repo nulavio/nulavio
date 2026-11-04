@@ -2,44 +2,295 @@
 """Assemble the static nulavio.net site (site/) with the brand tokens and logo.
 
     python3 -I scripts/site/build_site.py --out dist/site
+    python3 -I scripts/site/build_site.py --release [--commit <sha>] --out dist/site
 
 The output is plain files for Cloudflare Pages (direct upload): no build
 tool, no JavaScript, no third-party resources.
+
+The pages carry placeholders that this script stamps (landing spec §2.3, §9):
+{{commit}}, {{date_pt}}, {{date_en}}, {{firefox}} (browser/build/engine.json),
+{{patches}} (browser/patches/series), {{ubo}} (browser/distribution/
+extensions.lock.json), {{buildid}} and, per figure, {{onscreen:<id>}},
+{{port:<id>}} and {{wh:<file>}} from site/assets/shots/manifest.json (written
+by scripts/site/capture_site.py), and the two text excerpts {{e1}} (the real
+output of ``prefs explain``) and {{e2}} (the header lines of site/_headers).
+{{shot:<file>}} is the commit a capture was taken at and {{origin}} the
+commit(s) the numbers, excerpts and captures come from; outside --release
+they say so when the tree had changes or the build predates the commit.
+The build fails if a ``{{`` is left.
+
+By default the site is built from the working tree (unit tests run on a
+shared, possibly dirty tree). ``--release`` is how the published site is
+built: it refuses a dirty tree, extracts ``--commit`` with ``git archive``
+and builds from that copy only; the captures' manifest must name that
+commit. Evidence mode (spec §2.2): only ``text`` (paths are references, not
+links) is implemented while the repository is private.
 """
 
 from __future__ import annotations
 
 import argparse
+import datetime as dt
+import functools
+import html
+import json
+import re
 import shutil
+import subprocess
+import tarfile
+import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-SOURCE = ROOT / "site"
 ASSETS = {
-    "assets/tokens.css": ROOT / "browser" / "startpage" / "tokens.css",
-    "assets/nulavio-symbol.svg": ROOT / "docs" / "brand" / "assets" / "logo" / "nulavio-symbol.svg",
-    "assets/nulavio-symbol-dark-on-light.svg": ROOT / "docs" / "brand" / "assets" / "logo" / "nulavio-symbol-dark-on-light.svg",
-    "assets/favicon.svg": ROOT / "docs" / "brand" / "assets" / "favicon" / "favicon.svg",
-    "favicon.ico": ROOT / "docs" / "brand" / "assets" / "favicon" / "favicon.ico",
+    "assets/tokens.css": Path("browser/startpage/tokens.css"),
+    "assets/nulavio-symbol.svg": Path("docs/brand/assets/logo/nulavio-symbol.svg"),
+    "assets/nulavio-symbol-dark-on-light.svg": Path("docs/brand/assets/logo/nulavio-symbol-dark-on-light.svg"),
+    "assets/nulavio-lockup-horizontal.svg": Path("docs/brand/assets/logo/nulavio-lockup-horizontal.svg"),
+    "assets/nulavio-lockup-horizontal-on-dark.svg": Path("docs/brand/assets/logo/nulavio-lockup-horizontal-on-dark.svg"),
+    "assets/favicon.svg": Path("docs/brand/assets/favicon/favicon.svg"),
+    "favicon.ico": Path("docs/brand/assets/favicon/favicon.ico"),
 }
+# Page -> capture locale (manifest figures are per locale).
+PAGES = {"index.html": "pt-BR", "en/index.html": "en-US", "404.html": None}
+E1_CATEGORIES = ("tracking", "https")
+SCALE = 2  # captures are taken at devPixelsPerPx=2; width/height attributes are CSS px
+# Notes appended to a commit outside --release, so a development build never passes for a release.
+NOTES = {
+    "pt-BR": {"dirty": "árvore com alterações", "older": "build anterior ao commit",
+              "numbers": "números e trechos", "shots": "capturas", "and": " e ", "then": " e do commit "},
+    "en-US": {"dirty": "tree with changes", "older": "build older than the commit",
+              "numbers": "numbers and excerpts", "shots": "captures", "and": " and ", "then": " and commit "},
+}  # fmt: skip
+REF = re.compile(r'(<code class="ref"[^>]*>)([^<]*)(</code>)')
 
 
-def build(out: Path) -> list[str]:
-    if out.exists():
-        shutil.rmtree(out)
-    shutil.copytree(SOURCE, out)
-    (out / "assets").mkdir(exist_ok=True)
-    shutil.move(out / "site.css", out / "assets" / "site.css")
-    for relative, source in ASSETS.items():
-        shutil.copyfile(source, out / relative)
+class BuildError(RuntimeError):
+    pass
+
+
+def git(*args: str, cwd: Path = ROOT) -> str:
+    return subprocess.run(["git", "-C", str(cwd), *args], capture_output=True, text=True, check=True).stdout.strip()
+
+
+# -- values stamped into the pages --------------------------------------------------------
+
+
+def patch_count(src: Path) -> int:
+    lines = (src / "browser" / "patches" / "series").read_text(encoding="utf-8").splitlines()
+    return sum(1 for line in lines if line.strip() and not line.lstrip().startswith("#"))
+
+
+def ublock_version(src: Path) -> str:
+    lock = json.loads((src / "browser" / "distribution" / "extensions.lock.json").read_text(encoding="utf-8"))
+    return next(e["version"] for e in lock["extensions"] if e["key"] == "ublock-origin")
+
+
+def firefox_version(src: Path) -> str:
+    return json.loads((src / "browser" / "build" / "engine.json").read_text(encoding="utf-8"))["firefox"]
+
+
+def prefs_explain(src: Path, category: str) -> str:
+    """The launcher's own output, run exactly as bin/nulavio runs it (python3 -I, launcher on sys.path)."""
+    result = subprocess.run(
+        [
+            "python3", "-I", "-B", "-c",
+            "import sys; sys.path.insert(0, sys.argv[1]); from nulavio_launcher.cli import main; sys.exit(main(sys.argv[2:]))",
+            str(src / "launcher"), "prefs", "explain", "--category", category,
+        ],
+        capture_output=True, text=True, timeout=60, cwd=src,
+    )  # fmt: skip
+    if result.returncode != 0 or not result.stdout.strip():
+        raise BuildError(f"prefs explain --category {category} failed: {result.stderr[-400:]}")
+    return result.stdout.rstrip("\n")
+
+
+def excerpt_e1(src: Path) -> str:
+    blocks = [f"$ bin/nulavio prefs explain --category {c}\n{prefs_explain(src, c)}" for c in E1_CATEGORIES]
+    return "\n".join(blocks)
+
+
+def header_lines(src: Path) -> list[str]:
+    """The header lines of site/_headers: no comments, no blank lines, no path patterns."""
+    out = []
+    for line in (src / "site" / "_headers").read_text(encoding="utf-8").splitlines():
+        if line.strip() and not line.lstrip().startswith("#") and line[:1].isspace():
+            out.append(line.strip())
+    return out
+
+
+def commit_date(src_commit: str) -> dt.date:
+    return dt.date.fromisoformat(git("log", "-1", "--format=%cs", src_commit))
+
+
+@functools.lru_cache(maxsize=None)
+def commit_time(src_commit: str) -> dt.datetime:
+    return dt.datetime.fromisoformat(git("log", "-1", "--format=%cI", src_commit))
+
+
+def build_time(buildid: str) -> dt.datetime:
+    """A Gecko BuildID is the UTC time the build was packaged."""
+    return dt.datetime.strptime(buildid, "%Y%m%d%H%M%S").replace(tzinfo=dt.UTC)
+
+
+def shot_notes(entry: dict, manifest: dict) -> list[str]:
+    """What keeps a capture from being a release capture: a changed tree, or a build older than the commit."""
+    notes = []
+    if not entry.get("worktree_clean", manifest.get("worktree_clean", False)):
+        notes.append("dirty")
+    try:
+        if build_time(entry["buildid"]) < commit_time(entry["commit"]):
+            notes.append("older")
+    except (subprocess.CalledProcessError, ValueError):
+        notes.append("older")  # the commit or the build time cannot be read: do not vouch for it
+    return notes
+
+
+def load_manifest(src: Path) -> dict:
+    path = src / "site" / "assets" / "shots" / "manifest.json"
+    if not path.exists():
+        return {"files": [], "figures": {}}
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def stamps(src: Path, commit: str, manifest: dict) -> dict[str, str]:
+    date = commit_date(commit)
+    buildids = {f["buildid"] for f in manifest["files"]}
+    if len(buildids) > 1:
+        raise BuildError(f"the captures come from different builds: {sorted(buildids)}")
+    values = {
+        "commit": git("rev-parse", "--short=7", commit),
+        "date_pt": date.strftime("%d/%m/%Y"),
+        "date_en": date.isoformat(),
+        "firefox": firefox_version(src),
+        "patches": str(patch_count(src)),
+        "ubo": ublock_version(src),
+        "buildid": next(iter(buildids)) if buildids else "",
+        "e1": html.escape(excerpt_e1(src), quote=False),
+        "e2": html.escape("\n".join(header_lines(src)), quote=False),
+    }
+    return {k: v for k, v in values.items() if v}
+
+
+def describe(commit: str, notes: list[str], locale: str, what: str | None = None) -> str:
+    words = NOTES[locale]
+    parts = ([words[what]] if what else []) + [words[n] for n in dict.fromkeys(notes)]
+    return f"{commit} ({'; '.join(parts)})" if parts else commit
+
+
+def origin(values: dict[str, str], manifest: dict, locale: str) -> str:
+    """The commit(s) behind the page: one commit when the tree and every capture agree, else each named."""
+    source, source_notes = values["commit"], (["dirty"] if values.get("source_dirty") else [])
+    shots: dict[str, list[str]] = {}
+    for entry in manifest["files"]:
+        shots.setdefault(entry["commit"], []).extend(shot_notes(entry, manifest))
+    if not shots or set(shots) == {source}:
+        return describe(source, source_notes + shots.get(source, []), locale)
+    words = NOTES[locale]
+    commits = words["and"].join(sorted(shots))
+    notes = [n for c in sorted(shots) for n in shots[c]]
+    return describe(source, source_notes, locale, "numbers") + words["then"] + describe(commits, notes, locale, "shots")
+
+
+def break_points(text: str) -> str:
+    """Paths and test names break after a / or _, not in the middle of a word."""
+    return REF.sub(lambda m: m.group(1) + re.sub(r"([/_])", r"\1<wbr>", m.group(2)) + m.group(3), text)
+
+
+def stamp_page(text: str, values: dict[str, str], manifest: dict, locale: str | None, page: str) -> str:
+    files = {f["file"]: f for f in manifest["files"]}
+
+    def figure(key: str) -> dict:
+        try:
+            return manifest["figures"][key][locale]
+        except KeyError:
+            raise BuildError(f"{page}: no capture for {key} ({locale}) in the manifest") from None
+
+    def replace(match: re.Match) -> str:
+        name, _, arg = match.group(1).partition(":")
+        if name == "onscreen":
+            return html.escape(figure(arg)["transcript"], quote=False)
+        if name == "port":
+            return str(figure(arg)["port"])
+        if name == "wh":
+            entry = files.get(arg)
+            if entry is None:
+                raise BuildError(f"{page}: {arg} is not in the manifest")
+            return f'width="{round(entry["width"] / SCALE)}" height="{round(entry["height"] / SCALE)}"'
+        if name == "shot":
+            entry = files.get(arg)
+            if entry is None:
+                raise BuildError(f"{page}: {arg} is not in the manifest")
+            return describe(entry["commit"], shot_notes(entry, manifest), locale)
+        if name == "origin":
+            return origin(values, manifest, locale)
+        if name in values:
+            return values[name]
+        return match.group(0)
+
+    return break_points(re.sub(r"\{\{([a-z_0-9]+(?::[A-Za-z0-9_.-]+)?)\}\}", replace, text))
+
+
+# -- build --------------------------------------------------------------------------------
+
+
+def release_tree(commit: str, into: Path) -> Path:
+    if git("status", "--porcelain", "--untracked-files=normal"):
+        raise BuildError("--release refuses a dirty tree: commit or set aside the changes first")
+    archive = into / "src.tar"
+    subprocess.run(["git", "-C", str(ROOT), "archive", "--format=tar", "-o", str(archive), commit], check=True)
+    src = into / "src"
+    src.mkdir()
+    with tarfile.open(archive) as tar:
+        tar.extractall(src, filter="data")
+    archive.unlink()
+    return src
+
+
+def build(out: Path, *, release: bool = False, commit: str = "HEAD", evidence: str = "text") -> list[str]:
+    if evidence != "text":
+        raise BuildError(f"evidence mode {evidence!r} is not implemented; the repository is private (spec §2.2)")
+    with tempfile.TemporaryDirectory(prefix="nulavio-site-") as tmp:
+        src = release_tree(commit, Path(tmp)) if release else ROOT
+        manifest = load_manifest(src)
+        if release and manifest["files"]:
+            wanted = git("rev-parse", "--short=7", commit)
+            found = {f["commit"] for f in manifest["files"]}
+            if found != {wanted}:
+                raise BuildError(f"the captures were taken at {sorted(found)}, not at {wanted}: capture again")
+            unfit = sorted(f["file"] for f in manifest["files"] if shot_notes(f, manifest))
+            if unfit:
+                raise BuildError(f"captures from a changed tree or a build older than {wanted}: {unfit[:3]}…; capture again")
+        values = stamps(src, commit, manifest)
+        values["source_dirty"] = "" if release else git("status", "--porcelain", "--untracked-files=normal")
+        if out.exists():
+            shutil.rmtree(out)
+        shutil.copytree(src / "site", out)
+        (out / "assets").mkdir(exist_ok=True)
+        shutil.move(out / "site.css", out / "assets" / "site.css")
+        for relative, source in ASSETS.items():
+            shutil.copyfile(src / source, out / relative)
+        for page, locale in PAGES.items():
+            path = out / page
+            text = stamp_page(path.read_text(encoding="utf-8"), values, manifest, locale, page)
+            if "{{" in text:
+                left = sorted(set(re.findall(r"\{\{[^}]*\}\}", text)))
+                raise BuildError(f"{page}: placeholders left: {left}")
+            path.write_text(text, encoding="utf-8")
     return sorted(str(p.relative_to(out)) for p in out.rglob("*") if p.is_file())
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--out", type=Path, default=ROOT / "dist" / "site")
+    parser.add_argument("--release", action="store_true", help="refuse a dirty tree and build from git archive of --commit")
+    parser.add_argument("--commit", default="HEAD", help="commit to stamp (and, with --release, to build from)")
+    parser.add_argument("--evidence", default="text", choices=["text"], help="how references appear (spec §2.2)")
     args = parser.parse_args()
-    files = build(args.out)
+    try:
+        files = build(args.out, release=args.release, commit=args.commit, evidence=args.evidence)
+    except BuildError as e:
+        parser.exit(1, f"build_site: {e}\n")
     print(f"{len(files)} files in {args.out}:", ", ".join(files))
     return 0
 
