@@ -39,8 +39,12 @@ export async function setUpShortcuts() {
     reset?.addEventListener("click", async () => {
       try {
         await commands.reset(command.name);
+        // "Restaurar" goes away with the default key: the keyboard stays in the row, on "Mudar…".
+        change.focus();
         await render();
-        announce(t("shortcutsResetDone", [fallback || t("shortcutsNone")]), "ok", { control: list });
+        const still = list.querySelector(`[data-focus-key="change-${CSS.escape(command.name)}"]`);
+        still?.focus();
+        announce(t("shortcutsResetDone", [fallback || t("shortcutsNone")]), "ok", { control: still ?? undefined });
       } catch (e) {
         announce(errorText(e), "error");
       }

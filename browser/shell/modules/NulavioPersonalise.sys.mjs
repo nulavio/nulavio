@@ -65,8 +65,13 @@ async function option(id) {
 
 function read(entry) {
   const [pref] = entry.prefs;
-  if (!Services.prefs.prefHasUserValue(pref)) {
+  // A locked value (an administrator's lockPref or policy) is the one in effect, user value or not;
+  // otherwise no user value is the default choice.
+  if (!Services.prefs.prefHasUserValue(pref) && !Services.prefs.prefIsLocked(pref)) {
     return entry.values[entry.prefValues.indexOf(null)];
+  }
+  if (Services.prefs.getPrefType(pref) === Services.prefs.PREF_INVALID) {
+    return entry.default;
   }
   let current;
   switch (Services.prefs.getPrefType(pref)) {

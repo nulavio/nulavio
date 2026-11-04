@@ -126,7 +126,7 @@
   "err_is_current": {"message": "Delete the profile you are using from its own page."},
   "err_unexpected": {"message": "Something went wrong. Nothing was changed."},
   "profilesButton": {"message": "Profiles"},
-  "profilesButtonNamed": {"message": "Profile: $NAME$. Switch profile (Alt+Shift+P)", "placeholders": {"name": {"content": "$1"}}},
+  "profilesButtonNamed": {"message": "Profile: $NAME$. Switch profile", "placeholders": {"name": {"content": "$1"}}},
   "profilesShortcut": {"message": "Open the profile selector"},
   "profilesHeading": {"message": "Profiles"},
   "profilesCurrent": {"message": "Current profile"},
@@ -1270,7 +1270,7 @@
   "appearanceIntroMore": {"message": "It applies to this profile only. Security signs, the profile band and the private window's colours never change, and websites see none of these choices."},
   "densityLabel": {"message": "Window density"},
   "densityAuto": {"message": "Automatic (default)"},
-  "densityAutoHint": {"message": "Becomes compact by itself in small windows and in the Focus layout."},
+  "densityAutoHint": {"message": "Becomes compact by itself in narrow windows."},
   "densityNormal": {"message": "Normal"},
   "densityNormalHint": {"message": "Normal spacing always, even in small windows."},
   "densityCompact": {"message": "Compact"},
@@ -1282,7 +1282,7 @@
   "accentMint": {"message": "Mint (default)"},
   "accentBlue": {"message": "Blue"},
   "moreContrastLabel": {"message": "More contrast"},
-  "moreContrastHint": {"message": "Darker text and stronger borders in Nulavio's windows and pages. For websites, use \"Website contrast\" in the browser's settings."},
+  "moreContrastHint": {"message": "Text with more contrast and stronger borders in Nulavio's windows and pages. For websites, use \"Website contrast\" in the browser's settings."},
   "moreContrastSystem": {"message": "Your system already asks for high contrast, and Nulavio uses its colours."},
   "appearanceLocked": {"message": "Some of these options are managed by your administrator."},
   "ambienceLabel": {"message": "Soft background on the new tab"},
@@ -1315,7 +1315,7 @@
   "keyLockProfile": {"message": "Lock profile"},
   "keyAssistant": {"message": "Assistant"},
   "quickActionsLabel": {"message": "Quick actions after \">\" in the address bar"},
-  "routingFallbackLabel": {"message": "Where links from other apps with no rule open"},
+  "routingFallbackLabel": {"message": "Default destination: where links from other apps with no rule open"},
   "routingFallbackLast": {"message": "The last profile used (default)"},
   "routingFallbackAlways": {"message": "Always in $PROFILE$", "placeholders": {"profile": {"content": "$1"}}},
   "routingFallbackAlwaysProtected": {"message": "Always in $PROFILE$ (asks to unlock)", "placeholders": {"profile": {"content": "$1"}}},
@@ -1326,5 +1326,6 @@
   "routingBlockedLaunchDefault": {"message": "$HOST$ came from another app for $PROFILE$, but that profile could not be opened. So it does not open in the wrong profile, Nulavio stopped here.", "placeholders": {"host": {"content": "$1"}, "profile": {"content": "$2"}}},
   "routingWhyDefault": {"message": "Links from other apps with no rule open in $PROFILE$. This is in Nulavio's settings, under Smart routing.", "placeholders": {"profile": {"content": "$1"}}},
   "bandRoutedDefault": {"message": "Opened by the default destination · Change"},
-  "bandRoutedDefaultNamed": {"message": "Opened by the default destination · Change: links from other apps with no rule open in $PROFILE$. Change the destination", "placeholders": {"profile": {"content": "$1"}}}
+  "bandRoutedDefaultNamed": {"message": "Opened by the default destination · Change: links from other apps with no rule open in $PROFILE$. Change the destination", "placeholders": {"profile": {"content": "$1"}}},
+  "profilesButtonNamedKey": {"message": "Profile: $NAME$. Switch profile ($KEYS$)", "placeholders": {"name": {"content": "$1"}, "keys": {"content": "$2"}}}
 }

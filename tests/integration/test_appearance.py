@@ -30,40 +30,6 @@ for (const name of Services.prefs.getChildList("")) {
 }
 return {prefs: out, permissions: Services.perms.all.length};
 """
-# Prefs the engine itself moves on its own while a test runs (session, timestamps, telemetry ids).
-NOISE = (
-    "browser.sessionstore.",
-    "toolkit.startup.",
-    "places.",
-    "app.update.lastUpdateTime.",
-    "browser.laterrun.",
-    "browser.engagement.",
-    "idle.",
-    "storage.vacuum.",
-    "browser.pageActions.",
-    "media.gmp",
-    "extensions.databaseSchema",
-    "browser.newtabpage.activity-stream.impressionId",
-    "browser.migration.",
-    "privacy.purge_trackers.date_in_cookie_database",
-    "browser.download.",
-    "browser.startup.lastColdStartupCheck",
-    "datareporting.",
-    "browser.uiCustomization.state",
-    "sidebar.backupState",
-    "sidebar.old-sidebar.has-used",
-    "browser.toolbars.bookmarks.visibility",
-    "doh-rollout.",
-    "network.trr.blocklist_cleanup_done",
-    "browser.contextual-services.contextId",
-    "nimbus.",
-    "services.",
-    "dom.push.",
-    "trailhead.",
-    "browser.urlbar.",
-    "media.videocontrols.",
-)
-
 COLOURS = """
 const css = getComputedStyle(document.documentElement);
 const v = name => css.getPropertyValue(name).trim();
@@ -71,10 +37,6 @@ return {accent: v('--nv-color-accent-default'), focus: v('--nv-color-focus'), te
   acting: v('--nv-color-security-acting-edge'), privateAccent: v('--nv-color-chrome-private-accent'),
   route: v('--nv-color-route-vertical'), border: v('--nv-color-border-control')};
 """
-
-
-def quiet(prefs: dict) -> dict:
-    return {k: v for k, v in prefs.items() if not k.startswith(NOISE)}
 
 
 @unittest.skipUnless(harness.nulavio_engine(), "the Nulavio build's Shell (NULAVIO_ENGINE)")
@@ -201,7 +163,9 @@ class AppearanceTest(unittest.TestCase):
         )
 
     def test_05_walking_every_option_changes_only_its_own_prefs(self):
-        """UX6 done criterion: no option can turn a protection off."""
+        """UX6 done criterion: no option can turn a protection off. Every value of every appearance option,
+        through Settings: at each step only the options' own prefs differ from the start (no filter: the
+        engine changes no pref by itself during the walk), and at the end nothing does."""
         self.open()
         before = self.snapshot()
         walk = [("density", v) for v in APPEARANCE["density"]["values"]] + [("accent", v) for v in APPEARANCE["accent"]["values"]]
@@ -211,9 +175,7 @@ class AppearanceTest(unittest.TestCase):
             expected = APPEARANCE[option]["prefValues"][APPEARANCE[option]["values"].index(value)]
             self.wait_pref(pref, expected)
             now = self.snapshot()
-            changed = {
-                k for k in set(quiet(now["prefs"])) | set(quiet(before["prefs"])) if now["prefs"].get(k) != before["prefs"].get(k)
-            }
+            changed = {k for k in set(now["prefs"]) | set(before["prefs"]) if now["prefs"].get(k) != before["prefs"].get(k)}
             self.assertLessEqual(changed, OPTION_PREFS, (option, value))
             self.assertEqual(now["permissions"], before["permissions"])
         # The ambience first: "Reduzir transparência" only applies while something is transparent.
@@ -225,9 +187,7 @@ class AppearanceTest(unittest.TestCase):
             self.m.send("WebDriver:ElementClick", {"id": self.m.find_element(f"label:has(> {switch})")})
             self.wait_pref(pref, True)
             now = self.snapshot()
-            changed = {
-                k for k in set(quiet(now["prefs"])) | set(quiet(before["prefs"])) if now["prefs"].get(k) != before["prefs"].get(k)
-            }
+            changed = {k for k in set(now["prefs"]) | set(before["prefs"]) if now["prefs"].get(k) != before["prefs"].get(k)}
             self.assertLessEqual(changed, OPTION_PREFS, switch)
         for switch in ("#more-contrast", "#reduce-transparency", "#newtab-ambience"):
             self.m.send("WebDriver:ElementClick", {"id": self.m.find_element(f"label:has(> {switch})")})
@@ -237,7 +197,7 @@ class AppearanceTest(unittest.TestCase):
         for pref in OPTION_PREFS:
             self.wait_pref(pref, None)
         after = self.snapshot()
-        self.assertEqual(quiet(after["prefs"]), quiet(before["prefs"]))
+        self.assertEqual(after["prefs"], before["prefs"])
 
     def test_06_security_indicators_stay_whole_in_every_variant(self):
         self.m.send("WebDriver:SetWindowRect", {"width": 1366, "height": 768})
@@ -396,6 +356,27 @@ class AppearanceTest(unittest.TestCase):
         self.assertTrue(harness.wait_until(lambda: why() == [False, False, self.message("reduceTransparencyHint")], 10), why())
         self.m.send("WebDriver:ElementClick", {"id": self.m.find_element("label:has(> #more-contrast)")})
         self.assertTrue(harness.wait_until(lambda: why() == [True, True, self.message("reduceTransparencyContrast")], 10), why())
+
+    def test_12_a_value_an_administrator_locked_is_the_one_shown(self):
+        """Review: a locked accent (autoconfig lockPref) paints the window blue; Settings and Shell pages say so too."""
+        self.m.chrome(
+            "Services.prefs.getDefaultBranch('').setStringPref('nulavio.appearance.accent', 'blue');"
+            "Services.prefs.lockPref('nulavio.appearance.accent');"
+        )
+        try:
+            self.open()
+            state = lambda: self.m.execute(  # noqa: E731
+                "const r = document.querySelector('input[name=accent]:checked');"
+                "return [r?.value, r?.disabled, document.documentElement.dataset.accent,"
+                " document.getElementById('appearance-locked').hidden];"
+            )
+            self.assertTrue(harness.wait_until(lambda: state() == ["blue", True, "blue", False], 10), state())
+            self.assertIn("#2D64B5", self.m.chrome(COLOURS)["accent"])
+        finally:
+            self.m.chrome(
+                "Services.prefs.unlockPref('nulavio.appearance.accent');"
+                "Services.prefs.getDefaultBranch('').setStringPref('nulavio.appearance.accent', '');"
+            )
 
     def message(self, key: str) -> str:
         return self.m.execute("return browser.i18n.getMessage(arguments[0]);", [key])

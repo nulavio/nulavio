@@ -282,7 +282,7 @@ export function controlName(control) {
   }
   const label = control.labels?.[0];
   if (label) {
-    const named = [".field__label", ":scope > span > span:not(.hint)", ":scope > span > strong", ":scope > span:not(.hint)"]
+    const named = [".field__label", ":scope > span > span:not(.hint)", ":scope > span > strong", ":scope > span:not(.hint, [aria-hidden])"]
       .map(selector => label.querySelector(selector))
       .find(Boolean);
     return [...(named ?? label).childNodes]

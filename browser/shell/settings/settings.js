@@ -604,7 +604,10 @@ async function renderRouting() {
     ...(state.fallback.missing ? [h("option", { value: String(state.fallback.profileId), text: t("routingFallbackGone") })] : [])
   );
   fallback.value = String(state.fallback.profileId);
-  document.getElementById("routing-fallback-missing").hidden = !state.fallback.missing;
+  // The note says links stop at a warning page: true only while routing is on.
+  const missing = state.fallback.missing && state.enabled;
+  document.getElementById("routing-fallback-missing").hidden = !missing;
+  fallback.setAttribute("aria-describedby", missing ? "routing-fallback-hint routing-fallback-missing" : "routing-fallback-hint");
   const select = document.getElementById("rule-profile");
   const chosen = select.value;
   select.replaceChildren(

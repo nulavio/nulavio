@@ -126,7 +126,7 @@
   "err_is_current": {"message": "Exclua o perfil em uso pela página dele."},
   "err_unexpected": {"message": "Algo deu errado. Nada foi alterado."},
   "profilesButton": {"message": "Perfis"},
-  "profilesButtonNamed": {"message": "Perfil: $NAME$. Trocar de perfil (Alt+Shift+P)", "placeholders": {"name": {"content": "$1"}}},
+  "profilesButtonNamed": {"message": "Perfil: $NAME$. Trocar de perfil", "placeholders": {"name": {"content": "$1"}}},
   "profilesShortcut": {"message": "Abrir o seletor de perfis"},
   "profilesHeading": {"message": "Perfis"},
   "profilesCurrent": {"message": "Perfil atual"},
@@ -1270,7 +1270,7 @@
   "appearanceIntroMore": {"message": "Vale só para este perfil. Os sinais de segurança, a faixa do perfil e as cores da janela privativa nunca mudam, e os sites não veem nenhuma destas escolhas."},
   "densityLabel": {"message": "Densidade da janela"},
   "densityAuto": {"message": "Automático (padrão)"},
-  "densityAutoHint": {"message": "Fica compacto sozinho em janelas pequenas e no layout Foco."},
+  "densityAutoHint": {"message": "Fica compacto sozinho em janelas estreitas."},
   "densityNormal": {"message": "Normal"},
   "densityNormalHint": {"message": "Espaçamento normal sempre, mesmo em janelas pequenas."},
   "densityCompact": {"message": "Compacto"},
@@ -1282,7 +1282,7 @@
   "accentMint": {"message": "Menta (padrão)"},
   "accentBlue": {"message": "Azul"},
   "moreContrastLabel": {"message": "Mais contraste"},
-  "moreContrastHint": {"message": "Textos mais escuros e bordas mais fortes nas janelas e páginas do Nulavio. Para os sites, use “Contraste de sites” nas configurações do navegador."},
+  "moreContrastHint": {"message": "Textos com mais contraste e bordas mais fortes nas janelas e páginas do Nulavio. Para os sites, use “Contraste de sites” nas configurações do navegador."},
   "moreContrastSystem": {"message": "O seu sistema já pede alto contraste, e o Nulavio usa as cores dele."},
   "appearanceLocked": {"message": "Algumas destas opções são gerenciadas pelo administrador."},
   "ambienceLabel": {"message": "Fundo suave na nova aba"},
@@ -1315,7 +1315,7 @@
   "keyLockProfile": {"message": "Bloquear perfil"},
   "keyAssistant": {"message": "Assistente"},
   "quickActionsLabel": {"message": "Ações rápidas depois de “>” na barra de endereço"},
-  "routingFallbackLabel": {"message": "Onde abrem links de outros aplicativos sem regra"},
+  "routingFallbackLabel": {"message": "Destino padrão: onde abrem links de outros aplicativos sem regra"},
   "routingFallbackLast": {"message": "Último perfil usado (padrão)"},
   "routingFallbackAlways": {"message": "Sempre em $PROFILE$", "placeholders": {"profile": {"content": "$1"}}},
   "routingFallbackAlwaysProtected": {"message": "Sempre em $PROFILE$ (pede desbloqueio)", "placeholders": {"profile": {"content": "$1"}}},
@@ -1326,5 +1326,6 @@
   "routingBlockedLaunchDefault": {"message": "$HOST$ veio de outro aplicativo para $PROFILE$, mas esse perfil não pôde ser aberto. Para não abrir no perfil errado, o Nulavio parou aqui.", "placeholders": {"host": {"content": "$1"}, "profile": {"content": "$2"}}},
   "routingWhyDefault": {"message": "Links de outros aplicativos sem regra abrem em $PROFILE$. Isso fica nas Configurações do Nulavio, em Roteamento inteligente.", "placeholders": {"profile": {"content": "$1"}}},
   "bandRoutedDefault": {"message": "Aberto pelo destino padrão · Mudar"},
-  "bandRoutedDefaultNamed": {"message": "Aberto pelo destino padrão · Mudar: links de outros aplicativos sem regra abrem em $PROFILE$. Mudar o destino", "placeholders": {"profile": {"content": "$1"}}}
+  "bandRoutedDefaultNamed": {"message": "Aberto pelo destino padrão · Mudar: links de outros aplicativos sem regra abrem em $PROFILE$. Mudar o destino", "placeholders": {"profile": {"content": "$1"}}},
+  "profilesButtonNamedKey": {"message": "Perfil: $NAME$. Trocar de perfil ($KEYS$)", "placeholders": {"name": {"content": "$1"}, "keys": {"content": "$2"}}}
 }

@@ -71,12 +71,17 @@ async function showCurrentProfile() {
     return;
   }
   await setProfileIcon(current);
-  await browser.action.setTitle({ title: t("profilesButtonNamed", [current.name]) });
+  // The menu's key as the engine has it now (UX6: it can be changed in Settings > Atalhos).
+  const command = (await browser.commands?.getAll?.().catch(() => []))?.find(c => c.name === "_execute_action");
+  await browser.action.setTitle({
+    title: command?.shortcut ? t("profilesButtonNamedKey", [current.name, command.shortcut]) : t("profilesButtonNamed", [current.name]),
+  });
 }
 
 if (browser.nulavioProfiles && browser.action) {
   browser.nulavioProfiles.onChanged.addListener(() => showCurrentProfile().catch(console.error));
   showCurrentProfile().catch(console.error);
+  browser.commands?.onChanged?.addListener(() => showCurrentProfile().catch(console.error));
   darkTheme.addEventListener("change", () => shownProfile && setProfileIcon(shownProfile).catch(console.error));
   browser.windows.onCreated.addListener(win => {
     if (win.incognito && shownProfile) {

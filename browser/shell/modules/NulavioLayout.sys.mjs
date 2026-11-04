@@ -469,6 +469,14 @@ async function applyPreset(target, preset, ticket) {
   if (!Services.prefs.getBoolPref("sidebar.revamp")) fail("layout-unavailable");
   if (SIDEBAR_PREFS.some(pref => Services.prefs.prefIsLocked(pref))) fail("layout-locked");
   if (ticket.cancelled) fail("layout-failed");
+  // UX6: whichever way Foco is chosen (Settings, the first run, the key, a quick action), the Foco
+  // key later returns to the preset it came from.
+  if (preset === "focus" && !Services.prefs.prefIsLocked(PREF_BEFORE_FOCUS)) {
+    const before = (await NulavioLayout.state(target)).preset;
+    if (before === "lateral" || before === "top") {
+      Services.prefs.setStringPref(PREF_BEFORE_FOCUS, before);
+    }
+  }
   // Orientation first: SidebarManager normalizes visibility synchronously.
   // The final explicit visibility then wins, including re-selecting a
   // preset whose prefs already match but whose window was collapsed.
@@ -594,10 +602,7 @@ export const NulavioLayout = {
         say("layoutFocusOff");
         return state;
       }
-      if ((preset === "lateral" || preset === "top") && !Services.prefs.prefIsLocked(PREF_BEFORE_FOCUS)) {
-        Services.prefs.setStringPref(PREF_BEFORE_FOCUS, preset);
-      }
-      const state = await this.apply(target, "focus");
+      const state = await this.apply(target, "focus"); // apply() remembers the preset it came from
       say("layoutFocusOn");
       return state;
     } catch (e) {

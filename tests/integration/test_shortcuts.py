@@ -5,7 +5,6 @@ names a key shows the key the engine has now. Headless, throwaway profile.
 
 from __future__ import annotations
 
-import time
 import unittest
 
 import harness
@@ -60,6 +59,9 @@ class ShortcutsTest(unittest.TestCase):
         )
         self.assertEqual(clashes, [])
 
+    def announced(self) -> str | None:
+        return self.m.chrome("return document.querySelector('#a11y-announcement > label')?.getAttribute('aria-label') ?? null;")
+
     def test_02_the_focus_key_toggles_foco_and_returns_to_the_preset_it_came_from(self):
         focus_key = key_of("alt,control+F")
         for start in ("lateral", "top"):
@@ -68,8 +70,20 @@ class ShortcutsTest(unittest.TestCase):
                 self.assertEqual(self.preset(), start)
                 self.m.chrome(f"{focus_key}.doCommand();")
                 self.assertTrue(harness.wait_until(lambda: self.preset() == "focus", 15), self.preset())
+                self.assertTrue(harness.wait_until(lambda: self.announced() == "Layout Foco ligado.", 5), self.announced())
                 self.m.chrome(f"{focus_key}.doCommand();")
                 self.assertTrue(harness.wait_until(lambda want=start: self.preset() == want, 15), self.preset())
+                self.assertTrue(harness.wait_until(lambda: self.announced() == "Layout Foco desligado.", 5), self.announced())
+        self.apply("lateral")
+
+    def test_02b_foco_chosen_elsewhere_still_returns_to_the_preset_it_came_from(self):
+        """Review: Foco chosen in Settings (or the first run) from Abas no topo; the key goes back to Abas no topo."""
+        self.apply("lateral")
+        self.apply("focus")  # remembered: lateral
+        self.apply("top")
+        self.apply("focus")  # as Settings does it: remembered now as top
+        self.m.chrome(f"{key_of('alt,control+F')}.doCommand();")
+        self.assertTrue(harness.wait_until(lambda: self.preset() == "top", 15), self.preset())
         self.apply("lateral")
 
     def test_03_the_focus_key_explains_a_locked_layout_and_changes_nothing(self):
@@ -77,7 +91,8 @@ class ShortcutsTest(unittest.TestCase):
         self.m.chrome("Services.prefs.lockPref('sidebar.visibility');")
         try:
             self.m.chrome(f"{key_of('alt,control+F')}.doCommand();")
-            time.sleep(1.5)
+            said = "O layout é gerenciado pelo administrador."
+            self.assertTrue(harness.wait_until(lambda: self.announced() == said, 10), self.announced())
             self.assertEqual(self.preset(), "lateral")
         finally:
             self.m.chrome("Services.prefs.unlockPref('sidebar.visibility');")

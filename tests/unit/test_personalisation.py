@@ -12,6 +12,7 @@ import json
 import re
 import sys
 import unittest
+from collections import Counter
 from html.parser import HTMLParser
 from pathlib import Path
 
@@ -74,36 +75,53 @@ GUARDED_PREFIXES = (
 # The only guarded prefs an option may write, each tied to the one kind whose behaviour tests cover it.
 ALLOWED_BY_KIND = {"routing": {"nulavio.routing.fallbackProfile", "nulavio.routing.fallbackPath"}}
 
-# Every Services.prefs writer in the privileged code, by its first argument. A new writer anywhere
-# fails here until it is reviewed: an option could otherwise reach a protection through another module.
+# Every pref writer in the privileged code: each call (method and first argument) with how many times
+# it appears. A new call anywhere, even one that reuses a pinned name, changes a count and fails here
+# until it is reviewed: an option could otherwise reach a protection through another module.
 PREF_WRITERS = {
-    "NulavioConnect.sys.mjs": {"PREF_PREVIOUS"},
-    "NulavioGuard.sys.mjs": {"name"},
+    "NulavioConnect.sys.mjs": {"clearUserPref(PREF_PREVIOUS)": 1, "setStringPref(PREF_PREVIOUS)": 1},
+    "NulavioGuard.sys.mjs": {"clearUserPref(name)": 1, "setBoolPref(name)": 1, "setIntPref(name)": 1, "setStringPref(name)": 1},
     "NulavioLayout.sys.mjs": {
-        '"sidebar.verticalTabs"',
-        '"sidebar.visibility"',
-        "PREF_ADOPTION_VERSION",
-        "PREF_BEFORE_FOCUS",
-        "PREF_CHOICE_PENDING",
-        "PREF_SHELL_START",
+        'setBoolPref("sidebar.verticalTabs")': 2,
+        "setBoolPref(PREF_CHOICE_PENDING)": 4,
+        "setBoolPref(PREF_SHELL_START)": 1,
+        "setIntPref(PREF_ADOPTION_VERSION)": 1,
+        'setStringPref("sidebar.visibility")': 2,
+        "setStringPref(PREF_BEFORE_FOCUS)": 1,
     },
-    "NulavioPasswords.sys.mjs": {"name", "PREF_DISMISSED"},
-    # Only the declared pref of an option in options.json (test_the_appearance_writer_takes_its_pref_from_the_list).
-    "NulavioPersonalise.sys.mjs": {"pref"},
+    "NulavioPasswords.sys.mjs": {"clearUserPref(PREF_DISMISSED)": 1, "setBoolPref(name)": 1, "setStringPref(PREF_DISMISSED)": 2},
+    "NulavioPersonalise.sys.mjs": {
+        "clearUserPref(pref)": 1,
+        "setBoolPref(pref)": 1,
+        "setIntPref(pref)": 1,
+        "setStringPref(pref)": 1,
+    },
     "NulavioPrivacy.sys.mjs": {
-        '"browser.contentblocking.category"',
-        '"network.trr.custom_uri"',
-        '"network.trr.mode"',
-        '"network.trr.uri"',
-        "PREF_DNS_CHOSEN",
-        "PREF_FIRSTRUN",
-        "PREF_SEEDED",
+        "setBoolPref(PREF_DNS_CHOSEN)": 2,
+        'setIntPref("network.trr.mode")': 1,
+        "setIntPref(PREF_SEEDED)": 1,
+        'setStringPref("browser.contentblocking.category")': 1,
+        'setStringPref("network.trr.custom_uri")': 1,
+        'setStringPref("network.trr.uri")': 1,
+        "setStringPref(PREF_FIRSTRUN)": 1,
     },
-    "NulavioProfiles.sys.mjs": {"PREF_COLORS", "PREF_COLOR_MIGRATION"},
-    "NulavioRouting.sys.mjs": {"ENABLED_PREF", "FALLBACK_PATH_PREF", "FALLBACK_PREF", "IN_PAGE_PREF", "RULES_PREF"},
-    "NulavioSearch.sys.mjs": {"PREF_MIGRATION", "PREF_OPTIN", "pref"},
+    "NulavioProfiles.sys.mjs": {"setStringPref(PREF_COLORS)": 2, "setStringPref(PREF_COLOR_MIGRATION)": 3},
+    "NulavioRouting.sys.mjs": {
+        "clearUserPref(FALLBACK_PATH_PREF)": 1,
+        "clearUserPref(FALLBACK_PREF)": 1,
+        "setBoolPref(ENABLED_PREF)": 1,
+        "setBoolPref(IN_PAGE_PREF)": 1,
+        "setIntPref(FALLBACK_PREF)": 1,
+        "setStringPref(FALLBACK_PATH_PREF)": 1,
+        "setStringPref(RULES_PREF)": 1,
+    },
+    "NulavioSearch.sys.mjs": {"setBoolPref(pref)": 1, "setIntPref(PREF_MIGRATION)": 1, "setStringPref(PREF_OPTIN)": 1},
 }
-WRITER = re.compile(r"\.(?:set(?:Bool|Int|String|Char)Pref|clearUserPref|lockPref|unlockPref)\(\s*([^,)]+)")
+# Every nsIPrefBranch mutator, and Preferences.sys.mjs.
+WRITER = re.compile(
+    r"(?:\.(set(?:Bool|Int|String|Char)Pref|setComplexValue|clearUserPref|lockPref|unlockPref|deleteBranch|resetBranch)"
+    r"|\bPreferences\.(set|reset|lock|unlock))\(\s*([^,)]+)"
+)
 PRIVILEGED_CODE = (SHELL / "modules", ROOT / "browser" / "branding" / "nulavio", SHELL / "experiments", SHELL / "background.js")
 
 
@@ -232,16 +250,30 @@ class OptionListTest(unittest.TestCase):
 
     def test_the_guarded_set_reads_every_source(self):
         names = guarded_names()
-        # One from each source, so a parser that silently returns nothing fails here.
+        rules = json.loads((ROOT / "browser" / "config" / "guard-rules.json").read_text(encoding="utf-8"))["rules"]
+        sources = {
+            "watched": watched_prefs(),
+            "forbidden": list(FORBIDDEN),
+            "guard-rules": [r["pref"] for r in rules],
+            "sensitive": sensitive_prefs(),
+            "baseline": [p.name for p in profile.baseline_prefs() if p.category not in {"ui", "theme"}],
+        }
+        for source, members in sources.items():
+            with self.subTest(source=source):
+                self.assertGreater(len(members), 5, "a parser that returns nothing would hide a whole source")
+                for name in members:
+                    self.assertTrue(is_guarded(name, names), name)
+        # Names only a source covers (no prefix does): if that source stopped being read, they would pass.
         for name in (
-            "network.proxy.type",  # WATCHED_PREFS
-            "security.OCSP.enabled",  # FORBIDDEN
-            "security.sandbox.content.level",  # guard-rules.json
-            "privacy.sanitize.sanitizeOnShutdown",  # SENSITIVE_PREFS
+            "browser.formfill.enable",
+            "app.normandy.enabled",
+            "app.shield.optoutstudies.enabled",
+            "nimbus.rollouts.enabled",
         ):
-            self.assertTrue(is_guarded(name, names), name)
-        self.assertGreater(len(sensitive_prefs()), 5)
-        self.assertGreater(len(watched_prefs()), 10)
+            with self.subTest(name=name):
+                self.assertFalse(is_guarded(name, set()), "covered by a prefix: not a probe of its source")
+                self.assertTrue(is_guarded(name, names))
+                self.assertEqual(violations([{"id": "x", "kind": "cosmetic", "prefs": [name]}], names), [f"x: {name}"])
 
     def test_every_option_control_is_marked_both_ways(self):
         declared = {o["id"]: o for o in options()}
@@ -385,13 +417,24 @@ class RoutingFallbackTest(unittest.TestCase):
 
 class PrefWriterInventoryTest(unittest.TestCase):
     def test_every_privileged_pref_writer_is_pinned(self):
-        found: dict[str, set[str]] = {}
+        found: dict[str, dict[str, int]] = {}
         for place in PRIVILEGED_CODE:
             files = [place] if place.is_file() else sorted(p for p in place.rglob("*") if p.suffix in {".mjs", ".js"})
             for path in files:
-                for argument in WRITER.findall(path.read_text(encoding="utf-8")):
-                    found.setdefault(path.name, set()).add(argument.strip())
+                calls = Counter(
+                    f"{m.group(1) or 'Preferences.' + m.group(2)}({m.group(3).strip()})"
+                    for m in WRITER.finditer(path.read_text(encoding="utf-8"))
+                )
+                if calls:
+                    found[path.name] = dict(calls)
         self.assertEqual(found, PREF_WRITERS)
+
+    def test_the_appearance_module_writes_only_inside_set(self):
+        source = (SHELL / "modules" / "NulavioPersonalise.sys.mjs").read_text(encoding="utf-8")
+        body = source[source.index("  async set(id, value) {") : source.index("  /** Settings > Atalhos")]
+        self.assertEqual(len(WRITER.findall(body)), 4)
+        self.assertEqual(len(WRITER.findall(source)), 4)
+        self.assertEqual(re.findall(r"\bconst \[?pref\]? =", source), ["const [pref] =", "const [pref] ="])
 
 
 if __name__ == "__main__":
