@@ -230,3 +230,24 @@
   --nv-translucency-frost-opacityFloor: 0.88;
   }
 }
+@media -moz-pref("nulavio.appearance.accent", "blue") {
+  :root {
+    --nv-color-accent-default: light-dark(#2D64B5, #6AA7F4);
+    --nv-color-accent-tint: light-dark(#E8F0FB, #172B4D);
+    --nv-color-control-selected-edge: light-dark(#2D64B5, #6AA7F4);
+    --nv-color-selection-bg: light-dark(#2D64B5, #6AA7F4);
+    --nv-color-route-vertical: light-dark(#2D64B5, #6AA7F4);
+  }
+}
+@media -moz-pref("nulavio.appearance.moreContrast") {
+  :root {
+    --nv-color-text-secondary: light-dark(#23495A, #E2EBEE);
+    --nv-color-text-muted: light-dark(#23495A, #E2EBEE);
+    --nv-color-border-subtle: light-dark(#6B8794, #6E93A2);
+    --nv-color-border-control: light-dark(#3A6273, #8FAAB5);
+    --nv-color-border-separator: light-dark(#6B8794, #6E93A2);
+    --nv-color-chrome-tabText: light-dark(#23495A, #E2EBEE);
+    --nv-color-chrome-icon: light-dark(#23495A, #E2EBEE);
+    --nv-color-surface-frost: light-dark(#FFFFFF, #15293A);
+  }
+}

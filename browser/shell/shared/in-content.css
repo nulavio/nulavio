@@ -70,6 +70,38 @@
         --page-nav-button-background-color-selected: light-dark(#0F7A68, #0E3B33) !important;
         --page-nav-button-text-color-selected: light-dark(#FFFFFF, #6FE0C5) !important;
       }
+      @media -moz-pref("nulavio.appearance.accent", "blue") {
+        :root:not([lwtheme], .private) {
+          --color-violet-0: #F4F8FD !important;
+          --color-violet-10: #E8F0FB !important;
+          --color-violet-20: #B9D3F7 !important;
+          --color-violet-30: #6AA7F4 !important;
+          --color-violet-40: #4C86D4 !important;
+          --color-violet-50: #2D64B5 !important;
+          --color-violet-60: #244D8B !important;
+          --color-violet-70: #1E3C6C !important;
+          --color-violet-80: #172B4D !important;
+          --color-violet-90: #0E1A2D !important;
+          --color-accent-primary: light-dark(#2D64B5, #6AA7F4) !important;
+          --color-accent-primary-hover: light-dark(#244D8B, #B9D3F7) !important;
+          --color-accent-primary-active: light-dark(#1E3C6C, #E8F0FB) !important;
+          --link-color: light-dark(#2D64B5, #6AA7F4) !important;
+          --link-color-hover: light-dark(#2D64B5, #6AA7F4) !important;
+          --link-color-active: light-dark(#2D64B5, #6AA7F4) !important;
+          --page-nav-button-background-color-selected: light-dark(#2D64B5, #172B4D) !important;
+          --page-nav-button-text-color-selected: light-dark(#FFFFFF, #6AA7F4) !important;
+        }
+        :root:not([lwtheme], .private) moz-page-nav-button {
+          --page-nav-button-background-color-selected: light-dark(#2D64B5, #172B4D) !important;
+          --page-nav-button-text-color-selected: light-dark(#FFFFFF, #6AA7F4) !important;
+        }
+      }
+      @media -moz-pref("nulavio.appearance.moreContrast") {
+        :root:not([lwtheme], .private) {
+          --border-color: light-dark(#6B8794, #6E93A2) !important;
+          --border-color-card: light-dark(#6B8794, #6E93A2) !important;
+        }
+      }
       html.private {
         --background-color-canvas: #060C14 !important;
       }

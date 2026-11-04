@@ -587,3 +587,69 @@
   --nv-translucency-frost-opacity: 0.86;
   --nv-translucency-frost-opacityFloor: 0.86;
 }
+
+/* UX6 appearance variants: set by lib/appearance.js from the person's options. */
+:root[data-accent="blue"],
+:root[data-accent="blue"] [data-theme="light"] {
+  --nv-color-accent-default: #2D64B5;
+  --nv-color-accent-tint: #E8F0FB;
+  --nv-color-control-selected-edge: #2D64B5;
+  --nv-color-selection-bg: #2D64B5;
+  --nv-color-route-vertical: #2D64B5;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root[data-accent="blue"]:not([data-theme="light"]) {
+    --nv-color-accent-default: #6AA7F4;
+    --nv-color-accent-tint: #172B4D;
+    --nv-color-control-selected-edge: #6AA7F4;
+    --nv-color-selection-bg: #6AA7F4;
+    --nv-color-route-vertical: #6AA7F4;
+  }
+}
+
+:root[data-accent="blue"][data-theme="dark"],
+:root[data-accent="blue"] [data-theme="dark"] {
+  --nv-color-accent-default: #6AA7F4;
+  --nv-color-accent-tint: #172B4D;
+  --nv-color-control-selected-edge: #6AA7F4;
+  --nv-color-selection-bg: #6AA7F4;
+  --nv-color-route-vertical: #6AA7F4;
+}
+
+:root[data-contrast="more"],
+:root[data-contrast="more"] [data-theme="light"] {
+  --nv-color-text-secondary: #23495A;
+  --nv-color-text-muted: #23495A;
+  --nv-color-border-subtle: #6B8794;
+  --nv-color-border-control: #3A6273;
+  --nv-color-border-separator: #6B8794;
+  --nv-color-chrome-tabText: #23495A;
+  --nv-color-chrome-icon: #23495A;
+  --nv-color-surface-frost: #FFFFFF;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root[data-contrast="more"]:not([data-theme="light"]) {
+    --nv-color-text-secondary: #E2EBEE;
+    --nv-color-text-muted: #E2EBEE;
+    --nv-color-border-subtle: #6E93A2;
+    --nv-color-border-control: #8FAAB5;
+    --nv-color-border-separator: #6E93A2;
+    --nv-color-chrome-tabText: #E2EBEE;
+    --nv-color-chrome-icon: #E2EBEE;
+    --nv-color-surface-frost: #15293A;
+  }
+}
+
+:root[data-contrast="more"][data-theme="dark"],
+:root[data-contrast="more"] [data-theme="dark"] {
+  --nv-color-text-secondary: #E2EBEE;
+  --nv-color-text-muted: #E2EBEE;
+  --nv-color-border-subtle: #6E93A2;
+  --nv-color-border-control: #8FAAB5;
+  --nv-color-border-separator: #6E93A2;
+  --nv-color-chrome-tabText: #E2EBEE;
+  --nv-color-chrome-icon: #E2EBEE;
+  --nv-color-surface-frost: #15293A;
+}

@@ -23,7 +23,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from contrast import flatten, resolve, rgba  # noqa: E402
+from contrast import accent_separation, flatten, resolve, rgba, with_overrides  # noqa: E402
 
 TOKENS = ROOT / "docs" / "brand" / "tokens.json"
 OUTPUT = ROOT / "browser" / "startpage" / "tokens.css"
@@ -158,6 +158,114 @@ def require_both_themes(data: dict) -> None:
                 raise TokenError(f"frost fallback must be solid: {theme}")
 
 
+# UX6 appearance variants ($extensions["nulavio.variants"]): each value overrides tokens by path, and
+# every token whose resolved value changes is re-emitted for that value. Protected tokens never change.
+PROTECTED = (
+    "security",
+    "status",
+    "focus",
+    "focusOnAccent",
+    "identity",
+    "identityTile",
+    "identityGlyph",
+    "group",
+    "fullscreen",
+    "band",
+    "downloads",
+    "chrome.private",
+)
+SEPARATION_MIN = 0.08  # OKLab distance from identity, status and private colours (mint itself: 0.082)
+
+
+def variant_specs(data: dict) -> dict[str, dict]:
+    spec = data.get("$extensions", {}).get("nulavio.variants", {})
+    return {name: value for name, value in spec.items() if name != "comment"}
+
+
+def changed_paths(data: dict, overrides: dict[str, str]) -> list[str]:
+    """Every non-primitive token whose resolved value differs once the overrides apply."""
+    base, after = flatten(data), flatten(with_overrides(data, overrides))
+    return [p for p in base if not p.startswith("color.primitive.") and resolve(base, p) != resolve(after, p)]
+
+
+def is_protected(path: str) -> bool:
+    semantic = themed_path(path)[1]
+    return any(semantic == f"color.{name}" or semantic.startswith(f"color.{name}.") for name in PROTECTED)
+
+
+def validate_variants(data: dict) -> None:
+    tokens = flatten(data)
+    seen: dict[str, str] = {}
+    for dimension, spec in variant_specs(data).items():
+        if set(spec) - {"pref", "attribute", "base", "scale", "values"} or not spec.get("values"):
+            raise TokenError(f"variant {dimension}: invalid fields")
+        for name, value in spec["values"].items():
+            label = f"variant {dimension}={name}"
+            if name == spec["base"] or not name.isalpha() or not value.get("tokens"):
+                raise TokenError(f"{label}: invalid name or no tokens")
+            if not isinstance(value.get("prefValue"), (str, bool)) or value["prefValue"] is False:
+                raise TokenError(f"{label}: prefValue must be a string or true")
+            overrides = value["tokens"]
+            for path in overrides:
+                if path not in tokens or tokens[path].get("$type") != "color" or path.startswith("color.primitive."):
+                    raise TokenError(f"{label}: {path} is not a semantic colour token")
+                theme = themed_path(path)[0]
+                other = "dark" if theme == "light" else "light"
+                if theme is None or ".".join(other if p == theme else p for p in path.split(".")) not in overrides:
+                    raise TokenError(f"{label}: {path} is overridden for one theme only")
+            try:
+                changed = changed_paths(data, overrides)
+            except ValueError as error:
+                raise TokenError(f"{label}: {error}") from error
+            protected = [p for p in changed if is_protected(p)]
+            if protected:
+                raise TokenError(f"{label} reaches protected tokens: {', '.join(protected)}")
+            for path in changed:
+                if seen.get(path, dimension) != dimension:
+                    raise TokenError(f"{label} and variant {seen[path]} both change {path}")
+                seen[path] = dimension
+            if dimension == "accent":
+                for theme, nearest, distance in accent_separation(with_overrides(data, overrides)):
+                    if distance < SEPARATION_MIN:
+                        raise TokenError(f"{label}: accent.default too close to {nearest} in {theme} ({distance:.3f})")
+
+
+def variant_values(data: dict, overrides: dict[str, str]) -> dict[str, dict[str | None, str]]:
+    """{semantic: {theme: css value}} for every token the overrides change, in both themes."""
+    after = flatten(with_overrides(data, overrides))
+    semantics = {themed_path(p)[1] for p in changed_paths(data, overrides)}
+    out: dict[str, dict[str | None, str]] = {}
+    for path, token in after.items():
+        theme, semantic = themed_path(path)
+        if semantic in semantics:
+            out.setdefault(semantic, {})[theme] = css_value(token, after, path)
+    return out
+
+
+def variant_condition(spec: dict, value: dict) -> str:
+    if value["prefValue"] is True:
+        return f'-moz-pref("{spec["pref"]}")'
+    return f'-moz-pref("{spec["pref"]}", "{value["prefValue"]}")'
+
+
+def build_variants(data: dict) -> str:
+    """Shell pages: the attribute on <html> picks the variant; [data-theme] subtrees keep it."""
+    css = []
+    for spec in variant_specs(data).values():
+        for name, value in spec["values"].items():
+            values = variant_values(data, value["tokens"])
+            sel = f':root[{spec["attribute"]}="{name}"]'
+
+            def body(theme: str, indent: str = "  ", values: dict = values) -> str:
+                return "\n".join(f"{indent}{var_name(s)}: {v.get(theme, v.get(None))};" for s, v in values.items())
+
+            css.append(f'{sel},\n{sel} [data-theme="light"] {{\n{body("light")}\n}}\n')
+            dark = body("dark", "    ")
+            css.append(f'@media (prefers-color-scheme: dark) {{\n  {sel}:not([data-theme="light"]) {{\n{dark}\n  }}\n}}\n')
+            css.append(f'{sel}[data-theme="dark"],\n{sel} [data-theme="dark"] {{\n{body("dark")}\n}}\n')
+    return "\n".join(css)
+
+
 def build(data: dict) -> str:
     require_both_themes(data)
     tokens = flatten(data)
@@ -178,6 +286,10 @@ def build(data: dict) -> str:
     # Element-level selectors let a subtree force a theme (mockups, previews).
     lines.append('[data-theme="dark"] {\n  color-scheme: dark;\n' + "\n".join(themes["dark"]) + "\n}\n")
     lines.append('[data-theme="light"] {\n  color-scheme: light;\n' + "\n".join(themes["light"]) + "\n}\n")
+    validate_variants(data)
+    variants = build_variants(data)
+    if variants:
+        lines.append("/* UX6 appearance variants: set by lib/appearance.js from the person's options. */\n" + variants)
     return "\n".join(lines)
 
 
@@ -202,6 +314,12 @@ def build_chrome(data: dict) -> str:
     css = HEADER + ":root {\n" + "\n".join(shared + lines + themes["light"]) + "\n}\n"
     if themes["dark"]:
         css += "@media (prefers-color-scheme: dark) {\n  :root {\n" + "\n".join(themes["dark"]) + "\n  }\n}\n"
+    validate_variants(data)
+    for spec in variant_specs(data).values():
+        for value in spec["values"].values():
+            values = variant_values(data, value["tokens"])
+            body = "\n".join(f"    {var_name(s)}: light-dark({v['light']}, {v['dark']});" for s, v in values.items())
+            css += f"@media {variant_condition(spec, value)} {{\n  :root {{\n{body}\n  }}\n}}\n"
     return css
 
 
@@ -284,18 +402,12 @@ BRAND_RULES = (
 )
 
 
-def build_in_content(data: dict) -> str:
-    """Internal about: pages: the engine's accent, focus, link and canvas in Nulavio's colours.
-
-    An agent sheet scoped by exact about: URLs: web pages never see --nv-* or any of these
-    values (no fingerprinting surface). It steps aside for forced colours, a contrast
-    preference, an installed theme and nulavio.horizon.enabled=false, like sidebar-focus.css.
-    """
-    require_both_themes(data)
-    tokens = flatten(data)
+def in_content_lines(tokens: dict[str, dict], scale: str) -> list[str]:
+    """The engine variables about: pages get, with the accent's primitive scale (mint, or a variant's)."""
 
     def prim(name: str) -> str:
-        return resolve(tokens, f"color.primitive.{name}")
+        family, step = name.split(".")
+        return resolve(tokens, f"color.primitive.{scale if family == 'mint' else family}.{step}")
 
     def pair(path: str) -> str:
         return f"light-dark({resolve(tokens, f'color.light.{path}')}, {resolve(tokens, f'color.dark.{path}')})"
@@ -326,11 +438,46 @@ def build_in_content(data: dict) -> str:
         f"--page-nav-button-text-color-selected: light-dark({resolve(tokens, 'color.light.accent.on')}, "
         f"{resolve(tokens, 'color.dark.accent.default')})",
     ]
+    return lines
+
+
+def build_in_content(data: dict) -> str:
+    """Internal about: pages: the engine's accent, focus, link and canvas in Nulavio's colours.
+
+    An agent sheet scoped by exact about: URLs: web pages never see --nv-* or any of these
+    values (no fingerprinting surface). It steps aside for forced colours, a contrast
+    preference, an installed theme and nulavio.horizon.enabled=false, like sidebar-focus.css.
+    """
+    require_both_themes(data)
+    validate_variants(data)
+    tokens = flatten(data)
+    base_scale = variant_specs(data).get("accent", {}).get("scale", "mint")
+    lines = in_content_lines(tokens, base_scale)
     body = "".join(f"        {line} !important;\n" for line in lines)
     # UX3H: moz-page-nav-button re-declares the two selected-entry variables on its own
     # :host, so a value on :root never reached Settings' active entry (still solid mint in
     # dark). Set them on the element itself; the agent sheet's !important wins over :host.
     nav = "".join(f"        {line} !important;\n" for line in lines if line.startswith("--page-nav-button-"))
+
+    # UX6: an appearance variant re-declares only the engine variables whose value it changes.
+    variants = ""
+    for spec in variant_specs(data).values():
+        for value in spec["values"].values():
+            after = flatten(with_overrides(data, value["tokens"]))
+            changed = [line for line in in_content_lines(after, value.get("scale", base_scale)) if line not in lines]
+            if not changed:
+                continue
+            root = "".join(f"          {line} !important;\n" for line in changed)
+            buttons = "".join(f"          {line} !important;\n" for line in changed if line.startswith("--page-nav-button-"))
+            variants += (
+                f"      @media {variant_condition(spec, value)} {{\n        :root:not([lwtheme], .private) {{\n{root}        }}\n"
+            )
+            if buttons:
+                variants += f"        :root:not([lwtheme], .private) moz-page-nav-button {{\n{buttons}        }}\n"
+            variants += "      }\n"
+
+    def pair(path: str) -> str:
+        return f"light-dark({resolve(tokens, f'color.light.{path}')}, {resolve(tokens, f'color.dark.{path}')})"
 
     # UX3G A2: the private-browsing page on the private chrome's navy, not the engine's violet.
     def dark(path: str) -> str:
@@ -372,6 +519,7 @@ def build_in_content(data: dict) -> str:
         + "      :root:not([lwtheme]) moz-page-nav-button {\n"
         + nav
         + "      }\n"
+        + variants
         + private
         + "    }\n    }\n  }\n}\n"
     )
