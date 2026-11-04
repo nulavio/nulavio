@@ -601,9 +601,11 @@ async function renderRouting() {
     ...people.profiles
       .filter(p => p.id !== null)
       .map(p => h("option", { value: String(p.id), text: t(p.encrypted ? "routingFallbackAlwaysProtected" : "routingFallbackAlways", [p.name]) })),
-    ...(state.fallback.missing ? [h("option", { value: String(state.fallback.profileId), text: t("routingFallbackGone") })] : [])
+    // A deleted destination keeps its own entry: a profile created later can take the same id, and
+    // choosing this entry must never make that profile the destination.
+    ...(state.fallback.missing ? [h("option", { value: "missing", disabled: true, text: t("routingFallbackGone") })] : [])
   );
-  fallback.value = String(state.fallback.profileId);
+  fallback.value = state.fallback.missing ? "missing" : String(state.fallback.profileId);
   // The note says links stop at a warning page: true only while routing is on.
   const missing = state.fallback.missing && state.enabled;
   document.getElementById("routing-fallback-missing").hidden = !missing;
@@ -624,9 +626,11 @@ function setUpRouting() {
   document.getElementById("routing-in-page").addEventListener("change", event =>
     run(() => routing.setInPage(event.target.checked), { done: t("doneSaved") })
   );
-  document.getElementById("routing-fallback").addEventListener("change", event =>
-    run(() => routing.setFallback(Number(event.target.value)), { done: t("doneSaved") })
-  );
+  document.getElementById("routing-fallback").addEventListener("change", event => {
+    if (event.target.value !== "missing") {
+      run(() => routing.setFallback(Number(event.target.value)), { done: t("doneSaved") });
+    }
+  });
   const form = document.getElementById("add-rule");
   form.addEventListener("submit", async event => {
     event.preventDefault();

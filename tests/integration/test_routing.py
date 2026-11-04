@@ -1023,6 +1023,30 @@ class RoutingTest(unittest.TestCase):
         self.assertTrue(blocked, self.tabs(work))
         time.sleep(1)
         self.assertEqual(self.hits("/page/to-the-heir"), 0)
+        # Settings (review UX7-3): the deleted destination keeps its own entry, the heir is not shown as
+        # chosen, and the entry for the deleted profile cannot make the heir the destination.
+        url = self.m.chrome("return WebExtensionPolicy.getByID('shell@nulavio.net').getURL('settings/settings.html#routing');")
+        self.m.navigate(url)
+        harness.wait_until(lambda: self.m.execute("return document.documentElement.dataset.ready === 'true';"), timeout=15)
+        select = self.m.execute(
+            "const s = document.getElementById('routing-fallback');"
+            "return {value: s.value, chosen: s.selectedOptions[0].textContent,"
+            " heir: [...s.options].find(o => o.textContent === 'Sempre em Herdeiro')?.selected,"
+            " goneDisabled: s.querySelector('option[value=\"missing\"]')?.disabled};"
+        )
+        self.assertEqual(select["value"], "missing", select)
+        self.assertEqual(select["chosen"], "Um perfil que não existe mais", select)
+        self.assertIs(select["heir"], False, select)
+        self.assertIs(select["goneDisabled"], True, select)
+        pick = (
+            "const s = document.getElementById('routing-fallback'); s.value = arguments[0]; s.dispatchEvent(new Event('change'));"
+        )
+        self.m.execute(pick, ["missing"])
+        time.sleep(1)
+        self.assertTrue(self.call("return (await R.state()).fallback.missing;"), "the deleted entry chose the heir")
+        self.m.execute(pick, [str(reused)])
+        state = lambda: self.call("return (await R.state()).fallback;")  # noqa: E731
+        self.assertTrue(harness.wait_until(lambda: state()["missing"] is False and state()["profileId"] == reused, timeout=10))
         self.call("await R.setFallback(0);")
 
 
