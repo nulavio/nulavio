@@ -12,8 +12,8 @@ Rule for every step: build on the Nulavio build, run the full integration suite 
 | M3 Nulavio Home | Fix the "Extensão (Nulavio Shell)" identity chip on the new tab; favourites and recent sessions (opt-in, nothing personal shown by default); default top sites without Mozilla entries; new-tab budget ≤ 150 ms median (today 121 ms) | Next |
 | M4 Privacy Center and menus | Shell page reading real signals (content-blocking log, permissions, exceptions, site data, connection) through the upstream APIs; app menu and panels in Horizon; workspaces data-model proposal | **Per-site part done (S14)**: the engine's trust panel is the per-site panel (it already reads the content-blocking log, the per-site switch and site data); Settings → Site exceptions lists every exception. Menus and panel tokens: planned |
 | M5 Settings and Providers | Organised sections; Providers page showing only real integrations (extension installed and enabled, native-messaging host registered); no fake toggles | Planned |
-| M6 Onboarding, motion, states | Flow A (theme, tab layout, search engine, privacy, passwords); loading motion; error-page styling with criteria untouched | Planned |
-| M7 QA | Real KDE Wayland and GNOME review, Orca screen-reader pass, 125/150 % on hardware, performance budget in CI | Planned |
+| M6 Onboarding, motion, states | Flow A (theme, tab layout, search engine, privacy, passwords); loading motion; error-page styling with criteria untouched | Folded into UX3E/UX4 (the first run on the new tab) and UX7 (motion); no loading motion in 1.0 |
+| M7 QA | Real KDE Wayland and GNOME review, Orca screen-reader pass, 125/150 % on hardware, performance budget in CI | UX7: a frame-time budget on Xvfb (`scripts/research/frame_scene.py`); real-desktop passes stay with the maintainer |
 
 ## Decisions for the maintainer
 

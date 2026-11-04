@@ -44,7 +44,7 @@ Six fills a person picks for a profile: lima `#C5E384`, sky `#8CCBF5`, violet `#
 | Type | UI font = desktop font (`system-ui`, Noto Sans, Cantarell: follows KDE/GNOME scaling); pages: Inter/Noto; mono: JetBrains Mono/Noto Sans Mono. Sizes 12, 13, 14, 16, 20, 24, 32, 44 px; weights 400/500/600 |
 | Radius | xs 4, sm 6, **md 10** (tabs, buttons), **lg 14** (address bar), xl 20, pill |
 | Elevation | 1: `0 1px 2px` (cards); 2: `0 4px 12px` (popovers); 3: `0 12px 32px` (dialogs). The selected tab keeps Firefox's own shadow |
-| Motion | fast 120 ms, base 180 ms, slow 280 ms; easing `cubic-bezier(0.2, 0, 0, 1)`; nothing animates under `prefers-reduced-motion` |
+| Motion | fast 120, base 180, slow 280, expand 220, collapse 160, fade 80 and spin 900 ms; easings standard `cubic-bezier(0.2, 0, 0, 1)`, enter `(0, 0, 0, 1)` and exit `(0.3, 0, 1, 1)`. Under `prefers-reduced-motion` nothing moves, but what appears after a delay still appears; security cues never move (`security.duration` 0). See "UX7: motion and performance budget" |
 | Icons | 16, 20, 24 px; 1.75 px stroke (Nulavio pages); the chrome keeps Firefox's icon set |
 
 ## Sizes and densities (`size.*`)

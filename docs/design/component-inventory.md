@@ -1,14 +1,15 @@
 # Component inventory: current vs Horizon
 
-Status per component of the browser window and Nulavio's own pages. "Upstream" means Firefox 158's component, unmodified. Milestones refer to the [migration plan](migration-plan.md).
+Status per component of the browser window and Nulavio's own pages. "Upstream" means Firefox 159's component, unmodified. Milestones refer to the [migration plan](migration-plan.md).
 
-| Component | Upstream implementation | Status (2026-10-25) | Next |
+| Component | Upstream implementation | Status (2026-10-25; motion rows 2026-11-04) | Next |
 |---|---|---|---|
 | **Tab strip** | `tabbrowser-tabs`, `tab.tabbrowser-tab` | **Horizon**: tones, 10 px radius, 34/30/41 px heights, background-tab text colour | Tab hover preview, overflow arrows (M2) |
 | Selected tab | `[visuallyselected]` | **Horizon**: raised surface + route mark | — |
 | Pinned tab | `[pinned]` | Horizon tokens; mark centred | — |
 | Sound / muted tab | `.tab-audio-button`, `[soundplaying]`, `[muted]` | Upstream icons, Horizon colours | — |
-| Loading tab | `.tab-throbber`, `[busy]` | Throbber in accent | Nulavio loading motion with the symbol's dots (M6, reduced-motion aware) |
+| Loading tab | `.tab-throbber`, `[busy]` | Throbber in accent | No Nulavio loading motion in 1.0 (UX7) |
+| Dialog, create sheet, toast, chips (Shell) | — | UX7: plain dialogs (and backdrop), the create sheet and "ok" toasts arrive (opacity and an 8/4 px rise, base/fast on the enter curve); the new tab's profile chip arrives once painted; closing is instant; critical and destructive dialogs, warning/error toasts and the temporary chip never move | — |
 | Crashed tab | `[crashed]` | Upstream | Review copy and icon (M6) |
 | Tab groups | Native `tab-group`, editor, list and address-bar actions | UX3B: neutral names, token swatches/thin lines, native semantics; new reserved colours filtered, current legacy value preserved | Physical KDE/Orca checks; see [release evidence](screenshots/ux3b/release-verification.json) |
 | Containers | `.tab-context-line`, usercontext | Upstream | — |

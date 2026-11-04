@@ -28,7 +28,7 @@ Nulavio is complete when all of the following are verified (tests or recorded ev
 
 | Area | State (verified) |
 |---|---|
-| Engine | Firefox 159.0 source build (Track B), 7 patches, rootless container build; Track A launcher over distribution Firefox |
+| Engine | Firefox 159.0 source build (Track B), 8 patches, rootless container build; Track A launcher over distribution Firefox |
 | Shell | Built-in add-on with privileged modules: new tab, download warning, search, profiles, Smart Profile Routing (links from apps, typed addresses, link menu) |
 | Profiles | Engine profile groups (`SelectableProfileService`); isolation by separate instances and directories; **no encryption at rest yet** |
 | Guard | Launcher pre-launch audit (`guard.py`); refuses profiles with automation prefs (Marionette, remote agent) |

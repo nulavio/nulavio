@@ -15,7 +15,7 @@ No React, QML or other framework is added to the chrome. Shell pages are plain H
 
 ## How the window theme overrides Firefox without forking it
 
-Firefox 158 defines its look as **design tokens in CSS cascade layers**:
+Firefox 158 and 159 define their look as **design tokens in CSS cascade layers**:
 
 ```
 tokens-foundation < tokens-browser-theme < tokens-foundation-brand
@@ -51,22 +51,22 @@ Rules in `horizon.css`, enforced by `tests/unit/test_horizon_theme.py`:
 
 The launcher used to copy the preview `userChrome.css` into every profile. It uses `!important` and would override the built-in theme. With the Nulavio engine (`Engine.builtin_theme`), the launcher no longer installs it. It removes only the copy it wrote itself, identified by its header, and never a file the user made.
 
-## Extension points verified in the 158.0.1 source
+## Extension points verified in the 159.0 source (2026-11-04)
 
 | Area | Real entry points | Use by the Shell |
 |---|---|---|
 | Window document | `browser/base/content/browser.xhtml`, `navigator-toolbox.inc.xhtml` (`#navigator-toolbox`, `#TabsToolbar`, `#nav-bar`, `#urlbar-container`, `#PersonalToolbar`), `browser-box.inc.xhtml` | Stylesheet link (patch 0003) |
 | Skin and tokens | `chrome://browser/skin/` → `browser/themes/linux/browser.css` → `browser-shared.css` (imports `tab.tokens.css`, `tabs.css`, `urlbar.css`, `toolbarbuttons.css`, `browser-colors.css`); `toolkit/themes/shared/design-system/dist/tokens-{shared,brand,platform}.css` | Re-valued tokens |
-| Tabs | `browser/components/tabbrowser/content/` (`tabs.mjs`, `tab.js`, tab groups, split view, `drag-and-drop.js`), DOM `tab.tabbrowser-tab > .tab-stack > (.tab-background, .tab-content)` | Tokens; `.tab-background::after` mark |
+| Tabs | `browser/components/tabbrowser/content/` (`tabs.mjs`, `tab.mjs`, tab groups, split view, `drag-and-drop.js`), DOM `tab.tabbrowser-tab > .tab-stack > (.tab-background, .tab-content)` | Tokens; `.tab-background::after` mark |
 | Address bar | `browser/components/urlbar/content/` (`UrlbarInput.mjs`, `SmartbarInput.mjs`), DOM `moz-urlbar#urlbar > .urlbar-background + .urlbar-input-container`, results view `view-nova.css` | Tokens only |
 | Toolbar layout | `browser/components/customizableui/CustomizableUI.sys.mjs` (`browser.uiCustomization.state`) | Untouched; default layout kept |
-| Sidebar and vertical tabs | `browser/components/sidebar/`, prefs `sidebar.revamp` (true), `sidebar.verticalTabs` (false) | Supported by the theme |
+| Sidebar and vertical tabs | `browser/components/sidebar/`, prefs `sidebar.revamp` (true), `sidebar.verticalTabs` (the engine's default false; new Nulavio profiles adopt Lateral, D-UX2); launcher motion from patch 0008 and the motion tokens | Supported by the theme; presets in `NulavioLayout` |
 | Shared widgets | `toolkit/content/widgets/moz-*` (button, toggle, card, page-nav, box-item, message-bar, select…) with `*.tokens.css` | For Shell pages and Settings (next milestones) |
 | Component docs | `browser/components/storybook/` (needs a large npm install) | Not adopted; see [design system](design-system.md#component-gallery) |
 | New tab / home | Built-in `newtab@mozilla.org`; Nulavio overrides the new tab with the Shell add-on | Shell page |
-| Settings | `browser/components/preferences/` (`preferences.xhtml`, `*.inc.xhtml`, `config/`) | Planned (M5) |
-| Onboarding | `browser/components/aboutwelcome/` (`browser.aboutwelcome.enabled`) | Planned (M6) |
-| Warnings and errors | `toolkit/content/aboutNetError.{html,mjs}`, `net-error-card.mjs`, `browser/base/content/blockedSite.xhtml`, `browser/components/controlcenter/`, `browser-siteProtections.js` | Planned (M6); criteria untouched |
+| Settings | `browser/components/preferences/` (`preferences.xhtml`, `*.inc.xhtml`, `config/`) | Nulavio Settings is a Shell page (UX4, UX6); about:preferences keeps the engine's and takes Nulavio's colours from `in-content.css` |
+| Onboarding | `browser/components/aboutwelcome/` (`browser.aboutwelcome.enabled`) | Off (`browser.aboutwelcome.enabled=false`); the first run is on the Shell's new tab (UX3E, UX4) |
+| Warnings and errors | `toolkit/content/aboutNetError.{html,mjs}`, `net-error-card.mjs`, `browser/base/content/blockedSite.xhtml`, `browser/components/controlcenter/`, `browser-siteProtections.js` | The engine's pages, criteria untouched; Nulavio's security moments (download, lookalike, routing, Guard, Vault) are Shell pages (UX4) |
 
 ## Rebase notes
 
