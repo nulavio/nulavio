@@ -9,6 +9,7 @@
   <link rel="stylesheet" href="../shared/tokens.css">
   <link rel="stylesheet" href="../shared/base.css">
   <link rel="stylesheet" href="../shared/shell.css">
+  <script type="module" src="../lib/appearance.js"></script>
   <script type="module" src="settings.js"></script>
 </head>
 <body>
@@ -25,6 +26,7 @@
         <p class="settings-nav__group" id="nav-profile" data-i18n="scopeProfile"></p>
         <ul aria-labelledby="nav-profile">
           <li><a href="#layout" data-section="layout" data-i18n="layoutHeading">Layout</a></li>
+          <li><a href="#appearance" data-section="appearance" data-i18n="appearanceHeading">Appearance</a></li>
           <li><a href="#search" data-section="search" data-i18n="searchHeading">Search</a></li>
           <li><a href="#passwords" data-section="passwords" data-i18n="passwordsHeading">Passwords</a></li>
           <li><a href="#exceptions" data-section="exceptions" data-i18n="exceptionsHeading">Site exceptions</a></li>
@@ -111,6 +113,42 @@
           <button class="button button--primary" id="layout-keep" type="button" hidden aria-describedby="layout-pending"></button>
           <button class="button button--secondary" id="layout-retry" type="button" hidden data-i18n="layoutRetry"></button>
         </div>
+      </div>
+    </section>
+
+    <section class="section" id="appearance" aria-labelledby="appearance-heading" hidden>
+      <div class="section__head">
+        <h2 class="section__title" id="appearance-heading" data-i18n="appearanceHeading">Appearance</h2>
+        <p class="scope" data-i18n="scopeProfile"></p>
+      </div>
+      <div class="card stack">
+        <!-- UX6: only Nulavio's own look. No option here can touch a protection (tests/unit/test_personalisation.py). -->
+        <p class="hint" data-i18n="appearanceIntro"></p>
+        <details class="more" data-open-key="appearanceIntroMore"><summary data-i18n="howItWorks"></summary><p class="hint" data-i18n="appearanceIntroMore"></p></details>
+        <fieldset class="stack stack--tight" id="appearance-density" data-option="density">
+          <legend class="field__label" data-i18n="densityLabel"></legend>
+        <label class="check"><input type="radio" name="density" value="auto" data-focus-key="density-auto"> <span><strong data-i18n="densityAuto"></strong><span class="hint" data-i18n="densityAutoHint"></span></span></label>
+        <label class="check"><input type="radio" name="density" value="normal" data-focus-key="density-normal"> <span><strong data-i18n="densityNormal"></strong><span class="hint" data-i18n="densityNormalHint"></span></span></label>
+        <label class="check"><input type="radio" name="density" value="compact" data-focus-key="density-compact"> <span><strong data-i18n="densityCompact"></strong><span class="hint" data-i18n="densityCompactHint"></span></span></label>
+        <label class="check"><input type="radio" name="density" value="touch" data-focus-key="density-touch"> <span><strong data-i18n="densityTouch"></strong><span class="hint" data-i18n="densityTouchHint"></span></span></label>
+        </fieldset>
+        <fieldset class="stack stack--tight" id="appearance-accent" data-option="accent" aria-describedby="accent-hint">
+          <legend class="field__label" data-i18n="accentLabel"></legend>
+          <p class="hint" id="accent-hint" data-i18n="accentHint"></p>
+          <div class="accent-choices">
+            <label class="check accent-choice"><input type="radio" name="accent" value="mint" data-focus-key="accent-mint"><span class="accent-choice__dot" data-accent="mint" aria-hidden="true"></span><span data-i18n="accentMint"></span></label>
+            <label class="check accent-choice"><input type="radio" name="accent" value="blue" data-focus-key="accent-blue"><span class="accent-choice__dot" data-accent="blue" aria-hidden="true"></span><span data-i18n="accentBlue"></span></label>
+          </div>
+        </fieldset>
+        <div class="stack stack--tight" id="appearance-contrast" data-option="moreContrast">
+          <label class="check check--switch">
+            <input type="checkbox" role="switch" id="more-contrast" aria-describedby="more-contrast-hint" data-focus-key="more-contrast">
+            <span data-i18n="moreContrastLabel"></span>
+          </label>
+          <p class="hint" id="more-contrast-hint" data-i18n="moreContrastHint"></p>
+          <p class="hint" id="more-contrast-system" data-i18n="moreContrastSystem" hidden></p>
+        </div>
+        <p class="hint" id="appearance-locked" data-i18n="appearanceLocked" hidden></p>
       </div>
     </section>
 

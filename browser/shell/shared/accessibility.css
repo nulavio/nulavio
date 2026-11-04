@@ -27,6 +27,12 @@ input:is([type="radio"], [type="checkbox"]):focus-visible { outline-width: max(3
   .button, .input, .select { border-width: 2px; }
   :focus-visible { outline-width: max(3px, var(--nv-state-focusRingWidth)); }
 }
+/* UX6 "Mais contraste" (lib/appearance.js), the same rules: Shell pages may not see the media query. */
+:root[data-contrast="more"] {
+  .card, .notice, .assistant__off, .assistant__drift { border: 1px solid var(--nv-color-text-primary); }
+  .button, .input, .select { border-width: 2px; }
+  :focus-visible { outline-width: max(3px, var(--nv-state-focusRingWidth)); }
+}
 @media (forced-colors: active) {
   :focus-visible { outline: 2px solid Highlight; }
   .button, .input, .select, .card, .notice, .callout, .dialog,

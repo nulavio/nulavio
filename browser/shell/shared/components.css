@@ -442,6 +442,17 @@ fieldset.stack > legend { padding: 0; margin-bottom: var(--nv-space-2); }
   outline: var(--nv-state-focusRingWidth) solid var(--nv-color-focus);
   outline-offset: 4px;
 }
+/* UX6: the accent choice shows each accent's own colour next to its name. */
+.accent-choices { display: flex; flex-wrap: wrap; gap: var(--nv-space-3) var(--nv-space-6); }
+.accent-choice { align-items: center; }
+.accent-choice__dot {
+  inline-size: 1.25rem;
+  block-size: 1.25rem;
+  border-radius: 50%;
+  flex: none;
+  background: var(--nv-accent-preview-mint);
+}
+.accent-choice__dot[data-accent="blue"] { background: var(--nv-accent-preview-blue); }
 /* An icon choice (Calmaria): quiet glyphs on the sunken surface; the chosen one wears the profile's
    tile and glyph colours (set on the grid by tintAvatars) and the ring, as a chip would show it. */
 /* Seven to a row: the engine's fourteen icons sit in two even rows wherever there is room. */

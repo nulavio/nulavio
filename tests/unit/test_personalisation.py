@@ -87,6 +87,8 @@ PREF_WRITERS = {
         "PREF_SHELL_START",
     },
     "NulavioPasswords.sys.mjs": {"name", "PREF_DISMISSED"},
+    # Only the declared pref of an option in options.json (test_the_appearance_writer_takes_its_pref_from_the_list).
+    "NulavioPersonalise.sys.mjs": {"pref"},
     "NulavioPrivacy.sys.mjs": {
         '"browser.contentblocking.category"',
         '"network.trr.custom_uri"',
@@ -185,6 +187,17 @@ class OptionListTest(unittest.TestCase):
                 self.assertIn(option["labelKey"], pt)
                 self.assertIn(option["labelKey"], en)
                 self.assertTrue((SHELL / "modules" / f"{option['writer']}.sys.mjs").exists(), option["writer"])
+                if option["writer"] == "NulavioPersonalise":
+                    # One pref, one pref value per choice, and the default is the cleared pref.
+                    self.assertEqual(len(option["prefs"]), 1)
+                    self.assertIn(option["prefType"], {"int", "bool", "string"})
+                    self.assertEqual(len(option["prefValues"]), len(option["values"]))
+                    self.assertEqual(option["prefValues"].count(None), 1)
+                    self.assertIsNone(option["prefValues"][option["values"].index(option["default"])])
+                    kinds = {"int": int, "bool": bool, "string": str}
+                    for value in option["prefValues"]:
+                        if value is not None:
+                            self.assertIs(type(value), kinds[option["prefType"]], value)
 
     def test_no_option_writes_a_protection_pref(self):
         self.assertEqual(violations(options(), guarded_names()), [])
@@ -242,6 +255,50 @@ class OptionListTest(unittest.TestCase):
             parsed = pages.setdefault(page, page_ids(page))
             for marked in parsed.marked:
                 self.assertIn(marked, declared, f"{page}: data-option={marked} is not in options.json")
+
+
+class AppearanceApiTest(unittest.TestCase):
+    def test_the_appearance_writer_takes_its_pref_from_the_list(self):
+        source = (SHELL / "modules" / "NulavioPersonalise.sys.mjs").read_text(encoding="utf-8")
+        self.assertIn('"resource://builtin-addons/nulavio-shell/shared/options.json"', source)
+        self.assertIn("const [pref] = entry.prefs;", source)
+        self.assertIn('found.writer !== "NulavioPersonalise"', source)
+        for forbidden in ("ui.useAccessibilityTheme", "ui.prefersReducedTransparency", "document_color_use"):
+            self.assertNotIn(f'"{forbidden}"', source)
+
+    def test_every_shell_page_paints_the_appearance_first(self):
+        for page in sorted(SHELL.rglob("*.html")):
+            if "dev" in page.relative_to(SHELL).parts:
+                continue  # the component gallery shows the production CSS only
+            scripts = re.findall(r'<script type="module" src="([^"]+)"', page.read_text(encoding="utf-8"))
+            with self.subTest(page=str(page.relative_to(SHELL))):
+                self.assertTrue(scripts and scripts[0].endswith("lib/appearance.js"), scripts)
+        painter = (SHELL / "lib" / "appearance.js").read_text(encoding="utf-8")
+        # Only looks: two attributes on <html>, nothing else on the page.
+        self.assertEqual(set(re.findall(r"root\.dataset\.(\w+) =", painter)), {"accent", "contrast"})
+        self.assertNotIn("innerHTML", painter)
+
+    def test_the_api_takes_only_declared_values(self):
+        schema = json.loads((SHELL / "experiments" / "personalise" / "schema.json").read_text(encoding="utf-8"))[0]
+        declared = {o["id"]: o for o in options()}
+        functions = {f["name"]: f for f in schema["functions"]}
+        self.assertEqual(set(functions), {"state", "setDensity", "setAccent", "setMoreContrast"})
+        self.assertEqual(functions["setDensity"]["parameters"][0]["enum"], declared["density"]["values"])
+        self.assertEqual(functions["setAccent"]["parameters"][0]["enum"], declared["accent"]["values"])
+        self.assertEqual(functions["setMoreContrast"]["parameters"][0]["type"], "boolean")
+        self.assertEqual(declared["moreContrast"]["values"], [False, True])
+
+    def test_the_options_match_the_token_variants(self):
+        tokens = json.loads((ROOT / "docs" / "brand" / "tokens.json").read_text(encoding="utf-8"))
+        variants = tokens["$extensions"]["nulavio.variants"]
+        declared = {o["id"]: o for o in options()}
+        accent = variants["accent"]
+        self.assertEqual(declared["accent"]["prefs"], [accent["pref"]])
+        self.assertEqual(declared["accent"]["values"], [accent["base"], *accent["values"]])
+        self.assertEqual(declared["accent"]["prefValues"][1:], [v["prefValue"] for v in accent["values"].values()])
+        contrast = variants["contrast"]
+        self.assertEqual(declared["moreContrast"]["prefs"], [contrast["pref"]])
+        self.assertEqual(declared["moreContrast"]["prefValues"], [None, contrast["values"]["more"]["prefValue"]])
 
 
 class PrefWriterInventoryTest(unittest.TestCase):

@@ -105,6 +105,8 @@
   --nv-control-selected-weight: 700;
   --nv-route-vertical-width: 3px;
   --nv-route-vertical-height: 20px;
+  --nv-accent-preview-mint: light-dark(#0F7A68, #6FE0C5);
+  --nv-accent-preview-blue: light-dark(#2D64B5, #6AA7F4);
   --nv-color-bg-canvas: #F1F7F5;
   --nv-color-bg-surface: #FFFFFF;
   --nv-color-bg-raised: #FFFFFF;

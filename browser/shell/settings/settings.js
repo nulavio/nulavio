@@ -19,6 +19,7 @@ import {
   tintAvatars,
 } from "../lib/ui.js";
 import { setUpAI } from "./ai.js";
+import { setUpAppearance } from "./appearance.js";
 import { setUpLayout } from "./layout.js";
 import { setUpNav } from "./nav.js";
 
@@ -1031,6 +1032,9 @@ localize();
 const ready = [];
 if (browser.nulavioLayout) {
   ready.push(setUpLayout());
+}
+if (browser.nulavioPersonalise) {
+  ready.push(setUpAppearance());
 }
 if (search && profiles && routing && connect) {
   ready.push(setUpSearch(), setUpProfiles(), setUpRouting(), setUpIntegrations());

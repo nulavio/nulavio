@@ -248,6 +248,20 @@ def variant_condition(spec: dict, value: dict) -> str:
     return f'-moz-pref("{spec["pref"]}", "{value["prefValue"]}")'
 
 
+def accent_previews(data: dict) -> list[str]:
+    """Each accent's own colour, for the choice in Settings (it shows them all, whichever is on)."""
+    accent = variant_specs(data).get("accent")
+    if not accent:
+        return []
+    tokens = flatten(data)
+    lines = []
+    for name, overrides in [(accent["base"], {})] + [(n, v["tokens"]) for n, v in accent["values"].items()]:
+        after = flatten(with_overrides(data, overrides)) if overrides else tokens
+        light, dark = (resolve(after, f"color.{theme}.accent.default") for theme in ("light", "dark"))
+        lines.append(f"  --nv-accent-preview-{name}: light-dark({light}, {dark});")
+    return lines
+
+
 def build_variants(data: dict) -> str:
     """Shell pages: the attribute on <html> picks the variant; [data-theme] subtrees keep it."""
     css = []
@@ -280,7 +294,8 @@ def build(data: dict) -> str:
             themes[theme].append(f"  {var_name(semantic)}: {css_value(token, tokens, path)};")
         else:
             shared.append(f"  {var_name(path)}: {css_value(token, tokens, path)};")
-    lines.append(":root {\n  color-scheme: light dark;\n" + "\n".join(shared + themes["light"]) + "\n}\n")
+    validate_variants(data)
+    lines.append(":root {\n  color-scheme: light dark;\n" + "\n".join(shared + accent_previews(data) + themes["light"]) + "\n}\n")
     dark = "\n".join("  " + line for line in themes["dark"])
     lines.append('@media (prefers-color-scheme: dark) {\n  :root:not([data-theme="light"]) {\n' + dark + "\n  }\n}\n")
     # Element-level selectors let a subtree force a theme (mockups, previews).

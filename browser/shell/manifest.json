@@ -64,6 +64,20 @@
         ]
       }
     },
+    "nulavioPersonalise": {
+      "schema": "experiments/personalise/schema.json",
+      "parent": {
+        "scopes": [
+          "addon_parent"
+        ],
+        "script": "experiments/personalise/parent.js",
+        "paths": [
+          [
+            "nulavioPersonalise"
+          ]
+        ]
+      }
+    },
     "nulavioSearch": {
       "schema": "experiments/search/schema.json",
       "parent": {
