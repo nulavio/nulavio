@@ -74,7 +74,7 @@ function engineRow(engine) {
 
   const aliasForm = h(
     "form",
-    { class: "inline-form", novalidate: true },
+    { class: "inline-form", novalidate: true, "data-keep-edits": "" },
     h(
       "label",
       { class: "field field--inline" },
@@ -93,9 +93,19 @@ function engineRow(engine) {
     h("button", { class: "button button--quiet", type: "submit", text: t("engineAliasSave"), "data-focus-key": `alias-save-${engine.id}` }),
     h("p", { class: "form-error", role: "alert" })
   );
-  aliasForm.addEventListener("submit", event => {
+  aliasForm.addEventListener("submit", async event => {
     event.preventDefault();
-    run(() => search.setAlias(engine.id, aliasForm.elements.alias.value), { form: aliasForm, done: t("doneSaved") });
+    const field = aliasForm.elements.alias;
+    const saved = await run(
+      async () => {
+        await search.setAlias(engine.id, field.value);
+        return true;
+      },
+      { form: aliasForm, done: t("doneSaved") }
+    );
+    if (saved) {
+      field.defaultValue = field.value; // saved: no longer an edit to keep across a redraw
+    }
   });
 
   let suggest;

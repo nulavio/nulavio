@@ -451,6 +451,21 @@ class SearchPrivacyTest(unittest.TestCase):
                 self.assertTrue(harness.wait_until(lambda want=stored: value() == want, timeout=10), value())
                 time.sleep(0.5)  # a later redraw must not bring the typed text back
                 self.assertEqual(value(), stored)
+            # Typed but not saved: an unrelated change redraws the list and keeps it (review UX7-2).
+            bing = self.m.execute(
+                "return [...document.querySelectorAll('#engines li')]"
+                ".find(li => li.querySelector('.row__title').textContent.startsWith('Bing')).dataset.engineId;"
+            )
+            other = self.search("return (await S.list()).find(e => e.id === args[0]).alias;", bing)
+            self.m.execute("const f = document.querySelector(arguments[0]); f.value = '@rascunho';", [field])
+            try:
+                self.search("await S.setAlias(args[0], '@bingo'); return true;", bing)
+                redrawn = "return document.querySelector(arguments[0])?.defaultValue === '@bingo';"
+                bing_field = f'[data-focus-key="alias-{bing}"]'
+                self.assertTrue(harness.wait_until(lambda: self.m.execute(redrawn, [bing_field]), timeout=10))
+                self.assertEqual(value(), "@rascunho")
+            finally:
+                self.search("await S.setAlias(args[0], args[1]); return true;", bing, other or "")
         finally:
             self.search("await S.setAlias(args[0], args[1]); return true;", ddg, before)
 
