@@ -88,6 +88,17 @@ def settle(m, check: str | None) -> None:
     )
 
 
+def screen_grab() -> bool:
+    """The X server shows the window only when the browser runs headful on X (as under xvfb-run with
+    NULAVIO_TEST_HEADFUL=1 and no Wayland); otherwise a grab would be the caller's desktop."""
+    return bool(
+        shutil.which("import")
+        and os.environ.get("DISPLAY")
+        and os.environ.get("NULAVIO_TEST_HEADFUL") == "1"
+        and not os.environ.get("WAYLAND_DISPLAY")
+    )
+
+
 def window_png(m) -> bytes:
     """The window as the screen shows it: the X server's pixels (ImageMagick `import`), cropped to the
     window. WebDriver's chrome screenshot redraws the window itself and drops masked content (the
@@ -95,7 +106,7 @@ def window_png(m) -> bytes:
     m.set_context("chrome")
     try:
         m.execute("document.documentElement.removeAttribute('remotecontrol');")
-        if shutil.which("import") and os.environ.get("DISPLAY"):
+        if screen_grab():
             x, y, width, height = m.execute(
                 "const r = window.devicePixelRatio;"
                 "return [screenX, screenY, outerWidth, outerHeight].map(v => Math.round(v * r));"
@@ -113,7 +124,7 @@ def window_png(m) -> bytes:
 
 
 def capture_method() -> str:
-    if shutil.which("import") and os.environ.get("DISPLAY"):
+    if screen_grab():
         return "X server pixels (ImageMagick import -window root, cropped to the window)"
     return "WebDriver chrome screenshot (drops masked content: chevrons, the narrow Settings rail)"
 
