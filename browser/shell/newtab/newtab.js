@@ -109,7 +109,8 @@ async function showHere() {
     h("span", { class: "here__label", text: t("whereLabel") }),
     h("strong", { class: "here__name", text: here.temporary ? t("profilesTemporary") : here.name }),
     ...states.map(stateBadge),
-    ...(plain ? [h("span", { class: "here__plain", text: t("profileUnprotected") })] : [])
+    // One term everywhere for a profile without a password (audit 2026-11 T3): a quiet badge.
+    ...(plain ? [h("span", { class: "badge badge--quiet here__plain", text: `◇ ${t("profileUnprotected")}` })] : [])
   );
   who.hidden = false;
   if (here.routeCount) {
@@ -385,7 +386,7 @@ async function showDns() {
   }
   const card = document.getElementById("dns-choice");
   card.hidden = state.chosen;
-  card.querySelector("p").textContent = t(state.encryptedNow ? "dnsChoiceBodyEncrypted" : "dnsChoiceBody");
+  document.getElementById("dns-choice-body").textContent = t(state.encryptedNow ? "dnsChoiceBodyEncrypted" : "dnsChoiceBody");
   // The buttons follow what the resolver does now: "keep" always keeps it.
   card.dataset.encrypted = String(state.encryptedNow);
   document.getElementById("dns-actions-system").hidden = state.encryptedNow;
@@ -406,6 +407,209 @@ async function showDns() {
   document.getElementById("dns-use-system").onclick = toSystem;
 }
 
+// -- First run (audit 2026-11 FR-01) -------------------------------------------------------------
+// In a genuinely new profile, one card at a time below the search: welcome, the layout and DNS
+// cards (steps 1 and 2), passwords, the default browser, then "all set". Each answer applies at
+// once and is never asked again; a tab closed midway resumes at the first step not yet answered.
+// Private windows, temporary profiles and AI Workspaces never see it (NulavioPrivacy.firstRun).
+const QUESTIONS = ["layout", "dns", "passwords", "default-browser"];
+const STEP_CARDS = {
+  welcome: "firstrun-welcome",
+  layout: "layout-choice",
+  dns: "dns-choice",
+  passwords: "firstrun-passwords",
+  "default-browser": "firstrun-default",
+  finished: "firstrun-done",
+};
+const FIRST_CONTROL = {
+  welcome: "firstrun-start",
+  layout: "layout-choice-done",
+  dns: "dns-choice-heading",
+  passwords: "firstrun-passwords-choose",
+  "default-browser": "firstrun-default-make",
+  finished: "firstrun-finish",
+};
+
+async function firstRun() {
+  const privacy = browser.nulavioPrivacy;
+  if (!privacy?.firstRun || browser.extension.inIncognitoContext) {
+    return;
+  }
+  const start = await privacy.firstRun().catch(() => null);
+  if (!start?.active) {
+    return;
+  }
+  const layoutApi = browser.nulavioLayout;
+  const connect = browser.nulavioConnect;
+  const done = new Set(start.done);
+  const [layout, dns, defaultBrowser] = await Promise.all([
+    layoutApi?.state().catch(() => null),
+    privacy.dns().catch(() => null),
+    connect?.defaultBrowserState?.().catch(() => null),
+  ]);
+  // The steps that apply here: asked now, or answered earlier in this same sequence (so "Etapa N de M"
+  // keeps its numbers in a tab opened later).
+  const applies = {
+    layout: done.has("layout") || Boolean(layout?.choicePending),
+    dns: done.has("dns") || dns?.chosen === false,
+    passwords: true,
+    "default-browser": done.has("default-browser") || defaultBrowser?.state === "available",
+  };
+  const questions = QUESTIONS.filter(step => applies[step]);
+  const order = ["welcome", ...questions, "finished"];
+  const progress = document.getElementById("firstrun-progress");
+  const searchButton = document.querySelector("#search .button");
+  let current = null;
+
+  const pending = async step => {
+    if (done.has(step)) {
+      return false;
+    }
+    if (step === "layout") {
+      return Boolean((await layoutApi.state().catch(() => null))?.choicePending);
+    }
+    if (step === "dns") {
+      return (await privacy.dns().catch(() => null))?.chosen === false;
+    }
+    return true;
+  };
+  const record = async step => {
+    done.add(step);
+    await privacy.firstRunDone([step]).catch(() => {});
+  };
+  const show = step => {
+    current = step;
+    for (const [name, id] of Object.entries(STEP_CARDS)) {
+      const card = document.getElementById(id);
+      card.toggleAttribute("data-gated", name !== step);
+      if (card.classList.contains("firstrun")) {
+        card.hidden = name !== step;
+      }
+    }
+    const n = questions.indexOf(step);
+    progress.hidden = n < 0;
+    progress.textContent = n < 0 ? "" : t("firstrunProgress", [String(n + 1), String(questions.length)]);
+    // While a first-run card is the page's question, the search is not its main action.
+    searchButton.classList.toggle("button--primary", !step);
+    searchButton.classList.toggle("button--secondary", Boolean(step));
+  };
+  const leave = () => {
+    show(null);
+    for (const id of Object.values(STEP_CARDS)) {
+      document.getElementById(id).removeAttribute("data-gated");
+    }
+  };
+  // Go to the first step not answered yet. Focus follows only when the person was in a first-run card
+  // (on load the keyboard stays where the browser put it).
+  const advance = async answered => {
+    const wasInside = Object.values(STEP_CARDS).some(id => document.getElementById(id).contains(document.activeElement));
+    if (answered) {
+      await record(answered);
+    }
+    for (const step of order) {
+      if (step === "finished") {
+        await fillSummary();
+        show(step);
+        break;
+      }
+      if (await pending(step)) {
+        show(step);
+        break;
+      }
+      if ((step === "layout" || step === "dns") && !done.has(step)) {
+        await record(step); // answered in its card (or in Settings): never asked again
+      }
+    }
+    if (wasInside) {
+      const control = document.getElementById(FIRST_CONTROL[current]);
+      if (control?.matches("h2")) {
+        control.tabIndex = -1; // a heading takes focus only from here, as a reading position
+      }
+      control?.focus();
+    }
+  };
+
+  const fact = key => document.querySelector(`#status [data-status="${key}"]`);
+  const factLine = key => `${fact(key).previousElementSibling.textContent}: ${fact(key).textContent}`;
+  document.getElementById("firstrun-facts").replaceChildren(
+    ...["tracking", "https", "filter"].map(key => h("li", { "data-level": fact(key).dataset.level, text: factLine(key) })),
+    h("li", { "data-level": "ok", text: t("firstrunNothingSent") })
+  );
+  document.getElementById("firstrun-passwords-now").textContent = t("firstrunPasswordsNow", [fact("passwords").textContent]);
+
+  async function fillSummary() {
+    const [layoutNow, dnsNow, defaultNow] = await Promise.all([
+      layoutApi?.state().catch(() => null),
+      privacy.dns().catch(() => null),
+      applies["default-browser"] ? connect.defaultBrowserState().catch(() => null) : null,
+    ]);
+    const presetKey = { lateral: "layoutLateral", top: "layoutTop", focus: "layoutFocus" }[layoutNow?.preset];
+    const dnsKey = dnsNow ? { system: "dnsStatusSystem", default: "dnsStatusDefault", strict: "dnsStatusStrict" }[dnsNow.choice] ?? "dnsStatusFallback" : null;
+    const rows = [
+      presetKey ? [t("firstrunSummaryTabs"), t(presetKey)] : null,
+      dnsKey ? [t("dnsHeading"), t(dnsKey)] : null,
+      [t("statusPasswords"), fact("passwords").textContent],
+      defaultNow ? [t("firstrunSummaryDefault"), t(defaultNow.state === "enabled" ? "firstrunDefaultIsNulavio" : "firstrunDefaultIsOther")] : null,
+    ].filter(Boolean);
+    document.getElementById("firstrun-summary").replaceChildren(
+      ...rows.map(([name, value]) => h("div", {}, h("dt", { text: name }), h("dd", { text: value })))
+    );
+  }
+
+  document.getElementById("firstrun-start").addEventListener("click", () => advance("welcome"));
+  document.getElementById("firstrun-skip").addEventListener("click", async () => {
+    // "Pular": everything stays as it is now; no first-run question comes back.
+    if (layoutApi && (await pending("layout"))) {
+      await layoutApi.dismissChoice().catch(() => {});
+    }
+    if (await pending("dns")) {
+      await privacy.dismissDnsChoice().catch(() => {});
+    }
+    await privacy.firstRunDone(["welcome", ...QUESTIONS, "finished"]).catch(() => {});
+    leave();
+    document.getElementById("layout-choice").hidden = true;
+    document.getElementById("dns-choice").hidden = true;
+    document.getElementById("search-input").focus();
+  });
+  document.getElementById("firstrun-passwords-choose").addEventListener("click", async event => {
+    event.preventDefault();
+    await record("passwords");
+    location.href = event.currentTarget.href;
+  });
+  document.getElementById("firstrun-passwords-later").addEventListener("click", () => advance("passwords"));
+  const make = document.getElementById("firstrun-default-make");
+  make.addEventListener("click", async () => {
+    const error = document.getElementById("firstrun-default-error");
+    error.textContent = "";
+    make.setAttribute("aria-busy", "true");
+    try {
+      await connect.setDefaultBrowser();
+      await advance("default-browser");
+    } catch (e) {
+      error.textContent = errorText(e);
+    } finally {
+      make.removeAttribute("aria-busy");
+    }
+  });
+  document.getElementById("firstrun-default-later").addEventListener("click", () => advance("default-browser"));
+  document.getElementById("firstrun-finish").addEventListener("click", async () => {
+    await record("finished");
+    leave();
+    document.getElementById("search-input").focus();
+  });
+  // The layout and DNS cards hide themselves once answered: then the next step comes.
+  const answered = new MutationObserver(() => {
+    if ((current === "layout" && document.getElementById("layout-choice").hidden)
+      || (current === "dns" && document.getElementById("dns-choice").hidden)) {
+      advance(null);
+    }
+  });
+  for (const id of ["layout-choice", "dns-choice"]) {
+    answered.observe(document.getElementById(id), { attributes: true, attributeFilter: ["hidden"] });
+  }
+  await advance(null);
+}
+
 // Search settings and Nulavio settings exist only where the Shell is built in (privileged API).
 document.getElementById("search-settings").hidden = !browser.nulavioSearch;
 document.getElementById("open-settings").hidden = !browser.nulavioSearch;
@@ -415,7 +619,9 @@ localize();
 // until the first-run cards, the engine label and the "Você está em" line are
 // known, so nothing moves after the first frame; a slow API never holds it longer than 400 ms.
 const facts = Promise.allSettled([refresh(), showDns()]).then(summarise);
-const shaped = Promise.allSettled([engineShown, facts, showHere(), showLayoutChoice()]);
+const layoutShown = showLayoutChoice();
+const firstRunShown = Promise.allSettled([facts, layoutShown]).then(() => firstRun()).catch(e => console.error(e));
+const shaped = Promise.allSettled([engineShown, facts, showHere(), layoutShown, firstRunShown]);
 Promise.race([shaped, new Promise(resolve => setTimeout(resolve, 400))]).then(() => {
   document.documentElement.dataset.painted = "true";
 });

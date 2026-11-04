@@ -106,6 +106,11 @@ export const DNS_PROVIDERS = Object.freeze([
   Object.freeze({ id: "mullvad", uri: "https://dns.mullvad.net/dns-query" }),
 ]);
 export const PREF_DNS_CHOSEN = "nulavio.dns.chosen";
+/* The new tab's first run (audit 2026-11 FR-01): the steps answered or skipped, comma-separated. */
+export const PREF_FIRSTRUN = "nulavio.firstrun.done";
+export const FIRSTRUN_STEPS = Object.freeze(["welcome", "layout", "dns", "passwords", "default-browser", "finished"]);
+// NulavioLayout.PREF_SHELL_START: set once, for a genuinely new profile (the layout adoption's rule).
+const PREF_NEW_PROFILE = "nulavio.startpage.shellFirstTab";
 const MODE = { system: Ci.nsIDNSService.MODE_TRROFF, fallback: Ci.nsIDNSService.MODE_TRRFIRST, strict: Ci.nsIDNSService.MODE_TRRONLY };
 
 /** An https:// resolver address without credentials; returns it normalised or throws. */
@@ -164,6 +169,30 @@ class Privacy {
     Services.prefs.setIntPref("network.trr.mode", MODE[choice]);
     Services.prefs.setBoolPref(PREF_DNS_CHOSEN, true);
     return this.dns();
+  }
+
+  /**
+   * The first-run sequence: only in a genuinely new profile, never in an AI Workspace or a temporary
+   * profile (the page itself skips private windows); `done` lists the steps answered or skipped.
+   */
+  firstRun() {
+    const done = Services.prefs.getStringPref(PREF_FIRSTRUN, "").split(",").filter(step => FIRSTRUN_STEPS.includes(step));
+    const nonInteractive = Boolean(Services.prefs.getStringPref("nulavio.ai.workspace", ""))
+      || Services.prefs.getBoolPref("nulavio.profile.temporary", false);
+    const active = Services.prefs.getBoolPref(PREF_NEW_PROFILE, false) && !nonInteractive && !done.includes("finished");
+    return { active, done };
+  }
+
+  /** Record first-run steps as answered (or skipped): a step answered is never asked again. */
+  firstRunDone(steps) {
+    const list = [steps].flat();
+    if (!list.length || !list.every(step => FIRSTRUN_STEPS.includes(step))) {
+      throw new PrivacyError("invalid-step");
+    }
+    const done = new Set(this.firstRun().done);
+    list.forEach(step => done.add(step));
+    Services.prefs.setStringPref(PREF_FIRSTRUN, FIRSTRUN_STEPS.filter(step => done.has(step)).join(","));
+    return this.firstRun();
   }
 
   /** "Decide later" on the new tab: nothing changes, the question is not asked again. */

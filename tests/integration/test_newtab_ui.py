@@ -157,6 +157,112 @@ class NewTabHereTest(unittest.TestCase):
             self.m.send("WebDriver:CloseWindow")
             self.m.switch_to(main)
 
+    # -- first run (audit 2026-11 FR-01) ---------------------------------------------------------
+
+    FIRSTRUN = """
+const shown = id => { const e = document.getElementById(id); return e && !e.hidden && !e.hasAttribute('data-gated'); };
+const ids = ['firstrun-welcome', 'layout-choice', 'dns-choice', 'firstrun-passwords', 'firstrun-default', 'firstrun-done'];
+return {
+  cards: ids.filter(shown),
+  progress: document.getElementById('firstrun-progress').hidden ? null : document.getElementById('firstrun-progress').textContent,
+  search: document.querySelector('#search .button').className,
+  focused: document.activeElement?.id ?? null,
+  done: null,
+};
+"""
+
+    def first_run(self, done: str = "") -> None:
+        """A genuinely new profile's first run, from the step `done` leaves (the harness turns it off)."""
+        self.m.chrome(
+            "Services.prefs.setStringPref('nulavio.firstrun.done', arguments[0]);"
+            "Services.prefs.setBoolPref('nulavio.startpage.shellFirstTab', true);"
+            "Services.prefs.setBoolPref('nulavio.layout.choicePending', true);"
+            "Services.prefs.setBoolPref('nulavio.dns.chosen', false);",
+            [done],
+        )
+        self.addCleanup(self.m.chrome, "Services.prefs.setStringPref('nulavio.firstrun.done', 'finished');")
+
+    def cards(self) -> dict:
+        return self.m.execute(self.FIRSTRUN)
+
+    def click(self, element_id: str) -> None:
+        self.m.send("WebDriver:ElementClick", {"id": self.m.find_element(f"#{element_id}")})
+
+    def wait_card(self, card: str) -> dict:
+        found = harness.wait_until(lambda: (lambda c: c if c["cards"] == [card] else None)(self.cards()), 15)
+        self.assertTrue(found, self.cards())
+        return found
+
+    def test_05_first_run_asks_one_thing_at_a_time_and_never_again(self):
+        self.first_run()
+        self.open()
+        state = self.wait_card("firstrun-welcome")
+        self.assertIsNone(state["progress"])
+        self.assertIn("button--secondary", state["search"])  # the search waits while the page asks
+        facts = self.m.execute("return [...document.querySelectorAll('#firstrun-facts li')].map(li => li.textContent);")
+        self.assertIn(self.message("firstrunNothingSent"), facts)
+        self.shoot("firstrun-welcome")
+        self.click("firstrun-start")
+        state = self.wait_card("layout-choice")
+        total = int(state["progress"].split()[-1])
+        self.assertEqual(state["progress"], self.message("firstrunProgress", "1", str(total)))
+        self.assertEqual(state["focused"], "layout-choice-done")  # the next step's first control
+        self.shoot("firstrun-layout")
+        self.click("layout-choice-done")
+        state = self.wait_card("dns-choice")
+        self.assertEqual(state["progress"], self.message("firstrunProgress", "2", str(total)))
+        self.click("dns-later")
+        self.wait_card("firstrun-passwords")
+        now = self.m.execute("return document.getElementById('firstrun-passwords-now').textContent;")
+        self.assertTrue(now.startswith(self.message("firstrunPasswordsNow", "")[:5]), now)
+        self.shoot("firstrun-passwords")
+        # A tab opened now resumes at the first step not answered, with the same numbers.
+        resumed = self.open() and self.wait_card("firstrun-passwords")
+        self.assertEqual(resumed["progress"], self.message("firstrunProgress", "3", str(total)))
+        self.click("firstrun-passwords-later")
+        if total == 4:  # this computer could make Nulavio the default browser (xdg-settings answered)
+            self.wait_card("firstrun-default")
+            self.click("firstrun-default-later")
+        self.wait_card("firstrun-done")
+        summary = self.m.execute("return [...document.querySelectorAll('#firstrun-summary dt')].map(dt => dt.textContent);")
+        self.assertIn(self.message("firstrunSummaryTabs"), summary)
+        self.shoot("firstrun-done")
+        self.click("firstrun-finish")
+        self.assertTrue(harness.wait_until(lambda: self.cards()["cards"] == [], 10))
+        self.assertIn("button--primary", self.cards()["search"])
+        self.assertEqual(self.cards()["focused"], "search-input")
+        done = self.m.chrome("return Services.prefs.getStringPref('nulavio.firstrun.done');")
+        self.assertIn("finished", done.split(","))
+        self.assertFalse(self.m.chrome("return Services.prefs.getBoolPref('nulavio.layout.choicePending');"))
+        self.assertTrue(self.m.chrome("return Services.prefs.getBoolPref('nulavio.dns.chosen');"))
+        self.open()
+        self.assertEqual(self.cards()["cards"], [])  # never again
+
+    def test_06_skip_keeps_everything_and_asks_nothing(self):
+        self.first_run()
+        self.open()
+        self.wait_card("firstrun-welcome")
+        layout = self.m.chrome("return Services.prefs.getStringPref('sidebar.visibility');")
+        self.click("firstrun-skip")
+        self.assertTrue(harness.wait_until(lambda: self.cards()["cards"] == [], 10))
+        self.assertEqual(self.m.chrome("return Services.prefs.getStringPref('sidebar.visibility');"), layout)
+        self.assertFalse(self.m.chrome("return Services.prefs.getBoolPref('nulavio.layout.choicePending');"))
+        self.assertTrue(self.m.chrome("return Services.prefs.getBoolPref('nulavio.dns.chosen');"))
+        self.open()
+        self.assertEqual(self.cards()["cards"], [])
+
+    def test_07_no_first_run_in_an_ai_workspace_or_a_temporary_profile(self):
+        for pref, value in (("nulavio.profile.temporary", True), ("nulavio.ai.workspace", "ag-0123456789ab")):
+            with self.subTest(pref=pref):
+                self.first_run()
+                setter = "setBoolPref" if isinstance(value, bool) else "setStringPref"
+                self.m.chrome(f"Services.prefs.{setter}(arguments[0], arguments[1]);", [pref, value])
+                try:
+                    self.open()
+                    self.assertNotIn("firstrun-welcome", self.cards()["cards"])
+                finally:
+                    self.m.chrome("Services.prefs.clearUserPref(arguments[0]);", [pref])
+
 
 if __name__ == "__main__":
     unittest.main()

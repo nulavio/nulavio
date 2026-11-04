@@ -54,6 +54,9 @@ TEST_PREFS = {
     "browser.download.useDownloadDir": True,
     "browser.download.alwaysOpenPanel": False,
     "browser.shell.checkDefaultBrowser": False,
+    # The new tab's first-run sequence stays out of every test that does not ask for it
+    # (tests/integration/test_newtab_ui.py clears it to walk through it).
+    "nulavio.firstrun.done": "finished",
 }
 
 
@@ -427,6 +430,7 @@ PROFILE_TEST_PREFS = {
     "marionette.port": 0,
     "remote.prefs.recommended": False,
     "browser.shell.checkDefaultBrowser": False,
+    "nulavio.firstrun.done": "finished",
 }
 
 

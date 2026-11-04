@@ -30,6 +30,7 @@ this.nulavioConnect = class extends ExtensionAPI {
     return {
       nulavioConnect: {
         discover: call(() => connect.discover()),
+        defaultBrowserState: call(() => connect.defaultBrowserState()),
         setDefaultBrowser: call(() => connect.setDefaultBrowser()),
         restoreDefaultBrowser: call(() => connect.restoreDefaultBrowser()),
         kdeDevices: call(() => connect.kdeDevices()),

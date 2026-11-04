@@ -25,7 +25,15 @@
           }
         }]
       },
-      { "name": "dismissDnsChoice", "type": "function", "async": true, "parameters": [] }
+      { "name": "dismissDnsChoice", "type": "function", "async": true, "parameters": [] },
+      { "name": "firstRun", "type": "function", "async": true, "parameters": [] },
+      {
+        "name": "firstRunDone", "type": "function", "async": true,
+        "parameters": [{
+          "name": "steps", "type": "array", "maxItems": 6,
+          "items": { "type": "string", "enum": ["welcome", "layout", "dns", "passwords", "default-browser", "finished"] }
+        }]
+      }
     ],
     "events": [
       { "name": "onChanged", "type": "function", "parameters": [] }

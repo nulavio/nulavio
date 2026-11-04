@@ -33,6 +33,56 @@
         <a class="hero__link" id="search-settings" href="../settings/settings.html#search" hidden data-i18n="searchSettingsLink">Search settings</a></p>
     </header>
 
+    <!-- First run (audit 2026-11 FR-01): one card at a time, in this place, in a genuinely new profile.
+         The layout and DNS cards below are steps 1 and 2; newtab.js shows only the current one. -->
+    <p class="firstrun__progress" id="firstrun-progress" aria-live="polite" hidden></p>
+
+    <section class="card stack firstrun" id="firstrun-welcome" aria-labelledby="firstrun-welcome-heading" hidden>
+      <div class="firstrun__head">
+        <img class="firstrun__symbol" src="../shared/nulavio-symbol-adaptive.svg" alt="" width="32" height="32">
+        <h2 class="layout-choice__title" id="firstrun-welcome-heading" data-i18n="firstrunWelcomeTitle"></h2>
+      </div>
+      <p class="firstrun__lead" data-i18n="firstrunWelcomeLead"></p>
+      <ul class="firstrun__facts" id="firstrun-facts"></ul>
+      <div class="callout callout--info">
+        <svg class="callout__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 11v6M12 7.5v.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        <p data-i18n="footerLimits"></p>
+      </div>
+      <div class="actions">
+        <button class="button button--primary" type="button" id="firstrun-start" data-i18n="firstrunStart"></button>
+        <button class="button button--quiet" type="button" id="firstrun-skip" data-i18n="firstrunSkipAll"></button>
+      </div>
+    </section>
+
+    <section class="card stack firstrun" id="firstrun-passwords" aria-labelledby="firstrun-passwords-heading" hidden>
+      <h2 class="layout-choice__title" id="firstrun-passwords-heading" data-i18n="firstrunPasswordsTitle"></h2>
+      <p class="firstrun__lead" data-i18n="firstrunPasswordsLead"></p>
+      <p class="hint" id="firstrun-passwords-now"></p>
+      <div class="actions">
+        <a class="button button--primary" id="firstrun-passwords-choose" href="../settings/settings.html#passwords" data-i18n="firstrunPasswordsChoose"></a>
+        <button class="button button--quiet" type="button" id="firstrun-passwords-later" data-i18n="firstrunNotNow"></button>
+      </div>
+    </section>
+
+    <section class="card stack firstrun" id="firstrun-default" aria-labelledby="firstrun-default-heading" hidden>
+      <h2 class="layout-choice__title" id="firstrun-default-heading" data-i18n="firstrunDefaultTitle"></h2>
+      <p class="firstrun__lead" data-i18n="firstrunDefaultLead"></p>
+      <p class="form-error" id="firstrun-default-error" role="alert"></p>
+      <div class="actions">
+        <button class="button button--primary" type="button" id="firstrun-default-make" data-i18n="connectMakeDefault"></button>
+        <button class="button button--quiet" type="button" id="firstrun-default-later" data-i18n="firstrunNotNow"></button>
+      </div>
+    </section>
+
+    <section class="card stack firstrun" id="firstrun-done" aria-labelledby="firstrun-done-heading" hidden>
+      <h2 class="layout-choice__title" id="firstrun-done-heading" data-i18n="firstrunDoneTitle"></h2>
+      <dl class="facts firstrun__summary" id="firstrun-summary"></dl>
+      <p class="hint"><span data-i18n="firstrunDoneLater"></span> <a href="../settings/settings.html" data-i18n="settingsTitle"></a></p>
+      <div class="actions">
+        <button class="button button--primary" type="button" id="firstrun-finish" data-i18n="firstrunFinish"></button>
+      </div>
+    </section>
+
     <section class="card layout-choice" id="layout-choice" aria-labelledby="layout-choice-heading" hidden>
       <h2 class="layout-choice__title" id="layout-choice-heading" data-i18n="layoutChoiceHeading"></h2>
       <p class="hint" id="layout-choice-body" data-i18n="layoutChoiceBody"></p>
@@ -88,7 +138,7 @@
 
     <section class="card stack dns-choice" id="dns-choice" aria-labelledby="dns-choice-heading" hidden>
       <h2 class="layout-choice__title" id="dns-choice-heading" data-i18n="dnsChoiceHeading"></h2>
-      <p></p>
+      <p class="hint" id="dns-choice-body"></p>
       <!-- Lookups go unencrypted now: keeping that is a real "keep" -->
       <div class="actions" id="dns-actions-system">
         <button class="button button--secondary" type="button" id="dns-keep-system" data-i18n="dnsKeepSystem"></button>
