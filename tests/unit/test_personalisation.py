@@ -100,7 +100,7 @@ PREF_WRITERS = {
         "PREF_SEEDED",
     },
     "NulavioProfiles.sys.mjs": {"PREF_COLORS", "PREF_COLOR_MIGRATION"},
-    "NulavioRouting.sys.mjs": {"ENABLED_PREF", "IN_PAGE_PREF", "RULES_PREF"},
+    "NulavioRouting.sys.mjs": {"ENABLED_PREF", "FALLBACK_PREF", "IN_PAGE_PREF", "RULES_PREF"},
     "NulavioSearch.sys.mjs": {"PREF_MIGRATION", "PREF_OPTIN", "pref"},
 }
 WRITER = re.compile(r"\.(?:set(?:Bool|Int|String|Char)Pref|clearUserPref|lockPref|unlockPref)\(\s*([^,)]+)")
@@ -365,6 +365,20 @@ class QuickActionsTest(unittest.TestCase):
                 ROOT / "browser" / "l10n" / "pt-BR" / "browser" / "branding" / "nulavio" / "brand.ftl",
             ):
                 self.assertRegex(ftl.read_text(encoding="utf-8"), rf"(?m)^{name} = \S")
+
+
+class RoutingFallbackTest(unittest.TestCase):
+    def test_only_links_from_other_apps_use_the_default_destination(self):
+        """M5 review: typed addresses (M4b) and links in pages (M5) never move by a default."""
+        source = (SHELL / "modules" / "NulavioRouting.sys.mjs").read_text(encoding="utf-8")
+        calls = re.findall(r"decide\(\{[^}]*\}\)", source)
+        with_fallback = [c for c in calls if "fallbackProfileId" in c]
+        self.assertEqual(len(with_fallback), 2, calls)  # handleCommandLine and #dispatchOne (M4a)
+        for name in ("routeNavigation(", "#onOpeningRequest(subject) {"):
+            body = source[source.index(name) : source.index("\n  }\n", source.index(name))]
+            self.assertNotIn("fallbackProfileId", body, name)
+        # It applies only in the instance that receives links from other apps (the group's default).
+        self.assertIn('group.equals(Services.dirsvc.get("ProfD", Ci.nsIFile))', source)
 
 
 class PrefWriterInventoryTest(unittest.TestCase):

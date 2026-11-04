@@ -523,13 +523,15 @@ class WindowUI {
       state.routed = Boolean(ruleId);
       state.bar.toggleAttribute("nv-neutral", this.#neutral(win));
     }
-    const label = ruleId ? t("bandRoutedNamed", [this.#profile?.name || t("bandProfileDefault")]) : "";
+    // UX6: a link the default destination sent says that, not "your rule".
+    const name = this.#profile?.name || t("bandProfileDefault");
+    const label = ruleId === "default" ? t("bandRoutedDefaultNamed", [name]) : ruleId ? t("bandRoutedNamed", [name]) : "";
     for (const row of this.#rows(win)) {
       const node = row.querySelector(".nv-band-route");
       if (node.hidden !== !ruleId) {
         node.hidden = !ruleId;
       }
-      setText(node, ruleId ? t("bandRouted") : "");
+      setText(node, ruleId === "default" ? t("bandRoutedDefault") : ruleId ? t("bandRouted") : "");
       setAttr(node, "aria-label", label);
       setAttr(node, "title", label);
     }

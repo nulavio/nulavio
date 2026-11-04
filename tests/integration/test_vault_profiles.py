@@ -193,6 +193,36 @@ class LockedGroupProfileTest(unittest.TestCase):
         self.assertFalse(self.box.root.exists())
         self.assertFalse(any(p["id"] == self.vault_id for p in self.call("return (await P.list()).profiles;")["ok"]))
 
+    def test_routing_default_destination_locked_asks_to_unlock_instead_of_starting_it(self):
+        """UX6: a locked profile as the default destination for links from other apps asks to unlock it here."""
+        self.assertEqual(self.call("await R.setFallback(args[0]); return R.fallback();", self.vault_id), {"ok": self.vault_id})
+        try:
+            # This instance receives links from other apps: the group's default profile. The link arrives as
+            # a remote command line does (an instance cannot send one to itself), through the same handler.
+            self.call(
+                "const S = ChromeUtils.importESModule('resource:///modules/profiles/SelectableProfileService.sys.mjs')"
+                ".SelectableProfileService; await S.setDefaultProfileForGroup(); return true;"
+            )
+            url = self.server.url("/page/default-to-the-vault")
+            self.call(
+                "const line = Cu.createCommandLine([args[0]], null, Ci.nsICommandLine.STATE_REMOTE_EXPLICIT);"
+                "R.handleCommandLine(line); return line.length;",
+                url,
+            )
+            tabs = lambda: self.m.chrome("return gBrowser.browsers.map(b => b.currentURI.spec);")  # noqa: E731
+            self.assertTrue(
+                harness.wait_until(
+                    lambda: any("/vault/unlock.html" in u and f"p={self.vault_id}" in u for u in tabs()), timeout=20
+                ),
+                tabs(),
+            )
+            time.sleep(1)
+            self.assertEqual(self.server.requests_to("/page/default-to-the-vault"), [])
+            self.assertEqual(self.session.processes_for(self.path), [])
+            self.assertEqual(list(self.path.iterdir()), [])
+        finally:
+            self.call("await R.setFallback(0);")
+
     def test_routing_to_a_locked_profile_asks_to_unlock_instead_of_starting_it(self):
         rule = self.call(
             "return R.addRule({site: '127.0.0.1', match: 'host', action: 'open-in', profileId: args[0]});", self.vault_id

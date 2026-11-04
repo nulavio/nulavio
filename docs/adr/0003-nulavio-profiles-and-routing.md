@@ -33,7 +33,7 @@ Local router, explicit rules only, never inferred.
 1. The user's explicit choice for this navigation.
 2. An exact host rule.
 3. A registrable-domain rule. The domain is computed with the engine's Public Suffix List (`Services.eTLD`); subdomains match only when the rule enables them.
-4. The workspace or profile policy.
+4. The workspace or profile policy. For links from other apps (M4a) this is the default destination chosen in Settings (UX6, below); typed addresses and links in pages have none.
 5. Stay in the current profile.
 
 **Rule actions:**
@@ -123,6 +123,13 @@ The offered keys are `lima`, `sky`, `violet`, `coral`, `sand`, `slate`. Mint is 
 - **Only when asked for.** The observer exists only while "Also for links clicked in pages", routing and a profile group are all on.
 - **Never routed:** see the [review](../security/routing-m5-review.md) (no gesture, forms, redirects, frames, pop-ups with an opener, same site, private windows, a second navigation within one gesture, middle-click and Ctrl+click).
 - **Verification.** `test_routing` 15–22.
+
+## Default destination for links from other apps (UX6, 2026-11-04)
+
+- **What.** Settings → Smart routing → "Onde abrem links de outros aplicativos sem regra": "Último perfil usado (padrão)", today's behaviour, or "Sempre em {perfil}" for a profile of the group. Shared by the group (`nulavio.routing.fallbackProfile`, 0 for the last profile used).
+- **Where it applies.** Step 4 of the precedence, for M4a only: a rule always wins, and typed addresses (M4b) and links clicked in pages (M5) never use it, as the [M5 review](../security/routing-m5-review.md) requires. It applies only in the instance that receives links from other apps, the group's default profile (the last one whose window had focus): a command line aimed at another profile with `-P` or `--profile` is never moved by it. Routing off, private windows and routed command lines ignore it.
+- **Safety.** It reuses the M4a hand-off: a locked target opens the Vault's unlock page with the link held (no engine starts on the locked directory), a missing target or a failed start opens the local warning page (`by=default`), and the routed flag stops loops. The target's band says "Aberto pelo destino padrão · Mudar" while the tab shows that site (D-UX19).
+- **Verification.** `test_routing` 23–27 (decision matrix, a link opens once and only in the chosen profile with the band notice, a rule / a typed address / routing off ignore it, a missing destination loads nothing, the Settings choice) and `test_vault_profiles` (a locked destination asks to unlock instead of starting it); `tests/unit/test_personalisation.py` pins that only the two M4a call sites pass it.
 
 ## Temporary profile implementation
 

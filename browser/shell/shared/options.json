@@ -167,6 +167,23 @@
       "writer": "engine",
       "labelKey": "quickActionsLabel",
       "ui": []
+    },
+    {
+      "id": "routingFallback",
+      "kind": "routing",
+      "prefs": [
+        "nulavio.routing.fallbackProfile"
+      ],
+      "values": [
+        "last",
+        "profile"
+      ],
+      "default": "last",
+      "writer": "NulavioRouting",
+      "labelKey": "routingFallbackLabel",
+      "ui": [
+        "settings/settings.html#routing-fallback-field"
+      ]
     }
   ]
 }

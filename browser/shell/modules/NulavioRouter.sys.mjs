@@ -9,7 +9,7 @@
    Rules are only ever created by the user; nothing here infers one.
 
    Precedence: explicit choice > exact host rule > registrable-domain rule >
-   profile policy (M4a: stay) > stay. Hosts are compared in their ASCII form
+   default destination for links from other apps (UX6, M4a only) > stay. Hosts are compared in their ASCII form
    (IDN to punycode, lower case, no trailing dot); the registrable domain comes
    from the engine's Public Suffix List. IP addresses match host rules only. */
 
@@ -21,6 +21,8 @@ export const ENABLED_PREF = "nulavio.routing.enabled";
 export const ROUTED_FLAG = "nulavio-routed";
 /** Opt-in, shared by the group: rules also apply to links clicked in pages (M5). Default off. */
 export const IN_PAGE_PREF = "nulavio.routing.inPage";
+/** UX6, shared by the group: where links from other apps with no rule open (0: the last profile used). */
+export const FALLBACK_PREF = "nulavio.routing.fallbackProfile";
 
 export const MATCHES = Object.freeze(["host", "domain"]);
 export const ACTIONS = Object.freeze(["open-in", "ask", "stay"]);
@@ -169,9 +171,19 @@ function stay(reason, rule = null) {
  * @param {?number} [input.currentProfileId] - This instance's profile, when known.
  * @param {boolean} [input.isPrivate=false] - Private windows never switch (M4a).
  * @param {?number} [input.explicitProfileId] - The user's explicit choice for this navigation.
+ * @param {?number} [input.fallbackProfileId] - UX6: where a link from another app with no rule goes
+ *   (ADR 0003 step 4, M4a only). Only the M4a callers pass it; typed addresses and links in pages never do.
  * @returns {{action: "stay"|"open-in"|"ask", profileId: ?number, ruleId: ?string, reason: string}}
  */
-export function decide({ url, rules, enabled = true, currentProfileId = null, isPrivate = false, explicitProfileId = null }) {
+export function decide({
+  url,
+  rules,
+  enabled = true,
+  currentProfileId = null,
+  isPrivate = false,
+  explicitProfileId = null,
+  fallbackProfileId = null,
+}) {
   if (!enabled) {
     return stay("disabled");
   }
@@ -202,7 +214,12 @@ export function decide({ url, rules, enabled = true, currentProfileId = null, is
     rules.find(r => r.match === "host" && r.value === target.host) ??
     (target.registrable ? rules.find(r => r.match === "domain" && r.value === target.registrable) : undefined);
   if (!rule) {
-    return stay("no-rule"); // the profile policy for M4a is to stay
+    if (Number.isInteger(fallbackProfileId) && fallbackProfileId > 0) {
+      return fallbackProfileId === currentProfileId
+        ? stay("fallback")
+        : { action: "open-in", profileId: fallbackProfileId, ruleId: null, reason: "fallback" };
+    }
+    return stay("no-rule");
   }
   if (rule.action === "stay") {
     return stay("rule", rule);

@@ -1314,5 +1314,17 @@
   "keyFocus": {"message": "Layout Foco"},
   "keyLockProfile": {"message": "Bloquear perfil"},
   "keyAssistant": {"message": "Assistente"},
-  "quickActionsLabel": {"message": "Ações rápidas depois de “>” na barra de endereço"}
+  "quickActionsLabel": {"message": "Ações rápidas depois de “>” na barra de endereço"},
+  "routingFallbackLabel": {"message": "Onde abrem links de outros aplicativos sem regra"},
+  "routingFallbackLast": {"message": "Último perfil usado (padrão)"},
+  "routingFallbackAlways": {"message": "Sempre em $PROFILE$", "placeholders": {"profile": {"content": "$1"}}},
+  "routingFallbackAlwaysProtected": {"message": "Sempre em $PROFILE$ (pede desbloqueio)", "placeholders": {"profile": {"content": "$1"}}},
+  "routingFallbackGone": {"message": "Um perfil que não existe mais"},
+  "routingFallbackHint": {"message": "Vale para links de e-mail, chat e documentos. Endereços digitados e links clicados em páginas não mudam."},
+  "routingFallbackMissing": {"message": "O perfil escolhido para esses links não existe mais. Eles param numa página de aviso até você escolher outro."},
+  "routingBlockedMissingDefault": {"message": "$HOST$ veio de outro aplicativo, mas o perfil escolhido para esses links não existe mais. Para não abrir no perfil errado, o Nulavio parou aqui.", "placeholders": {"host": {"content": "$1"}}},
+  "routingBlockedLaunchDefault": {"message": "$HOST$ veio de outro aplicativo para $PROFILE$, mas esse perfil não pôde ser aberto. Para não abrir no perfil errado, o Nulavio parou aqui.", "placeholders": {"host": {"content": "$1"}, "profile": {"content": "$2"}}},
+  "routingWhyDefault": {"message": "Links de outros aplicativos sem regra abrem em $PROFILE$. Isso fica nas Configurações do Nulavio, em Roteamento inteligente.", "placeholders": {"profile": {"content": "$1"}}},
+  "bandRoutedDefault": {"message": "Aberto pelo destino padrão · Mudar"},
+  "bandRoutedDefaultNamed": {"message": "Aberto pelo destino padrão · Mudar: links de outros aplicativos sem regra abrem em $PROFILE$. Mudar o destino", "placeholders": {"profile": {"content": "$1"}}}
 }

@@ -1314,5 +1314,17 @@
   "keyFocus": {"message": "Focus layout"},
   "keyLockProfile": {"message": "Lock profile"},
   "keyAssistant": {"message": "Assistant"},
-  "quickActionsLabel": {"message": "Quick actions after \">\" in the address bar"}
+  "quickActionsLabel": {"message": "Quick actions after \">\" in the address bar"},
+  "routingFallbackLabel": {"message": "Where links from other apps with no rule open"},
+  "routingFallbackLast": {"message": "The last profile used (default)"},
+  "routingFallbackAlways": {"message": "Always in $PROFILE$", "placeholders": {"profile": {"content": "$1"}}},
+  "routingFallbackAlwaysProtected": {"message": "Always in $PROFILE$ (asks to unlock)", "placeholders": {"profile": {"content": "$1"}}},
+  "routingFallbackGone": {"message": "A profile that no longer exists"},
+  "routingFallbackHint": {"message": "For links from email, chat and documents. Typed addresses and links clicked in pages do not change."},
+  "routingFallbackMissing": {"message": "The profile chosen for these links no longer exists. They stop at a warning page until you choose another."},
+  "routingBlockedMissingDefault": {"message": "$HOST$ came from another app, but the profile chosen for these links no longer exists. So it does not open in the wrong profile, Nulavio stopped here.", "placeholders": {"host": {"content": "$1"}}},
+  "routingBlockedLaunchDefault": {"message": "$HOST$ came from another app for $PROFILE$, but that profile could not be opened. So it does not open in the wrong profile, Nulavio stopped here.", "placeholders": {"host": {"content": "$1"}, "profile": {"content": "$2"}}},
+  "routingWhyDefault": {"message": "Links from other apps with no rule open in $PROFILE$. This is in Nulavio's settings, under Smart routing.", "placeholders": {"profile": {"content": "$1"}}},
+  "bandRoutedDefault": {"message": "Opened by the default destination · Change"},
+  "bandRoutedDefaultNamed": {"message": "Opened by the default destination · Change: links from other apps with no rule open in $PROFILE$. Change the destination", "placeholders": {"profile": {"content": "$1"}}}
 }

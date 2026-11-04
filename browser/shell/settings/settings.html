@@ -330,6 +330,13 @@
           <span data-i18n="routingInPageLabel"></span>
         </label>
         <p class="hint" id="routing-in-page-hint" data-i18n="routingInPageHint"></p>
+        <!-- UX6: where links from other apps with no rule open (ADR 0003 step 4, M4a only). -->
+        <div class="stack stack--tight" id="routing-fallback-field" data-option="routingFallback">
+          <label class="field"><span class="field__label" data-i18n="routingFallbackLabel"></span>
+            <select class="select" id="routing-fallback" aria-describedby="routing-fallback-hint routing-fallback-missing" data-focus-key="routing-fallback"></select></label>
+          <p class="hint" id="routing-fallback-hint" data-i18n="routingFallbackHint"></p>
+          <p class="hint" id="routing-fallback-missing" data-level="warn" hidden data-i18n="routingFallbackMissing"></p>
+        </div>
         <ul class="list" id="rules"></ul>
         <div class="empty-state" id="routing-empty" hidden>
           <p class="empty-state__title" data-i18n="routingNeedsTwoTitle"></p>

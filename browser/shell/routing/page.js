@@ -125,6 +125,24 @@ async function render() {
       document.getElementById("remember-field").hidden = false;
     }
     actions.push(button(here ?? t("routingOpenHere"), "button--secondary", () => openHere(url, rule, remember())));
+  } else if (params.get("by") === "default") {
+    // UX6: the default destination for links from other apps could not take the link.
+    const chosen = people?.profiles.find(p => String(p.id) === params.get("p")) ?? null;
+    const launch = params.get("why") === "launch" && chosen;
+    document.getElementById("explain").textContent = launch
+      ? t("routingBlockedLaunchDefault", [host, chosen.name])
+      : t("routingBlockedMissingDefault", [host]);
+    if (state.fallback?.profileName) {
+      document.getElementById("why").hidden = false;
+      document.getElementById("why-text").textContent = t("routingWhyDefault", [state.fallback.profileName]);
+    }
+    if (launch) {
+      actions.push(button(t("routingTryAgain", [chosen.name]), "button--primary", async () => {
+        await routing.openIn(chosen.id, url.href);
+        await closeThisTab();
+      }));
+    }
+    actions.push(button(here ?? t("routingOpenHereAnyway"), "button--secondary", () => openHere(url, null, false)));
   } else {
     const why = params.get("why");
     const name = rule?.profileName;

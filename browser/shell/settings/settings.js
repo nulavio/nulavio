@@ -592,6 +592,19 @@ async function renderRouting() {
   rerender(document.getElementById("rules"), () =>
     state.rules.length ? state.rules.map(ruleRow) : alone ? [] : h("li", { class: "hint", text: t("routingNoRules") })
   );
+  // UX6: the default destination for links from other apps; off (disabled) with routing, gone when alone.
+  const fallback = document.getElementById("routing-fallback");
+  document.getElementById("routing-fallback-field").hidden = alone;
+  fallback.disabled = !state.enabled;
+  fallback.replaceChildren(
+    h("option", { value: "0", text: t("routingFallbackLast") }),
+    ...people.profiles
+      .filter(p => p.id !== null)
+      .map(p => h("option", { value: String(p.id), text: t(p.encrypted ? "routingFallbackAlwaysProtected" : "routingFallbackAlways", [p.name]) })),
+    ...(state.fallback.missing ? [h("option", { value: String(state.fallback.profileId), text: t("routingFallbackGone") })] : [])
+  );
+  fallback.value = String(state.fallback.profileId);
+  document.getElementById("routing-fallback-missing").hidden = !state.fallback.missing;
   const select = document.getElementById("rule-profile");
   const chosen = select.value;
   select.replaceChildren(
@@ -607,6 +620,9 @@ function setUpRouting() {
   );
   document.getElementById("routing-in-page").addEventListener("change", event =>
     run(() => routing.setInPage(event.target.checked), { done: t("doneSaved") })
+  );
+  document.getElementById("routing-fallback").addEventListener("change", event =>
+    run(() => routing.setFallback(Number(event.target.value)), { done: t("doneSaved") })
   );
   const form = document.getElementById("add-rule");
   form.addEventListener("submit", async event => {
