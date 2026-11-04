@@ -97,6 +97,9 @@ function startTimer(ms, callback) {
 
 // Run one native step for `win`. It settles with the step's result, with GONE as soon as the
 // window unloads (or the step fails because it closed), or with TIMED_OUT at the deadline.
+// The step gets `current()`: false once it has settled that way. A step that changes the window
+// checks it after each await, so one that outlives its deadline (the queue has moved on, and a
+// later preset may already be in place) stops instead of writing its preset over the newer one.
 function settleInWindow(win, step, ms = WINDOW_STEP_TIMEOUT_MS) {
   if (windowGone(win)) {
     return Promise.resolve(GONE);
@@ -118,7 +121,8 @@ function settleInWindow(win, step, ms = WINDOW_STEP_TIMEOUT_MS) {
     const onGone = () => finish(resolve, GONE);
     win.addEventListener("unload", onGone, { once: true });
     timer = startTimer(ms, () => finish(resolve, windowGone(win) ? GONE : TIMED_OUT));
-    Promise.resolve().then(step).then(
+    const current = () => !settled && !windowGone(win);
+    Promise.resolve().then(() => step(current)).then(
       value => finish(resolve, value),
       error => (windowGone(win) ? finish(resolve, GONE) : finish(reject, error))
     );
@@ -319,11 +323,11 @@ function expandAdoptedWindows() {
     }
     // Bounded per window (QA A-1): the layout queue waits for this adoption.
     tasks.push(
-      settleInWindow(w, async () => {
+      settleInWindow(w, async current => {
         await w.SidebarController.promiseInitialized;
-        if (!windowGone(w) && w.toolbar?.visible) {
+        if (current() && w.toolbar?.visible) {
           await w.SidebarController.waitUntilStable();
-          if (!windowGone(w) && w.toolbar?.visible) {
+          if (current() && w.toolbar?.visible) {
             w.SidebarController._state?.updateVisibility(true, true);
             // Native per-window sidebar state (saved with the window), never a pref;
             // a width the person dragged is kept.
@@ -473,6 +477,7 @@ async function applyPreset(target, preset, ticket) {
   // key later returns to the preset it came from.
   if (preset === "focus" && !Services.prefs.prefIsLocked(PREF_BEFORE_FOCUS)) {
     const before = (await NulavioLayout.state(target)).preset;
+    if (ticket.cancelled) fail("layout-failed");
     if (before === "lateral" || before === "top") {
       Services.prefs.setStringPref(PREF_BEFORE_FOCUS, before);
     }
@@ -487,14 +492,21 @@ async function applyPreset(target, preset, ticket) {
       Services.prefs.setBoolPref(PREF_CHOICE_PENDING, false);
     }
     await Promise.all(windows.map(async w => {
-      const result = await settleInWindow(w, async () => {
+      const result = await settleInWindow(w, async current => {
         const sidebar = controller(w);
         await sidebar.waitUntilStable();
+        if (!current() || ticket.cancelled) {
+          return; // past the deadline: a later preset may already be in place
+        }
         controller(w);
         // updateVisibility affects only launcher expansion/visibility, keeping
         // open panels, widths, position, tools and tab/group data intact.
         sidebar._state.updateVisibility(true, preset === "lateral");
+        // The engine drops a hover toggle that a later one superseded (_expandOnHoverToggleID).
         await sidebar.toggleExpandOnHover(preset === "focus");
+        if (!current()) {
+          return;
+        }
         await sidebar.waitUntilStable();
         controller(w);
       });

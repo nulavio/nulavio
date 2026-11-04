@@ -411,6 +411,46 @@ class LayoutPresetsTest(unittest.TestCase):
         # The queue is free: the next choice applies at once.
         self.assertEqual(self.apply("lateral")["preset"], "lateral")
 
+    def test_a_window_step_past_its_deadline_never_overrides_a_later_preset(self):
+        """Codex review (PR #3): a window whose wait outlives the step deadline must not, when the wait
+        finally ends, write the earlier preset over one applied after it."""
+        self.apply("focus")
+        first = self.m.send("WebDriver:GetWindowHandle")["value"]
+        _second, ctx = self.open_secondary_window()
+        self.m.switch_to(first)
+        result = chrome_async(
+            self.m,
+            f"""
+          const M=ChromeUtils.importESModule({LAYOUT_MODULE!r}); const L=M.NulavioLayout;
+          const w2=[...Services.wm.getEnumerator('navigator:browser')].find(w=>String(w.browsingContext.id)===args[0]);
+          const sidebar=w2.SidebarController, original=sidebar.waitUntilStable.bind(sidebar);
+          const late=[];
+          // Lateral: every wait in the second window ends only when released, after the deadline.
+          sidebar.waitUntilStable=()=>new Promise(resolve=>late.push(resolve));
+          const lateral=(await L.apply(window,'lateral')).preset;
+          sidebar.waitUntilStable=original;
+          // Then Foco applies normally in both windows...
+          const focus=(await L.apply(window,'focus')).preset;
+          // The window itself (state() still calls a pinned-open Foco "focus", QA M-3): hover on, collapsed.
+          const look=()=>({{hover:w2.document.documentElement.hasAttribute('sidebar-expand-on-hover'),
+            expanded:Boolean(sidebar._state?.launcherExpanded)}});
+          const before=look();
+          // ...and only now do the old waits end.
+          for (const resolve of late) resolve();
+          await new Promise(r=>setTimeout(r,1500));
+          await original();
+          const after=look();
+          w2.close();
+          return {{lateral, focus, before, after, late: late.length, deadline: M.WINDOW_STEP_TIMEOUT_MS}};
+        """,
+            [ctx],
+        )
+        self.assertNotIn("error", result, result)
+        self.assertEqual((result["ok"]["lateral"], result["ok"]["focus"]), ("lateral", "focus"), result)
+        self.assertGreater(result["ok"]["late"], 0, result)
+        self.assertEqual(result["ok"]["before"], {"hover": True, "expanded": False}, result)
+        self.assertEqual(result["ok"]["after"], {"hover": True, "expanded": False}, result)
+
     def test_preserves_position_width_tools_bookmarks_density_and_assistant(self):
         self.apply("lateral")
         self.m.chrome("""
