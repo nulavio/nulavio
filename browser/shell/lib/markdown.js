@@ -8,10 +8,11 @@
 
 import { h } from "./ui.js";
 
-// Inline marks, in the order they are tried at each place: code first (its content is literal).
+// Inline marks other than code (code spans are cut first, in one pass, and their content is literal).
+// Text longer than INLINE_MAX is shown as it is: no pattern ever runs on a huge line (review UX5-E F4).
+const INLINE_MAX = 4000;
 const INLINE = new RegExp(
   [
-    /(`+)([\s\S]*?[^`])\1(?!`)/.source, // `code`
     /!\[[^\]]*\]\((?:[^()]|\([^()]*\))*\)/.source, // ![image](address): kept as text
     /\[([^\]]+)\]\(((?:[^()\s]|\([^()\s]*\))*)(?:\s+"[^"]*")?\)/.source, // [text](address), one level of ( ) inside
     /\*\*(?=\S)([\s\S]*?\S)\*\*/.source, // **strong**
@@ -28,18 +29,59 @@ function host(address) {
   return url && /^https?:$/.test(url.protocol) ? url.host : "";
 }
 
+/** `code` spans, found by scanning for a closing run of the same length (linear: no backtracking). */
+function codeSpans(text) {
+  const out = [];
+  let at = 0;
+  let from = 0;
+  while (from < text.length) {
+    const start = text.indexOf("`", from);
+    if (start < 0) {
+      break;
+    }
+    let run = start;
+    while (text[run] === "`") {
+      run++;
+    }
+    const ticks = text.slice(start, run);
+    let close = text.indexOf(ticks, run);
+    while (close >= 0 && text[close + ticks.length] === "`") {
+      let next = close;
+      while (text[next] === "`") {
+        next++;
+      }
+      close = text.indexOf(ticks, next);
+    }
+    if (close < 0) {
+      from = run; // no closing run of that length: the backticks stay as text
+      continue;
+    }
+    out.push(text.slice(at, start), { code: text.slice(run, close) });
+    at = from = close + ticks.length;
+  }
+  out.push(text.slice(at));
+  return out;
+}
+
 /** Inline Markdown in one line or paragraph, as nodes. */
 function inline(text) {
+  if (text.length > INLINE_MAX) {
+    return [text];
+  }
+  return codeSpans(text).flatMap(part =>
+    typeof part === "string" ? marks(part) : [h("code", { text: part.code.trim() || part.code })]
+  );
+}
+
+function marks(text) {
   const out = [];
   let at = 0;
   for (const match of text.matchAll(INLINE)) {
     if (match.index > at) {
       out.push(text.slice(at, match.index));
     }
-    const [whole, , code, linkText, linkTo, strong1, strong2, em1, em2] = match;
-    if (code !== undefined) {
-      out.push(h("code", { text: code.trim() || code }));
-    } else if (whole.startsWith("!")) {
+    const [whole, linkText, linkTo, strong1, strong2, em1, em2] = match;
+    if (whole.startsWith("!")) {
       out.push(whole);
     } else if (linkText !== undefined) {
       const where = host(linkTo);
@@ -63,7 +105,25 @@ function lines(list) {
 }
 
 const LIST_ITEM = /^\s{0,3}(?:([-*+])|(\d{1,9})[.)])\s+(.*)$/;
-const HEADING = /^\s{0,3}#{1,6}\s+(.*?)\s*#*\s*$/;
+/** A heading's text, or null, without a pattern (a crafted line cannot make it slow). */
+function heading(row) {
+  const stripped = row.replace(/^ {0,3}/, "");
+  if (!stripped.startsWith("#")) {
+    return null;
+  }
+  let level = 0;
+  while (stripped[level] === "#") {
+    level++;
+  }
+  if (level > 6 || !/^[ \t]/.test(stripped.slice(level))) {
+    return null;
+  }
+  let text = stripped.slice(level).trim();
+  while (text.endsWith("#")) {
+    text = text.slice(0, -1);
+  }
+  return text.trim();
+}
 const FENCE = /^\s{0,3}(```+|~~~+)/;
 const QUOTE = /^\s{0,3}>\s?(.*)$/;
 
@@ -89,9 +149,9 @@ function blocks(source) {
       out.push(h("pre", {}, h("code", { text: body.join("\n") })));
       continue;
     }
-    const heading = row.match(HEADING);
-    if (heading) {
-      out.push(h("p", {}, h("strong", {}, ...inline(heading[1]))));
+    const title = heading(row);
+    if (title !== null) {
+      out.push(h("p", {}, h("strong", {}, ...inline(title))));
       i++;
       continue;
     }
@@ -123,7 +183,7 @@ function blocks(source) {
       continue;
     }
     const paragraph = [];
-    while (i < rows.length && rows[i].trim() && !FENCE.test(rows[i]) && !HEADING.test(rows[i]) && !QUOTE.test(rows[i]) && !LIST_ITEM.test(rows[i])) {
+    while (i < rows.length && rows[i].trim() && !FENCE.test(rows[i]) && heading(rows[i]) === null && !QUOTE.test(rows[i]) && !LIST_ITEM.test(rows[i])) {
       paragraph.push(rows[i++]);
     }
     out.push(h("p", {}, ...lines(paragraph)));
