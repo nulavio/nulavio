@@ -18,6 +18,7 @@ sys.path.insert(0, str(ROOT / "scripts" / "site"))
 sys.path.insert(0, str(ROOT / "scripts" / "brand"))
 
 import build_site  # noqa: E402
+import verify_live  # noqa: E402
 from contrast import ratio  # noqa: E402
 
 PAGES = ["index.html", "en/index.html", "404.html"]
@@ -270,6 +271,53 @@ class SiteTest(unittest.TestCase):
                         self.assertGreaterEqual(value, minimum)
         site_css = (ROOT / "site" / "site.css").read_text(encoding="utf-8")
         self.assertNotRegex(site_css, r"#[0-9A-Fa-f]{3,8}\b|rgb\(|hsl\(", "site.css takes every colour from the tokens")
+
+
+class VerifyLiveTest(unittest.TestCase):
+    """scripts/site/verify_live.py, the check after a deploy (.github/workflows/site.yml), against a fake site."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
+        self.dist = self.tmp / "site"
+        build_site.build(self.dist)
+        self.headers = verify_live.expected_headers(self.dist)
+        self.served = {
+            "https://nulavio.net/" + path: (dist_file, dict(self.headers)) for path, dist_file in verify_live.CHECKED.items()
+        }
+
+    def fetch(self, url):
+        name, headers = self.served[url]
+        return 200, headers, (self.dist / name).read_bytes()
+
+    def test_headers_come_from_the_build(self):
+        self.assertIn("content-security-policy", self.headers)
+        self.assertEqual(self.headers["strict-transport-security"], "max-age=15552000; includeSubDomains")
+
+    def test_the_build_as_built_passes(self):
+        self.assertEqual(verify_live.problems(self.dist, "https://nulavio.net/", self.fetch), [])
+
+    def test_an_older_page_or_a_missing_header_fails(self):
+        def stale(url):
+            status, headers, body = self.fetch(url)
+            if url.endswith("/en/"):
+                body = b"<!doctype html><title>old</title>"
+            if url == "https://nulavio.net/":
+                headers = {k: v for k, v in headers.items() if k != "content-security-policy"}
+            return status, headers, body
+
+        found = verify_live.problems(self.dist, "https://nulavio.net/", stale)
+        self.assertEqual(len(found), 2, found)
+        self.assertTrue(any("/en/" in p and "bytes" in p for p in found), found)
+        self.assertTrue(any("content-security-policy" in p for p in found), found)
+
+    def test_an_error_status_fails(self):
+        def missing(url):
+            status, headers, body = self.fetch(url)
+            return (404, headers, b"") if url.endswith("security.txt") else (status, headers, body)
+
+        found = verify_live.problems(self.dist, "https://nulavio.net/", missing)
+        self.assertEqual(found, ["https://nulavio.net/.well-known/security.txt: HTTP 404"])
 
 
 if __name__ == "__main__":
