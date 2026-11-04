@@ -355,25 +355,22 @@ Verified on a real incremental Track B 159.0 build of `f3dfa89` (BuildID `202611
   - a quick action.
 - **Visibility.** An agent-activity seal in the band.
 
-*UX5 progress (2026-11-03, branch `ux3g-polish`).*
+*UX5 progress (2026-11-03 and 04, branch `ux3g-polish`).*
 - **Plan.** Made from a read-only Understand workflow (5 readers and a synthesis). It is cut into sub-slices 0, 1, A–J. The maintainer delegated the open questions, and Q1–Q20 follow the plan's recommendations. Q1: the page copy goes again to the same recipient, with "Deixar a página de fora". Q8: Alt+Shift+A. Q15: 150 s idle, 10/30 min caps. Q16: the conversation in memory per window. Q20: 200 000 characters.
-- **Done, each with its tests (unit; `test_assistant_ui`, `test_ai_ui`, `test_ai_bridge` on the Track B build):**
+- **Done, each with its tests (unit; `test_assistant_ui` 41, `test_ai_ui` 12, `test_ai_bridge`, `test_window_band` 12 and `test_search` on the Track B build):**
   - **0** Approvals only tighten: checked again after the answer, session answers kept apart, and an AI Workspace window that can only stop, pause or revoke. ADR 0007 has the amendment.
   - **1** The fake provider streams, fails by status, hangs and counts.
   - **A** Provider errors by cause, each saying whether the request arrived; "Resposta cortada", with "Continuar".
   - **B** Context items read at "Incluir" and kept in memory. The line above Send gives recipient (host:port), model and whole size. The tools refuse `size-changed` and `recipient-changed`, and "Resumir" only attaches.
   - **C1 and C2** Stream mode and "Parar" or Esc, with honest cancel texts. The emergency stop, pause or revocation cuts a run at once.
-  - **D** The conversation per window, with "Começar conversa nova", "Levar a conversa" and "Tentar de novo".
-  - **E (Markdown part)** Answers in a safe Markdown that loads nothing.
-- **Review.** An adversarial review workflow on C1/C2 confirmed 15 findings, all fixed with tests (two `fix` commits). The worst: a late stop cut the AI Workspace cleanup, and a call stopped mid-way was missing from Atividade.
-- **QA.** Terra R4 on 0, 1, A and B confirmed no defects. Its two visual notes are fixed: a duplicate title in the side panel, and no next step after a cut answer. Much of its list stayed UNRUN.
-- **Still open.**
-  - E: sources on literal matches (Q13).
-  - F: the run timeline and inline approval.
-  - G: selection menu, entry channel and shortcut.
-  - H: `@ia` keyword and the `>` action.
-  - I: the activity seal.
-  - J: closing docs (ADR amendments for extraction at Include, the conversation, Markdown and stream; architecture, design system, threat model), the gallery and its baselines, and the full suite and packaging.
+  - **D** The conversation per window, with "Começar conversa nova", "Levar a conversa" and "Tentar de novo"; 200 000 characters and 50 answers at most.
+  - **E** Answers in a safe Markdown that loads nothing, in linear time; sources only for word-for-word quotes, which show their tab.
+  - **F** The run timeline and the permission card in the panel ("Negar" focused); with no panel, the request in front in the task's window, never both.
+  - **G and H** The selection menu, Alt+Shift+A, `@ia` in the address bar and the quick action: each one writes or attaches, none sends.
+  - **I** The band's activity seal (actions that ran, waiting, "Parar tarefa") and the connected-agent seal from the bridge's session markers.
+  - **J** ADR 0007 amendment, stream contract in `docs/architecture/ai-bridge.md`, AI-T35–38 in the threat model, the design-system section, the gallery and its baselines.
+- **Reviews.** Adversarial review workflows on C1/C2 (15 findings) and on D–I (16 confirmed, one critical: a retry could resend a page copy after it was left out). All are fixed with tests.
+- **QA.** Terra R4 on 0, 1, A and B confirmed no defects; its two visual notes are fixed. Terra R5 on C–I and the review fixes is running.
 
 **UX6 — Safe personalisation**
 - **Presets.** Offered in onboarding and in Settings.
