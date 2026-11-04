@@ -172,16 +172,27 @@ class MotionTest(unittest.TestCase):
                 self.assertEqual(self.animations("#status", toast, level), [])
         self.m.execute("document.getElementById('status').textContent = '';")
 
+    # The page paints again in the same script that reads (the 180 ms entrance has no fill: a separate
+    # read under load can land after it is over).
+    REPAINT = (
+        "{ const r = document.documentElement; r.removeAttribute('data-painted');"
+        " getComputedStyle(document.querySelector('.here__who > .chip')).animationName;"
+        " r.setAttribute('data-painted', 'true'); }"
+    )
+
     def test_04_the_profile_arrives_on_the_new_tab_and_nothing_moves_under_reduce(self):
         self.m.chrome("Services.prefs.setIntPref('ui.prefersReducedMotion', 0);")
         self.open("newtab/newtab.html", "return document.documentElement.hasAttribute('data-painted');")
-        chip = self.animations(".here__who > .chip")
+        chip = self.animations(".here__who > .chip", self.REPAINT)
         self.assertEqual([tuple(a) for a in chip], [("CSSAnimation", "nv-chip-in", 180, "cubic-bezier(0, 0, 0, 1)")])
-        self.assertEqual(self.animations(".here__who .badge"), [])
+        self.assertEqual(self.animations(".here__who .badge", self.REPAINT), [])
         self.m.chrome("Services.prefs.setIntPref('ui.prefersReducedMotion', 1);")
         try:
             self.open("newtab/newtab.html", "return document.documentElement.hasAttribute('data-painted');")
-            self.assertTrue(all(a[2] == 0 for a in self.animations()), self.animations())
+            self.assertEqual(self.animations(".here__who > .chip", self.REPAINT), [])
+            name = "return getComputedStyle(document.querySelector('.here__who > .chip')).animationName;"
+            self.assertEqual(self.m.execute(name), "none")
+            self.assertTrue(all(a[2] == 0 for a in self.animations("", self.REPAINT)), self.animations())
         finally:
             self.m.chrome("Services.prefs.clearUserPref('ui.prefersReducedMotion');")
 
