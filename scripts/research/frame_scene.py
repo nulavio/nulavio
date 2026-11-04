@@ -198,7 +198,7 @@ def one_run(engine: Path, samples: int) -> dict:
                     # painted (polled: an upper bound, the same method on both, used for the comparison).
                     seen = harness.wait_until(
                         lambda: m.execute(
-                            "if (!document.documentElement.hasAttribute('data-painted')) return null;"
+                            "if (!document.documentElement?.hasAttribute('data-painted')) return null;"
                             "const e = performance.getEntriesByName('nv-painted')[0];"
                             "return {seen: Date.now(), mark: e ? performance.timeOrigin + e.startTime : null};"
                         ),
