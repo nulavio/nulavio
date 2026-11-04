@@ -632,7 +632,6 @@
   "exceptionPopup": {"message": "Pop-ups permitidos"},
   "exceptionUntilClose": {"message": "até você fechar o navegador"},
   "exceptionPrivate": {"message": "janelas privativas"},
-  "exceptionBuiltIn": {"message": "do próprio navegador"},
   "err_filter_missing": {"message": "O uBlock Origin não está ativo neste perfil."},
   "err_invalid_type": {"message": "Esse tipo de exceção não aparece aqui."},
   "dnsHeading": {"message": "DNS"},
@@ -651,10 +650,9 @@
   "dnsCustom": {"message": "Outro resolvedor (endereço)"},
   "dnsUriLabel": {"message": "Endereço do resolvedor (https://)"},
   "dnsThirdParty": {"message": "O resolvedor que você escolher vê quais sites você procura neste perfil. Leia a política de privacidade dele antes de escolher."},
-  "dnsSave": {"message": "Usar este"},
+  "dnsSave": {"message": "Salvar escolha"},
   "dnsSaved": {"message": "DNS alterado neste perfil."},
   "dnsNowSystem": {"message": "Agora: o resolvedor do computador."},
-  "dnsNowDefault": {"message": "Agora: o padrão do navegador (o resolvedor do computador, a menos que a liberação regional da Mozilla ligue o DNS criptografado). Escolha abaixo para decidir você mesmo."},
   "dnsNowFallback": {"message": "Agora: DNS criptografado pelo $NAME$, com o resolvedor do computador como reserva.", "placeholders": {"name": {"content": "$1"}}},
   "dnsNowStrict": {"message": "Agora: somente DNS criptografado, pelo $NAME$.", "placeholders": {"name": {"content": "$1"}}},
   "dnsStatusSystem": {"message": "Resolvedor do computador"},
@@ -1255,5 +1253,12 @@
   "vaultCancel": {"message": "Cancelar"},
   "vaultChange": {"message": "Alterar"},
   "bandProtectedShort": {"message": "Protegido"},
-  "profilesTemporaryHint": {"message": "Perfil vazio, apagado ao fechar"}
+  "profilesTemporaryHint": {"message": "Perfil vazio, apagado ao fechar"},
+  "dnsDefaultOption": {"message": "Padrão do navegador (atual)"},
+  "dnsDefaultOptionNote": {"message": "Continua como está até você escolher uma das opções abaixo."},
+  "dnsNowDefaultPlain": {"message": "Agora: o padrão do navegador, sem criptografia (o resolvedor do computador)."},
+  "dnsNowDefaultEncrypted": {"message": "Agora: o padrão do navegador, com DNS criptografado pela Cloudflare (programa de resolvedores da Mozilla)."},
+  "exceptionBuiltInBadge": {"message": "Padrão do navegador"},
+  "exceptionRemoveBuiltInTitle": {"message": "Remover um padrão do navegador?"},
+  "exceptionRemoveBuiltInBody": {"message": "O navegador mantém esta exceção para $SITE$ ($WHAT$). Sem ela, a proteção volta a valer nesse site, e algo nele pode deixar de funcionar.", "placeholders": {"site": {"content": "$1"}, "what": {"content": "$2"}}}
 }

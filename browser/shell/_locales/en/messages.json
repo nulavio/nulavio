@@ -632,7 +632,6 @@
   "exceptionPopup": {"message": "Pop-ups allowed"},
   "exceptionUntilClose": {"message": "until you close the browser"},
   "exceptionPrivate": {"message": "private windows"},
-  "exceptionBuiltIn": {"message": "built into the browser"},
   "err_filter_missing": {"message": "uBlock Origin is not active in this profile."},
   "err_invalid_type": {"message": "That exception type is not listed here."},
   "dnsHeading": {"message": "DNS"},
@@ -651,10 +650,9 @@
   "dnsCustom": {"message": "Another resolver (address)"},
   "dnsUriLabel": {"message": "Resolver address (https://)"},
   "dnsThirdParty": {"message": "The resolver you choose sees which sites you look up from this profile. Read its privacy policy before choosing."},
-  "dnsSave": {"message": "Use this"},
+  "dnsSave": {"message": "Save choice"},
   "dnsSaved": {"message": "DNS changed for this profile."},
   "dnsNowSystem": {"message": "Now: the computer's resolver."},
-  "dnsNowDefault": {"message": "Now: the browser's default (the computer's resolver unless Mozilla's regional roll-out turns encrypted DNS on). Choose below to decide yourself."},
   "dnsNowFallback": {"message": "Now: encrypted DNS through $NAME$, with the computer's resolver as a fallback.", "placeholders": {"name": {"content": "$1"}}},
   "dnsNowStrict": {"message": "Now: encrypted DNS only, through $NAME$.", "placeholders": {"name": {"content": "$1"}}},
   "dnsStatusSystem": {"message": "Computer's resolver"},
@@ -1255,5 +1253,12 @@
   "vaultCancel": {"message": "Cancel"},
   "vaultChange": {"message": "Change"},
   "bandProtectedShort": {"message": "Protected"},
-  "profilesTemporaryHint": {"message": "An empty profile, deleted when you close it"}
+  "profilesTemporaryHint": {"message": "An empty profile, deleted when you close it"},
+  "dnsDefaultOption": {"message": "Browser default (current)"},
+  "dnsDefaultOptionNote": {"message": "Stays as it is until you choose one of the options below."},
+  "dnsNowDefaultPlain": {"message": "Now: the browser's default, unencrypted (the computer's resolver)."},
+  "dnsNowDefaultEncrypted": {"message": "Now: the browser's default, with DNS encrypted by Cloudflare (Mozilla's resolver programme)."},
+  "exceptionBuiltInBadge": {"message": "Browser default"},
+  "exceptionRemoveBuiltInTitle": {"message": "Remove a browser default?"},
+  "exceptionRemoveBuiltInBody": {"message": "The browser keeps this exception for $SITE$ ($WHAT$). Without it, the protection applies to that site again, and something there may stop working.", "placeholders": {"site": {"content": "$1"}, "what": {"content": "$2"}}}
 }

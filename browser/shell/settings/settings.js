@@ -914,7 +914,6 @@ function exceptionRow(entry) {
   const key = EXCEPTION_LABELS[entry.type]?.[entry.capability] ?? EXCEPTION_LABELS[entry.type]?.allow;
   const what = key ? t(key) : `${entry.type} (${entry.capability})`;
   const notes = [
-    entry.builtIn ? t("exceptionBuiltIn") : null,
     entry.session ? t("exceptionUntilClose") : null,
     entry.private ? t("exceptionPrivate") : null,
   ].filter(Boolean);
@@ -925,14 +924,28 @@ function exceptionRow(entry) {
     "aria-label": `${t("engineRemove")}: ${entry.site} — ${what}`,
     "data-focus-key": `exception-${entry.type}-${entry.origin}`,
   });
-  remove.addEventListener("click", () => run(() => privacy.remove(entry.type, entry.origin), { done: t("doneRemoved") }));
+  remove.addEventListener("click", async () => {
+    // A browser default is removed only after its consequence is said (audit 2026-11 SET-14).
+    if (entry.builtIn) {
+      const ok = await confirmDialog({
+        title: t("exceptionRemoveBuiltInTitle"),
+        body: t("exceptionRemoveBuiltInBody", [entry.site, what]),
+        confirm: t("engineRemove"),
+      });
+      if (!ok) {
+        return;
+      }
+    }
+    run(() => privacy.remove(entry.type, entry.origin), { done: t("doneRemoved") });
+  });
   return h(
     "li",
-    { class: "row row--plain", dataset: { type: entry.type, origin: entry.origin } },
+    { class: "row row--plain", dataset: { type: entry.type, origin: entry.origin, ...(entry.builtIn ? { builtIn: "" } : {}) } },
     h(
       "div",
       { class: "row__main" },
-      h("p", { class: "row__title mono", text: entry.site }),
+      h("p", { class: "row__title" }, h("span", { class: "mono", text: entry.site }),
+        entry.builtIn ? h("span", { class: "badge badge--quiet", text: t("exceptionBuiltInBadge") }) : null),
       h("p", { class: "hint", text: [what, ...notes].join(" · ") })
     ),
     h("div", { class: "row__end" }, remove)
@@ -970,7 +983,8 @@ function dnsText(state) {
     return t("dnsNowSystem");
   }
   if (state.choice === "default") {
-    return t("dnsNowDefault");
+    // What the default does right now, in plain words (audit 2026-11 SET-02).
+    return t(state.encryptedNow ? "dnsNowDefaultEncrypted" : "dnsNowDefaultPlain");
   }
   const name = state.provider === "custom" ? state.uri : t(`dns${state.provider[0].toUpperCase()}${state.provider.slice(1)}`);
   return t(state.choice === "strict" ? "dnsNowStrict" : "dnsNowFallback", [name]);
@@ -978,8 +992,12 @@ function dnsText(state) {
 
 function syncDnsForm(form) {
   const choice = form.elements.choice.value;
-  document.getElementById("dns-provider-row").hidden = choice === "system" || !choice;
+  document.getElementById("dns-provider-row").hidden = choice === "system" || choice === "default" || !choice;
   document.getElementById("dns-uri-field").hidden = form.elements.provider.value !== "custom";
+  // "Salvar escolha" only when the form says something other than what is in effect.
+  const same = choice === form.dataset.choice && (choice === "system" || choice === "default"
+    || (form.elements.provider.value === form.dataset.provider && form.elements.uri.value === form.dataset.uri));
+  document.getElementById("dns-save").disabled = !choice || choice === "default" || same;
 }
 
 async function renderDns() {
@@ -990,11 +1008,14 @@ async function renderDns() {
   const form = document.getElementById("dns-form");
   document.getElementById("dns-current").textContent = dnsText(state);
   form.dataset.choice = state.choice;
+  document.getElementById("dns-default-option").hidden = state.choice !== "default";
   for (const radio of form.elements.choice) {
     radio.checked = radio.value === state.choice;
   }
   form.elements.provider.value = state.provider ?? "cloudflare";
   form.elements.uri.value = state.provider === "custom" ? state.uri : "";
+  form.dataset.provider = form.elements.provider.value;
+  form.dataset.uri = form.elements.uri.value;
   syncDnsForm(form);
 }
 
@@ -1002,11 +1023,12 @@ function setUpDns() {
   document.getElementById("dns").hidden = false;
   const form = document.getElementById("dns-form");
   form.addEventListener("change", () => syncDnsForm(form));
+  form.addEventListener("input", () => syncDnsForm(form));
   form.addEventListener("submit", async event => {
     event.preventDefault();
     const choice = form.elements.choice.value;
-    if (!choice) {
-      return;
+    if (!choice || choice === "default") {
+      return; // "Padrão do navegador (atual)" is what is in effect: nothing to save
     }
     const details = { choice, provider: form.elements.provider.value, uri: form.elements.uri.value };
     if (await run(() => privacy.setDns(details), { form, done: t("dnsSaved") })) {
