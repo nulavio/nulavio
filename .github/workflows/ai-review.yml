@@ -118,9 +118,9 @@ jobs:
         if: steps.input.outputs.status == 'ready'
         env:
           # Must equal claudeCodeVersion in src/entrypoints/run.ts of the pinned action. The hash comes from the
-          # GPG-verified manifest: python3 -I scripts/upstream/verify_claude_code_release.py 2.1.311
-          CLAUDE_CODE_VERSION: "2.1.311"
-          CLAUDE_CODE_SHA256: 86dc1fcc69498159eaf15f446613e847010f9036bfbbdffd4c49350be8489ada
+          # GPG-verified manifest: python3 -I scripts/upstream/verify_claude_code_release.py 2.1.312
+          CLAUDE_CODE_VERSION: "2.1.312"
+          CLAUDE_CODE_SHA256: 4f4178ce41d83e23341ebfbaecdbcf8ea6bf7baea0690025abe49eeec3a5d01d
           # Must equal bun-version in the pinned action's action.yml; hash from Bun's SHASUMS256.txt for the release.
           BUN_VERSION: "1.4.4"
           BUN_ZIP_SHA256: bf8ccbfb2b0b80159e0f9a6d15c55317add8077534dbc6130a3edb52fccb395c
@@ -202,5 +202,5 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           BASE_SHA: ${{ github.sha }}
-          AI_REVIEW_SOURCE: claude-opus-5-5 through claude-code-action v1.0.263
+          AI_REVIEW_SOURCE: claude-opus-5-5 through claude-code-action v1.0.264
         run: python3 -I scripts/ci/post_ai_review.py --post
