@@ -33,7 +33,7 @@ SCHEMA = json.loads((ROOT / ".github" / "ai-review" / "schema.json").read_text()
 LOCAL_SCRIPT = ROOT / "scripts" / "review" / "ai_review_local.sh"
 HOOK = ROOT / "scripts" / "git-hooks" / "pre-push"
 FIXTURES = ROOT / "tests" / "fixtures" / "claude-code"
-ACTION_PIN = "anthropics/claude-code-action@8041f1d17e0e7d2f2cfe35002962e9f26237c0bb # v1.0.263"
+ACTION_PIN = "anthropics/claude-code-action@d70510b174a1244958df0b03166a54912811f3e6 # v1.0.264"
 ZERO = "0" * 40
 GIT_ENV = {**os.environ, "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": os.devnull}
 
@@ -428,7 +428,7 @@ class ReviewInputTest(unittest.TestCase):
 
 @unittest.skipUnless(shutil.which("gpg"), "gpg not installed")
 class VerifyClaudeCodeReleaseTest(unittest.TestCase):
-    def verify(self, manifest: Path = FIXTURES / "manifest.json", version: str = "2.1.311", platform: str = "linux-x64"):
+    def verify(self, manifest: Path = FIXTURES / "manifest.json", version: str = "2.1.312", platform: str = "linux-x64"):
         return verify_cc.verify_manifest(
             manifest, FIXTURES / "manifest.json.sig", FIXTURES / "claude-code.asc", version, platform
         )
@@ -436,13 +436,13 @@ class VerifyClaudeCodeReleaseTest(unittest.TestCase):
     def test_signed_manifest_gives_the_pinned_hash(self):
         digest, size, key = self.verify()
         self.assertEqual(digest, env_value("CLAUDE_CODE_SHA256"))
-        self.assertEqual(size, 293776752)
+        self.assertEqual(size, 293592432)
         self.assertEqual(key, verify_cc.PINNED_PRIMARY)
 
     def test_tampered_manifest_is_refused(self):
         with tempfile.TemporaryDirectory() as tmp:
             tampered = Path(tmp) / "manifest.json"
-            tampered.write_text((FIXTURES / "manifest.json").read_text().replace("86dc1fcc", "00000000"))
+            tampered.write_text((FIXTURES / "manifest.json").read_text().replace("4f4178ce", "00000000"))
             with self.assertRaises(SystemExit) as caught:
                 self.verify(tampered)
             self.assertIn("FAILED", str(caught.exception))
@@ -450,7 +450,7 @@ class VerifyClaudeCodeReleaseTest(unittest.TestCase):
     def test_other_key_version_or_platform_is_refused(self):
         with mock.patch.object(verify_cc, "PINNED_PRIMARY", "0" * 40), self.assertRaises(SystemExit):
             self.verify()
-        for version, platform in (("2.1.310", "linux-x64"), ("2.1.311", "linux-sparc"), ("latest", "linux-x64")):
+        for version, platform in (("2.1.310", "linux-x64"), ("2.1.312", "linux-sparc"), ("latest", "linux-x64")):
             with self.subTest(version=version, platform=platform), self.assertRaises(SystemExit):
                 self.verify(version=version, platform=platform)
 
