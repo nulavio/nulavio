@@ -394,7 +394,8 @@ Verified on a real incremental Track B 159.0 build of `f3dfa89` (BuildID `202611
   - **S3–S4** Settings → Aparência: density, accent, "Mais contraste", the new tab's soft background and "Reduzir transparência"; `test_appearance` 11 (walks every option and sees no other pref change).
   - **S5–S6** Ctrl+Alt+F and Ctrl+Alt+B, Settings → Atalhos, the keys read from the engine, two quick actions after ">"; `test_shortcuts` 10.
   - **S7** The default destination for links from other apps (ADR 0003 step 4, M4a only); `test_routing` 23–27 and the locked case in `test_vault_profiles`.
-- **Open.** The adversarial review and Terra QA of the slice; the real Track B build and full suites; whether a locked last-used profile loses a link that starts the browser (plan K3, a Vault question).
+- **Review.** An adversarial review (4 dimensions, each finding checked by a skeptic): 24 confirmed, one high. The default destination could move a command line sent to a profile on purpose, because every instance makes itself the group default in memory; it now reads `profiles.ini` when the line arrives. The medium ones: a reused profile id inheriting the destination (it is now kept by id and directory), the routing note read when hidden, "Restaurar" dropping focus, and three tests weaker than their names. All fixed with tests (`5df03c0`, `16283fc`); two low test gaps are recorded in the commit.
+- **Open.** Terra QA of the slice; the real Track B build and full suites; whether a locked last-used profile loses a link that starts the browser (plan K3, a Vault question); a brand-new profile's first start loses a command-line link with or without routing (found while testing S7; a profile that ran before keeps it).
 
 **UX7 — Motion and finish**
 - **Motion tokens applied.** Profile arrival on the band, the sidebar, sheets, chips and toasts; all off under reduced motion.
