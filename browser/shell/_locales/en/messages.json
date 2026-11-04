@@ -1313,5 +1313,6 @@
   "keyProfiles": {"message": "Profile menu"},
   "keyFocus": {"message": "Focus layout"},
   "keyLockProfile": {"message": "Lock profile"},
-  "keyAssistant": {"message": "Assistant"}
+  "keyAssistant": {"message": "Assistant"},
+  "quickActionsLabel": {"message": "Quick actions after \">\" in the address bar"}
 }

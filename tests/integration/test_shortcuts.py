@@ -165,6 +165,52 @@ class ShortcutsTest(unittest.TestCase):
             self.m.send("WebDriver:CloseWindow")
             self.m.switch_to(next(iter(handles)))
 
+    def test_09_quick_actions_open_settings_and_toggle_focus(self):
+        """UX6 (D8): after ">", Nulavio's settings and the Foco toggle; matched by their words."""
+        actions = (
+            "const {ActionsProviderQuickActions: Q} = ChromeUtils.importESModule("
+            "'moz-src:///browser/components/urlbar/ActionsProviderQuickActions.sys.mjs');"
+        )
+        # As typed: a prefix of a word, or the whole word (the engine's exact-match path).
+        found = lambda text, exact=False: chrome_async(  # noqa: E731
+            self.m, actions + "return [...await Q.getActions({input: args[0], includesExactMatch: args[1]})];", [text, exact]
+        )["ok"]
+        self.assertIn("nulavio-focus", found("foc"))
+        self.assertIn("nulavio-focus", found("foco", True))
+        self.assertIn("nulavio-focus", found("focus", True))
+        self.assertIn("nulavio-settings", found("nulav"))
+        self.assertIn("nulavio-settings", found("nulavio", True))
+        labels = chrome_async(
+            self.m,
+            "return await document.l10n.formatValues([{id: 'nulavio-quickaction-settings'}, {id: 'nulavio-quickaction-focus'}]);",
+        )["ok"]
+        self.assertEqual(labels, ["Abrir as configurações do Nulavio", "Ligar ou desligar o layout Foco"])
+        self.apply("lateral")
+        self.m.chrome(actions + "Q.getAction('nulavio-focus').onPick(null, {browserWindow: window});")
+        self.assertTrue(harness.wait_until(lambda: self.preset() == "focus", 15), self.preset())
+        self.m.chrome(actions + "Q.getAction('nulavio-focus').onPick(null, {browserWindow: window});")
+        self.assertTrue(harness.wait_until(lambda: self.preset() == "lateral", 15), self.preset())
+        before = self.m.chrome("return gBrowser.tabs.length;")
+        self.m.chrome(actions + "Q.getAction('nulavio-settings').onPick(null, {browserWindow: window});")
+        opened = (
+            "return gBrowser.tabs.map(t => t.linkedBrowser.currentURI.spec).some(u => u.endsWith('/settings/settings.html'));"
+        )
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome(opened), 10))
+        self.m.chrome("while (gBrowser.tabs.length > arguments[0]) gBrowser.removeTab(gBrowser.tabs.at(-1));", [before])
+
+    def test_10_quick_actions_are_not_offered_in_an_ai_workspace(self):
+        actions = (
+            "const {ActionsProviderQuickActions: Q} = ChromeUtils.importESModule("
+            "'moz-src:///browser/components/urlbar/ActionsProviderQuickActions.sys.mjs');"
+        )
+        unsupported = actions + "return ['nulavio-settings', 'nulavio-focus'].map(a => Q.getAction(a).isUnsupported());"
+        self.assertEqual(self.m.chrome(unsupported), [False, False])
+        self.m.chrome("Services.prefs.setStringPref('nulavio.ai.workspace', 'test-agent');")
+        try:
+            self.assertEqual(self.m.chrome(unsupported), [True, True])
+        finally:
+            self.m.chrome("Services.prefs.clearUserPref('nulavio.ai.workspace');")
+
 
 if __name__ == "__main__":
     unittest.main()

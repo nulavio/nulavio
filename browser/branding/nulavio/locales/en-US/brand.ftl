@@ -18,3 +18,8 @@ trademarkInfo = Nulavio is built on the Gecko engine by Mozilla. Nulavio is not 
 ## It includes the page shown in the panel's next message; nothing is sent.
 
 nulavio-quickaction-assistant = Ask the assistant about this page
+
+## Nulavio's other quick actions after ">" (UX6): open its settings, and turn the Focus layout on or off.
+
+nulavio-quickaction-settings = Open Nulavio settings
+nulavio-quickaction-focus = Turn the Focus layout on or off

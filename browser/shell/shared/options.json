@@ -153,6 +153,20 @@
       "ui": [
         "settings/settings.html#shortcut-list"
       ]
+    },
+    {
+      "id": "quickActions",
+      "kind": "quick-action",
+      "prefs": [],
+      "values": [
+        "nulavio-assistant",
+        "nulavio-settings",
+        "nulavio-focus"
+      ],
+      "default": "nulavio-assistant",
+      "writer": "engine",
+      "labelKey": "quickActionsLabel",
+      "ui": []
     }
   ]
 }

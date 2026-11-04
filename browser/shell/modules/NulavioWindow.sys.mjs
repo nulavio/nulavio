@@ -32,6 +32,9 @@ const inContent = Services.io.newURI("resource://builtin-addons/nulavio-shell/sh
 const AREA = "nulavio-band";
 const WIDGET = "nulavio-band-widget";
 const QUICK_ACTION = "nulavio-assistant"; // the address bar quick action (UX5-H)
+// UX6 (D8): Nulavio's other quick actions after ">". None of them unlocks, resumes, grants or turns
+// anything off (tests/unit/test_personalisation.py); lock and AI actions have their own places.
+const QUICK_ACTIONS = Object.freeze([QUICK_ACTION, "nulavio-settings", "nulavio-focus"]);
 const SHELL = "shell@nulavio.net";
 const HTML = "http://www.w3.org/1999/xhtml";
 // nulavio-ai-agent-files-changed: the driving agent's registry or the emergency stop changed (NulavioAI).
@@ -781,6 +784,36 @@ class WindowUI {
           return null;
         },
       });
+      const workspace = () => Boolean(Services.prefs.getStringPref("nulavio.ai.workspace", ""));
+      lazy.ActionsProviderQuickActions.addAction("nulavio-settings", {
+        commands: ["nulavio", "configurações do nulavio", "nulavio settings"],
+        icon: WebExtensionPolicy.getByID(SHELL)?.getURL("shared/nulavio-symbol-mono.svg") ?? "",
+        label: "nulavio-quickaction-settings",
+        isUnsupported: workspace, // an agent's window has no Nulavio settings to open
+        onPick: (_queryContext, controller) => {
+          const win = controller?.browserWindow ?? top();
+          const url = WebExtensionPolicy.getByID(SHELL)?.getURL("settings/settings.html");
+          if (win && url) {
+            win.openTrustedLinkIn(url, "tab");
+          }
+          return null;
+        },
+      });
+      lazy.ActionsProviderQuickActions.addAction("nulavio-focus", {
+        commands: ["foco", "modo foco", "focus", "focus mode"],
+        icon: WebExtensionPolicy.getByID(SHELL)?.getURL("shared/nulavio-symbol-mono.svg") ?? "",
+        label: "nulavio-quickaction-focus",
+        isUnsupported: () => workspace() || !Services.prefs.getBoolPref("sidebar.revamp", false),
+        onPick: (_queryContext, controller) => {
+          const win = controller?.browserWindow ?? top();
+          if (win) {
+            const extension = WebExtensionPolicy.getByID(SHELL)?.extension;
+            const say = key => win.A11yUtils?.announce({ raw: extension?.localizeMessage(key) ?? key }).catch(() => {});
+            lazy.NulavioLayout.toggleFocus(win, say).catch(() => {}); // announced in the window
+          }
+          return null;
+        },
+      });
     } catch (e) {
       console.error("Nulavio: quick action", e); // an engine without this API: the other entry points remain
     }
@@ -801,10 +834,12 @@ class WindowUI {
       Services.obs.removeObserver(this, topic);
     }
     lazy.CustomizableUI.removeListener(this);
-    try {
-      lazy.ActionsProviderQuickActions.removeAction(QUICK_ACTION);
-    } catch (e) {
-      console.error("Nulavio: quick action", e);
+    for (const action of QUICK_ACTIONS) {
+      try {
+        lazy.ActionsProviderQuickActions.removeAction(action);
+      } catch (e) {
+        console.error("Nulavio: quick action", e);
+      }
     }
     for (const win of this.#windows.keys()) {
       this.#detach(win);

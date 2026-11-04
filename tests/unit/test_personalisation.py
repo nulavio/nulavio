@@ -349,6 +349,24 @@ class CommandsTest(unittest.TestCase):
         self.assertNotIn("nulavioVault", take)
 
 
+class QuickActionsTest(unittest.TestCase):
+    def test_quick_actions_are_pinned_and_none_lowers_a_protection(self):
+        source = (SHELL / "modules" / "NulavioWindow.sys.mjs").read_text(encoding="utf-8")
+        added = re.findall(r'addAction\(\s*("[^"]+"|QUICK_ACTION)', source)
+        names = [json.loads(a) if a.startswith('"') else "nulavio-assistant" for a in added]
+        declared = next(o for o in options() if o["id"] == "quickActions")
+        self.assertEqual(sorted(names), sorted(declared["values"]))
+        block = source[source.index('addAction("nulavio-settings"') : source.index("  stop() {")]
+        for forbidden in ("NulavioVault", "unlock", "setStopped", "grant", "autonomy", "NulavioGuard", "Services.prefs.set"):
+            self.assertNotIn(forbidden, block)
+        for name in ("nulavio-quickaction-settings", "nulavio-quickaction-focus"):
+            for ftl in (
+                ROOT / "browser" / "branding" / "nulavio" / "locales" / "en-US" / "brand.ftl",
+                ROOT / "browser" / "l10n" / "pt-BR" / "browser" / "branding" / "nulavio" / "brand.ftl",
+            ):
+                self.assertRegex(ftl.read_text(encoding="utf-8"), rf"(?m)^{name} = \S")
+
+
 class PrefWriterInventoryTest(unittest.TestCase):
     def test_every_privileged_pref_writer_is_pinned(self):
         found: dict[str, set[str]] = {}

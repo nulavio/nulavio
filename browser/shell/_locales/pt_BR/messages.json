@@ -1313,5 +1313,6 @@
   "keyProfiles": {"message": "Menu de perfis"},
   "keyFocus": {"message": "Layout Foco"},
   "keyLockProfile": {"message": "Bloquear perfil"},
-  "keyAssistant": {"message": "Assistente"}
+  "keyAssistant": {"message": "Assistente"},
+  "quickActionsLabel": {"message": "Ações rápidas depois de “>” na barra de endereço"}
 }
