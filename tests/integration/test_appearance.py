@@ -384,23 +384,24 @@ class AppearanceTest(unittest.TestCase):
                 "Services.prefs.getDefaultBranch('').setStringPref('nulavio.appearance.accent', '');"
             )
 
-    def test_12b_a_locked_density_default_still_reads_automatic(self):
-        """Review: a policy lock writes the default branch only; the engine still runs Automático (no user
-        value), so Settings shows Automático, disabled, not the locked default."""
-        self.m.chrome(
-            "Services.prefs.getDefaultBranch('').setIntPref('browser.uidensity', 2);Services.prefs.lockPref('browser.uidensity');"
+    def test_12b_a_locked_density_reads_as_the_engine_draws_it(self):
+        """Review: a policy lock writes the default branch only. The engine (gUIDensity) then compacts
+        short windows on top of that default: a locked Normal is Automático, a locked Toque is Toque
+        (the window draws it), both disabled."""
+        state = lambda: self.m.execute(  # noqa: E731
+            "const r = document.querySelector('input[name=density]:checked'); return [r?.value, r?.disabled];"
         )
-        try:
-            self.open()
-            state = lambda: self.m.execute(  # noqa: E731
-                "const r = document.querySelector('input[name=density]:checked'); return [r?.value, r?.disabled];"
-            )
-            self.assertTrue(harness.wait_until(lambda: state() == ["auto", True], 10), state())
-        finally:
-            self.m.chrome(
-                "Services.prefs.unlockPref('browser.uidensity');"
-                "Services.prefs.getDefaultBranch('').setIntPref('browser.uidensity', 0);"
-            )
+        drawn = "return document.documentElement.getAttribute('uidensity') || 'normal';"
+        lock = "Services.prefs.getDefaultBranch('').setIntPref('browser.uidensity', arguments[0]);"
+        for locked, shown, window in ((0, "auto", "normal"), (2, "touch", "touch")):
+            with self.subTest(locked=locked):
+                self.m.chrome(lock + "Services.prefs.lockPref('browser.uidensity');", [locked])
+                try:
+                    self.open()
+                    self.assertTrue(harness.wait_until(lambda want=shown: state() == [want, True], 10), state())
+                    self.assertEqual(self.m.chrome(drawn), window)  # 1366x768: not short, so no auto-compact
+                finally:
+                    self.m.chrome("Services.prefs.unlockPref('browser.uidensity');" + lock, [0])
 
     def message(self, key: str) -> str:
         return self.m.execute("return browser.i18n.getMessage(arguments[0]);", [key])

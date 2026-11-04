@@ -63,17 +63,24 @@ async function option(id) {
   return found;
 }
 
-// The engine reads these by whether they have a user value: browser.uidensity with none is
-// Automático (gUIDensity), even when an administrator locks a default value.
+// The engine reads browser.uidensity by whether it has a user value (gUIDensity): with none, short
+// windows compact on top of the default value, so Automático is a default of Normal (0) and any other
+// default (an administrator's lock writes the default branch) is that density.
 const BY_USER_VALUE = new Set(["browser.uidensity"]);
 
 function read(entry) {
   const [pref] = entry.prefs;
-  // A locked value (an administrator's lockPref or policy) is the one in effect, user value or not,
-  // for prefs read by value (Nulavio's, through -moz-pref); otherwise no user value is the default choice.
-  const lockedValue = Services.prefs.prefIsLocked(pref) && !BY_USER_VALUE.has(pref);
-  if (!Services.prefs.prefHasUserValue(pref) && !lockedValue) {
-    return entry.values[entry.prefValues.indexOf(null)];
+  if (!Services.prefs.prefHasUserValue(pref)) {
+    if (BY_USER_VALUE.has(pref)) {
+      const base = Services.prefs.getIntPref(pref, 0);
+      const index = base === 0 ? entry.prefValues.indexOf(null) : entry.prefValues.indexOf(base);
+      return index === -1 ? entry.default : entry.values[index];
+    }
+    // A locked value (an administrator's lockPref or policy) is the one in effect for prefs read by
+    // value (Nulavio's, through -moz-pref); otherwise no user value is the default choice.
+    if (!Services.prefs.prefIsLocked(pref)) {
+      return entry.values[entry.prefValues.indexOf(null)];
+    }
   }
   if (Services.prefs.getPrefType(pref) === Services.prefs.PREF_INVALID) {
     return entry.default;
