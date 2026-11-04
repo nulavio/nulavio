@@ -86,6 +86,35 @@ class ShortcutsTest(unittest.TestCase):
         self.assertTrue(harness.wait_until(lambda: self.preset() == "top", 15), self.preset())
         self.apply("lateral")
 
+    def press(self, key: str, code: str, key_code: int) -> None:
+        """Ctrl+Alt+<key> as keyboard events through the widget (nsITextInputProcessor), as typing does."""
+        self.m.chrome(
+            "const [key, code, keyCode] = arguments;"
+            "const tip = Cc['@mozilla.org/text-input-processor;1'].createInstance(Ci.nsITextInputProcessor);"
+            "if (!tip.beginInputTransactionForTests(window)) throw new Error('no input transaction');"
+            "const ctrl = new KeyboardEvent('', {key: 'Control', code: 'ControlLeft', keyCode: 17});"
+            "const alt = new KeyboardEvent('', {key: 'Alt', code: 'AltLeft', keyCode: 18});"
+            "const letter = new KeyboardEvent('', {key, code, keyCode});"
+            "tip.keydown(ctrl); tip.keydown(alt); tip.keydown(letter); tip.keyup(letter); tip.keyup(alt); tip.keyup(ctrl);",
+            [key, code, key_code],
+        )
+
+    def test_02c_the_keys_work_when_pressed(self):
+        """Terra R7 asked for real key presses: the keys reach the Shell through the window's key handling."""
+        self.apply("lateral")
+        self.m.chrome("gURLBar.blur(); gBrowser.selectedBrowser.focus();")
+        self.press("f", "KeyF", 70)
+        self.assertTrue(harness.wait_until(lambda: self.preset() == "focus", 15), self.preset())
+        self.press("f", "KeyF", 70)
+        self.assertTrue(harness.wait_until(lambda: self.preset() == "lateral", 15), self.preset())
+        popup = (
+            "return [...document.querySelectorAll('browser')]"
+            "  .some(b => (b.currentURI?.spec || '').endsWith('/profiles/popup.html'));"
+        )
+        self.press("b", "KeyB", 66)
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome(popup), 10))
+        self.m.chrome("for (const p of document.querySelectorAll('panel[panelopen], panel[open]')) p.hidePopup?.();")
+
     def test_03_the_focus_key_explains_a_locked_layout_and_changes_nothing(self):
         self.apply("lateral")
         self.m.chrome("Services.prefs.lockPref('sidebar.visibility');")
