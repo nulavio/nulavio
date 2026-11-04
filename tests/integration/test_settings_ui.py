@@ -19,6 +19,7 @@ import harness
 SCOPES = {
     "layout": "scopeProfile",
     "appearance": "scopeProfile",
+    "shortcuts": "scopeProfile",
     "search": "scopeProfile",
     "passwords": "scopeProfile",
     "exceptions": "scopeProfile",

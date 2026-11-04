@@ -27,6 +27,7 @@
         <ul aria-labelledby="nav-profile">
           <li><a href="#layout" data-section="layout" data-i18n="layoutHeading">Layout</a></li>
           <li><a href="#appearance" data-section="appearance" data-i18n="appearanceHeading">Appearance</a></li>
+          <li><a href="#shortcuts" data-section="shortcuts" data-i18n="shortcutsHeading">Shortcuts</a></li>
           <li><a href="#search" data-section="search" data-i18n="searchHeading">Search</a></li>
           <li><a href="#passwords" data-section="passwords" data-i18n="passwordsHeading">Passwords</a></li>
           <li><a href="#exceptions" data-section="exceptions" data-i18n="exceptionsHeading">Site exceptions</a></li>
@@ -161,6 +162,22 @@
           <span><span data-i18n="reduceTransparencyLabel"></span><span class="hint" id="reduce-transparency-why"></span></span>
         </label>
         <p class="hint" id="appearance-locked" data-i18n="appearanceLocked" hidden></p>
+      </div>
+    </section>
+
+    <section class="section" id="shortcuts" aria-labelledby="shortcuts-heading" hidden>
+      <div class="section__head">
+        <h2 class="section__title" id="shortcuts-heading" data-i18n="shortcutsHeading">Shortcuts</h2>
+        <p class="scope" data-i18n="scopeProfile"></p>
+      </div>
+      <div class="card stack">
+        <p class="hint" data-i18n="shortcutsIntro"></p>
+        <details class="more" data-open-key="shortcutsIntroMore"><summary data-i18n="howItWorks"></summary><p class="hint" data-i18n="shortcutsIntroMore"></p></details>
+        <!-- UX6 (D7): keys change in the engine's extension shortcuts view, which checks clashes. -->
+        <ul class="list" id="shortcut-list" data-option="shortcuts"></ul>
+        <div class="card__footer">
+          <button class="button button--link button--go" type="button" id="shortcuts-browser" data-i18n="shortcutsBrowser"></button>
+        </div>
       </div>
     </section>
 

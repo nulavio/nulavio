@@ -8,7 +8,11 @@
         "name": "apply", "type": "function", "async": true,
         "parameters": [{ "name": "preset", "type": "string", "enum": ["lateral", "top", "focus"] }]
       },
-      { "name": "dismissChoice", "type": "function", "async": true, "parameters": [] }
+      { "name": "dismissChoice", "type": "function", "async": true, "parameters": [] },
+      {
+        "name": "toggleFocus", "type": "function", "async": true,
+        "parameters": [{ "name": "tabId", "type": "integer", "minimum": 0 }]
+      }
     ],
     "events": [{ "name": "onChanged", "type": "function", "parameters": [] }]
   }

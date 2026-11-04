@@ -7,7 +7,8 @@
       "prefs": [
         "sidebar.verticalTabs",
         "sidebar.visibility",
-        "nulavio.layout.choicePending"
+        "nulavio.layout.choicePending",
+        "nulavio.layout.beforeFocus"
       ],
       "values": [
         "lateral",
@@ -134,6 +135,23 @@
       "labelKey": "reduceTransparencyLabel",
       "ui": [
         "settings/settings.html#appearance-transparency"
+      ]
+    },
+    {
+      "id": "shortcuts",
+      "kind": "command",
+      "prefs": [],
+      "values": [
+        "_execute_action",
+        "open-assistant",
+        "toggle-focus",
+        "lock-profile"
+      ],
+      "default": "_execute_action",
+      "writer": "engine",
+      "labelKey": "shortcutsHeading",
+      "ui": [
+        "settings/settings.html#shortcut-list"
       ]
     }
   ]

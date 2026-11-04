@@ -17,6 +17,7 @@ import {
   temporaryStorageText,
   tintAvatars,
 } from "../lib/ui.js";
+import { nulavioKeys } from "../lib/keys.js";
 import { TEMPLATE_NAMES, freeName, templateHintKey } from "../lib/names.js";
 
 const profiles = browser.nulavioProfiles;
@@ -373,7 +374,28 @@ document.getElementById("new-temporary").addEventListener("click", () =>
   act(() => profiles.openTemporary(), t("profilesTemporaryOpening"))
 );
 
+/* Ctrl+Alt+B (UX6, D-UX23) opens this menu with a lock request: the same confirmation as the
+   "Bloquear agora" button, or, when there is nothing to lock here, why. */
+async function takeLockRequest(state) {
+  const asked = await browser.runtime.sendMessage({ type: "take-lock-request" }).catch(() => false);
+  if (!asked) {
+    return;
+  }
+  const lock = document.getElementById("lock-current");
+  const current = state.profiles?.find(p => p.isCurrent);
+  if (lock && !document.getElementById("current-actions").hidden) {
+    lock.click();
+  } else {
+    announce(t(current?.locked ? "lockShortcutLocked" : "lockShortcutUnprotected"), "info");
+  }
+}
+
 localize();
+// The menu's own key, as the engine has it now (UX6: it can be changed in Settings > Atalhos).
+nulavioKeys().then(keys => {
+  const key = keys._execute_action;
+  document.querySelector(".popup__keys").textContent = key ? t("profilesKeyHintKeys", [key]) : t("profilesKeyHintNoKey");
+}, () => {});
 if (profiles) {
   Promise.all([profiles.list(), profiles.options()])
     .then(async ([state, choices]) => {
@@ -382,6 +404,7 @@ if (profiles) {
       buildSheet();
       render(state);
       await renderSite(state).catch(e => console.error(e));
+      await takeLockRequest(state);
     })
     .catch(e => announce(errorText(e), "error"))
     .finally(() => {

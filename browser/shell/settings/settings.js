@@ -20,6 +20,7 @@ import {
 } from "../lib/ui.js";
 import { setUpAI } from "./ai.js";
 import { setUpAppearance } from "./appearance.js";
+import { setUpShortcuts } from "./shortcuts.js";
 import { setUpLayout } from "./layout.js";
 import { setUpNav } from "./nav.js";
 
@@ -1034,7 +1035,7 @@ if (browser.nulavioLayout) {
   ready.push(setUpLayout());
 }
 if (browser.nulavioPersonalise) {
-  ready.push(setUpAppearance());
+  ready.push(setUpAppearance(), setUpShortcuts());
 }
 if (search && profiles && routing && connect) {
   ready.push(setUpSearch(), setUpProfiles(), setUpRouting(), setUpIntegrations());

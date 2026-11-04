@@ -83,6 +83,7 @@ PREF_WRITERS = {
         '"sidebar.verticalTabs"',
         '"sidebar.visibility"',
         "PREF_ADOPTION_VERSION",
+        "PREF_BEFORE_FOCUS",
         "PREF_CHOICE_PENDING",
         "PREF_SHELL_START",
     },
@@ -186,7 +187,8 @@ class OptionListTest(unittest.TestCase):
                 self.assertIn(option["default"], option["values"])
                 self.assertIn(option["labelKey"], pt)
                 self.assertIn(option["labelKey"], en)
-                self.assertTrue((SHELL / "modules" / f"{option['writer']}.sys.mjs").exists(), option["writer"])
+                if option["writer"] != "engine":  # keyboard commands: the engine's own extension shortcuts
+                    self.assertTrue((SHELL / "modules" / f"{option['writer']}.sys.mjs").exists(), option["writer"])
                 if option["writer"] == "NulavioPersonalise":
                     # One pref, one pref value per choice, and the default is the cleared pref.
                     self.assertEqual(len(option["prefs"]), 1)
@@ -283,8 +285,18 @@ class AppearanceApiTest(unittest.TestCase):
         declared = {o["id"]: o for o in options()}
         functions = {f["name"]: f for f in schema["functions"]}
         self.assertEqual(
-            set(functions), {"state", "setDensity", "setAccent", "setMoreContrast", "setNewtabAmbience", "setReduceTransparency"}
+            set(functions),
+            {
+                "state",
+                "setDensity",
+                "setAccent",
+                "setMoreContrast",
+                "setNewtabAmbience",
+                "setReduceTransparency",
+                "openKeyboardShortcuts",
+            },
         )
+        self.assertEqual(functions["openKeyboardShortcuts"]["parameters"], [])
         for name in ("setNewtabAmbience", "setReduceTransparency"):
             self.assertEqual(functions[name]["parameters"][0]["type"], "boolean")
         self.assertEqual(functions["setDensity"]["parameters"][0]["enum"], declared["density"]["values"])
@@ -303,6 +315,38 @@ class AppearanceApiTest(unittest.TestCase):
         contrast = variants["contrast"]
         self.assertEqual(declared["moreContrast"]["prefs"], [contrast["pref"]])
         self.assertEqual(declared["moreContrast"]["prefValues"], [None, contrast["values"]["more"]["prefValue"]])
+
+
+class CommandsTest(unittest.TestCase):
+    """D-UX23: Nulavio's keys are pinned, and none of them unlocks, resumes, grants or turns anything off."""
+
+    def test_the_commands_are_the_declared_ones_with_their_keys(self):
+        manifest = json.loads((SHELL / "manifest.json").read_text(encoding="utf-8"))
+        declared = next(o for o in options() if o["id"] == "shortcuts")
+        self.assertEqual(sorted(manifest["commands"]), sorted(declared["values"]))
+        keys = {name: c["suggested_key"]["default"] for name, c in manifest["commands"].items()}
+        self.assertEqual(
+            keys,
+            {
+                "_execute_action": "Alt+Shift+P",
+                "open-assistant": "Alt+Shift+A",
+                "toggle-focus": "Ctrl+Alt+F",
+                "lock-profile": "Ctrl+Alt+B",
+            },
+        )
+        self.assertEqual(len(set(keys.values())), len(keys))
+
+    def test_no_key_lowers_a_protection(self):
+        source = (SHELL / "background.js").read_text(encoding="utf-8")
+        block = source[source.index("// -- Nulavio keys (UX6, D-UX23)") : source.index('// -- "@ia" in the address bar')]
+        for forbidden in ("nulavioVault", "unlock", "setStopped(false)", "grant", "autonomy", "nulavioGuard", "Services."):
+            self.assertNotIn(forbidden, block)
+        # The lock key only opens the menu; the menu runs the same confirmation as its button.
+        self.assertIn("browser.action.openPopup(", block)
+        popup = (SHELL / "profiles" / "popup.js").read_text(encoding="utf-8")
+        take = popup[popup.index("async function takeLockRequest") : popup.index("localize();")]
+        self.assertIn("lock.click()", take)
+        self.assertNotIn("nulavioVault", take)
 
 
 class PrefWriterInventoryTest(unittest.TestCase):

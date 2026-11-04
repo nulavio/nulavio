@@ -134,6 +134,14 @@ export const NulavioPersonalise = {
     return this.state();
   },
 
+  /** Settings > Atalhos: the engine's list of every browser shortcut, in the caller's window. */
+  openKeyboardShortcuts(win) {
+    if (!win || win.closed || typeof win.openTrustedLinkIn !== "function") {
+      throw new PersonaliseError("no-window");
+    }
+    win.openTrustedLinkIn("about:keyboard", "tab");
+  },
+
   /** Calls `listener` when an option's pref or the system's appearance changes. Returns unsubscribe. */
   subscribe(listener) {
     const changed = () => listener();

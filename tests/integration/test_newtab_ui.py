@@ -139,7 +139,7 @@ class NewTabHereTest(unittest.TestCase):
         self.assertTrue(self.m.execute("return document.querySelectorAll('#help .keys li').length;") >= 5)
         # Each line says the engine's own key (159 moved Add-ons to Ctrl+Shift+F; Ctrl+Shift+A searches tabs).
         shown = self.m.execute(
-            "return [...document.querySelectorAll('#help .keys li')]"
+            "return [...document.querySelectorAll('#help .keys li[data-key]')]"
             ".map(li => [li.dataset.key, [...li.querySelectorAll('kbd')].map(k => k.textContent)]);"
         )
         names = {"accel": "Ctrl", "control": "Ctrl", "shift": "Shift", "alt": "Alt"}
@@ -152,6 +152,20 @@ class NewTabHereTest(unittest.TestCase):
             self.assertIsNotNone(engine, key_id)
             said = [names[m.strip()] for m in engine[0].split(",") if m.strip()] + [engine[1].upper()]
             self.assertEqual(kbds, said, key_id)
+        # Nulavio's own keys (UX6) come from the engine's commands, so a changed key shows here too.
+        nulavio = self.m.execute(
+            "return [...document.querySelectorAll('#nulavio-keys li:not([hidden])')]"
+            ".map(li => [li.dataset.command, [...li.querySelectorAll('kbd')].map(k => k.textContent).join('+')]);"
+        )
+        self.assertEqual(
+            sorted(map(tuple, nulavio)),
+            [
+                ("_execute_action", "Alt+Shift+P"),
+                ("lock-profile", "Ctrl+Alt+B"),
+                ("open-assistant", "Alt+Shift+A"),
+                ("toggle-focus", "Ctrl+Alt+F"),
+            ],
+        )
         self.shoot("help")
 
     def test_04_a_private_window_says_so(self):

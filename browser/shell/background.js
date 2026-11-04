@@ -273,6 +273,34 @@ if (browser.nulavioAI && browser.commands) {
   });
 }
 
+// -- Nulavio keys (UX6, D-UX23) ---------------------------------------------
+// Ctrl+Alt+F toggles the Foco layout (and back to the preset it came from). Ctrl+Alt+B only opens
+// the profile menu, which shows the same "Bloquear agora" confirmation as its button (Cancel
+// focused); nothing here locks a profile or changes a protection itself. Both can be remapped in the
+// engine's extension shortcuts view (Settings > Atalhos).
+
+let lockAsked = 0; // when Ctrl+Alt+B was pressed; the menu takes it once, within a few seconds
+
+if (browser.commands) {
+  browser.commands.onCommand.addListener(async (command, tab) => {
+    if (command === "toggle-focus" && browser.nulavioLayout?.toggleFocus) {
+      const target = tab ?? (await browser.tabs.query({ active: true, currentWindow: true }))[0];
+      if (target) {
+        browser.nulavioLayout.toggleFocus(target.id).catch(() => {}); // announced in the window
+      }
+    } else if (command === "lock-profile") {
+      lockAsked = Date.now();
+      browser.action.openPopup(tab ? { windowId: tab.windowId } : {}).catch(console.error);
+    }
+  });
+  browser.runtime.onMessage.addListener((message, _sender, respond) => {
+    if (message?.type === "take-lock-request") {
+      respond(Date.now() - lockAsked < 5000);
+      lockAsked = 0;
+    }
+  });
+}
+
 // -- "@ia" in the address bar (UX5-H, Q7): what follows only fills the assistant's question --
 // Nothing is kept while typing, and Enter only opens the panel of that window with the text in the
 // question; Send stays the person's. Search suggestions never get it: the engine skips them for text

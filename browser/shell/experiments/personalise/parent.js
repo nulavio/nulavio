@@ -29,6 +29,10 @@ this.nulavioPersonalise = class extends ExtensionAPI {
         setMoreContrast: call(value => NulavioPersonalise.set("moreContrast", value)),
         setNewtabAmbience: call(value => NulavioPersonalise.set("newtabAmbience", value)),
         setReduceTransparency: call(value => NulavioPersonalise.set("reduceTransparency", value)),
+        // The calling page's own window, never "most recent window".
+        openKeyboardShortcuts: call(() =>
+          NulavioPersonalise.openKeyboardShortcuts(context.xulBrowser?.browsingContext?.topChromeWindow)
+        ),
         onChanged: new ExtensionCommon.EventManager({
           context,
           name: "nulavioPersonalise.onChanged",

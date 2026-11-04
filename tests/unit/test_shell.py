@@ -167,7 +167,9 @@ class PrivilegedApiTest(unittest.TestCase):
         api = self.manifest["experiment_apis"]["nulavioLayout"]
         self.assertEqual(api["parent"]["events"], ["startup"])
         schema = json.loads((SHELL / api["schema"]).read_text())[0]
-        self.assertEqual({f["name"] for f in schema["functions"]}, {"state", "apply", "dismissChoice"})
+        self.assertEqual({f["name"] for f in schema["functions"]}, {"state", "apply", "dismissChoice", "toggleFocus"})
+        toggle = next(f for f in schema["functions"] if f["name"] == "toggleFocus")
+        self.assertEqual(toggle["parameters"], [{"name": "tabId", "type": "integer", "minimum": 0}])
         for name in ("state", "dismissChoice"):
             fn = next(f for f in schema["functions"] if f["name"] == name)
             self.assertEqual(fn["parameters"], [])
@@ -513,6 +515,7 @@ class LayoutModuleTest(unittest.TestCase):
                 '"sidebar.verticalTabs"',
                 '"sidebar.visibility"',
                 "PREF_ADOPTION_VERSION",
+                "PREF_BEFORE_FOCUS",
                 "PREF_CHOICE_PENDING",
                 "PREF_SHELL_START",
             },

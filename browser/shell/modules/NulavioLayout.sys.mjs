@@ -11,6 +11,8 @@ export const PREF_CHOICE_PENDING = "nulavio.layout.choicePending";
 // UX3G N-4 (provisional decision): only profiles this build sees as new start on the Shell's
 // new tab; profiles that came from earlier builds keep about:home. Written once, with adoption.
 export const PREF_SHELL_START = "nulavio.startpage.shellFirstTab";
+// UX6 (D-UX23): the preset the Foco key returns to.
+export const PREF_BEFORE_FOCUS = "nulavio.layout.beforeFocus";
 
 // UX3F (QA A5): Lateral's launcher width on adoption, in CSS pixels (engine default ~246).
 export const ADOPTED_LAUNCHER_WIDTH = 224;
@@ -576,6 +578,32 @@ export const NulavioLayout = {
       && !Services.prefs.prefIsLocked(PREF_CHOICE_PENDING)
       && Services.prefs.getBoolPref(PREF_CHOICE_PENDING, false);
     return { preset, available, locked, choicePending };
+  },
+
+  /**
+   * UX6 (D-UX23): the Foco key and quick action. In Foco it returns to the preset it came from
+   * (Lateral when unknown); otherwise it remembers Lateral or Abas no topo and applies Foco.
+   * `say(key)` announces the outcome in the window (on, off, or why nothing changed).
+   */
+  async toggleFocus(target, say = () => {}) {
+    try {
+      const { preset } = await this.state(target);
+      if (preset === "focus") {
+        const back = Services.prefs.getStringPref(PREF_BEFORE_FOCUS, "lateral") === "top" ? "top" : "lateral";
+        const state = await this.apply(target, back);
+        say("layoutFocusOff");
+        return state;
+      }
+      if ((preset === "lateral" || preset === "top") && !Services.prefs.prefIsLocked(PREF_BEFORE_FOCUS)) {
+        Services.prefs.setStringPref(PREF_BEFORE_FOCUS, preset);
+      }
+      const state = await this.apply(target, "focus");
+      say("layoutFocusOn");
+      return state;
+    } catch (e) {
+      say(e?.code === "layout-locked" ? "layoutLocked" : "layoutUnavailable");
+      throw e;
+    }
   },
 
   apply(target, preset) {

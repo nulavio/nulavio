@@ -2,6 +2,7 @@
    settings (no counters, no network). */
 
 import { localize, t } from "../lib/i18n.js";
+import { keyElements, nulavioKeys } from "../lib/keys.js";
 import { chip, errorText, h, settleRadioChanges, stateBadge } from "../lib/ui.js";
 
 const UBLOCK_ID = "uBlock0@raymondhill.net";
@@ -616,7 +617,18 @@ async function firstRun() {
 document.getElementById("search-settings").hidden = !browser.nulavioSearch;
 document.getElementById("open-settings").hidden = !browser.nulavioSearch;
 
+// UX6: Nulavio's keys in "Atalhos e ajuda", as the engine has them now.
+async function showNulavioKeys() {
+  const keys = await nulavioKeys();
+  for (const row of document.querySelectorAll("#nulavio-keys li[data-command]")) {
+    const shortcut = keys[row.dataset.command];
+    row.hidden = !shortcut;
+    row.querySelector(".keys__keys").replaceChildren(...keyElements(shortcut));
+  }
+}
+
 localize();
+showNulavioKeys().catch(e => console.error(e));
 // UX3G N1: paint once, in the final shape. The page stays invisible (pages.css)
 // until the first-run cards, the engine label and the "Você está em" line are
 // known, so nothing moves after the first frame; a slow API never holds it longer than 400 ms.

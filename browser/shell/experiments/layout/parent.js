@@ -40,6 +40,13 @@ this.nulavioLayout = class extends ExtensionAPI {
         state: call(() => layout.state(browserOf)),
         apply: call(preset => layout.apply(browserOf, preset)),
         dismissChoice: call(() => layout.dismissChoice()),
+        // D-UX23: from the Foco key (background page): the tab the key was pressed in, never
+        // "most recent window"; the outcome is announced in that window.
+        toggleFocus: call(tabId => {
+          const win = context.extension.tabManager.get(tabId).window;
+          const say = key => win.A11yUtils?.announce({ raw: context.extension.localizeMessage(key) }).catch(() => {});
+          return layout.toggleFocus(win, say);
+        }),
         onChanged: new ExtensionCommon.EventManager({
           context,
           name: "nulavioLayout.onChanged",

@@ -41,6 +41,18 @@
         "default": "Alt+Shift+A"
       },
       "description": "__MSG_commandOpenAssistant__"
+    },
+    "toggle-focus": {
+      "suggested_key": {
+        "default": "Ctrl+Alt+F"
+      },
+      "description": "__MSG_commandToggleFocus__"
+    },
+    "lock-profile": {
+      "suggested_key": {
+        "default": "Ctrl+Alt+B"
+      },
+      "description": "__MSG_commandLockProfile__"
     }
   },
   "omnibox": {
