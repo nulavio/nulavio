@@ -185,28 +185,35 @@ def one_run(engine: Path, samples: int) -> dict:
                             frames = got.get("raf") or []
                         raw[name].append(intervals_after_first(frames))
                 # Ctrl+T: from the command to the new tab's nv-painted mark (epoch ms on both sides).
-                new_tab = []
+                new_tab, new_tab_poll = [], []
                 for _ in range(samples + 1):
                     m.set_context("content")
                     handles = set(m.window_handles())
                     m.set_context("chrome")
                     began = m.execute("const t = Date.now(); BrowserCommands.openTab(); return t;")
                     m.set_context("content")
-                    harness.wait_until(lambda before=handles: set(m.window_handles()) - before, 10)
+                    harness.wait_until(lambda before=handles: set(m.window_handles()) - before, 10, interval=0.01)
                     m.switch_to((set(m.window_handles()) - handles).pop())
-                    mark = harness.wait_until(
+                    # The build's nv-painted mark (exact), and for both builds the moment the page is seen
+                    # painted (polled: an upper bound, the same method on both, used for the comparison).
+                    seen = harness.wait_until(
                         lambda: m.execute(
+                            "if (!document.documentElement.hasAttribute('data-painted')) return null;"
                             "const e = performance.getEntriesByName('nv-painted')[0];"
-                            "return e ? performance.timeOrigin + e.startTime : null;"
+                            "return {seen: Date.now(), mark: e ? performance.timeOrigin + e.startTime : null};"
                         ),
                         10,
+                        interval=0.005,
                     )
                     m.set_context("chrome")
-                    if mark:
-                        new_tab.append(mark - began)
+                    if seen:
+                        new_tab_poll.append(seen["seen"] - began)
+                        if seen["mark"]:
+                            new_tab.append(seen["mark"] - began)
                     m.execute("gBrowser.removeTab(gBrowser.selectedTab);")
                     time.sleep(0.3)
                 out["new_tab_ms"] = new_tab[1:]  # the first warms the Shell
+                out["new_tab_poll_ms"] = new_tab_poll[1:]
                 # Idle: 60 s on a page with the band, counted in the chrome window.
                 count = (
                     "const u = window.windowUtils;"
@@ -255,6 +262,7 @@ def pooled(runs: list[dict]) -> dict:
         values = [x for run in runs for sample in run["raw"].get(name, []) for x in sample]
         scenes[name] = summary(values)
     scenes["new_tab"] = summary([x for run in runs for x in run.get("new_tab_ms", [])])
+    scenes["new_tab_polled"] = summary([x for run in runs for x in run.get("new_tab_poll_ms", [])])
     idles = [run["idle"] for run in runs if run.get("idle")]
     if idles:
         scenes["idle"] = {k: max(i[k] for i in idles if i.get(k) is not None) for k in ("reflows", "framesConstructed")}
@@ -264,7 +272,9 @@ def pooled(runs: list[dict]) -> dict:
 def run_medians(runs: list[dict], name: str) -> list[float]:
     out = []
     for run in runs:
-        values = run.get("new_tab_ms", []) if name == "new_tab" else [x for sample in run["raw"].get(name, []) for x in sample]
+        values = (
+            run.get("new_tab_poll_ms", []) if name == "new_tab" else [x for sample in run["raw"].get(name, []) for x in sample]
+        )
         if values:
             out.append(statistics.median(values))
     return out
