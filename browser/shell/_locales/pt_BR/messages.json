@@ -1263,5 +1263,6 @@
   "exceptionRemoveBuiltInBody": {"message": "O navegador mantém esta exceção para $SITE$ ($WHAT$). Sem ela, a proteção volta a valer nesse site, e algo nele pode deixar de funcionar.", "placeholders": {"site": {"content": "$1"}, "what": {"content": "$2"}}},
   "guardFirst": {"message": "É a primeira vez que o Guard vê este perfil: ele registrou como ele está agora e, a partir da próxima abertura, mostra o que mudar por fora do Nulavio."},
   "guardSkippedTemporary": {"message": "O Guard não vigia um perfil temporário: ele é apagado quando fecha."},
-  "guardSkippedWorkspace": {"message": "O Guard não vigia uma Área de IA: ela é um perfil só do agente."}
+  "guardSkippedWorkspace": {"message": "O Guard não vigia uma Área de IA: ela é um perfil só do agente."},
+  "profilesIconCurrent": {"message": "Ícone atual"}
 }

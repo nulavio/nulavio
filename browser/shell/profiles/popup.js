@@ -5,7 +5,18 @@
    and nothing is created before "Criar e abrir" (UX4, audit SPA-02/09/17). */
 
 import { localize, t } from "../lib/i18n.js";
-import { announce, chip, errorText, h, lockCurrentProfile, profileStates, stateBadge, temporaryStorageText } from "../lib/ui.js";
+import {
+  announce,
+  avatarPicker,
+  chip,
+  errorText,
+  h,
+  lockCurrentProfile,
+  profileStates,
+  stateBadge,
+  temporaryStorageText,
+  tintAvatars,
+} from "../lib/ui.js";
 import { TEMPLATE_NAMES, freeName, templateHintKey } from "../lib/names.js";
 
 const profiles = browser.nulavioProfiles;
@@ -175,6 +186,7 @@ function fillSheet(template) {
   if (template) {
     sheet.elements.avatar.value = template.avatar;
     sheet.querySelector(`input[name="color"][value="${template.color}"]`).checked = true;
+    tintAvatars(document.querySelector("#sheet-avatars .swatches--glyphs"), template.color);
   }
 }
 
@@ -192,8 +204,8 @@ function buildSheet() {
       return button;
     })
   );
-  document.getElementById("sheet-avatar").replaceChildren(
-    ...options.avatars.map(a => h("option", { value: a, text: browser.i18n.getMessage(`avatar_${a.replaceAll("-", "_")}`) || a }))
+  document.getElementById("sheet-avatars").replaceChildren(
+    avatarPicker({ avatars: options.avatars, selected: options.avatars[0], color: options.colors[0] })
   );
   const colors = document.getElementById("sheet-colors");
   colors.append(
@@ -209,6 +221,11 @@ function buildSheet() {
   );
   sheet.elements.name.addEventListener("input", () => {
     sheet.elements.name.dataset.touched = "1";
+  });
+  sheet.addEventListener("change", event => {
+    if (event.target.name === "color") {
+      tintAvatars(document.querySelector("#sheet-avatars .swatches--glyphs"), event.target.value);
+    }
   });
 }
 

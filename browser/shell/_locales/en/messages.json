@@ -1263,5 +1263,6 @@
   "exceptionRemoveBuiltInBody": {"message": "The browser keeps this exception for $SITE$ ($WHAT$). Without it, the protection applies to that site again, and something there may stop working.", "placeholders": {"site": {"content": "$1"}, "what": {"content": "$2"}}},
   "guardFirst": {"message": "This is the first time Guard sees this profile: it recorded how it is now, and from the next start it shows what changed outside Nulavio."},
   "guardSkippedTemporary": {"message": "Guard does not watch a temporary profile: it is deleted when it closes."},
-  "guardSkippedWorkspace": {"message": "Guard does not watch an AI Workspace: it is a profile of the agent's own."}
+  "guardSkippedWorkspace": {"message": "Guard does not watch an AI Workspace: it is a profile of the agent's own."},
+  "profilesIconCurrent": {"message": "Current icon"}
 }

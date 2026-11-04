@@ -442,6 +442,32 @@ fieldset.stack > legend { padding: 0; margin-bottom: var(--nv-space-2); }
   outline: var(--nv-state-focusRingWidth) solid var(--nv-color-focus);
   outline-offset: 4px;
 }
+/* An icon choice (Calmaria): quiet glyphs on the sunken surface; the chosen one wears the profile's
+   tile and glyph colours (set on the grid by tintAvatars) and the ring, as a chip would show it. */
+/* Seven to a row: the engine's fourteen icons sit in two even rows wherever there is room. */
+.swatches--glyphs { gap: var(--nv-space-2); max-width: calc(7 * 2.25rem + 6 * var(--nv-space-2)); }
+.swatch__tile {
+  display: grid;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 30%;
+  background: var(--nv-color-bg-sunken);
+  color: var(--nv-color-text-secondary);
+  font-weight: 650;
+  line-height: 1;
+}
+.swatch__glyph { width: 1.25rem; height: 1.25rem; }
+.swatch--glyph:hover .swatch__tile { color: var(--nv-color-text-primary); }
+.swatch input:checked + .swatch__tile {
+  background: var(--tile);
+  color: var(--glyph);
+  box-shadow: 0 0 0 2px var(--nv-color-bg-surface), 0 0 0 4px var(--nv-color-text-primary);
+}
+.swatch input:focus-visible + .swatch__tile {
+  outline: var(--nv-state-focusRingWidth) solid var(--nv-color-focus);
+  outline-offset: 4px;
+}
 .dialog {
   max-width: min(30rem, calc(100vw - 2rem));
   padding: var(--nv-space-6);

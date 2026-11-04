@@ -885,3 +885,7 @@ spec and its measurements are kept with the session evidence). Two grammars, no 
   "Protegido · desbloqueado" as its accessible name. Alert rows keep every strong cue (fill, pattern,
   frame, words, fixed place, no motion). The toolbar button is monochrome; the open sidebar keeps its
   accent glyph without a tinted block; the address bar takes the 14 px radius.
+- **Choosing an icon.** Settings and the create sheet choose the icon on a grid of glyph tiles
+  (`avatarPicker` in `lib/ui.js`, a radio group, seven to a row). The others stay quiet on the sunken
+  surface; the chosen one wears the colour chosen next to it (`tintAvatars`, updated before saving)
+  and a ring, with its name as the radio's label. Forced colours show the radio and a framed tile.

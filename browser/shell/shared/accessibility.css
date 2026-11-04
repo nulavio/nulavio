@@ -43,6 +43,8 @@ input:is([type="radio"], [type="checkbox"]):focus-visible { outline-width: max(3
   .check--switch input[role="switch"]::before { display: none; }
   .swatch input { position: static; opacity: 1; }
   .swatch__fill { display: none; }
+  .swatch--glyph { grid-auto-flow: column; align-items: center; gap: 2px; }
+  .swatch__tile { border: 1px solid CanvasText; }
   .callout--critical, .dialog--critical,
   .input[aria-invalid="true"], .select[aria-invalid="true"] { border: 2px solid CanvasText; }
 }

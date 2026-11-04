@@ -40,6 +40,31 @@ def chrome_async(m, body: str, args=()):
         m.set_context("content")
 
 
+GRID = """
+const grid = document.querySelector(arguments[0]);
+const radios = [...grid.querySelectorAll('input[type=radio][name=avatar]')];
+const tone = name => {
+  const probe = document.createElement('span');
+  probe.style.background = `var(--nv-color-identityTile-${name})`;
+  document.body.append(probe);
+  const value = getComputedStyle(probe).backgroundColor;
+  probe.remove();
+  return value;
+};
+const checked = grid.querySelector('input:checked + .swatch__tile');
+const other = grid.querySelector('input:not(:checked) + .swatch__tile');
+return {
+  legend: grid.querySelector('legend').textContent,
+  count: radios.length,
+  named: radios.every(r => r.closest('label').querySelector('.visually-hidden').textContent.trim().length > 0),
+  glyphs: grid.querySelectorAll('.swatch__tile svg').length,
+  chosen: grid.querySelector('input:checked')?.value ?? null,
+  tinted: getComputedStyle(checked).backgroundColor === tone(arguments[1]),
+  quiet: getComputedStyle(other).backgroundColor !== tone(arguments[1]),
+};
+"""
+
+
 @unittest.skipUnless(harness.nulavio_engine(), "engine profiles need the Nulavio build (NULAVIO_ENGINE)")
 class ProfilesTest(unittest.TestCase):
     @classmethod
@@ -314,6 +339,11 @@ class ProfilesTest(unittest.TestCase):
             " pressed: [...document.querySelectorAll('#templates button[aria-pressed=true]')].map(b => b.dataset.template)};"
         )
         self.assertEqual(filled, {"name": "Pesquisa", "avatar": "book", "color": "violet", "pressed": ["research"]})
+        # The icon is a grid of glyph tiles; only the chosen one wears the template's colour.
+        grid = self.m.execute(GRID, ["#sheet-avatars .swatches--glyphs", "violet"])
+        self.assertEqual(
+            grid, {"legend": "Ícone", "count": 14, "named": True, "glyphs": 14, "chosen": "book", "tinted": True, "quiet": True}
+        )
         time.sleep(0.5)
         self.assertEqual(set(self.listed()), before, "a template created a profile before Criar")
         # Back returns to the menu with nothing created.
@@ -376,6 +406,33 @@ class ProfilesTest(unittest.TestCase):
         finally:
             for profile_id in made:
                 self.profiles("await P.remove(args[0]);", profile_id)
+
+    def test_14_the_icon_grid_follows_the_colour_and_saves(self):
+        """Visual audit (icons): a profile's icon is chosen on a grid of glyph tiles; the chosen tile wears the
+        colour chosen next to it, before saving, and "Salvar" keeps both."""
+        made = self.profiles("return P.create({name: 'Grade', avatar: 'leaf', color: 'sky'});")
+        try:
+            self.m.navigate(self.shell_url + "settings/settings.html#profiles")
+            self.assertTrue(harness.wait_until(self.ready, timeout=15))
+            row = f'#profile-list > li[data-profile-id="{made}"]'
+            found = f"return Boolean(document.querySelector('{row} details'));"
+            self.assertTrue(harness.wait_until(lambda: self.m.execute(found), 10))
+            self.m.execute(f"document.querySelector('{row} details').open = true;")
+            grid = f"{row} .swatches--glyphs"
+            self.assertEqual(
+                self.m.execute(GRID, [grid, "sky"]),
+                {"legend": "Ícone", "count": 14, "named": True, "glyphs": 14, "chosen": "leaf", "tinted": True, "quiet": True},
+            )
+            click = lambda selector: self.m.send("WebDriver:ElementClick", {"id": self.m.find_element(f"{row} {selector}")})  # noqa: E731
+            click('label:has(> input[name="color"][value="coral"])')
+            self.assertTrue(self.m.execute(GRID, [grid, "coral"])["tinted"], "the chosen icon kept the old colour")
+            click('label:has(> input[name="avatar"][value="star"])')
+            self.assertEqual(self.m.execute(GRID, [grid, "coral"])["chosen"], "star")
+            click('form button[type="submit"]')
+            saved = lambda: {k: self.listed()["Grade"][k] for k in ("avatar", "color")}  # noqa: E731
+            self.assertTrue(harness.wait_until(lambda: saved() == {"avatar": "star", "color": "coral"}, 10), saved())
+        finally:
+            self.profiles("await P.remove(args[0]);", made)
 
 
 if __name__ == "__main__":

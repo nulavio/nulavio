@@ -2,7 +2,7 @@
    attributes, never innerHTML, so engine names, URLs and profile names coming
    from settings cannot inject markup. */
 
-import { SPECIAL_GLYPHS, profileGlyph, profileInitial } from "../modules/NulavioAvatars.sys.mjs";
+import { AVATAR_GLYPHS, SPECIAL_GLYPHS, profileGlyph, profileInitial } from "../modules/NulavioAvatars.sys.mjs";
 import { t } from "./i18n.js";
 
 export function h(tag, props = {}, ...children) {
@@ -89,6 +89,45 @@ export function chip(profile, size = "md") {
   }
   return el;
 }
+/** The icon choice (Calmaria): a radio grid of glyph tiles. Only the chosen one wears the profile's
+    colour (set with tintAvatars when the colour changes), so the grid stays quiet and the choice is
+    shown by colour, a ring and the label together. `name` draws an icon this build cannot draw with the
+    profile's initial, as its chip does. */
+export function avatarPicker({ avatars, selected, color, name = "", focusKey = null }) {
+  const choices = selected && !avatars.includes(selected) ? [selected, ...avatars] : avatars;
+  const grid = h(
+    "fieldset",
+    { class: "swatches swatches--glyphs" },
+    h("legend", { class: "field__label", text: t("profilesIconLabel") }),
+    choices.map(avatar => {
+      const label = browser.i18n.getMessage(`avatar_${avatar.replaceAll("-", "_")}`) || t("profilesIconCurrent");
+      const d = AVATAR_GLYPHS[avatar];
+      return h(
+        "label",
+        { class: "swatch swatch--glyph", title: label },
+        h("input", {
+          type: "radio",
+          name: "avatar",
+          value: avatar,
+          checked: avatar === selected,
+          "data-focus-key": focusKey ? `${focusKey}-${avatar}` : null,
+        }),
+        h("span", { class: "swatch__tile", "aria-hidden": "true" }, d ? glyph(d, "swatch__glyph") : profileInitial(name) ?? glyph(SPECIAL_GLYPHS.person, "swatch__glyph")),
+        h("span", { class: "visually-hidden", text: label })
+      );
+    })
+  );
+  tintAvatars(grid, color);
+  return grid;
+}
+
+/** Give the icon grid the tile and glyph of the colour chosen next to it. */
+export function tintAvatars(grid, color) {
+  const name = IDENTITY_NAMES.has(color) ? color : "slate";
+  grid.style.setProperty("--tile", `var(--nv-color-identityTile-${name})`);
+  grid.style.setProperty("--glyph", `var(--nv-color-identityGlyph-${name})`);
+}
+
 // 24 px line icons (1.75 px stroke, currentColor). State is never carried by an icon alone: words go next to it.
 const ICONS = {
   critical: "M8.3 2.5h7.4l5.8 5.8v7.4l-5.8 5.8H8.3l-5.8-5.8V8.3z M12 7.5v5.5 M12 16.5v.5",

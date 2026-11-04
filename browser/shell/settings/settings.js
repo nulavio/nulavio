@@ -6,6 +6,7 @@ import { localize, t } from "../lib/i18n.js";
 import { TEMPLATE_NAMES, freeName, templateHintKey } from "../lib/names.js";
 import {
   announce,
+  avatarPicker,
   chip,
   confirmDialog,
   errorText,
@@ -15,6 +16,7 @@ import {
   rerender,
   stateBadge,
   temporaryStorageText,
+  tintAvatars,
 } from "../lib/ui.js";
 import { setUpAI } from "./ai.js";
 import { setUpLayout } from "./layout.js";
@@ -258,49 +260,34 @@ function colorPicker(profile) {
   );
 }
 
-function avatarSelect(profile) {
-  const avatars = profileOptions.avatars.includes(profile.avatar) ? profileOptions.avatars : [profile.avatar, ...profileOptions.avatars];
-  return h(
-    "label",
-    { class: "field" },
-    h("span", { class: "field__label", text: t("profilesIconLabel") }),
-    h(
-      "select",
-      { class: "select", name: "avatar", "data-focus-key": `avatar-${profile.id}` },
-      avatars.map(a =>
-        h("option", { value: a, selected: a === profile.avatar, text: browser.i18n.getMessage(`avatar_${a.replaceAll("-", "_")}`) || a })
-      )
-    )
-  );
-}
-
 function profileRow(profile) {
   const form = h(
     "form",
     { class: "stack stack--tight", novalidate: true },
     h(
-      "div",
-      { class: "field-row" },
-      h(
-        "label",
-        { class: "field" },
-        h("span", { class: "field__label", text: t("profilesNameLabel") }),
-        h("input", {
-          class: "input",
-          name: "name",
-          value: profile.name,
-          maxlength: "60",
-          autocomplete: "off",
-          "data-focus-key": `name-${profile.id}`,
-        })
-      ),
-      avatarSelect(profile)
+      "label",
+      { class: "field" },
+      h("span", { class: "field__label", text: t("profilesNameLabel") }),
+      h("input", {
+        class: "input",
+        name: "name",
+        value: profile.name,
+        maxlength: "60",
+        autocomplete: "off",
+        "data-focus-key": `name-${profile.id}`,
+      })
     ),
+    avatarPicker({ avatars: profileOptions.avatars, selected: profile.avatar, color: profile.color, name: profile.name, focusKey: `avatar-${profile.id}` }),
     colorPicker(profile),
     profile.kind === "sensitive" ? h("p", { class: "hint", "data-kind": "sensitive", text: t("profilesSensitiveHint") }) : null,
     h("p", { class: "form-error", role: "alert" }),
     h("div", { class: "actions" }, h("button", { class: "button button--secondary", type: "submit", text: t("profilesSave"), "data-focus-key": `save-${profile.id}` }))
   );
+  form.addEventListener("change", event => {
+    if (event.target.name === "color") {
+      tintAvatars(form.querySelector(".swatches--glyphs"), event.target.value);
+    }
+  });
   form.addEventListener("submit", event => {
     event.preventDefault();
     const { name, avatar, color } = Object.fromEntries(new FormData(form));
