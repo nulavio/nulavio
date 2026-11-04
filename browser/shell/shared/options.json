@@ -172,7 +172,8 @@
       "id": "routingFallback",
       "kind": "routing",
       "prefs": [
-        "nulavio.routing.fallbackProfile"
+        "nulavio.routing.fallbackProfile",
+        "nulavio.routing.fallbackPath"
       ],
       "values": [
         "last",

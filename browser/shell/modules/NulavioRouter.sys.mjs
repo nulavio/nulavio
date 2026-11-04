@@ -23,6 +23,8 @@ export const ROUTED_FLAG = "nulavio-routed";
 export const IN_PAGE_PREF = "nulavio.routing.inPage";
 /** UX6, shared by the group: where links from other apps with no rule open (0: the last profile used). */
 export const FALLBACK_PREF = "nulavio.routing.fallbackProfile";
+/** UX6: the default destination's directory, so a new profile that reuses a deleted one's id is not it. */
+export const FALLBACK_PATH_PREF = "nulavio.routing.fallbackPath";
 
 export const MATCHES = Object.freeze(["host", "domain"]);
 export const ACTIONS = Object.freeze(["open-in", "ask", "stay"]);

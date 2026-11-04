@@ -72,7 +72,7 @@ GUARDED_PREFIXES = (
 )
 
 # The only guarded prefs an option may write, each tied to the one kind whose behaviour tests cover it.
-ALLOWED_BY_KIND = {"routing": {"nulavio.routing.fallbackProfile"}}
+ALLOWED_BY_KIND = {"routing": {"nulavio.routing.fallbackProfile", "nulavio.routing.fallbackPath"}}
 
 # Every Services.prefs writer in the privileged code, by its first argument. A new writer anywhere
 # fails here until it is reviewed: an option could otherwise reach a protection through another module.
@@ -100,7 +100,7 @@ PREF_WRITERS = {
         "PREF_SEEDED",
     },
     "NulavioProfiles.sys.mjs": {"PREF_COLORS", "PREF_COLOR_MIGRATION"},
-    "NulavioRouting.sys.mjs": {"ENABLED_PREF", "FALLBACK_PREF", "IN_PAGE_PREF", "RULES_PREF"},
+    "NulavioRouting.sys.mjs": {"ENABLED_PREF", "FALLBACK_PATH_PREF", "FALLBACK_PREF", "IN_PAGE_PREF", "RULES_PREF"},
     "NulavioSearch.sys.mjs": {"PREF_MIGRATION", "PREF_OPTIN", "pref"},
 }
 WRITER = re.compile(r"\.(?:set(?:Bool|Int|String|Char)Pref|clearUserPref|lockPref|unlockPref)\(\s*([^,)]+)")
@@ -378,7 +378,9 @@ class RoutingFallbackTest(unittest.TestCase):
             body = source[source.index(name) : source.index("\n  }\n", source.index(name))]
             self.assertNotIn("fallbackProfileId", body, name)
         # It applies only in the instance that receives links from other apps (the group's default).
-        self.assertIn('group.equals(Services.dirsvc.get("ProfD", Ci.nsIFile))', source)
+        # Decided from profiles.ini when the command line arrives (the engine's in-memory default is not used).
+        self.assertIn('Services.dirsvc.get("UAppData", Ci.nsIFile)', source)
+        self.assertNotIn("groupToolkitProfile", source)
 
 
 class PrefWriterInventoryTest(unittest.TestCase):

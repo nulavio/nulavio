@@ -28,6 +28,7 @@
 
 import {
   ENABLED_PREF,
+  FALLBACK_PATH_PREF,
   FALLBACK_PREF,
   IN_PAGE_PREF,
   MAX_RULES,
@@ -126,18 +127,55 @@ class NulavioRoutingClass {
   }
 
   /**
-   * The default destination applies only in the instance that receives links from other apps:
-   * the group's default profile (the last one whose window had focus). A command line aimed at
-   * another profile on purpose (`-P`, `--profile`) is never moved by it.
+   * Whether this instance is the one the desktop sends links to: the group's default profile as
+   * profiles.ini says now (the last profile whose window had focus). Read from the file, at the
+   * moment a command line arrives: the engine's own copy is no help, because every instance makes
+   * itself the default in memory when it starts. So a link sent on purpose to a profile (its
+   * `--profile` path, the engine's "Move tab to" a profile, the start-up profile selector) is never
+   * moved by the default destination. When this cannot be told, the answer is no.
    */
-  #appFallback() {
+  #receivesAppLinks() {
     try {
-      const fallback = this.fallback();
-      const group = lazy.SelectableProfileService.groupToolkitProfile?.rootDir;
-      return fallback && group && group.equals(Services.dirsvc.get("ProfD", Ci.nsIFile)) ? fallback : null;
-    } catch {
-      return null;
+      const storeID = Services.prefs.getStringPref("toolkit.profiles.storeID", "");
+      if (!storeID) {
+        return false;
+      }
+      const ini = Services.dirsvc.get("UAppData", Ci.nsIFile);
+      ini.append("profiles.ini");
+      if (!ini.exists()) {
+        return false;
+      }
+      const parser = Cc["@mozilla.org/xpcom/ini-parser-factory;1"].getService(Ci.nsIINIParserFactory).createINIParser(ini);
+      for (const section of parser.getSections()) {
+        let id = null;
+        try {
+          id = parser.getString(section, "StoreID");
+        } catch {}
+        if (!section.startsWith("Profile") || id !== storeID) {
+          continue;
+        }
+        const path = parser.getString(section, "Path");
+        let dir;
+        if (parser.getString(section, "IsRelative") === "1") {
+          dir = ini.parent.clone();
+          for (const part of path.split("/")) {
+            dir.append(part);
+          }
+        } else {
+          dir = Cc["@mozilla.org/file/local;1"].createInstance(Ci.nsIFile);
+          dir.initWithPath(path);
+        }
+        return dir.equals(Services.dirsvc.get("ProfD", Ci.nsIFile));
+      }
+    } catch (e) {
+      console.error("Nulavio routing: could not tell whether this profile receives links", e);
     }
+    return false;
+  }
+
+  /** The default destination for this command line, or null (decided when it arrives). */
+  #appFallback(receiver) {
+    return receiver ? this.fallback() || null : null;
   }
 
   async #share(pref) {
@@ -163,7 +201,9 @@ class NulavioRoutingClass {
     const { profiles } = availability.available ? await lazy.NulavioProfiles.list() : { profiles: [] };
     const byId = new Map(profiles.map(p => [p.id, p]));
     const fallback = this.fallback();
-    const destination = fallback ? byId.get(fallback) : null;
+    const found = fallback ? byId.get(fallback) : null;
+    // The same id with another directory is a new profile that took a deleted one's id: not it.
+    const destination = found && found.path === Services.prefs.getStringPref(FALLBACK_PATH_PREF, "") ? found : null;
     return {
       ...availability,
       enabled: this.enabled(),
@@ -205,15 +245,19 @@ class NulavioRoutingClass {
       fail("invalid-profile");
     }
     // Only a profile of the group (never a temporary one, which is outside it).
-    if (profileId !== 0 && !(await lazy.SelectableProfileService.getProfile(profileId))) {
+    const profile = profileId === 0 ? null : await lazy.SelectableProfileService.getProfile(profileId);
+    if (profileId !== 0 && !profile) {
       fail("invalid-profile");
     }
     if (profileId === 0) {
       Services.prefs.clearUserPref(FALLBACK_PREF);
+      Services.prefs.clearUserPref(FALLBACK_PATH_PREF);
     } else {
       Services.prefs.setIntPref(FALLBACK_PREF, profileId);
+      Services.prefs.setStringPref(FALLBACK_PATH_PREF, profile.path);
     }
     await this.#share(FALLBACK_PREF);
+    await this.#share(FALLBACK_PATH_PREF);
   }
 
   /** Add (or replace) the user's rule for a site. Returns its id. */
@@ -335,6 +379,8 @@ class NulavioRoutingClass {
     }
 
     const initial = cmdLine.state === Ci.nsICommandLine.STATE_INITIAL_LAUNCH;
+    // UX6: decided now, before the engine's profile service makes this instance the default.
+    const receiver = this.fallback() ? this.#receivesAppLinks() : false;
     const service = lazy.SelectableProfileService;
     let take = candidates;
     if (!initial && service.initialized && service.currentProfile) {
@@ -342,7 +388,7 @@ class NulavioRoutingClass {
       try {
         const rules = this.rules();
         const current = service.currentProfile.id;
-        const fallbackProfileId = this.#appFallback(); // M4a only: links from other apps
+        const fallbackProfileId = this.#appFallback(receiver); // M4a only: links from other apps
         take = candidates.filter(c => decide({ url: c.url, rules, currentProfileId: current, fallbackProfileId }).action !== "stay");
       } catch (e) {
         console.error("Nulavio routing: decision failed; holding the links", e);
@@ -357,7 +403,7 @@ class NulavioRoutingClass {
     if (!initial && cmdLine.length === 0) {
       cmdLine.preventDefault = true; // no extra empty window in this instance
     }
-    this.#dispatch(take.map(c => c.url), { initial }).catch(e => console.error("Nulavio routing: dispatch failed", e));
+    this.#dispatch(take.map(c => c.url), { initial, receiver }).catch(e => console.error("Nulavio routing: dispatch failed", e));
   }
 
   // -- the band's notice (D-UX19): "Aberto em {perfil} pela sua regra · Mudar" ----------------
@@ -645,7 +691,7 @@ class NulavioRoutingClass {
     }
   }
 
-  async #dispatch(urls, { initial }) {
+  async #dispatch(urls, { initial, receiver = false }) {
     const service = lazy.SelectableProfileService;
     let rules = [];
     let current = null;
@@ -657,7 +703,7 @@ class NulavioRoutingClass {
       rules = this.rules();
       enabled = this.enabled();
       current = service.currentProfile?.id ?? null;
-      fallbackProfileId = this.#appFallback(); // M4a only: these are links from other apps
+      fallbackProfileId = this.#appFallback(receiver); // M4a only: these are links from other apps
     } catch (e) {
       console.error("Nulavio routing: profile service unavailable", e);
       failed = true;
@@ -696,7 +742,10 @@ class NulavioRoutingClass {
     }
     // UX6: the default destination says so on the pages it may lead to.
     const by = decision.reason === "fallback" ? "default" : null;
-    const profile = await lazy.SelectableProfileService.getProfile(decision.profileId).catch(() => null);
+    let profile = await lazy.SelectableProfileService.getProfile(decision.profileId).catch(() => null);
+    if (by === "default" && profile && profile.path !== Services.prefs.getStringPref(FALLBACK_PATH_PREF, "")) {
+      profile = null; // a new profile that reuses the deleted destination's id never gets its links
+    }
     if (!profile) {
       await this.#openPage("routing/blocked.html", { u: url, r: decision.ruleId, why: "missing", src: source, by });
       return;
@@ -756,6 +805,7 @@ class NulavioRoutingClass {
     Services.prefs.addObserver(RULES_PREF, this);
     Services.prefs.addObserver(ENABLED_PREF, this);
     Services.prefs.addObserver(FALLBACK_PREF, this);
+    Services.prefs.addObserver(FALLBACK_PATH_PREF, this);
     Services.obs.addObserver(this, "sps-profiles-updated");
   }
 

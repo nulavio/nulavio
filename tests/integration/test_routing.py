@@ -958,11 +958,72 @@ class RoutingTest(unittest.TestCase):
         )
         self.assertEqual(options[0], ["0", "Último perfil usado (padrão)"])
         self.assertIn([str(self.ids["Destino"]), "Sempre em Destino"], options)
-        self.m.execute(
-            "const s = document.getElementById('routing-fallback'); s.value = '0'; s.dispatchEvent(new Event('change'));"
+        pick = (
+            "const s = document.getElementById('routing-fallback'); s.value = arguments[0]; s.dispatchEvent(new Event('change'));"
         )
-        self.assertTrue(harness.wait_until(lambda: self.call("return (await R.state()).fallback.profileId;") == 0, timeout=10))
+        chosen = lambda: self.call("return (await R.state()).fallback.profileId;")  # noqa: E731
+        for value in (str(self.ids["Destino"]), "0"):  # each a change from what is saved
+            before = chosen()
+            self.m.execute(pick, [value])
+            self.assertTrue(harness.wait_until(lambda want=int(value): chosen() == want, timeout=10), (before, value))
         self.assertFalse(self.m.execute("return document.getElementById('routing-fallback').disabled;"))
+
+    def test_28_a_link_sent_on_purpose_to_another_profile_is_not_moved(self):
+        """Review: the engine makes every instance the default in memory; only profiles.ini says which
+        one the desktop sends links to. A command line sent to another profile (the engine's "Move tab
+        to", a --profile path) keeps its link, running or starting cold."""
+        self.call("await R.setFallback(args[0]);", self.ids["Destino"])
+        work = self.receiver()  # Trabalho is the default on disk
+        self.wait_shared(work, self.ids["Destino"])
+        own = self.m.chrome("return Services.dirsvc.get('ProfD', Ci.nsIFile).path;")
+        # Running: from Trabalho to this instance (Pessoal), which is not the default.
+        work.chrome(
+            "Cc['@mozilla.org/remote;1'].getService(Ci.nsIRemoteService).sendCommandLine(arguments[0], arguments[1], false);",
+            [own, ["-new-tab", self.ip("/page/sent-to-pessoal")]],
+        )
+        self.assertTrue(harness.wait_until(lambda: any(u.endswith("/page/sent-to-pessoal") for u in self.own_tabs()), timeout=20))
+        self.assertFalse(any("/page/sent-to-pessoal" in u for u in self.tabs(self.instance("Destino"))))
+        # Cold: a new profile starts with --profile and the link, as "Move tab to" does (the default is Trabalho).
+        self.call("await R.setFallback(args[0]);", self.ids["Trabalho"])
+        self.wait_shared(work, self.ids["Trabalho"])
+        cold = self.call("return P.create({name: 'Frio'});")
+        type(self).ids["Frio"] = cold
+        type(self).paths["Frio"] = Path(self.call("return (await SPS.getProfile(args[0])).path;", cold))
+        harness.GeckoProfileSession.enable_marionette(self.paths["Frio"])
+        # Started once before (a brand-new profile's first start loses a command-line link today,
+        # with or without routing: recorded in the plan as its own question).
+        self.start("Frio")
+        self.stop("Frio")
+        work = self.receiver()
+        self.call(
+            "SPS.execProcess(['--profile', args[0], '-new-tab', args[1]]); return true;",
+            str(self.paths["Frio"]),
+            self.ip("/page/cold-to-frio"),
+        )
+        frio = self.instance("Frio")
+        self.assertTrue(harness.wait_until(lambda: any(u.endswith("/page/cold-to-frio") for u in self.tabs(frio)), timeout=30))
+        time.sleep(1)
+        self.assertFalse(any("/page/cold-to-frio" in u for u in self.tabs(work)), "the link was moved to the default destination")
+        self.call("await R.setFallback(0);")
+
+    def test_29_a_new_profile_that_reuses_the_deleted_destinations_id_gets_no_links(self):
+        gone = self.call("return P.create({name: 'Passageiro'});")
+        self.call("await R.setFallback(args[0]);", gone)
+        self.assertTrue(harness.wait_until(lambda: self.error_of("await P.remove(args[0]);", gone) is None, 15))
+        reused = self.call("return P.create({name: 'Herdeiro'});")
+        if reused != gone:
+            self.skipTest(f"the engine gave the new profile id {reused}, not the deleted {gone}")
+        self.assertTrue(self.call("return (await R.state()).fallback.missing;"))
+        work = self.receiver()
+        self.wait_shared(work, gone)
+        self.deliver("Trabalho", [self.ip("/page/to-the-heir")])
+        blocked = harness.wait_until(
+            lambda: [u for u in self.tabs(work) if "/routing/blocked.html" in u and "to-the-heir" in u], 20
+        )
+        self.assertTrue(blocked, self.tabs(work))
+        time.sleep(1)
+        self.assertEqual(self.hits("/page/to-the-heir"), 0)
+        self.call("await R.setFallback(0);")
 
 
 if __name__ == "__main__":
