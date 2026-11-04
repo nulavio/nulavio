@@ -428,6 +428,14 @@ class ProfilesTest(unittest.TestCase):
             self.assertTrue(self.m.execute(GRID, [grid, "coral"])["tinted"], "the chosen icon kept the old colour")
             click('label:has(> input[name="avatar"][value="star"])')
             self.assertEqual(self.m.execute(GRID, [grid, "coral"])["chosen"], "star")
+            # Another profile changes meanwhile (another window): the list is drawn again and the
+            # unsaved choices stay.
+            other = self.profiles("return P.create({name: 'Outro'});")
+            time.sleep(1.5)
+            kept = self.m.execute(GRID, [grid, "coral"])
+            self.assertEqual((kept["chosen"], kept["tinted"]), ("star", True), kept)
+            self.profiles("await P.remove(args[0]);", other)
+            time.sleep(1)
             click('form button[type="submit"]')
             saved = lambda: {k: self.listed()["Grade"][k] for k in ("avatar", "color")}  # noqa: E731
             self.assertTrue(harness.wait_until(lambda: saved() == {"avatar": "star", "color": "coral"}, 10), saved())

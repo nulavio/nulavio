@@ -41,9 +41,35 @@ export function errorText(error) {
 export function rerender(container, build) {
   const key = document.activeElement?.closest?.("[data-focus-key]")?.dataset.focusKey;
   const open = new Set([...container.querySelectorAll("details[open][data-open-key]")].map(d => d.dataset.openKey));
+  // What the person changed but did not save yet, in an open form (a name, an icon, a colour): an
+  // unrelated update (another window, another profile) redraws the list and must not throw it away.
+  const edits = [];
+  for (const field of container.querySelectorAll("details[open][data-open-key] [data-focus-key]")) {
+    if (field.type === "radio" || field.type === "checkbox") {
+      if (field.checked !== field.defaultChecked) {
+        edits.push([field.dataset.focusKey, "checked", field.checked]);
+      }
+    } else if (field.localName === "input" && field.type !== "submit" && field.value !== field.defaultValue) {
+      edits.push([field.dataset.focusKey, "value", field.value]);
+    }
+  }
   container.replaceChildren(...[build()].flat());
   for (const details of container.querySelectorAll("details[data-open-key]")) {
     details.open = open.has(details.dataset.openKey);
+  }
+  for (const [focusKey, property, value] of edits) {
+    const field = container.querySelector(`details[open] [data-focus-key="${CSS.escape(focusKey)}"]`);
+    if (field) {
+      field[property] = value;
+    }
+  }
+  if (edits.length) {
+    for (const grid of container.querySelectorAll("details[open] .swatches--glyphs")) {
+      const color = grid.closest("form")?.querySelector('input[name="color"]:checked')?.value;
+      if (color) {
+        tintAvatars(grid, color);
+      }
+    }
   }
   if (key) {
     container.querySelector(`[data-focus-key="${CSS.escape(key)}"]`)?.focus();
