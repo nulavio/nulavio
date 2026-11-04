@@ -136,6 +136,15 @@ function render(findings) {
     document.title = t("guardEmptyTitle");
     document.getElementById("headline").textContent = t("guardEmptyTitle");
     document.getElementById("intro").textContent = t("guardIntroEmpty");
+    // Why there is nothing, when there is a reason (audit 2026-11 GUARD-02); else "as Nulavio last saw it".
+    guard.check().then(result => {
+      const key = result?.state === "first" ? "guardFirst"
+        : result?.reason === "temporary" ? "guardSkippedTemporary"
+          : result?.reason === "ai-workspace" ? "guardSkippedWorkspace" : null;
+      if (key && !reviewing) {
+        document.querySelector("#empty .hint").textContent = t(key);
+      }
+    }).catch(() => {});
     if (reviewing) {
       document.getElementById("close").focus();
     }
