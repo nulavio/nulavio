@@ -1,0 +1,15 @@
+{
+  "comment": "Every personalisation option Nulavio offers (UX6), read by NulavioPersonalise and by tests/unit/test_personalisation.py. No option may write a protection pref; the test proves it against the Guard's lists, the baseline and a guarded prefix set. kind: cosmetic | routing | command | quick-action. ui: the page (under browser/shell) and the id of the element that holds the control, which carries data-option=<id>.",
+  "options": [
+    {
+      "id": "layout",
+      "kind": "cosmetic",
+      "prefs": ["sidebar.verticalTabs", "sidebar.visibility", "nulavio.layout.choicePending"],
+      "values": ["lateral", "top", "focus"],
+      "default": "lateral",
+      "writer": "NulavioLayout",
+      "labelKey": "layoutHeading",
+      "ui": ["settings/settings.html#layout-choices", "newtab/newtab.html#layout-choice-options"]
+    }
+  ]
+}
