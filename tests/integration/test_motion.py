@@ -65,6 +65,61 @@ class MotionTest(unittest.TestCase):
         self.assertEqual(self.m.execute(after), "visible")
         self.m.chrome("Services.prefs.clearUserPref('ui.prefersReducedMotion');")
 
+    def toggle_sidebar(self):
+        """Press the sidebar button once; the launcher's animations as the engine started them."""
+        self.m.set_context("chrome")
+        try:
+            return self.m.execute_async(
+                "const done = arguments[arguments.length - 1];"
+                "(async () => {"
+                "  await SidebarController.waitUntilStable();"
+                "  SidebarController.handleToolbarButtonClick();"
+                "  let seen = null;"
+                "  for (let i = 0; i < 100 && !seen; i++) {"
+                "    await new Promise(r => setTimeout(r, 10));"
+                "    const running = SidebarController._ongoingAnimations;"
+                "    const timing = a => { const t = a.effect.getTiming(); return [t.duration, t.easing]; };"
+                "    if (running.length) seen = running.map(timing);"
+                "  }"
+                "  await SidebarController.waitUntilStable();"
+                "  done({seen, expanded: SidebarController.getUIState().launcherExpanded});"
+                "})();"
+            )
+        finally:
+            self.m.set_context("content")
+
+    def test_02_the_sidebar_moves_on_the_motion_tokens(self):
+        """UX7-B: the launcher narrows in 160 ms and widens in 220 ms on the standard curve (patch 0008 and
+        firefox-branding.js); under reduced motion the engine starts no animation."""
+        self.m.chrome("Services.prefs.setIntPref('ui.prefersReducedMotion', 0);")
+        layout = (
+            'ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioLayout.sys.mjs").NulavioLayout'
+        )
+        self.m.set_context("chrome")
+        try:
+            self.m.execute_async(
+                f"const done = arguments[arguments.length - 1]; {layout}.apply(window, 'lateral').then(() => done(true));"
+            )
+        finally:
+            self.m.set_context("content")
+        curve = "cubic-bezier(0.2, 0, 0, 1)"
+        first = self.toggle_sidebar()
+        second = self.toggle_sidebar()
+        by_state = {first["expanded"]: first["seen"], second["expanded"]: second["seen"]}
+        self.assertTrue(by_state[False], "no animation when the launcher narrowed")
+        self.assertTrue(by_state[True], "no animation when the launcher widened")
+        self.assertEqual({tuple(a) for a in by_state[False]}, {(160, curve)})
+        self.assertEqual({tuple(a) for a in by_state[True]}, {(220, curve)})
+        self.m.chrome("Services.prefs.setIntPref('ui.prefersReducedMotion', 1);")
+        try:
+            # The engine follows the system setting live (gReduceMotion); wait until it has.
+            noticed = "return window.gReduceMotion === true;"
+            self.assertTrue(harness.wait_until(lambda: self.m.chrome(noticed), 10))
+            for _ in range(2):
+                self.assertIsNone(self.toggle_sidebar()["seen"], "an animation ran under reduced motion")
+        finally:
+            self.m.chrome("Services.prefs.clearUserPref('ui.prefersReducedMotion');")
+
 
 if __name__ == "__main__":
     unittest.main()

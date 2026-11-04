@@ -107,5 +107,37 @@ class MotionSheetTest(unittest.TestCase):
         self.assertEqual(tokens["motion"]["duration"]["spin"]["$value"], "900ms")
 
 
+class SidebarMotionTest(unittest.TestCase):
+    """The launcher's width moves on the motion tokens (firefox-branding.js reads them as prefs)."""
+
+    def prefs(self) -> dict[str, str]:
+        text = (ROOT / "browser" / "branding" / "nulavio" / "pref" / "firefox-branding.js").read_text(encoding="utf-8")
+        return dict(re.findall(r'^pref\("(sidebar\.animation\.[\w.-]+)",\s*(.+?)\);', text, re.M))
+
+    def test_sidebar_prefs_equal_the_tokens(self):
+        tokens = json.loads((ROOT / "docs" / "brand" / "tokens.json").read_text(encoding="utf-8"))["motion"]
+        ms = lambda name: tokens["duration"][name]["$value"].removesuffix("ms")  # noqa: E731
+        curve = "cubic-bezier({})".format(", ".join(str(v) for v in tokens["easing"]["standard"]["$value"]))
+        self.assertEqual(
+            self.prefs(),
+            {
+                "sidebar.animation.duration-ms": ms("expand"),
+                "sidebar.animation.collapse-duration-ms": ms("collapse"),
+                "sidebar.animation.expand-on-hover.duration-ms": ms("expand"),
+                "sidebar.animation.easing": f'"{curve}"',
+            },
+        )
+
+    def test_patch_0008_reads_the_curve_and_collapse_prefs(self):
+        patch = (ROOT / "browser" / "patches" / "0008-sidebar-let-prefs-set-the-launcher-animation-curve.patch").read_text(
+            encoding="utf-8"
+        )
+        added = "\n".join(line for line in patch.splitlines() if line.startswith("+") and not line.startswith("+++"))
+        self.assertIn('"sidebar.animation.collapse-duration-ms"', added)
+        self.assertIn('"sidebar.animation.easing"', added)
+        self.assertIn('"ease-in-out"', added)  # an invalid or missing pref keeps the engine's curve
+        self.assertNotIn("gReduceMotion", added)  # the engine's own reduced-motion skip is untouched
+
+
 if __name__ == "__main__":
     unittest.main()

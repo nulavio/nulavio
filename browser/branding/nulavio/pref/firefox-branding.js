@@ -107,6 +107,9 @@ pref("browser.newtabpage.activity-stream.default.sites", "");
 pref("sidebar.animation.duration-ms", 220);
 pref("sidebar.animation.collapse-duration-ms", 160);
 pref("sidebar.animation.easing", "cubic-bezier(0.2, 0, 0, 1)");
+// UX7: the Foco preset opens the launcher on hover (expand-on-hover) with the same expand token
+// (motion.duration.expand), not the engine's 400 ms; its 200 ms intent delay stays.
+pref("sidebar.animation.expand-on-hover.duration-ms", 220);
 
 // UX3F (QA A3): no empty bookmarks toolbar sliding in under a new tab and
 // pushing it down. The toolbar stays one shortcut away (Ctrl+Shift+B), and the
