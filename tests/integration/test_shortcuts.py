@@ -77,14 +77,15 @@ class ShortcutsTest(unittest.TestCase):
         self.apply("lateral")
 
     def test_02b_foco_chosen_elsewhere_still_returns_to_the_preset_it_came_from(self):
-        """Review: Foco chosen in Settings (or the first run) from Abas no topo; the key goes back to Abas no topo."""
-        self.apply("lateral")
-        self.apply("focus")  # remembered: lateral
+        """Review: Foco chosen in Settings (or the first run) from Lateral; the key goes back to Lateral.
+        The remembered preset starts as the other one, so only the choice itself can set it."""
+        self.m.chrome("Services.prefs.setStringPref('nulavio.layout.beforeFocus', 'top');")
         self.apply("top")
-        self.apply("focus")  # as Settings does it: remembered now as top
-        self.m.chrome(f"{key_of('alt,control+F')}.doCommand();")
-        self.assertTrue(harness.wait_until(lambda: self.preset() == "top", 15), self.preset())
+        self.apply("focus")  # remembered: top
         self.apply("lateral")
+        self.apply("focus")  # as Settings does it: remembered now as lateral
+        self.m.chrome(f"{key_of('alt,control+F')}.doCommand();")
+        self.assertTrue(harness.wait_until(lambda: self.preset() == "lateral", 15), self.preset())
 
     def press(self, key: str, code: str, key_code: int) -> None:
         """Ctrl+Alt+<key> as keyboard events through the widget (nsITextInputProcessor), as typing does."""
