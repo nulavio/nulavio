@@ -1,0 +1,418 @@
+{
+ "screen": [
+  1366,
+  768
+ ],
+ "reducedMotion": true,
+ "method": "X server pixels (ImageMagick import -window root, cropped to the window)",
+ "build": {
+  "buildID": "20261104151506",
+  "sourceStamp": "5add844c26613d7e4d84c799d6e23cf987b1240d",
+  "version": "159.0",
+  "git": "80337bdcb1a34e95e2a5c8e1d32c710c3e93f5e0",
+  "gitDirty": false,
+  "shell": "browser/shell, the theme CSS, firefox-branding.js and brand.ftl from git 80337bd, copied onto build 20261104151506 by scripts/build/dev_sync.py (the engine is that build's)"
+ },
+ "files": [
+  {
+   "file": "newtab-first-run-light@100.png",
+   "sha256": "ab848fefda5da355a84030068864a91574e01abc11ddb494ba99ce60552e6e14",
+   "page": "newtab-first-run",
+   "theme": "light",
+   "scale": 1.0,
+   "size": [
+    1366,
+    768
+   ]
+  },
+  {
+   "file": "settings-layout-light@100.png",
+   "sha256": "eeda87c37d4290bbb57083a240ba2cad25fb94d3990783d0499b6522818c926f",
+   "page": "settings-layout",
+   "theme": "light",
+   "scale": 1.0,
+   "size": [
+    1366,
+    768
+   ]
+  },
+  {
+   "file": "settings-appearance-light@100.png",
+   "sha256": "006eaa161944829809ab43283e08039a264ba991991e34275d8779282386b786",
+   "page": "settings-appearance",
+   "theme": "light",
+   "scale": 1.0,
+   "size": [
+    1366,
+    768
+   ]
+  },
+  {
+   "file": "assistant-light@100.png",
+   "sha256": "09eb5990e6267fd6726a11759dc97384ea582b4aeb1a3409d514414cca2fdf4c",
+   "page": "assistant",
+   "theme": "light",
+   "scale": 1.0,
+   "size": [
+    1366,
+    768
+   ]
+  },
+  {
+   "file": "lookalike-light@100.png",
+   "sha256": "b0c376e8603f7a0d91af0e729d420753aa248de863fe0e71d22513d591a8dd2c",
+   "page": "lookalike",
+   "theme": "light",
+   "scale": 1.0,
+   "size": [
+    1366,
+    768
+   ]
+  },
+  {
+   "file": "guard-review-light@100.png",
+   "sha256": "a904e4c6a17f28adc5f260f95bd54da42bc79ea1c9acb772c297118f8458c797",
+   "page": "guard-review",
+   "theme": "light",
+   "scale": 1.0,
+   "size": [
+    1366,
+    768
+   ]
+  },
+  {
+   "file": "newtab-first-run-light@125.png",
+   "sha256": "b19c0c2ca1a0fd9406ba8cbbc322360f37582c867c987c3f1761663461c50a55",
+   "page": "newtab-first-run",
+   "theme": "light",
+   "scale": 1.25,
+   "size": [
+    1366,
+    768
+   ]
+  },
+  {
+   "file": "settings-layout-light@125.png",
+   "sha256": "1421baa784e22736aa9df07be0358061f301cad1cb577e4904cb4a02d2cb9f14",
+   "page": "settings-layout",
+   "theme": "light",
+   "scale": 1.25,
+   "size": [
+    1366,
+    768
+   ]
+  },
+  {
+   "file": "settings-appearance-light@125.png",
+   "sha256": "09fb31fe4069c71eb9acd0a3a38102dcd415bcfc00c8822f0f89700402a99dfb",
+   "page": "settings-appearance",
+   "theme": "light",
+   "scale": 1.25,
+   "size": [
+    1366,
+    768
+   ]
+  },
+  {
+   "file": "assistant-light@125.png",
+   "sha256": "cafce7abc8d0e6359983122aa9f92b1e003ba84119ccc348f6d2dd42bb31a856",
+   "page": "assistant",
+   "theme": "light",
+   "scale": 1.25,
+   "size": [
+    1366,
+    768
+   ]
+  },
+  {
+   "file": "lookalike-light@125.png",
+   "sha256": "a852089d3273b735d51de7a3d79037d5c5dc61aeae0263cc10364d1dd25beda0",
+   "page": "lookalike",
+   "theme": "light",
+   "scale": 1.25,
+   "size": [
+    1366,
+    768
+   ]
+  },
+  {
+   "file": "guard-review-light@125.png",
+   "sha256": "bc653166cdef2fbfdceccb6683c564f806d3aa31be1e0eb2665795619977f532",
+   "page": "guard-review",
+   "theme": "light",
+   "scale": 1.25,
+   "size": [
+    1366,
+    768
+   ]
+  },
+  {
+   "file": "newtab-first-run-light@150.png",
+   "sha256": "c727a23b92a34f62714de01cab8ec18291fc357e871f6b5c50eaf8f97c0074e5",
+   "page": "newtab-first-run",
+   "theme": "light",
+   "scale": 1.5,
+   "size": [
+    1367,
+    768
+   ]
+  },
+  {
+   "file": "settings-layout-light@150.png",
+   "sha256": "d4c6a969f910bc73c478f670f40d6ab4b179deb53da387640cd4ffaa5060e997",
+   "page": "settings-layout",
+   "theme": "light",
+   "scale": 1.5,
+   "size": [
+    1367,
+    768
+   ]
+  },
+  {
+   "file": "settings-appearance-light@150.png",
+   "sha256": "c3caf931155d4749425e0726dfc67a23b3530834cbd316afa5d3374893d762c5",
+   "page": "settings-appearance",
+   "theme": "light",
+   "scale": 1.5,
+   "size": [
+    1367,
+    768
+   ]
+  },
+  {
+   "file": "assistant-light@150.png",
+   "sha256": "25b37dfeb3f4d439bd6e5ec13d2cd4ddd0521d71c3eaff667f639342927fcd2c",
+   "page": "assistant",
+   "theme": "light",
+   "scale": 1.5,
+   "size": [
+    1367,
+    768
+   ]
+  },
+  {
+   "file": "lookalike-light@150.png",
+   "sha256": "19829fa26a9b2977dc49d992a7283bd92460008f9ef87808853d565dbc02b857",
+   "page": "lookalike",
+   "theme": "light",
+   "scale": 1.5,
+   "size": [
+    1367,
+    768
+   ]
+  },
+  {
+   "file": "guard-review-light@150.png",
+   "sha256": "46718a63a8991e880add18a98b904a9d3e5f3c52b7e616671b7c60a828dc854b",
+   "page": "guard-review",
+   "theme": "light",
+   "scale": 1.5,
+   "size": [
+    1367,
+    768
+   ]
+  },
+  {
+   "file": "newtab-first-run-dark@100.png",
+   "sha256": "02105bc46909452f1d37c4615956f6f81f69a7135ace7e90d6da76635707c6e8",
+   "page": "newtab-first-run",
+   "theme": "dark",
+   "scale": 1.0,
+   "size": [
+    1366,
+    768
+   ]
+  },
+  {
+   "file": "settings-layout-dark@100.png",
+   "sha256": "0da0f323e3aaa05ec5ebcbe044a1d2adba79d518b388cdf2d1ca55be3a39fafd",
+   "page": "settings-layout",
+   "theme": "dark",
+   "scale": 1.0,
+   "size": [
+    1366,
+    768
+   ]
+  },
+  {
+   "file": "settings-appearance-dark@100.png",
+   "sha256": "3cbbd88626a107043958d9246b01161ff99ab2274a5234fb6860ef2b9709b9ef",
+   "page": "settings-appearance",
+   "theme": "dark",
+   "scale": 1.0,
+   "size": [
+    1366,
+    768
+   ]
+  },
+  {
+   "file": "assistant-dark@100.png",
+   "sha256": "ce85e611b6e293efe6306a8e26fa264b9e29735fef715ae9283ba52b6cce8962",
+   "page": "assistant",
+   "theme": "dark",
+   "scale": 1.0,
+   "size": [
+    1366,
+    768
+   ]
+  },
+  {
+   "file": "lookalike-dark@100.png",
+   "sha256": "a4fccbda44d6b5bf9019f8e11d8e228f28f9ddb8d3b866f5ab99e81fcd14604b",
+   "page": "lookalike",
+   "theme": "dark",
+   "scale": 1.0,
+   "size": [
+    1366,
+    768
+   ]
+  },
+  {
+   "file": "guard-review-dark@100.png",
+   "sha256": "db0d2dffc253b88f3ac455b8cb3129fe07aec99dc66969263b33a54273960c29",
+   "page": "guard-review",
+   "theme": "dark",
+   "scale": 1.0,
+   "size": [
+    1366,
+    768
+   ]
+  },
+  {
+   "file": "newtab-first-run-dark@125.png",
+   "sha256": "c1cc24e392e2aca26b6685ecee1f2e0b06c2d19546f6e61d2571b66df7b6a20a",
+   "page": "newtab-first-run",
+   "theme": "dark",
+   "scale": 1.25,
+   "size": [
+    1366,
+    768
+   ]
+  },
+  {
+   "file": "settings-layout-dark@125.png",
+   "sha256": "a3a5994720210fda0d03758cbbd9e5b105c9e6b55e0efcbfa487682224b845ca",
+   "page": "settings-layout",
+   "theme": "dark",
+   "scale": 1.25,
+   "size": [
+    1366,
+    768
+   ]
+  },
+  {
+   "file": "settings-appearance-dark@125.png",
+   "sha256": "0c19ffcd4277ff647dceb0030fec89c524fdc165b870845ae7f30fa123ef3f80",
+   "page": "settings-appearance",
+   "theme": "dark",
+   "scale": 1.25,
+   "size": [
+    1366,
+    768
+   ]
+  },
+  {
+   "file": "assistant-dark@125.png",
+   "sha256": "f4c87a47eb854a3c49f3fe151aa7d3441b6fa6e3de0331e02eba0285903ec71c",
+   "page": "assistant",
+   "theme": "dark",
+   "scale": 1.25,
+   "size": [
+    1366,
+    768
+   ]
+  },
+  {
+   "file": "lookalike-dark@125.png",
+   "sha256": "503c06e823f68b4f80d4efe75d0c172f96e3bf214ec7065572b61e5fca1951af",
+   "page": "lookalike",
+   "theme": "dark",
+   "scale": 1.25,
+   "size": [
+    1366,
+    768
+   ]
+  },
+  {
+   "file": "guard-review-dark@125.png",
+   "sha256": "3e42228774f51f4ab04157420601eece43dcfb69199e7ded633076f1df57cbc7",
+   "page": "guard-review",
+   "theme": "dark",
+   "scale": 1.25,
+   "size": [
+    1366,
+    768
+   ]
+  },
+  {
+   "file": "newtab-first-run-dark@150.png",
+   "sha256": "3840f3f0c4e2e299c1090df73756570fd41c0ab8b18a6b07f7e6dedbb365a851",
+   "page": "newtab-first-run",
+   "theme": "dark",
+   "scale": 1.5,
+   "size": [
+    1367,
+    768
+   ]
+  },
+  {
+   "file": "settings-layout-dark@150.png",
+   "sha256": "0ee97f783b0106e107feba284df4dab3772819608dc4e367e30a2d837447716e",
+   "page": "settings-layout",
+   "theme": "dark",
+   "scale": 1.5,
+   "size": [
+    1367,
+    768
+   ]
+  },
+  {
+   "file": "settings-appearance-dark@150.png",
+   "sha256": "59b5158cf612a2a1d67347a98a3a00f9548cf2d25001f2ee803f18c63843f6bc",
+   "page": "settings-appearance",
+   "theme": "dark",
+   "scale": 1.5,
+   "size": [
+    1367,
+    768
+   ]
+  },
+  {
+   "file": "assistant-dark@150.png",
+   "sha256": "c53c04b95abf135e5a896f07492ab8ce7c7193ad4c6bcf9abcbef239df03049d",
+   "page": "assistant",
+   "theme": "dark",
+   "scale": 1.5,
+   "size": [
+    1367,
+    768
+   ]
+  },
+  {
+   "file": "lookalike-dark@150.png",
+   "sha256": "658463c7e948aad5d3bbc8caf9b131c5b502fee36559f88757bfb1661395899d",
+   "page": "lookalike",
+   "theme": "dark",
+   "scale": 1.5,
+   "size": [
+    1367,
+    768
+   ]
+  },
+  {
+   "file": "guard-review-dark@150.png",
+   "sha256": "037f7460306c90da26d774ccb145a03e09d8ec82b70382cc8f1d7690143cb043",
+   "page": "guard-review",
+   "theme": "dark",
+   "scale": 1.5,
+   "size": [
+    1367,
+    768
+   ]
+  }
+ ],
+ "contactSheet": {
+  "file": "matrix.png",
+  "command": "montage <files> -tile 6x -geometry 456x256+4+4 -background #F1F7F5 matrix.png"
+ }
+}
