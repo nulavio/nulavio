@@ -40,6 +40,8 @@ fi
 
 git -C "$repo" fetch --quiet origin main
 info=$(python3 -I "$repo/scripts/release/release_manifest.py" verify "$out" --repo "$repo" --on origin/main)
+# Before anything is written: no package in the directory that the manifest does not list.
+python3 -I "$repo/scripts/release/release_manifest.py" packages "$out/manifest.json" "$out/packages" >/dev/null
 field() { python3 -I -c 'import json, sys; v = json.loads(sys.argv[1])[sys.argv[2]]; print(*v, sep="\n") if isinstance(v, list) else print(v)' "$info" "$1"; }
 tag=$(field tag)
 commit=$(field commit)
