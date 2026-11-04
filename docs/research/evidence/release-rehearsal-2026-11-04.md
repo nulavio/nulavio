@@ -93,6 +93,37 @@ Second attempt:
 b2fa0ea890e489621b755b891a95b9844467c27d9699e3698dbff17e98f81cbb  result.json
 ```
 
+## Third attempt after freeing host memory
+
+Stale `/tmp` directories (tmpfs, partly held in a full zram swap) that no
+process had open were removed at the maintainer's request; host
+`MemAvailable` rose from about 15 to about 19 GiB. The previous one-job
+`last-result.json` was kept as `logs/last-result.onejob-20261104T001548.json`
+and the rehearsal was rerun with Make `-j1`, Cargo `--jobs=1` and the same
+16 GiB container budget and 4 GiB host reserve (out dir
+`dist/rehearsal-159.0.1-guarded-after-cleanup/`, guard log
+`logs/guard-20261104T085253-1276634/` in the private cache).
+
+`verify-source` passed again. The build now got past `firefox-on-glean`
+(single `rustc` at about 9.7 GiB RSS), `webrender`, `style` and the rest of the
+Rust graph, and stopped in the final `gkrust` crate after 12 min 33 s of Make
+time. Guard window 11:52:53 to 12:14:09 UTC, 256 samples. Exact reason:
+`available memory below reserve (3.94 GiB)`, `oom: false`, exit 75. Container
+`memory.current` reached its 16.00 GiB `memory.max` (17 `max` events) as host
+availability crossed the reserve, so `gkrust` with release Rust LTO
+(`RUST_LTO_ELIGIBLE=1`) needs more than this budget leaves on this host. The
+container was removed. SHA-256: `build.log`
+`84d2204578db43a0eb2e6cc80672a9974eb88dbd9b5d2055b6e034affd941710`,
+`telemetry.jsonl`
+`9f3581bda9ba7de7290a2230fb150aef99be75d7924e74291eccc80dfb0f4a5b`,
+`result.json`
+`d714609fbbaa952b671ec7e288b1420793407298174f06ac0e85ab3b5e9f60ce`.
+
+The compiled Rust dependencies stay in the objdir, so a later attempt resumes
+at `gkrust`. Finishing needs either more memory than the 16 GiB budget (larger
+host or runner) or a reviewed change to the release Rust LTO setting; neither
+was made here.
+
 ## Verification and remaining gates
 
 The install-path regression test failed before the fix: a stub packager
