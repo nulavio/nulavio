@@ -28,6 +28,7 @@ import os
 import re
 import secrets
 import signal
+import subprocess
 import sys
 import time
 import unittest
@@ -543,7 +544,8 @@ class AssistantUiTest(unittest.TestCase):
         self.assertEqual(chrome_async(self.m, f"return {AI}.assistantChips(window);")["ok"], [])  # gone from the browser too
         before = self.provider.count
         self.submit("Sem a página?")
-        self.wait_view(lambda v: v["answered"] and v["receipt"].startswith("Só a pergunta"))
+        # The receipt names the conversation that went with it, and no page (review UX5-D/G F2).
+        self.wait_view(lambda v: v["answered"] and self.provider.count > before and "página" not in v["receipt"])
         self.assertNotIn("<<<PAGE", self.sent_since(before))
         # Summarise includes this page and writes the request; Send stays with the person (Q5).
         before = self.provider.count
@@ -657,8 +659,11 @@ class AssistantUiTest(unittest.TestCase):
                 self.assertIsNone(view["attached"])
                 self.assertEqual(len(self.provider.requests) - before, 1)
                 self.assertNotIn("<<<PAGE", self.sent_since(before))
+                again = len(self.provider.requests)
                 self.submit("E a próxima também")
-                self.wait_view(lambda v: v["answered"] and v["receipt"].startswith("Só a pergunta"))
+                self.wait_view(
+                    lambda v, n=again: v["answered"] and len(self.provider.requests) > n and "página" not in v["receipt"]
+                )
                 self.assertNotIn("<<<PAGE", self.sent_since(before))
 
     def test_08_nothing_in_private_windows(self):
@@ -1546,12 +1551,15 @@ class AssistantUiTest(unittest.TestCase):
 
     def test_34_the_band_counts_a_tasks_steps_and_says_when_it_waits(self):
         self.close_other_tabs()
+        # A refused call is not an action; a call that ran and failed (bad arguments) is.
         local = {
             "id": "c1",
             "type": "function",
             "function": {"name": "tab_new", "arguments": json.dumps({"url": "http://127.0.0.1:9/"})},
         }
-        self.provider.replies += [{"choices": [{"message": {"content": None, "tool_calls": [local]}}]}] * 2
+        failing = {"id": "c3", "type": "function", "function": {"name": "tab_new", "arguments": json.dumps({"url": 5})}}
+        self.provider.replies.append({"choices": [{"message": {"content": None, "tool_calls": [local]}}]})
+        self.provider.replies += [{"choices": [{"message": {"content": None, "tool_calls": [failing]}}]}] * 2
         self.provider.replies.append({"choices": [{"message": {"content": "Fim."}}]})
         self.provider.delay = 1.5  # each model turn takes a moment: the seal shows each count
         self.show_sidebar(reload=True)
@@ -1568,8 +1576,10 @@ class AssistantUiTest(unittest.TestCase):
                 self.assertEqual((seal["opacity"], seal["onTop"]), ("1", True), seal)  # on screen, not covered
                 self.assertGreater(seal["width"], 0)
             time.sleep(0.1)
+        self.assertIn("Assistente agindo na Área de IA", seen)  # the refused call: no count
         self.assertIn("Assistente agindo na Área de IA · 1 ação", seen)
         self.assertIn("Assistente agindo na Área de IA · 2 ações", seen)
+        self.assertNotIn("Assistente agindo na Área de IA · 0 ações", seen)
         self.assertTrue(harness.wait_until(lambda: self.band_seal("activity") is None, 10))  # gone when done
         self.provider.delay = 0.0
         # Waiting for an answer, and "Parar tarefa" from the band.
@@ -1592,11 +1602,16 @@ class AssistantUiTest(unittest.TestCase):
         self.assertTrue(harness.wait_until(lambda: self.band_seal("activity") is None, 15))
 
     def test_35_the_band_names_an_agent_connected_through_the_bridge(self):
-        """UX5-I2: a session marker with a live pid shows; with a dead one, or none, nothing shows."""
+        """UX5-I2: a session marker whose pid is a live bridge shows; a dead pid, a pid that is some other
+        program (reused after a kill), or no marker shows nothing."""
         sessions = Path(self.session.env["HOME"]) / ".local" / "state" / "nulavio" / "ai" / "sessions"
         sessions.mkdir(parents=True, exist_ok=True)
         marker = sessions / "s-test.json"
-        marker.write_text(json.dumps({"agent": "ag-0123456789ab", "name": "Claude Code", "pid": os.getpid()}))
+        # A stand-in for `nulavio ai serve`: what the band checks is a live pid whose command has "serve".
+        bridge = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(300)", "serve"])
+        self.addCleanup(bridge.wait)
+        self.addCleanup(bridge.kill)
+        marker.write_text(json.dumps({"agent": "ag-0123456789ab", "name": "Claude Code", "pid": bridge.pid}))
         try:
             seal = harness.wait_until(lambda: self.band_seal("connected"), 15)
             self.assertEqual(seal["text"], "Agente conectado: Claude Code")
@@ -1630,10 +1645,129 @@ class AssistantUiTest(unittest.TestCase):
             finally:
                 self.m.send("WebDriver:CloseWindow")
                 self.m.switch_to(main)
+            marker.write_text(json.dumps({"agent": "ag-0123456789ab", "name": "Claude Code", "pid": os.getpid()}))
+            self.assertTrue(harness.wait_until(lambda: self.band_seal("connected") is None, 15))  # alive, not a bridge
+            marker.write_text(json.dumps({"agent": "ag-0123456789ab", "name": "Claude Code", "pid": bridge.pid}))
+            self.assertTrue(harness.wait_until(lambda: self.band_seal("connected"), 15))
             marker.write_text(json.dumps({"agent": "ag-0123456789ab", "name": "Claude Code", "pid": 2**22 + 12345}))
             self.assertTrue(harness.wait_until(lambda: self.band_seal("connected") is None, 15))  # that process is gone
         finally:
             marker.unlink(missing_ok=True)
+
+    # -- fixes from the UX5 D-I review -------------------------------------------------------------
+
+    def test_36_a_retry_after_leaving_the_page_out_sends_no_page_and_the_receipt_says_all(self):
+        url = self.server.url("/page/Reenvio")
+        self.close_other_tabs()
+        self.select_new_tab(url)
+        self.show_sidebar(reload=True)
+        self.wait_view(lambda v: v["offer"])
+        self.panel("document.getElementById('new-thread').click();")
+        self.assertTrue(harness.wait_until(lambda: self.thread_view()["empty"], 10))
+        self.panel("document.getElementById('include-page').click();")
+        self.wait_view(lambda v: v["attached"])
+        self.provider.replies.append({"choices": [{"message": {"content": "Primeira."}}]})
+        view = self.ask_panel("PERGUNTA-A?")
+        self.assertIn("desta página foram enviados", view["receipt"])  # only the page went with it
+        # The page again with the next question, which fails; then "Deixar a página de fora".
+        self.wait_view(lambda v: v["offer"])
+        self.panel("document.getElementById('include-page').click();")
+        self.wait_view(lambda v: v["attached"])
+        self.provider.replies.append(Reply(status=503))
+        self.submit("PERGUNTA-B?")
+        self.wait_view(lambda v: v["level"] == "error")
+        self.assertTrue(harness.wait_until(lambda: self.thread_view()["retry"], 10))
+        self.panel("document.getElementById('leave-page').click();")
+        self.assertTrue(harness.wait_until(lambda: not self.thread_view()["leave"], 10))
+        hint = harness.wait_until(lambda: self.thread_view()["retry"], 10)
+        announced = int(re.search(r"Reenvia ([\d.]+) caracteres", hint).group(1).replace(".", ""))
+        self.provider.replies.append({"choices": [{"message": {"content": "Sem a página."}}]})
+        before = self.provider.count
+        self.panel("document.getElementById('retry').click();")
+        view = self.wait_view(lambda v: v["answered"] and self.provider.count == before + 1)
+        sent = json.dumps(self.provider.requests[-1][2], ensure_ascii=False)
+        self.assertNotIn("<<<PAGE", sent)  # neither the failed turn's copy nor the earlier one
+        self.assertIn("PERGUNTA-B?", sent)
+        self.assertEqual(self.provider.chars[-1], announced)
+        self.assertIn(" da conversa)", view["receipt"])  # the conversation went with it, and the receipt says so
+        # A turn that failed for one recipient is not sent again to another, after carrying the conversation.
+        self.provider.replies.append(Reply(status=503))
+        self.submit("PERGUNTA-C?")
+        self.wait_view(lambda v: v["level"] == "error")
+        self.assertTrue(harness.wait_until(lambda: self.thread_view()["retry"], 10))
+        other = FakeProvider()
+        restore = {"kind": "openai", "baseUrl": self.provider.base, "model": "test-model"}
+        try:
+            chrome_async(self.m, f"return await {AI}.assistantConfigure(args[0]);", [{**restore, "baseUrl": other.base}])
+            self.show_sidebar(reload=True)
+            self.assertTrue(harness.wait_until(lambda: self.thread_view()["moved"], 10))
+            self.panel("document.getElementById('moved-carry').click();")
+            self.assertTrue(harness.wait_until(lambda: not self.thread_view()["moved"], 10))
+            self.assertIsNone(self.thread_view()["retry"])
+            st = chrome_async(self.m, f"const w = {WINDOW}; return await {AI}.assistantState(w);", [None])["ok"]
+            expected = {"recipient": st["recipient"], "model": "test-model", "chars": 1}
+            start = f"const w = {WINDOW}; return await {AI}.assistantStart('ask', {{retry: true, expected: args[0]}}, w);"
+            refused = chrome_async(self.m, start, [expected, None])
+            self.assertEqual(refused, {"error": "thread-recipient"})
+            self.assertEqual(other.count, 0)
+        finally:
+            chrome_async(self.m, f"return await {AI}.assistantConfigure(args[0]);", [restore])
+            other.close()
+            self.show_sidebar(reload=True)
+            self.close_other_tabs()
+
+    def test_37_a_new_conversation_during_an_answer_does_not_get_that_turn(self):
+        self.close_other_tabs()
+        self.show_sidebar(reload=True)
+        self.wait_view(lambda v: v["state"] == "ready")
+        self.panel("document.getElementById('new-thread').click();")
+        self.provider.replies += [{"choices": [{"message": {"content": "Da conversa velha."}}]},
+                                  {"choices": [{"message": {"content": "Da nova."}}]}]  # fmt: skip
+        self.provider.delay = 2.0
+        try:
+            self.submit("PERGUNTA-VELHA?")
+            self.assertTrue(harness.wait_until(self.tools_process, 10))
+            self.panel("document.getElementById('new-thread').click();")
+            self.wait_view(lambda v: v["answered"], timeout=30)
+        finally:
+            self.provider.delay = 0.0
+        self.assertTrue(harness.wait_until(lambda: not self.thread_view()["shown"], 10))
+        self.ask_panel("PERGUNTA-NOVA?")
+        self.assertEqual([m["content"] for m in self.user_turns()], ["PERGUNTA-NOVA?"])
+
+    def test_38_a_card_waiting_in_the_panel_comes_back_with_it_and_goes_to_a_tab_without_it(self):
+        self.close_other_tabs()
+        self.ask_first(self.assistant_agent())
+        call = {"id": "c1", "type": "function", "function": {"name": "tab_new", "arguments": json.dumps({"url": "about:blank"})}}
+        self.provider.replies.append({"choices": [{"message": {"content": None, "tool_calls": [call]}}]})
+        self.show_sidebar(reload=True)
+        self.wait_view(lambda v: v["state"] == "ready")
+        self.mode("task")
+        self.addCleanup(self.mode, "ask")
+        self.submit("Abra uma aba")
+        self.assertTrue(harness.wait_until(lambda: self.card()["shown"], 30))
+        tabs = "return gBrowser.browsers.filter(b => b.currentURI.spec.includes('ai/request.html')).length;"
+        requests = Path(self.session.env["HOME"]) / ".local" / "state" / "nulavio" / "ai" / "requests"
+        try:
+            # The panel reloads: the card is there again, and no request tab opens as well.
+            self.show_sidebar(reload=True)
+            self.assertTrue(harness.wait_until(lambda: self.card()["shown"], 10))
+            time.sleep(2)  # past the moment a closed panel's card goes to a tab
+            self.assertTrue(self.card()["shown"])
+            self.assertEqual(self.m.chrome(tabs), 0)
+            # The panel closes: the request opens in front in the task's window, so it is never left unseen.
+            chrome_async(self.m, f"const w = {WINDOW}; w.SidebarController.hide(); return true;", [None])
+            front = "const s = gBrowser.selectedBrowser.currentURI.spec; return s.includes('ai/request.html') ? s : null;"
+            found = harness.wait_until(lambda: self.m.chrome(front), 15)
+            self.assertTrue(found)
+            self.assertEqual(self.m.chrome(tabs), 1)
+            chrome_async(self.m, f"return await {AI}.answer(args[0], 'deny');", [found.split("id=")[1]])
+        finally:
+            for pending in requests.glob("*.json"):
+                chrome_async(self.m, f"return await {AI}.answer(args[0], 'deny');", [pending.stem])
+            self.assertTrue(harness.wait_until(lambda: self.tools_process() is None, 60))
+            self.show_sidebar(reload=True)
+            self.close_other_tabs()
 
 
 if __name__ == "__main__":

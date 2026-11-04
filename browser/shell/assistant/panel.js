@@ -102,10 +102,13 @@ function showSendLine() {
     ? t("assistantSendLineTask", [state.recipient])
     : t("assistantSendLine", [state.recipient, state.provider.model, count(total)]);
   // Above the limit, Send waits for an explicit choice: never a silent cut (Q20).
-  const tooLarge = !task && total > MAX_REQUEST_CHARS;
+  const tooMany = !task && (thread?.historyTurns ?? 0) >= (thread?.maxTurns ?? Infinity);
+  const tooLarge = !task && (total > MAX_REQUEST_CHARS || tooMany);
   $("too-large").hidden = !tooLarge;
   if (tooLarge) {
-    $("too-large-text").textContent = t("assistantTooLarge", [count(total), count(MAX_REQUEST_CHARS)]);
+    $("too-large-text").textContent = tooMany
+      ? t("assistantTooManyTurns", [count(thread.maxTurns)])
+      : t("assistantTooLarge", [count(total), count(MAX_REQUEST_CHARS)]);
     $("large-leave").hidden = !thread?.page || thread.pageLeftOut;
   }
   const moved = !task && threadMoved();
@@ -135,12 +138,16 @@ function renderThread() {
       ? withPage
         ? t("assistantThreadLinePageOne", [thread.page.title])
         : t("assistantThreadLineOne")
-      : withPage
-        ? t("assistantThreadLinePage", [count(n), thread.page.title])
-        : t("assistantThreadLine", [count(n)]);
+      : withPage && thread.copies > 1
+        ? t("assistantThreadLineCopies", [count(n), count(thread.copies)])
+        : withPage
+          ? t("assistantThreadLinePage", [count(n), thread.page.title])
+          : t("assistantThreadLine", [count(n)]);
   $("leave-page").hidden = !thread?.page || thread.pageLeftOut;
   const last = turns.at(-1);
-  $("retry-actions").hidden = run || mode() === "task" || thread?.retryChars == null || threadMoved();
+  // A retry goes only to the recipient that turn was for (review UX5-D F1).
+  const otherRecipient = Boolean(thread?.retryRecipient && thread.retryRecipient !== state?.recipient);
+  $("retry-actions").hidden = run || mode() === "task" || thread?.retryChars == null || threadMoved() || otherRecipient;
   if (!$("retry-actions").hidden) {
     const chars = (state?.systemChars ?? 0) + thread.historyChars + thread.retryChars;
     $("retry-hint").textContent = t("assistantRetryHint", [count(chars), state.recipient]);
@@ -168,6 +175,7 @@ function turnItem(turn) {
     { class: "assistant__turn", "data-state": turn.state },
     h("p", { class: "assistant__turn-question", text: turn.question }),
     turn.page ? h("p", { class: "hint", text: t("assistantTurnPage", [turn.page.title, turn.page.host]) }) : null,
+    turn.selection ? h("p", { class: "hint", text: t("assistantTurnSelection", [turn.selection.title, turn.selection.host]) }) : null,
     turnAnswer(turn.state === "done" ? said : "", turn.state === "done" ? "" : said),
     h("p", { class: "hint", text: receipt }),
     turn.state === "done" && turn.answer
@@ -370,20 +378,7 @@ async function render() {
     syncMode();
     renderThread();
     await takeOffer();
-    if (!run) {
-      // A Task goes on while the panel is closed (Q18): this panel shows it, with "Parar". An Ask that
-      // was open when the panel closed is being stopped: it is not shown as going on.
-      const going = (await ai.assistantRuns().catch(() => [])).find(r => r.kind === "task");
-      if (going) {
-        const stopping = going.state === "cancelling";
-        run = { runId: going.runId, kind: "task", text: "", stopping, steps: [...going.steps] };
-        setRunning(true);
-        $("send").disabled = stopping; // a stop already asked for: it ends by itself
-        showSteps(run.steps);
-        $("answer-section").hidden = !run.steps.length;
-        announce(t(stopping ? "assistantTaskStopping" : "assistantTaskGoesOn"), "progress");
-      }
-    }
+    await adoptTask();
   } else {
     ++contextVersion;
     chips = [];
@@ -421,6 +416,29 @@ function showSources(list) {
 const toolName = id => browser.i18n.getMessage(`aiTool_${String(id).replace(/[^a-z0-9_]/gi, "_")}`) || String(id);
 const STEP_STATES = new Set(["started", "ok", "denied", "error", "cancelled"]);
 
+/** A Task goes on while the panel is closed (Q18): this panel shows it again, with "Parar", and the
+    permission request it waits for, if any. An Ask open when the panel closed is being stopped: it is
+    not shown as going on. */
+async function adoptTask() {
+  if (run || document.body.dataset.state !== "ready") {
+    return;
+  }
+  const going = (await ai.assistantRuns().catch(() => [])).find(r => r.kind === "task");
+  if (!going || run) {
+    return;
+  }
+  const stopping = going.state === "cancelling";
+  run = { runId: going.runId, kind: "task", text: "", stopping, steps: [...going.steps] };
+  setRunning(true);
+  $("send").disabled = stopping; // a stop already asked for: it ends by itself
+  showSteps(run.steps);
+  $("answer-section").hidden = !run.steps.length;
+  announce(t(stopping ? "assistantTaskStopping" : "assistantTaskGoesOn"), "progress");
+  if (going.pendingApproval) {
+    showApproval(going.pendingApproval); // the card it waits for comes back with the panel
+  }
+}
+
 /** The run's timeline (UX5-F): each step, by its tool's name, and what happened to it. */
 function showSteps(steps) {
   $("steps").setAttribute("aria-label", t("assistantStepsLabel"));
@@ -446,9 +464,16 @@ function hideApproval() {
   $("approval").hidden = true;
 }
 
+let showing = null; // the request a card is being built for; a newer one, or its end, wins
+const gone = new Set(); // requests whose step ended or that another place shows
+
 async function showApproval(id) {
+  if (approval?.id === id || gone.has(id)) {
+    return;
+  }
+  showing = id;
   const request = await ai.request(id).catch(() => null);
-  if (!request || !run || approval?.id === id) {
+  if (!request || !run || showing !== id || gone.has(id)) {
     return;
   }
   hideApproval();
@@ -498,13 +523,33 @@ async function answerApproval(value) {
   for (const button of $("approval").querySelectorAll("button")) {
     button.disabled = true;
   }
+  gone.add(id);
   try {
     await ai.answer(id, value);
     announce(t(value === "deny" ? "aiAnsweredDeny" : value === "session" ? "assistantAnsweredTask" : "aiAnsweredOnce"));
   } catch (e) {
     announce(e?.message === "invalid" || e?.message === "expired" ? t("aiRequestExpired") : errorText(e), "warn");
   }
-  hideApproval();
+  if (approval?.id === id) {
+    hideApproval(); // never a newer card that came while this answer went
+  }
+}
+
+/** What went with an answered question, all of it (review UX5-D/G F2): the page, the selection, and the
+    conversation (with the page copies it carried), never "only the question" when more went. */
+function receipt(result) {
+  const parts = [
+    result.pageChars ? t("assistantPartPage", [count(result.pageChars)]) : null,
+    result.selectionChars ? t("assistantPartSelection", [count(result.selectionChars)]) : null,
+    result.historyChars ? t(result.historyPage ? "assistantPartConversationPage" : "assistantPartConversation", [count(result.historyChars)]) : null,
+  ].filter(Boolean);
+  if (!parts.length) {
+    return t("assistantSentQuestionOnly", [result.recipient, count(result.chars)]);
+  }
+  if (parts.length === 1 && result.pageChars) {
+    return t("assistantSentPage", [count(result.pageChars), result.recipient, count(result.chars)]);
+  }
+  return t("assistantSentParts", [result.recipient, count(result.chars), parts.join(", ")]);
 }
 
 function showResult(result, task) {
@@ -520,11 +565,7 @@ function showResult(result, task) {
   // The provider's limit stopped the answer (AI-08): said where the answer ends, not only announced.
   $("truncated").hidden = !result.truncated;
   $("continue").hidden = task;
-  $("receipt").textContent = task
-    ? t("assistantSentTask", [result.recipient ?? state.recipient])
-    : result.pageChars
-      ? t("assistantSentPage", [count(result.pageChars), result.recipient, count(result.chars)])
-      : t("assistantSentQuestionOnly", [result.recipient, count(result.chars)]);
+  $("receipt").textContent = task ? t("assistantSentTask", [result.recipient ?? state.recipient]) : receipt(result);
   showSteps(result.steps);
   showSources(task ? [] : result.sources);
   $("answer-section").hidden = false;
@@ -599,8 +640,13 @@ async function takeOffer() {
   }
   chips = await ai.assistantChips().catch(() => chips);
   $("drift").hidden = true;
-  if (delivery.draft && !run) {
-    $("prompt").value = delivery.draft; // from "@ia" in the address bar: written here, sent only by Send
+  if (delivery.draft) {
+    // From "@ia" in the address bar: written here, sent only by Send; during a run it waits for its end.
+    if (run) {
+      laterDraft = delivery.draft;
+    } else {
+      $("prompt").value = delivery.draft;
+    }
   }
   showContext();
   const added = chips.find(c => c.chipId === delivery.chipId);
@@ -615,6 +661,10 @@ async function takeOffer() {
 function onRunEvent(event) {
   if (event.type === "offer") {
     takeOffer();
+    return;
+  }
+  if (!run && event.type === "approval" && event.place === "panel") {
+    adoptTask(); // it came before this panel took the run: take it now, with its card
     return;
   }
   if (!run || event.runId !== run.runId) {
@@ -636,6 +686,12 @@ function onRunEvent(event) {
       run.steps[at] = step;
     }
     if (event.state !== "started") {
+      if (approval) {
+        gone.add(approval.id);
+      }
+      if (showing) {
+        gone.add(showing);
+      }
       hideApproval(); // the call that waited for an answer is over
     }
     showSteps(run.steps);
@@ -644,6 +700,7 @@ function onRunEvent(event) {
     if (event.place === "panel") {
       showApproval(event.id);
     } else if (event.place === "tab" || event.place === "elsewhere") {
+      gone.add(event.id);
       hideApproval();
       $("approval-elsewhere").textContent = t(event.place === "tab" ? "assistantApprovalInTab" : "assistantApprovalElsewhere");
       $("approval-elsewhere").hidden = false;
@@ -663,12 +720,24 @@ function onRunEvent(event) {
       $("interrupted-text").textContent = t("assistantIncomplete");
       $("interrupted").hidden = false;
     }
-    showError({ message: event.code }, kind === "task").then(refreshThread);
+    showError({ message: event.code }, kind === "task").then(refreshThread).then(applyLaterDraft);
+  }
+}
+
+let laterDraft = null; // "@ia" text that came during a run: written in once it ends
+
+function applyLaterDraft() {
+  if (laterDraft && !run) {
+    $("prompt").value = laterDraft;
+    laterDraft = null;
+    showSendLine();
   }
 }
 
 function endRun() {
   hideApproval();
+  gone.clear();
+  showing = null;
   $("approval-elsewhere").hidden = true;
   cancelAnimationFrame(paint);
   paint = 0;
@@ -690,6 +759,7 @@ async function finishRun(result) {
     if (!task) {
       $("prompt").value = ""; // the question is in the conversation now; after an error or a stop it stays
     }
+    applyLaterDraft();
     showResult(result, task);
     renderThread();
     if (stopping) {
@@ -715,6 +785,7 @@ async function finishRun(result) {
     $("activity-actions").hidden = false;
   }
   announce(result.cutBy ? `${errorText(result.cutBy)} ${why}` : why, "error");
+  applyLaterDraft();
   if (result.cutBy) {
     await render().catch(() => {});
   }

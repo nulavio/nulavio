@@ -1191,5 +1191,14 @@
   "galleryStepRead": {"message": "Ler a página"},
   "galleryStepRunning": {"message": "em andamento"},
   "gallerySourceLabel": {"message": "Trecho citado da página “Exemplo” · example.invalid"},
-  "gallerySourceQuote": {"message": "Um trecho de exemplo citado palavra por palavra da página."}
+  "gallerySourceQuote": {"message": "Um trecho de exemplo citado palavra por palavra da página."},
+  "assistantSentParts": {"message": "Enviado para $RECIPIENT$: $TOTAL$ caracteres no total ($PARTS$), com as instruções do Nulavio.", "placeholders": {"recipient": {"content": "$1"}, "total": {"content": "$2"}, "parts": {"content": "$3"}}},
+  "assistantPartPage": {"message": "$CHARS$ desta página", "placeholders": {"chars": {"content": "$1"}}},
+  "assistantPartSelection": {"message": "$CHARS$ da seleção", "placeholders": {"chars": {"content": "$1"}}},
+  "assistantPartConversation": {"message": "$CHARS$ da conversa", "placeholders": {"chars": {"content": "$1"}}},
+  "assistantPartConversationPage": {"message": "$CHARS$ da conversa, com as cópias de página dela", "placeholders": {"chars": {"content": "$1"}}},
+  "assistantTooManyTurns": {"message": "A conversa chegou a $MAX$ respostas, o limite. Comece uma conversa nova para continuar.", "placeholders": {"max": {"content": "$1"}}},
+  "assistantTurnSelection": {"message": "Com texto selecionado de “$TITLE$” · $HOST$", "placeholders": {"title": {"content": "$1"}, "host": {"content": "$2"}}},
+  "assistantThreadLineCopies": {"message": "Conversa: $COUNT$ respostas vão junto com a próxima pergunta, com $COPIES$ cópias de páginas e seleções", "placeholders": {"count": {"content": "$1"}, "copies": {"content": "$2"}}},
+  "bandAssistantActingNone": {"message": "Assistente agindo na Área de IA"}
 }

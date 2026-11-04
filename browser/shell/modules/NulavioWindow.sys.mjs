@@ -163,8 +163,9 @@ class WindowUI {
     if (topic === "browser-delayed-startup-finished") {
       this.#attach(win);
     } else if (topic === "nulavio-ai-activity-changed") {
-      if (this.#windows.has(win)) {
-        this.#paint(win); // the assistant's task in this window (memory only: nothing is read or started)
+      // The assistant's task shows in every normal window (Q10); memory only: nothing is read or started.
+      for (const window of this.#windows.keys()) {
+        this.#paint(window);
       }
     } else {
       if (topic === "nulavio-ai-window-changed") {
@@ -617,10 +618,13 @@ class WindowUI {
       seal("guard", this.#guardCount > 0, t("bandGuard", [String(this.#guardCount)]));
       seal("pause", Boolean(agent && !agent.paused && !agent.stopped && !agent.revoked), t("bandPauseAgent", [agentName]));
       seal("stop", Boolean(agent), t("bandStopAll"));
-      const acting = activity?.steps === 1 ? t("bandAssistantActingOne") : t("bandAssistantActing", [String(activity?.steps ?? 0)]);
+      // A count only once an action ran: never "0 ações" (refused or stopped calls are not actions).
+      const acting = !activity?.steps ? t("bandAssistantActingNone")
+        : activity.steps === 1 ? t("bandAssistantActingOne") : t("bandAssistantActing", [String(activity.steps)]);  // prettier-ignore
       seal("activity", Boolean(activity), activity?.stopping ? t("bandAssistantStopping") : activity?.waiting ? t("bandAssistantWaiting") : acting);
       row.dataset.activity = String(Boolean(activity));
-      const others = privateWindow ? [] : this.#connected.filter(c => c.agent !== agent?.id);
+      // Not where an agent drives this window: it would learn which other agents are connected (review UX5-I F5).
+      const others = privateWindow || agent ? [] : this.#connected.filter(c => c.agent !== agent?.id);
       seal("connected", others.length > 0, others.length === 1 ? t("bandAgentConnected", [others[0].name])
         : t("bandAgentsConnected", [String(others.length)]));  // prettier-ignore
       seal("task-stop", Boolean(activity && !activity.stopping), t("bandTaskStop"));

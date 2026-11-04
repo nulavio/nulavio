@@ -28,6 +28,7 @@ ChromeUtils.defineESModuleGetters(lazy, {
   callToolStream: "resource://builtin-addons/nulavio-shell/modules/NulavioTools.sys.mjs",
   ExtensionParent: "resource://gre/modules/ExtensionParent.sys.mjs",
   PrivateBrowsingUtils: "resource://gre/modules/PrivateBrowsingUtils.sys.mjs",
+  setTimeout: "resource://gre/modules/Timer.sys.mjs",
   stateDir: "resource://builtin-addons/nulavio-shell/modules/NulavioTools.sys.mjs",
 });
 
@@ -99,6 +100,9 @@ const TASK_TOTAL_MS = 30 * 60000;
 const ASK_GRACE_MS = 2000;
 const TASK_GRACE_MS = 20000;
 const RUN_WATCH_MS = 500;
+const PLACE_GRACE_MS = 2000; // the watcher leaves a task's request this long to the task's own event
+const PANEL_GONE_MS = 1500; // a panel that reloads listens again within this
+const MAX_TURNS = 50; // assistant.py MAX_TURNS
 
 // The page text that goes with a message: the first MAX_PAGE_CHARS code points, as the tools
 // (launcher/nulavio_launcher/ai/assistant.py MAX_PAGE_CHARS) would cut it.
@@ -333,7 +337,15 @@ class AI {
     if (!ID_RE.test(String(id)) || !ANSWERS.has(answer)) {
       fail("bad-request");
     }
-    return api({ op: "answer", id, answer });
+    const result = await api({ op: "answer", id, answer });
+    for (const run of this.#runs.values()) {
+      if (run.pendingApproval === id) {
+        run.pendingApproval = null; // answered: nothing waits for the person any more
+        run.waiting = false;
+        this.#activity(run);
+      }
+    }
+    return result;
   }
 
   /** Watch for permission requests (idempotent). Not in an AI Workspace. */
@@ -362,8 +374,8 @@ class AI {
       if (!ID_RE.test(id) || this.#shown.has(id) || (await IOUtils.exists(PathUtils.join(dir, `${id}.seen`)))) {
         continue;
       }
-      if (this.#runs.size && (await IOUtils.readJSON(path).catch(() => null))?.client === "nulavio-assistant") {
-        continue; // the assistant's own run shows it, in its panel or its window (#onRunEvent)
+      if (await this.#placedByARun(path)) {
+        continue; // the assistant's own task shows it, in its panel or its window (#onRunEvent)
       }
       // First Nulavio window to see it takes it; the bridge then waits for the answer.
       if (!(await this.#claim(id))) {
@@ -372,6 +384,19 @@ class AI {
       this.#shown.add(id);
       this.#open(`ai/request.html?id=${id}`);
     }
+  }
+
+  /** A request the assistant's running task is about to place itself (its event follows within moments).
+      Only for a task of this browser, the assistant's own agent, and for a short while: after that the
+      watcher shows it like any other, so a request is never left without a page. */
+  async #placedByARun(path) {
+    const tasks = [...this.#runs.values()].filter(run => run.kind === "task" && run.state === "running");
+    if (!tasks.length) {
+      return false;
+    }
+    const [body, info] = await Promise.all([IOUtils.readJSON(path).catch(() => null), IOUtils.stat(path).catch(() => null)]);
+    const young = info && Date.now() - info.lastModified < PLACE_GRACE_MS;
+    return Boolean(young && body?.client === "nulavio-assistant" && tasks.some(run => run.agentId === body.agent_id));
   }
 
   /** Mark a request as seen by this browser (the bridge then waits for the answer); false if another took it. */
@@ -385,7 +410,10 @@ class AI {
   }
 
   #open(page, where = null) {
-    const win = where && !where.closed ? where : Services.wm.getMostRecentBrowserWindow();
+    if (where?.closed) {
+      return; // the window it belonged to closed: never another window's tab (UX5-F)
+    }
+    const win = where ?? Services.wm.getMostRecentBrowserWindow();
     const policy = WebExtensionPolicy.getByID(SHELL_ID);
     if (!win || !policy) {
       return;
@@ -536,15 +564,22 @@ class AI {
         code: turn.code ?? null,
         sent: Boolean(turn.sent),
         page: turn.page ? { title: turn.page.title, host: URL.parse(turn.page.url)?.host ?? "" } : null,
+        selection: turn.selection ? { title: turn.selection.title, host: URL.parse(turn.selection.url)?.host ?? "" } : null,
       })),
       recipient: thread.recipient,
       model: thread.model,
       historyTurns: history.length,
       historyChars,
       page: withPage ? { title: (withPage.page ?? withPage.selection).title } : null,
+      // How many page copies and selections go with the next question (the line names one, or counts them).
+      copies: history.reduce((n, turn) => n + (turn.page ? 1 : 0) + (turn.selection ? 1 : 0), 0),
       pageLeftOut: thread.pageLeftOut && thread.turns.some(turn => turn.page || turn.selection),
       // "Tentar de novo" sends the last question again, as it went (Q17): what it adds to the conversation.
-      retryChars: last && last.state !== "done" ? AI.#userChars(last, false) : null,
+      // A retry goes again only to the recipient that turn was for, and without the page once it was
+      // left out (review UX5-D F1).
+      retryChars: last && last.state !== "done" ? AI.#userChars(last, thread.pageLeftOut) : null,
+      retryRecipient: last && last.state !== "done" ? (last.recipient ?? null) : null,
+      maxTurns: MAX_TURNS,
     };
   }
 
@@ -719,7 +754,20 @@ class AI {
   subscribeAssistant(listener, windowOf = () => null) {
     const entry = { listener, windowOf };
     this.#runListeners.add(entry);
-    return () => this.#runListeners.delete(entry);
+    return () => {
+      this.#runListeners.delete(entry);
+      // A card waits in a panel that just closed or reloaded: if no panel shows the run any more, its request
+      // opens in front in the run's window, so it never expires unseen (review UX5-F F1). A reloaded panel
+      // shows it again from assistantRuns.
+      lazy.setTimeout(() => {
+        for (const run of this.#runs.values()) {
+          if (run.pendingApproval && run.pendingPlace === "panel" && !this.#panelOpen(run.win)) {
+            run.pendingPlace = "tab";
+            this.#open(`ai/request.html?id=${run.pendingApproval}`, run.win);
+          }
+        }
+      }, PANEL_GONE_MS);
+    };
   }
 
   /** The run's panel is open: this window's side panel shows the assistant, and that page listens. */
@@ -762,25 +810,36 @@ class AI {
         if (!last || last.state === "done") {
           fail("bad-request");
         }
+        if (last.recipient && last.recipient !== details?.expected?.recipient) {
+          fail("thread-recipient");
+        }
         thread.turns.pop();
-        request = { op: "ask", question: last.question, page: last.page, selection: last.selection ?? null,
-          expected: details?.expected ?? fail("bad-request") };
+        request = { op: "ask", question: last.question, page: thread.pageLeftOut ? null : last.page,
+          selection: thread.pageLeftOut ? null : (last.selection ?? null), expected: details?.expected ?? fail("bad-request") };
         if (!Number.isInteger(request.expected.chars)) {
           fail("bad-request");
         }
       } else {
         request = this.#askRequest(details?.question ?? "", details, win);
       }
+      if (AI.#history(thread).length >= MAX_TURNS) {
+        fail("too-large"); // the tools take up to MAX_TURNS earlier turns; the panel offers a new conversation
+      }
       request.history = AI.#history(thread);
-      turn = { question: request.question.trim(), page: request.page, selection: request.selection ?? null };
+      // The turn belongs to this conversation: if it is cleared meanwhile, the turn is dropped (review UX5-D F4).
+      turn = { question: request.question.trim(), page: request.page, selection: request.selection ?? null,
+        recipient: request.expected?.recipient ?? null, thread };
     } else if (kind === "task") {
       request = { op: "task", task: String(details?.task ?? ""), expected: details?.expected ?? null };
     } else {
       fail("bad-request");
     }
     request.profile = Services.dirsvc.get("ProfD", Ci.nsIFile).path;
+    // A task's requests come from the assistant's own agent: the request watcher leaves only those to the run.
+    const agentConfig = kind === "task" ? await IOUtils.readJSON(PathUtils.join(lazy.stateDir(), "ai", "assistant.json")).catch(() => null) : null;
     const runId = Services.uuid.generateUUID().toString().slice(1, -1);
-    const run = { win, kind, owner, state: "running", sent: false, steps: [], cutBy: null, turn, text: "" };
+    const run = { win, kind, owner, state: "running", sent: false, steps: [], cutBy: null, turn, text: "",
+      agentId: agentConfig?.agent ?? null, pendingApproval: null, pendingPlace: null };
     this.#runs.set(runId, run);
     run.handle = lazy.callToolStream(["ai", "assistant"], request, {
       onEvent: event => this.#onRunEvent(runId, run, event),
@@ -803,12 +862,15 @@ class AI {
   /** The band's view of this window's task (UX5-I): how many steps it did and whether it waits for
       the person. Read from the runs in memory: no file, no process. */
   activityState(win) {
-    for (const [runId, run] of this.#runs) {
-      if (run.win === win && run.kind === "task") {
-        return { runId, steps: run.steps.length, waiting: Boolean(run.waiting), stopping: run.state === "cancelling" };
-      }
+    // Its own window's task first; then this browser's other task, in every normal window (Q10).
+    const tasks = [...this.#runs].filter(([, run]) => run.kind === "task" && !run.win.closed);
+    const [runId, run] = tasks.find(([, r]) => r.win === win) ?? tasks[0] ?? [];
+    if (!run || lazy.PrivateBrowsingUtils.isWindowPrivate(win)) {
+      return null;
     }
-    return null;
+    // Actions are steps that ran (done or failed), not ones refused or stopped before they acted.
+    const acted = run.steps.filter(step => step.state === "ok" || step.state === "error").length;
+    return { runId, steps: acted, waiting: Boolean(run.waiting), stopping: run.state === "cancelling", here: run.win === win };
   }
 
   #activity(run) {
@@ -830,7 +892,13 @@ class AI {
         continue;
       }
       const session = await IOUtils.readJSON(path).catch(() => null);
-      if (Number.isInteger(session?.pid) && AGENT_RE.test(String(session.agent)) && (await IOUtils.exists(`/proc/${session.pid}`))) {
+      if (!Number.isInteger(session?.pid) || !AGENT_RE.test(String(session.agent))) {
+        continue;
+      }
+      // The pid lives and is still a bridge (a pid reused by another program after a kill does not count).
+      // /proc files stat as empty: without maxBytes IOUtils.read would read nothing.
+      const command = await IOUtils.read(`/proc/${session.pid}/cmdline`, { maxBytes: 4096 }).catch(() => null);
+      if (command && new TextDecoder().decode(command).split("\0").includes("serve")) {
         out.push({ agent: session.agent, name: String(session.name ?? session.agent).slice(0, 48) });
       }
     }
@@ -859,7 +927,8 @@ class AI {
     } else if (event.type === "delta") {
       run.text += event.text;
     } else if (event.type === "step" && event.state !== "started") {
-      run.steps.push({ tool: event.tool, error: event.state !== "ok" });
+      run.steps.push({ tool: event.tool, error: event.state !== "ok", state: event.state });
+      run.pendingApproval = null;
       run.waiting = false;
       this.#activity(run);
     } else if (event.type === "approval") {
@@ -879,14 +948,19 @@ class AI {
       open, else as the request page in front in the run's own window; never both, never in another window. */
   #placeApproval(run, runId, event) {
     const id = String(event.id ?? "");
-    if (!ID_RE.test(id)) {
-      return { ...event, place: "none" };
+    if (!ID_RE.test(id) || run.win.closed || run.state !== "running") {
+      return { ...event, place: "none" }; // its window closed or it is stopping: nothing to answer
     }
+    run.pendingApproval = id;
     if (this.#shown.has(id)) {
       return { ...event, place: "tab" }; // a tab shows it already
     }
     this.#shown.add(id); // at once, so the request watcher never opens a tab for it as well
     const inPanel = this.#panelOpen(run.win);
+    run.pendingPlace = inPanel ? "panel" : "tab";
+    if (inPanel && Services.focus.activeWindow !== run.win) {
+      run.win.focus(); // in front, as the request tab would be (AI-04): a request nobody sees expires as a no
+    }
     this.#claim(id).then(claimed => {
       if (!claimed) {
         this.#emit(run, { type: "approval", runId, id, place: "elsewhere" }); // another Nulavio took it
@@ -928,11 +1002,12 @@ class AI {
 
   /** The Ask's turn joins its window's conversation (in memory), answered or not. */
   #keepTurn(run, event) {
-    if (run.win.closed) {
-      return;
+    if (run.win.closed || this.#threads.get(run.win) !== run.turn.thread) {
+      return; // the window closed, or "Começar conversa nova" came while it ran: it is not in that one
     }
-    const thread = this.#threadOf(run.win);
-    const turn = { ...run.turn, sent: Boolean(event.sent ?? run.sent) };
+    const thread = run.turn.thread;
+    const { thread: _owner, ...kept } = run.turn;
+    const turn = { ...kept, sent: Boolean(event.sent ?? run.sent) };
     if (event.type === "done" && !event.cancelled) {
       Object.assign(turn, { state: "done", answer: String(event.answer ?? ""), chars: event.chars, recipient: event.recipient,
         truncated: Boolean(event.truncated) });
@@ -974,7 +1049,8 @@ class AI {
     this.#userWindow(win);
     return [...this.#runs]
       .filter(([, run]) => run.win === win)
-      .map(([runId, run]) => ({ runId, kind: run.kind, state: run.state, sent: run.sent, steps: run.steps }));
+      .map(([runId, run]) => ({ runId, kind: run.kind, state: run.state, sent: run.sent, steps: run.steps,
+        pendingApproval: run.pendingPlace === "panel" ? run.pendingApproval : null }));
   }
 
   /** The page that started an Ask went away (the panel closed): its Asks stop (Q18). */

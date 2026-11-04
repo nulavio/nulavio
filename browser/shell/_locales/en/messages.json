@@ -1191,5 +1191,14 @@
   "galleryStepRead": {"message": "Read the page"},
   "galleryStepRunning": {"message": "in progress"},
   "gallerySourceLabel": {"message": "Passage quoted from the page “Sample” · example.invalid"},
-  "gallerySourceQuote": {"message": "A sample passage quoted word for word from the page."}
+  "gallerySourceQuote": {"message": "A sample passage quoted word for word from the page."},
+  "assistantSentParts": {"message": "Sent to $RECIPIENT$: $TOTAL$ characters in all ($PARTS$), with Nulavio's instructions.", "placeholders": {"recipient": {"content": "$1"}, "total": {"content": "$2"}, "parts": {"content": "$3"}}},
+  "assistantPartPage": {"message": "$CHARS$ from this page", "placeholders": {"chars": {"content": "$1"}}},
+  "assistantPartSelection": {"message": "$CHARS$ from the selection", "placeholders": {"chars": {"content": "$1"}}},
+  "assistantPartConversation": {"message": "$CHARS$ from the conversation", "placeholders": {"chars": {"content": "$1"}}},
+  "assistantPartConversationPage": {"message": "$CHARS$ from the conversation, with its page copies", "placeholders": {"chars": {"content": "$1"}}},
+  "assistantTooManyTurns": {"message": "The conversation has reached $MAX$ answers, the limit. Start a new conversation to go on.", "placeholders": {"max": {"content": "$1"}}},
+  "assistantTurnSelection": {"message": "With selected text from “$TITLE$” · $HOST$", "placeholders": {"title": {"content": "$1"}, "host": {"content": "$2"}}},
+  "assistantThreadLineCopies": {"message": "Conversation: $COUNT$ answers go with the next question, with $COPIES$ copies of pages and selections", "placeholders": {"count": {"content": "$1"}, "copies": {"content": "$2"}}},
+  "bandAssistantActingNone": {"message": "Assistant acting in the AI Workspace"}
 }
