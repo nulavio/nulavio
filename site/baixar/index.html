@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="pt-BR">
+<!-- Download page. Stamped by scripts/site/build_site.py from packaging/release.json; left out of the site until a release is published. -->
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Baixar o Nulavio (alpha) · Nulavio</title>
+<meta name="description" content="Como instalar o alpha do Nulavio no Fedora a partir do repositório assinado, conferir a chave e remover.">
+<link rel="canonical" href="https://nulavio.net/baixar/">
+<link rel="alternate" hreflang="pt-BR" href="https://nulavio.net/baixar/">
+<link rel="alternate" hreflang="en" href="https://nulavio.net/en/download/">
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/assets/tokens.css">
+<link rel="stylesheet" href="/assets/site.css">
+</head>
+<body>
+<a class="skip" href="#main">Pular para o conteúdo</a>
+<header class="masthead">
+<a class="brand" href="/"><picture>
+<source media="(prefers-color-scheme: dark)" srcset="/assets/nulavio-lockup-horizontal-on-dark.svg" width="132" height="27">
+<img src="/assets/nulavio-lockup-horizontal.svg" alt="Nulavio" width="132" height="27">
+</picture></a>
+<a class="lang" href="/en/download/" hreflang="en" lang="en">English</a>
+</header>
+<main id="main">
+<section id="summary" aria-labelledby="summary-h">
+<div class="summary-text">
+<p class="pill"><strong>Alpha</strong> · versão <span class="mono">{{release_version}}</span> · Fedora, x86_64</p>
+<h1 id="summary-h">Baixar o Nulavio</h1>
+<p class="lead">Esta é a primeira versão pública. Ela passa nos testes automatizados do projeto, mas ainda pode ter defeitos: mantenha outro navegador instalado.</p>
+</div>
+<dl class="facts" aria-label="Ficha da versão">
+<div><dt>Versão</dt><dd class="mono">{{release_version}}</dd></div>
+<div><dt>Sistema</dt><dd>Fedora 44 ou mais novo, x86_64</dd></div>
+<div><dt>Ubuntu</dt><dd>Ainda não: falta o repositório APT</dd></div>
+<div><dt>Atualizações</dt><dd>Pelo dnf, como os outros programas do sistema</dd></div>
+</dl>
+</section>
+
+<section id="install" aria-labelledby="install-h">
+<h2 id="install-h">Instalar</h2>
+<p class="prose">Adicione o repositório do Nulavio e instale o pacote:</p>
+<div class="pre-scroll" role="region" aria-label="Comandos de instalação" tabindex="0"><pre translate="no"><code>sudo dnf config-manager addrepo --from-repofile={{repo_file}}
+sudo dnf install nulavio</code></pre></div>
+<p class="prose">Na primeira instalação, o dnf mostra a chave do repositório e pergunta se pode importá-la. Só aceite se a impressão digital for esta:</p>
+<p class="prose"><code class="mono" translate="no">{{key_fpr}}</code></p>
+<p class="prose">A mesma chave pública fica em <code translate="no">{{key_url}}</code>. O repositório vem com a verificação de assinatura dos pacotes e dos metadados ligada.</p>
+<p class="limit"><strong>Limite:</strong> A impressão digital só protege se você a conferir por um caminho diferente do download, por exemplo nesta página aberta em outro aparelho.</p>
+</section>
+
+<section id="updates" aria-labelledby="updates-h">
+<h2 id="updates-h">Atualizações</h2>
+<p class="prose">As versões novas chegam pelo <code translate="no">sudo dnf upgrade</code> ou pela loja de programas do sistema. Quando a Mozilla publica uma correção de segurança do Firefox, a meta do projeto é publicar o Nulavio correspondente em até 72 horas.</p>
+<p class="limit"><strong>Limite:</strong> Nesse intervalo, o Nulavio instalado ainda não tem a correção.</p>
+</section>
+
+<section id="verify" aria-labelledby="verify-h">
+<h2 id="verify-h">Conferir um download manual</h2>
+<p class="prose">Os mesmos pacotes, com a lista <code translate="no">SHA256SUMS</code> assinada pela chave acima, o SBOM e o manifesto do build, ficam na página da versão no GitHub: <code translate="no">github.com/caiolombello/nulavio/releases</code>.</p>
+<div class="pre-scroll" role="region" aria-label="Comandos de verificação" tabindex="0"><pre translate="no"><code>gpg --import nulavio-packages.asc
+gpg --verify SHA256SUMS.asc SHA256SUMS
+sha256sum --check --ignore-missing SHA256SUMS</code></pre></div>
+</section>
+
+<section id="known" aria-labelledby="known-h">
+<h2 id="known-h">O que este alpha ainda não faz</h2>
+<ul class="limits-list">
+<li class="limit"><strong>Limite:</strong> Não consulta a reputação de downloads no Google: o Google reserva essa verificação a parceiros. No lugar dela, instaladores e scripts baixados abrem um aviso, nunca são executados direto e são salvos sem permissão de execução.</li>
+<li class="limit"><strong>Limite:</strong> O desbloqueio de perfis pelo celular ou por chave de segurança FIDO2 ainda não está disponível. Perfis protegidos abrem com senha, código de recuperação ou o chaveiro do sistema.</li>
+<li class="limit"><strong>Limite:</strong> Só Fedora por enquanto.</li>
+</ul>
+</section>
+
+<section id="remove" aria-labelledby="remove-h">
+<h2 id="remove-h">Remover</h2>
+<div class="pre-scroll" role="region" aria-label="Comandos de remoção" tabindex="0"><pre translate="no"><code>sudo dnf remove nulavio
+sudo rm /etc/yum.repos.d/nulavio.repo</code></pre></div>
+<p class="prose">Seus perfis ficam na sua pasta pessoal e não são apagados ao remover o programa.</p>
+</section>
+
+<section id="report" aria-labelledby="report-h">
+<h2 id="report-h">Relatar um problema</h2>
+<p class="prose">Defeitos: abra uma issue no repositório do projeto. Falhas de segurança: escreva para <a href="mailto:security@nulavio.net" translate="no">security@nulavio.net</a>, não para a lista pública.</p>
+</section>
+</main>
+<footer class="colophon">
+<div class="colophon-inner">
+<p>O Nulavio é construído sobre o motor Gecko da Mozilla. O Nulavio não é afiliado à Mozilla. Firefox é marca registrada da Mozilla Foundation.</p>
+<p>Revisão de {{date_pt}} · <span class="mono">commit {{commit}}</span> · <a href="/">Início</a> · <a href="/en/download/" hreflang="en" lang="en">English</a></p>
+</div>
+</footer>
+</body>
+</html>

@@ -46,3 +46,25 @@ Each item was checked again on 2026-10-27 against the Nulavio build of Firefox 1
 
 **Result:** the alpha is **not released yet**. Everything that can be done without the maintainer is done and verified; the release waits on the items marked **maintainer** above (release key and repository host, Safe Browsing quota and download protection decision, test security report, trademark searches, Proton Pass once on the Nulavio build). Slices outside the alpha that also wait: S10 (a FIDO2 security key) and S11 (Android, last by decision; the test phone).
 
+
+## Public alpha (decided 2026-11-04)
+
+The maintainer's decisions [D8–D11](execution-plan.md#decisions-for-the-public-release-maintainer-2026-11-04): a public alpha first, Fedora only through the signed dnf repository; R15 accepted; phone and FIDO2 unlock out of 1.0; the independent audit limited to the Vault and the release chain.
+
+What is in place for it (2026-11-04): `publish_release.sh` signs only what a rehearsal of reviewed, committed history checked and stages the repository and the GitHub release assets; `make_release_key.sh` creates the key and puts only its public part in the repository; the site's download pages (`/baixar/`, `/en/download/`) appear only once `packaging/release.json` names a version and a key the repository holds ([build](../architecture/build.md#publishing-a-release)).
+
+| # | Still open | Owner |
+|---|---|---|
+| 1 | **A release build of the pinned Firefox.** On 2026-11-04 the guarded release build of 159.0.1 stopped twice at `gkrust` (Rust with LTO) on the laptop's memory ([evidence](../research/evidence/release-rehearsal-2026-11-04.md)); a later local build with `--disable-release` (no Rust LTO, not committed) finished, which is enough for testing but is not a release build. A machine with more memory, or less load on the laptop during the build, is needed | maintainer |
+| 2 | Release key: run `make_release_key.sh`, back it up offline, commit the public key and the fingerprint in `packaging/release.json` | maintainer |
+| 3 | Repository host for `packages.nulavio.net` (recommended: Cloudflare R2 with that custom domain, next to the site on Cloudflare Pages; a 91 MB RPM is over the Pages file limit) | maintainer |
+| 4 | Safe Browsing quota review with Google | maintainer |
+| 5 | A test report to `security@nulavio.net`, received and answered | maintainer |
+| 6 | Trademark searches (INPI, USPTO, EUIPO) | maintainer or counsel |
+| 7 | Proton Pass sign-in and autofill once on the Nulavio build | maintainer |
+| 8 | Confirmation that keeping Firefox's add-on application ID and installing from addons.mozilla.org is acceptable ([build, release blockers](../architecture/build.md#release-blockers-for-track-b)) | maintainer |
+| 9 | With the release: the landing page's status ("Em desenvolvimento", "repositório ainda privado") and the README's status change in the same commit that sets the version; once the repository is public, the evidence references can become links (site spec §2.2) | with the release |
+
+## Scope of 1.0 (decided 2026-11-04)
+
+1.0 is the public alpha's scope made stable: every phase's DoD except phone unlock (U6/U7, S11) and FIDO2 unlock (S10), which the UI and the site show as not available yet; an independent review of the Vault and of the release chain with its findings fixed or recorded; at least one month of alpha releases inside the update SLA; the remaining Proton Pass checklist (unlock after restart, autosave, passkeys); and the UX DoD (both themes, every preset, WCAG 2.2 AA checks).

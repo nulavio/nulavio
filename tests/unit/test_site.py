@@ -7,6 +7,7 @@ import itertools
 import json
 import re
 import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -270,6 +271,91 @@ class SiteTest(unittest.TestCase):
                         self.assertGreaterEqual(value, minimum)
         site_css = (ROOT / "site" / "site.css").read_text(encoding="utf-8")
         self.assertNotRegex(site_css, r"#[0-9A-Fa-f]{3,8}\b|rgb\(|hsl\(", "site.css takes every colour from the tokens")
+
+
+def throwaway_key(home: Path) -> tuple[str, str]:
+    """A signing key made for the test (no passphrase, never a release key): fingerprint and armored public key."""
+    home.mkdir(mode=0o700)
+    gpg = ["gpg", "--homedir", str(home), "--batch", "--quiet"]
+    uid = "Throwaway <t@example.invalid>"
+    subprocess.run([*gpg, "--passphrase", "", "--quick-generate-key", uid, "ed25519", "sign", "1d"], check=True)
+    listing = subprocess.run([*gpg, "--with-colons", "--list-keys"], capture_output=True, text=True, check=True).stdout
+    fpr = next(line.split(":")[9] for line in listing.splitlines() if line.startswith("fpr:"))
+    armored = subprocess.run([*gpg, "--armor", "--export", fpr], capture_output=True, text=True, check=True).stdout
+    return fpr, armored
+
+
+@unittest.skipUnless(shutil.which("gpg"), "gpg is not installed")
+class DownloadPagesTest(unittest.TestCase):
+    """The download pages appear only for a published release whose key is in the repository."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = Path(tempfile.mkdtemp())
+        cls.fpr, cls.armored = throwaway_key(cls.tmp / "gnupg")
+
+    @classmethod
+    def tearDownClass(cls):
+        shutil.rmtree(cls.tmp, ignore_errors=True)
+
+    def source(self, name: str, version: str, fpr: str, key: str | None) -> Path:
+        src = self.tmp / name
+        (src / "packaging").mkdir(parents=True)
+        release = json.loads((ROOT / "packaging" / "release.json").read_text(encoding="utf-8"))
+        release.update(version=version, key_fingerprint=fpr)
+        (src / "packaging" / "release.json").write_text(json.dumps(release), encoding="utf-8")
+        if key is not None:
+            (src / build_site.PUBLIC_KEY).parent.mkdir(parents=True)
+            (src / build_site.PUBLIC_KEY).write_text(key, encoding="utf-8")
+        return src
+
+    def test_no_release_no_download_pages(self):
+        self.assertIsNone(build_site.release_values(self.source("none", "", "", None)))
+        self.assertIsNone(build_site.release_values(self.source("no-key", "159.0.1-0.1", "", None)))
+        out = self.tmp / "unreleased"
+        files = build_site.build(out)
+        for page in build_site.DOWNLOAD_PAGES:
+            self.assertNotIn(page, files)
+        self.assertTrue((out / "en" / "index.html").exists())
+
+    def test_the_key_must_match_the_fingerprint(self):
+        with self.assertRaises(build_site.BuildError):
+            build_site.release_values(self.source("missing", "159.0.1-0.1", self.fpr, None))
+        with self.assertRaises(build_site.BuildError):
+            build_site.release_values(self.source("other", "159.0.1-0.1", "A" * 40, self.armored))
+        with self.assertRaises(build_site.BuildError):
+            build_site.release_values(self.source("bad-version", "alpha", self.fpr, self.armored))
+
+    def test_release_pages(self):
+        values = build_site.release_values(self.source("released", "159.0.1-0.1", self.fpr, self.armored))
+        self.assertEqual(values["key_fpr"].replace(" ", ""), self.fpr)
+        out = self.tmp / "released-site"
+        real = build_site.release_values
+        build_site.release_values = lambda src: values
+        try:
+            files = set(build_site.build(out))
+        finally:
+            build_site.release_values = real
+        ids = []
+        for page in build_site.DOWNLOAD_PAGES:
+            self.assertIn(page, files)
+            html = (out / page).read_text(encoding="utf-8")
+            with self.subTest(page=page):
+                self.assertNotIn("{{", html)
+                self.assertNotIn("<script", html)
+                self.assertNotIn("style=", html)
+                self.assertIn(values["key_fpr"], html)
+                self.assertIn("dnf config-manager addrepo --from-repofile=https://packages.nulavio.net/rpm/nulavio.repo", html)
+                self.assertIn("159.0.1-0.1", html)
+                for url in re.findall(r'(?:src|href|srcset)="(https?://[^"]+)"', html):
+                    self.assertTrue(url.startswith(SAME_SITE), url)
+                for ref in re.findall(r'(?:src|href|srcset)="(/[^"]*)"', html):
+                    target = ref.lstrip("/")
+                    self.assertIn(f"{target}index.html" if not target or target.endswith("/") else target, files)
+                levels = [int(level) for level in re.findall(r"<h([1-6])\b", html)]
+                self.assertEqual(levels.count(1), 1)
+                ids.append([n.attrs["id"] for n in Tree(html).all() if "id" in n.attrs])
+        self.assertEqual(ids[0], ids[1])
 
 
 if __name__ == "__main__":

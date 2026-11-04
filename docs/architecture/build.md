@@ -198,8 +198,8 @@ The build packages **en-US and pt-BR** (`NULAVIO_LOCALES`, default `pt-BR`). `fe
 
 ## Release blockers for Track B
 
-1. ~~Google Safe Browsing API key~~ **Resolved 2026-10-25** (section above). What remains: a quota review with Google, and either access to Google's download-protection API or acceptance of R15 for downloads.
-2. Signed packages and repository ([update policy](update-policy.md)): packages and the signing tooling are done and verified (section below); what remains is the maintainer's release key and a host for the repository.
+1. ~~Google Safe Browsing API key~~ **Resolved 2026-10-25** (section above). R15 for downloads was accepted on 2026-11-04 (D9); what remains is the quota review with Google.
+2. Signed packages and repository ([update policy](update-policy.md)): packages, signing and the publishing steps are done and verified (sections below); what remains is the maintainer's release key and a host for the repository.
 3. Policy/legal confirmation for keeping Firefox's add-on application ID and using AMO.
 4. Brand clearance ([strategy](../brand/strategy.md#trademark-and-availability-status)).
 
@@ -231,5 +231,15 @@ One engine build serves Fedora and Debian/Ubuntu: patch 0006 makes the engine re
 
 Measured on the reference laptop (2026-10-26): RPM 91 MB, built in about 2.5 minutes; .deb built in about 1 minute after the container's package index is fetched; each check about 30–60 seconds. Results of the first run: both packages install and pass every check; the signed repository installs with verified signatures and refuses altered metadata.
 
-Still with the maintainer: the release key (and where its public part is published), the repository host (`packages.nulavio.net` is a placeholder in `nulavio.repo`), and a .deb repository (APT) when Ubuntu users need updates through `apt`.
+Still with the maintainer: the release key, the repository host for `packages.nulavio.net`, and a .deb repository (APT) when Ubuntu users need updates through `apt` (the alpha is Fedora only, D8).
+
+### Publishing a release
+
+| Step | Command | What it does |
+|---|---|---|
+| Release key (once) | `scripts/release/make_release_key.sh <new-gnupg-home>` | RSA 4096 signing key, two years, in a new GnuPG home outside the repository; writes only the public key to `site/keys/nulavio-packages.asc` (served at `https://nulavio.net/keys/nulavio-packages.asc`) and prints the fingerprint for `packaging/release.json` and the backup steps |
+| Check the rehearsal | `scripts/release/release_manifest.py verify <rehearsal-out>` | Refuses an unfinished rehearsal, a tree with uncommitted or untracked changes, an `engine.json` that does not pin the source built, a package or SBOM whose SHA-256 changed, or a base commit not on `origin/main`; prints the tag `v<firefox>-<release>` |
+| Sign and stage | `GNUPGHOME=<key-home> scripts/release/publish_release.sh <rehearsal-out> <fingerprint>` | Runs the check above, then `sign_repo.sh` with `NULAVIO_RELEASE_MANIFEST` (any package not listed with the same SHA-256 stops it), and stages `publish/rpm/` (the dnf repository) and `publish/github/` (signed RPM, SBOM, manifest, public key, `SHA256SUMS` and its signature, checked with only the published key). Uploads nothing; writes the upload, tag and release commands to `publish/NEXT.md` |
+| Upload | the host's own tool (for Cloudflare R2: `rclone sync`) | `publish/rpm/` goes to `https://packages.nulavio.net/rpm/` as it is: `repodata/` at the top, `nulavio.repo` next to it |
+| Download pages | `packaging/release.json` → `scripts/site/build_site.py --release` | `/baixar/` and `/en/download/` appear only when the file names a version and a key fingerprint and the public key in the repository has that fingerprint |
 

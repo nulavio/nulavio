@@ -38,7 +38,7 @@ Each milestone has a definition of done (DoD). "Done" requires the DoD to be ver
 - [x] Nulavio Shell built-in add-on (`browser/shell/`), built from the branding directory with no Mozilla file patched
 - [x] New tab (FR-08): search with the default engine, live protection status read from the browser settings
 - [x] Flow E executable-download warning (compensates R15): Show in folder / Delete, no Open
-- [ ] Google's download-protection API for Track B (request access) (R15)
+- [x] Google's download-protection API for Track B (R15): **accepted without it** for the alpha and 1.0 (maintainer, 2026-11-04, D9); partner access may be requested later
 - [x] Flow E inside the engine's downloads panel (patch 0007, 2026-10-27): a program's default action and panel click show it in its folder, "Open" and "Always open similar files" are unavailable, a click while it downloads no longer sets it to open when done, and the status line says why; the Nulavio page still explains (`test_shell` 03–04)
 - [x] Track B in Portuguese: en-US + pt-BR packaged from signed-off firefox-l10n revisions, brand translated, follows the desktop language
 
@@ -131,7 +131,8 @@ External agents (Codex CLI and Desktop, Claude Code and Desktop, other MCP clien
 ## Phase 6 — Tests, packaging, alpha
 
 - [x] RPM (Fedora) and .deb (Ubuntu) from one engine build, installed and checked in clean containers; signed-repository tooling verified end to end with a throwaway key; SBOM per package ([build](../architecture/build.md#packages-s18))
-- [ ] Sign with the release key and publish the repository (needs the maintainer's key and a host)
+- [x] Publishing steps (2026-11-04): `publish_release.sh` signs only what a rehearsal of reviewed, committed history checked and stages the dnf repository and the GitHub release assets; `make_release_key.sh`; download pages that appear only with a published release ([build](../architecture/build.md#publishing-a-release))
+- [ ] Sign with the release key and publish the repository (needs the maintainer's key and a host; the alpha is Fedora only, D8)
 - [x] Update SLA automation (upstream check twice a day with signature checks and an issue per release, urgency from Mozilla's advisories with a 24-hour target, verified engine bump, release rehearsal with a manifest, opt-in local timer that pre-builds staged releases); security changelog ([changelog](../security/changelog.md), [update policy](../architecture/update-policy.md))
 - [x] Security pipeline in CI: dependency watch (OSV.dev, AMO, registries), Dependabot, Gradle locking and verification, gitleaks, Opengrep with Nulavio's rules, ShellCheck, zizmor, actionlint; advisory AI review of pull requests, off until a credential is added ([code scanning](../security/code-scanning.md), [dependency updates](../security/dependency-updates.md), [pull requests](../process/pull-requests.md))
 - [ ] Maintainer: decide whether 24 hours becomes the public commitment for urgent Firefox releases, and enable the local upstream timer ([update policy](../architecture/update-policy.md))

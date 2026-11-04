@@ -19,6 +19,12 @@ commit(s) the numbers, excerpts and captures come from; outside --release
 they say so when the tree had changes or the build predates the commit.
 The build fails if a ``{{`` is left.
 
+The download pages (baixar/, en/download/) describe a published release:
+{{release_version}}, {{key_fpr}}, {{repo_file}} and {{key_url}} come from
+packaging/release.json. Until it names a version and a key fingerprint and
+site/keys/nulavio-packages.asc holds that key, the pages are left out of the
+site, so nothing offers a download that does not exist.
+
 By default the site is built from the working tree (unit tests run on a
 shared, possibly dirty tree). ``--release`` is how the published site is
 built: it refuses a dirty tree, extracts ``--commit`` with ``git archive``
@@ -53,6 +59,8 @@ ASSETS = {
 }
 # Page -> capture locale (manifest figures are per locale).
 PAGES = {"index.html": "pt-BR", "en/index.html": "en-US", "404.html": None}
+DOWNLOAD_PAGES = {"baixar/index.html": "pt-BR", "en/download/index.html": "en-US"}
+PUBLIC_KEY = Path("site/keys/nulavio-packages.asc")
 E1_CATEGORIES = ("tracking", "https")
 SCALE = 2  # captures are taken at devPixelsPerPx=2; width/height attributes are CSS px
 # Notes appended to a commit outside --release, so a development build never passes for a release.
@@ -117,6 +125,41 @@ def header_lines(src: Path) -> list[str]:
         if line.strip() and not line.lstrip().startswith("#") and line[:1].isspace():
             out.append(line.strip())
     return out
+
+
+def armored_fingerprint(path: Path) -> str | None:
+    """The primary key fingerprint of an armored public key, read with gpg (no keyring is touched)."""
+    with tempfile.TemporaryDirectory(prefix="nulavio-site-gpg-") as home:
+        try:
+            result = subprocess.run(
+                ["gpg", "--homedir", home, "--quiet", "--with-colons", "--show-keys", str(path)],
+                capture_output=True, text=True, timeout=30,
+            )  # fmt: skip
+        except FileNotFoundError:
+            raise BuildError("gpg is needed to check the release key behind the download pages") from None
+    fprs = [line.split(":")[9] for line in result.stdout.splitlines() if line.startswith("fpr:")]
+    return fprs[0] if result.returncode == 0 and fprs else None
+
+
+def release_values(src: Path) -> dict[str, str] | None:
+    """Values for the download pages, or None while no release is published (the pages are then left out)."""
+    release = json.loads((src / "packaging" / "release.json").read_text(encoding="utf-8"))
+    version, fpr = release.get("version", ""), release.get("key_fingerprint", "").replace(" ", "").upper()
+    if not (version and fpr):
+        return None
+    if not re.fullmatch(r"[0-9]+(\.[0-9]+)+-[0-9.]+", version):
+        raise BuildError(f"packaging/release.json: version {version!r} is not <firefox>-<release> (as in the tag)")
+    key = src / PUBLIC_KEY
+    if not key.is_file():
+        raise BuildError(f"packaging/release.json names a key but {PUBLIC_KEY} is missing")
+    if armored_fingerprint(key) != fpr:
+        raise BuildError(f"{PUBLIC_KEY} is not the key {fpr} that packaging/release.json names")
+    return {
+        "release_version": version,
+        "key_fpr": " ".join(fpr[i : i + 4] for i in range(0, len(fpr), 4)),
+        "repo_file": release["repo_file"],
+        "key_url": release["key_url"],
+    }
 
 
 def commit_date(src_commit: str) -> dt.date:
@@ -270,9 +313,19 @@ def build(out: Path, *, release: bool = False, commit: str = "HEAD", evidence: s
         shutil.move(out / "site.css", out / "assets" / "site.css")
         for relative, source in ASSETS.items():
             shutil.copyfile(src / source, out / relative)
-        for page, locale in PAGES.items():
+        released = release_values(src)
+        pages = dict(PAGES)
+        if released is None:
+            for page in DOWNLOAD_PAGES:
+                (out / page).unlink()
+                if not any((out / page).parent.iterdir()):
+                    (out / page).parent.rmdir()
+        else:
+            pages.update(DOWNLOAD_PAGES)
+        for page, locale in pages.items():
             path = out / page
-            text = stamp_page(path.read_text(encoding="utf-8"), values, manifest, locale, page)
+            page_values = {**values, **released} if page in DOWNLOAD_PAGES else values
+            text = stamp_page(path.read_text(encoding="utf-8"), page_values, manifest, locale, page)
             if "{{" in text:
                 left = sorted(set(re.findall(r"\{\{[^}]*\}\}", text)))
                 raise BuildError(f"{page}: placeholders left: {left}")
