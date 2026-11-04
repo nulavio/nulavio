@@ -211,6 +211,8 @@ return {
         self.click("layout-choice-done")
         state = self.wait_card("dns-choice")
         self.assertEqual(state["progress"], self.message("firstrunProgress", "2", str(total)))
+        # The keyboard follows to the new step, not to the search (QA R6-1).
+        self.assertTrue(harness.wait_until(lambda: self.cards()["focused"] == "dns-choice-heading", 5), self.cards())
         self.click("dns-later")
         self.wait_card("firstrun-passwords")
         now = self.m.execute("return document.getElementById('firstrun-passwords-now').textContent;")

@@ -501,8 +501,8 @@ async function firstRun() {
   };
   // Go to the first step not answered yet. Focus follows only when the person was in a first-run card
   // (on load the keyboard stays where the browser put it).
-  const advance = async answered => {
-    const wasInside = Object.values(STEP_CARDS).some(id => document.getElementById(id).contains(document.activeElement));
+  const advance = async (answered, { focus = false } = {}) => {
+    const wasInside = focus || Object.values(STEP_CARDS).some(id => document.getElementById(id).contains(document.activeElement));
     if (answered) {
       await record(answered);
     }
@@ -601,7 +601,9 @@ async function firstRun() {
   const answered = new MutationObserver(() => {
     if ((current === "layout" && document.getElementById("layout-choice").hidden)
       || (current === "dns" && document.getElementById("dns-choice").hidden)) {
-      advance(null);
+      // Answered in its card: the next step takes the keyboard, even though the layout card sends it
+      // to the search as it closes (QA R6-1).
+      advance(null, { focus: true });
     }
   });
   for (const id of ["layout-choice", "dns-choice"]) {
