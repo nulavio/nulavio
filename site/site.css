@@ -214,6 +214,28 @@ figcaption p { margin-bottom: var(--nv-space-3); }
 
 #fig-1 { margin-bottom: var(--nv-space-9); }
 
+/* -- in short: a first read in plain words; each item names the section that proves it -- */
+
+#brief h2 { margin-bottom: var(--nv-space-6); }
+.brief {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--nv-space-6) var(--nv-space-8);
+}
+.brief li { min-width: 0; max-width: 32rem; }
+.brief h3 { display: flex; gap: var(--nv-space-2); align-items: baseline; margin-bottom: var(--nv-space-2); }
+.brief h3 .num { margin-right: 0; min-width: 1.25rem; }
+.brief p { margin: 0; padding-left: calc(1.25rem + var(--nv-space-2)); color: var(--nv-color-text-secondary); }
+.brief-after { margin-top: var(--nv-space-7); max-width: 40rem; }
+@media (min-width: 48rem) {
+  .brief { grid-template-columns: 1fr 1fr; }
+}
+@media (min-width: 64rem) {
+  .brief { grid-template-columns: repeat(3, 1fr); }
+}
+
 /* -- table of contents ----------------------------------------------------------------- */
 
 .toc { padding-top: var(--nv-space-8); border-top: 1px solid var(--nv-color-border-separator); }

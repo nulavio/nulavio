@@ -42,7 +42,7 @@
 <p class="pill"><strong>Em desenvolvimento</strong> · ainda não há versão para baixar</p>
 <h1 id="summary-h">Privado por padrão. Honesto por princípio.</h1>
 <p class="lead">O Nulavio é um navegador para Linux feito sobre o motor Gecko, da Mozilla. Ele vem com a proteção contra rastreamento no modo Estrito, instala o bloqueador uBlock Origin na primeira abertura e não envia dados a servidores do Nulavio: o projeto não mantém nenhum serviço que receba dados do navegador.</p>
-<p>Esta página foi escrita como um documento de engenharia. Cada afirmação diz o que custa ou onde para, e onde conferir: o arquivo, o teste ou a decisão registrada que a sustenta. O que ainda não está pronto aparece como não pronto. Números, trechos e capturas vêm do commit {{origin}}.</p>
+<p>Esta página é um documento de engenharia: cada afirmação diz o que custa ou onde para, e onde conferir. O que ainda não está pronto aparece como não pronto. Números, trechos e capturas vêm do commit {{origin}}.</p>
 <p>O código usa a licença MPL-2.0, mas o repositório ainda é privado. Até ele ser aberto, os caminhos citados aqui são referências, não links.</p>
 </div>
 <dl class="facts" aria-label="Ficha técnica">
@@ -66,6 +66,18 @@
 <p class="onscreen">{{onscreen:fig-1}}</p>
 </figcaption>
 </figure>
+<section id="brief" aria-labelledby="brief-h">
+<h2 id="brief-h">Em poucas palavras</h2>
+<ul class="brief">
+<li><h3><span class="num">2</span><a href="#defaults">Rastreadores bloqueados desde a primeira abertura</a></h3><p>A proteção contra rastreamento vem no modo Estrito e o uBlock Origin já vem instalado. Alguns sites quebram com isso; a seção 2 diz quais padrões causam o quê.</p></li>
+<li><h3><span class="num">4</span><a href="#typing">O que você digita fica com você</a></h3><p>Nada vai a um buscador enquanto você digita, a não ser que você ligue as sugestões.</p></li>
+<li><h3><span class="num">5</span><a href="#profiles">Trabalho, banco e vida pessoal sem se misturar</a></h3><p>Cada perfil tem seus próprios logins e histórico, e regras suas decidem em qual perfil cada link abre.</p></li>
+<li><h3><span class="num">6</span><a href="#vault">Perfis com senha, cifrados no disco</a></h3><p>Um perfil protegido fica cifrado enquanto está bloqueado. Não há chave mestra: quem perde todas as formas de desbloquear perde os dados.</p></li>
+<li><h3><span class="num">7</span><a href="#guard">Avisa o que mudou com o navegador fechado</a></h3><p>Se outro programa mexer no seu perfil enquanto o navegador está fechado, o Nulavio mostra a mudança na próxima abertura.</p></li>
+<li><h3><span class="num">8</span><a href="#ai">IA só quando você pede</a></h3><p>O assistente fica parado até você configurar, e antes de enviar diz para onde vai a mensagem e qual o tamanho. Em janelas privativas, ele não funciona.</p></li>
+</ul>
+<p class="brief-after">E o que ele ainda não faz: a seção <a href="#status">1</a> lista o que falta, e a <a href="#limits">10</a>, o que nenhum navegador resolve.</p>
+</section>
 <nav id="toc" class="toc" aria-labelledby="toc-h">
 <h2 id="toc-h">Neste documento</h2>
 <ol>

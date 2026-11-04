@@ -42,7 +42,7 @@
 <p class="pill"><strong>In development</strong> · no release to download yet</p>
 <h1 id="summary-h">Private by default. Honest by design.</h1>
 <p class="lead">Nulavio is a browser for Linux built on Mozilla's Gecko engine. It comes with tracking protection set to Strict, installs the uBlock Origin blocker on first launch, and sends no data to Nulavio servers: the project runs no service that receives data from the browser.</p>
-<p>This page is written like an engineering document. Each claim says what it costs or where it stops, and where to check it: the file, the test or the recorded decision behind it. What is not ready yet is marked as not ready. Numbers, excerpts and captures come from commit {{origin}}.</p>
+<p>This page is an engineering document: each claim says what it costs or where it stops, and where to check it. What is not ready yet is marked as not ready. Numbers, excerpts and captures come from commit {{origin}}.</p>
 <p>The code is licensed under the MPL-2.0, but the repository is still private. Until it opens, the paths quoted here are references, not links.</p>
 </div>
 <dl class="facts" aria-label="Fact sheet">
@@ -66,6 +66,18 @@
 <p class="onscreen">{{onscreen:fig-1}}</p>
 </figcaption>
 </figure>
+<section id="brief" aria-labelledby="brief-h">
+<h2 id="brief-h">In short</h2>
+<ul class="brief">
+<li><h3><span class="num">2</span><a href="#defaults">Trackers blocked from the first launch</a></h3><p>Tracking protection comes set to Strict and uBlock Origin comes installed. Some sites break because of it; section 2 says which default causes what.</p></li>
+<li><h3><span class="num">4</span><a href="#typing">What you type stays with you</a></h3><p>Nothing goes to a search engine while you type, unless you turn suggestions on.</p></li>
+<li><h3><span class="num">5</span><a href="#profiles">Work, banking and personal life kept apart</a></h3><p>Each profile has its own sign-ins and history, and your own rules decide which profile each link opens in.</p></li>
+<li><h3><span class="num">6</span><a href="#vault">Password-protected profiles, encrypted on disk</a></h3><p>A protected profile stays encrypted while it is locked. There is no master key: losing every way to unlock it means losing the data.</p></li>
+<li><h3><span class="num">7</span><a href="#guard">Tells you what changed while the browser was closed</a></h3><p>If another program touches your profile while the browser is closed, Nulavio shows the change the next time it starts.</p></li>
+<li><h3><span class="num">8</span><a href="#ai">AI only when you ask</a></h3><p>The assistant does nothing until you set it up, and before sending it says where the message goes and how big it is. It does not work in private windows.</p></li>
+</ul>
+<p class="brief-after">And what it does not do yet: section <a href="#status">1</a> lists what is missing, and section <a href="#limits">10</a>, what no browser can fix.</p>
+</section>
 <nav id="toc" class="toc" aria-labelledby="toc-h">
 <h2 id="toc-h">In this document</h2>
 <ol>
