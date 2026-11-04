@@ -59,10 +59,12 @@ in that case; inspect it and use `podman rm` with its recorded ID. Artifacts,
 source and object directories remain for incremental builds. A 24-hour runtime
 ceiling is an additional backstop, not the disconnect detector.
 
-Adjustments are per invocation: `NULAVIO_BUILD_MEMORY_GIB=1..16`,
+Adjustments are per invocation: `NULAVIO_BUILD_MEMORY_GIB=1..20` (default 16;
+above 16 only on explicit request, because release `gkrust` with Rust LTO needs
+more than 16 GiB; the 4 GiB host reserve still applies),
 `MOZ_PARALLEL_BUILD=1..2`, `NULAVIO_BUILD_MIN_AVAILABLE_GIB` (default 4),
 `NULAVIO_BUILD_PSI_LIMIT` (default 10) and `NULAVIO_BUILD_PSI_SECONDS` (default
-30). The maximum memory/jobs cannot silently exceed this initial laptop budget.
+30). The maximum memory/jobs cannot silently exceed this laptop budget.
 No host VM settings, swap configuration, unrelated processes or global service
 configuration are changed. A successful one-job recovery stays at one job on
 subsequent invocations. After reviewing the cause and logs, a maintainer can

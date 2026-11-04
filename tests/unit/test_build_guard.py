@@ -31,9 +31,11 @@ class PolicyTest(unittest.TestCase):
     def test_limit_configuration_never_infers_cpu_count(self):
         config = build_guard.Config.from_env({})
         self.assertEqual((config.memory_gib, config.jobs, config.cargo_jobs, config.cpus), (16, 2, 1, 2))
-        for env in ({"MOZ_PARALLEL_BUILD": "16"}, {"CARGO_BUILD_JOBS": "2"}, {"NULAVIO_BUILD_MEMORY_GIB": "32"}):
+        rejected = ({"MOZ_PARALLEL_BUILD": "16"}, {"CARGO_BUILD_JOBS": "2"}, {"NULAVIO_BUILD_MEMORY_GIB": "21"})
+        for env in (*rejected, {"NULAVIO_BUILD_MEMORY_GIB": "32"}):
             with self.subTest(env=env), self.assertRaises(ValueError):
                 build_guard.Config.from_env(env)
+        self.assertEqual(build_guard.Config.from_env({"NULAVIO_BUILD_MEMORY_GIB": "20"}).memory_gib, 20)
 
     def test_oom_retry_reduces_jobs_once_and_preserves_refusal(self):
         config = build_guard.Config.from_env({})

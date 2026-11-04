@@ -44,8 +44,10 @@ class Config:
             psi_limit=float(env.get("NULAVIO_BUILD_PSI_LIMIT", "10")),
             psi_seconds=float(env.get("NULAVIO_BUILD_PSI_SECONDS", "30")),
         )
-        if not 1 <= config.memory_gib <= 16 or config.jobs not in (1, 2) or env.get("CARGO_BUILD_JOBS", "1") != "1":
-            raise ValueError("build budget: at most 16 GiB, MOZ_PARALLEL_BUILD=1 or 2, CARGO_BUILD_JOBS=1")
+        # 16 GiB by default; up to 20 GiB only when asked for (gkrust with release Rust LTO).
+        # The host reserve below still stops the build first.
+        if not 1 <= config.memory_gib <= 20 or config.jobs not in (1, 2) or env.get("CARGO_BUILD_JOBS", "1") != "1":
+            raise ValueError("build budget: at most 20 GiB, MOZ_PARALLEL_BUILD=1 or 2, CARGO_BUILD_JOBS=1")
         if not 1 <= config.min_available_gib <= 16 or not 0 < config.psi_limit <= 100 or not 0 < config.psi_seconds <= 300:
             raise ValueError("invalid memory/PSI thresholds")
         return config
