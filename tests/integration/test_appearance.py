@@ -384,6 +384,24 @@ class AppearanceTest(unittest.TestCase):
                 "Services.prefs.getDefaultBranch('').setStringPref('nulavio.appearance.accent', '');"
             )
 
+    def test_12b_a_locked_density_default_still_reads_automatic(self):
+        """Review: a policy lock writes the default branch only; the engine still runs Automático (no user
+        value), so Settings shows Automático, disabled, not the locked default."""
+        self.m.chrome(
+            "Services.prefs.getDefaultBranch('').setIntPref('browser.uidensity', 2);Services.prefs.lockPref('browser.uidensity');"
+        )
+        try:
+            self.open()
+            state = lambda: self.m.execute(  # noqa: E731
+                "const r = document.querySelector('input[name=density]:checked'); return [r?.value, r?.disabled];"
+            )
+            self.assertTrue(harness.wait_until(lambda: state() == ["auto", True], 10), state())
+        finally:
+            self.m.chrome(
+                "Services.prefs.unlockPref('browser.uidensity');"
+                "Services.prefs.getDefaultBranch('').setIntPref('browser.uidensity', 0);"
+            )
+
     def message(self, key: str) -> str:
         return self.m.execute("return browser.i18n.getMessage(arguments[0]);", [key])
 

@@ -1270,7 +1270,7 @@
   "appearanceIntroMore": {"message": "Vale só para este perfil. Os sinais de segurança, a faixa do perfil e as cores da janela privativa nunca mudam, e os sites não veem nenhuma destas escolhas."},
   "densityLabel": {"message": "Densidade da janela"},
   "densityAuto": {"message": "Automático (padrão)"},
-  "densityAutoHint": {"message": "Fica compacto sozinho em janelas estreitas."},
+  "densityAutoHint": {"message": "Fica compacto sozinho em janelas baixas e, no layout Foco, também nas estreitas."},
   "densityNormal": {"message": "Normal"},
   "densityNormalHint": {"message": "Espaçamento normal sempre, mesmo em janelas pequenas."},
   "densityCompact": {"message": "Compacto"},

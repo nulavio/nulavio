@@ -1270,7 +1270,7 @@
   "appearanceIntroMore": {"message": "It applies to this profile only. Security signs, the profile band and the private window's colours never change, and websites see none of these choices."},
   "densityLabel": {"message": "Window density"},
   "densityAuto": {"message": "Automatic (default)"},
-  "densityAutoHint": {"message": "Becomes compact by itself in narrow windows."},
+  "densityAutoHint": {"message": "Becomes compact by itself in short windows and, in the Focus layout, in narrow ones too."},
   "densityNormal": {"message": "Normal"},
   "densityNormalHint": {"message": "Normal spacing always, even in small windows."},
   "densityCompact": {"message": "Compact"},
