@@ -131,19 +131,20 @@ class MotionTest(unittest.TestCase):
         " a.animationName ? getComputedStyle(a.effect.target).animationTimingFunction : a.effect.getTiming().easing]);"
     )
 
-    def animations(self, selector: str = "") -> list:
-        return self.m.execute(self.ANIMATIONS, [selector])
+    def animations(self, selector: str = "", trigger: str = "", value: str = "") -> list:
+        """The animations under `selector`, read in the same script that runs `trigger` (its argument is
+        arguments[1]): under load a separate read can land after a 120 ms transition is over."""
+        return self.m.execute(trigger + self.ANIMATIONS, [selector, value])
 
     def test_03_calm_surfaces_arrive_on_the_tokens_and_warnings_never_move(self):
         self.m.chrome("Services.prefs.setIntPref('ui.prefersReducedMotion', 0);")
         self.open("settings/settings.html", "return document.documentElement.dataset.ready === 'true';")
         dialog = (
-            "const d = document.createElement('dialog'); d.className = arguments[0]; d.id = 'probe-dialog';"
-            "d.innerHTML = '<form class=\"dialog__form\"><p>Teste</p></form>'; document.body.append(d); d.showModal();"
+            "{ const d = document.createElement('dialog'); d.className = arguments[1]; d.id = 'probe-dialog';"
+            "d.innerHTML = '<form class=\"dialog__form\"><p>Teste</p></form>'; document.body.append(d); d.showModal(); }"
         )
         enter = "cubic-bezier(0, 0, 0, 1)"
-        self.m.execute(dialog, ["dialog"])
-        moving = sorted(map(tuple, self.animations("#probe-dialog")))
+        moving = sorted(map(tuple, self.animations("#probe-dialog", dialog, "dialog")))
         self.assertEqual(
             moving,
             [
@@ -155,23 +156,20 @@ class MotionTest(unittest.TestCase):
         self.m.execute("document.getElementById('probe-dialog').remove();")
         for kind in ("dialog dialog--critical", "dialog dialog--danger"):
             with self.subTest(kind=kind):
-                self.m.execute(dialog, [kind])
-                self.assertEqual(self.animations("#probe-dialog"), [])
+                self.assertEqual(self.animations("#probe-dialog", dialog, kind), [])
                 self.m.execute("document.getElementById('probe-dialog').remove();")
         toast = (
-            "const s = document.getElementById('status'); s.removeAttribute('data-inline');"
-            "s.dataset.level = arguments[0]; s.textContent = ''; s.offsetWidth; s.textContent = 'Salvo.';"
+            "{ const s = document.getElementById('status'); s.removeAttribute('data-inline');"
+            "s.dataset.level = arguments[1]; s.textContent = ''; s.offsetWidth; s.textContent = 'Salvo.'; }"
         )
-        self.m.execute(toast, ["ok"])
         self.assertEqual(
-            sorted(map(tuple, self.animations("#status"))),
+            sorted(map(tuple, self.animations("#status", toast, "ok"))),
             [("CSSTransition", "opacity", 120, enter), ("CSSTransition", "translate", 120, enter)],
         )
         for level in ("warn", "error"):
             with self.subTest(level=level):
                 self.m.execute("document.getElementById('status').textContent = '';")
-                self.m.execute(toast, [level])
-                self.assertEqual(self.animations("#status"), [])
+                self.assertEqual(self.animations("#status", toast, level), [])
         self.m.execute("document.getElementById('status').textContent = '';")
 
     def test_04_the_profile_arrives_on_the_new_tab_and_nothing_moves_under_reduce(self):
@@ -190,10 +188,14 @@ class MotionTest(unittest.TestCase):
     def test_05_the_create_sheet_enters_and_leaves_at_once(self):
         self.m.chrome("Services.prefs.setIntPref('ui.prefersReducedMotion', 0);")
         self.open("profiles/popup.html", "return document.documentElement.dataset.ready === 'true';")
-        self.m.send("WebDriver:ElementClick", {"id": self.m.find_element("#new-profile")})
-        self.assertIn(
-            ("CSSTransition", "opacity", 180, "cubic-bezier(0, 0, 0, 1)"), [tuple(a) for a in self.animations("#sheet")]
+        # Opened and read in one script: under load a separate read can land after the 180 ms are over.
+        entering = self.m.execute(
+            "document.getElementById('new-profile').click();"
+            "return document.getElementById('sheet').getAnimations()"
+            ".map(a => [a.constructor.name, a.transitionProperty,"
+            " a.effect.getComputedTiming().duration, a.effect.getTiming().easing]);"
         )
+        self.assertIn(("CSSTransition", "opacity", 180, "cubic-bezier(0, 0, 0, 1)"), [tuple(a) for a in entering])
         closed = self.m.execute(
             "document.getElementById('sheet-back').click();"
             "return [document.getElementById('sheet').hidden, getComputedStyle(document.getElementById('sheet')).display,"
