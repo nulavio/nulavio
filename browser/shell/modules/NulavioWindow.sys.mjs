@@ -15,7 +15,9 @@ ChromeUtils.defineESModuleGetters(lazy, {
   NulavioAI: "resource://builtin-addons/nulavio-shell/modules/NulavioAI.sys.mjs",
   NulavioGuard: "resource://builtin-addons/nulavio-shell/modules/NulavioGuard.sys.mjs",
   NulavioLayout: "resource://builtin-addons/nulavio-shell/modules/NulavioLayout.sys.mjs",
-  AVATARS: "resource://builtin-addons/nulavio-shell/modules/NulavioProfiles.sys.mjs",
+  AVATAR_GLYPHS: "resource://builtin-addons/nulavio-shell/modules/NulavioAvatars.sys.mjs",
+  SPECIAL_GLYPHS: "resource://builtin-addons/nulavio-shell/modules/NulavioAvatars.sys.mjs",
+  profileInitial: "resource://builtin-addons/nulavio-shell/modules/NulavioAvatars.sys.mjs",
   NulavioProfiles: "resource://builtin-addons/nulavio-shell/modules/NulavioProfiles.sys.mjs",
   NulavioRouting: "resource://builtin-addons/nulavio-shell/modules/NulavioRouting.sys.mjs",
   PrivateBrowsingUtils: "resource://gre/modules/PrivateBrowsingUtils.sys.mjs",
@@ -81,6 +83,26 @@ function button(doc, className, action) {
 // textContent write always replaces the text node (the document has mutation observers),
 // which reconstructs frames, reflows the toolbox and fires accessibility events. So the
 // band writes only what changed: the result is the same DOM, by construction.
+const SVG = "http://www.w3.org/2000/svg";
+
+/** The profile's solid glyph (NulavioAvatars) in the band's 16 px tile, redrawn only when it changes. */
+function showGlyph(node, d) {
+  if (node.firstElementChild?.dataset?.d === d) {
+    return;
+  }
+  const doc = node.ownerDocument;
+  const svg = doc.createElementNS(SVG, "svg");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("class", "nv-band-glyph-avatar");
+  svg.dataset.d = d;
+  const path = doc.createElementNS(SVG, "path");
+  path.setAttribute("d", d);
+  path.setAttribute("fill", "currentColor");
+  path.setAttribute("fill-rule", "evenodd");
+  svg.append(path);
+  node.replaceChildren(svg);
+}
+
 function setText(node, text) {
   if (node.textContent !== text) {
     node.textContent = text;
@@ -566,33 +588,39 @@ class WindowUI {
       row.dataset.agent = String(Boolean(agent));
       row.dataset.workspace = String(Boolean(workspace));
       row.dataset.raw = String(Boolean(agent?.raw));
+      // Which outline glyph the protection and the agent status draw (window-band.css); words stay the cue.
+      row.dataset.protection = this.#protection === "unlocked" ? "unlocked" : this.#protection === "plain" ? "plain" : "unknown";
+      row.dataset.agentStatus = this.#actionError ? "failed" : this.#agentUnavailable ? "unknown"
+        : agent?.stopped ? "stopped" : agent?.revoked ? "revoked" : "paused";
       const identity = row.querySelector(".nv-band-identity");
-      const fill = workspace
-        ? "var(--nv-color-security-agent-ink)" : `var(--nv-color-identity-${profile?.color ?? "slate"})`;
+      const color = profile?.color ?? "slate";
+      const fill = workspace ? "var(--nv-color-security-agent-ink)" : `var(--nv-color-identity-${color})`;
       if (identity.style.getPropertyValue("--profile-fill") !== fill) {
         identity.style.setProperty("--profile-fill", fill);
+        // Calmaria: the neutral row draws the soft tile; alert rows keep the strong fill above.
+        identity.style.setProperty("--profile-tile", `var(--nv-color-identityTile-${color})`);
+        identity.style.setProperty("--profile-glyph", `var(--nv-color-identityGlyph-${color})`);
       }
       setAttr(identity, "aria-label", t("profilesButtonNamed", [name]));
       setAttr(identity, "title", name);
       const glyph = row.querySelector(".nv-band-flag");
-      if (!workspace && !this.#temporary && lazy.AVATARS.includes(profile?.avatar)) {
-        const src = `chrome://browser/content/profiles/assets/16_${profile.avatar}.svg`;
-        const current = glyph.firstElementChild;
-        if (glyph.childElementCount !== 1 || current.localName !== "img" || current.getAttribute("src") !== src) {
-          const image = element(win.document, "img", "nv-band-avatar");
-          image.src = src;
-          image.alt = "";
-          glyph.replaceChildren(image);
-        }
-      } else {
-        const letter = workspace ? "▤" : [...name][0]?.toLocaleUpperCase() || "?";
-        if (glyph.firstElementChild || glyph.textContent !== letter) {
-          glyph.textContent = letter;
-        }
+      // The profile's own glyph, the hourglass of a temporary profile or the AI Workspace's; else its
+      // initial, and the person glyph for a name with no letter (never "?": that means unknown).
+      const d = workspace ? lazy.SPECIAL_GLYPHS.workspace
+        : this.#temporary ? lazy.SPECIAL_GLYPHS.temporary : lazy.AVATAR_GLYPHS[profile?.avatar] ?? null;
+      const letter = d ? null : lazy.profileInitial(name);
+      if (d || !letter) {
+        showGlyph(glyph, d ?? lazy.SPECIAL_GLYPHS.person);
+      } else if (glyph.firstElementChild || glyph.textContent !== letter) {
+        glyph.textContent = letter;
       }
       setAttr(glyph, "aria-hidden", "true");
       setText(row.querySelector(".nv-band-name"), name);
-      named(row.querySelector(".nv-band-protection"), protection);
+      // "Protegido" fits the Lateral column; the whole "Protegido · desbloqueado" is its name and title.
+      const protectionNode = row.querySelector(".nv-band-protection");
+      setText(protectionNode, this.#protection === "unlocked" ? t("bandProtectedShort") : protection);
+      setAttr(protectionNode, "aria-label", protection);
+      setAttr(protectionNode, "title", protection);
       const seal = (kind, visible, text) => {
         const node = row.querySelector(`.nv-band-${kind}`);
         const hadFocus = node === win.document.activeElement;

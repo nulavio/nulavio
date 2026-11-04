@@ -73,7 +73,10 @@ function render(state) {
       ? [chip(badge, "lg"), h("span", { class: "popup__name", text: current.name }), ...profileStates(current).map(stateBadge)]
       : [])
   );
-  document.querySelector(".popup__keys").hidden = temporary;
+  // The number keys and "Por que perfis?" only when there are other profiles: with none, the empty
+  // line itself says what profiles are for (audit 2026-11 FR-10).
+  document.querySelector(".popup__keys").hidden = temporary || !others.length;
+  document.querySelector(".popup__why").hidden = !temporary && state.available && !others.length;
   // A protected profile open in this window can be locked from here: it closes its windows (UX4).
   const actions = document.getElementById("current-actions");
   actions.hidden = !(current?.encrypted && !current.locked && browser.nulavioVault);
@@ -199,7 +202,7 @@ function buildSheet() {
         "label",
         { class: "swatch", title: t(`color_${color}`) },
         h("input", { type: "radio", name: "color", value: color, checked: index === 0 }),
-        h("span", { class: "swatch__fill", style: `--chip: var(--nv-color-identity-${color})`, "aria-hidden": "true" }),
+        h("span", { class: "swatch__fill", style: `--tile: var(--nv-color-identityTile-${color}); --glyph: var(--nv-color-identityGlyph-${color})`, "aria-hidden": "true" }),
         h("span", { class: "visually-hidden", text: t(`color_${color}`) })
       )
     )

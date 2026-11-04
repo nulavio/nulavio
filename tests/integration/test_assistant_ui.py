@@ -435,16 +435,16 @@ class AssistantUiTest(unittest.TestCase):
         )
         status = (
             "const s = document.getElementById('status');"
-            "return [s.dataset.level, s.textContent, getComputedStyle(s, '::before').content];"
+            "return [s.dataset.level, s.textContent, getComputedStyle(s, '::before').maskImage];"
         )
         busy = harness.wait_until(lambda: (lambda v: v if v[0] == "progress" else None)(self.m.execute(status)), 10)
         self.assertTrue(busy, self.m.execute(status))
         self.assertEqual(busy[1], f"Enviado para {self.recipient()}. Aguardando a resposta…")
-        self.assertNotIn("✓", busy[2])  # a progress mark, never a check mark while waiting
+        self.assertNotIn("icon-check.svg", busy[2])  # a progress mark, never a check mark while waiting
         self.assertTrue(harness.wait_until(lambda: self.m.execute("return document.body.dataset.answered === 'true';"), 20))
         level, text, mark = self.m.execute(status)
         self.assertEqual((level, text), ("ok", "Resposta pronta."))
-        self.assertIn("✓", mark)  # done
+        self.assertIn("icon-check.svg", mark)  # done: the check, drawn as an SVG mask
         answer = self.m.execute(
             "const a = document.getElementById('answer'), s = document.getElementById('answer-section');"
             "const h = document.getElementById(s.getAttribute('aria-labelledby'));"

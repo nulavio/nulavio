@@ -36,8 +36,8 @@
     :root {
       --tab-border-radius: var(--nv-radius-md);
       --toolbarbutton-border-radius: var(--nv-radius-md);
-      /* UX3F M3: three steps. sm 6 (chips), md 10 (tabs, buttons, address bar), lg 14 (cards, panels). */
-      --urlbar-border-radius: var(--nv-radius-md);
+      /* UX3F M3: three steps. sm 6 (chips), md 10 (tabs, buttons), lg 14 (address bar, cards). */
+      --urlbar-border-radius: var(--nv-radius-lg);
       --panel-border-radius: var(--nv-radius-md);
     }
   }
@@ -211,8 +211,9 @@
       opacity: 1;
     }
 
-    /* UX3F M1: the open sidebar is the button's own state; show it in the
-       accent (icon and tint), not as a grey block outside the palette. */
+    /* UX3F M1, Calmaria (2026-11): the open sidebar is the button's own state, shown by its glyph and
+       the accent icon colour only. In Lateral the sidebar is always open, so a tinted block here was the
+       one coloured block on the toolbar with no news in it; it is gone. */
     :root:not([lwtheme]) #sidebar-button:is([checked], [open]) {
       --toolbarbutton-icon-fill: var(--nv-color-accent-default);
 
@@ -223,9 +224,10 @@
         list-style-image: url("chrome://browser/skin/sidebar-collapsed.svg");
       }
 
-      /* UX3G: a 12% accent tint, so the state reads without a solid block. */
-      &:not(:hover:active) > :is(.toolbarbutton-icon, .toolbarbutton-badge-stack) {
-        background-color: color-mix(in srgb, var(--nv-color-accent-default) 12%, transparent);
+      /* Not the engine's grey "checked" block either: the accent glyph is the state. Hover and
+         press keep their feedback. */
+      &:not(:hover, :active) > :is(.toolbarbutton-icon, .toolbarbutton-badge-stack) {
+        background-color: transparent;
       }
     }
 

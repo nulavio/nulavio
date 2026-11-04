@@ -251,7 +251,7 @@ function colorPicker(profile) {
           checked: color === profile.color,
           "data-focus-key": `color-${profile.id}-${color}`,
         }),
-        h("span", { class: "swatch__fill", style: `--chip: var(--nv-color-identity-${color})`, "aria-hidden": "true" }),
+        h("span", { class: "swatch__fill", style: `--tile: var(--nv-color-identityTile-${color}); --glyph: var(--nv-color-identityGlyph-${color})`, "aria-hidden": "true" }),
         h("span", { class: "visually-hidden", text: t(`color_${color}`) })
       )
     )

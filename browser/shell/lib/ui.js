@@ -2,6 +2,7 @@
    attributes, never innerHTML, so engine names, URLs and profile names coming
    from settings cannot inject markup. */
 
+import { SPECIAL_GLYPHS, profileGlyph, profileInitial } from "../modules/NulavioAvatars.sys.mjs";
 import { t } from "./i18n.js";
 
 export function h(tag, props = {}, ...children) {
@@ -53,40 +54,41 @@ export function initial(name) {
   return ([...String(name ?? "").trim()][0] ?? "?").toLocaleUpperCase();
 }
 
-const avatarURLs = new Map();
+const SVG_NS = "http://www.w3.org/2000/svg";
+const IDENTITY_NAMES = new Set(["lima", "sky", "violet", "coral", "sand", "slate"]);
 
-/** The engine's profile icon, coloured with the identity "on" token, as a data: URL. */
-export function avatarURL(avatar) {
-  if (!browser.nulavioProfiles || !avatar) {
-    return Promise.resolve(null);
-  }
-  if (!avatarURLs.has(avatar)) {
-    const ink = getComputedStyle(document.documentElement).getPropertyValue("--nv-color-identity-on").trim();
-    avatarURLs.set(
-      avatar,
-      browser.nulavioProfiles
-        .avatarSvg(avatar, ink)
-        .then(svg => `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`)
-        .catch(() => null)
-    );
-  }
-  return avatarURLs.get(avatar);
+/** A solid glyph (modules/NulavioAvatars.sys.mjs) as an inline SVG in the current colour. */
+export function glyph(d, className = "chip__glyph") {
+  const svg = document.createElementNS(SVG_NS, "svg");
+  svg.setAttribute("class", className);
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("aria-hidden", "true");
+  const path = document.createElementNS(SVG_NS, "path");
+  path.setAttribute("d", d);
+  path.setAttribute("fill", "currentColor");
+  path.setAttribute("fill-rule", "evenodd");
+  svg.append(path);
+  return svg;
 }
 
-/** A profile's identity chip: its colour plus its icon (or initial while the icon loads). */
+/** A profile's identity chip (Calmaria): a soft tile in its colour with its solid glyph, or its
+    initial; never colour alone, and never a "?" (that sign means "unknown" elsewhere). */
 export function chip(profile, size = "md") {
   const kind = profile.temporary ? " chip--temporary" : "";
-  const el = h("span", { class: `chip chip--${size}${kind}`, "aria-hidden": "true", text: initial(profile.name) });
-  el.style.setProperty("--chip", `var(--nv-color-identity-${profile.color})`);
-  avatarURL(profile.avatar).then(url => {
-    if (url) {
-      el.replaceChildren(h("img", { src: url, alt: "" }));
-    }
-  });
+  const el = h("span", { class: `chip chip--${size}${kind}`, "aria-hidden": "true" });
+  const color = IDENTITY_NAMES.has(profile.color) ? profile.color : "slate";
+  el.style.setProperty("--chip", `var(--nv-color-identity-${color})`);
+  el.style.setProperty("--tile", `var(--nv-color-identityTile-${color})`);
+  el.style.setProperty("--glyph", `var(--nv-color-identityGlyph-${color})`);
+  const d = profileGlyph(profile);
+  const letter = d ? null : profileInitial(profile.name);
+  if (letter) {
+    el.textContent = letter;
+  } else {
+    el.append(glyph(d ?? SPECIAL_GLYPHS.person));
+  }
   return el;
 }
-
-const SVG_NS = "http://www.w3.org/2000/svg";
 // 24 px line icons (1.75 px stroke, currentColor). State is never carried by an icon alone: words go next to it.
 const ICONS = {
   critical: "M8.3 2.5h7.4l5.8 5.8v7.4l-5.8 5.8H8.3l-5.8-5.8V8.3z M12 7.5v5.5 M12 16.5v.5",

@@ -68,20 +68,24 @@
     outline: var(--nv-state-focusRingWidth) solid var(--nv-color-focus);
     outline-offset: calc(-1 * var(--nv-state-focusRingWidth));
   }
-  /* Neutral identity: a quiet outlined chip; the profile colour stays as a
-     filled disc with the initial or avatar (colour is never the only cue). */
+  /* Neutral identity (Calmaria, 2026-11): a ghost button, no frame; the profile is the 16 px tile in
+     its colour with its solid glyph or initial, then its name (colour is never the only cue). */
   .nv-band-row .nv-band-identity {
     display: flex;
     align-items: center;
     gap: var(--nv-space-2);
     min-inline-size: 0;
-    padding-inline: var(--nv-space-1) var(--nv-space-3);
+    padding-inline: var(--nv-space-1) var(--nv-space-2);
     background: transparent;
     color: var(--nv-color-band-text);
-    border: var(--nv-security-identityRingWidth) solid var(--nv-color-border-control);
+    border: var(--nv-security-identityRingWidth) solid transparent;
     /* UX3G M3: the same 6px corner as the alert chip; only colour and fill change. */
     border-radius: var(--nv-radius-sm);
     font-weight: var(--nv-font-weight-medium);
+  }
+  .nv-band-row .nv-band-identity:hover {
+    text-decoration: none;
+    background: color-mix(in srgb, currentColor 8%, transparent);
   }
   .nv-band-flag {
     display: inline-grid;
@@ -89,21 +93,14 @@
     flex: none;
     inline-size: var(--nv-icon-size-sm);
     block-size: var(--nv-icon-size-sm);
-    border-radius: 50%;
-    background: var(--profile-fill, var(--nv-color-identity-slate));
-    color: var(--nv-color-identity-on);
-    box-shadow: inset 0 0 0 1px var(--nv-color-identity-ring);
-    font-size: calc(var(--nv-font-size-xs) * 0.75);
+    border-radius: 5px;
+    background: var(--profile-tile, var(--nv-color-identityTile-slate));
+    color: var(--profile-glyph, var(--nv-color-identityGlyph-slate));
+    font-size: 10px;
     font-weight: var(--nv-font-weight-semibold);
     line-height: 1;
   }
-  .nv-band-avatar {
-    inline-size: var(--nv-space-4);
-    block-size: var(--nv-space-4);
-    -moz-context-properties: fill, stroke;
-    fill: transparent;
-    stroke: currentColor;
-  }
+  .nv-band-glyph-avatar { inline-size: 100%; block-size: 100%; }
   .nv-band-row .nv-band-protection { color: var(--nv-color-text-secondary); }
   /* D-UX19: "Aberto pela sua regra · Mudar", next to the profile; calm text, never a seal */
   .nv-band-row .nv-band-route { flex: none; white-space: nowrap; color: var(--nv-color-text-secondary); }
@@ -191,6 +188,8 @@
       border-color: CanvasText !important;
     }
     .nv-band-row button:focus-visible { outline-color: Highlight; }
+    /* The tile is a soft fill: here it gets an edge, and the glyph the text colour. */
+    .nv-band-flag { background: Canvas !important; color: CanvasText !important; box-shadow: inset 0 0 0 1px CanvasText; }
   }
   .nv-band-row, .nv-band-row *, #nulavio-fullscreen, #nulavio-fullscreen * {
     animation: none !important;
@@ -254,6 +253,41 @@
     color: var(--nv-color-security-raw-text);
     border-color: var(--nv-color-security-raw-text);
     font-weight: var(--nv-font-weight-semibold);
+  }
+  /* Calmaria (2026-11): state glyphs are outline SVGs drawn here, 16 px at 1.5 px, before the words
+     (never Unicode in the text: it changed with the desktop font and was read aloud). Solid shapes are
+     only for who you are (the tile); no silhouette is in both sets. The words remain the cue. */
+  .nv-band-row :is(.nv-band-protection, .nv-band-route, .nv-band-temporary, .nv-band-private, .nv-band-agent,
+      .nv-band-status, .nv-band-activity, .nv-band-guard, .nv-band-connected, .nv-band-pause, .nv-band-stop,
+      .nv-band-task-stop, .nv-band-assistant-pause)::before {
+    content: "";
+    display: inline-block;
+    inline-size: var(--nv-icon-size-sm);
+    block-size: var(--nv-icon-size-sm);
+    margin-inline-end: var(--nv-space-1);
+    vertical-align: -3px;
+    background-color: currentColor;
+    mask: var(--band-glyph) center / contain no-repeat;
+  }
+  .nv-band-row[data-protection="plain"] .nv-band-protection::before { content: none; }
+  .nv-band-row[data-protection="unlocked"] .nv-band-protection { --band-glyph: url("resource://builtin-addons/nulavio-shell/shared/icons/unlocked.svg"); }
+  .nv-band-row[data-protection="unknown"] .nv-band-protection { --band-glyph: url("resource://builtin-addons/nulavio-shell/shared/icons/unknown.svg"); }
+  .nv-band-row .nv-band-route { --band-glyph: url("resource://builtin-addons/nulavio-shell/shared/icons/route.svg"); }
+  .nv-band-row .nv-band-temporary { --band-glyph: url("resource://builtin-addons/nulavio-shell/shared/icons/temporary.svg"); }
+  .nv-band-row .nv-band-private { --band-glyph: url("resource://builtin-addons/nulavio-shell/shared/icons/private.svg"); }
+  .nv-band-row :is(.nv-band-agent, .nv-band-activity) { --band-glyph: url("resource://builtin-addons/nulavio-shell/shared/icons/agent.svg"); }
+  .nv-band-row .nv-band-guard { --band-glyph: url("resource://builtin-addons/nulavio-shell/shared/icons/warning.svg"); }
+  .nv-band-row .nv-band-connected { --band-glyph: url("resource://builtin-addons/nulavio-shell/shared/icons/connected.svg"); }
+  .nv-band-row :is(.nv-band-pause, .nv-band-assistant-pause) { --band-glyph: url("resource://builtin-addons/nulavio-shell/shared/icons/pause.svg"); }
+  .nv-band-row :is(.nv-band-stop, .nv-band-task-stop) { --band-glyph: url("resource://builtin-addons/nulavio-shell/shared/icons/stop.svg"); }
+  .nv-band-row .nv-band-status { --band-glyph: url("resource://builtin-addons/nulavio-shell/shared/icons/pause.svg"); }
+  .nv-band-row[data-agent-status="stopped"] .nv-band-status { --band-glyph: url("resource://builtin-addons/nulavio-shell/shared/icons/stop.svg"); }
+  .nv-band-row[data-agent-status="failed"] .nv-band-status { --band-glyph: url("resource://builtin-addons/nulavio-shell/shared/icons/critical.svg"); }
+  .nv-band-row[data-agent-status="revoked"] .nv-band-status { --band-glyph: url("resource://builtin-addons/nulavio-shell/shared/icons/revoked.svg"); }
+  .nv-band-row[data-agent-status="unknown"] .nv-band-status { --band-glyph: url("resource://builtin-addons/nulavio-shell/shared/icons/unknown.svg"); }
+  @media (forced-colors: active) {
+    .nv-band-row :is(.nv-band-protection, .nv-band-route, .nv-band-seal, .nv-band-pause, .nv-band-stop,
+        .nv-band-task-stop, .nv-band-assistant-pause)::before { forced-color-adjust: none; background-color: CanvasText; }
   }
   .nv-band-raw::before {
     content: "";

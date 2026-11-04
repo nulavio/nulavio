@@ -35,12 +35,14 @@
 
 /* Live status on the new tab */
 .facts dd[data-level] { display: flex; align-items: baseline; gap: var(--nv-space-2); }
-.facts dd[data-level]::before { font-weight: var(--nv-font-weight-semibold); flex: none; }
-.facts dd[data-level="ok"]::before { content: "✓"; color: var(--nv-color-status-secure); }
+/* Marks are SVG masks (Calmaria): one shape whatever the desktop font, never read aloud. */
+:is(.facts dd, .here__summary, .firstrun__facts li)[data-level]::before { flex: none; content: ""; inline-size: 1em; block-size: 1em; align-self: center; background-color: currentColor; mask: var(--mark) center / contain no-repeat; }
+[data-level="ok"] { --mark: url("icon-check.svg"); }
+[data-level="warn"] { --mark: url("icon-warning.svg"); }
+[data-level="unknown"] { --mark: url("icon-unknown.svg"); }
+.facts dd[data-level="ok"]::before { background-color: var(--nv-color-status-secure); }
 .facts dd[data-level="warn"] { color: var(--nv-color-status-warning); }
-.facts dd[data-level="warn"]::before { content: "⚠"; }
 .facts dd[data-level="unknown"] { color: var(--nv-color-text-muted); }
-.facts dd[data-level="unknown"]::before { content: "?"; }
 .card__note { margin: var(--nv-space-5) 0 0; font-size: var(--nv-type-caption-size); color: var(--nv-color-text-muted); }
 
 /* New tab (UX4, audit SPA-14): "Você está em …" and the facts in one line; the rest in Details */
@@ -51,12 +53,10 @@
 .here__label, .here__plain, .here__routes { color: var(--nv-color-text-secondary); }
 .here__who .badge { margin-inline-start: 0; }
 .here__summary { display: inline-flex; align-items: baseline; gap: var(--nv-space-2); font-weight: var(--nv-font-weight-medium); }
-.here__summary::before { font-weight: var(--nv-font-weight-semibold); flex: none; }
-.here__summary[data-level="ok"]::before { content: "✓"; color: var(--nv-color-status-secure); }
+/* A state is not a "safe" seal: the line carries no mark when all is on; attention keeps its own. */
+.here__summary[data-level="ok"]::before { content: none; }
 .here__summary[data-level="warn"] { color: var(--nv-color-status-warning); }
-.here__summary[data-level="warn"]::before { content: "⚠"; }
 .here__summary[data-level="unknown"] { color: var(--nv-color-text-secondary); }
-.here__summary[data-level="unknown"]::before { content: "?"; }
 .here__settings { margin-inline-start: auto; font-size: var(--nv-type-label-size); }
 .here__details .facts { margin-top: var(--nv-space-3); grid-template-columns: repeat(auto-fit, minmax(min(14rem, 100%), 1fr)); }
 .popup__filter { inline-size: 100%; margin-bottom: var(--nv-space-2); }
@@ -171,6 +171,7 @@
   color: var(--nv-color-text-secondary);
 }
 .popup__current { display: flex; align-items: center; gap: var(--nv-space-4); }
+.popup__current .popup__name { font-size: var(--nv-type-body-size); font-weight: var(--nv-font-weight-semibold); }
 .popup__name { font-weight: var(--nv-font-weight-medium); overflow-wrap: anywhere; }
 .popup__list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--nv-space-1); }
 .popup__item {
@@ -193,19 +194,44 @@
 .popup__empty { color: var(--nv-color-text-secondary); font-size: var(--nv-type-label-size); }
 .popup__templates { display: flex; flex-wrap: wrap; gap: var(--nv-space-3); }
 .popup__note { margin: 0; font-size: var(--nv-type-caption-size); color: var(--nv-color-text-secondary); }
-.popup__footer { display: grid; justify-items: start; gap: var(--nv-space-1); }
-.popup__footer #new-profile { justify-self: stretch; margin-bottom: var(--nv-space-2); }
+/* The menu's actions are menu rows (audit 2026-11 FR-09, Calmaria): 36 px, an outline icon (or its
+   space, so the words line up), the same hover as the profile rows; no full-width outlined button. */
+.popup__footer { display: grid; gap: var(--nv-space-1); padding-top: var(--nv-space-3); border-top: 1px solid var(--nv-color-border-subtle); }
+.popup__footer > .button {
+  display: flex;
+  align-items: center;
+  gap: var(--nv-space-3);
+  min-height: 2.25rem;
+  padding: var(--nv-space-1) var(--nv-space-3);
+  border: 0;
+  border-radius: var(--nv-radius-md);
+  background: transparent;
+  color: var(--nv-color-text-primary);
+  font-size: var(--nv-type-label-size);
+  font-weight: var(--nv-font-weight-regular);
+  text-align: start;
+}
+/* An icon where the row has one; an empty 16 px space where it does not, so the words line up. */
+.popup__footer > .button::before { content: ""; flex: none; align-self: flex-start; margin-block-start: 0.15em; inline-size: 1rem; block-size: 1rem; }
+.popup__footer > :is(#new-profile, #new-temporary)::before { background-color: currentColor; mask: var(--item-icon) center / contain no-repeat; }
+.popup__footer > #new-profile { --item-icon: url("icon-plus.svg"); }
+.popup__footer > #new-temporary { --item-icon: url("icon-temporary.svg"); }
+.popup__text { display: grid; gap: 2px; }
+.popup__hint { font-size: var(--nv-type-caption-size); color: var(--nv-color-text-secondary); }
 .popup__keys { margin: 0; font-size: var(--nv-type-caption-size); color: var(--nv-color-text-muted); }
 /* UX4: state in words on each row, and "aberto" for a profile open now (a dot and the word) */
 .popup__item .badge, .popup__current .badge { margin-inline-start: 0; }
 .popup__running { flex: none; font-size: var(--nv-type-caption-size); color: var(--nv-color-text-secondary); }
-.popup__running::before { content: "●"; margin-inline-end: var(--nv-space-1); color: var(--nv-color-accent-default); }
+.popup__running::before { content: ""; display: inline-block; inline-size: 6px; block-size: 6px; margin-inline-end: var(--nv-space-1); vertical-align: 0.1em; border-radius: 50%; background: var(--nv-color-accent-default); }
 .popup__item kbd { flex: none; }
 .popup__current { flex-wrap: wrap; }
 .popup__main[hidden] { display: none; }
 .popup__title { margin: 0; font-size: var(--nv-type-section-size); font-weight: var(--nv-type-section-weight); line-height: var(--nv-type-section-lineHeight); }
 .popup__sheet .popup__templates { gap: var(--nv-space-2); }
-.popup__why > summary { cursor: pointer; font-size: var(--nv-type-label-size); color: var(--nv-color-text-secondary); }
+.popup__why > summary { cursor: pointer; font-size: var(--nv-type-label-size); color: var(--nv-color-text-secondary); list-style: none; display: flex; align-items: baseline; gap: var(--nv-space-2); }
+.popup__why > summary::-webkit-details-marker { display: none; }
+.popup__why > summary::before { content: ""; flex: none; inline-size: 1em; block-size: 1em; align-self: center; background-color: currentColor; mask: url("icon-chevron.svg") center / contain no-repeat; }
+.popup__why[open] > summary::before { transform: rotate(90deg); }
 .popup__why[open] > summary { margin-bottom: var(--nv-space-2); }
 .popup__why { display: grid; gap: var(--nv-space-2); }
 
@@ -306,9 +332,8 @@ html[data-page="newtab"]:not([data-painted]) .page {
 .firstrun__facts { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--nv-space-2); }
 .firstrun__facts li { display: flex; gap: var(--nv-space-2); align-items: baseline; }
 /* "Seguro" is neutral (no green); what needs attention says so with its own mark. */
-.firstrun__facts li::before { content: "✓"; color: var(--nv-color-text-secondary); font-weight: var(--nv-font-weight-semibold); }
-.firstrun__facts li[data-level="warn"]::before { content: "⚠"; color: var(--nv-color-status-warning); }
-.firstrun__facts li[data-level="unknown"]::before { content: "?"; }
+.firstrun__facts li::before { color: var(--nv-color-text-secondary); }
+.firstrun__facts li[data-level="warn"]::before { background-color: var(--nv-color-status-warning); }
 .firstrun__summary { gap: var(--nv-space-2); }
 .firstrun__summary div { grid-template-columns: minmax(7rem, 12rem) minmax(0, 1fr); align-items: baseline; gap: var(--nv-space-4); }
 .firstrun__summary dt { font-size: var(--nv-type-label-size); color: var(--nv-color-text-secondary); }

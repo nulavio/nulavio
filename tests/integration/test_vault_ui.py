@@ -150,12 +150,14 @@ class VaultUiTest(unittest.TestCase):
     def assert_status(self, level: str) -> dict:
         line = self.status_line()
         self.assertEqual(line["level"], level, line)
-        self.assertEqual(line["mark"] == '"✓ "', level == "ok", f"✓ only for a result that happened: {line}")
+        # Marks are SVG masks now (Calmaria): the check only for a result that happened.
+        self.assertEqual("icon-check.svg" in line["mask"], level == "ok", f"✓ only for a result that happened: {line}")
         if level == "error":
             self.assertEqual(line["color"], line["critical"], "errors use the critical style")
             self.assertIn("icon-critical.svg", line["mask"], "errors carry the critical icon")
         if level == "warn":
-            self.assertEqual((line["color"], line["mark"]), (line["warning"], '"⚠ "'))
+            self.assertEqual(line["color"], line["warning"])
+            self.assertIn("icon-warning.svg", line["mask"], "a warning carries the warning icon")
         return line
 
     def type_into(self, element_id: str, text: str) -> None:
@@ -221,7 +223,7 @@ class VaultUiTest(unittest.TestCase):
         templates = self.m.execute(
             "return [...document.querySelectorAll('#templates button')].map(b => ({pressed: b.getAttribute('aria-pressed'),"
             " bg: getComputedStyle(b).backgroundColor, border: getComputedStyle(b).borderTopColor,"
-            " mark: getComputedStyle(b, '::before').content}));"
+            " mark: getComputedStyle(b, '::before').content, mask: getComputedStyle(b, '::before').maskImage}));"
         )
         pressed = [b for b in templates if b["pressed"] == "true"]
         others = [b for b in templates if b["pressed"] == "false"]
@@ -230,7 +232,8 @@ class VaultUiTest(unittest.TestCase):
         for other in others:
             self.assertNotEqual((pressed[0]["bg"], pressed[0]["border"]), (other["bg"], other["border"]))
             self.assertEqual(other["mark"], "none")
-        self.assertEqual(pressed[0]["mark"], '"✓"')
+        self.assertEqual(pressed[0]["mark"], '""')  # a check drawn by an SVG mask, not a font glyph
+        self.assertIn("icon-check.svg", pressed[0]["mask"])
         # Native radios and checkboxes take the brand accent, not the toolkit's blue (DS-11).
         accent = self.m.execute(
             "const probe = document.createElement('i'); probe.style.color = 'var(--nv-color-accent-default)';"
@@ -313,7 +316,7 @@ class VaultUiTest(unittest.TestCase):
 
         self.assertTrue(harness.wait_until(watch, timeout=60, interval=0.1), f"never showed unlocked: {seen}")
         if "unlocking" in seen:  # usually caught; the unlock can be faster than one poll
-            self.assertEqual((seen["unlocking"]["level"], seen["unlocking"]["mark"] == '"✓ "'), ("progress", False))
+            self.assertEqual((seen["unlocking"]["level"], "icon-check.svg" in seen["unlocking"]["mask"]), ("progress", False))
         self.assertEqual(seen["unlocked"]["level"], "ok")
         self.assertIn("última janela", seen["unlocked"]["text"])
         self.assertTrue(harness.wait_until(lambda: self.instances(path), timeout=60), "the profile did not start")

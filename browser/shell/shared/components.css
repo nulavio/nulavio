@@ -84,7 +84,16 @@ kbd {
   text-underline-offset: 0.2em;
 }
 .button--link:hover:not(:disabled) { box-shadow: none; text-decoration-thickness: 2px; }
-.button--go::after { content: "→"; margin-inline-start: 0.35em; text-decoration: none; display: inline-block; }
+.button--go::after {
+  content: "";
+  display: inline-block;
+  inline-size: 1em;
+  block-size: 1em;
+  margin-inline-start: 0.3em;
+  vertical-align: -0.15em;
+  background-color: currentColor;
+  mask: url("icon-arrow.svg") center / contain no-repeat;
+}
 /* The state tokens are opacities: tint with the button's own text colour. */
 .button:hover:not(:disabled) { box-shadow: inset 0 0 0 100vmax color-mix(in srgb, var(--button-overlay) calc(var(--nv-state-hoverOverlay) * 100%), transparent); }
 .button:active:not(:disabled) { box-shadow: inset 0 0 0 100vmax color-mix(in srgb, var(--button-overlay) calc(var(--nv-state-pressedOverlay) * 100%), transparent); }
@@ -106,7 +115,18 @@ kbd {
 .actions:not(.actions--end) > .button--quiet:first-child { margin-inline-start: calc(-1 * var(--nv-space-5)); }
 .actions[hidden] { display: none; }
 .result { margin: 0; font-weight: var(--nv-font-weight-medium); }
-.result[data-level="ok"]::before { content: "✓ "; color: var(--nv-color-status-secure); }
+.result[data-level="ok"]::before,
+.status[data-level="ok"]::before,
+.inline-status[data-level="ok"]::before {
+  content: "";
+  display: inline-block;
+  inline-size: 1em;
+  block-size: 1em;
+  margin-inline-end: 0.35em;
+  vertical-align: -0.15em;
+  background-color: var(--nv-color-status-secure);
+  mask: url("icon-check.svg") center / contain no-repeat;
+}
 .result[data-level="error"] { color: var(--nv-color-status-criticalText); }
 .why summary { cursor: pointer; color: var(--nv-color-text-secondary); }
 /* One disclosure mark for "Por quê?" and "Mais": a chevron that turns when open (audit 2026-11 T5). */
@@ -171,9 +191,19 @@ kbd {
 .status { margin: 0; min-height: 1.5em; font-weight: var(--nv-font-weight-medium); }
 .status:empty { min-height: 0; }
 /* Levels set by announce() in lib/ui.js: info has no mark; ✓ only for a result that happened */
-.status[data-level="ok"]::before { content: "✓ "; color: var(--nv-color-status-secure); }
+
 .status[data-level="warn"] { color: var(--nv-color-status-warning); }
-.status[data-level="warn"]::before { content: "⚠ "; }
+.status[data-level="warn"]::before,
+.inline-status[data-level="warn"]::before {
+  content: "";
+  display: inline-block;
+  inline-size: 1em;
+  block-size: 1em;
+  margin-inline-end: 0.35em;
+  vertical-align: -0.15em;
+  background-color: currentColor;
+  mask: url("icon-warning.svg") center / contain no-repeat;
+}
 .status[data-level="error"] { color: var(--nv-color-status-criticalText); }
 .status[data-level="error"]::before,
 .result[data-level="error"]::before {
@@ -207,9 +237,9 @@ kbd {
 /* The result of what was just done, next to the control (lib/ui.js announce) */
 .inline-status { margin-inline-start: var(--nv-space-3); font-size: var(--nv-type-label-size); font-weight: var(--nv-font-weight-medium); white-space: nowrap; }
 .check > .inline-status { display: inline-block; align-self: center; }
-.inline-status[data-level="ok"]::before { content: "✓ "; color: var(--nv-color-status-secure); }
+
 .inline-status[data-level="warn"] { color: var(--nv-color-status-warning); }
-.inline-status[data-level="warn"]::before { content: "⚠ "; }
+
 .inline-status[data-level="error"] { color: var(--nv-color-status-criticalText); }
 .inline-status[data-level="error"]::before {
   /* the same octagon as every other error (design-system States), never a second glyph */
@@ -311,33 +341,38 @@ kbd {
 }
 .badge--security .badge__icon { color: var(--nv-color-text-secondary); }
 
-/* Identity chip: a profile's colour with its icon or initial; never colour alone */
+/* Identity chip (Calmaria, 2026-11): a soft tile in the profile's colour with its solid glyph or
+   initial in the same hue (>= 6.3:1, tokens identityTile/identityGlyph). No ring, no disc: the
+   glyph carries the shape; never colour alone. Corners about 30 % of the side (16-20 px: 5-6). */
 .chip {
   --chip: var(--nv-color-identity-slate);
+  --tile: var(--nv-color-identityTile-slate);
+  --glyph: var(--nv-color-identityGlyph-slate);
   display: inline-grid;
   place-items: center;
   flex: none;
-  border-radius: 50%;
-  background: var(--chip);
-  color: var(--nv-color-identity-on);
-  box-shadow: inset 0 0 0 1px var(--nv-color-identity-ring);
+  border-radius: 30%;
+  background: var(--tile);
+  color: var(--glyph);
   font-family: var(--nv-font-family-ui);
   font-weight: var(--nv-font-weight-semibold);
   line-height: 1;
 }
-.chip img { width: 84%; height: 84%; }
-.chip--sm { width: 1.25rem; height: 1.25rem; font-size: 0.6875rem; }
-.chip--md { width: 1.75rem; height: 1.75rem; font-size: var(--nv-type-label-size); }
-.chip--lg { width: 2.25rem; height: 2.25rem; font-size: var(--nv-type-body-size); }
-.chip--neutral { --chip: var(--nv-color-bg-sunken); color: var(--nv-color-text-secondary); box-shadow: none; }
+.chip__glyph { width: 100%; height: 100%; }
+.chip--sm { width: 1.25rem; height: 1.25rem; font-size: 0.78rem; }
+.chip--md { width: 1.75rem; height: 1.75rem; font-size: 1.09rem; }
+.chip--lg { width: 2.25rem; height: 2.25rem; font-size: 1.4rem; }
+.chip--xl { width: 3rem; height: 3rem; font-size: 1.875rem; }
+.chip--neutral { --tile: var(--nv-color-bg-sunken); --glyph: var(--nv-color-text-secondary); }
 /* Temporary profile: the neutral identity colour with a dashed ring ("not kept"), same in both themes */
 .chip--temporary {
-  box-shadow: none;
   background: var(--nv-color-security-temporary-fill);
   color: var(--nv-color-security-temporary-text);
-  outline: 2px dashed var(--nv-color-security-temporary-edge);
-  outline-offset: -2px;
+  outline: var(--nv-security-temporaryWidth) dashed var(--nv-color-security-temporary-edge);
+  outline-offset: calc(-1 * var(--nv-security-temporaryWidth));
 }
+/* Inside the dashes the hourglass is smaller, so the two never touch. */
+.chip--temporary > .chip__glyph { width: 62%; height: 62%; }
 
 .list { list-style: none; margin: 0; padding: 0; display: grid; }
 .row {
@@ -389,15 +424,19 @@ fieldset.stack > legend { padding: 0; margin-bottom: var(--nv-space-2); }
 .swatches legend { padding: 0; margin-bottom: var(--nv-space-2); }
 .swatch { position: relative; display: inline-grid; cursor: pointer; }
 .swatch input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; }
+/* A colour choice: the tile it gives, with a dot of its glyph colour (the shape of a chip). */
 .swatch__fill {
   width: 1.75rem;
   height: 1.75rem;
-  border-radius: 50%;
-  background: var(--chip);
-  box-shadow: inset 0 0 0 1px var(--nv-color-identity-ring);
+  border-radius: 30%;
+  background: radial-gradient(circle, var(--glyph) 0 22%, transparent 23%), var(--tile);
 }
 .swatch input:checked + .swatch__fill {
   box-shadow: 0 0 0 2px var(--nv-color-bg-surface), 0 0 0 4px var(--nv-color-text-primary);
+  /* The chosen colour also carries a check, so it never depends on the ring's colour alone. */
+  background: var(--glyph);
+  mask: url("icon-check.svg") center / 70% no-repeat, linear-gradient(#000 0 0);
+  mask-composite: exclude;
 }
 .swatch input:focus-visible + .swatch__fill {
   outline: var(--nv-state-focusRingWidth) solid var(--nv-color-focus);
@@ -467,14 +506,12 @@ a { color: var(--nv-color-accent-default); }
 a:hover { text-decoration-thickness: 2px; }
 
 /* Integrations: state in words and a mark; never colour alone */
-.state-mark { width: 1.75rem; height: 1.75rem; border-radius: 50%; display: inline-grid; place-items: center; font-weight: var(--nv-font-weight-semibold); background: var(--nv-color-bg-sunken); color: var(--nv-color-text-secondary); }
-.state-mark::before { content: "?"; }
-.state-mark--enabled { background: var(--nv-color-accent-tint); color: var(--nv-color-text-primary); }
-.state-mark--enabled::before { content: "✓"; }
-.state-mark--available::before { content: "•"; }
-.state-mark--unavailable::before { content: "–"; }
-.state-mark--error { background: var(--nv-color-status-warningTint); color: var(--nv-color-status-warning); }
-.state-mark--error::before { content: "!"; }
+.state-mark { --mark: url("icon-unknown.svg"); width: 1.75rem; height: 1.75rem; border-radius: 50%; display: inline-grid; place-items: center; background: var(--nv-color-bg-sunken); color: var(--nv-color-text-secondary); }
+.state-mark::before { content: ""; inline-size: 1rem; block-size: 1rem; background-color: currentColor; mask: var(--mark) center / contain no-repeat; }
+.state-mark--enabled { --mark: url("icon-check.svg"); background: var(--nv-color-accent-tint); color: var(--nv-color-text-primary); }
+.state-mark--available::before { mask: none; inline-size: 6px; block-size: 6px; border-radius: 50%; }
+.state-mark--unavailable::before { mask: none; inline-size: 8px; block-size: 2px; border-radius: 1px; }
+.state-mark--error { --mark: url("icon-critical.svg"); background: var(--nv-color-status-warningTint); color: var(--nv-color-status-warning); }
 .evidence { margin: 0; padding-left: 1.25rem; display: grid; gap: var(--nv-space-1); font-size: var(--nv-type-caption-size); color: var(--nv-color-text-secondary); overflow-wrap: anywhere; }
 a.button { display: inline-flex; align-items: center; text-decoration: none; }
 
@@ -507,7 +544,7 @@ a.button { display: inline-flex; align-items: center; text-decoration: none; }
   border-color: var(--nv-color-accent-default);
   color: var(--nv-color-text-primary);
 }
-.button[aria-pressed="true"]::before { content: "✓"; font-weight: var(--nv-font-weight-semibold); }
+.button[aria-pressed="true"]::before { content: ""; }
 
 
 /* Download warning (flow E): the critical state has its own colour, icon and headline (SB-05, DS-04) */
@@ -633,8 +670,8 @@ a.button { display: inline-flex; align-items: center; text-decoration: none; }
   block-size: 1.125rem;
   border-radius: 50%;
   background: var(--nv-color-accent-default);
-  color: var(--nv-color-accent-on);
-  font-size: 0.6875rem;
-  line-height: 1;
+  /* The check is cut out of the accent dot (an SVG mask, not a font glyph). */
+  mask: url("icon-check.svg") center / 72% no-repeat, linear-gradient(#000 0 0);
+  mask-composite: exclude;
 }
 }

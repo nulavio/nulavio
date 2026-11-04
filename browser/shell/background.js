@@ -7,7 +7,7 @@
 
 import { workspaceBarTexts } from "./lib/agent-texts.js";
 import { t } from "./lib/i18n.js";
-import { drawProfileIcon } from "./lib/profile-icon.js";
+import { TOOLBAR_INK, drawProfileIcon } from "./lib/profile-icon.js";
 import { isRiskyFilename } from "./lib/risky.js";
 import { temporaryStorageText } from "./lib/ui.js";
 
@@ -43,10 +43,24 @@ browser.downloads.onChanged.addListener(async delta => {
 
 // -- Profile selector (Track B: the engine's profiles; absent in Track A) --
 
+// The button is drawn in the toolbar's icon colour: the theme's, and the private chrome's (dark in
+// both themes) in each private window. Redrawn when the theme changes.
+const darkTheme = matchMedia("(prefers-color-scheme: dark)");
+let shownProfile = null;
+
+async function setProfileIcon(profile) {
+  shownProfile = profile;
+  await browser.action.setIcon({ imageData: drawProfileIcon(profile, { ink: darkTheme.matches ? TOOLBAR_INK.dark : TOOLBAR_INK.light }) });
+  const windows = await browser.windows.getAll({ windowTypes: ["normal"] }).catch(() => []);
+  for (const win of windows.filter(w => w.incognito)) {
+    await browser.action.setIcon({ windowId: win.id, imageData: drawProfileIcon(profile, { ink: TOOLBAR_INK.private }) }).catch(() => {});
+  }
+}
+
 async function showCurrentProfile() {
   const state = await browser.nulavioProfiles.list();
   if (state.reason === "temporary") {
-    await browser.action.setIcon({ imageData: drawProfileIcon({ name: t("profilesTemporaryShort"), temporary: true }) });
+    await setProfileIcon({ name: t("profilesTemporaryShort"), temporary: true });
     await browser.action.setTitle({ title: t("profilesTemporaryButton") });
     await browser.nulavioProfiles.markTemporary(`${t("profilesTemporaryBar")} ${temporaryStorageText(state.temporary)}`);
     return;
@@ -56,13 +70,19 @@ async function showCurrentProfile() {
     await browser.action.setTitle({ title: t("profilesButton") });
     return;
   }
-  await browser.action.setIcon({ imageData: drawProfileIcon(current) });
+  await setProfileIcon(current);
   await browser.action.setTitle({ title: t("profilesButtonNamed", [current.name]) });
 }
 
 if (browser.nulavioProfiles && browser.action) {
   browser.nulavioProfiles.onChanged.addListener(() => showCurrentProfile().catch(console.error));
   showCurrentProfile().catch(console.error);
+  darkTheme.addEventListener("change", () => shownProfile && setProfileIcon(shownProfile).catch(console.error));
+  browser.windows.onCreated.addListener(win => {
+    if (win.incognito && shownProfile) {
+      browser.action.setIcon({ windowId: win.id, imageData: drawProfileIcon(shownProfile, { ink: TOOLBAR_INK.private }) }).catch(() => {});
+    }
+  });
 }
 
 // -- "Open link in profile": the user's explicit choice from a link's menu --

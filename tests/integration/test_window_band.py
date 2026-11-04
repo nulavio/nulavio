@@ -17,6 +17,8 @@ from test_horizon import rgb
 from test_profiles import chrome_async
 from nulavio_launcher.vault import sodium, storage
 
+AVATARS = 'ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioAvatars.sys.mjs")'
+
 WINDOW = 'ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioWindow.sys.mjs").NulavioWindow'
 BAND_PROBE = """(() => {
   const full = document.documentElement.matches('[inFullscreen], [inDOMFullscreen]');
@@ -443,9 +445,10 @@ class WindowBandTest(unittest.TestCase):
             identity = next(c for c in state["cues"] if c["kind"] == "nv-band-identity")
             self.assertEqual(identity["outline"], "solid")
             self.assertGreaterEqual(float(identity["outlineWidth"].removesuffix("px")), 2)
+            # Calmaria: Nulavio's own solid glyph for the profile's avatar, on its tile (not the engine's outline).
             self.assertEqual(
-                self.m.chrome("return document.querySelector('#nulavio-band .nv-band-avatar')?.getAttribute('src');"),
-                "chrome://browser/content/profiles/assets/16_book.svg",
+                self.m.chrome("return document.querySelector('#nulavio-band .nv-band-flag svg path')?.getAttribute('d');"),
+                self.m.chrome(f"return {AVATARS}.AVATAR_GLYPHS.book;"),
             )
         self.m.chrome("""
           for(const key of ['nulavio.horizon.enabled','ui.prefersContrast',
@@ -540,14 +543,14 @@ class WindowBandTest(unittest.TestCase):
         self.assertTrue(self.m.chrome("return matchMedia('(prefers-contrast: more)').matches;"))
         self.m.chrome("document.documentElement.style.colorScheme='dark';")
         self.assertTrue(
-            harness.wait_until(lambda: self.m.chrome("return !!document.querySelector('#nulavio-band .nv-band-avatar');"), 10)
+            harness.wait_until(lambda: self.m.chrome("return !!document.querySelector('#nulavio-band .nv-band-flag svg');"), 10)
         )
         icon = self.m.chrome("""
-          // UX3F A1: the avatar sits on the profile-colour disc inside the neutral chip.
-          const e=document.querySelector('#nulavio-band .nv-band-flag'), i=e.querySelector('img');
-          return {bg:getComputedStyle(e).backgroundColor,stroke:getComputedStyle(i).stroke};
+          // Calmaria: the solid glyph in the profile's glyph tone on its soft tile, inside the neutral chip.
+          const e=document.querySelector('#nulavio-band .nv-band-flag');
+          return {bg:getComputedStyle(e).backgroundColor,fill:getComputedStyle(e).color};
         """)
-        self.assertGreaterEqual(ratio(rgb(icon["stroke"]), rgb(icon["bg"])), 3, icon)
+        self.assertGreaterEqual(ratio(rgb(icon["fill"]), rgb(icon["bg"])), 3, icon)
         self.m.chrome("document.documentElement.style.removeProperty('color-scheme');")
         self.m.chrome(
             "Services.prefs.clearUserPref('ui.useAccessibilityTheme');"
@@ -692,12 +695,15 @@ class ProtectedWindowBandTest(unittest.TestCase):
                 time.sleep(0.3)
                 state = child.chrome(f"return {BAND_PROBE};")
                 assert_band(self, state)
-                self.assertIn(
-                    child.chrome(
-                        "return WebExtensionPolicy.getByID('shell@nulavio.net').extension.localizeMessage('bandProtected');"
-                    ),
-                    state["text"],
+                # Calmaria: "Protegido" fits the Lateral column; the whole phrase is its name and title.
+                message = "return WebExtensionPolicy.getByID('shell@nulavio.net').extension.localizeMessage(arguments[0]);"
+                self.assertIn(child.chrome(message, ["bandProtectedShort"]), state["text"])
+                node = child.chrome(
+                    "const e = document.querySelector('#nulavio-band .nv-band-protection');"
+                    "return {label: e.getAttribute('aria-label'), title: e.getAttribute('title')};"
                 )
+                full = child.chrome(message, ["bandProtected"])
+                self.assertEqual(node, {"label": full, "title": full})
             assert_layout_matrix(self, child, "protected-unlocked")
             lock = chrome_async(
                 child,

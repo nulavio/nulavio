@@ -14,7 +14,7 @@
        state and whether they are open, one "Novo perfil…" that opens a create sheet. -->
   <main class="popup__main" id="menu">
     <section aria-labelledby="current-label">
-      <h1 class="popup__label" id="current-label" data-i18n="profilesThisWindow">This window</h1>
+      <h1 class="visually-hidden" id="current-label" data-i18n="profilesThisWindow">This window</h1>
       <div class="popup__current" id="current"></div>
       <div class="actions" id="current-actions" hidden></div>
     </section>
@@ -41,7 +41,7 @@
 
     <footer class="popup__footer">
       <button class="button button--secondary" type="button" id="new-profile" hidden data-i18n="profilesNewSheet">New profile…</button>
-      <button class="button button--quiet" type="button" id="new-temporary" data-i18n="profilesTemporaryNew"></button>
+      <button class="button button--quiet" type="button" id="new-temporary" aria-describedby="new-temporary-hint"><span class="popup__text"><span data-i18n="profilesTemporaryNew"></span><span class="popup__hint" id="new-temporary-hint" data-i18n="profilesTemporaryHint"></span></span></button>
       <button class="button button--quiet" type="button" id="manage" data-i18n="profilesManage">Manage profiles</button>
       <button class="button button--quiet" type="button" id="settings" data-i18n="settingsTitle">Nulavio settings</button>
     </footer>

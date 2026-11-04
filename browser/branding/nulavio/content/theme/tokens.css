@@ -203,6 +203,18 @@
   --nv-color-fullscreen-acting: light-dark(#6FE0C5, #6FE0C5);
   --nv-color-fullscreen-private: light-dark(#2A1745, #2A1745);
   --nv-color-fullscreen-foreground: light-dark(#F1F7F5, #F1F7F5);
+  --nv-color-identityTile-lima: light-dark(#C4DC92, #2F3D00);
+  --nv-color-identityTile-sky: light-dark(#A6D8FA, #133B52);
+  --nv-color-identityTile-violet: light-dark(#D4C8FF, #3A2E59);
+  --nv-color-identityTile-coral: light-dark(#FBBDCE, #4F2937);
+  --nv-color-identityTile-sand: light-dark(#E7CF94, #463F2C);
+  --nv-color-identityTile-slate: light-dark(#C9D3D6, #32383A);
+  --nv-color-identityGlyph-lima: light-dark(#334C00, #C5E384);
+  --nv-color-identityGlyph-sky: light-dark(#00476C, #8CCBF5);
+  --nv-color-identityGlyph-violet: light-dark(#492E7F, #C2B0F7);
+  --nv-color-identityGlyph-coral: light-dark(#721E3F, #F4A8BD);
+  --nv-color-identityGlyph-sand: light-dark(#593C00, #FDCF8B);
+  --nv-color-identityGlyph-slate: light-dark(#37454A, #BFD0D6);
   --nv-elevation-1: 0 1px 2px rgba(7, 15, 24, 0.14);
   --nv-elevation-2: 0 4px 12px rgba(7, 15, 24, 0.14);
   --nv-elevation-3: 0 12px 32px rgba(7, 15, 24, 0.14);
