@@ -410,11 +410,40 @@ class PackagingTest(unittest.TestCase):
         manifest = json.loads((out / "manifest.json").read_text(encoding="utf-8"))
         for key in ("experiment_apis", "action", "commands", "omnibox", "options_ui"):
             self.assertNotIn(key, manifest)
+        # Only the plain-data modules the pages import stay (no experiment, no privileged module).
         self.assertFalse(
-            [f for f in files if f.split("/")[0] in ("experiments", "modules", "settings", "profiles", "routing", "vault")]
+            [
+                f
+                for f in files
+                if f.split("/")[0] in ("experiments", "modules", "settings", "profiles", "routing", "vault")
+                and f not in make_shell.PLAIN_MODULES
+            ]
         )
         self.assertIn("newtab/newtab.html", files)
         self.assertEqual(manifest["permissions"], make_shell.manifest()["permissions"])
+
+    def test_every_relative_import_resolves_in_both_variants(self):
+        """CI (Track A): the variant for a distribution Firefox dropped modules/ while lib/ui.js imported
+        modules/NulavioAvatars.sys.mjs, so every page and the background failed to load there."""
+        pattern = re.compile(r"""(?:\bfrom\s*|\bimport\s*\(\s*|^\s*import\s+)["'](\.{1,2}/[^"']+)["']""", re.MULTILINE)
+        for privileged in (True, False):
+            out = self.tmp / f"imports-{privileged}"
+            files = set(make_shell.assemble(out, privileged=privileged))
+            for script in sorted(p for p in out.rglob("*") if p.suffix in (".js", ".mjs")):
+                if script.relative_to(out).parts[0] in ("experiments", "modules") and privileged:
+                    continue  # chrome code: resource:// and moz-src:// imports, checked with the engine
+                for ref in pattern.findall(script.read_text(encoding="utf-8")):
+                    target = (script.parent / ref).resolve()
+                    with self.subTest(privileged=privileged, script=str(script.relative_to(out)), ref=ref):
+                        self.assertTrue(target.is_file(), f"{ref} missing")
+                        self.assertIn(str(target.relative_to(out.resolve())), files)
+
+    def test_plain_modules_use_no_privileged_global(self):
+        for relative in make_shell.PLAIN_MODULES:
+            text = (ROOT / "browser" / "shell" / relative).read_text(encoding="utf-8")
+            code = re.sub(r"/\*.*?\*/|//[^\n]*", "", text, flags=re.DOTALL)
+            with self.subTest(module=relative):
+                self.assertNotRegex(code, r"\b(?:Services|ChromeUtils|Components|Cc|Ci|Cu|import)\b")
 
     def test_build_files_list_every_file_under_builtin_addons(self):
         branding = self.tmp / "branding"
