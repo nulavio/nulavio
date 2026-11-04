@@ -43,7 +43,7 @@ jobs:
       - name: libsodium and gocryptfs for the Vault tests (decisions D1, D2)
         run: sudo apt-get update -q && sudo apt-get install -y --no-install-recommends libsodium23 gocryptfs fuse3
       - name: Gradle wrapper JAR is an official Gradle release (Dependabot replaces it on wrapper updates)
-        uses: gradle/actions/wrapper-validation@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+        uses: gradle/actions/wrapper-validation@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
       - name: Companion protocol library (Java; Gradle and dependencies checksum-verified)
         run: JAVA_HOME="$JAVA_HOME_21_X64" android/gradlew -p android --no-daemon -q :nv1:test
       - name: Unit tests
@@ -128,7 +128,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Gradle wrapper JAR is an official Gradle release (Dependabot replaces it on wrapper updates)
-        uses: gradle/actions/wrapper-validation@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+        uses: gradle/actions/wrapper-validation@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
       - name: Lint and release build (Gradle and dependencies checksum-verified; no signing key in CI)
         run: JAVA_HOME="$JAVA_HOME_21_X64" android/gradlew -p android --no-daemon -q :app:lintDebug :app:assembleRelease
 
