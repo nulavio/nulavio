@@ -940,3 +940,86 @@ other apps, without lowering a protection.
   profile used (default) or a chosen profile, through the M4a hand-off (unlock page for a locked
   profile, warning page for a missing one), announced in the target's band.
 
+
+## UX7: motion and performance budget (2026-11-04)
+
+Every movement Nulavio adds comes from the motion tokens, and nothing it adds moves under reduced
+motion. Security cues, warnings and critical consent never move.
+
+| Element | What moves | Tokens | Never moves | Reduced motion |
+|---|---|---|---|---|
+| Sidebar launcher | width | expand 220 / collapse 160 ms, standard curve (patch 0008); Foco's expand-on-hover 220 ms after the engine's 200 ms intent delay | — | The engine skips it |
+| Tab labels, route mark, hover | opacity, scale, colour | fade, base, fast | — | Off |
+| Plain dialogs and the profile create sheet | opening only: opacity and `translate: 0 8px → 0`; the backdrop's opacity | base, enter | `.dialog--critical`, `.dialog--danger` ("Bloquear agora", deletions) | Instant |
+| Toasts | appearing only: opacity and `translate: 0 4px → 0` | fast, enter | warn and error levels, inline results | Instant |
+| The profile's arrival | the identity chip in the new tab's "Você está em" line, once the page paints | base, enter | the band, state badges, the temporary chip | Off |
+| Progress spinner | rotation | spin 900 ms, linear | — | Static |
+| Band, fullscreen line, security badges, warning and critical surfaces | nothing, ever | `security.duration` 0 | — | — |
+
+Closing a sheet, removing a chip and hiding a toast are instant, so focus never waits on an
+animation. Under reduced motion the guard in `shared/accessibility.css` sets every duration to 0 but
+keeps delays, so what appears after a delay (the new tab's fallback, list placeholders, "still
+loading") still appears. `test_motion` 01–05 and `tests/unit/test_motion_sheet.py` check both.
+
+### Budget
+
+`scripts/research/frame_scene.py` measures it on a real Track B build against the previous one:
+headful on a private Xvfb (1920×1080, software WebRender), a fresh profile per run, the two builds
+alternating, frame intervals from the compositor's frame-time recording (the dialog from
+requestAnimationFrame in the page). Xvfb timings are a regression gate, not a measure of real
+hardware; frame times in a visible KDE or GNOME window stay with the maintainer.
+
+Two measurements, 5 runs × 10 samples per scene on each build, run on 2026-11-04 (BuildID
+20261104151506, the UX6/UX7 build at `e95fba6`, against 20261104061818; the fixes after `e95fba6`
+change no measured scene):
+
+- [perf.json](screenshots/ux7/perf.json): both builds **without** their distribution, so no
+  extension is installed. This is what Nulavio's own code costs, and what the budget is read on.
+- [perf-with-ublock.json](screenshots/ux7/perf-with-ublock.json): both builds as shipped, with uBlock
+  Origin installed by the distribution. In a fresh profile uBlock downloads and compiles its lists for
+  the first minutes, and that work lands on the new tab and the idle minute of both builds alike.
+
+| Gate | Budget | This build (no extensions) | Previous build | As shipped (uBlock), this / previous | Result |
+|---|---|---|---|---|---|
+| Sidebar collapse, frame interval | p95 ≤ 20 ms, max ≤ 50 ms | p95 18.4, max 19.7 | 18.4, 20.9 | 19.0, 35.0 / 18.6, 35.1 | Pass |
+| Sidebar expand | p95 ≤ 20 ms, max ≤ 50 ms | 18.6, 21.6 | 18.4, 20.8 | 18.5, 21.0 / 18.5, 20.8 | Pass |
+| Settings dialog opening (rAF in the page) | p95 ≤ 20 ms, max ≤ 50 ms | 17.4, 17.6 | 17.4, 17.6 | 17.4, 17.6 / 17.4, 17.6 | Pass |
+| Tab switch | p95 ≤ 20 ms, max ≤ 50 ms | 18.4, **121.6** | 18.3, 122.6 | 18.2, 122.4 / 18.4, 121.8 | Exception (below) |
+| Ctrl+T to the new tab's `nv-painted` | p95 ≤ 150 ms | p50 52, p95 62, max 65 | — (no mark) | p50 57, p95 **251** / — | Pass; exception as shipped (below) |
+| Ctrl+T, polled on both builds (5 ms) | compared only | p50 61, p95 69 | p50 57, p95 69 | p50 66, p95 284 / p50 63, p95 217 | — |
+| 60 s idle on a page with the band | 0 chrome reflows, 0 frames constructed | 0 and 0 in every run | 0 and 0 | 0 in 4 of 5 runs, **380 and 7** in one / 372 and 7 in one | Pass; exception as shipped (below) |
+| Against the previous build | flag a median > 10 % worse when the runs do not overlap | none flagged | — | none flagged | Pass |
+
+**Exceptions** (to be accepted by the maintainer):
+
+- *Tab switch, max.* About half the samples on both builds hold one 117–123 ms interval: the window
+  waits for the background tab's content before it composites it (the engine's tab switcher with
+  software WebRender). No Nulavio motion runs in that scene, the p95 stays at 18 ms, and the previous
+  build is the same to the millisecond.
+- *As shipped, the new tab's p95 and one idle minute* come from uBlock Origin's first-run work in a
+  fresh profile: the medians stay at 57–66 ms, the same samples are slow on the previous build with
+  the same distribution, and without extensions every one of these lines passes. A first comparison
+  against an extracted package that had no `distribution/` read this as a Nulavio regression;
+  `frame_scene.py` now records each build's extensions and refuses to compare builds that differ.
+
+The sidebar scenes measure the curve and durations of patch 0008 on both builds, so they compare like
+with like. Re-run with:
+
+```sh
+env -u WAYLAND_DISPLAY xvfb-run -a -s "-screen 0 1920x1080x24" env GDK_BACKEND=x11 MOZ_ENABLE_WAYLAND=0 \
+  NULAVIO_TEST_HEADFUL=1 NULAVIO_ENGINE=<build>/nulavio/nulavio \
+  python3 -I scripts/research/frame_scene.py --baseline-engine <previous>/nulavio/nulavio --runs 5 --out <dir>
+```
+
+For the "no extensions" reading, copy both packages without `distribution/`; for "as shipped", give
+both the same `distribution/`.
+
+### Captures
+
+[screenshots/ux7/](screenshots/ux7/matrix.png) holds the window with the first-run new tab, Settings →
+Layout, Settings → Aparência, the assistant panel, the look-alike site warning and the Guard review, at
+100/125/150 % in both themes on a 1366×768 screen, with reduced motion on (36 shots, 7.4 MB). They
+come from the X server's pixels, because WebDriver's own window screenshot drops masked content (the
+disclosure chevrons and the narrow Settings rail). The [manifest](screenshots/ux7/manifest.json) holds
+each file's sha256 and size, the build and the commit whose Shell was synced onto it.
+`scripts/research/ux7_captures.py` takes them again.
