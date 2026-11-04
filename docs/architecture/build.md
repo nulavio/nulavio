@@ -2,6 +2,90 @@
 
 Status: **development spike, first build succeeded on 2026-10-24.** Builds are not releases: they are not signed or distributed (see "Release blockers"). Since 2026-10-25 they include a Google Safe Browsing key (see below).
 
+## Resource limits and recovery (local builds)
+
+`scripts/build/build_nulavio.sh` uses `build_guard.py` for every engine build,
+including builds started by `rehearse_release.sh` and `autobuild.py`. It refuses to
+start when another Nulavio build container is active, `MemAvailable` is below
+4 GiB, or memory PSI `full avg10` is above 10%. It requires enforceable cgroup v2
+limits; it never falls back to an unlimited container.
+
+Defaults for a 32 GiB laptop shared with other applications:
+
+- The whole container, including descendants: **16 GiB memory maximum, no swap,
+  two CPUs of quota, 512 tasks**. The entry point reads back `memory.max`,
+  `memory.swap.max`, `cpu.max`, `pids.max` and `memory.oom.group` before executing.
+- Firefox: **`MOZ_PARALLEL_BUILD=2`** in the environment and generated mozconfig,
+  and explicit `mach build --jobs 2`. Make receives `-j2` and shares its jobserver.
+- Rust: **`CARGO_BUILD_JOBS=1`**, explicit Cargo jobs via mozconfig, and a wrapper
+  that serializes Cargo invocations across Make edges. The wrapper removes
+  `MAKEFLAGS`, `MFLAGS` and `CARGO_MAKEFLAGS`: this Cargo prioritizes an inherited
+  jobserver over `--jobs`. At one Make job, Gecko supplies its own `-j1`.
+- Nested native builds: `CMAKE_BUILD_PARALLEL_LEVEL=1`, `NUM_JOBS=1`,
+  `RAYON_NUM_THREADS=1`, `OMP_NUM_THREADS=1`, `OPENBLAS_NUM_THREADS=1` and
+  `NINJAFLAGS=-j1` for callers that honor it. These variables are not universal
+  enforcement for arbitrary tools: the cgroup still caps all threads/processes.
+  Image bootstrap uses the same 16 GiB/no-swap/two-CPU budget and one image job.
+
+Every five seconds the supervisor writes `telemetry.jsonl`: host available RAM,
+swap used, memory PSI, kernel CPU and I/O-wait percentages, container memory,
+OOM events, compiler counts/process IDs and Cargo/Make arguments. An inner
+watchdog samples processes each second and aborts if more than one `rustc` is
+observed. A reserve breach stops the workload immediately; PSI above 10% for
+30 continuous seconds stops it with the reason recorded. It does not try to
+reconfigure a running Make jobserver. On memory failure, the **next explicit
+invocation** drops to one Make job. A memory failure at one job refuses another
+attempt until the cause is investigated; there is no automatic retry loop.
+
+The script prints a control directory under `$NULAVIO_BUILD_DIR/logs/guard-*`
+(default build directory `~/.cache/nulavio-build`). To inspect or stop that exact
+workload, substitute its printed path:
+
+```sh
+control=/absolute/path/to/logs/guard-TIMESTAMP-PID
+cat "$control/config.json" "$control/limits.json"
+tail -f "$control/build.log" "$control/telemetry.jsonl"
+podman inspect "$(cat "$control/container-id")"
+podman stop --time 10 "$(cat "$control/container-id")"
+cat "$control/result.json"
+```
+
+SIGINT, SIGTERM and SIGHUP stop the identified container, then remove it after
+recording the result. The container's init forwards signals and reaps children.
+If the supervisor is killed or its connection disappears without a signal, a
+30-second heartbeat lease stops the workload from inside the container (up to
+10 additional seconds for graceful termination). An exited container may remain
+in that case; inspect it and use `podman rm` with its recorded ID. Artifacts,
+source and object directories remain for incremental builds. A 24-hour runtime
+ceiling is an additional backstop, not the disconnect detector.
+
+Adjustments are per invocation: `NULAVIO_BUILD_MEMORY_GIB=1..20` (default 16;
+above 16 only on explicit request, because release `gkrust` with Rust LTO needs
+more than 16 GiB; the 4 GiB host reserve still applies),
+`MOZ_PARALLEL_BUILD=1..2`, `NULAVIO_BUILD_MIN_AVAILABLE_GIB` (default 4),
+`NULAVIO_BUILD_PSI_LIMIT` (default 10) and `NULAVIO_BUILD_PSI_SECONDS` (default
+30). The maximum memory/jobs cannot silently exceed this laptop budget.
+No host VM settings, swap configuration, unrelated processes or global service
+configuration are changed. A successful one-job recovery stays at one job on
+subsequent invocations. After reviewing the cause and logs, a maintainer can
+archive `logs/last-result.json` to explicitly return to the configured budget.
+
+Before a full engine build, the opt-in controlled probes can be repeated:
+
+```sh
+NULAVIO_BUILD_RESOURCE_TESTS=1 python3 -B -I tests/run.py integration test_build_resources.py
+```
+
+They use the already built `localhost/nulavio-build:f44` image, a 1 GiB cgroup,
+and disposable directories. They check descendant limits, isolated cgroup OOM
+and one-job recovery, SIGTERM cleanup with a child ignoring TERM, and SIGKILL
+of the supervisor followed by lease expiry. They do not create host memory
+pressure. On 2026-11-03 all four passed in 60 seconds; a separate Make `-j2`
+probe compiled two local Rust packages with multiple dependencies and a C++
+object, observing at most one `rustc` and no inherited-jobserver warning after
+removing Cargo's jobserver environment. These checks do not certify a complete
+Firefox build or desktop responsiveness under other applications' workloads.
+
 ## Pipeline
 
 ```

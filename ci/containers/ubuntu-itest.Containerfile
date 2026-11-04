@@ -7,7 +7,7 @@
 # The base image is pinned by tag and digest and kept current by Dependabot. The .deb
 # scripts run in this same image (scripts/release/base_image.sh); see
 # docs/security/dependency-updates.md.
-FROM docker.io/library/ubuntu:26.10@sha256:9c3a42b7c0016cbf87ceb71fd72d26c0e73b37e532e2c6071707f124c489c118
+FROM docker.io/library/ubuntu:26.10@sha256:262df65c0ec6bf8d9dcc87454f4330a05fae4b97825f45854af3b136666584c2
 ARG MOZILLA_APT_FPR=35BAA0B33E9EB396F59CA838C0BA5CE6DC6315A3
 RUN apt-get update \
  && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates wget gnupg python3 procps findutils \
