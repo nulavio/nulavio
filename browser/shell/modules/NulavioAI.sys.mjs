@@ -25,12 +25,15 @@
 const lazy = {};
 ChromeUtils.defineESModuleGetters(lazy, {
   callTool: "resource://builtin-addons/nulavio-shell/modules/NulavioTools.sys.mjs",
+  callToolStream: "resource://builtin-addons/nulavio-shell/modules/NulavioTools.sys.mjs",
   ExtensionParent: "resource://gre/modules/ExtensionParent.sys.mjs",
   PrivateBrowsingUtils: "resource://gre/modules/PrivateBrowsingUtils.sys.mjs",
+  setTimeout: "resource://gre/modules/Timer.sys.mjs",
   stateDir: "resource://builtin-addons/nulavio-shell/modules/NulavioTools.sys.mjs",
 });
 
 const SHELL_ID = "shell@nulavio.net";
+const SIDEBAR_ID = "shell_nulavio_net-sidebar-action"; // the assistant panel in the side panel
 const WORKSPACE_PREF = "nulavio.ai.workspace";
 const TARGET_PREF = "nulavio.ai.target";
 const TARGET_LABEL_PREF = "nulavio.ai.target.label";
@@ -39,6 +42,17 @@ const BAR = "nulavio-ai-workspace";
 const RAW_BAR = "nulavio-ai-raw";
 const STATE_ATTR = "nulavio-state";
 const POLL_MS = 1500;
+// The band asks for the driving agent's state every 1.5 s. The answer depends only on
+// <state>/ai/agents.json and <state>/ai/STOP, so the tools run again only when one of
+// them changes, after a change made here, or every OVERVIEW_TTL_MS as a safety net.
+const OVERVIEW_TTL_MS = 15000;
+// While an agent drives a window, a change to those files (a pause, revoke or emergency
+// stop from the command line) is noticed within this interval and the band refreshed at
+// once, instead of waiting for its next 1.5 s tick. Two stats; no process is started.
+const AGENT_FILES_MS = 500;
+export const AGENT_FILES_TOPIC = "nulavio-ai-agent-files-changed";
+// A task of the assistant started, did a step, waits for an answer or ended (UX5-I): the band repaints.
+export const ACTIVITY_TOPIC = "nulavio-ai-activity-changed";
 const RAW_POLL_MS = 1000;
 const ID_RE = /^[0-9a-f]{16}$/;
 const AGENT_RE = /^ag-[0-9a-f]{12}$/;
@@ -76,6 +90,62 @@ function tabTracker() {
   return lazy.ExtensionParent.apiManager.global.tabTracker ?? fail("unexpected");
 }
 
+// Assistant runs in stream mode (UX5-C2, Q15): no line for IDLE_MS ends a run (except while a
+// permission request waits), and a run never lasts longer than its cap. Cancelling gives the tools
+// ASK_GRACE_MS (Ask) or TASK_GRACE_MS (a Task closes its AI Workspace) before SIGKILL.
+const IDLE_MS = 150000;
+const IDLE_PREF = "nulavio.assistant.idle_ms";
+const ASK_TOTAL_MS = 10 * 60000;
+const TASK_TOTAL_MS = 30 * 60000;
+const ASK_GRACE_MS = 2000;
+const TASK_GRACE_MS = 20000;
+const RUN_WATCH_MS = 500;
+const PLACE_GRACE_MS = 2000; // the watcher leaves a task's request this long to the task's own event
+const PANEL_GONE_MS = 1500; // a panel that reloads listens again within this
+const MAX_TURNS = 50; // assistant.py MAX_TURNS
+
+// The page text that goes with a message: the first MAX_PAGE_CHARS code points, as the tools
+// (launcher/nulavio_launcher/ai/assistant.py MAX_PAGE_CHARS) would cut it.
+const MAX_PAGE_CHARS = 60000;
+const MAX_SELECTION_CHARS = 16384; // assistant.py MAX_SELECTION_CHARS: the engine's limit for a menu's selection
+
+/** Code points, as the tools count them (Python's len), not UTF-16 units. */
+function codePoints(text) {
+  let n = 0;
+  for (const _ of text) {
+    n++;
+  }
+  return n;
+}
+
+/** [text cut to `max` code points, whether it was longer]. */
+function cutCodePoints(text, max) {
+  let n = 0;
+  let end = 0;
+  for (const ch of text) {
+    if (n === max) {
+      return [text.slice(0, end), true];
+    }
+    n++;
+    end += ch.length;
+  }
+  return [text, false];
+}
+
+/** What a page adds to the request, in code points: its block and the blank line after it.
+    Mirrors assistant.py _page_block and _content; the tools refuse a Send whose size differs. */
+function pageBlockChars({ url, title, chars }) {
+  return codePoints(`Page content (untrusted, from ${url}, title "${title}"):\n<<<PAGE\n`) + chars + codePoints("\nPAGE>>>\n\n");
+}
+
+/** What a selection adds: its block (assistant.py _selection_block) and the blank line after it. */
+function selectionBlockChars({ url, frameUrl, title, chars }) {
+  const where = frameUrl && frameUrl !== url ? `${url}, in a frame from ${frameUrl}` : url;
+  return codePoints(`Selected text (untrusted, from ${where}, title "${title}"):\n<<<SELECTION\n`) + chars + codePoints("\nSELECTION>>>\n\n");
+}
+
+const blockChars = item => (item.kind === "selection" ? selectionBlockChars(item) : pageBlockChars(item));
+
 /** A web page a tab shows (address and title only), or null for anything else. */
 function pageOf(browser) {
   const url = browser?.currentURI?.spec ?? "";
@@ -89,6 +159,21 @@ class AI {
   #rawTimer = null;
   #observing = false;
   #renders = new WeakMap(); // window -> the last bar update, so updates never overlap
+  #overviewCache = null; // { key, at, overview } for windowState(); a failed read is never kept
+  // The assistant's context items, per window (UX5-B): what was read at "Incluir", kept in memory
+  // only, until it is sent, removed, or the window closes. The panel gets sizes, never the text.
+  #contexts = new WeakMap(); // window -> Map<chipId, {kind, tabId, url, title, text, chars, truncated}>
+  // Assistant runs (UX5-C2): runId -> {win, kind, owner, handle, state, sent, steps, cutBy}. Events go
+  // only to the pages of the run's window (the panel there); a run never starts in a private window.
+  #runs = new Map();
+  // What an entry point asked the panel of a window to do when it opens (UX5-G): {focus, chipId}.
+  #offers = new WeakMap();
+  // Conversations (UX5-D, Q16): per window, in memory only, never on disk or in the activity. Gone when the
+  // window closes or on "Começar conversa nova". {turns, recipient, model, pageLeftOut}
+  #threads = new WeakMap();
+  #runListeners = new Set();
+  #runWatch = null;
+  #filesTimer = null;
 
   /** The agent driving this window, if any. "agent:pid" (one of the user's profiles, opened for an agent)
       counts only while that bridge process lives; a bare agent id is an AI Workspace. */
@@ -108,11 +193,79 @@ class AI {
     return api({ op: "overview" });
   }
 
-  add({ name, client, autonomy, domains = [], disposable = false, acceptFullControl = false }) {
-    return api({ op: "add", name, client, autonomy, domains, disposable, acceptFullControl });
+  /** The registry's and the emergency stop's file state: what windowState()'s answer depends on. */
+  async #agentFilesKey() {
+    const dir = PathUtils.join(lazy.stateDir(), "ai");
+    const [registry, stop] = await Promise.all([
+      IOUtils.stat(PathUtils.join(dir, "agents.json")).catch(() => null),
+      IOUtils.exists(PathUtils.join(dir, "STOP")),
+    ]);
+    return `${registry?.lastModified ?? 0}:${registry?.size ?? -1}:${stop}`;
   }
 
-  change(id, op, details = {}) {
+  async #bandOverview() {
+    const key = await this.#agentFilesKey().catch(() => null);
+    const cached = this.#overviewCache;
+    if (key && cached?.key === key && Date.now() - cached.at < OVERVIEW_TTL_MS) {
+      return cached.overview;
+    }
+    this.#overviewCache = null;
+    const overview = await this.overview();
+    this.#overviewCache = key ? { key, at: Date.now(), overview } : null;
+    return overview;
+  }
+
+  #watchAgentFiles(active) {
+    if (!active) {
+      this.#filesTimer?.cancel();
+      this.#filesTimer = null;
+      return;
+    }
+    if (this.#filesTimer) {
+      return;
+    }
+    this.#filesTimer = Cc["@mozilla.org/timer;1"].createInstance(Ci.nsITimer);
+    this.#filesTimer.initWithCallback(() => this.#checkAgentFiles().catch(() => {}), AGENT_FILES_MS,
+      Ci.nsITimer.TYPE_REPEATING_SLACK);
+  }
+
+  async #checkAgentFiles() {
+    if (!this.#bar && !(await this.workspaceAgent())) {
+      this.#watchAgentFiles(false); // no agent drives this window any more
+      return;
+    }
+    const cached = this.#overviewCache;
+    if (!cached) {
+      return; // the next band tick asks the tools anyway
+    }
+    if ((await this.#agentFilesKey()) !== cached.key && this.#overviewCache === cached) {
+      this.#overviewCache = null;
+      Services.obs.notifyObservers(null, AGENT_FILES_TOPIC);
+    }
+  }
+
+  /** Whatever this browser changes is shown at the next tick, not after the file check. */
+  #changed(promise) {
+    this.#overviewCache = null;
+    return promise.finally(() => {
+      this.#overviewCache = null;
+    });
+  }
+
+  /** In a window an agent drives, nothing may loosen a setting or hide what was done there: only the
+      emergency stop, pausing and revoking (the user's own window does the rest; UX5-0). */
+  async #onlyTightens(tightens) {
+    if (!tightens && (await this.workspaceAgent())) {
+      fail("workspace-change");
+    }
+  }
+
+  async add({ name, client, autonomy, domains = [], disposable = false, acceptFullControl = false }) {
+    await this.#onlyTightens(false);
+    return this.#changed(api({ op: "add", name, client, autonomy, domains, disposable, acceptFullControl }));
+  }
+
+  async change(id, op, details = {}) {
     const allowed = [
       "autonomy",
       "grant",
@@ -129,7 +282,8 @@ class AI {
     if (!allowed.includes(op)) {
       fail("bad-request");
     }
-    return api({ ...details, op, agent: agentId(id) });
+    await this.#onlyTightens(op === "revoke" || (op === "pause" && details?.paused === true));
+    return this.#changed(api({ ...details, op, agent: agentId(id) }));
   }
 
   /** The connect wizard: which agents are installed, the exact command, then run it after approval. */
@@ -141,19 +295,22 @@ class AI {
     return api({ op: "plan", agent: agentId(id), client });
   }
 
-  install(id, client, replace = false) {
+  async install(id, client, replace = false) {
+    await this.#onlyTightens(false); // it writes another program's settings
     return api({ op: "install", agent: agentId(id), client, replace: Boolean(replace) });
   }
 
-  setStopped(stopped) {
-    return api({ op: "stop", stopped: Boolean(stopped) });
+  async setStopped(stopped) {
+    await this.#onlyTightens(Boolean(stopped));
+    return this.#changed(api({ op: "stop", stopped: Boolean(stopped) }));
   }
 
   activity(limit = 100, agent = null) {
     return api({ op: "audit", limit, agent: agent ? agentId(agent) : null });
   }
 
-  clearActivity() {
+  async clearActivity() {
+    await this.#onlyTightens(false);
     return api({ op: "audit-clear" });
   }
 
@@ -180,7 +337,15 @@ class AI {
     if (!ID_RE.test(String(id)) || !ANSWERS.has(answer)) {
       fail("bad-request");
     }
-    return api({ op: "answer", id, answer });
+    const result = await api({ op: "answer", id, answer });
+    for (const run of this.#runs.values()) {
+      if (run.pendingApproval === id) {
+        run.pendingApproval = null; // answered: nothing waits for the person any more
+        run.waiting = false;
+        this.#activity(run);
+      }
+    }
+    return result;
   }
 
   /** Watch for permission requests (idempotent). Not in an AI Workspace. */
@@ -209,10 +374,11 @@ class AI {
       if (!ID_RE.test(id) || this.#shown.has(id) || (await IOUtils.exists(PathUtils.join(dir, `${id}.seen`)))) {
         continue;
       }
+      if (await this.#placedByARun(path)) {
+        continue; // the assistant's own task shows it, in its panel or its window (#onRunEvent)
+      }
       // First Nulavio window to see it takes it; the bridge then waits for the answer.
-      try {
-        await IOUtils.writeUTF8(PathUtils.join(dir, `${id}.seen`), "", { mode: "create" });
-      } catch {
+      if (!(await this.#claim(id))) {
         continue; // another Nulavio instance took it
       }
       this.#shown.add(id);
@@ -220,8 +386,34 @@ class AI {
     }
   }
 
-  #open(page) {
-    const win = Services.wm.getMostRecentBrowserWindow();
+  /** A request the assistant's running task is about to place itself (its event follows within moments).
+      Only for a task of this browser, the assistant's own agent, and for a short while: after that the
+      watcher shows it like any other, so a request is never left without a page. */
+  async #placedByARun(path) {
+    const tasks = [...this.#runs.values()].filter(run => run.kind === "task" && run.state === "running");
+    if (!tasks.length) {
+      return false;
+    }
+    const [body, info] = await Promise.all([IOUtils.readJSON(path).catch(() => null), IOUtils.stat(path).catch(() => null)]);
+    const young = info && Date.now() - info.lastModified < PLACE_GRACE_MS;
+    return Boolean(young && body?.client === "nulavio-assistant" && tasks.some(run => run.agentId === body.agent_id));
+  }
+
+  /** Mark a request as seen by this browser (the bridge then waits for the answer); false if another took it. */
+  async #claim(id) {
+    try {
+      await IOUtils.writeUTF8(PathUtils.join(this.#requestsDir(), `${id}.seen`), "", { mode: "create" });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  #open(page, where = null) {
+    if (where?.closed) {
+      return; // the window it belonged to closed: never another window's tab (UX5-F)
+    }
+    const win = where ?? Services.wm.getMostRecentBrowserWindow();
     const policy = WebExtensionPolicy.getByID(SHELL_ID);
     if (!win || !policy) {
       return;
@@ -316,29 +508,601 @@ class AI {
     return page && { tabId: tabTracker().getId(tab), ...page };
   }
 
-  /** Ask. `page` is null, or the {tabId, url} the user included in this message: that tab's visible
-      text goes along only while it still shows that address. The selected tab at Send is never read. */
-  async assistantAsk(question, page, win) {
+  #contextOf(win) {
+    let items = this.#contexts.get(win);
+    if (!items) {
+      items = new Map();
+      this.#contexts.set(win, items);
+    }
+    return items;
+  }
+
+  #threadOf(win) {
+    let thread = this.#threads.get(win);
+    if (!thread) {
+      thread = { turns: [], recipient: null, model: null, pageLeftOut: false };
+      this.#threads.set(win, thread);
+    }
+    return thread;
+  }
+
+  /** What a turn's question adds to a request: its page block (unless left out) and the question. */
+  static #userChars(turn, leftOut) {
+    const page = turn.page && !leftOut ? pageBlockChars({ ...turn.page, chars: codePoints(turn.page.text) }) : 0;
+    const selection = turn.selection && !leftOut ? selectionBlockChars({ ...turn.selection, chars: codePoints(turn.selection.text) }) : 0;
+    return page + selection + (page || selection ? codePoints("Question: ") : 0) + codePoints(turn.question);
+  }
+
+  /** The earlier turns that go with the next Ask: the answered ones, each with the page copy that went
+      with it, to the same recipient (Q1), unless the person left the page out. */
+  static #history(thread) {
+    return thread.turns
+      .filter(turn => turn.state === "done" && turn.answer)
+      .map(turn => ({
+        question: turn.question,
+        page: thread.pageLeftOut ? null : turn.page,
+        selection: thread.pageLeftOut ? null : (turn.selection ?? null),
+        answer: turn.answer,
+      }));
+  }
+
+  /** The conversation of this window, as the panel shows it: no page text, sizes only. */
+  assistantThread(win) {
+    const thread = this.#threadOf(this.#userWindow(win));
+    const history = AI.#history(thread);
+    const historyChars = history.reduce((n, turn) => n + AI.#userChars(turn, false) + codePoints(turn.answer), 0);
+    const withPage = history.find(turn => turn.page) ?? history.find(turn => turn.selection);
+    const last = thread.turns.at(-1);
+    return {
+      turns: thread.turns.map(turn => ({
+        state: turn.state,
+        question: turn.question,
+        answer: turn.answer ?? "",
+        chars: turn.chars ?? null,
+        recipient: turn.recipient,
+        truncated: Boolean(turn.truncated),
+        code: turn.code ?? null,
+        sent: Boolean(turn.sent),
+        page: turn.page ? { title: turn.page.title, host: URL.parse(turn.page.url)?.host ?? "" } : null,
+        selection: turn.selection ? { title: turn.selection.title, host: URL.parse(turn.selection.url)?.host ?? "" } : null,
+      })),
+      recipient: thread.recipient,
+      model: thread.model,
+      historyTurns: history.length,
+      historyChars,
+      page: withPage ? { title: (withPage.page ?? withPage.selection).title } : null,
+      // How many page copies and selections go with the next question (the line names one, or counts them).
+      copies: history.reduce((n, turn) => n + (turn.page ? 1 : 0) + (turn.selection ? 1 : 0), 0),
+      pageLeftOut: thread.pageLeftOut && thread.turns.some(turn => turn.page || turn.selection),
+      // "Tentar de novo" sends the last question again, as it went (Q17): what it adds to the conversation.
+      // A retry goes again only to the recipient that turn was for, and without the page once it was
+      // left out (review UX5-D F1).
+      retryChars: last && last.state !== "done" ? AI.#userChars(last, thread.pageLeftOut) : null,
+      retryRecipient: last && last.state !== "done" ? (last.recipient ?? null) : null,
+      maxTurns: MAX_TURNS,
+    };
+  }
+
+  /** "Mostrar a aba" for a source: selects the tab of this window that shows exactly that address, if any. */
+  assistantShowSource(url, win) {
+    this.#userWindow(win);
+    const tab = [...win.gBrowser.tabs].find(t => pageOf(t.linkedBrowser)?.url === String(url));
+    if (tab) {
+      win.gBrowser.selectedTab = tab;
+    }
+    return Boolean(tab);
+  }
+
+  /** "Começar conversa nova". */
+  assistantThreadClear(win) {
+    this.#threads.delete(this.#userWindow(win));
+  }
+
+  /** "Deixar a página de fora": the conversation goes on without the page copies it carried. */
+  assistantThreadLeavePage(win) {
+    this.#threadOf(this.#userWindow(win)).pageLeftOut = true;
+  }
+
+  /** "Levar a conversa" to the recipient the assistant uses now (Q2): its questions and answers go
+      there, the page copies do not. */
+  assistantThreadCarry(recipient, win) {
+    const thread = this.#threadOf(this.#userWindow(win));
+    thread.recipient = String(recipient);
+    thread.pageLeftOut = true;
+  }
+
+  static #chipView(chipId, item) {
+    const { kind, tabId, url, title, chars, truncated } = item;
+    const frameHost = item.frameUrl ? (URL.parse(item.frameUrl)?.host ?? "") : "";
+    const host = URL.parse(url)?.host ?? "";
+    return { chipId, kind, tabId, url, title, host, frameHost: frameHost !== host ? frameHost : "", chars, truncated, blockChars: blockChars(item) };
+  }
+
+  /** "Incluir esta página": read the visible text of the tab the user named, now, and keep it for the
+      next message (the size shown is what goes: Q4). A later Send sends this copy, not the page then. */
+  async assistantInclude(source, win) {
     this.#userWindow(win);
     if (await this.workspaceAgent()) {
       fail("ai-workspace");
     }
-    let sent = null;
-    if (page) {
-      const browser = this.#includedBrowser(page, win);
-      // The engine's own extractor (visible text, as reader-like features use); no script in the page.
-      const extracted = await browser.browsingContext.currentWindowGlobal.getActor("PageExtractor").getText({});
-      this.#includedBrowser(page, win); // it navigated while being read: refuse rather than send another page
-      sent = { url: browser.currentURI.spec, title: browser.contentTitle, text: String(extracted?.text ?? "") };
+    if (source?.kind !== "page") {
+      fail("bad-request");
     }
-    return this.#assistant({ op: "ask", question: String(question), page: sent }, 180000);
+    const browser = this.#includedBrowser(source, win);
+    // The engine's own extractor (visible text, as reader-like features use); no script in the page.
+    const extracted = await browser.browsingContext.currentWindowGlobal
+      .getActor("PageExtractor")
+      .getText({ sufficientLength: MAX_PAGE_CHARS + 1 });
+    this.#includedBrowser(source, win); // it navigated while being read: refuse rather than keep another page
+    const [text, truncated] = cutCodePoints(String(extracted?.text ?? ""), MAX_PAGE_CHARS);
+    const items = this.#contextOf(win);
+    for (const [id, item] of items) {
+      if (item.kind === "page") {
+        items.delete(id); // one page per message: the new one replaces it
+      }
+    }
+    const chipId = Services.uuid.generateUUID().toString().slice(1, -1);
+    const item = { kind: "page", tabId: source.tabId, url: source.url, title: browser.contentTitle || source.url, text, chars: codePoints(text), truncated };
+    items.set(chipId, item);
+    return AI.#chipView(chipId, item);
+  }
+
+  assistantRemove(chipId, win) {
+    this.#contextOf(this.#userWindow(win)).delete(String(chipId));
+  }
+
+  /** The items waiting for this window's next message (the panel shows them again when it reopens). */
+  assistantChips(win) {
+    return [...this.#contextOf(this.#userWindow(win))].map(([id, item]) => AI.#chipView(id, item));
+  }
+
+  /** The tools' request for an Ask: the included items (each page only while its tab still shows that
+      address) and what the panel showed. The items leave the window's context: consent is per message. */
+  #askRequest(question, options, win) {
+    const { chips = [], expected = null } = options ?? {};
+    if (!expected || typeof expected.recipient !== "string" || !Number.isInteger(expected.chars)) {
+      fail("bad-request");
+    }
+    const items = this.#contextOf(win);
+    const used = (chips ?? []).map(id => items.get(String(id)) ?? fail("page-changed"));
+    for (const id of chips ?? []) {
+      items.delete(String(id)); // consent is per message: the items go with this one only
+    }
+    for (const item of used) {
+      this.#includedBrowser(item, win); // that tab went elsewhere or closed: nothing is sent
+    }
+    const page = used.find(item => item.kind === "page");
+    const selected = used.find(item => item.kind === "selection");
+    const sent = page ? { url: page.url, title: page.title, text: page.text } : null;
+    const selection = selected ? { url: selected.url, frameUrl: selected.frameUrl, title: selected.title, text: selected.text } : null;
+    return { op: "ask", question: String(question), page: sent, selection, expected };
+  }
+
+  /** An entry point outside the panel (UX5-G): the selection menu ({kind: "selection", pageUrl, frameUrl,
+      text}) or the shortcut ({kind: "composer"}), for the window of `tabId`. A selection becomes an item of
+      that window's next message (read here, never sent to the panel); the side panel opens there, and the
+      panel focuses its question. Nothing is sent. Never in a private window or an AI Workspace. */
+  async assistantOffer(offer, tabId) {
+    const tab = Number.isInteger(tabId) ? tabTracker().getTab(tabId, null) : null;
+    const win = this.#userWindow(tab ? (tab.documentGlobal ?? tab.ownerGlobal) : null);
+    if (await this.workspaceAgent()) {
+      fail("ai-workspace");
+    }
+    const delivery = { focus: true, chipId: null };
+    if (offer?.kind === "selection") {
+      const browser = tab.linkedBrowser;
+      if (lazy.PrivateBrowsingUtils.isBrowserPrivate(browser)) {
+        fail("private-window");
+      }
+      const page = pageOf(browser);
+      if (!page || page.url !== offer.pageUrl) {
+        fail("page-changed"); // the tab went elsewhere since the menu opened
+      }
+      const raw = String(offer.text ?? "");
+      const [text] = cutCodePoints(raw, MAX_SELECTION_CHARS);
+      if (!text.trim()) {
+        fail("bad-request");
+      }
+      const items = this.#contextOf(win);
+      for (const [id, item] of items) {
+        if (item.kind === "selection") {
+          items.delete(id); // one selection per message: the new one replaces it
+        }
+      }
+      delivery.chipId = Services.uuid.generateUUID().toString().slice(1, -1);
+      const frameUrl = typeof offer.frameUrl === "string" && /^https?:/.test(offer.frameUrl) ? offer.frameUrl : null;
+      // At the engine's limit the selection may have been longer: the item says it may be cut.
+      items.set(delivery.chipId, { kind: "selection", tabId, url: page.url, frameUrl, title: page.title, text, chars: codePoints(text),
+        truncated: raw.length >= MAX_SELECTION_CHARS });
+    } else if (offer?.kind === "draft") {
+      delivery.draft = String(offer.text ?? "").trim().slice(0, 8000); // "@ia …": the question, written, not sent
+    } else if (offer?.kind === "page") {
+      // The address bar's quick action: this tab's page, read now, as "Incluir esta página" would.
+      const page = pageOf(tab.linkedBrowser) ?? fail("page-changed");
+      delivery.chipId = (await this.assistantInclude({ kind: "page", tabId, url: page.url }, win)).chipId;
+    } else if (offer?.kind !== "composer") {
+      fail("bad-request");
+    }
+    this.#offers.set(win, delivery);
+    // Opened by the module in that window: no user-input rule, and never another window's side panel.
+    await win.SidebarController.show(SIDEBAR_ID);
+    this.#emit({ win }, { type: "offer" });
+    return { done: true };
+  }
+
+  /** The panel takes what an entry point left for its window, once. */
+  assistantTakeOffer(win) {
+    const delivery = this.#offers.get(this.#userWindow(win)) ?? null;
+    this.#offers.delete(win);
+    return delivery;
+  }
+
+  /** Ask, answered in one piece. `chips`: the items the user included in this message. `expected`: where
+      the panel said it goes and its size; the tools refuse the request if either is no longer true. The
+      selected tab at Send is never read. The panel streams instead (assistantStart). */
+  async assistantAsk(question, options, win) {
+    this.#userWindow(win);
+    if (await this.workspaceAgent()) {
+      fail("ai-workspace");
+    }
+    return this.#assistant(this.#askRequest(question, options, win), 180000);
+  }
+
+  // -- runs in stream mode (UX5-C2) ----------------------------------------------------------------
+
+  /** `windowOf`: the window of the page that listens; a window with one counts as having its panel open. */
+  subscribeAssistant(listener, windowOf = () => null) {
+    const entry = { listener, windowOf };
+    this.#runListeners.add(entry);
+    return () => {
+      this.#runListeners.delete(entry);
+      // A card waits in a panel that just closed or reloaded: if no panel shows the run any more, its request
+      // opens in front in the run's window, so it never expires unseen (review UX5-F F1). A reloaded panel
+      // shows it again from assistantRuns.
+      lazy.setTimeout(() => {
+        for (const run of this.#runs.values()) {
+          if (run.pendingApproval && run.pendingPlace === "panel" && !this.#panelOpen(run.win)) {
+            run.pendingPlace = "tab";
+            this.#open(`ai/request.html?id=${run.pendingApproval}`, run.win);
+          }
+        }
+      }, PANEL_GONE_MS);
+    };
+  }
+
+  /** The run's panel is open: this window's side panel shows the assistant, and that page listens. */
+  #panelOpen(win) {
+    const sidebar = win.SidebarController;
+    if (!sidebar?.isOpen || sidebar.currentID !== SIDEBAR_ID) {
+      return false;
+    }
+    return [...this.#runListeners].some(entry => entry.windowOf() === win);
+  }
+
+  #emit(run, event) {
+    for (const { listener } of this.#runListeners) {
+      try {
+        listener(run.win, event);
+      } catch (e) {
+        console.error(e);
+      }
+    }
+  }
+
+  /** Start an Ask or a Task whose events reach this window's panel (onAssistantEvent): start, sending,
+      delta, step, approval, then exactly one done or error. `owner`: the page that started it; an Ask
+      ends with it (Q18), a Task goes on and the panel finds it again with assistantRuns. */
+  async assistantStart(kind, details, win, owner = null) {
+    this.#userWindow(win);
+    if (await this.workspaceAgent()) {
+      fail("ai-workspace");
+    }
+    let request;
+    let turn = null;
+    if (kind === "ask") {
+      const thread = this.#threadOf(win);
+      if (thread.recipient && thread.recipient !== details?.expected?.recipient && AI.#history(thread).length) {
+        fail("thread-recipient"); // the conversation went elsewhere: the person chooses first (Q2)
+      }
+      const last = thread.turns.at(-1);
+      if (details?.retry) {
+        // "Tentar de novo": the last question that did not get an answer, with the page copy it had.
+        if (!last || last.state === "done") {
+          fail("bad-request");
+        }
+        if (last.recipient && last.recipient !== details?.expected?.recipient) {
+          fail("thread-recipient");
+        }
+        thread.turns.pop();
+        request = { op: "ask", question: last.question, page: thread.pageLeftOut ? null : last.page,
+          selection: thread.pageLeftOut ? null : (last.selection ?? null), expected: details?.expected ?? fail("bad-request") };
+        if (!Number.isInteger(request.expected.chars)) {
+          fail("bad-request");
+        }
+      } else {
+        request = this.#askRequest(details?.question ?? "", details, win);
+      }
+      if (AI.#history(thread).length >= MAX_TURNS) {
+        fail("too-large"); // the tools take up to MAX_TURNS earlier turns; the panel offers a new conversation
+      }
+      request.history = AI.#history(thread);
+      // The turn belongs to this conversation: if it is cleared meanwhile, the turn is dropped (review UX5-D F4).
+      turn = { question: request.question.trim(), page: request.page, selection: request.selection ?? null,
+        recipient: request.expected?.recipient ?? null, thread };
+    } else if (kind === "task") {
+      request = { op: "task", task: String(details?.task ?? ""), expected: details?.expected ?? null };
+    } else {
+      fail("bad-request");
+    }
+    request.profile = Services.dirsvc.get("ProfD", Ci.nsIFile).path;
+    // A task's requests come from the assistant's own agent: the request watcher leaves only those to the run.
+    const agentConfig = kind === "task" ? await IOUtils.readJSON(PathUtils.join(lazy.stateDir(), "ai", "assistant.json")).catch(() => null) : null;
+    const runId = Services.uuid.generateUUID().toString().slice(1, -1);
+    const run = { win, kind, owner, state: "running", sent: false, steps: [], cutBy: null, turn, text: "",
+      agentId: agentConfig?.agent ?? null, pendingApproval: null, pendingPlace: null };
+    this.#runs.set(runId, run);
+    run.handle = lazy.callToolStream(["ai", "assistant"], request, {
+      onEvent: event => this.#onRunEvent(runId, run, event),
+      // The idle limit can be shortened for tests (never under 1 s); nothing else reads this pref.
+      idleMs: Math.max(1000, Services.prefs.getIntPref(IDLE_PREF, IDLE_MS)),
+      totalMs: kind === "ask" ? ASK_TOTAL_MS : TASK_TOTAL_MS,
+      graceMs: kind === "ask" ? ASK_GRACE_MS : TASK_GRACE_MS,
+    });
+    run.handle.result.then(
+      terminal => this.#finishRun(runId, run, terminal),
+      e => this.#finishRun(runId, run, { type: "error", code: e?.code ?? "helper-failed" })
+    );
+    run.onUnload = () => this.#cancelRun(run); // the window closed
+    win.addEventListener("unload", run.onUnload, { once: true });
+    this.#watchRuns();
+    this.#activity(run);
+    return { runId };
+  }
+
+  /** The band's view of this window's task (UX5-I): how many steps it did and whether it waits for
+      the person. Read from the runs in memory: no file, no process. */
+  activityState(win) {
+    // Its own window's task first; then this browser's other task, in every normal window (Q10).
+    const tasks = [...this.#runs].filter(([, run]) => run.kind === "task" && !run.win.closed);
+    const [runId, run] = tasks.find(([, r]) => r.win === win) ?? tasks[0] ?? [];
+    if (!run || lazy.PrivateBrowsingUtils.isWindowPrivate(win)) {
+      return null;
+    }
+    // Actions are steps that ran (done or failed), not ones refused or stopped before they acted.
+    const acted = run.steps.filter(step => step.state === "ok" || step.state === "error").length;
+    return { runId, steps: acted, waiting: Boolean(run.waiting), stopping: run.state === "cancelling", here: run.win === win };
+  }
+
+  #activity(run) {
+    if (run.kind === "task" && !run.win.closed) {
+      Services.obs.notifyObservers(run.win, ACTIVITY_TOPIC);
+    }
+  }
+
+  /** Agents connected through the bridge now (UX5-I2): the markers `nulavio ai serve` leaves while it runs,
+      for a process that still lives. Files only; nothing is started. */
+  async connectedAgents() {
+    const dir = PathUtils.join(lazy.stateDir(), "ai", "sessions");
+    if (!(await IOUtils.exists(dir))) {
+      return [];
+    }
+    const out = [];
+    for (const path of await IOUtils.getChildren(dir)) {
+      if (!path.endsWith(".json")) {
+        continue;
+      }
+      const session = await IOUtils.readJSON(path).catch(() => null);
+      if (!Number.isInteger(session?.pid) || !AGENT_RE.test(String(session.agent))) {
+        continue;
+      }
+      // The pid lives and is still a bridge (a pid reused by another program after a kill does not count).
+      // /proc files stat as empty: without maxBytes IOUtils.read would read nothing.
+      const command = await IOUtils.read(`/proc/${session.pid}/cmdline`, { maxBytes: 4096 }).catch(() => null);
+      if (command && new TextDecoder().decode(command).split("\0").includes("serve")) {
+        out.push({ agent: session.agent, name: String(session.name ?? session.agent).slice(0, 48) });
+      }
+    }
+    return out;
+  }
+
+  /** "Parar tarefa" in the band: this window's task only. */
+  assistantStopTask(win) {
+    const found = this.activityState(win);
+    if (found) {
+      this.#cancelRun(this.#runs.get(found.runId));
+    }
+  }
+
+  /** "Pausar assistente" in the band: the assistant's agent, as Settings would (resume stays there). */
+  async pauseAssistant() {
+    const config = await IOUtils.readJSON(PathUtils.join(lazy.stateDir(), "ai", "assistant.json")).catch(() => null);
+    if (config?.agent) {
+      await this.change(config.agent, "pause", { paused: true });
+    }
+  }
+
+  #onRunEvent(runId, run, event) {
+    if (event.type === "sending") {
+      run.sent = true;
+    } else if (event.type === "delta") {
+      run.text += event.text;
+    } else if (event.type === "step" && event.state !== "started") {
+      run.steps.push({ tool: event.tool, error: event.state !== "ok", state: event.state });
+      run.pendingApproval = null;
+      run.waiting = false;
+      this.#activity(run);
+    } else if (event.type === "approval") {
+      run.waiting = true;
+      this.#activity(run);
+      // Someone has to answer: the idle limit waits until the request expires (Q15).
+      const expires = Date.parse(event.expires);
+      if (Number.isFinite(expires)) {
+        run.handle.holdIdle(expires + 10000);
+      }
+      event = this.#placeApproval(run, runId, event);
+    }
+    this.#emit(run, { ...event, runId });
+  }
+
+  /** A permission request of a run is shown once (UX5-F, Q9): as a card in the run's panel when it is
+      open, else as the request page in front in the run's own window; never both, never in another window. */
+  #placeApproval(run, runId, event) {
+    const id = String(event.id ?? "");
+    if (!ID_RE.test(id) || run.win.closed || run.state !== "running") {
+      return { ...event, place: "none" }; // its window closed or it is stopping: nothing to answer
+    }
+    run.pendingApproval = id;
+    if (this.#shown.has(id)) {
+      return { ...event, place: "tab" }; // a tab shows it already
+    }
+    this.#shown.add(id); // at once, so the request watcher never opens a tab for it as well
+    const inPanel = this.#panelOpen(run.win);
+    run.pendingPlace = inPanel ? "panel" : "tab";
+    if (inPanel && Services.focus.activeWindow !== run.win) {
+      run.win.focus(); // in front, as the request tab would be (AI-04): a request nobody sees expires as a no
+    }
+    this.#claim(id).then(claimed => {
+      if (!claimed) {
+        this.#emit(run, { type: "approval", runId, id, place: "elsewhere" }); // another Nulavio took it
+      } else if (!inPanel) {
+        this.#open(`ai/request.html?id=${id}`, run.win);
+      }
+    });
+    return { ...event, place: inPanel ? "panel" : "tab" };
+  }
+
+  #finishRun(runId, run, terminal) {
+    this.#runs.delete(runId);
+    run.state = "done";
+    let event = { ...terminal, runId };
+    if (run.cancelling && terminal.type === "error" && terminal.code === "helper-failed") {
+      // Cancelled and ended hard (SIGKILL) before saying so. Whether a request may have gone is what the
+      // tools said before ("sending" comes just before each request).
+      event = { type: "done", runId, cancelled: true, sent: run.sent, steps: run.steps };
+    } else if (run.kind === "task" && terminal.type === "error" && terminal.code === "helper-failed") {
+      event = { ...event, code: "task-unfinished" }; // the run may have acted already
+    }
+    if (run.cutBy) {
+      event.cutBy = run.cutBy; // the emergency stop, a pause or a revocation ended it
+    }
+    if (run.turn) {
+      this.#keepTurn(run, event);
+    }
+    this.#emit(run, event);
+    this.#activity(run);
+    // Nothing of the run stays: its page text and the page that started it go with it.
+    run.win.removeEventListener("unload", run.onUnload);
+    run.owner = run.handle = run.turn = run.onUnload = null;
+    run.text = "";
+    if (!this.#runs.size) {
+      this.#runWatch?.cancel();
+      this.#runWatch = null;
+    }
+  }
+
+  /** The Ask's turn joins its window's conversation (in memory), answered or not. */
+  #keepTurn(run, event) {
+    if (run.win.closed || this.#threads.get(run.win) !== run.turn.thread) {
+      return; // the window closed, or "Começar conversa nova" came while it ran: it is not in that one
+    }
+    const thread = run.turn.thread;
+    const { thread: _owner, ...kept } = run.turn;
+    const turn = { ...kept, sent: Boolean(event.sent ?? run.sent) };
+    if (event.type === "done" && !event.cancelled) {
+      Object.assign(turn, { state: "done", answer: String(event.answer ?? ""), chars: event.chars, recipient: event.recipient,
+        truncated: Boolean(event.truncated) });
+      thread.recipient = event.recipient;
+      thread.model = event.model;
+    } else if (event.type === "done") {
+      Object.assign(turn, { state: "cancelled", answer: run.text });
+    } else {
+      Object.assign(turn, { state: "error", code: event.code });
+    }
+    thread.turns.push(turn);
+  }
+
+  #cancelRun(run, cutBy = null) {
+    if (run.state !== "running") {
+      return;
+    }
+    run.state = "cancelling";
+    run.cancelling = true;
+    this.#activity(run);
+    run.cutBy ??= cutBy;
+    run.handle.cancel(run.kind === "ask" ? ASK_GRACE_MS : TASK_GRACE_MS);
+  }
+
+  /** "Parar" or Esc in the panel: only for a run of the calling window. */
+  assistantCancel(runId, win) {
+    const run = this.#runs.get(String(runId));
+    if (run && run.win !== win) {
+      fail("bad-request");
+    }
+    if (run) {
+      this.#cancelRun(run);
+    }
+    return { state: run ? run.state : "done" };
+  }
+
+  /** This window's runs (a Task goes on when the panel closes; the panel shows it again). */
+  assistantRuns(win) {
+    this.#userWindow(win);
+    return [...this.#runs]
+      .filter(([, run]) => run.win === win)
+      .map(([runId, run]) => ({ runId, kind: run.kind, state: run.state, sent: run.sent, steps: run.steps,
+        pendingApproval: run.pendingPlace === "panel" ? run.pendingApproval : null }));
+  }
+
+  /** The page that started an Ask went away (the panel closed): its Asks stop (Q18). */
+  assistantOwnerClosed(owner) {
+    for (const run of this.#runs.values()) {
+      if (run.owner === owner && run.kind === "ask") {
+        this.#cancelRun(run);
+      }
+    }
+  }
+
+  /** While runs go on, the emergency stop, a pause or a revocation of the assistant cuts them at once
+      (Q19, D-UX5): two file reads every RUN_WATCH_MS, no process. */
+  #watchRuns() {
+    if (this.#runWatch) {
+      return;
+    }
+    this.#runWatch = Cc["@mozilla.org/timer;1"].createInstance(Ci.nsITimer);
+    this.#runWatch.initWithCallback(() => this.#checkRuns().catch(() => {}), RUN_WATCH_MS, Ci.nsITimer.TYPE_REPEATING_SLACK);
+  }
+
+  async #checkRuns() {
+    if (!this.#runs.size) {
+      return;
+    }
+    const dir = PathUtils.join(lazy.stateDir(), "ai");
+    let cutBy = null;
+    if (await IOUtils.exists(PathUtils.join(dir, "STOP"))) {
+      cutBy = "emergency-stop";
+    } else {
+      const config = await IOUtils.readJSON(PathUtils.join(dir, "assistant.json")).catch(() => null);
+      const registry = await IOUtils.readJSON(PathUtils.join(dir, "agents.json")).catch(() => null);
+      const agent = config?.agent ? registry?.agents?.[config.agent] : null;
+      // As the tools decide (assistant.py _blocked): no agent any more ("Remover assistente"), or revoked.
+      if ((config && !config.agent) || (config?.agent && registry && (!agent || agent.revoked))) {
+        cutBy = "assistant-revoked";
+      } else if (agent?.paused) {
+        cutBy = "assistant-paused";
+      }
+    }
+    if (cutBy) {
+      for (const run of this.#runs.values()) {
+        this.#cancelRun(run, cutBy);
+      }
+    }
   }
 
   /** A task in the assistant's AI Workspace, under its agent permissions; never from a private window. */
-  async assistantTask(task, win) {
+  async assistantTask(task, expected, win) {
     this.#userWindow(win);
     try {
-      return await this.#assistant({ op: "task", task: String(task) }, 600000);
+      return await this.#assistant({ op: "task", task: String(task), expected: expected ?? null }, 600000);
     } catch (e) {
       if (e?.code === "helper-failed") {
         fail("task-unfinished"); // no answer in time (or the tools ended): the run may have acted already
@@ -367,6 +1131,7 @@ class AI {
   async windowState() {
     const warning = this.windowWarning();
     const id = warning?.id || await this.workspaceAgent();
+    this.#watchAgentFiles(Boolean(id));
     if (!id) {
       return null;
     }
@@ -375,7 +1140,7 @@ class AI {
       paused: warning?.paused ?? false, failed: warning?.failed ?? false,
     };
     try {
-      const overview = await this.overview();
+      const overview = await this.#bandOverview();
       const agent = overview.agents.find(a => a.id === id);
       return { ...state, name: agent?.name ?? id, autonomy: agent?.autonomy ?? null,
         paused: agent ? Boolean(agent.paused) : state.paused, revoked: Boolean(agent?.revoked),

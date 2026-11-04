@@ -17,6 +17,8 @@ from test_horizon import rgb
 from test_profiles import chrome_async
 from nulavio_launcher.vault import sodium, storage
 
+AVATARS = 'ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioAvatars.sys.mjs")'
+
 WINDOW = 'ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioWindow.sys.mjs").NulavioWindow'
 BAND_PROBE = """(() => {
   const full = document.documentElement.matches('[inFullscreen], [inDOMFullscreen]');
@@ -38,7 +40,7 @@ BAND_PROBE = """(() => {
 def assert_band(test, state):
     test.assertIsNotNone(state)
     test.assertFalse(state["overflow"], state)
-    test.assertGreaterEqual(state["rect"]["h"], 3 if state["full"] else 30)
+    test.assertGreaterEqual(state["rect"]["h"], 3 if state["full"] else 24)  # UX3F A1: 24px neutral band
     for cue in state["cues"]:
         test.assertGreaterEqual(cue["h"], 20, cue)  # text seals; interactive targets below are >=24
         test.assertGreater(cue["w"], 0, cue)
@@ -158,14 +160,22 @@ class WindowBandTest(unittest.TestCase):
             visibility: cs.visibility, placement: C.getPlacementOfWidget('nulavio-band-widget')?.area,
             aboveTabs: !!(bar.compareDocumentPosition(document.getElementById('TabsToolbar')) & Node.DOCUMENT_POSITION_FOLLOWING),
             aboveNav: !!(bar.compareDocumentPosition(document.getElementById('nav-bar')) & Node.DOCUMENT_POSITION_FOLLOWING),
-            nativeUnchanged: native.join() === [...gNavToolbox.children].filter(e => e !== bar).map(e => e.id).join()};
+            nativeUnchanged: native.join() === [...gNavToolbox.children].filter(e => e !== bar).map(e => e.id).join(),
+            // UX3G A1: a neutral band may open the navigation row instead of a row of its own.
+            fused: getComputedStyle(gNavToolbox).display === 'grid',
+            sameRowAsNav: Math.round(r.top) === Math.round(document.getElementById('nav-bar').getBoundingClientRect().top)};
         """,
         )
         self.assertNotIn("error", result, result)
         r = result["ok"]
         self.assertIn("Farol", r["name"])
-        self.assertGreaterEqual(r["height"], 30)
-        self.assertGreater(r["width"], 400)
+        self.assertGreaterEqual(r["height"], 24)
+        if r["fused"]:
+            # UX3G A1: in the navigation row the band is as wide as its cues, never collapsed.
+            self.assertTrue(r["sameRowAsNav"], r)
+            self.assertGreater(r["width"], 200)
+        else:
+            self.assertGreater(r["width"], 400)
         self.assertEqual((r["opacity"], r["visibility"], r["placement"]), ("1", "visible", "nulavio-band"))
         self.assertTrue(r["aboveTabs"] and r["aboveNav"] and r["nativeUnchanged"], r)
         assert_layout_matrix(self, self.m, "ordinary")
@@ -273,7 +283,14 @@ class WindowBandTest(unittest.TestCase):
                     time.sleep(0.25)
                     state = self.m.chrome(f"return {BAND_PROBE};")
                     assert_band(self, state)
-                    self.assertEqual(state["bg"], "rgb(4, 8, 13)" if dark else "rgb(191, 208, 214)")
+                    # UX3F A1: the neutral band sits on the toolbox surface; UX3G A1: in a wide window with
+                    # vertical tabs it opens the navigation row and shows the toolbar through (transparent row).
+                    fused = self.m.chrome("return getComputedStyle(gNavToolbox).display === 'grid';")
+                    self.assertEqual(fused, vertical and width / float(scale) >= 1024, (vertical, width, scale))
+                    if fused:
+                        self.assertEqual(state["bg"], "rgba(0, 0, 0, 0)")
+                    else:
+                        self.assertEqual(state["bg"], "rgb(6, 12, 20)" if dark else "rgb(226, 235, 238)")
                     rows.append({"dark": dark, "vertical": vertical, "width": width, "scale": scale, **state})
                     self.m.set_context("chrome")
                     try:
@@ -428,9 +445,10 @@ class WindowBandTest(unittest.TestCase):
             identity = next(c for c in state["cues"] if c["kind"] == "nv-band-identity")
             self.assertEqual(identity["outline"], "solid")
             self.assertGreaterEqual(float(identity["outlineWidth"].removesuffix("px")), 2)
+            # Calmaria: Nulavio's own solid glyph for the profile's avatar, on its tile (not the engine's outline).
             self.assertEqual(
-                self.m.chrome("return document.querySelector('#nulavio-band .nv-band-avatar')?.getAttribute('src');"),
-                "chrome://browser/content/profiles/assets/16_book.svg",
+                self.m.chrome("return document.querySelector('#nulavio-band .nv-band-flag svg path')?.getAttribute('d');"),
+                self.m.chrome(f"return {AVATARS}.AVATAR_GLYPHS.book;"),
             )
         self.m.chrome("""
           for(const key of ['nulavio.horizon.enabled','ui.prefersContrast',
@@ -525,13 +543,14 @@ class WindowBandTest(unittest.TestCase):
         self.assertTrue(self.m.chrome("return matchMedia('(prefers-contrast: more)').matches;"))
         self.m.chrome("document.documentElement.style.colorScheme='dark';")
         self.assertTrue(
-            harness.wait_until(lambda: self.m.chrome("return !!document.querySelector('#nulavio-band .nv-band-avatar');"), 10)
+            harness.wait_until(lambda: self.m.chrome("return !!document.querySelector('#nulavio-band .nv-band-flag svg');"), 10)
         )
         icon = self.m.chrome("""
-          const e=document.querySelector('#nulavio-band .nv-band-identity'), i=e.querySelector('img');
-          return {bg:getComputedStyle(e).backgroundColor,stroke:getComputedStyle(i).stroke};
+          // Calmaria: the solid glyph in the profile's glyph tone on its soft tile, inside the neutral chip.
+          const e=document.querySelector('#nulavio-band .nv-band-flag');
+          return {bg:getComputedStyle(e).backgroundColor,fill:getComputedStyle(e).color};
         """)
-        self.assertGreaterEqual(ratio(rgb(icon["stroke"]), rgb(icon["bg"])), 3, icon)
+        self.assertGreaterEqual(ratio(rgb(icon["fill"]), rgb(icon["bg"])), 3, icon)
         self.m.chrome("document.documentElement.style.removeProperty('color-scheme');")
         self.m.chrome(
             "Services.prefs.clearUserPref('ui.useAccessibilityTheme');"
@@ -676,12 +695,15 @@ class ProtectedWindowBandTest(unittest.TestCase):
                 time.sleep(0.3)
                 state = child.chrome(f"return {BAND_PROBE};")
                 assert_band(self, state)
-                self.assertIn(
-                    child.chrome(
-                        "return WebExtensionPolicy.getByID('shell@nulavio.net').extension.localizeMessage('bandProtected');"
-                    ),
-                    state["text"],
+                # Calmaria: "Protegido" fits the Lateral column; the whole phrase is its name and title.
+                message = "return WebExtensionPolicy.getByID('shell@nulavio.net').extension.localizeMessage(arguments[0]);"
+                self.assertIn(child.chrome(message, ["bandProtectedShort"]), state["text"])
+                node = child.chrome(
+                    "const e = document.querySelector('#nulavio-band .nv-band-protection');"
+                    "return {label: e.getAttribute('aria-label'), title: e.getAttribute('title')};"
                 )
+                full = child.chrome(message, ["bandProtected"])
+                self.assertEqual(node, {"label": full, "title": full})
             assert_layout_matrix(self, child, "protected-unlocked")
             lock = chrome_async(
                 child,

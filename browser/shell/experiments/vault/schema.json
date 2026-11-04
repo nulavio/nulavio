@@ -64,6 +64,12 @@
         ]
       },
       {
+        "name": "lockCurrent",
+        "type": "function",
+        "async": true,
+        "parameters": []
+      },
+      {
         "name": "createProtected",
         "type": "function",
         "async": true,

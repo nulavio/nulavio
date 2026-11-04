@@ -353,6 +353,14 @@ def api_request(request: dict) -> dict:
     if op == "lock":
         profiles.lock(prof)
         return {"locked": True}
+    if op == "lock-on-exit":
+        # "Bloquear agora" for the profile that is open in this browser (UX4): the Shell quits the
+        # browser next; this watcher locks the volume once the engine is gone, even if none was
+        # started at unlock. A second watcher finds it already locked and stops.
+        if not profiles.is_encrypted(prof):
+            raise VaultError("not-encrypted")
+        spawn_autolock(prof)
+        return {"watching": True}
     if op == "phone-pair-start":
         return spawn_phone_session({"kind": "pair", "path": str(prof.path), "current": str(request.get("current") or "")})
     if op == "phone-unlock-start":

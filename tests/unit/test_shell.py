@@ -111,7 +111,7 @@ def module_text(name: str) -> str:
 
 API_NAMES = ("nulavioSearch", "nulavioProfiles", "nulavioRouting", "nulavioConnect", "nulavioVault", "nulavioAI")
 API_NAMES += ("nulavioGuard", "nulavioPrivacy", "nulavioPasswords")
-API_NAMES += ("nulavioLayout",)
+API_NAMES += ("nulavioLayout", "nulavioPersonalise")
 
 
 class PrivilegedApiTest(unittest.TestCase):
@@ -146,6 +146,7 @@ class PrivilegedApiTest(unittest.TestCase):
         self.assertNotIn("events", apis["nulavioProfiles"]["parent"])
         self.assertEqual(apis["nulavioRouting"]["parent"]["events"], ["startup"])  # links clicked in pages (M5)
         self.assertNotIn("events", apis["nulavioConnect"]["parent"])
+        self.assertNotIn("events", apis["nulavioPersonalise"]["parent"])  # lazy: nothing to do at startup
 
     def test_parent_scripts_only_bridge_to_the_modules(self):
         for script in (SHELL / "experiments").rglob("parent.js"):
@@ -160,11 +161,18 @@ class PrivilegedApiTest(unittest.TestCase):
                     )
                 self.assertNotIn("Services.prefs.set", text)
 
-    def test_layout_exposes_only_fixed_presets_without_a_startup_writer(self):
+    def test_layout_exposes_only_fixed_presets_and_first_run_dismissal(self):
+        apis = list(self.manifest["experiment_apis"])
+        self.assertLess(apis.index("nulavioLayout"), apis.index("nulavioPrivacy"))
         api = self.manifest["experiment_apis"]["nulavioLayout"]
-        self.assertNotIn("events", api["parent"])
+        self.assertEqual(api["parent"]["events"], ["startup"])
         schema = json.loads((SHELL / api["schema"]).read_text())[0]
-        self.assertEqual({f["name"] for f in schema["functions"]}, {"state", "apply"})
+        self.assertEqual({f["name"] for f in schema["functions"]}, {"state", "apply", "dismissChoice", "toggleFocus"})
+        toggle = next(f for f in schema["functions"] if f["name"] == "toggleFocus")
+        self.assertEqual(toggle["parameters"], [{"name": "tabId", "type": "integer", "minimum": 0}])
+        for name in ("state", "dismissChoice"):
+            fn = next(f for f in schema["functions"] if f["name"] == name)
+            self.assertEqual(fn["parameters"], [])
         apply = next(f for f in schema["functions"] if f["name"] == "apply")
         self.assertEqual(apply["parameters"], [{"name": "preset", "type": "string", "enum": ["lateral", "top", "focus"]}])
 
@@ -400,13 +408,42 @@ class PackagingTest(unittest.TestCase):
         out = self.tmp / "plain"
         files = make_shell.assemble(out, privileged=False)
         manifest = json.loads((out / "manifest.json").read_text(encoding="utf-8"))
-        for key in ("experiment_apis", "action", "commands", "options_ui"):
+        for key in ("experiment_apis", "action", "commands", "omnibox", "options_ui"):
             self.assertNotIn(key, manifest)
+        # Only the plain-data modules the pages import stay (no experiment, no privileged module).
         self.assertFalse(
-            [f for f in files if f.split("/")[0] in ("experiments", "modules", "settings", "profiles", "routing", "vault")]
+            [
+                f
+                for f in files
+                if f.split("/")[0] in ("experiments", "modules", "settings", "profiles", "routing", "vault")
+                and f not in make_shell.PLAIN_MODULES
+            ]
         )
         self.assertIn("newtab/newtab.html", files)
         self.assertEqual(manifest["permissions"], make_shell.manifest()["permissions"])
+
+    def test_every_relative_import_resolves_in_both_variants(self):
+        """CI (Track A): the variant for a distribution Firefox dropped modules/ while lib/ui.js imported
+        modules/NulavioAvatars.sys.mjs, so every page and the background failed to load there."""
+        pattern = re.compile(r"""(?:\bfrom\s*|\bimport\s*\(\s*|^\s*import\s+)["'](\.{1,2}/[^"']+)["']""", re.MULTILINE)
+        for privileged in (True, False):
+            out = self.tmp / f"imports-{privileged}"
+            files = set(make_shell.assemble(out, privileged=privileged))
+            for script in sorted(p for p in out.rglob("*") if p.suffix in (".js", ".mjs")):
+                if script.relative_to(out).parts[0] in ("experiments", "modules") and privileged:
+                    continue  # chrome code: resource:// and moz-src:// imports, checked with the engine
+                for ref in pattern.findall(script.read_text(encoding="utf-8")):
+                    target = (script.parent / ref).resolve()
+                    with self.subTest(privileged=privileged, script=str(script.relative_to(out)), ref=ref):
+                        self.assertTrue(target.is_file(), f"{ref} missing")
+                        self.assertIn(str(target.relative_to(out.resolve())), files)
+
+    def test_plain_modules_use_no_privileged_global(self):
+        for relative in make_shell.PLAIN_MODULES:
+            text = (ROOT / "browser" / "shell" / relative).read_text(encoding="utf-8")
+            code = re.sub(r"/\*.*?\*/|//[^\n]*", "", text, flags=re.DOTALL)
+            with self.subTest(module=relative):
+                self.assertNotRegex(code, r"\b(?:Services|ChromeUtils|Components|Cc|Ci|Cu|import)\b")
 
     def test_build_files_list_every_file_under_builtin_addons(self):
         branding = self.tmp / "branding"
@@ -492,6 +529,68 @@ class PasswordsTest(unittest.TestCase):
         self.assertIn("this.manager.documentURI", parent)  # the address comes from the engine
         self.assertNotIn("message.data", parent)
         self.assertNotIn("content_scripts", make_shell.manifest())
+
+
+class LayoutModuleTest(unittest.TestCase):
+    """D-UX2 and UX3E: safe new-profile Lateral adoption, P3-1 listener safety and P3-2 window swap."""
+
+    def test_layout_module_writes_only_sidebar_presets_and_adoption_markers(self):
+        source = module_text("NulavioLayout.sys.mjs")
+        writes = set(re.findall(r"Services\.prefs\.set(?:Bool|Int|String)Pref\(([^,]+),", source))
+        self.assertEqual(
+            writes,
+            # UX3G N-4 (provisional): the new-profile start-page flag is written with the adoption markers.
+            {
+                '"sidebar.verticalTabs"',
+                '"sidebar.visibility"',
+                "PREF_ADOPTION_VERSION",
+                "PREF_BEFORE_FOCUS",
+                "PREF_CHOICE_PENDING",
+                "PREF_SHELL_START",
+            },
+        )
+        self.assertIn('"SwapDocShells"', source)
+        self.assertIn('"EndSwapDocShells"', source)
+        privacy = module_text("NulavioPrivacy.sys.mjs")
+        self.assertLess(privacy.index("lazy.NulavioLayout.adoptInitialLayout()"), privacy.index("setIntPref(PREF_SEEDED"))
+
+    def test_layout_pictures_match_between_settings_and_the_first_run(self):
+        """UX6 S1: the two copies of each preset's picture (Settings and the first-run card) stay equal."""
+
+        def pictures(page: str) -> dict[str, str]:
+            html = (SHELL / page).read_text(encoding="utf-8")
+            found = {}
+            for label in re.findall(r'<label class="layout-option">(.*?)</label>', html, re.S):
+                svg = re.search(r"<svg .*?</svg>", label, re.S).group(0)
+                value = re.search(r'type="radio" name="[^"]+" value="([a-z]+)"', label).group(1)
+                found[value] = re.sub(r"\s+", " ", svg).strip()
+            return found
+
+        settings, newtab = pictures("settings/settings.html"), pictures("newtab/newtab.html")
+        self.assertEqual(set(settings), {"lateral", "top", "focus"})
+        self.assertEqual(settings, newtab)
+
+    def test_layout_names_bridge_to_the_engine_settings(self):
+        # QA B-9: about:preferences > Browser layout says "Vertical/Horizontal tabs" and has no Focus;
+        # the presets name that native term, and the card's link says which Settings it opens.
+        for name, vertical, horizontal, nulavio in (
+            ("pt_BR", "Abas na vertical", "Abas na horizontal", "Nulavio"),
+            ("en", "Vertical tabs", "Horizontal tabs", "Nulavio"),
+        ):
+            with self.subTest(locale=name):
+                msg = {k: v["message"] for k, v in locale(name).items()}
+                self.assertIn(vertical.lower(), msg["layoutLateralHint"].lower())
+                self.assertIn(vertical.lower(), msg["layoutFocusHint"].lower())
+                self.assertIn(horizontal.lower(), msg["layoutTopHint"].lower())
+                self.assertIn(vertical, msg["layoutScope"])
+                self.assertIn(horizontal, msg["layoutScope"])
+                self.assertIn(nulavio, msg["layoutChoiceSettings"])
+
+    def test_layout_surfaces_guard_listener_registration(self):
+        for rel in ("settings/layout.js", "newtab/newtab.js"):
+            with self.subTest(script=rel):
+                source = (SHELL / rel).read_text(encoding="utf-8")
+                self.assertRegex(source, r"try\s*\{\s*api\.onChanged\.addListener\(")
 
 
 if __name__ == "__main__":

@@ -128,14 +128,16 @@ class PrivacyTest(unittest.TestCase):
             harness.wait_until(lambda: self.m.execute("return document.documentElement.dataset.ready === 'true';"), 15)
         )
         rows = self.m.execute(
-            "return [...document.querySelectorAll('#exception-list > li')].map(li => [li.dataset.type, li.textContent]);"
+            "return [...document.querySelectorAll('#exception-list > li')]"
+            ".map(li => [li.dataset.type, li.textContent, li.hasAttribute('data-built-in')]);"
         )
-        mine = [r for r in rows if "do próprio navegador" not in r[1]]
+        mine = [r for r in rows if not r[2]]
         self.assertEqual(len(mine), 1, rows)
         self.assertEqual(mine[0][0], "trackingprotection")
         self.assertIn("Proteção contra rastreamento desligada", mine[0][1])
         # The engine's own defaults are listed as such (addons.mozilla.org may offer add-ons).
-        self.assertTrue(any(r[0] == "install" and "addons.mozilla.org" in r[1] for r in rows), rows)
+        self.assertTrue(any(r[0] == "install" and "addons.mozilla.org" in r[1] and r[2] for r in rows), rows)
+        self.assertTrue(all("Padrão do navegador" in r[1] for r in rows if r[2]), rows)  # said in words, as a badge
         filter_text = self.m.execute("return document.getElementById('filter-text').textContent;")
         self.assertTrue(filter_text)  # uBlock Origin's state as the add-on manager reports it
         self.m.execute("document.querySelector('#exceptions').scrollIntoView();")

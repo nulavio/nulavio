@@ -82,8 +82,10 @@ async function act(action, finding) {
       await guard.reveal(finding.id);
       return;
     }
-    render(await guard.resolve(finding.id, action));
-    announce(t(action === "undo" ? "guardUndone" : "guardKept"));
+    const left = await guard.resolve(finding.id, action);
+    render(left);
+    const said = t(action === "undo" ? "guardUndone" : "guardKept");
+    announce(left.length ? said : `${said} ${t("guardAllReviewed")}`); // the last one: the review is over
   } catch (e) {
     announce(errorText(e), "error");
   }
@@ -119,6 +121,8 @@ function item(f) {
   );
 }
 
+let reviewing = false; // findings were shown: an empty list now means the last one was just resolved
+
 function render(findings) {
   const list = document.getElementById("findings");
   list.replaceChildren(...[...findings].sort((a, b) => rank(a) - rank(b) || a.id.localeCompare(b.id)).map(item));
@@ -128,8 +132,31 @@ function render(findings) {
   document.body.dataset.count = String(findings.length);
   if (!findings.length) {
     guard.hideBar().catch(() => {});
+    // The page says what it is now: nothing to review (audit 2026-11 GUARD-01).
+    document.title = t("guardEmptyTitle");
+    document.getElementById("headline").textContent = t("guardEmptyTitle");
+    document.getElementById("intro").textContent = t("guardIntroEmpty");
+    // Why there is nothing, when there is a reason (audit 2026-11 GUARD-02); else "as Nulavio last saw it".
+    guard.check().then(result => {
+      const key = result?.state === "first" ? "guardFirst"
+        : result?.reason === "temporary" ? "guardSkippedTemporary"
+          : result?.reason === "ai-workspace" ? "guardSkippedWorkspace" : null;
+      if (key && !reviewing) {
+        document.querySelector("#empty .hint").textContent = t(key);
+      }
+    }).catch(() => {});
+    if (reviewing) {
+      document.getElementById("close").focus();
+    }
   }
+  reviewing = findings.length > 0;
 }
+
+document.getElementById("close").addEventListener("click", async () => {
+  const tab = await browser.tabs.getCurrent();
+  const siblings = await browser.tabs.query({ windowId: tab.windowId });
+  return siblings.length > 1 ? browser.tabs.remove(tab.id) : browser.tabs.update(tab.id, { url: "about:newtab" });
+});
 
 localize();
 guard
@@ -137,6 +164,7 @@ guard
   .then(render)
   .catch(e => {
     document.body.dataset.state = "error";
+    document.getElementById("findings").removeAttribute("aria-busy"); // nothing is loading any more (SB-19)
     announce(errorText(e), "error");
   })
   .finally(() => {

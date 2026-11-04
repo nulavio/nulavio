@@ -7,31 +7,48 @@
    after customization; no reset of the user's placements or preferences. */
 const lazy = {};
 ChromeUtils.defineESModuleGetters(lazy, {
+  AboutNewTab: "resource:///modules/AboutNewTab.sys.mjs",
+  ActionsProviderQuickActions: "moz-src:///browser/components/urlbar/ActionsProviderQuickActions.sys.mjs",
   CustomizableUI: "moz-src:///browser/components/customizableui/CustomizableUI.sys.mjs",
   ExtensionParent: "resource://gre/modules/ExtensionParent.sys.mjs",
+  ExtensionSettingsStore: "resource://gre/modules/ExtensionSettingsStore.sys.mjs",
   NulavioAI: "resource://builtin-addons/nulavio-shell/modules/NulavioAI.sys.mjs",
   NulavioGuard: "resource://builtin-addons/nulavio-shell/modules/NulavioGuard.sys.mjs",
-  AVATARS: "resource://builtin-addons/nulavio-shell/modules/NulavioProfiles.sys.mjs",
+  NulavioLayout: "resource://builtin-addons/nulavio-shell/modules/NulavioLayout.sys.mjs",
+  AVATAR_GLYPHS: "resource://builtin-addons/nulavio-shell/modules/NulavioAvatars.sys.mjs",
+  SPECIAL_GLYPHS: "resource://builtin-addons/nulavio-shell/modules/NulavioAvatars.sys.mjs",
+  profileInitial: "resource://builtin-addons/nulavio-shell/modules/NulavioAvatars.sys.mjs",
   NulavioProfiles: "resource://builtin-addons/nulavio-shell/modules/NulavioProfiles.sys.mjs",
+  NulavioRouting: "resource://builtin-addons/nulavio-shell/modules/NulavioRouting.sys.mjs",
   PrivateBrowsingUtils: "resource://gre/modules/PrivateBrowsingUtils.sys.mjs",
   profileLockState: "resource://builtin-addons/nulavio-shell/modules/NulavioVaultState.sys.mjs",
 });
 const sheets = Cc["@mozilla.org/content/style-sheet-service;1"].getService(Ci.nsIStyleSheetService);
 const sidebarFocus = Services.io.newURI("resource://builtin-addons/nulavio-shell/shared/sidebar-focus.css");
 const bandSheet = Services.io.newURI("resource://builtin-addons/nulavio-shell/shared/window-band.css");
+// UX3F A2: the engine's internal pages (Settings, add-ons, home) in Nulavio's colours. Scoped by exact
+// about: URLs inside the sheet, so web pages never see it.
+const inContent = Services.io.newURI("resource://builtin-addons/nulavio-shell/shared/in-content.css");
 const AREA = "nulavio-band";
 const WIDGET = "nulavio-band-widget";
+const QUICK_ACTION = "nulavio-assistant"; // the address bar quick action (UX5-H)
+// UX6 (D8): Nulavio's other quick actions after ">". None of them unlocks, resumes, grants or turns
+// anything off (tests/unit/test_personalisation.py); lock and AI actions have their own places.
+const QUICK_ACTIONS = Object.freeze([QUICK_ACTION, "nulavio-settings", "nulavio-focus"]);
 const SHELL = "shell@nulavio.net";
 const HTML = "http://www.w3.org/1999/xhtml";
-const TOPICS = ["browser-delayed-startup-finished", "nulavio-ai-window-changed", "nulavio-guard-changed"];
+// nulavio-ai-agent-files-changed: the driving agent's registry or the emergency stop changed (NulavioAI).
+const TOPICS = ["browser-delayed-startup-finished", "nulavio-ai-window-changed", "nulavio-guard-changed",
+  "nulavio-ai-agent-files-changed", "nulavio-ai-activity-changed"];
 // Fixed paths only. Query strings, fragments, titles and page text never name a trusted surface.
 const SURFACES = Object.freeze({
   "/newtab/newtab.html": "newtabTitle",
   "/settings/settings.html": "settingsTitle",
   "/profiles/popup.html": "profilesButton",
   "/vault/unlock.html": "bandSurfaceUnlock",
-  "/vault/create.html": "vaultNewProtected",
+  "/vault/create.html": "vaultCreateTitle",
   "/vault/phone.html": "bandSurfacePhone",
+  "/vault/methods.html": "bandSurfaceMethods",
   "/guard/review.html": "bandSurfaceGuard",
   "/ai/request.html": "bandSurfacePermission",
   "/routing/ask.html": "bandSurfaceRouting",
@@ -39,6 +56,10 @@ const SURFACES = Object.freeze({
   "/warning/warning.html": "bandSurfaceDownload",
   "/passwords/lookalike.html": "bandSurfacePassword",
 });
+// UX3H A-1: ordinary Shell pages. Their name is on the tab, so in the navigation row
+// (window-band.css) the band does not repeat it. Every other surface asks for trust
+// and keeps its name in a full band row ([nv-named]).
+const PLAIN_SURFACES = Object.freeze(new Set(["newtabTitle", "settingsTitle", "profilesButton"]));
 
 function policy() {
   return WebExtensionPolicy.getByID(SHELL);
@@ -61,10 +82,46 @@ function button(doc, className, action) {
   return node;
 }
 
+// The band repaints on every refresh tick (1.5 s) in every window. In browser.xhtml a
+// textContent write always replaces the text node (the document has mutation observers),
+// which reconstructs frames, reflows the toolbox and fires accessibility events. So the
+// band writes only what changed: the result is the same DOM, by construction.
+const SVG = "http://www.w3.org/2000/svg";
+
+/** The profile's solid glyph (NulavioAvatars) in the band's 16 px tile, redrawn only when it changes. */
+function showGlyph(node, d) {
+  if (node.firstElementChild?.dataset?.d === d) {
+    return;
+  }
+  const doc = node.ownerDocument;
+  const svg = doc.createElementNS(SVG, "svg");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("class", "nv-band-glyph-avatar");
+  svg.dataset.d = d;
+  const path = doc.createElementNS(SVG, "path");
+  path.setAttribute("d", d);
+  path.setAttribute("fill", "currentColor");
+  path.setAttribute("fill-rule", "evenodd");
+  svg.append(path);
+  node.replaceChildren(svg);
+}
+
+function setText(node, text) {
+  if (node.textContent !== text) {
+    node.textContent = text;
+  }
+}
+
+function setAttr(node, name, value) {
+  if (node.getAttribute(name) !== value) {
+    node.setAttribute(name, value);
+  }
+}
+
 function named(node, text) {
-  node.textContent = text;
-  node.setAttribute("aria-label", text);
-  node.title = text;
+  setText(node, text);
+  setAttr(node, "aria-label", text);
+  setAttr(node, "title", text);
 }
 
 class WindowUI {
@@ -82,7 +139,9 @@ class WindowUI {
   #agentRevision = 0;
   #agentUnavailable = false;
   #guardCount = 0;
+  #connected = []; // agents connected through the bridge now (UX5-I2)
   #actionError = false;
+  #startPageChecked = false;
 
   start() {
     if (this.#started) {
@@ -90,7 +149,7 @@ class WindowUI {
     }
     this.#started = true;
     this.#generation++;
-    for (const uri of [sidebarFocus]) {
+    for (const uri of [sidebarFocus, inContent]) {
       if (!sheets.sheetRegistered(uri, sheets.AGENT_SHEET)) {
         sheets.loadAndRegisterSheet(uri, sheets.AGENT_SHEET);
       }
@@ -109,6 +168,7 @@ class WindowUI {
       },
     });
     cui.addListener(this);
+    this.#addQuickAction();
     for (const topic of TOPICS) {
       Services.obs.addObserver(this, topic);
     }
@@ -118,6 +178,7 @@ class WindowUI {
         this.#attach(win);
       }
     }
+    this.#confirmOwnNewTab();
     this.#timer = Cc["@mozilla.org/timer;1"].createInstance(Ci.nsITimer);
     this.#timer.initWithCallback(() => this.refresh(), 1500, Ci.nsITimer.TYPE_REPEATING_SLACK);
     this.refresh();
@@ -126,6 +187,11 @@ class WindowUI {
   observe(win, topic) {
     if (topic === "browser-delayed-startup-finished") {
       this.#attach(win);
+    } else if (topic === "nulavio-ai-activity-changed") {
+      // The assistant's task shows in every normal window (Q10); memory only: nothing is read or started.
+      for (const window of this.#windows.keys()) {
+        this.#paint(window);
+      }
     } else {
       if (topic === "nulavio-ai-window-changed") {
         this.#agentRevision++;
@@ -138,6 +204,11 @@ class WindowUI {
             this.#paint(window);
           }
         }
+      }
+      if (topic === "nulavio-ai-agent-files-changed") {
+        // A refresh already under way may have read the agent's state before the change.
+        this.refresh().finally(() => this.refresh());
+        return;
       }
       this.refresh();
     }
@@ -173,21 +244,29 @@ class WindowUI {
     const identity = button(doc, "nv-band-identity", () => this.#profiles(win));
     identity.append(element(doc, "span", "nv-band-flag"), element(doc, "span", "nv-band-name"));
     const protection = button(doc, "nv-band-protection", () => this.#open(win, "settings/settings.html#profiles"));
+    // D-UX19: next to the profile, while this tab shows a site one of the group's rules sent here.
+    const route = button(doc, "nv-band-route", () => this.#open(win, "settings/settings.html#routing"));
+    route.hidden = true;
     const header = element(doc, "span", "nv-band-header");
-    row.append(identity, protection, header);
+    row.append(identity, protection, route, header);
     const seals = element(doc, "div", "nv-band-seals");
-    for (const kind of ["temporary", "private", "agent", "raw", "status"]) {
+    for (const kind of ["temporary", "private", "agent", "raw", "status", "activity"]) {
       const seal = element(doc, "span", `nv-band-seal nv-band-${kind}`);
       seal.hidden = true;
       seals.append(seal);
     }
     const guard = button(doc, "nv-band-seal nv-band-guard", () => this.#open(win, "guard/review.html"));
+    // UX5-I2: an agent connected through the bridge, acting in its own AI Workspace (Settings say more).
+    const connected = button(doc, "nv-band-seal nv-band-connected", () => this.#open(win, "settings/settings.html#ai"));
     const pause = button(doc, "nv-band-pause", () => this.#agentAction("pause"));
     const stop = button(doc, "nv-band-stop", () => this.#agentAction("stop"));
-    for (const control of [guard, pause, stop]) {
+    // UX5-I (Q10): the assistant's task in this window. These only tighten; resuming stays in Settings.
+    const taskStop = button(doc, "nv-band-task-stop", () => lazy.NulavioAI.assistantStopTask(win));
+    const assistantPause = button(doc, "nv-band-assistant-pause", () => lazy.NulavioAI.pauseAssistant().catch(console.error));
+    for (const control of [guard, connected, pause, stop, taskStop, assistantPause]) {
       control.hidden = true;
     }
-    seals.append(guard, pause, stop);
+    seals.append(guard, connected, pause, stop, taskStop, assistantPause);
     row.append(seals);
     return row;
   }
@@ -243,10 +322,20 @@ class WindowUI {
       return;
     }
     const doc = win.document;
-    const sheet = element(doc, "link");
-    sheet.rel = "stylesheet";
-    sheet.href = bandSheet.spec;
-    doc.head.append(sheet);
+    // UX3H (QA M-2): load the band's sheet synchronously, before the band exists, so the
+    // band's first frame is already its final one. A <link> loads asynchronously: on the
+    // first launch the band showed for ~100 ms as a separate row (+54 px) before it joined
+    // the navigation row. The <link> stays only as a fallback.
+    let sheet = null;
+    try {
+      win.windowUtils.loadSheetUsingURIString(bandSheet.spec, win.windowUtils.AUTHOR_SHEET);
+    } catch (e) {
+      console.error(e);
+      sheet = element(doc, "link");
+      sheet.rel = "stylesheet";
+      sheet.href = bandSheet.spec;
+      doc.head.append(sheet);
+    }
     const bar = doc.createXULElement("toolbar");
     bar.id = AREA;
     bar.setAttribute("customizable", "true");
@@ -264,7 +353,7 @@ class WindowUI {
     fullscreen.setAttribute("aria-label", t("bandLabel"));
     const line = element(doc, "div", "nv-fullscreen-line");
     line.setAttribute("aria-hidden", "true");
-    for (const kind of ["normal", "temporary", "private", "agent", "raw", "guard"]) {
+    for (const kind of ["normal", "temporary", "private", "agent", "raw", "guard", "activity"]) {
       const segment = element(doc, "span", `nv-fullscreen-${kind}`);
       segment.hidden = kind !== "normal";
       line.append(segment);
@@ -281,6 +370,8 @@ class WindowUI {
           for (const node of this.#rows(win)) {
             named(node.querySelector(".nv-band-header"), "");
           }
+          this.#windows.get(win)?.bar.removeAttribute("nv-named");
+          this.#markOwnPagePending(win);
         } else if (flags & Ci.nsIWebProgressListener.STATE_STOP) {
           header();
         }
@@ -305,6 +396,62 @@ class WindowUI {
     this.#windows.set(win, { bar, compact, fullscreen, line, sheet, progress, header, unload, pointer, screenObserver,
       noticeTimer: null, safety: null, restoreGroupPalette: this.#groupPalette(win) });
     this.#paint(win);
+    this.#unifyStartPage(win);
+  }
+
+  // QA M-2 (UX3E; UX3F A3): the Shell's new tab is the browser's own, so the engine's "Your new tab has
+  // changed" notice must not cover it. This records, for the Shell's id only, the same
+  // confirmation the notice's "Keep changes" button writes (ExtensionControlledPopup,
+  // type "newTabNotification"); the notice re-checks it before opening. Any other add-on
+  // that takes over the new tab still gets the notice, and nothing else is affected.
+  #confirmOwnNewTab() {
+    const store = lazy.ExtensionSettingsStore;
+    store.initialize().then(() => {
+      if (this.#started && !store.getSetting("newTabNotification", SHELL)?.value) {
+        return store.addSetting(SHELL, "newTabNotification", SHELL, true, () => false);
+      }
+      return null;
+    }).catch(console.error);
+  }
+
+  // QA M-2 (UX3E; UX3F A3): one new tab. The session's first window, when it starts on the
+  // engine's default home page, shows the Shell's new tab in that same tab, so the
+  // first window of a new profile already offers the one-time choices, and startup
+  // and Ctrl+T look the same. Only the first window, and only an untouched start:
+  // a single tab, no history, the home page pref at its default, the Shell's page
+  // still the new tab, a non-private window. Later windows (Ctrl+N), links from
+  // other apps, session restore and a home page the person set are left alone,
+  // and the address bar stays empty (the new tab is an initial page).
+  #unifyStartPage(win) {
+    if (this.#startPageChecked) {
+      return;
+    }
+    this.#startPageChecked = true;
+    const url = policy()?.getURL("newtab/newtab.html");
+    if (!url || lazy.PrivateBrowsingUtils.isWindowPrivate(win)
+        || Services.prefs.prefHasUserValue("browser.startup.homepage")) {
+      return;
+    }
+    Promise.resolve(win.gBrowserInit?.uriToLoadPromise).then(uri => {
+      const start = Array.isArray(uri) ? (uri.length === 1 ? uri[0] : null) : uri;
+      const browser = win.gBrowser?.selectedBrowser;
+      // UX3G N-4 (provisional): only new profiles; profiles from earlier builds keep about:home.
+      if (start !== "about:home" || win.closed || !this.#windows.has(win) || win.gBrowser.tabs.length !== 1
+          || !lazy.NulavioLayout.startsOnShellTab()
+          || lazy.AboutNewTab.newTabURL !== url || browser.canGoBack || browser.canGoForward
+          || !["about:home", "about:blank"].includes(browser.currentURI?.spec)) {
+        return;
+      }
+      // Least privilege: the Shell page loads with the Shell's own principal, not the system's.
+      const principal = policy()?.extension?.principal;
+      if (!principal) {
+        return;
+      }
+      browser.fixupAndLoadURIString(url, {
+        triggeringPrincipal: principal,
+        loadFlags: Ci.nsIWebNavigation.LOAD_FLAGS_REPLACE_HISTORY,
+      });
+    }).catch(console.error);
   }
 
   #showNotice(win) {
@@ -330,6 +477,7 @@ class WindowUI {
 
   #header(win) {
     let text = "";
+    let trust = false;
     try {
       const browser = win.gBrowser.selectedBrowser;
       const global = browser.browsingContext.currentWindowGlobal;
@@ -340,6 +488,7 @@ class WindowUI {
         if (key && url.protocol === "moz-extension:" && url.host === new URL(policy().getURL("")).host
             && browser.currentURI.spec === global.documentURI.spec) {
           text = t("bandSystemPage", [t(key)]);
+          trust = !PLAIN_SURFACES.has(key);
         }
       }
     } catch {
@@ -348,6 +497,64 @@ class WindowUI {
     for (const row of this.#rows(win)) {
       named(row.querySelector(".nv-band-header"), text);
     }
+    this.#windows.get(win)?.bar.toggleAttribute("nv-named", trust);
+    this.#markOwnPagePending(win);
+    this.#routeNotice(win);
+  }
+
+  /** A window with no alert may carry the band inside the navigation row (UX3G A1). A routing notice
+      also gives it back its own row, so the notice never squeezes the profile out (review F16). */
+  #neutral(win) {
+    return !this.#temporary && !lazy.PrivateBrowsingUtils.isWindowPrivate(win) && !this.#agent
+      && this.#guardCount === 0 && !this.#actionError && !this.#windows.get(win)?.routed
+      && !lazy.NulavioAI.activityState(win) && !this.#connected.some(c => c.agent !== this.#agent?.id);
+  }
+
+  /** "Aberto pela sua regra · Mudar" (D-UX19): only what the group's own rules say about this tab. */
+  #routeNotice(win) {
+    let ruleId = null;
+    try {
+      ruleId = lazy.PrivateBrowsingUtils.isWindowPrivate(win) ? null : lazy.NulavioRouting.arrivedBy(win.gBrowser.selectedBrowser);
+    } catch (e) {
+      console.error(e);
+    }
+    const state = this.#windows.get(win);
+    if (state && state.routed !== Boolean(ruleId)) {
+      state.routed = Boolean(ruleId);
+      state.bar.toggleAttribute("nv-neutral", this.#neutral(win));
+    }
+    // UX6: a link the default destination sent says that, not "your rule".
+    const name = this.#profile?.name || t("bandProfileDefault");
+    const label = ruleId === "default" ? t("bandRoutedDefaultNamed", [name]) : ruleId ? t("bandRoutedNamed", [name]) : "";
+    for (const row of this.#rows(win)) {
+      const node = row.querySelector(".nv-band-route");
+      if (node.hidden !== !ruleId) {
+        node.hidden = !ruleId;
+      }
+      setText(node, ruleId === "default" ? t("bandRoutedDefault") : ruleId ? t("bandRouted") : "");
+      setAttr(node, "aria-label", label);
+      setAttr(node, "title", label);
+    }
+  }
+
+  // UX3G: for a moment after Ctrl+T the address bar already holds the Shell's new tab URL
+  // while the tab still shows its initial, empty about:blank, and the identity box calls
+  // that "Not Secure". Mark only that state: the Shell's exact URL over an initial empty
+  // document with no web origin. Any committed page (web, error or the Shell's own) clears
+  // it, so a web page's security indicator is never affected (window-band.css).
+  #markOwnPagePending(win) {
+    let pending = false;
+    try {
+      const browser = win.gBrowser.selectedBrowser;
+      const global = browser.browsingContext.currentWindowGlobal;
+      const own = policy()?.getURL("newtab/newtab.html");
+      pending = Boolean(own && global) && browser.currentURI?.spec === own
+        && global.isInitialDocument && global.documentURI?.spec === "about:blank"
+        && global.documentPrincipal?.addonPolicy?.id !== SHELL;
+    } catch {
+      pending = false;
+    }
+    win.document.documentElement.toggleAttribute("nulavio-own-page-pending", pending);
   }
 
   #paint(win) {
@@ -356,18 +563,25 @@ class WindowUI {
     const workspace = agent?.target.kind === "workspace";
     const name = this.#temporary ? t("profilesTemporaryShort") : workspace ? agent.name
       : this.#profileUnavailable && profile?.name ? `? ${profile.name}`
-        : profile?.name || agent?.target.profile || t("bandProfileUnavailable");
+        : profile?.name || agent?.target.profile
+          // No registered profile is the ordinary default profile; only a failed read is "unavailable".
+          || t(this.#profileUnavailable ? "bandProfileUnavailable" : "bandProfileDefault");
     const protection = t(this.#protection === "unlocked" ? "bandProtected" : this.#protection === "plain" ? "bandUnprotected" : "bandProtectionUnknown");
     const privateWindow = lazy.PrivateBrowsingUtils.isWindowPrivate(win);
     const root = win.document.documentElement;
     root.toggleAttribute("nulavio-window-agent", Boolean(agent));
     root.toggleAttribute("nulavio-window-raw", Boolean(agent?.raw));
     const state = this.#windows.get(win);
+    const activity = lazy.NulavioAI.activityState(win);
     const kinds = { normal: true, temporary: this.#temporary, private: privateWindow,
-      agent: Boolean(agent), raw: Boolean(agent?.raw), guard: this.#guardCount > 0 };
+      agent: Boolean(agent), raw: Boolean(agent?.raw), guard: this.#guardCount > 0, activity: Boolean(activity) };
     for (const [kind, visible] of Object.entries(kinds)) {
       state.line.querySelector(`.nv-fullscreen-${kind}`).hidden = !visible;
     }
+    // UX3G A1: a window with no alert (not private, temporary, agent, Guard or a failed
+    // action) may carry the band inside the navigation row (window-band.css); any alert
+    // gives it back its own strong row at once.
+    state.bar.toggleAttribute("nv-neutral", this.#neutral(win));
     const safety = JSON.stringify([name, this.#protection, privateWindow, this.#temporary, agent, this.#guardCount, this.#actionError]);
     if (state.safety !== safety) {
       state.safety = safety;
@@ -379,27 +593,45 @@ class WindowUI {
       row.dataset.agent = String(Boolean(agent));
       row.dataset.workspace = String(Boolean(workspace));
       row.dataset.raw = String(Boolean(agent?.raw));
+      // Which outline glyph the protection and the agent status draw (window-band.css); words stay the cue.
+      row.dataset.protection = this.#protection === "unlocked" ? "unlocked" : this.#protection === "plain" ? "plain" : "unknown";
+      row.dataset.agentStatus = this.#actionError ? "failed" : this.#agentUnavailable ? "unknown"
+        : agent?.stopped ? "stopped" : agent?.revoked ? "revoked" : "paused";
       const identity = row.querySelector(".nv-band-identity");
-      identity.style.setProperty("--profile-fill", workspace
-        ? "var(--nv-color-security-agent-ink)" : `var(--nv-color-identity-${profile?.color ?? "slate"})`);
-      identity.setAttribute("aria-label", t("profilesButtonNamed", [name]));
-      identity.title = name;
-      const glyph = row.querySelector(".nv-band-flag");
-      if (!workspace && !this.#temporary && lazy.AVATARS.includes(profile?.avatar)) {
-        const image = element(win.document, "img", "nv-band-avatar");
-        image.src = `chrome://browser/content/profiles/assets/16_${profile.avatar}.svg`;
-        image.alt = "";
-        glyph.replaceChildren(image);
-      } else {
-        glyph.textContent = workspace ? "▤" : [...name][0]?.toLocaleUpperCase() || "?";
+      const color = profile?.color ?? "slate";
+      const fill = workspace ? "var(--nv-color-security-agent-ink)" : `var(--nv-color-identity-${color})`;
+      if (identity.style.getPropertyValue("--profile-fill") !== fill) {
+        identity.style.setProperty("--profile-fill", fill);
+        // Calmaria: the neutral row draws the soft tile; alert rows keep the strong fill above.
+        identity.style.setProperty("--profile-tile", `var(--nv-color-identityTile-${color})`);
+        identity.style.setProperty("--profile-glyph", `var(--nv-color-identityGlyph-${color})`);
       }
-      glyph.setAttribute("aria-hidden", "true");
-      row.querySelector(".nv-band-name").textContent = name;
-      named(row.querySelector(".nv-band-protection"), protection);
+      setAttr(identity, "aria-label", t("profilesButtonNamed", [name]));
+      setAttr(identity, "title", name);
+      const glyph = row.querySelector(".nv-band-flag");
+      // The profile's own glyph, the hourglass of a temporary profile or the AI Workspace's; else its
+      // initial, and the person glyph for a name with no letter (never "?": that means unknown).
+      const d = workspace ? lazy.SPECIAL_GLYPHS.workspace
+        : this.#temporary ? lazy.SPECIAL_GLYPHS.temporary : lazy.AVATAR_GLYPHS[profile?.avatar] ?? null;
+      const letter = d ? null : lazy.profileInitial(name);
+      if (d || !letter) {
+        showGlyph(glyph, d ?? lazy.SPECIAL_GLYPHS.person);
+      } else if (glyph.firstElementChild || glyph.textContent !== letter) {
+        glyph.textContent = letter;
+      }
+      setAttr(glyph, "aria-hidden", "true");
+      setText(row.querySelector(".nv-band-name"), name);
+      // "Protegido" fits the Lateral column; the whole "Protegido · desbloqueado" is its name and title.
+      const protectionNode = row.querySelector(".nv-band-protection");
+      setText(protectionNode, this.#protection === "unlocked" ? t("bandProtectedShort") : protection);
+      setAttr(protectionNode, "aria-label", protection);
+      setAttr(protectionNode, "title", protection);
       const seal = (kind, visible, text) => {
         const node = row.querySelector(`.nv-band-${kind}`);
         const hadFocus = node === win.document.activeElement;
-        node.hidden = !visible;
+        if (node.hidden !== !visible) {
+          node.hidden = !visible;
+        }
         named(node, text);
         if (!visible && hadFocus) {
           row.querySelector(".nv-band-stop").focus();
@@ -419,6 +651,17 @@ class WindowUI {
       seal("guard", this.#guardCount > 0, t("bandGuard", [String(this.#guardCount)]));
       seal("pause", Boolean(agent && !agent.paused && !agent.stopped && !agent.revoked), t("bandPauseAgent", [agentName]));
       seal("stop", Boolean(agent), t("bandStopAll"));
+      // A count only once an action ran: never "0 ações" (refused or stopped calls are not actions).
+      const acting = !activity?.steps ? t("bandAssistantActingNone")
+        : activity.steps === 1 ? t("bandAssistantActingOne") : t("bandAssistantActing", [String(activity.steps)]);  // prettier-ignore
+      seal("activity", Boolean(activity), activity?.stopping ? t("bandAssistantStopping") : activity?.waiting ? t("bandAssistantWaiting") : acting);
+      row.dataset.activity = String(Boolean(activity));
+      // Not where an agent drives this window: it would learn which other agents are connected (review UX5-I F5).
+      const others = privateWindow || agent ? [] : this.#connected.filter(c => c.agent !== agent?.id);
+      seal("connected", others.length > 0, others.length === 1 ? t("bandAgentConnected", [others[0].name])
+        : t("bandAgentsConnected", [String(others.length)]));  // prettier-ignore
+      seal("task-stop", Boolean(activity && !activity.stopping), t("bandTaskStop"));
+      seal("assistant-pause", Boolean(activity && !activity.stopping), t("bandAssistantPause"));
     }
     this.#header(win);
   }
@@ -434,10 +677,11 @@ class WindowUI {
     const agentRevision = this.#agentRevision;
     const refresh = (async () => {
       const [profile, temporary, protection, agent] = await Promise.allSettled([
-        lazy.NulavioProfiles.current(), lazy.NulavioProfiles.temporaryState(),
+        lazy.NulavioProfiles.currentForBand(), lazy.NulavioProfiles.temporaryState(),
         lazy.profileLockState(Services.dirsvc.get("ProfD", Ci.nsIFile).path),
         lazy.NulavioAI.windowState(),
       ]);
+      const connected = await lazy.NulavioAI.connectedAgents().catch(() => []);
       if (!this.#started || generation !== this.#generation) {
         return;
       }
@@ -464,6 +708,7 @@ class WindowUI {
         }
       }
       this.#guardCount = lazy.NulavioGuard.findings().length;
+      this.#connected = connected;
       for (const win of this.#windows.keys()) {
         this.#paint(win);
       }
@@ -504,9 +749,76 @@ class WindowUI {
     state.screenObserver.disconnect();
     state.bar.remove();
     state.fullscreen.remove();
-    state.sheet.remove();
+    if (state.sheet) {
+      state.sheet.remove();
+    } else {
+      try {
+        win.windowUtils.removeSheetUsingURIString(bandSheet.spec, win.windowUtils.AUTHOR_SHEET);
+      } catch {
+        // The window is already gone.
+      }
+    }
     win.document.documentElement.removeAttribute("nulavio-window-agent");
     win.document.documentElement.removeAttribute("nulavio-window-raw");
+  }
+
+  /** "Perguntar ao assistente sobre esta página" in the address bar (UX5-H, Q6): typing one of its words, or
+      the actions list, offers it; picking it puts this tab's page in the panel's next message and opens the
+      panel. Nothing is sent. Not offered in private windows or where an agent drives the browser. */
+  #addQuickAction() {
+    const top = () => Services.wm.getMostRecentBrowserWindow();
+    try {
+      lazy.ActionsProviderQuickActions.addAction(QUICK_ACTION, {
+        commands: ["assistente", "perguntar ao assistente", "assistant", "ask the assistant"],
+        icon: WebExtensionPolicy.getByID(SHELL)?.getURL("shared/nulavio-symbol-mono.svg") ?? "",
+        label: "nulavio-quickaction-assistant",
+        isUnsupported: () => {
+          const win = top();
+          return !win || lazy.PrivateBrowsingUtils.isWindowPrivate(win) || Boolean(Services.prefs.getStringPref("nulavio.ai.workspace", ""));
+        },
+        onPick: (_queryContext, controller) => {
+          const win = controller?.browserWindow ?? top();
+          if (!win || lazy.PrivateBrowsingUtils.isWindowPrivate(win)) {
+            return null;
+          }
+          const tabId = lazy.ExtensionParent.apiManager.global.tabTracker.getId(win.gBrowser.selectedTab);
+          lazy.NulavioAI.assistantOffer({ kind: "page" }, tabId).catch(console.error);
+          return null;
+        },
+      });
+      const workspace = () => Boolean(Services.prefs.getStringPref("nulavio.ai.workspace", ""));
+      lazy.ActionsProviderQuickActions.addAction("nulavio-settings", {
+        commands: ["nulavio", "configurações do nulavio", "nulavio settings"],
+        icon: WebExtensionPolicy.getByID(SHELL)?.getURL("shared/nulavio-symbol-mono.svg") ?? "",
+        label: "nulavio-quickaction-settings",
+        isUnsupported: workspace, // an agent's window has no Nulavio settings to open
+        onPick: (_queryContext, controller) => {
+          const win = controller?.browserWindow ?? top();
+          const url = WebExtensionPolicy.getByID(SHELL)?.getURL("settings/settings.html");
+          if (win && url) {
+            win.openTrustedLinkIn(url, "tab");
+          }
+          return null;
+        },
+      });
+      lazy.ActionsProviderQuickActions.addAction("nulavio-focus", {
+        commands: ["foco", "modo foco", "focus", "focus mode"],
+        icon: WebExtensionPolicy.getByID(SHELL)?.getURL("shared/nulavio-symbol-mono.svg") ?? "",
+        label: "nulavio-quickaction-focus",
+        isUnsupported: () => workspace() || !Services.prefs.getBoolPref("sidebar.revamp", false),
+        onPick: (_queryContext, controller) => {
+          const win = controller?.browserWindow ?? top();
+          if (win) {
+            const extension = WebExtensionPolicy.getByID(SHELL)?.extension;
+            const say = key => win.A11yUtils?.announce({ raw: extension?.localizeMessage(key) ?? key }).catch(() => {});
+            lazy.NulavioLayout.toggleFocus(win, say).catch(() => {}); // announced in the window
+          }
+          return null;
+        },
+      });
+    } catch (e) {
+      console.error("Nulavio: quick action", e); // an engine without this API: the other entry points remain
+    }
   }
 
   stop() {
@@ -524,12 +836,19 @@ class WindowUI {
       Services.obs.removeObserver(this, topic);
     }
     lazy.CustomizableUI.removeListener(this);
+    for (const action of QUICK_ACTIONS) {
+      try {
+        lazy.ActionsProviderQuickActions.removeAction(action);
+      } catch (e) {
+        console.error("Nulavio: quick action", e);
+      }
+    }
     for (const win of this.#windows.keys()) {
       this.#detach(win);
     }
     lazy.CustomizableUI.destroyWidget(WIDGET);
     lazy.CustomizableUI.unregisterArea(AREA);
-    for (const uri of [sidebarFocus]) {
+    for (const uri of [sidebarFocus, inContent]) {
       if (sheets.sheetRegistered(uri, sheets.AGENT_SHEET)) {
         sheets.unregisterSheet(uri, sheets.AGENT_SHEET);
       }

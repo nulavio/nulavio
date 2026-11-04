@@ -15,11 +15,12 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
+import contrast
 import harness
 import pngdiff
-import contrast
 
 BASELINES = Path(__file__).resolve().parents[1] / "baselines" / "component-gallery"
+LAYOUT = 'ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioLayout.sys.mjs").NulavioLayout'
 # Repeated captures in one pinned Linux engine are identical. Allow only small
 # rasterisation drift, not structural changes; dimensions are separately exact.
 MAX_MEAN = 0.1
@@ -28,11 +29,37 @@ MAX_CHANGED = 0.001
 
 @unittest.skipUnless(harness.nulavio_engine(), "Track B built-in Shell gallery requires NULAVIO_ENGINE")
 class ComponentGalleryTest(unittest.TestCase):
+    @staticmethod
+    def _exclude_sidebar_launcher(m, *, assert_initial_lateral=False):
+        """Exclude window-chrome launcher width so SetWindowRect sets exact content innerWidth."""
+        m.set_context("chrome")
+        try:
+            state = m.execute_async(
+                f"const done = arguments[arguments.length - 1];"
+                f"const checkInitial = arguments[0];"
+                f"(async () => {{"
+                f"  const initial = await {LAYOUT}.state(window);"
+                f"  if (checkInitial && initial.preset !== 'lateral') {{"
+                f"    done({{ error: 'expected initial lateral, got ' + initial.preset }});"
+                f"    return;"
+                f"  }}"
+                f"  const applied = await {LAYOUT}.apply(window, 'top');"
+                f"  SidebarController._state.updateVisibility(false, false);"
+                f"  await SidebarController.waitUntilStable();"
+                f"  document.documentElement.style.minWidth = '0px';"
+                f"  done({{ applied: applied.preset, launcherVisible: SidebarController.getUIState().launcherVisible }});"
+                f"}})().catch(err => done({{ error: String(err) }}));",
+                [assert_initial_lateral],
+            )
+        finally:
+            m.set_context("content")
+        assert state == {"applied": "top", "launcherVisible": False}, state
+
     @classmethod
     def setUpClass(cls):
         cls.session = harness.GeckoProfileSession(name="Gallery")
         cls.m = cls.session.start()
-        cls.m.chrome("document.documentElement.style.minWidth = '0px';")
+        cls._exclude_sidebar_launcher(cls.m, assert_initial_lateral=True)
         cls.artifacts = harness.artifacts_dir() / "component-gallery"
         cls.artifacts.mkdir(parents=True, exist_ok=True)
         url = cls.m.chrome('return ChromeUtils.importESModule("resource:///modules/AboutNewTab.sys.mjs").AboutNewTab.newTabURL;')
@@ -109,7 +136,7 @@ class ComponentGalleryTest(unittest.TestCase):
                     self.assertGreaterEqual(float(state["focusWidth"].removesuffix("px")), 2)
                     self.assertNotEqual(state["hover"], "none", state)
                     self.assertNotEqual(state["active"], "none", state)
-                    self.assertEqual(state["invalid"], "2px", state)
+                    self.assertEqual(state["invalid"], "2px")
                     self.assertEqual(state["opaque"], "1", state)
                     self.assertEqual(state["animated"], "none", state)
                     self.assertTrue(state["safeFirst"] and state["inert"], state)
@@ -188,7 +215,7 @@ class ComponentGalleryTest(unittest.TestCase):
             self.assertFalse(self.m.execute("return document.documentElement.scrollWidth > innerWidth;"))
         self.m.chrome("Services.prefs.setIntPref('ui.useAccessibilityTheme', 1);")
         self.m = type(self).m = self.session.restart()
-        self.m.chrome("document.documentElement.style.minWidth = '0px';")
+        self._exclude_sidebar_launcher(self.m, assert_initial_lateral=False)
         self.m.send("WebDriver:SetWindowRect", {"width": 390, "height": 1000})
         self.open_gallery()
         self.m.execute("document.documentElement.style.fontSize = '200%';")
@@ -212,3 +239,7 @@ class ComponentGalleryTest(unittest.TestCase):
             "Services.prefs.clearUserPref('ui.useAccessibilityTheme');"
             "Services.prefs.clearUserPref('browser.display.document_color_use');"
         )
+
+
+if __name__ == "__main__":
+    unittest.main()

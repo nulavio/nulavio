@@ -24,12 +24,39 @@ def without_comments(css: str) -> str:
     return re.sub(r"/\*.*?\*/", "", css, flags=re.S)
 
 
+def private_block(css: str) -> str:
+    """The UX3G private-window block: from its media query to the matching close brace."""
+    start = css.index('@media not ((forced-colors) or (prefers-contrast)) {\n    :root[privatebrowsingmode="temporary"]')
+    depth = 0
+    for i in range(start, len(css)):
+        if css[i] == "{":
+            depth += 1
+        elif css[i] == "}":
+            depth -= 1
+            if depth == 0:
+                return css[start : i + 1]
+    raise AssertionError("unbalanced private block")
+
+
 class HorizonThemeTest(unittest.TestCase):
     def test_values_come_from_tokens(self):
         code = without_comments(CSS)
         self.assertNotRegex(code, r"#[0-9a-fA-F]{3,8}\b", "literal colour: add a token to docs/brand/tokens.json")
         self.assertNotRegex(code, r"\brgba?\(|\bhsla?\(", "literal colour function")
-        self.assertNotIn("!important", code, "author !important breaks user themes and accessibility overrides")
+        outside = code.replace(private_block(code), "")
+        self.assertNotIn("!important", outside, "author !important breaks user themes and accessibility overrides")
+
+    def test_private_window_override_is_scoped_to_the_engine_substitute(self):
+        """UX3G N2: the only !important rules repaint the engine's own private theme (inline
+        variables), never a theme the person installed, forced colours or a contrast preference."""
+        block = private_block(without_comments(CSS))
+        self.assertIn("@media not ((forced-colors) or (prefers-contrast))", block)
+        selectors = re.findall(r"^\s*([^{}\n]+)\{", block, flags=re.M)
+        self.assertEqual(selectors[1].strip(), ':root[privatebrowsingmode="temporary"][lwtheme][theme-in-app]')
+        self.assertTrue(all(":root" not in s or "[theme-in-app]" in s for s in selectors), selectors)
+        values = re.findall(r"!important", block)
+        self.assertGreater(len(values), 10)
+        self.assertNotRegex(block, r"#[0-9a-fA-F]{3,8}\b")
 
     def test_everything_is_behind_the_pref(self):
         code = without_comments(CSS)
@@ -92,3 +119,80 @@ class HorizonThemeTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class InContentPagesTest(unittest.TestCase):
+    """UX3F A2: the engine's internal pages in Nulavio's colours, never reaching web pages."""
+
+    SHEET = (ROOT / "browser" / "shell" / "shared" / "in-content.css").read_text(encoding="utf-8")
+
+    def test_scoped_to_exact_internal_pages(self):
+        code = without_comments(self.SHEET)
+        head = code[: code.index("{")]
+        self.assertTrue(head.strip().startswith("@-moz-document"), head)
+        targets = re.findall(r'url-prefix\("([^"]+)"\)', head)
+        self.assertTrue(targets)
+        self.assertTrue(all(t.startswith("about:") and t[6:].isalpha() for t in targets), targets)
+        self.assertNotRegex(head, r"url\(|domain\(|regexp\(", "only about: prefixes")
+        self.assertEqual(code.count("@-moz-document"), 1)
+
+    def test_no_nulavio_variables_and_steps_aside(self):
+        code = without_comments(self.SHEET)
+        self.assertNotIn("--nv-", code, "Nulavio token names would be visible to the page")
+        self.assertIn('@media -moz-pref("nulavio.horizon.enabled")', code)
+        self.assertIn("@media not ((forced-colors) or (prefers-contrast))", code)
+        self.assertIn(":root:not([lwtheme])", code)
+        self.assertIn('"default-theme@mozilla.org"', code)
+
+    def test_registered_like_the_sidebar_focus_sheet(self):
+        window = (ROOT / "browser" / "shell" / "modules" / "NulavioWindow.sys.mjs").read_text(encoding="utf-8")
+        self.assertIn("shared/in-content.css", window)
+        self.assertEqual(window.count("for (const uri of [sidebarFocus, inContent])"), 2)
+
+    def test_settings_active_entry_is_set_on_the_nav_button_itself(self):
+        """UX3H: the :host of moz-page-nav-button re-declares the variables; :root alone never reached it."""
+        code = without_comments(self.SHEET)
+        rule = re.search(r":root:not\(\[lwtheme\]\) moz-page-nav-button \{([^}]*)\}", code)
+        self.assertTrue(rule, "no rule on moz-page-nav-button")
+        self.assertIn("--page-nav-button-background-color-selected: light-dark(#0F7A68, #0E3B33) !important", rule.group(1))
+        self.assertIn("--page-nav-button-text-color-selected: light-dark(#FFFFFF, #6FE0C5) !important", rule.group(1))
+
+    def test_about_home_search_field_is_readable_in_light(self):
+        """UX3H A-2: the about:home field was navy in light (placeholder 1.12:1)."""
+        import importlib.util
+
+        spec = importlib.util.spec_from_file_location("contrast", ROOT / "scripts" / "brand" / "contrast.py")
+        contrast = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(contrast)
+        code = without_comments(self.SHEET)
+        rule = re.search(r"\n\s*content-search-handoff-ui \{([^}]*)\}", code).group(1)
+        field = re.search(r"--content-search-handoff-ui-background-color: light-dark\((#\w{6}), (#\w{6})\)", rule)
+        edge = re.search(r"--content-search-handoff-ui-unfocused-border-color: light-dark\((#\w{6}), (#\w{6})\)", rule)
+        self.assertTrue(field and edge, rule)
+        canvas = re.search(r"--background-color-canvas: light-dark\((#\w{6}), (#\w{6})\)", code)
+        light_text, dark_text = "#0B1623", "#F1F7F5"  # text.primary (FieldText follows the scheme)
+        self.assertGreaterEqual(contrast.ratio(light_text, field.group(1)), 7)
+        self.assertGreaterEqual(contrast.ratio(dark_text, field.group(2)), 7)
+        self.assertGreaterEqual(contrast.ratio(edge.group(1), canvas.group(1)), 3)
+        self.assertGreaterEqual(contrast.ratio(edge.group(2), canvas.group(2)), 3)
+        # The private page (always navy) keeps the private field.
+        private = re.search(r"html\.private content-search-handoff-ui \{([^}]*)\}", code).group(1)
+        self.assertIn("#15293A", private)
+        self.assertNotIn("light-dark", private)
+
+    def test_kit_artwork_is_replaced_by_nulavio_artwork(self):
+        jar = (ROOT / "browser" / "branding" / "nulavio" / "content" / "jar.mn").read_text(encoding="utf-8")
+        art = ROOT / "browser" / "branding" / "nulavio" / "content" / "illustration-promo.svg"
+        self.assertTrue(art.is_file())
+        for kit in ("kit-happy", "kit-concerned"):
+            self.assertIn(
+                f"% override chrome://global/skin/illustrations/{kit}.svg chrome://branding/content/illustration-promo.svg",
+                jar,
+            )
+        # UX3H M-1: the fox on about:addons' empty list and on about:logins.
+        for fox in (
+            "chrome://mozapps/skin/extensions/kit-addons.svg",
+            "chrome://mozapps/skin/extensions/kit-themes.svg",
+            "chrome://global/content/megalist/icons/cpm-fox-illustration.svg",
+        ):
+            self.assertIn(f"% override {fox} chrome://branding/content/illustration-promo.svg", jar)

@@ -35,42 +35,143 @@
 
 /* Live status on the new tab */
 .facts dd[data-level] { display: flex; align-items: baseline; gap: var(--nv-space-2); }
-.facts dd[data-level]::before { font-weight: var(--nv-font-weight-semibold); flex: none; }
-.facts dd[data-level="ok"]::before { content: "✓"; color: var(--nv-color-status-secure); }
+/* Marks are SVG masks (Calmaria): one shape whatever the desktop font, never read aloud. */
+:is(.facts dd, .here__summary, .firstrun__facts li)[data-level]::before { flex: none; content: ""; inline-size: 1em; block-size: 1em; align-self: center; background-color: currentColor; mask: var(--mark) center / contain no-repeat; }
+[data-level="ok"] { --mark: url("icon-check.svg"); }
+[data-level="warn"] { --mark: url("icon-warning.svg"); }
+[data-level="unknown"] { --mark: url("icon-unknown.svg"); }
+.facts dd[data-level="ok"]::before { background-color: var(--nv-color-status-secure); }
 .facts dd[data-level="warn"] { color: var(--nv-color-status-warning); }
-.facts dd[data-level="warn"]::before { content: "⚠"; }
 .facts dd[data-level="unknown"] { color: var(--nv-color-text-muted); }
-.facts dd[data-level="unknown"]::before { content: "?"; }
 .card__note { margin: var(--nv-space-5) 0 0; font-size: var(--nv-type-caption-size); color: var(--nv-color-text-muted); }
 
-/* Settings page */
-.page--settings { max-width: 52rem; gap: var(--nv-space-7); padding-top: var(--nv-space-8); }
-.settings-header { display: grid; gap: var(--nv-space-3); }
-.settings-header__title { margin: 0; font-size: var(--nv-type-title-size); font-weight: var(--nv-type-title-weight); line-height: var(--nv-type-title-lineHeight); letter-spacing: -0.01em; }
-.settings-header__intro { margin: 0; color: var(--nv-color-text-secondary); }
-.settings-nav { display: flex; gap: var(--nv-space-3); flex-wrap: wrap; }
+/* New tab (UX4, audit SPA-14): "Você está em …" and the facts in one line; the rest in Details */
+.here { display: grid; gap: var(--nv-space-4); }
+.here__line { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: var(--nv-space-3) var(--nv-space-5); }
+.here__who { display: flex; flex-basis: 100%; flex-wrap: wrap; align-items: center; gap: var(--nv-space-3); }
+.here__who[hidden], .here__routes[hidden], .here__settings[hidden] { display: none; }
+.here__label, .here__plain, .here__routes { color: var(--nv-color-text-secondary); }
+.here__who .badge { margin-inline-start: 0; }
+.here__summary { display: inline-flex; align-items: baseline; gap: var(--nv-space-2); font-weight: var(--nv-font-weight-medium); }
+/* A state is not a "safe" seal: the line carries no mark when all is on; attention keeps its own. */
+.here__summary[data-level="ok"]::before { content: none; }
+.here__summary[data-level="warn"] { color: var(--nv-color-status-warning); }
+.here__summary[data-level="unknown"] { color: var(--nv-color-text-secondary); }
+.here__settings { margin-inline-start: auto; font-size: var(--nv-type-label-size); }
+.here__details .facts { margin-top: var(--nv-space-3); grid-template-columns: repeat(auto-fit, minmax(min(14rem, 100%), 1fr)); }
+.popup__filter { inline-size: 100%; margin-bottom: var(--nv-space-2); }
+.popup__filter[hidden] { display: none; }
+.here__sites { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--nv-space-2) var(--nv-space-5); }
+.help__body { margin-top: var(--nv-space-4); }
+.help.card { background: none; border: 0; box-shadow: none; padding-block: 0; }
+.help .footer { margin-top: var(--nv-space-6); }
+
+/* Settings page (UX4, audit SPA-04/05/06): a sticky rail grouped by how far a change reaches,
+   one section at a time, and results next to the control that made them. */
+.settings { display: grid; grid-template-columns: 15rem minmax(0, 1fr); align-items: start; min-height: 100vh; }
+.settings-rail {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+  display: grid;
+  gap: var(--nv-space-5);
+  align-content: start;
+  padding: var(--nv-space-8) var(--nv-space-4) var(--nv-space-6);
+  border-inline-end: 1px solid var(--nv-color-border-subtle);
+}
+.settings-search__input { inline-size: 100%; }
+.settings-nav { display: grid; gap: var(--nv-space-2); }
+.settings-nav ul { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--nv-space-1); }
+.settings-nav__group {
+  margin: var(--nv-space-4) 0 0;
+  padding-inline: var(--nv-space-4);
+  font-size: var(--nv-type-caption-size);
+  font-weight: var(--nv-font-weight-semibold);
+  color: var(--nv-color-text-secondary);
+}
+.settings-nav__group:first-child { margin-top: 0; }
 .settings-nav a {
-  padding: var(--nv-space-2) var(--nv-space-5);
-  border-radius: var(--nv-radius-pill);
-  border: 1px solid var(--nv-color-border-subtle);
+  display: block;
+  padding: var(--nv-space-2) var(--nv-space-4);
+  border-radius: var(--nv-radius-md);
   color: var(--nv-color-text-primary);
   text-decoration: none;
 }
-.settings-nav a:hover { box-shadow: inset 0 0 0 100vmax color-mix(in srgb, currentColor 8%, transparent); }
+.settings-nav a:hover { background: color-mix(in srgb, currentColor 8%, transparent); }
+/* The open section: tint, weight and an edge, never colour alone */
+.settings-nav a[aria-current="page"] {
+  background: var(--nv-color-accent-tint);
+  font-weight: var(--nv-font-weight-semibold);
+  box-shadow: inset 3px 0 0 var(--nv-color-accent-default);
+}
+.settings-nav a[aria-current="page"]:dir(rtl) { box-shadow: inset -3px 0 0 var(--nv-color-accent-default); }
+.page--settings { max-width: 52rem; margin: 0; gap: var(--nv-space-7); padding-top: var(--nv-space-8); padding-bottom: var(--nv-space-9); }
+.settings-header { display: grid; gap: var(--nv-space-3); }
+.settings-header__title { margin: 0; font-size: var(--nv-type-title-size); font-weight: var(--nv-type-title-weight); line-height: var(--nv-type-title-lineHeight); letter-spacing: -0.01em; }
+.settings-header__intro { margin: 0; color: var(--nv-color-text-secondary); }
+.settings-where { margin: 0; display: flex; align-items: center; flex-wrap: wrap; gap: var(--nv-space-3); }
+.settings-where[hidden] { display: none; }
+.settings-where__label { color: var(--nv-color-text-secondary); }
+.settings-where .badge { margin-inline-start: 0; }
+.settings-results { margin: 0; color: var(--nv-color-text-secondary); font-size: var(--nv-type-label-size); }
+.settings-main[data-view="section"] > .section:not([data-active]),
+.settings-main[data-view="search"] > .section:not([data-match]),
+.settings-main[data-view="search"] > .section > [data-miss] { display: none; }
 .section { display: grid; gap: var(--nv-space-5); scroll-margin-top: var(--nv-space-6); }
+.section__head { display: flex; align-items: baseline; flex-wrap: wrap; gap: var(--nv-space-2) var(--nv-space-4); }
+.section__head-end { margin-inline-start: auto; }
 .section__title { margin: 0; font-size: var(--nv-type-section-size); font-weight: var(--nv-type-section-weight); line-height: var(--nv-type-section-lineHeight); }
+/* The heading takes the keyboard after a rail link (tabindex -1): a reading position, not a control */
+.section__title:focus { outline: none; }
+/* How far a section reaches: an info tag (neutral), not a state */
+.scope {
+  margin: 0;
+  padding: 0 var(--nv-space-3);
+  border-radius: var(--nv-radius-sm);
+  background: var(--nv-color-bg-sunken);
+  color: var(--nv-color-text-secondary);
+  font-size: var(--nv-type-caption-size);
+  font-weight: var(--nv-font-weight-medium);
+}
+
+/* Narrow windows: the rail becomes a sticky row above the page */
+@media (max-width: 56rem) {
+  .settings { grid-template-columns: minmax(0, 1fr); }
+  .settings-rail {
+    z-index: var(--nv-zIndex-navigation);
+    height: auto;
+    padding: var(--nv-space-3) var(--nv-space-5);
+    border-inline-end: 0;
+    border-bottom: 1px solid var(--nv-color-border-subtle);
+    background: var(--nv-color-bg-canvas);
+  }
+  .settings-nav { display: flex; overflow-x: auto; gap: var(--nv-space-1); scrollbar-width: thin; scrollbar-color: var(--nv-color-border-control) transparent; padding-block-end: var(--nv-space-2); }
+  /* Reached by its address, a section or card stops below the sticky rail (nav.js measures it). */
+  .settings-main .section, .settings-main [id] { scroll-margin-top: calc(var(--settings-rail-h, 7rem) + var(--nv-space-4)); }
+  /* More entries past an edge (QA R2-1): the row fades there, so it reads as scrollable */
+  .settings-nav[data-more-end] { mask-image: linear-gradient(to right, #000 calc(100% - 2.5rem), transparent); }
+  .settings-nav[data-more-start] { mask-image: linear-gradient(to left, #000 calc(100% - 2.5rem), transparent); }
+  .settings-nav[data-more-start][data-more-end] {
+    mask-image: linear-gradient(to right, transparent, #000 2.5rem, #000 calc(100% - 2.5rem), transparent);
+  }
+  .settings-nav ul { display: flex; }
+  .settings-nav__group { display: none; }
+  .settings-nav a { white-space: nowrap; }
+  .page--settings { margin: 0 auto; padding-top: var(--nv-space-6); }
+}
+
 /* Toolbar profile selector */
 .popup { min-height: 0; background: var(--nv-color-bg-canvas); font-family: var(--nv-font-family-ui); }
 .popup__main { width: min(20rem, 100vw); padding: var(--nv-space-5); display: grid; gap: var(--nv-space-5); }
 .popup__label {
   margin: 0 0 var(--nv-space-3);
-  font-size: var(--nv-type-caption-size);
+  font-size: var(--nv-type-label-size);
   font-weight: var(--nv-font-weight-semibold);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--nv-color-text-muted);
+  color: var(--nv-color-text-secondary);
 }
 .popup__current { display: flex; align-items: center; gap: var(--nv-space-4); }
+.popup__current .popup__name { font-size: var(--nv-type-body-size); font-weight: var(--nv-font-weight-semibold); }
 .popup__name { font-weight: var(--nv-font-weight-medium); overflow-wrap: anywhere; }
 .popup__list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--nv-space-1); }
 .popup__item {
@@ -93,8 +194,46 @@
 .popup__empty { color: var(--nv-color-text-secondary); font-size: var(--nv-type-label-size); }
 .popup__templates { display: flex; flex-wrap: wrap; gap: var(--nv-space-3); }
 .popup__note { margin: 0; font-size: var(--nv-type-caption-size); color: var(--nv-color-text-secondary); }
-.popup__footer { display: flex; align-items: center; justify-content: space-between; gap: var(--nv-space-3); flex-wrap: wrap; }
+/* The menu's actions are menu rows (audit 2026-11 FR-09, Calmaria): 36 px, an outline icon (or its
+   space, so the words line up), the same hover as the profile rows; no full-width outlined button. */
+.popup__footer { display: grid; gap: var(--nv-space-1); padding-top: var(--nv-space-3); border-top: 1px solid var(--nv-color-border-subtle); }
+.popup__footer > .button {
+  display: flex;
+  align-items: center;
+  gap: var(--nv-space-3);
+  min-height: 2.25rem;
+  padding: var(--nv-space-1) var(--nv-space-3);
+  border: 0;
+  border-radius: var(--nv-radius-md);
+  background: transparent;
+  color: var(--nv-color-text-primary);
+  font-size: var(--nv-type-label-size);
+  font-weight: var(--nv-font-weight-regular);
+  text-align: start;
+}
+/* An icon where the row has one; an empty 16 px space where it does not, so the words line up. */
+.popup__footer > .button::before { content: ""; flex: none; align-self: flex-start; margin-block-start: 0.15em; inline-size: 1rem; block-size: 1rem; }
+.popup__footer > :is(#new-profile, #new-temporary)::before { background-color: currentColor; mask: var(--item-icon) center / contain no-repeat; }
+.popup__footer > #new-profile { --item-icon: url("icon-plus.svg"); }
+.popup__footer > #new-temporary { --item-icon: url("icon-temporary.svg"); }
+.popup__text { display: grid; gap: 2px; }
+.popup__hint { font-size: var(--nv-type-caption-size); color: var(--nv-color-text-secondary); }
 .popup__keys { margin: 0; font-size: var(--nv-type-caption-size); color: var(--nv-color-text-muted); }
+/* UX4: state in words on each row, and "aberto" for a profile open now (a dot and the word) */
+.popup__item .badge, .popup__current .badge { margin-inline-start: 0; }
+.popup__running { flex: none; font-size: var(--nv-type-caption-size); color: var(--nv-color-text-secondary); }
+.popup__running::before { content: ""; display: inline-block; inline-size: 6px; block-size: 6px; margin-inline-end: var(--nv-space-1); vertical-align: 0.1em; border-radius: 50%; background: var(--nv-color-accent-default); }
+.popup__item kbd { flex: none; }
+.popup__current { flex-wrap: wrap; }
+.popup__main[hidden] { display: none; }
+.popup__title { margin: 0; font-size: var(--nv-type-section-size); font-weight: var(--nv-type-section-weight); line-height: var(--nv-type-section-lineHeight); }
+.popup__sheet .popup__templates { gap: var(--nv-space-2); }
+.popup__why > summary { cursor: pointer; font-size: var(--nv-type-label-size); color: var(--nv-color-text-secondary); list-style: none; display: flex; align-items: baseline; gap: var(--nv-space-2); }
+.popup__why > summary::-webkit-details-marker { display: none; }
+.popup__why > summary::before { content: ""; flex: none; inline-size: 1em; block-size: 1em; align-self: center; background-color: currentColor; mask: url("icon-chevron.svg") center / contain no-repeat; }
+.popup__why[open] > summary::before { transform: rotate(90deg); }
+.popup__why[open] > summary { margin-bottom: var(--nv-space-2); }
+.popup__why { display: grid; gap: var(--nv-space-2); }
 
 @media (prefers-reduced-motion: no-preference) {
   .popup__item, .button { transition: background-color var(--nv-motion-duration-fast) var(--nv-motion-easing-standard); }
@@ -103,13 +242,185 @@
 /* Routing pages: the held address is shown as text only */
 .target { display: flex; align-items: center; gap: var(--nv-space-3); font-weight: var(--nv-font-weight-medium); }
 .target[hidden] { display: none; }
+/* UX4 (SPA-07): where you are → where the rule sends the link, each with its state in words */
+.route {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nv-space-3) var(--nv-space-4);
+  padding: var(--nv-space-4);
+  border-radius: var(--nv-radius-md);
+  background: var(--nv-color-bg-sunken);
+}
+.route[hidden] { display: none; }
+.route__end { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--nv-space-3); }
+.route__name { font-weight: var(--nv-font-weight-medium); }
+.route__note { color: var(--nv-color-text-secondary); font-size: var(--nv-type-label-size); }
+.route__arrow { color: var(--nv-color-text-secondary); font-size: var(--nv-type-section-size); }
+.route .badge { margin-inline-start: 0; }
 .url { margin: 0; padding: var(--nv-space-3) var(--nv-space-4); border-radius: var(--nv-radius-sm); background: var(--nv-color-bg-sunken); overflow-wrap: anywhere; }
 
 /* Guard review: one card per change; long values (paths, fingerprints) wrap */
 .finding__detail { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: var(--nv-type-caption-size); color: var(--nv-color-text-secondary); }
 
-/* New tab: the one-time DNS question, above the facts */
-.dns-choice { max-width: 52rem; margin-inline: auto; width: 100%; }
+/* UX3G N1: the new tab paints once, in its final shape. newtab.js sets
+   data-painted when the first-run cards and the engine label are known, so the
+   hero never shrinks after the first frame. If the script never runs, the
+   animation below still reveals the page after 600 ms. */
+html[data-page="newtab"]:not([data-painted]) .page {
+  visibility: hidden;
+  animation: nv-reveal-fallback 0s 600ms forwards;
+}
+@keyframes nv-reveal-fallback { to { visibility: visible; } }
+@media (prefers-reduced-motion: no-preference) {
+  html[data-page="newtab"][data-painted] .page {
+    animation: nv-page-in var(--nv-motion-duration-fast) var(--nv-motion-easing-enter);
+  }
+}
+@keyframes nv-page-in { from { opacity: 0; } }
+
+/* New tab: one-time first-run choices (layout, DNS), above the facts */
+.layout-choice, .dns-choice, .here, .help, .firstrun, .firstrun__progress { max-width: 52rem; margin-inline: auto; width: 100%; }
+
+/* UX3F A4: the layout choice is a visual question. While it is open the hero
+   steps back (no symbol, a smaller headline), so the whole card and its main
+   action fit the first screen at 1280x800. */
+.page:has(> :is(.layout-choice, .firstrun):not([hidden], [data-gated])) {
+  padding-top: var(--nv-space-7);
+  gap: var(--nv-space-6);
+  .hero { gap: var(--nv-space-3); }
+  .hero picture { display: none; }
+  .hero__headline { font-size: var(--nv-font-size-2xl); }
+}
+.layout-choice { display: grid; gap: var(--nv-space-4); }
+/* UX3G A4/B-11: on short viewports (1280x800 at 150 % is ~490px tall) the
+   card gives up the headline and the option hints (both kept for assistive
+   technology), shortens the previews and puts the three options on one row,
+   so its main action stays on the first screen. */
+@media (max-height: 40rem) {
+  .page:has(> :is(.layout-choice, .firstrun):not([hidden], [data-gated])) {
+    padding-top: var(--nv-space-4);
+    gap: var(--nv-space-4);
+    .hero__hint { display: none; }
+    /* The page's only h1 stays for assistive technology, off screen. */
+    .hero__headline {
+      position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden;
+      clip-path: inset(50%); white-space: nowrap;
+    }
+    /* B-11 (UX6): tighter still, so "Manter …" ends on the first screen at 150 % on 1280 x 800. */
+    .layout-choice { gap: var(--nv-space-2); padding-block: var(--nv-space-3); }
+    .layout-options { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--nv-space-3); }
+    .layout-option__preview { block-size: 2.5rem; inline-size: auto; }
+    /* Each hint still describes its radio (aria-describedby), off screen. */
+    .layout-option__hint {
+      position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden;
+      clip-path: inset(50%); white-space: nowrap;
+    }
+  }
+}
+
+/* Protected profile creation: the profile being made, with "Alterar" (audit 2026-11 FR-06). */
+.create-summary { margin: 0; display: flex; align-items: center; gap: var(--nv-space-3); }
+.create-summary[hidden] { display: none; }
+.create-summary .button--quiet { margin-inline-start: auto; }
+
+/* First run (audit 2026-11 FR-01): one card at a time; the others wait, gated by newtab.js. */
+[data-gated] { display: none !important; }
+.firstrun__progress { margin: 0; font-size: var(--nv-type-label-size); font-weight: var(--nv-font-weight-medium); color: var(--nv-color-text-secondary); }
+.firstrun__head { display: flex; align-items: center; gap: var(--nv-space-3); }
+.firstrun__symbol { inline-size: 2rem; block-size: 2rem; flex: none; }
+.firstrun__lead { margin: 0; max-inline-size: 62ch; }
+.firstrun__facts { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--nv-space-2); }
+.firstrun__facts li { display: flex; gap: var(--nv-space-2); align-items: baseline; }
+/* "Seguro" is neutral (no green); what needs attention says so with its own mark. */
+.firstrun__facts li::before { color: var(--nv-color-text-secondary); }
+.firstrun__facts li[data-level="warn"]::before { background-color: var(--nv-color-status-warning); }
+.firstrun__summary { gap: var(--nv-space-2); }
+.firstrun__summary div { grid-template-columns: minmax(7rem, 12rem) minmax(0, 1fr); align-items: baseline; gap: var(--nv-space-4); }
+.firstrun__summary dt { font-size: var(--nv-type-label-size); color: var(--nv-color-text-secondary); }
+
+/* UX3G N6: one card style on the new tab; the DNS choice reads like the layout one. */
+.dns-choice.stack { gap: var(--nv-space-4); }
+.layout-choice__title {
+  margin: 0;
+  font-size: var(--nv-type-section-size);
+  font-weight: var(--nv-type-section-weight);
+  line-height: var(--nv-type-section-lineHeight);
+}
+.layout-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(11rem, 100%), 1fr));
+  gap: var(--nv-space-4);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+.layout-option {
+  display: grid;
+  align-content: start;
+  gap: var(--nv-space-2);
+  padding: var(--nv-space-4);
+  border: 1px solid var(--nv-color-border-subtle);
+  border-radius: var(--nv-radius-md);
+  background: var(--nv-color-bg-surface);
+  cursor: pointer;
+}
+.layout-option:hover { border-color: var(--nv-color-border-control); }
+.layout-option:has(input:checked) {
+  border-color: var(--nv-color-accent-default);
+  box-shadow: inset 0 0 0 1px var(--nv-color-accent-default);
+  background: var(--nv-color-accent-tint);
+}
+.layout-option:has(input:disabled) { cursor: default; }
+.layout-option__preview {
+  inline-size: 100%;
+  max-inline-size: 160px;
+  block-size: auto;
+  justify-self: start;
+  margin-block-end: var(--nv-space-2);
+}
+.layout-option__name {
+  display: flex;
+  align-items: center;
+  gap: var(--nv-space-3);
+  font-size: var(--nv-type-body-size);
+  font-weight: var(--nv-font-weight-semibold);
+}
+.layout-option__name input { margin: 0; width: 1.125rem; height: 1.125rem; flex: none; accent-color: var(--nv-color-accent-default); }
+.layout-option__hint { padding-inline-start: calc(1.125rem + var(--nv-space-3)); }
+/* In a narrow column the picture sits beside the name. The query is on the options' own width in
+   the page's text size, so with very large text (200 %) the option stays one column and nothing
+   overflows (WCAG 1.4.10). */
+.layout-options { container-type: inline-size; }
+@container (max-width: 36rem) and (min-width: 18rem) {
+  .layout-option { grid-template-columns: 6rem minmax(0, 1fr); column-gap: var(--nv-space-4); align-items: center; }
+  .layout-option__preview { grid-row: span 2; max-inline-size: 6rem; margin: 0; }
+  .layout-option__hint { padding-inline-start: 0; }
+}
+@media (max-width: 36rem) {
+  :is(.layout-choice, .dns-choice, .firstrun) .actions { flex-direction: column; align-items: stretch; }
+  :is(.layout-choice, .dns-choice, .firstrun) .actions .button { justify-content: center; }
+  .actions:not(.actions--end) > .button--quiet:first-child { margin-inline-start: 0; }
+  .here__settings { margin-inline-start: 0; }
+}
+/* Miniatures drawn from tokens, so they follow the theme */
+.lp-frame { fill: var(--nv-color-chrome-toolbox); stroke: var(--nv-color-border-subtle); }
+.lp-content { fill: var(--nv-color-bg-surface); stroke: var(--nv-color-border-subtle); }
+.lp-item { fill: var(--nv-color-border-control); }
+@media (prefers-color-scheme: dark) {
+  .lp-item { fill: var(--nv-color-text-muted); }
+}
+.lp-item--on { fill: var(--nv-color-chrome-tabSelected); stroke: var(--nv-color-border-control); stroke-width: 0.75; }
+.lp-mark { fill: var(--nv-color-accent-default); }
+@media (prefers-reduced-motion: no-preference) {
+  .layout-option { transition: border-color var(--nv-motion-duration-fast) var(--nv-motion-easing-standard), background-color var(--nv-motion-duration-fast) var(--nv-motion-easing-standard); }
+}
+@media (forced-colors: active) {
+  .layout-option:has(input:checked) { border: 2px solid Highlight; }
+  .lp-frame, .lp-content { fill: Canvas; stroke: CanvasText; }
+  .lp-item, .lp-item--on, .lp-mark { fill: CanvasText; }
+}
 
 /* Assistant side panel: narrow, plain-text answers */
 body.assistant { padding: var(--nv-space-4); }
@@ -125,14 +436,84 @@ body.assistant { padding: var(--nv-space-4); }
 /* Look-alike login: the consequence of "continue" sits right under the buttons (SB-10) */
 #continue-note:empty { display: none; }
 
-/* Solid canvas is the default. New-tab ambience/preferences belong to UX6. */
+/* Solid canvas is the default. UX6 (D-UX10): the new tab's optional ambience, a soft gradient from
+   the canvas to the accent's tint with frosted cards on it. lib/appearance.js never turns it on in a
+   private window; the cards turn solid with "Reduzir transparência", the system's request or more
+   contrast. Its pairs are in docs/brand/tokens.json (text and accent on the gradient and on frost). */
+html[data-page="newtab"][data-ambience="on"] body {
+  background: linear-gradient(160deg, var(--nv-color-ambience-from), var(--nv-color-ambience-to)) fixed;
+}
+html[data-page="newtab"][data-ambience="on"] .card {
+  background: var(--nv-color-surface-frost);
+  backdrop-filter: blur(var(--nv-translucency-frost-blur));
+}
+html[data-page="newtab"][data-ambience="on"][data-transparency="reduced"] .card {
+  background: var(--nv-color-surface-frostFallback);
+  backdrop-filter: none;
+}
 @media (max-width: 30rem) {
   .page { padding-inline: var(--nv-space-4); }
-  .row, .row--plain { grid-template-columns: minmax(0, 1fr); }
-  .row__end { justify-content: flex-start; }
+  /* Rows follow the width of their list (components.css, container query), not the window. */
   .callout { flex-wrap: wrap; }
   .callout__action { margin-inline-start: 0; }
 }
+/* Security moments (UX4, audit SB-24): the pages that ask for a safety decision open with the same
+   context line, the Nulavio mark, the kind of moment and, where it is about this profile, its name
+   and state in words (lib/moment.js). Calm surface; the decision itself keeps its callout and glyph. */
+.moment__context {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nv-space-2) var(--nv-space-3);
+  margin: 0;
+  min-height: 1.25rem;
+  font-size: var(--nv-type-label-size);
+  color: var(--nv-color-text-secondary);
+}
+.moment__mark { width: 1rem; height: 1rem; flex: none; }
+.moment__kind { font-weight: var(--nv-font-weight-semibold); }
+.moment__profile { display: inline-flex; align-items: center; gap: var(--nv-space-2); color: var(--nv-color-text-primary); }
+.moment__context .badge { margin-inline-start: 0; }
+/* The level, in the same place on every page: glyph and word, from the page's own callout */
+.moment__severity {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nv-space-1);
+  margin-inline-start: auto;
+  font-weight: var(--nv-font-weight-semibold);
+}
+.moment__severity[data-level="warning"] { color: var(--nv-color-status-warning); }
+.moment__severity[data-level="critical"] { color: var(--nv-color-status-criticalText, var(--nv-color-status-critical)); }
+.moment__severity-icon { width: 1rem; height: 1rem; flex: none; }
+/* Still loading after 400 ms: say so (nothing flashes for a fast page) */
+body[data-state="loading"] .moment__context::after {
+  content: attr(data-loading);
+  margin-inline-start: auto;
+  visibility: hidden;
+  animation: nv-reveal-fallback 0s 400ms forwards;
+}
+
+/* The recovery code (UX4, audit SB-08): 7 numbered groups; printing shows only them */
+.code-grid {
+  list-style: none;
+  margin: 0;
+  padding: var(--nv-space-4);
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(6.5rem, 1fr));
+  gap: var(--nv-space-3) var(--nv-space-5);
+  border-radius: var(--nv-radius-md);
+  background: var(--nv-color-bg-sunken);
+}
+.code-grid:empty { display: none; }
+.code-grid__group { display: flex; align-items: baseline; gap: var(--nv-space-2); }
+.code-grid__n { min-inline-size: 1.25rem; font-size: var(--nv-type-caption-size); color: var(--nv-color-text-secondary); text-align: end; }
+.code-grid__value { font-size: var(--nv-type-section-size); letter-spacing: 0.08em; }
+@media print {
+  body[data-printing="code"] * { visibility: hidden; }
+  body[data-printing="code"] .code-print, body[data-printing="code"] .code-print * { visibility: visible; }
+  body[data-printing="code"] .code-print { position: absolute; inset: 0 auto auto 0; background: none; }
+}
+
 /* Download warning (flow E) */
 .page--narrow { max-width: 40rem; }
 .warning { display: grid; gap: var(--nv-space-5); }

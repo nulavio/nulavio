@@ -1,14 +1,18 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-page="newtab">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="referrer" content="no-referrer">
-  <title data-i18n="newtabTitle">New tab</title>
+  <!-- UX3F A3: paint the canvas colour (color.*.bg.canvas) from the first frame (no white flash before the sheets load). -->
+  <meta name="color-scheme" content="light dark">
+  <style>html{background:#F1F7F5}@media (prefers-color-scheme:dark){html{background:#0F1C2A}}</style>
+  <title data-i18n="newtabTitle">New Tab</title>
   <link rel="icon" href="../shared/nulavio-symbol-adaptive.svg">
   <link rel="stylesheet" href="../shared/tokens.css">
   <link rel="stylesheet" href="../shared/base.css">
   <link rel="stylesheet" href="../shared/shell.css">
+  <script type="module" src="../lib/appearance.js"></script>
   <script type="module" src="newtab.js"></script>
 </head>
 <body>
@@ -18,7 +22,8 @@
         <source srcset="../shared/nulavio-symbol.svg" media="(prefers-color-scheme: dark)">
         <img class="hero__symbol" src="../shared/nulavio-symbol-dark-on-light.svg" alt="" width="56" height="64">
       </picture>
-      <h1 class="hero__headline" data-i18n="headline">The web is yours. So is your data.</h1>
+      <!-- UX4 (audit SPA-14): no slogan; the page says where you are and what is true now -->
+      <h1 class="visually-hidden" data-i18n="newtabTitle">New Tab</h1>
       <form class="search" id="search" role="search">
         <label class="visually-hidden" for="search-input" data-i18n="searchLabel">Search the web</label>
         <input class="search__input" id="search-input" type="search" name="q" autocomplete="off"
@@ -29,9 +34,112 @@
         <a class="hero__link" id="search-settings" href="../settings/settings.html#search" hidden data-i18n="searchSettingsLink">Search settings</a></p>
     </header>
 
+    <!-- First run (audit 2026-11 FR-01): one card at a time, in this place, in a genuinely new profile.
+         The layout and DNS cards below are steps 1 and 2; newtab.js shows only the current one. -->
+    <p class="firstrun__progress" id="firstrun-progress" aria-live="polite" hidden></p>
+
+    <section class="card stack firstrun" id="firstrun-welcome" aria-labelledby="firstrun-welcome-heading" hidden>
+      <div class="firstrun__head">
+        <img class="firstrun__symbol" src="../shared/nulavio-symbol-adaptive.svg" alt="" width="32" height="32">
+        <h2 class="layout-choice__title" id="firstrun-welcome-heading" data-i18n="firstrunWelcomeTitle"></h2>
+      </div>
+      <p class="firstrun__lead" data-i18n="firstrunWelcomeLead"></p>
+      <ul class="firstrun__facts" id="firstrun-facts"></ul>
+      <div class="callout callout--info">
+        <svg class="callout__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 11v6M12 7.5v.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        <p data-i18n="footerLimits"></p>
+      </div>
+      <div class="actions">
+        <button class="button button--primary" type="button" id="firstrun-start" data-i18n="firstrunStart"></button>
+        <button class="button button--quiet" type="button" id="firstrun-skip" data-i18n="firstrunSkipAll"></button>
+      </div>
+    </section>
+
+    <section class="card stack firstrun" id="firstrun-passwords" aria-labelledby="firstrun-passwords-heading" hidden>
+      <h2 class="layout-choice__title" id="firstrun-passwords-heading" data-i18n="firstrunPasswordsTitle"></h2>
+      <p class="firstrun__lead" data-i18n="firstrunPasswordsLead"></p>
+      <p class="hint" id="firstrun-passwords-now"></p>
+      <div class="actions">
+        <a class="button button--primary" id="firstrun-passwords-choose" href="../settings/settings.html#passwords" data-i18n="firstrunPasswordsChoose"></a>
+        <button class="button button--quiet" type="button" id="firstrun-passwords-later" data-i18n="firstrunNotNow"></button>
+      </div>
+    </section>
+
+    <section class="card stack firstrun" id="firstrun-default" aria-labelledby="firstrun-default-heading" hidden>
+      <h2 class="layout-choice__title" id="firstrun-default-heading" data-i18n="firstrunDefaultTitle"></h2>
+      <p class="firstrun__lead" data-i18n="firstrunDefaultLead"></p>
+      <p class="form-error" id="firstrun-default-error" role="alert"></p>
+      <div class="actions">
+        <button class="button button--primary" type="button" id="firstrun-default-make" data-i18n="connectMakeDefault"></button>
+        <button class="button button--quiet" type="button" id="firstrun-default-later" data-i18n="firstrunNotNow"></button>
+      </div>
+    </section>
+
+    <section class="card stack firstrun" id="firstrun-done" aria-labelledby="firstrun-done-heading" hidden>
+      <h2 class="layout-choice__title" id="firstrun-done-heading" data-i18n="firstrunDoneTitle"></h2>
+      <dl class="facts firstrun__summary" id="firstrun-summary"></dl>
+      <p class="hint"><span data-i18n="firstrunDoneLater"></span> <a href="../settings/settings.html" data-i18n="settingsTitle"></a></p>
+      <div class="actions">
+        <button class="button button--primary" type="button" id="firstrun-finish" data-i18n="firstrunFinish"></button>
+      </div>
+    </section>
+
+    <section class="card layout-choice" id="layout-choice" aria-labelledby="layout-choice-heading" hidden>
+      <h2 class="layout-choice__title" id="layout-choice-heading" data-i18n="layoutChoiceHeading"></h2>
+      <p class="hint" id="layout-choice-body" data-i18n="layoutChoiceBody"></p>
+      <!-- UX3F A4: three visual options. The native radios keep keyboard and screen-reader behaviour. -->
+      <fieldset class="layout-options" id="layout-choice-options" aria-describedby="layout-choice-body" data-option="layout">
+        <legend class="visually-hidden" data-i18n="layoutChoose"></legend>
+        <label class="layout-option">
+          <svg class="layout-option__preview" viewBox="0 0 160 96" width="160" height="96" aria-hidden="true" focusable="false">
+            <rect class="lp-frame" x="0.5" y="0.5" width="159" height="95" rx="8"/>
+            <rect class="lp-content" x="50" y="8" width="102" height="80" rx="5"/>
+            <rect class="lp-item lp-item--on" x="8" y="10" width="36" height="10" rx="3"/>
+            <rect class="lp-mark" x="8" y="12" width="2" height="6" rx="1"/>
+            <rect class="lp-item" x="8" y="24" width="36" height="10" rx="3"/>
+            <rect class="lp-item" x="8" y="38" width="36" height="10" rx="3"/>
+            <rect class="lp-item" x="8" y="52" width="28" height="10" rx="3"/>
+          </svg>
+          <span class="layout-option__name"><input type="radio" name="newtab-layout" value="lateral" aria-describedby="newtab-layout-lateral-hint" disabled><span data-i18n="layoutLateral"></span></span>
+          <span class="hint layout-option__hint" id="newtab-layout-lateral-hint" data-i18n="layoutChoiceLateralHint"></span>
+        </label>
+        <label class="layout-option">
+          <svg class="layout-option__preview" viewBox="0 0 160 96" width="160" height="96" aria-hidden="true" focusable="false">
+            <rect class="lp-frame" x="0.5" y="0.5" width="159" height="95" rx="8"/>
+            <rect class="lp-item lp-item--on" x="8" y="7" width="38" height="11" rx="3"/>
+            <rect class="lp-mark" x="12" y="15" width="10" height="2" rx="1"/>
+            <rect class="lp-item" x="50" y="7" width="38" height="11" rx="3"/>
+            <rect class="lp-item" x="92" y="7" width="30" height="11" rx="3"/>
+            <rect class="lp-content" x="8" y="24" width="144" height="64" rx="5"/>
+          </svg>
+          <span class="layout-option__name"><input type="radio" name="newtab-layout" value="top" aria-describedby="newtab-layout-top-hint" disabled><span data-i18n="layoutTop"></span></span>
+          <span class="hint layout-option__hint" id="newtab-layout-top-hint" data-i18n="layoutChoiceTopHint"></span>
+        </label>
+        <label class="layout-option">
+          <svg class="layout-option__preview" viewBox="0 0 160 96" width="160" height="96" aria-hidden="true" focusable="false">
+            <rect class="lp-frame" x="0.5" y="0.5" width="159" height="95" rx="8"/>
+            <rect class="lp-content" x="22" y="8" width="130" height="80" rx="5"/>
+            <rect class="lp-item lp-item--on" x="7" y="10" width="10" height="10" rx="3"/>
+            <rect class="lp-mark" x="4" y="12" width="2" height="6" rx="1"/>
+            <rect class="lp-item" x="7" y="24" width="10" height="10" rx="3"/>
+            <rect class="lp-item" x="7" y="38" width="10" height="10" rx="3"/>
+          </svg>
+          <span class="layout-option__name"><input type="radio" name="newtab-layout" value="focus" aria-describedby="newtab-layout-focus-hint" disabled><span data-i18n="layoutFocus"></span></span>
+          <span class="hint layout-option__hint" id="newtab-layout-focus-hint" data-i18n="layoutChoiceFocusHint"></span>
+        </label>
+      </fieldset>
+      <p class="visually-hidden" id="layout-choice-current" role="status" aria-live="polite" data-i18n="layoutLoading"></p>
+      <p class="form-error" id="layout-choice-error" role="alert"></p>
+      <div class="actions">
+        <button class="button button--primary" type="button" id="layout-choice-done" data-i18n="layoutChoiceDone"></button>
+        <button class="button button--secondary" type="button" id="layout-choice-retry" hidden data-i18n="layoutRetry"></button>
+        <a class="button button--quiet" id="layout-choice-settings" href="../settings/settings.html#layout" data-i18n="layoutChoiceSettings"></a>
+      </div>
+    </section>
+
     <section class="card stack dns-choice" id="dns-choice" aria-labelledby="dns-choice-heading" hidden>
-      <h2 class="card__title" id="dns-choice-heading" data-i18n="dnsChoiceHeading"></h2>
-      <p></p>
+      <h2 class="layout-choice__title" id="dns-choice-heading" data-i18n="dnsChoiceHeading"></h2>
+      <p class="hint" id="dns-choice-body"></p>
       <!-- Lookups go unencrypted now: keeping that is a real "keep" -->
       <div class="actions" id="dns-actions-system">
         <button class="button button--secondary" type="button" id="dns-keep-system" data-i18n="dnsKeepSystem"></button>
@@ -47,10 +155,19 @@
       </div>
     </section>
 
-    <section class="grid">
-      <article class="card card--facts" aria-labelledby="status-heading">
-        <h2 class="card__title" id="status-heading" data-i18n="statusHeading">Protections right now</h2>
-        <dl class="facts" id="status" aria-live="polite">
+    <!-- UX4: "Você está em …" with the facts in one line; "Detalhes" opens the rest. The line
+         is filled before the page paints and is not a live region (SPA-23). -->
+    <section class="card here" id="here" aria-labelledby="status-heading">
+      <h2 class="visually-hidden" id="status-heading" data-i18n="statusHeading">Protections right now</h2>
+      <p class="here__line">
+        <span class="here__who" id="here-who" hidden></span>
+        <span class="here__summary" id="here-summary" data-level="unknown">…</span>
+        <span class="here__routes" id="here-routes" hidden></span>
+        <a class="here__settings" id="open-settings" href="../settings/settings.html" hidden data-i18n="settingsTitle"></a>
+      </p>
+      <details class="more here__details" id="here-details">
+        <summary data-i18n="newtabDetails">Details</summary>
+        <dl class="facts" id="status">
           <div><dt data-i18n="statusTracking">Tracking protection</dt><dd data-status="tracking">…</dd></div>
           <div><dt data-i18n="statusHttps">HTTPS-Only</dt><dd data-status="https">…</dd></div>
           <div><dt data-i18n="statusGpc">Global Privacy Control signal</dt><dd data-status="gpc">…</dd></div>
@@ -58,34 +175,50 @@
           <div><dt data-i18n="statusPasswords">Passwords</dt><dd data-status="passwords">…</dd></div>
           <div id="dns-status" hidden><dt data-i18n="dnsHeading">DNS</dt><dd data-status="dns">…</dd></div>
         </dl>
+        <div class="stack stack--tight" id="here-route-list" hidden>
+          <h3 class="subhead" data-i18n="routesHereHeading"></h3>
+          <ul class="here__sites" id="here-sites"></ul>
+        </div>
         <p class="card__note" data-i18n="statusNote">Read just now from the browser settings. Nothing is sent to Nulavio.</p>
-      </article>
-
-      <article class="card" aria-labelledby="keys-heading">
-        <h2 class="card__title" id="keys-heading" data-i18n="keysHeading">Shortcuts</h2>
-        <ul class="keys">
-          <li><span data-i18n="keyAddress">Address bar</span><span><kbd>Ctrl</kbd> <kbd>L</kbd></span></li>
-          <li><span data-i18n="keyTab">New tab</span><span><kbd>Ctrl</kbd> <kbd>T</kbd></span></li>
-          <li><span data-i18n="keyPrivate">Private window</span><span><kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>P</kbd></span></li>
-          <li><span data-i18n="keyDownloads">Downloads</span><span><kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>Y</kbd></span></li>
-          <li><span data-i18n="keyAddons">Add-ons</span><span><kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>A</kbd></span></li>
-        </ul>
-      </article>
-
-      <article class="card" aria-labelledby="broken-heading">
-        <h2 class="card__title" id="broken-heading" data-i18n="brokenHeading">If a site breaks</h2>
-        <ol class="steps">
-          <li data-i18n="broken1"></li>
-          <li data-i18n="broken2"></li>
-          <li data-i18n="broken3"></li>
-        </ol>
-      </article>
+      </details>
     </section>
 
-    <footer class="footer">
-      <p data-i18n="footer"></p>
-      <p data-i18n="footerLimits"></p>
-    </footer>
+    <!-- Shortcuts, help and the engine note are one click away, not on every tab (SPA-14) -->
+    <details class="card more help" id="help">
+      <summary class="help__summary" data-i18n="newtabHelp">Shortcuts and help</summary>
+      <div class="grid help__body">
+        <div aria-labelledby="keys-heading">
+          <h2 class="card__title" id="keys-heading" data-i18n="keysHeading">Shortcuts</h2>
+          <!-- data-key: the engine's own <key> id; test_newtab_ui checks each line against it. -->
+          <ul class="keys">
+            <li data-key="focusURLBar"><span data-i18n="keyAddress">Address bar</span><span><kbd>Ctrl</kbd> <kbd>L</kbd></span></li>
+            <li data-key="key_newNavigatorTab"><span data-i18n="keyTab">New tab</span><span><kbd>Ctrl</kbd> <kbd>T</kbd></span></li>
+            <li data-key="key_privatebrowsing"><span data-i18n="keyPrivate">Private window</span><span><kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>P</kbd></span></li>
+            <li data-key="key_openDownloads"><span data-i18n="keyDownloads">Downloads</span><span><kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>Y</kbd></span></li>
+            <li data-key="key_openAddons"><span data-i18n="keyAddons">Add-ons</span><span><kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>F</kbd></span></li>
+          </ul>
+          <!-- UX6: Nulavio's own keys as the engine has them now (a changed key shows here too). -->
+          <ul class="keys" id="nulavio-keys">
+            <li data-command="_execute_action" hidden><span data-i18n="keyProfiles">Profile menu</span><span class="keys__keys"></span></li>
+            <li data-command="toggle-focus" hidden><span data-i18n="keyFocus">Focus layout</span><span class="keys__keys"></span></li>
+            <li data-command="lock-profile" hidden><span data-i18n="keyLockProfile">Lock profile</span><span class="keys__keys"></span></li>
+            <li data-command="open-assistant" hidden><span data-i18n="keyAssistant">Assistant</span><span class="keys__keys"></span></li>
+          </ul>
+        </div>
+        <div aria-labelledby="broken-heading">
+          <h2 class="card__title" id="broken-heading" data-i18n="brokenHeading">If a site breaks</h2>
+          <ol class="steps">
+            <li data-i18n="broken1"></li>
+            <li data-i18n="broken2"></li>
+            <li data-i18n="broken3"></li>
+          </ol>
+        </div>
+      </div>
+      <footer class="footer">
+        <p data-i18n="footer"></p>
+        <p data-i18n="footerLimits"></p>
+      </footer>
+    </details>
   </main>
 </body>
 </html>

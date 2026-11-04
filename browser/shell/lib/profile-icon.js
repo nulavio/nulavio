@@ -1,35 +1,37 @@
-/* Toolbar icon for the current profile: its identity colour with its initial,
-   drawn locally. Colours are generated from the design tokens
-   (lib/identity-colors.js), so there is one source of truth. A temporary
-   profile gets a dashed ring, as its chip in Shell pages does. */
+/* The toolbar's profile button (Calmaria, 2026-11): monochrome, in the toolbar's icon colour, the
+   profile's solid glyph (or initial) on a square of that colour at 14 %. The profile's own colour shows
+   once per window, in the band the browser draws; the toolbar does not repeat it. A temporary profile
+   shows the hourglass (no dashes at 16 px, where they read as a letter). Glyphs come from
+   modules/NulavioAvatars.sys.mjs, so every surface draws the same shapes. */
 
-import { IDENTITY_COLORS } from "./identity-colors.js";
+import { AVATAR_GLYPHS, SPECIAL_GLYPHS, profileInitial } from "../modules/NulavioAvatars.sys.mjs";
 
-export function drawProfileIcon(profile, sizes = [16, 32]) {
-  const fill = IDENTITY_COLORS[profile.color] ?? IDENTITY_COLORS.slate;
-  const ink = IDENTITY_COLORS.on;
-  const letter = ([...String(profile.name ?? "").trim()][0] ?? "?").toLocaleUpperCase();
+// color.{light,dark}.chrome.icon; the private chrome is dark in both themes (docs/brand/tokens.json).
+export const TOOLBAR_INK = Object.freeze({ light: "#23495A", dark: "#BFD0D6", private: "#BFD0D6" });
+
+export function drawProfileIcon(profile, { ink = TOOLBAR_INK.light, sizes = [16, 32] } = {}) {
+  const d = profile.temporary ? SPECIAL_GLYPHS.temporary : AVATAR_GLYPHS[profile.avatar] ?? null;
+  const letter = d ? null : profileInitial(profile.name);
   const imageData = {};
   for (const size of sizes) {
     const canvas = new OffscreenCanvas(size, size);
     const ctx = canvas.getContext("2d");
-    const r = size / 2;
-    ctx.beginPath();
-    ctx.arc(r, r, r - size / 16, 0, Math.PI * 2);
-    ctx.fillStyle = fill;
-    ctx.fill();
-    ctx.lineWidth = profile.temporary ? size / 10 : size / 16;
-    ctx.strokeStyle = ink;
-    if (profile.temporary) {
-      ctx.setLineDash([size / 8, size / 12]);
-    }
-    ctx.stroke();
-    ctx.setLineDash([]);
     ctx.fillStyle = ink;
-    ctx.font = `600 ${Math.round(size * 0.6)}px system-ui, sans-serif`;
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText(letter, r, r + size * 0.04);
+    ctx.globalAlpha = 0.14;
+    ctx.beginPath();
+    ctx.roundRect(0, 0, size, size, size * 0.3);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    if (letter) {
+      ctx.font = `600 ${Math.round(size * 0.625)}px system-ui, sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(letter, size / 2, size / 2 + size * 0.02);
+    } else {
+      // The 24-unit glyph fills the square as in the band (about 11 px of 16).
+      ctx.scale(size / 24, size / 24);
+      ctx.fill(new Path2D(d ?? SPECIAL_GLYPHS.person), "evenodd");
+    }
     imageData[size] = ctx.getImageData(0, 0, size, size);
   }
   return imageData;

@@ -1,0 +1,11 @@
+<!-- This Source Code Form is subject to the terms of the Mozilla Public
+   - License, v. 2.0. If a copy of the MPL was not distributed with this
+   - file, You can obtain one at http://mozilla.org/MPL/2.0/. -->
+<!-- UX3G: the Nulavio route mark drawn as a 16px tool glyph, like the engine's
+     icons: 1.5px stroke on the pixel grid, ~13px optical height, one trail dot. It takes its colour
+     from the context (hover, disabled, themes, high contrast), never a fixed one. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+  <path d="M4.5 7.25V2.5l7 11V2.5" fill="none" stroke="context-fill" stroke-opacity="context-fill-opacity"
+        stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="4.5" cy="12.75" r="1" fill="context-fill" fill-opacity="context-fill-opacity"/>
+</svg>

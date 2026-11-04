@@ -183,7 +183,8 @@ class ConnectTest(unittest.TestCase):
             try:
                 return self.m.execute(
                     "const l = document.getElementById('integration-list');"
-                    "return l.dataset.ready ? [...l.children].map(li => [li.dataset.integration, li.dataset.state]) : null;"
+                    "const rows = [...l.children, ...document.getElementById('integration-unavailable').children];"
+                    "return l.dataset.ready ? rows.map(li => [li.dataset.integration, li.dataset.state]) : null;"
                 )
             except MarionetteError:
                 return None
@@ -191,7 +192,16 @@ class ConnectTest(unittest.TestCase):
         listed = harness.wait_until(rows, timeout=20)
         p0 = ["plasma-browser-integration", "xdg-portals", "secret-service", "default-browser"]
         later = ["kde-connect", "screen-cast", "security-keys", "notifications", "krunner", "activities"]
-        self.assertEqual([r[0] for r in listed], p0 + later)
+        # Every integration is listed once: what works or can be turned on first, in priority order, then
+        # what this computer lacks, folded (audit 2026-11 SET-05).
+        order = p0 + later
+        found = [r[0] for r in listed]
+        self.assertEqual(sorted(found), sorted(order))
+        missing = [r[1] in ("unavailable", "unknown") for r in listed]
+        self.assertEqual(missing, sorted(missing))
+        for part in (False, True):
+            names = [r[0] for r, m in zip(listed, missing, strict=True) if m is part]
+            self.assertEqual(names, [n for n in order if n in names])
         self.assertEqual(dict(listed)["xdg-portals"], "available")
         self.assertTrue(self.m.execute("return Boolean(document.querySelector('[data-focus-key=\"make-default\"]'));"))
         # Nothing on the page reached the network.
@@ -229,6 +239,55 @@ class ConnectTest(unittest.TestCase):
         self.assertEqual(self.found()["krunner"]["state"], "enabled")
         self.call("return C.setKrunner(false);")
         self.assertFalse((data / "krunner" / "dbusplugins" / "net.nulavio.krunner.desktop").exists())
+
+    def test_07_link_menu_offers_reachable_devices_and_sends_one_link(self):
+        # The item starts hidden and appears once the reachable devices are known; the
+        # engine leaves hidden items out of onShown's menuIds, so it once never appeared.
+        page = 'data:text/html,<a id="go" href="https://example.org/from-menu">link</a>'
+        self.m.navigate(page)
+        self.m.context_click("#go")
+        devices = harness.wait_until(lambda: self.m.menu_entries("nulavio-send-link") or None, timeout=15)
+        self.assertEqual(devices, ["Pixel", "Tablet"], "the link menu has no 'Send link to device' item")
+        clicked = self.m.chrome(
+            "const item = document.querySelector(`[id$='nulavio-send-link']`);"
+            "[...item.querySelectorAll('menuitem')].find(i => i.getAttribute('label') === 'Pixel').click();"
+            "document.getElementById('contentAreaContextMenu').hidePopup(); return 'clicked';"
+        )
+        self.assertEqual(clicked, "clicked")
+        self.assertTrue(
+            harness.wait_until(
+                lambda: "--device abc123_def --share https://example.org/from-menu" in self.kdeconnect_log.read_text(),
+                timeout=15,
+            ),
+            "the link was not sent to the chosen device",
+        )
+
+        # Never offered in a private window, and back in the normal window afterwards.
+        handles = set(self.m.window_handles())
+        main = self.m.send("WebDriver:GetWindowHandle")["value"]
+        self.m.chrome("OpenBrowserWindow({private: true});")
+        self.assertTrue(harness.wait_until(lambda: set(self.m.window_handles()) - handles, timeout=20))
+        private = (set(self.m.window_handles()) - handles).pop()
+        self.m.switch_to(private)
+        try:
+            harness.wait_until(lambda: self.m.current_url() == "about:privatebrowsing", timeout=20)
+            self.m.navigate(page)
+            self.m.context_click("#go")
+            self.assertTrue(harness.wait_until(self.m.menu_open))
+            time.sleep(2)  # longer than the device lookup takes in the normal window
+            self.assertIsNone(self.m.menu_entries("nulavio-send-link"), "offered in a private window")
+            self.m.close_menu()
+        finally:
+            self.m.send("WebDriver:CloseWindow")
+            self.m.switch_to(main)
+        listed = self.kdeconnect_log.read_text().count("--list-available")
+        self.m.context_click("#go")
+        self.assertEqual(
+            harness.wait_until(lambda: self.m.menu_entries("nulavio-send-link") or None, timeout=15), ["Pixel", "Tablet"]
+        )
+        self.m.close_menu()
+        # A recent answer is reused: the next menus do not wait for KDE Connect's tool again.
+        self.assertEqual(self.kdeconnect_log.read_text().count("--list-available"), listed)
 
     def test_99_real_desktop_settings_untouched(self):
         time.sleep(0.5)

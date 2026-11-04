@@ -1,0 +1,123 @@
+/* Generated from docs/brand/tokens.json by scripts/brand/build_tokens.py. Do not edit. */
+@-moz-document url-prefix("about:preferences"),
+  url-prefix("about:settings"),
+  url-prefix("about:addons"),
+  url-prefix("about:home"),
+  url-prefix("about:newtab"),
+  url-prefix("about:profiles"),
+  url-prefix("about:editprofile"),
+  url-prefix("about:newprofile"),
+  url-prefix("about:deleteprofile"),
+  url-prefix("about:privatebrowsing"),
+  url-prefix("about:logins"),
+  url-prefix("about:policies"),
+  url-prefix("about:welcome") {
+  #category-experimental,
+  #category-more-from-mozilla {
+    display: none !important;
+  }
+  ul:has(> li[data-l10n-id^="login-intro-instructions-fxa"]) {
+    display: none !important;
+  }
+  @media -moz-pref("nulavio.horizon.enabled") {
+    @media -moz-pref("extensions.activeThemeID", "default-theme@mozilla.org") or
+      -moz-pref("extensions.activeThemeID", "firefox-compact-light@mozilla.org") or
+      -moz-pref("extensions.activeThemeID", "firefox-compact-dark@mozilla.org") {
+    @media not ((forced-colors) or (prefers-contrast)) {
+      :root:not([lwtheme]) {
+        --color-violet-0: #EEFCF8 !important;
+        --color-violet-10: #DDF8F0 !important;
+        --color-violet-20: #A6EEDC !important;
+        --color-violet-30: #6FE0C5 !important;
+        --color-violet-40: #3FAD96 !important;
+        --color-violet-50: #0F7A68 !important;
+        --color-violet-60: #0F6153 !important;
+        --color-violet-70: #0E4E43 !important;
+        --color-violet-80: #0E3B33 !important;
+        --color-violet-90: #092220 !important;
+        --color-violet-desaturated-0: #F1F7F5 !important;
+        --color-violet-desaturated-10: #E2EBEE !important;
+        --color-violet-desaturated-20: #BFD0D6 !important;
+        --color-violet-desaturated-30: #8FAAB5 !important;
+        --color-violet-desaturated-40: #6E93A2 !important;
+        --color-violet-desaturated-50: #4F7383 !important;
+        --color-violet-desaturated-60: #3A6273 !important;
+        --color-violet-desaturated-70: #23495A !important;
+        --color-violet-desaturated-80: #183746 !important;
+        --color-violet-desaturated-90: #0B1623 !important;
+        --color-gray-0: #F1F7F5 !important;
+        --color-gray-05: #EAF1F2 !important;
+        --color-gray-10: #E2EBEE !important;
+        --color-gray-80: #112432 !important;
+        --color-gray-85: #0F1C2A !important;
+        --color-gray-90: #0B1623 !important;
+        --color-accent-primary: light-dark(#0F7A68, #6FE0C5) !important;
+        --color-accent-primary-hover: light-dark(#0F6153, #A6EEDC) !important;
+        --color-accent-primary-active: light-dark(#0E4E43, #DDF8F0) !important;
+        --focus-outline-color: light-dark(#0F7A68, #6FE0C5) !important;
+        --link-color: light-dark(#0F7A68, #6FE0C5) !important;
+        --link-color-hover: light-dark(#0F7A68, #6FE0C5) !important;
+        --link-color-active: light-dark(#0F7A68, #6FE0C5) !important;
+        --background-color-canvas: light-dark(#F1F7F5, #0F1C2A) !important;
+        --background-color-box: light-dark(#FFFFFF, #15293A) !important;
+        --table-background-color: light-dark(#FFFFFF, #15293A) !important;
+        --border-color: light-dark(#BFD0D6, #23495A) !important;
+        --border-color-card: light-dark(#BFD0D6, #23495A) !important;
+        --page-nav-button-background-color-selected: light-dark(#0F7A68, #0E3B33) !important;
+        --page-nav-button-text-color-selected: light-dark(#FFFFFF, #6FE0C5) !important;
+      }
+      :root:not([lwtheme]) moz-page-nav-button {
+        --page-nav-button-background-color-selected: light-dark(#0F7A68, #0E3B33) !important;
+        --page-nav-button-text-color-selected: light-dark(#FFFFFF, #6FE0C5) !important;
+      }
+      @media -moz-pref("nulavio.appearance.accent", "blue") {
+        :root:not([lwtheme], .private) {
+          --color-violet-0: #F4F8FD !important;
+          --color-violet-10: #E8F0FB !important;
+          --color-violet-20: #B9D3F7 !important;
+          --color-violet-30: #6AA7F4 !important;
+          --color-violet-40: #4C86D4 !important;
+          --color-violet-50: #2D64B5 !important;
+          --color-violet-60: #244D8B !important;
+          --color-violet-70: #1E3C6C !important;
+          --color-violet-80: #172B4D !important;
+          --color-violet-90: #0E1A2D !important;
+          --color-accent-primary: light-dark(#2D64B5, #6AA7F4) !important;
+          --color-accent-primary-hover: light-dark(#244D8B, #B9D3F7) !important;
+          --color-accent-primary-active: light-dark(#1E3C6C, #E8F0FB) !important;
+          --link-color: light-dark(#2D64B5, #6AA7F4) !important;
+          --link-color-hover: light-dark(#2D64B5, #6AA7F4) !important;
+          --link-color-active: light-dark(#2D64B5, #6AA7F4) !important;
+          --page-nav-button-background-color-selected: light-dark(#2D64B5, #172B4D) !important;
+          --page-nav-button-text-color-selected: light-dark(#FFFFFF, #6AA7F4) !important;
+        }
+        :root:not([lwtheme], .private) moz-page-nav-button {
+          --page-nav-button-background-color-selected: light-dark(#2D64B5, #172B4D) !important;
+          --page-nav-button-text-color-selected: light-dark(#FFFFFF, #6AA7F4) !important;
+        }
+      }
+      @media -moz-pref("nulavio.appearance.moreContrast") {
+        :root:not([lwtheme], .private) {
+          --border-color: light-dark(#6B8794, #6E93A2) !important;
+          --border-color-card: light-dark(#6B8794, #6E93A2) !important;
+        }
+      }
+      html.private {
+        --background-color-canvas: #060C14 !important;
+      }
+      content-search-handoff-ui {
+        --content-search-handoff-ui-background-color: light-dark(#FFFFFF, #15293A) !important;
+        --content-search-handoff-ui-unfocused-border-color: light-dark(#6B8794, #6E93A2) !important;
+      }
+      html.private .logo {
+        -moz-context-properties: fill;
+        fill: #9E86C9 !important;
+      }
+      html.private content-search-handoff-ui {
+        --content-search-handoff-ui-background-color: #15293A !important;
+        --content-search-handoff-ui-unfocused-border-color: #6E93A2 !important;
+      }
+    }
+    }
+  }
+}

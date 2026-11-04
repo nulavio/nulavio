@@ -49,6 +49,30 @@ What each level can and cannot technically do, beyond the preset table in ADR 00
 | Autonomous | Complete multi-step tasks, submit forms, use files and signed-in sessions without asking | Purchases and account changes, scripts, local network, other profiles: ask until granted; cookies/storage: blocked until granted; raw automation: only through its own opt-in |
 | Full control | Everything except raw automation, without asking: actions on pages, purchases and payments, account changes, private tabs, the profiles in its list, scripts | Raw automation and privileged pages (a separate per-agent opt-in with its own warning, [ADR 0007 amendment of 2026-10-28](../adr/0007-ai-bridge.md#amendment-2026-10-28-raw-automation-leaves-full-control-ux1-d-ux4)); open a **locked** profile (needs the Vault key, never a permission); stop pages from doing what pages do; restrict what the agent process itself does outside the bridge |
 
+## Assistant stream contract (UX5)
+
+`nulavio ai assistant` keeps its one-request, one-answer contract for every caller. The assistant's panel uses stream mode for Ask and Task. Stream mode uses the same process per call, the same arguments and the same pipe; there is no socket, helper or permission.
+
+| Direction | What | Notes |
+|---|---|---|
+| Browser → tools | One JSON request line with `"stream": true` | stdin stays open until the terminal line; its end means "cancel" |
+| Tools → browser | `start {recipient, model, chars}` | The size the panel showed; `chars` is null for a Task (known afterwards) |
+| | `sending {turn}` | Just before each request goes; from then on it "may have arrived" |
+| | `delta {text}` | Ask only; gathered for about 50 ms or 256 characters |
+| | `step {index, tool, state, capability, reason, origin, ms}` | Task only; `started`, then `ok`, `denied`, `error` or `cancelled`; never the tool's output |
+| | `approval {id, capability, expires}` | A permission request the run waits for; the module shows it once (panel card or request tab) |
+| | Exactly one `done {…, cancelled, sent}` or `error {code, sent, retryAfter?, status?}` | `sent`: whether a request may have reached the provider |
+
+Cancel paths:
+- **The browser.** `callToolStream(...).cancel(grace)` sends SIGTERM, then SIGKILL after 2 s (Ask) or 20 s (Task).
+- **The tools.** On the first SIGTERM they ignore further ones and raise `Cancelled`, a BaseException, so no `except Exception` swallows it. A watcher thread turns the end of stdin into SIGTERM.
+- **The cleanup.** Removing the request files, closing the AI Workspace and ending the session's answers are never cut. Once the answer is in, or the workspace is closing, a stop waits, and the panel says the answer arrived first.
+- **Lines.** SIGTERM is blocked while a line is written, so no half line reaches the browser.
+
+The browser reader fails closed. It refuses a line that is not JSON or is over 1 MiB, and an end without a terminal line (`helper-failed`, or `task-unfinished` for a Task). An idle limit of 150 s per line is held while a permission request waits; the caps are 10 min (Ask) and 30 min (Task).
+
+Session markers (UX5-I2): while `nulavio ai serve` runs, `<state>/ai/sessions/<session>.json` (0600) names the agent, its client and the serving pid; it is removed at the end. The band reads these files and checks `/proc/<pid>`, so it never starts a process, and a marker left by a killed process is ignored.
+
 ## Integration points
 
 - **Engine**: no patch. The bridge uses the engine's standard BiDi endpoint. Normal profiles keep refusing remote-control flags.

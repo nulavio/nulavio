@@ -7,7 +7,7 @@
 
 import { workspaceBarTexts } from "./lib/agent-texts.js";
 import { t } from "./lib/i18n.js";
-import { drawProfileIcon } from "./lib/profile-icon.js";
+import { TOOLBAR_INK, drawProfileIcon } from "./lib/profile-icon.js";
 import { isRiskyFilename } from "./lib/risky.js";
 import { temporaryStorageText } from "./lib/ui.js";
 
@@ -43,10 +43,24 @@ browser.downloads.onChanged.addListener(async delta => {
 
 // -- Profile selector (Track B: the engine's profiles; absent in Track A) --
 
+// The button is drawn in the toolbar's icon colour: the theme's, and the private chrome's (dark in
+// both themes) in each private window. Redrawn when the theme changes.
+const darkTheme = matchMedia("(prefers-color-scheme: dark)");
+let shownProfile = null;
+
+async function setProfileIcon(profile) {
+  shownProfile = profile;
+  await browser.action.setIcon({ imageData: drawProfileIcon(profile, { ink: darkTheme.matches ? TOOLBAR_INK.dark : TOOLBAR_INK.light }) });
+  const windows = await browser.windows.getAll({ windowTypes: ["normal"] }).catch(() => []);
+  for (const win of windows.filter(w => w.incognito)) {
+    await browser.action.setIcon({ windowId: win.id, imageData: drawProfileIcon(profile, { ink: TOOLBAR_INK.private }) }).catch(() => {});
+  }
+}
+
 async function showCurrentProfile() {
   const state = await browser.nulavioProfiles.list();
   if (state.reason === "temporary") {
-    await browser.action.setIcon({ imageData: drawProfileIcon({ name: t("profilesTemporaryShort"), temporary: true }) });
+    await setProfileIcon({ name: t("profilesTemporaryShort"), temporary: true });
     await browser.action.setTitle({ title: t("profilesTemporaryButton") });
     await browser.nulavioProfiles.markTemporary(`${t("profilesTemporaryBar")} ${temporaryStorageText(state.temporary)}`);
     return;
@@ -56,13 +70,30 @@ async function showCurrentProfile() {
     await browser.action.setTitle({ title: t("profilesButton") });
     return;
   }
-  await browser.action.setIcon({ imageData: drawProfileIcon(current) });
-  await browser.action.setTitle({ title: t("profilesButtonNamed", [current.name]) });
+  await setProfileIcon(current);
+  // The menu's key as the engine has it now (UX6: it can be changed in Settings > Atalhos).
+  const command = (await browser.commands?.getAll?.().catch(() => []))?.find(c => c.name === "_execute_action");
+  await browser.action.setTitle({
+    title: command?.shortcut ? t("profilesButtonNamedKey", [current.name, command.shortcut]) : t("profilesButtonNamed", [current.name]),
+  });
 }
 
 if (browser.nulavioProfiles && browser.action) {
   browser.nulavioProfiles.onChanged.addListener(() => showCurrentProfile().catch(console.error));
   showCurrentProfile().catch(console.error);
+  browser.commands?.onChanged?.addListener(() => showCurrentProfile().catch(console.error));
+  // commands.reset() fires no onChanged in Firefox 159: Settings > Atalhos says when it restored a key.
+  browser.runtime.onMessage.addListener(message => {
+    if (message?.type === "commands-reset") {
+      showCurrentProfile().catch(console.error);
+    }
+  });
+  darkTheme.addEventListener("change", () => shownProfile && setProfileIcon(shownProfile).catch(console.error));
+  browser.windows.onCreated.addListener(win => {
+    if (win.incognito && shownProfile) {
+      browser.action.setIcon({ windowId: win.id, imageData: drawProfileIcon(shownProfile, { ink: TOOLBAR_INK.private }) }).catch(() => {});
+    }
+  });
 }
 
 // -- "Open link in profile": the user's explicit choice from a link's menu --
@@ -71,8 +102,10 @@ if (browser.nulavioProfiles && browser.action) {
 
 const LINK_MENU = "nulavio-open-link-in";
 let menuBuild = null;
+let linkMenu = false; // the item exists (there are other profiles)
 
 async function buildLinkMenu() {
+  linkMenu = false;
   await browser.menus.remove(LINK_MENU).catch(() => {}); // only this menu: others (send link) stay
   const state = await browser.nulavioProfiles.list();
   const others = state.available ? state.profiles.filter(p => !p.isCurrent && p.id !== null) : [];
@@ -84,6 +117,7 @@ async function buildLinkMenu() {
   for (const profile of others) {
     browser.menus.create({ id: `${LINK_MENU}:${profile.id}`, parentId: LINK_MENU, title: profile.name, ...scope });
   }
+  linkMenu = true;
 }
 
 function rebuildLinkMenu() {
@@ -105,9 +139,11 @@ if (browser.nulavioProfiles && browser.nulavioRouting && browser.menus) {
       console.error(e);
     });
   });
+  // A hidden item is left out of onShown's menuIds, so the link context decides here:
+  // checking menuIds kept the item hidden everywhere after one private window.
   browser.menus.onShown.addListener(async (info, tab) => {
-    if (info.menuIds.includes(LINK_MENU)) {
-      await browser.menus.update(LINK_MENU, { visible: !tab?.incognito });
+    if (linkMenu && info.contexts.includes("link")) {
+      await browser.menus.update(LINK_MENU, { visible: !tab?.incognito }).catch(() => {});
       browser.menus.refresh();
     }
   });
@@ -139,6 +175,9 @@ if (browser.nulavioAI) {
 
 // -- Nulavio Connect: send one link to a KDE Connect device, on the user's click --
 // The menu lists the devices reachable when it opens; never offered in private windows.
+// The item is hidden until then, and the engine leaves hidden items out of onShown's
+// menuIds, so a link menu is recognised by its context (the item's URL patterns still
+// keep it off non-web links).
 
 const SEND_MENU = "nulavio-send-link";
 
@@ -146,18 +185,52 @@ if (browser.nulavioConnect && browser.menus) {
   const scope = { contexts: ["link"], targetUrlPatterns: ["http://*/*", "https://*/*"] };
   browser.menus.create({ id: SEND_MENU, title: t("menuSendLink"), visible: false, ...scope });
   let shown = [];
+  let visible = false;
+  let opened = 0; // the menu that is open now: answers for one already closed are dropped
+  // The device list comes from KDE Connect's own tool (a helper process, ~1-2 s): a recent answer
+  // is used at once, so only the first link menu in a while waits for it. A phone that left in the
+  // last 30 s can still be listed; sending to it fails as for any unreachable device.
+  const FRESH_MS = 30000;
+  let known = null;
+  let knownAt = 0;
+  const devices = async () => {
+    if (known && Date.now() - knownAt < FRESH_MS) {
+      return known;
+    }
+    const found = await browser.nulavioConnect.kdeDevices().catch(() => null);
+    // Only a list with devices is kept: a failure or an empty answer (KDE Connect still starting,
+    // a phone not connected yet) is asked again at the next menu (review F14).
+    known = found?.length ? found : null;
+    knownAt = Date.now();
+    return found ?? [];
+  };
+  browser.menus.onHidden.addListener(() => {
+    opened++;
+    if (visible) {
+      visible = false; // each menu starts without it: no stale devices, nothing in private windows
+      browser.menus.update(SEND_MENU, { visible: false }).catch(() => {});
+    }
+  });
   browser.menus.onShown.addListener(async (info, tab) => {
-    if (!info.menuIds.includes(SEND_MENU)) {
+    const menu = ++opened;
+    if (!info.contexts.includes("link") || tab?.incognito) {
       return;
     }
-    const devices = tab?.incognito ? [] : await browser.nulavioConnect.kdeDevices().catch(() => []);
+    const reachable = await devices();
+    if (menu !== opened) {
+      return;
+    }
     await Promise.all(shown.map(id => browser.menus.remove(id).catch(() => {})));
-    shown = devices.map(device => {
+    shown = reachable.map(device => {
       const id = `${SEND_MENU}:${device.id}`;
       browser.menus.create({ id, parentId: SEND_MENU, title: device.name, ...scope });
       return id;
     });
-    await browser.menus.update(SEND_MENU, { visible: devices.length > 0 });
+    if (menu !== opened) {
+      return;
+    }
+    visible = reachable.length > 0;
+    await browser.menus.update(SEND_MENU, { visible });
     browser.menus.refresh();
   });
   browser.menus.onClicked.addListener((info, tab) => {
@@ -165,5 +238,93 @@ if (browser.nulavioConnect && browser.menus) {
     if (id.startsWith(`${SEND_MENU}:`) && !tab?.incognito) {
       browser.nulavioConnect.sendLink(info.linkUrl, id.slice(SEND_MENU.length + 1)).catch(console.error);
     }
+  });
+}
+
+// -- Nulavio Assistant: "Perguntar ao assistente" on a selection, and its shortcut (UX5-G) --
+// Both only put something in the panel of that window (the selection as an item, or the focus on
+// the question) and open it; nothing is sent until Send. Never in private windows, and none of it
+// is offered where an agent drives the browser (its AI Workspace). The label never repeats the
+// selection itself. The listeners are added at once, so the event page wakes for them.
+
+const ASK_MENU = "nulavio-ask-selection";
+
+if (browser.nulavioAI && browser.menus) {
+  browser.nulavioAI
+    .workspaceAgent()
+    .then(agent => {
+      if (!agent) {
+        browser.menus.create({ id: ASK_MENU, title: t("menuAskSelection"), contexts: ["selection"] }, () => void browser.runtime.lastError);
+      }
+    })
+    .catch(console.error);
+  browser.menus.onShown.addListener(async (info, tab) => {
+    if (info.contexts.includes("selection")) {
+      await browser.menus.update(ASK_MENU, { visible: !tab?.incognito }).catch(() => {});
+      browser.menus.refresh();
+    }
+  });
+  browser.menus.onClicked.addListener((info, tab) => {
+    if (info.menuItemId === ASK_MENU && tab && !tab.incognito) {
+      const offer = { kind: "selection", pageUrl: info.pageUrl ?? "", frameUrl: info.frameUrl ?? "", text: info.selectionText ?? "" };
+      browser.nulavioAI.assistantOffer(offer, tab.id).catch(console.error);
+    }
+  });
+}
+
+if (browser.nulavioAI && browser.commands) {
+  browser.commands.onCommand.addListener(async (command, tab) => {
+    if (command !== "open-assistant") {
+      return;
+    }
+    const target = tab ?? (await browser.tabs.query({ active: true, currentWindow: true }))[0];
+    if (target && !target.incognito) {
+      browser.nulavioAI.assistantOffer({ kind: "composer" }, target.id).catch(console.error);
+    }
+  });
+}
+
+// -- Nulavio keys (UX6, D-UX23) ---------------------------------------------
+// Ctrl+Alt+F toggles the Foco layout (and back to the preset it came from). Ctrl+Alt+B only opens
+// the profile menu, which shows the same "Bloquear agora" confirmation as its button (Cancel
+// focused); nothing here locks a profile or changes a protection itself. Both can be remapped in the
+// engine's extension shortcuts view (Settings > Atalhos).
+
+let lockAsked = 0; // when Ctrl+Alt+B was pressed; the menu takes it once, within a few seconds
+
+if (browser.commands) {
+  browser.commands.onCommand.addListener(async (command, tab) => {
+    if (command === "toggle-focus" && browser.nulavioLayout?.toggleFocus) {
+      const target = tab ?? (await browser.tabs.query({ active: true, currentWindow: true }))[0];
+      if (target) {
+        browser.nulavioLayout.toggleFocus(target.id).catch(() => {}); // announced in the window
+      }
+    } else if (command === "lock-profile") {
+      lockAsked = Date.now();
+      browser.action.openPopup(tab ? { windowId: tab.windowId } : {}).catch(console.error);
+    }
+  });
+  browser.runtime.onMessage.addListener((message, _sender, respond) => {
+    if (message?.type === "take-lock-request") {
+      respond(Date.now() - lockAsked < 5000);
+      lockAsked = 0;
+    }
+  });
+}
+
+// -- "@ia" in the address bar (UX5-H, Q7): what follows only fills the assistant's question --
+// Nothing is kept while typing, and Enter only opens the panel of that window with the text in the
+// question; Send stays the person's. Search suggestions never get it: the engine skips them for text
+// that starts with "@" and names no search engine (bug 1551049; tests/integration/test_search.py 05b
+// checks it). In a private window the text is dropped.
+
+if (browser.nulavioAI && browser.omnibox) {
+  browser.omnibox.setDefaultSuggestion({ description: t("omniboxDefault") });
+  browser.omnibox.onInputEntered.addListener(async text => {
+    const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
+    if (!tab || tab.incognito || (await browser.nulavioAI.workspaceAgent())) {
+      return;
+    }
+    browser.nulavioAI.assistantOffer({ kind: "draft", text: String(text).slice(0, 8000) }, tab.id).catch(console.error);
   });
 }

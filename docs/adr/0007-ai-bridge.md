@@ -130,3 +130,68 @@ Verified on the Firefox 159 Track B build: `test_assistant` unit, 11 tests. New 
 When `raw_automation` hands the endpoint over, the bridge writes `nulavio-raw.json` (`{"agent", "pid", "since"}`, 0600) into the AI Workspace's profile. It is removed when the workspace starts or stops. The Shell polls it each second. Once it sees the file for its own agent, from a live bridge, it latches the window into raw mode until the window closes, so deleting the file does not undo it. It replaces the bar with a critical one that cannot be closed: "Automação bruta: o Nulavio não verifica nem registra o que acontece nesta janela", with "Parar agente". The root element's `nulavio-state` attribute carries `ai`, `ai-profile` and `raw` for the window theme (UX3). The marker is a cue for the window, not a control: the bridge's own state and its watcher still end the workspace on stop, pause or revoke.
 
 **Verified.** `tests/unit/test_ai_bridge.py` (presets; the opt-in and its refusal without acceptance; legacy registries; risk tiers; place in requests; request file; raw marker; profile-target prefs; CLI flags; API without English consent). On the Track B build: `test_ai_bridge` 20–22 (the opt-in; a real AI Workspace's bar read from the engine's chrome: wording, level, not closable, "Parar agente", the raw bar latched, Stop pausing the agent and ending the workspace; the user's-profile wording) and `test_ai_ui` 02–05 and 09–10 (consent texts from the locale, request page order/classes/focus/risk/place/expiry, level and state badges, the emergency-stop callout with "Retomar", localised activity, the raw-automation switch, the assistant listed at once).
+
+## Amendment 2026-11-03: approvals only tighten (UX5-0)
+
+**Change.**
+- **The answer is checked again.** A permission prompt can stay open for minutes. `registry.decide` now checks the emergency stop, pause, revocation, the site list and a block the user set meanwhile again after "once" or "session". If any of them now refuses, the call is refused with that reason (`stopped`, `paused`, `revoked`, `out-of-scope`, `grant`).
+- **Pending requests end early.** `BrowserApprover` denies a pending request at once when one of these happens: the stop turns on, the agent is paused or revoked, or the call is cancelled. It removes the request files, so the request page reads as expired.
+- **Session answers are kept apart.** "Allow until the agent disconnects" is stored in `session_grants`, apart from the user's `grants`. It used to overwrite them. `policy.effective_mode` reads it first, as `session-grant`. These replace it:
+  - a grant the user sets;
+  - a reset;
+  - a new level.
+
+  The bridge and the assistant's task drop their session's answers when they end.
+- **AI Workspace windows.** In a window an agent drives, the Shell API refuses everything that loosens a setting or hides what was done (`workspace-change`): adding agents, levels, grants, sites, profiles, routes, resuming, lifting the stop, installing a client configuration, clearing the activity. Only the stop, pause and revoke work there.
+
+**Changelog: this only tightens.** A capability the user set to "ask" goes back to "ask" when the session ends, not to the level's default. Nothing that was refused becomes allowed.
+
+## Amendment 2026-11-03: the assistant's context, conversation, stream and entry points (UX5)
+
+**Consent is per item and checked twice.**
+- "Incluir esta página" reads the tab's visible text at once and keeps that copy in the browser, per window and in memory only. The panel gets sizes, never the text. A later Send sends that copy while the tab still shows the same address.
+- The line above Send names the recipient (host and port, since another port can be another program), the model and the whole size of the request in code points, Nulavio's instructions included.
+- The tools recompute the size and compare the recipient. They refuse with `size-changed` or `recipient-changed`, and then nothing is sent.
+- A page is cut at 60 000 characters and a selection at 16 384, and the item says so before Send.
+
+**A conversation per window (Q1, Q2, Q16, Q17, Q20).**
+- It lives in `NulavioAI`'s memory only. It survives closing the side panel and is gone when the window closes or on "Começar conversa nova". The tools keep nothing (decision 4): each Ask carries its history.
+- The page copy that went in a turn goes again to the same recipient, and the line says so. "Deixar a página de fora" stops that.
+- When the provider changes, the conversation goes to the new recipient only after "Levar a conversa", and without the page.
+- "Tentar de novo" says what it resends and sends exactly that.
+- Above 200 000 characters, Send waits for a choice. Nothing is cut silently.
+
+**Stream and stop.**
+- With `"stream": true`, `nulavio ai assistant` writes NDJSON events on the same pipe, ending in exactly one terminal line. The contract is in [the architecture](../architecture/ai-bridge.md#assistant-stream-contract-ux5). It is not a new IPC: the same process per call, no socket and no permission.
+- SIGTERM, or the end of stdin, cancels. A stop never cuts the AI Workspace's cleanup, and a call stopped mid-way is recorded as `cancelled`.
+- The emergency stop, a pause or a revocation cuts a run at once (Q19).
+
+**Answers.**
+- Answers are a safe Markdown subset made with `h()` (no HTML, no image, no clickable link, nothing that loads).
+- Sources are only passages quoted word for word from a page that went (Q13).
+
+**Permission requests of the assistant's tasks (Q9).** A request shows once:
+- as a card in the run's own side panel, with "Negar" first and focused, and the allow answers disarmed for a moment;
+- or, when that panel is closed, as the request page in front in the run's window.
+
+Never both, and never in an AI Workspace. The answer goes through the same `answer()`.
+
+**Entry points (Q5–Q8).** None of them sends anything; each only puts something in the panel's next message and opens it, in the right window.
+- **Selection menu:** "Perguntar ao assistente sobre a seleção". The text stays in the browser.
+- **Shortcut:** Alt+Shift+A, a named command that never toggles the panel closed.
+- **Omnibox keyword:** `@ia`. It only writes the question.
+- **Quick action:** "Perguntar ao assistente sobre esta página" in the address bar.
+
+None of them is offered in private windows or where an agent drives the browser.
+
+**Manifest changes, with reasons.**
+- `commands.open-assistant` is one more entry under an existing key, not a permission. It is the only way to get a shortcut that opens without closing.
+- `omnibox.keyword` is a new key. The address bar is where most questions start, and the keyword takes text from it without a permission or an engine change. It is privileged like `commands`. The text never reaches search suggestions: the engine skips them for text that starts with "@" and names no engine (bug 1551049), and `test_search` 05b pins this with a positive control. No engine patch was needed.
+
+**Visibility.**
+- While the assistant's task acts, the band of its window says so and counts the steps, or says that it waits for the person. It offers "Parar tarefa" and "Pausar assistente".
+- An agent connected through the bridge shows as "Agente conectado" in the user's windows. This comes from session markers that `nulavio ai serve` leaves while it runs (pid checked; files only, no process).
+
+**Changelog.** These change what the assistant can do only in what the person sees and controls:
+- Every new path either tightens (a refusal before sending, a stop, a pause) or puts text where the person sends it.
+- The page copy that goes again in a conversation goes to the recipient that already received it, and the person can leave it out.

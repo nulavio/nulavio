@@ -1,12 +1,28 @@
-/* Toolbar profile selector (Alt+Shift+P). One click opens another profile in
-   its own window; the engine reuses a running instance instead of starting a
-   second one. Creating from a template creates the profile and opens it. */
+/* Toolbar profile selector (Alt+Shift+P), also opened from the band's profile flag.
+   One click opens another profile; the engine brings forward its running instance instead of
+   starting a second one. Each row says the profile's state in words (Protegido, Bloqueado)
+   and whether it is open now. "Novo perfil…" opens a create sheet: a template only fills it,
+   and nothing is created before "Criar e abrir" (UX4, audit SPA-02/09/17). */
 
 import { localize, t } from "../lib/i18n.js";
-import { announce, chip, errorText, h, temporaryStorageText } from "../lib/ui.js";
-import { TEMPLATE_NAMES, freeName } from "../lib/names.js";
+import {
+  announce,
+  avatarPicker,
+  chip,
+  errorText,
+  h,
+  lockCurrentProfile,
+  profileStates,
+  stateBadge,
+  temporaryStorageText,
+  tintAvatars,
+} from "../lib/ui.js";
+import { nulavioKeys } from "../lib/keys.js";
+import { TEMPLATE_NAMES, freeName, templateHintKey } from "../lib/names.js";
 
 const profiles = browser.nulavioProfiles;
+let known = { profiles: [] };
+let options = null;
 
 async function act(action, doneText) {
   try {
@@ -20,7 +36,44 @@ async function act(action, doneText) {
   }
 }
 
-function render(state, options) {
+/** A row's name is what it shows: the verb and name, then its state and whether it is open. */
+function rowName(profile) {
+  if (profile.locked) {
+    return t("profilesUnlockNamed", [profile.name]); // "Bancos, bloqueado, desbloquear…"
+  }
+  const extras = [
+    ...profileStates(profile).map(state => t(state === "protected" ? "vaultProtectedBadge" : "profilesTemporaryShort")),
+    ...(profile.running ? [t("profileRunning")] : []),
+  ];
+  return [t("profilesOpenNamed", [profile.name]), ...extras].join(", ");
+}
+
+function profileRow(profile, index) {
+  const key = index < 9 ? String(index + 1) : null;
+  const button = h(
+    "button",
+    {
+      class: "popup__item",
+      type: "button",
+      "aria-keyshortcuts": key,
+      "aria-label": rowName(profile),
+      dataset: { profileId: String(profile.id), running: String(Boolean(profile.running)) },
+    },
+    chip(profile, "md"),
+    h("span", { class: "popup__name", text: profile.name }),
+    ...profileStates(profile).map(stateBadge),
+    profile.running ? h("span", { class: "popup__running", text: t("profileRunning") }) : null,
+    key ? h("kbd", { "aria-hidden": "true", text: key }) : null
+  );
+  button.addEventListener("click", () =>
+    profile.locked
+      ? act(() => browser.nulavioVault.openUnlockPage(profile.id))
+      : act(() => profiles.switchTo(profile.id), t("profilesOpening", [profile.name]))
+  );
+  return h("li", {}, button);
+}
+
+function render(state) {
   const temporary = state.reason === "temporary";
   const current = temporary ? { ...state.profiles[0], name: t("profilesTemporary") } : state.profiles.find(p => p.isCurrent);
   const others = state.profiles.filter(p => !p.isCurrent);
@@ -28,9 +81,31 @@ function render(state, options) {
   const badge = temporary ? { ...current, name: t("profilesTemporaryShort") } : current;
 
   document.getElementById("current").replaceChildren(
-    ...(current ? [chip(badge, "lg"), h("span", { class: "popup__name", text: current.name })] : [])
+    ...(current
+      ? [chip(badge, "lg"), h("span", { class: "popup__name", text: current.name }), ...profileStates(current).map(stateBadge)]
+      : [])
   );
-  document.querySelector(".popup__keys").hidden = temporary;
+  // The number keys and "Por que perfis?" only when there are other profiles: with none, the empty
+  // line itself says what profiles are for (audit 2026-11 FR-10).
+  document.querySelector(".popup__keys").hidden = temporary || !others.length;
+  document.querySelector(".popup__why").hidden = !temporary && state.available && !others.length;
+  // A protected profile open in this window can be locked from here: it closes its windows (UX4).
+  const actions = document.getElementById("current-actions");
+  actions.hidden = !(current?.encrypted && !current.locked && browser.nulavioVault);
+  if (!actions.hidden) {
+    const lock = h("button", { class: "button button--secondary", type: "button", id: "lock-current", text: t("vaultLockCurrent", [current.name]) });
+    lock.addEventListener("click", async () => {
+      try {
+        const said = await lockCurrentProfile(current.name);
+        if (said) {
+          announce(said, "info");
+        }
+      } catch (e) {
+        announce(errorText(e), "error");
+      }
+    });
+    actions.replaceChildren(lock);
+  }
 
   const unavailable = document.getElementById("unavailable");
   unavailable.hidden = state.available;
@@ -39,61 +114,14 @@ function render(state, options) {
     : temporary
       ? temporaryStorageText(state.temporary)
       : t(state.reason === "disabled" ? "profilesDisabled" : "profilesUnavailable");
-  document.getElementById("new-protected").hidden = temporary;
   document.getElementById("others-section").hidden = !state.available;
-  document.getElementById("new-section").hidden = !state.available;
+  document.getElementById("new-profile").hidden = !state.available;
   if (!state.available) {
     return;
   }
-
-  const list = document.getElementById("others");
-  list.replaceChildren(
-    ...(others.length
-      ? others.map((profile, index) => {
-          const key = index < 9 ? String(index + 1) : null;
-          const button = h(
-            "button",
-            {
-              class: "popup__item",
-              type: "button",
-              "aria-keyshortcuts": key,
-              // The visible name and state stay in the accessible name (SPA-10, SB-17).
-              "aria-label": t(profile.locked ? "profilesUnlockNamed" : "profilesOpenNamed", [profile.name]),
-              dataset: { profileId: String(profile.id) },
-            },
-            chip(profile, "md"),
-            h("span", { class: "popup__name", text: profile.name }),
-            profile.locked ? h("span", { class: "badge", text: t("profilesLocked") }) : null,
-            key ? h("kbd", { "aria-hidden": "true", text: key }) : null
-          );
-          button.addEventListener("click", () =>
-            profile.locked
-              ? act(() => browser.nulavioVault.openUnlockPage(profile.id))
-              : act(() => profiles.switchTo(profile.id), t("profilesOpening", [profile.name]))
-          );
-          return h("li", {}, button);
-        })
-      : [h("li", { class: "popup__empty", text: t("profilesNone") })])
-  );
-
-  document.getElementById("templates").replaceChildren(
-    ...options.templates.map(template => {
-      const name = t(TEMPLATE_NAMES[template.id]);
-      const button = h(
-        "button",
-        { class: "button button--secondary button--with-chip", type: "button", dataset: { template: template.id } },
-        chip({ name, avatar: template.avatar, color: template.color }, "sm"),
-        h("span", { text: name })
-      );
-      button.addEventListener("click", () =>
-        act(async () => {
-          const id = await profiles.create({ templateId: template.id, name: freeName(name, state.profiles.map(p => p.name)) });
-          await profiles.switchTo(id);
-        }, t("profilesCreated"))
-      );
-      return button;
-    })
-  );
+  document
+    .getElementById("others")
+    .replaceChildren(...(others.length ? others.map(profileRow) : [h("li", { class: "popup__empty", text: t("profilesNone") })]));
 }
 
 /* "Always open this site in this profile": a rule the user creates with one
@@ -141,43 +169,248 @@ async function renderSite(state) {
   document.getElementById("site-section").hidden = actions.length === 0;
 }
 
-document.addEventListener("keydown", event => {
-  if (event.altKey || event.ctrlKey || event.metaKey || !/^[1-9]$/.test(event.key)) {
-    return;
-  }
-  if (event.target.closest?.("input, select, textarea")) {
-    return;
-  }
-  const item = document.querySelectorAll("#others .popup__item")[Number(event.key) - 1];
-  if (item) {
-    event.preventDefault();
-    item.click();
-  }
-});
+// -- the create sheet ------------------------------------------------------------
 
-document.getElementById("manage").addEventListener("click", async () => {
-  await browser.tabs.create({ url: browser.runtime.getURL("settings/settings.html#profiles") });
-  window.close();
-});
+const sheet = document.getElementById("sheet");
+let chosenTemplate = null;
 
-localize();
-if (profiles) {
-  Promise.all([profiles.list(), profiles.options()])
-    .then(async ([state, options]) => {
-      render(state, options);
-      await renderSite(state).catch(e => console.error(e));
-    })
-    .catch(e => announce(errorText(e), "error"))
-    .finally(() => {
-      document.documentElement.dataset.ready = "true";
-      document.querySelector("#others .popup__item, #templates button, #manage")?.focus();
-    });
+function fillSheet(template) {
+  chosenTemplate = template?.id ?? null;
+  for (const button of document.querySelectorAll("#templates button")) {
+    button.setAttribute("aria-pressed", String(button.dataset.template === chosenTemplate));
+  }
+  document.getElementById("template-hint").textContent = t(templateHintKey(chosenTemplate));
+  const name = sheet.elements.name;
+  if (template && !name.dataset.touched) {
+    name.value = freeName(t(TEMPLATE_NAMES[template.id]), known.profiles.map(p => p.name));
+  }
+  if (template) {
+    sheet.elements.avatar.value = template.avatar;
+    sheet.querySelector(`input[name="color"][value="${template.color}"]`).checked = true;
+    tintAvatars(document.querySelector("#sheet-avatars .swatches--glyphs"), template.color);
+  }
 }
 
+function buildSheet() {
+  document.getElementById("templates").replaceChildren(
+    ...options.templates.map(template => {
+      const name = t(TEMPLATE_NAMES[template.id]);
+      const button = h(
+        "button",
+        { class: "button button--secondary button--with-chip", type: "button", "aria-pressed": "false", dataset: { template: template.id } },
+        chip({ name, avatar: template.avatar, color: template.color }, "sm"),
+        h("span", { text: name })
+      );
+      button.addEventListener("click", () => fillSheet(template));
+      return button;
+    })
+  );
+  document.getElementById("sheet-avatars").replaceChildren(
+    avatarPicker({ avatars: options.avatars, selected: options.avatars[0], color: options.colors[0] })
+  );
+  const colors = document.getElementById("sheet-colors");
+  colors.append(
+    ...options.colors.map((color, index) =>
+      h(
+        "label",
+        { class: "swatch", title: t(`color_${color}`) },
+        h("input", { type: "radio", name: "color", value: color, checked: index === 0 }),
+        h("span", { class: "swatch__fill", style: `--tile: var(--nv-color-identityTile-${color}); --glyph: var(--nv-color-identityGlyph-${color})`, "aria-hidden": "true" }),
+        h("span", { class: "visually-hidden", text: t(`color_${color}`) })
+      )
+    )
+  );
+  sheet.elements.name.addEventListener("input", () => {
+    sheet.elements.name.dataset.touched = "1";
+  });
+  sheet.addEventListener("change", event => {
+    if (event.target.name === "color") {
+      tintAvatars(document.querySelector("#sheet-avatars .swatches--glyphs"), event.target.value);
+    }
+  });
+}
+
+function openSheet() {
+  document.getElementById("menu").hidden = true;
+  sheet.hidden = false;
+  sheet.querySelector(".form-error").textContent = "";
+  sheet.elements.name.focus();
+}
+
+function closeSheet() {
+  sheet.hidden = true;
+  document.getElementById("menu").hidden = false;
+  document.getElementById("new-profile").focus();
+}
+
+let createdId = null; // made already: a second "Criar e abrir" only opens it (review F15)
+
+sheet.addEventListener("submit", async event => {
+  event.preventDefault();
+  // Inside the sheet, errors are said in the sheet (the menu's status line is hidden behind it).
+  const error = sheet.querySelector(".form-error");
+  error.textContent = "";
+  const values = Object.fromEntries(new FormData(sheet));
+  const name = values.name.trim();
+  if (!name) {
+    error.textContent = t("err_invalid_name");
+    sheet.elements.name.focus();
+    return;
+  }
+  try {
+    if (values.protect && createdId === null) {
+      // A protected profile is made in the Vault's own steps (password, recovery code), with what was
+      // chosen here: name, template, icon and colour.
+      const query = new URLSearchParams({
+        name,
+        avatar: values.avatar,
+        color: values.color,
+        ...(chosenTemplate ? { template: chosenTemplate } : {}),
+      });
+      await browser.tabs.create({ url: browser.runtime.getURL(`vault/create.html?${query}`) });
+      window.close();
+      return;
+    }
+    if (createdId === null) {
+      createdId = await profiles.create({ name, avatar: values.avatar, color: values.color, ...(chosenTemplate ? { templateId: chosenTemplate } : {}) });
+    }
+    await profiles.switchTo(createdId);
+    window.close();
+  } catch (e) {
+    error.textContent = errorText(e);
+    if (createdId !== null) {
+      document.getElementById("sheet-create").textContent = t("profilesOpenNamed", [name]);
+    }
+  }
+});
+document.getElementById("sheet-back").addEventListener("click", closeSheet);
+document.addEventListener("keydown", event => {
+  if (event.key === "Escape" && !sheet.hidden) {
+    event.preventDefault();
+    closeSheet();
+  }
+});
+
+// -- typing filters the list -------------------------------------------------------
+
+const filter = document.getElementById("filter");
+const fold = text => String(text).normalize("NFD").replace(/\p{M}/gu, "").toLocaleLowerCase();
+const visibleItems = () => [...document.querySelectorAll("#others li:not([hidden]) .popup__item")];
+
+function applyFilter() {
+  const query = fold(filter.value.trim());
+  let shown = 0;
+  for (const item of document.querySelectorAll("#others .popup__item")) {
+    const hit = !query || fold(item.querySelector(".popup__name").textContent).includes(query);
+    item.parentElement.hidden = !hit;
+    shown += hit ? 1 : 0;
+  }
+  const none = document.getElementById("filter-none");
+  none.hidden = shown > 0 || !query;
+  none.textContent = none.hidden ? "" : t("profilesFilterNone", [filter.value.trim()]);
+}
+
+function clearFilter() {
+  filter.value = "";
+  filter.hidden = true;
+  applyFilter();
+}
+
+filter.addEventListener("input", applyFilter);
+filter.addEventListener("keydown", event => {
+  if (event.key === "Escape") {
+    event.preventDefault();
+    event.stopPropagation();
+    clearFilter();
+    document.querySelector("#others .popup__item")?.focus();
+  } else if (event.key === "Enter") {
+    event.preventDefault();
+    visibleItems()[0]?.click();
+  } else if (event.key === "ArrowDown") {
+    event.preventDefault();
+    visibleItems()[0]?.focus();
+  }
+});
+
+// -- keyboard: 1–9 open a profile, arrows move between the rows, letters filter -----
+
+document.addEventListener("keydown", event => {
+  if (!sheet.hidden || event.altKey || event.ctrlKey || event.metaKey || event.target.closest?.("input, select, textarea")) {
+    return;
+  }
+  const items = visibleItems();
+  if (/^\p{L}$/u.test(event.key) && document.querySelectorAll("#others .popup__item").length > 1) {
+    event.preventDefault();
+    filter.hidden = false;
+    filter.value += event.key;
+    filter.focus();
+    applyFilter();
+    return;
+  }
+  if (/^[1-9]$/.test(event.key)) {
+    const item = items[Number(event.key) - 1];
+    if (item) {
+      event.preventDefault();
+      item.click();
+    }
+    return;
+  }
+  const at = items.indexOf(document.activeElement);
+  const next = { ArrowDown: at + 1, ArrowUp: at - 1, Home: 0, End: items.length - 1 }[event.key];
+  if (at !== -1 && next !== undefined && items[next]) {
+    event.preventDefault();
+    items[next].focus();
+  }
+});
+
+async function openShellPage(path) {
+  await browser.tabs.create({ url: browser.runtime.getURL(path) });
+  window.close();
+}
+document.getElementById("manage").addEventListener("click", () => openShellPage("settings/settings.html#profiles"));
+document.getElementById("settings").addEventListener("click", () => openShellPage("settings/settings.html"));
+document.getElementById("new-profile").addEventListener("click", openSheet);
 document.getElementById("new-temporary").addEventListener("click", () =>
   act(() => profiles.openTemporary(), t("profilesTemporaryOpening"))
 );
 
-document.getElementById("new-protected").addEventListener("click", () =>
-  act(() => browser.tabs.create({ url: browser.runtime.getURL("vault/create.html") }))
-);
+/* Ctrl+Alt+B (UX6, D-UX23) opens this menu with a lock request: the same confirmation as the
+   "Bloquear agora" button, or, when there is nothing to lock here, why. */
+async function takeLockRequest(state) {
+  const asked = await browser.runtime.sendMessage({ type: "take-lock-request" }).catch(() => false);
+  if (!asked) {
+    return;
+  }
+  const lock = document.getElementById("lock-current");
+  const current = state.profiles?.find(p => p.isCurrent);
+  if (lock && !document.getElementById("current-actions").hidden) {
+    lock.click();
+  } else {
+    announce(t(current?.locked ? "lockShortcutLocked" : "lockShortcutUnprotected"), "info");
+  }
+}
+
+localize();
+// The menu's own key, as the engine has it now (UX6: it can be changed in Settings > Atalhos).
+nulavioKeys().then(keys => {
+  const key = keys._execute_action;
+  document.querySelector(".popup__keys").textContent = key ? t("profilesKeyHintKeys", [key]) : t("profilesKeyHintNoKey");
+}, () => {});
+if (profiles) {
+  Promise.all([profiles.list(), profiles.options()])
+    .then(async ([state, choices]) => {
+      known = state;
+      options = choices;
+      buildSheet();
+      render(state);
+      await renderSite(state).catch(e => console.error(e));
+      await takeLockRequest(state);
+    })
+    .catch(e => announce(errorText(e), "error"))
+    .finally(() => {
+      document.documentElement.dataset.ready = "true";
+      // In a temporary profile the way out is another temporary window (SPA-17).
+      const first = known.reason === "temporary" ? "#new-temporary" : "#others .popup__item, #new-profile:not([hidden]), #manage";
+      document.querySelector(first)?.focus();
+    });
+}

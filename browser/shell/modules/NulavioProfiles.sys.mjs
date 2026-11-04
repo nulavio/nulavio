@@ -20,10 +20,16 @@ ChromeUtils.defineESModuleGetters(lazy, {
   profileLockState: "resource://builtin-addons/nulavio-shell/modules/NulavioVaultState.sys.mjs",
   vaultHelper: "resource://builtin-addons/nulavio-shell/modules/NulavioVault.sys.mjs",
   SelectableProfileService: "resource:///modules/profiles/SelectableProfileService.sys.mjs",
+  ENABLED_PREF: "resource://builtin-addons/nulavio-shell/modules/NulavioRouter.sys.mjs",
+  RULES_PREF: "resource://builtin-addons/nulavio-shell/modules/NulavioRouter.sys.mjs",
+  normalizeHost: "resource://builtin-addons/nulavio-shell/modules/NulavioRouter.sys.mjs",
+  parseRules: "resource://builtin-addons/nulavio-shell/modules/NulavioRouter.sys.mjs",
 });
 
 /** Identity colour per profile id, shared by every profile of the group (JSON). */
 export const PREF_COLORS = "nulavio.profiles.colors";
+// The band's profile summary is rebuilt at least this often, even without a change notice.
+const BAND_CACHE_MS = 30000;
 const PREF_COLOR_MIGRATION = "nulavio.profiles.colors.farol";
 const LEGACY_COLORS = ["mint", "sky", "violet", "rose", "sand", "slate"];
 
@@ -114,6 +120,10 @@ class NulavioProfilesClass {
   #avatarCache = new Map();
   #temporary = null;
   #migratingColors = null;
+  // The band's view of the current profile (name, colour, avatar), rebuilt only
+  // when the group store or the colours change, or after BAND_CACHE_MS at most.
+  #band = null;
+  #bandAt = 0;
   #storeSetup = null;
 
   get #service() {
@@ -154,6 +164,9 @@ class NulavioProfilesClass {
       const setup = (async () => {
         await this.#service.init();
         await this.#service.maybeSetupDataStore();
+        // Setting up the store can give this profile its id and group name: the band's cached
+        // summary (and the new tab's rules here) must not wait 30 s to see them.
+        this.#band = null;
       })().finally(() => {
         if (this.#storeSetup === setup) {
           this.#storeSetup = null;
@@ -336,17 +349,36 @@ class NulavioProfilesClass {
     }
   }
 
+  /** Whether an instance has this profile open now (UX4 profile menu). The engine's lock symlink
+      names its process, "<ip>:+<pid>", on Linux, as the launcher reads it (profile.py); a lock
+      left by a crash names a process that is gone. Elsewhere: not known, so not shown. */
+  async #running(path) {
+    try {
+      const lock = Cc["@mozilla.org/file/local;1"].createInstance(Ci.nsIFile);
+      lock.initWithPath(PathUtils.join(path, "lock"));
+      if (!lock.isSymlink()) {
+        return false;
+      }
+      const pid = /:\+(\d+)$/.exec(lock.target)?.[1];
+      return Boolean(pid) && (await IOUtils.exists(`/proc/${pid}`));
+    } catch {
+      return false;
+    }
+  }
+
   async #describe(profile, map, currentId) {
     const lock = await lazy.profileLockState(profile.path).catch(() => "plain");
     const color = this.#colorFor(profile, map);
+    const isCurrent = profile.id === currentId;
     return {
+      running: isCurrent || (lock !== "locked" && (await this.#running(profile.path))),
       kind: lock === "locked" ? null : await this.#kind(profile.path),
       id: profile.id,
       name: profile.name,
       avatar: profile.avatar,
       color,
       colorMigration: color === "lima" && this.#colorMigration().mint.includes(profile.id) ? "mint-to-lima" : null,
-      isCurrent: profile.id === currentId,
+      isCurrent,
       encrypted: lock !== "plain",
       locked: lock === "locked",
       path: profile.path,
@@ -391,6 +423,88 @@ class NulavioProfilesClass {
   async current() {
     const { profiles } = await this.list();
     return profiles.find(p => p.isCurrent) ?? null;
+  }
+
+  /**
+   * What the identity band shows for this instance: name, colour and avatar of
+   * the current profile. The band asks every 1.5 s in every window; list()
+   * reads every profile of the group (database, lock state, user.js) to answer
+   * that, so this keeps one summary, rebuilt from the database when the engine
+   * reports a change (sps-profiles-updated, from this or another instance), the
+   * colours change, or BAND_CACHE_MS have passed. A failed read is not kept.
+   */
+  /** The new tab's "Você está em" line (UX4): the band's cached summary of this profile, its
+      protection in the Vault's words ("plain", "unlocked" or "unknown") and the rules that open
+      sites here. Reads no other profile, so a new tab stays cheap. */
+  async here() {
+    const [band, protection] = await Promise.all([
+      this.currentForBand(),
+      lazy.profileLockState(Services.dirsvc.get("ProfD", Ci.nsIFile).path).catch(() => "unknown"),
+    ]);
+    if (!band) {
+      return null;
+    }
+    let routes = [];
+    if (band.id !== null && Services.prefs.getBoolPref(lazy.ENABLED_PREF, true)) {
+      routes = lazy
+        .parseRules(Services.prefs.getStringPref(lazy.RULES_PREF, "[]"))
+        .filter(rule => rule.profileId === band.id && rule.action === "open-in")
+        .map(rule => {
+          try {
+            return lazy.normalizeHost(rule.value).display;
+          } catch {
+            return rule.value;
+          }
+        });
+    }
+    return {
+      name: band.name,
+      color: band.color,
+      avatar: band.avatar,
+      temporary: Boolean(band.temporary),
+      protection: band.temporary ? "plain" : protection,
+      routeCount: routes.length,
+      routes: routes.slice(0, 5),
+    };
+  }
+
+  currentForBand() {
+    this.#observe();
+    if (this.#band && Date.now() - this.#bandAt < BAND_CACHE_MS) {
+      return this.#band;
+    }
+    const pending = this.#readBand();
+    this.#band = pending;
+    this.#bandAt = Date.now();
+    pending.catch(() => {
+      if (this.#band === pending) {
+        this.#band = null;
+      }
+    });
+    return pending;
+  }
+
+  async #readBand() {
+    if ((await this.temporaryState()).temporary) {
+      return { id: null, name: "", avatar: null, color: "slate", isCurrent: true, temporary: true };
+    }
+    if (!this.availability().available) {
+      return null;
+    }
+    const service = this.#service;
+    if (this.#storeSetup) {
+      await this.#storeSetup;
+    } else if (!service.initialized) {
+      await service.init().catch(e => console.error("Nulavio Profiles: profile service", e));
+    }
+    const current = service.currentProfile;
+    if (!current) {
+      const name = service.groupToolkitProfile?.name ?? "";
+      return { id: null, name, avatar: "default-favicon", color: COLORS[0], isCurrent: true };
+    }
+    // currentProfile is not refreshed when another instance renames the profile; the database is.
+    const profile = (await service.getProfile(current.id)) ?? current;
+    return { id: profile.id, name: profile.name, avatar: profile.avatar, color: this.#colorFor(profile, this.colors()), isCurrent: true };
   }
 
   async #profile(id) {
@@ -575,6 +689,7 @@ class NulavioProfilesClass {
   }
 
   observe() {
+    this.#band = null;
     for (const listener of this.#listeners) {
       try {
         listener();

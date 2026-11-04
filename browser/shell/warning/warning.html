@@ -9,11 +9,14 @@
   <link rel="stylesheet" href="../shared/tokens.css">
   <link rel="stylesheet" href="../shared/base.css">
   <link rel="stylesheet" href="../shared/shell.css">
+  <script type="module" src="../lib/appearance.js"></script>
   <script type="module" src="warning.js"></script>
+  <script type="module" src="../lib/moment.js"></script>
 </head>
 <body>
   <main class="page page--narrow">
     <article class="card warning" aria-labelledby="warn-headline">
+      <header class="moment__context" data-kind="download" data-profile="current"></header>
       <h1 class="warning__headline" id="warn-headline" data-i18n="warnHeadline">This download can run programs</h1>
 
       <div class="file" id="file" hidden>
@@ -27,6 +30,7 @@
       <div class="callout callout--warning" id="callout" role="alert">
         <!-- Warning: a triangle. Critical (a verdict says the file is dangerous): an octagon, never the same icon -->
         <svg class="callout__icon" id="icon-warning" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 2 21h20z M12 10v5 M12 18v.5" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <svg class="callout__icon" id="icon-info" viewBox="0 0 24 24" aria-hidden="true" hidden><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.75"/><path d="M12 11v6 M12 7.5v.5" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/></svg>
         <svg class="callout__icon" id="icon-critical" viewBox="0 0 24 24" aria-hidden="true" hidden><path d="M8 2.5h8l5.5 5.5v8L16 21.5H8L2.5 16V8z M12 7.5v5.5 M12 16.75v.25" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></svg>
         <p id="callout-text" data-i18n="warnBody"></p>
       </div>

@@ -283,7 +283,7 @@ class HorizonGroupsTest(unittest.TestCase):
                     self.assertEqual(r["bg"], "rgba(0, 0, 0, 0)")
                     self.assertEqual(r["swatchContent"], '""')
                     self.assertNotEqual(rgb(r["swatch"]), rgb(r["mark"]["color"]))
-                    self.assertEqual((r["mark"]["w"], r["mark"]["h"]), ("2px", "16px") if vertical else ("16px", "2px"))
+                    self.assertEqual((r["mark"]["w"], r["mark"]["h"]), ("3px", "20px") if vertical else ("16px", "2px"))
                     self.assertEqual(r["hidden"], [False, collapsed])
                     measurements.append({"collapsed": collapsed, **r})
                     self.capture(
@@ -480,8 +480,11 @@ class HorizonGroupsTest(unittest.TestCase):
                           gURLBar.focus(); gURLBar.search(nvGroups[0].label);
                           for(let i=0;i<100;i++) {
                             const button=document.querySelector('.urlbarView-action-btn[data-action^="tabgroup-"]');
+                            // The row is ready once its colour and its label are both in (the view can redraw it in between).
                             if(button && button.style.getPropertyValue('--tab-group-color')
-                              .includes('--tab-group-'+args[0]+')')) return true;
+                              .includes('--tab-group-'+args[0]+')')
+                              && button.querySelector('.urlbarView-action-btn-label')?.textContent
+                                .includes(nvGroups[0].label)) return true;
                             await new Promise(resolve=>setTimeout(resolve,50));
                           }
                           throw new Error('native group action did not resolve the current colour: '+JSON.stringify(

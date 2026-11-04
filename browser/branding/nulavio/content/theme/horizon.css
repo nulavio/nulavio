@@ -36,7 +36,9 @@
     :root {
       --tab-border-radius: var(--nv-radius-md);
       --toolbarbutton-border-radius: var(--nv-radius-md);
+      /* UX3F M3: three steps. sm 6 (chips), md 10 (tabs, buttons), lg 14 (address bar, cards). */
       --urlbar-border-radius: var(--nv-radius-lg);
+      --panel-border-radius: var(--nv-radius-md);
     }
   }
 
@@ -52,6 +54,66 @@
     &[uidensity="touch"] {
       --tab-min-height: var(--nv-size-tab-heightTouch);
       --urlbar-height: max(var(--nv-size-field-heightTouch), 1.4em);
+    }
+
+    /* UX3F A5: vertical tabs on a 40px step (34 + 2 x 2 margin + 2 x 1 padding),
+       the rhythm the rest of the chrome uses (4px grid). */
+    @media -moz-pref("sidebar.verticalTabs") {
+      --tab-height-with-margin-padding: calc(2px + var(--tab-min-height) + (2 * var(--tab-margin-block)));
+    }
+  }
+
+  /* UX3G N4: the launcher is 224px from the first frame (the width the Lateral
+     layout adopts), not the engine's 246px narrowing after start-up. A width the
+     person dragged is an inline style on the launcher and still wins. */
+  :root,
+  :root[uidensity] {
+    --sidebar-expanded-launcher-width: var(--nv-size-sidebar-launcherExpanded);
+  }
+
+  /* UX3G N4: hold the identity band's row from the first paint, so the toolbars
+     do not move down when the Shell mounts the band after the window loads. */
+  /* With vertical tabs a neutral band joins the navigation row (A1), so the
+     row is held only for the horizontal strip. */
+  @media not -moz-pref("sidebar.verticalTabs") {
+    #navigator-toolbox:not(:has(> #nulavio-band))::before {
+      content: "";
+      display: block;
+      order: -1;
+      min-block-size: var(--nv-space-6);
+      border-block-end: 1px solid var(--nv-color-border-subtle);
+      background-color: var(--nv-color-band-bg);
+    }
+  }
+
+  /* UX3G M7 and polish: on the 4px grid. Tabs sit 8px from the strip edges
+     (the engine's Nova value is 9px), and pinned tiles are 36px, 8px apart. */
+  @media -moz-pref("sidebar.verticalTabs") {
+    :root:not([uidensity="touch"], [uidensity="compact"]) {
+      --tab-margin-inline-inner: var(--nv-space-3);
+    }
+  }
+  :root {
+    --tab-background-width-pinned-expanded: var(--nv-size-tab-pinned);
+    --tab-margin-inline-pinned-expanded: var(--nv-space-2);
+  }
+  #tabbrowser-tabs[orient="vertical"][expanded] > #pinned-tabs-container[orient="vertical"]:not(:empty) {
+    margin-block-end: var(--nv-space-3);
+    padding-block-end: var(--nv-space-3);
+    border-block-end: 1px solid var(--nv-color-border-subtle);
+  }
+
+  #tabbrowser-tabs[orient="vertical"] {
+    --tab-padding-block-start: 1px;
+    --tab-padding-block-end: 1px;
+  }
+
+  /* UX3F M7: pinned tabs are compact 40px tiles that start at the edge,
+     not one full-width bar per row; a hairline separates them from the list. */
+  #tabbrowser-tabs[orient="vertical"][expanded] > #pinned-tabs-container[orient="vertical"] {
+    &::part(items-wrapper) {
+      grid-template-columns: repeat(auto-fill, var(--tab-pinned-min-width-expanded));
+      justify-content: start;
     }
   }
 
@@ -84,6 +146,10 @@
       --tab-icon-fill-loading: var(--nv-color-accent-default);
       --tab-attention-dot-color: var(--nv-color-accent-default);
 
+      /* UX3G: the page area before a document paints is the new tab's canvas,
+         not the engine's #F9F9FB (the flash between Ctrl+T and the new tab). */
+      --tabpanel-background-color: var(--nv-color-bg-canvas);
+
       /* Navigation toolbar */
       --toolbar-background-color: var(--nv-color-chrome-toolbar);
       --toolbar-text-color: var(--nv-color-text-primary);
@@ -105,6 +171,90 @@
       --urlbarview-text-color-selected: var(--nv-color-text-primary);
       --urlbarview-background-color-hover: color-mix(in srgb, currentColor calc(var(--nv-state-hoverOverlay) * 100%), transparent);
       --urlbarview-text-color-hover: var(--nv-color-text-primary);
+
+      /* UX3F M2: the rest edge keeps the control colour (>= 3:1, WCAG 1.4.11);
+         focus adds elevation 1 to the accent ring (below). */
+
+      /* UX3F M5: menus and panels on the Nulavio surfaces, not GTK grey. */
+      /* UX3G M5/N7: the engine (159) paints panels from --panel-*-color; the
+         older --menu-*/--arrowpanel-* names no longer reach them. */
+      --panel-background-color: var(--nv-color-bg-raised);
+      --panel-text-color: var(--nv-color-text-primary);
+      --panel-border-color: var(--nv-color-border-subtle);
+      --panel-separator-color: var(--nv-color-border-separator);
+      --menuitem-hover-background-color: color-mix(in srgb, currentColor calc(var(--nv-state-hoverOverlay) * 100%), transparent);
+      --menuitem-disabled-hover-background-color: color-mix(in srgb, currentColor 4%, transparent);
+      --menu-disabled-color: color-mix(in srgb, currentColor 55%, transparent);
+      --sidebar-border-color: var(--nv-color-border-subtle);
+      /* UX3H M-3: the sidebar panel (its header with the title and close
+         button, and built-in panels) on Nulavio's surface instead of the
+         system's -moz-sidebar grey (#36363A dark, #FAFAFB light on GTK). */
+      --sidebar-background-color: var(--nv-color-bg-surface);
+      --sidebar-text-color: var(--nv-color-text-primary);
+    }
+
+    /* UX3G M2: a clearer step from rest to focus. The rest edge stays the
+       control colour (>= 3:1); focus adds a soft accent halo to the engine's
+       accent ring and elevation 1. */
+    :root:not([lwtheme]) #urlbar[focused]:not([open]) > .urlbar-background {
+      box-shadow: 0 0 0 var(--nv-space-1) color-mix(in srgb, var(--nv-color-focus) 22%, transparent), var(--nv-elevation-1);
+    }
+
+    :root:not([lwtheme]) #tabbrowser-tabs[orient="vertical"] .tabbrowser-tab[visuallyselected] > .tab-stack > .tab-background::after {
+      background-color: var(--nv-color-route-vertical);
+    }
+
+    /* UX3F M8: the placeholder reads at >= 4.5:1 on the field in both themes. */
+    :root:not([lwtheme]) #urlbar-input::placeholder,
+    :root:not([lwtheme]) .searchbar-textbox::placeholder {
+      color: var(--nv-color-text-muted);
+      opacity: 1;
+    }
+
+    /* UX3F M1, Calmaria (2026-11): the open sidebar is the button's own state, shown by its glyph and
+       the accent icon colour only. In Lateral the sidebar is always open, so a tinted block here was the
+       one coloured block on the toolbar with no news in it; it is gone. */
+    :root:not([lwtheme]) #sidebar-button:is([checked], [open]) {
+      --toolbarbutton-icon-fill: var(--nv-color-accent-default);
+
+      /* UX3G: the open state keeps the outline glyph (the only filled icon on the
+         toolbar was the open sidebar); colour and tint carry the state. Hover
+         still previews the action. Left-to-right, sidebar on the left only. */
+      &[expanded]:not(:hover, [sidebar-positionend]):-moz-locale-dir(ltr) {
+        list-style-image: url("chrome://browser/skin/sidebar-collapsed.svg");
+      }
+
+      /* Not the engine's grey "checked" block either: the accent glyph is the state. Hover and
+         press keep their feedback. */
+      &:not(:hover, :active) > :is(.toolbarbutton-icon, .toolbarbutton-badge-stack) {
+        background-color: transparent;
+      }
+    }
+
+    /* UX3G M5/N7: menus (context, toolbar, tab) and panels (the main menu)
+       get system colours (Menu, Field) on or above the element, so the theme
+       is set on the element too. The autoscroll popup keeps its own (an id
+       selector wins). */
+    :root:not([lwtheme]) :is(menupopup, panel) {
+      --panel-background-color: var(--nv-color-bg-raised);
+      --panel-text-color: var(--nv-color-text-primary);
+      --panel-border-color: var(--nv-color-border-subtle);
+      --panel-separator-color: var(--nv-color-border-separator);
+    }
+
+    /* UX3G B3: "Switch to Tab" and the other action chips in address-bar
+       results are a soft tint, not a 1px currentColor outline on every row.
+       Container chips keep their colour edge; forced colours keep the border. */
+    :root:not([lwtheme]) .urlbarView-row:is([type="switchtab"], [type="remotetab"], [type="clipboard"])
+      .urlbarView-action:not(.urlbarView-userContext, .urlbarView-tabGroup) {
+      border-color: transparent;
+      background-color: color-mix(in srgb, currentColor calc(var(--nv-state-hoverOverlay) * 100%), transparent);
+    }
+
+    /* UX3G B2: the profiles button uses the monochrome Nulavio glyph like its
+       neighbours; the accent only marks it while its panel is open. */
+    :root:not([lwtheme]) #shell_nulavio_net-browser-action[open] {
+      --toolbarbutton-icon-fill: var(--nv-color-accent-default);
     }
 
     /* UX3B: keep native colour roles distinct. Lines/swatches use group ink;
@@ -309,15 +459,82 @@
     inset-inline-start: calc(50% - var(--nv-size-indicator-length) / 2);
   }
 
+  /* UX3F A5: in the vertical strip the mark is an edge, not a glyph: 3 x 20,
+     flush with the tab's inner edge (>= 9px clear of the icon), rounded on the
+     content side only. In the collapsed strip it sits outside the tile. */
   #tabbrowser-tabs[orient="vertical"] .tabbrowser-tab[visuallyselected] > .tab-stack > .tab-background::after {
-    inset-block-end: calc(50% - var(--nv-size-indicator-length) / 2);
-    inset-inline-start: var(--nv-size-indicator-thickness);
-    inline-size: var(--nv-size-indicator-thickness);
-    block-size: var(--nv-size-indicator-length);
+    inset-block-end: calc(50% - var(--nv-route-vertical-height) / 2);
+    inset-inline-start: 0;
+    inline-size: var(--nv-route-vertical-width);
+    block-size: var(--nv-route-vertical-height);
+    border-radius: 0 var(--nv-radius-xs) var(--nv-radius-xs) 0;
   }
+
+  #tabbrowser-tabs[orient="vertical"]:not([expanded]) .tabbrowser-tab[visuallyselected] > .tab-stack > .tab-background::after {
+    inset-inline-start: calc(-1 * var(--nv-space-2) - var(--nv-route-vertical-width) / 2);
+    border-radius: var(--nv-radius-xs);
+  }
+
 
   :root[lwtheme] .tabbrowser-tab[visuallyselected] > .tab-stack > .tab-background::after {
     background-color: currentColor;
+  }
+
+  /* UX3G N2: private windows. The engine swaps the default theme for its
+     violet "Nova Private Window" theme ([lwtheme] with [theme-in-app]; a theme
+     the person installed never has [theme-in-app]). Keep its dark scheme but
+     paint it with Nulavio's private chrome. The identity band keeps the strong
+     private alert (window-band.css), so the window still reads as private. */
+  @media not ((forced-colors) or (prefers-contrast)) {
+    :root[privatebrowsingmode="temporary"][lwtheme][theme-in-app] {
+      --lwt-accent-color: var(--nv-color-chrome-private-toolbox) !important;
+      --lwt-accent-color-inactive: var(--nv-color-chrome-private-toolbox) !important;
+      --lwt-text-color: var(--nv-color-chrome-private-text) !important;
+      --toolbar-background-color: var(--nv-color-chrome-private-toolbar) !important;
+      --toolbar-text-color: var(--nv-color-chrome-private-text) !important;
+      --toolbarbutton-icon-fill: var(--nv-color-chrome-private-icon) !important;
+      --toolbarbutton-icon-fill-attention: var(--nv-color-chrome-private-accent) !important;
+      --toolbarbutton-background-color-hover: color-mix(in srgb, currentColor calc(var(--nv-state-hoverOverlay) * 100%), transparent) !important;
+      --toolbarbutton-background-color-active: color-mix(in srgb, currentColor calc(var(--nv-state-pressedOverlay) * 100%), transparent) !important;
+      --toolbar-field-background-color: var(--nv-color-chrome-private-field) !important;
+      --toolbar-field-background-color-focus: var(--nv-color-chrome-private-field) !important;
+      --toolbar-field-text-color: var(--nv-color-chrome-private-text) !important;
+      --toolbar-field-text-color-focus: var(--nv-color-chrome-private-text) !important;
+      --toolbar-field-border-color: var(--nv-color-chrome-private-control) !important;
+      --toolbar-field-border-color-focus: var(--nv-color-chrome-private-accent) !important;
+      --lwt-toolbar-field-highlight: color-mix(in srgb, var(--nv-color-chrome-private-accent) 35%, transparent) !important;
+      --lwt-toolbar-field-highlight-text: var(--nv-color-chrome-private-text) !important;
+      --panel-background-color: var(--nv-color-chrome-private-raised) !important;
+      --panel-text-color: var(--nv-color-chrome-private-text) !important;
+      --panel-border-color: var(--nv-color-chrome-private-border) !important;
+      --tab-background-color-selected: var(--nv-color-chrome-private-tabSelected) !important;
+      --tab-text-color-selected: var(--nv-color-chrome-private-text) !important;
+      --tab-icon-fill-loading: var(--nv-color-chrome-private-accent) !important;
+      --lwt-tab-line-color: transparent !important;
+      --lwt-background-tab-separator-color: var(--nv-color-chrome-private-border) !important;
+      --tabs-navbar-separator-color: var(--nv-color-chrome-private-border) !important;
+      --toolbarseparator-color: var(--nv-color-chrome-private-border) !important;
+      --chrome-content-separator-color: var(--nv-color-chrome-private-border) !important;
+      --urlbarview-background-color-selected: var(--nv-color-chrome-private-tabSelected) !important;
+      --urlbarview-text-color-selected: var(--nv-color-chrome-private-text) !important;
+      --sidebar-background-color: var(--nv-color-chrome-private-toolbox) !important;
+      --sidebar-text-color: var(--nv-color-chrome-private-text) !important;
+      --sidebar-border-color: var(--nv-color-chrome-private-border) !important;
+      --tabpanel-background-color: var(--nv-color-chrome-private-toolbox) !important;
+      --focus-outline-color: var(--nv-color-chrome-private-accent);
+
+      /* UX3G N8: the open sidebar reads as the accent here too, not a grey block. */
+      #sidebar-button:is([checked], [open]) {
+        --toolbarbutton-icon-fill: var(--nv-color-chrome-private-accent) !important;
+      }
+
+      /* UX3H M-1: the private-window indicator on Nulavio's private fill (the
+         band's colour) instead of the engine's fixed purple #7338E2; the mask glyph
+         stays light on it, so the indicator is as visible as before. */
+      .private-browsing-indicator-button > .toolbarbutton-icon {
+        fill: var(--nv-color-security-private-fill) !important;
+      }
+    }
   }
 
   @media (forced-colors) {
@@ -330,12 +547,77 @@
     .tabbrowser-tab[visuallyselected] > .tab-stack > .tab-background::after {
       animation: nulavio-route-in var(--nv-motion-duration-fast) var(--nv-motion-easing-standard);
     }
+
+    /* UX3F B4: the vertical mark grows along its own axis. */
+    #tabbrowser-tabs[orient="vertical"] .tabbrowser-tab[visuallyselected] > .tab-stack > .tab-background::after {
+      animation-name: nulavio-route-in-v;
+    }
+
+    /* UX3F A5/M4: while the launcher animates, labels fade instead of being cut,
+       and the controls answer hover with short, quiet transitions. */
+    /* UX3G: the fade-out is short enough (80ms, no delay) to end as the width
+       starts moving, so the collapse has no empty beat. */
+    #sidebar-main[sidebar-ongoing-animations] #tabbrowser-tabs[orient="vertical"] .tab-label-container {
+      opacity: 0;
+      transition: opacity var(--nv-motion-duration-fade) var(--nv-motion-easing-exit) 0s;
+    }
+
+    #tabbrowser-tabs[orient="vertical"][expanded] .tab-label-container {
+      transition: opacity var(--nv-motion-duration-base) var(--nv-motion-easing-enter);
+    }
+
+    .tabbrowser-tab > .tab-stack > .tab-background,
+    toolbarbutton > :is(.toolbarbutton-icon, .toolbarbutton-badge-stack),
+    #urlbar > .urlbar-background {
+      transition: background-color var(--nv-motion-duration-fast) var(--nv-motion-easing-standard),
+        border-color var(--nv-motion-duration-fast) var(--nv-motion-easing-standard),
+        box-shadow var(--nv-motion-duration-fast) var(--nv-motion-easing-standard);
+    }
   }
+
+  /* UX3F B5: the main menu scans faster with the engine's own 16px glyphs. */
+  #appMenu-mainView .subviewbutton:not(.subviewbutton-iconic, #appMenu-zoom-controls, .toolbaritem-combined-buttons *) {
+    -moz-context-properties: fill, fill-opacity;
+    fill: currentColor;
+    fill-opacity: 0.85;
+
+    > .toolbarbutton-icon {
+      display: flex;
+      inline-size: var(--nv-icon-size-sm);
+      block-size: var(--nv-icon-size-sm);
+      margin-inline-end: var(--nv-space-3);
+    }
+  }
+  #appMenu-new-tab-button2 { list-style-image: url("chrome://browser/skin/new-tab.svg"); }
+  #appMenu-new-window-button2 { list-style-image: url("chrome://browser/skin/window.svg"); }
+  #appMenu-new-private-window-button2 { list-style-image: url("chrome://browser/skin/privateBrowsing.svg"); }
+  #appMenu-history-button { list-style-image: url("chrome://browser/skin/history.svg"); }
+  #appMenu-bookmarks-button { list-style-image: url("chrome://browser/skin/bookmark-hollow.svg"); }
+  #appMenu-tab-groups-button { list-style-image: url("chrome://browser/skin/tabs.svg"); }
+  #appMenu-downloads-button { list-style-image: url("chrome://browser/skin/downloads/downloads.svg"); }
+  #appMenu-passwords-button { list-style-image: url("chrome://browser/skin/login.svg"); }
+  #appMenu-extensions-themes-button,
+  #appMenu-unified-extensions-button { list-style-image: url("chrome://mozapps/skin/extensions/extension.svg"); }
+  #appMenu-print-button2 { list-style-image: url("chrome://global/skin/icons/print.svg"); }
+  #appMenu-save-file-button2 { list-style-image: url("chrome://browser/skin/save.svg"); }
+  #appMenu-find-button2 { list-style-image: url("chrome://global/skin/icons/search-glass.svg"); }
+  #appMenu-translate-button { list-style-image: url("chrome://browser/skin/translations.svg"); }
+  #appMenu-settings-button { list-style-image: url("chrome://global/skin/icons/settings.svg"); }
+  #appMenu-more-button2 { list-style-image: url("chrome://global/skin/icons/developer.svg"); }
+  #appMenu-help-button2 { list-style-image: url("chrome://global/skin/icons/help.svg"); }
+  #appMenu-fullscreen-button2 { list-style-image: url("chrome://browser/skin/fullscreen.svg"); }
 }
 
 @keyframes nulavio-route-in {
   from {
     opacity: 0;
     transform: scaleX(0.4);
+  }
+}
+
+@keyframes nulavio-route-in-v {
+  from {
+    opacity: 0;
+    transform: scaleY(0.4);
   }
 }

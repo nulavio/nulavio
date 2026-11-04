@@ -80,6 +80,25 @@
       <div class="assistant__off stack stack--tight"><h3 class="assistant__off-title" data-i18n="galleryPrivateWindowTitle">Private window · sample</h3><p data-i18n="galleryPrivateWindowText">The assistant is unavailable here.</p></div>
       <p class="status" data-level="progress" data-i18n="galleryRequestInProgress">Sample request in progress · Stop remains available in the product.</p>
     </section>
+    <section class="card stack" aria-labelledby="assistant-run-title">
+      <h2 id="assistant-run-title" data-i18n="galleryAssistantRunTitle">Assistant conversation and runs</h2>
+      <ul class="assistant__chips" inert>
+        <li class="assistant__chip" data-kind="selection"><span class="assistant__chip-text"><span data-i18n="gallerySelectionItem">Selected text · artificial example</span><span class="hint" data-i18n="gallerySelectionFrame">from a frame of example.invalid</span><span class="hint" data-i18n="gallerySelectionCut">16,384 characters; it may be cut (the limit for a selection)</span></span><button type="button" class="assistant__chip-remove" aria-label="Remove sample selection" data-i18n-attr="aria-label:galleryRemoveSampleSelection">×</button></li>
+      </ul>
+      <p class="hint hint--on" data-i18n="gallerySendLine">Goes to example.invalid:443 · sample-model · 1,234 characters, counting Nulavio's instructions</p>
+      <ol class="assistant__turns" inert>
+        <li class="assistant__turn" data-state="done"><p class="assistant__turn-question" data-i18n="galleryTurnQuestion">Sample question?</p><div class="assistant__turn-answer"><p data-i18n="galleryTurnAnswer">Sample answer, rendered as safe Markdown.</p></div><p class="hint" data-i18n="galleryTurnReceipt">1,234 characters to example.invalid:443</p></li>
+      </ol>
+      <section class="callout callout--warning assistant__approval" inert aria-labelledby="gallery-approval-headline"><svg class="callout__icon" viewBox="0 0 24 24" aria-hidden="true" data-icon="warning"><path d="M12 3 2 21h20z M12 10v5 M12 18v.5" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></svg><div class="stack stack--tight"><p class="hint" data-i18n="galleryApprovalWho">Sample assistant · Level: Restricted</p><h3 class="assistant__answer-title" id="gallery-approval-headline" data-i18n="galleryApprovalWants">Sample assistant wants to click and type</h3><p data-i18n="galleryApprovalRisk">Warning sample: this changes pages or sends data on your behalf.</p><div class="actions"><button class="button button--primary" type="button" data-i18n="galleryApprovalDeny">Deny</button><button class="button button--secondary" type="button" data-i18n="galleryApprovalOnce">Allow once</button><button class="button button--quiet" type="button" data-i18n="galleryApprovalTask">Allow until this task ends</button></div></div></section>
+      <ol class="assistant__steps" inert>
+        <li data-state="ok"><span data-i18n="galleryStepOpen">Open a tab</span> <span class="hint" data-i18n="galleryStepDone">done</span></li>
+        <li data-state="denied"><span data-i18n="galleryStepClick">Click</span> <span class="hint" data-i18n="galleryStepDenied">denied</span></li>
+        <li data-state="started"><span data-i18n="galleryStepRead">Read the page</span> <span class="hint" data-i18n="galleryStepRunning">in progress</span></li>
+      </ol>
+      <ul class="assistant__sources" inert>
+        <li class="assistant__source"><p class="hint" data-i18n="gallerySourceLabel">Passage quoted from the page “Sample” · example.invalid</p><blockquote class="assistant__source-quote" data-i18n="gallerySourceQuote">A sample passage quoted word for word from the page.</blockquote></li>
+      </ul>
+    </section>
     <section class="card stack" aria-labelledby="consent-title">
       <h2 id="consent-title" data-i18n="galleryConsentTitle">Critical consent specimen</h2>
       <p class="visually-hidden" data-i18n="galleryConsentDescription">Critical consent specimen: Keep restricted is first and primary; Allow full control is secondary and critical. Neither can grant permission.</p>

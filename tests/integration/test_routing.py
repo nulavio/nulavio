@@ -303,6 +303,68 @@ class RoutingTest(unittest.TestCase):
         self.assertEqual(self.session.processes_for(self.paths["Bancos"]), before)
         self.assertTrue(harness.wait_until(lambda: any(u.endswith("/page/routed-2") for u in self.tabs(bank)), timeout=10))
 
+    def test_04b_the_band_says_the_rule_opened_it_here(self):
+        """D-UX19: "Aberto pela sua regra · Mudar" next to the profile, only while the tab shows that rule's site."""
+        bank = self.instance("Bancos")
+        self.deliver("Trabalho", [self.local("/page/routed-notice")])
+        self.assertTrue(harness.wait_until(lambda: any(u.endswith("/page/routed-notice") for u in self.tabs(bank)), timeout=30))
+        for handle in bank.window_handles():
+            bank.switch_to(handle)
+            if bank.current_url().endswith("/page/routed-notice"):
+                break
+        notice = (
+            "const n = document.querySelector('#nulavio-band-widget .nv-band-route');"
+            "return n && !n.hidden ? {text: n.textContent, label: n.getAttribute('aria-label')} : null;"
+        )
+        shown = harness.wait_until(lambda: bank.chrome(notice), timeout=15)
+        self.assertTrue(shown, "no notice for a link the rule sent here")
+        self.assertIn("pela sua regra", shown["text"])
+        self.assertIn("Bancos", shown["label"])
+        self.assertTrue(shown["label"].startswith(shown["text"]), shown)  # WCAG 2.5.3: the visible words lead the name
+        # The same tab on a site no rule sends here: the notice goes.
+        bank.navigate(f"http://127.0.0.1:{self.server.port}/page/not-routed")
+        self.assertTrue(harness.wait_until(lambda: bank.chrome(notice) is None, timeout=15))
+        # A site of the rule typed here (not sent by another profile) gets no notice.
+        bank.navigate(self.local("/page/typed-here"))
+        time.sleep(1)
+        self.assertIsNone(bank.chrome(notice))
+        # Review F3: the person's own tab on a site of the rule, selected in another window, never takes
+        # the notice of a link routed meanwhile; only the tab that link opened shows it.
+        before = set(bank.window_handles())
+        bank.chrome("OpenBrowserWindow();")
+        self.assertTrue(harness.wait_until(lambda: set(bank.window_handles()) - before, timeout=20))
+        mine = (set(bank.window_handles()) - before).pop()
+        bank.switch_to(mine)
+        bank.navigate(self.local("/page/mine"))
+        self.assertTrue(harness.wait_until(lambda: bank.current_url().endswith("/page/mine"), timeout=10))
+        self.deliver("Trabalho", [self.local("/page/routed-again")])
+        self.assertTrue(harness.wait_until(lambda: any(u.endswith("/page/routed-again") for u in self.tabs(bank)), timeout=30))
+        select = (
+            "const t = gBrowser.tabs.find(t => t.linkedBrowser.currentURI.spec.endsWith(arguments[0]));"
+            "if (t) { gBrowser.selectedTab = t; } return Boolean(t);"
+        )
+
+        # Select the person's own tab wherever the browser put the windows, then read that window's band.
+        def select_anywhere(path: str) -> bool:
+            for handle in bank.window_handles():
+                bank.switch_to(handle)
+                if bank.chrome(select, [path]):
+                    return True
+            return False
+
+        self.assertTrue(harness.wait_until(lambda: select_anywhere("/page/mine"), timeout=10), "the person's own tab is gone")
+        time.sleep(2)  # more than one band refresh
+        self.assertIsNone(bank.chrome(notice), "the person's own tab took the notice")
+        for handle in bank.window_handles():
+            bank.switch_to(handle)
+            if bank.chrome(select, ["/page/routed-again"]):
+                self.assertTrue(harness.wait_until(lambda: bank.chrome(notice), timeout=10), "the routed tab has no notice")
+                break
+        else:
+            self.fail("the routed tab was not found")
+        bank.switch_to(mine)
+        bank.send("WebDriver:CloseWindow")
+
     def test_05_ask_first_loads_nothing_until_the_user_chooses(self):
         self.call("await R.setRuleAction(args[0], 'ask');", self.bank_rule)
         time.sleep(1.5)
@@ -319,6 +381,35 @@ class RoutingTest(unittest.TestCase):
                 break
         harness.wait_until(lambda: work.execute("return document.documentElement.dataset.ready === 'true';"), timeout=10)
         self.assertIn("/page/asked", work.execute("return document.getElementById('url').textContent;"))
+        # UX4 (SPA-07/24): here → there, both named; "remember" above the buttons it changes; why.
+        page = work.execute(
+            "const $ = id => document.getElementById(id);"
+            "return {from: document.querySelector('#route-from .route__name')?.textContent,"
+            " to: document.querySelector('#route-to .route__name')?.textContent, route: !$('route').hidden,"
+            " buttons: [...document.querySelectorAll('#actions button')].map(b => [b.className.split(' ')[1], b.textContent]),"
+            " remember: !$('remember-field').hidden,"
+            " rememberFirst: Boolean($('remember-field').compareDocumentPosition($('actions')) & 4),"
+            " why: !$('why').hidden,"
+            " described: document.querySelector('#actions .button--primary').getAttribute('aria-describedby')};"
+        )
+        dont = work.execute("return browser.i18n.getMessage('routingDontOpen');")
+        self.assertEqual(
+            page,
+            {
+                "from": "Trabalho",
+                "to": "Bancos",
+                "route": True,
+                "buttons": [
+                    ["button--primary", "Abrir em Bancos"],
+                    ["button--secondary", "Abrir em Trabalho"],
+                    ["button--quiet", dont],
+                ],
+                "remember": True,
+                "rememberFirst": True,
+                "why": True,
+                "described": "explain",
+            },
+        )
         work.send("WebDriver:ElementClick", {"id": work.find_element("#actions .button--primary")})
         self.assertTrue(harness.wait_until(lambda: self.hits("/page/asked"), timeout=30))
         self.assertTrue(
@@ -532,6 +623,32 @@ class RoutingTest(unittest.TestCase):
         self.assertEqual(self.hits("/page/from-menu"), 1)
         self.assertFalse(any("/page/from-menu" in u for u in self.own_tabs()))
 
+    def test_14b_link_menu_comes_back_after_a_private_window(self):
+        # Hidden in a private window. The engine leaves hidden items out of onShown's
+        # menuIds, so the item once stayed hidden in every window after that.
+        handles = set(self.m.window_handles())
+        main = self.m.send("WebDriver:GetWindowHandle")["value"]
+        self.m.chrome("OpenBrowserWindow({private: true});")
+        self.assertTrue(harness.wait_until(lambda: set(self.m.window_handles()) - handles, timeout=20))
+        private = (set(self.m.window_handles()) - handles).pop()
+        self.m.switch_to(private)
+        try:
+            harness.wait_until(lambda: self.m.current_url() == "about:privatebrowsing", timeout=20)
+            self.m.navigate(self.server.url("/links"))
+            self.m.context_click("#go")
+            self.assertTrue(harness.wait_until(self.m.menu_open))
+            time.sleep(1)
+            self.assertIsNone(self.m.menu_entries("nulavio-open-link-in"), "offered in a private window")
+            self.m.close_menu()
+        finally:
+            self.m.send("WebDriver:CloseWindow")
+            self.m.switch_to(main)
+        self.m.navigate(self.server.url("/links"))
+        self.m.context_click("#go")
+        entries = harness.wait_until(lambda: self.m.menu_entries("nulavio-open-link-in") or None, timeout=10)
+        self.assertIn("Trabalho", entries or [], "'Open link in profile' did not come back")
+        self.m.close_menu()
+
     # -- M5: links clicked in pages (docs/security/routing-m5-review.md) -------
 
     def m5_setup(self) -> None:
@@ -685,6 +802,252 @@ class RoutingTest(unittest.TestCase):
         self.m.execute("document.getElementById('link').href += '-off';")
         self.click("#link")
         self.stayed_here("m5-link-off")
+
+    # -- UX6: the default destination for links from other apps (ADR 0003 step 4, M4a only) --------
+
+    def ip(self, path: str) -> str:
+        return f"http://127.0.0.1:{self.server.port}{path}"
+
+    def receiver(self) -> harness.Marionette:
+        """Trabalho as the instance that receives links from other apps: the group's default profile
+        (what focusing its window does; the desktop starts `nulavio URL` in that profile)."""
+        work = self.others.get("Trabalho") or self.start("Trabalho")
+        self.assertEqual(chrome_async(work, "await SPS.setDefaultProfileForGroup(); return true;"), {"ok": True})
+        return work
+
+    def wait_shared(self, client, value: int) -> None:
+        read = "return Services.prefs.getIntPref('nulavio.routing.fallbackProfile', 0);"
+        self.assertTrue(harness.wait_until(lambda: client.chrome(read) == value, timeout=15), client.chrome(read))
+
+    def test_23_default_destination_decisions(self):
+        cases = self.call(
+            """
+            const rules = D.parseRules(JSON.stringify([
+              {id: "h1", match: "host", value: "mail.example.com", action: "open-in", profileId: 2},
+            ]));
+            const d = (url, extra = {}) => {
+              const r = D.decide({url, rules, fallbackProfileId: 7, currentProfileId: 1, ...extra});
+              return [r.action, r.profileId, r.reason];
+            };
+            return {
+              noRule: d("https://news.example.org/"),
+              ruleWins: d("https://mail.example.com/"),
+              alreadyThere: d("https://news.example.org/", {currentProfileId: 7}),
+              privateWin: d("https://news.example.org/", {isPrivate: true}),
+              disabled: d("https://news.example.org/", {enabled: false}),
+              scheme: d("file:///etc/passwd"),
+              explicit: d("https://news.example.org/", {explicitProfileId: 1}),
+              unset: d("https://news.example.org/", {fallbackProfileId: null}),
+            };
+            """
+        )
+        self.assertEqual(
+            cases,
+            {
+                "noRule": ["open-in", 7, "fallback"],
+                "ruleWins": ["open-in", 2, "host"],
+                "alreadyThere": ["stay", None, "fallback"],
+                "privateWin": ["stay", None, "private"],
+                "disabled": ["stay", None, "disabled"],
+                "scheme": ["stay", None, "scheme"],
+                "explicit": ["stay", None, "explicit"],
+                "unset": ["stay", None, "no-rule"],
+            },
+        )
+
+    def test_24_a_link_from_an_app_with_no_rule_opens_once_in_the_default_destination(self):
+        # Earlier tests left rules for these hosts; the default destination is for links no rule names.
+        self.call("for (const rule of R.rules()) await R.removeRule(rule.id); return true;")
+        destination = self.call("return P.create({name: 'Destino'});")
+        type(self).ids["Destino"] = destination
+        type(self).paths["Destino"] = Path(self.call("return (await SPS.getProfile(args[0])).path;", destination))
+        harness.GeckoProfileSession.enable_marionette(self.paths["Destino"])
+        self.call("await R.setFallback(args[0]);", destination)
+        self.assertEqual(
+            self.call("return (await R.state()).fallback;"),
+            {"profileId": destination, "profileName": "Destino", "missing": False, "protected": False},
+        )
+        work = self.receiver()
+        self.wait_shared(work, destination)
+        self.assertTrue(
+            harness.wait_until(
+                lambda: work.chrome("return Services.prefs.getStringPref('nulavio.routing.rules', '[]');") == "[]", 15
+            )
+        )
+        self.deliver("Trabalho", [self.ip("/page/fallback-1")])
+        there = self.instance("Destino")
+        self.assertTrue(harness.wait_until(lambda: any(u.endswith("/page/fallback-1") for u in self.tabs(there)), timeout=30))
+        time.sleep(1)
+        self.assertEqual(self.hits("/page/fallback-1"), 1, "the link was requested more than once")
+        self.assertFalse(any("/page/fallback-1" in u for u in self.tabs(work)), "it was opened in Trabalho too")
+        # The band of the tab it opened says why it is here (D-UX19).
+        notice = (
+            "const n = document.querySelector('#nulavio-band-widget .nv-band-route');"
+            "return n && !n.hidden ? {text: n.textContent, label: n.getAttribute('aria-label')} : null;"
+        )
+        for handle in there.window_handles():
+            there.switch_to(handle)
+            if there.current_url().endswith("/page/fallback-1"):
+                break
+        shown = harness.wait_until(lambda: there.chrome(notice), timeout=15)
+        self.assertTrue(shown, "no notice for a link the default destination sent here")
+        self.assertIn("destino padrão", shown["text"])
+        self.assertIn("Destino", shown["label"])
+
+    def test_25_rules_typed_addresses_and_routing_off_ignore_the_default_destination(self):
+        work = self.receiver()
+        self.wait_shared(work, self.ids["Destino"])
+        # A rule wins: with "stay here" for 127.0.0.1, the link opens where it arrived, not in Destino.
+        rule = self.call("return R.addRule({site: '127.0.0.1', match: 'host', action: 'stay'});")
+        try:
+            rules = "return Services.prefs.getStringPref('nulavio.routing.rules', '[]');"
+            self.assertTrue(harness.wait_until(lambda: rule in work.chrome(rules), timeout=15))
+            self.deliver("Trabalho", [self.ip("/page/rule-not-default")])
+            self.assertTrue(harness.wait_until(lambda: any(u.endswith("/page/rule-not-default") for u in self.tabs(work)), 20))
+            self.assertFalse(any("/page/rule-not-default" in u for u in self.tabs(self.instance("Destino"))))
+        finally:
+            self.call("await R.removeRule(args[0]);", rule)
+        # A typed address loads where it was typed (M4b never uses the default).
+        self.m.chrome(TYPE_JS, [self.ip("/page/typed-not-default") + "\n"])
+        self.assertTrue(
+            harness.wait_until(lambda: any(u.endswith("/page/typed-not-default") for u in self.own_tabs()), timeout=20)
+        )
+        # Routing off: a link from another app opens where it arrives.
+        self.call("await R.setEnabled(false);")
+        try:
+            off = "return Services.prefs.getBoolPref('nulavio.routing.enabled', true);"
+            self.assertTrue(harness.wait_until(lambda: work.chrome(off) is False, timeout=15))
+            self.deliver("Trabalho", [self.ip("/page/off-not-default")])
+            self.assertTrue(
+                harness.wait_until(lambda: any(u.endswith("/page/off-not-default") for u in self.tabs(work)), timeout=20)
+            )
+        finally:
+            self.call("await R.setEnabled(true);")
+
+    def test_26_a_missing_default_destination_stops_and_loads_nothing(self):
+        work = self.receiver()
+        on = "return Services.prefs.getBoolPref('nulavio.routing.enabled', true);"
+        self.assertTrue(harness.wait_until(lambda: work.chrome(on) is True, timeout=15))  # test_25 turned it back on
+        work.chrome("Services.prefs.setIntPref('nulavio.routing.fallbackProfile', 99999);")
+        self.wait_shared(work, 99999)
+        try:
+            self.deliver("Trabalho", [self.ip("/page/fallback-gone")])
+            blocked = harness.wait_until(
+                lambda: [u for u in self.tabs(work) if "/routing/blocked.html" in u and "by=default" in u], 20
+            )
+            self.assertTrue(blocked, self.tabs(work))
+            time.sleep(1)
+            self.assertEqual(self.hits("/page/fallback-gone"), 0, "the link opened in the wrong profile")
+            for handle in work.window_handles():
+                work.switch_to(handle)
+                if "by=default" in work.current_url():
+                    break
+            harness.wait_until(lambda: work.execute("return document.documentElement.dataset.ready === 'true';"), timeout=10)
+            self.assertIn(
+                "perfil escolhido para esses links", work.execute("return document.getElementById('explain').textContent;")
+            )
+        finally:
+            work.chrome("Services.prefs.clearUserPref('nulavio.routing.fallbackProfile');")
+
+    def test_27_settings_choose_the_default_destination(self):
+        url = self.m.chrome("return WebExtensionPolicy.getByID('shell@nulavio.net').getURL('settings/settings.html#routing');")
+        self.m.navigate(url)
+        harness.wait_until(lambda: self.m.execute("return document.documentElement.dataset.ready === 'true';"), timeout=15)
+        options = self.m.execute(
+            "return [...document.querySelectorAll('#routing-fallback option')].map(o => [o.value, o.textContent]);"
+        )
+        self.assertEqual(options[0], ["0", "Último perfil usado (padrão)"])
+        self.assertIn([str(self.ids["Destino"]), "Sempre em Destino"], options)
+        pick = (
+            "const s = document.getElementById('routing-fallback'); s.value = arguments[0]; s.dispatchEvent(new Event('change'));"
+        )
+        chosen = lambda: self.call("return (await R.state()).fallback.profileId;")  # noqa: E731
+        for value in (str(self.ids["Destino"]), "0"):  # each a change from what is saved
+            before = chosen()
+            self.m.execute(pick, [value])
+            self.assertTrue(harness.wait_until(lambda want=int(value): chosen() == want, timeout=10), (before, value))
+        self.assertFalse(self.m.execute("return document.getElementById('routing-fallback').disabled;"))
+
+    def test_28_a_link_sent_on_purpose_to_another_profile_is_not_moved(self):
+        """Review: the engine makes every instance the default in memory; only profiles.ini says which
+        one the desktop sends links to. A command line sent to another profile (the engine's "Move tab
+        to", a --profile path) keeps its link, running or starting cold."""
+        self.call("await R.setFallback(args[0]);", self.ids["Destino"])
+        work = self.receiver()  # Trabalho is the default on disk
+        self.wait_shared(work, self.ids["Destino"])
+        own = self.m.chrome("return Services.dirsvc.get('ProfD', Ci.nsIFile).path;")
+        # Running: from Trabalho to this instance (Pessoal), which is not the default.
+        work.chrome(
+            "Cc['@mozilla.org/remote;1'].getService(Ci.nsIRemoteService).sendCommandLine(arguments[0], arguments[1], false);",
+            [own, ["-new-tab", self.ip("/page/sent-to-pessoal")]],
+        )
+        self.assertTrue(harness.wait_until(lambda: any(u.endswith("/page/sent-to-pessoal") for u in self.own_tabs()), timeout=20))
+        self.assertFalse(any("/page/sent-to-pessoal" in u for u in self.tabs(self.instance("Destino"))))
+        # Cold: a new profile starts with --profile and the link, as "Move tab to" does (the default is Trabalho).
+        self.call("await R.setFallback(args[0]);", self.ids["Trabalho"])
+        self.wait_shared(work, self.ids["Trabalho"])
+        cold = self.call("return P.create({name: 'Frio'});")
+        type(self).ids["Frio"] = cold
+        type(self).paths["Frio"] = Path(self.call("return (await SPS.getProfile(args[0])).path;", cold))
+        harness.GeckoProfileSession.enable_marionette(self.paths["Frio"])
+        # Started once before (a brand-new profile's first start loses a command-line link today,
+        # with or without routing: recorded in the plan as its own question).
+        self.start("Frio")
+        self.stop("Frio")
+        work = self.receiver()
+        self.call(
+            "SPS.execProcess(['--profile', args[0], '-new-tab', args[1]]); return true;",
+            str(self.paths["Frio"]),
+            self.ip("/page/cold-to-frio"),
+        )
+        frio = self.instance("Frio")
+        self.assertTrue(harness.wait_until(lambda: any(u.endswith("/page/cold-to-frio") for u in self.tabs(frio)), timeout=30))
+        time.sleep(1)
+        self.assertFalse(any("/page/cold-to-frio" in u for u in self.tabs(work)), "the link was moved to the default destination")
+        self.call("await R.setFallback(0);")
+
+    def test_29_a_new_profile_that_reuses_the_deleted_destinations_id_gets_no_links(self):
+        gone = self.call("return P.create({name: 'Passageiro'});")
+        self.call("await R.setFallback(args[0]);", gone)
+        self.assertTrue(harness.wait_until(lambda: self.error_of("await P.remove(args[0]);", gone) is None, 15))
+        reused = self.call("return P.create({name: 'Herdeiro'});")
+        if reused != gone:
+            self.skipTest(f"the engine gave the new profile id {reused}, not the deleted {gone}")
+        self.assertTrue(self.call("return (await R.state()).fallback.missing;"))
+        work = self.receiver()
+        self.wait_shared(work, gone)
+        self.deliver("Trabalho", [self.ip("/page/to-the-heir")])
+        blocked = harness.wait_until(
+            lambda: [u for u in self.tabs(work) if "/routing/blocked.html" in u and "to-the-heir" in u], 20
+        )
+        self.assertTrue(blocked, self.tabs(work))
+        time.sleep(1)
+        self.assertEqual(self.hits("/page/to-the-heir"), 0)
+        # Settings (review UX7-3): the deleted destination keeps its own entry, the heir is not shown as
+        # chosen, and the entry for the deleted profile cannot make the heir the destination.
+        url = self.m.chrome("return WebExtensionPolicy.getByID('shell@nulavio.net').getURL('settings/settings.html#routing');")
+        self.m.navigate(url)
+        harness.wait_until(lambda: self.m.execute("return document.documentElement.dataset.ready === 'true';"), timeout=15)
+        select = self.m.execute(
+            "const s = document.getElementById('routing-fallback');"
+            "return {value: s.value, chosen: s.selectedOptions[0].textContent,"
+            " heir: [...s.options].find(o => o.textContent === 'Sempre em Herdeiro')?.selected,"
+            " goneDisabled: s.querySelector('option[value=\"missing\"]')?.disabled};"
+        )
+        self.assertEqual(select["value"], "missing", select)
+        self.assertEqual(select["chosen"], "Um perfil que não existe mais", select)
+        self.assertIs(select["heir"], False, select)
+        self.assertIs(select["goneDisabled"], True, select)
+        pick = (
+            "const s = document.getElementById('routing-fallback'); s.value = arguments[0]; s.dispatchEvent(new Event('change'));"
+        )
+        self.m.execute(pick, ["missing"])
+        time.sleep(1)
+        self.assertTrue(self.call("return (await R.state()).fallback.missing;"), "the deleted entry chose the heir")
+        self.m.execute(pick, [str(reused)])
+        state = lambda: self.call("return (await R.state()).fallback;")  # noqa: E731
+        self.assertTrue(harness.wait_until(lambda: state()["missing"] is False and state()["profileId"] == reused, timeout=10))
+        self.call("await R.setFallback(0);")
 
 
 if __name__ == "__main__":

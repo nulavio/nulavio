@@ -230,7 +230,9 @@ class Bridge:
         self._target: str | None = None  # the address the current call acts on (for the audit)
         self._downloads_mode: dict[str, bool] = {}
         self._args: dict = {}  # the current call's arguments (where it acts, for permission requests)
+        self._cancel: threading.Event | None = None  # the current call's cancel: a pending request is denied
         self.raw = False  # the AI Workspace's endpoint was handed over (raw_automation)
+        self.last_call: dict | None = None
 
     # -- policy ----------------------------------------------------------------------
 
@@ -253,7 +255,8 @@ class Bridge:
             self._target = url
         host = urllib.parse.urlsplit(url).hostname if url else None
         decision = registry.decide(self.agent_id, capability, host=host, target=policy.origin(url),
-                                   session_id=self.session_id, approver=self.approver, place=self._place())  # fmt: skip
+                                   session_id=self.session_id, approver=self.approver, place=self._place(),
+                                   cancel=self._cancel)  # fmt: skip
         checked.append(capability)
         if not decision.allowed:
             if decision.reason in ("revoked", "stopped"):
@@ -294,6 +297,7 @@ class Bridge:
             validate(tool.schema, arguments)
             with self._lock:
                 self._args = arguments
+                self._cancel = cancel
                 self._sync_downloads()
                 result, target_url = getattr(self, "_t_" + name)(arguments, cancel, checked)
             outcome, decision, reason = "ok", "allow", None
@@ -306,9 +310,21 @@ class Bridge:
             result, outcome, decision, reason = self._error(str(exc)), "error:tool", "allow", None
         except BidiError as exc:
             result, outcome, decision, reason = self._error(f"Browser error: {exc}"), f"error:{exc.error}", "allow", None
+        except BaseException as exc:
+            # A cancel (the assistant's stream mode) or another failure in the middle of the call: it may have
+            # acted, so the activity records it before the exception goes on.
+            self.last_call = None
+            with contextlib.suppress(Exception):
+                audit.record(agent=self.agent_id, session=self.session_id, tool=name, capability=",".join(checked) or None,
+                             target=policy.origin(self._target), ms=int((time.monotonic() - started) * 1000),
+                             outcome="cancelled" if not isinstance(exc, Exception) else "error:failed")  # fmt: skip
+            raise
         target_url = target_url or self._target
         agent = self._agent() or {}
         typed = arguments.get("text") if name == "type" else arguments.get("expression") if name == "evaluate" else None
+        # What the call was, without its output (the assistant's step events, UX5-C1): the audit's own fields.
+        self.last_call = {"capability": ",".join(checked) or None, "reason": reason, "origin": policy.origin(target_url),
+                          "outcome": outcome.split(":", 1)[0], "ms": int((time.monotonic() - started) * 1000)}  # fmt: skip
         audit.record(
             agent=self.agent_id, client=agent.get("client"), session=self.session_id, tool=name,
             capability=",".join(checked) or None, decision=decision, reason=reason, target=policy.origin(target_url),

@@ -7,6 +7,7 @@ edit Claude Code, Codex or any other program's settings (brief, phase 4).
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import os
 import secrets
@@ -217,9 +218,16 @@ def _serve(args) -> int:
     audit.record(agent=agent["id"], client=agent.get("client"), session=session, event="connected", client_exe=executable,
                  outcome="ok" if matches else "client-mismatch")  # fmt: skip
     print(f"nulavio ai serve: agent {agent['id']} session {session}", file=sys.stderr)
+    marker = None
     try:
+        with contextlib.suppress(OSError):
+            marker = registry.mark_session(agent, session)
         Server(Bridge(agent["id"], session, headless=args.headless)).serve()
     finally:
+        if marker is not None:
+            marker.unlink(missing_ok=True)
+        with contextlib.suppress(registry.RegistryError, OSError, ValueError):
+            registry.end_session(agent["id"], session)
         audit.record(agent=agent["id"], client=agent.get("client"), session=session, event="disconnected")
     return 0
 
@@ -348,29 +356,114 @@ def _api(args) -> int:
 ASSISTANT_LIMIT = 512 * 1024  # a question plus the page's text
 
 
-def _assistant(args) -> int:
-    """`nulavio ai assistant`: one JSON request on stdin for the browser's assistant panel (A12)."""
+def _assistant_error(exc: BaseException) -> dict:
+    """The error answer for the browser: a stable code (and, from the provider, whether it was reached)."""
     from . import assistant
     from ..vault.core import VaultError
 
-    raw = sys.stdin.read(ASSISTANT_LIMIT + 1)
+    if isinstance(exc, assistant.AssistantError):
+        result = {"error": exc.code, "detail": str(exc)[:200] if str(exc) != exc.code else None, "sent": exc.sent}
+        if exc.retry_after is not None:
+            result["retryAfter"] = exc.retry_after
+        if exc.status is not None:
+            result["status"] = exc.status
+        return result
+    if isinstance(exc, VaultError):  # the system keyring
+        return {"error": exc.code}
+    if isinstance(exc, registry.RegistryError):
+        return {"error": "registry"}
+    if isinstance(exc, OSError):
+        return {"error": "failed", "detail": type(exc).__name__}
+    raise exc
+
+
+def _assistant(args) -> int:
+    """`nulavio ai assistant`: one JSON request line on stdin for the browser's assistant panel (A12).
+
+    Without "stream", one JSON answer on stdout. With "stream": true (UX5-C1), one JSON event per line:
+    start, sending, delta (Ask), step and approval (Task), then exactly one terminal line, done or error.
+    The browser keeps stdin open until then: its end, or SIGTERM, cancels; the answer then is
+    done {cancelled: true, sent}, where sent says whether a request may have reached the provider."""
+    import signal
+
+    from . import assistant
+    from ..vault.core import VaultError
+
+    # A SIGTERM that comes before stream mode is set up waits (and is then a cancel), instead of
+    # ending the process without its terminal line.
+    signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGTERM})
+    raw = sys.stdin.readline(ASSISTANT_LIMIT + 1)
     try:
         request = json.loads(raw) if len(raw) <= ASSISTANT_LIMIT else None
     except ValueError:
         request = None
+    if isinstance(request, dict) and request.get("stream") is True and request.get("op") in ("ask", "task"):
+        return _assistant_stream(request)
+    signal.pthread_sigmask(signal.SIG_UNBLOCK, {signal.SIGTERM})  # one answer: SIGTERM ends it as before
     try:
         if not isinstance(request, dict):
             raise assistant.AssistantError("bad-request")
         result = assistant.api_request(request)
-    except assistant.AssistantError as exc:
-        result = {"error": exc.code, "detail": str(exc)[:200] if str(exc) != exc.code else None}
-    except VaultError as exc:  # the system keyring
-        result = {"error": exc.code}
-    except registry.RegistryError:
-        result = {"error": "registry"}
-    except OSError as exc:
-        result = {"error": "failed", "detail": type(exc).__name__}
+    except (assistant.AssistantError, VaultError, registry.RegistryError, OSError) as exc:
+        result = _assistant_error(exc)
     print(json.dumps(result))
+    return 0
+
+
+def _assistant_stream(request: dict) -> int:
+    import signal
+    import threading
+
+    from . import assistant
+    from ..vault.core import VaultError
+
+    def write(line: str) -> None:
+        # SIGTERM waits while a line is written, so a cancel never leaves half a line for the browser to read.
+        signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGTERM})
+        try:
+            sys.stdout.write(line + "\n")
+            sys.stdout.flush()  # bin/nulavio runs python3 -I, which ignores PYTHONUNBUFFERED
+        finally:
+            signal.pthread_sigmask(signal.SIG_UNBLOCK, {signal.SIGTERM})
+
+    out = assistant.Stream(write)
+
+    def cancel(_signum, _frame):
+        if not out.cancellable:
+            # The answer is in, or the AI Workspace is closing: that finishes, and the browser says the
+            # answer arrived before the stop.
+            out.cancel_requested = True
+            return
+        signal.signal(signal.SIGTERM, signal.SIG_IGN)  # once: the unwinding (closing the AI Workspace) is not cut
+        raise assistant.Cancelled()
+
+    signal.signal(signal.SIGTERM, cancel)
+    main = threading.main_thread().ident
+
+    def watch_stdin() -> None:
+        # Anything after the request line is ignored; the end of stdin means the browser closed it or ended.
+        with contextlib.suppress(OSError):
+            while os.read(sys.stdin.fileno(), 4096):
+                pass
+        signal.pthread_kill(main, signal.SIGTERM)
+
+    try:
+        try:
+            threading.Thread(target=watch_stdin, name="stdin-watch", daemon=True).start()
+            signal.pthread_sigmask(signal.SIG_UNBLOCK, {signal.SIGTERM})  # a cancel can come from here on
+            result = assistant.api_request(request, out=out)
+        finally:
+            signal.signal(signal.SIGTERM, signal.SIG_IGN)  # the terminal line is never cut in half
+        terminal = {"type": "done", **result, "cancelled": False, "sent": out.sent}
+    except assistant.Cancelled:
+        terminal = {"type": "done", "cancelled": True, "sent": out.sent, "steps": out.steps}
+    except (assistant.AssistantError, VaultError, registry.RegistryError, OSError) as exc:
+        error = _assistant_error(exc)
+        error["sent"] = bool(error.get("sent")) or out.answered > 0  # an earlier turn reached it
+        terminal = {"type": "error", "code": error.pop("error"), **error, "steps": out.steps}
+    except Exception as exc:  # never end without a terminal line: the browser would wait for its timeout
+        terminal = {"type": "error", "code": "failed", "detail": type(exc).__name__, "sent": out.sent, "steps": out.steps}
+    write(json.dumps(terminal, ensure_ascii=False))
     return 0
 
 

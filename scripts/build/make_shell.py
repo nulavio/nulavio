@@ -66,8 +66,11 @@ def manifest() -> dict:
 
 # Parts that need the privileges of a built-in add-on (experiment APIs over
 # the engine's Search Service and profile service) and the UI that uses them.
-PRIVILEGED_KEYS = ("experiment_apis", "action", "commands", "options_ui", "sidebar_action")
+PRIVILEGED_KEYS = ("experiment_apis", "action", "commands", "omnibox", "options_ui", "sidebar_action")
 PRIVILEGED_DIRS = ("experiments", "modules", "settings", "profiles", "routing", "vault", "ai", "guard", "passwords", "assistant")
+# Plain-data modules (no browser globals, no imports) that the Shell's own pages import too: they stay
+# in the variant for a distribution Firefox, or every page that imports them fails to load there.
+PLAIN_MODULES = ("modules/NulavioAvatars.sys.mjs",)
 
 
 def assemble(out: Path, privileged: bool = True) -> list[str]:
@@ -89,8 +92,12 @@ def assemble(out: Path, privileged: bool = True) -> list[str]:
         for key in PRIVILEGED_KEYS:
             data.pop(key, None)
         (out / "manifest.json").write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+        kept = {relative: (out / relative).read_bytes() for relative in PLAIN_MODULES}
         for name in PRIVILEGED_DIRS:
             shutil.rmtree(out / name, ignore_errors=True)
+        for relative, data in kept.items():
+            (out / relative).parent.mkdir(parents=True, exist_ok=True)
+            (out / relative).write_bytes(data)
     return sorted(str(p.relative_to(out)) for p in out.rglob("*") if p.is_file())
 
 

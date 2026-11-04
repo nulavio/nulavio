@@ -1,12 +1,17 @@
 [
   {
     "namespace": "nulavioLayout",
-    "description": "Explicit native layout presets in the current profile. Built-in Shell only; no generic preference writer or startup changes.",
+    "description": "Native layout presets and one-time first-run choice in the current profile (D-UX2). Built-in Shell only; no generic preference writer.",
     "functions": [
       { "name": "state", "type": "function", "async": true, "parameters": [] },
       {
         "name": "apply", "type": "function", "async": true,
         "parameters": [{ "name": "preset", "type": "string", "enum": ["lateral", "top", "focus"] }]
+      },
+      { "name": "dismissChoice", "type": "function", "async": true, "parameters": [] },
+      {
+        "name": "toggleFocus", "type": "function", "async": true,
+        "parameters": [{ "name": "tabId", "type": "integer", "minimum": 0 }]
       }
     ],
     "events": [{ "name": "onChanged", "type": "function", "parameters": [] }]

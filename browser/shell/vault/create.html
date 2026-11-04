@@ -9,27 +9,36 @@
   <link rel="stylesheet" href="../shared/tokens.css">
   <link rel="stylesheet" href="../shared/base.css">
   <link rel="stylesheet" href="../shared/shell.css">
+  <script type="module" src="../lib/appearance.js"></script>
   <script type="module" src="create.js"></script>
 </head>
 <body data-step="profile">
   <main class="page page--narrow">
     <section class="card stack" aria-labelledby="headline">
+      <!-- What this page is, the same line as the other security moments (audit 2026-11 FR-08). -->
+      <header class="moment__context" data-kind="create"></header>
       <p class="hint" id="progress"></p>
-      <h1 id="headline"></h1>
+      <h1 class="warning__headline" id="headline"></h1>
 
       <form class="stack" id="step-profile">
         <label class="field">
           <span class="field__label" data-i18n="vaultProfileName"></span>
           <input class="input" id="name" maxlength="60" required>
         </label>
-        <fieldset class="stack stack--tight">
-          <legend class="field__label" data-i18n="vaultProfileKind"></legend>
+        <fieldset class="stack stack--tight" aria-describedby="template-hint">
+          <legend class="field__label" data-i18n="profilesTemplates"></legend>
           <div class="actions" id="templates"></div>
+          <p class="hint" id="template-hint" aria-live="polite" data-i18n="profilesTemplatesNoteAll"></p>
         </fieldset>
-        <div class="actions"><button class="button button--primary" type="submit" data-i18n="vaultNext"></button></div>
+        <div class="actions">
+          <button class="button button--primary" type="submit" data-i18n="vaultNext"></button>
+          <button class="button button--quiet" type="button" id="cancel" data-i18n="vaultCancel"></button>
+        </div>
       </form>
 
       <form class="stack" id="step-protection" hidden>
+        <!-- The name chosen in the profile menu, with a way back to change it (audit 2026-11 FR-06). -->
+        <p class="create-summary" id="summary" hidden></p>
         <label class="check">
           <input type="radio" name="method" value="password" checked>
           <span><strong data-i18n="vaultChoosePassword"></strong><span class="hint" data-i18n="vaultChoosePasswordHint"></span></span>
@@ -52,6 +61,10 @@
           <input type="radio" name="method" value="keyring">
           <span><strong data-i18n="vaultChooseKeyring"></strong><span class="hint" data-i18n="vaultChooseKeyringHint"></span></span>
         </label>
+        <div class="callout callout--info">
+          <svg class="callout__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 11v6M12 7.5v.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          <p data-i18n="vaultNoMasterKeyCreate"></p>
+        </div>
         <p class="form-error" id="protection-error" role="alert"></p>
         <div class="actions">
           <button class="button button--primary" type="submit" data-i18n="vaultCreate"></button>
@@ -61,7 +74,9 @@
 
       <form class="stack" id="step-recovery" hidden>
         <p data-i18n="vaultRecoveryIntro"></p>
-        <p class="notice mono" id="code"></p>
+        <!-- UX4 (audit SB-08): 7 numbered groups, read one by one; print is the only copy offered -->
+        <ol class="code-grid code-print" id="code" data-i18n-attr="aria-label:vaultCodeLabel"></ol>
+        <div class="actions"><button class="button button--secondary" type="button" id="print-code" data-i18n="vaultCodePrint"></button></div>
         <p class="hint" data-i18n="vaultRecoveryKeep"></p>
         <div class="field-row">
           <label class="field">
@@ -83,7 +98,6 @@
       </div>
 
       <p class="status" id="status" role="status" aria-live="polite"></p>
-      <p class="hint" data-i18n="vaultNoMasterKey"></p>
     </section>
   </main>
 </body>

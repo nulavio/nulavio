@@ -337,6 +337,52 @@
         "parameters": []
       },
       {
+        "name": "assistantInclude",
+        "type": "function",
+        "async": true,
+        "description": "Read the visible text of one tab now, for the next message; returns its size, never the text.",
+        "parameters": [
+          {
+            "name": "source",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "page"
+                ]
+              },
+              "tabId": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "url": {
+                "type": "string",
+                "maxLength": 1048576
+              }
+            }
+          }
+        ]
+      },
+      {
+        "name": "assistantRemove",
+        "type": "function",
+        "async": true,
+        "parameters": [
+          {
+            "name": "chipId",
+            "type": "string",
+            "maxLength": 64
+          }
+        ]
+      },
+      {
+        "name": "assistantChips",
+        "type": "function",
+        "async": true,
+        "parameters": []
+      },
+      {
         "name": "assistantAsk",
         "type": "function",
         "async": true,
@@ -347,18 +393,37 @@
             "maxLength": 8000
           },
           {
-            "name": "page",
+            "name": "options",
             "type": "object",
-            "optional": true,
-            "description": "The page the user included in this message, as assistantPage() returned it then; null for the question alone.",
+            "description": "The context items of this message (from assistantInclude) and what the panel showed.",
             "properties": {
-              "tabId": {
-                "type": "integer",
-                "minimum": 0
+              "chips": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "maxLength": 64
+                },
+                "maxItems": 4
               },
-              "url": {
-                "type": "string",
-                "maxLength": 1048576
+              "expected": {
+                "type": "object",
+                "optional": false,
+                "description": "Where the panel said the request goes, and its size: the tools refuse it if either changed.",
+                "properties": {
+                  "recipient": {
+                    "type": "string",
+                    "maxLength": 300
+                  },
+                  "model": {
+                    "type": "string",
+                    "maxLength": 200
+                  },
+                  "chars": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "optional": true
+                  }
+                }
               }
             }
           }
@@ -373,6 +438,219 @@
             "name": "task",
             "type": "string",
             "maxLength": 8000
+          },
+          {
+            "name": "expected",
+            "type": "object",
+            "description": "Where the panel said the request goes, and its size: the tools refuse it if either changed.",
+            "properties": {
+              "recipient": {
+                "type": "string",
+                "maxLength": 300
+              },
+              "model": {
+                "type": "string",
+                "maxLength": 200
+              },
+              "chars": {
+                "type": "integer",
+                "minimum": 0,
+                "optional": true
+              }
+            },
+            "optional": true
+          }
+        ]
+      },
+      {
+        "name": "assistantStart",
+        "type": "function",
+        "async": true,
+        "description": "Start an Ask or a Task in stream mode; its events come through onAssistantEvent. Returns {runId}.",
+        "parameters": [
+          {
+            "name": "kind",
+            "type": "string",
+            "enum": [
+              "ask",
+              "task"
+            ]
+          },
+          {
+            "name": "details",
+            "type": "object",
+            "properties": {
+              "question": {
+                "type": "string",
+                "maxLength": 8000,
+                "optional": true
+              },
+              "task": {
+                "type": "string",
+                "maxLength": 8000,
+                "optional": true
+              },
+              "chips": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "maxLength": 64
+                },
+                "maxItems": 4,
+                "optional": true
+              },
+              "expected": {
+                "type": "object",
+                "optional": true,
+                "description": "Where the panel said the request goes, and its size: the tools refuse it if either changed.",
+                "properties": {
+                  "recipient": {
+                    "type": "string",
+                    "maxLength": 300
+                  },
+                  "model": {
+                    "type": "string",
+                    "maxLength": 200
+                  },
+                  "chars": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "optional": true
+                  }
+                }
+              },
+              "retry": {
+                "type": "boolean",
+                "optional": true
+              }
+            }
+          }
+        ]
+      },
+      {
+        "name": "assistantCancel",
+        "type": "function",
+        "async": true,
+        "parameters": [
+          {
+            "name": "runId",
+            "type": "string",
+            "maxLength": 64
+          }
+        ]
+      },
+      {
+        "name": "assistantRuns",
+        "type": "function",
+        "async": true,
+        "parameters": []
+      },
+      {
+        "name": "assistantThread",
+        "type": "function",
+        "async": true,
+        "description": "This window's conversation, as the panel shows it (no page text).",
+        "parameters": []
+      },
+      {
+        "name": "assistantThreadClear",
+        "type": "function",
+        "async": true,
+        "parameters": []
+      },
+      {
+        "name": "assistantThreadLeavePage",
+        "type": "function",
+        "async": true,
+        "parameters": []
+      },
+      {
+        "name": "assistantThreadCarry",
+        "type": "function",
+        "async": true,
+        "parameters": [
+          {
+            "name": "recipient",
+            "type": "string",
+            "maxLength": 300
+          }
+        ]
+      },
+      {
+        "name": "assistantShowSource",
+        "type": "function",
+        "async": true,
+        "description": "Select the tab of this window that shows exactly this address (a source's page); false if none.",
+        "parameters": [
+          {
+            "name": "url",
+            "type": "string",
+            "maxLength": 1048576
+          }
+        ]
+      },
+      {
+        "name": "assistantOffer",
+        "type": "function",
+        "async": true,
+        "description": "An entry point (the selection menu, the shortcut) for the window of tabId: opens its side panel; sends nothing.",
+        "parameters": [
+          {
+            "name": "offer",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "selection",
+                  "composer",
+                  "draft",
+                  "page"
+                ]
+              },
+              "pageUrl": {
+                "type": "string",
+                "maxLength": 1048576,
+                "optional": true
+              },
+              "frameUrl": {
+                "type": "string",
+                "maxLength": 1048576,
+                "optional": true
+              },
+              "text": {
+                "type": "string",
+                "maxLength": 65536,
+                "optional": true
+              }
+            }
+          },
+          {
+            "name": "tabId",
+            "type": "integer",
+            "minimum": 0
+          }
+        ]
+      },
+      {
+        "name": "assistantTakeOffer",
+        "type": "function",
+        "async": true,
+        "parameters": []
+      }
+    ],
+    "events": [
+      {
+        "name": "onAssistantEvent",
+        "type": "function",
+        "description": "An event of a run in this window: start, sending, delta, step, approval, then done or error.",
+        "parameters": [
+          {
+            "name": "event",
+            "type": "object",
+            "additionalProperties": {
+              "type": "any"
+            }
           }
         ]
       }

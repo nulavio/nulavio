@@ -97,7 +97,9 @@ async function fileDigest(path, maxBytes = 64 * 1024 * 1024) {
     if (info.type !== "regular" || info.size > maxBytes) {
       return info.type === "regular" ? `size:${info.size}:mtime:${info.lastModified}` : null;
     }
-    return sha256(await IOUtils.read(path));
+    // Same lowercase hex as sha256(bytes), streamed off the main thread instead of
+    // reading up to 64 MB into JS at startup.
+    return await IOUtils.computeHexDigest(path, "sha256");
   } catch {
     return null;
   }

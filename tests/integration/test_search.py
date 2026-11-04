@@ -248,6 +248,40 @@ class SearchPrivacyTest(unittest.TestCase):
             self.search("await S.setDefault(args[0]);", previous)
             self.search("await S.remove(args[0]);", fixture)
 
+    def test_05b_text_after_the_assistant_keyword_never_reaches_suggestions(self):
+        """UX5-H gate: with remote suggestions allowed for the default engine, what follows "@ia" (the
+        Nulavio Assistant's keyword) never reaches a suggestion service or any other request. The engine
+        skips suggestions for "@" text that names no engine (bug 1551049); this pins it. The same setup
+        does send ordinary typing, which proves the measurement sees it."""
+        self.require_nulavio()
+        fixture = self.search(
+            "return S.addCustom({name: 'Fixture', url: args[0], suggestUrl: args[1], alias: '@fixture'});",
+            self.server.url("/search?q=%s"),
+            self.server.url("/suggest?q=%s"),
+        )
+        previous = self.search("return (await S.list()).find(e => e.isDefault).id;")
+        self.search("await S.setDefault(args[0]);", fixture)
+        self.search("await S.setSuggestOptIn(args[0], true);", fixture)
+        try:
+            self.m.chrome("gURLBar.blur();")
+            self.m.chrome(NET_START)
+            try:
+                self.type_keys("@ia nvassistantsecret")
+                time.sleep(2.0)
+                typed = self.m.chrome("return gURLBar.value;")
+            finally:
+                seen = self.m.chrome(NET_STOP)
+                self.m.chrome("gURLBar.view.close(); gURLBar.handleRevert(); gURLBar.blur();")
+            self.assertEqual(typed, "@ia nvassistantsecret")
+            self.assertFalse([h for h in self.server.requests_to("/suggest") if "nvassistantsecret" in h])
+            self.assert_nothing_about(seen, "nvassistantsecret")
+            self.type_in_urlbar("nvcontrolafteria")  # the positive control, with the same consent
+            self.assertTrue(any("nvcontrolafteria" in h for h in self.server.requests_to("/suggest")))
+        finally:
+            self.search("await S.setSuggestOptIn(args[0], false);", fixture)
+            self.search("await S.setDefault(args[0]);", previous)
+            self.search("await S.remove(args[0]);", fixture)
+
     def test_06_alias_search_goes_straight_to_its_engine(self):
         self.require_nulavio()
         fixture = self.search(
@@ -361,7 +395,7 @@ class SearchPrivacyTest(unittest.TestCase):
 
     def test_12_settings_page_adds_and_removes_through_the_ui(self):
         self.require_nulavio()
-        url = self.m.chrome("return WebExtensionPolicy.getByID('shell@nulavio.net').getURL('settings/settings.html');")
+        url = self.m.chrome("return WebExtensionPolicy.getByID('shell@nulavio.net').getURL('settings/settings.html#search');")
         self.m.navigate(url)
         harness.wait_until(lambda: self.root_ready(), timeout=15)
         rows = self.m.execute("return document.querySelectorAll('#engines li').length;")
@@ -395,6 +429,45 @@ class SearchPrivacyTest(unittest.TestCase):
             ".filter(n => !n.startsWith('moz-extension:') && !n.startsWith('data:'));"
         )
         self.assertEqual(external, [])
+
+    def test_13_a_saved_alias_shows_as_stored(self):
+        """Review UX7: after Salvar the field shows the alias as stored ("@pato"), not the text typed."""
+        self.require_nulavio()
+        url = self.m.chrome("return WebExtensionPolicy.getByID('shell@nulavio.net').getURL('settings/settings.html#search');")
+        self.m.navigate(url)
+        harness.wait_until(lambda: self.root_ready(), timeout=15)
+        ddg = self.m.execute(
+            "return [...document.querySelectorAll('#engines li')]"
+            ".find(li => li.querySelector('.row__title').textContent.startsWith('DuckDuckGo')).dataset.engineId;"
+        )
+        field = f'[data-focus-key="alias-{ddg}"]'
+        value = lambda: self.m.execute("return document.querySelector(arguments[0]).value;", [field])  # noqa: E731
+        before = value()
+        try:
+            self.m.execute("document.querySelector(arguments[0]).closest('details').open = true;", [field])
+            for typed, stored in (("Pato", "@pato"), (before, before)):
+                self.m.execute("const f = document.querySelector(arguments[0]); f.value = arguments[1];", [field, typed])
+                self.m.send("WebDriver:ElementClick", {"id": self.m.find_element(f'[data-focus-key="alias-save-{ddg}"]')})
+                self.assertTrue(harness.wait_until(lambda want=stored: value() == want, timeout=10), value())
+                time.sleep(0.5)  # a later redraw must not bring the typed text back
+                self.assertEqual(value(), stored)
+            # Typed but not saved: an unrelated change redraws the list and keeps it (review UX7-2).
+            bing = self.m.execute(
+                "return [...document.querySelectorAll('#engines li')]"
+                ".find(li => li.querySelector('.row__title').textContent.startsWith('Bing')).dataset.engineId;"
+            )
+            other = self.search("return (await S.list()).find(e => e.id === args[0]).alias;", bing)
+            self.m.execute("const f = document.querySelector(arguments[0]); f.value = '@rascunho';", [field])
+            try:
+                self.search("await S.setAlias(args[0], '@bingo'); return true;", bing)
+                redrawn = "return document.querySelector(arguments[0])?.defaultValue === '@bingo';"
+                bing_field = f'[data-focus-key="alias-{bing}"]'
+                self.assertTrue(harness.wait_until(lambda: self.m.execute(redrawn, [bing_field]), timeout=10))
+                self.assertEqual(value(), "@rascunho")
+            finally:
+                self.search("await S.setAlias(args[0], args[1]); return true;", bing, other or "")
+        finally:
+            self.search("await S.setAlias(args[0], args[1]); return true;", ddg, before)
 
     def root_ready(self):
         try:

@@ -18,14 +18,15 @@ const DURATIONS = [
 let state = null;
 
 async function run(action, done = null) {
+  const control = document.activeElement; // the result is shown next to the control that started it
   try {
     const result = await action();
     if (done) {
-      announce(done);
+      announce(done, "ok", { control });
     }
     return result;
   } catch (e) {
-    announce(errorText(e), "error");
+    announce(errorText(e), "error", { control });
     return null;
   }
 }
@@ -84,14 +85,20 @@ function capabilityRow(agent, capability) {
       await renderAgents();
     }, t("doneSaved"))
   );
-  const meta = grant
-    ? grant.until
-      ? t("aiGrantUntil", [when(grant.until)])
-      : grant.session
-        ? t("aiGrantSession")
-        : t("aiGrantSet")
-    : t("aiGrantFromLevel");
-  const reset = grant
+  // "Allow until the agent disconnects" is kept apart from the user's own choice (UX5-0): it is
+  // in effect only while that session is connected, and the menu keeps showing the user's choice.
+  const answered = agent.session_grants?.[capability];
+  const live = Boolean(answered) && (agent.active_sessions ?? []).some(s => s.session === answered.session);
+  const meta = live
+    ? t("aiGrantSession")
+    : grant
+      ? grant.until
+        ? t("aiGrantUntil", [when(grant.until)])
+        : grant.session
+          ? t("aiGrantSession")
+          : t("aiGrantSet")
+      : t("aiGrantFromLevel");
+  const reset = grant || live
     ? h("button", {
         class: "button button--quiet",
         type: "button",
@@ -321,7 +328,10 @@ async function renderAgents() {
   // The latest call wins: an older answer that arrives late (the stop switch toggled twice quickly)
   // must not put back a state that is no longer true.
   const turn = ++renders;
-  const next = await ai.overview();
+  const next = await ai.overview().catch(e => {
+    document.getElementById("ai-agents").setAttribute("aria-busy", "false"); // nothing is loading any more
+    throw e;
+  });
   const profiles = browser.nulavioProfiles ? (await browser.nulavioProfiles.list()).profiles.filter(p => p.path) : [];
   if (turn !== renders) {
     return;
@@ -335,6 +345,7 @@ async function renderAgents() {
   rerender(document.getElementById("ai-agents"), () =>
     state.agents.length ? state.agents.map(agentRow) : [h("li", { class: "popup__empty", text: t("aiNoAgents") })]
   );
+  document.getElementById("ai-agents").setAttribute("aria-busy", "false");
 }
 
 function renderLevels() {
@@ -442,7 +453,8 @@ function activityTitle(entry) {
 }
 
 async function renderActivity() {
-  const { entries } = await ai.activity(30);
+  const list = document.getElementById("ai-activity");
+  const { entries } = await ai.activity(30).finally(() => list.setAttribute("aria-busy", "false"));
   const names = Object.fromEntries((state?.agents ?? []).map(a => [a.id, a.name]));
   rerender(document.getElementById("ai-activity"), () =>
     entries.length
@@ -460,6 +472,7 @@ async function renderActivity() {
         )
       : [h("li", { class: "popup__empty", text: t("aiNoActivity") })]
   );
+  document.getElementById("ai-activity-clear").disabled = !entries.length; // nothing to clear (SET-08)
 }
 
 // -- Nulavio Assistant (A12) -----------------------------------------------------------
@@ -487,6 +500,18 @@ async function renderAssistant() {
 
 function setUpAssistant() {
   const form = document.getElementById("ai-assistant");
+  // A switch saves when it changes, like every other switch here (audit SPA-15); "Salvar" is for
+  // the provider fields, which also keep this choice.
+  form.elements.allowed.addEventListener("change", async event => {
+    const box = event.target;
+    try {
+      await ai.assistantAllow(box.checked);
+      announce(t("doneSaved"), "ok", { control: box });
+    } catch (e) {
+      box.checked = !box.checked; // the switch keeps showing what is in force
+      announce(errorText(e), "error", { control: box });
+    }
+  });
   form.addEventListener("submit", async event => {
     event.preventDefault();
     const error = form.querySelector(".form-error");
@@ -515,8 +540,19 @@ function setUpAssistant() {
 }
 
 export async function setUpAI() {
-  if (await ai.workspaceAgent()) {
-    return; // an agent drives this window: its settings are managed from the user's own window
+  const agent = await ai.workspaceAgent();
+  if (agent) {
+    // An agent drives this window: say so, where the controls would be, and leave none of them
+    // in the page (audit SPA-27). They are managed from one of the user's own windows.
+    const { agents } = await ai.overview().catch(() => ({ agents: [] }));
+    const section = document.getElementById("ai");
+    for (const child of section.querySelectorAll(":scope > :not(.section__head)")) {
+      child.remove();
+    }
+    const name = agents.find(a => a.id === agent)?.name ?? agent;
+    section.append(h("p", { class: "notice", id: "ai-workspace-notice", text: t("settingsAiInWorkspace", [name]) }));
+    section.hidden = false;
+    return;
   }
   document.getElementById("ai").hidden = false;
   renderLevels();

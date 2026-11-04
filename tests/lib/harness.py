@@ -54,6 +54,9 @@ TEST_PREFS = {
     "browser.download.useDownloadDir": True,
     "browser.download.alwaysOpenPanel": False,
     "browser.shell.checkDefaultBrowser": False,
+    # The new tab's first-run sequence stays out of every test that does not ask for it
+    # (tests/integration/test_newtab_ui.py clears it to walk through it).
+    "nulavio.firstrun.done": "finished",
 }
 
 
@@ -141,6 +144,13 @@ class FixtureServer:
         if path.startswith("/page/"):
             name = path.rsplit("/", 1)[-1]
             return f"<!doctype html><title>{name}</title><p id=name>{name}</p>".encode(), html, {}
+        if path == "/long-page":
+            # Assistant fixture (tests/integration/test_assistant_ui.py): about `n` characters of visible
+            # text in paragraphs, accents included, to check where an included page is cut.
+            n = min(int(query.get("n", "1000")), 2_000_000)
+            para = ("Ção é um parágrafo longo de teste. " * 30).strip()
+            body = "".join(f"<p>{i} {para}</p>" for i in range(n // len(para) + 1))
+            return f"<!doctype html><title>long-page</title>{body}".encode(), html, {}
         if path == "/login":
             # Fixture for password-manager certification. Throwaway credentials only.
             page = (
@@ -420,6 +430,7 @@ PROFILE_TEST_PREFS = {
     "marionette.port": 0,
     "remote.prefs.recommended": False,
     "browser.shell.checkDefaultBrowser": False,
+    "nulavio.firstrun.done": "finished",
 }
 
 
@@ -469,8 +480,12 @@ class GeckoProfileSession:
         (self.tmp / "run").mkdir(mode=0o700)
         if os.environ.get("NULAVIO_TEST_HEADFUL") != "1":
             self.env["MOZ_HEADLESS"] = "1"
-        elif os.environ.get("WAYLAND_DISPLAY"):
-            self.env["WAYLAND_DISPLAY"] = os.environ["WAYLAND_DISPLAY"]
+        else:
+            # Headful: the display the caller chose, a private Xvfb (`env -u WAYLAND_DISPLAY DISPLAY=:n
+            # GDK_BACKEND=x11`) or Wayland. Nothing else of the caller's session is passed.
+            for variable in ("WAYLAND_DISPLAY", "DISPLAY", "GDK_BACKEND", "MOZ_ENABLE_WAYLAND"):
+                if os.environ.get(variable):
+                    self.env[variable] = os.environ[variable]
         self.name = name
         self.profile_dir = self.tmp / "profiles" / "first"
         self.process: subprocess.Popen | None = None

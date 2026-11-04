@@ -264,6 +264,11 @@ class NulavioSearchClass {
   }
 
   async state() {
+    // UX3G N5: a page asking before the first-run migration ran (the first new
+    // tab) waits for it, so it never shows an engine that is about to change.
+    if (Services.prefs.getIntPref(PREF_MIGRATION, 0) < MIGRATION_VERSION) {
+      await this.startup().catch(e => console.error("Nulavio Search: first-run migration", e));
+    }
     return {
       engines: await this.list(),
       suggestions: Services.prefs.getBoolPref(PREF_SUGGEST, false),

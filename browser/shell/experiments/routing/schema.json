@@ -6,6 +6,7 @@
       { "name": "state", "type": "function", "async": true, "parameters": [] },
       { "name": "setEnabled", "type": "function", "async": true, "parameters": [{ "name": "enabled", "type": "boolean" }] },
       { "name": "setInPage", "type": "function", "async": true, "parameters": [{ "name": "enabled", "type": "boolean" }] },
+      { "name": "setFallback", "type": "function", "async": true, "parameters": [{ "name": "profileId", "type": "integer", "minimum": 0 }] },
       {
         "name": "addRule", "type": "function", "async": true,
         "parameters": [{

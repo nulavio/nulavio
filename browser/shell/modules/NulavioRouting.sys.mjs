@@ -28,6 +28,8 @@
 
 import {
   ENABLED_PREF,
+  FALLBACK_PATH_PREF,
+  FALLBACK_PREF,
   IN_PAGE_PREF,
   MAX_RULES,
   ROUTED_FLAG,
@@ -50,6 +52,8 @@ ChromeUtils.defineESModuleGetters(lazy, {
 });
 
 const SHELL_ID = "shell@nulavio.net";
+// UX6: a link the default destination sent says so in the target's band ("Aberto pelo destino padrão").
+const ROUTE_BY_FLAG = "nulavio-route-by";
 const GROUPED_PREF = "browser.profiles.created";
 const GESTURE_PREF = "dom.user_activation.transient.timeout";
 
@@ -77,12 +81,31 @@ function webUrl(url) {
   return uri.spec;
 }
 
+// How long a link another profile sent here waits for its tab to show it (D-UX19).
+const ARRIVAL_MS = 60000;
+
+function siteOrNull(url) {
+  try {
+    return siteOf(url);
+  } catch {
+    return null;
+  }
+}
+
+/** The rule that sends a site to this very profile (a decision to stay "already here"), or null. */
+function hereBy(decision) {
+  return decision.reason === "already-here" ? decision.ruleId : null;
+}
+
 class NulavioRoutingClass {
   #listeners = new Set();
   #observing = false;
   #pageWatch = false; // M5: preference observers installed
   #pageObserving = false; // M5: the request observer is installed
   #pageRoutes = new Map(); // M5: inner window id of a page -> when it last had a navigation routed
+  // D-UX19: the tabs a routed command line opened (each with its links), and the tabs showing one.
+  #opened = new WeakMap(); // a tab's <browser> -> {urls, at}
+  #arrived = new WeakMap(); // a tab's <browser> -> the rule that sent its site here
 
   // -- rules (shared by every profile of the group) -------------------------
 
@@ -96,6 +119,63 @@ class NulavioRoutingClass {
 
   rules() {
     return parseRules(Services.prefs.getStringPref(RULES_PREF, "[]"));
+  }
+
+  /** UX6: the profile links from other apps with no rule open in (0: the last profile used). */
+  fallback() {
+    return Math.max(0, Services.prefs.getIntPref(FALLBACK_PREF, 0));
+  }
+
+  /**
+   * Whether this instance is the one the desktop sends links to: the group's default profile as
+   * profiles.ini says now (the last profile whose window had focus). Read from the file, at the
+   * moment a command line arrives: the engine's own copy is no help, because every instance makes
+   * itself the default in memory when it starts. So a link sent on purpose to a profile (its
+   * `--profile` path, the engine's "Move tab to" a profile, the start-up profile selector) is never
+   * moved by the default destination. When this cannot be told, the answer is no.
+   */
+  #receivesAppLinks() {
+    try {
+      const storeID = Services.prefs.getStringPref("toolkit.profiles.storeID", "");
+      if (!storeID) {
+        return false;
+      }
+      const ini = Services.dirsvc.get("UAppData", Ci.nsIFile);
+      ini.append("profiles.ini");
+      if (!ini.exists()) {
+        return false;
+      }
+      const parser = Cc["@mozilla.org/xpcom/ini-parser-factory;1"].getService(Ci.nsIINIParserFactory).createINIParser(ini);
+      for (const section of parser.getSections()) {
+        let id = null;
+        try {
+          id = parser.getString(section, "StoreID");
+        } catch {}
+        if (!section.startsWith("Profile") || id !== storeID) {
+          continue;
+        }
+        const path = parser.getString(section, "Path");
+        let dir;
+        if (parser.getString(section, "IsRelative") === "1") {
+          dir = ini.parent.clone();
+          for (const part of path.split("/")) {
+            dir.append(part);
+          }
+        } else {
+          dir = Cc["@mozilla.org/file/local;1"].createInstance(Ci.nsIFile);
+          dir.initWithPath(path);
+        }
+        return dir.equals(Services.dirsvc.get("ProfD", Ci.nsIFile));
+      }
+    } catch (e) {
+      console.error("Nulavio routing: could not tell whether this profile receives links", e);
+    }
+    return false;
+  }
+
+  /** The default destination for this command line, or null (decided when it arrives). */
+  #appFallback(receiver) {
+    return receiver ? this.fallback() || null : null;
   }
 
   async #share(pref) {
@@ -120,10 +200,20 @@ class NulavioRoutingClass {
     const availability = lazy.NulavioProfiles.availability();
     const { profiles } = availability.available ? await lazy.NulavioProfiles.list() : { profiles: [] };
     const byId = new Map(profiles.map(p => [p.id, p]));
+    const fallback = this.fallback();
+    const found = fallback ? byId.get(fallback) : null;
+    // The same id with another directory is a new profile that took a deleted one's id: not it.
+    const destination = found && found.path === Services.prefs.getStringPref(FALLBACK_PATH_PREF, "") ? found : null;
     return {
       ...availability,
       enabled: this.enabled(),
       inPage: this.inPage(),
+      fallback: {
+        profileId: fallback,
+        profileName: destination?.name ?? null,
+        missing: Boolean(fallback) && !destination,
+        protected: Boolean(destination?.encrypted),
+      },
       rules: this.rules().map(rule => {
         const target = byId.get(rule.profileId);
         let display = rule.value;
@@ -146,6 +236,28 @@ class NulavioRoutingClass {
     this.#requireProfiles();
     Services.prefs.setBoolPref(IN_PAGE_PREF, Boolean(enabled));
     await this.#share(IN_PAGE_PREF);
+  }
+
+  /** UX6: where links from other apps with no rule open; 0 for the last profile used. */
+  async setFallback(profileId) {
+    this.#requireProfiles();
+    if (!Number.isInteger(profileId) || profileId < 0) {
+      fail("invalid-profile");
+    }
+    // Only a profile of the group (never a temporary one, which is outside it).
+    const profile = profileId === 0 ? null : await lazy.SelectableProfileService.getProfile(profileId);
+    if (profileId !== 0 && !profile) {
+      fail("invalid-profile");
+    }
+    if (profileId === 0) {
+      Services.prefs.clearUserPref(FALLBACK_PREF);
+      Services.prefs.clearUserPref(FALLBACK_PATH_PREF);
+    } else {
+      Services.prefs.setIntPref(FALLBACK_PREF, profileId);
+      Services.prefs.setStringPref(FALLBACK_PATH_PREF, profile.path);
+    }
+    await this.#share(FALLBACK_PREF);
+    await this.#share(FALLBACK_PATH_PREF);
   }
 
   /** Add (or replace) the user's rule for a site. Returns its id. */
@@ -218,9 +330,9 @@ class NulavioRoutingClass {
     return { action: this.#launchRouted(profile, spec) };
   }
 
-  #launchRouted(profile, url) {
+  #launchRouted(profile, url, by = null) {
     const service = lazy.SelectableProfileService;
-    const args = [`--${ROUTED_FLAG}`, "-new-tab", url];
+    const args = [`--${ROUTED_FLAG}`, ...(by === "default" ? [`--${ROUTE_BY_FLAG}`, "default"] : []), "-new-tab", url];
     try {
       service.sendCommandLine(profile.path, args, true);
       return "delivered";
@@ -240,6 +352,11 @@ class NulavioRoutingClass {
    */
   handleCommandLine(cmdLine) {
     if (cmdLine.handleFlag(ROUTED_FLAG, false)) {
+      let by = null;
+      try {
+        by = cmdLine.handleFlagWithParam(ROUTE_BY_FLAG, false);
+      } catch {}
+      this.#expectArrivals(cmdLine, by === "default" ? "default" : null);
       return; // sent by routing or by an explicit choice: open here
     }
     if (!this.enabled() || !Services.prefs.getBoolPref(GROUPED_PREF, false)) {
@@ -262,6 +379,8 @@ class NulavioRoutingClass {
     }
 
     const initial = cmdLine.state === Ci.nsICommandLine.STATE_INITIAL_LAUNCH;
+    // UX6: decided now, before the engine's profile service makes this instance the default.
+    const receiver = this.fallback() ? this.#receivesAppLinks() : false;
     const service = lazy.SelectableProfileService;
     let take = candidates;
     if (!initial && service.initialized && service.currentProfile) {
@@ -269,7 +388,8 @@ class NulavioRoutingClass {
       try {
         const rules = this.rules();
         const current = service.currentProfile.id;
-        take = candidates.filter(c => decide({ url: c.url, rules, currentProfileId: current }).action !== "stay");
+        const fallbackProfileId = this.#appFallback(receiver); // M4a only: links from other apps
+        take = candidates.filter(c => decide({ url: c.url, rules, currentProfileId: current, fallbackProfileId }).action !== "stay");
       } catch (e) {
         console.error("Nulavio routing: decision failed; holding the links", e);
       }
@@ -283,7 +403,101 @@ class NulavioRoutingClass {
     if (!initial && cmdLine.length === 0) {
       cmdLine.preventDefault = true; // no extra empty window in this instance
     }
-    this.#dispatch(take.map(c => c.url), { initial }).catch(e => console.error("Nulavio routing: dispatch failed", e));
+    this.#dispatch(take.map(c => c.url), { initial, receiver }).catch(e => console.error("Nulavio routing: dispatch failed", e));
+  }
+
+  // -- the band's notice (D-UX19): "Aberto em {perfil} pela sua regra · Mudar" ----------------
+
+  /**
+   * A routed command line: note the tabs it opens (review F3: the notice belongs to those tabs, not
+   * to any tab that shows a site of the same rule). The browser opens them right after this handler
+   * returns: as new tabs of a window that is open, or as the first tab of the first window when the
+   * link starts this instance. Which rule (if any) sent each link is decided when its tab shows it.
+   */
+  #expectArrivals(cmdLine, by = null) {
+    try {
+      const args = Array.from({ length: cmdLine.length }, (_, i) => cmdLine.getArgument(i));
+      const urls = parseCommandLine(args).items.map(item => this.#resolve(cmdLine, item.value)).filter(Boolean);
+      if (!urls.length) {
+        return;
+      }
+      const arrival = { urls, at: Date.now(), by };
+      const windows = [...Services.wm.getEnumerator("navigator:browser")].filter(w => !w.closed && w.gBrowser);
+      if (!windows.length) {
+        const first = subject => {
+          Services.obs.removeObserver(first, "browser-delayed-startup-finished");
+          this.#opened.set(subject.gBrowser.selectedBrowser, arrival);
+        };
+        Services.obs.addObserver(first, "browser-delayed-startup-finished");
+        return;
+      }
+      let left = urls.length;
+      const stop = () => {
+        for (const win of windows) {
+          win.gBrowser?.tabContainer.removeEventListener("TabOpen", onOpen);
+        }
+      };
+      const onOpen = event => {
+        this.#opened.set(event.target.linkedBrowser, arrival);
+        if (--left === 0) {
+          stop();
+        }
+      };
+      for (const win of windows) {
+        win.gBrowser.tabContainer.addEventListener("TabOpen", onOpen);
+      }
+      sleep(10000).then(stop); // the tabs open at once; a later tab is the person's own
+    } catch (e) {
+      console.error("Nulavio routing: arrival notice", e);
+    }
+  }
+
+  /** The rule that sends this URL to this very profile, or null. */
+  #ruleHere(url) {
+    const current = lazy.SelectableProfileService.currentProfile?.id ?? null;
+    if (current === null) {
+      return null;
+    }
+    return hereBy(decide({ url, rules: this.rules(), enabled: this.enabled(), currentProfileId: current }));
+  }
+
+  /**
+   * The rule that sent the site of this tab here, while the tab still shows a site of that rule;
+   * null otherwise. Only a tab that a routed command line opened (within a minute) can say so, and
+   * only for a site whose rule also covers one of the links it was sent. Only this group's own
+   * rules count: an explicit choice gets no notice.
+   */
+  arrivedBy(browser) {
+    const url = browser?.currentURI?.spec;
+    const web = url && /^https?:/.test(url);
+    const held = this.#arrived.get(browser);
+    // UX6: the default destination opened this tab; said while it shows that site ("default").
+    if (typeof held === "object" && held?.by === "default") {
+      if (web && siteOrNull(url) === held.site) {
+        return "default";
+      }
+      this.#arrived.delete(browser);
+    }
+    const arrival = this.#opened.get(browser);
+    if (arrival?.by === "default" && web && Date.now() - arrival.at <= ARRIVAL_MS) {
+      const site = siteOrNull(url);
+      if (site && arrival.urls.some(u => siteOrNull(u) === site)) {
+        this.#opened.delete(browser);
+        this.#arrived.set(browser, { by: "default", site });
+        return "default";
+      }
+    }
+    const ruleId = web ? this.#ruleHere(url) : null;
+    if (held && held === ruleId) {
+      return ruleId;
+    }
+    this.#arrived.delete(browser);
+    if (!ruleId || !arrival || Date.now() - arrival.at > ARRIVAL_MS || !arrival.urls.some(u => this.#ruleHere(u) === ruleId)) {
+      return null;
+    }
+    this.#opened.delete(browser);
+    this.#arrived.set(browser, ruleId);
+    return ruleId;
   }
 
   /**
@@ -477,24 +691,26 @@ class NulavioRoutingClass {
     }
   }
 
-  async #dispatch(urls, { initial }) {
+  async #dispatch(urls, { initial, receiver = false }) {
     const service = lazy.SelectableProfileService;
     let rules = [];
     let current = null;
     let enabled = true;
     let failed = false;
+    let fallbackProfileId = null;
     try {
       await service.init(); // loads the group's shared prefs, so the rules are current
       rules = this.rules();
       enabled = this.enabled();
       current = service.currentProfile?.id ?? null;
+      fallbackProfileId = this.#appFallback(receiver); // M4a only: these are links from other apps
     } catch (e) {
       console.error("Nulavio routing: profile service unavailable", e);
       failed = true;
     }
     for (const url of urls) {
       try {
-        await this.#dispatchOne(url, { failed, rules, enabled, current });
+        await this.#dispatchOne(url, { failed, rules, enabled, current, fallbackProfileId });
       } catch (e) {
         console.error("Nulavio routing: could not route a link", e);
         await this.#openPage("routing/blocked.html", { u: url, why: "error", src: "app" }).catch(console.error);
@@ -505,12 +721,12 @@ class NulavioRoutingClass {
     }
   }
 
-  async #dispatchOne(url, { failed, rules, enabled, current }) {
+  async #dispatchOne(url, { failed, rules, enabled, current, fallbackProfileId }) {
     if (failed) {
       await this.#openPage("routing/blocked.html", { u: url, why: "error", src: "app" });
       return;
     }
-    const decision = decide({ url, rules, enabled, currentProfileId: current });
+    const decision = decide({ url, rules, enabled, currentProfileId: current, fallbackProfileId });
     if (decision.action === "stay") {
       await this.#openHere(url); // held at start-up; it belongs here after all
       return;
@@ -524,9 +740,14 @@ class NulavioRoutingClass {
       await this.#openPage("routing/ask.html", { u: url, r: decision.ruleId, src: source });
       return;
     }
-    const profile = await lazy.SelectableProfileService.getProfile(decision.profileId).catch(() => null);
+    // UX6: the default destination says so on the pages it may lead to.
+    const by = decision.reason === "fallback" ? "default" : null;
+    let profile = await lazy.SelectableProfileService.getProfile(decision.profileId).catch(() => null);
+    if (by === "default" && profile && profile.path !== Services.prefs.getStringPref(FALLBACK_PATH_PREF, "")) {
+      profile = null; // a new profile that reuses the deleted destination's id never gets its links
+    }
     if (!profile) {
-      await this.#openPage("routing/blocked.html", { u: url, r: decision.ruleId, why: "missing", src: source });
+      await this.#openPage("routing/blocked.html", { u: url, r: decision.ruleId, why: "missing", src: source, by });
       return;
     }
     if ((await lazy.profileLockState(profile.path)) === "locked") {
@@ -535,10 +756,10 @@ class NulavioRoutingClass {
       return;
     }
     try {
-      this.#launchRouted(profile, url);
+      this.#launchRouted(profile, url, by);
     } catch (e) {
       console.error("Nulavio routing: could not open the target profile", e);
-      await this.#openPage("routing/blocked.html", { u: url, r: decision.ruleId, why: "launch", src: source });
+      await this.#openPage("routing/blocked.html", { u: url, r: decision.ruleId, why: "launch", src: source, by, p: String(profile.id) });
     }
   }
 
@@ -583,6 +804,8 @@ class NulavioRoutingClass {
     this.#observing = true;
     Services.prefs.addObserver(RULES_PREF, this);
     Services.prefs.addObserver(ENABLED_PREF, this);
+    Services.prefs.addObserver(FALLBACK_PREF, this);
+    Services.prefs.addObserver(FALLBACK_PATH_PREF, this);
     Services.obs.addObserver(this, "sps-profiles-updated");
   }
 

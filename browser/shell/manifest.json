@@ -27,7 +27,7 @@
     "default_title": "__MSG_profilesButton__",
     "default_popup": "profiles/popup.html",
     "default_area": "navbar",
-    "default_icon": "shared/nulavio-symbol-adaptive.svg"
+    "default_icon": "shared/nulavio-symbol-mono.svg"
   },
   "commands": {
     "_execute_action": {
@@ -35,9 +35,61 @@
         "default": "Alt+Shift+P"
       },
       "description": "__MSG_profilesShortcut__"
+    },
+    "open-assistant": {
+      "suggested_key": {
+        "default": "Alt+Shift+A"
+      },
+      "description": "__MSG_commandOpenAssistant__"
+    },
+    "toggle-focus": {
+      "suggested_key": {
+        "default": "Ctrl+Alt+F"
+      },
+      "description": "__MSG_commandToggleFocus__"
+    },
+    "lock-profile": {
+      "suggested_key": {
+        "default": "Ctrl+Alt+B"
+      },
+      "description": "__MSG_commandLockProfile__"
     }
   },
+  "omnibox": {
+    "keyword": "@ia"
+  },
   "experiment_apis": {
+    "nulavioLayout": {
+      "schema": "experiments/layout/schema.json",
+      "parent": {
+        "scopes": [
+          "addon_parent"
+        ],
+        "script": "experiments/layout/parent.js",
+        "events": [
+          "startup"
+        ],
+        "paths": [
+          [
+            "nulavioLayout"
+          ]
+        ]
+      }
+    },
+    "nulavioPersonalise": {
+      "schema": "experiments/personalise/schema.json",
+      "parent": {
+        "scopes": [
+          "addon_parent"
+        ],
+        "script": "experiments/personalise/parent.js",
+        "paths": [
+          [
+            "nulavioPersonalise"
+          ]
+        ]
+      }
+    },
     "nulavioSearch": {
       "schema": "experiments/search/schema.json",
       "parent": {
@@ -178,20 +230,6 @@
           "startup"
         ]
       }
-    },
-    "nulavioLayout": {
-      "schema": "experiments/layout/schema.json",
-      "parent": {
-        "scopes": [
-          "addon_parent"
-        ],
-        "script": "experiments/layout/parent.js",
-        "paths": [
-          [
-            "nulavioLayout"
-          ]
-        ]
-      }
     }
   },
   "permissions": [
@@ -210,7 +248,7 @@
   "sidebar_action": {
     "default_panel": "assistant/panel.html",
     "default_title": "__MSG_assistantTitle__",
-    "default_icon": "shared/nulavio-symbol-adaptive.svg",
+    "default_icon": "shared/nulavio-symbol-mono.svg",
     "open_at_install": false
   }
 }

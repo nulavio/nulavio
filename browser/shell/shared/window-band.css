@@ -7,10 +7,13 @@
     display: flex !important;
     visibility: visible !important;
     opacity: var(--nv-security-opacity) !important;
-    min-block-size: var(--nv-size-field-heightCompact);
+    /* UX3F A1: the neutral band is a quiet 24px row on the window surface.
+       Alert states (private, temporary, agent, raw, Guard) keep their strong
+       fills, patterns and edges below, so a strong band now always means one. */
+    min-block-size: var(--nv-space-6);
     padding: 0;
     border: 0;
-    border-block-end: 1px solid var(--nv-color-band-rule);
+    border-block-end: 1px solid var(--nv-color-border-subtle);
     background: var(--nv-color-band-bg) !important;
     color: var(--nv-color-band-text) !important;
     -moz-window-dragging: drag;
@@ -29,10 +32,13 @@
     align-items: center;
     gap: var(--nv-space-2) var(--nv-space-3);
     min-inline-size: 0;
-    min-block-size: var(--nv-size-field-heightCompact);
-    padding: var(--nv-space-1) var(--nv-space-3);
+    min-block-size: var(--nv-space-6);
+    padding: 0 var(--nv-space-3);
     font-family: var(--nv-font-family-ui);
-    font-size: max(1em, var(--nv-font-size-sm));
+    /* UX3G N10: one quiet size for the band (12px, medium, a little tracking). */
+    font-size: var(--nv-font-size-xs);
+    font-weight: var(--nv-font-weight-medium);
+    letter-spacing: 0.01em;
     line-height: var(--nv-font-lineHeight-tight);
     background-color: var(--nv-color-band-bg);
     color: var(--nv-color-band-text);
@@ -45,12 +51,12 @@
     min-inline-size: var(--nv-space-6);
     max-inline-size: 100%;
     margin: 0;
-    padding: var(--nv-space-1) var(--nv-space-2);
+    padding: 0 var(--nv-space-2);
     border: 1px solid transparent;
-    border-radius: var(--nv-radius-xs);
+    border-radius: var(--nv-radius-sm);
     font: inherit;
     color: inherit;
-    background: var(--nv-color-band-bg);
+    background: transparent;
     overflow-wrap: anywhere;
     -moz-window-dragging: no-drag;
     cursor: pointer;
@@ -59,31 +65,70 @@
     text-decoration: underline;
   }
   .nv-band-row button:focus-visible {
-    outline: var(--nv-state-focusRingWidth) solid var(--nv-color-band-rule);
-    outline-offset: 0;
+    outline: var(--nv-state-focusRingWidth) solid var(--nv-color-focus);
+    outline-offset: calc(-1 * var(--nv-state-focusRingWidth));
   }
+  /* Neutral identity (Calmaria, 2026-11): a ghost button, no frame; the profile is the 16 px tile in
+     its colour with its solid glyph or initial, then its name (colour is never the only cue). */
   .nv-band-row .nv-band-identity {
     display: flex;
     align-items: center;
     gap: var(--nv-space-2);
     min-inline-size: 0;
+    padding-inline: var(--nv-space-1) var(--nv-space-2);
+    background: transparent;
+    color: var(--nv-color-band-text);
+    border: var(--nv-security-identityRingWidth) solid transparent;
+    /* UX3G M3: the same 6px corner as the alert chip; only colour and fill change. */
+    border-radius: var(--nv-radius-sm);
+    font-weight: var(--nv-font-weight-medium);
+  }
+  .nv-band-row .nv-band-identity:hover {
+    text-decoration: none;
+    background: color-mix(in srgb, currentColor 8%, transparent);
+  }
+  .nv-band-flag {
+    display: inline-grid;
+    place-items: center;
+    flex: none;
+    inline-size: var(--nv-icon-size-sm);
+    block-size: var(--nv-icon-size-sm);
+    border-radius: 5px;
+    background: var(--profile-tile, var(--nv-color-identityTile-slate));
+    color: var(--profile-glyph, var(--nv-color-identityGlyph-slate));
+    font-size: 10px;
+    font-weight: var(--nv-font-weight-semibold);
+    line-height: 1;
+  }
+  .nv-band-glyph-avatar { inline-size: 100%; block-size: 100%; }
+  .nv-band-row .nv-band-protection { color: var(--nv-color-text-secondary); }
+  /* D-UX19: "Aberto pela sua regra · Mudar", next to the profile; calm text, never a seal */
+  .nv-band-row .nv-band-route { flex: none; white-space: nowrap; color: var(--nv-color-text-secondary); }
+  /* Alert rows keep the pre-UX3F filled chip, exactly as strong as before. */
+  .nv-band-row:is([data-private="true"], [data-agent="true"], [data-raw="true"], [data-temporary="true"]) .nv-band-identity {
+    padding-inline: var(--nv-space-2);
     background: var(--profile-fill, var(--nv-color-identity-slate));
     color: var(--nv-color-identity-on);
-    border: var(--nv-security-identityRingWidth) solid var(--nv-color-identity-ring);
+    border-color: var(--nv-color-identity-ring);
     border-radius: var(--nv-radius-sm);
     font-weight: var(--nv-font-weight-semibold);
   }
-  .nv-band-flag { display: flex; align-items: center; flex: none; }
-  .nv-band-avatar {
-    inline-size: var(--nv-icon-size-sm);
-    block-size: var(--nv-icon-size-sm);
-    -moz-context-properties: fill, stroke;
-    fill: transparent;
-    stroke: currentColor;
+  .nv-band-row:is([data-private="true"], [data-agent="true"], [data-raw="true"], [data-temporary="true"]) .nv-band-flag {
+    background: transparent;
+    color: inherit;
+    box-shadow: none;
   }
+  /* An AI area replaces the profile: it keeps the strong filled chip. */
   .nv-band-row[data-workspace="true"] .nv-band-identity {
+    background: var(--profile-fill);
     color: var(--nv-color-security-agent-on);
     border-color: var(--nv-color-security-agent-ink);
+    font-weight: var(--nv-font-weight-semibold);
+  }
+  .nv-band-row[data-workspace="true"] .nv-band-flag {
+    background: transparent;
+    color: inherit;
+    box-shadow: none;
   }
   .nv-band-name { overflow-wrap: anywhere; min-inline-size: 0; }
   .nv-band-header {
@@ -91,6 +136,7 @@
     text-align: center;
     overflow-wrap: anywhere;
     min-inline-size: 0;
+    color: var(--nv-color-band-meta);
   }
   #nulavio-fullscreen { display: none; }
   :root:is([inFullscreen], [inDOMFullscreen]) #nulavio-fullscreen {
@@ -142,6 +188,8 @@
       border-color: CanvasText !important;
     }
     .nv-band-row button:focus-visible { outline-color: Highlight; }
+    /* The tile is a soft fill: here it gets an edge, and the glyph the text colour. */
+    .nv-band-flag { background: Canvas !important; color: CanvasText !important; box-shadow: inset 0 0 0 1px CanvasText; }
   }
   .nv-band-row, .nv-band-row *, #nulavio-fullscreen, #nulavio-fullscreen * {
     animation: none !important;
@@ -186,11 +234,60 @@
   :root[nulavio-window-agent] #browser {
     border: var(--nv-security-fullscreenHeight) double var(--nv-color-security-agent-ink);
   }
+  /* UX5-I: the assistant's task acting in its AI Workspace, for this window (solid, not the agent's double). */
+  .nv-band-row .nv-band-activity {
+    background: var(--nv-color-security-agent-ink);
+    color: var(--nv-color-security-agent-on);
+    font-weight: var(--nv-font-weight-semibold);
+  }
+  .nv-band-row .nv-band-connected {
+    border-color: var(--nv-color-security-agent-ink);
+    border-style: double;
+  }
+  .nv-fullscreen-line .nv-fullscreen-activity {
+    border-block: 0;
+    border-block-start: var(--nv-security-fullscreenHeight) solid var(--nv-color-fullscreen-foreground);
+  }
   .nv-band-row .nv-band-raw {
     background: var(--nv-color-security-raw-fill);
     color: var(--nv-color-security-raw-text);
     border-color: var(--nv-color-security-raw-text);
     font-weight: var(--nv-font-weight-semibold);
+  }
+  /* Calmaria (2026-11): state glyphs are outline SVGs drawn here, 16 px at 1.5 px, before the words
+     (never Unicode in the text: it changed with the desktop font and was read aloud). Solid shapes are
+     only for who you are (the tile); no silhouette is in both sets. The words remain the cue. */
+  .nv-band-row :is(.nv-band-protection, .nv-band-route, .nv-band-temporary, .nv-band-private, .nv-band-agent,
+      .nv-band-status, .nv-band-activity, .nv-band-guard, .nv-band-connected, .nv-band-pause, .nv-band-stop,
+      .nv-band-task-stop, .nv-band-assistant-pause)::before {
+    content: "";
+    display: inline-block;
+    inline-size: var(--nv-icon-size-sm);
+    block-size: var(--nv-icon-size-sm);
+    margin-inline-end: var(--nv-space-1);
+    vertical-align: -3px;
+    background-color: currentColor;
+    mask: var(--band-glyph) center / contain no-repeat;
+  }
+  .nv-band-row[data-protection="plain"] .nv-band-protection::before { content: none; }
+  .nv-band-row[data-protection="unlocked"] .nv-band-protection { --band-glyph: url("resource://builtin-addons/nulavio-shell/shared/icons/unlocked.svg"); }
+  .nv-band-row[data-protection="unknown"] .nv-band-protection { --band-glyph: url("resource://builtin-addons/nulavio-shell/shared/icons/unknown.svg"); }
+  .nv-band-row .nv-band-route { --band-glyph: url("resource://builtin-addons/nulavio-shell/shared/icons/route.svg"); }
+  .nv-band-row .nv-band-temporary { --band-glyph: url("resource://builtin-addons/nulavio-shell/shared/icons/temporary.svg"); }
+  .nv-band-row .nv-band-private { --band-glyph: url("resource://builtin-addons/nulavio-shell/shared/icons/private.svg"); }
+  .nv-band-row :is(.nv-band-agent, .nv-band-activity) { --band-glyph: url("resource://builtin-addons/nulavio-shell/shared/icons/agent.svg"); }
+  .nv-band-row .nv-band-guard { --band-glyph: url("resource://builtin-addons/nulavio-shell/shared/icons/warning.svg"); }
+  .nv-band-row .nv-band-connected { --band-glyph: url("resource://builtin-addons/nulavio-shell/shared/icons/connected.svg"); }
+  .nv-band-row :is(.nv-band-pause, .nv-band-assistant-pause) { --band-glyph: url("resource://builtin-addons/nulavio-shell/shared/icons/pause.svg"); }
+  .nv-band-row :is(.nv-band-stop, .nv-band-task-stop) { --band-glyph: url("resource://builtin-addons/nulavio-shell/shared/icons/stop.svg"); }
+  .nv-band-row .nv-band-status { --band-glyph: url("resource://builtin-addons/nulavio-shell/shared/icons/pause.svg"); }
+  .nv-band-row[data-agent-status="stopped"] .nv-band-status { --band-glyph: url("resource://builtin-addons/nulavio-shell/shared/icons/stop.svg"); }
+  .nv-band-row[data-agent-status="failed"] .nv-band-status { --band-glyph: url("resource://builtin-addons/nulavio-shell/shared/icons/critical.svg"); }
+  .nv-band-row[data-agent-status="revoked"] .nv-band-status { --band-glyph: url("resource://builtin-addons/nulavio-shell/shared/icons/revoked.svg"); }
+  .nv-band-row[data-agent-status="unknown"] .nv-band-status { --band-glyph: url("resource://builtin-addons/nulavio-shell/shared/icons/unknown.svg"); }
+  @media (forced-colors: active) {
+    .nv-band-row :is(.nv-band-protection, .nv-band-route, .nv-band-seal, .nv-band-pause, .nv-band-stop,
+        .nv-band-task-stop, .nv-band-assistant-pause)::before { forced-color-adjust: none; background-color: CanvasText; }
   }
   .nv-band-raw::before {
     content: "";
@@ -247,4 +344,75 @@
     .nv-band-raw::before { border: 3px double Mark; background: Canvas; }
     .nv-band-row .nv-band-raw { border: 3px double Mark !important; }
   }
+}
+
+/* UX3G A1: with tabs down the side, a neutral band is not a row of its own:
+   it opens the navigation row, on the toolbar surface, so the chrome above the
+   page is one 44px row (was 70px). Alerts (private, temporary, agent, Guard, a
+   failed action) drop [nv-neutral] and get their strong full-width row back.
+   The band stays first in the toolbox, outside page content, never hidden.
+   UX3H A-1: a Shell page that asks for trust (unlock, Guard, a permission, a
+   download or password warning: [nv-named], NulavioWindow #header) gets the
+   full row back too, so its "Nulavio · <page>" name stays on screen. */
+@-moz-document url("chrome://browser/content/browser.xhtml") {
+  /* Only in wide windows: in a narrow one the address bar keeps the width. */
+  @media -moz-pref("sidebar.verticalTabs") and (min-width: 64rem) {
+    #navigator-toolbox:has(> #nulavio-band[nv-neutral]:not([nv-named])) {
+      display: grid;
+      /* UX3H A-1: a fixed first column, the launcher's own width, so the
+         navigation row never moves when the band's content changes (a Shell
+         page, a longer profile name) and lines up with the sidebar's edge. */
+      grid-template-columns: var(--nv-size-sidebar-launcherExpanded, 224px) minmax(0, 1fr);
+
+      > * {
+        grid-column: 1 / -1;
+      }
+      > #nulavio-band[nv-neutral]:not([nv-named]) {
+        grid-row: 1;
+        grid-column: 1;
+        border-block-end: 0;
+        min-inline-size: 0;
+        overflow: hidden;
+        background: var(--toolbar-background-color) !important;
+      }
+      > #nav-bar {
+        grid-row: 1;
+        grid-column: 2;
+      }
+    }
+    #nulavio-band[nv-neutral]:not([nv-named]) .nv-band-row {
+      flex-wrap: nowrap;
+      gap: var(--nv-space-2);
+      padding-inline: var(--nv-space-2);
+      background-color: transparent;
+    }
+    /* The page name ("Nulavio · New Tab") is already on the tab and in the
+       window title; in this row it only pushed the navigation sideways. */
+    #nulavio-band[nv-neutral]:not([nv-named]) .nv-band-header {
+      display: none;
+    }
+    /* The protection state is never cut; a long profile name ends in an
+       ellipsis and keeps its full name in the chip's tooltip and label. */
+    #nulavio-band[nv-neutral]:not([nv-named]) .nv-band-protection {
+      flex: none;
+      white-space: nowrap;
+    }
+    #nulavio-band[nv-neutral]:not([nv-named]) .nv-band-identity {
+      flex: 0 1 auto;
+      overflow: hidden;
+    }
+    #nulavio-band[nv-neutral]:not([nv-named]) .nv-band-name {
+      overflow: hidden;
+      overflow-wrap: normal;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+  }
+}
+
+/* UX3G: no "Not Secure" over the transient empty document that precedes the
+   Shell's own new tab (NulavioWindow #markOwnPagePending). Web pages never
+   carry this attribute; their indicator is untouched. */
+:root[nulavio-own-page-pending] #identity-box.notSecure {
+  visibility: hidden;
 }

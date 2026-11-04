@@ -40,6 +40,31 @@ def chrome_async(m, body: str, args=()):
         m.set_context("content")
 
 
+GRID = """
+const grid = document.querySelector(arguments[0]);
+const radios = [...grid.querySelectorAll('input[type=radio][name=avatar]')];
+const tone = name => {
+  const probe = document.createElement('span');
+  probe.style.background = `var(--nv-color-identityTile-${name})`;
+  document.body.append(probe);
+  const value = getComputedStyle(probe).backgroundColor;
+  probe.remove();
+  return value;
+};
+const checked = grid.querySelector('input:checked + .swatch__tile');
+const other = grid.querySelector('input:not(:checked) + .swatch__tile');
+return {
+  legend: grid.querySelector('legend').textContent,
+  count: radios.length,
+  named: radios.every(r => r.closest('label').querySelector('.visually-hidden').textContent.trim().length > 0),
+  glyphs: grid.querySelectorAll('.swatch__tile svg').length,
+  chosen: grid.querySelector('input:checked')?.value ?? null,
+  tinted: getComputedStyle(checked).backgroundColor === tone(arguments[1]),
+  quiet: getComputedStyle(other).backgroundColor !== tone(arguments[1]),
+};
+"""
+
+
 @unittest.skipUnless(harness.nulavio_engine(), "engine profiles need the Nulavio build (NULAVIO_ENGINE)")
 class ProfilesTest(unittest.TestCase):
     @classmethod
@@ -189,7 +214,20 @@ class ProfilesTest(unittest.TestCase):
         path = self.path_of(self.work)
         item = self.m.find_element(f'#others .popup__item[data-profile-id="{self.work}"]')
         other = self.open_instance(path, lambda: self.m.send("WebDriver:ElementClick", {"id": item}))
+        # UX4: an open profile says so, in words and in its name (the engine's lock names its process).
+        self.assertEqual(self.popup_row(self.work), {"running": "true", "label": "Abrir Trabalho, aberto", "mark": "aberto"})
         self.close_instance(other, path)
+        self.assertEqual(self.popup_row(self.work), {"running": "false", "label": "Abrir Trabalho", "mark": None})
+
+    def popup_row(self, profile_id: int) -> dict:
+        self.m.navigate(self.shell_url + "profiles/popup.html")
+        self.assertTrue(harness.wait_until(self.ready, timeout=15))
+        return self.m.execute(
+            "const b = document.querySelector(`#others .popup__item[data-profile-id='${arguments[0]}']`);"
+            "return {running: b.dataset.running, label: b.getAttribute('aria-label'),"
+            " mark: b.querySelector('.popup__running')?.textContent ?? null};",
+            [profile_id],
+        )
 
     def test_08_settings_page_edits_and_deletes_with_confirmation(self):
         research = self.profiles("return P.create({templateId: 'research', name: 'Pesquisa'});")
@@ -280,6 +318,129 @@ class ProfilesTest(unittest.TestCase):
         self.assertTrue(harness.wait_until(self.ready, timeout=15))
         hint = f'#profile-list > li[data-profile-id="{sensitive}"] [data-kind="sensitive"]'
         self.assertTrue(harness.wait_until(lambda: self.m.execute(f"return Boolean(document.querySelector('{hint}'));"), 10))
+
+    def test_12_create_sheet_fills_and_creates_only_on_submit(self):
+        """UX4 (audit SPA-09): "Novo perfil…" opens a sheet; a template only fills it."""
+        before = set(self.listed())
+        self.m.navigate(self.shell_url + "profiles/popup.html")
+        self.assertTrue(harness.wait_until(self.ready, timeout=15))
+        self.m.send("WebDriver:ElementClick", {"id": self.m.find_element("#new-profile")})
+        self.assertEqual(
+            self.m.execute(
+                "const $ = id => document.getElementById(id);"
+                "return [$('menu').hidden, $('sheet').hidden, document.activeElement.id];"
+            ),
+            [True, False, "sheet-name"],
+        )
+        self.m.send("WebDriver:ElementClick", {"id": self.m.find_element('#templates button[data-template="research"]')})
+        filled = self.m.execute(
+            "const f = document.getElementById('sheet');"
+            "return {name: f.elements.name.value, avatar: f.elements.avatar.value, color: f.elements.color.value,"
+            " pressed: [...document.querySelectorAll('#templates button[aria-pressed=true]')].map(b => b.dataset.template)};"
+        )
+        self.assertEqual(filled, {"name": "Pesquisa", "avatar": "book", "color": "violet", "pressed": ["research"]})
+        # The icon is a grid of glyph tiles; only the chosen one wears the template's colour.
+        grid = self.m.execute(GRID, ["#sheet-avatars .swatches--glyphs", "violet"])
+        self.assertEqual(
+            grid, {"legend": "Ícone", "count": 14, "named": True, "glyphs": 14, "chosen": "book", "tinted": True, "quiet": True}
+        )
+        time.sleep(0.5)
+        self.assertEqual(set(self.listed()), before, "a template created a profile before Criar")
+        # Back returns to the menu with nothing created.
+        self.m.send("WebDriver:ElementClick", {"id": self.m.find_element("#sheet-back")})
+        self.assertEqual(
+            self.m.execute("return [document.getElementById('menu').hidden, document.activeElement.id];"), [False, "new-profile"]
+        )
+        # "Proteger com senha" continues in the Vault's own steps, prefilled; nothing is created here.
+        self.m.send("WebDriver:ElementClick", {"id": self.m.find_element("#new-profile")})
+        self.m.execute(
+            "const f = document.getElementById('sheet');"
+            "f.elements.name.value = 'Banco seguro'; f.elements.protect.checked = true;"
+        )
+        self.m.send("WebDriver:ElementClick", {"id": self.m.find_element("#sheet-create")})
+        vault = harness.wait_until(
+            lambda: next(
+                (u for u in self.m.chrome("return gBrowser.browsers.map(b => b.currentURI.spec);") if "/vault/create.html?" in u),
+                None,
+            ),
+            timeout=10,
+        )
+        self.assertTrue(vault, "the protected steps did not open")
+        self.assertIn("name=Banco+seguro", vault)
+        self.assertEqual(set(self.listed()), before)
+        self.m.navigate(vault)
+        harness.wait_until(lambda: self.m.execute("return document.querySelectorAll('#templates button').length;"), timeout=10)
+        self.assertEqual(self.m.execute("return document.getElementById('name').value;"), "Banco seguro")
+        # The name is not asked twice: the Vault starts at the protection step, showing the profile (FR-06).
+        settled = "const s = document.body.dataset.step; return s === 'protection' || s === 'unavailable' ? s : null;"
+        step = harness.wait_until(lambda: self.m.execute(settled), timeout=10)
+        if step == "protection":
+            self.assertIn("Banco seguro", self.m.execute("return document.getElementById('summary').textContent;"))
+            self.assertEqual(self.m.execute("return document.getElementById('progress').textContent;")[-6:], "1 de 2")
+
+    def test_13_typing_filters_the_profile_menu(self):
+        """UX4 (audit SPA-17): letters filter the list by name (accents ignored), Escape clears it."""
+        made = [self.profiles("return P.create({name: args[0]});", name) for name in ("Álbum", "Bolsa")]
+        try:
+            self.m.navigate(self.shell_url + "profiles/popup.html")
+            self.assertTrue(harness.wait_until(self.ready, timeout=15))
+            self.m.execute("document.querySelector('#others .popup__item').focus();")
+            self.m.send("WebDriver:ElementSendKeys", {"id": self.m.find_element("#others .popup__item"), "text": "alb"})
+            shown = lambda: self.m.execute(  # noqa: E731
+                "return [...document.querySelectorAll('#others li:not([hidden]) .popup__name')].map(n => n.textContent);"
+            )
+            self.assertTrue(harness.wait_until(lambda: shown() == ["Álbum"], 5), shown())
+            self.assertEqual(
+                self.m.execute("return [document.activeElement.id, document.getElementById('filter').value];"), ["filter", "alb"]
+            )
+            self.m.send("WebDriver:ElementSendKeys", {"id": self.m.find_element("#filter"), "text": "zz"})
+            self.assertTrue(
+                harness.wait_until(lambda: not self.m.execute("return document.getElementById('filter-none').hidden;"), 5)
+            )
+            self.m.send("WebDriver:ElementSendKeys", {"id": self.m.find_element("#filter"), "text": "\ue00c"})  # Escape
+            self.assertTrue(
+                harness.wait_until(
+                    lambda: len(shown()) >= 2 and self.m.execute("return document.getElementById('filter').hidden;"), 5
+                )
+            )
+        finally:
+            for profile_id in made:
+                self.profiles("await P.remove(args[0]);", profile_id)
+
+    def test_14_the_icon_grid_follows_the_colour_and_saves(self):
+        """Visual audit (icons): a profile's icon is chosen on a grid of glyph tiles; the chosen tile wears the
+        colour chosen next to it, before saving, and "Salvar" keeps both."""
+        made = self.profiles("return P.create({name: 'Grade', avatar: 'leaf', color: 'sky'});")
+        try:
+            self.m.navigate(self.shell_url + "settings/settings.html#profiles")
+            self.assertTrue(harness.wait_until(self.ready, timeout=15))
+            row = f'#profile-list > li[data-profile-id="{made}"]'
+            found = f"return Boolean(document.querySelector('{row} details'));"
+            self.assertTrue(harness.wait_until(lambda: self.m.execute(found), 10))
+            self.m.execute(f"document.querySelector('{row} details').open = true;")
+            grid = f"{row} .swatches--glyphs"
+            self.assertEqual(
+                self.m.execute(GRID, [grid, "sky"]),
+                {"legend": "Ícone", "count": 14, "named": True, "glyphs": 14, "chosen": "leaf", "tinted": True, "quiet": True},
+            )
+            click = lambda selector: self.m.send("WebDriver:ElementClick", {"id": self.m.find_element(f"{row} {selector}")})  # noqa: E731
+            click('label:has(> input[name="color"][value="coral"])')
+            self.assertTrue(self.m.execute(GRID, [grid, "coral"])["tinted"], "the chosen icon kept the old colour")
+            click('label:has(> input[name="avatar"][value="star"])')
+            self.assertEqual(self.m.execute(GRID, [grid, "coral"])["chosen"], "star")
+            # Another profile changes meanwhile (another window): the list is drawn again and the
+            # unsaved choices stay.
+            other = self.profiles("return P.create({name: 'Outro'});")
+            time.sleep(1.5)
+            kept = self.m.execute(GRID, [grid, "coral"])
+            self.assertEqual((kept["chosen"], kept["tinted"]), ("star", True), kept)
+            self.profiles("await P.remove(args[0]);", other)
+            time.sleep(1)
+            click('form button[type="submit"]')
+            saved = lambda: {k: self.listed()["Grade"][k] for k in ("avatar", "color")}  # noqa: E731
+            self.assertTrue(harness.wait_until(lambda: saved() == {"avatar": "star", "color": "coral"}, 10), saved())
+        finally:
+            self.profiles("await P.remove(args[0]);", made)
 
 
 if __name__ == "__main__":

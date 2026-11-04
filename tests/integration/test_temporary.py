@@ -229,7 +229,7 @@ class TemporaryFromTheBrowserTest(unittest.TestCase):
                 " dashed: document.querySelector('#current .chip')?.classList.contains('chip--temporary'),"
                 " note: document.getElementById('unavailable').textContent,"
                 " others: document.getElementById('others-section').hidden,"
-                " protected: document.getElementById('new-protected').hidden,"
+                " protected: document.getElementById('new-profile').hidden,"
                 " temporary: document.getElementById('new-temporary').hidden};"
             )
             self.assertEqual(page["name"], "Perfil temporário")

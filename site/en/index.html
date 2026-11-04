@@ -1,63 +1,1209 @@
 <!doctype html>
 <html lang="en">
+<!-- Generated structure for nulavio.net (spec: landing «Recibo»). Values in double braces are stamped by scripts/site/build_site.py. -->
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Nulavio: a Linux browser private by default</title>
-  <meta name="description" content="Nulavio is an open-source Linux browser built on the Gecko engine, private by default, with ad blocking and password-manager integration. In development.">
-  <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
-  <link rel="alternate" hreflang="pt-BR" href="https://nulavio.net/">
-  <link rel="alternate" hreflang="en" href="https://nulavio.net/en/">
-  <link rel="stylesheet" href="/assets/tokens.css">
-  <link rel="stylesheet" href="/assets/site.css">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Nulavio: a browser for Linux, in development</title>
+<meta name="description" content="Nulavio is a browser for Linux built on Mozilla's Gecko engine. It blocks trackers from the first launch, sends no data to Nulavio servers, and states in writing what it does and what it does not do yet. In development, no release to download.">
+<link rel="canonical" href="https://nulavio.net/en/">
+<link rel="alternate" hreflang="pt-BR" href="https://nulavio.net/">
+<link rel="alternate" hreflang="en" href="https://nulavio.net/en/">
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/assets/tokens.css">
+<link rel="stylesheet" href="/assets/site.css">
 </head>
 <body>
-  <header class="top">
-    <a class="brand" href="/en/">
-      <picture>
-        <source srcset="/assets/nulavio-symbol.svg" media="(prefers-color-scheme: dark)">
-        <img src="/assets/nulavio-symbol-dark-on-light.svg" alt="" width="28" height="32">
-      </picture>
-      <span>Nulavio</span>
-    </a>
-    <a class="lang" href="/" hreflang="pt-BR" lang="pt-BR">Português</a>
-  </header>
-
-  <main class="page">
-    <section class="hero">
-      <p class="status"><strong>In development</strong> · no release to download yet</p>
-      <h1>The web is yours. So is your data.</h1>
-      <p class="lead">Nulavio is an open-source browser for Linux, built on Mozilla's Gecko engine. It comes private by default, blocks ads and trackers, and works with your password manager.</p>
-    </section>
-
-    <section class="grid" aria-label="What Nulavio does">
-      <article class="card">
-        <h2>Private by default</h2>
-        <p>Strict tracking protection, HTTPS-Only and the Global Privacy Control signal are on from the start. Nothing is sent to Nulavio: the project has no servers that receive your browsing data.</p>
-      </article>
-      <article class="card">
-        <h2>Ad blocking</h2>
-        <p>uBlock Origin is included, at a pinned version checked at install time. If a site breaks, turn it off for that site only.</p>
-      </article>
-      <article class="card">
-        <h2>Your passwords, in your manager</h2>
-        <p>Proton Pass and KeePassXC through their official extensions; Bitwarden in testing. Nulavio does not read your vault.</p>
-      </article>
-      <article class="card">
-        <h2>Engine protections kept</h2>
-        <p>Sandboxing, site isolation, certificate checks and phishing and malware protection stay on. Downloaded installers and scripts show a warning before you open them.</p>
-      </article>
-    </section>
-
-    <section class="limits">
-      <h2>What a browser cannot fix</h2>
-      <p>No browser protects against malware already running on your computer. We document the known limits and will publish them with the code.</p>
-    </section>
-  </main>
-
-  <footer class="footer">
-    <p>Nulavio is built on Mozilla's Gecko engine. Nulavio is not affiliated with Mozilla. Firefox is a trademark of the Mozilla Foundation.</p>
-    <p>This site uses no scripts, cookies or visitor analytics.</p>
-  </footer>
+<svg class="sprite" aria-hidden="true" focusable="false">
+<symbol id="i-done" viewBox="0 0 20 20"><path d="M4.5 10.5l3.5 3.5 7.5-8"/></symbol>
+<symbol id="i-partly" viewBox="0 0 20 20"><circle cx="10" cy="10" r="7"/><path class="fill" d="M10 3a7 7 0 0 0 0 14z"/></symbol>
+<symbol id="i-missing" viewBox="0 0 20 20"><circle cx="10" cy="10" r="7"/></symbol>
+<symbol id="i-out" viewBox="0 0 20 20"><path d="M5 10h10"/></symbol>
+<symbol id="i-ask" viewBox="0 0 20 20"><path d="M7.4 7.6a2.7 2.7 0 1 1 3.8 2.5c-.8.4-1.2 1-1.2 1.8v.6"/><circle class="fill" cx="10" cy="15.4" r="1.1"/></symbol>
+<symbol id="i-block" viewBox="0 0 20 20"><circle cx="10" cy="10" r="7"/><path d="M5.1 14.9l9.8-9.8"/></symbol>
+</svg>
+<a class="skip" href="#main">Skip to content</a>
+<header class="masthead">
+<a class="brand" href="/en/"><picture>
+<source media="(prefers-color-scheme: dark)" srcset="/assets/nulavio-lockup-horizontal-on-dark.svg" width="132" height="27">
+<img src="/assets/nulavio-lockup-horizontal.svg" alt="Nulavio" width="132" height="27">
+</picture></a>
+<a class="lang" href="/" hreflang="pt-BR" lang="pt-BR">Português</a>
+</header>
+<main id="main">
+<!-- Receipts (spec 4.1). Status: docs/product/release-criteria.md (walk-through of 2026-10-27: "the alpha is not released yet").
+     No server: launcher/nulavio_launcher/cli.py ("nothing is sent to Nulavio; there is no Nulavio server"); in browser/, nulavio.net
+     only appears as an extension and contract id (shell@nulavio.net, @nulavio.net/routing-command-line-handler;1).
+     Engine: browser/build/engine.json. Licence: LICENSE, LICENSES.md. Platform order: docs/product/execution-plan.md (Project goal). -->
+<section id="summary" aria-labelledby="summary-h">
+<div class="summary-text">
+<p class="revision">nulavio.net · revision of {{date_en}} · commit {{commit}}</p>
+<p class="pill"><strong>In development</strong> · no release to download yet</p>
+<h1 id="summary-h">Private by default. Honest by design.</h1>
+<p class="lead">Nulavio is a browser for Linux built on Mozilla's Gecko engine. It comes with tracking protection set to Strict, installs the uBlock Origin blocker on first launch, and sends no data to Nulavio servers: the project runs no service that receives data from the browser.</p>
+<p>This page is an engineering document: each claim says what it costs or where it stops, and where to check it. What is not ready yet is marked as not ready. Numbers, excerpts and captures come from commit {{origin}}.</p>
+<p>The code is licensed under the MPL-2.0, but the repository is still private. Until it opens, the paths quoted here are references, not links.</p>
+</div>
+<dl class="facts" aria-label="Fact sheet">
+<div><dt>Status</dt><dd>In development, no release to download</dd></div>
+<div><dt>System</dt><dd>Linux: Fedora KDE first, then Ubuntu</dd></div>
+<div><dt>Engine</dt><dd>Gecko, built from Firefox <span class="mono">{{firefox}}</span> source</dd></div>
+<div><dt>Engine patches</dt><dd><span class="mono">{{patches}}</span></dd></div>
+<div><dt>Licence</dt><dd>MPL-2.0 (repository still private)</dd></div>
+<div><dt>Nulavio servers that receive browser data</dt><dd>None</dd></div>
+</dl>
+</section>
+<figure id="fig-1">
+<picture class="shot">
+<source media="(max-width: 47.9375rem) and (prefers-color-scheme: dark)" srcset="/assets/shots/window-crop-en-US-dark.webp" {{wh:window-crop-en-US-dark.webp}}>
+<source media="(max-width: 47.9375rem)" srcset="/assets/shots/window-crop-en-US-light.webp" {{wh:window-crop-en-US-light.webp}}>
+<source media="(prefers-color-scheme: dark)" srcset="/assets/shots/window-en-US-dark.webp" {{wh:window-en-US-dark.webp}}>
+<img src="/assets/shots/window-en-US-light.webp" {{wh:window-en-US-light.webp}} alt="Nulavio window. At the top left, the band shows the briefcase icon in light blue, the name Work and a padlock with the word Protected; beside or below it, the address bar with 127.0.0.1. On the left, the vertical list with three tabs: Meeting notes, selected, Timesheet and Documentation; in the middle, a sample notes page." loading="eager">
+</picture>
+<figcaption>
+<p><strong>Figure 1.</strong> Nulavio at commit {{shot:window-en-US-light.webp}}, build {{buildid}}, Firefox {{firefox}}: the protected profile «Work», unlocked, with tabs on the side and a sample page served by this computer (127.0.0.1). Captured by the project's test harness in a throwaway profile. The script removes the automation cue the engine draws while tests control it (striped address bar and robot icon), and nothing else.</p>
+<p class="onscreen">{{onscreen:fig-1}}</p>
+</figcaption>
+</figure>
+<section id="brief" aria-labelledby="brief-h">
+<h2 id="brief-h">In short</h2>
+<ul class="brief">
+<li><h3><span class="num">2</span><a href="#defaults">Trackers blocked from the first launch</a></h3><p>Tracking protection comes set to Strict and uBlock Origin is installed on first launch (section 3.4). Some sites break because of it; section 2 says which default causes what.</p></li>
+<li><h3><span class="num">4</span><a href="#typing">What you type stays with you</a></h3><p>Nothing goes to a search engine while you type, unless you turn suggestions on.</p></li>
+<li><h3><span class="num">5</span><a href="#profiles">Work, banking and personal life kept apart</a></h3><p>Each profile has its own sign-ins and history, and your own rules decide which profile each link opens in.</p></li>
+<li><h3><span class="num">6</span><a href="#vault">Password-protected profiles, encrypted on disk</a></h3><p>A protected profile stays encrypted while it is locked. There is no master key: losing every way to unlock it means losing the data.</p></li>
+<li><h3><span class="num">7</span><a href="#guard">Tells you what changed while the browser was closed</a></h3><p>If another program touches your profile while the browser is closed, Nulavio shows the change the next time it starts.</p></li>
+<li><h3><span class="num">8</span><a href="#ai">AI only when you ask</a></h3><p>The assistant does nothing until you set it up, and before sending it says where the message goes and how big it is. It does not work in private windows.</p></li>
+</ul>
+<p class="brief-after">And what it does not do yet: section <a href="#status">1</a> lists what is missing, and section <a href="#limits">10</a>, what no browser can fix.</p>
+</section>
+<nav id="toc" class="toc" aria-labelledby="toc-h">
+<h2 id="toc-h">In this document</h2>
+<ol>
+<li><span class="num">1</span><span><a href="#status">Where the project is</a> <span class="gist">no release to download yet; see what is ready and what is missing.</span></span></li>
+<li><span class="num">2</span><span><a href="#defaults">Defaults we change</a> <span class="gist">trackers blocked, HTTPS only, no telemetry; each change with its reason and cost.</span></span></li>
+<li><span class="num">3</span><span><a href="#kept">What we keep on</a> <span class="gist">the engine protections that use the network, and whom they talk to.</span></span></li>
+<li><span class="num">4</span><span><a href="#typing">What you type</a> <span class="gist">nothing goes to a search engine before Enter unless you turn suggestions on; you choose the DNS.</span></span></li>
+<li><span class="num">5</span><span><a href="#profiles">Profiles and routes</a> <span class="gist">work, banking and personal use in separate profiles, and each link in the right one.</span></span></li>
+<li><span class="num">6</span><span><a href="#vault">Protected profiles</a> <span class="gist">encrypted on disk while locked, with no master key.</span></span></li>
+<li><span class="num">7</span><span><a href="#guard">Guard</a> <span class="gist">what changed in your profile while the browser was closed.</span></span></li>
+<li><span class="num">8</span><span><a href="#ai">AI, only when you ask</a> <span class="gist">nothing runs until you set it up, and you see what goes and where.</span></span></li>
+<li><span class="num">9</span><span><a href="#passwords">Passwords</a> <span class="gist">in the manager you already use; Nulavio does not read the vault.</span></span></li>
+<li><span class="num">10</span><span><a href="#limits">What a browser cannot fix</a> <span class="gist">the limits no browser gets past.</span></span></li>
+<li><span class="num">11</span><span><a href="#verify">How to check</a> <span class="gist">what you can check today and what depends on the code being public.</span></span></li>
+</ol>
+</nav>
+<section id="status" aria-labelledby="status-h">
+<h2 id="status-h"><span class="num">1</span> Where the project is</h2>
+<p class="opening">There is no release to download yet. Below is what already works, what partly works and what is missing, item by item.</p>
+<div class="claim">
+<div class="claim-text">
+<p>This list follows the project's release criteria, last checked on 2026-10-27. The first public release waits on items that depend on the maintainer or on third parties: the release key, the package host, decisions with Google and the trademark searches.</p>
+</div>
+<div class="receipt">
+<p class="receipt-title">How to check</p>
+<dl>
+<dt>File</dt>
+<dd><code class="ref" translate="no">docs/product/release-criteria.md</code></dd>
+<dd><code class="ref" translate="no">docs/product/requirements.md</code></dd>
+</dl>
+</div>
+</div>
+<ul class="ledger">
+<li class="ledger-row is-done">
+<p class="state"><svg class="icon" aria-hidden="true" focusable="false"><use href="#i-done"/></svg><span>Done</span></p>
+<p class="item"><strong>Build from source</strong> <span>Built in a rootless container from Firefox {{firefox}} source. The download is refused if its SHA-256 is not the recorded one, which comes from Mozilla's signed checksum list.</span></p>
+<ul class="refs"><li><code class="ref" translate="no">browser/build/engine.json</code></li><li><code class="ref" translate="no">scripts/upstream/fetch_firefox_source.py</code></li><li><code class="ref" translate="no">docs/architecture/build.md</code></li></ul>
+</li>
+<li class="ledger-row is-done">
+<p class="state"><svg class="icon" aria-hidden="true" focusable="false"><use href="#i-done"/></svg><span>Done</span></p>
+<p class="item"><strong>Changes to the engine</strong> <span>{{patches}} patches, each named for what it does. The project's rule: anything that fits in prefs, policies or the built-in add-on does not become a patch.</span></p>
+<ul class="refs"><li><code class="ref" translate="no">browser/patches/series</code></li></ul>
+</li>
+<li class="ledger-row is-partly">
+<p class="state"><svg class="icon" aria-hidden="true" focusable="false"><use href="#i-partly"/></svg><span>Partly</span></p>
+<p class="item"><strong>Packages for Fedora and Ubuntu</strong> <span>The RPM and .deb come from the same build, and they install and start in clean Fedora 44 and Ubuntu 26.10 containers. A repository signed with a test key installs and refuses altered metadata. Still missing: the release key, the repository host and a test on a real Ubuntu machine.</span></p>
+<ul class="refs"><li><code class="ref" translate="no">scripts/release/check_rpm.sh</code></li><li><code class="ref" translate="no">scripts/release/check_deb.sh</code></li><li><code class="ref" translate="no">docs/product/release-criteria.md (item 5)</code></li><li><code class="ref" translate="no">docs/security/residual-risks.md › R46</code></li></ul>
+</li>
+<li class="ledger-row is-partly">
+<p class="state"><svg class="icon" aria-hidden="true" focusable="false"><use href="#i-partly"/></svg><span>Partly</span></p>
+<p class="item"><strong>Security updates</strong> <span>The project's commitment (SECURITY.md): a Nulavio release within 72 hours of a critical or high Mozilla security fix; for urgent ones the internal target is 24 hours. For the first urgent release, Firefox 159.0 (2026-10-27), the packages were ready to sign 12.8 hours after Mozilla published it. Signing with the release key and publishing have not been rehearsed; they wait for the key and the host. Today, noticing a new release depends on the maintainer's machine and on GitHub's schedule.</span></p>
+<ul class="refs"><li><code class="ref" translate="no">SECURITY.md</code></li><li><code class="ref" translate="no">docs/architecture/update-policy.md</code></li><li><code class="ref" translate="no">docs/research/evidence/release-rehearsal-2026-10-28.md</code></li><li><code class="ref" translate="no">docs/security/residual-risks.md › R51</code></li></ul>
+</li>
+<li class="ledger-row is-partly">
+<p class="state"><svg class="icon" aria-hidden="true" focusable="false"><use href="#i-partly"/></svg><span>Partly</span></p>
+<p class="item"><strong>Safe Browsing</strong> <span>Google's phishing and malware page lists work with Nulavio's key. The download check does not come with it, because Google keeps it for partners (3.5). A quota review with Google is pending.</span></p>
+<ul class="refs"><li><code class="ref" translate="no">tests/integration/test_engine_slice.py › test_14_safe_browsing_blocks_google_test_phishing_page</code></li><li><code class="ref" translate="no">docs/security/residual-risks.md › R15</code></li><li><code class="ref" translate="no">docs/security/residual-risks.md › R16</code></li></ul>
+</li>
+<li class="ledger-row is-partly">
+<p class="state"><svg class="icon" aria-hidden="true" focusable="false"><use href="#i-partly"/></svg><span>Partly</span></p>
+<p class="item"><strong>Password managers</strong> <span>Proton Pass, KeePassXC and Bitwarden install through their official extensions, and each has a step still to do (section 9).</span></p>
+<ul class="refs"><li><code class="ref" translate="no">tests/integration/test_password_extensions.py</code></li><li><code class="ref" translate="no">docs/security/residual-risks.md › R8</code></li><li><code class="ref" translate="no">docs/security/residual-risks.md › R9</code></li></ul>
+</li>
+<li class="ledger-row is-partly">
+<p class="state"><svg class="icon" aria-hidden="true" focusable="false"><use href="#i-partly"/></svg><span>Partly</span></p>
+<p class="item"><strong>Phone unlock</strong> <span>The Android app is built and tested against the desktop code, but it has not run on a real phone, so it stays off the alpha's feature list.</span></p>
+<ul class="refs"><li><code class="ref" translate="no">docs/adr/0005-phone-profile-unlock.md</code></li><li><code class="ref" translate="no">docs/security/residual-risks.md › R48</code></li></ul>
+</li>
+<li class="ledger-row is-partly">
+<p class="state"><svg class="icon" aria-hidden="true" focusable="false"><use href="#i-partly"/></svg><span>Partly</span></p>
+<p class="item"><strong>Security contact</strong> <span><span translate="no">security@nulavio.net</span> and <span translate="no">/.well-known/security.txt</span> have been live since 2026-10-25. A test report still has to be sent and answered.</span></p>
+<ul class="refs"><li><code class="ref" translate="no">docs/product/release-criteria.md (item 6)</code></li></ul>
+</li>
+<li class="ledger-row is-missing">
+<p class="state"><svg class="icon" aria-hidden="true" focusable="false"><use href="#i-missing"/></svg><span>Not done</span></p>
+<p class="item"><strong>FIDO2 security key</strong> <span>Planned as a way to unlock profiles; waiting for a key to test with.</span></p>
+<ul class="refs"><li><code class="ref" translate="no">docs/product/execution-plan.md (S10)</code></li></ul>
+</li>
+<li class="ledger-row is-missing">
+<p class="state"><svg class="icon" aria-hidden="true" focusable="false"><use href="#i-missing"/></svg><span>Not done</span></p>
+<p class="item"><strong>Public source code</strong> <span>The code is under the MPL-2.0, but the repository is still private.</span></p>
+<ul class="refs"><li><code class="ref" translate="no">LICENSE</code></li></ul>
+</li>
+<li class="ledger-row is-missing">
+<p class="state"><svg class="icon" aria-hidden="true" focusable="false"><use href="#i-missing"/></svg><span>Not done</span></p>
+<p class="item"><strong>Independent audit</strong> <span>It needs someone outside the project; planned before version 1.0.</span></p>
+<ul class="refs"><li><code class="ref" translate="no">docs/product/roadmap.md (U11)</code></li><li><code class="ref" translate="no">docs/product/execution-plan.md (U11, A14)</code></li></ul>
+</li>
+<li class="ledger-row is-missing">
+<p class="state"><svg class="icon" aria-hidden="true" focusable="false"><use href="#i-missing"/></svg><span>Not done</span></p>
+<p class="item"><strong>Trademark</strong> <span>Nulavio is a candidate name; the INPI, USPTO and EUIPO searches have not been done.</span></p>
+<ul class="refs"><li><code class="ref" translate="no">docs/brand/strategy.md</code></li></ul>
+</li>
+<li class="ledger-row is-out">
+<p class="state"><svg class="icon" aria-hidden="true" focusable="false"><use href="#i-out"/></svg><span>Outside 1.0</span></p>
+<p class="item"><strong>Other systems</strong> <span>Windows and iOS are outside the Linux 1.0 (evaluation of 2026-10-27). macOS is not planned before Linux is stable. The phone app is Android only.</span></p>
+<ul class="refs"><li><code class="ref" translate="no">docs/research/windows-ios-evaluation.md</code></li><li><code class="ref" translate="no">docs/product/vision.md (non-goals)</code></li><li><code class="ref" translate="no">docs/security/residual-risks.md › R50</code></li></ul>
+</li>
+</ul>
+</section>
+<section id="defaults" aria-labelledby="defaults-h">
+<h2 id="defaults-h"><span class="num">2</span> Defaults we change</h2>
+<p class="opening">Nulavio changes few engine defaults, and all of them in the direction of sending less.</p>
+<p class="prose">The privacy defaults live in <code class="ref" translate="no">browser/config/prefs/baseline.js</code>, each with its reason (<code translate="no">@why</code>) and its cost (<code translate="no">@tradeoff</code>); a test refuses a pref without them. What applies only to the Nulavio build lives in <code class="ref" translate="no">browser/branding/nulavio/pref/firefox-branding.js</code>, with comments. You can change any of them in the engine's settings or in <code translate="no">about:config</code>, and your choice stays in the profile.</p>
+<div class="claim" id="s2-1">
+<div class="claim-text">
+<h3><span class="num">2.1</span> Strict tracking protection</h3>
+<p>Blocks trackers, cross-site cookies, cryptominers and known or suspected fingerprinters, in every window.</p>
+<p class="cost"><strong>Cost:</strong> Some embeds and logins may break. The shield in the address bar turns protection off for that site only, and Mozilla's compatibility exceptions stay on.</p>
+<p class="note-history"><strong>A bug we had.</strong> Until 2026-10-26, the build requested Strict only as a distribution default, and the engine recomputed that value to Standard. Since then Nulavio writes Strict once into each profile, and the test checks the mode in effect and a really blocked tracker, not the requested value.</p>
+<!-- Receipt: docs/product/roadmap.md (phase 3); scripts/build/make_distribution.py (USER_VALUE_ONLY) -->
+</div>
+<div class="receipt">
+<p class="receipt-title">How to check</p>
+<dl>
+<dt>Pref</dt>
+<dd><code class="ref" translate="no">browser.contentblocking.category = "strict"</code></dd>
+<dt>Tests</dt>
+<dd><code class="ref" translate="no">tests/integration/test_privacy.py › test_01_baseline_prefs_are_in_effect_and_tracking_protection_is_strict</code></dd>
+<dd><code class="ref" translate="no">tests/integration/test_privacy.py › test_02_tracker_blocked_logged_and_shown_in_the_site_panel</code></dd>
+<dd><code class="ref" translate="no">tests/integration/test_privacy.py › test_03_per_site_switch_is_listed_in_settings_and_reversible</code></dd>
+<dt>In the browser</dt>
+<dd><code class="ref" translate="no">about:config</code></dd>
+</dl>
+</div>
+</div>
+<div class="claim" id="s2-2">
+<div class="claim-text">
+<h3><span class="num">2.2</span> HTTPS-Only</h3>
+<p>Every connection is upgraded to HTTPS. To open a site that only has HTTP, you accept an exception for that site, and you can remove it later.</p>
+<p class="cost"><strong>Cost:</strong> HTTP-only sites show a warning page first.</p>
+</div>
+<div class="receipt">
+<p class="receipt-title">How to check</p>
+<dl>
+<dt>Pref</dt>
+<dd><code class="ref" translate="no">dom.security.https_only_mode = true</code></dd>
+<dt>Test</dt>
+<dd><code class="ref" translate="no">tests/integration/test_engine_slice.py › test_06_https_only_upgrades_and_exception_is_revocable</code></dd>
+</dl>
+</div>
+</div>
+<div class="claim" id="s2-3">
+<div class="claim-text">
+<h3><span class="num">2.3</span> Global Privacy Control signal</h3>
+<p>The browser tells each site that you do not allow your data to be sold or shared. In several jurisdictions this signal has legal weight.</p>
+<p class="limit"><strong>Limit:</strong> Each site decides whether to honour it.</p>
+</div>
+<div class="receipt">
+<p class="receipt-title">How to check</p>
+<dl>
+<dt>Pref</dt>
+<dd><code class="ref" translate="no">privacy.globalprivacycontrol.enabled = true</code></dd>
+<dt>Test</dt>
+<dd><code class="ref" translate="no">tests/integration/test_privacy.py › test_01_baseline_prefs_are_in_effect_and_tracking_protection_is_strict</code></dd>
+</dl>
+</div>
+</div>
+<div class="claim" id="s2-4">
+<div class="claim-text">
+<h3><span class="num">2.4</span> No telemetry, studies or remote changes</h3>
+<p>Mozilla's telemetry, studies and remote configuration changes are off. The build is compiled without the crash reporter and without the built-in updater; updates will come through your system's package manager.</p>
+</div>
+<div class="receipt">
+<p class="receipt-title">How to check</p>
+<dl>
+<dt>Prefs</dt>
+<dd><code class="ref" translate="no">datareporting.healthreport.uploadEnabled = false</code></dd>
+<dd><code class="ref" translate="no">app.shield.optoutstudies.enabled = false</code></dd>
+<dd><code class="ref" translate="no">app.normandy.enabled = false</code></dd>
+<dd><code class="ref" translate="no">nimbus.rollouts.enabled = false</code></dd>
+<dt>Policies</dt>
+<dd><code class="ref" translate="no">DisableTelemetry</code></dd>
+<dd><code class="ref" translate="no">DisableFirefoxStudies</code></dd>
+<dd><code class="ref" translate="no">scripts/build/make_distribution.py</code></dd>
+<dt>File</dt>
+<dd><code class="ref" translate="no">browser/build/mozconfig (--disable-crashreporter, --disable-updater)</code></dd>
+<dt>Test</dt>
+<dd><code class="ref" translate="no">tests/integration/test_engine_slice.py › test_02_baseline_prefs_are_applied_and_exist_in_engine</code></dd>
+<dt>In the browser</dt>
+<dd><code class="ref" translate="no">about:policies</code></dd>
+</dl>
+</div>
+</div>
+<div class="claim" id="s2-5">
+<div class="claim-text">
+<h3><span class="num">2.5</span> No early connections</h3>
+<p>The browser does not connect to a site before you choose to go there: no pre-connecting while you type, from suggestions, or when the pointer rests on a bookmark. WebRTC only offers the default route's address, so local and VPN interfaces are not exposed.</p>
+<p class="cost"><strong>Cost:</strong> The first response of some pages may take slightly longer, and rare direct calls between computers with several networks may need a relay server.</p>
+</div>
+<div class="receipt">
+<p class="receipt-title">How to check</p>
+<dl>
+<dt>Prefs</dt>
+<dd><code class="ref" translate="no">network.http.speculative-parallel-limit = 0</code></dd>
+<dd><code class="ref" translate="no">browser.urlbar.speculativeConnect.enabled = false</code></dd>
+<dd><code class="ref" translate="no">browser.places.speculativeConnect.enabled = false</code></dd>
+<dd><code class="ref" translate="no">media.peerconnection.ice.default_address_only = true</code></dd>
+</dl>
+</div>
+</div>
+<div class="claim" id="s2-6">
+<div class="claim-text">
+<h3><span class="num">2.6</span> Mozilla's AI and account off</h3>
+<p>Mozilla's chatbot, smart tab groups, Link Preview and Smart Window are off. Link Preview would fetch the page in the background, with a header that identifies the request, before you open it. You can turn each feature back on in the engine's settings. The Mozilla account and Sync are off too.</p>
+</div>
+<div class="receipt">
+<p class="receipt-title">How to check</p>
+<dl>
+<dt>Prefs</dt>
+<dd><code class="ref" translate="no">browser.ml.chat.enabled = false</code></dd>
+<dd><code class="ref" translate="no">browser.ai.control.smartWindow = "blocked"</code></dd>
+<dd><code class="ref" translate="no">browser.ml.linkPreview.enabled = false</code></dd>
+<dt>File</dt>
+<dd><code class="ref" translate="no">browser/branding/nulavio/pref/firefox-branding.js (Nulavio build; includes identity.fxaccounts.enabled = false, with a comment only, no @why/@tradeoff)</code></dd>
+<dt>Tests</dt>
+<dd><code class="ref" translate="no">tests/unit/test_prefs_and_guard.py › test_mozilla_ai_is_off_in_both_tracks_with_the_same_values</code></dd>
+<dd><code class="ref" translate="no">tests/integration/test_mozilla_features.py › test_01_ai_prefs_are_build_defaults_not_user_values</code></dd>
+<dd><code class="ref" translate="no">tests/integration/test_mozilla_features.py › test_04_no_account_button_or_sync_promo</code></dd>
+<dt>Decision</dt>
+<dd><code class="ref" translate="no">docs/adr/0007-ai-bridge.md (Consequences)</code></dd>
+</dl>
+</div>
+</div>
+<div class="claim" id="s2-7">
+<div class="claim-text">
+<h3><span class="num">2.7</span> What these defaults break</h3>
+<p>On 2026-10-26 we opened 50 public pages twice on the Nulavio build, which then used Firefox 158.0.1: once with the protections and once without. None broke because of the protections. Six pages were flagged and three more were checked by hand; the differences were removed ad slots, the site's own variants or the site's own pop-ups.</p>
+<p class="limit"><strong>Limit:</strong> These were public pages, with no sign-in and no forms.</p>
+</div>
+<div class="receipt">
+<p class="receipt-title">How to check</p>
+<dl>
+<dt>File</dt>
+<dd><code class="ref" translate="no">docs/research/site-regression-2026-10.md</code></dd>
+<dd><code class="ref" translate="no">docs/research/evidence/site-regression-2026-10-26.json</code></dd>
+<dt>Runner</dt>
+<dd><code class="ref" translate="no">tests/regression/run_sites.py</code></dd>
+</dl>
+</div>
+</div>
+<div class="claim" id="s2-explain">
+<div class="claim-text">
+<h3>Every default explains itself</h3>
+<p>The same file feeds the command below. This is its real output at this revision's commit (excerpt):</p>
+</div>
+<div class="receipt">
+<p class="receipt-title">How to check</p>
+<dl>
+<dt>File</dt>
+<dd><code class="ref" translate="no">browser/config/prefs/baseline.js</code></dd>
+<dt>Tests</dt>
+<dd><code class="ref" translate="no">tests/unit/test_prefs_and_guard.py › test_every_pref_is_documented</code></dd>
+<dd><code class="ref" translate="no">tests/unit/test_prefs_and_guard.py › test_no_protection_is_weakened</code></dd>
+</dl>
+</div>
+</div>
+<div class="excerpt">
+<div class="pre-scroll" role="region" aria-label="Output of prefs explain" tabindex="0"><pre lang="en" translate="no"><code>{{e1}}</code></pre></div>
+</div>
+</section>
+<section id="kept" aria-labelledby="kept-h">
+<h2 id="kept-h"><span class="num">3</span> What we keep on, and why</h2>
+<p class="opening">Some engine protections need the network. We keep them, because turning them off would leave you less protected.</p>
+<p class="prose">So «Nulavio has no server» does not mean «the browser never connects to anything».</p>
+<div class="claim" id="s3-1">
+<div class="claim-text">
+<h3><span class="num">3.1</span> Sandbox and site isolation</h3>
+<p>Content processes run with seccomp-bpf on every thread and in their own user namespace, and site isolation stays on.</p>
+</div>
+<div class="receipt">
+<p class="receipt-title">How to check</p>
+<dl>
+<dt>Tests</dt>
+<dd><code class="ref" translate="no">tests/integration/test_engine_slice.py › test_04_content_processes_are_sandboxed</code></dd>
+<dd><code class="ref" translate="no">tests/integration/test_engine_slice.py › test_11_record_environment</code></dd>
+<dt>File</dt>
+<dd><code class="ref" translate="no">docs/security/hardening.md</code></dd>
+<dt>In the browser</dt>
+<dd><code class="ref" translate="no">about:support</code></dd>
+</dl>
+</div>
+</div>
+<div class="claim" id="s3-2">
+<div class="claim-text">
+<h3><span class="num">3.2</span> Safe Browsing</h3>
+<p>Google Safe Browsing's phishing and malware page lists stay on, with Nulavio's own key, and the engine keeps them current. A test opens Google's official phishing test page and checks that the warning replaces it.</p>
+<p class="limit"><strong>Limit:</strong> The key does not include download checks (3.5), and it is under Google's non-commercial terms with the default quota.</p>
+</div>
+<div class="receipt">
+<p class="receipt-title">How to check</p>
+<dl>
+<dt>Tests</dt>
+<dd><code class="ref" translate="no">tests/integration/test_engine_slice.py › test_12_safe_browsing_has_api_key</code></dd>
+<dd><code class="ref" translate="no">tests/integration/test_engine_slice.py › test_14_safe_browsing_blocks_google_test_phishing_page</code></dd>
+<dt>Risk</dt>
+<dd><code class="ref" translate="no">docs/security/residual-risks.md › R15</code></dd>
+<dd><code class="ref" translate="no">docs/security/residual-risks.md › R16</code></dd>
+</dl>
+</div>
+</div>
+<div class="claim" id="s3-3">
+<div class="claim-text">
+<h3><span class="num">3.3</span> Mozilla's security lists</h3>
+<p>Revoked certificates and blocked extensions arrive through Mozilla's Remote Settings service, which stays on. Studies and remote configuration changes do not (2.4).</p>
+</div>
+<div class="receipt">
+<p class="receipt-title">How to check</p>
+<dl>
+<dt>File</dt>
+<dd><code class="ref" translate="no">docs/security/hardening.md › «Deliberately not changed»</code></dd>
+</dl>
+</div>
+</div>
+<div class="claim" id="s3-4">
+<div class="claim-text">
+<h3><span class="num">3.4</span> Signed extensions, and uBlock Origin</h3>
+<p>Extensions load only with Mozilla's signature. uBlock Origin is installed by a build policy: on first launch, the browser downloads the version the project records (today {{ubo}}) from addons.mozilla.org and checks Mozilla's signature. After that it updates like any extension, and its filter lists also update over the network. It works in private windows, and you can disable it or turn it off for one site.</p>
+<p class="limit"><strong>Limit:</strong> On this path the engine checks the signature but not the SHA-256 the project records. The SHA-256 is checked when Nulavio installs a password extension (section 9).</p>
+</div>
+<div class="receipt">
+<p class="receipt-title">How to check</p>
+<dl>
+<dt>File</dt>
+<dd><code class="ref" translate="no">browser/build/mozconfig (MOZ_REQUIRE_SIGNING=1)</code></dd>
+<dd><code class="ref" translate="no">browser/distribution/extensions.lock.json</code></dd>
+<dd><code class="ref" translate="no">scripts/build/make_distribution.py (normal_installed policy)</code></dd>
+<dt>Test</dt>
+<dd><code class="ref" translate="no">tests/integration/test_engine_slice.py › test_08_ublock_blocks_and_is_reversible</code></dd>
+<dt>Risk</dt>
+<dd><code class="ref" translate="no">docs/security/residual-risks.md › R6</code></dd>
+<dt>In the browser</dt>
+<dd><code class="ref" translate="no">about:policies</code></dd>
+<dd><code class="ref" translate="no">about:addons</code></dd>
+</dl>
+</div>
+</div>
+<div class="claim" id="s3-5">
+<div class="claim-text">
+<h3><span class="num">3.5</span> Downloaded programs</h3>
+<p>Downloaded installers and scripts are saved without permission to run and never open on their own. Nulavio shows a warning with «Show in folder» and «Delete», and no «Open»; the engine's downloads panel does not offer «Open» for them either.</p>
+<p class="limit"><strong>Limit:</strong> The warning says the file can run programs, not whether it is dangerous: Nulavio does not check download reputation with Google.</p>
+</div>
+<div class="receipt">
+<p class="receipt-title">How to check</p>
+<dl>
+<dt>File</dt>
+<dd><code class="ref" translate="no">browser/patches/0007-downloads-never-open-a-program-from-the-downloads-ui.patch</code></dd>
+<dt>Tests</dt>
+<dd><code class="ref" translate="no">tests/integration/test_shell.py › test_03_executable_download_opens_warning_without_open</code></dd>
+<dd><code class="ref" translate="no">tests/integration/test_shell.py › test_04_regular_download_does_not_warn</code></dd>
+<dt>Risk</dt>
+<dd><code class="ref" translate="no">docs/security/residual-risks.md › R15</code></dd>
+</dl>
+</div>
+</div>
+<div class="claim" id="s3-6">
+<div class="claim-text">
+<h3><span class="num">3.6</span> What we have not published yet</h3>
+<p class="claim-state"><svg class="icon" aria-hidden="true" focusable="false"><use href="#i-missing"/></svg><span>Not done</span></p>
+<p>The full list of connections a new profile makes on its own. This section lists the ones we know about and chose to keep: Safe Browsing, Remote Settings, the download and updates of extensions on addons.mozilla.org, uBlock Origin's lists, the DNS resolver you choose (4.4), and Mozilla's captive-portal detection (firefox-portal-detection.com), left as the engine sets it. There is no test yet that records every request of a new profile.</p>
+</div>
+</div>
+</section>
+<section id="typing" aria-labelledby="typing-h">
+<h2 id="typing-h"><span class="num">4</span> What you type</h2>
+<p class="opening">In most browsers, what you type in the address bar goes to the search engine while you type. In Nulavio, nothing goes before Enter unless you turn suggestions on.</p>
+<div class="claim" id="s4-1">
+<div class="claim-text">
+<h3><span class="num">4.1</span> Nothing goes to a search engine while you type</h3>
+<p>The test types into the real address bar, key by key, and records every request the browser makes. Typing and focusing the bar send nothing to any search engine, also with shortcuts like @google or @ddg.</p>
+<p class="limit"><strong>Limit:</strong> The test measures HTTP and HTTPS requests, not DNS, so a word that looks like an address may still be looked up in DNS. Early connections and single-word DNS lookups are off to reduce this.</p>
+</div>
+<div class="receipt">
+<p class="receipt-title">How to check</p>
+<dl>
+<dt>Tests</dt>
+<dd><code class="ref" translate="no">tests/integration/test_search.py › test_02_typing_and_focus_send_nothing</code></dd>
+<dd><code class="ref" translate="no">tests/integration/test_search.py › test_03_aliases_send_nothing_while_typing</code></dd>
+<dt>Risk</dt>
+<dd><code class="ref" translate="no">docs/security/residual-risks.md › R20</code></dd>
+</dl>
+</div>
+</div>
+<div class="claim" id="s4-2">
+<div class="claim-text">
+<h3><span class="num">4.2</span> Suggestions, one search engine at a time</h3>
+<p>If you want suggestions, you turn them on for each search engine. Turning them on for one does not let another receive what you type: the rule sits at the one place in the engine that fetches suggestions.</p>
+</div>
+<div class="receipt">
+<p class="receipt-title">How to check</p>
+<dl>
+<dt>File</dt>
+<dd><code class="ref" translate="no">browser/patches/0004-search-require-per-engine-consent-for-suggestions.patch</code></dd>
+<dt>Test</dt>
+<dd><code class="ref" translate="no">tests/integration/test_search.py › test_05_consent_is_per_provider</code></dd>
+<dt>Pref</dt>
+<dd><code class="ref" translate="no">nulavio.search.suggest.optin</code></dd>
+</dl>
+</div>
+</div>
+<div class="claim" id="s4-3">
+<div class="claim-text">
+<h3><span class="num">4.3</span> The default search engine</h3>
+<p>In new profiles, DuckDuckGo becomes the default for normal and private windows, but only if the default is still the factory one. Brave Search and Mojeek come ready, with @brave and @mojeek. SearXNG is added only with an address you type, and Nulavio never picks a public instance. Kagi is added if you ask.</p>
+</div>
+<div class="receipt">
+<p class="receipt-title">How to check</p>
+<dl>
+<dt>Decision</dt>
+<dd><code class="ref" translate="no">docs/adr/0002-nulavio-search.md</code></dd>
+<dt>Tests</dt>
+<dd><code class="ref" translate="no">tests/integration/test_search.py › test_04_first_run_defaults_and_providers</code></dd>
+<dd><code class="ref" translate="no">tests/integration/test_search.py › test_07_private_default_is_independent</code></dd>
+<dd><code class="ref" translate="no">tests/integration/test_search.py › test_09_searxng_kagi_add_and_remove</code></dd>
+<dd><code class="ref" translate="no">tests/integration/test_search.py › test_10_migration_runs_once_and_keeps_a_choice</code></dd>
+</dl>
+</div>
+</div>
+<div class="claim" id="s4-4">
+<div class="claim-text">
+<h3><span class="num">4.4</span> DNS, chosen once</h3>
+<p>On the first new tab, Nulavio asks once how to look up sites. There are three options: through your computer's resolver; through encrypted DNS, with your computer's resolver as a fallback; or through encrypted DNS only. The encrypted resolver is one you choose: Cloudflare, Quad9, Mullvad or your own address. Until you answer, the engine's default applies. Nulavio receives nothing either way.</p>
+<p class="cost"><strong>Cost:</strong> In encrypted-only mode, if the resolver fails, sites do not open, including networks with a sign-in page, rather than falling back to plain DNS.</p>
+<p class="limit"><strong>Limit:</strong> Encrypted DNS changes who sees your lookups; it does not hide the sites you visit.</p>
+</div>
+<div class="receipt">
+<p class="receipt-title">How to check</p>
+<dl>
+<dt>Tests</dt>
+<dd><code class="ref" translate="no">tests/integration/test_dns.py › test_01_new_tab_asks_once_and_keeping_the_system_resolver_is_explicit</code></dd>
+<dd><code class="ref" translate="no">tests/integration/test_dns.py › test_02_encrypted_only_uses_the_chosen_resolver_and_fails_closed</code></dd>
+<dd><code class="ref" translate="no">tests/integration/test_dns.py › test_03_back_to_the_system_resolver_sends_nothing_to_it</code></dd>
+<dt>Risk</dt>
+<dd><code class="ref" translate="no">docs/security/residual-risks.md › R40</code></dd>
+</dl>
+</div>
+</div>
+</section>
+<section id="profiles" aria-labelledby="profiles-h">
+<h2 id="profiles-h"><span class="num">5</span> Profiles and routes</h2>
+<p class="opening">Work, banking and personal use can live in different profiles that share no sign-ins or history. Rules of yours decide which profile each link opens in.</p>
+<div class="claim" id="s5-1">
+<div class="claim-text">
+<h3><span class="num">5.1</span> Profiles that do not mix</h3>
+<p>Each profile is a separate engine instance with its own folder (directories 0700, files 0600). Cookies, site data, history, extensions, passwords saved in the browser and preferences do not cross from one to another. Switching never opens a second copy of a profile that is already open.</p>
+<p class="limit"><strong>Limit:</strong> Switching profiles does not bring your sign-in along: in the other profile you sign in again. Profiles separate what the browser keeps, not your internet address or the browser's fingerprint, so a site visited in both can still tell it is the same computer.</p>
+</div>
+<div class="receipt">
+<p class="receipt-title">How to check</p>
+<dl>
+<dt>Decision</dt>
+<dd><code class="ref" translate="no">docs/adr/0003-nulavio-profiles-and-routing.md (decision 2)</code></dd>
+<dt>Tests</dt>
+<dd><code class="ref" translate="no">tests/integration/test_profiles.py › test_05_switch_isolates_and_never_duplicates</code></dd>
+<dd><code class="ref" translate="no">tests/integration/test_engine_slice.py › test_09_profile_files_are_private</code></dd>
+<dt>File</dt>
+<dd><code class="ref" translate="no">docs/research/fingerprinting.md</code></dd>
+</dl>
+</div>
+</div>
+<div class="claim" id="s5-2">
+<div class="claim-text">
+<h3><span class="num">5.2</span> The band: which profile you are in</h3>
+<p>At the top of every window, above the address bar, a band drawn by the browser shows the profile, with a colour, an icon (or the name's initial) and a name, and its state in words and with a symbol, never by colour alone. Web pages cannot write in this band; only Nulavio's own pages are named in it. When Nulavio cannot read the state, the band says «Protection unknown» instead of guessing. In full screen it becomes a thin line at the top.</p>
+<p class="note">«No password» means that profile's files are not encrypted on disk. The protections in section 2 apply to every profile.</p>
+</div>
+<div class="receipt">
+<p class="receipt-title">How to check</p>
+<dl>
+<dt>Tests</dt>
+<dd><code class="ref" translate="no">tests/integration/test_window_band.py › test_01_identity_is_above_native_controls_and_cannot_be_hidden</code></dd>
+<dd><code class="ref" translate="no">tests/integration/test_window_band.py › test_02_only_a_selected_top_level_shell_principal_names_the_header</code></dd>
+<dd><code class="ref" translate="no">tests/integration/test_window_band.py › test_07_page_fullscreen_keeps_a_flow_safety_line_and_native_exit_warning</code></dd>
+<dd><code class="ref" translate="no">tests/integration/test_window_band.py › test_real_unlocked_profile_is_named_protected_and_current_lock_is_not_invented</code></dd>
+<dt>File</dt>
+<dd><code class="ref" translate="no">docs/design/ux-principles.md</code></dd>
+</dl>
+</div>
+</div>
+<figure id="fig-2" class="fig-bands">
+<figcaption><p><strong>Figure 2.</strong> The band in four states, cropped from real windows at commit {{shot:band-personal-en-US-light.webp}}. The text of each row was read from the band at capture time.</p></figcaption>
+<!-- The AI Workspace state (C2e) is not shown: capturing it needs a live AI Bridge session, which capture_site.py does not start. A figure that cannot be made real stays out. -->
+<ul class="bands">
+<li>
+<picture class="band-shot band-main">
+<source media="(max-width: 47.9375rem) and (prefers-color-scheme: dark)" srcset="/assets/shots/band-personal-crop-en-US-dark.webp" {{wh:band-personal-crop-en-US-dark.webp}}>
+<source media="(max-width: 47.9375rem)" srcset="/assets/shots/band-personal-crop-en-US-light.webp" {{wh:band-personal-crop-en-US-light.webp}}>
+<source media="(prefers-color-scheme: dark)" srcset="/assets/shots/band-personal-en-US-dark.webp" {{wh:band-personal-en-US-dark.webp}}>
+<img src="/assets/shots/band-personal-en-US-light.webp" {{wh:band-personal-en-US-light.webp}} alt="Nulavio band in the Personal, no password state." loading="lazy" decoding="async">
+</picture>
+<dl><dt class="onscreen">{{onscreen:band-personal}}</dt><dd>A profile without a password: its files are not encrypted on disk.</dd></dl>
+</li>
+<li>
+<picture class="band-shot band-main">
+<source media="(max-width: 47.9375rem) and (prefers-color-scheme: dark)" srcset="/assets/shots/band-work-crop-en-US-dark.webp" {{wh:band-work-crop-en-US-dark.webp}}>
+<source media="(max-width: 47.9375rem)" srcset="/assets/shots/band-work-crop-en-US-light.webp" {{wh:band-work-crop-en-US-light.webp}}>
+<source media="(prefers-color-scheme: dark)" srcset="/assets/shots/band-work-en-US-dark.webp" {{wh:band-work-en-US-dark.webp}}>
+<img src="/assets/shots/band-work-en-US-light.webp" {{wh:band-work-en-US-light.webp}} alt="Nulavio band in the Work, protected state." loading="lazy" decoding="async">
+</picture>
+<dl><dt class="onscreen">{{onscreen:band-work}}</dt><dd>A protected profile, open now; it locks again when its last window closes (section 6).</dd></dl>
+</li>
+<li>
+<picture class="band-shot band-main is-row">
+<source media="(prefers-color-scheme: dark)" srcset="/assets/shots/band-temporary-crop-en-US-dark.webp" {{wh:band-temporary-crop-en-US-dark.webp}}>
+<img src="/assets/shots/band-temporary-crop-en-US-light.webp" {{wh:band-temporary-crop-en-US-light.webp}} alt="Nulavio band in the temporary state." loading="lazy" decoding="async">
+</picture>
+<picture class="band-shot band-narrow">
+<source media="(prefers-color-scheme: dark)" srcset="/assets/shots/band-temporary-seal-en-US-dark.webp" {{wh:band-temporary-seal-en-US-dark.webp}}>
+<img src="/assets/shots/band-temporary-seal-en-US-light.webp" {{wh:band-temporary-seal-en-US-light.webp}} alt="The temporary seal, at the end of the same band." loading="lazy" decoding="async">
+</picture>
+<dl><dt class="onscreen">{{onscreen:band-temporary}}</dt><dd>A temporary window: its profile is deleted when it closes (5.5).</dd></dl>
+</li>
+<li>
+<picture class="band-shot band-main is-row">
+<source media="(prefers-color-scheme: dark)" srcset="/assets/shots/band-private-crop-en-US-dark.webp" {{wh:band-private-crop-en-US-dark.webp}}>
+<img src="/assets/shots/band-private-crop-en-US-light.webp" {{wh:band-private-crop-en-US-light.webp}} alt="Nulavio band in the private window state." loading="lazy" decoding="async">
+</picture>
+<picture class="band-shot band-narrow">
+<source media="(prefers-color-scheme: dark)" srcset="/assets/shots/band-private-seal-en-US-dark.webp" {{wh:band-private-seal-en-US-dark.webp}}>
+<img src="/assets/shots/band-private-seal-en-US-light.webp" {{wh:band-private-seal-en-US-light.webp}} alt="The private window seal, at the end of the same band." loading="lazy" decoding="async">
+</picture>
+<dl><dt class="onscreen">{{onscreen:band-private}}</dt><dd>A private window: no history is kept, and the assistant does not work in it.</dd></dl>
+</li>
+</ul>
+</figure>
+<div class="claim" id="s5-3">
+<div class="claim-text">
+<h3><span class="num">5.3</span> Links that arrive from other apps</h3>
+<p>With Nulavio as your default browser, a link opened from another app (email, chat, documents) and an address typed in the bar go through your rules before anything loads. A rule says what to do with a site: open it in a profile, ask first, or never switch profile. If the target profile cannot open, Nulavio stops there and says why, rather than opening the link in the wrong profile. If it is locked, Nulavio asks you to unlock it first. Rules stay on this computer, and only you create them.</p>
+</div>
+<div class="receipt">
+<p class="receipt-title">How to check</p>
+<dl>
+<dt>Decision</dt>
+<dd><code class="ref" translate="no">docs/adr/0003-nulavio-profiles-and-routing.md (M4a, M4b, «Failure is conservative»)</code></dd>
+<dt>Tests</dt>
+<dd><code class="ref" translate="no">tests/integration/test_routing.py › test_04_link_opens_in_the_rule_profile_and_nowhere_else</code></dd>
+<dd><code class="ref" translate="no">tests/integration/test_routing.py › test_05_ask_first_loads_nothing_until_the_user_chooses</code></dd>
+<dd><code class="ref" translate="no">tests/integration/test_routing.py › test_08_a_missing_profile_never_falls_back_silently</code></dd>
+<dd><code class="ref" translate="no">tests/integration/test_routing.py › test_11_typed_address_opens_in_the_rule_profile</code></dd>
+<dd><code class="ref" translate="no">tests/integration/test_vault_profiles.py › test_routing_to_a_locked_profile_asks_to_unlock_instead_of_starting_it</code></dd>
+<dd><code class="ref" translate="no">tests/integration/test_connect.py › test_03_make_default_and_restore</code></dd>
+</dl>
+</div>
+</div>
+<figure id="fig-3" class="diagram">
+<svg class="diagram-wide" viewBox="0 0 960 463" role="img" aria-labelledby="d1w-t" aria-describedby="d1w-d" focusable="false">
+<title id="d1w-t">The path of a link that arrives from another app</title>
+<desc id="d1w-d">A link opened from another app, such as email, chat or documents, reaches Nulavio, which checks your rules before anything loads. There are five outcomes: with no rule, or with «Never switch profile», the link opens here; with «Open there», it opens in the rule's profile, and only there; with «Ask first», nothing loads until you choose; if the target profile is locked, Nulavio asks you to unlock it and nothing loads; if the profile cannot open or no longer exists, Nulavio stops there and says why. Typed addresses follow the same path; links clicked in pages only if you turn that option on.</desc>
+<rect x="560" y="0" width="400" height="69" rx="8" class="d-node"/>
+<text x="574" y="29.12" class="d-strong">No rule, or «Never switch profile»</text>
+<text x="574" y="50.12" class="d-text">→ opens here</text>
+<rect x="560" y="81" width="400" height="69" rx="8" class="d-node"/>
+<text x="574" y="110.12" class="d-strong">«Open there»</text>
+<text x="574" y="131.12" class="d-text">→ opens in the rule's profile, and only there</text>
+<rect x="560" y="162" width="400" height="69" rx="8" class="d-node"/>
+<text x="574" y="191.12" class="d-strong">«Ask first»</text>
+<text x="574" y="212.12" class="d-text">→ nothing loads until you choose</text>
+<rect x="560" y="243" width="400" height="69" rx="8" class="d-node"/>
+<text x="574" y="272.12" class="d-strong">Target profile locked</text>
+<text x="574" y="293.12" class="d-text">→ asks you to unlock; nothing loads</text>
+<rect x="560" y="324" width="400" height="69" rx="8" class="d-node"/>
+<text x="574" y="353.12" class="d-strong">Profile cannot open or no longer exists</text>
+<text x="574" y="374.12" class="d-text">→ stops here and says why</text>
+<rect x="0" y="151.5" width="220" height="90" rx="8" class="d-node"/>
+<text x="14" y="180.62" class="d-text">Link opened from another</text>
+<text x="14" y="201.62" class="d-text">app (email, chat,</text>
+<text x="14" y="222.62" class="d-text">documents)</text>
+<rect x="270" y="151.5" width="220" height="90" rx="8" class="d-node"/>
+<text x="284" y="180.62" class="d-strong">Nulavio checks your</text>
+<text x="284" y="201.62" class="d-strong">rules</text>
+<text x="284" y="222.62" class="d-muted">before loading</text>
+<path d="M224 196.5H264" class="d-arrow"/>
+<path d="M257 191.5L264 196.5L257 201.5" class="d-arrow"/>
+<path d="M494 196.5H525" class="d-arrow"/>
+<path d="M525 34.5V358.5" class="d-arrow"/>
+<path d="M525 34.5H554" class="d-arrow"/>
+<path d="M547 29.5L554 34.5L547 39.5" class="d-arrow"/>
+<path d="M525 115.5H554" class="d-arrow"/>
+<path d="M547 110.5L554 115.5L547 120.5" class="d-arrow"/>
+<path d="M525 196.5H554" class="d-arrow"/>
+<path d="M547 191.5L554 196.5L547 201.5" class="d-arrow"/>
+<path d="M525 277.5H554" class="d-arrow"/>
+<path d="M547 272.5L554 277.5L547 282.5" class="d-arrow"/>
+<path d="M525 358.5H554" class="d-arrow"/>
+<path d="M547 353.5L554 358.5L547 363.5" class="d-arrow"/>
+<text x="0" y="431" class="d-muted">Typed addresses follow the same path.</text>
+<text x="0" y="453" class="d-muted">Links clicked in pages, only if you turn that option on (5.4).</text>
+</svg>
+<svg class="diagram-tall" viewBox="0 0 360 852" role="img" aria-labelledby="d1t-t" aria-describedby="d1t-d" focusable="false">
+<title id="d1t-t">The path of a link that arrives from another app</title>
+<desc id="d1t-d">A link opened from another app, such as email, chat or documents, reaches Nulavio, which checks your rules before anything loads. There are five outcomes: with no rule, or with «Never switch profile», the link opens here; with «Open there», it opens in the rule's profile, and only there; with «Ask first», nothing loads until you choose; if the target profile is locked, Nulavio asks you to unlock it and nothing loads; if the profile cannot open or no longer exists, Nulavio stops there and says why. Typed addresses follow the same path; links clicked in pages only if you turn that option on.</desc>
+<rect x="0" y="0" width="360" height="74" rx="8" class="d-node"/>
+<text x="14" y="30.76" class="d-text">Link opened from another app (email,</text>
+<text x="14" y="54.76" class="d-text">chat, documents)</text>
+<path d="M180 78V104" class="d-arrow"/>
+<path d="M175 97L180 104L185 97" class="d-arrow"/>
+<rect x="0" y="108" width="360" height="74" rx="8" class="d-node"/>
+<text x="14" y="138.76" class="d-strong">Nulavio checks your rules</text>
+<text x="14" y="162.76" class="d-muted">before loading</text>
+<rect x="48" y="206" width="312" height="98" rx="8" class="d-node"/>
+<text x="62" y="236.76" class="d-strong">No rule, or «Never switch</text>
+<text x="62" y="260.76" class="d-strong">profile»</text>
+<text x="62" y="284.76" class="d-text">→ opens here</text>
+<rect x="48" y="316" width="312" height="98" rx="8" class="d-node"/>
+<text x="62" y="346.76" class="d-strong">«Open there»</text>
+<text x="62" y="370.76" class="d-text">→ opens in the rule's profile,</text>
+<text x="62" y="394.76" class="d-text">and only there</text>
+<rect x="48" y="426" width="312" height="98" rx="8" class="d-node"/>
+<text x="62" y="456.76" class="d-strong">«Ask first»</text>
+<text x="62" y="480.76" class="d-text">→ nothing loads until you</text>
+<text x="62" y="504.76" class="d-text">choose</text>
+<rect x="48" y="536" width="312" height="98" rx="8" class="d-node"/>
+<text x="62" y="566.76" class="d-strong">Target profile locked</text>
+<text x="62" y="590.76" class="d-text">→ asks you to unlock; nothing</text>
+<text x="62" y="614.76" class="d-text">loads</text>
+<rect x="48" y="646" width="312" height="98" rx="8" class="d-node"/>
+<text x="62" y="676.76" class="d-strong">Profile cannot open or no</text>
+<text x="62" y="700.76" class="d-strong">longer exists</text>
+<text x="62" y="724.76" class="d-text">→ stops here and says why</text>
+<path d="M22 186V695" class="d-arrow"/>
+<path d="M22 255H42" class="d-arrow"/>
+<path d="M35 250L42 255L35 260" class="d-arrow"/>
+<path d="M22 365H42" class="d-arrow"/>
+<path d="M35 360L42 365L35 370" class="d-arrow"/>
+<path d="M22 475H42" class="d-arrow"/>
+<path d="M35 470L42 475L35 480" class="d-arrow"/>
+<path d="M22 585H42" class="d-arrow"/>
+<path d="M35 580L42 585L35 590" class="d-arrow"/>
+<path d="M22 695H42" class="d-arrow"/>
+<path d="M35 690L42 695L35 700" class="d-arrow"/>
+<text x="0" y="786" class="d-muted">Typed addresses follow the same path.</text>
+<text x="0" y="810" class="d-muted">Links clicked in pages, only if you turn</text>
+<text x="0" y="834" class="d-muted">that option on (5.4).</text>
+</svg>
+<figcaption><p><strong>Figure 3.</strong> The path of a link that arrives from another app. The decision happens before anything loads.</p></figcaption>
+</figure>
+<div class="claim" id="s5-4">
+<div class="claim-text">
+<h3><span class="num">5.4</span> Links clicked inside pages</h3>
+<p>They are off by default, because in that case the page chooses the address. If you turn on «Also for links clicked in pages», a plain click on a link to another site follows your rules, and the page you were on stays open. Even then it never moves pop-ups, forms, redirects, links inside embedded frames, links within the same site or private windows: those load in the profile you are in. For a link, you can always choose «Open link in profile» from its right-click menu.</p>
+<p class="limit"><strong>Limit:</strong> With it on, a page can put an identifier of yours in the link the other profile opens, and link the two identities on that site.</p>
+</div>
+<div class="receipt">
+<p class="receipt-title">How to check</p>
+<dl>
+<dt>Tests</dt>
+<dd><code class="ref" translate="no">tests/integration/test_routing.py › test_15_in_page_routing_is_off_by_default</code></dd>
+<dd><code class="ref" translate="no">tests/integration/test_routing.py › test_16_a_clicked_link_opens_in_the_rule_profile_and_the_page_stays</code></dd>
+<dd><code class="ref" translate="no">tests/integration/test_routing.py › test_18_navigations_that_are_never_routed_load_here</code></dd>
+<dd><code class="ref" translate="no">tests/integration/test_routing.py › test_14_link_menu_opens_the_link_in_the_chosen_profile</code></dd>
+<dt>File</dt>
+<dd><code class="ref" translate="no">docs/security/routing-m5-review.md</code></dd>
+<dt>Risk</dt>
+<dd><code class="ref" translate="no">docs/security/residual-risks.md › R24</code></dd>
+<dd><code class="ref" translate="no">docs/security/residual-risks.md › R45</code></dd>
+</dl>
+</div>
+</div>
+<div class="claim" id="s5-5">
+<div class="claim-text">
+<h3><span class="num">5.5</span> Temporary window</h3>
+<p>Opens a new, empty profile in its own instance, kept in memory where the system allows, and deleted when the window closes.</p>
+<p class="limit"><strong>Limit:</strong> Only the profile's folder is deleted. Files saved to Downloads, what other programs keep (the clipboard, a password manager) and memory pages written to a swap area on disk remain.</p>
+</div>
+<div class="receipt">
+<p class="receipt-title">How to check</p>
+<dl>
+<dt>Tests</dt>
+<dd><code class="ref" translate="no">tests/integration/test_temporary.py › test_01_new_temporary_window_from_the_selector_is_deleted_when_it_closes</code></dd>
+<dd><code class="ref" translate="no">tests/unit/test_temporary.py › test_swap_on_disk</code></dd>
+<dt>Risk</dt>
+<dd><code class="ref" translate="no">docs/security/residual-risks.md › R37</code></dd>
+</dl>
+</div>
+</div>
+</section>
+<section id="vault" aria-labelledby="vault-h">
+<h2 id="vault-h"><span class="num">6</span> Protected profiles</h2>
+<p class="opening">A protected profile stays encrypted on disk while it is locked. Once open, it works like any other.</p>
+<div class="claim" id="s6-1">
+<div class="claim-text">
+<h3><span class="num">6.1</span> Encrypted while locked</h3>
+<p>The profile's files live in a gocryptfs volume, with XChaCha20-Poly1305 and the file names encrypted too. While locked, the profile is an empty, read-only folder, and a copy of its files does not open without one of the unlock methods. It locks again when its last window closes. You create a protected profile from the browser itself, in three decisions.</p>
+<p class="cost"><strong>Cost:</strong> Protected profiles need gocryptfs and FUSE installed on the system; without them, the creation page says what is missing.</p>
+</div>
+<div class="receipt">
+<p class="receipt-title">How to check</p>
+<dl>
+<dt>Decision</dt>
+<dd><code class="ref" translate="no">docs/adr/0006-nulavio-vault.md (S5, S6)</code></dd>
+<dt>Tests</dt>
+<dd><code class="ref" translate="no">tests/unit/test_vault_storage.py › test_locked_volume_hides_files_and_names</code></dd>
+<dd><code class="ref" translate="no">tests/unit/test_vault_storage.py › test_locked_mount_point_takes_no_writes</code></dd>
+<dd><code class="ref" translate="no">tests/unit/test_vault_storage.py › test_autolock_after_the_profile_closes</code></dd>
+<dd><code class="ref" translate="no">tests/integration/test_vault_profiles.py › test_profile_data_is_unreadable_when_locked</code></dd>
+<dd><code class="ref" translate="no">tests/integration/test_vault_ui.py › test_01_create_a_protected_profile_in_three_decisions</code></dd>
+<dd><code class="ref" translate="no">tests/integration/test_vault_ui.py › test_06_tools_missing</code></dd>
+</dl>
+</div>
+</div>
+<div class="claim" id="s6-2">
+<div class="claim-text">
+<h3><span class="num">6.2</span> Ways to unlock, with no master key</h3>
+<p>Each protected profile has its own key, 32 random bytes, which is only ever stored inside encrypted envelopes, one per unlock method. Today there are three methods: the profile's password (Argon2id), a 140-bit recovery code and your computer login, through the system keyring. The code is shown once, in 7 groups of 4 characters, and the only copy the page offers is printing it. There is no Nulavio master key: if you lose every method, the data cannot be recovered, and profile creation tells you so.</p>
+</div>
+<div class="receipt">
+<p class="receipt-title">How to check</p>
+<dl>
+<dt>Decision</dt>
+<dd><code class="ref" translate="no">docs/adr/0006-nulavio-vault.md (Keys, Lifecycle)</code></dd>
+<dt>Tests</dt>
+<dd><code class="ref" translate="no">tests/unit/test_vault.py › test_copy_without_a_factor_stays_locked</code></dd>
+<dd><code class="ref" translate="no">tests/unit/test_vault.py › test_files_never_contain_the_dek</code></dd>
+<dd><code class="ref" translate="no">tests/unit/test_vault.py › test_crash_during_save_leaves_no_secret</code></dd>
+<dd><code class="ref" translate="no">tests/unit/test_vault.py › test_codes_are_unique_and_high_entropy</code></dd>
+</dl>
+</div>
+</div>
+<figure id="fig-4" class="diagram">
+<svg class="diagram-wide" viewBox="0 0 960 575" role="img" aria-labelledby="d2w-t" aria-describedby="d2w-d" focusable="false">
+<title id="d2w-t">One key per profile, one envelope per unlock method</title>
+<desc id="d2w-d">Three unlock methods work today: the password, with Argon2id; the recovery code, 140 bits, shown once; and the computer login, through the system keyring. Each one opens its own envelope, encrypted with XChaCha20-Poly1305, and the three envelopes hold the same profile key, 32 random bytes, which opens the gocryptfs volume with contents and names encrypted. Not available yet: the phone, built but not yet tested on a device, and the security key, which does not exist yet. While locked, the profile folder is empty and read-only, and a copy does not open without one of the methods. While open, the engine uses the profile, and programs running as you can read its files. There is no Nulavio master key: losing every method means losing the data.</desc>
+<text x="300" y="18" class="d-muted">envelope · XChaCha20-Poly1305</text>
+<rect x="0" y="34" width="250" height="69" rx="8" class="d-node"/>
+<text x="14" y="63.12" class="d-strong">Password</text>
+<text x="14" y="84.12" class="d-muted">Argon2id</text>
+<rect x="300" y="46.5" width="170" height="44" rx="8" class="d-node"/>
+<text x="350" y="73.62" class="d-text">envelope</text>
+<rect x="314" y="60.5" width="24" height="16" rx="2" class="d-arrow"/>
+<path d="M314 61.5L326 70.1L338 61.5" class="d-arrow"/>
+<path d="M254 68.5H294" class="d-arrow"/>
+<path d="M287 63.5L294 68.5L287 73.5" class="d-arrow"/>
+<rect x="0" y="117" width="250" height="69" rx="8" class="d-node"/>
+<text x="14" y="146.12" class="d-strong">Recovery code</text>
+<text x="14" y="167.12" class="d-muted">140 bits, shown once</text>
+<rect x="300" y="129.5" width="170" height="44" rx="8" class="d-node"/>
+<text x="350" y="156.62" class="d-text">envelope</text>
+<rect x="314" y="143.5" width="24" height="16" rx="2" class="d-arrow"/>
+<path d="M314 144.5L326 153.1L338 144.5" class="d-arrow"/>
+<path d="M254 151.5H294" class="d-arrow"/>
+<path d="M287 146.5L294 151.5L287 156.5" class="d-arrow"/>
+<rect x="0" y="200" width="250" height="69" rx="8" class="d-node"/>
+<text x="14" y="229.12" class="d-strong">Computer login</text>
+<text x="14" y="250.12" class="d-muted">system keyring</text>
+<rect x="300" y="212.5" width="170" height="44" rx="8" class="d-node"/>
+<text x="350" y="239.62" class="d-text">envelope</text>
+<rect x="314" y="226.5" width="24" height="16" rx="2" class="d-arrow"/>
+<path d="M314 227.5L326 236.1L338 227.5" class="d-arrow"/>
+<path d="M254 234.5H294" class="d-arrow"/>
+<path d="M287 229.5L294 234.5L287 239.5" class="d-arrow"/>
+<rect x="540" y="117" width="190" height="69" rx="8" class="d-key"/>
+<text x="554" y="146.12" class="d-strong">Profile key</text>
+<text x="554" y="167.12" class="d-muted">32 random bytes</text>
+<path d="M474 68.5H505V151.5" class="d-arrow"/>
+<path d="M474 151.5H505V151.5" class="d-arrow"/>
+<path d="M474 234.5H505V151.5" class="d-arrow"/>
+<path d="M505 151.5H534" class="d-arrow"/>
+<path d="M527 146.5L534 151.5L527 156.5" class="d-arrow"/>
+<rect x="770" y="106.5" width="190" height="90" rx="8" class="d-node"/>
+<text x="784" y="135.62" class="d-strong">gocryptfs volume</text>
+<text x="784" y="156.62" class="d-muted">contents and names</text>
+<text x="784" y="177.62" class="d-muted">encrypted</text>
+<path d="M734 151.5H764" class="d-arrow"/>
+<path d="M757 146.5L764 151.5L757 156.5" class="d-arrow"/>
+<text x="0" y="309" class="d-muted">Not available yet</text>
+<rect x="0" y="321" width="290" height="90" rx="8" class="d-soft"/>
+<text x="14" y="350.12" class="d-muted">Phone</text>
+<text x="14" y="371.12" class="d-muted">built; not yet tested on a</text>
+<text x="14" y="392.12" class="d-muted">device</text>
+<rect x="310" y="321" width="290" height="90" rx="8" class="d-soft"/>
+<text x="324" y="360.62" class="d-muted">Security key</text>
+<text x="324" y="381.62" class="d-muted">does not exist yet</text>
+<rect x="0" y="441" width="470" height="90" rx="8" class="d-node"/>
+<text x="14" y="470.12" class="d-strong">Locked:</text>
+<text x="14" y="491.12" class="d-text">the profile folder is empty and read-only; a copy does</text>
+<text x="14" y="512.12" class="d-text">not open without one of the methods</text>
+<rect x="490" y="441" width="470" height="90" rx="8" class="d-node"/>
+<text x="504" y="470.12" class="d-strong">Open:</text>
+<text x="504" y="491.12" class="d-text">the engine uses the profile; programs running as you</text>
+<text x="504" y="512.12" class="d-text">can read its files (R30)</text>
+<text x="0" y="565" class="d-text">No Nulavio master key: losing every method means losing the data.</text>
+</svg>
+<svg class="diagram-tall" viewBox="0 0 360 1084" role="img" aria-labelledby="d2t-t" aria-describedby="d2t-d" focusable="false">
+<title id="d2t-t">One key per profile, one envelope per unlock method</title>
+<desc id="d2t-d">Three unlock methods work today: the password, with Argon2id; the recovery code, 140 bits, shown once; and the computer login, through the system keyring. Each one opens its own envelope, encrypted with XChaCha20-Poly1305, and the three envelopes hold the same profile key, 32 random bytes, which opens the gocryptfs volume with contents and names encrypted. Not available yet: the phone, built but not yet tested on a device, and the security key, which does not exist yet. While locked, the profile folder is empty and read-only, and a copy does not open without one of the methods. While open, the engine uses the profile, and programs running as you can read its files. There is no Nulavio master key: losing every method means losing the data.</desc>
+<rect x="0" y="0" width="228" height="74" rx="8" class="d-node"/>
+<text x="14" y="30.76" class="d-strong">Password</text>
+<text x="14" y="54.76" class="d-muted">Argon2id</text>
+<rect x="256" y="15" width="80" height="44" rx="8" class="d-node"/>
+<rect x="284" y="29" width="24" height="16" rx="2" class="d-arrow"/>
+<path d="M284 30L296 38.6L308 30" class="d-arrow"/>
+<path d="M232 37H250" class="d-arrow"/>
+<path d="M243 32L250 37L243 42" class="d-arrow"/>
+<rect x="0" y="86" width="228" height="74" rx="8" class="d-node"/>
+<text x="14" y="116.76" class="d-strong">Recovery code</text>
+<text x="14" y="140.76" class="d-muted">140 bits, shown once</text>
+<rect x="256" y="101" width="80" height="44" rx="8" class="d-node"/>
+<rect x="284" y="115" width="24" height="16" rx="2" class="d-arrow"/>
+<path d="M284 116L296 124.6L308 116" class="d-arrow"/>
+<path d="M232 123H250" class="d-arrow"/>
+<path d="M243 118L250 123L243 128" class="d-arrow"/>
+<rect x="0" y="172" width="228" height="74" rx="8" class="d-node"/>
+<text x="14" y="202.76" class="d-strong">Computer login</text>
+<text x="14" y="226.76" class="d-muted">system keyring</text>
+<rect x="256" y="187" width="80" height="44" rx="8" class="d-node"/>
+<rect x="284" y="201" width="24" height="16" rx="2" class="d-arrow"/>
+<path d="M284 202L296 210.6L308 202" class="d-arrow"/>
+<path d="M232 209H250" class="d-arrow"/>
+<path d="M243 204L250 209L243 214" class="d-arrow"/>
+<rect x="0" y="266" width="24" height="16" rx="2" class="d-arrow"/>
+<path d="M0 267L12 275.6L24 267" class="d-arrow"/>
+<text x="34" y="280" class="d-muted">envelope · XChaCha20-Poly1305</text>
+<path d="M340 37H352" class="d-arrow"/>
+<path d="M340 123H352" class="d-arrow"/>
+<path d="M340 209H352" class="d-arrow"/>
+<path d="M352 37V306H180V324" class="d-arrow"/>
+<path d="M175 317L180 324L185 317" class="d-arrow"/>
+<rect x="0" y="328" width="360" height="74" rx="8" class="d-key"/>
+<text x="14" y="358.76" class="d-strong">Profile key</text>
+<text x="14" y="382.76" class="d-muted">32 random bytes</text>
+<path d="M180 406V432" class="d-arrow"/>
+<path d="M175 425L180 432L185 425" class="d-arrow"/>
+<rect x="0" y="436" width="360" height="74" rx="8" class="d-node"/>
+<text x="14" y="466.76" class="d-strong">gocryptfs volume</text>
+<text x="14" y="490.76" class="d-muted">contents and names encrypted</text>
+<text x="0" y="546" class="d-muted">Not available yet</text>
+<rect x="0" y="558" width="360" height="74" rx="8" class="d-soft"/>
+<text x="14" y="588.76" class="d-muted">Phone</text>
+<text x="14" y="612.76" class="d-muted">built; not yet tested on a device</text>
+<rect x="0" y="644" width="360" height="74" rx="8" class="d-soft"/>
+<text x="14" y="674.76" class="d-muted">Security key</text>
+<text x="14" y="698.76" class="d-muted">does not exist yet</text>
+<rect x="0" y="748" width="360" height="122" rx="8" class="d-node"/>
+<text x="14" y="778.76" class="d-strong">Locked:</text>
+<text x="14" y="802.76" class="d-text">the profile folder is empty and</text>
+<text x="14" y="826.76" class="d-text">read-only; a copy does not open</text>
+<text x="14" y="850.76" class="d-text">without one of the methods</text>
+<rect x="0" y="882" width="360" height="122" rx="8" class="d-node"/>
+<text x="14" y="912.76" class="d-strong">Open:</text>
+<text x="14" y="936.76" class="d-text">the engine uses the profile;</text>
+<text x="14" y="960.76" class="d-text">programs running as you can read its</text>
+<text x="14" y="984.76" class="d-text">files (R30)</text>
+<text x="0" y="1042" class="d-text">No Nulavio master key: losing every</text>
+<text x="0" y="1066" class="d-text">method means losing the data.</text>
+</svg>
+<figcaption><p><strong>Figure 4.</strong> One key per profile, one envelope per unlock method, and what changes between locked and open. Adding or removing a method touches only its envelope; the data is not encrypted again.</p></figcaption>
+</figure>
+<ul class="limits-list">
+<li class="limit"><strong>Limit:</strong> While open, the profile can be read by any program running as your user: encryption protects locked profiles and copies, not an open session. <code class="ref" translate="no">(R30)</code></li>
+<li class="limit"><strong>Limit:</strong> The computer login opens the profile for anyone using your account. On a shared account, choose the password.</li>
+<li class="limit"><strong>Limit:</strong> If the watcher that locks the profile is killed, the profile stays open until you lock it in Settings. <code class="ref" translate="no">(R32)</code></li>
+<li class="limit"><strong>Limit:</strong> Encrypting a profile that already existed does not erase its old content from SSDs, snapshots or backups. <code class="ref" translate="no">(R31)</code></li>
+<li class="limit"><strong>Limit:</strong> Phone unlock is built but has not run on a real phone yet, and the FIDO2 security key does not exist yet. <code class="ref" translate="no">(R48)</code></li>
+</ul>
+</section>
+<section id="guard" aria-labelledby="guard-h">
+<h2 id="guard-h"><span class="num">7</span> Guard: what changed while the browser was closed</h2>
+<p class="opening">If another program changes your profile while the browser is closed, Nulavio shows the change the next time it opens.</p>
+<div class="claim" id="s7-review">
+<div class="claim-text">
+<p>Every time it starts, Nulavio Guard compares the profile with its record of the last run: extensions, protection and network settings, certificate authorities, security modules, native-messaging programs, policies, user.js and search engines. Each change made outside the browser appears on a page, with Undo where possible, or Keep. Extensions, settings and search engines you change inside the browser do not appear. A certificate authority or security module you add in the certificate manager appears at the next start, for you to keep. Temporary profiles and profiles an agent is driving are not checked. In a protected profile, Guard's record stays encrypted while the profile is locked.</p>
+<figure id="fig-5" class="guard-shot">
+<picture class="shot">
+<source media="(max-width: 47.9375rem) and (prefers-color-scheme: dark)" srcset="/assets/shots/guard-review-en-US-narrow-dark.webp" {{wh:guard-review-en-US-narrow-dark.webp}}>
+<source media="(max-width: 47.9375rem)" srcset="/assets/shots/guard-review-en-US-narrow-light.webp" {{wh:guard-review-en-US-narrow-light.webp}}>
+<source media="(prefers-color-scheme: dark)" srcset="/assets/shots/guard-review-en-US-800-dark.webp" {{wh:guard-review-en-US-800-dark.webp}}>
+<img src="/assets/shots/guard-review-en-US-800-light.webp" {{wh:guard-review-en-US-800-light.webp}} alt="Page “Changes made outside Nulavio”, with a card for each change: the “Nulavio Guard Test CA” certificate authority, a native-messaging program that points to /usr/bin/true, malware protection turned off, the two network proxy settings and the changed user.js, each with its buttons." loading="lazy" decoding="async">
+</picture>
+<figcaption>
+<p><strong>Figure 5.</strong> The Guard page after a test's scenario: with the profile closed, a program turned on a proxy, turned off malware protection in user.js, registered a native-messaging program and added a test certificate authority.</p>
+<p class="onscreen">{{onscreen:fig-5}}</p>
+</figcaption>
+</figure>
+<p class="limit"><strong>Limit:</strong> Guard detects; it does not prevent. A change to user.js has no Undo on the page: you fix the file by hand or keep it. A program running as you while the profile is open can also rewrite Guard's record and hide what it did. Guard catches common tools and forgotten changes, not malware built to fool it.</p>
+</div>
+<div class="receipt">
+<p class="receipt-title">How to check</p>
+<dl>
+<dt>Tests</dt>
+<dd><code class="ref" translate="no">tests/integration/test_guard.py › test_01_first_start_records_and_reports_nothing</code></dd>
+<dd><code class="ref" translate="no">tests/integration/test_guard.py › test_02_changes_made_while_closed_are_reported_and_undone_or_kept</code></dd>
+<dd><code class="ref" translate="no">tests/integration/test_guard.py › test_03_changes_made_in_the_browser_are_not_reported</code></dd>
+<dt>File</dt>
+<dd><code class="ref" translate="no">docs/security/hardening.md › «Guard at run time: what it catches and how it can be bypassed»</code></dd>
+<dt>Risk</dt>
+<dd><code class="ref" translate="no">docs/security/residual-risks.md › R38</code></dd>
+</dl>
+</div>
+</div>
+</section>
+<section id="ai" aria-labelledby="ai-h">
+<h2 id="ai-h"><span class="num">8</span> AI, only when you ask</h2>
+<p class="opening">Mozilla's AI features are off (2.6). Nulavio has two paths of its own; both stay idle until you set them up, and both follow the same permission policy.</p>
+<div class="claim" id="s8-1">
+<div class="claim-text">
+<h3><span class="num">8.1</span> Assistant</h3>
+<p>You choose the provider: any service compatible with OpenAI's chat API, including a model running on your computer, or Anthropic's API. Its address must be HTTPS or on this computer. Nulavio runs no model and no proxy, and has no account. The key stays in the system keyring and never enters the browser. Only profiles you allow can ask. A page's text goes only when you click «Include this page», and only that tab's text; if you switch tabs, it leaves the message, and the panel tells you.</p>
+<p>Before Send, a line says where the message goes (address and port), which model answers and the total size, Nulavio's instructions included. If the recipient or the size changes before sending, the send is refused and nothing leaves. While an assistant task acts, the window's band says so and offers «Stop task».</p>
+<p>In private windows the assistant does not work.</p>
+<p class="limit"><strong>Limit:</strong> The provider you choose sees what is sent to it, and a model misled by a page can still act within the assistant's permissions.</p>
+<!-- Figure 6 (assistant panel, C4) is not on this page: capture_site.py does not capture it yet. -->
+</div>
+<div class="receipt">
+<p class="receipt-title">How to check</p>
+<dl>
+<dt>File</dt>
+<dd><code class="ref" translate="no">launcher/nulavio_launcher/ai/assistant.py (default: no provider, no profile)</code></dd>
+<dt>Tests</dt>
+<dd><code class="ref" translate="no">tests/integration/test_assistant_ui.py › test_01_settings_store_the_key_in_the_keyring_only</code></dd>
+<dd><code class="ref" translate="no">tests/integration/test_assistant_ui.py › test_02_page_text_goes_only_for_the_included_tab</code></dd>
+<dd><code class="ref" translate="no">tests/integration/test_assistant_ui.py › test_07_switching_tabs_or_leaving_the_page_takes_it_out_and_says_so</code></dd>
+<dd><code class="ref" translate="no">tests/integration/test_assistant_ui.py › test_08_nothing_in_private_windows</code></dd>
+<dd><code class="ref" translate="no">tests/unit/test_assistant.py › test_endpoint_must_be_https_or_this_computer</code></dd>
+<dd><code class="ref" translate="no">tests/unit/test_assistant.py › test_the_size_shown_is_what_the_provider_gets</code></dd>
+<dd><code class="ref" translate="no">tests/unit/test_assistant.py › test_send_is_refused_when_what_the_panel_showed_changed</code></dd>
+<dd><code class="ref" translate="no">tests/integration/test_assistant_ui.py › test_34_the_band_counts_a_tasks_steps_and_says_when_it_waits</code></dd>
+<dt>Decision</dt>
+<dd><code class="ref" translate="no">docs/adr/0007-ai-bridge.md › amendment of 2026-11-03</code></dd>
+<dt>Risk</dt>
+<dd><code class="ref" translate="no">docs/security/residual-risks.md › R43</code></dd>
+</dl>
+</div>
+</div>
+<div class="claim" id="s8-2">
+<div class="claim-text">
+<h3><span class="num">8.2</span> External agents</h3>
+<p>Agents like Claude Code and Codex CLI use the browser through a Nulavio MCP server, which they start themselves and talk to over standard input and output. Each agent works in an AI Workspace, a profile of its own. It enters one of your profiles only if you give it that profile, and never a locked one. Every call goes through a decision outside the model, in this order: emergency stop, revocation, site list, explicit grant, level. Page text cannot change permissions. The log keeps actions, not content.</p>
+</div>
+<div class="receipt">
+<p class="receipt-title">How to check</p>
+<dl>
+<dt>Decision</dt>
+<dd><code class="ref" translate="no">docs/adr/0007-ai-bridge.md (decisions 2–9)</code></dd>
+<dt>Tests</dt>
+<dd><code class="ref" translate="no">tests/integration/test_ai_bridge.py › test_06_emergency_stop</code></dd>
+<dd><code class="ref" translate="no">tests/integration/test_ai_bridge.py › test_08_engine_protections_stay_on</code></dd>
+<dd><code class="ref" translate="no">tests/integration/test_ai_bridge.py › test_09_audit_keeps_actions_not_content</code></dd>
+<dd><code class="ref" translate="no">tests/integration/test_ai_bridge.py › test_12_page_text_cannot_change_permissions</code></dd>
+<dd><code class="ref" translate="no">tests/integration/test_ai_bridge.py › test_18_profiles_the_agent_may_not_use</code></dd>
+<dd><code class="ref" translate="no">tests/integration/test_ai_agents_real.py (real Claude Code and Codex CLI, run separately)</code></dd>
+</dl>
+</div>
+</div>
+<div class="table-scroll" role="region" aria-labelledby="t1-cap" tabindex="0">
+<table>
+<caption id="t1-cap"><strong>Table 1.</strong> What each level lets an agent do (ADR 0007). You can change each row per agent.</caption>
+<thead><tr><th scope="col">Capability</th><th scope="col">Restricted</th><th scope="col">Assisted</th><th scope="col">Autonomous</th><th scope="col">Full control</th></tr></thead>
+<tbody>
+<tr><th scope="row">Read pages, navigate, take screenshots</th><td><svg class="icon icon-sm" aria-hidden="true" focusable="false"><use href="#i-done"/></svg>allow</td><td><svg class="icon icon-sm" aria-hidden="true" focusable="false"><use href="#i-done"/></svg>allow</td><td><svg class="icon icon-sm" aria-hidden="true" focusable="false"><use href="#i-done"/></svg>allow</td><td><svg class="icon icon-sm" aria-hidden="true" focusable="false"><use href="#i-done"/></svg>allow</td></tr>
+<tr><th scope="row">Click and type</th><td><svg class="icon icon-sm" aria-hidden="true" focusable="false"><use href="#i-ask"/></svg>ask</td><td><svg class="icon icon-sm" aria-hidden="true" focusable="false"><use href="#i-done"/></svg>allow</td><td><svg class="icon icon-sm" aria-hidden="true" focusable="false"><use href="#i-done"/></svg>allow</td><td><svg class="icon icon-sm" aria-hidden="true" focusable="false"><use href="#i-done"/></svg>allow</td></tr>
+<tr><th scope="row">Submit forms</th><td><svg class="icon icon-sm" aria-hidden="true" focusable="false"><use href="#i-ask"/></svg>ask</td><td><svg class="icon icon-sm" aria-hidden="true" focusable="false"><use href="#i-ask"/></svg>ask</td><td><svg class="icon icon-sm" aria-hidden="true" focusable="false"><use href="#i-done"/></svg>allow</td><td><svg class="icon icon-sm" aria-hidden="true" focusable="false"><use href="#i-done"/></svg>allow</td></tr>
+<tr><th scope="row">Files, signed-in sessions, background work</th><td><svg class="icon icon-sm" aria-hidden="true" focusable="false"><use href="#i-block"/></svg>block</td><td><svg class="icon icon-sm" aria-hidden="true" focusable="false"><use href="#i-ask"/></svg>ask</td><td><svg class="icon icon-sm" aria-hidden="true" focusable="false"><use href="#i-done"/></svg>allow</td><td><svg class="icon icon-sm" aria-hidden="true" focusable="false"><use href="#i-done"/></svg>allow</td></tr>
+<tr><th scope="row">Purchases, account settings</th><td><svg class="icon icon-sm" aria-hidden="true" focusable="false"><use href="#i-block"/></svg>block</td><td><svg class="icon icon-sm" aria-hidden="true" focusable="false"><use href="#i-ask"/></svg>ask</td><td><svg class="icon icon-sm" aria-hidden="true" focusable="false"><use href="#i-ask"/></svg>ask</td><td><svg class="icon icon-sm" aria-hidden="true" focusable="false"><use href="#i-done"/></svg>allow</td></tr>
+<tr><th scope="row">Local network and internal pages, JavaScript, network inspection, other profiles, private tabs</th><td><svg class="icon icon-sm" aria-hidden="true" focusable="false"><use href="#i-block"/></svg>block</td><td><svg class="icon icon-sm" aria-hidden="true" focusable="false"><use href="#i-block"/></svg>block</td><td><svg class="icon icon-sm" aria-hidden="true" focusable="false"><use href="#i-ask"/></svg>ask</td><td><svg class="icon icon-sm" aria-hidden="true" focusable="false"><use href="#i-done"/></svg>allow</td></tr>
+<tr><th scope="row">Cookies and storage</th><td><svg class="icon icon-sm" aria-hidden="true" focusable="false"><use href="#i-block"/></svg>block</td><td><svg class="icon icon-sm" aria-hidden="true" focusable="false"><use href="#i-block"/></svg>block</td><td><svg class="icon icon-sm" aria-hidden="true" focusable="false"><use href="#i-block"/></svg>block</td><td><svg class="icon icon-sm" aria-hidden="true" focusable="false"><use href="#i-done"/></svg>allow</td></tr>
+<tr><th scope="row">Raw automation and privileged pages</th><td><svg class="icon icon-sm" aria-hidden="true" focusable="false"><use href="#i-block"/></svg>block</td><td><svg class="icon icon-sm" aria-hidden="true" focusable="false"><use href="#i-block"/></svg>block</td><td><svg class="icon icon-sm" aria-hidden="true" focusable="false"><use href="#i-block"/></svg>block</td><td><svg class="icon icon-sm" aria-hidden="true" focusable="false"><use href="#i-block"/></svg>block (separate opt-in)</td></tr>
+</tbody>
+</table>
+</div>
+<p class="scroll-hint">Scroll sideways to see all four levels.</p>
+<p class="note prose">Full control turns on only after you accept a warning. Autonomous does not ask again for what it covers. «Ask» opens a request for you; if there is no way to ask, the answer is no.</p>
+<div class="claim" id="s8-3">
+<div class="claim-text">
+<h3><span class="num">8.3</span> Raw automation, kept apart</h3>
+<p>Direct access to the WebDriver BiDi protocol is not part of any level, Full control included. It is a separate opt-in for each agent, with its own warning, and the window then says that Nulavio neither checks nor records what happens in it. The emergency stop still ends everything.</p>
+</div>
+<div class="receipt">
+<p class="receipt-title">How to check</p>
+<dl>
+<dt>Decision</dt>
+<dd><code class="ref" translate="no">docs/adr/0007-ai-bridge.md › amendment of 2026-10-28</code></dd>
+<dt>Tests</dt>
+<dd><code class="ref" translate="no">tests/integration/test_ai_bridge.py › test_20_raw_automation_needs_debugging_bypasses_policy_and_still_ends_with_stop</code></dd>
+<dd><code class="ref" translate="no">tests/integration/test_ai_bridge.py › test_21_the_ai_workspace_window_says_who_drives_it_and_when_nothing_is_checked</code></dd>
+<dt>Risk</dt>
+<dd><code class="ref" translate="no">docs/security/residual-risks.md › R42</code></dd>
+</dl>
+</div>
+</div>
+<ul class="limits-list">
+<li class="limit"><strong>Limit:</strong> An agent does everything its permissions allow, without asking when the permission says so. <code class="ref" translate="no">(R26)</code></li>
+<li class="limit"><strong>Limit:</strong> A command-line agent runs as you: outside Nulavio it can do whatever you can, including editing Nulavio's files. <code class="ref" translate="no">(R27)</code></li>
+<li class="limit"><strong>Limit:</strong> While an AI Workspace runs, the engine's automation port is open on 127.0.0.1, and another program of yours can use it. <code class="ref" translate="no">(R28)</code></li>
+</ul>
+</section>
+<section id="passwords" aria-labelledby="passwords-h">
+<h2 id="passwords-h"><span class="num">9</span> Passwords, in your manager</h2>
+<p class="opening">Nulavio has no password vault of its own and does not read yours.</p>
+<div class="claim" id="s9-managers">
+<div class="claim-text">
+<p>It works with the official Proton Pass, KeePassXC and Bitwarden extensions. When you choose one in Settings → Passwords and confirm, Nulavio installs the pinned version of the official extension, checking the recorded SHA-256 and Mozilla's signature, and turns off the browser's own password prompts. Switching back to the browser's manager does not remove the extension or delete saved logins.</p>
+<dl class="managers" aria-label="Status per manager">
+<div><dt translate="no"><svg class="icon" aria-hidden="true" focusable="false"><use href="#i-partly"/></svg>Proton Pass<span class="visually-hidden"> (Partly)</span></dt><dd>Sign-in and autofill with a real account worked on 2026-10-25 in Nulavio Preview, the test version that runs on your distribution's Firefox. On the Nulavio build, the official extension loads and the chooser installs the pinned version; the real sign-in still has to be repeated.</dd></div>
+<div><dt translate="no"><svg class="icon" aria-hidden="true" focusable="false"><use href="#i-partly"/></svg>KeePassXC<span class="visually-hidden"> (Partly)</span></dt><dd>Pairing and autofill end to end with KeePassXC 2.8.0 and the distribution's Firefox, in a Fedora 44 container, in CI (pushes to main and pull requests). Not yet tested on a real desktop.</dd></div>
+<div><dt translate="no"><svg class="icon" aria-hidden="true" focusable="false"><use href="#i-partly"/></svg>Bitwarden<span class="visually-hidden"> (Partly)</span></dt><dd>It installs, its signature checks out, its background process starts and its window opens. Sign-in with a real account has not been tested.</dd></div>
+</dl>
+</div>
+<div class="receipt">
+<p class="receipt-title">How to check</p>
+<dl>
+<dt>Tests</dt>
+<dd><code class="ref" translate="no">tests/integration/test_password_extensions.py › test_proton_pass</code></dd>
+<dd><code class="ref" translate="no">tests/integration/test_password_extensions.py › test_keepassxc_browser</code></dd>
+<dd><code class="ref" translate="no">tests/integration/test_password_extensions.py › test_bitwarden</code></dd>
+<dd><code class="ref" translate="no">tests/integration/test_passwords.py › test_04_provider_chooser_shows_real_state</code></dd>
+<dd><code class="ref" translate="no">tests/integration/test_passwords.py › test_05_choosing_proton_pass_installs_the_pinned_version_and_switching_back_keeps_it</code></dd>
+<dt>File</dt>
+<dd><code class="ref" translate="no">browser/shell/modules/NulavioPasswords.sys.mjs</code></dd>
+<dd><code class="ref" translate="no">docs/research/evidence/keepassxc-2.8.0-native-messaging.json</code></dd>
+<dt>Risk</dt>
+<dd><code class="ref" translate="no">docs/security/residual-risks.md › R8</code></dd>
+<dd><code class="ref" translate="no">docs/security/residual-risks.md › R9</code></dd>
+</dl>
+</div>
+</div>
+<div class="claim" id="s9-1">
+<div class="claim-text">
+<h3><span class="num">9.1</span> Look-alike address</h3>
+<p>When you open a site whose address imitates one where you have a login saved in the browser, Nulavio warns you before you type the password. The real site is never warned about.</p>
+<p class="limit"><strong>Limit:</strong> The warning only compares with logins kept by the browser's own manager. With Proton Pass, KeePassXC or Bitwarden, Nulavio does not read the vault, so it has nothing to compare with.</p>
+</div>
+<div class="receipt">
+<p class="receipt-title">How to check</p>
+<dl>
+<dt>Tests</dt>
+<dd><code class="ref" translate="no">tests/integration/test_passwords.py › test_02_lookalike_site_shows_the_warning_and_continue_is_remembered</code></dd>
+<dd><code class="ref" translate="no">tests/integration/test_passwords.py › test_03_the_real_site_is_never_warned</code></dd>
+<dt>Risk</dt>
+<dd><code class="ref" translate="no">docs/security/residual-risks.md › R41</code></dd>
+</dl>
+</div>
+</div>
+</section>
+<section id="limits" aria-labelledby="limits-h">
+<h2 id="limits-h"><span class="num">10</span> What a browser cannot fix</h2>
+<div class="limits-box">
+<p>Some threats are out of any browser's reach. We would rather write that down before anyone asks.</p>
+<ul>
+<li>A malicious program running as your user can read the open profile (cookies, sessions, history), install extensions and change settings. The 0700 and 0600 permissions protect against other accounts, not against yours.</li>
+<li>A program with root access sees everything.</li>
+<li>Anyone with physical access to an open session also sees everything.</li>
+<li>Anonymity against someone watching the whole network is not the goal; that is what Tor Browser is for.</li>
+<li>Browser fingerprinting is only reduced. In our measurement of 2026-10-26, on Firefox 158.0.1, Strict mode rounded the reported processor count (16 to 8) but did not change the canvas reading on the test page.</li>
+</ul>
+</div>
+<div class="receipt">
+<p class="receipt-title">How to check</p>
+<dl>
+<dt>File</dt>
+<dd><code class="ref" translate="no">docs/security/residual-risks.md (each risk with its consequence and plan)</code></dd>
+<dd><code class="ref" translate="no">docs/security/threat-model.md</code></dd>
+<dd><code class="ref" translate="no">docs/research/fingerprinting.md</code></dd>
+<dd><code class="ref" translate="no">docs/product/vision.md (non-goals)</code></dd>
+<dt>Test</dt>
+<dd><code class="ref" translate="no">tests/integration/test_privacy.py › test_04_fingerprinting_surface_measured_in_strict_and_standard</code></dd>
+</dl>
+</div>
+</section>
+<section id="verify" aria-labelledby="verify-h">
+<h2 id="verify-h"><span class="num">11</span> How to check</h2>
+<p class="opening">From what you can do today to what depends on the code being public or on a release.</p>
+<div class="claim" id="s11-1">
+<div class="claim-text">
+<h3><span class="num">11.1</span> Today, with nothing installed: this site</h3>
+<p>Ask for this site's response headers with <code translate="no">curl -sI https://nulavio.net/</code>. The ones we set are in the file below, copied from this revision's commit. The content policy starts with <code translate="no">default-src 'none'</code>: even if someone added a script to the HTML, the browser would refuse to run it. None of these headers sets a cookie.</p>
+</div>
+<div class="receipt">
+<p class="receipt-title">How to check</p>
+<dl>
+<dt>File</dt>
+<dd><code class="ref" translate="no">site/_headers</code></dd>
+<dt>Tests</dt>
+<dd><code class="ref" translate="no">tests/unit/test_site.py › test_security_headers</code></dd>
+<dd><code class="ref" translate="no">tests/unit/test_site.py › test_pages_are_static_and_first_party</code></dd>
+</dl>
+</div>
+</div>
+<div class="excerpt">
+<p class="excerpt-label">excerpt of <code translate="no">site/_headers</code></p>
+<div class="pre-scroll" role="region" aria-label="Excerpt of site/_headers" tabindex="0"><pre lang="en" translate="no"><code>{{e2}}</code></pre></div>
+</div>
+<!-- While Cloudflare's NEL is on (spec §13, decision 2). After turning it off, keep only the first sentence. -->
+<div class="prose"><p>Cloudflare, which serves the site, adds headers of its own, such as server and cf-ray. One of them is NEL (report-to and nel): it asks browsers that implement it to tell Cloudflare when a connection to this site fails.</p></div>
+<div class="claim" id="s11-2">
+<div class="claim-text">
+<h3><span class="num">11.2</span> Once the code is public: the tests</h3>
+<p><code translate="no">python3 -I tests/run.py unit</code> runs the unit tests, with no engine and no network. The integration tests need the Nulavio build: <code translate="no">scripts/build/build_nulavio.sh {{firefox}}</code> builds the browser in a rootless container. The full build of Firefox 159.0 took 47 minutes on the reference laptop on 2026-10-27, and the build tree takes about 23 GB. The tests use throwaway profiles and never touch yours. <code translate="no">bin/nulavio prefs explain</code> lists every default with its reason and cost.</p>
+</div>
+<div class="receipt">
+<p class="receipt-title">How to check</p>
+<dl>
+<dt>File</dt>
+<dd><code class="ref" translate="no">README.md</code></dd>
+<dd><code class="ref" translate="no">docs/architecture/build.md</code></dd>
+<dd><code class="ref" translate="no">docs/research/evidence/release-rehearsal-2026-10-28.md</code></dd>
+<dd><code class="ref" translate="no">tests/lib/harness.py</code></dd>
+</dl>
+</div>
+</div>
+<div class="claim" id="s11-3">
+<div class="claim-text">
+<h3><span class="num">11.3</span> Once there is a release: in the browser itself</h3>
+<p><code translate="no">about:config</code> shows every pref quoted here, <code translate="no">about:policies</code> shows the policy that installs uBlock Origin, and <code translate="no">about:support</code> shows the sandbox and site isolation.</p>
+</div>
+</div>
+<div class="claim" id="s11-4">
+<div class="claim-text">
+<h3><span class="num">11.4</span> Found a mismatch?</h3>
+<p>If a claim on this page does not match the code, the mistake is ours. For now, the only address that receives mail is <a href="mailto:security@nulavio.net" translate="no">security@nulavio.net</a>: use it to report a vulnerability and also to point out a mistake on this page. The security policy is at <a href="/.well-known/security.txt" translate="no">/.well-known/security.txt</a>.</p>
+</div>
+</div>
+</section>
+<p id="signoff" class="signoff"><picture>
+<source media="(prefers-color-scheme: dark)" srcset="/assets/nulavio-symbol.svg" width="28" height="32">
+<img src="/assets/nulavio-symbol-dark-on-light.svg" alt="" width="28" height="32">
+</picture>
+<span>Your web. Your rules.</span></p>
+</main>
+<footer class="colophon">
+<div class="colophon-inner">
+<p>Nulavio is built on Mozilla's Gecko engine. Nulavio is not affiliated with Mozilla. Firefox is a trademark of the Mozilla Foundation.</p>
+<p>This site uses no scripts, cookies or visitor analytics. It is served by Cloudflare, which receives each request like any web server. Some browsers also tell Cloudflare when a connection to the site fails (11.1).</p>
+<p>Revision of {{date_en}} · <span class="mono">commit {{commit}}</span> · Security: <a href="mailto:security@nulavio.net" translate="no">security@nulavio.net</a> · <a href="/" hreflang="pt-BR" lang="pt-BR">Português</a></p>
+</div>
+</footer>
 </body>
 </html>

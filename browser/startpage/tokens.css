@@ -38,6 +38,10 @@
   --nv-motion-duration-fast: 120ms;
   --nv-motion-duration-base: 180ms;
   --nv-motion-duration-slow: 280ms;
+  --nv-motion-duration-expand: 220ms;
+  --nv-motion-duration-collapse: 160ms;
+  --nv-motion-duration-fade: 80ms;
+  --nv-motion-duration-spin: 900ms;
   --nv-motion-easing-standard: cubic-bezier(0.2, 0, 0, 1);
   --nv-motion-easing-enter: cubic-bezier(0, 0, 0, 1);
   --nv-motion-easing-exit: cubic-bezier(0.3, 0, 1, 1);
@@ -55,11 +59,13 @@
   --nv-size-tab-height: 34px;
   --nv-size-tab-heightCompact: 30px;
   --nv-size-tab-heightTouch: 41px;
+  --nv-size-tab-pinned: 36px;
   --nv-size-field-height: 36px;
   --nv-size-field-heightCompact: 30px;
   --nv-size-field-heightTouch: 40px;
   --nv-size-indicator-length: 16px;
   --nv-size-indicator-thickness: 2px;
+  --nv-size-sidebar-launcherExpanded: 224px;
   --nv-type-body-size: 1rem;
   --nv-type-body-weight: 400;
   --nv-type-body-lineHeight: 1.5;
@@ -100,6 +106,8 @@
   --nv-control-selected-weight: 700;
   --nv-route-vertical-width: 3px;
   --nv-route-vertical-height: 20px;
+  --nv-accent-preview-mint: light-dark(#0F7A68, #6FE0C5);
+  --nv-accent-preview-blue: light-dark(#2D64B5, #6AA7F4);
   --nv-color-bg-canvas: #F1F7F5;
   --nv-color-bg-surface: #FFFFFF;
   --nv-color-bg-raised: #FFFFFF;
@@ -109,6 +117,7 @@
   --nv-color-text-muted: #4F7383;
   --nv-color-border-subtle: #BFD0D6;
   --nv-color-border-control: #6B8794;
+  --nv-color-border-separator: #8FAAB5;
   --nv-color-accent-default: #0F7A68;
   --nv-color-accent-on: #FFFFFF;
   --nv-color-accent-tint: #DDF8F0;
@@ -125,8 +134,17 @@
   --nv-color-chrome-tabText: #23495A;
   --nv-color-chrome-field: #FFFFFF;
   --nv-color-chrome-icon: #23495A;
-  --nv-color-chrome-private-toolbar: #0B1623;
-  --nv-color-chrome-private-toolbox: #070F18;
+  --nv-color-chrome-private-toolbar: #0F1C2A;
+  --nv-color-chrome-private-toolbox: #060C14;
+  --nv-color-chrome-private-tabSelected: #1E4252;
+  --nv-color-chrome-private-field: #15293A;
+  --nv-color-chrome-private-raised: #183746;
+  --nv-color-chrome-private-text: #F1F7F5;
+  --nv-color-chrome-private-tabText: #BFD0D6;
+  --nv-color-chrome-private-icon: #BFD0D6;
+  --nv-color-chrome-private-border: #23495A;
+  --nv-color-chrome-private-control: #6E93A2;
+  --nv-color-chrome-private-accent: #6FE0C5;
   --nv-color-identity-sky: #8CCBF5;
   --nv-color-identity-violet: #C2B0F7;
   --nv-color-identity-sand: #FDCF8B;
@@ -141,7 +159,7 @@
   --nv-color-identity-edge-coral: #070F18;
   --nv-color-identity-edge-sand: #070F18;
   --nv-color-identity-edge-slate: #070F18;
-  --nv-color-band-bg: #BFD0D6;
+  --nv-color-band-bg: #E2EBEE;
   --nv-color-band-text: #0B1623;
   --nv-color-band-meta: #23495A;
   --nv-color-band-rule: #23495A;
@@ -190,6 +208,20 @@
   --nv-color-fullscreen-acting: #6FE0C5;
   --nv-color-fullscreen-private: #2A1745;
   --nv-color-fullscreen-foreground: #F1F7F5;
+  --nv-color-identityTile-lima: #C4DC92;
+  --nv-color-identityTile-sky: #A6D8FA;
+  --nv-color-identityTile-violet: #D4C8FF;
+  --nv-color-identityTile-coral: #FBBDCE;
+  --nv-color-identityTile-sand: #E7CF94;
+  --nv-color-identityTile-slate: #C9D3D6;
+  --nv-color-identityGlyph-lima: #334C00;
+  --nv-color-identityGlyph-sky: #00476C;
+  --nv-color-identityGlyph-violet: #492E7F;
+  --nv-color-identityGlyph-coral: #721E3F;
+  --nv-color-identityGlyph-sand: #593C00;
+  --nv-color-identityGlyph-slate: #37454A;
+  --nv-color-ambience-from: #F1F7F5;
+  --nv-color-ambience-to: #DDF8F0;
   --nv-elevation-1: 0 1px 2px rgba(7, 15, 24, 0.14);
   --nv-elevation-2: 0 4px 12px rgba(7, 15, 24, 0.14);
   --nv-elevation-3: 0 12px 32px rgba(7, 15, 24, 0.14);
@@ -199,8 +231,8 @@
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --nv-color-bg-canvas: #0B1623;
-    --nv-color-bg-surface: #112432;
+    --nv-color-bg-canvas: #0F1C2A;
+    --nv-color-bg-surface: #15293A;
     --nv-color-bg-raised: #183746;
     --nv-color-bg-sunken: #070F18;
     --nv-color-text-primary: #F1F7F5;
@@ -208,6 +240,7 @@
     --nv-color-text-muted: #8FAAB5;
     --nv-color-border-subtle: #23495A;
     --nv-color-border-control: #6E93A2;
+    --nv-color-border-separator: #4F7383;
     --nv-color-accent-default: #6FE0C5;
     --nv-color-accent-on: #0B1623;
     --nv-color-accent-tint: #0E3B33;
@@ -218,14 +251,23 @@
     --nv-color-status-criticalText: #EE8A8C;
     --nv-color-status-warningTint: #3A2A12;
     --nv-color-status-criticalTint: #3F1A1D;
-    --nv-color-chrome-toolbox: #070F18;
-    --nv-color-chrome-toolbar: #0B1623;
-    --nv-color-chrome-tabSelected: #183746;
+    --nv-color-chrome-toolbox: #060C14;
+    --nv-color-chrome-toolbar: #0F1C2A;
+    --nv-color-chrome-tabSelected: #1E4252;
     --nv-color-chrome-tabText: #BFD0D6;
-    --nv-color-chrome-field: #112432;
+    --nv-color-chrome-field: #15293A;
     --nv-color-chrome-icon: #BFD0D6;
-    --nv-color-chrome-private-toolbar: #0B1623;
-    --nv-color-chrome-private-toolbox: #070F18;
+    --nv-color-chrome-private-toolbar: #0F1C2A;
+    --nv-color-chrome-private-toolbox: #060C14;
+    --nv-color-chrome-private-tabSelected: #1E4252;
+    --nv-color-chrome-private-field: #15293A;
+    --nv-color-chrome-private-raised: #183746;
+    --nv-color-chrome-private-text: #F1F7F5;
+    --nv-color-chrome-private-tabText: #BFD0D6;
+    --nv-color-chrome-private-icon: #BFD0D6;
+    --nv-color-chrome-private-border: #23495A;
+    --nv-color-chrome-private-control: #6E93A2;
+    --nv-color-chrome-private-accent: #6FE0C5;
     --nv-color-identity-sky: #8CCBF5;
     --nv-color-identity-violet: #C2B0F7;
     --nv-color-identity-sand: #FDCF8B;
@@ -240,12 +282,12 @@
     --nv-color-identity-edge-coral: #F4A8BD;
     --nv-color-identity-edge-sand: #FDCF8B;
     --nv-color-identity-edge-slate: #BFD0D6;
-    --nv-color-band-bg: #04080D;
+    --nv-color-band-bg: #060C14;
     --nv-color-band-text: #F1F7F5;
     --nv-color-band-meta: #8FAAB5;
     --nv-color-band-rule: #6E93A2;
     --nv-color-band-hairline: #4F7383;
-    --nv-color-band-lines: #3A6273;
+    --nv-color-band-lines: #4F7383;
     --nv-color-security-temporary-fill: #04080D;
     --nv-color-security-temporary-edge: #F1F7F5;
     --nv-color-security-temporary-text: #F1F7F5;
@@ -273,7 +315,7 @@
     --nv-color-group-orange: #B09584;
     --nv-color-group-purple: #A0A7C2;
     --nv-color-group-red: #B98E89;
-    --nv-color-control-selected-fill: #112432;
+    --nv-color-control-selected-fill: #15293A;
     --nv-color-control-selected-edge: #6FE0C5;
     --nv-color-control-selected-text: #F1F7F5;
     --nv-color-selection-bg: #6FE0C5;
@@ -281,7 +323,7 @@
     --nv-color-focusOnAccent: #0B1623;
     --nv-color-scrim: rgba(0,0,0,0.55);
     --nv-color-surface-frost: rgba(17,36,50,0.88);
-    --nv-color-surface-frostFallback: #112432;
+    --nv-color-surface-frostFallback: #15293A;
     --nv-color-downloads-attention-warning: #E7AE61;
     --nv-color-route-vertical: #6FE0C5;
     --nv-color-fullscreen-ink: #0B1623;
@@ -289,6 +331,20 @@
     --nv-color-fullscreen-acting: #6FE0C5;
     --nv-color-fullscreen-private: #2A1745;
     --nv-color-fullscreen-foreground: #F1F7F5;
+    --nv-color-identityTile-lima: #2F3D00;
+    --nv-color-identityTile-sky: #133B52;
+    --nv-color-identityTile-violet: #3A2E59;
+    --nv-color-identityTile-coral: #4F2937;
+    --nv-color-identityTile-sand: #463F2C;
+    --nv-color-identityTile-slate: #32383A;
+    --nv-color-identityGlyph-lima: #C5E384;
+    --nv-color-identityGlyph-sky: #8CCBF5;
+    --nv-color-identityGlyph-violet: #C2B0F7;
+    --nv-color-identityGlyph-coral: #F4A8BD;
+    --nv-color-identityGlyph-sand: #FDCF8B;
+    --nv-color-identityGlyph-slate: #BFD0D6;
+    --nv-color-ambience-from: #0F1C2A;
+    --nv-color-ambience-to: #0E3B33;
     --nv-elevation-1: 0 1px 2px rgba(0, 0, 0, 0.24);
     --nv-elevation-2: 0 4px 12px rgba(0, 0, 0, 0.45);
     --nv-elevation-3: 0 12px 32px rgba(0, 0, 0, 0.5);
@@ -299,8 +355,8 @@
 
 [data-theme="dark"] {
   color-scheme: dark;
-  --nv-color-bg-canvas: #0B1623;
-  --nv-color-bg-surface: #112432;
+  --nv-color-bg-canvas: #0F1C2A;
+  --nv-color-bg-surface: #15293A;
   --nv-color-bg-raised: #183746;
   --nv-color-bg-sunken: #070F18;
   --nv-color-text-primary: #F1F7F5;
@@ -308,6 +364,7 @@
   --nv-color-text-muted: #8FAAB5;
   --nv-color-border-subtle: #23495A;
   --nv-color-border-control: #6E93A2;
+  --nv-color-border-separator: #4F7383;
   --nv-color-accent-default: #6FE0C5;
   --nv-color-accent-on: #0B1623;
   --nv-color-accent-tint: #0E3B33;
@@ -318,14 +375,23 @@
   --nv-color-status-criticalText: #EE8A8C;
   --nv-color-status-warningTint: #3A2A12;
   --nv-color-status-criticalTint: #3F1A1D;
-  --nv-color-chrome-toolbox: #070F18;
-  --nv-color-chrome-toolbar: #0B1623;
-  --nv-color-chrome-tabSelected: #183746;
+  --nv-color-chrome-toolbox: #060C14;
+  --nv-color-chrome-toolbar: #0F1C2A;
+  --nv-color-chrome-tabSelected: #1E4252;
   --nv-color-chrome-tabText: #BFD0D6;
-  --nv-color-chrome-field: #112432;
+  --nv-color-chrome-field: #15293A;
   --nv-color-chrome-icon: #BFD0D6;
-  --nv-color-chrome-private-toolbar: #0B1623;
-  --nv-color-chrome-private-toolbox: #070F18;
+  --nv-color-chrome-private-toolbar: #0F1C2A;
+  --nv-color-chrome-private-toolbox: #060C14;
+  --nv-color-chrome-private-tabSelected: #1E4252;
+  --nv-color-chrome-private-field: #15293A;
+  --nv-color-chrome-private-raised: #183746;
+  --nv-color-chrome-private-text: #F1F7F5;
+  --nv-color-chrome-private-tabText: #BFD0D6;
+  --nv-color-chrome-private-icon: #BFD0D6;
+  --nv-color-chrome-private-border: #23495A;
+  --nv-color-chrome-private-control: #6E93A2;
+  --nv-color-chrome-private-accent: #6FE0C5;
   --nv-color-identity-sky: #8CCBF5;
   --nv-color-identity-violet: #C2B0F7;
   --nv-color-identity-sand: #FDCF8B;
@@ -340,12 +406,12 @@
   --nv-color-identity-edge-coral: #F4A8BD;
   --nv-color-identity-edge-sand: #FDCF8B;
   --nv-color-identity-edge-slate: #BFD0D6;
-  --nv-color-band-bg: #04080D;
+  --nv-color-band-bg: #060C14;
   --nv-color-band-text: #F1F7F5;
   --nv-color-band-meta: #8FAAB5;
   --nv-color-band-rule: #6E93A2;
   --nv-color-band-hairline: #4F7383;
-  --nv-color-band-lines: #3A6273;
+  --nv-color-band-lines: #4F7383;
   --nv-color-security-temporary-fill: #04080D;
   --nv-color-security-temporary-edge: #F1F7F5;
   --nv-color-security-temporary-text: #F1F7F5;
@@ -373,7 +439,7 @@
   --nv-color-group-orange: #B09584;
   --nv-color-group-purple: #A0A7C2;
   --nv-color-group-red: #B98E89;
-  --nv-color-control-selected-fill: #112432;
+  --nv-color-control-selected-fill: #15293A;
   --nv-color-control-selected-edge: #6FE0C5;
   --nv-color-control-selected-text: #F1F7F5;
   --nv-color-selection-bg: #6FE0C5;
@@ -381,7 +447,7 @@
   --nv-color-focusOnAccent: #0B1623;
   --nv-color-scrim: rgba(0,0,0,0.55);
   --nv-color-surface-frost: rgba(17,36,50,0.88);
-  --nv-color-surface-frostFallback: #112432;
+  --nv-color-surface-frostFallback: #15293A;
   --nv-color-downloads-attention-warning: #E7AE61;
   --nv-color-route-vertical: #6FE0C5;
   --nv-color-fullscreen-ink: #0B1623;
@@ -389,6 +455,20 @@
   --nv-color-fullscreen-acting: #6FE0C5;
   --nv-color-fullscreen-private: #2A1745;
   --nv-color-fullscreen-foreground: #F1F7F5;
+  --nv-color-identityTile-lima: #2F3D00;
+  --nv-color-identityTile-sky: #133B52;
+  --nv-color-identityTile-violet: #3A2E59;
+  --nv-color-identityTile-coral: #4F2937;
+  --nv-color-identityTile-sand: #463F2C;
+  --nv-color-identityTile-slate: #32383A;
+  --nv-color-identityGlyph-lima: #C5E384;
+  --nv-color-identityGlyph-sky: #8CCBF5;
+  --nv-color-identityGlyph-violet: #C2B0F7;
+  --nv-color-identityGlyph-coral: #F4A8BD;
+  --nv-color-identityGlyph-sand: #FDCF8B;
+  --nv-color-identityGlyph-slate: #BFD0D6;
+  --nv-color-ambience-from: #0F1C2A;
+  --nv-color-ambience-to: #0E3B33;
   --nv-elevation-1: 0 1px 2px rgba(0, 0, 0, 0.24);
   --nv-elevation-2: 0 4px 12px rgba(0, 0, 0, 0.45);
   --nv-elevation-3: 0 12px 32px rgba(0, 0, 0, 0.5);
@@ -407,6 +487,7 @@
   --nv-color-text-muted: #4F7383;
   --nv-color-border-subtle: #BFD0D6;
   --nv-color-border-control: #6B8794;
+  --nv-color-border-separator: #8FAAB5;
   --nv-color-accent-default: #0F7A68;
   --nv-color-accent-on: #FFFFFF;
   --nv-color-accent-tint: #DDF8F0;
@@ -423,8 +504,17 @@
   --nv-color-chrome-tabText: #23495A;
   --nv-color-chrome-field: #FFFFFF;
   --nv-color-chrome-icon: #23495A;
-  --nv-color-chrome-private-toolbar: #0B1623;
-  --nv-color-chrome-private-toolbox: #070F18;
+  --nv-color-chrome-private-toolbar: #0F1C2A;
+  --nv-color-chrome-private-toolbox: #060C14;
+  --nv-color-chrome-private-tabSelected: #1E4252;
+  --nv-color-chrome-private-field: #15293A;
+  --nv-color-chrome-private-raised: #183746;
+  --nv-color-chrome-private-text: #F1F7F5;
+  --nv-color-chrome-private-tabText: #BFD0D6;
+  --nv-color-chrome-private-icon: #BFD0D6;
+  --nv-color-chrome-private-border: #23495A;
+  --nv-color-chrome-private-control: #6E93A2;
+  --nv-color-chrome-private-accent: #6FE0C5;
   --nv-color-identity-sky: #8CCBF5;
   --nv-color-identity-violet: #C2B0F7;
   --nv-color-identity-sand: #FDCF8B;
@@ -439,7 +529,7 @@
   --nv-color-identity-edge-coral: #070F18;
   --nv-color-identity-edge-sand: #070F18;
   --nv-color-identity-edge-slate: #070F18;
-  --nv-color-band-bg: #BFD0D6;
+  --nv-color-band-bg: #E2EBEE;
   --nv-color-band-text: #0B1623;
   --nv-color-band-meta: #23495A;
   --nv-color-band-rule: #23495A;
@@ -488,9 +578,92 @@
   --nv-color-fullscreen-acting: #6FE0C5;
   --nv-color-fullscreen-private: #2A1745;
   --nv-color-fullscreen-foreground: #F1F7F5;
+  --nv-color-identityTile-lima: #C4DC92;
+  --nv-color-identityTile-sky: #A6D8FA;
+  --nv-color-identityTile-violet: #D4C8FF;
+  --nv-color-identityTile-coral: #FBBDCE;
+  --nv-color-identityTile-sand: #E7CF94;
+  --nv-color-identityTile-slate: #C9D3D6;
+  --nv-color-identityGlyph-lima: #334C00;
+  --nv-color-identityGlyph-sky: #00476C;
+  --nv-color-identityGlyph-violet: #492E7F;
+  --nv-color-identityGlyph-coral: #721E3F;
+  --nv-color-identityGlyph-sand: #593C00;
+  --nv-color-identityGlyph-slate: #37454A;
+  --nv-color-ambience-from: #F1F7F5;
+  --nv-color-ambience-to: #DDF8F0;
   --nv-elevation-1: 0 1px 2px rgba(7, 15, 24, 0.14);
   --nv-elevation-2: 0 4px 12px rgba(7, 15, 24, 0.14);
   --nv-elevation-3: 0 12px 32px rgba(7, 15, 24, 0.14);
   --nv-translucency-frost-opacity: 0.86;
   --nv-translucency-frost-opacityFloor: 0.86;
+}
+
+/* UX6 appearance variants: set by lib/appearance.js from the person's options. */
+:root[data-accent="blue"],
+:root[data-accent="blue"] [data-theme="light"] {
+  --nv-color-accent-default: #2D64B5;
+  --nv-color-accent-tint: #E8F0FB;
+  --nv-color-control-selected-edge: #2D64B5;
+  --nv-color-selection-bg: #2D64B5;
+  --nv-color-route-vertical: #2D64B5;
+  --nv-color-ambience-to: #E8F0FB;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root[data-accent="blue"]:not([data-theme="light"]) {
+    --nv-color-accent-default: #6AA7F4;
+    --nv-color-accent-tint: #172B4D;
+    --nv-color-control-selected-edge: #6AA7F4;
+    --nv-color-selection-bg: #6AA7F4;
+    --nv-color-route-vertical: #6AA7F4;
+    --nv-color-ambience-to: #172B4D;
+  }
+}
+
+:root[data-accent="blue"][data-theme="dark"],
+:root[data-accent="blue"] [data-theme="dark"] {
+  --nv-color-accent-default: #6AA7F4;
+  --nv-color-accent-tint: #172B4D;
+  --nv-color-control-selected-edge: #6AA7F4;
+  --nv-color-selection-bg: #6AA7F4;
+  --nv-color-route-vertical: #6AA7F4;
+  --nv-color-ambience-to: #172B4D;
+}
+
+:root[data-contrast="more"],
+:root[data-contrast="more"] [data-theme="light"] {
+  --nv-color-text-secondary: #23495A;
+  --nv-color-text-muted: #23495A;
+  --nv-color-border-subtle: #6B8794;
+  --nv-color-border-control: #3A6273;
+  --nv-color-border-separator: #6B8794;
+  --nv-color-chrome-tabText: #23495A;
+  --nv-color-chrome-icon: #23495A;
+  --nv-color-surface-frost: #FFFFFF;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root[data-contrast="more"]:not([data-theme="light"]) {
+    --nv-color-text-secondary: #E2EBEE;
+    --nv-color-text-muted: #E2EBEE;
+    --nv-color-border-subtle: #6E93A2;
+    --nv-color-border-control: #8FAAB5;
+    --nv-color-border-separator: #6E93A2;
+    --nv-color-chrome-tabText: #E2EBEE;
+    --nv-color-chrome-icon: #E2EBEE;
+    --nv-color-surface-frost: #15293A;
+  }
+}
+
+:root[data-contrast="more"][data-theme="dark"],
+:root[data-contrast="more"] [data-theme="dark"] {
+  --nv-color-text-secondary: #E2EBEE;
+  --nv-color-text-muted: #E2EBEE;
+  --nv-color-border-subtle: #6E93A2;
+  --nv-color-border-control: #8FAAB5;
+  --nv-color-border-separator: #6E93A2;
+  --nv-color-chrome-tabText: #E2EBEE;
+  --nv-color-chrome-icon: #E2EBEE;
+  --nv-color-surface-frost: #15293A;
 }

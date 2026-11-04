@@ -38,12 +38,38 @@ function finish(message, level) {
   document.documentElement.dataset.state = level === "ok" ? "deleted" : "error";
 }
 
+/* The download is gone from the list (audit 2026-11 WARN-01/02): say so plainly, and offer the folder
+   and closing the tab. Nothing here can open a file. */
+function missing() {
+  document.title = t("warnMissingTitle");
+  document.getElementById("warn-headline").textContent = t("warnMissingHeadline");
+  document.querySelector("details.why").hidden = true;
+  const callout = document.getElementById("callout");
+  callout.classList.replace("callout--warning", "callout--info");
+  callout.setAttribute("role", "status");
+  document.getElementById("icon-warning").setAttribute("hidden", "");
+  document.getElementById("icon-info").removeAttribute("hidden");
+  document.getElementById("callout-text").textContent = t("warnMissing");
+  const folder = document.getElementById("show");
+  const close = document.getElementById("delete");
+  folder.textContent = t("warnOpenFolder");
+  close.textContent = t("warnCloseTab");
+  folder.addEventListener("click", () => browser.downloads.showDefaultFolder());
+  close.addEventListener("click", async () => {
+    const tab = await browser.tabs.getCurrent();
+    const siblings = await browser.tabs.query({ windowId: tab.windowId });
+    return siblings.length > 1 ? browser.tabs.remove(tab.id) : browser.tabs.update(tab.id, { url: "about:newtab" });
+  });
+  document.getElementById("actions").hidden = false;
+  folder.focus();
+  document.documentElement.dataset.state = "missing";
+}
+
 async function render() {
   localize();
   const [item] = Number.isInteger(id) ? await browser.downloads.search({ id }) : [];
   if (!item) {
-    finish(t("warnMissing"), "error");
-    document.getElementById("callout").hidden = true;
+    missing();
     return;
   }
   document.getElementById("file").hidden = false;

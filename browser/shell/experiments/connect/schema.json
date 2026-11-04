@@ -10,6 +10,12 @@
         "parameters": []
       },
       {
+        "name": "defaultBrowserState",
+        "type": "function",
+        "async": true,
+        "parameters": []
+      },
+      {
         "name": "setDefaultBrowser",
         "type": "function",
         "async": true,

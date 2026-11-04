@@ -69,6 +69,54 @@ def display(color) -> str:
     return "#" + "".join(f"{round(c):02X}" for c in color[:3])
 
 
+def oklab(color: str) -> tuple[float, float, float]:
+    """OKLab (Björn Ottosson) of an opaque sRGB colour."""
+    r, g, b, a = rgba(color)
+    if a != 1:
+        raise ValueError("OKLab needs an opaque colour")
+    lr, lg, lb = (_channel(c) for c in (r, g, b))
+    lms = (
+        0.4122214708 * lr + 0.5363325363 * lg + 0.0514459929 * lb,
+        0.2119034982 * lr + 0.6806995451 * lg + 0.1073969566 * lb,
+        0.0883024619 * lr + 0.2817188376 * lg + 0.6299787005 * lb,
+    )
+    l_, m_, s_ = (math.copysign(abs(v) ** (1 / 3), v) for v in lms)
+    return (
+        0.2104542553 * l_ + 0.7936177850 * m_ - 0.0040720468 * s_,
+        1.9779984951 * l_ - 2.4285922050 * m_ + 0.4505937099 * s_,
+        0.0259040371 * l_ + 0.7827717662 * m_ - 0.8086757660 * s_,
+    )
+
+
+# What the accent must stay apart from (UX6): who you are, what state things are in, and private.
+SEPARATED = ("identity", "identityTile", "identityGlyph", "status", "chrome.private", "security.private")
+# The private chrome's own accent is mint by design (it never follows a variant).
+SEPARATION_EXEMPT = ("chrome.private.accent",)
+
+
+def accent_separation(data: dict) -> list[tuple[str, str, float]]:
+    """For each theme: the colour nearest to accent.default among SEPARATED tokens, and its OKLab distance."""
+    tokens = flatten(data)
+    out = []
+    for theme in ("light", "dark"):
+        accent = oklab(resolve(tokens, f"color.{theme}.accent.default"))
+        nearest = None
+        for path in tokens:
+            semantic = path[len(f"color.{theme}.") :] if path.startswith(f"color.{theme}.") else None
+            if not semantic or semantic in SEPARATION_EXEMPT:
+                continue
+            if not any(semantic == name or semantic.startswith(name + ".") for name in SEPARATED):
+                continue
+            value = resolve(tokens, path)
+            if not (isinstance(value, str) and re.fullmatch(r"#[0-9a-fA-F]{6}", value)):
+                continue
+            distance = math.dist(accent, oklab(value))
+            if nearest is None or distance < nearest[1]:
+                nearest = (path, distance)
+        out.append((theme, nearest[0], nearest[1]))
+    return out
+
+
 def flatten(tree: dict, prefix: str = "") -> dict[str, dict]:
     out: dict[str, dict] = {}
     for key, value in tree.items():
@@ -162,6 +210,38 @@ def checked_pairs(data: dict) -> list[dict]:
     return rows
 
 
+def with_overrides(data: dict, overrides: dict[str, str]) -> dict:
+    """A copy of the tokens with some values replaced by path (an appearance variant)."""
+    copy = json.loads(json.dumps(data))
+    for path, value in overrides.items():
+        node = copy
+        for part in path.split("."):
+            node = node[part]
+        node["$value"] = value
+    return copy
+
+
+def variant_combinations(data: dict) -> list[tuple[dict[str, str], dict[str, str]]]:
+    """Every combination of the declared appearance variants (each dimension's base included)."""
+    specs = {k: v for k, v in data.get("$extensions", {}).get("nulavio.variants", {}).items() if k != "comment"}
+    combos: list[tuple[dict[str, str], dict[str, str]]] = [({}, {})]
+    for dimension, spec in specs.items():
+        choices = [(spec["base"], {})] + [(name, value["tokens"]) for name, value in spec["values"].items()]
+        combos = [
+            ({**labels, dimension: name}, {**overrides, **tokens}) for labels, overrides in combos for name, tokens in choices
+        ]
+    return combos
+
+
+def variant_rows(data: dict) -> list[dict]:
+    """Every declared pair under every variant combination (UX6: contrast for every variant)."""
+    rows = []
+    for labels, overrides in variant_combinations(data):
+        for row in checked_pairs(with_overrides(data, overrides)):
+            rows.append({**row, "variant": labels})
+    return rows
+
+
 def check(data: dict) -> list[tuple[str, str, str, str, float, float, bool]]:
     """Keep the seven-field tuple API used by existing callers."""
     return [
@@ -204,8 +284,13 @@ def main() -> int:
             print(f"| `{fg_name}` {fg} | `{bg_name}` {bg} | {value:.2f}:1 | {minimum}:1 | {'✅' if ok else '❌'} {level} |")
         elif not ok:
             print(f"FAIL {fg_name} ({fg}) on {bg_name} ({bg}): {value:.2f} < {minimum}", file=sys.stderr)
+    variants = variant_rows(data)
+    for row in variants:
+        if not row["pass"]:
+            failures += 1
+            print(f"FAIL {row['variant']} {row['fg']} on {row['bg']}: {row['ratio']:.2f} < {row['min']}", file=sys.stderr)
     if not args.report:
-        print(f"{len(rows) - failures}/{len(rows)} contrast pairs pass")
+        print(f"{len(rows) - failures}/{len(rows)} contrast pairs pass; {len(variants)} rows across every appearance variant")
     return 1 if failures else 0
 
 

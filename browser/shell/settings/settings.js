@@ -3,10 +3,26 @@
    Shell's privileged APIs; this page keeps no state of its own. */
 
 import { localize, t } from "../lib/i18n.js";
-import { TEMPLATE_NAMES, freeName } from "../lib/names.js";
-import { announce, chip, confirmDialog, errorText, h, rerender, temporaryStorageText } from "../lib/ui.js";
+import { TEMPLATE_NAMES, freeName, templateHintKey } from "../lib/names.js";
+import {
+  announce,
+  avatarPicker,
+  chip,
+  confirmDialog,
+  errorText,
+  h,
+  lockCurrentProfile,
+  profileStates,
+  rerender,
+  stateBadge,
+  temporaryStorageText,
+  tintAvatars,
+} from "../lib/ui.js";
 import { setUpAI } from "./ai.js";
+import { setUpAppearance } from "./appearance.js";
+import { setUpShortcuts } from "./shortcuts.js";
 import { setUpLayout } from "./layout.js";
+import { setUpNav } from "./nav.js";
 
 const search = browser.nulavioSearch;
 const profiles = browser.nulavioProfiles;
@@ -19,8 +35,10 @@ function debounce(fn, ms = 60) {
   };
 }
 
-/** Run an action; show errors next to the form (or in the status line). */
-async function run(action, { form = null, done = null } = {}) {
+/** Run an action; show errors next to the form (or in the status line). The result is shown next to
+    the control that started it; `background` reads (re-rendering a list) belong to no control. */
+async function run(action, { form = null, done = null, background = false } = {}) {
+  const control = background ? null : document.activeElement;
   const error = form?.querySelector(".form-error");
   if (error) {
     error.textContent = "";
@@ -28,14 +46,14 @@ async function run(action, { form = null, done = null } = {}) {
   try {
     const result = await action();
     if (done) {
-      announce(done);
+      announce(done, "ok", { control });
     }
     return result;
   } catch (e) {
     if (error) {
       error.textContent = errorText(e);
     } else {
-      announce(errorText(e), "error");
+      announce(errorText(e), "error", { control });
     }
     return undefined;
   }
@@ -56,7 +74,7 @@ function engineRow(engine) {
 
   const aliasForm = h(
     "form",
-    { class: "inline-form", novalidate: true },
+    { class: "inline-form", novalidate: true, "data-keep-edits": "" },
     h(
       "label",
       { class: "field field--inline" },
@@ -75,9 +93,19 @@ function engineRow(engine) {
     h("button", { class: "button button--quiet", type: "submit", text: t("engineAliasSave"), "data-focus-key": `alias-save-${engine.id}` }),
     h("p", { class: "form-error", role: "alert" })
   );
-  aliasForm.addEventListener("submit", event => {
+  aliasForm.addEventListener("submit", async event => {
     event.preventDefault();
-    run(() => search.setAlias(engine.id, aliasForm.elements.alias.value), { form: aliasForm, done: t("doneSaved") });
+    const field = aliasForm.elements.alias;
+    const saved = await run(
+      async () => {
+        await search.setAlias(engine.id, field.value);
+        return true;
+      },
+      { form: aliasForm, done: t("doneSaved") }
+    );
+    if (saved) {
+      field.defaultValue = field.value; // saved: no longer an edit to keep across a redraw
+    }
   });
 
   let suggest;
@@ -147,7 +175,7 @@ function engineRow(engine) {
 }
 
 async function renderSearch() {
-  const state = await run(() => search.state());
+  const state = await run(() => search.state(), { background: true });
   if (!state) {
     return;
   }
@@ -163,6 +191,8 @@ async function renderSearch() {
   const privateBox = document.getElementById("suggest-private");
   privateBox.checked = state.suggestionsPrivate;
   privateBox.disabled = !anyOptIn;
+  // Off, the option says what turns it on, not only what it would do (audit 2026-11 SET-09).
+  document.getElementById("suggest-private-note").textContent = t(anyOptIn ? "suggestPrivateNote" : "suggestPrivateOff");
 
   const present = new Set(state.engines.map(e => e.provider).filter(Boolean));
   const missing = state.providers.filter(p => !present.has(p.key));
@@ -235,24 +265,8 @@ function colorPicker(profile) {
           checked: color === profile.color,
           "data-focus-key": `color-${profile.id}-${color}`,
         }),
-        h("span", { class: "swatch__fill", style: `--chip: var(--nv-color-identity-${color})`, "aria-hidden": "true" }),
+        h("span", { class: "swatch__fill", style: `--tile: var(--nv-color-identityTile-${color}); --glyph: var(--nv-color-identityGlyph-${color})`, "aria-hidden": "true" }),
         h("span", { class: "visually-hidden", text: t(`color_${color}`) })
-      )
-    )
-  );
-}
-
-function avatarSelect(profile) {
-  const avatars = profileOptions.avatars.includes(profile.avatar) ? profileOptions.avatars : [profile.avatar, ...profileOptions.avatars];
-  return h(
-    "label",
-    { class: "field" },
-    h("span", { class: "field__label", text: t("profilesIconLabel") }),
-    h(
-      "select",
-      { class: "select", name: "avatar", "data-focus-key": `avatar-${profile.id}` },
-      avatars.map(a =>
-        h("option", { value: a, selected: a === profile.avatar, text: browser.i18n.getMessage(`avatar_${a.replaceAll("-", "_")}`) || a })
       )
     )
   );
@@ -261,30 +275,31 @@ function avatarSelect(profile) {
 function profileRow(profile) {
   const form = h(
     "form",
-    { class: "stack stack--tight", novalidate: true },
+    { class: "stack stack--tight", novalidate: true, "data-keep-edits": "" },
     h(
-      "div",
-      { class: "field-row" },
-      h(
-        "label",
-        { class: "field" },
-        h("span", { class: "field__label", text: t("profilesNameLabel") }),
-        h("input", {
-          class: "input",
-          name: "name",
-          value: profile.name,
-          maxlength: "60",
-          autocomplete: "off",
-          "data-focus-key": `name-${profile.id}`,
-        })
-      ),
-      avatarSelect(profile)
+      "label",
+      { class: "field" },
+      h("span", { class: "field__label", text: t("profilesNameLabel") }),
+      h("input", {
+        class: "input",
+        name: "name",
+        value: profile.name,
+        maxlength: "60",
+        autocomplete: "off",
+        "data-focus-key": `name-${profile.id}`,
+      })
     ),
+    avatarPicker({ avatars: profileOptions.avatars, selected: profile.avatar, color: profile.color, name: profile.name, focusKey: `avatar-${profile.id}` }),
     colorPicker(profile),
     profile.kind === "sensitive" ? h("p", { class: "hint", "data-kind": "sensitive", text: t("profilesSensitiveHint") }) : null,
     h("p", { class: "form-error", role: "alert" }),
     h("div", { class: "actions" }, h("button", { class: "button button--secondary", type: "submit", text: t("profilesSave"), "data-focus-key": `save-${profile.id}` }))
   );
+  form.addEventListener("change", event => {
+    if (event.target.name === "color") {
+      tintAvatars(form.querySelector(".swatches--glyphs"), event.target.value);
+    }
+  });
   form.addEventListener("submit", event => {
     event.preventDefault();
     const { name, avatar, color } = Object.fromEntries(new FormData(form));
@@ -311,9 +326,27 @@ function profileRow(profile) {
 
   const end = [];
   if (profile.isCurrent) {
-    const del = h("button", { class: "button button--quiet", type: "button", text: t("profilesDeleteCurrent") });
-    del.addEventListener("click", () => run(() => profiles.openCurrentPage("delete")));
-    end.push(del);
+    if (profile.encrypted && !profile.locked && browser.nulavioVault) {
+      const lock = h("button", {
+        class: "button button--secondary",
+        type: "button",
+        text: t("vaultLockCurrent", [profile.name]),
+        "data-focus-key": `lock-current-${profile.id}`,
+      });
+      lock.addEventListener("click", async () => {
+        const said = await run(() => lockCurrentProfile(profile.name));
+        if (said) {
+          announce(said, "info");
+        }
+      });
+      end.push(lock);
+    }
+    if (profile.id === null) {
+      // Not in the profile store yet: no inline editor, so the row's action edits it (audit 2026-11 SET-03).
+      const edit = h("button", { class: "button button--secondary", type: "button", text: t("profilesEditCurrent"), "data-focus-key": "edit-current" });
+      edit.addEventListener("click", () => run(() => profiles.openCurrentPage("edit")));
+      end.push(edit);
+    }
   } else {
     // The accessible name keeps the visible words and the state (SPA-10, SB-17): "Abrir Pessoal",
     // or "Bancos, bloqueado, desbloquear…" next to the visible "Desbloquear…".
@@ -361,9 +394,15 @@ function profileRow(profile) {
     end.push(del);
   }
   if (profile.encrypted) {
-    const phones = h("button", { class: "button button--quiet", type: "button", text: t("vaultPhones"), "data-focus-key": `phones-${profile.id}` });
-    phones.addEventListener("click", () => run(() => browser.nulavioVault.openPhonePage(profile.id)));
-    end.push(phones);
+    // Every way it unlocks, with add, replace and remove (UX4, audit SB-09); phones are one of them.
+    const methods = h("a", {
+      class: "button button--quiet",
+      href: `../vault/methods.html?p=${profile.id}`,
+      text: t("bandSurfaceMethods"),
+      "aria-label": t("methodsNamed", [profile.name]),
+      "data-focus-key": `methods-${profile.id}`,
+    });
+    end.push(methods);
   }
 
   return h(
@@ -378,7 +417,7 @@ function profileRow(profile) {
         { class: "row__title" },
         h("span", { text: profile.name }),
         profile.isCurrent ? h("span", { class: "badge", text: t("profilesCurrent") }) : null,
-        profile.locked ? h("span", { class: "badge badge--quiet", text: t("profilesLocked") }) : null
+        ...profileStates(profile).map(stateBadge)
       ),
       // When an open protected profile locks again (SB-14), next to "Bloquear agora".
       profile.encrypted && !profile.locked ? h("p", { class: "row__note", "data-relock": "", text: t("vaultRelocksWhenClosed") }) : null,
@@ -396,11 +435,35 @@ function profileRow(profile) {
   );
 }
 
+/** The header names the profile being configured, with its state in words (SPA-05). */
+async function renderWhere(state) {
+  const where = document.getElementById("settings-where");
+  const workspace = browser.nulavioAI ? await browser.nulavioAI.workspaceAgent().catch(() => null) : null;
+  const current =
+    state.reason === "temporary"
+      ? { name: t("profilesTemporaryShort"), color: "slate", avatar: null, temporary: true }
+      : state.available
+        ? state.profiles.find(p => p.isCurrent)
+        : null;
+  where.hidden = !current;
+  if (!current) {
+    return;
+  }
+  const states = [...(workspace ? ["workspace"] : []), ...profileStates(current)];
+  where.replaceChildren(
+    chip(current, "md"),
+    h("span", { class: "settings-where__label", text: t("whereLabel") }),
+    h("strong", { class: "settings-where__name", text: current.temporary ? t("profilesTemporary") : current.name }),
+    ...states.map(stateBadge)
+  );
+}
+
 async function renderProfiles() {
-  const state = await run(() => profiles.list());
+  const state = await run(() => profiles.list(), { background: true });
   if (!state) {
     return;
   }
+  renderWhere(state);
   const unavailable = document.getElementById("profiles-unavailable");
   const usable = state.available;
   unavailable.hidden = usable;
@@ -416,21 +479,37 @@ async function renderProfiles() {
     return;
   }
   rerender(document.getElementById("profile-list"), () => state.profiles.map(profileRow));
+  // Deleting the profile you are in is a quiet action in the card's footer, never next to its name (SET-03).
+  rerender(document.getElementById("profiles-footer"), () => {
+    if (!state.profiles.some(p => p.isCurrent)) {
+      return [];
+    }
+    const del = h("button", { class: "button button--quiet", type: "button", text: t("profilesDeleteCurrent"), "data-focus-key": "delete-current" });
+    del.addEventListener("click", () => run(() => profiles.openCurrentPage("delete")));
+    return [del];
+  });
+  // A template only fills the form below (audit SPA-09): nothing is created before "Criar perfil".
+  const form = document.getElementById("create-profile");
   rerender(document.getElementById("templates"), () =>
     profileOptions.templates.map(template => {
       const name = t(TEMPLATE_NAMES[template.id]);
-      const button = h("button", { class: "button button--secondary button--with-chip", type: "button", "data-focus-key": `template-${template.id}` });
+      const button = h("button", {
+        class: "button button--secondary button--with-chip",
+        type: "button",
+        "aria-pressed": String(form.dataset.template === template.id),
+        "data-focus-key": `template-${template.id}`,
+        dataset: { template: template.id },
+      });
       button.append(chip({ name, avatar: template.avatar, color: template.color }, "sm"), h("span", { text: name }));
-      button.addEventListener("click", () =>
-        run(
-          () =>
-            profiles.create({
-              templateId: template.id,
-              name: freeName(name, state.profiles.map(p => p.name)),
-            }),
-          { done: t("profilesCreated") }
-        )
-      );
+      button.addEventListener("click", () => {
+        form.dataset.template = template.id;
+        form.elements.name.value = freeName(name, state.profiles.map(p => p.name));
+        for (const each of document.querySelectorAll("#templates button")) {
+          each.setAttribute("aria-pressed", String(each === button));
+        }
+        document.getElementById("template-hint").textContent = t(templateHintKey(template.id));
+        form.elements.name.focus();
+      });
       return button;
     })
   );
@@ -446,9 +525,18 @@ async function setUpProfiles() {
   const form = document.getElementById("create-profile");
   form.addEventListener("submit", async event => {
     event.preventDefault();
-    const created = await run(() => profiles.create({ name: form.elements.name.value }), { form, done: t("profilesCreated") });
+    const templateId = form.dataset.template;
+    const created = await run(() => profiles.create({ name: form.elements.name.value, ...(templateId ? { templateId } : {}) }), {
+      form,
+      done: t("profilesCreated"),
+    });
     if (created !== undefined) {
       form.reset();
+      delete form.dataset.template;
+      for (const each of document.querySelectorAll("#templates button")) {
+        each.setAttribute("aria-pressed", "false");
+      }
+      document.getElementById("template-hint").textContent = t(templateHintKey(null));
     }
   });
   profiles.onChanged.addListener(debounce(renderProfiles));
@@ -494,7 +582,7 @@ function ruleRow(rule) {
 }
 
 async function renderRouting() {
-  const [state, people] = await Promise.all([run(() => routing.state()), run(() => profiles.list())]);
+  const [state, people] = await Promise.all([run(() => routing.state(), { background: true }), run(() => profiles.list(), { background: true })]);
   if (!state || !people) {
     return;
   }
@@ -507,9 +595,31 @@ async function renderRouting() {
   const inPage = document.getElementById("routing-in-page");
   inPage.checked = state.inPage;
   inPage.disabled = !state.enabled;
+  // With one profile there is nowhere to route to: say so and offer a new profile (audit 2026-11 SET-01).
+  const alone = people.profiles.length < 2 && !state.rules.length;
+  document.getElementById("routing-empty").hidden = !alone;
+  document.getElementById("add-rule").hidden = alone;
   rerender(document.getElementById("rules"), () =>
-    state.rules.length ? state.rules.map(ruleRow) : h("li", { class: "hint", text: t("routingNoRules") })
+    state.rules.length ? state.rules.map(ruleRow) : alone ? [] : h("li", { class: "hint", text: t("routingNoRules") })
   );
+  // UX6: the default destination for links from other apps; off (disabled) with routing, gone when alone.
+  const fallback = document.getElementById("routing-fallback");
+  document.getElementById("routing-fallback-field").hidden = alone;
+  fallback.disabled = !state.enabled;
+  fallback.replaceChildren(
+    h("option", { value: "0", text: t("routingFallbackLast") }),
+    ...people.profiles
+      .filter(p => p.id !== null)
+      .map(p => h("option", { value: String(p.id), text: t(p.encrypted ? "routingFallbackAlwaysProtected" : "routingFallbackAlways", [p.name]) })),
+    // A deleted destination keeps its own entry: a profile created later can take the same id, and
+    // choosing this entry must never make that profile the destination.
+    ...(state.fallback.missing ? [h("option", { value: "missing", disabled: true, text: t("routingFallbackGone") })] : [])
+  );
+  fallback.value = state.fallback.missing ? "missing" : String(state.fallback.profileId);
+  // The note says links stop at a warning page: true only while routing is on.
+  const missing = state.fallback.missing && state.enabled;
+  document.getElementById("routing-fallback-missing").hidden = !missing;
+  fallback.setAttribute("aria-describedby", missing ? "routing-fallback-hint routing-fallback-missing" : "routing-fallback-hint");
   const select = document.getElementById("rule-profile");
   const chosen = select.value;
   select.replaceChildren(
@@ -526,6 +636,11 @@ function setUpRouting() {
   document.getElementById("routing-in-page").addEventListener("change", event =>
     run(() => routing.setInPage(event.target.checked), { done: t("doneSaved") })
   );
+  document.getElementById("routing-fallback").addEventListener("change", event => {
+    if (event.target.value !== "missing") {
+      run(() => routing.setFallback(Number(event.target.value)), { done: t("doneSaved") });
+    }
+  });
   const form = document.getElementById("add-rule");
   form.addEventListener("submit", async event => {
     event.preventDefault();
@@ -645,10 +760,16 @@ function integrationRow(item) {
 async function renderIntegrations() {
   const list = document.getElementById("integration-list");
   list.setAttribute("aria-busy", "true");
-  const items = await run(() => connect.discover());
+  const items = await run(() => connect.discover(), { background: true });
   list.setAttribute("aria-busy", "false");
   if (items) {
-    rerender(list, () => items.map(integrationRow));
+    // What works or can be turned on comes first; what this computer lacks is folded below (SET-05).
+    const missing = item => item.state === "unavailable" || item.state === "unknown";
+    const absent = items.filter(missing);
+    rerender(list, () => items.filter(item => !missing(item)).map(integrationRow));
+    rerender(document.getElementById("integration-unavailable"), () => absent.map(integrationRow));
+    document.getElementById("integration-more").hidden = !absent.length;
+    document.getElementById("integration-more-summary").textContent = t("connectNotFound", [String(absent.length)]);
     list.dataset.ready = "true";
   }
 }
@@ -729,11 +850,12 @@ function providerRow(item, state) {
 }
 
 async function renderPasswords() {
-  const state = await run(() => passwords.state());
+  const state = await run(() => passwords.state(), { background: true });
+  const list = document.getElementById("provider-list");
+  list.setAttribute("aria-busy", "false"); // also when the read failed: nothing is loading any more
   if (!state) {
     return;
   }
-  const list = document.getElementById("provider-list");
   rerender(list, () => state.providers.map(item => providerRow(item, state)));
   list.setAttribute("aria-busy", "false");
   list.dataset.current = state.current;
@@ -790,9 +912,11 @@ function renderConfirmed(pairs) {
 async function setUpPasswords() {
   document.getElementById("passwords").hidden = false;
   await renderPasswords();
-  const pairs = await run(() => passwords.listConfirmed());
+  const pairs = await run(() => passwords.listConfirmed(), { background: true });
   if (pairs) {
     renderConfirmed(pairs);
+  } else {
+    document.getElementById("confirmed-list").setAttribute("aria-busy", "false");
   }
 }
 
@@ -812,7 +936,6 @@ function exceptionRow(entry) {
   const key = EXCEPTION_LABELS[entry.type]?.[entry.capability] ?? EXCEPTION_LABELS[entry.type]?.allow;
   const what = key ? t(key) : `${entry.type} (${entry.capability})`;
   const notes = [
-    entry.builtIn ? t("exceptionBuiltIn") : null,
     entry.session ? t("exceptionUntilClose") : null,
     entry.private ? t("exceptionPrivate") : null,
   ].filter(Boolean);
@@ -823,14 +946,28 @@ function exceptionRow(entry) {
     "aria-label": `${t("engineRemove")}: ${entry.site} — ${what}`,
     "data-focus-key": `exception-${entry.type}-${entry.origin}`,
   });
-  remove.addEventListener("click", () => run(() => privacy.remove(entry.type, entry.origin), { done: t("doneRemoved") }));
+  remove.addEventListener("click", async () => {
+    // A browser default is removed only after its consequence is said (audit 2026-11 SET-14).
+    if (entry.builtIn) {
+      const ok = await confirmDialog({
+        title: t("exceptionRemoveBuiltInTitle"),
+        body: t("exceptionRemoveBuiltInBody", [entry.site, what]),
+        confirm: t("engineRemove"),
+      });
+      if (!ok) {
+        return;
+      }
+    }
+    run(() => privacy.remove(entry.type, entry.origin), { done: t("doneRemoved") });
+  });
   return h(
     "li",
-    { class: "row row--plain", dataset: { type: entry.type, origin: entry.origin } },
+    { class: "row row--plain", dataset: { type: entry.type, origin: entry.origin, ...(entry.builtIn ? { builtIn: "" } : {}) } },
     h(
       "div",
       { class: "row__main" },
-      h("p", { class: "row__title mono", text: entry.site }),
+      h("p", { class: "row__title" }, h("span", { class: "mono", text: entry.site }),
+        entry.builtIn ? h("span", { class: "badge badge--quiet", text: t("exceptionBuiltInBadge") }) : null),
       h("p", { class: "hint", text: [what, ...notes].join(" · ") })
     ),
     h("div", { class: "row__end" }, remove)
@@ -839,7 +976,8 @@ function exceptionRow(entry) {
 
 async function renderExceptions() {
   const list = document.getElementById("exception-list");
-  const [entries, filter] = await Promise.all([run(() => privacy.exceptions()), run(() => privacy.filter())]);
+  const [entries, filter] = await Promise.all([run(() => privacy.exceptions(), { background: true }), run(() => privacy.filter(), { background: true })]);
+  list.setAttribute("aria-busy", "false");
   if (entries) {
     rerender(list, () => entries.map(exceptionRow));
     list.setAttribute("aria-busy", "false");
@@ -867,7 +1005,8 @@ function dnsText(state) {
     return t("dnsNowSystem");
   }
   if (state.choice === "default") {
-    return t("dnsNowDefault");
+    // What the default does right now, in plain words (audit 2026-11 SET-02).
+    return t(state.encryptedNow ? "dnsNowDefaultEncrypted" : "dnsNowDefaultPlain");
   }
   const name = state.provider === "custom" ? state.uri : t(`dns${state.provider[0].toUpperCase()}${state.provider.slice(1)}`);
   return t(state.choice === "strict" ? "dnsNowStrict" : "dnsNowFallback", [name]);
@@ -875,23 +1014,30 @@ function dnsText(state) {
 
 function syncDnsForm(form) {
   const choice = form.elements.choice.value;
-  document.getElementById("dns-provider-row").hidden = choice === "system" || !choice;
+  document.getElementById("dns-provider-row").hidden = choice === "system" || choice === "default" || !choice;
   document.getElementById("dns-uri-field").hidden = form.elements.provider.value !== "custom";
+  // "Salvar escolha" only when the form says something other than what is in effect.
+  const same = choice === form.dataset.choice && (choice === "system" || choice === "default"
+    || (form.elements.provider.value === form.dataset.provider && form.elements.uri.value === form.dataset.uri));
+  document.getElementById("dns-save").disabled = !choice || choice === "default" || same;
 }
 
 async function renderDns() {
-  const state = await run(() => privacy.dns());
+  const state = await run(() => privacy.dns(), { background: true });
   if (!state) {
     return;
   }
   const form = document.getElementById("dns-form");
   document.getElementById("dns-current").textContent = dnsText(state);
   form.dataset.choice = state.choice;
+  document.getElementById("dns-default-option").hidden = state.choice !== "default";
   for (const radio of form.elements.choice) {
     radio.checked = radio.value === state.choice;
   }
   form.elements.provider.value = state.provider ?? "cloudflare";
   form.elements.uri.value = state.provider === "custom" ? state.uri : "";
+  form.dataset.provider = form.elements.provider.value;
+  form.dataset.uri = form.elements.uri.value;
   syncDnsForm(form);
 }
 
@@ -899,11 +1045,12 @@ function setUpDns() {
   document.getElementById("dns").hidden = false;
   const form = document.getElementById("dns-form");
   form.addEventListener("change", () => syncDnsForm(form));
+  form.addEventListener("input", () => syncDnsForm(form));
   form.addEventListener("submit", async event => {
     event.preventDefault();
     const choice = form.elements.choice.value;
-    if (!choice) {
-      return;
+    if (!choice || choice === "default") {
+      return; // "Padrão do navegador (atual)" is what is in effect: nothing to save
     }
     const details = { choice, provider: form.elements.provider.value, uri: form.elements.uri.value };
     if (await run(() => privacy.setDns(details), { form, done: t("dnsSaved") })) {
@@ -920,6 +1067,9 @@ const ready = [];
 if (browser.nulavioLayout) {
   ready.push(setUpLayout());
 }
+if (browser.nulavioPersonalise) {
+  ready.push(setUpAppearance(), setUpShortcuts());
+}
 if (search && profiles && routing && connect) {
   ready.push(setUpSearch(), setUpProfiles(), setUpRouting(), setUpIntegrations());
   if (browser.nulavioAI) {
@@ -934,7 +1084,7 @@ if (search && profiles && routing && connect) {
 } else {
   document.getElementById("needs-build").hidden = false;
 }
+setUpNav();
 Promise.allSettled(ready).then(() => {
   document.documentElement.dataset.ready = "true";
-  document.getElementById(location.hash.slice(1))?.scrollIntoView();
 });

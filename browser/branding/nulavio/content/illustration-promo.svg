@@ -1,0 +1,27 @@
+<!-- This Source Code Form is subject to the terms of the Mozilla Public
+   - License, v. 2.0. If a copy of the MPL was not distributed with this
+   - file, You can obtain one at http://mozilla.org/MPL/2.0/. -->
+<!-- Nulavio's own illustration for the engine's promo cards (replaces the
+     "Kit" artwork through chrome overrides in jar.mn). Brand colours from
+     docs/brand/tokens.json; the symbol path is the Nulavio route mark. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="50" height="40" viewBox="0 0 50 40" fill="none">
+  <style>
+    .wash { fill: #DDF8F0; }
+    .dot { fill: #A6EEDC; }
+    .mark { color: #0F7A68; }
+    @media (prefers-color-scheme: dark) {
+      .wash { fill: #0E3B33; }
+      .dot { fill: #0F7A68; }
+      .mark { color: #6FE0C5; }
+    }
+  </style>
+  <circle class="wash" cx="33" cy="27" r="19"/>
+  <circle class="dot" cx="9" cy="9" r="3"/>
+  <circle class="dot" cx="4" cy="17" r="1.6"/>
+  <g class="mark" transform="translate(22 10) scale(0.36) translate(-20 -16)">
+    <path d="M30 45 V26 L66 70 V26" stroke="currentColor" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="30" cy="56.7" r="4.2" fill="currentColor"/>
+    <circle cx="30" cy="66.3" r="2.9" fill="currentColor"/>
+    <circle cx="30" cy="73.3" r="1.8" fill="currentColor"/>
+  </g>
+</svg>

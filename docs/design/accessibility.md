@@ -13,8 +13,8 @@ Target: WCAG 2.2 AA in both themes, at 100–150 % scaling, with keyboard and sc
 | No colour-only meaning (1.4.1) | Selection = surface + mark; states use icon + words; "secure" is neutral | design rule, mark tested |
 | High contrast | Horizon colours step aside under `prefers-contrast` | `HorizonHighContrastTest` |
 | Forced colours | Same guard; the mark uses `SelectedItem` | Not simulable for the window in this harness (pending manual check) |
-| Reduced motion | The only Horizon animation (mark entrance) is disabled | `test_horizon` 12 |
-| Scaling 100/125/150 % and 1366×768/1920×1080 | Densities in px tokens; text in the desktop font | [matrix-after.png](screenshots/matrix-after.png) |
+| Reduced motion | Nothing Nulavio adds moves (the window's route mark and tab labels, the sidebar launcher, Shell surfaces), and what appears after a delay still appears (new-tab fallback, list placeholders, "still loading") | `test_motion` 01–05, `test_horizon` 12, `test_window_band`, `tests/unit/test_motion_sheet.py` |
+| Scaling 100/125/150 % and 1366×768/1920×1080 | Densities in px tokens; text in the desktop font | [UX7 matrix](screenshots/ux7/matrix.png): the window with five Nulavio pages and the assistant at 100/125/150 %, light and dark, on 1366×768 ([manifest](screenshots/ux7/manifest.json)); the October [matrix-after.png](screenshots/matrix-after.png) is kept as history |
 | Keyboard | Native window navigation; Shell primary actions focused, context removal restores focus, Ctrl+Enter sends | `test_assistant_ui`, `test_ai_ui`, `test_vault_ui`, `test_shell` |
 | Screen readers | Labelled controls, answer heading, one polite start/end announcement, digit-by-digit phone comparison | DOM assertions in the Shell integration tests; manual Orca pass pending |
 | Right-to-left | Logical properties only (`inset-inline-start`, `inline-size`) | `test_horizon_theme.test_rtl_safe_geometry` |
@@ -26,9 +26,11 @@ Pending: manual Orca pass, forced colours on a real high-contrast GTK theme, 125
 
 The last CSS layer (`nv-accessibility`) guarantees that page/gallery composition
 does not replace keyboard focus, high-contrast borders or forced-colour native
-inputs. Reduced motion disables transitions and animations, including pseudo
-elements. Critical/warning/refusal signals are opaque and non-animated even when
-motion is allowed. Invalid fields have a 2 px critical border and an associated
+inputs. Reduced motion takes the time out of transitions and animations, including
+pseudo elements and `::backdrop`, but keeps animation delays, so delayed reveals
+still appear (UX7). Critical/warning/refusal signals, destructive confirmations
+(`.dialog--danger`), warning and error toasts, the temporary chip and every band
+cue are opaque and non-animated even when motion is allowed. Invalid fields have a 2 px critical border and an associated
 text error with an octagon; colour is supplemental. Buttons preserve native
 disabled semantics, and pressed controls retain a check mark and outline.
 

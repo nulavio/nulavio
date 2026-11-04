@@ -9,11 +9,14 @@
   <link rel="stylesheet" href="../shared/tokens.css">
   <link rel="stylesheet" href="../shared/base.css">
   <link rel="stylesheet" href="../shared/shell.css">
+  <script type="module" src="../lib/appearance.js"></script>
   <script type="module" src="request.js"></script>
+  <script type="module" src="../lib/moment.js"></script>
 </head>
 <body data-state="loading">
   <main class="page page--narrow">
     <section class="card stack" aria-labelledby="headline">
+      <header class="moment__context" data-kind="request"></header>
       <p class="hint" id="who"></p>
       <h1 class="warning__headline" id="headline"></h1>
       <!-- Risk by capability (policy.RISK): callout--critical / --warning / --info, icon + words -->
@@ -29,6 +32,11 @@
         <button class="button button--quiet" type="button" id="session" data-i18n="aiAllowSession"></button>
       </div>
       <p class="status" id="status" role="status" aria-live="polite"></p>
+      <!-- UX4 (SB-24): every security moment says why it appeared, in the same place -->
+      <details class="why">
+        <summary data-i18n="momentWhy"></summary>
+        <p data-i18n="aiRequestWhy"></p>
+      </details>
       <p class="hint"><a href="../settings/settings.html#ai" target="_blank" rel="noopener" data-i18n="aiManage"></a></p>
     </section>
   </main>

@@ -28,7 +28,7 @@ Nulavio is complete when all of the following are verified (tests or recorded ev
 
 | Area | State (verified) |
 |---|---|
-| Engine | Firefox 159.0 source build (Track B), 7 patches, rootless container build; Track A launcher over distribution Firefox |
+| Engine | Firefox 159.0 source build (Track B), 8 patches, rootless container build; Track A launcher over distribution Firefox |
 | Shell | Built-in add-on with privileged modules: new tab, download warning, search, profiles, Smart Profile Routing (links from apps, typed addresses, link menu) |
 | Profiles | Engine profile groups (`SelectableProfileService`); isolation by separate instances and directories; **no encryption at rest yet** |
 | Guard | Launcher pre-launch audit (`guard.py`); refuses profiles with automation prefs (Marionette, remote agent) |
@@ -262,6 +262,75 @@ not complete: D-UX2's safe new-profile adoption/migration and first-run choice
 belong to the next slice; D-UX13, D-UX17, D-UX23, extra sidebar curation,
 Shell/assistant redesign, command palette and split view remain open.
 
+**UX3E — Lateral for new profiles and the first-run choice (locally verified, 2026-11-02).** On base `5a98bd703233` (D-UX2):
+- **New profiles.** A genuinely new profile starts in Lateral, and its first new tab asks once, in pt-BR and en-US, whether to keep it, with the three presets live and synced with Settings.
+- **Existing profiles.** A profile with any earlier sign of use keeps its layout untouched and is never asked. Private windows, temporary profiles and Áreas de IA are never asked either.
+- **Writes.** Only `sidebar.verticalTabs`, `sidebar.visibility` and two `nulavio.layout.*` markers, never over a locked pref.
+- **UX3D follow-ups closed.** Resilient `onChanged` registration, and tabs moved between windows.
+- **No patch.** No new patch, no new manifest permission, and no change to Vault, AI, Guard or downloads.
+
+[Mechanisms](../design/design-system.md#ux3e-lateral-for-new-profiles-and-the-first-run-choice-2026-11-02).
+
+Verified on a real incremental Track B 159.0 build (BuildID `20261102120448`), whose 98 Shell/branding entries match the source:
+
+| Check | Result |
+|---|---|
+| Unit tests | 603 (3 skips) |
+| Integration tests | 245 (13 skips) |
+| `test_layout_presets` per locale | 14, including a real upgrade of a profile created by the 5a98bd7 build: it keeps Abas no topo, with no prompt |
+| Contrast pairs | 256 |
+| Generated tokens | current |
+| ruff | clean |
+| Security scans | all six |
+
+Physical desktop checks, publication and exact-SHA CI are separate gates.
+
+**UX3E QA follow-up (locally verified, 2026-11-02).** The functional QA of `20261102120448` (not fit: 1 high, 3 medium, 11 low) is answered on the same branch: a window closing mid-transition no longer wedges the layout queue (A-1); a `sidebar.*` policy keeps new profiles out of adoption on every run (M-1); the first window shows the choice and the "new tab has changed" notice no longer covers it, with Settings offering the pending choice too (M-2, the functional part of UX3F A3 taken unchanged); Foco expanded with the sidebar button stays Foco (M-3); lows B-2, B-3, B-7, B-8 and B-9. B-11 (150 % fold) stays open; B-1, B-4 to B-6, B-10 and B-12 to B-14 are recorded with reasons ([details](../design/design-system.md#ux3e-qa-follow-up-2026-11-02)). No new permission, pref writer or patch.
+
+Verified on a real incremental Track B 159.0 build of `f3dfa89` (BuildID `20261102164518`, tarball sha256 `d61608f3…29edda2`), installed as a full application copy (distribution and tools), every suite run alone:
+
+| Check | Result |
+|---|---|
+| Unit tests | 604 (3 skips) |
+| Integration tests | 250 (13 skips); 3 failures: `test_ai_bridge` 13 and `test_horizon_groups` 11 fail the same way on the 8880bdd build here (environment), `test_temporary` 01 is intermittent under full-suite load (passes alone, 3 of 3) |
+| `test_layout_presets` per locale | 19 in pt-BR and en-US, including the real upgrade from 5a98bd7; the new A-1, M-1, M-2, M-3 and low-severity tests fail on the 8880bdd build |
+| Contrast pairs | 256 |
+| Generated tokens | current |
+| ruff | clean |
+| Security scans | all six |
+
+**UX3F — visual review against Zen, and polish (locally verified, 2026-11-02).** On base `8880bdd` (UX3E), from the visual QA of build 20261102120448:
+- **Done.** A1 quiet neutral band (alert states unchanged), A2 Horizon on the engine's internal pages (`in-content.css`, Nulavio artwork, no "Firefox Suggest" heading, Labs hidden), A4 visual layout choice above the fold, A5 tighter vertical tabs with a 3 x 20 edge mark, 224 px Lateral and eased motion, M1, M4–M8, B2, B4, B5.
+- **Mostly done.** A3: the first window shows the Shell's new tab with the choice, without the "new tab changed" notice, bookmarks bar or white page; the page is still served as a Shell extension page (address-bar chip and the engine's ~60 ms about:blank frame remain).
+- **Partly / open.** M2 keeps the control edge at rest (WCAG 1.4.11), M3 content radius during the sidebar animation, B1 band label on system pages (kept as the trusted-surface label), B3 result pills.
+- **Engine.** Patch 0008 (sidebar animation curve and collapse time via prefs). No new manifest permission, CSP unchanged, nothing in Vault, AI, Guard or downloads beyond colours.
+
+[Mechanisms, item table and polish](../design/design-system.md#ux3f-visual-review-against-zen-and-polish-2026-11-02). Real 159.0 build 20261102153026: 246 integration (13 skips; the one failure is environmental and identical on 8880bdd), layout 15/15 per locale, 607 unit, 266 contrast pairs, six scans. The UX3E functional QA findings (A-1, M-1, M-2) stay in the UX3E round; rebased onto those fixes, a real build (20261102172613) runs 251 integration tests (13 skips; failures: `test_ai_bridge` 13 environmental, `test_temporary` 01 intermittent under load, and a card-text check tied to the old wording, since fixed in the test), then 20/20 layout cases per locale, 608 unit, 266 contrast pairs and six scans. Physical desktop checks (compositor, GNOME/KDE menus), publication and exact-SHA CI are separate gates.
+
+**UX3G — polish after the UX3F visual QA (locally verified, 2026-11-02).** On base `fff6d93`, from the QA of build 20261102172613:
+- **Done.** N1 new tab painted once in its final shape; N5 the new tab reads the engine after the first-run search migration and searches with the engine it shows; N2 Labs and "More from Mozilla" hidden in Settings, Nulavio shields on the privacy status, neutral account icon, Nulavio glyph on About, no add-on Recommendations pane, private windows repainted from `chrome.private.*` tokens (the band keeps the strong alert); M5/N7 menus and the main menu on `bg.raised` with a `border.separator` token (2.45:1 / 2.46:1); B3 action chips without the outline; N3 footer on one row; N4 launcher at 224 px and the band row held from the first paint; N6 one card style; "Not Secure" hidden only over the transient blank document before the Shell's own new tab; a 16 px stroke glyph with `context-fill`, also on the profiles button; dark scale of four steps; tinted active Settings entry in dark; 80 ms label fade.
+- **Provisional decision (N-4), may change before release.** Profiles that come from earlier builds (the same new-profile rule the layout adoption uses) keep `about:home` as the first tab; only new profiles open on the Shell's new tab. A home page the person set, session restore and private windows are unchanged. Tests: a real upgrade from a 5a98bd7 build keeps `about:home`; a new profile opens the Shell's new tab with the card.
+- **Done later in the same round.** The about:privatebrowsing page on the private navy (A2); the neutral band in the navigation row (A1 second phase); tabs 8 px from the strip edges and 36 px pinned tiles (M7).
+- **Open.** "Search addons.mozilla.org" (a factual site name; a Fluent rename needs patches in two locales); the "Extension (Nulavio Shell)" chip, until the new tab is served as an internal page.
+
+**UX3G perf — performance and resource use (locally verified, 2026-11-03).** On `9637e7f` (UX3H), from a read-only audit (30 of 39 findings confirmed by adversarial verification) and an independent runtime QA (GPT-6.1 Terra, `~/.cache/nulavio-qa/ux3g/terra-ux3h/`):
+- **Done.** The band's 1.5 s tick writes the DOM only on change and reads a cached current-profile summary (idle reflows per minute 5,776 → 0 with one window, 23,712 → 0 with four); an agent-driven window starts the tools only when the agent's files change (Python processes per minute 31 → 3), with a 500 ms file watch so a pause, revoke or stop from the command line still reaches the band in about 0.4 s; new tabs read their status in parallel and stop following a settled layout choice (ready and painted 83 → 66 ms); the blocked Assistant panel rechecks at most every 3 s; Guard hashes helper programs off the main thread; about:home does not fetch the weather or stories in the background (defaults only). Idle CPU on an ordinary page 0.56 → 0.33 s per minute. QA Q-1 (no account/Sync steps in about:logins) and Q-2 (private-browsing icon in Nulavio's colours) fixed.
+- **Neutral.** Startup, processes and memory with 10 tabs (an interleaved repetition closed QA Q-3 as noise).
+- **Open.** A fast path for the tools CLI (conflicts with uncommitted launcher work); a PGO + LTO build; about:home loaded and replaced at startup (measure first).
+- **Fixed afterwards (44cf837).** "Send link to device" (KDE Connect) never appeared, and "Open link in profile" vanished from every window after one right click in a private window: the engine leaves hidden items out of `menus.onShown`'s `menuIds`, so both now recognise a link menu by its context.
+
+**UX4 — Shell pages, first pass (locally verified, 2026-11-03).** On `44cf837`, build 20261103124946 (`e03946a`..`49a1060`), from the audit's SPA and SB findings:
+- **Settings.** Two panes: a sticky rail grouped by scope (Este perfil, Todos os perfis, Este computador), one section per address with `aria-current`, a filter over every section, Smart routing as its own entry, the profile being configured in the header, the scope on every section, results next to the control that made them (spoken once with its name), switches that always save on change, and an explanation instead of an empty AI section in an AI Workspace.
+- **New tab.** "Você está em {perfil}" with its state in words, one line of facts that names what needs attention, the rules that open sites here, and a Settings link; the protection list in "Detalhes", help and the engine note in "Atalhos e ajuda"; no slogan; nothing read aloud at load. The search box stays (UX3G N5).
+- **Profile menu.** State in words and "aberto" for profiles open now (the engine's lock, as the launcher reads it); arrow keys; "Novo perfil…" opens a create sheet where a template only fills the fields; a protected profile continues in the Vault's steps, prefilled. Settings templates also fill the form instead of creating a profile.
+- **Routing.** "This profile → the rule's profile" with both states, buttons that name both, "Desbloquear {perfil} e abrir" for a locked target, "Não abrir", "Lembrar" above the buttons with what each choice does, and a "why". In the band (D-UX19), "Aberto pela sua regra · Mudar" next to the profile while a tab shows a site that another profile sent here by one of the group's rules.
+- **Security moments.** One context line (the Nulavio mark, the band's name for the page, this profile and its state where relevant) on unlock, phone, look-alike, download, Guard, agent request and routing pages.
+- **Vault.** vault/methods.html lists every unlock method and adds, replaces or removes one, each change confirmed with a current secret; the recovery code is shown as 7 numbered groups with "Imprimir o código", the heading focused first, and a guard against leaving before it is typed back. No copy is written to the clipboard or to a file.
+- **Second pass (same day).** "Bloquear {perfil} agora" for the protected profile open in this window (it asks first, a watcher locks the volume once the engine has exited, and the browser quits the way the person would); typing filters the profile menu; the security moments' context line carries the level ("Crítico", "Atenção") from the page's own callout, says "Carregando…" after 400 ms and offers "Tentar de novo" where trying again can help.
+- **Review.** An adversarial review of the first pass (security, correctness, accessibility, copy; each finding checked by a skeptic): 20 confirmed, 1 refuted. The one high finding: the unlock-methods page could remove the last password or recovery code, after which no change could be confirmed; the medium ones: the band's routing notice could land on a tab the rule did not open, "Sem proteção" next to "Proteções ativas" on the new tab, and a methods page that offered what could not work. All fixed (`c243c32`, `5c90bdc`, `d8e4465`).
+- **Decided (the maintainer left both to the recommendation, 2026-11-03).** The recovery code is offered only for printing, never saved to a file (the guardrail against secrets in plain text on disk); the new tab keeps its search box (UX3G N5) although the final mockup drops it.
+- **Closed (same day).** Slow lists show still placeholder rows after 400 ms and never stay busy after a failure (`1ed8434`); every security moment has the "Por que isto apareceu?" disclosure, with the same summary (`470e179`). Unverified by hand: "Bloquear agora" end to end on a real protected profile (stubbed UI test and the tools' unit test only).
+
 **UX4 — Shell pages**
 - **Settings.** Two panes, with search, scope labels and inline status.
 - **New tab.** "Você está em …".
@@ -286,16 +355,66 @@ Shell/assistant redesign, command palette and split view remain open.
   - a quick action.
 - **Visibility.** An agent-activity seal in the band.
 
+*UX5 progress (2026-11-03 and 04, branch `ux3g-polish`).*
+- **Plan.** Made from a read-only Understand workflow (5 readers and a synthesis). It is cut into sub-slices 0, 1, A–J. The maintainer delegated the open questions, and Q1–Q20 follow the plan's recommendations. Q1: the page copy goes again to the same recipient, with "Deixar a página de fora". Q8: Alt+Shift+A. Q15: 150 s idle, 10/30 min caps. Q16: the conversation in memory per window. Q20: 200 000 characters.
+- **Done, each with its tests (unit; `test_assistant_ui` 41, `test_ai_ui` 12, `test_ai_bridge`, `test_window_band` 12 and `test_search` on the Track B build):**
+  - **0** Approvals only tighten: checked again after the answer, session answers kept apart, and an AI Workspace window that can only stop, pause or revoke. ADR 0007 has the amendment.
+  - **1** The fake provider streams, fails by status, hangs and counts.
+  - **A** Provider errors by cause, each saying whether the request arrived; "Resposta cortada", with "Continuar".
+  - **B** Context items read at "Incluir" and kept in memory. The line above Send gives recipient (host:port), model and whole size. The tools refuse `size-changed` and `recipient-changed`, and "Resumir" only attaches.
+  - **C1 and C2** Stream mode and "Parar" or Esc, with honest cancel texts. The emergency stop, pause or revocation cuts a run at once.
+  - **D** The conversation per window, with "Começar conversa nova", "Levar a conversa" and "Tentar de novo"; 200 000 characters and 50 answers at most.
+  - **E** Answers in a safe Markdown that loads nothing, in linear time; sources only for word-for-word quotes, which show their tab.
+  - **F** The run timeline and the permission card in the panel ("Negar" focused); with no panel, the request in front in the task's window, never both.
+  - **G and H** The selection menu, Alt+Shift+A, `@ia` in the address bar and the quick action: each one writes or attaches, none sends.
+  - **I** The band's activity seal (actions that ran, waiting, "Parar tarefa") and the connected-agent seal from the bridge's session markers.
+  - **J** ADR 0007 amendment, stream contract in `docs/architecture/ai-bridge.md`, AI-T35–38 in the threat model, the design-system section, the gallery and its baselines.
+- **Reviews.** Adversarial review workflows on C1/C2 (15 findings) and on D–I (16 confirmed, one critical: a retry could resend a page copy after it was left out). All are fixed with tests.
+- **QA.** Terra R4 on 0, 1, A and B confirmed no defects; its two visual notes are fixed. Terra R5 on C–I and the review fixes found no defect (partial coverage, not a certification; the integration suite covers what it left out).
+
+*Visual audit and polish (2026-11-04, branch `ux3g-polish`), asked by the maintainer after UX5: Settings, onboarding, the icons and the landing page.*
+- **Audit.** A workflow critiqued 68 real captures (Settings, first run, Shell pages, site; 1280 and 390 px, light and dark), verified every finding and wrote a plan: 53 findings, 4 high (routing with one profile, a section title hidden under the narrow rail, "Sites sensíveis" changing settings without saying so, the site out of date).
+- **Done (with tests):** the cross-cutting parts (rhythm, disclosures, link buttons, badges, switches, focus, toggles, empty states); Settings (one-sentence intros with "Como funciona", layout pictures, Profiles, Search, Integrations, plainer words); the template hint everywhere a template is chosen; protected profile creation; the missing-download, Guard and assistant first screens; and the new tab's first run, one question at a time (welcome, layout, DNS, passwords, default browser, all set).
+- **Icons and chrome (Calmaria).** A three-direction workflow with two judges chose solid one-tone glyphs on soft tiles for who you are and outline glyphs for state, one source for pages, band and toolbar (`NulavioAvatars.sys.mjs`), new tile/glyph tokens, no Unicode pseudo-icons, a quiet band and a monochrome toolbar button (design-system.md, Calmaria).
+- **Landing page.** A three-direction workflow chose "Recibo": the page as a dated engineering document where each claim says what it costs or where it stops and where to check it, with real captures; implemented in evidence mode `text` (the repository is private). Publishing stays with the maintainer (§13 of its spec: evidence mode, NEL, trademark line).
+- **QA and follow-up.** Terra R6 on the whole round: one medium finding (the first run's DNS step left the keyboard in the search box), fixed with a test (`f41f984`). Its other notes are answered: an "Em poucas palavras" block reads the landing in plain words before the document starts, and a profile's icon is chosen on a grid of glyph tiles (Settings and the create sheet) instead of a list of names.
+
 **UX6 — Safe personalisation**
 - **Presets.** Offered in onboarding and in Settings.
 - **Appearance.** Density, contrast-checked accents, "Reduzir transparência" and "Mais contraste".
 - **Shortcuts.** A link to about:keyboard, Nulavio commands the user can remap, and Nulavio quick actions after ">".
 - **Routing.** The default destination for links from other apps.
 
+*UX6 progress (2026-11-04, branch `ux3g-polish`).*
+- **Plan.** A read-only Understand workflow (5 readers and a synthesis) cut it into S0–S8; the maintainer delegated the decisions, recorded below as D-UX24 to D-UX31 (D-UX23 decided).
+- **Done, each with its tests (unit; integration on the previous package with this tree's Shell, branding and brand.ftl synced by `scripts/build/dev_sync.py`, because another session held the build machine; a real build follows):**
+  - **S0** One list of options (`shared/options.json`) and `tests/unit/test_personalisation.py`: no option writes a guarded pref, the check fails closed, every privileged pref writer is pinned.
+  - **S1** The layout pictures stay equal in Settings and the first run; B-11 closed (the card's main action on the first screen at 150 %).
+  - **S2** Token variants: Azul and "Mais contraste", 1224 contrast rows in every combination; security, private, focus and status tokens never follow one.
+  - **S3–S4** Settings → Aparência: density, accent, "Mais contraste", the new tab's soft background and "Reduzir transparência"; `test_appearance` 11 (walks every option and sees no other pref change).
+  - **S5–S6** Ctrl+Alt+F and Ctrl+Alt+B, Settings → Atalhos, the keys read from the engine, two quick actions after ">"; `test_shortcuts` 10.
+  - **S7** The default destination for links from other apps (ADR 0003 step 4, M4a only); `test_routing` 23–27 and the locked case in `test_vault_profiles`.
+- **Review.** An adversarial review (4 dimensions, each finding checked by a skeptic): 24 confirmed, one high. The default destination could move a command line sent to a profile on purpose, because every instance makes itself the group default in memory; it now reads `profiles.ini` when the line arrives. The medium ones: a reused profile id inheriting the destination (it is now kept by id and directory), the routing note read when hidden, "Restaurar" dropping focus, and three tests weaker than their names. All fixed with tests (`5df03c0`, `16283fc`); two low test gaps are recorded in the commit.
+- **Real build and QA.** Track B build 20261104151506 (`e95fba6`): 702 unit tests (3 skips) and all 35 integration files green. Terra R7 (GPT-6.1 Terra, xhigh) ran part of its items and confirmed no product defect, without certifying the round; its one failure was the engine's own storage-access permission appearing during the walk, so `test_appearance` now compares the permission list itself (`44aa803`), and the real key presses it asked for are in `test_shortcuts` 02c (`5a5072b`).
+- **Second review** (the UX7 commits and the UX6 fixes, 3 dimensions, each finding checked by a skeptic): 16 confirmed, one medium. A profile created after the default destination was deleted could take its id; Settings showed it as chosen, and picking "Um perfil que não existe mais" made it the destination. The deleted destination now has its own entry that cannot be chosen (`test_routing` 29). The low ones: Settings carried an edit over a redraw even after it was saved or for a switch that saves at once (now only in forms that ask for it, the profile form; `test_search` 13); "Restaurar" left the old key in the profile button's name (Firefox 159's `commands.reset` fires no `onChanged`; `test_shortcuts` 06b); a locked density default read as Normal or Toque while the engine runs Automático (`test_appearance` 12b); the Automático hint now says what the engine does; and the measurement and capture tools (below, UX7).
+- **Open.** Whether a locked last-used profile loses a link that starts the browser (plan K3, a Vault question); a brand-new profile's first start loses a command-line link with or without routing (found while testing S7; a profile that ran before keeps it).
+
 **UX7 — Motion and finish**
 - **Motion tokens applied.** Profile arrival on the band, the sidebar, sheets, chips and toasts; all off under reduced motion.
 - **Measurement and captures.** A frame-time scene, and the capture matrix at 100/125/150 %.
 - **Docs.** The design docs are refreshed.
+
+*UX7 progress (2026-11-04, branch `ux3g-polish`).*
+- **Done, each with its tests:**
+  - **A** The reduced-motion guard stops what moves but keeps delays, so what appears late on purpose still appears (`050a162`); `motion.duration.spin` 900 ms; `tests/unit/test_motion_sheet.py`.
+  - **B** The sidebar launcher on the motion tokens through patch 0008 (expand 220, collapse 160 ms), and Foco's expand-on-hover at 220 ms after the engine's 200 ms intent delay (`eae7277`).
+  - **C** Plain dialogs, the profile create sheet, "ok" toasts and the new tab's profile chip arrive; critical and danger dialogs (including "Bloquear agora"), warnings and security cues never move (`e77994c`); `test_motion` 01–05.
+  - **D** `scripts/research/frame_scene.py` and the budget in [design-system.md](../design/design-system.md#ux7-motion-and-performance-budget-2026-11-04): every line passes without extensions except the tab switch's maximum, which is the engine waiting for a background tab, identical on the previous build; as shipped, uBlock Origin's first-run work weighs on the new tab and one idle minute of both builds alike. No regression against the previous build. Exceptions written there for the maintainer.
+  - **E** The capture matrix in `docs/design/screenshots/ux7/` (36 shots, 7.4 MB, from the X server's pixels, with a manifest).
+  - **F** Docs: design system, accessibility, component inventory, architecture (the extension points checked in the 159.0 source), migration plan, UX principles.
+- **Review.** The adversarial review of the UX7 commits and the UX6 fixes is recorded under UX6; it also found that the sidebar samples recorded the restoring toggle, that a failed scene dropped out of the verdict, and that the capture script left the first-run state on. A second, smaller review of those fixes confirmed 7 low findings, four distinct issues (a locked Compacto or Toque read as Automático, an unsaved alias lost on a redraw, the hint's wording, the screen grab without a visible window), all fixed with tests (`805c7b6`, `695d12c`, `80337bd`).
+- **Found while measuring.** The first comparison flagged the new tab as 16 % slower; an A/B over four builds showed it came from the baseline package having no `distribution/` (no uBlock Origin). With the same distribution the medians match. `frame_scene.py` now refuses to compare builds that install different extensions.
+- **Open.** The maintainer's checks from the plan: Foco's 220 ms hover and the entrances felt on a real desktop, frame times in a visible KDE Wayland or GNOME window, and a reduced-motion pass with the desktop setting; accepting the two written exceptions; commit on `main`, push and CI (not done here: no remote).
 
 ### Decisions (maintainer, 2026-10-27: every recommendation accepted)
 
@@ -313,7 +432,7 @@ Shell/assistant redesign, command palette and split view remain open.
 | D-UX10 | Translucency | Solid chrome by default; optional ambience only on the new tab; "Reduzir transparência" setting |
 | D-UX11 | Assistant streaming | Yes (backend change in UX5) |
 | D-UX12 | pt-BR for "AI Workspace" | "Área de IA" |
-| D-UX13 | Bookmarks bar | Shown only when there are bookmarks |
+| D-UX13 | Bookmarks bar | Hidden by default (`never`, UX3F A3); Ctrl+Shift+B shows it and the person's choice is kept (amended in UX6 to what ships) |
 | D-UX14 | Track B rendered tests in CI | A self-hosted runner later (maintainer). Until then each slice runs the Track B suite locally and records it in the commit message |
 | D-UX15 | Identity palette | Mint → lima `#C5E384`, sand → `#FDCF8B`, "rosa" renamed "coral" |
 | D-UX16 | Tab-group colours | Orange, purple and red swatches hidden (too close to warning, private and critical); old groups drawn muted; engine colour names kept |
@@ -323,7 +442,15 @@ Shell/assistant redesign, command palette and split view remain open.
 | D-UX20 | Light band tone | navy 200 `#BFD0D6`, with a 1 px ring on identity flags |
 | D-UX21 | Autonomy labels | "Nível: Restrito / Assistido / Autônomo / Controle total" |
 | D-UX22 | Assistant next to the vertical tab list | No automatic collapse; Ctrl+Alt+Z and the Foco preset cover narrow windows |
-| D-UX23 | Shortcuts for Foco and "Bloquear agora" | Chosen in UX6, after checking about:keyboard, KDE/GNOME and Orca |
+| D-UX23 | Shortcuts for Foco and "Bloquear agora" | Ctrl+Alt+F toggles Foco (back to the preset it came from); Ctrl+Alt+B opens the profile menu's "Bloquear agora" confirmation, never locks directly. Both free in Firefox 159's Linux chrome, Plasma, GNOME and Orca; Ctrl+Alt+L excluded (screen lock) |
+| D-UX24 | Where appearance options live | Prefs only, written by `NulavioPersonalise` through a new experiment; no `storage` permission and no new manifest permission |
+| D-UX25 | Density | The engine's `browser.uidensity` with its own four names (Automático clears it), in Settings → Aparência, not in a preset |
+| D-UX26 | Accents | Menta (default) and Azul only; focus stays mint; more accents only through the same separation and contrast tests |
+| D-UX27 | "Mais contraste" | A Nulavio token variant for its own surfaces; never the system's LookAndFeel prefs (websites see them); private chrome unchanged |
+| D-UX28 | "Reduzir transparência" | Ships with the opt-in new-tab ambience (D-UX10); disabled with its reason while nothing is transparent |
+| D-UX29 | Remapping keys | In the engine's extension shortcuts view (`commands.openShortcutSettings`), with "Restaurar" in Settings; no key capture in the Shell |
+| D-UX30 | Quick actions | Nulavio's settings and the Foco toggle only; nothing that locks, unlocks, resumes, grants or raises autonomy |
+| D-UX31 | Default destination for links from other apps | "Último perfil usado" (default) or "Sempre em {perfil}", M4a only, in the group's default instance, through the M4a hand-off; "Perguntar sempre" deferred |
 
 ### UX plan summary
 

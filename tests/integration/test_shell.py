@@ -151,6 +151,7 @@ class ShellTest(unittest.TestCase):
             " icon: [...document.querySelectorAll('.callout__icon')].filter(i => !i.hasAttribute('hidden'))"
             ".map(i => i.id).join(),"
             " headline: document.getElementById('warn-headline').textContent,"
+            " moment: document.querySelector('.moment__severity')?.dataset.level ?? null,"
             " deleteFile: browser.i18n.getMessage('warnDeleteFile')};"
         )
 
@@ -249,6 +250,14 @@ class ShellTest(unittest.TestCase):
         finally:
             self.force_danger(None)
         self.assertEqual(critical["severity"], "critical", critical)
+        # UX4 (SB-24): the level is also in the security moment's context line, glyph and word.
+        level = self.m.execute(
+            "const s = document.querySelector('.moment__context .moment__severity');"
+            "return s && {level: s.dataset.level, icon: Boolean(s.querySelector('svg')), word: s.textContent};"
+        )
+        self.assertEqual((level["level"], level["icon"]), ("critical", True), level)
+        self.assertEqual(level["word"], self.m.execute("return browser.i18n.getMessage('momentCritical');"))
+        self.assertEqual(warning["moment"], "warning", warning)
         self.assertEqual([b[0] for b in critical["buttons"]], ["delete", "show"], critical)
         self.assertEqual([b[2] for b in critical["buttons"]], ["primary", "secondary"], critical)
         self.assertEqual((critical["focused"], critical["icon"]), ("delete", "icon-critical"))
@@ -303,9 +312,17 @@ class ShellTest(unittest.TestCase):
         except MarionetteError:
             pass
         state = harness.wait_until(lambda: self.root_data("state"), timeout=10)
-        self.assertEqual(state, "error")
-        buttons = self.m.execute("return [...document.querySelectorAll('button')].filter(b => !b.closest('[hidden]')).length;")
-        self.assertEqual(buttons, 0, "no actions for a download that does not exist")
+        self.assertEqual(state, "missing")
+        # Only the downloads folder and closing the tab: nothing that could open or delete a file (WARN-02).
+        buttons = self.m.execute(
+            "return [...document.querySelectorAll('button')].filter(b => !b.closest('[hidden]')).map(b => b.id);"
+        )
+        self.assertEqual(buttons, ["show", "delete"])
+        texts = self.m.execute("return [...document.querySelectorAll('#actions button')].map(b => b.textContent);")
+        self.assertEqual(
+            texts,
+            [self.m.execute("return browser.i18n.getMessage(arguments[0]);", [k]) for k in ("warnOpenFolder", "warnCloseTab")],
+        )
 
     def test_06_private_download_warns_in_a_private_window(self):
         if self.state.get("temporary"):

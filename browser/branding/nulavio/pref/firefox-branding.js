@@ -100,3 +100,54 @@ pref("browser.aboutaddons.novaThemesPickerEnabled", false);
 // visits still appear there.
 pref("browser.topsites.useRemoteSetting", false);
 pref("browser.newtabpage.activity-stream.default.sites", "");
+
+// UX3F (QA A5/M4): the sidebar launcher moves on Nulavio's standard motion
+// curve and narrows faster than it widens (browser/patches/0008). Reduced
+// motion still turns the animation off.
+pref("sidebar.animation.duration-ms", 220);
+pref("sidebar.animation.collapse-duration-ms", 160);
+pref("sidebar.animation.easing", "cubic-bezier(0.2, 0, 0, 1)");
+// UX7: the Foco preset opens the launcher on hover (expand-on-hover) with the same expand token
+// (motion.duration.expand), not the engine's 400 ms; its 200 ms intent delay stays.
+pref("sidebar.animation.expand-on-hover.duration-ms", 220);
+
+// UX3F (QA A3): no empty bookmarks toolbar sliding in under a new tab and
+// pushing it down. The toolbar stays one shortcut away (Ctrl+Shift+B), and the
+// person's choice in the toolbar menu is kept.
+pref("browser.toolbars.bookmarks.visibility", "never");
+
+// UX3F (QA A2): no Mozilla product names in Nulavio's own UI. Address-bar
+// results are not grouped under a "Firefox Suggest" heading (the results
+// and their order are unchanged), and the "Firefox Labs" Settings pane, which
+// lists Mozilla's remote experiments, starts hidden (Nimbus rollouts are off).
+pref("browser.urlbar.groupLabels.enabled", false);
+pref("browser.preferences.experimental.hidden", true);
+
+// UX3G N2: about:addons opens on the person's own extensions, without the
+// "Recommendations" pane (AMO picks that Firefox recommends, "by Firefox"
+// themes) and without its per-extension recommendation cards. Add-ons are still
+// one search away on the same page. Settings drops "More from Mozilla"
+// (Mozilla's product promotions).
+pref("extensions.getAddons.showPane", false);
+pref("extensions.htmlaboutaddons.recommendations.enabled", false);
+pref("browser.preferences.moreFromMozilla", false);
+
+// UX3H M-1: no Mozilla privacy-notice tab (mozilla.org) on the first launch.
+// The engine opens it to tell people that data is sent to Mozilla; Nulavio
+// sends none unless the person opts in (browser/config/prefs/baseline.js sets
+// the same master switch for profiles the launcher seeds). Off here too, so a
+// plain package and a profile created without the launcher behave the same:
+// no data submission, no notice and no request to mozilla.org at startup.
+pref("datareporting.policy.dataSubmissionEnabled", false);
+pref("datareporting.policy.firstRunURL", "");
+// No "Suggest Firefox Relay email masks" offer: Relay needs a Mozilla account,
+// which Nulavio 1.0 does not offer (D-UX8). An empty value hides the option in
+// Settings and every Relay prompt; saved logins are unaffected.
+pref("signon.firefoxRelay.feature", "");
+
+// Performance and privacy: about:home (still the start page of profiles that
+// came from earlier builds) does not fetch the weather or stories in the
+// background. Defaults only: a person who turns them on keeps that choice.
+pref("browser.newtabpage.activity-stream.showWeather", false);
+pref("browser.newtabpage.activity-stream.widgets.weather.enabled", false);
+pref("browser.newtabpage.activity-stream.feeds.section.topstories", false);

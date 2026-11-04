@@ -339,6 +339,13 @@ class NulavioConnectClass {
   }
 
   /** The user clicked "Make Nulavio the default browser". */
+  /** The default-browser check alone, for the new tab's first run (no other probe, no tools). */
+  async defaultBrowserState() {
+    const spec = (await this.definitions()).find(d => d.id === "default-browser");
+    const { state, reason } = await this.#defaultBrowser(spec);
+    return { state, reason };
+  }
+
   async setDefaultBrowser() {
     const spec = (await this.definitions()).find(d => d.id === "default-browser");
     const before = await xdg(["xdg-settings", "get", "default-web-browser"]);

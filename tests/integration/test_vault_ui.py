@@ -150,12 +150,14 @@ class VaultUiTest(unittest.TestCase):
     def assert_status(self, level: str) -> dict:
         line = self.status_line()
         self.assertEqual(line["level"], level, line)
-        self.assertEqual(line["mark"] == '"✓ "', level == "ok", f"✓ only for a result that happened: {line}")
+        # Marks are SVG masks now (Calmaria): the check only for a result that happened.
+        self.assertEqual("icon-check.svg" in line["mask"], level == "ok", f"✓ only for a result that happened: {line}")
         if level == "error":
             self.assertEqual(line["color"], line["critical"], "errors use the critical style")
             self.assertIn("icon-critical.svg", line["mask"], "errors carry the critical icon")
         if level == "warn":
-            self.assertEqual((line["color"], line["mark"]), (line["warning"], '"⚠ "'))
+            self.assertEqual(line["color"], line["warning"])
+            self.assertIn("icon-warning.svg", line["mask"], "a warning carries the warning icon")
         return line
 
     def type_into(self, element_id: str, text: str) -> None:
@@ -221,7 +223,7 @@ class VaultUiTest(unittest.TestCase):
         templates = self.m.execute(
             "return [...document.querySelectorAll('#templates button')].map(b => ({pressed: b.getAttribute('aria-pressed'),"
             " bg: getComputedStyle(b).backgroundColor, border: getComputedStyle(b).borderTopColor,"
-            " mark: getComputedStyle(b, '::before').content}));"
+            " mark: getComputedStyle(b, '::before').content, mask: getComputedStyle(b, '::before').maskImage}));"
         )
         pressed = [b for b in templates if b["pressed"] == "true"]
         others = [b for b in templates if b["pressed"] == "false"]
@@ -230,7 +232,8 @@ class VaultUiTest(unittest.TestCase):
         for other in others:
             self.assertNotEqual((pressed[0]["bg"], pressed[0]["border"]), (other["bg"], other["border"]))
             self.assertEqual(other["mark"], "none")
-        self.assertEqual(pressed[0]["mark"], '"✓"')
+        self.assertEqual(pressed[0]["mark"], '""')  # a check drawn by an SVG mask, not a font glyph
+        self.assertIn("icon-check.svg", pressed[0]["mask"])
         # Native radios and checkboxes take the brand accent, not the toolkit's blue (DS-11).
         accent = self.m.execute(
             "const probe = document.createElement('i'); probe.style.color = 'var(--nv-color-accent-default)';"
@@ -255,7 +258,10 @@ class VaultUiTest(unittest.TestCase):
         self.shoot("create-2-protection")
         self.click("#step-protection button[type=submit]")
         self.wait_state("recovery", "step", timeout=90)
-        code = self.m.execute("return document.getElementById('code').textContent;")
+        code = self.m.execute("return document.getElementById('code').dataset.code;")
+        # UX4 (SB-08): 7 numbered groups, and the heading (not a field below the code) has the keyboard.
+        self.assertEqual(self.m.execute("return document.querySelectorAll('#code > li').length;"), 7)
+        self.assertEqual(self.m.execute("return document.activeElement.id;"), "headline")
         self.assertRegex(code, r"^([0-9A-HJKMNP-TV-Z]{4}-){6}[0-9A-HJKMNP-TV-Z]{4}$")
         self.shoot("create-3-recovery")
         groups = code.split("-")
@@ -268,6 +274,7 @@ class VaultUiTest(unittest.TestCase):
         self.click("#step-recovery button[type=submit]")
         self.wait_state("done", "step")
         self.assertEqual(self.m.execute("return document.getElementById('code').textContent;"), "")  # no longer on screen
+        self.assertIsNone(self.m.execute("return document.getElementById('code').dataset.code ?? null;"))
         self.shoot("create-4-done")
         profile = next(p for p in self.call("return (await P.list()).profiles;") if p["name"] == "Cofre UI")
         self.assertEqual((profile["encrypted"], profile["locked"]), (True, True))
@@ -309,7 +316,7 @@ class VaultUiTest(unittest.TestCase):
 
         self.assertTrue(harness.wait_until(watch, timeout=60, interval=0.1), f"never showed unlocked: {seen}")
         if "unlocking" in seen:  # usually caught; the unlock can be faster than one poll
-            self.assertEqual((seen["unlocking"]["level"], seen["unlocking"]["mark"] == '"✓ "'), ("progress", False))
+            self.assertEqual((seen["unlocking"]["level"], "icon-check.svg" in seen["unlocking"]["mask"]), ("progress", False))
         self.assertEqual(seen["unlocked"]["level"], "ok")
         self.assertIn("última janela", seen["unlocked"]["text"])
         self.assertTrue(harness.wait_until(lambda: self.instances(path), timeout=60), "the profile did not start")
@@ -389,6 +396,9 @@ class VaultUiTest(unittest.TestCase):
         try:
             self.open_page(f"vault/unlock.html?p={self.created_id}")
             self.wait_state("storage-unavailable")
+            # SB-19: the state says what to do next; "Tentar de novo" reads it again.
+            retry = self.m.execute("return document.querySelector('.moment__retry button')?.textContent ?? null;")
+            self.assertEqual(retry, self.m.execute("return browser.i18n.getMessage('momentRetry');"))
             self.shoot("unlock-storage-unavailable")
         finally:
             os.rename(hidden, tools)
@@ -542,6 +552,151 @@ class VaultUiTest(unittest.TestCase):
         self.stop_instance(path)
         box = storage.Container(path)
         self.assertTrue(harness.wait_until(lambda: not box.mounted(), timeout=30), "not locked after the window closed")
+
+    def test_10_unlock_methods_page(self):
+        """UX4 (audit SB-09, SB-16): every method by kind; each change confirmed with a current secret."""
+        profile_id, code = self.create_via_api("Metodos", password=PASSWORD, keyring=False)
+        self.open_page(f"vault/methods.html?p={profile_id}")
+        self.wait_state("idle")
+        rows = self.m.execute("return [...document.querySelectorAll('#methods > li')].map(li => li.dataset.method);")
+        self.assertEqual(sorted(rows), ["password", "recovery-code"])
+        self.assertTrue(self.m.execute("return document.getElementById('few').hidden;"))  # two methods: no warning
+        self.shoot("methods-idle")
+        # A change without the current secret is refused next to the field, and nothing changes.
+        self.click("#add-password")
+        self.type_into("new-password", "second pass 22")
+        self.type_into("new-password2", "second pass 22")
+        self.click("#password-form button[type=submit]")
+        self.assertTrue(self.m.execute("return document.getElementById('current-error').textContent.length > 0;"))
+        self.assertEqual(self.m.execute("return document.activeElement.id;"), "current")
+        # With the wrong secret: refused, the field is cleared and marked.
+        self.type_into("new-password", "second pass 22")
+        self.type_into("new-password2", "second pass 22")
+        self.type_into("current", "not the password")
+        self.click("#password-form button[type=submit]")
+        self.assertTrue(
+            harness.wait_until(
+                lambda: self.m.execute("return document.getElementById('current').getAttribute('aria-invalid');") == "true", 30
+            )
+        )
+        self.assertEqual(self.m.execute("return document.getElementById('current').value;"), "")
+        # With the password: a second password is added.
+        self.type_into("new-password", "second pass 22")
+        self.type_into("new-password2", "second pass 22")
+        self.type_into("current", PASSWORD)
+        self.click("#password-form button[type=submit]")
+        self.assertTrue(
+            harness.wait_until(
+                lambda: self.m.execute("return document.querySelectorAll('#methods > li[data-method=password]').length;") == 2, 30
+            )
+        )
+        # A new recovery code: confirmed, shown once as 7 groups, two typed back; the old one stops working.
+        self.type_into("current", "second pass 22")
+        self.click("#new-code")
+        self.click("dialog[open] button[value=confirm]")
+        self.wait_state("code")
+        new_code = self.m.execute("return document.getElementById('code').dataset.code;")
+        self.assertNotEqual(new_code, code)
+        self.assertEqual(self.m.execute("return document.querySelectorAll('#code > li').length;"), 7)
+        self.assertEqual(self.m.execute("return document.activeElement.id;"), "code-heading")
+        self.shoot("methods-new-code")
+        groups = new_code.split("-")
+        index = lambda label: int(self.m.execute(f"return document.getElementById('{label}').textContent.match(/\\d+/)[0];")) - 1  # noqa: E731
+        self.type_into("group-a", groups[index("group-a-label")])
+        self.type_into("group-b", groups[index("group-b-label")])
+        self.click("#code-step button[type=submit]")
+        self.wait_state("idle")
+        self.assertEqual(self.m.execute("return document.getElementById('code').textContent;"), "")
+        # Removing a method asks first; the old code no longer confirms anything.
+        self.type_into("current", code)
+        first = self.m.execute("return document.querySelector('#methods > li[data-method=password]').dataset.envelope;")
+        self.click(f"#methods > li[data-envelope='{first}'] button")
+        self.click("dialog[open] button[value=confirm]")
+        self.assertTrue(
+            harness.wait_until(
+                lambda: self.m.execute("return document.getElementById('current-error').textContent.length > 0;"), 30
+            )
+        )
+        self.assertEqual(self.m.execute("return document.querySelectorAll('#methods > li[data-method=password]').length;"), 2)
+        self.type_into("current", new_code)
+        self.click(f"#methods > li[data-envelope='{first}'] button")
+        self.click("dialog[open] button[value=confirm]")
+        self.assertTrue(
+            harness.wait_until(
+                lambda: self.m.execute("return document.querySelectorAll('#methods > li[data-method=password]').length;") == 1, 30
+            )
+        )
+        # Down to one method: the page says what that means, and the last one cannot be removed.
+        self.type_into("current", new_code)
+        self.click("#methods > li[data-method=password] button")
+        self.click("dialog[open] button[value=confirm]")
+        self.assertTrue(
+            harness.wait_until(lambda: self.m.execute("return document.querySelectorAll('#methods > li').length;") == 1, 30)
+        )
+        last = self.m.execute(
+            "const b = document.querySelector('#methods > li button');"
+            "return {disabled: b.disabled, why: document.querySelector('#methods [id^=keep-]')?.textContent ?? null,"
+            " few: !document.getElementById('few').hidden, kind: document.querySelector('#methods > li').dataset.method};"
+        )
+        self.assertEqual((last["disabled"], last["few"], last["kind"]), (True, True, "recovery-code"))
+        self.assertTrue(last["why"])
+        self.shoot("methods-last")
+
+    def test_11_lock_now_for_the_profile_in_this_window(self):
+        """UX4: "Bloquear agora" for this window's protected profile asks first and only then calls the Vault.
+        The Vault call quits the browser, so here it is replaced by a recorder (the tools part is a unit test)."""
+        self.call(
+            "const real = await P.list(); const me = real.profiles.find(p => p.isCurrent);"
+            "P.nvRealList = P.list; P.nvLockCalls = 0;"
+            "const shown = real.profiles.map(p => (p.isCurrent ? {...p, encrypted: true, locked: false} : p));"
+            "P.list = async () => ({...real, profiles: shown});"
+            "V.lockCurrent = async () => { P.nvLockCalls++; return {quit: false}; };"
+            "return me.name;"
+        )
+        try:
+            self.open_page("profiles/popup.html")
+            name = self.call("return (await P.nvRealList.call(P)).profiles.find(p => p.isCurrent).name;")
+            self.assertEqual(
+                self.m.execute("return document.getElementById('lock-current')?.textContent;"),
+                self.m.execute("return browser.i18n.getMessage('vaultLockCurrent', [arguments[0]]);", [name]),
+            )
+            self.click("#lock-current")
+            dialog = self.m.execute(
+                "const d = document.querySelector('dialog[open]');"
+                "return d && {focused: document.activeElement.value, primary: d.querySelector('.button--primary').value};"
+            )
+            self.assertEqual(dialog, {"focused": "cancel", "primary": "cancel"})  # closing windows: Cancel first
+            self.click("dialog[open] button[value=cancel]")
+            time.sleep(0.5)
+            self.assertEqual(self.call("return P.nvLockCalls;"), 0)
+            self.click("#lock-current")
+            self.click("dialog[open] button[value=confirm]")
+            self.assertTrue(harness.wait_until(lambda: self.call("return P.nvLockCalls;") == 1, 10))
+            self.assertTrue(
+                harness.wait_until(
+                    lambda: self.status_text() == self.m.execute("return browser.i18n.getMessage('vaultLockCurrentKept');"), 10
+                )
+            )
+        finally:
+            self.call("delete P.list; delete P.nvRealList; delete P.nvLockCalls; delete V.lockCurrent;")
+
+    def test_12_the_last_password_or_recovery_code_stays(self):
+        """Review F1: changes are confirmed with a password or the recovery code; with the computer login and
+        the code, the code cannot be removed (nothing could confirm a change after it)."""
+        profile_id, _ = self.create_via_api("SoChave", password=None, keyring=True)
+        self.open_page(f"vault/methods.html?p={profile_id}")
+        self.wait_state("idle")
+        rows = self.m.execute(
+            "return Object.fromEntries([...document.querySelectorAll('#methods > li')].map(li => [li.dataset.method,"
+            " {disabled: li.querySelector('button').disabled, note: li.querySelector('[id^=keep-]')?.textContent ?? null,"
+            " label: [...li.querySelectorAll('.row__note')].map(n => n.textContent)}]));"
+        )
+        self.assertEqual(sorted(rows), ["os-keyring", "recovery-code"])
+        self.assertTrue(rows["recovery-code"]["disabled"])
+        self.assertEqual(rows["recovery-code"]["note"], self.m.execute("return browser.i18n.getMessage('methodsLastConfirmer');"))
+        self.assertFalse(rows["os-keyring"]["disabled"])
+        self.assertEqual(rows["os-keyring"]["label"], [])  # the tools' own "computer login" label is not shown
+        self.shoot("methods-keyring")
 
 
 if __name__ == "__main__":

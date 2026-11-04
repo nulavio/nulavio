@@ -36,6 +36,10 @@
   --nv-motion-duration-fast: 120ms;
   --nv-motion-duration-base: 180ms;
   --nv-motion-duration-slow: 280ms;
+  --nv-motion-duration-expand: 220ms;
+  --nv-motion-duration-collapse: 160ms;
+  --nv-motion-duration-fade: 80ms;
+  --nv-motion-duration-spin: 900ms;
   --nv-motion-easing-standard: cubic-bezier(0.2, 0, 0, 1);
   --nv-motion-easing-enter: cubic-bezier(0, 0, 0, 1);
   --nv-motion-easing-exit: cubic-bezier(0.3, 0, 1, 1);
@@ -53,11 +57,13 @@
   --nv-size-tab-height: 34px;
   --nv-size-tab-heightCompact: 30px;
   --nv-size-tab-heightTouch: 41px;
+  --nv-size-tab-pinned: 36px;
   --nv-size-field-height: 36px;
   --nv-size-field-heightCompact: 30px;
   --nv-size-field-heightTouch: 40px;
   --nv-size-indicator-length: 16px;
   --nv-size-indicator-thickness: 2px;
+  --nv-size-sidebar-launcherExpanded: 224px;
   --nv-type-body-size: 1rem;
   --nv-type-body-weight: 400;
   --nv-type-body-lineHeight: 1.5;
@@ -98,8 +104,8 @@
   --nv-control-selected-weight: 700;
   --nv-route-vertical-width: 3px;
   --nv-route-vertical-height: 20px;
-  --nv-color-bg-canvas: light-dark(#F1F7F5, #0B1623);
-  --nv-color-bg-surface: light-dark(#FFFFFF, #112432);
+  --nv-color-bg-canvas: light-dark(#F1F7F5, #0F1C2A);
+  --nv-color-bg-surface: light-dark(#FFFFFF, #15293A);
   --nv-color-bg-raised: light-dark(#FFFFFF, #183746);
   --nv-color-bg-sunken: light-dark(#E2EBEE, #070F18);
   --nv-color-text-primary: light-dark(#0B1623, #F1F7F5);
@@ -107,6 +113,7 @@
   --nv-color-text-muted: light-dark(#4F7383, #8FAAB5);
   --nv-color-border-subtle: light-dark(#BFD0D6, #23495A);
   --nv-color-border-control: light-dark(#6B8794, #6E93A2);
+  --nv-color-border-separator: light-dark(#8FAAB5, #4F7383);
   --nv-color-accent-default: light-dark(#0F7A68, #6FE0C5);
   --nv-color-accent-on: light-dark(#FFFFFF, #0B1623);
   --nv-color-accent-tint: light-dark(#DDF8F0, #0E3B33);
@@ -117,14 +124,23 @@
   --nv-color-status-criticalText: light-dark(#A8323A, #EE8A8C);
   --nv-color-status-warningTint: light-dark(#FBEBD3, #3A2A12);
   --nv-color-status-criticalTint: light-dark(#F9DEDF, #3F1A1D);
-  --nv-color-chrome-toolbox: light-dark(#E2EBEE, #070F18);
-  --nv-color-chrome-toolbar: light-dark(#F1F7F5, #0B1623);
-  --nv-color-chrome-tabSelected: light-dark(#FFFFFF, #183746);
+  --nv-color-chrome-toolbox: light-dark(#E2EBEE, #060C14);
+  --nv-color-chrome-toolbar: light-dark(#F1F7F5, #0F1C2A);
+  --nv-color-chrome-tabSelected: light-dark(#FFFFFF, #1E4252);
   --nv-color-chrome-tabText: light-dark(#23495A, #BFD0D6);
-  --nv-color-chrome-field: light-dark(#FFFFFF, #112432);
+  --nv-color-chrome-field: light-dark(#FFFFFF, #15293A);
   --nv-color-chrome-icon: light-dark(#23495A, #BFD0D6);
-  --nv-color-chrome-private-toolbar: light-dark(#0B1623, #0B1623);
-  --nv-color-chrome-private-toolbox: light-dark(#070F18, #070F18);
+  --nv-color-chrome-private-toolbar: light-dark(#0F1C2A, #0F1C2A);
+  --nv-color-chrome-private-toolbox: light-dark(#060C14, #060C14);
+  --nv-color-chrome-private-tabSelected: light-dark(#1E4252, #1E4252);
+  --nv-color-chrome-private-field: light-dark(#15293A, #15293A);
+  --nv-color-chrome-private-raised: light-dark(#183746, #183746);
+  --nv-color-chrome-private-text: light-dark(#F1F7F5, #F1F7F5);
+  --nv-color-chrome-private-tabText: light-dark(#BFD0D6, #BFD0D6);
+  --nv-color-chrome-private-icon: light-dark(#BFD0D6, #BFD0D6);
+  --nv-color-chrome-private-border: light-dark(#23495A, #23495A);
+  --nv-color-chrome-private-control: light-dark(#6E93A2, #6E93A2);
+  --nv-color-chrome-private-accent: light-dark(#6FE0C5, #6FE0C5);
   --nv-color-identity-sky: light-dark(#8CCBF5, #8CCBF5);
   --nv-color-identity-violet: light-dark(#C2B0F7, #C2B0F7);
   --nv-color-identity-sand: light-dark(#FDCF8B, #FDCF8B);
@@ -139,12 +155,12 @@
   --nv-color-identity-edge-coral: light-dark(#070F18, #F4A8BD);
   --nv-color-identity-edge-sand: light-dark(#070F18, #FDCF8B);
   --nv-color-identity-edge-slate: light-dark(#070F18, #BFD0D6);
-  --nv-color-band-bg: light-dark(#BFD0D6, #04080D);
+  --nv-color-band-bg: light-dark(#E2EBEE, #060C14);
   --nv-color-band-text: light-dark(#0B1623, #F1F7F5);
   --nv-color-band-meta: light-dark(#23495A, #8FAAB5);
   --nv-color-band-rule: light-dark(#23495A, #6E93A2);
   --nv-color-band-hairline: light-dark(#6B8794, #4F7383);
-  --nv-color-band-lines: light-dark(#4F7383, #3A6273);
+  --nv-color-band-lines: light-dark(#4F7383, #4F7383);
   --nv-color-security-temporary-fill: light-dark(#F1F7F5, #04080D);
   --nv-color-security-temporary-edge: light-dark(#0B1623, #F1F7F5);
   --nv-color-security-temporary-text: light-dark(#0B1623, #F1F7F5);
@@ -172,7 +188,7 @@
   --nv-color-group-orange: light-dark(#6B4E3E, #B09584);
   --nv-color-group-purple: light-dark(#474F6B, #A0A7C2);
   --nv-color-group-red: light-dark(#6E4440, #B98E89);
-  --nv-color-control-selected-fill: light-dark(#FFFFFF, #112432);
+  --nv-color-control-selected-fill: light-dark(#FFFFFF, #15293A);
   --nv-color-control-selected-edge: light-dark(#0F7A68, #6FE0C5);
   --nv-color-control-selected-text: light-dark(#0B1623, #F1F7F5);
   --nv-color-selection-bg: light-dark(#0F7A68, #6FE0C5);
@@ -180,7 +196,7 @@
   --nv-color-focusOnAccent: light-dark(#FFFFFF, #0B1623);
   --nv-color-scrim: light-dark(rgba(7,15,24,0.55), rgba(0,0,0,0.55));
   --nv-color-surface-frost: light-dark(rgba(255,255,255,0.86), rgba(17,36,50,0.88));
-  --nv-color-surface-frostFallback: light-dark(#FFFFFF, #112432);
+  --nv-color-surface-frostFallback: light-dark(#FFFFFF, #15293A);
   --nv-color-downloads-attention-warning: light-dark(#8A5A10, #E7AE61);
   --nv-color-route-vertical: light-dark(#0F7A68, #6FE0C5);
   --nv-color-fullscreen-ink: light-dark(#0B1623, #0B1623);
@@ -188,6 +204,20 @@
   --nv-color-fullscreen-acting: light-dark(#6FE0C5, #6FE0C5);
   --nv-color-fullscreen-private: light-dark(#2A1745, #2A1745);
   --nv-color-fullscreen-foreground: light-dark(#F1F7F5, #F1F7F5);
+  --nv-color-identityTile-lima: light-dark(#C4DC92, #2F3D00);
+  --nv-color-identityTile-sky: light-dark(#A6D8FA, #133B52);
+  --nv-color-identityTile-violet: light-dark(#D4C8FF, #3A2E59);
+  --nv-color-identityTile-coral: light-dark(#FBBDCE, #4F2937);
+  --nv-color-identityTile-sand: light-dark(#E7CF94, #463F2C);
+  --nv-color-identityTile-slate: light-dark(#C9D3D6, #32383A);
+  --nv-color-identityGlyph-lima: light-dark(#334C00, #C5E384);
+  --nv-color-identityGlyph-sky: light-dark(#00476C, #8CCBF5);
+  --nv-color-identityGlyph-violet: light-dark(#492E7F, #C2B0F7);
+  --nv-color-identityGlyph-coral: light-dark(#721E3F, #F4A8BD);
+  --nv-color-identityGlyph-sand: light-dark(#593C00, #FDCF8B);
+  --nv-color-identityGlyph-slate: light-dark(#37454A, #BFD0D6);
+  --nv-color-ambience-from: light-dark(#F1F7F5, #0F1C2A);
+  --nv-color-ambience-to: light-dark(#DDF8F0, #0E3B33);
   --nv-elevation-1: 0 1px 2px rgba(7, 15, 24, 0.14);
   --nv-elevation-2: 0 4px 12px rgba(7, 15, 24, 0.14);
   --nv-elevation-3: 0 12px 32px rgba(7, 15, 24, 0.14);
@@ -201,5 +231,27 @@
   --nv-elevation-3: 0 12px 32px rgba(0, 0, 0, 0.5);
   --nv-translucency-frost-opacity: 0.88;
   --nv-translucency-frost-opacityFloor: 0.88;
+  }
+}
+@media -moz-pref("nulavio.appearance.accent", "blue") {
+  :root {
+    --nv-color-accent-default: light-dark(#2D64B5, #6AA7F4);
+    --nv-color-accent-tint: light-dark(#E8F0FB, #172B4D);
+    --nv-color-control-selected-edge: light-dark(#2D64B5, #6AA7F4);
+    --nv-color-selection-bg: light-dark(#2D64B5, #6AA7F4);
+    --nv-color-route-vertical: light-dark(#2D64B5, #6AA7F4);
+    --nv-color-ambience-to: light-dark(#E8F0FB, #172B4D);
+  }
+}
+@media -moz-pref("nulavio.appearance.moreContrast") {
+  :root {
+    --nv-color-text-secondary: light-dark(#23495A, #E2EBEE);
+    --nv-color-text-muted: light-dark(#23495A, #E2EBEE);
+    --nv-color-border-subtle: light-dark(#6B8794, #6E93A2);
+    --nv-color-border-control: light-dark(#3A6273, #8FAAB5);
+    --nv-color-border-separator: light-dark(#6B8794, #6E93A2);
+    --nv-color-chrome-tabText: light-dark(#23495A, #E2EBEE);
+    --nv-color-chrome-icon: light-dark(#23495A, #E2EBEE);
+    --nv-color-surface-frost: light-dark(#FFFFFF, #15293A);
   }
 }
