@@ -124,6 +124,29 @@ at `gkrust`. Finishing needs either more memory than the 16 GiB budget (larger
 host or runner) or a reviewed change to the release Rust LTO setting; neither
 was made here.
 
+## Fourth attempt with a 20 GiB container budget
+
+At the maintainer's request the guard now accepts `NULAVIO_BUILD_MEMORY_GIB` up
+to 20 (default still 16, reserve still 4 GiB), and Steam and Grok Bot were
+closed normally. The previous `last-result.json` was kept as
+`logs/last-result.onejob-20261104T121409.json`. The rerun (out dir
+`dist/rehearsal-159.0.1-guarded-20g/`, guard log
+`logs/guard-20261104T091901-1343461/`) resumed directly at `gkrust`.
+
+Guard window 12:19:01 to 12:28:26 UTC, 114 samples, host availability 19.73 GiB
+at start. Container memory reached 17.36 GiB with no `max` or `oom` events and
+was still growing by about 0.8 to 1 GiB per minute when host availability fell
+to 3.70 GiB. Exact reason: `available memory below reserve (3.70 GiB)`,
+`oom: false`, exit 75; the container was removed. SHA-256: `build.log`
+`d0157d9123d28b596bef6ff2398d8690d32f6e4b27b72b3b87e729ab192e9d44`, `telemetry.jsonl`
+`dffda9d71018da34a4b06f7b01a881770506ad589e03c7f8322ea3603747d844`, `result.json`
+`7a636db6b61e654a086c426f1eb4632fe00d30043a912b4863779fb6ab1528e4`.
+
+Release `gkrust` with Rust LTO therefore needs more than about 17.4 GiB on top of
+the desktop's own use, which this 32 GiB laptop cannot provide while keeping the
+4 GiB reserve. The remaining paths are a larger host or runner, or a reviewed
+change to the release Rust LTO setting.
+
 ## Verification and remaining gates
 
 The install-path regression test failed before the fix: a stub packager
