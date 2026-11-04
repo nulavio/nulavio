@@ -28,7 +28,13 @@ for (const name of Services.prefs.getChildList("")) {
   out[name] = type === Services.prefs.PREF_BOOL ? Services.prefs.getBoolPref(name)
     : type === Services.prefs.PREF_INT ? Services.prefs.getIntPref(name) : Services.prefs.getStringPref(name, "");
 }
-return {prefs: out, permissions: Services.perms.all.length};
+// Every permission, except the engine's record that a person clicked in a page of the Shell itself
+// (storageAccessAPI for the Shell's own origin, written on any real click; it grants nothing to a site).
+const shell = WebExtensionPolicy.getByID('shell@nulavio.net').getURL('').slice(0, -1); // without the trailing slash
+const permissions = Services.perms.all
+  .filter(p => !(p.type === 'storageAccessAPI' && p.principal.origin === shell))
+  .map(p => [p.type, p.principal.origin, p.capability].join(' ')).sort();
+return {prefs: out, permissions};
 """
 COLOURS = """
 const css = getComputedStyle(document.documentElement);
