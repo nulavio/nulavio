@@ -592,11 +592,17 @@ def ask(question: str, profile: str, page: dict | None = None, expected: dict | 
         raise AssistantError("too-large")
     _check_expected(provider, expected, chars)
     sent_page = min(len(str(page.get("text") or "")), MAX_PAGE_CHARS) if page else 0
+    sent_selection = min(len(str(selection.get("text") or "")), MAX_SELECTION_CHARS) if selection else 0
+    earlier = messages[:-1]
+    # What the receipt names (review UX5-D/G F2): the conversation and any page copy or selection it carried.
+    history_chars = sum(len(m["content"]) for m in earlier if isinstance(m.get("content"), str))
+    history_page = any(isinstance(t, dict) and (t.get("page") or t.get("selection")) for t in history or [])
+    where = (page or selection or {}).get("url")
 
     def record(outcome: str) -> None:
         # Sizes only, never text: everything this request carried (the conversation too), less the fixed instructions.
         audit.record(agent=data["agent"], client="nulavio-assistant", tool="assistant.ask",
-                     target=_origin(page.get("url")) if page else None, outcome=outcome,
+                     target=_origin(where), outcome=outcome,
                      input_chars=chars - len(SYSTEM))  # fmt: skip
 
     try:
@@ -623,7 +629,8 @@ def ask(question: str, profile: str, page: dict | None = None, expected: dict | 
     record("ok")
     pages = [p for p in [page, *(t.get("page") for t in history or [] if isinstance(t, dict))] if isinstance(p, dict)]
     return {"answer": text.strip(), "recipient": recipient(provider), "model": provider["model"],
-            "pageChars": sent_page, "chars": chars, "truncated": truncated,
+            "pageChars": sent_page, "selectionChars": sent_selection, "historyChars": history_chars,
+            "historyPage": history_page, "chars": chars, "truncated": truncated,
             "sources": sources(text, pages)}  # fmt: skip
 
 
@@ -634,22 +641,59 @@ def ask(question: str, profile: str, page: dict | None = None, expected: dict | 
 
 SOURCE_MIN = 24
 MAX_SOURCES = 5
-QUOTED = re.compile(r'“([^”]+)”|"([^"\n]+)"|«([^»]+)»|„([^“”]+)[“”]')
-LINK = re.compile(r"!?\[([^\]]*)\]\([^)]*\)")
+QUOTE_PAIRS = (("“", "”"), ("«", "»"), ("„", "“"), ("„", "”"), ('"', '"'))
 MARKS = re.compile(r"[*_`#>~|]+")
-HEADING = re.compile(r"^\s{0,3}#{1,6}\s+(.+?)\s*#*\s*$")
+MAX_LINE = 4096  # longer page lines are compared, but never searched with a pattern
+
+
+def _heading(line: str) -> str | None:
+    """A Markdown heading's text, without a pattern (a crafted line cannot make it slow)."""
+    stripped = line.lstrip(" ")
+    if len(line) - len(stripped) > 3 or not stripped.startswith("#"):
+        return None
+    level = len(stripped) - len(stripped.lstrip("#"))
+    rest = stripped[level:]
+    if level > 6 or not rest[:1].isspace():
+        return None
+    return rest.strip().rstrip("#").strip() or None
+
+
+def _strip_links(text: str) -> str:
+    """[text](address) and ![text](address) become their text, in one pass (no pattern to backtrack)."""
+    out, at = [], 0
+    while True:
+        start = text.find("[", at)
+        middle = text.find("](", start + 1) if start >= 0 else -1
+        end = text.find(")", middle + 2) if middle >= 0 else -1
+        if end < 0:
+            break
+        cut = start - 1 if start and text[start - 1] == "!" else start
+        out += [text[at:cut], text[start + 1 : middle]]
+        at = end + 1
+    out.append(text[at:])
+    return "".join(out)
 
 
 def _plain(text: str) -> str:
     text = unicodedata.normalize("NFC", text)
-    text = LINK.sub(r"\1", text)
+    text = _strip_links(text)
     text = MARKS.sub(" ", text)
     return " ".join(text.split())
 
 
 def _quotes(answer: str) -> list[str]:
     """What the answer presents as quoted: text in quotation marks, and Markdown quote blocks."""
-    found = ["".join(groups) for groups in (m.groups("") for m in QUOTED.finditer(answer))]
+    found = []
+    for opening, closing in QUOTE_PAIRS:  # each pair in one pass (str.find), never a pattern
+        at = 0
+        while (start := answer.find(opening, at)) >= 0:
+            end = answer.find(closing, start + 1)
+            if end < 0:
+                break
+            inside = answer[start + 1 : end]
+            if opening != '"' or "\n" not in inside:
+                found.append(inside)
+            at = end + 1
     block: list[str] = []
     for line in [*answer.splitlines(), ""]:
         if line.lstrip().startswith(">"):
@@ -664,9 +708,9 @@ def _indexed(page_text: str) -> tuple[str, list[tuple[int, str | None]]]:
     """The page's plain text, and for each line where it starts there, the heading above it."""
     plain, starts, heading = "", [], None
     for line in page_text.splitlines():
-        found = HEADING.match(line)
+        found = _heading(line[:MAX_LINE])
         if found:
-            heading = _plain(found.group(1)) or heading
+            heading = _plain(found) or heading
         piece = _plain(line)
         if piece:
             starts.append((len(plain) + (1 if plain else 0), heading))
@@ -677,9 +721,12 @@ def _indexed(page_text: str) -> tuple[str, list[tuple[int, str | None]]]:
 def sources(answer: str, pages: list[dict]) -> list[dict]:
     """Passages of `answer` quoted literally from one of `pages` ({url, title, text})."""
     out: list[dict] = []
-    indexed = [(page, *_indexed(str(page.get("text") or ""))) for page in pages]
-    for quote in _quotes(answer):
-        wanted = _plain(quote)
+    quotes = [q for q in (_plain(q) for q in _quotes(answer)) if len(q) >= SOURCE_MIN]
+    if not quotes:
+        return out  # nothing quoted: the pages are not even read
+    unique = list({(p.get("url"), p.get("text")): p for p in pages}.values())
+    indexed = [(page, *_indexed(str(page.get("text") or ""))) for page in unique]
+    for wanted in quotes:
         if len(wanted) < SOURCE_MIN or re.fullmatch(r"\S+://\S+", wanted):
             continue
         for page, plain, starts in indexed:

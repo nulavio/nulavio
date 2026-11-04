@@ -279,6 +279,32 @@ class AssistantTest(unittest.TestCase):
         decomposed = "Diz que “A taxa de ado\u0063\u0327a\u0303o caiu 12% no último trimestre”."  # NFD in the answer
         self.assertEqual(len(assistant.sources(decomposed, [page])), 1)
 
+    def test_sources_stay_fast_on_hostile_text(self):
+        """Review UX5-E F3: no pattern can backtrack on a crafted page line or answer."""
+        quote = "Diz “" + "A" * 30 + "” e mais"
+        hostile = ["# x" + " " * 20_000 + "y", "[" * 60_000, "“" * 60_000, '"' * 60_000, "![a](" * 20_000, "#" * 60_000]
+        for text in hostile:
+            started = time.monotonic()
+            assistant.sources(quote, [{"url": "u", "title": "t", "text": text}])
+            self.assertLess(time.monotonic() - started, 1.0, text[:12])
+        started = time.monotonic()
+        assistant.sources("“" * 60_000 + '"' * 60_000 + "[" * 60_000, [{"url": "u", "title": "t", "text": "x"}])
+        self.assertLess(time.monotonic() - started, 1.0)
+
+    def test_the_result_names_everything_that_went(self):
+        """Review UX5-D/G F2: the receipt can say when a selection or the conversation's page copy went."""
+        self.configure()
+        assistant.allow_profile(PROFILE, True)
+        selection = {"url": "https://sel.example/x", "title": "S", "text": "Texto selecionado aqui."}
+        result = assistant.ask("O que é?", PROFILE, None, None, None, None, selection)
+        self.assertEqual((result["pageChars"], result["selectionChars"], result["historyChars"], result["historyPage"]),
+                         (0, len(selection["text"]), 0, False))  # fmt: skip
+        self.assertEqual(audit.read(agent=assistant.load()["agent"])[-1]["target"], "https://sel.example")
+        history = [{"question": "Antes?", "page": {"url": "https://p.example/", "title": "P", "text": "PAGE"}, "answer": "Sim."}]
+        result = assistant.ask("E agora?", PROFILE, None, None, None, history)
+        self.assertTrue(result["historyPage"])
+        self.assertGreater(result["historyChars"], len("Antes?") + len("Sim."))
+
     def test_an_answer_carries_its_sources(self):
         self.configure()
         assistant.allow_profile(PROFILE, True)
