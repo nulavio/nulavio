@@ -307,7 +307,8 @@ html[data-page="newtab"]:not([data-painted]) .page {
       position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden;
       clip-path: inset(50%); white-space: nowrap;
     }
-    .layout-choice { gap: var(--nv-space-3); padding-block: var(--nv-space-4); }
+    /* B-11 (UX6): tighter still, so "Manter …" ends on the first screen at 150 % on 1280 x 800. */
+    .layout-choice { gap: var(--nv-space-2); padding-block: var(--nv-space-3); }
     .layout-options { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--nv-space-3); }
     .layout-option__preview { block-size: 2.5rem; inline-size: auto; }
     /* Each hint still describes its radio (aria-describedby), off screen. */

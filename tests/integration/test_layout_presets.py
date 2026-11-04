@@ -1177,6 +1177,22 @@ class LayoutPresetsTest(unittest.TestCase):
         self.assertEqual(shape, (3, 3, "polite", False), card)
         self.assertNotEqual(card["checkedEdge"], "rgba(0, 0, 0, 0)", card)
         self.assertIn(card["title"], ("Nova aba", "New Tab"))
+        # B-11 (UX6 S1): at 150 % on 1280 x 800 and 1366 x 768 screens the main action still ends on
+        # the first screen. The window is sized in CSS pixels, so a screen at 150 % is width / 1.5.
+        fold = (
+            "const r = document.getElementById('layout-choice-done').getBoundingClientRect();"
+            "return {bottom: Math.round(r.bottom), viewport: innerHeight};"
+        )
+        try:
+            self.m.chrome("Services.prefs.setCharPref('layout.css.devPixelsPerPx', '1.5');")
+            for width, height in ((1280, 800), (1366, 768)):
+                self.m.send("WebDriver:SetWindowRect", {"width": round(width / 1.5), "height": round(height / 1.5)})
+                time.sleep(0.8)
+                measured = self.m.execute(fold)
+                self.assertLessEqual(measured["bottom"], measured["viewport"], (width, height, measured))
+        finally:
+            self.m.chrome("Services.prefs.clearUserPref('layout.css.devPixelsPerPx');")
+            self.m.send("WebDriver:SetWindowRect", {"width": 1280, "height": 800})
 
     def test_a_locked_choice_marker_never_shows_a_card_that_cannot_close(self):
         # QA B-3: with nulavio.layout.choicePending locked to true (autoconfig) the card never
