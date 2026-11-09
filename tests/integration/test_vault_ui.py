@@ -74,6 +74,9 @@ class VaultUiTest(unittest.TestCase):
         cls.session.env["NULAVIO_BUSCTL"] = str(busctl)
         cls.session.env["NV_FAKE_AVAHI"] = str(cls.avahi)
         cls.m = cls.session.start()
+        # Connecting a phone is not offered by default (D10). The phone tests turn it on, as someone
+        # testing the Companion would; test 13 runs with the build's default.
+        cls.m.chrome('Services.prefs.setBoolPref("nulavio.vault.phone.pairing", true);')
         cls.base = cls.m.chrome('return WebExtensionPolicy.getByID("shell@nulavio.net").getURL("");')
         cls.shots = harness.artifacts_dir() / "vault-ui"
         cls.shots.mkdir(parents=True, exist_ok=True)
@@ -480,7 +483,7 @@ class VaultUiTest(unittest.TestCase):
         self.open_page(f"vault/phone.html?p={profile_id}")
         self.wait_state("idle")
         # Honest copy (SB-13): one more way to unlock, the others keep working; the button shows a QR, not the
-        # recovery code; the "no master key" footer lists the phone.
+        # recovery code; the "no master key" footer names no method, so it is true for every profile.
         copy = self.m.execute(
             "return {explain: document.getElementById('explain').textContent,"
             " cta: document.querySelector('#start-form button[type=submit]').textContent,"
@@ -489,7 +492,7 @@ class VaultUiTest(unittest.TestCase):
         self.assertIn("mais um jeito de desbloquear", copy["explain"])
         self.assertIn("continuam valendo", copy["explain"])
         self.assertEqual(copy["cta"], "Mostrar QR para o celular")
-        self.assertIn("celular", copy["footer"])
+        self.assertIn("um dos jeitos de desbloquear deste perfil", copy["footer"])
         self.shoot("phone-idle")
         self.type_into("current", "not the password")
         self.click("#start-form button[type=submit]")
@@ -697,6 +700,62 @@ class VaultUiTest(unittest.TestCase):
         self.assertFalse(rows["os-keyring"]["disabled"])
         self.assertEqual(rows["os-keyring"]["label"], [])  # the tools' own "computer login" label is not shown
         self.shoot("methods-keyring")
+
+    def test_13_connecting_a_phone_is_not_offered_yet(self):
+        """D10: phone and security-key unlock are not in 1.0. With the build's default no page offers to
+        connect a phone and the Shell refuses to start one; a phone connected before keeps working."""
+        pref = "nulavio.vault.phone.pairing"
+        self.m.chrome("Services.prefs.clearUserPref(arguments[0]);", [pref])
+        try:
+            self.assertFalse(self.m.chrome("return Services.prefs.getBoolPref(arguments[0], true);", [pref]), "the build default")
+            profile_id, _ = self.create_via_api("SemCelular", password=PASSWORD, keyring=False)
+            # The unlock-methods page: no link to the phones, and it says what is not available yet.
+            self.open_page(f"vault/methods.html?p={profile_id}")
+            self.wait_state("idle")
+            page = self.m.execute(
+                "return {link: document.getElementById('phones').getClientRects().length,"
+                " note: document.getElementById('not-yet').textContent};"
+            )
+            self.assertEqual(page["link"], 0, "the link to connect a phone is shown")
+            for words in ("celular", "chave de segurança", "ainda não disponíveis"):
+                self.assertIn(words, page["note"])
+            self.shoot("methods-not-yet")
+            # The phone page, opened by its address: it says so, offers no code and nothing to try again.
+            self.open_page(f"vault/phone.html?p={profile_id}")
+            self.wait_state("not-yet")
+            page = self.m.execute(
+                "return {explain: document.getElementById('explain').textContent,"
+                " form: document.getElementById('start-form').getClientRects().length,"
+                " retry: document.querySelector('.moment__retry') !== null};"
+            )
+            not_yet = self.m.execute("return browser.i18n.getMessage('phoneNotYet');")
+            self.assertEqual(page, {"explain": not_yet, "form": 0, "retry": False})
+            self.shoot("phone-not-yet")
+            # A page or anything else that calls the Shell directly is refused the same way.
+            with self.assertRaises(AssertionError) as refused:
+                self.call("return V.phoneStart(args[0], 'pair', {current: args[1]});", profile_id, PASSWORD)
+            self.assertEqual(str(refused.exception), "phone-not-yet")
+            # The phone connected in test 08 is still listed and can be removed, but no new one is offered.
+            self.open_page(f"vault/methods.html?p={self.phone_profile}")
+            self.wait_state("idle")
+            self.assertGreater(self.m.execute("return document.getElementById('phones').getClientRects().length;"), 0)
+            self.open_page(f"vault/phone.html?p={self.phone_profile}")
+            self.wait_state("idle")
+            page = self.m.execute(
+                "const form = document.getElementById('start-form');"
+                "return {phones: document.getElementById('phones').textContent,"
+                " remove: document.querySelectorAll('#phones button').length,"
+                " field: document.getElementById('current').getClientRects().length > 0,"
+                " connect: form.querySelector('button[type=submit]').getClientRects().length};"
+            )
+            self.assertIn("Pixel de teste", page["phones"])
+            self.assertEqual((page["remove"], page["field"], page["connect"]), (1, True, 0))
+            # ... and it still unlocks that profile.
+            self.open_page(f"vault/unlock.html?p={self.phone_profile}")
+            self.wait_state("idle")
+            self.assertIsNotNone(self.m.execute("return document.getElementById('use-phone');"))
+        finally:
+            self.m.chrome("Services.prefs.setBoolPref(arguments[0], true);", [pref])
 
 
 if __name__ == "__main__":

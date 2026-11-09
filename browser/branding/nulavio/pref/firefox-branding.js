@@ -145,6 +145,12 @@ pref("datareporting.policy.firstRunURL", "");
 // Settings and every Relay prompt; saved logins are unaffected.
 pref("signon.firefoxRelay.feature", "");
 
+// Unlocking with a phone is not part of 1.0 (decision D10, 2026-11-04): the
+// Companion app is not published, so connecting a phone is not offered and
+// the pages say "not available yet". A phone that is already connected keeps
+// unlocking and can be removed. Developers testing the Companion turn this on.
+pref("nulavio.vault.phone.pairing", false);
+
 // Performance and privacy: about:home (still the start page of profiles that
 // came from earlier builds) does not fetch the weather or stories in the
 // background. Defaults only: a person who turns them on keeps that choice.

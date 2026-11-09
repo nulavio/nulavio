@@ -1,7 +1,8 @@
 /* Connect a phone to a protected profile, or remove one (ADR 0005, S11). The phone runs Nulavio
    Companion; the computer shows a code, both screens show the same 6 digits, the user confirms on
    both. Pairing adds an unlock method, so the profile's current password or recovery code is asked
-   first. States on <body data-state>: loading, idle, waiting, compare, paired, error, unavailable. */
+   first. States on <body data-state>: loading, idle, waiting, compare, paired, error, unavailable,
+   not-yet (connecting a phone is not offered in this version, D10; a connected one can be removed). */
 
 import { localize, t } from "../lib/i18n.js";
 import { qrSvg } from "../lib/qr.js";
@@ -131,13 +132,25 @@ async function render() {
   }
   const phones = profile.methods.filter(m => m.method === "phone");
   byId("phones").replaceChildren(...(phones.length ? phones.map(phoneRow) : [h("li", { class: "hint", text: t("phoneNone") })]));
+  if (!capabilities.phonePairing) {
+    // Not offered yet: no way to start, and the page says so instead of how it would work. With a
+    // phone connected, the field stays, because removing it is confirmed with a current secret.
+    byId("explain").textContent = t("phoneNotYet");
+    byId("start-form").hidden = !phones.length;
+    byId("start-form").querySelector(".actions").hidden = true;
+    byId("pair-hint-key").hidden = true;
+    setState(phones.length ? "idle" : "not-yet");
+    return;
+  }
   byId("start-form").hidden = false;
   setState("idle");
 }
 
 byId("start-form").addEventListener("submit", event => {
   event.preventDefault();
-  start(byId("current").value);
+  if (!byId("start-form").querySelector(".actions").hidden) {
+    start(byId("current").value); // Enter in the field does nothing while connecting is not offered
+  }
 });
 byId("match").addEventListener("click", () => {
   setState("waiting", t("phoneWaitingConfirm"), "progress");
