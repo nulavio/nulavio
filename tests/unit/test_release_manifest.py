@@ -12,8 +12,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts" / "release"))
+sys.path.insert(0, str(ROOT / "scripts" / "upstream"))
 
 import release_manifest  # noqa: E402
+from verify_firefox_release import SIGNING_SUBKEYS  # noqa: E402
 
 RPM = "packages/x86_64/nulavio-159.0.1-0.1.fc44.x86_64.rpm"
 DEB = "packages/nulavio_159.0.1-0.1_amd64.deb"
@@ -43,7 +45,7 @@ class ReleaseManifestTest(unittest.TestCase):
         self.manifest = {
             "firefox": "159.0.1",
             "source_sha256": SOURCE,
-            "signing_subkey": "827E658608679618CD349F93678E455D76767AA3",
+            "signing_subkey": min(SIGNING_SUBKEYS),
             "engine_json": {"firefox": "159.0.1", "source_sha256": SOURCE},
             "nulavio_base_commit": self.base,
             "worktree_diff_sha256": hashlib.sha256(b"").hexdigest(),
