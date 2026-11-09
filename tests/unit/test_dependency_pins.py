@@ -195,9 +195,9 @@ class OtherPinsTest(unittest.TestCase):
     def test_dependabot_covers_every_pinned_ecosystem(self):
         config = (ROOT / ".github" / "dependabot.yml").read_text()
         for ecosystem, directory in [("github-actions", "/"), ("pip", "/requirements"), ("gradle", "/android"),
-                                     ("docker", "/ci/containers")]:  # fmt: skip
+                                     ("docker", "/ci/containers"), ("npm", "/ci/site")]:  # fmt: skip
             self.assertRegex(config, rf'package-ecosystem: "{ecosystem}"\n\s+directory: "{re.escape(directory)}"')
-        self.assertEqual(config.count("cooldown:"), 3)  # all but docker, whose registries give no release dates
+        self.assertEqual(config.count("cooldown:"), 4)  # all but docker, whose registries give no release dates
         self.assertNotIn("insecure-external-code-execution", config)
         self.assertNotRegex(config, r"(?m)^\s*registries:")  # no credentials handed to Dependabot
 
