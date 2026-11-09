@@ -228,6 +228,8 @@ class VaultUiTest(unittest.TestCase):
     def test_01_create_a_protected_profile_in_three_decisions(self):
         self.open_page("vault/create.html")
         self.wait_state("profile", "step")
+        # "Tentar de novo" belongs to a failed state the page lists, never to a page that just opened.
+        self.assertIsNone(self.m.execute("return document.querySelector('.moment__retry');"))
         # The pressed template looks pressed (DS-05): another surface and edge, and a ✓, not only aria-pressed.
         templates = self.m.execute(
             "return [...document.querySelectorAll('#templates button')].map(b => ({pressed: b.getAttribute('aria-pressed'),"
