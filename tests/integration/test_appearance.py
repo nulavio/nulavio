@@ -377,7 +377,9 @@ class AppearanceTest(unittest.TestCase):
                 " document.getElementById('appearance-locked').hidden];"
             )
             self.assertTrue(harness.wait_until(lambda: state() == ["blue", True, "blue", False], 10), state())
-            self.assertIn("#2D64B5", self.m.chrome(COLOURS)["accent"])
+            # The window is painted a moment after the page says so (it failed one run in three on a busy machine).
+            accent = lambda: self.m.chrome(COLOURS)["accent"]  # noqa: E731
+            self.assertTrue(harness.wait_until(lambda: "#2D64B5" in accent(), 10), accent())
         finally:
             self.m.chrome(
                 "Services.prefs.unlockPref('nulavio.appearance.accent');"
