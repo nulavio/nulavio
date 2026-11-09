@@ -369,7 +369,8 @@ class VaultUiTest(unittest.TestCase):
     def test_04_only_the_recovery_code_left(self):
         profile_id, code = self.create_via_api("SoLogin", password=None, keyring=True)
         self.keyring_store.write_text("[]")
-        self.open_page(f"vault/unlock.html?p={profile_id}")
+        url = self.server.url("/page/recovery-opened")
+        self.open_page(f"vault/unlock.html?p={profile_id}&u={url}")
         self.wait_state("idle")  # computer login is still offered first
         self.click("#use-keyring")
         self.wait_state("device-unavailable")
@@ -379,6 +380,10 @@ class VaultUiTest(unittest.TestCase):
         self.wait_state("unlocked", timeout=60)
         path = self.profile_path(profile_id)
         self.assertTrue(harness.wait_until(lambda: self.instances(path), timeout=60))
+        # Stop it once it is really up, as tests 02 and 09 do. The watcher polls for the engine that took
+        # the profile: one ended in its first half second is never seen, and the watcher then waits out
+        # its two-minute grace period before locking (this test failed that way about one run in four).
+        self.assertTrue(harness.wait_until(lambda: self.server.requests_to("/page/recovery-opened"), timeout=60))
         self.stop_instance(path)
         self.assertTrue(harness.wait_until(lambda: not storage.Container(path).mounted(), timeout=30))
 
