@@ -109,6 +109,19 @@ class SiteTest(unittest.TestCase):
                 for url in re.findall(r'(?:src|href|srcset)="(https?://[^"]+)"', html):
                     self.assertTrue(url.startswith(SAME_SITE), f"third-party resource {url}")
 
+    def test_addresses_are_kept_from_email_obfuscation(self):
+        """Every page opts out of Cloudflare's address rewriting, which adds a script the site's policy blocks."""
+        opened, closed = build_site.EMAIL_OFF
+        for page in sorted(f for f in self.files if f.endswith(".html")):
+            html = (self.out / page).read_text(encoding="utf-8")
+            with self.subTest(page=page):
+                self.assertEqual((html.count(opened), html.count(closed)), (1, 1))
+                self.assertIn(f"<body>\n{opened}\n", html)
+                self.assertIn(f"\n{closed}\n</body>", html)
+                inside = html[html.index(opened) : html.index(closed)]
+                self.assertEqual(html.count("@nulavio.net"), inside.count("@nulavio.net"), "an address outside the opt-out")
+        self.assertIn("mailto:security@nulavio.net", (self.out / "index.html").read_text(encoding="utf-8"))
+
     def test_local_references_resolve(self):
         for page in PAGES:
             html = (self.out / page).read_text(encoding="utf-8")
