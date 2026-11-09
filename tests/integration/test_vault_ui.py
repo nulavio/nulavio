@@ -190,6 +190,15 @@ class VaultUiTest(unittest.TestCase):
             (self.shots / f"{name}-{scheme}.png").write_bytes(self.m.screenshot_png(full=True))
         self.m.execute("delete document.documentElement.dataset.theme;")
 
+    def password_prompt(self, wait: float = 3) -> bool:
+        """Whether the engine's password manager offers to save a login, in any tab (these pages open in the background)."""
+        script = (
+            "for (const w of Services.wm.getEnumerator('navigator:browser')) {"
+            " if (w.gBrowser.browsers.some(b => w.PopupNotifications.getNotification('password', b))) { return true; } }"
+            "return false;"
+        )
+        return harness.wait_until(lambda: self.m.chrome(script), timeout=wait, interval=0.25)
+
     def profile_path(self, profile_id: int) -> Path:
         return Path(self.call("return (await SPS.getProfile(args[0])).path;", profile_id))
 
@@ -292,12 +301,17 @@ class VaultUiTest(unittest.TestCase):
         self.assertEqual(self.m.execute("return document.activeElement.id;"), "password")  # keyboard first
         self.assertEqual(self.m.execute("return document.getElementById('url').textContent;"), url)
         self.shoot("unlock-idle")
-        self.type_into("password", "not the password")
+        # Typed with real keys: the engine's password manager only captures what a person typed.
+        self.m.send("WebDriver:ElementSendKeys", {"id": self.m.find_element("#password"), "text": "not the password"})
         self.click("#password-form button[type=submit]")
         self.wait_state("error")
         self.assertEqual(self.m.execute("return document.activeElement.id;"), "password")
         self.assert_status("error")  # critical colour and icon, no ✓ and no amber (SB-12)
         self.shoot("unlock-error")
+        # The profile's password is never offered to this profile's password manager, which may be unprotected.
+        origin = self.base.rstrip("/")
+        self.assertFalse(self.m.chrome("return Services.logins.getLoginSavingEnabled(arguments[0]);", [origin]))
+        self.assertFalse(self.password_prompt(), "the engine offered to save the profile's password")
         self.click("#use-recovery")
         self.type_into("recovery", "1234")
         self.click("#recovery-form button[type=submit]")
