@@ -16,6 +16,10 @@ work=${NULAVIO_BUILD_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/nulavio-build}
 install="$work/install/nulavio"
 # Package exactly the tree installed below, including with a private build cache.
 export NULAVIO_INSTALL_DIR="$install"
+# The package release: one above the published one for the same Firefox, so that
+# dnf upgrades the people who installed it (release_manifest.py verify refuses less).
+NULAVIO_RELEASE=${NULAVIO_RELEASE:-$(python3 -I "$repo/scripts/release/release_manifest.py" next-release "$version")}
+export NULAVIO_RELEASE
 out=$(mkdir -p "${2:-$repo/dist/rehearsal-$version}" && cd "${2:-$repo/dist/rehearsal-$version}" && pwd)
 mkdir -p "$out/logs" "$out/packages"
 report="$out/rehearsal.md"

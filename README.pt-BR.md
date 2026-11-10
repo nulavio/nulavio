@@ -55,7 +55,7 @@ O Nulavio acompanha o canal de releases do Firefox e busca publicar cada atualiz
 No Fedora 44 ou mais novo, x86_64:
 
 ```sh
-sudo dnf config-manager addrepo --from-repofile=https://packages.nulavio.net/rpm/nulavio.repo
+sudo dnf config-manager addrepo --from-repofile=https://nulavio.net/rpm/nulavio.repo
 sudo dnf install nulavio
 ```
 

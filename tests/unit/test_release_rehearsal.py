@@ -22,6 +22,10 @@ class RehearsalInstallTest(unittest.TestCase):
             release.mkdir(parents=True)
             script = release / "rehearse_release.sh"
             shutil.copyfile(ROOT / "scripts" / "release" / script.name, script)
+            shutil.copyfile(ROOT / "scripts" / "release" / "release_manifest.py", release / "release_manifest.py")
+            # 159.0.1-0.1 is published: the rehearsal builds the next release, which dnf upgrades to.
+            (repo / "packaging").mkdir()
+            (repo / "packaging" / "release.json").write_text('{"version": "159.0.1-0.1"}')
             for name in (
                 "scripts/upstream/verify_firefox_release.py",
                 "scripts/build/make_distribution.py",
@@ -45,7 +49,10 @@ class RehearsalInstallTest(unittest.TestCase):
             for packager in ("rpm", "deb"):
                 for name in ("make_rpm.sh", "check_rpm.sh", "make_deb.sh"):
                     path = release / name
-                    body = 'printf "%s\\n" "${NULAVIO_INSTALL_DIR-unset}" > "$1/install-path"\nexit 41\n'
+                    body = (
+                        'printf "%s\\n" "${NULAVIO_INSTALL_DIR-unset}" > "$1/install-path"\n'
+                        'printf "%s\\n" "${NULAVIO_RELEASE-unset}" > "$1/release"\nexit 41\n'
+                    )
                     path.write_text("#!/bin/sh\n" + (body if name == f"make_{packager}.sh" else "exit 0\n"))
                     path.chmod(0o755)
                 env = {
@@ -60,6 +67,7 @@ class RehearsalInstallTest(unittest.TestCase):
                 self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
                 self.assertIn(f"rehearsal: {packager} failed", result.stderr)
                 self.assertEqual((out / "packages" / "install-path").read_text().strip(), str(work / "install" / "nulavio"))
+                self.assertEqual((out / "packages" / "release").read_text().strip(), "0.2")
 
 
 if __name__ == "__main__":

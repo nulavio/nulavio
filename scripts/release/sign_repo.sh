@@ -9,9 +9,14 @@
 #   GNUPGHOME=~/.gnupg scripts/release/sign_repo.sh <packages-dir> <repo-out> <key-id>
 #
 # Output: <repo-out>/x86_64/*.rpm (signed), repodata/ (createrepo_c),
-# repodata/repomd.xml.asc (detached signature), nulavio-packages.asc (public
-# key) and nulavio.repo for users. Upload <repo-out> as it is, to the
-# directory NULAVIO_REPO_BASEURL names (repodata/ sits at its top).
+# repodata/repomd.xml.asc (detached signature) and nulavio-packages.asc (public
+# key). Upload <repo-out> as it is, to the directory NULAVIO_REPO_BASEURL names
+# (repodata/ sits at its top).
+#
+# No nulavio.repo here: that file decides whether dnf checks signatures, so it
+# must not live where the packages are uploaded (anyone who can write the bucket
+# could turn the checks off). It is site/rpm/nulavio.repo, served by the site
+# (https://nulavio.net/rpm/nulavio.repo) from the reviewed git tree.
 #
 # With NULAVIO_RELEASE_MANIFEST=<rehearsal-out>/manifest.json (publish_release.sh
 # sets it), every package in <packages-dir> must be listed there with the same
@@ -25,8 +30,6 @@ packages=$(realpath "${1:?usage: sign_repo.sh <packages-dir> <repo-out> <key-id>
 out=$(mkdir -p "${2:?repo-out}" && realpath "$2")
 key=${3:?key id or fingerprint}
 gnupg=$(realpath "${GNUPGHOME:-$HOME/.gnupg}")
-baseurl=${NULAVIO_REPO_BASEURL:-https://packages.nulavio.net/rpm}
-keyurl=${NULAVIO_REPO_KEYURL:-https://nulavio.net/keys/nulavio-packages.asc}
 image=$("$(dirname "$0")/base_image.sh" fedora-build)
 
 if [[ -n ${NULAVIO_RELEASE_MANIFEST:-} ]]; then
@@ -53,8 +56,6 @@ podman run --rm --security-opt label=disable \
     createrepo_c --quiet /repo
     gpg --batch --yes --local-user "'"$key"'" --detach-sign --armor /repo/repodata/repomd.xml
     gpg --batch --yes --armor --export "'"$key"'" > /repo/nulavio-packages.asc
-    printf "%s\n" "[nulavio]" "name=Nulavio" "baseurl='"$baseurl"'" "enabled=1" \
-        "gpgcheck=1" "repo_gpgcheck=1" "gpgkey='"$keyurl"'" > /repo/nulavio.repo
     rm -rf "$GNUPGHOME"
 '
 echo "signed repository in $out"

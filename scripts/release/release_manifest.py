@@ -3,6 +3,7 @@
 
     python3 -I scripts/release/release_manifest.py verify <rehearsal-out> [--repo DIR] [--on REF]
     python3 -I scripts/release/release_manifest.py packages <manifest.json> <packages-dir>
+    python3 -I scripts/release/release_manifest.py next-release <firefox-version> [--repo DIR]
 
 ``verify`` refuses a rehearsal that is not fit to publish: not finished, built
 from a tree with uncommitted or untracked changes, an engine pin that differs
@@ -98,12 +99,57 @@ def tag(manifest: dict) -> tuple[str, list[str]]:
     return versions.pop(), rpms
 
 
+def _numbers(text: str) -> tuple[int, ...]:
+    return tuple(int(part) for part in text.split("."))
+
+
+def published(repo: Path) -> tuple[str, str] | None:
+    """The (Firefox version, package release) of the published release, if any."""
+    try:
+        data = json.loads((repo / "packaging" / "release.json").read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return None
+    except (OSError, ValueError) as e:
+        raise ManifestError(f"cannot read packaging/release.json ({e})") from None
+    version = data.get("version")
+    if not version:
+        return None
+    match = re.fullmatch(r"(\d+(?:\.\d+)+)-([0-9]+(?:\.[0-9]+)*)", version)
+    if not match:
+        raise ManifestError(f"packaging/release.json: version {version!r} is not <firefox>-<release>")
+    return match[1], match[2]
+
+
+def check_newer(release_tag: str, repo: Path) -> None:
+    version, _, release = release_tag[1:].partition("-")
+    current = published(repo)
+    if current and (_numbers(version), _numbers(release)) <= (_numbers(current[0]), _numbers(current[1])):
+        raise ManifestError(
+            f"{release_tag} is not newer than the published {current[0]}-{current[1]}: dnf would not upgrade "
+            "to it; rebuild with a higher NULAVIO_RELEASE"
+        )
+    exists = subprocess.run(["git", "-C", str(repo), "rev-parse", "-q", "--verify", f"refs/tags/{release_tag}"],
+                            capture_output=True)  # fmt: skip
+    if exists.returncode == 0:
+        raise ManifestError(f"the tag {release_tag} already exists")
+
+
+def next_release(firefox: str, repo: Path) -> str:
+    current = published(repo)
+    if not current or current[0] != firefox:
+        return "0.1"
+    parts = list(_numbers(current[1]))
+    parts[-1] += 1
+    return ".".join(map(str, parts))
+
+
 def verify(out: Path, repo: Path, ref: str) -> dict:
     manifest = load(out / "manifest.json")
     check_tree(manifest)
     check_files(manifest, out)
     check_base(manifest["nulavio_base_commit"], repo, ref)
     release_tag, rpms = tag(manifest)
+    check_newer(release_tag, repo)
     return {
         "tag": release_tag,
         "firefox": manifest["firefox"],
@@ -135,10 +181,15 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("packages", help="every package in a directory is listed in the manifest")
     p.add_argument("manifest", type=Path)
     p.add_argument("packages", type=Path)
+    n = sub.add_parser("next-release", help="the package release to build for a Firefox version")
+    n.add_argument("firefox")
+    n.add_argument("--repo", type=Path, default=ROOT)
     args = parser.parse_args(argv)
     try:
         if args.command == "verify":
             print(json.dumps(verify(args.out, args.repo, args.on), indent=2))
+        elif args.command == "next-release":
+            print(next_release(args.firefox, args.repo))
         else:
             print("\n".join(check_packages(args.manifest, args.packages)))
     except ManifestError as e:
