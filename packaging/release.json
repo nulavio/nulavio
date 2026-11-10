@@ -1,0 +1,8 @@
+{
+  "comment": "The published release the download pages describe. build_site.py leaves the pages out until version and key_fingerprint are set and site/keys/nulavio-packages.asc exists; publish_release.sh prints when to set version.",
+  "channel": "alpha",
+  "version": "",
+  "key_fingerprint": "",
+  "repo_file": "https://packages.nulavio.net/rpm/nulavio.repo",
+  "key_url": "https://nulavio.net/keys/nulavio-packages.asc"
+}

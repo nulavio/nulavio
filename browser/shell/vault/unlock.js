@@ -37,7 +37,21 @@ function busy(on) {
   }
 }
 
+/* A refused secret marks its field (the 2 px critical edge of accessibility.md) and the status line
+   under the form is the field's description, so a screen reader hears the reason with the field.
+   The mark and the message belong to that attempt: they go when the person types again or moves
+   to the other form, where a message about the first field would be wrong. */
+function clearRefusal() {
+  for (const id of ["password", "recovery"]) {
+    byId(id).removeAttribute("aria-invalid");
+  }
+  if (document.body.dataset.state === "error") {
+    setState("idle");
+  }
+}
+
 function showRecovery(show) {
+  clearRefusal();
   byId("recovery-form").hidden = !show;
   byId("password-form").hidden = show || !profile.methods.some(m => m.method === "password");
   byId("alternatives").hidden = show;
@@ -69,9 +83,11 @@ async function attempt(method, secret = null) {
       setState("error", t(method === "recovery-code" ? "vaultWrongRecovery" : "vaultWrongPassword"), "error");
       const field = method === "recovery-code" ? byId("recovery") : byId("password");
       field.value = "";
+      field.setAttribute("aria-invalid", "true");
       field.focus();
     } else if (code === "recovery-code-malformed") {
       setState("error", t("vaultRecoveryMalformed"), "error");
+      byId("recovery").setAttribute("aria-invalid", "true");
       byId("recovery").focus();
     } else {
       setState("error", errorText(e), "error");
@@ -200,6 +216,9 @@ byId("recovery-form").addEventListener("submit", event => {
   attempt("recovery-code", byId("recovery").value);
 });
 byId("recovery-back").addEventListener("click", () => showRecovery(false));
+for (const id of ["password", "recovery"]) {
+  byId(id).addEventListener("input", clearRefusal);
+}
 byId("phone-cancel").addEventListener("click", () => {
   if (phoneSession) {
     browser.nulavioVault.phoneSession(phoneSession, "cancel").catch(() => null);

@@ -1,10 +1,9 @@
 # Security-sensitive paths and who must review changes to them.
 #
-# On the current plan (private repository, GitHub Free) this file is
-# documentation only: GitHub does not request or require code-owner reviews.
-# It takes effect if the repository becomes public or moves to GitHub Pro, and
-# becomes a merge requirement only with a ruleset that asks for code-owner
-# review (docs/process/pull-requests.md, "Upgrading the plan").
+# Documentation only: main's branch protection does not ask for code-owner
+# review (one maintainer, whose account the agents also use). It becomes a
+# merge requirement only when that setting is turned on
+# (docs/process/pull-requests.md, "If the plan changes").
 
 /.github/                          @caiolombello
 /browser/patches/                  @caiolombello

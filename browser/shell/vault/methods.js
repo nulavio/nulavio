@@ -129,7 +129,10 @@ async function render() {
   }
   byId("current").disabled = !confirmers;
   byId("add-keyring").hidden = !capabilities.keyring || methods.some(m => m.method === "os-keyring");
+  // Connecting a phone is not offered yet (D10); the link stays while one is connected, to remove it.
   byId("phones").href = `phone.html?p=${profileId}`;
+  byId("phones").hidden = !capabilities.phonePairing && !methods.some(m => m.method === "phone");
+  byId("not-yet").textContent = t(capabilities.phonePairing ? "methodsNotYetKey" : "methodsNotYet");
   setState(byId("code-step").hidden ? "idle" : "code");
 }
 

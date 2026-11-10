@@ -1,4 +1,4 @@
-"""nulavio.net static site: no scripts or third parties, strict headers, honest copy."""
+"""nulavio.net: static pages with no scripts or third parties, strict headers, honest copy, and the waitlist."""
 
 from __future__ import annotations
 
@@ -7,6 +7,8 @@ import itertools
 import json
 import re
 import shutil
+import sqlite3
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -21,8 +23,14 @@ import build_site  # noqa: E402
 import verify_live  # noqa: E402
 from contrast import ratio  # noqa: E402
 
-PAGES = ["index.html", "en/index.html", "404.html"]
+# The landing (what Nulavio is at launch, the comparison, the waitlist form), the waitlist pages and the
+# engineering document ("Recibo": what is ready today, with captures and excerpts from the tree).
 LANDING = {"index.html": "pt-BR", "en/index.html": "en-US"}
+WAITLIST = {"lista/index.html": "pt-BR", "en/waitlist/index.html": "en-US"}
+DOCUMENT = {"engenharia/index.html": "pt-BR", "en/engineering/index.html": "en-US"}
+PAGES = [*LANDING, *WAITLIST, *DOCUMENT, "404.html"]
+FORM_LANG = {"pt-BR": "pt-BR", "en-US": "en"}  # the page's locale -> the form's "lang" field
+WORKER = ROOT / "site" / "_worker.js"
 SAME_SITE = "https://nulavio.net/"
 SHOTS = ROOT / "site" / "assets" / "shots"
 VOID = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track", "wbr"}
@@ -109,11 +117,26 @@ class SiteTest(unittest.TestCase):
                 for url in re.findall(r'(?:src|href|srcset)="(https?://[^"]+)"', html):
                     self.assertTrue(url.startswith(SAME_SITE), f"third-party resource {url}")
 
+    def test_addresses_are_kept_from_email_obfuscation(self):
+        """Every page opts out of Cloudflare's address rewriting, which adds a script the site's policy blocks."""
+        opened, closed = build_site.EMAIL_OFF
+        for page in sorted(f for f in self.files if f.endswith(".html")):
+            html = (self.out / page).read_text(encoding="utf-8")
+            with self.subTest(page=page):
+                self.assertEqual((html.count(opened), html.count(closed)), (1, 1))
+                self.assertIn(f"<body>\n{opened}\n", html)
+                self.assertIn(f"\n{closed}\n</body>", html)
+                inside = html[html.index(opened) : html.index(closed)]
+                self.assertEqual(html.count("@nulavio.net"), inside.count("@nulavio.net"), "an address outside the opt-out")
+        # The security address is on the engineering pages since the landing (#16); it must reach them intact.
+        for page in ("engenharia/index.html", "en/engineering/index.html"):
+            self.assertIn("mailto:security@nulavio.net", (self.out / page).read_text(encoding="utf-8"))
+
     def test_local_references_resolve(self):
         for page in PAGES:
             html = (self.out / page).read_text(encoding="utf-8")
             for ref in re.findall(r'(?:src|href|srcset)="(/[^"]*)"', html):
-                target = ref.lstrip("/")
+                target = ref.lstrip("/").partition("#")[0]
                 with self.subTest(page=page, ref=ref):
                     if not target or target.endswith("/"):
                         self.assertIn(f"{target}index.html", self.files)
@@ -127,6 +150,7 @@ class SiteTest(unittest.TestCase):
         self.assertIn("frame-ancestors 'none'", csp)
         self.assertNotIn("unsafe", csp)
         self.assertNotIn("script-src", csp, "the site has no scripts to allow")
+        self.assertIn("form-action 'self'", csp, "the waitlist forms post to this origin and nowhere else")
         self.assertIn("Referrer-Policy: no-referrer", headers)
         self.assertIn("X-Content-Type-Options: nosniff", headers)
         self.assertRegex(headers, r"Strict-Transport-Security: max-age=\d+")
@@ -149,12 +173,26 @@ class SiteTest(unittest.TestCase):
         self.assertLess(expires - now, dt.timedelta(days=366), "RFC 9116 recommends less than a year")
 
     def test_copy_is_honest(self):
-        pt = (self.out / "index.html").read_text(encoding="utf-8")
-        en = (self.out / "en/index.html").read_text(encoding="utf-8")
-        self.assertIn("não é afiliado à Mozilla", pt)
-        self.assertIn("not affiliated with Mozilla", en)
+        for pages in (LANDING, DOCUMENT):
+            pt, en = (self.read(page) for page in pages)
+            self.assertIn("não é afiliado à Mozilla", pt)
+            self.assertIn("not affiliated with Mozilla", en)
+        pt, en = (self.read(page) for page in DOCUMENT)
         self.assertIn("Em desenvolvimento", pt)
         self.assertIn("In development", en)
+        # The landing sells the launch, and still says what a browser cannot do: no anonymity
+        # (Tor Browser's job), and one trade-off in plain words under every feature.
+        pt, en = (self.read(page) for page in LANDING)
+        self.assertIn("use o Tor Browser", pt)
+        self.assertIn("use Tor Browser", en)
+        for page, label in (("index.html", "Sem letra miúda:"), ("en/index.html", "No fine print:")):
+            tree = self.tree(page)
+            features = [n for n in tree.all("section") if "feature" in n.classes()]
+            self.assertGreaterEqual(len(features), 5)
+            for feature in features:
+                fine = [n for n in feature.walk() if "fine" in n.classes()]
+                self.assertEqual(len(fine), 1, feature.attrs)
+                self.assertIn(label, fine[0].text())
         absolute = re.compile(r"(?i)\b(100\s?%|unhackable|imune|immune|totalmente seguro|completely secure|garantid|guarantee)")
         for page in PAGES:
             self.assertIsNone(absolute.search((self.out / page).read_text(encoding="utf-8")), page)
@@ -172,10 +210,12 @@ class SiteTest(unittest.TestCase):
             self.assertNotIn("{{", self.read(page), page)
 
     def test_both_languages_have_the_same_ids(self):
-        ids = {page: [n.attrs["id"] for n in self.tree(page).all() if "id" in n.attrs] for page in LANDING}
-        pt, en = ids.values()
-        self.assertEqual(len(pt), len(set(pt)), "duplicate ids")
-        self.assertEqual(pt, en)
+        for pages in (LANDING, WAITLIST, DOCUMENT):
+            ids = {page: [n.attrs["id"] for n in self.tree(page).all() if "id" in n.attrs] for page in pages}
+            pt, en = ids.values()
+            with self.subTest(pages=list(pages)):
+                self.assertEqual(len(pt), len(set(pt)), "duplicate ids")
+                self.assertEqual(pt, en)
 
     def test_one_h1_and_heading_levels_do_not_skip(self):
         for page in PAGES:
@@ -189,22 +229,25 @@ class SiteTest(unittest.TestCase):
     def test_images_have_alt_text(self):
         for page in PAGES:
             tree = self.tree(page)
-            signoff = next((n for n in tree.all() if n.attrs.get("id") == "signoff"), None)
-            decorative = {id(n) for n in signoff.walk()} if signoff else set()
+            # Decorative: the sign-off symbol, and what sits inside a drawing that is one image with its own label.
+            drawings = [n for n in tree.all() if n.attrs.get("role") == "img" and n.tag != "svg"]
+            around = [*drawings, *(n for n in tree.all() if n.attrs.get("id") == "signoff")]
+            decorative = {id(n) for parent in around for n in parent.walk()}
             for img in tree.all("img"):
                 with self.subTest(page=page, src=img.attrs.get("src")):
                     self.assertIn("alt", img.attrs)
                     if id(img) in decorative:
-                        self.assertEqual(img.attrs["alt"], "", "the sign-off symbol is decorative")
+                        self.assertEqual(img.attrs["alt"], "", "decorative: the label is on the drawing around it")
                     else:
                         self.assertTrue(img.attrs["alt"].strip())
 
     def test_figures_tables_and_scroll_regions_are_labelled(self):
-        for page in LANDING:
+        for page in (*LANDING, *WAITLIST, *DOCUMENT):
             tree = self.tree(page)
             with self.subTest(page=page):
                 figures = tree.all("figure")
-                self.assertGreaterEqual(len(figures), 5)
+                if page in DOCUMENT:
+                    self.assertGreaterEqual(len(figures), 5)
                 for figure in figures:
                     self.assertTrue(any(n.tag == "figcaption" for n in figure.walk()), figure.attrs)
                 for table in tree.all("table"):
@@ -214,6 +257,9 @@ class SiteTest(unittest.TestCase):
                 for node in tree.all():
                     if node.attrs.get("tabindex") == "0":
                         self.assertTrue(node.attrs.get("aria-label") or node.attrs.get("aria-labelledby"), node.attrs)
+                    if node.attrs.get("role") == "img" and node.tag != "svg":
+                        # a drawing of the interface made of HTML: one image, described in a sentence or more
+                        self.assertGreater(len(node.attrs.get("aria-label", "")), 60, node.attrs)
                 for svg in (n for n in tree.all("svg") if n.attrs.get("role") == "img"):
                     # the <title> is the name and the <desc> the description: never one long name
                     for attr, kind in (("aria-labelledby", "title"), ("aria-describedby", "desc")):
@@ -229,7 +275,7 @@ class SiteTest(unittest.TestCase):
             with self.subTest(shot=shot.name):
                 self.assertIn(shot.name, entries)
                 self.assertEqual(hashlib.sha256(shot.read_bytes()).hexdigest(), entries[shot.name]["sha256"])
-        for page, locale in LANDING.items():
+        for page, locale in DOCUMENT.items():
             tree = self.tree(page)
             onscreen = [" ".join(n.text().split()) for n in tree.all() if "onscreen" in n.classes()]
             used = set(re.findall(r'/assets/shots/([^"]+)', self.read(page)))
@@ -244,7 +290,7 @@ class SiteTest(unittest.TestCase):
     def test_excerpts_are_generated_from_the_tree(self):
         headers = (ROOT / "site" / "_headers").read_text(encoding="utf-8")
         e1 = build_site.excerpt_e1(ROOT)
-        for page in LANDING:
+        for page in DOCUMENT:
             tree = self.tree(page)
             pres = {n.parent.attrs.get("aria-label"): n.text() for n in tree.all("pre")}
             with self.subTest(page=page):
@@ -263,14 +309,208 @@ class SiteTest(unittest.TestCase):
         text_pairs += [("status-warning", bg) for bg in ("bg-canvas", "bg-surface", "bg-sunken")]
         border_pairs = [("border-control", bg) for bg in ("bg-canvas", "bg-surface", "bg-sunken")]
         border_pairs += [("focus", "bg-canvas"), ("focus", "bg-sunken")]
+        # The landing (site/landing.css). Text: buttons, the Nulavio column of the comparison, the
+        # notices, the mock-ups' own chrome. Icons, large type and control edges need 3:1.
+        text_pairs += [("accent-on", "accent-default"), ("text-muted", "bg-surface")]
+        tinted = ("accent-tint", "status-warningTint", "bg-raised")
+        text_pairs += [(fg, bg) for fg in ("text-primary", "text-secondary") for bg in tinted]
+        text_pairs += [("security-guard-text", "security-guard-fill"), ("status-criticalText", "bg-surface")]
+        text_pairs += [("band-text", "band-bg"), ("band-meta", "band-bg"), ("control-selected-text", "control-selected-fill")]
+        text_pairs += [(f"identityGlyph-{hue}", f"identityTile-{hue}") for hue in ("lima", "sky", "sand", "violet")]
+        border_pairs += [("accent-default", bg) for bg in ("bg-canvas", "bg-surface", "bg-sunken", "accent-tint")]
+        border_pairs += [("status-warning", "accent-tint"), ("text-muted", "accent-tint"), ("status-critical", "bg-surface")]
+        border_pairs += [("control-selected-edge", "bg-sunken"), ("security-temporary-edge", "bg-canvas")]
         for scheme, values in (("light", light), ("dark", dark)):
             for pairs, minimum in ((text_pairs, 4.5), (border_pairs, 3.0)):
                 for fg, bg in pairs:
                     with self.subTest(scheme=scheme, fg=fg, bg=bg):
                         value = ratio(values[f"--nv-color-{fg}"], values[f"--nv-color-{bg}"])
                         self.assertGreaterEqual(value, minimum)
-        site_css = (ROOT / "site" / "site.css").read_text(encoding="utf-8")
-        self.assertNotRegex(site_css, r"#[0-9A-Fa-f]{3,8}\b|rgb\(|hsl\(", "site.css takes every colour from the tokens")
+        for sheet in build_site.STYLESHEETS:
+            css = (ROOT / "site" / sheet).read_text(encoding="utf-8")
+            self.assertNotRegex(css, r"#[0-9A-Fa-f]{3,8}\b|rgb\(|hsl\(", f"{sheet} takes every colour from the tokens")
+
+    # -- landing and waitlist -------------------------------------------------------------
+
+    def test_stamped_numbers_come_from_the_tree(self):
+        prefs = (ROOT / "browser" / "config" / "prefs" / "baseline.js").read_text(encoding="utf-8")
+        defaults = len(re.findall(r"^// @why ", prefs, re.M))
+        self.assertEqual(build_site.default_count(ROOT), defaults, "every counted default is an annotated one")
+        for page in LANDING:
+            numbers = [n.text().strip() for n in self.tree(page).all("dd")]
+            with self.subTest(page=page):
+                self.assertIn(str(defaults), numbers)
+                self.assertIn(f"uBlock Origin {build_site.ublock_version(ROOT)}", self.read(page))
+                self.assertIn(f"Firefox {build_site.firefox_version(ROOT)}", self.read(page))
+
+    def test_link_preview_image_is_ours_and_has_the_declared_size(self):
+        for page in LANDING:
+            html = self.read(page)
+            image = re.search(r'<meta property="og:image" content="([^"]+)">', html).group(1)
+            with self.subTest(page=page):
+                self.assertTrue(image.startswith(SAME_SITE), image)
+                data = (self.out / image.removeprefix(SAME_SITE)).read_bytes()
+                self.assertEqual(data[:8], b"\x89PNG\r\n\x1a\n")
+                size = (int.from_bytes(data[16:20], "big"), int.from_bytes(data[20:24], "big"))
+                declared = tuple(
+                    int(re.search(rf'og:image:{side}" content="(\d+)"', html).group(1)) for side in ("width", "height")
+                )
+                self.assertEqual(size, declared)
+
+    def test_waitlist_forms_post_to_this_origin(self):
+        accepted = re.search(r"PLATFORMS = new Set\(\[(.*?)\]\)", WORKER.read_text(encoding="utf-8")).group(1)
+        platforms = set(accepted.replace('"', "").split(", "))
+        for page, locale in {**LANDING, **WAITLIST}.items():
+            tree = self.tree(page)
+            forms = tree.all("form")
+            with self.subTest(page=page):
+                self.assertEqual(len(forms), 2)
+                labelled = {n.attrs.get("for") for n in tree.all("label")}
+                for form in forms:
+                    self.assertEqual((form.attrs.get("action"), form.attrs.get("method")), ("/api/waitlist", "post"))
+                    fields = {n.attrs.get("name"): n for n in form.walk() if n.tag in ("input", "select")}
+                    self.assertEqual(fields["lang"].attrs.get("value"), FORM_LANG[locale])
+                    self.assertEqual(fields["email"].attrs.get("type"), "email")
+                    self.assertIn("required", fields["email"].attrs)
+                    self.assertIn(fields["email"].attrs["id"], labelled, "a visible label, not only a placeholder")
+                    self.assertEqual(fields["hp"].attrs.get("tabindex"), "-1", "the honeypot is out of the tab order")
+                    if "platform" in fields:
+                        self.assertIn(fields["platform"].attrs["id"], labelled)
+                        options = {n.attrs.get("value") for n in fields["platform"].walk() if n.tag == "option"}
+                        self.assertEqual(options, platforms, "the worker accepts exactly the platforms the form offers")
+                    self.assertTrue(any(n.tag == "button" and n.attrs.get("type") == "submit" for n in form.walk()))
+
+    def test_waitlist_pages_answer_every_state_of_the_worker(self):
+        worker = WORKER.read_text(encoding="utf-8")
+        states = set(re.findall(r'redirect\(lang, (?:leaving \? )?"(\w+)"(?: : "(\w+)")?\)', worker))
+        states = {s for pair in states for s in pair if s}
+        self.assertEqual(states, {"ok", "left", "invalid", "unavailable"})
+        targets = dict(re.findall(r'"?([\w-]+)"?: "(/[\w/]+/)"', re.search(r"const PAGES = \{(.*?)\}", worker).group(1)))
+        self.assertEqual(targets, {"pt-BR": "/lista/", "en": "/en/waitlist/"})
+        for (page, locale), target in zip(WAITLIST.items(), (targets["pt-BR"], targets["en"]), strict=True):
+            tree = self.tree(page)
+            with self.subTest(page=page):
+                self.assertEqual(target.strip("/") + "/index.html", page)
+                notices = {n.attrs.get("id") for n in tree.all() if "notice" in n.classes()}
+                self.assertEqual(notices, states, "one message for each answer of site/_worker.js")
+                ids = {n.attrs.get("id") for n in tree.all()}
+                self.assertLessEqual({"data", "leave"}, ids, "what is kept and how to leave, linked from the landing")
+                fields = [
+                    {n.attrs.get("name"): n.attrs.get("value") for n in f.walk() if n.tag == "input"} for f in tree.all("form")
+                ]
+                leave = [f for f in fields if f.get("action") == "leave"]
+                self.assertEqual(len(leave), 1)
+                self.assertEqual(leave[0]["lang"], FORM_LANG[locale])
+        css = (ROOT / "site" / "landing.css").read_text(encoding="utf-8")
+        self.assertRegex(css, r"\.notice \{[^}]*display: none", "a message shows only when its fragment is the target")
+        self.assertIn(".notice:target", css)
+
+    def test_only_the_api_reaches_the_worker(self):
+        routes = json.loads((self.out / "_routes.json").read_text(encoding="utf-8"))
+        self.assertEqual(routes, {"version": 1, "include": ["/api/*"], "exclude": []})
+        self.assertIn("_worker.js", self.files)
+        for page in PAGES:
+            loads = re.findall(r'(?:src|href)="[^"]*_worker[^"]*"', self.read(page))
+            self.assertEqual(loads, [], f"{page}: no page loads the worker, it is server code")
+
+    def test_comparison_names_the_browsers_and_its_date(self):
+        for page in LANDING:
+            tables = self.tree(page).all("table")
+            with self.subTest(page=page):
+                self.assertEqual(len(tables), 1)
+                columns = [n.text().strip() for n in tables[0].walk() if n.tag == "th" and n.attrs.get("scope") == "col"]
+                self.assertEqual(columns[1:], ["Nulavio", "Brave", "LibreWolf", "Mullvad Browser", "Tor Browser"])
+                body = next(n for n in tables[0].walk() if n.tag == "tbody")
+                for row in (n for n in body.walk() if n.tag == "tr"):
+                    cells = [c for c in row.children if isinstance(c, Node) and c.tag == "td"]
+                    self.assertEqual(len(cells), 5, row.text())
+                    self.assertTrue(all(c.text().strip() for c in cells), "every cell says something in words, not only an icon")
+                self.assertRegex(self.read(page), r"(novembro de|November) 20\d\d", "the comparison says when it was made")
+
+
+@unittest.skipUnless(shutil.which("node"), "node is not installed")
+class WaitlistWorkerTest(unittest.TestCase):
+    """site/_worker.js: what it answers (tests/lib/waitlist_worker_driver.mjs) and what its SQL does in SQLite."""
+
+    @classmethod
+    def setUpClass(cls):
+        driver = ROOT / "tests" / "lib" / "waitlist_worker_driver.mjs"
+        done = subprocess.run(["node", str(driver), str(WORKER)], capture_output=True, text=True, timeout=60, check=True)
+        cls.cases = json.loads(done.stdout)
+
+    def rows(self, *names: str) -> list[tuple]:
+        """The table after the statements of these cases ran, in order, in SQLite (what D1 runs)."""
+        db = sqlite3.connect(":memory:")
+        self.addCleanup(db.close)
+        for name in names:
+            for statement in self.cases[name]["statements"]:
+                db.execute(statement["sql"], statement["args"])
+        return db.execute("SELECT email, lang, platform, joined FROM waitlist ORDER BY joined, email").fetchall()
+
+    def test_join_keeps_the_address_the_language_the_platform_and_the_time(self):
+        self.assertEqual((self.cases["join"]["status"], self.cases["join"]["location"]), (303, "/lista/#ok"))
+        ((email, lang, platform, joined),) = self.rows("join")
+        self.assertEqual((email, lang, platform), ("Ana@Example.org", "pt-BR", "fedora"))
+        self.assertRegex(joined, r"^20\d\d-\d\d-\d\dT\d\d:\d\d:\d\dZ$")
+        self.assertEqual(len(self.cases["join"]["statements"][-1]["args"]), 4, "nothing else is stored: no IP, no user agent")
+
+    def test_joining_twice_is_one_sign_up_that_keeps_its_place(self):
+        first = self.rows("join")
+        again = self.rows("join", "join_again_other_case")
+        self.assertEqual(len(again), 1, "the same address in another letter case is the same sign-up")
+        self.assertEqual(again[0][3], first[0][3], "the first date stays: it is the place in line")
+        self.assertEqual(again[0][1:3], ("en", "fedora"), "the language follows the last form; a platform given is not erased")
+        self.assertEqual(self.cases["join_again_other_case"]["location"], "/en/waitlist/#ok", "same answer as a new sign-up")
+
+    def test_leaving_deletes_and_answers_the_same_for_an_unknown_address(self):
+        self.assertEqual(self.rows("join", "leave"), [])
+        self.assertEqual(len(self.rows("join", "leave_absent")), 1)
+        self.assertEqual(self.cases["leave"]["location"], "/en/waitlist/#left")
+        self.assertEqual(self.cases["leave_absent"]["location"], "/lista/#left")
+
+    def test_values_are_bound_and_unknown_ones_fall_back(self):
+        rows = self.rows("join", "join_unknown_platform", "unknown_lang")
+        kept = {(email, lang, platform) for email, lang, platform, _ in rows}
+        self.assertEqual(
+            kept, {("Ana@Example.org", "pt-BR", "fedora"), ("bruno@example.org", "en", ""), ("carla@example.org", "pt-BR", "")}
+        )
+        self.assertEqual(self.cases["unknown_lang"]["location"], "/lista/#ok", "the redirect never follows the form's own text")
+        for case in self.cases.values():
+            for statement in case["statements"]:
+                self.assertNotIn("example.org", statement["sql"], "addresses travel as bound parameters")
+
+    def test_what_is_refused_stores_nothing(self):
+        expected = {
+            "invalid_email": (303, "/en/waitlist/#invalid"),
+            "no_dot_in_domain": (303, "/lista/#invalid"),
+            "too_long_email": (303, "/lista/#invalid"),
+            "honeypot": (303, "/en/waitlist/#ok"),  # a bot is told it worked
+            "cross_site": (403, None),
+            "wrong_content_type": (415, None),
+            "too_large": (413, None),
+            "get": (405, None),
+            "no_database": (303, "/en/waitlist/#unavailable"),
+            "database_down": (303, "/lista/#unavailable"),
+        }
+        for name, (status, location) in expected.items():
+            case = self.cases[name]
+            with self.subTest(case=name):
+                self.assertEqual((case["status"], case["location"]), (status, location))
+                self.assertEqual(case["statements"], [])
+        self.assertEqual(self.cases["get"]["headers"].get("allow"), "POST")
+        self.assertEqual(self.cases["no_fetch_metadata"]["location"], "/en/waitlist/#ok", "an older browser still gets in")
+
+    def test_answers_carry_their_own_headers(self):
+        for name in ("join", "invalid_email", "cross_site", "get"):
+            headers = self.cases[name]["headers"]
+            with self.subTest(case=name):
+                self.assertEqual(headers["cache-control"], "no-store")
+                self.assertEqual(headers["referrer-policy"], "no-referrer")
+                self.assertEqual(headers["x-content-type-options"], "nosniff")
+                self.assertIn("default-src 'none'", headers["content-security-policy"])
+
+    def test_other_paths_fall_through_to_the_static_files(self):
+        self.assertEqual((self.cases["other_api_path"]["status"], self.cases["other_api_path"]["body"]), (404, "the 404 page"))
 
 
 class VerifyLiveTest(unittest.TestCase):
@@ -318,6 +558,91 @@ class VerifyLiveTest(unittest.TestCase):
 
         found = verify_live.problems(self.dist, "https://nulavio.net/", missing)
         self.assertEqual(found, ["https://nulavio.net/.well-known/security.txt: HTTP 404"])
+
+
+def throwaway_key(home: Path) -> tuple[str, str]:
+    """A signing key made for the test (no passphrase, never a release key): fingerprint and armored public key."""
+    home.mkdir(mode=0o700)
+    gpg = ["gpg", "--homedir", str(home), "--batch", "--quiet"]
+    uid = "Throwaway <t@example.invalid>"
+    subprocess.run([*gpg, "--passphrase", "", "--quick-generate-key", uid, "ed25519", "sign", "1d"], check=True)
+    listing = subprocess.run([*gpg, "--with-colons", "--list-keys"], capture_output=True, text=True, check=True).stdout
+    fpr = next(line.split(":")[9] for line in listing.splitlines() if line.startswith("fpr:"))
+    armored = subprocess.run([*gpg, "--armor", "--export", fpr], capture_output=True, text=True, check=True).stdout
+    return fpr, armored
+
+
+@unittest.skipUnless(shutil.which("gpg"), "gpg is not installed")
+class DownloadPagesTest(unittest.TestCase):
+    """The download pages appear only for a published release whose key is in the repository."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = Path(tempfile.mkdtemp())
+        cls.fpr, cls.armored = throwaway_key(cls.tmp / "gnupg")
+
+    @classmethod
+    def tearDownClass(cls):
+        shutil.rmtree(cls.tmp, ignore_errors=True)
+
+    def source(self, name: str, version: str, fpr: str, key: str | None) -> Path:
+        src = self.tmp / name
+        (src / "packaging").mkdir(parents=True)
+        release = json.loads((ROOT / "packaging" / "release.json").read_text(encoding="utf-8"))
+        release.update(version=version, key_fingerprint=fpr)
+        (src / "packaging" / "release.json").write_text(json.dumps(release), encoding="utf-8")
+        if key is not None:
+            (src / build_site.PUBLIC_KEY).parent.mkdir(parents=True)
+            (src / build_site.PUBLIC_KEY).write_text(key, encoding="utf-8")
+        return src
+
+    def test_no_release_no_download_pages(self):
+        self.assertIsNone(build_site.release_values(self.source("none", "", "", None)))
+        self.assertIsNone(build_site.release_values(self.source("no-key", "159.0.1-0.1", "", None)))
+        out = self.tmp / "unreleased"
+        files = build_site.build(out)
+        for page in build_site.DOWNLOAD_PAGES:
+            self.assertNotIn(page, files)
+        self.assertTrue((out / "en" / "index.html").exists())
+
+    def test_the_key_must_match_the_fingerprint(self):
+        with self.assertRaises(build_site.BuildError):
+            build_site.release_values(self.source("missing", "159.0.1-0.1", self.fpr, None))
+        with self.assertRaises(build_site.BuildError):
+            build_site.release_values(self.source("other", "159.0.1-0.1", "A" * 40, self.armored))
+        with self.assertRaises(build_site.BuildError):
+            build_site.release_values(self.source("bad-version", "alpha", self.fpr, self.armored))
+
+    def test_release_pages(self):
+        values = build_site.release_values(self.source("released", "159.0.1-0.1", self.fpr, self.armored))
+        self.assertEqual(values["key_fpr"].replace(" ", ""), self.fpr)
+        out = self.tmp / "released-site"
+        real = build_site.release_values
+        build_site.release_values = lambda src: values
+        try:
+            files = set(build_site.build(out))
+        finally:
+            build_site.release_values = real
+        ids = []
+        for page in build_site.DOWNLOAD_PAGES:
+            self.assertIn(page, files)
+            html = (out / page).read_text(encoding="utf-8")
+            with self.subTest(page=page):
+                self.assertNotIn("{{", html)
+                self.assertNotIn("<script", html)
+                self.assertNotIn("style=", html)
+                self.assertIn(values["key_fpr"], html)
+                self.assertIn("dnf config-manager addrepo --from-repofile=https://packages.nulavio.net/rpm/nulavio.repo", html)
+                self.assertIn("159.0.1-0.1", html)
+                for url in re.findall(r'(?:src|href|srcset)="(https?://[^"]+)"', html):
+                    self.assertTrue(url.startswith(SAME_SITE), url)
+                for ref in re.findall(r'(?:src|href|srcset)="(/[^"]*)"', html):
+                    target = ref.lstrip("/")
+                    self.assertIn(f"{target}index.html" if not target or target.endswith("/") else target, files)
+                levels = [int(level) for level in re.findall(r"<h([1-6])\b", html)]
+                self.assertEqual(levels.count(1), 1)
+                ids.append([n.attrs["id"] for n in Tree(html).all() if "id" in n.attrs])
+        self.assertEqual(ids[0], ids[1])
 
 
 if __name__ == "__main__":

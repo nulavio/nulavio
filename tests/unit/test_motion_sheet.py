@@ -129,35 +129,37 @@ class MotionSheetTest(unittest.TestCase):
 
 
 class SidebarMotionTest(unittest.TestCase):
-    """The launcher's width moves on the motion tokens (firefox-branding.js reads them as prefs)."""
+    """The launcher's width moves on the motion tokens. Since Firefox 160 the engine animates it with a view
+    transition whose timing is CSS (sidebar.css); Horizon re-values those variables. Expand-on-hover reads a pref."""
 
-    def prefs(self) -> dict[str, str]:
-        text = (ROOT / "browser" / "branding" / "nulavio" / "pref" / "firefox-branding.js").read_text(encoding="utf-8")
-        return dict(re.findall(r'^pref\("(sidebar\.animation\.[\w.-]+)",\s*(.+?)\);', text, re.M))
+    HORIZON = ROOT / "browser" / "branding" / "nulavio" / "content" / "theme" / "horizon.css"
 
-    def test_sidebar_prefs_equal_the_tokens(self):
-        tokens = json.loads((ROOT / "docs" / "brand" / "tokens.json").read_text(encoding="utf-8"))["motion"]
-        ms = lambda name: tokens["duration"][name]["$value"].removesuffix("ms")  # noqa: E731
-        curve = "cubic-bezier({})".format(", ".join(str(v) for v in tokens["easing"]["standard"]["$value"]))
+    def test_horizon_puts_the_engine_transition_on_the_tokens(self):
+        found = {prop: (preludes, value) for preludes, prop, value in declarations(self.HORIZON) if prop.startswith("--motion-")}
         self.assertEqual(
-            self.prefs(),
+            {prop: value for prop, (_, value) in found.items()},
             {
-                "sidebar.animation.duration-ms": ms("expand"),
-                "sidebar.animation.collapse-duration-ms": ms("collapse"),
-                "sidebar.animation.expand-on-hover.duration-ms": ms("expand"),
-                "sidebar.animation.easing": f'"{curve}"',
+                "--motion-dur-sidebar-enter": "var(--nv-motion-duration-expand)",
+                "--motion-dur-sidebar-exit": "var(--nv-motion-duration-collapse)",
+                "--motion-ease-emphasized": "var(--nv-motion-easing-standard)",
             },
         )
+        for prop, (preludes, _) in found.items():
+            with self.subTest(prop=prop):
+                # Off with the rest of Horizon (nulavio.horizon.enabled), on the root element.
+                self.assertIn('@media -moz-pref("nulavio.horizon.enabled")', preludes)
+                self.assertEqual(preludes[-1], ":root")
 
-    def test_patch_0008_reads_the_curve_and_collapse_prefs(self):
-        patch = (ROOT / "browser" / "patches" / "0008-sidebar-let-prefs-set-the-launcher-animation-curve.patch").read_text(
-            encoding="utf-8"
-        )
-        added = "\n".join(line for line in patch.splitlines() if line.startswith("+") and not line.startswith("+++"))
-        self.assertIn('"sidebar.animation.collapse-duration-ms"', added)
-        self.assertIn('"sidebar.animation.easing"', added)
-        self.assertIn('"ease-in-out"', added)  # an invalid or missing pref keeps the engine's curve
-        self.assertNotIn("gReduceMotion", added)  # the engine's own reduced-motion skip is untouched
+    def test_only_expand_on_hover_is_a_pref(self):
+        text = (ROOT / "browser" / "branding" / "nulavio" / "pref" / "firefox-branding.js").read_text(encoding="utf-8")
+        prefs = dict(re.findall(r'^pref\("(sidebar\.animation\.[\w.-]+)",\s*(.+?)\);', text, re.M))
+        tokens = json.loads((ROOT / "docs" / "brand" / "tokens.json").read_text(encoding="utf-8"))["motion"]
+        expand = tokens["duration"]["expand"]["$value"].removesuffix("ms")
+        self.assertEqual(prefs, {"sidebar.animation.expand-on-hover.duration-ms": expand})
+
+    def test_no_engine_patch_for_the_sidebar_motion(self):
+        series = (ROOT / "browser" / "patches" / "series").read_text(encoding="utf-8")
+        self.assertNotIn("sidebar", series)
 
 
 if __name__ == "__main__":

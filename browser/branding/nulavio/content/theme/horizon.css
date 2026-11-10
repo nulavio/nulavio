@@ -61,6 +61,15 @@
     @media -moz-pref("sidebar.verticalTabs") {
       --tab-height-with-margin-padding: calc(2px + var(--tab-min-height) + (2 * var(--tab-margin-block)));
     }
+
+    /* UX3F A5/M4: the launcher widens and narrows on the motion tokens. The
+       engine's sidebar view transition (sidebar.css) reads these: expand and
+       launcher-enter, collapse and launcher-exit. Reduced motion skips the
+       transition in the engine (gReduceMotion). Expand-on-hover takes its
+       duration from sidebar.animation.expand-on-hover.duration-ms. */
+    --motion-dur-sidebar-enter: var(--nv-motion-duration-expand);
+    --motion-dur-sidebar-exit: var(--nv-motion-duration-collapse);
+    --motion-ease-emphasized: var(--nv-motion-easing-standard);
   }
 
   /* UX3G N4: the launcher is 224px from the first frame (the width the Lateral

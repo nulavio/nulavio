@@ -1,7 +1,8 @@
-# Cloudflare Pages response headers. The site is static: no scripts, no
-# third-party resources, no cookies.
+# Cloudflare Pages response headers. The pages are static: no scripts, no
+# third-party resources, no cookies. form-action 'self' is for the waitlist forms,
+# which post to /api/waitlist on this origin (site/_worker.js sets its own headers).
 /*
-  Content-Security-Policy: default-src 'none'; style-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'
+  Content-Security-Policy: default-src 'none'; style-src 'self'; img-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'
   Referrer-Policy: no-referrer
   X-Content-Type-Options: nosniff
   Permissions-Policy: camera=(), microphone=(), geolocation=()
