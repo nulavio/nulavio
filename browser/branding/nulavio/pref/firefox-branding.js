@@ -45,6 +45,26 @@ pref("urlclassifier.downloadBlockTable", "");
 pref("urlclassifier.downloadAllowTable", "");
 pref("browser.safebrowsing.downloads.remote.enabled", false);
 
+// Fingerprinting protection beyond the engine's own set for the Strict
+// category (measured in docs/research/fingerprinting.md, checked on every run
+// by tests/integration/test_fingerprinting.py):
+//   -EfficientCanvasRandomization: the engine's quick mode adds noise only to
+//     images a page exports. Without it the full mode applies, and raw pixel
+//     reads (getImageData), offscreen canvases and WebGL reads differ per site
+//     and per session too.
+//   +WebGLRendererConstant, +WebGLVendorSanitize: pages are not told the
+//     graphics card's model (Firefox Nightly's choice).
+//   +WindowOuterSize, +WindowScreenXY, +WindowInnerScreenXY,
+//   +MouseEventScreenPoint: pages do not learn how large the toolbars and the
+//     sidebar are, or where the window sits on the screen.
+//   +UseStandinsForNativeColors: pages get standard system colours instead of
+//     the desktop theme's.
+//   +DeviceSensors: no motion or orientation readings.
+// A site the person exempts from tracking protection is exempt from these too.
+// Time zone, language, screen size and window size are left as they are:
+// changing them breaks sites (docs/security/hardening.md).
+pref("privacy.fingerprintingProtection.overrides", "-EfficientCanvasRandomization,+WebGLRendererConstant,+WebGLVendorSanitize,+WindowOuterSize,+WindowScreenXY,+WindowInnerScreenXY,+MouseEventScreenPoint,+UseStandinsForNativeColors,+DeviceSensors");
+
 // Follow the desktop's language among the locales packaged in the build
 // (en-US and pt-BR), as distribution Firefox does. An empty value means "use
 // the OS locales" (intl/locale/LocaleService.cpp); users can still pick a
@@ -101,12 +121,8 @@ pref("browser.aboutaddons.novaThemesPickerEnabled", false);
 pref("browser.topsites.useRemoteSetting", false);
 pref("browser.newtabpage.activity-stream.default.sites", "");
 
-// UX3F (QA A5/M4): the sidebar launcher moves on Nulavio's standard motion
-// curve and narrows faster than it widens (browser/patches/0008). Reduced
-// motion still turns the animation off.
-pref("sidebar.animation.duration-ms", 220);
-pref("sidebar.animation.collapse-duration-ms", 160);
-pref("sidebar.animation.easing", "cubic-bezier(0.2, 0, 0, 1)");
+// The launcher's expand and collapse timing is in Horizon (horizon.css, on the
+// engine's sidebar view transition).
 // UX7: the Foco preset opens the launcher on hover (expand-on-hover) with the same expand token
 // (motion.duration.expand), not the engine's 400 ms; its 200 ms intent delay stays.
 pref("sidebar.animation.expand-on-hover.duration-ms", 220);
@@ -144,6 +160,17 @@ pref("datareporting.policy.firstRunURL", "");
 // which Nulavio 1.0 does not offer (D-UX8). An empty value hides the option in
 // Settings and every Relay prompt; saved logins are unaffected.
 pref("signon.firefoxRelay.feature", "");
+
+// No region lookup. A new profile's engine asks Mozilla's location service
+// (location.services.mozilla.com) which country this computer is in, at the
+// first start and again on a timer, to pick regional defaults. The request
+// shows the computer's address to Mozilla, and nothing in Nulavio needs the
+// answer: with no address the lookup returns nothing without using the
+// network, and the engine falls back to its region-neutral defaults (search
+// engines are the person's choice, ADR 0002). The integration tests, which
+// run without that service, have always exercised this state.
+pref("browser.region.network.url", "");
+pref("browser.region.update.enabled", false);
 
 // Performance and privacy: about:home (still the start page of profiles that
 // came from earlier builds) does not fetch the weather or stories in the

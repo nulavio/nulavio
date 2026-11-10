@@ -193,6 +193,15 @@ class VaultUiTest(unittest.TestCase):
             (self.shots / f"{name}-{scheme}.png").write_bytes(self.m.screenshot_png(full=True))
         self.m.execute("delete document.documentElement.dataset.theme;")
 
+    def password_prompt(self, wait: float = 3) -> bool:
+        """Whether the engine's password manager offers to save a login, in any tab (these pages open in the background)."""
+        script = (
+            "for (const w of Services.wm.getEnumerator('navigator:browser')) {"
+            " if (w.gBrowser.browsers.some(b => w.PopupNotifications.getNotification('password', b))) { return true; } }"
+            "return false;"
+        )
+        return harness.wait_until(lambda: self.m.chrome(script), timeout=wait, interval=0.25)
+
     def profile_path(self, profile_id: int) -> Path:
         return Path(self.call("return (await SPS.getProfile(args[0])).path;", profile_id))
 
@@ -222,6 +231,8 @@ class VaultUiTest(unittest.TestCase):
     def test_01_create_a_protected_profile_in_three_decisions(self):
         self.open_page("vault/create.html")
         self.wait_state("profile", "step")
+        # "Tentar de novo" belongs to a failed state the page lists, never to a page that just opened.
+        self.assertIsNone(self.m.execute("return document.querySelector('.moment__retry');"))
         # The pressed template looks pressed (DS-05): another surface and edge, and a ✓, not only aria-pressed.
         templates = self.m.execute(
             "return [...document.querySelectorAll('#templates button')].map(b => ({pressed: b.getAttribute('aria-pressed'),"
@@ -295,17 +306,32 @@ class VaultUiTest(unittest.TestCase):
         self.assertEqual(self.m.execute("return document.activeElement.id;"), "password")  # keyboard first
         self.assertEqual(self.m.execute("return document.getElementById('url').textContent;"), url)
         self.shoot("unlock-idle")
-        self.type_into("password", "not the password")
+        # Typed with real keys: the engine's password manager only captures what a person typed.
+        self.m.send("WebDriver:ElementSendKeys", {"id": self.m.find_element("#password"), "text": "not the password"})
         self.click("#password-form button[type=submit]")
         self.wait_state("error")
         self.assertEqual(self.m.execute("return document.activeElement.id;"), "password")
         self.assert_status("error")  # critical colour and icon, no ✓ and no amber (SB-12)
+        # The refused field is marked and the message is its description; neither outlives the attempt.
+        marked = (
+            "const f = document.getElementById(arguments[0]);"
+            "return [f.getAttribute('aria-invalid'), f.getAttribute('aria-describedby')];"
+        )
+        self.assertEqual(self.m.execute(marked, ["password"]), ["true", "status"])
         self.shoot("unlock-error")
+        # The profile's password is never offered to this profile's password manager, which may be unprotected.
+        origin = self.base.rstrip("/")
+        self.assertFalse(self.m.chrome("return Services.logins.getLoginSavingEnabled(arguments[0]);", [origin]))
+        self.assertFalse(self.password_prompt(), "the engine offered to save the profile's password")
         self.click("#use-recovery")
+        self.assertEqual((self.state(), self.status_text()), ("idle", ""), "the password's error stayed over the other form")
+        self.assertIsNone(self.m.execute(marked, ["password"])[0])
         self.type_into("recovery", "1234")
         self.click("#recovery-form button[type=submit]")
         self.wait_state("error")
+        self.assertEqual(self.m.execute(marked, ["recovery"]), ["true", "status"])
         self.click("#recovery-back")
+        self.assertEqual((self.state(), self.m.execute(marked, ["recovery"])[0]), ("idle", None))
         self.assertEqual(self.server.requests_to("/page/vault-opened"), [])  # nothing loaded while locked
         self.type_into("password", PASSWORD)
         self.click("#password-form button[type=submit]")
@@ -356,7 +382,8 @@ class VaultUiTest(unittest.TestCase):
     def test_04_only_the_recovery_code_left(self):
         profile_id, code = self.create_via_api("SoLogin", password=None, keyring=True)
         self.keyring_store.write_text("[]")
-        self.open_page(f"vault/unlock.html?p={profile_id}")
+        url = self.server.url("/page/recovery-opened")
+        self.open_page(f"vault/unlock.html?p={profile_id}&u={url}")
         self.wait_state("idle")  # computer login is still offered first
         self.click("#use-keyring")
         self.wait_state("device-unavailable")
@@ -366,6 +393,10 @@ class VaultUiTest(unittest.TestCase):
         self.wait_state("unlocked", timeout=60)
         path = self.profile_path(profile_id)
         self.assertTrue(harness.wait_until(lambda: self.instances(path), timeout=60))
+        # Stop it once it is really up, as tests 02 and 09 do. The watcher polls for the engine that took
+        # the profile: one ended in its first half second is never seen, and the watcher then waits out
+        # its two-minute grace period before locking (this test failed that way about one run in four).
+        self.assertTrue(harness.wait_until(lambda: self.server.requests_to("/page/recovery-opened"), timeout=60))
         self.stop_instance(path)
         self.assertTrue(harness.wait_until(lambda: not storage.Container(path).mounted(), timeout=30))
 
