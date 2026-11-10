@@ -131,6 +131,7 @@ function named(node, text) {
 class WindowUI {
   #started = false;
   #windows = new Map();
+  #sheets = new WeakMap(); // window → its band sheet: null (loaded by windowUtils) or the fallback <link>
   #unsubscribe = null;
   #profile = null;
   #profileUnavailable = false;
@@ -329,8 +330,34 @@ class WindowUI {
   prepareWindow(win) {
     const doc = win.document;
     if (this.#started && doc.documentElement.getAttribute("windowtype") === "navigator:browser" && !doc.getElementById(AREA)) {
+      // The sheet before the toolbar, as in #attach: the band's first frame is its final one.
+      this.#loadSheet(win);
       this.#insertToolbar(doc);
     }
+  }
+
+  /*
+   * UX3H (QA M-2): load the band's sheet synchronously, before the band exists, so the band's
+   * first frame is already its final one. A <link> loads asynchronously: on the first launch the
+   * band showed for ~100 ms as a separate row (+54 px) before it joined the navigation row. The
+   * <link> stays only as a fallback. Once per window: prepareWindow or #attach, whichever is first.
+   */
+  #loadSheet(win) {
+    if (this.#sheets.has(win)) {
+      return this.#sheets.get(win);
+    }
+    let sheet = null;
+    try {
+      win.windowUtils.loadSheetUsingURIString(bandSheet.spec, win.windowUtils.AUTHOR_SHEET);
+    } catch (e) {
+      console.error(e);
+      sheet = element(win.document, "link");
+      sheet.rel = "stylesheet";
+      sheet.href = bandSheet.spec;
+      win.document.head.append(sheet);
+    }
+    this.#sheets.set(win, sheet);
+    return sheet;
   }
 
   #insertToolbar(doc) {
@@ -350,20 +377,7 @@ class WindowUI {
       return;
     }
     const doc = win.document;
-    // UX3H (QA M-2): load the band's sheet synchronously, before the band exists, so the
-    // band's first frame is already its final one. A <link> loads asynchronously: on the
-    // first launch the band showed for ~100 ms as a separate row (+54 px) before it joined
-    // the navigation row. The <link> stays only as a fallback.
-    let sheet = null;
-    try {
-      win.windowUtils.loadSheetUsingURIString(bandSheet.spec, win.windowUtils.AUTHOR_SHEET);
-    } catch (e) {
-      console.error(e);
-      sheet = element(doc, "link");
-      sheet.rel = "stylesheet";
-      sheet.href = bandSheet.spec;
-      doc.head.append(sheet);
-    }
+    const sheet = this.#loadSheet(win);
     // The toolbar is usually there already (prepareWindow); a window that was open before the
     // Shell started gets it now. Registering a toolbar CustomizableUI already built does nothing.
     const bar = doc.getElementById(AREA) ?? this.#insertToolbar(doc);
@@ -781,6 +795,7 @@ class WindowUI {
         // The window is already gone.
       }
     }
+    this.#sheets.delete(win); // a restarted Shell loads it again
     win.document.documentElement.removeAttribute("nulavio-window-agent");
     win.document.documentElement.removeAttribute("nulavio-window-raw");
   }
