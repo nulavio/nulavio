@@ -8,12 +8,16 @@ option leaves every other pref as it was. Headless, throwaway profile.
 from __future__ import annotations
 
 import json
+import re
 import time
 import unittest
 from pathlib import Path
 
 import harness
 from test_window_band import BAND_PROBE, assert_band
+
+# Times the engine records for its Safe Browsing list updates, written in the background.
+SAFE_BROWSING_CLOCK = re.compile(r"browser\.safebrowsing\.provider\.[a-z0-9]+\.(lastupdatetime|nextupdatetime|backofftime)")
 
 ROOT = Path(__file__).resolve().parents[2]
 OPTIONS = json.loads((ROOT / "browser" / "shell" / "shared" / "options.json").read_text(encoding="utf-8"))["options"]
@@ -170,8 +174,9 @@ class AppearanceTest(unittest.TestCase):
 
     def test_05_walking_every_option_changes_only_its_own_prefs(self):
         """UX6 done criterion: no option can turn a protection off. Every value of every appearance option,
-        through Settings: at each step only the options' own prefs differ from the start (no filter: the
-        engine changes no pref by itself during the walk), and at the end nothing does."""
+        through Settings: at each step only the options' own prefs differ from the start, and at the end
+        nothing does. The one exception is the engine's own record of when it last fetched the Safe
+        Browsing lists, which a background update can write at any moment (it failed a run that way)."""
         self.open()
         before = self.snapshot()
         walk = [("density", v) for v in APPEARANCE["density"]["values"]] + [("accent", v) for v in APPEARANCE["accent"]["values"]]
@@ -182,6 +187,7 @@ class AppearanceTest(unittest.TestCase):
             self.wait_pref(pref, expected)
             now = self.snapshot()
             changed = {k for k in set(now["prefs"]) | set(before["prefs"]) if now["prefs"].get(k) != before["prefs"].get(k)}
+            changed = {k for k in changed if not SAFE_BROWSING_CLOCK.fullmatch(k)}
             self.assertLessEqual(changed, OPTION_PREFS, (option, value))
             self.assertEqual(now["permissions"], before["permissions"])
         # The ambience first: "Reduzir transparência" only applies while something is transparent.
@@ -194,6 +200,7 @@ class AppearanceTest(unittest.TestCase):
             self.wait_pref(pref, True)
             now = self.snapshot()
             changed = {k for k in set(now["prefs"]) | set(before["prefs"]) if now["prefs"].get(k) != before["prefs"].get(k)}
+            changed = {k for k in changed if not SAFE_BROWSING_CLOCK.fullmatch(k)}
             self.assertLessEqual(changed, OPTION_PREFS, switch)
         for switch in ("#more-contrast", "#reduce-transparency", "#newtab-ambience"):
             self.m.send("WebDriver:ElementClick", {"id": self.m.find_element(f"label:has(> {switch})")})
@@ -203,7 +210,8 @@ class AppearanceTest(unittest.TestCase):
         for pref in OPTION_PREFS:
             self.wait_pref(pref, None)
         after = self.snapshot()
-        self.assertEqual(after["prefs"], before["prefs"])
+        steady = lambda prefs: {k: v for k, v in prefs.items() if not SAFE_BROWSING_CLOCK.fullmatch(k)}  # noqa: E731
+        self.assertEqual(steady(after["prefs"]), steady(before["prefs"]))
 
     def test_06_security_indicators_stay_whole_in_every_variant(self):
         self.m.send("WebDriver:SetWindowRect", {"width": 1366, "height": 768})
@@ -255,7 +263,8 @@ class AppearanceTest(unittest.TestCase):
         self.assertTrue(harness.wait_until(lambda: set(self.m.window_handles()) - handles, 10))
         newtab = (set(self.m.window_handles()) - handles).pop()
         self.m.switch_to(newtab)
-        painted = "return document.documentElement.hasAttribute('data-painted');"
+        # The new tab may not have a document yet when the first check runs.
+        painted = "return document.documentElement?.hasAttribute('data-painted') ?? false;"
         self.assertTrue(harness.wait_until(lambda: self.m.execute(painted), 20))
         self.m.switch_to(settings)
         self.m.execute("browser.nulavioPersonalise.setAccent('blue');")
@@ -281,7 +290,8 @@ class AppearanceTest(unittest.TestCase):
 
     def newtab(self) -> None:
         self.m.navigate(self.base + "newtab/newtab.html")
-        painted = "return document.documentElement.hasAttribute('data-painted');"
+        # The new tab may not have a document yet when the first check runs.
+        painted = "return document.documentElement?.hasAttribute('data-painted') ?? false;"
         self.assertTrue(harness.wait_until(lambda: self.m.execute(painted), 20))
 
     def look(self) -> dict:
