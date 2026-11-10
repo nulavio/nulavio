@@ -161,6 +161,17 @@ pref("datareporting.policy.firstRunURL", "");
 // Settings and every Relay prompt; saved logins are unaffected.
 pref("signon.firefoxRelay.feature", "");
 
+// No region lookup. A new profile's engine asks Mozilla's location service
+// (location.services.mozilla.com) which country this computer is in, at the
+// first start and again on a timer, to pick regional defaults. The request
+// shows the computer's address to Mozilla, and nothing in Nulavio needs the
+// answer: with no address the lookup returns nothing without using the
+// network, and the engine falls back to its region-neutral defaults (search
+// engines are the person's choice, ADR 0002). The integration tests, which
+// run without that service, have always exercised this state.
+pref("browser.region.network.url", "");
+pref("browser.region.update.enabled", false);
+
 // Performance and privacy: about:home (still the start page of profiles that
 // came from earlier builds) does not fetch the weather or stories in the
 // background. Defaults only: a person who turns them on keeps that choice.

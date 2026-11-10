@@ -144,6 +144,18 @@ user_pref("browser.places.speculativeConnect.enabled", false);
 
 // @mode seed
 // @category network
+// @why Do not ask Mozilla's location service which country this computer is in (the request shows its address to Mozilla).
+// @tradeoff The engine uses its region-neutral defaults instead of regional ones (search engine list, form autofill).
+user_pref("browser.region.network.url", "");
+
+// @mode seed
+// @category network
+// @why Do not repeat the region lookup on a timer.
+// @tradeoff None beyond the lookup itself.
+user_pref("browser.region.update.enabled", false);
+
+// @mode seed
+// @category network
 // @why WebRTC only offers the default route's address, so local/VPN-side interfaces are not exposed to peers.
 // @tradeoff Rare peer-to-peer setups on multi-homed hosts may need a TURN relay.
 user_pref("media.peerconnection.ice.default_address_only", true);

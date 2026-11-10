@@ -105,6 +105,10 @@ MOZILLA_AI_OFF = {  # decision D-UX7: the Nulavio assistant (ADR 0007) is the on
     "extensions.ml.enabled": False,
     "nimbus.rollouts.enabled": False,
 }
+NO_REGION_LOOKUP = {  # no request to Mozilla's location service on a new profile (review 2026-11-09, RT-1)
+    "browser.region.network.url": "",
+    "browser.region.update.enabled": False,
+}
 FINGERPRINTING = "privacy.fingerprintingProtection.overrides"  # docs/research/fingerprinting.md
 # Changing these breaks sites or accessibility; they belong to an opt-in mode, never to the default.
 NEVER_BY_DEFAULT = {
@@ -142,6 +146,15 @@ class MozillaAiAndAccountTest(unittest.TestCase):
                 self.assertIn(name, baseline, "Track A needs it too (baseline.js)")
                 self.assertEqual(baseline[name].value, value)
                 self.assertEqual(baseline[name].mode, "seed", "a default the person can change, not enforced")
+                self.assertEqual(branding.get(name), value, "Track B default (firefox-branding.js)")
+
+    def test_no_region_lookup_in_either_track(self):
+        baseline = {p.name: p for p in profile.baseline_prefs()}
+        branding = branding_prefs()
+        for name, value in NO_REGION_LOOKUP.items():
+            with self.subTest(pref=name):
+                self.assertEqual(baseline[name].value, value, "Track A (baseline.js)")
+                self.assertEqual(baseline[name].mode, "seed")
                 self.assertEqual(branding.get(name), value, "Track B default (firefox-branding.js)")
 
     def test_fingerprinting_additions_are_the_same_in_both_tracks_and_watched(self):
