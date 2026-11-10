@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 # Sign Nulavio RPMs and build a signed dnf repository, in a disposable Fedora
-# container. The private key never enters the repository or an image: the
-# container reads it from GNUPGHOME (mounted read-only into a private copy).
+# container. The private key never enters the container: the signatures are
+# made by the gpg-agent of GNUPGHOME on the host, through its "extra" socket
+# (GnuPG's socket for use from another machine), mounted into the container.
+# A key with a passphrase is asked for there, with the host's pinentry, or
+# taken from that agent's cache. Only the public key is copied in.
 #
 #   GNUPGHOME=~/.gnupg scripts/release/sign_repo.sh <packages-dir> <repo-out> <key-id>
 #
@@ -30,10 +33,20 @@ if [[ -n ${NULAVIO_RELEASE_MANIFEST:-} ]]; then
     python3 -I "$(dirname "$0")/release_manifest.py" packages "$NULAVIO_RELEASE_MANIFEST" "$packages" >/dev/null
 fi
 
+gpg-connect-agent --homedir "$gnupg" /bye >/dev/null
+agent=$(gpgconf --homedir "$gnupg" --list-dirs agent-extra-socket)
+[[ -S $agent ]] || { echo "sign_repo: no gpg-agent extra socket for $gnupg" >&2; exit 1; }
+public=$(mktemp -d)
+trap 'rm -rf "$public"' EXIT
+gpg --homedir "$gnupg" --batch --armor --export "$key" >"$public/key.asc"
+[[ -s $public/key.asc ]] || { echo "sign_repo: no public key $key in $gnupg" >&2; exit 1; }
+
 podman run --rm --security-opt label=disable \
-    -v "$packages:/packages:ro" -v "$gnupg:/gnupg-ro:ro" -v "$out:/repo" "$image" bash -euc '
+    -v "$packages:/packages:ro" -v "$public:/public:ro" -v "$agent:/run/host-gpg-agent" -v "$out:/repo" "$image" bash -euc '
     dnf -y -q install rpm-sign createrepo_c gnupg2 >/dev/null 2>&1 || { echo "sign_repo: dnf failed" >&2; exit 1; }
-    export GNUPGHOME=$(mktemp -d); cp -a /gnupg-ro/. "$GNUPGHOME"/; chmod 700 "$GNUPGHOME"
+    export GNUPGHOME=$(mktemp -d); chmod 700 "$GNUPGHOME"
+    ln -s /run/host-gpg-agent "$GNUPGHOME/S.gpg-agent"
+    gpg --batch --quiet --import /public/key.asc
     mkdir -p /repo/x86_64
     find /packages -name "nulavio-*.rpm" -exec cp {} /repo/x86_64/ \;
     rpmsign --define "_gpg_name '"$key"'" --addsign /repo/x86_64/*.rpm >/dev/null

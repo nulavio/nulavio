@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # End-to-end check of the signed repository tooling with a THROWAWAY key made
-# for this run (no passphrase, expires in a day, deleted afterwards): sign the
-# package and the metadata, install from the repository in a clean container
-# with gpgcheck and repo_gpgcheck on, then confirm a tampered repository is
-# refused. Real releases use the maintainer's key.
+# for this run (with a passphrase like the release key, expires in a day,
+# deleted afterwards): sign the package and the metadata through the host's
+# gpg-agent, install from the repository in a clean container with gpgcheck
+# and repo_gpgcheck on, then confirm a tampered repository is refused. Real
+# releases use the maintainer's key.
 #
 #   scripts/release/test_signed_repo.sh <packages-dir>
 set -euo pipefail
@@ -12,10 +13,28 @@ repo_root=$(cd "$(dirname "$0")/../.." && pwd)
 image=$("$repo_root/scripts/release/base_image.sh" fedora-build)
 packages=$(realpath "${1:?usage: test_signed_repo.sh <packages-dir>}")
 work=$(mktemp -d "${TMPDIR:-/tmp}/nulavio-signtest-XXXXXX")
-trap 'rm -rf "$work"' EXIT
 export GNUPGHOME="$work/gnupg"
+trap 'gpgconf --kill gpg-agent 2>/dev/null; rm -rf "$work"' EXIT
 mkdir -m 700 "$GNUPGHOME"
-gpg --batch --quiet --pinentry-mode loopback --passphrase '' \
+# A passphrase, like the release key: the container's signing requests reach this agent through
+# its extra socket, which keeps its own passphrase cache and asks pinentry. For a release that is
+# the maintainer's pinentry; here a stand-in pinentry answers with the throwaway passphrase, so
+# nothing ever opens on the desktop.
+passphrase="throwaway-$RANDOM-$RANDOM"
+cat >"$work/pinentry" <<PINENTRY
+#!/bin/sh
+echo "OK throwaway pinentry"
+while read -r cmd _; do
+    case "\$cmd" in
+        GETPIN) echo "D $passphrase"; echo OK ;;
+        BYE) echo OK; exit 0 ;;
+        *) echo OK ;;
+    esac
+done
+PINENTRY
+chmod 700 "$work/pinentry"
+printf 'pinentry-program %s\n' "$work/pinentry" >"$GNUPGHOME/gpg-agent.conf"
+printf '%s' "$passphrase" | gpg --batch --quiet --pinentry-mode loopback --passphrase-fd 0 \
     --quick-gen-key "Nulavio throwaway test key <test@nulavio.invalid>" rsa3072 sign 1d
 fpr=$(gpg --batch --with-colons --list-secret-keys | awk -F: '/^fpr/ {print $10; exit}')
 

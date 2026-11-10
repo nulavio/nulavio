@@ -381,7 +381,12 @@ class PackagingTest(unittest.TestCase):
 
     def test_repository_signing_never_stores_a_key(self):
         sign = (ROOT / "scripts" / "release" / "sign_repo.sh").read_text(encoding="utf-8")
-        self.assertIn("/gnupg-ro:ro", sign)
+        # The host's agent signs (its extra socket in the container): a passphrase works and the
+        # private key never enters the container; only the exported public key does.
+        self.assertIn("--list-dirs agent-extra-socket", sign)
+        self.assertIn('ln -s /run/host-gpg-agent "$GNUPGHOME/S.gpg-agent"', sign)
+        self.assertNotIn("/gnupg-ro", sign)
+        self.assertNotIn("export-secret", sign)
         self.assertIn('rm -rf "$GNUPGHOME"', sign)
         self.assertIn("repo_gpgcheck=1", sign)
         test = (ROOT / "scripts" / "release" / "test_signed_repo.sh").read_text(encoding="utf-8")
