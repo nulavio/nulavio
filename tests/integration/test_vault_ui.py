@@ -309,16 +309,26 @@ class VaultUiTest(unittest.TestCase):
         self.wait_state("error")
         self.assertEqual(self.m.execute("return document.activeElement.id;"), "password")
         self.assert_status("error")  # critical colour and icon, no ✓ and no amber (SB-12)
+        # The refused field is marked and the message is its description; neither outlives the attempt.
+        marked = (
+            "const f = document.getElementById(arguments[0]);"
+            "return [f.getAttribute('aria-invalid'), f.getAttribute('aria-describedby')];"
+        )
+        self.assertEqual(self.m.execute(marked, ["password"]), ["true", "status"])
         self.shoot("unlock-error")
         # The profile's password is never offered to this profile's password manager, which may be unprotected.
         origin = self.base.rstrip("/")
         self.assertFalse(self.m.chrome("return Services.logins.getLoginSavingEnabled(arguments[0]);", [origin]))
         self.assertFalse(self.password_prompt(), "the engine offered to save the profile's password")
         self.click("#use-recovery")
+        self.assertEqual((self.state(), self.status_text()), ("idle", ""), "the password's error stayed over the other form")
+        self.assertIsNone(self.m.execute(marked, ["password"])[0])
         self.type_into("recovery", "1234")
         self.click("#recovery-form button[type=submit]")
         self.wait_state("error")
+        self.assertEqual(self.m.execute(marked, ["recovery"]), ["true", "status"])
         self.click("#recovery-back")
+        self.assertEqual((self.state(), self.m.execute(marked, ["recovery"])[0]), ("idle", None))
         self.assertEqual(self.server.requests_to("/page/vault-opened"), [])  # nothing loaded while locked
         self.type_into("password", PASSWORD)
         self.click("#password-form button[type=submit]")
