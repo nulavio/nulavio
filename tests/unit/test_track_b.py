@@ -178,6 +178,72 @@ class PatchStackTest(unittest.TestCase):
                 self.assertNotRegex(text, r"(?m)^[-+].*(security\.sandbox|MOZ_DISABLE_.*SANDBOX|xpinstall\.signatures)")
 
 
+CONF = 'line1\nvendor = "Mozilla"\nappid = "x"\ndevtools = "all"\n'
+# Two patches on neighbouring lines of one file, like 0001 (vendor) and 0009 (User-Agent name)
+# in browser/moz.configure: with the second applied, the first neither reverses nor applies alone.
+VENDOR = """--- a/conf.txt
++++ b/conf.txt
+@@ -1,4 +1,4 @@
+ line1
+-vendor = "Mozilla"
++vendor = "Nulavio"
+ appid = "x"
+ devtools = "all"
+"""
+UA_NAME = """--- a/conf.txt
++++ b/conf.txt
+@@ -1,4 +1,5 @@
+ line1
+ vendor = "Nulavio"
++ua = "Firefox"
+ appid = "x"
+ devtools = "all"
+"""
+BOTH = 'line1\nvendor = "Nulavio"\nua = "Firefox"\nappid = "x"\ndevtools = "all"\n'
+
+
+class ApplyPatchesTest(unittest.TestCase):
+    """A tree an earlier build patched is built again (the release rehearsal on 2026-11-10 stopped here)."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp(prefix="nv-patches-"))
+        self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
+        self.source = self.tmp / "src"
+        self.source.mkdir()
+        (self.source / "conf.txt").write_text(CONF)
+        self.patches = []
+        for name, text in (("0001-vendor.patch", VENDOR), ("0002-ua-name.patch", UA_NAME)):
+            (self.tmp / name).write_text(text)
+            self.patches.append(self.tmp / name)
+
+    def run_series(self):
+        lines = []
+        apply_patches.apply_series(self.source, self.patches, log=lines.append)
+        return lines
+
+    def test_fresh_tree_gets_the_whole_series(self):
+        self.assertEqual(self.run_series(), ["+ 0001-vendor.patch", "+ 0002-ua-name.patch"])
+        self.assertEqual((self.source / "conf.txt").read_text(), BOTH)
+
+    def test_a_patched_tree_is_left_as_it_is(self):
+        self.run_series()
+        self.assertEqual(self.run_series(), ["= 0001-vendor.patch (already applied)", "= 0002-ua-name.patch (already applied)"])
+        self.assertEqual((self.source / "conf.txt").read_text(), BOTH)
+        # Checked on its own, the first patch neither reverses nor applies: the old check stopped here.
+        self.assertFalse(apply_patches.patch(self.source, self.patches[0], "--reverse", "--check"))
+        self.assertFalse(apply_patches.patch(self.source, self.patches[0], "--check"))
+
+    def test_a_tree_with_the_head_of_the_series_gets_the_rest(self):
+        self.assertTrue(apply_patches.patch(self.source, self.patches[0]))
+        self.assertEqual(self.run_series(), ["= 0001-vendor.patch (already applied)", "+ 0002-ua-name.patch"])
+        self.assertEqual((self.source / "conf.txt").read_text(), BOTH)
+
+    def test_a_patch_that_does_not_fit_stops_the_build(self):
+        (self.source / "conf.txt").write_text(CONF.replace("appid", "app_id"))
+        with self.assertRaises(SystemExit):
+            self.run_series()
+
+
 class BrandingTest(unittest.TestCase):
     def test_names_are_nulavio(self):
         ftl = (BRANDING / "locales" / "en-US" / "brand.ftl").read_text()
