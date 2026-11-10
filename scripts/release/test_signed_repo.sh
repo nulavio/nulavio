@@ -34,7 +34,7 @@ done
 PINENTRY
 chmod 700 "$work/pinentry"
 printf 'pinentry-program %s\n' "$work/pinentry" >"$GNUPGHOME/gpg-agent.conf"
-gpg --batch --quiet --pinentry-mode loopback --passphrase "$passphrase" \
+printf '%s' "$passphrase" | gpg --batch --quiet --pinentry-mode loopback --passphrase-fd 0 \
     --quick-gen-key "Nulavio throwaway test key <test@nulavio.invalid>" rsa3072 sign 1d
 fpr=$(gpg --batch --with-colons --list-secret-keys | awk -F: '/^fpr/ {print $10; exit}')
 
