@@ -1,6 +1,6 @@
 # Pull requests, branches and the advisory AI review
 
-Status: convention adopted 2026-10-27. `main` has branch protection (settings read from GitHub on 2026-11-10). The table under [What is enforced](#what-is-enforced-and-what-is-advisory) says which parts GitHub enforces and which stay advisory.
+Status: convention adopted 2026-10-27. `main` has branch protection (settings read from GitHub on 2026-11-10). **Paused since 2026-11-10:** the repository moved to the `nulavio` organization (GitHub Free), where branch protection and rulesets need a public repository. Until it is public, every row marked "Enforced by GitHub" below is kept by convention only; the settings come back with the same values when it is. The table under [What is enforced](#what-is-enforced-and-what-is-advisory) says which parts GitHub enforces and which stay advisory.
 
 In short:
 
@@ -90,7 +90,7 @@ About 8–10 billed Actions minutes per review (both jobs, rounded up) and, as a
 Preferred, with no long-lived secret: Workload Identity Federation.
 
 1. In the Claude Console: Settings → Workload identity → Connect workload → GitHub Actions, issuer `https://token.actions.githubusercontent.com`. Create a service account `nulavio-ai-review` in a dedicated workspace (for example `nulavio-ci`) with a monthly spend limit (for example USD 40).
-2. Create a federation rule with a token lifetime of 1,200 seconds, scope `workspace:developer`, and a condition on the claims `repository == 'caiolombello/nulavio'`, `event_name == 'pull_request_target'` and `job_workflow_ref == 'caiolombello/nulavio/.github/workflows/ai-review.yml@refs/heads/main'`. After the first run, compare these with the claim values in the Console's authentication history before tightening the rule.
+2. Create a federation rule with a token lifetime of 1,200 seconds, scope `workspace:developer`, and a condition on the claims `repository == 'nulavio/nulavio'`, `event_name == 'pull_request_target'` and `job_workflow_ref == 'nulavio/nulavio/.github/workflows/ai-review.yml@refs/heads/main'`. After the first run, compare these with the claim values in the Console's authentication history before tightening the rule.
 3. In GitHub, Settings → Secrets and variables → Actions → Variables, add `ANTHROPIC_FEDERATION_RULE_ID` (`fdrl_…`), `ANTHROPIC_ORGANIZATION_ID`, `ANTHROPIC_SERVICE_ACCOUNT_ID` (`svac_…`) and, if the rule covers several workspaces, `ANTHROPIC_WORKSPACE_ID`. These are identifiers, not secrets.
 
 Fallback: a Console API key from the same spend-capped workspace, stored as the repository secret `ANTHROPIC_API_KEY` and used only by this workflow. Rotate it every 90 days and at once after any unexpected change under `.github/`. On this plan any workflow pushed by someone with write access can read repository secrets, which is why federation is preferred. If both are configured, the workflow uses federation and warns.

@@ -16,7 +16,7 @@ The one control GitHub enforces on this plan: GitHub refuses a push that adds or
 
 The maintainer creates it under Settings → Developer settings → Fine-grained tokens:
 
-- resource owner `caiolombello`; repository access: only `caiolombello/nulavio`;
+- resource owner `caiolombello`; repository access: only `nulavio/nulavio`;
 - permissions: Contents read and write; Pull requests read and write; Issues read and write (optional); Metadata read (automatic);
 - **no access** to Workflows, Actions, Administration, Secrets, Variables and Environments;
 - expiry: 90 days.

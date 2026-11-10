@@ -19,7 +19,7 @@ import post_ai_review as post  # noqa: E402
 SCHEMA = json.loads((ROOT / ".github" / "ai-review" / "schema.json").read_text())
 HEAD = "a" * 40
 BASE = "b" * 40
-CTX = post.Context(repo="caiolombello/nulavio", pr="7", head_sha=HEAD, base_sha=BASE, source="test model")
+CTX = post.Context(repo="nulavio/nulavio", pr="7", head_sha=HEAD, base_sha=BASE, source="test model")
 # Fake secrets are assembled at run time so this file never contains one (see test_repo_hygiene).
 FAKE_GITHUB_TOKEN = "gh" + "p_" + "Ab1" * 12
 FAKE_ANTHROPIC_KEY = "sk-" + "ant-" + "api03-" + "x" * 30
@@ -220,7 +220,7 @@ class RenderTest(unittest.TestCase):
         self.assertIn("lower-severity finding(s) not shown", body)
 
     def test_binary_files_get_a_visible_notice(self):
-        ctx = post.Context(repo="caiolombello/nulavio", pr="7", head_sha=HEAD, binary_files=2)
+        ctx = post.Context(repo="nulavio/nulavio", pr="7", head_sha=HEAD, binary_files=2)
         body, _ = comment(result(), ctx=ctx)
         self.assertIn("2 file(s) in this change are binary to git", body)
         self.assertNotIn("binary to git", comment(result())[0])
@@ -242,13 +242,13 @@ class PublishTest(unittest.TestCase):
     def ci_env(self, **extra):
         env = {
             "GITHUB_ACTIONS": "true",
-            "GITHUB_REPOSITORY": "caiolombello/nulavio",
+            "GITHUB_REPOSITORY": "nulavio/nulavio",
             "GITHUB_SERVER_URL": "https://github.com",
             "GITHUB_RUN_ID": "123",
             "PR_NUMBER": "7",
             "HEAD_SHA": HEAD,
             "BASE_SHA": BASE,
-            "AI_REVIEW_SOURCE": "claude-opus-5-5 through claude-code-action v1.0.264",
+            "AI_REVIEW_SOURCE": "claude-opus-5-5 through claude-code-action v1.0.267",
             "INPUT_STATUS": "ready",
             "REVIEW_RESULT": "success",
             "RESULT": json.dumps(result()),
@@ -261,9 +261,9 @@ class PublishTest(unittest.TestCase):
         code, out = self.run_main(["--post"], env=self.ci_env(), api=api)
         self.assertEqual(code, 0, out)
         writes = [call for call in api.calls if call[0] != "GET"]
-        self.assertEqual([(m, p) for m, p, _ in writes], [("POST", "repos/caiolombello/nulavio/issues/7/comments")])
+        self.assertEqual([(m, p) for m, p, _ in writes], [("POST", "repos/nulavio/nulavio/issues/7/comments")])
         self.assertTrue(writes[0][2]["body"].startswith(post.MARKER))
-        self.assertIn("workflow run: https://github.com/caiolombello/nulavio/actions/runs/123", writes[0][2]["body"])
+        self.assertIn("workflow run: https://github.com/nulavio/nulavio/actions/runs/123", writes[0][2]["body"])
         self.assertFalse(any("/reviews" in path for _, path, _ in api.calls))
 
     def test_existing_comment_of_the_same_author_is_updated(self):
@@ -275,14 +275,14 @@ class PublishTest(unittest.TestCase):
         code, _ = self.run_main(["--post"], env=self.ci_env(), api=api)
         self.assertEqual(code, 0)
         writes = [(m, p) for m, p, _ in api.calls if m != "GET"]
-        self.assertEqual(writes, [("PATCH", "repos/caiolombello/nulavio/issues/comments/2")])
+        self.assertEqual(writes, [("PATCH", "repos/nulavio/nulavio/issues/comments/2")])
 
     def test_local_run_updates_the_comment_of_the_logged_in_user(self):
         api = FakeApi(comments=[{"id": 9, "user": {"login": "caiolombello"}, "body": post.MARKER}])
-        argv = ["--post", "--stdin", "--repo", "caiolombello/nulavio", "--pr", "7", "--head-sha", HEAD]
+        argv = ["--post", "--stdin", "--repo", "nulavio/nulavio", "--pr", "7", "--head-sha", HEAD]
         code, _ = self.run_main(argv, api=api, stdin=json.dumps({"type": "result", "structured_output": result()}))
         self.assertEqual(code, 0)
-        self.assertIn(("PATCH", "repos/caiolombello/nulavio/issues/comments/9"), [(m, p) for m, p, _ in api.calls])
+        self.assertIn(("PATCH", "repos/nulavio/nulavio/issues/comments/9"), [(m, p) for m, p, _ in api.calls])
 
     def test_failed_review_posts_a_notice_that_is_not_a_pass(self):
         api = FakeApi()

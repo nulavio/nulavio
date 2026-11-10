@@ -140,7 +140,7 @@ jobs:
       - name: Review (read-only tools, structured output)
         id: claude
         if: steps.input.outputs.status == 'ready'
-        uses: anthropics/claude-code-action@d70510b174a1244958df0b03166a54912811f3e6 # v1.0.264
+        uses: anthropics/claude-code-action@4845bacbb38b3c4b15d948f035349786f678e068 # v1.0.267
         env:
           CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: "1"
         with:
@@ -202,5 +202,5 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           BASE_SHA: ${{ github.sha }}
-          AI_REVIEW_SOURCE: claude-opus-5-5 through claude-code-action v1.0.264
+          AI_REVIEW_SOURCE: claude-opus-5-5 through claude-code-action v1.0.267
         run: python3 -I scripts/ci/post_ai_review.py --post

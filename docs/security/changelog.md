@@ -29,7 +29,7 @@ Urgency: <urgent | standard> (<reasons>). Source SHA-256 <digest> (Mozilla's sig
 
 ## Unreleased (development, Firefox 160.0)
 
-**Upstream**: Firefox 160.0, staged on archive.mozilla.org, not yet released by Mozilla ([update issue #14](https://github.com/caiolombello/nulavio/issues/14)); no advisory yet.
+**Upstream**: Firefox 160.0, staged on archive.mozilla.org, not yet released by Mozilla ([update issue #14](https://github.com/nulavio/nulavio/issues/14)); no advisory yet.
 Urgency: urgent until 6 h after Mozilla's release (no advisory yet, update policy). Source SHA-256 2b23d2bf6716ea16b45c10aa5c275c78a1d7ff50ad53150809ab27424c58fd81 (Mozilla's signed SHA256SUMS, verified against the pinned release key).
 
 | Mozilla's release | Detected | Ready to sign | Published | Target | Deadline |
@@ -40,7 +40,7 @@ Urgency: urgent until 6 h after Mozilla's release (no advisory yet, update polic
 
 ## Unreleased (development, Firefox 159.0.1)
 
-**Upstream**: Firefox 159.0.1, released by Mozilla on 2026-11-03 14:09:02 UTC ([mfsa2026-123](https://www.mozilla.org/security/advisories/mfsa2026-123/), [update issue #4](https://github.com/caiolombello/nulavio/issues/4)).
+**Upstream**: Firefox 159.0.1, released by Mozilla on 2026-11-03 14:09:02 UTC ([mfsa2026-123](https://www.mozilla.org/security/advisories/mfsa2026-123/), [update issue #4](https://github.com/nulavio/nulavio/issues/4)).
 Urgency: urgent (impact high: CVE-2026-120572, incorrect boundary conditions in Layout: Block and Inline). Source SHA-256 b5fe407199685f8bddf3b2c81feb8b805429e6f3d307c9430f53456f85b6e063 (Mozilla's signed SHA256SUMS, verified against the pinned release key).
 
 | Mozilla's release | Detected | Ready to sign | Published | Target | Deadline |
@@ -70,7 +70,7 @@ Earlier: Firefox 158.0.1, released by Mozilla on 2026-10-20; the development bui
 | 2026-10-26 | An AI Workspace engine kept running when an agent killed its MCP bridge | Its automation endpoint stayed open on 127.0.0.1 until the user closed it (any process of the user could drive that workspace) | `46aced7`: engines start with a parent-death signal (`setpriv --pdeathsig`) |
 | 2026-10-27 | The Companion formatted the 6-digit pairing code and JSON escapes with the phone's language | On a phone set to Persian, Arabic, Hindi or Thai the code would show in that script's digits, so the person could not compare it with the desktop's; the signed bytes were not affected (hexadecimal escapes are never localised) | `Locale.ROOT` in `Nv1.sasDigits` and `Json`, a test in four locales, and the Opengrep rule `nulavio-java-default-locale` |
 | 2026-10-26 | The Shell's background page did not start with the browser after a profile's first run | AI permission requests did not appear in the browser on later runs (the fallback denied them), and the temporary-profile bar waited for an event | `725d792`: the page now starts with every run |
-| 2026-11-09 | After a password was typed on the unlock page of a protected profile, the engine's password manager offered to save it ("Salvar senha de moz-extension://…?") | Accepting the offer copied that profile's password into the saved logins of the profile that was open, which may have no protection | [#15](https://github.com/caiolombello/nulavio/pull/15): saving is off for the Shell's own pages, set at every start; `test_vault_ui` 02 types a password with real keys and checks that no tab offers to save it. No package had been published |
+| 2026-11-09 | After a password was typed on the unlock page of a protected profile, the engine's password manager offered to save it ("Salvar senha de moz-extension://…?") | Accepting the offer copied that profile's password into the saved logins of the profile that was open, which may have no protection | [#15](https://github.com/nulavio/nulavio/pull/15): saving is off for the Shell's own pages, set at every start; `test_vault_ui` 02 types a password with real keys and checks that no tab offers to save it. No package had been published |
 | 2026-11-10 | The Nulavio build's User-Agent ended in `Nulavio/<version>` instead of `Firefox/<version>` | Every site visited, and every request, could tell a Nulavio user from the far larger group of Firefox users, and saw the point release; sites that look for Firefox did not recognise the browser | Patch 0009: the User-Agent is Firefox's own, in pages and on the wire (`test_fingerprinting` 01). No package had been published |
 | 2026-11-10 | The engine's font protection never applied on Fedora (its lists stop at release 39 and the release number is not read from Fedora's `os-release`), and its quick canvas mode leaves raw pixel reads unchanged | With tracking protection in Strict, every installed font and the plain canvas pixels were still readable by any page, while the docs named font limits among the protections | Patch 0010 and `privacy.fingerprintingProtection.overrides`; `test_fingerprinting` 03 and 05. The same defect is in Firefox on Fedora; to be reported to Mozilla |
 
