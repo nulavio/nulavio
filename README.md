@@ -1,93 +1,119 @@
-<p align="center"><img src="docs/brand/assets/logo/nulavio-lockup-horizontal.svg" alt="Nulavio" width="320"></p>
+<p align="center">
+  <a href="https://nulavio.net/en/">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="docs/brand/assets/logo/nulavio-lockup-horizontal-on-dark.svg">
+      <img src="docs/brand/assets/logo/nulavio-lockup-horizontal.svg" alt="Nulavio" width="300">
+    </picture>
+  </a>
+</p>
 
-<p align="center"><b>Your web. Your rules.</b> · <i>A web é sua. Seus dados também.</i></p>
+<p align="center"><strong>The Linux browser that is protected from the start.</strong></p>
 
-Nulavio is an open-source, Linux-first desktop browser built on Mozilla's Gecko engine. It focuses on privacy by default, ad and tracker blocking, and safe use of the password manager you already trust. It is honest about what a browser can and cannot protect.
+<p align="center">
+  <a href="https://github.com/nulavio/nulavio/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/nulavio/nulavio/actions/workflows/ci.yml/badge.svg?branch=main"></a>
+  <a href="LICENSE"><img alt="License: MPL-2.0" src="https://img.shields.io/badge/license-MPL--2.0-0F7A68"></a>
+  <img alt="Platform: Linux" src="https://img.shields.io/badge/platform-Linux-0B1623">
+  <img alt="Engine: Firefox 160" src="https://img.shields.io/badge/engine-Firefox%20160-0F7A68">
+  <img alt="Status: pre-alpha" src="https://img.shields.io/badge/status-pre--alpha-B45309">
+</p>
 
-> **Status: pre-alpha. Everything below runs on the development build; the first public alpha waits on package signing and hosting ([release criteria](docs/product/release-criteria.md)). This is a preview, not a release.** Website: [nulavio.net](https://nulavio.net) · security reports: security@nulavio.net
-> The **Nulavio build** (Track B: Firefox built from Mozilla's verified source with Nulavio's patches, Shell, profiles, Vault and AI Bridge) is what will ship, first for Fedora through a signed dnf repository. What the alpha still waits for is listed in the [release criteria](docs/product/release-criteria.md#public-alpha-decided-2026-11-04). The *Nulavio Preview* (Track A) below is a launcher and hardened profile layer on top of your distribution's **unmodified** Firefox, for trying Nulavio from a clone today. See [ADR 0001](docs/adr/0001-engine-selection.md).
+<p align="center">
+  <a href="https://nulavio.net/en/">Website</a> ·
+  <a href="#install">Install</a> ·
+  <a href="#build-from-source">Build from source</a> ·
+  <a href="#documentation">Documentation</a> ·
+  <a href="SECURITY.md">Security</a> ·
+  <a href="README.pt-BR.md">Português</a>
+</p>
 
-![Nulavio Preview on KDE Plasma (Wayland)](docs/brand/assets/review/preview-window-kde-wayland.png)
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="site/assets/shots/window-en-US-dark.webp">
+    <img src="site/assets/shots/window-en-US-light.webp" alt="The Nulavio window: the identity band names the profile, the vertical tab list on the left, the new tab with the protections of this profile" width="860">
+  </picture>
+</p>
 
-## What works today (verified)
+Nulavio is an open-source desktop browser for Linux, built from Mozilla's signature-verified Firefox source. It blocks ads and trackers from the first launch, keeps each part of your life in its own profile, encrypts the profiles you protect, and sends nothing to servers of its own: there is no telemetry and no Nulavio account.
 
-Verified on Fedora 44 KDE Plasma 6.7.5 (Wayland), Firefox 158.0.1. Each item has an automated test or recorded evidence.
+## Highlights
 
-- Isolated profile in `~/.local/share/nulavio/profiles/<name>` (0700/0600). Your Firefox profiles are never touched.
-- Upstream sandbox active: seccomp-bpf plus user namespaces on every web-content process. Site isolation is on.
-- 27 documented privacy/security defaults (`nulavio prefs explain`): telemetry off, Enhanced Tracking Protection Strict, HTTPS-Only with revocable per-site exceptions, Global Privacy Control, no speculative connections, no search suggestions or trending searches sent while you type. Every one of them can be undone.
-- Ad blocking with **uBlock Origin**, pinned by SHA-256. Blocking is tested and reversible.
-- Official **Proton Pass**, **KeePassXC-Browser** and **Bitwarden** extensions install, run and render their UI. **Proton Pass signs in and autofills real sites** (verified on the maintainer's Fedora KDE desktop). **KeePassXC pairing and autofill work end to end** (automated, in CI). Bitwarden logins are not yet tested with a real account (see [limits](docs/security/residual-risks.md)).
-- One credential provider at a time (`nulavio provider set …`), reversible, never deleting saved logins.
-- **Nulavio Guard** audits the profile before every launch and refuses to start a profile with weakened sandbox, signature or TLS settings.
-- `nulavio doctor`: engine, sandbox prerequisites, Secret Service/KWallet, native messaging hosts, profile permissions, extension inventory.
-- Desktop identity on Wayland: app_id `nulavio-preview`, own icon, local start page in pt-BR/EN, light and dark.
-- Nothing is sent to Nulavio. There is no Nulavio server.
-- Verified on **Ubuntu userspace** too (Firefox from Mozilla's APT repository): 15/15 integration tests.
+- **Protected before the first click.** uBlock Origin, Enhanced Tracking Protection in Strict mode, HTTPS-Only, Global Privacy Control and Google Safe Browsing are on in a new profile. Canvas and WebGL readings differ from site to site, and pages cannot see your extra fonts or your graphics card ([what a page can read](docs/research/fingerprinting.md)).
+- **One profile for each part of your life.** Personal, work, banking and research profiles, each in its own browser instance with its own cookies, logins and extensions. Links from other apps and addresses you type open in the profile your rules say.
+- **Profiles encrypted on disk, and you hold the key.** A protected profile opens with its password, a recovery code or your desktop login. There is no master key, not even for Nulavio ([ADR 0006](docs/adr/0006-nulavio-vault.md)).
+- **You hear about changes made from outside.** Nulavio Guard compares each start with the last one: extensions, certificate authorities, security modules, protective settings, `user.js`. You undo or keep each change.
+- **AI that goes only as far as you let it.** Connect Claude Code, Codex or any MCP client. Each agent works in a profile of its own, with the permissions you grant, an activity log and an emergency stop ([ADR 0007](docs/adr/0007-ai-bridge.md)).
+- **Also built in:** your password manager (Proton Pass, Bitwarden, KeePassXC or the browser's own), search suggestions only from the engines you allow, your choice of DNS, downloads that never start a program from the browser, KDE Plasma and desktop portal integration, English and Portuguese.
 
-**Track B (development build):** `scripts/build/build_nulavio.sh 160.0` builds a Nulavio-branded browser from signature-verified Firefox source in a rootless container. A full release build takes about 2 h 20 min and 23 GB on the reference laptop, inside the build's default limits (16 GiB of memory, two processors). With a Google Safe Browsing key (kept outside the repository), the build passes the integration suite (363 tests; the ones that reach the network, need a phone or a visible window run on request), including an end-to-end phishing-protection test. Download reputation is not available to non-partner keys (residual risk R15). The build includes the **Nulavio Shell**: a new tab with search and the live state of each protection, and a warning page for downloaded installers and scripts (Show in folder / Delete, no Open). It ships in English and Portuguese and follows the desktop language. **Search** defaults to DuckDuckGo in normal and private windows, with Brave Search and Mojeek ready as `@brave` and `@mojeek`, your own SearXNG instance or any engine you add; what you type is sent to a provider while typing only if you switch suggestions on for that provider ([ADR 0002](docs/adr/0002-nulavio-search.md)). **Profiles** get a selector on the toolbar (Alt+Shift+P): switch with one click, start from Personal, Work, Banking or Research templates; each profile keeps its own cookies, passwords and extensions. **Smart routing** opens links from other apps (email, chat) and addresses you type straight in the profile your rules say, before anything is loaded; any link can go to another profile with "Open link in profile". **Integrations** shows what your desktop offers (KDE Plasma, portals, secret storage, default browser), with how each was checked, and can make Nulavio the default browser when you ask ([ADR 0003](docs/adr/0003-nulavio-profiles-and-routing.md)). Its window uses **Nulavio Horizon**, its own theme for the tab strip, toolbar and address bar, in light and dark ([design](docs/design/architecture.md)). See [build](docs/architecture/build.md).
+## Status
 
-![Nulavio Horizon, dark](docs/design/screenshots/after-dark-1366x768.png)
+**Pre-alpha.** The first public alpha ships for **Fedora**, through a signed dnf repository; Ubuntu (APT) follows. Unlocking a profile with a phone or a FIDO2 security key comes after 1.0 and is shown as "not available yet" in the browser. The [release criteria](docs/product/release-criteria.md) list what is done and what is left, and the [roadmap](docs/product/roadmap.md) the phases.
 
-<p align="center"><img src="docs/brand/assets/review/trackb-about-dialog.png" alt="About Nulavio dialog from the Track B build" width="480"></p>
+Nulavio follows Firefox's release channel and aims to ship each Firefox security release within 24 hours, 72 at most ([update policy](docs/architecture/update-policy.md)).
 
-## Quick start (preview)
+## Install
 
-Requirements: Linux x86_64, Python ≥ 3.11, a distribution Firefox ≥ 140 (Fedora RPM, or the Mozilla APT package on Debian/Ubuntu; **not** the Snap). No other dependencies.
+> The first alpha is being published. Until it is, [join the waitlist](https://nulavio.net/en/) and you get an e-mail when your system is supported.
+
+With the first alpha, on Fedora:
 
 ```sh
-git clone <this repo> nulavio && cd nulavio
-bin/nulavio setup            # shows the full plan, asks before creating anything
-bin/nulavio run              # start; add a URL, --private, --temporary or --confined (bubblewrap: sees only the profile and Downloads)
-bin/nulavio doctor           # check your environment and profile
-bin/nulavio desktop install  # optional: menu entry + icons under ~/.local/share (no root)
+sudo dnf config-manager addrepo --from-repofile=https://packages.nulavio.net/rpm/nulavio.repo
+sudo dnf install nulavio
 ```
 
-Other commands: `nulavio provider set proton-pass --install-extension`, `nulavio extensions list`, `nulavio prefs explain`, `nulavio theme off`, `nulavio profile list`, `nulavio desktop uninstall`.
+Packages and the repository metadata are signed with the OpenPGP key `298A 9093 BAAB B26F 79BB  29F4 BF47 E5FA 9EDB 8DB1` ([public key](https://nulavio.net/keys/nulavio-packages.asc)). Every release comes with a CycloneDX SBOM.
+
+## Build from source
+
+Requirements: Linux x86_64, rootless Podman, about 25 GB of disk, and a [Google Safe Browsing API key](docs/architecture/build.md#google-safe-browsing-key) in `~/.config/nulavio-build/google-safebrowsing.key`. The build runs in a disposable container limited to 16 GiB of memory and two processors; on the reference laptop a full release build takes about 2 h 20 min.
+
+```sh
+git clone https://github.com/nulavio/nulavio.git && cd nulavio
+scripts/build/build_nulavio.sh 160.0
+```
+
+The script checks Mozilla's signed checksums before it builds anything, applies the [patch stack](browser/patches/series), and writes `nulavio-160.0.en-US.linux-x86_64.tar.xz`. Packaging, signing and the release rehearsal are described in [build](docs/architecture/build.md) and the [update policy](docs/architecture/update-policy.md).
+
+### Try the preview without building
+
+The preview launcher (Track A) runs your distribution's unmodified Firefox with Nulavio's isolated, hardened profile. It needs Python 3.11 or later and a distribution Firefox 140 or later (not the Snap):
+
+```sh
+bin/nulavio setup     # shows the plan and asks before creating anything
+bin/nulavio run       # add a URL, --private, --temporary or --confined
+bin/nulavio doctor    # checks the environment and the profile
+```
 
 ## Tests
 
 ```sh
-python3 -I tests/run.py unit                                  # ~1 s, no engine, no network
-python3 -I tests/run.py integration                           # headless engine, ~15 s
-NULAVIO_NETWORK_TESTS=1 python3 -I tests/run.py integration   # + official password-manager extensions
+python3 -I tests/run.py unit          # no engine, no network
+python3 -I tests/run.py integration   # the real engine, headless
 ```
 
-## Repository layout
-
-| Path | What |
-|---|---|
-| `bin/nulavio`, `launcher/` | Preview launcher (Python stdlib only) |
-| `browser/config/` | Annotated prefs, providers, Guard rules (the single configuration source for Tracks A and B) |
-| `browser/distribution/extensions.lock.json` | Pinned extensions (version, URL, SHA-256, reviewed permissions) |
-| `browser/startpage/`, `browser/theme/` | Local start page and preview chrome theme |
-| `docs/` | ADR, product, architecture, security, brand, research |
-| `scripts/brand/` | Generators for tokens, logo, icons, mockups; contrast checker |
-| `scripts/upstream/`, `scripts/release/` | Source-release verification, lock refresh, SBOM, Firefox release watch, verified engine bump, release rehearsal and pre-build |
-| `contrib/systemd/` | Opt-in user timer for the engine security fast path (not installed by anything) |
-| `tests/` | Unit and integration suites; minimal Marionette client |
-| `sbom/` | CycloneDX SBOM of the preview |
+The integration suite drives the real browser through Marionette: 363 tests on the Firefox 160 build, the ones that need the network, a phone or a visible window run on request.
 
 ## Documentation
 
-- Decision: [ADR 0001 — engine selection](docs/adr/0001-engine-selection.md)
-- Product: [vision](docs/product/vision.md) · [requirements](docs/product/requirements.md) · [roadmap](docs/product/roadmap.md) · [release criteria](docs/product/release-criteria.md)
-- Architecture: [overview](docs/architecture/overview.md) · [trust boundaries](docs/architecture/trust-boundaries.md) · [password providers](docs/architecture/password-providers.md) · [extension model](docs/architecture/extension-model.md) · [update policy](docs/architecture/update-policy.md)
-- Security: [threat model](docs/security/threat-model.md) · [threat matrix](docs/security/threat-matrix.md) · [hardening](docs/security/hardening.md) · [residual risks](docs/security/residual-risks.md) · [SECURITY.md](SECURITY.md) · [code scanning](docs/security/code-scanning.md) · [dependency updates](docs/security/dependency-updates.md) · [engine update policy](docs/architecture/update-policy.md)
-- Process: [pull requests and the advisory AI review](docs/process/pull-requests.md) · [agent guardrails (proposal)](docs/process/agent-guardrails.md)
-- Brand: [strategy](docs/brand/strategy.md) · [explorations](docs/brand/explorations.md) · [guidelines](docs/brand/guidelines.md) · [UX flows](docs/brand/ux-flows.md)
-- Research: [compatibility matrix](docs/research/compatibility-matrix.md)
+| Area | Where |
+|---|---|
+| Decisions | [ADRs](docs/adr/): engine, search, profiles and routing, Connect, phone unlock, Vault, AI Bridge |
+| Product | [vision](docs/product/vision.md) · [requirements](docs/product/requirements.md) · [roadmap](docs/product/roadmap.md) · [release criteria](docs/product/release-criteria.md) |
+| Architecture | [overview](docs/architecture/overview.md) · [build](docs/architecture/build.md) · [update policy](docs/architecture/update-policy.md) · [trust boundaries](docs/architecture/trust-boundaries.md) |
+| Security | [threat model](docs/security/threat-model.md) · [hardening](docs/security/hardening.md) · [residual risks](docs/security/residual-risks.md) · [changelog](docs/security/changelog.md) |
+| Design | [design system](docs/design/design-system.md) · [UX principles](docs/design/ux-principles.md) · [accessibility](docs/design/accessibility.md) |
+| Process | [contributing](CONTRIBUTING.md) · [pull requests](docs/process/pull-requests.md) |
 
-## Honest limits
+## Security
 
-A browser cannot protect you from malware that already runs on your computer as your user or as root. Nulavio reduces what is exposed and detects some tampering, but it is not "infostealer-proof". Read [residual risks](docs/security/residual-risks.md).
+Report a vulnerability through GitHub's [private vulnerability reporting](https://github.com/nulavio/nulavio/security/advisories/new) or to **security@nulavio.net**. [SECURITY.md](SECURITY.md) says what is in scope and how reports are handled. Firefox engine bugs go to Mozilla.
 
-## Trademarks and licences
+A browser cannot protect you from malware that already runs as your user or as root. Nulavio reduces what is exposed and reports some tampering; it does not make a computer "infostealer-proof". The [residual risks](docs/security/residual-risks.md) say what each protection does not do.
 
-Code: [MPL-2.0](LICENSE). Brand assets: see [LICENSES.md](LICENSES.md). "Nulavio" is a candidate name and is **not registered**; the project domain is `nulavio.net` ([status](docs/brand/strategy.md#trademark-and-availability-status)). Nulavio is not affiliated with Mozilla. Firefox is a trademark of the Mozilla Foundation.
+## Contributing
 
----
+Read [CONTRIBUTING.md](CONTRIBUTING.md). In short: conventional commits signed off (`git commit -s`), one change per pull request, and a description that says how it was verified and what was not. Changes reach `main` only through a pull request with green CI.
 
-### Resumo em português
+## License and trademarks
 
-O Nulavio é um navegador open-source para Linux, baseado no motor Gecko. Ele prioriza privacidade por padrão, bloqueio de anúncios e rastreadores e integração segura com gerenciadores de senhas, sendo transparente sobre seus limites. Hoje existe uma **prévia** (Trilha A): um launcher e um perfil isolado e endurecido sobre o Firefox **sem modificações** da sua distribuição. Ela foi testada no Fedora 44 KDE (Wayland), com sandbox verificado, uBlock Origin fixado por hash, HTTPS-Only e as extensões oficiais do Proton Pass, KeePassXC e Bitwarden carregando. O build próprio com a marca Nulavio (Trilha B) é a próxima etapa. Comece com `bin/nulavio setup`.
+Code under the [Mozilla Public License 2.0](LICENSE); brand assets as described in [LICENSES.md](LICENSES.md). "Nulavio" is not a registered trademark yet. Nulavio is not affiliated with Mozilla; Firefox is a trademark of the Mozilla Foundation.
