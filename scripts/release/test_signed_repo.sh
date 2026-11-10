@@ -38,13 +38,15 @@ printf '%s' "$passphrase" | gpg --batch --quiet --pinentry-mode loopback --passp
     --quick-gen-key "Nulavio throwaway test key <test@nulavio.invalid>" rsa3072 sign 1d
 fpr=$(gpg --batch --with-colons --list-secret-keys | awk -F: '/^fpr/ {print $10; exit}')
 
-NULAVIO_REPO_BASEURL=file:///repo NULAVIO_REPO_KEYURL=file:///repo/nulavio-packages.asc \
-    "$repo_root/scripts/release/sign_repo.sh" "$packages" "$work/repo" "$fpr" >/dev/null
+"$repo_root/scripts/release/sign_repo.sh" "$packages" "$work/repo" "$fpr" >/dev/null
+# The published site/rpm/nulavio.repo, pointed at this local repository and key.
+sed -e 's|^baseurl=.*|baseurl=file:///repo|' -e 's|^gpgkey=.*|gpgkey=file:///repo/nulavio-packages.asc|' \
+    "$repo_root/site/rpm/nulavio.repo" >"$work/nulavio.repo"
 echo "signed with throwaway key ${fpr: -16}"
 
 install_from() {
-    podman run --rm --security-opt label=disable -v "$1:/repo:ro" "$image" bash -euc '
-        cp /repo/nulavio.repo /etc/yum.repos.d/
+    podman run --rm --security-opt label=disable -v "$1:/repo:ro" -v "$work/nulavio.repo:/nulavio.repo:ro" "$image" bash -euc '
+        cp /nulavio.repo /etc/yum.repos.d/
         dnf -y -q install nulavio >/dev/null 2>&1 || { echo "refused"; exit 3; }
         rpm -K /repo/x86_64/nulavio-*.rpm | grep -q "signatures OK" && echo "installed with verified signatures"
     '

@@ -103,6 +103,34 @@ class ReleaseManifestTest(unittest.TestCase):
         self.write()
         self.refused("is not on main")
 
+    def published(self, version: str):
+        (self.repo / "packaging").mkdir(exist_ok=True)
+        (self.repo / "packaging" / "release.json").write_text(json.dumps({"version": version}), encoding="utf-8")
+
+    def test_a_release_not_newer_than_the_published_one_is_refused(self):
+        # dnf upgrades only to a higher version-release: the same number never reaches installed copies.
+        self.published("159.0.1-0.1")
+        self.refused("not newer than the published 159.0.1-0.1")
+        self.published("160.0-0.1")
+        self.refused("not newer")
+        self.published("159.0.1-0.0.9")
+        self.assertEqual(self.verify()["tag"], "v159.0.1-0.1")
+
+    def test_an_existing_tag_is_refused(self):
+        git = ["git", "-C", str(self.repo), "-c", "user.name=t", "-c", "user.email=t@example.invalid"]
+        subprocess.run([*git, "tag", "v159.0.1-0.1", self.base], check=True)
+        self.refused("already exists")
+
+    def test_the_next_release_counts_up_from_the_published_one(self):
+        self.assertEqual(release_manifest.next_release("159.0.1", self.repo), "0.1")
+        self.published("159.0.1-0.1")
+        self.assertEqual(release_manifest.next_release("159.0.1", self.repo), "0.2")
+        self.assertEqual(release_manifest.next_release("160.0", self.repo), "0.1")
+        self.published("159.0.1-0.9")
+        self.assertEqual(release_manifest.next_release("159.0.1", self.repo), "0.10")
+        self.published("160.0-0.10")
+        self.refused("not newer")  # the Firefox version is compared first
+
     def test_signing_refuses_packages_the_manifest_does_not_list(self):
         packages = self.out / "packages"
         self.assertEqual(len(release_manifest.check_packages(self.out / "manifest.json", packages)), 2)
@@ -116,8 +144,23 @@ class ReleaseManifestTest(unittest.TestCase):
         check, sign = script.index("release_manifest.py"), script.index("rpmsign")
         self.assertLess(check, sign)
         # dnf reads repodata/ under baseurl, and sign_repo.sh writes it at the top of <repo-out>.
-        self.assertIn("baseurl=${NULAVIO_REPO_BASEURL:-https://packages.nulavio.net/rpm}", script)
         self.assertIn("createrepo_c --quiet /repo\n", script)
+        # The file that turns dnf's checks on is never written where the packages are uploaded.
+        self.assertNotIn("> /repo/nulavio.repo", script)
+        self.assertNotIn("gpgcheck", script)
+
+    def test_the_repo_file_comes_from_the_site_with_both_checks_on(self):
+        release = json.loads((ROOT / "packaging" / "release.json").read_text(encoding="utf-8"))
+        self.assertEqual(release["repo_file"], "https://nulavio.net/rpm/nulavio.repo")
+        lines = (ROOT / "site" / "rpm" / "nulavio.repo").read_text(encoding="utf-8").splitlines()
+        self.assertEqual(lines, [
+            "[nulavio]", "name=Nulavio", "baseurl=https://packages.nulavio.net/rpm", "enabled=1",
+            "gpgcheck=1", "repo_gpgcheck=1", f"gpgkey={release['key_url']}",
+        ])  # fmt: skip
+        for readme in ("README.md", "README.pt-BR.md"):
+            text = (ROOT / readme).read_text(encoding="utf-8")
+            self.assertIn("--from-repofile=https://nulavio.net/rpm/nulavio.repo", text)
+            self.assertNotIn("packages.nulavio.net/rpm/nulavio.repo", text)
 
 
 if __name__ == "__main__":

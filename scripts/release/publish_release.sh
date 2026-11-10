@@ -79,7 +79,7 @@ origin/main; signed with $key. Not done by the script: everything below.
    Then, in a clean Fedora container, install from it with both checks on:
 
        podman run --rm -it $("$repo/scripts/release/base_image.sh" fedora-build) bash -c \\
-         'dnf -y config-manager addrepo --from-repofile=https://packages.nulavio.net/rpm/nulavio.repo && dnf -y install nulavio && rpm -q nulavio'
+         'dnf -y config-manager addrepo --from-repofile=https://nulavio.net/rpm/nulavio.repo && dnf -y install nulavio && rpm -q nulavio'
 
 2. Tag and create the GitHub release as a draft, review it, then publish it:
 

@@ -3,6 +3,6 @@
   "channel": "alpha",
   "version": "160.0-0.1",
   "key_fingerprint": "298A 9093 BAAB B26F 79BB  29F4 BF47 E5FA 9EDB 8DB1",
-  "repo_file": "https://packages.nulavio.net/rpm/nulavio.repo",
+  "repo_file": "https://nulavio.net/rpm/nulavio.repo",
   "key_url": "https://nulavio.net/keys/nulavio-packages.asc"
 }

@@ -594,7 +594,22 @@ class DownloadPagesTest(unittest.TestCase):
         if key is not None:
             (src / build_site.PUBLIC_KEY).parent.mkdir(parents=True)
             (src / build_site.PUBLIC_KEY).write_text(key, encoding="utf-8")
+        (src / build_site.REPO_FILE).parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(ROOT / build_site.REPO_FILE, src / build_site.REPO_FILE)
         return src
+
+    def test_a_repo_file_without_the_checks_or_off_the_site_is_refused(self):
+        src = self.source("checks-off", "159.0.1-0.1", self.fpr, self.armored)
+        repo_file = src / build_site.REPO_FILE
+        repo_file.write_text(repo_file.read_text(encoding="utf-8").replace("gpgcheck=1", "gpgcheck=0"), encoding="utf-8")
+        with self.assertRaises(build_site.BuildError):
+            build_site.release_values(src)
+        src = self.source("bucket", "159.0.1-0.1", self.fpr, self.armored)
+        release = json.loads((src / "packaging" / "release.json").read_text(encoding="utf-8"))
+        release["repo_file"] = "https://packages.nulavio.net/rpm/nulavio.repo"
+        (src / "packaging" / "release.json").write_text(json.dumps(release), encoding="utf-8")
+        with self.assertRaises(build_site.BuildError):
+            build_site.release_values(src)
 
     def test_no_release_no_download_pages(self):
         self.assertIsNone(build_site.release_values(self.source("none", "", "", None)))
@@ -635,7 +650,7 @@ class DownloadPagesTest(unittest.TestCase):
                 self.assertNotIn("<script", html)
                 self.assertNotIn("style=", html)
                 self.assertIn(values["key_fpr"], html)
-                self.assertIn("dnf config-manager addrepo --from-repofile=https://packages.nulavio.net/rpm/nulavio.repo", html)
+                self.assertIn("dnf config-manager addrepo --from-repofile=https://nulavio.net/rpm/nulavio.repo", html)
                 self.assertIn("159.0.1-0.1", html)
                 for url in re.findall(r'(?:src|href|srcset)="(https?://[^"]+)"', html):
                     self.assertTrue(url.startswith(SAME_SITE), url)
