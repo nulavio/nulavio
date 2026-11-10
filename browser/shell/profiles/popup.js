@@ -145,6 +145,7 @@ async function renderSite(state) {
   if (rule && rule.action !== "stay") {
     const target = state.profiles.find(p => p.id === rule.profileId);
     text.textContent = target ? t("routingSiteOpensIn", [shown, target.name]) : t("routingTargetMissing");
+    text.classList.toggle("form-error", !target);
     const remove = h("button", { class: "button button--quiet", type: "button", text: t("routingRemoveRule") });
     remove.addEventListener("click", () => act(() => routing.removeRule(rule.id), t("doneRemoved")));
     actions.push(remove);

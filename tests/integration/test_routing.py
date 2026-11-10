@@ -489,7 +489,12 @@ class RoutingTest(unittest.TestCase):
             return self.m.execute("return [...document.querySelectorAll('#rules > li[data-rule-id]')].map(li => li.textContent);")
 
         self.assertTrue(harness.wait_until(lambda: len(rows()) == 2, timeout=10), rows())
-        self.assertTrue(any("⚠" in r for r in rows()), "a rule whose profile is gone must say so")
+        # In the error style (octagon and words), not a glyph in the text (design-system, Calmaria).
+        missing = self.m.execute(
+            "return [...document.querySelectorAll('#rules > li[data-rule-id] .form-error')].map(e => e.textContent);"
+        )
+        gone = self.m.execute("return browser.i18n.getMessage('routingTargetMissing');")
+        self.assertEqual(missing, [gone], "a rule whose profile is gone must say so")
         self.m.execute(
             "const f = document.getElementById('add-rule'); f.elements.site.value = 'https://Wiki.Example.org/x';"
             "f.elements.match.value = 'domain'; f.elements.action.value = 'ask';"
