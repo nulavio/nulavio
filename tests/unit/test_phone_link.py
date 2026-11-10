@@ -158,12 +158,15 @@ class PhoneSessionTest(unittest.TestCase):
 
     def pair(self) -> None:
         session, first, thread = self.start("pair", {"current": PASSWORD})
-        self.phone.pair(first["qr"])
+        phone = self.phone.pair(first["qr"])
         self.assertEqual(self.wait_state(session, "waiting-for-you", "failed"), "waiting-for-you")
         self.assertEqual(session.status()["sas"], self.phone.sas)
         self.assertRegex(self.phone.sas, r"^\d{6}$")
         session.handle({"action": "confirm", "match": True})
         thread.join(20)
+        # The phone records the desktop's last message on its own thread, which can still be reading it
+        # when the desktop's thread has ended (failed in CI, runs 42867466404 and 42871213425).
+        phone.join(20)
         self.assertEqual(session.status(), {"session": session.id, "kind": "pair", "state": "paired", "phone": "Pixel de teste"})
         self.assertEqual(self.phone.result, {"t": "paired"})
 
@@ -178,8 +181,9 @@ class PhoneSessionTest(unittest.TestCase):
         session, first, thread = self.start("unlock", {"autolock": False})
         signed = json.loads(first["qr"])
         self.assertEqual(signed["r"]["profile_name"], "cofre")
-        self.phone.unlock(first["qr"])
+        phone = self.phone.unlock(first["qr"])
         thread.join(20)
+        phone.join(20)
         self.assertEqual(session.state, "unlocked")
         self.assertEqual(self.phone.result, {"t": "ok"})
         self.assertTrue(profiles.container(self.prof).mounted())
@@ -187,10 +191,11 @@ class PhoneSessionTest(unittest.TestCase):
 
     def test_02_digits_that_do_not_match_end_pairing_on_either_side(self):
         session, first, thread = self.start("pair", {"current": PASSWORD})
-        self.phone.pair(first["qr"])
+        phone = self.phone.pair(first["qr"])
         self.wait_state(session, "waiting-for-you")
         session.handle({"action": "confirm", "match": False})
         thread.join(20)
+        phone.join(20)
         self.assertEqual((session.state, session.error), ("failed", "sas-mismatch"))
         self.assertEqual(self.phone.result, {"t": "error", "code": "sas-mismatch"})
 
