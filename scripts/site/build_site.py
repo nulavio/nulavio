@@ -249,7 +249,20 @@ def stamp_page(text: str, values: dict[str, str], manifest: dict, locale: str | 
             return values[name]
         return match.group(0)
 
-    return break_points(re.sub(r"\{\{([a-z_0-9]+(?::[A-Za-z0-9_.-]+)?)\}\}", replace, text))
+    return keep_addresses(break_points(re.sub(r"\{\{([a-z_0-9]+(?::[A-Za-z0-9_.-]+)?)\}\}", replace, text)), page)
+
+
+# Cloudflare, which serves the site, can rewrite every address in a page ("email obfuscation") and add a
+# script to put them back. The site's own policy allows no script, so the security contact showed as
+# "[email protected]" and the page stopped matching the build (verify_live.py). These comments are
+# Cloudflare's own way for a page to opt out, so the pages do not depend on how the zone is set.
+EMAIL_OFF = ("<!--email_off-->", "<!--/email_off-->")
+
+
+def keep_addresses(text: str, page: str) -> str:
+    if text.count("<body>") != 1 or text.count("</body>") != 1:
+        raise BuildError(f"{page}: expected exactly one <body> and one </body>")
+    return text.replace("<body>", f"<body>\n{EMAIL_OFF[0]}").replace("</body>", f"{EMAIL_OFF[1]}\n</body>")
 
 
 # -- build --------------------------------------------------------------------------------
