@@ -27,6 +27,17 @@ Urgency: <urgent | standard> (<reasons>). Source SHA-256 <digest> (Mozilla's sig
 **Nulavio fixes**: <none, or the table above>.
 ```
 
+## Unreleased (development, Firefox 160.0)
+
+**Upstream**: Firefox 160.0, staged on archive.mozilla.org, not yet released by Mozilla ([update issue #14](https://github.com/caiolombello/nulavio/issues/14)); no advisory yet.
+Urgency: urgent until 6 h after Mozilla's release (no advisory yet, update policy). Source SHA-256 2b23d2bf6716ea16b45c10aa5c275c78a1d7ff50ad53150809ab27424c58fd81 (Mozilla's signed SHA256SUMS, verified against the pinned release key).
+
+| Mozilla's release | Detected | Ready to sign | Published | Target | Deadline |
+|---|---|---|---|---|---|
+| not yet | staged, 2026-11-09 23:35 UTC (upstream issue) | not yet | not published | 24 h from release | 72 h from release |
+
+**Nulavio fixes**: engine pin and signed source digest moved from Firefox 159.0.1 to 160.0. Patch 0008 is gone: Firefox 160 animates the sidebar launcher with a view transition whose timing is CSS, so Horizon sets Nulavio's expand and collapse times there. Patches 0001–0007 apply unchanged. No change to what a user must do.
+
 ## Unreleased (development, Firefox 159.0.1)
 
 **Upstream**: Firefox 159.0.1, released by Mozilla on 2026-11-03 14:09:02 UTC ([mfsa2026-123](https://www.mozilla.org/security/advisories/mfsa2026-123/), [update issue #4](https://github.com/caiolombello/nulavio/issues/4)).
