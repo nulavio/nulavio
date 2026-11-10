@@ -859,7 +859,9 @@ async function renderPasswords() {
   rerender(list, () => state.providers.map(item => providerRow(item, state)));
   list.setAttribute("aria-busy", "false");
   list.dataset.current = state.current;
-  document.getElementById("engine-logins").textContent = t("passwordsEngineLogins", [String(state.engineLogins)]);
+  const logins = state.engineLogins;
+  document.getElementById("engine-logins").textContent =
+    logins === 0 ? t("passwordsEngineLoginsNone") : logins === 1 ? t("passwordsEngineLoginsOne") : t("passwordsEngineLogins", [String(logins)]);
 }
 
 /** Look-alike sites the person chose to continue on (flow D): each can be removed, and the warning returns. */

@@ -223,7 +223,7 @@ function agentRow(agent) {
   const meta = [
     agent.active_sessions?.length ? t("aiConnectedNow", [String(agent.active_sessions.length)]) : null,
     seen ? t("aiLastSeen", [when(seen.seen), seen.executable ?? "?"]) : t("aiNeverConnected"),
-    seen && seen.matches === false ? t("aiClientMismatch") : null,
+    seen && seen.matches === false ? { text: t("aiClientMismatch"), error: true } : null,
     agent.domains?.length ? t("aiSitesOnly", [agent.domains.join(", ")]) : t("aiAnySite"),
   ].filter(Boolean);
 
@@ -295,7 +295,9 @@ function agentRow(agent) {
       "div",
       { class: "row__main" },
       h("p", { class: "row__title" }, h("span", { text: agent.name }), ...badges),
-      ...meta.map(text => h("p", { class: "row__note", text }))
+      ...meta.map(note =>
+        typeof note === "string" ? h("p", { class: "row__note", text: note }) : h("p", { class: "row__note form-error", text: note.text })
+      )
     ),
     h("div", { class: "row__end" }, pause, revoke),
     h(
