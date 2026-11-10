@@ -28,11 +28,20 @@ class SidebarFocusTest(unittest.TestCase):
         const [view, done] = arguments;
         (async () => {
           await SidebarController.show(view);
-          const doc = SidebarController.browser.contentDocument;
           const deep = root => [...root.querySelectorAll('*')].flatMap(e => [e, ...(e.shadowRoot ? deep(e.shadowRoot) : [])]);
-          const control = deep(doc).find(e => (e.localName === 'input' || e.localName === 'button')
+          const usable = root => deep(root).find(e => (e.localName === 'input' || e.localName === 'button')
             && e.getBoundingClientRect().width > 0 && !e.disabled);
-          if (!control) throw new Error('no native control in ' + doc.documentURI);
+          // Firefox 160 draws an extension panel's header (its close button) in the window, next
+          // to the panel, not inside webext-panels.xhtml.
+          let doc = SidebarController.browser.contentDocument;
+          let control = usable(doc);
+          const header = document.getElementById('sidebar-panel-header');
+          if (!control && header && !header.hidden) {
+            await header.updateComplete;
+            control = usable(header.shadowRoot ?? header);
+            doc = document;
+          }
+          if (!control) throw new Error('no native control in ' + SidebarController.browser.contentDocument.documentURI);
           Services.focus.setFocus(control, Ci.nsIFocusManager.FLAG_BYKEY);
           InspectorUtils.addPseudoClassLock(control, ':focus-visible');
           await new Promise(resolve => doc.defaultView.requestAnimationFrame(resolve));

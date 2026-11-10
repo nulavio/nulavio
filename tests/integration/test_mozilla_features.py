@@ -169,6 +169,26 @@ class MozillaFeaturesTest(unittest.TestCase):
         )
         self.assertEqual(entry, {"page": False, "tab": False, "selectionShortcut": False})
 
+    def test_03b_no_region_lookup_at_mozilla(self):
+        """The build asks no location service for the country: with no address to ask, the lookup ends without a request."""
+        state = self.chrome_async(
+            "const done = arguments[arguments.length - 1];"
+            'const { Region } = ChromeUtils.importESModule("resource://gre/modules/Region.sys.mjs");'
+            "const hosts = [];"
+            "const watch = { observe(channel) { hosts.push(channel.QueryInterface(Ci.nsIHttpChannel).URI.host); } };"
+            'Services.obs.addObserver(watch, "http-on-opening-request");'
+            "(async () => { await Region._fetchRegion(); return {"
+            ' url: Services.urlFormatter.formatURLPref("browser.region.network.url"),'
+            ' update: Services.prefs.getBoolPref("browser.region.update.enabled"),'
+            ' userSet: ["network.url", "update.enabled"].filter(n => Services.prefs.prefHasUserValue(`browser.region.${n}`)),'
+            ' asked: hosts.filter(h => h.includes("location.services")),'
+            " home: Region.home,"
+            "}; })()"
+            '.finally(() => Services.obs.removeObserver(watch, "http-on-opening-request"))'
+            ".then(done, e => done({ error: String(e) }));"
+        )
+        self.assertEqual(state, {"url": "", "update": False, "userSet": [], "asked": [], "home": None})
+
     def test_04_no_account_button_or_sync_promo(self):
         state = self.m.chrome(
             "const b = document.getElementById('fxa-toolbar-menu-button');"

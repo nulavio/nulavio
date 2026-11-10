@@ -5,12 +5,17 @@
     python3 -I scripts/site/build_site.py --release [--commit <sha>] --out dist/site
 
 The output is plain files for Cloudflare Pages (direct upload): no build
-tool, no JavaScript, no third-party resources.
+tool, no JavaScript in the pages, no third-party resources. The pages are the
+landing (index.html, en/index.html; landing.css), the waitlist pages (lista/,
+en/waitlist/) and the engineering document (engenharia/, en/engineering/;
+site.css). site/_worker.js is not a page script: Cloudflare runs it for
+/api/* only (site/_routes.json), to store waitlist sign-ups.
 
 The pages carry placeholders that this script stamps (landing spec §2.3, §9):
 {{commit}}, {{date_pt}}, {{date_en}}, {{firefox}} (browser/build/engine.json),
 {{patches}} (browser/patches/series), {{ubo}} (browser/distribution/
-extensions.lock.json), {{buildid}} and, per figure, {{onscreen:<id>}},
+extensions.lock.json), {{defaults}} (the annotated defaults of browser/config/
+prefs/baseline.js), {{buildid}} and, per figure, {{onscreen:<id>}},
 {{port:<id>}} and {{wh:<file>}} from site/assets/shots/manifest.json (written
 by scripts/site/capture_site.py), and the two text excerpts {{e1}} (the real
 output of ``prefs explain``) and {{e2}} (the header lines of site/_headers).
@@ -52,7 +57,16 @@ ASSETS = {
     "favicon.ico": Path("docs/brand/assets/favicon/favicon.ico"),
 }
 # Page -> capture locale (manifest figures are per locale).
-PAGES = {"index.html": "pt-BR", "en/index.html": "en-US", "404.html": None}
+PAGES = {
+    "index.html": "pt-BR",
+    "en/index.html": "en-US",
+    "lista/index.html": "pt-BR",
+    "en/waitlist/index.html": "en-US",
+    "engenharia/index.html": "pt-BR",
+    "en/engineering/index.html": "en-US",
+    "404.html": None,
+}
+STYLESHEETS = ("site.css", "landing.css")  # served from /assets/
 E1_CATEGORIES = ("tracking", "https")
 SCALE = 2  # captures are taken at devPixelsPerPx=2; width/height attributes are CSS px
 # Notes appended to a commit outside --release, so a development build never passes for a release.
@@ -84,6 +98,12 @@ def patch_count(src: Path) -> int:
 def ublock_version(src: Path) -> str:
     lock = json.loads((src / "browser" / "distribution" / "extensions.lock.json").read_text(encoding="utf-8"))
     return next(e["version"] for e in lock["extensions"] if e["key"] == "ublock-origin")
+
+
+def default_count(src: Path) -> int:
+    """The defaults Nulavio changes and documents: each has a @why and a @tradeoff (tests/unit/test_prefs_and_guard.py)."""
+    lines = (src / "browser" / "config" / "prefs" / "baseline.js").read_text(encoding="utf-8").splitlines()
+    return sum(1 for line in lines if line.startswith("user_pref("))
 
 
 def firefox_version(src: Path) -> str:
@@ -165,6 +185,7 @@ def stamps(src: Path, commit: str, manifest: dict) -> dict[str, str]:
         "firefox": firefox_version(src),
         "patches": str(patch_count(src)),
         "ubo": ublock_version(src),
+        "defaults": str(default_count(src)),
         "buildid": next(iter(buildids)) if buildids else "",
         "e1": html.escape(excerpt_e1(src), quote=False),
         "e2": html.escape("\n".join(header_lines(src)), quote=False),
@@ -280,7 +301,8 @@ def build(out: Path, *, release: bool = False, commit: str = "HEAD", evidence: s
             shutil.rmtree(out)
         shutil.copytree(src / "site", out)
         (out / "assets").mkdir(exist_ok=True)
-        shutil.move(out / "site.css", out / "assets" / "site.css")
+        for sheet in STYLESHEETS:
+            shutil.move(out / sheet, out / "assets" / sheet)
         for relative, source in ASSETS.items():
             shutil.copyfile(src / source, out / relative)
         for page, locale in PAGES.items():

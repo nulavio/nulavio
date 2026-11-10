@@ -74,6 +74,9 @@ class VaultUiTest(unittest.TestCase):
         cls.session.env["NULAVIO_BUSCTL"] = str(busctl)
         cls.session.env["NV_FAKE_AVAHI"] = str(cls.avahi)
         cls.m = cls.session.start()
+        # Connecting a phone is not offered by default (D10). The phone tests turn it on, as someone
+        # testing the Companion would; test 13 runs with the build's default.
+        cls.m.chrome('Services.prefs.setBoolPref("nulavio.vault.phone.pairing", true);')
         cls.base = cls.m.chrome('return WebExtensionPolicy.getByID("shell@nulavio.net").getURL("");')
         cls.shots = harness.artifacts_dir() / "vault-ui"
         cls.shots.mkdir(parents=True, exist_ok=True)
@@ -190,6 +193,15 @@ class VaultUiTest(unittest.TestCase):
             (self.shots / f"{name}-{scheme}.png").write_bytes(self.m.screenshot_png(full=True))
         self.m.execute("delete document.documentElement.dataset.theme;")
 
+    def password_prompt(self, wait: float = 3) -> bool:
+        """Whether the engine's password manager offers to save a login, in any tab (these pages open in the background)."""
+        script = (
+            "for (const w of Services.wm.getEnumerator('navigator:browser')) {"
+            " if (w.gBrowser.browsers.some(b => w.PopupNotifications.getNotification('password', b))) { return true; } }"
+            "return false;"
+        )
+        return harness.wait_until(lambda: self.m.chrome(script), timeout=wait, interval=0.25)
+
     def profile_path(self, profile_id: int) -> Path:
         return Path(self.call("return (await SPS.getProfile(args[0])).path;", profile_id))
 
@@ -219,6 +231,8 @@ class VaultUiTest(unittest.TestCase):
     def test_01_create_a_protected_profile_in_three_decisions(self):
         self.open_page("vault/create.html")
         self.wait_state("profile", "step")
+        # "Tentar de novo" belongs to a failed state the page lists, never to a page that just opened.
+        self.assertIsNone(self.m.execute("return document.querySelector('.moment__retry');"))
         # The pressed template looks pressed (DS-05): another surface and edge, and a ✓, not only aria-pressed.
         templates = self.m.execute(
             "return [...document.querySelectorAll('#templates button')].map(b => ({pressed: b.getAttribute('aria-pressed'),"
@@ -292,17 +306,32 @@ class VaultUiTest(unittest.TestCase):
         self.assertEqual(self.m.execute("return document.activeElement.id;"), "password")  # keyboard first
         self.assertEqual(self.m.execute("return document.getElementById('url').textContent;"), url)
         self.shoot("unlock-idle")
-        self.type_into("password", "not the password")
+        # Typed with real keys: the engine's password manager only captures what a person typed.
+        self.m.send("WebDriver:ElementSendKeys", {"id": self.m.find_element("#password"), "text": "not the password"})
         self.click("#password-form button[type=submit]")
         self.wait_state("error")
         self.assertEqual(self.m.execute("return document.activeElement.id;"), "password")
         self.assert_status("error")  # critical colour and icon, no ✓ and no amber (SB-12)
+        # The refused field is marked and the message is its description; neither outlives the attempt.
+        marked = (
+            "const f = document.getElementById(arguments[0]);"
+            "return [f.getAttribute('aria-invalid'), f.getAttribute('aria-describedby')];"
+        )
+        self.assertEqual(self.m.execute(marked, ["password"]), ["true", "status"])
         self.shoot("unlock-error")
+        # The profile's password is never offered to this profile's password manager, which may be unprotected.
+        origin = self.base.rstrip("/")
+        self.assertFalse(self.m.chrome("return Services.logins.getLoginSavingEnabled(arguments[0]);", [origin]))
+        self.assertFalse(self.password_prompt(), "the engine offered to save the profile's password")
         self.click("#use-recovery")
+        self.assertEqual((self.state(), self.status_text()), ("idle", ""), "the password's error stayed over the other form")
+        self.assertIsNone(self.m.execute(marked, ["password"])[0])
         self.type_into("recovery", "1234")
         self.click("#recovery-form button[type=submit]")
         self.wait_state("error")
+        self.assertEqual(self.m.execute(marked, ["recovery"]), ["true", "status"])
         self.click("#recovery-back")
+        self.assertEqual((self.state(), self.m.execute(marked, ["recovery"])[0]), ("idle", None))
         self.assertEqual(self.server.requests_to("/page/vault-opened"), [])  # nothing loaded while locked
         self.type_into("password", PASSWORD)
         self.click("#password-form button[type=submit]")
@@ -353,7 +382,8 @@ class VaultUiTest(unittest.TestCase):
     def test_04_only_the_recovery_code_left(self):
         profile_id, code = self.create_via_api("SoLogin", password=None, keyring=True)
         self.keyring_store.write_text("[]")
-        self.open_page(f"vault/unlock.html?p={profile_id}")
+        url = self.server.url("/page/recovery-opened")
+        self.open_page(f"vault/unlock.html?p={profile_id}&u={url}")
         self.wait_state("idle")  # computer login is still offered first
         self.click("#use-keyring")
         self.wait_state("device-unavailable")
@@ -363,6 +393,10 @@ class VaultUiTest(unittest.TestCase):
         self.wait_state("unlocked", timeout=60)
         path = self.profile_path(profile_id)
         self.assertTrue(harness.wait_until(lambda: self.instances(path), timeout=60))
+        # Stop it once it is really up, as tests 02 and 09 do. The watcher polls for the engine that took
+        # the profile: one ended in its first half second is never seen, and the watcher then waits out
+        # its two-minute grace period before locking (this test failed that way about one run in four).
+        self.assertTrue(harness.wait_until(lambda: self.server.requests_to("/page/recovery-opened"), timeout=60))
         self.stop_instance(path)
         self.assertTrue(harness.wait_until(lambda: not storage.Container(path).mounted(), timeout=30))
 
@@ -480,7 +514,7 @@ class VaultUiTest(unittest.TestCase):
         self.open_page(f"vault/phone.html?p={profile_id}")
         self.wait_state("idle")
         # Honest copy (SB-13): one more way to unlock, the others keep working; the button shows a QR, not the
-        # recovery code; the "no master key" footer lists the phone.
+        # recovery code; the "no master key" footer names no method, so it is true for every profile.
         copy = self.m.execute(
             "return {explain: document.getElementById('explain').textContent,"
             " cta: document.querySelector('#start-form button[type=submit]').textContent,"
@@ -489,7 +523,7 @@ class VaultUiTest(unittest.TestCase):
         self.assertIn("mais um jeito de desbloquear", copy["explain"])
         self.assertIn("continuam valendo", copy["explain"])
         self.assertEqual(copy["cta"], "Mostrar QR para o celular")
-        self.assertIn("celular", copy["footer"])
+        self.assertIn("um dos jeitos de desbloquear deste perfil", copy["footer"])
         self.shoot("phone-idle")
         self.type_into("current", "not the password")
         self.click("#start-form button[type=submit]")
@@ -697,6 +731,62 @@ class VaultUiTest(unittest.TestCase):
         self.assertFalse(rows["os-keyring"]["disabled"])
         self.assertEqual(rows["os-keyring"]["label"], [])  # the tools' own "computer login" label is not shown
         self.shoot("methods-keyring")
+
+    def test_13_connecting_a_phone_is_not_offered_yet(self):
+        """D10: phone and security-key unlock are not in 1.0. With the build's default no page offers to
+        connect a phone and the Shell refuses to start one; a phone connected before keeps working."""
+        pref = "nulavio.vault.phone.pairing"
+        self.m.chrome("Services.prefs.clearUserPref(arguments[0]);", [pref])
+        try:
+            self.assertFalse(self.m.chrome("return Services.prefs.getBoolPref(arguments[0], true);", [pref]), "the build default")
+            profile_id, _ = self.create_via_api("SemCelular", password=PASSWORD, keyring=False)
+            # The unlock-methods page: no link to the phones, and it says what is not available yet.
+            self.open_page(f"vault/methods.html?p={profile_id}")
+            self.wait_state("idle")
+            page = self.m.execute(
+                "return {link: document.getElementById('phones').getClientRects().length,"
+                " note: document.getElementById('not-yet').textContent};"
+            )
+            self.assertEqual(page["link"], 0, "the link to connect a phone is shown")
+            for words in ("celular", "chave de segurança", "ainda não disponíveis"):
+                self.assertIn(words, page["note"])
+            self.shoot("methods-not-yet")
+            # The phone page, opened by its address: it says so, offers no code and nothing to try again.
+            self.open_page(f"vault/phone.html?p={profile_id}")
+            self.wait_state("not-yet")
+            page = self.m.execute(
+                "return {explain: document.getElementById('explain').textContent,"
+                " form: document.getElementById('start-form').getClientRects().length,"
+                " retry: document.querySelector('.moment__retry') !== null};"
+            )
+            not_yet = self.m.execute("return browser.i18n.getMessage('phoneNotYet');")
+            self.assertEqual(page, {"explain": not_yet, "form": 0, "retry": False})
+            self.shoot("phone-not-yet")
+            # A page or anything else that calls the Shell directly is refused the same way.
+            with self.assertRaises(AssertionError) as refused:
+                self.call("return V.phoneStart(args[0], 'pair', {current: args[1]});", profile_id, PASSWORD)
+            self.assertEqual(str(refused.exception), "phone-not-yet")
+            # The phone connected in test 08 is still listed and can be removed, but no new one is offered.
+            self.open_page(f"vault/methods.html?p={self.phone_profile}")
+            self.wait_state("idle")
+            self.assertGreater(self.m.execute("return document.getElementById('phones').getClientRects().length;"), 0)
+            self.open_page(f"vault/phone.html?p={self.phone_profile}")
+            self.wait_state("idle")
+            page = self.m.execute(
+                "const form = document.getElementById('start-form');"
+                "return {phones: document.getElementById('phones').textContent,"
+                " remove: document.querySelectorAll('#phones button').length,"
+                " field: document.getElementById('current').getClientRects().length > 0,"
+                " connect: form.querySelector('button[type=submit]').getClientRects().length};"
+            )
+            self.assertIn("Pixel de teste", page["phones"])
+            self.assertEqual((page["remove"], page["field"], page["connect"]), (1, True, 0))
+            # ... and it still unlocks that profile.
+            self.open_page(f"vault/unlock.html?p={self.phone_profile}")
+            self.wait_state("idle")
+            self.assertIsNotNone(self.m.execute("return document.getElementById('use-phone');"))
+        finally:
+            self.m.chrome("Services.prefs.setBoolPref(arguments[0], true);", [pref])
 
 
 if __name__ == "__main__":
