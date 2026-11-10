@@ -1074,6 +1074,7 @@
   "momentCritical": {"message": "Critical"},
   "momentRetry": {"message": "Try again"},
   "momentLoading": {"message": "Loading…"},
+  "momentBandCheck": {"message": "Before you type a password, look at the top of the window: only the browser can write “Nulavio · $SURFACE$” there. No website can.", "placeholders": {"surface": {"content": "$1"}}},
   "methodsLastConfirmer": {"message": "Kept: a password or the recovery code is what confirms any change here."},
   "methodsNoConfirmer": {"message": "This profile no longer has a password or a recovery code, and those are what confirm changes here. It still opens with the other ways listed here."},
   "routingRememberHintLocked": {"message": "Unlock and open $TARGET$: next time it opens there without asking. Open in $CURRENT$: $SITE$ stops switching profiles.", "placeholders": {"target": {"content": "$1"}, "current": {"content": "$2"}, "site": {"content": "$3"}}},
