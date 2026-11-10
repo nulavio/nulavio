@@ -27,16 +27,17 @@ Urgency: <urgent | standard> (<reasons>). Source SHA-256 <digest> (Mozilla's sig
 **Nulavio fixes**: <none, or the table above>.
 ```
 
-## Unreleased (development, Firefox 160.0)
+## Nulavio 160.0-0.1 (Firefox 160.0), published 2026-11-10
 
-**Upstream**: Firefox 160.0, staged on archive.mozilla.org, not yet released by Mozilla ([update issue #14](https://github.com/nulavio/nulavio/issues/14)); no advisory yet.
-Urgency: urgent until 6 h after Mozilla's release (no advisory yet, update policy). Source SHA-256 2b23d2bf6716ea16b45c10aa5c275c78a1d7ff50ad53150809ab27424c58fd81 (Mozilla's signed SHA256SUMS, verified against the pinned release key).
+The first public alpha, for Fedora ([release](https://github.com/nulavio/nulavio/releases/tag/v160.0-0.1), dnf repository at `packages.nulavio.net`, signed with `298A 9093 BAAB B26F 79BB  29F4 BF47 E5FA 9EDB 8DB1`).
+
+**Upstream**: Firefox 160.0, released by Mozilla on 2026-11-10 ([advisories](https://www.mozilla.org/security/advisories/); [update issue #14](https://github.com/nulavio/nulavio/issues/14)). Urgency: urgent (no advisory yet when the build started, update policy). Source SHA-256 2b23d2bf6716ea16b45c10aa5c275c78a1d7ff50ad53150809ab27424c58fd81 (Mozilla's signed SHA256SUMS, verified against the pinned release key).
 
 | Mozilla's release | Detected | Ready to sign | Published | Target | Deadline |
 |---|---|---|---|---|---|
-| not yet | staged, 2026-11-09 23:35 UTC (upstream issue) | not yet | not published | 24 h from release | 72 h from release |
+| 2026-11-10 (product-details gives the date only) | staged, 2026-11-09 23:35 UTC (upstream issue); pre-built from staging the same day | 2026-11-10 22:26 UTC (rehearsal: unit, 349 integration tests, RPM/DEB in clean containers, signed-repository check, 33 min) | 2026-11-10 22:59 UTC (repository uploaded and installed from in a clean Fedora 44 container; GitHub release) | 24 h: met (same day) | 72 h: met |
 
-**Nulavio fixes**: engine pin and signed source digest moved from Firefox 159.0.1 to 160.0. Patch 0008 is gone: Firefox 160 animates the sidebar launcher with a view transition whose timing is CSS, so Horizon sets Nulavio's expand and collapse times there. Patches 0001–0007 apply unchanged. No change to what a user must do.
+**Nulavio fixes**: engine pin and signed source digest moved from Firefox 159.0.1 to 160.0. Patch 0008 is gone: Firefox 160 animates the sidebar launcher with a view transition whose timing is CSS, so Horizon sets Nulavio's expand and collapse times there. Patches 0001–0007 apply unchanged. No change to what a user must do. The first signing with the real key also found that the signing container could not ask for a passphrase (#36, fixed before publishing), and that a patched tree could not be rebuilt (#34).
 
 ## Unreleased (development, Firefox 159.0.1)
 

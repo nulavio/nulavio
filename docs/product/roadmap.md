@@ -132,11 +132,11 @@ External agents (Codex CLI and Desktop, Claude Code and Desktop, other MCP clien
 
 - [x] RPM (Fedora) and .deb (Ubuntu) from one engine build, installed and checked in clean containers; signed-repository tooling verified end to end with a throwaway key; SBOM per package ([build](../architecture/build.md#packages-s18))
 - [x] Publishing steps (2026-11-04): `publish_release.sh` signs only what a rehearsal of reviewed, committed history checked and stages the dnf repository and the GitHub release assets; `make_release_key.sh`; download pages that appear only with a published release ([build](../architecture/build.md#publishing-a-release))
-- [ ] Sign with the release key and publish the repository (needs the maintainer's key and a host; the alpha is Fedora only, D8)
+- [x] Sign with the release key and publish the repository: v160.0-0.1 on 2026-11-10 ([release](https://github.com/nulavio/nulavio/releases/tag/v160.0-0.1); repository at `packages.nulavio.net`)
 - [x] Update SLA automation (upstream check twice a day with signature checks and an issue per release, urgency from Mozilla's advisories with a 24-hour target, verified engine bump, release rehearsal with a manifest, opt-in local timer that pre-builds staged releases); security changelog ([changelog](../security/changelog.md), [update policy](../architecture/update-policy.md))
 - [x] Security pipeline in CI: dependency watch (OSV.dev, AMO, registries), Dependabot, Gradle locking and verification, gitleaks, Opengrep with Nulavio's rules, ShellCheck, zizmor, actionlint; advisory AI review of pull requests, off until a credential is added ([code scanning](../security/code-scanning.md), [dependency updates](../security/dependency-updates.md), [pull requests](../process/pull-requests.md))
 - [ ] Maintainer: decide whether 24 hours becomes the public commitment for urgent Firefox releases, and enable the local upstream timer ([update policy](../architecture/update-policy.md))
-- [ ] Alpha only after [release criteria](release-criteria.md) are met — walked on 2026-10-27: all verifiable items pass; waiting on the release key and repository host, Safe Browsing quota and download-protection decision, a test security report, trademark searches, and Proton Pass once on the Nulavio build ([walk-through](release-criteria.md#alpha-gate-walk-through--2026-10-27-s24))
+- [x] Public alpha for Fedora, after the [release criteria](release-criteria.md#public-alpha-decided-2026-11-04): v160.0-0.1, published 2026-11-10
 
 ## Next task (recommended)
 
