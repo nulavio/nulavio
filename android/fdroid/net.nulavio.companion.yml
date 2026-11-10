@@ -5,8 +5,8 @@ Categories:
 License: MPL-2.0
 AuthorName: Nulavio
 WebSite: https://nulavio.net
-SourceCode: https://github.com/caiolombello/nulavio
-IssueTracker: https://github.com/caiolombello/nulavio/issues
+SourceCode: https://github.com/nulavio/nulavio
+IssueTracker: https://github.com/nulavio/nulavio/issues
 
 AutoName: Nulavio Companion
 Summary: Unlock protected Nulavio profiles with your phone
@@ -20,7 +20,7 @@ Description: |-
   Google services, no trackers. Pairing compares six digits on both screens.
 
 RepoType: git
-Repo: https://github.com/caiolombello/nulavio.git
+Repo: https://github.com/nulavio/nulavio.git
 
 Builds:
   - versionName: 0.1.0

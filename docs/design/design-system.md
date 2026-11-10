@@ -440,7 +440,7 @@ physical KDE/GTK/forced colours, hardware scaling and frame time remain pending.
 
 The parent's UX3A publication is separately recorded at
 `25e591d8ef8184a4aaf0da6b535bf7d86c1248d6`, with all six jobs successful in
-[CI run 40819764438](https://github.com/caiolombello/nulavio/actions/runs/40819764438).
+[CI run 40819764438](https://github.com/nulavio/nulavio/actions/runs/40819764438).
 Its local privileged engine opt-in run passed 15 tests with zero skips, including
 live Safe Browsing phishing blocking, per the supplied
 `network-engine-verification.json`. These are parent release results, distinct

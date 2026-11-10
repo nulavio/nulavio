@@ -33,7 +33,7 @@ SCHEMA = json.loads((ROOT / ".github" / "ai-review" / "schema.json").read_text()
 LOCAL_SCRIPT = ROOT / "scripts" / "review" / "ai_review_local.sh"
 HOOK = ROOT / "scripts" / "git-hooks" / "pre-push"
 FIXTURES = ROOT / "tests" / "fixtures" / "claude-code"
-ACTION_PIN = "anthropics/claude-code-action@d70510b174a1244958df0b03166a54912811f3e6 # v1.0.264"
+ACTION_PIN = "anthropics/claude-code-action@4845bacbb38b3c4b15d948f035349786f678e068 # v1.0.267"
 ZERO = "0" * 40
 GIT_ENV = {**os.environ, "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": os.devnull}
 
