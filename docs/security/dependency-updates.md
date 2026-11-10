@@ -106,7 +106,7 @@ Put the digest after the tag in the Containerfiles (the same digest for the same
 
 Everything above works without them; they add GitHub's own alerts (free on private repositories, also on the Free plan):
 
-- Settings → Advanced Security: turn on Dependency graph, Dependabot alerts, Dependabot security updates and Grouped security updates. Or, as the maintainer: `gh api -X PUT repos/caiolombello/nulavio/vulnerability-alerts` and `gh api -X PUT repos/caiolombello/nulavio/automated-security-fixes`.
+- Settings → Advanced Security: turn on Dependency graph, Dependabot alerts, Dependabot security updates and Grouped security updates. Or, as the maintainer: `gh api -X PUT repos/nulavio/nulavio/vulnerability-alerts` and `gh api -X PUT repos/nulavio/nulavio/automated-security-fixes`.
 - To be told: Watch → Custom → Security alerts on the repository, and email for Dependabot alerts in your notification settings.
 
 These alerts cover little here (ruff only: no alerts for actions pinned by SHA, Gradle needs a dependency submission workflow, Docker has no security updates), which is why the daily watch exists.

@@ -141,8 +141,8 @@ The maintainer's brief: make the experience and look of Nulavio exceptional, wit
 | # | Slice | Scope | Done when | Size |
 |---|---|---|---|---|
 | UX0 | **Record** — done 2026-10-27 | Audit and findings, "before" captures, the three directions and the final one (HTML mockups, rationales, renders), the decision, revised UX principles, this programme | Docs tests green | S |
-| UX1 | **Security, consent and honesty fixes** — **done 2026-10-28** ([CI](https://github.com/caiolombello/nulavio/actions/runs/40696267881), `8dd50fe5908aee17df464c21b1e7eafafde11496`) | See the list below | Real Track B package: 187 integration tests, 13 skips; 586 unit tests, 3 skips; Fedora/Ubuntu CI green | M–L |
-| UX2 | **System** — **done 2026-10-28** ([CI](https://github.com/caiolombello/nulavio/actions/runs/40751057936), `0dd29501fff5156c1c3e10837ed7a12202f439c5`) | Tokens v2, component layers, real gallery and identity migration | 600 unit tests (1 skip), 194 real Track B integration tests (13 skips), 208/208 contrast pairs; Fedora/Ubuntu CI green | L |
+| UX1 | **Security, consent and honesty fixes** — **done 2026-10-28** ([CI](https://github.com/nulavio/nulavio/actions/runs/40696267881), `8dd50fe5908aee17df464c21b1e7eafafde11496`) | See the list below | Real Track B package: 187 integration tests, 13 skips; 586 unit tests, 3 skips; Fedora/Ubuntu CI green | M–L |
+| UX2 | **System** — **done 2026-10-28** ([CI](https://github.com/nulavio/nulavio/actions/runs/40751057936), `0dd29501fff5156c1c3e10837ed7a12202f439c5`) | Tokens v2, component layers, real gallery and identity migration | 600 unit tests (1 skip), 194 real Track B integration tests (13 skips), 208/208 contrast pairs; Fedora/Ubuntu CI green | L |
 | UX3 | **Window** — **merged 2026-11-04** (pull request #3, `6e1b349`) | See the list below | Security-visibility matrix: each state × each preset × both themes; on screen, opacity 1, `elementFromPoint`, host not truncated | L |
 | UX4 | **Shell pages** — **merged 2026-11-04** (pull request #3, `6e1b349`) | See the list below | Integration tests per page state, both themes; every `data-state` captured | L |
 | UX5 | **Assistant** (Dia-like, under ADR 0007) — **merged 2026-11-04** (pull request #3, `6e1b349`) | See the list below | Assistant tests: chips, drift, private refusal, cancel, stream, truncation, approval in front | L |
@@ -220,7 +220,7 @@ also record the four actual native editor captures from a private Xvfb session.
 Main publication and exact-SHA CI are separate post-commit gates.
 Downloads/patch 0007, presets/onboarding, sidebar curation, Shell pages,
 assistant flows and broad motion remain later slices; UX3 is not complete.
-UX3A's separate [publication CI](https://github.com/caiolombello/nulavio/actions/runs/40819764438)
+UX3A's separate [publication CI](https://github.com/nulavio/nulavio/actions/runs/40819764438)
 passed all six jobs, and the parent's additional local engine opt-in run passed
 15/15 including live phishing blocking; its immutable release evidence is retained.
 
@@ -256,7 +256,7 @@ No startup/default/migration write, new shortcut, native patch or Horizon CSS
 is added. An open assistant panel is preserved (D-UX22).
 [Mechanisms and scope](../design/design-system.md#ux3d-explicit-native-layout-presets-2026-10-29),
 [build, tests, retained failures and captures](../design/screenshots/ux3d/verification.json).
-UX3C's separate [publication CI](https://github.com/caiolombello/nulavio/actions/runs/40903066116)
+UX3C's separate [publication CI](https://github.com/nulavio/nulavio/actions/runs/40903066116)
 on `419f5ec99137d601a885d66cbaab3780e27908e0` passed all six jobs. For UX3D, the
 parent fast-forward integrated `1165765b7c2564602ce800ccf838dc9d413619d0`,
 rebuilt Track B 159.0 cleanly after reversing the stale pre-UX3C patch `0007` in

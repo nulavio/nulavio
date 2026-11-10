@@ -723,7 +723,7 @@ class IssueTest(TempDirTest):
         status = self.tmp / f"status-{next(self.runs)}.json"
         status.write_text(json.dumps(report))
         with contextlib.redirect_stdout(io.StringIO()) as out:
-            rc = upstream_issue.main(["--status", str(status), "--repo", "caiolombello/nulavio", *extra], api=api)
+            rc = upstream_issue.main(["--status", str(status), "--repo", "nulavio/nulavio", *extra], api=api)
         return rc, out.getvalue()
 
     def test_an_alert_that_cannot_be_written_fails_with_exit_4(self):
@@ -785,9 +785,7 @@ class IssueTest(TempDirTest):
         ):
             status.write_text(text)
             with self.subTest(text=text), contextlib.redirect_stdout(io.StringIO()):
-                self.assertEqual(
-                    upstream_issue.main(["--status", str(status), "--repo", "caiolombello/nulavio"], api=FakeGitHub()), 3
-                )
+                self.assertEqual(upstream_issue.main(["--status", str(status), "--repo", "nulavio/nulavio"], api=FakeGitHub()), 3)
 
     def test_advisories_out_of_reach_do_not_notify(self):
         old = upstream_issue.fields(self.published()["targets"][0]) | {"urgency": "standard", "status": "found"}
@@ -801,7 +799,7 @@ class IssueTest(TempDirTest):
 
     def test_github_client_is_pinned_to_the_api_host(self):
         with self.assertRaises(ValueError):
-            upstream_issue.GitHub("caiolombello/nulavio/../x", "t")
+            upstream_issue.GitHub("nulavio/nulavio/../x", "t")
         requests = []
 
         class Response(io.BytesIO):
@@ -812,9 +810,9 @@ class IssueTest(TempDirTest):
                 requests.append(request)
                 return Response(b'{"number": 5}')
 
-        api = upstream_issue.GitHub("caiolombello/nulavio", "t0ken", opener=Opener())
+        api = upstream_issue.GitHub("nulavio/nulavio", "t0ken", opener=Opener())
         self.assertEqual(api.create("t", "b", []), 5)
-        self.assertEqual(requests[0].full_url, "https://api.github.com/repos/caiolombello/nulavio/issues")
+        self.assertEqual(requests[0].full_url, "https://api.github.com/repos/nulavio/nulavio/issues")
         self.assertEqual(requests[0].unredirected_hdrs["Authorization"], "Bearer t0ken")
 
 
