@@ -134,7 +134,7 @@ class LayoutPresetsTest(unittest.TestCase):
                   const s=SidebarController.getUIState(), tabs=gBrowser.tabContainer;
                   const r=tabs.getBoundingClientRect();
                   return {orientation:tabs.getAttribute('orient'),parent:tabs.parentElement.id,
-                    expanded:s.launcherExpanded,visible:s.launcherVisible,w:r.width,h:r.height,
+                    expanded:s.launcherExpanded,visible:SidebarController._state.launcherVisible,w:r.width,h:r.height,
                     hover:document.documentElement.hasAttribute('sidebar-expand-on-hover')};
                 """)
                 self.assertEqual(native["orientation"], "horizontal" if preset == "top" else "vertical")
@@ -634,7 +634,7 @@ class LayoutPresetsTest(unittest.TestCase):
             second_init = self.m.chrome("""
               const s=SidebarController.getUIState();
               return {hover:document.documentElement.hasAttribute('sidebar-expand-on-hover'),
-                visible:s.launcherVisible,expanded:s.launcherExpanded,
+                visible:SidebarController._state.launcherVisible,expanded:s.launcherExpanded,
                 orient:gBrowser.tabContainer.getAttribute('orient')};
             """)
             self.assertEqual(

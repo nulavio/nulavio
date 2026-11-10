@@ -47,7 +47,7 @@ class ComponentGalleryTest(unittest.TestCase):
                 f"  SidebarController._state.updateVisibility(false, false);"
                 f"  await SidebarController.waitUntilStable();"
                 f"  document.documentElement.style.minWidth = '0px';"
-                f"  done({{ applied: applied.preset, launcherVisible: SidebarController.getUIState().launcherVisible }});"
+                f"  done({{ applied: applied.preset, launcherVisible: SidebarController._state.launcherVisible }});"
                 f"}})().catch(err => done({{ error: String(err) }}));",
                 [assert_initial_lateral],
             )

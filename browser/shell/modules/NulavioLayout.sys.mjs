@@ -572,6 +572,9 @@ export const NulavioLayout = {
     const vertical = Services.prefs.getBoolPref("sidebar.verticalTabs");
     const visibility = Services.prefs.getStringPref("sidebar.visibility");
     const ui = sidebar.getUIState();
+    // Whether the launcher shows, as the engine derives it. Firefox 160's saved UI state has only
+    // the person's choice (userLauncherVisible), which the visibility mode can override.
+    const launcherVisible = sidebar._state?.launcherVisible ?? ui?.launcherVisible;
     const hover = win.document.documentElement.hasAttribute("sidebar-expand-on-hover");
     const available = Services.prefs.getBoolPref("sidebar.revamp") && !!ui;
     const locked = SIDEBAR_PREFS.some(pref => Services.prefs.prefIsLocked(pref));
@@ -581,9 +584,9 @@ export const NulavioLayout = {
     if (available && win.gBrowser.tabContainer.verticalMode === vertical) {
       if (!vertical && visibility === PRESETS.top) {
         preset = "top";
-      } else if (vertical && ui.launcherVisible && visibility === PRESETS.lateral && ui.launcherExpanded && !hover) {
+      } else if (vertical && launcherVisible && visibility === PRESETS.lateral && ui.launcherExpanded && !hover) {
         preset = "lateral";
-      } else if (vertical && ui.launcherVisible && visibility === PRESETS.focus && (hover || ui.launcherExpanded)) {
+      } else if (vertical && launcherVisible && visibility === PRESETS.focus && (hover || ui.launcherExpanded)) {
         // QA M-3: the sidebar button is Foco's keyboard route (its hint says so). Natively it
         // pins the launcher open and pauses hover until pressed again; that is still Foco.
         preset = "focus";
