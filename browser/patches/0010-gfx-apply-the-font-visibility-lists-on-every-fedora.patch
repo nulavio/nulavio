@@ -1,0 +1,59 @@
+Subject: [PATCH] gfx: apply the font visibility lists on every Fedora
+
+The engine's fingerprinting protection hides fonts a person installed from
+websites: only the fonts a distribution installs by default (and its language
+packs) stay visible. On Linux that needs a list per distribution release. For
+Fedora there are lists for 38 and 39 only, and they are never used: the
+release number is read from VERSION_ID="…" with quotes, which Ubuntu's
+os-release has and Fedora's does not, so every Fedora is "Fedora, unknown
+version" and every installed font stays visible. Measured on Fedora 44 with
+Firefox 159.0.1: the same 33 of 63 probed families are visible with the
+protection off, on, and with privacy.resistFingerprinting.
+
+An unknown Fedora now uses the two newest lists together, as an unknown
+Ubuntu already uses the 22.04 and 20.04 lists. They still name what a current
+Fedora installs by default (Noto, Liberation, Cantarell, STIX). Fonts outside
+them are hidden from web content only while the protection applies: the
+browser's own interface, and sites a person exempts from tracking protection,
+still see every font.
+
+Owner: Nulavio maintainers
+Upstream: to be reported (Fedora release detection in widget/GfxInfoBase.cpp,
+and lists for current releases).
+---
+--- a/gfx/thebes/gfxFcPlatformFontList.cpp
++++ b/gfx/thebes/gfxFcPlatformFontList.cpp
+@@ -2221,8 +2221,18 @@
+       return FontVisibility::User;
+ 
+     case Device::Linux_Fedora_any:
+-      // We have no font list for this Fedora version
+-      return FontVisibility::Unknown;
++      // Nulavio: every Fedora ends up here. There is no list for versions
++      // after 39, and the release number is never read on Fedora, whose
++      // os-release has VERSION_ID without quotes. With no list, all installed
++      // fonts stay visible to websites and the font protection does nothing.
++      // The two newest lists together still name what a current Fedora
++      // installs by default (Noto, Liberation, Cantarell, STIX), as the
++      // Ubuntu case above does for its unknown versions.
++      if (FamilyInList(aName, kBaseFonts_Fedora_39) ||
++          FamilyInList(aName, kBaseFonts_Fedora_38)) {
++        return FontVisibility::Base;
++      }
++      return FontVisibility::User;
+ 
+     case Device::Linux_Fedora_39:
+       if (FamilyInList(aName, kBaseFonts_Fedora_39)) {
+@@ -2266,7 +2276,11 @@
+       break;
+ 
+     case Device::Linux_Fedora_any:
+-      // No font list for this Fedora version; see GetVisibilityForFamily().
++      // Nulavio: the two newest lists; see GetVisibilityForFamily().
++      fontLists.AppendElement(std::make_pair(kBaseFonts_Fedora_39,
++                                             std::size(kBaseFonts_Fedora_39)));
++      fontLists.AppendElement(std::make_pair(kBaseFonts_Fedora_38,
++                                             std::size(kBaseFonts_Fedora_38)));
+       break;
+ 
+     case Device::Linux_Fedora_39:

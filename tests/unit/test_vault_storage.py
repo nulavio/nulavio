@@ -271,7 +271,9 @@ class SupervisedRunTest(StorageCase):
         self.addCleanup(proc.stderr.close)
         prof = profile.get("work")
         box = profiles.container(prof)
-        wait_for(lambda: box.mounted() and (prof.path / "session-data.txt").exists())
+        # The stand-in engine writes its file before it takes the lock: wait for both, or a test that
+        # reads the lock right away races it (seen once in CI, run 42809091803).
+        wait_for(lambda: box.mounted() and (prof.path / "session-data.txt").exists() and prof.running_pid())
         return proc, prof, box
 
     def test_volume_is_open_only_while_the_engine_runs(self):
