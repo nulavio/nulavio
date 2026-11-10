@@ -178,3 +178,9 @@ pref("browser.region.update.enabled", false);
 pref("browser.newtabpage.activity-stream.showWeather", false);
 pref("browser.newtabpage.activity-stream.widgets.weather.enabled", false);
 pref("browser.newtabpage.activity-stream.feeds.section.topstories", false);
+
+// Unlocking with a phone is not part of 1.0 (decision D10, 2026-11-04): the
+// Companion app is not published, so connecting a phone is not offered and
+// the pages say "not available yet". A phone that is already connected keeps
+// unlocking and can be removed. Developers testing the Companion turn this on.
+pref("nulavio.vault.phone.pairing", false);
