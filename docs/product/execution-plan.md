@@ -28,7 +28,7 @@ Nulavio is complete when all of the following are verified (tests or recorded ev
 
 | Area | State (verified) |
 |---|---|
-| Engine | Firefox 159.0 source build (Track B), 8 patches, rootless container build; Track A launcher over distribution Firefox |
+| Engine | Firefox 160.0 source build (Track B), 7 patches, rootless container build; Track A launcher over distribution Firefox |
 | Shell | Built-in add-on with privileged modules: new tab, download warning, search, profiles, Smart Profile Routing (links from apps, typed addresses, link menu) |
 | Profiles | Engine profile groups (`SelectableProfileService`); isolation by separate instances and directories; **no encryption at rest yet** |
 | Guard | Launcher pre-launch audit (`guard.py`); refuses profiles with automation prefs (Marionette, remote agent) |
@@ -125,7 +125,7 @@ The maintainer accepted the recommendations below, with the Android changes note
 ## UX redesign programme (from 2026-10-27)
 
 The maintainer's brief: make the experience and look of Nulavio exceptional, with its own coherent identity on every surface, without weakening any protection.
-- **Engine target:** Firefox 159.0.
+- **Engine target:** Firefox 160.0.
 - **Inputs:** the [audit](../design/audit-2026-10-27.md) (107 findings) and the [direction](../design/visual-directions.md): Farol, with Maré's organisation and Névoa's flows.
 - **Done means:** each slice ends with tests green, a commit on `main`, a push, and CI green on the full SHA. Nothing is "done" while it is only a mockup.
 
@@ -377,6 +377,7 @@ Verified on a real incremental Track B 159.0 build of `f3dfa89` (BuildID `202611
 - **Done (with tests):** the cross-cutting parts (rhythm, disclosures, link buttons, badges, switches, focus, toggles, empty states); Settings (one-sentence intros with "Como funciona", layout pictures, Profiles, Search, Integrations, plainer words); the template hint everywhere a template is chosen; protected profile creation; the missing-download, Guard and assistant first screens; and the new tab's first run, one question at a time (welcome, layout, DNS, passwords, default browser, all set).
 - **Icons and chrome (Calmaria).** A three-direction workflow with two judges chose solid one-tone glyphs on soft tiles for who you are and outline glyphs for state, one source for pages, band and toolbar (`NulavioAvatars.sys.mjs`), new tile/glyph tokens, no Unicode pseudo-icons, a quiet band and a monochrome toolbar button (design-system.md, Calmaria).
 - **Landing page.** A three-direction workflow chose "Recibo": the page as a dated engineering document where each claim says what it costs or where it stops and where to check it, with real captures; implemented in evidence mode `text` (the repository is private). Publishing stays with the maintainer (§13 of its spec: evidence mode, NEL, trademark line).
+- **Marketing landing and waitlist (2026-11-09, asked by the maintainer).** The home page (`/`, `/en/`) is now a marketing landing with a waitlist, and "Recibo" moved unchanged to `/engenharia/` and `/en/engineering/`, linked from the footer. By the maintainer's decision the landing describes Nulavio **as it is meant to ship**, in the present tense: it includes items that are planned or outside 1.0 today (phone and FIDO2 unlock, D10; the public repository; the Ubuntu repository; the 24-hour target for urgent engine fixes). What is ready today stays in the engineering document. It keeps the brand's limits: one trade-off in plain words under every feature, no anonymity claim, a comparison with Brave, LibreWolf, Mullvad Browser and Tor Browser that says where each of them is the better choice (checked against their public documentation in November 2026; recheck before each release). No invented proof: the numbers are stamped from the tree. The waitlist is first-party: forms post to `/api/waitlist` (`site/_worker.js`, the site's only server code; D1; address, language, platform and time, nothing else), with a removal form and no script on any page. Open, for the maintainer: bind the D1 database (CONTRIBUTING, "Website"), a WAF rate limit for the form, and whether sign-ups should be confirmed by email before launch (needs outbound mail on the domain).
 - **QA and follow-up.** Terra R6 on the whole round: one medium finding (the first run's DNS step left the keyboard in the search box), fixed with a test (`f41f984`). Its other notes are answered: an "Em poucas palavras" block reads the landing in plain words before the document starts, and a profile's icon is chosen on a grid of glyph tiles (Settings and the create sheet) instead of a list of names.
 
 **UX6 — Safe personalisation**

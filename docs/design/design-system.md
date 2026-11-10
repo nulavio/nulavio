@@ -789,7 +789,7 @@ Input: the visual QA of build 20261102120448 (Nulavio 159 next to Zen 1.24b), wi
 | A2 internal pages | Done, two parts open | `shared/in-content.css` (generated, agent sheet like `sidebar-focus.css`) re-values Nova's violet and tinted neutrals with mint and navy on exact about: URLs; Nulavio artwork replaces the Kit fox (chrome overrides); no "Firefox Suggest" heading (`browser.urlbar.groupLabels.enabled`), Labs pane hidden by default. Open: the Fluent terms themselves, the grey `moz-promo` surface (shadow DOM) |
 | A3 one new tab | Mostly done | The session's first window shows the Shell's new tab (so the choice appears at first use), no "Your new tab has changed" notice over it, no bookmarks bar, color-scheme + inline canvas colour; Ctrl+T paints the page at ~137 ms. Open: serving it as an internal about: page. Until then the address bar keeps the "Extensão (Nulavio Shell)" chip, and the engine's initial about:blank frame (~60 ms after Ctrl+T) is white with "Não seguro"; later windows (Ctrl+N) and the Home button still open about:home |
 | A4 layout choice | Done | Three option cards with 160 x 96 token-drawn miniatures, plain-language lines, accent edge + tint when selected, hidden live status, compact hero; CTA ends <= 600 px at 1280 x 800 |
-| A5 vertical tabs | Done | 40 px step; 3 x 20 route mark on the inner edge (outside the tile when collapsed); 224 px Lateral on adoption; label fade; patch 0008 for the curve and collapse time |
+| A5 vertical tabs | Done | 40 px step; 3 x 20 route mark on the inner edge (outside the tile when collapsed); 224 px Lateral on adoption; label fade; the curve and collapse time in Horizon (patch 0008 until Firefox 159) |
 | M1 sidebar button | Done | Accent icon on accent tint |
 | M2 address bar | Partly | Accent ring + elevation 1 when focused; radius 10. The rest edge stays at the control colour (3.5:1): the subtle edge suggested by the QA fails WCAG 1.4.11, which `test_horizon` asserts |
 | M3 radius scale | Partly | 6 / 10 / 14; address bar and panels at 10. Open: the content area still gains a radius only while the sidebar animates (engine clip) |
@@ -823,7 +823,7 @@ Input: the visual QA of build 20261102120448 (Nulavio 159 next to Zen 1.24b), wi
 - **Security indicators.** No identity or security code was changed. The new tab is still identified as the Shell extension page; the transient "Não seguro" on the engine's initial about:blank is unchanged. No web page or third-party extension page loses or changes an indicator.
 - **If the person restores the engine's new tab** (another new-tab page or add-on), the first-run card is no longer reachable from Ctrl+T; Settings → Layout still offers the same three presets. Left to the UX3E round (functional QA M-2).
 - **`in-content.css`** uses literal values and no `--nv-*` names, scoped by `@-moz-document` to exact about: prefixes, so web pages never see it (no fingerprinting surface); it steps aside for forced colours, a contrast preference, installed themes and `nulavio.horizon.enabled=false`.
-- **Patch 0008** is the minimum for the motion fix: two prefs read by `browser-sidebar.js` (curve, validated with a fallback, and collapse duration). Reduced motion keeps the engine's no-animation path.
+- **Patch 0008** is the minimum for the motion fix: two prefs read by `browser-sidebar.js` (curve, validated with a fallback, and collapse duration). Reduced motion keeps the engine's no-animation path. Firefox 160 replaced that code with a view transition timed in CSS; since then Horizon re-values its variables (`--motion-dur-sidebar-enter`, `-exit`, `--motion-ease-emphasized`) and the patch is gone.
 - **Not touched:** Vault, AI, Guard and downloads beyond colours. The UX3E functional QA findings (A-1 "Aplicando layout…" hang, M-1 policy) are left to the UX3E round.
 
 Captures (outside the repository, 1280 x 800, light and dark, Xvfb without a compositor; Marionette's remote-control stripes removed only for the capture): `before-*` from 8880bdd (BuildID 20261102120448) and `after-*` from the UX3F build (BuildID 20261102153026, commit 02c691f).
@@ -948,7 +948,7 @@ motion. Security cues, warnings and critical consent never move.
 
 | Element | What moves | Tokens | Never moves | Reduced motion |
 |---|---|---|---|---|
-| Sidebar launcher | width | expand 220 / collapse 160 ms, standard curve (patch 0008); Foco's expand-on-hover 220 ms after the engine's 200 ms intent delay | — | The engine skips it |
+| Sidebar launcher | width | expand 220 / collapse 160 ms, standard curve (Horizon on the engine's view transition; patch 0008 until Firefox 159); Foco's expand-on-hover 220 ms after the engine's 200 ms intent delay | — | The engine skips it |
 | Tab labels, route mark, hover | opacity, scale, colour | fade, base, fast | — | Off |
 | Plain dialogs and the profile create sheet | opening only: opacity and `translate: 0 8px → 0`; the backdrop's opacity | base, enter | `.dialog--critical`, `.dialog--danger` ("Bloquear agora", deletions) | Instant |
 | Toasts | appearing only: opacity and `translate: 0 4px → 0` | fast, enter | warn and error levels, inline results | Instant |
@@ -1002,7 +1002,7 @@ change no measured scene):
   against an extracted package that had no `distribution/` read this as a Nulavio regression;
   `frame_scene.py` now records each build's extensions and refuses to compare builds that differ.
 
-The sidebar scenes measure the curve and durations of patch 0008 on both builds, so they compare like
+The sidebar scenes measure the curve and durations of patch 0008 (Horizon since Firefox 160) on both builds, so they compare like
 with like. Re-run with:
 
 ```sh

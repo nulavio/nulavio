@@ -129,6 +129,26 @@ function settleInWindow(win, step, ms = WINDOW_STEP_TIMEOUT_MS) {
   });
 }
 
+/**
+ * Show the window's launcher, expanded or not, the way the person's own toolbar click would.
+ * Firefox 159 had SidebarState.updateVisibility(visible, expand); Firefox 160 derives visibility
+ * from the sidebar.visibility mode (its pref observer enters the mode) and keeps only the
+ * person's choice (userLauncherVisible), and only some modes have an expanded state.
+ */
+function showLauncher(state, expanded) {
+  if (!state) {
+    return;
+  }
+  if (typeof state.updateVisibility === "function") {
+    state.updateVisibility(true, expanded);
+    return;
+  }
+  state.userLauncherVisible = true;
+  if (state.launcherExpandable) {
+    state.launcherExpanded = expanded;
+  }
+}
+
 async function ready(win) {
   const sidebar = controller(win);
   const started = await settleInWindow(win, () => sidebar.promiseInitialized);
@@ -328,7 +348,7 @@ function expandAdoptedWindows() {
         if (current() && w.toolbar?.visible) {
           await w.SidebarController.waitUntilStable();
           if (current() && w.toolbar?.visible) {
-            w.SidebarController._state?.updateVisibility(true, true);
+            showLauncher(w.SidebarController._state, true);
             // Native per-window sidebar state (saved with the window), never a pref;
             // a width the person dragged is kept.
             if (w.SidebarController._state && !w.SidebarController._state.expandedLauncherWidth) {
@@ -499,9 +519,9 @@ async function applyPreset(target, preset, ticket) {
           return; // past the deadline: a later preset may already be in place
         }
         controller(w);
-        // updateVisibility affects only launcher expansion/visibility, keeping
+        // Showing the launcher affects only its expansion/visibility, keeping
         // open panels, widths, position, tools and tab/group data intact.
-        sidebar._state.updateVisibility(true, preset === "lateral");
+        showLauncher(sidebar._state, preset === "lateral");
         // The engine drops a hover toggle that a later one superseded (_expandOnHoverToggleID).
         await sidebar.toggleExpandOnHover(preset === "focus");
         if (!current()) {
@@ -572,6 +592,9 @@ export const NulavioLayout = {
     const vertical = Services.prefs.getBoolPref("sidebar.verticalTabs");
     const visibility = Services.prefs.getStringPref("sidebar.visibility");
     const ui = sidebar.getUIState();
+    // Whether the launcher shows, as the engine derives it. Firefox 160's saved UI state has only
+    // the person's choice (userLauncherVisible), which the visibility mode can override.
+    const launcherVisible = sidebar._state?.launcherVisible ?? ui?.launcherVisible;
     const hover = win.document.documentElement.hasAttribute("sidebar-expand-on-hover");
     const available = Services.prefs.getBoolPref("sidebar.revamp") && !!ui;
     const locked = SIDEBAR_PREFS.some(pref => Services.prefs.prefIsLocked(pref));
@@ -581,9 +604,9 @@ export const NulavioLayout = {
     if (available && win.gBrowser.tabContainer.verticalMode === vertical) {
       if (!vertical && visibility === PRESETS.top) {
         preset = "top";
-      } else if (vertical && ui.launcherVisible && visibility === PRESETS.lateral && ui.launcherExpanded && !hover) {
+      } else if (vertical && launcherVisible && visibility === PRESETS.lateral && ui.launcherExpanded && !hover) {
         preset = "lateral";
-      } else if (vertical && ui.launcherVisible && visibility === PRESETS.focus && (hover || ui.launcherExpanded)) {
+      } else if (vertical && launcherVisible && visibility === PRESETS.focus && (hover || ui.launcherExpanded)) {
         // QA M-3: the sidebar button is Foco's keyboard route (its hint says so). Natively it
         // pins the launcher open and pauses hover until pressed again; that is still Foco.
         preset = "focus";

@@ -22,7 +22,12 @@ from collections.abc import Callable
 from pathlib import Path
 
 # URL path -> file in the build.
-CHECKED = {"": "index.html", "en/": "en/index.html", ".well-known/security.txt": ".well-known/security.txt"}
+CHECKED = {
+    "": "index.html",
+    "en/": "en/index.html",
+    "lista/": "lista/index.html",  # a page next to /api/*: static files must not go through site/_worker.js
+    ".well-known/security.txt": ".well-known/security.txt",
+}
 USER_AGENT = "nulavio-site-verify (+https://nulavio.net/)"
 
 Fetch = Callable[[str], tuple[int, dict[str, str], bytes]]
