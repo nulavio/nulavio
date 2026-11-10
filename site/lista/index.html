@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="pt-BR">
+<!-- nulavio.net waitlist page: the form, what is kept, how to leave. The fragment chooses the message after a form is sent (site/_worker.js). -->
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Lista de espera · Nulavio</title>
+<meta name="description" content="Entre na lista de espera do Nulavio, veja o que guardamos sobre você e saia quando quiser.">
+<link rel="canonical" href="https://nulavio.net/lista/">
+<link rel="alternate" hreflang="pt-BR" href="https://nulavio.net/lista/">
+<link rel="alternate" hreflang="en" href="https://nulavio.net/en/waitlist/">
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/assets/tokens.css">
+<link rel="stylesheet" href="/assets/landing.css">
+</head>
+<body>
+<svg class="sprite" aria-hidden="true" focusable="false">
+<symbol id="i-arrow" viewBox="0 0 20 20"><path d="M4 10h12M11.5 5.5L16 10l-4.5 4.5"/></symbol>
+</svg>
+<a class="skip" href="#main">Pular para o conteúdo</a>
+<header class="top">
+<div class="wrap top-inner">
+<a class="brand" href="/"><picture>
+<source media="(prefers-color-scheme: dark)" srcset="/assets/nulavio-lockup-horizontal-on-dark.svg" width="132" height="27">
+<img src="/assets/nulavio-lockup-horizontal.svg" alt="Nulavio" width="132" height="27">
+</picture></a>
+<div class="top-actions">
+<a class="lang" href="/en/waitlist/" hreflang="en" lang="en"><span class="lang-long">English</span><span class="lang-short" aria-hidden="true">EN</span></a>
+<a class="btn btn-quiet btn-sm" href="/">O navegador</a>
+</div>
+</div>
+</header>
+<main id="main" class="wrap">
+<div class="sheet">
+<div class="notice" id="ok" role="status"><b>Você está na lista.</b>Vamos escrever uma única vez, quando o Nulavio estiver pronto para o seu sistema. Até lá, silêncio.</div>
+<div class="notice" id="left" role="status"><b>Pronto.</b>Se esse e-mail estava na lista, ele foi apagado.</div>
+<div class="notice notice-warn" id="invalid" role="status"><b>Esse e-mail não parece válido.</b>Confira o endereço e tente de novo. Nada foi guardado.</div>
+<div class="notice notice-warn" id="unavailable" role="status"><b>A lista está fora do ar agora.</b>Nada foi guardado. Tente de novo daqui a pouco.</div>
+<h1 id="list-h">Lista de espera</h1>
+<p class="lead">Deixe seu e-mail e avisamos quando o Nulavio chegar ao seu sistema. Fedora primeiro, Ubuntu em seguida.</p>
+<form class="join signup" action="/api/waitlist" method="post">
+<input type="hidden" name="lang" value="pt-BR">
+<p class="trap" aria-hidden="true"><label>Deixe este campo vazio <input type="text" name="hp" tabindex="-1" autocomplete="off"></label></p>
+<div class="join-row">
+<div>
+<label class="join-label" for="list-email">Seu e-mail</label>
+<input class="field" id="list-email" type="email" name="email" required maxlength="254" autocomplete="email" autocapitalize="off" spellcheck="false">
+</div>
+<div>
+<label class="join-label" for="list-os">Sistema que você usa (opcional)</label>
+<select class="field" id="list-os" name="platform">
+<option value="">Prefiro não dizer</option>
+<option value="fedora">Fedora</option>
+<option value="ubuntu">Ubuntu ou Debian</option>
+<option value="arch">Arch</option>
+<option value="linux-other">Outra distribuição Linux</option>
+<option value="windows">Windows</option>
+<option value="macos">macOS</option>
+</select>
+</div>
+<button class="btn btn-primary" type="submit">Entrar na lista<svg class="ico" aria-hidden="true"><use href="#i-arrow"/></svg></button>
+</div>
+</form>
+<h2 id="data">O que guardamos</h2>
+<ul class="plain">
+<li>o e-mail que você digitou;</li>
+<li>o idioma da página em que você se inscreveu;</li>
+<li>o sistema, se você escolher um;</li>
+<li>a data e a hora da inscrição, para respeitar a ordem de chegada.</li>
+</ul>
+<p class="muted">Não guardamos seu endereço IP nem dados do seu navegador junto com a inscrição. A lista fica num banco de dados na Cloudflare, a empresa que hospeda este site e que recebe cada pedido como qualquer servidor web. Seu e-mail serve para um único aviso: o de que o Nulavio está disponível para você. Sem newsletter e sem repasse a ninguém.</p>
+<h2 id="leave">Sair da lista</h2>
+<p class="muted">Digite o e-mail que você inscreveu. Ele é apagado na hora, sem perguntas.</p>
+<form class="join" action="/api/waitlist" method="post">
+<input type="hidden" name="lang" value="pt-BR">
+<input type="hidden" name="action" value="leave">
+<p class="trap" aria-hidden="true"><label>Deixe este campo vazio <input type="text" name="hp" tabindex="-1" autocomplete="off"></label></p>
+<div class="join-row">
+<div>
+<label class="join-label" for="leave-email">E-mail inscrito</label>
+<input class="field" id="leave-email" type="email" name="email" required maxlength="254" autocomplete="email" autocapitalize="off" spellcheck="false">
+</div>
+<button class="btn btn-quiet" type="submit">Apagar meu e-mail</button>
+</div>
+</form>
+</div>
+</main>
+<footer class="foot">
+<div class="wrap">
+<div class="foot-grid">
+<div>
+<a class="brand" href="/"><picture>
+<source media="(prefers-color-scheme: dark)" srcset="/assets/nulavio-lockup-horizontal-on-dark.svg" width="132" height="27">
+<img src="/assets/nulavio-lockup-horizontal.svg" alt="Nulavio" width="132" height="27">
+</picture></a>
+<p>Proteção serena para a web aberta.</p>
+</div>
+<ul class="foot-links">
+<li><a href="/">Início</a></li>
+<li><a href="/engenharia/">Documento de engenharia</a></li>
+<li><a href="/.well-known/security.txt">Segurança</a></li>
+<li><a href="/en/waitlist/" hreflang="en" lang="en">English</a></li>
+</ul>
+</div>
+<div class="foot-legal">
+<p>O Nulavio não é afiliado à Mozilla. Firefox é marca registrada da Mozilla Foundation.</p>
+<p>Este site não usa scripts, cookies nem análise de visitas. O formulário da lista de espera envia só o que você digita nele.</p>
+</div>
+</div>
+</footer>
+</body>
+</html>
