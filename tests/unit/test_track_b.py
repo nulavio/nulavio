@@ -49,6 +49,11 @@ class MozconfigTest(unittest.TestCase):
         ):
             self.assertIn(required, self.lines)
 
+    def test_rust_lto_is_thin_and_reaches_cargo(self):
+        """Fat Rust LTO does not fit the build laptop. Only "export" lines reach the makefiles that run Cargo:
+        without the word, the release build silently goes back to the fat pass (seen on 2026-11-09)."""
+        self.assertIn('mk_add_options "export CARGO_RUSTCFLAGS=-Clto=thin"', self.lines)
+
     def test_no_weakening_or_mozilla_branding(self):
         joined = "\n".join(self.lines)
         for option in FORBIDDEN_OPTIONS:
