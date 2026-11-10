@@ -16,6 +16,12 @@ this.nulavioPasswords = class extends ExtensionAPI {
   }
 
   onStartup() {
+    // The profile password typed on Nulavio's own pages is never offered to the engine's password manager.
+    try {
+      this.module().excludeShellPages(this.extension.baseURI.prePath);
+    } catch (e) {
+      console.error("Nulavio pages and the password manager", e);
+    }
     // Flow D: the engine's own window-actor system, not a content script in pages.
     try {
       this.module().registerLookalikeCheck();

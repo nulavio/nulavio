@@ -47,7 +47,7 @@ The first entries (2026-10-27, until 2026-12-31) are ten advisories in tooling o
 
 ## Dependabot pull requests
 
-`.github/dependabot.yml` groups updates to keep pull requests and CI minutes down. Its own runs are free; each pull request runs CI (about 14 billed minutes). Nothing merges automatically, and the repository has no branch protection, so the rule is manual: **merge only with green CI, after reading the diff.** Merge in GitHub, or squash locally onto `main` and push; Dependabot closes a pull request once `main` has the version.
+`.github/dependabot.yml` groups updates to keep pull requests and CI minutes down. Its own runs are free; each pull request runs CI (about 14 billed minutes). Nothing merges automatically. Branch protection on `main` requires the quick CI checks; the engine integration result and the diff are read by hand: **merge only with green CI, after reading the diff.** Merge in GitHub (a direct push to `main` is refused); Dependabot closes a pull request once `main` has the version.
 
 - **Actions**, weekly on Wednesdays (Firefox releases on Tuesdays), with a 7-day cooldown so that a hijacked tag has time to be noticed. Check that the new SHA is the tag's commit (`git ls-remote https://github.com/<owner>/<repo> refs/tags/<tag>^{}`).
 - **pip**, monthly. Dependabot writes one hash per file PyPI publishes for the new version, so one hash becomes about twenty. That is expected.

@@ -105,11 +105,27 @@ MOZILLA_AI_OFF = {  # decision D-UX7: the Nulavio assistant (ADR 0007) is the on
     "extensions.ml.enabled": False,
     "nimbus.rollouts.enabled": False,
 }
+NO_REGION_LOOKUP = {  # no request to Mozilla's location service on a new profile (review 2026-11-09, RT-1)
+    "browser.region.network.url": "",
+    "browser.region.update.enabled": False,
+}
+FINGERPRINTING = "privacy.fingerprintingProtection.overrides"  # docs/research/fingerprinting.md
+# Changing these breaks sites or accessibility; they belong to an opt-in mode, never to the default.
+NEVER_BY_DEFAULT = {
+    "AllTargets",
+    "JSDateTimeUTC",
+    "JSLocale",
+    "CSSPrefersColorScheme",
+    "CSSPrefersReducedMotion",
+    "KeyboardEvents",
+    "RoundWindowSize",
+}
 TRACK_B_ONLY = {  # Mozilla account, promos and artwork in the Nulavio build (D-UX8, WCS-10)
     "identity.fxaccounts.enabled": False,
     "browser.aboutaddons.novaThemesPickerEnabled": False,
     "browser.topsites.useRemoteSetting": False,
     "browser.newtabpage.activity-stream.default.sites": "",
+    "nulavio.vault.phone.pairing": False,  # D10: connecting a phone is not offered in 1.0
 }
 
 
@@ -132,6 +148,31 @@ class MozillaAiAndAccountTest(unittest.TestCase):
                 self.assertEqual(baseline[name].value, value)
                 self.assertEqual(baseline[name].mode, "seed", "a default the person can change, not enforced")
                 self.assertEqual(branding.get(name), value, "Track B default (firefox-branding.js)")
+
+    def test_no_region_lookup_in_either_track(self):
+        baseline = {p.name: p for p in profile.baseline_prefs()}
+        branding = branding_prefs()
+        for name, value in NO_REGION_LOOKUP.items():
+            with self.subTest(pref=name):
+                self.assertEqual(baseline[name].value, value, "Track A (baseline.js)")
+                self.assertEqual(baseline[name].mode, "seed")
+                self.assertEqual(branding.get(name), value, "Track B default (firefox-branding.js)")
+
+    def test_fingerprinting_additions_are_the_same_in_both_tracks_and_watched(self):
+        baseline = {p.name: p for p in profile.baseline_prefs()}
+        value = branding_prefs()[FINGERPRINTING]
+        self.assertEqual(baseline[FINGERPRINTING].value, value, "Track A seeds what the Nulavio build has by default")
+        self.assertEqual(baseline[FINGERPRINTING].mode, "seed")
+        items = value.split(",")
+        self.assertTrue(all(re.fullmatch(r"[+-][A-Za-z0-9]+", item) for item in items), items)
+        self.assertEqual(len(items), len(set(items)))
+        # The quick canvas mode leaves raw pixel reads alone: it must be off for the full one to apply.
+        self.assertIn("-EfficientCanvasRandomization", items)
+        self.assertEqual({item[1:] for item in items} & NEVER_BY_DEFAULT, set())
+        guard = (ROOT / "browser" / "shell" / "modules" / "NulavioGuard.sys.mjs").read_text(encoding="utf-8")
+        watched = guard[guard.index("WATCHED_PREFS = Object.freeze([") : guard.index("]);", guard.index("WATCHED_PREFS"))]
+        for entry in ('"privacy.fingerprintingProtection",', '"privacy.fingerprintingProtection.",'):
+            self.assertIn(entry, watched, "a change made outside the browser must be reported at the next start")
 
     def test_account_promos_and_mozilla_tiles_are_off_in_the_nulavio_build(self):
         branding = branding_prefs()

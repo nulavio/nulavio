@@ -117,3 +117,46 @@ class ProfileInitializationTest(unittest.TestCase):
         self.assertTrue(state["initialized"])
         self.assertIn("Created after retry", state["names"])
         self.assertNotIn("Not created", state["names"])
+
+
+STARTING_NAME = (
+    MODULES
+    + """
+  await P.temporaryState(); await S.init();
+  if(S.currentProfile) throw new Error('fixture already has a profile group');
+  const names=async()=>({list:(await P.list()).profiles.filter(p=>p.isCurrent).map(p=>p.name),
+    band:(await P.currentForBand())?.name});
+  const before=await names();
+  await P.create({name:'Second profile'});
+  const personal=WebExtensionPolicy.getByID('shell@nulavio.net').extension.localizeMessage('templatePersonal');
+  return {before,after:await names(),stored:(await S.getProfile(S.currentProfile.id)).name,personal};
+"""
+)
+
+
+@unittest.skipUnless(harness.nulavio_engine(), "profile-store initialization requires the built-in Shell")
+class StartingProfileNameTest(unittest.TestCase):
+    """Review 2026-11-09 V3: the profile the person started with keeps its name when the first other
+    profile is made. The engine would rename it "Original profile" ("Perfil original")."""
+
+    def names(self, toolkit_name):
+        session = harness.GeckoProfileSession(name=toolkit_name)
+        self.addCleanup(session.cleanup)
+        result = chrome_async(session.start(), STARTING_NAME)
+        self.assertNotIn("error", result, result)
+        return result["ok"]
+
+    def test_a_chosen_name_is_kept(self):
+        state = self.names("FirstStore")
+        self.assertEqual(state["before"], {"list": ["FirstStore"], "band": "FirstStore"})
+        self.assertEqual(state["after"], {"list": ["FirstStore"], "band": "FirstStore"})
+        self.assertEqual(state["stored"], "FirstStore")
+
+    def test_the_engine_name_of_a_new_install_shows_as_the_first_template(self):
+        # A new install's profile is "default-release" (profiles.ini); the person never chose it.
+        state = self.names("default-release")
+        personal = state["personal"]
+        self.assertIn(personal, ("Pessoal", "Personal"))  # the session's language
+        self.assertEqual(state["before"], {"list": [personal], "band": personal})
+        self.assertEqual(state["after"], {"list": [personal], "band": personal})
+        self.assertEqual(state["stored"], personal)

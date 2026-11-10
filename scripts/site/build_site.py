@@ -5,12 +5,17 @@
     python3 -I scripts/site/build_site.py --release [--commit <sha>] --out dist/site
 
 The output is plain files for Cloudflare Pages (direct upload): no build
-tool, no JavaScript, no third-party resources.
+tool, no JavaScript in the pages, no third-party resources. The pages are the
+landing (index.html, en/index.html; landing.css), the waitlist pages (lista/,
+en/waitlist/) and the engineering document (engenharia/, en/engineering/;
+site.css). site/_worker.js is not a page script: Cloudflare runs it for
+/api/* only (site/_routes.json), to store waitlist sign-ups.
 
 The pages carry placeholders that this script stamps (landing spec §2.3, §9):
 {{commit}}, {{date_pt}}, {{date_en}}, {{firefox}} (browser/build/engine.json),
 {{patches}} (browser/patches/series), {{ubo}} (browser/distribution/
-extensions.lock.json), {{buildid}} and, per figure, {{onscreen:<id>}},
+extensions.lock.json), {{defaults}} (the annotated defaults of browser/config/
+prefs/baseline.js), {{buildid}} and, per figure, {{onscreen:<id>}},
 {{port:<id>}} and {{wh:<file>}} from site/assets/shots/manifest.json (written
 by scripts/site/capture_site.py), and the two text excerpts {{e1}} (the real
 output of ``prefs explain``) and {{e2}} (the header lines of site/_headers).
@@ -18,6 +23,12 @@ output of ``prefs explain``) and {{e2}} (the header lines of site/_headers).
 commit(s) the numbers, excerpts and captures come from; outside --release
 they say so when the tree had changes or the build predates the commit.
 The build fails if a ``{{`` is left.
+
+The download pages (baixar/, en/download/) describe a published release:
+{{release_version}}, {{key_fpr}}, {{repo_file}} and {{key_url}} come from
+packaging/release.json. Until it names a version and a key fingerprint and
+site/keys/nulavio-packages.asc holds that key, the pages are left out of the
+site, so nothing offers a download that does not exist.
 
 By default the site is built from the working tree (unit tests run on a
 shared, possibly dirty tree). ``--release`` is how the published site is
@@ -52,7 +63,18 @@ ASSETS = {
     "favicon.ico": Path("docs/brand/assets/favicon/favicon.ico"),
 }
 # Page -> capture locale (manifest figures are per locale).
-PAGES = {"index.html": "pt-BR", "en/index.html": "en-US", "404.html": None}
+PAGES = {
+    "index.html": "pt-BR",
+    "en/index.html": "en-US",
+    "lista/index.html": "pt-BR",
+    "en/waitlist/index.html": "en-US",
+    "engenharia/index.html": "pt-BR",
+    "en/engineering/index.html": "en-US",
+    "404.html": None,
+}
+STYLESHEETS = ("site.css", "landing.css")  # served from /assets/
+DOWNLOAD_PAGES = {"baixar/index.html": "pt-BR", "en/download/index.html": "en-US"}
+PUBLIC_KEY = Path("site/keys/nulavio-packages.asc")
 E1_CATEGORIES = ("tracking", "https")
 SCALE = 2  # captures are taken at devPixelsPerPx=2; width/height attributes are CSS px
 # Notes appended to a commit outside --release, so a development build never passes for a release.
@@ -86,6 +108,12 @@ def ublock_version(src: Path) -> str:
     return next(e["version"] for e in lock["extensions"] if e["key"] == "ublock-origin")
 
 
+def default_count(src: Path) -> int:
+    """The defaults Nulavio changes and documents: each has a @why and a @tradeoff (tests/unit/test_prefs_and_guard.py)."""
+    lines = (src / "browser" / "config" / "prefs" / "baseline.js").read_text(encoding="utf-8").splitlines()
+    return sum(1 for line in lines if line.startswith("user_pref("))
+
+
 def firefox_version(src: Path) -> str:
     return json.loads((src / "browser" / "build" / "engine.json").read_text(encoding="utf-8"))["firefox"]
 
@@ -117,6 +145,41 @@ def header_lines(src: Path) -> list[str]:
         if line.strip() and not line.lstrip().startswith("#") and line[:1].isspace():
             out.append(line.strip())
     return out
+
+
+def armored_fingerprint(path: Path) -> str | None:
+    """The primary key fingerprint of an armored public key, read with gpg (no keyring is touched)."""
+    with tempfile.TemporaryDirectory(prefix="nulavio-site-gpg-") as home:
+        try:
+            result = subprocess.run(
+                ["gpg", "--homedir", home, "--quiet", "--with-colons", "--show-keys", str(path)],
+                capture_output=True, text=True, timeout=30,
+            )  # fmt: skip
+        except FileNotFoundError:
+            raise BuildError("gpg is needed to check the release key behind the download pages") from None
+    fprs = [line.split(":")[9] for line in result.stdout.splitlines() if line.startswith("fpr:")]
+    return fprs[0] if result.returncode == 0 and fprs else None
+
+
+def release_values(src: Path) -> dict[str, str] | None:
+    """Values for the download pages, or None while no release is published (the pages are then left out)."""
+    release = json.loads((src / "packaging" / "release.json").read_text(encoding="utf-8"))
+    version, fpr = release.get("version", ""), release.get("key_fingerprint", "").replace(" ", "").upper()
+    if not (version and fpr):
+        return None
+    if not re.fullmatch(r"[0-9]+(\.[0-9]+)+-[0-9.]+", version):
+        raise BuildError(f"packaging/release.json: version {version!r} is not <firefox>-<release> (as in the tag)")
+    key = src / PUBLIC_KEY
+    if not key.is_file():
+        raise BuildError(f"packaging/release.json names a key but {PUBLIC_KEY} is missing")
+    if armored_fingerprint(key) != fpr:
+        raise BuildError(f"{PUBLIC_KEY} is not the key {fpr} that packaging/release.json names")
+    return {
+        "release_version": version,
+        "key_fpr": " ".join(fpr[i : i + 4] for i in range(0, len(fpr), 4)),
+        "repo_file": release["repo_file"],
+        "key_url": release["key_url"],
+    }
 
 
 def commit_date(src_commit: str) -> dt.date:
@@ -165,6 +228,7 @@ def stamps(src: Path, commit: str, manifest: dict) -> dict[str, str]:
         "firefox": firefox_version(src),
         "patches": str(patch_count(src)),
         "ubo": ublock_version(src),
+        "defaults": str(default_count(src)),
         "buildid": next(iter(buildids)) if buildids else "",
         "e1": html.escape(excerpt_e1(src), quote=False),
         "e2": html.escape("\n".join(header_lines(src)), quote=False),
@@ -228,7 +292,20 @@ def stamp_page(text: str, values: dict[str, str], manifest: dict, locale: str | 
             return values[name]
         return match.group(0)
 
-    return break_points(re.sub(r"\{\{([a-z_0-9]+(?::[A-Za-z0-9_.-]+)?)\}\}", replace, text))
+    return keep_addresses(break_points(re.sub(r"\{\{([a-z_0-9]+(?::[A-Za-z0-9_.-]+)?)\}\}", replace, text)), page)
+
+
+# Cloudflare, which serves the site, can rewrite every address in a page ("email obfuscation") and add a
+# script to put them back. The site's own policy allows no script, so the security contact showed as
+# "[email protected]" and the page stopped matching the build (verify_live.py). These comments are
+# Cloudflare's own way for a page to opt out, so the pages do not depend on how the zone is set.
+EMAIL_OFF = ("<!--email_off-->", "<!--/email_off-->")
+
+
+def keep_addresses(text: str, page: str) -> str:
+    if text.count("<body>") != 1 or text.count("</body>") != 1:
+        raise BuildError(f"{page}: expected exactly one <body> and one </body>")
+    return text.replace("<body>", f"<body>\n{EMAIL_OFF[0]}").replace("</body>", f"{EMAIL_OFF[1]}\n</body>")
 
 
 # -- build --------------------------------------------------------------------------------
@@ -267,12 +344,23 @@ def build(out: Path, *, release: bool = False, commit: str = "HEAD", evidence: s
             shutil.rmtree(out)
         shutil.copytree(src / "site", out)
         (out / "assets").mkdir(exist_ok=True)
-        shutil.move(out / "site.css", out / "assets" / "site.css")
+        for sheet in STYLESHEETS:
+            shutil.move(out / sheet, out / "assets" / sheet)
         for relative, source in ASSETS.items():
             shutil.copyfile(src / source, out / relative)
-        for page, locale in PAGES.items():
+        released = release_values(src)
+        pages = dict(PAGES)
+        if released is None:
+            for page in DOWNLOAD_PAGES:
+                (out / page).unlink()
+                if not any((out / page).parent.iterdir()):
+                    (out / page).parent.rmdir()
+        else:
+            pages.update(DOWNLOAD_PAGES)
+        for page, locale in pages.items():
             path = out / page
-            text = stamp_page(path.read_text(encoding="utf-8"), values, manifest, locale, page)
+            page_values = {**values, **released} if page in DOWNLOAD_PAGES else values
+            text = stamp_page(path.read_text(encoding="utf-8"), page_values, manifest, locale, page)
             if "{{" in text:
                 left = sorted(set(re.findall(r"\{\{[^}]*\}\}", text)))
                 raise BuildError(f"{page}: placeholders left: {left}")
