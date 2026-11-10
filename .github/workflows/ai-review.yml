@@ -202,5 +202,5 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           BASE_SHA: ${{ github.sha }}
-          AI_REVIEW_SOURCE: claude-opus-5-5 through claude-code-action v1.0.264
+          AI_REVIEW_SOURCE: claude-opus-5-5 through claude-code-action v1.0.267
         run: python3 -I scripts/ci/post_ai_review.py --post
