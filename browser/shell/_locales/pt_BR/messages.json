@@ -1070,6 +1070,7 @@
   "momentCritical": {"message": "Crítico"},
   "momentRetry": {"message": "Tentar de novo"},
   "momentLoading": {"message": "Carregando…"},
+  "momentBandCheck": {"message": "Antes de digitar uma senha, confira o alto da janela: só o navegador consegue escrever “Nulavio · $SURFACE$” ali. Nenhum site consegue.", "placeholders": {"surface": {"content": "$1"}}},
   "methodsLastConfirmer": {"message": "Fica: é com uma senha ou com o código de recuperação que se confirma qualquer mudança aqui."},
   "methodsNoConfirmer": {"message": "Este perfil não tem mais senha nem código de recuperação, e é com eles que se confirmam as mudanças aqui. Ele ainda abre com o login do computador ou o celular."},
   "routingRememberHintLocked": {"message": "Desbloquear e abrir em $TARGET$: da próxima vez abre lá, sem perguntar. Abrir em $CURRENT$: $SITE$ deixa de trocar de perfil.", "placeholders": {"target": {"content": "$1"}, "current": {"content": "$2"}, "site": {"content": "$3"}}},

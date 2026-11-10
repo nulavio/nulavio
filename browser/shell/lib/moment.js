@@ -1,8 +1,12 @@
 /* One template for the security moments (UX4, audit SB-24): unlocking, pairing a phone, a
    look-alike site, a program download, the Guard review and an agent's request all open with the
-   same context line, the Nulavio mark and what kind of moment this is, and, where the page is about
-   this profile, its name and state in words. The window's band names the page as well; only the
-   browser can draw that one, so a web page that copies this line still cannot copy the band.
+   same context line: what kind of moment this is and, where the page is about this profile, its
+   name and state in words.
+
+   The line does not carry the Nulavio mark or the "Nulavio · …" name the window's band gives the
+   page (review 2026-11-09 V4). Only the browser can draw the band; a web page can copy anything in
+   here, so repeating the band's words in the page would teach people to trust the copy. Pages that
+   take a password point at the band instead.
 
    Markup: <header class="moment__context" data-kind="unlock" data-profile="current"></header>
    data-profile="current" adds this profile (pages about another profile show it themselves). */
@@ -22,6 +26,9 @@ const KINDS = {
   methods: "bandSurfaceMethods",
   create: "vaultCreateTitle",
 };
+
+// Pages where a password is typed: they say where to look before typing it.
+const SECRET_KINDS = new Set(["unlock", "create", "methods"]);
 
 async function here() {
   const summary = await browser.nulavioProfiles?.here?.().catch(() => null);
@@ -98,10 +105,12 @@ export async function momentContext(root = document) {
   const kind = KINDS[header.dataset.kind] ?? null;
   header.dataset.loading = t("momentLoading");
   header.replaceChildren(
-    icon("mark", "moment__mark"),
-    h("span", { class: "moment__kind", text: kind ? `Nulavio · ${t(kind)}` : "Nulavio" }),
+    ...(kind ? [h("span", { class: "moment__kind", text: t(kind) })] : []),
     ...(header.dataset.profile === "current" ? await here() : [])
   );
+  if (kind && SECRET_KINDS.has(header.dataset.kind) && !card.querySelector(":scope > .moment__check")) {
+    header.after(h("p", { class: "moment__check", text: t("momentBandCheck", [t(kind)]) }));
+  }
   const update = () => {
     showSeverity(header, card);
     offerRetry(header, card);
