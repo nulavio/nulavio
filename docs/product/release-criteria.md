@@ -4,14 +4,14 @@
 
 | # | Criterion | Status | Evidence / gap |
 |---|---|---|---|
-| 1 | Compiles in a supported environment | ✅ **Track B builds** from verified source in a Fedora 44 container (≈ 52 min); Track A needs no compilation | [build.md](../architecture/build.md) |
-| 2 | Starts on Fedora KDE without disabling the sandbox | ✅ Track A (real Wayland window) and Track B build (headless) | `test_04`; ADR E3, E17 |
-| 3 | Opens HTTP/HTTPS sites, tabs, downloads | ✅ | `test_05`, `test_06`, `test_07` |
-| 4 | Authenticates via Proton Pass using the official extension | ✅ **Signed in to a real account and autofilled a real site** on the maintainer's desktop (Fedora 44 KDE Wayland, 2026-10-25); extension active, engine password manager off | `test_password_extensions` |
-| 5 | KeePassXC integration demonstrated, or blocker recorded | ✅ **Demonstrated end to end** (association + autofill) in a Fedora 44 container with the distribution's KeePassXC 2.8.0, re-run in GitHub CI on every push. Manual desktop tests: community testers (the maintainer does not use KeePassXC) | [evidence](../research/evidence/keepassxc-2.8.0-native-messaging.json) |
+| 1 | ✅ **Done 2026-11-10.** Thin Rust LTO (#17) fits the release build in the guarded budget: Firefox 160.0 built from scratch in 2 h 21 min, container peak 13.0 GiB of 16, and passed the 363-test integration suite (#19) | — |
+| 2 | ✅ **Done 2026-11-10.** Key created with `make_release_key.sh` (RSA 4096, signing only, expires 2028-11-09, fingerprint `298A 9093 BAAB B26F 79BB  29F4 BF47 E5FA 9EDB 8DB1`); public key and fingerprint committed (#27); passphrase in the maintainer's password manager. Still open: the offline backups of the private key and of the revocation certificate, kept apart | maintainer (backups) |
+| 3 | ✅ **Done 2026-11-10.** Cloudflare R2 bucket `nulavio-packages` served at `packages.nulavio.net` (TLS 1.2 minimum). Still open: an R2 API token limited to that bucket, for the upload step of `publish/NEXT.md` | maintainer (token) |
+| 4 | ✅ **Decided 2026-11-10: the default quota is accepted for the alpha.** The `nulavio` project has 10,000 requests a day for each Safe Browsing API (Update, Lookup, Submission, other) and 1,800 a minute; at about 48 list updates a day per browser, that is room for roughly 200 daily active installs. Review it with Google (a quota increase may need a billing account) when "Update API requests per day" passes 70 % | maintainer (watch the quota) |
+| 5 | ✅ **Done 2026-11-10.** A test report sent from an outside address to `security@nulavio.net` arrived (Cloudflare Email Routing forwards it to the maintainer) and was answered. Replies come from the maintainer's own address: the routing only receives | — |
 | 6 | Blocks ads in a reproducible test | ✅ | `test_08` (EasyList first-party rule; control request; reversible) |
-| 7 | Profile directory isolated and permission-protected | ✅ | `test_09`, registry hash check |
-| 8 | Security documentation and out-of-scope threats | ✅ | [threat model](../security/threat-model.md), [residual risks](../security/residual-risks.md) |
+| 7 | ✅ **Done 2026-11-10.** On the Nulavio build of Firefox 160.0: the provider chooser installed the pinned Proton Pass from addons.mozilla.org, sign-in worked and a saved login was offered and filled | — |
+| 8 | ✅ **Decided 2026-11-10 by the maintainer: keep Firefox's add-on application ID and install from addons.mozilla.org**, as other Gecko-based browsers do (LibreWolf, Waterfox); a separate ID would make AMO's extensions, uBlock Origin and Proton Pass included, incompatible. This is a product decision on that prior art, not a legal opinion: no counsel has reviewed it ([ADR 0001](../adr/0001-engine-selection.md#open-items)) | — |
 | 9 | No improper use of Mozilla art or marks | ✅ for Nulavio assets (original). Track A displays Firefox's own UI as installed, with a non-affiliation notice. Track B must remove all marks | [LICENSES](../../LICENSES.md) |
 | 10 | No known critical flaws introduced by the project | ✅ none known; Guard blocks weakened profiles | unit + integration suites |
 | 11 | Test results and limitations recorded | ✅ | this file, ADR, residual risks |

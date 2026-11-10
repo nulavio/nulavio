@@ -129,7 +129,7 @@ Reopen this ADR if **any** of these holds:
 
 1. ~~Go-ahead for the Track B build spike~~ **Done (E17):** built in ≈ 52 min using 23 GB. Next: Mozilla-hosted URL audit (help/support links), built-in new tab, RPM packaging.
 2. **Release vs ESR base for Track B.** Recommendation: follow **Release** (latest web-compat and WebAuthn work), and switch to ESR only if the patch stack exceeds about 10 non-branding patches or a rebase exceeds one working day.
-3. **Application ID and AMO for a rebranded build.** Keep Firefox's add-on application ID for compatibility; confirm the policy and legal position before public distribution.
+3. **Application ID and AMO for a rebranded build.** Keep Firefox's add-on application ID for compatibility; confirm the policy and legal position before public distribution. **Decided 2026-11-10 by the maintainer:** keep it and install from addons.mozilla.org, on the prior art of other Gecko-based browsers (LibreWolf, Waterfox); Proton Pass from AMO works on the Nulavio build. Not reviewed by counsel; revisit if Mozilla's AMO or trademark terms say otherwise.
 4. ~~Native messaging path in Track B~~ **Resolved (E16a):** rebranded builds keep reading `~/.mozilla/native-messaging-hosts`. Pairing demonstrated in a Fedora container (E14). Still to do: the maintainer's own desktop, Ubuntu KDE, and Flatpak KeePassXC.
 5. **Manual login/autofill certification** for Proton Pass, KeePassXC and Bitwarden with real accounts (maintainer).
 6. **Ubuntu:** the default Firefox is a Snap that cannot read hidden directories, so the preview requires Mozilla's APT package. To verify on Ubuntu KDE.
