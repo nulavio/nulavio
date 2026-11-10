@@ -101,12 +101,8 @@ pref("browser.aboutaddons.novaThemesPickerEnabled", false);
 pref("browser.topsites.useRemoteSetting", false);
 pref("browser.newtabpage.activity-stream.default.sites", "");
 
-// UX3F (QA A5/M4): the sidebar launcher moves on Nulavio's standard motion
-// curve and narrows faster than it widens (browser/patches/0008). Reduced
-// motion still turns the animation off.
-pref("sidebar.animation.duration-ms", 220);
-pref("sidebar.animation.collapse-duration-ms", 160);
-pref("sidebar.animation.easing", "cubic-bezier(0.2, 0, 0, 1)");
+// The launcher's expand and collapse timing is in Horizon (horizon.css, on the
+// engine's sidebar view transition).
 // UX7: the Foco preset opens the launcher on hover (expand-on-hover) with the same expand token
 // (motion.duration.expand), not the engine's 400 ms; its 200 ms intent delay stays.
 pref("sidebar.animation.expand-on-hover.duration-ms", 220);

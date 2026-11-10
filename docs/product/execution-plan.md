@@ -28,7 +28,7 @@ Nulavio is complete when all of the following are verified (tests or recorded ev
 
 | Area | State (verified) |
 |---|---|
-| Engine | Firefox 159.0 source build (Track B), 8 patches, rootless container build; Track A launcher over distribution Firefox |
+| Engine | Firefox 160.0 source build (Track B), 7 patches, rootless container build; Track A launcher over distribution Firefox |
 | Shell | Built-in add-on with privileged modules: new tab, download warning, search, profiles, Smart Profile Routing (links from apps, typed addresses, link menu) |
 | Profiles | Engine profile groups (`SelectableProfileService`); isolation by separate instances and directories; **no encryption at rest yet** |
 | Guard | Launcher pre-launch audit (`guard.py`); refuses profiles with automation prefs (Marionette, remote agent) |
@@ -125,7 +125,7 @@ The maintainer accepted the recommendations below, with the Android changes note
 ## UX redesign programme (from 2026-10-27)
 
 The maintainer's brief: make the experience and look of Nulavio exceptional, with its own coherent identity on every surface, without weakening any protection.
-- **Engine target:** Firefox 159.0.
+- **Engine target:** Firefox 160.0.
 - **Inputs:** the [audit](../design/audit-2026-10-27.md) (107 findings) and the [direction](../design/visual-directions.md): Farol, with Maré's organisation and Névoa's flows.
 - **Done means:** each slice ends with tests green, a commit on `main`, a push, and CI green on the full SHA. Nothing is "done" while it is only a mockup.
 
