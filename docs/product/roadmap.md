@@ -32,7 +32,7 @@ Each milestone has a definition of done (DoD). "Done" requires the DoD to be ver
 - [x] Nulavio Shell UI, M0–M2 first slice: audit, three directions, Horizon chosen, window theme for tab strip, toolbar and address bar (Track B). Next milestones: [design migration plan](../design/migration-plan.md)
 
 - [x] Track A: launcher, isolated profile, start page, desktop identity, chrome theme
-- [x] Track B inputs: `browser/branding/nulavio/` + generated assets, `browser/build/mozconfig`, patch stack (`browser/patches/`, 7 patches: vendor name, l10n mapping of the branding, Horizon stylesheet link, per-provider consent for search suggestions, address-bar routing hook, system Mozilla directory, programs never opened from the downloads UI), container build script
+- [x] Track B inputs: `browser/branding/nulavio/` + generated assets, `browser/build/mozconfig`, patch stack (`browser/patches/`, 9 patches: vendor name, l10n mapping of the branding, Horizon stylesheet link, per-provider consent for search suggestions, address-bar routing hook, system Mozilla directory, programs never opened from the downloads UI, Firefox's name in the User-Agent, the font visibility lists on every Fedora), container build script
 - [x] `distribution/` generated from `browser/config/` (`distribution.ini` defaults + `policies.json`), verified active in the build (`test_13`)
 - [x] Google Safe Browsing API key from a secret: dedicated Google Cloud project, key restricted to the Safe Browsing API, build passes 17/17 incl. the end-to-end phishing test
 - [x] Nulavio Shell built-in add-on (`browser/shell/`), built from the branding directory with no Mozilla file patched
