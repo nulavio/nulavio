@@ -65,7 +65,13 @@ Packages and the repository metadata are signed with the OpenPGP key `298A 9093 
 
 ## Build from source
 
-Requirements: Linux x86_64, rootless Podman, about 25 GB of disk, and a [Google Safe Browsing API key](docs/architecture/build.md#google-safe-browsing-key) in `~/.config/nulavio-build/google-safebrowsing.key`. The build runs in a disposable container limited to 16 GiB of memory and two processors; on the reference laptop a full release build takes about 2 h 20 min.
+Requirements: Linux x86_64, about 25 GB of disk, and a [Google Safe Browsing API key](docs/architecture/build.md#google-safe-browsing-key) in `~/.config/nulavio-build/google-safebrowsing.key`. The source download, its signature check, the branding and the patches run on the host before the container starts, so the host needs Python 3.11 or later, `git`, GnuPG, `tar`, ImageMagick 7 with SVG support (librsvg) and rootless Podman. On Fedora:
+
+```sh
+sudo dnf install python3 git-core gnupg2 tar ImageMagick librsvg2 podman
+```
+
+The build itself runs in a disposable container limited to 16 GiB of memory and two processors; on the reference laptop a full release build takes about 2 h 20 min.
 
 ```sh
 git clone https://github.com/nulavio/nulavio.git && cd nulavio
