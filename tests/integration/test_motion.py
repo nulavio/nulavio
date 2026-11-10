@@ -66,7 +66,7 @@ class MotionTest(unittest.TestCase):
         self.m.chrome("Services.prefs.clearUserPref('ui.prefersReducedMotion');")
 
     def toggle_sidebar(self):
-        """Press the sidebar button once; the launcher's animations as the engine started them."""
+        """Press the sidebar button once; the timing of the engine's view transition (its groups' animations)."""
         self.m.set_context("chrome")
         try:
             return self.m.execute_async(
@@ -75,11 +75,13 @@ class MotionTest(unittest.TestCase):
                 "  await SidebarController.waitUntilStable();"
                 "  SidebarController.handleToolbarButtonClick();"
                 "  let seen = null;"
-                "  for (let i = 0; i < 100 && !seen; i++) {"
-                "    await new Promise(r => setTimeout(r, 10));"
-                "    const running = SidebarController._ongoingAnimations;"
-                "    const timing = a => { const t = a.effect.getTiming(); return [t.duration, t.easing]; };"
-                "    if (running.length) seen = running.map(timing);"
+                "  for (let i = 0; i < 200 && !seen; i++) {"
+                "    await new Promise(r => requestAnimationFrame(r));"
+                "    const groups = document.getAnimations()"
+                "      .filter(a => (a.effect.pseudoElement || '').startsWith('::view-transition-group('));"
+                "    const timing = a => [a.effect.getComputedTiming().duration,"
+                "      getComputedStyle(document.documentElement, a.effect.pseudoElement).animationTimingFunction];"
+                "    if (groups.length) seen = groups.map(timing);"
                 "  }"
                 "  await SidebarController.waitUntilStable();"
                 "  done({seen, expanded: SidebarController.getUIState().launcherExpanded});"
@@ -89,8 +91,8 @@ class MotionTest(unittest.TestCase):
             self.m.set_context("content")
 
     def test_02_the_sidebar_moves_on_the_motion_tokens(self):
-        """UX7-B: the launcher narrows in 160 ms and widens in 220 ms on the standard curve (patch 0008 and
-        firefox-branding.js); under reduced motion the engine starts no animation."""
+        """UX7-B: the launcher narrows in 160 ms and widens in 220 ms on the standard curve (Horizon on the
+        engine's view transition); under reduced motion the engine starts no transition."""
         self.m.chrome("Services.prefs.setIntPref('ui.prefersReducedMotion', 0);")
         layout = (
             'ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioLayout.sys.mjs").NulavioLayout'

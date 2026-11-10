@@ -114,6 +114,14 @@ user_pref("browser.contentblocking.category", "strict");
 // @tradeoff An interstitial appears for HTTP-only sites; "Continue to HTTP site" adds a site exception.
 user_pref("dom.security.https_only_mode", true);
 
+// --- Fingerprinting (docs/research/fingerprinting.md) ---
+
+// @mode seed
+// @category privacy
+// @why Adds to the engine's fingerprinting protection: noise on every canvas and WebGL read, no graphics card model, no toolbar or window position, standard system colours, no motion sensors.
+// @tradeoff A page that reads canvas pixels back gets them changed by one step in a few places; sites that pick settings by graphics card use their defaults; exempt a site with the shield in the address bar.
+user_pref("privacy.fingerprintingProtection.overrides", "-EfficientCanvasRandomization,+WebGLRendererConstant,+WebGLVendorSanitize,+WindowOuterSize,+WindowScreenXY,+WindowInnerScreenXY,+MouseEventScreenPoint,+UseStandinsForNativeColors,+DeviceSensors");
+
 // --- Network leaks ---
 
 // @mode seed

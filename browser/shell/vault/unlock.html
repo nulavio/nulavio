@@ -24,14 +24,16 @@
       <form class="stack stack--tight" id="password-form" hidden>
         <label class="field">
           <span class="field__label" data-i18n="vaultPasswordLabel"></span>
-          <input class="input" id="password" type="password" autocomplete="current-password" maxlength="1024" required>
+          <input class="input" id="password" type="password" autocomplete="current-password" maxlength="1024" required
+                 aria-describedby="status">
         </label>
         <div class="actions"><button class="button button--primary" type="submit" data-i18n="vaultUnlock"></button></div>
       </form>
       <form class="stack stack--tight" id="recovery-form" hidden>
         <label class="field">
           <span class="field__label" data-i18n="vaultRecoveryLabel"></span>
-          <input class="input mono" id="recovery" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="64" required>
+          <input class="input mono" id="recovery" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="64" required
+                 aria-describedby="status">
         </label>
         <div class="actions">
           <button class="button button--primary" type="submit" data-i18n="vaultUnlockWithRecovery"></button>
