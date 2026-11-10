@@ -45,6 +45,26 @@ pref("urlclassifier.downloadBlockTable", "");
 pref("urlclassifier.downloadAllowTable", "");
 pref("browser.safebrowsing.downloads.remote.enabled", false);
 
+// Fingerprinting protection beyond the engine's own set for the Strict
+// category (measured in docs/research/fingerprinting.md, checked on every run
+// by tests/integration/test_fingerprinting.py):
+//   -EfficientCanvasRandomization: the engine's quick mode adds noise only to
+//     images a page exports. Without it the full mode applies, and raw pixel
+//     reads (getImageData), offscreen canvases and WebGL reads differ per site
+//     and per session too.
+//   +WebGLRendererConstant, +WebGLVendorSanitize: pages are not told the
+//     graphics card's model (Firefox Nightly's choice).
+//   +WindowOuterSize, +WindowScreenXY, +WindowInnerScreenXY,
+//   +MouseEventScreenPoint: pages do not learn how large the toolbars and the
+//     sidebar are, or where the window sits on the screen.
+//   +UseStandinsForNativeColors: pages get standard system colours instead of
+//     the desktop theme's.
+//   +DeviceSensors: no motion or orientation readings.
+// A site the person exempts from tracking protection is exempt from these too.
+// Time zone, language, screen size and window size are left as they are:
+// changing them breaks sites (docs/security/hardening.md).
+pref("privacy.fingerprintingProtection.overrides", "-EfficientCanvasRandomization,+WebGLRendererConstant,+WebGLVendorSanitize,+WindowOuterSize,+WindowScreenXY,+WindowInnerScreenXY,+MouseEventScreenPoint,+UseStandinsForNativeColors,+DeviceSensors");
+
 // Follow the desktop's language among the locales packaged in the build
 // (en-US and pt-BR), as distribution Firefox does. An empty value means "use
 // the OS locales" (intl/locale/LocaleService.cpp); users can still pick a
