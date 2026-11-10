@@ -118,8 +118,8 @@ Again on 2026-10-27, over the branches then waiting to be merged (85 commits): g
 - If the repository becomes public or gets Advanced Security: turn on secret scanning with push protection and private vulnerability reporting, and upload the scanners' SARIF.
 - Run zizmor with `--persona pedantic` in CI once the integration job no longer expands `${{ matrix.image }}` in `run:` blocks.
 - Repository settings (the maintainer's decision; nothing here changes them): require actions pinned by full SHA and allow only GitHub's own actions, so GitHub refuses an unpinned action before it runs, where today `tests/unit/test_repo_hygiene.py` notices it after the commit:
-  `gh api -X PUT repos/caiolombello/nulavio/actions/permissions -F enabled=true -f allowed_actions=selected -F sha_pinning_required=true`, then
-  `gh api -X PUT repos/caiolombello/nulavio/actions/permissions/selected-actions -F github_owned_allowed=true -F verified_allowed=false`.
+  `gh api -X PUT repos/nulavio/nulavio/actions/permissions -F enabled=true -f allowed_actions=selected -F sha_pinning_required=true`, then
+  `gh api -X PUT repos/nulavio/nulavio/actions/permissions/selected-actions -F github_owned_allowed=true -F verified_allowed=false`.
   If "selected actions" is not offered for a private repository on the free plan, set `sha_pinning_required` alone.
 - Patches to the engine: `./mach lint -l eslint -l file-whitespace` on the files the patches touch, and `./mach clang-format` on the C++ one, as a step of `scripts/release/rehearse_release.sh` after the patches are applied (Mozilla's own linters run only inside the source tree). First check that it works in the build container without the network. Opengrep does not read diffs, so until then review each patch by hand at every engine update: privileged APIs it calls, prefs it changes, URL and IPC handling, and a regression test for each security patch (as patch 0007 has).
 - `rpmlint` and `lintian` in the package checks (`check_rpm.sh`, `check_deb.sh`): report only at first, blocking once each override has a reason.

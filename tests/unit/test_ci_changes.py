@@ -17,7 +17,7 @@ sys.path.insert(0, str(ROOT / "scripts" / "ci"))
 
 import needs_integration as gate  # noqa: E402
 
-REPO = "caiolombello/nulavio"
+REPO = "nulavio/nulavio"
 
 
 def git(cwd: Path, *args: str) -> str:
