@@ -1046,7 +1046,7 @@
   "methodsSavePassword": {"message": "Salvar a senha"},
   "methodsCodeHeading": {"message": "Seu novo código de recuperação"},
   "methodsCodeIntro": {"message": "O código antigo já não abre este perfil. Este aparece só agora."},
-  "methodsCodeReplaced": {"message": "Código de recuperação trocado. O antigo não abre mais este perfil."},
+  "methodsCodeReplaced": {"message": "Código de recuperação trocado. O antigo não abre mais este perfil; só uma cópia do perfil feita antes desta troca ainda o aceitaria."},
   "methodsPasswordAdded": {"message": "Senha adicionada."},
   "methodsKeyringAdded": {"message": "Login do computador adicionado."},
   "methodsWorking": {"message": "Aplicando…"},
