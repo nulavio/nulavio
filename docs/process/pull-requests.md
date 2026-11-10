@@ -1,6 +1,6 @@
 # Pull requests, branches and the advisory AI review
 
-Status: convention adopted 2026-10-27. `main` has branch protection (settings read from GitHub on 2026-11-10). **Paused since 2026-11-10:** the repository moved to the `nulavio` organization (GitHub Free), where branch protection and rulesets need a public repository. Until it is public, every row marked "Enforced by GitHub" below is kept by convention only; the settings come back with the same values when it is. The table under [What is enforced](#what-is-enforced-and-what-is-advisory) says which parts GitHub enforces and which stay advisory.
+Status: convention adopted 2026-10-27. `main` has branch protection (settings read from GitHub on 2026-11-10). The repository moved to the `nulavio` organization and became public on 2026-11-10; branch protection was restored with the same values the same day (read back through the API). The table under [What is enforced](#what-is-enforced-and-what-is-advisory) says which parts GitHub enforces and which stay advisory.
 
 In short:
 
@@ -142,7 +142,7 @@ When Mozilla publishes a security release, the [update policy](../architecture/u
 
 ### Public repository
 
-- Actions minutes on standard runners are free. Secret scanning with push protection, Dependabot alerts and CodeQL become available at no cost. Turn on private vulnerability reporting ([SECURITY.md](../../SECURITY.md) already points to it).
+- Done on 2026-11-10, when the repository became public: secret scanning with push protection, Dependabot alerts, CodeQL (default setup) and private vulnerability reporting ([SECURITY.md](../../SECURITY.md) points to it) are on. Actions minutes on standard runners are free.
 - Pull requests from forks get no secrets: keep the `pull_request_target` design and its same-repository condition. Review automatically only when the author is an owner, member or collaborator (`author_association`); for outside contributors, a maintainer adds the label after reading the raw diff (hidden Markdown can carry instructions).
 - Keep the action's `allowed_non_write_users` and `allowed_bots` empty.
 - AI comments and workflow logs become public.

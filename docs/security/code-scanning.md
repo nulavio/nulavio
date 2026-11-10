@@ -115,7 +115,7 @@ Again on 2026-10-27, over the branches then waiting to be merged (85 commits): g
 
 - Verify Opengrep's Sigstore signature, not only its SHA-256, when bumping it (needs a pinned `cosign`).
 - ~~Make `security` a required check~~: done, it is required by `main`'s branch protection (read 2026-11-10). It still runs after a branch is pushed, so a secret pushed to a branch is on GitHub before the job reports it; only push protection (public repository or Advanced Security) stops that.
-- If the repository becomes public or gets Advanced Security: turn on secret scanning with push protection and private vulnerability reporting, and upload the scanners' SARIF.
+- ~~Turn on secret scanning with push protection and private vulnerability reporting~~: done on 2026-11-10, when the repository became public, with CodeQL's default setup. Still open: upload the scanners' SARIF (gitleaks, Opengrep) so their findings show in the Security tab.
 - Run zizmor with `--persona pedantic` in CI once the integration job no longer expands `${{ matrix.image }}` in `run:` blocks.
 - Repository settings (the maintainer's decision; nothing here changes them): require actions pinned by full SHA and allow only GitHub's own actions, so GitHub refuses an unpinned action before it runs, where today `tests/unit/test_repo_hygiene.py` notices it after the commit:
   `gh api -X PUT repos/nulavio/nulavio/actions/permissions -F enabled=true -f allowed_actions=selected -F sha_pinning_required=true`, then
