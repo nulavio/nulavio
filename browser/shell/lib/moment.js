@@ -80,7 +80,9 @@ function state() {
 
 function offerRetry(header, card) {
   let retry = card.querySelector(":scope > .moment__retry");
-  const wanted = (header.dataset.retry ?? "").split(/\s+/).includes(state());
+  // A page with no data-retry, or with no state yet, lists nothing: "" is not a state to retry.
+  const current = state();
+  const wanted = current !== "" && (header.dataset.retry ?? "").split(/\s+/).includes(current);
   if (wanted && !retry) {
     const button = h("button", { class: "button button--secondary", type: "button", text: t("momentRetry") });
     button.addEventListener("click", () => location.reload());

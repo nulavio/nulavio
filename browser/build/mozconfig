@@ -28,6 +28,14 @@ ac_add_options --disable-debug
 ac_add_options --disable-tests
 ac_add_options --enable-bootstrap
 
+# Rust link-time optimisation: thin, not the release default (fat). The fat
+# pass over gkrust needed more than 17 GiB and stopped four guarded builds on
+# the 32 GiB build laptop (docs/research/evidence/release-rehearsal-2026-11-04.md).
+# The build system appends CARGO_RUSTCFLAGS after its own -Clto, and rustc
+# keeps the last value. Everything else of --enable-release stays. Only
+# "export" lines reach the makefiles that run Cargo (.mozconfig.mk).
+mk_add_options "export CARGO_RUSTCFLAGS=-Clto=thin"
+
 # Extensions must be signed by Mozilla's AMO root (explicit even though the
 # release milestone already implies it; ESR would not).
 ac_add_options MOZ_REQUIRE_SIGNING=1

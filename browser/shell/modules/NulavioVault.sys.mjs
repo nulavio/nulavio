@@ -27,6 +27,10 @@ ChromeUtils.defineESModuleGetters(lazy, {
 const SHELL_ID = "shell@nulavio.net";
 const TIMEOUT_MS = 90000; // Argon2id (256 MiB) plus mounting; encryption of a new profile copies files
 const METHODS = new Set(["password", "recovery-code", "os-keyring"]);
+// Connecting a phone is not offered yet (D10): off unless this pref says otherwise. Unlocking with a
+// phone that is already connected, and removing it, never depend on it.
+const PREF_PHONE_PAIRING = "nulavio.vault.phone.pairing";
+const phonePairing = () => Services.prefs.getBoolPref(PREF_PHONE_PAIRING, false);
 const CHANGES = new Set(["new-recovery-code", "add-password", "add-keyring", "remove-method"]);
 const MAX_SECRET = 1024;
 
@@ -63,16 +67,16 @@ class Vault {
 
   async capabilities() {
     if (this.#capabilities) {
-      return this.#capabilities;
+      return { ...this.#capabilities, phonePairing: phonePairing() };
     }
     try {
       const found = await helper({ op: "capabilities" });
       if (found.storage && found.sodium) {
         this.#capabilities = found; // only a working setup is remembered; a missing one is checked again
       }
-      return found;
+      return { ...found, phonePairing: phonePairing() };
     } catch (e) {
-      return { storage: false, sodium: false, keyring: false, reason: e.code ?? "unexpected" };
+      return { storage: false, sodium: false, keyring: false, phonePairing: false, reason: e.code ?? "unexpected" };
     }
   }
 
@@ -198,6 +202,9 @@ class Vault {
    * show, as rows of QR modules drawn by the engine's own encoder.
    */
   async phoneStart(profileId, kind, { current = null } = {}) {
+    if (kind === "pair" && !phonePairing()) {
+      fail("phone-not-yet"); // the page does not offer it; a call from elsewhere is refused the same way
+    }
     const { path } = await this.#path(profileId);
     const request = kind === "pair" ? { op: "phone-pair-start", path, current: checkSecret(current) } : { op: "phone-unlock-start", path };
     const answer = await helper(request);

@@ -67,6 +67,17 @@ Evidence and per-platform states: [compatibility report](../research/phone-unloc
 
 **Pending (needs the maintainer):** running `test_companion_emulator.py`'s steps on the Galaxy S24+ (USB or wireless debugging) and a manual pass: set up, pair, unlock a test profile, decline, airplane mode, lost-phone removal. The Android emulator (37.2 and 37.3) crashes at start on the reference desktop (kernel 7.2, with or without KVM), so no emulated run was possible here.
 
+## Availability (decision D10, 2026-11-04)
+
+Phone unlock is not part of 1.0: the Companion is not published and the run on a real phone is still open. Until it is, the browser does not offer to connect a phone:
+
+- The unlock-methods page says that unlocking with a phone or a security key is not available yet in this version (FIDO2, slice S10, is not built).
+- The phone page offers no code, and the Shell refuses to start a pairing (`phone-not-yet`).
+- A phone that is already connected keeps unlocking its profile and can be removed, so nobody is locked out by this.
+- The pages' "no master key" line names no method, so it is true for every profile.
+
+`nulavio.vault.phone.pairing` (off in the build) turns the offer on for people testing the Companion. `test_vault_ui` 08 and 09 run with it on, 13 with the default.
+
 ## Threat model summary
 
 Full list: [threat model for unlock](../security/threat-model-unlock.md). Key points:

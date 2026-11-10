@@ -1124,7 +1124,7 @@
 <li>Um programa com acesso de root vê tudo.</li>
 <li>Quem tem acesso físico a uma sessão aberta também vê tudo.</li>
 <li>Anonimato contra quem observa a rede inteira não é o objetivo; para isso existe o Tor Browser.</li>
-<li>A impressão digital do navegador é só reduzida. Na nossa medição de 26/10/2026, com o Firefox 158.0.1, o modo Estrito arredondou o número de processadores informado (de 16 para 8), mas não mudou a leitura do canvas na página de teste.</li>
+<li>A impressão digital do navegador é reduzida, não apagada. Na nossa medição de 10/11/2026, com o Firefox 159.0.1, o canvas e o WebGL dão leituras diferentes em cada site, as fontes visíveis para as páginas caíram de 33 para 15, a placa de vídeo aparece como “Mozilla” e o nome do navegador é o do Firefox. O fuso horário, o idioma, o tamanho da tela e o endereço de internet continuam diferentes de uma pessoa para outra, e um site atento ainda percebe que não é um Firefox comum. Para sumir na multidão, use o Tor Browser ou o Mullvad Browser.</li>
 </ul>
 </div>
 <div class="receipt">
@@ -1137,6 +1137,7 @@
 <dd><code class="ref" translate="no">docs/product/vision.md (não objetivos)</code></dd>
 <dt>Teste</dt>
 <dd><code class="ref" translate="no">tests/integration/test_privacy.py › test_04_fingerprinting_surface_measured_in_strict_and_standard</code></dd>
+<dd><code class="ref" translate="no">tests/integration/test_fingerprinting.py</code></dd>
 </dl>
 </div>
 </section>

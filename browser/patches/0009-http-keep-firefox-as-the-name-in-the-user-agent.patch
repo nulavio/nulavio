@@ -1,0 +1,32 @@
+Subject: [PATCH] http: keep Firefox as the name in the User-Agent
+
+The engine builds its User-Agent from the application's name unless the
+project file gives it another one. With --with-app-basename=Nulavio every
+request, and navigator.userAgent, ended in "Nulavio/159.0.1" instead of
+"Firefox/159.0". That names a small group of people to every site they visit,
+gives away the point release, and is a value that sites looking for Firefox do
+not recognise. With this the User-Agent is the one Firefox itself sends on
+the same system. Like the vendor (patch 0001), the option can only be implied
+by the project configure file.
+
+Nothing else reads the option: about:support, the profile location, the
+window class and the add-on application ID are unchanged.
+
+Owner: Nulavio maintainers
+Upstream: not applicable (Firefox's own build has this name already; Fenix
+sets the same option in mobile/android/moz.configure).
+---
+--- a/browser/moz.configure
++++ b/browser/moz.configure
+@@ -12,6 +12,11 @@
+ 
+ 
+ imply_option("MOZ_APP_VENDOR", "Nulavio")
++# Nulavio: the User-Agent keeps saying Firefox. Without this the engine uses
++# the application's own name, and every request and navigator.userAgent would
++# carry "Nulavio/<version>": a label for a small group of people, and a value
++# sites that look for Firefox do not recognise.
++imply_option("MOZ_APP_UA_NAME", "Firefox")
+ imply_option("MOZ_APP_ID", "{ec8030f7-c20a-464f-9b0e-13a3a9e97384}")
+ # Include the DevTools client, not just the server (which is the default)
+ imply_option("MOZ_DEVTOOLS", "all")
