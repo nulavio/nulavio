@@ -55,14 +55,14 @@ What is in place for it (2026-11-04): `publish_release.sh` signs only what a reh
 
 | # | Still open | Owner |
 |---|---|---|
-| 1 | **A release build of the pinned Firefox.** On 2026-11-04 the guarded release build of 159.0.1 stopped twice at `gkrust` (Rust with LTO) on the laptop's memory ([evidence](../research/evidence/release-rehearsal-2026-11-04.md)); a later local build with `--disable-release` (no Rust LTO, not committed) finished, which is enough for testing but is not a release build. A machine with more memory, or less load on the laptop during the build, is needed | maintainer |
-| 2 | Release key: run `make_release_key.sh`, back it up offline, commit the public key and the fingerprint in `packaging/release.json` | maintainer |
-| 3 | Repository host for `packages.nulavio.net` (recommended: Cloudflare R2 with that custom domain, next to the site on Cloudflare Pages; a 91 MB RPM is over the Pages file limit) | maintainer |
-| 4 | Safe Browsing quota review with Google | maintainer |
-| 5 | A test report to `security@nulavio.net`, received and answered | maintainer |
-| 6 | Trademark searches (INPI, USPTO, EUIPO) | maintainer or counsel |
-| 7 | Proton Pass sign-in and autofill once on the Nulavio build | maintainer |
-| 8 | Confirmation that keeping Firefox's add-on application ID and installing from addons.mozilla.org is acceptable ([build, release blockers](../architecture/build.md#release-blockers-for-track-b)) | maintainer |
+| 1 | ✅ **Done 2026-11-10.** Thin Rust LTO (#17) fits the release build in the guarded budget: Firefox 160.0 built from scratch in 2 h 21 min, container peak 13.0 GiB of 16, and passed the 363-test integration suite (#19) | — |
+| 2 | ✅ **Done 2026-11-10.** Key created with `make_release_key.sh` (RSA 4096, signing only, expires 2028-11-09, fingerprint `298A 9093 BAAB B26F 79BB  29F4 BF47 E5FA 9EDB 8DB1`); public key and fingerprint committed (#27); passphrase in the maintainer's password manager. Still open: the offline backups of the private key and of the revocation certificate, kept apart | maintainer (backups) |
+| 3 | ✅ **Done 2026-11-10.** Cloudflare R2 bucket `nulavio-packages` served at `packages.nulavio.net` (TLS 1.2 minimum). Still open: an R2 API token limited to that bucket, for the upload step of `publish/NEXT.md` | maintainer (token) |
+| 4 | ✅ **Decided 2026-11-10: the default quota is accepted for the alpha.** The `nulavio` project has 10,000 requests a day for each Safe Browsing API (Update, Lookup, Submission, other) and 1,800 a minute; at about 48 list updates a day per browser, that is room for roughly 200 daily active installs. Review it with Google (a quota increase may need a billing account) when "Update API requests per day" passes 70 % | maintainer (watch the quota) |
+| 5 | ✅ **Done 2026-11-10.** A test report sent from an outside address to `security@nulavio.net` arrived (Cloudflare Email Routing forwards it to the maintainer) and was answered. Replies come from the maintainer's own address: the routing only receives | — |
+| 6 | ✅ **Done 2026-11-10 (preliminary).** No mark "nulavio" at INPI, USPTO, TMview (EUIPO and national offices) or the WIPO Global Brand Database, searched by the maintainer for the exact word. Not a clearance: similar marks were not searched, no counsel reviewed it, and the name is not registered ([brand status](../brand/strategy.md#trademark-and-availability-status)) | maintainer (registration, if wanted) |
+| 7 | ✅ **Done 2026-11-10.** On the Nulavio build of Firefox 160.0: the provider chooser installed the pinned Proton Pass from addons.mozilla.org, sign-in worked and a saved login was offered and filled | — |
+| 8 | ✅ **Decided 2026-11-10 by the maintainer: keep Firefox's add-on application ID and install from addons.mozilla.org**, as other Gecko-based browsers do (LibreWolf, Waterfox); a separate ID would make AMO's extensions, uBlock Origin and Proton Pass included, incompatible. This is a product decision on that prior art, not a legal opinion: no counsel has reviewed it ([ADR 0001](../adr/0001-engine-selection.md#open-items)) | — |
 | 9 | With the release: the landing page's status ("Em desenvolvimento", "repositório ainda privado") and the README's status change in the same commit that sets the version; once the repository is public, the evidence references can become links (site spec §2.2) | with the release |
 
 ## Scope of 1.0 (decided 2026-11-04)
