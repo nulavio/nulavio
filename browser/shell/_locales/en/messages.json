@@ -1046,7 +1046,7 @@
   "methodsSavePassword": {"message": "Save the password"},
   "methodsCodeHeading": {"message": "Your new recovery code"},
   "methodsCodeIntro": {"message": "The old code no longer opens this profile. This one is shown only now."},
-  "methodsCodeReplaced": {"message": "Recovery code replaced. The old one no longer opens this profile."},
+  "methodsCodeReplaced": {"message": "Recovery code replaced. The old one no longer opens this profile; only a copy of the profile made before this change would still accept it."},
   "methodsPasswordAdded": {"message": "Password added."},
   "methodsKeyringAdded": {"message": "Computer login added."},
   "methodsWorking": {"message": "Applying…"},
