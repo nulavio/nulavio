@@ -128,7 +128,9 @@ class SiteTest(unittest.TestCase):
                 self.assertIn(f"\n{closed}\n</body>", html)
                 inside = html[html.index(opened) : html.index(closed)]
                 self.assertEqual(html.count("@nulavio.net"), inside.count("@nulavio.net"), "an address outside the opt-out")
-        self.assertIn("mailto:security@nulavio.net", (self.out / "index.html").read_text(encoding="utf-8"))
+        # The security address is on the engineering pages since the landing (#16); it must reach them intact.
+        for page in ("engenharia/index.html", "en/engineering/index.html"):
+            self.assertIn("mailto:security@nulavio.net", (self.out / page).read_text(encoding="utf-8"))
 
     def test_local_references_resolve(self):
         for page in PAGES:
