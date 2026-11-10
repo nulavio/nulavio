@@ -105,6 +105,15 @@ The maintainer accepted the recommendations below, with the Android changes note
 | D6 | AI Bridge implementation | **Nulavio's own MCP server** in standard-library Python; Mozilla's firefox-devtools-mcp evaluated in the matrix; Playwright only in a throwaway directory | S4 |
 | D7 | Agent configuration | **Throwaway configuration in tests**; any change to the real Codex or Claude configuration is shown first and written only after approval | S4, S8 |
 
+### Decisions for the public release (maintainer, 2026-11-04)
+
+| # | Decision | Outcome | Affects |
+|---|---|---|---|
+| D8 | First public release | **A public alpha before 1.0**, for **Fedora only, through the signed dnf repository**. The .deb is built and checked but not published until there is an APT repository: a browser without updates through the package manager would leave Ubuntu users on old engines | [Release criteria](release-criteria.md#public-alpha-decided-2026-11-04), `publish_release.sh` |
+| D9 | Download protection (R15) | **Accepted in writing**: Google keeps download reputation for partners; the Flow E warning, downloads saved without execute permission and never opened directly compensate. Partner access may still be requested later | [R15](../security/residual-risks.md) |
+| D10 | Scope of 1.0 | **Phone unlock (U6/U7, S11) and FIDO2 unlock (S10) leave 1.0**, shown as "not available yet"; they ship in a later version, so the stable release does not wait on Android or a security key | [Release criteria](release-criteria.md#scope-of-10-decided-2026-11-04) |
+| D11 | Independent audit before 1.0 | **Limited to the Vault (profile encryption, key handling, recovery) and the release chain (build, signing, repository, updates)**; the rest stays covered by the project's own reviews and tests | U11 |
+
 ## Guardrails for every slice
 
 - No secret in plain text on disk, in logs or in the clipboard; tests use artificial data and throwaway profiles only.

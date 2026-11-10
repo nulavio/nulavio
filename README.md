@@ -5,7 +5,7 @@
 Nulavio is an open-source, Linux-first desktop browser built on Mozilla's Gecko engine. It focuses on privacy by default, ad and tracker blocking, and safe use of the password manager you already trust. It is honest about what a browser can and cannot protect.
 
 > **Status: pre-alpha. Everything below runs on the development build; the first public alpha waits on package signing and hosting ([release criteria](docs/product/release-criteria.md)). This is a preview, not a release.** Website: [nulavio.net](https://nulavio.net) · security reports: security@nulavio.net
-> The *Nulavio Preview* (Track A) is a launcher and isolated, hardened profile layer on top of your distribution's **unmodified** Firefox. The branded source build (Track B) is a development spike ([build](docs/architecture/build.md)). It is not a release and lacks a Safe Browsing key. See [ADR 0001](docs/adr/0001-engine-selection.md).
+> The **Nulavio build** (Track B: Firefox built from Mozilla's verified source with Nulavio's patches, Shell, profiles, Vault and AI Bridge) is what will ship, first for Fedora through a signed dnf repository. What the alpha still waits for is listed in the [release criteria](docs/product/release-criteria.md#public-alpha-decided-2026-11-04). The *Nulavio Preview* (Track A) below is a launcher and hardened profile layer on top of your distribution's **unmodified** Firefox, for trying Nulavio from a clone today. See [ADR 0001](docs/adr/0001-engine-selection.md).
 
 ![Nulavio Preview on KDE Plasma (Wayland)](docs/brand/assets/review/preview-window-kde-wayland.png)
 

@@ -54,7 +54,7 @@ Otherwise it is **standard** (72 hours): only moderate or low issues, or still n
 2. Verify the source release: `scripts/upstream/verify_firefox_release.py <version>` checks `SHA256SUMS` against the **pinned** Mozilla Software Releases key (`14F2 6682 D091 6CDD 81E3 7B6D 61B7 B526 D98F 0353`) and prints the tarball hash. `scripts/release/bump_engine.py <version>` runs that check and pins the version and the hash in `browser/build/engine.json`.
 3. Apply the patch stack (`browser/patches/series`, applied idempotently by `scripts/build/apply_patches.py`). Each patch has an owner, a reason and an upstreaming plan; the unit tests enforce this and cap the stack at about 10 patches.
 4. Build in a clean container. Run unit and integration tests plus the provider certification smoke tests.
-5. Sign packages (RPM GPG; provenance attestation planned): only the files the rehearsal's `manifest.json` lists, with those SHA-256 digests. Publish. Record in the security changelog.
+5. Sign packages (RPM GPG; provenance attestation planned): only the files the rehearsal's `manifest.json` lists, with those SHA-256 digests (`publish_release.sh` refuses anything else, [build](build.md#publishing-a-release)). Publish. Record in the security changelog.
 
 ### Key rotation
 
@@ -106,7 +106,6 @@ Each run takes a lock, so runs never overlap. It builds only a release whose sig
 
 ### Next steps (not adopted yet)
 
-- `sign_repo.sh` refusing any package that `manifest.json` does not list with the same SHA-256 (today the rule above is followed by hand).
 - Patch stack pre-check against the `FIREFOX_<version>_BUILD<n>` tag of Mozilla's GitHub mirror, days before a major: an early warning that a rebase is needed. Indicative only; builds keep using the signed tarball.
 - `sccache` for dot releases (estimated 52 to 15–25 minutes, not measured yet).
 - The `upstream` job on the 1-vCPU `ubuntu-slim` runner, once the billing shows it costs less.
