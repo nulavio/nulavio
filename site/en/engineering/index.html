@@ -1122,7 +1122,7 @@
 <li>A program with root access sees everything.</li>
 <li>Anyone with physical access to an open session also sees everything.</li>
 <li>Anonymity against someone watching the whole network is not the goal; that is what Tor Browser is for.</li>
-<li>Browser fingerprinting is only reduced. In our measurement of 2026-10-26, on Firefox 158.0.1, Strict mode rounded the reported processor count (16 to 8) but did not change the canvas reading on the test page.</li>
+<li>Browser fingerprinting is reduced, not removed. In our measurement of 2026-11-10, on Firefox 159.0.1, canvas and WebGL give a different reading on every site, the fonts pages can see went from 33 to 15, the graphics card reads “Mozilla” and the browser's name is Firefox's. Time zone, language, screen size and internet address still differ from one person to another, and a careful site can still tell this is not a stock Firefox. To blend into the crowd, use Tor Browser or Mullvad Browser.</li>
 </ul>
 </div>
 <div class="receipt">
@@ -1135,6 +1135,7 @@
 <dd><code class="ref" translate="no">docs/product/vision.md (non-goals)</code></dd>
 <dt>Test</dt>
 <dd><code class="ref" translate="no">tests/integration/test_privacy.py › test_04_fingerprinting_surface_measured_in_strict_and_standard</code></dd>
+<dd><code class="ref" translate="no">tests/integration/test_fingerprinting.py</code></dd>
 </dl>
 </div>
 </section>

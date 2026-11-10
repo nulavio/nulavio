@@ -59,9 +59,9 @@ in that case; inspect it and use `podman rm` with its recorded ID. Artifacts,
 source and object directories remain for incremental builds. A 24-hour runtime
 ceiling is an additional backstop, not the disconnect detector.
 
-Adjustments are per invocation: `NULAVIO_BUILD_MEMORY_GIB=1..20` (default 16;
-above 16 only on explicit request, because release `gkrust` with Rust LTO needs
-more than 16 GiB; the 4 GiB host reserve still applies),
+Adjustments are per invocation: `NULAVIO_BUILD_MEMORY_GIB=1..20` (default 16,
+which the release build fits since it uses thin Rust LTO: 13 GiB at its peak on
+2026-11-09; above 16 only on explicit request; the 4 GiB host reserve still applies),
 `MOZ_PARALLEL_BUILD=1..2`, `NULAVIO_BUILD_MIN_AVAILABLE_GIB` (default 4),
 `NULAVIO_BUILD_PSI_LIMIT` (default 10) and `NULAVIO_BUILD_PSI_SECONDS` (default
 30). The maximum memory/jobs cannot silently exceed this laptop budget.
@@ -119,6 +119,7 @@ Work directory (outside the repository): `${NULAVIO_BUILD_DIR:-~/.cache/nulavio-
 | Result | `application.ini`: `Vendor=Nulavio`, `Name=Nulavio`, `RemotingName=nulavio`, add-on ID unchanged; `nulavio --version` → `Nulavio Nulavio 158.0.1` |
 | Integration tests against the build | **17/17** on 2026-10-25, with network tests (official password-manager extensions, Safe Browsing end to end). Before the key: 14/15 |
 | Rebuilds | Adding the key changes the configuration, so most of the tree recompiled: **38 min**. A branding-only change (prefs, icons) rebuilds and repackages in **< 1 min** |
+| Release build under the guard (two CPUs, 16 GiB), Firefox 159.0.1, thin Rust LTO, 2026-11-09 | **104 min** wall clock with the Rust dependencies already compiled and the configuration changed back to release; `gkrust` itself 12 min. Container peak **13.0 GiB**, no cgroup `max` or OOM event; the host never had less than 15 GiB available. Package 81.8 MiB ([evidence](../research/evidence/release-rehearsal-2026-11-09.md)) |
 
 Lessons from the first attempts: `MOZ_APP_VENDOR` cannot be set from a mozconfig (it is only implied by the project file, hence patch 0001). `--enable-bootstrap` does not install Rust, so it comes from Fedora packages. Keep the build output pipe alive for the whole build: a killed log `tee` interrupted the first packaging step.
 
@@ -133,6 +134,7 @@ Lessons from the first attempts: `MOZ_APP_VENDOR` cannot be set from a mozconfig
 | `--disable-updater` | Updates come from the distribution package (RPM/DEB) under the [update policy](update-policy.md). This is a delivery-channel choice, not a removal of updates |
 | `--disable-crashreporter` | There is no Nulavio crash server. Crash data is never sent anywhere |
 | `--enable-release --enable-optimize --disable-debug --disable-tests` | Release-like build for realistic testing |
+| `mk_add_options "export CARGO_RUSTCFLAGS=-Clto=thin"` | The release default runs a fat link-time optimisation pass over `gkrust` (all Rust code in one unit). It needed more than 17 GiB and stopped four guarded builds on the 32 GiB build laptop ([evidence](../research/evidence/release-rehearsal-2026-11-04.md)). Thin LTO still optimises across crates and fits in 13 GiB. The build system appends this value after its own `-Clto` and `rustc` keeps the last one, so no engine patch is needed; only `export` lines of the mozconfig reach the makefiles that run Cargo. Cost: somewhat less cross-crate optimisation in Rust code (style system, WebRender) than a fat pass; Mozilla's own builds go further in the other direction (cross-language LTO with profile-guided optimisation), which needs a larger builder and is a later item |
 
 ## Google Safe Browsing key
 

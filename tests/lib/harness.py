@@ -85,6 +85,61 @@ def _png_1px() -> bytes:
     return b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", header) + chunk(b"IDAT", pixel) + chunk(b"IEND", b"")
 
 
+# What a page can read about the browser and the computer (tests/integration/test_fingerprinting.py).
+# ?font=<family> asks whether text in that family measures differently from the generic fallbacks,
+# which is how pages find out which fonts are installed.
+FP_SURFACE_PAGE = """<!doctype html><meta charset="utf-8"><title>fp-surface</title>
+<canvas id=c width=240 height=64></canvas><canvas id=g width=48 height=48></canvas><pre id=fp></pre>
+<script>
+(async () => {
+  const hex = async bytes => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)))
+    .map(b => b.toString(16).padStart(2, '0')).join('').slice(0, 16);
+  const text = s => hex(new TextEncoder().encode(String(s)));
+  const guarded = async fn => { try { return await fn(); } catch (e) { return 'error: ' + e.name; } };
+  const out = { ua: navigator.userAgent, appVersion: navigator.appVersion, platform: navigator.platform, oscpu: navigator.oscpu,
+    vendor: navigator.vendor, hw: navigator.hardwareConcurrency, touch: navigator.maxTouchPoints };
+  out.win = { inner: innerWidth + 'x' + innerHeight, outer: outerWidth + 'x' + outerHeight, xy: screenX + ',' + screenY,
+    innerScreen: window.mozInnerScreenX + ',' + window.mozInnerScreenY };
+  const c = document.getElementById('c'), x = c.getContext('2d');
+  const grad = x.createLinearGradient(0, 0, 240, 0); grad.addColorStop(0, '#12a37f'); grad.addColorStop(1, '#3b6fd8');
+  x.fillStyle = grad; x.fillRect(0, 0, 240, 64); x.fillStyle = '#fff'; x.font = '20px sans-serif';
+  x.fillText('Nulavio fp surface', 8, 30);
+  x.strokeStyle = 'rgba(255,0,90,.7)'; x.arc(200, 34, 18, 0, 5); x.stroke();
+  const pixels = () => hex(x.getImageData(0, 0, 240, 64).data);
+  const blob = async () => hex(new Uint8Array(await (await new Promise(r => c.toBlob(r))).arrayBuffer()));
+  out.canvas = { pixels: await pixels(), pixelsAgain: await pixels(), dataUrl: await text(c.toDataURL()),
+    dataUrlAgain: await text(c.toDataURL()), blob: await guarded(blob) };
+  out.canvas.offscreen = await guarded(async () => { const o = new OffscreenCanvas(60, 30), y = o.getContext('2d');
+    y.fillStyle = '#12a37f'; y.fillRect(0, 0, 60, 30); y.fillStyle = '#fff'; y.fillRect(7, 5, 21, 9);
+    return hex(y.getImageData(0, 0, 60, 30).data); });
+  out.webgl = await guarded(async () => {
+    const gl = document.getElementById('g').getContext('webgl');
+    if (!gl) return null;
+    const info = gl.getExtension('WEBGL_debug_renderer_info');
+    gl.clearColor(0.2, 0.6, 0.4, 1); gl.clear(gl.COLOR_BUFFER_BIT); gl.enable(gl.SCISSOR_TEST);
+    for (let i = 0; i < 6; i++) {
+      gl.scissor(i * 7, i * 5, 9, 11); gl.clearColor(i / 6, 1 - i / 6, 0.3 + i / 9, 1); gl.clear(gl.COLOR_BUFFER_BIT);
+    }
+    const px = new Uint8Array(48 * 48 * 4); gl.readPixels(0, 0, 48, 48, gl.RGBA, gl.UNSIGNED_BYTE, px);
+    return { vendor: gl.getParameter(gl.VENDOR), renderer: gl.getParameter(gl.RENDERER),
+      unmaskedVendor: info ? gl.getParameter(info.UNMASKED_VENDOR_WEBGL) : null,
+      unmaskedRenderer: info ? gl.getParameter(info.UNMASKED_RENDERER_WEBGL) : null, readPixels: await hex(px) };
+  });
+  const family = new URLSearchParams(location.search).get('font');
+  if (family) {
+    const probe = document.createElement('canvas').getContext('2d');
+    const width = f => { probe.font = '72px ' + f; return probe.measureText('mmmmmmmmmm').width; };
+    out.font = ['monospace', 'serif', 'sans-serif'].some(g => width('"' + family + '", ' + g) !== width(g));
+  }
+  const sample = document.createElement('span'); document.body.append(sample);
+  const colour = name => { sample.style.color = name; return getComputedStyle(sample).color; };
+  out.colours = { accent: colour('AccentColor'), highlight: colour('Highlight'), selected: colour('SelectedItem') };
+  sample.remove();
+  document.getElementById('fp').textContent = JSON.stringify(out);
+})().catch(e => { document.getElementById('fp').textContent = JSON.stringify({ fatal: String(e) }); });
+</script>"""
+
+
 class FixtureServer:
     """Local HTTP fixtures on 127.0.0.1 that record which paths were requested."""
 
@@ -92,6 +147,7 @@ class FixtureServer:
 
     def __init__(self):
         self.hits: list[str] = []
+        self.agents: dict[str, str] = {}  # path (without the query) -> the User-Agent header it was last asked with
         self._lock = threading.Lock()
         outer = self
 
@@ -99,6 +155,7 @@ class FixtureServer:
             def do_GET(self):
                 with outer._lock:
                     outer.hits.append(self.path)
+                    outer.agents[self.path.partition("?")[0]] = self.headers.get("User-Agent", "")
                 if self.path.startswith("/redirect?to=http://"):
                     # Routing fixture (test_routing.py): a redirect onto another site.
                     self.send_response(302)
@@ -198,6 +255,8 @@ class FixtureServer:
                 " document.getElementById('fp').textContent = JSON.stringify(out); })();</script>"
             )
             return page.encode(), html, {}
+        if path == "/fp-surface":
+            return FP_SURFACE_PAGE.encode(), html, {}
         if path == "/tracker.js":
             return b"document.getElementById('state').textContent = 'tracker ran';", "text/javascript", {}
         if path == "/agent-task":
