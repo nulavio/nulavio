@@ -44,7 +44,10 @@ class ComponentGalleryTest(unittest.TestCase):
                 f"    return;"
                 f"  }}"
                 f"  const applied = await {LAYOUT}.apply(window, 'top');"
-                f"  SidebarController._state.updateVisibility(false, false);"
+                # Hide the launcher as its toolbar button would (Firefox 160: userLauncherVisible).
+                f"  const st = SidebarController._state;"
+                f"  if (typeof st.updateVisibility === 'function') st.updateVisibility(false, false);"
+                f"  else st.userLauncherVisible = false;"
                 f"  await SidebarController.waitUntilStable();"
                 f"  document.documentElement.style.minWidth = '0px';"
                 f"  done({{ applied: applied.preset, launcherVisible: SidebarController._state.launcherVisible }});"
