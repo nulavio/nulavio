@@ -1,7 +1,9 @@
 """One template for the security moments (UX4, audit SB-24). Nulavio build only.
 
 Every page that asks for a safety decision opens with the same context line and says why it
-appeared, under the same words, in a "why" disclosure. Pages are opened bare (no request id),
+appeared, under the same words, in a "why" disclosure. The line never repeats the band's
+"Nulavio · …" name or the mark (review 2026-11-09 V4): only the band can be trusted, and pages
+that take a password say to look there. Pages are opened bare (no request id),
 which is enough for the parts of the template that do not depend on the request.
 """
 
@@ -13,6 +15,18 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
 import harness
+
+# The band's name for each kind (NulavioWindow SURFACES), and the kinds where a password is typed.
+SURFACES = {
+    "unlock": "bandSurfaceUnlock",
+    "phone": "bandSurfacePhone",
+    "methods": "bandSurfaceMethods",
+    "request": "bandSurfacePermission",
+    "download": "bandSurfaceDownload",
+    "lookalike": "bandSurfacePassword",
+    "routing": "bandSurfaceRouting",
+}
+SECRET_KINDS = {"unlock", "methods"}
 
 PAGES = {
     "vault/unlock.html": "unlock",
@@ -32,6 +46,8 @@ return {
   kind: line?.dataset.kind ?? null,
   mark: Boolean(line?.querySelector('.moment__mark')),
   text: line?.querySelector('.moment__kind')?.textContent ?? null,
+  line: line?.textContent ?? '',
+  check: document.querySelector('.moment__check')?.textContent ?? null,
   why: why?.querySelector('summary')?.textContent ?? null,
   body: why ? [...why.querySelectorAll('p, li')].map(e => e.textContent).join(' ').length : 0,
 };
@@ -57,8 +73,14 @@ class SecurityMomentsTest(unittest.TestCase):
             state = harness.wait_until(lambda: (s := self.m.execute(STATE))["text"] and s["why"] and s, timeout=15)
             self.assertTrue(state, f"{page}: no context line or no why disclosure: {self.m.execute(STATE)}")
             self.assertEqual(state["kind"], kind, page)
-            self.assertTrue(state["mark"], page)
-            self.assertTrue(state["text"].startswith("Nulavio · "), (page, state["text"]))
+            surface = self.m.execute("return browser.i18n.getMessage(arguments[0]);", [SURFACES[kind]])
+            self.assertFalse(state["mark"], page)
+            self.assertEqual(state["text"], surface, page)
+            self.assertNotIn("Nulavio", state["line"], page)
+            if kind in SECRET_KINDS:
+                self.assertIn(f"“Nulavio · {surface}”", state["check"] or "", page)
+            else:
+                self.assertIsNone(state["check"], page)
             self.assertGreater(state["body"], 20, f"{page}: the why disclosure says nothing")
             seen[page] = state["why"]
         expected = self.m.execute("return browser.i18n.getMessage('momentWhy');")
