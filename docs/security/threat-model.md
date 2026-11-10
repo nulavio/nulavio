@@ -320,12 +320,12 @@ Each scenario lists: assets · adversary · preconditions · trust boundary · i
 |---|---|
 | Assets | A6, then everything users install |
 | Adversary | T-SUPPLY through a pull request; a coding agent misled by content it read (prompt injection) or simply wrong; a stolen maintainer or agent token |
-| Preconditions | Write access to the repository (agents work with the maintainer's token); no branch protection on the current plan (private repository, GitHub Free) |
+| Preconditions | Write access to the repository (agents work with the maintainer's token); branch protection on `main` requires a pull request and four status checks but no approval |
 | Boundary | TB16, TB8 |
 | Impact | Weakened protections, a backdoor or a leaking workflow shipped in a build; secrets read by a workflow pushed to any branch |
-| Preventive | **Now:** [pull request flow](../process/pull-requests.md) and branch naming (convention; opt-in pre-push hook); actions pinned by commit and least-privilege workflow permissions (unit test); fork pull requests get no secrets; the advisory AI review runs from `main` with read-only tools and posts through a fixed script, and is never a required check. **Proposed:** a fine-grained agent token without the Workflows permission and agent permission rules ([agent guardrails](../process/agent-guardrails.md)); branch protection and required checks on GitHub Pro or a public repository |
+| Preventive | **Now:** [pull request flow](../process/pull-requests.md) and branch naming (convention; opt-in pre-push hook); actions pinned by commit and least-privilege workflow permissions (unit test); fork pull requests get no secrets; the advisory AI review runs from `main` with read-only tools and posts through a fixed script, and is never a required check. branch protection on `main` (pull request required, administrators included; four required checks; linear history; no force push). **Proposed:** a fine-grained agent token without the Workflows permission and agent permission rules ([agent guardrails](../process/agent-guardrails.md)); the engine integration result as a required check |
 | Detective | CI on every pull request; the AI review comment, including text that looks like prompt injection; a CI check that reports commits on `main` without a merged pull request (off until `REQUIRE_PR_FOR_MAIN` is set) |
-| Limitations | The maintainer is the only reviewer; nothing on GitHub stops a direct push to `main` today; the AI review can miss problems or be misled; the AI review sends the diff and the files it reads to Anthropic's API |
+| Limitations | The maintainer is the only reviewer and no approval is required, so a token that can push a branch can merge a pull request whose required checks pass; the engine integration result is read by hand; the AI review can miss problems or be misled; the AI review sends the diff and the files it reads to Anthropic's API |
 | Tests | `test_ai_review`, `test_post_ai_review`, `test_repo_hygiene` |
 | Residual | **Medium** |
 

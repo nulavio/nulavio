@@ -114,7 +114,7 @@ Again on 2026-10-27, over the branches then waiting to be merged (85 commits): g
 ## Next steps (not done)
 
 - Verify Opengrep's Sigstore signature, not only its SHA-256, when bumping it (needs a pinned `cosign`).
-- Make `security` a required check once `main` has branch protection (not available for private repositories on the free plan). Until then the job reports problems after the push; it cannot stop one.
+- ~~Make `security` a required check~~: done, it is required by `main`'s branch protection (read 2026-11-10). It still runs after a branch is pushed, so a secret pushed to a branch is on GitHub before the job reports it; only push protection (public repository or Advanced Security) stops that.
 - If the repository becomes public or gets Advanced Security: turn on secret scanning with push protection and private vulnerability reporting, and upload the scanners' SARIF.
 - Run zizmor with `--persona pedantic` in CI once the integration job no longer expands `${{ matrix.image }}` in `run:` blocks.
 - Repository settings (the maintainer's decision; nothing here changes them): require actions pinned by full SHA and allow only GitHub's own actions, so GitHub refuses an unpinned action before it runs, where today `tests/unit/test_repo_hygiene.py` notices it after the commit:

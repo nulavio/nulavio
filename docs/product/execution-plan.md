@@ -28,12 +28,12 @@ Nulavio is complete when all of the following are verified (tests or recorded ev
 
 | Area | State (verified) |
 |---|---|
-| Engine | Firefox 160.0 source build (Track B), 7 patches, rootless container build; Track A launcher over distribution Firefox |
-| Shell | Built-in add-on with privileged modules: new tab, download warning, search, profiles, Smart Profile Routing (links from apps, typed addresses, link menu) |
-| Profiles | Engine profile groups (`SelectableProfileService`); isolation by separate instances and directories; **no encryption at rest yet** |
-| Guard | Launcher pre-launch audit (`guard.py`); refuses profiles with automation prefs (Marionette, remote agent) |
-| Vault, unlock | **Nothing yet** |
-| Automation | Marionette/WebDriver BiDi exist in the engine; Nulavio uses them only in tests on throwaway profiles |
+| Engine | Firefox 160.0 source build (Track B), 9 patches, rootless container build; Track A launcher over distribution Firefox |
+| Shell | Built-in add-on with privileged modules: the window band, new tab and first run, Settings, download warning, search, profiles, Smart Profile Routing, Vault pages, passwords (provider chooser, look-alike warning), Guard review, the assistant and the AI Bridge |
+| Profiles | Engine profile groups (`SelectableProfileService`); isolation by separate instances and directories; templates, temporary profiles; protected profiles are encrypted at rest (Vault) |
+| Guard | Launcher pre-launch audit (`guard.py`); refuses profiles with automation prefs (Marionette, remote agent); at run time, a review page for extensions, certificates and watched prefs changed while the browser was closed (S13) |
+| Vault, unlock | Protected profiles encrypted at rest (gocryptfs, libsodium; ADR 0006), unlocked with a password, the recovery code or the desktop login (system keyring); phone and security key are not offered yet (D10, S10, S11) |
+| Automation | The AI Bridge lets an approved agent work in a profile through the engine's WebDriver BiDi, with per-session permissions, a stop and pause, and a raw mode that the window shows (ADR 0007); Marionette only in tests on throwaway profiles |
 | Tooling on the reference laptop | gocryptfs 2.6.1, cryptsetup, libsodium 1.0.22, TPM 2.0 (`/dev/tpmrm0`, user not in `tss`), Claude Code 2.1.308, Codex CLI 0.164.0, Node 24; no Android SDK, no FIDO tools, no Playwright |
 
 ## Workstreams
@@ -134,11 +134,11 @@ The maintainer's brief: make the experience and look of Nulavio exceptional, wit
 | UX0 | **Record** — done 2026-10-27 | Audit and findings, "before" captures, the three directions and the final one (HTML mockups, rationales, renders), the decision, revised UX principles, this programme | Docs tests green | S |
 | UX1 | **Security, consent and honesty fixes** — **done 2026-10-28** ([CI](https://github.com/caiolombello/nulavio/actions/runs/40696267881), `8dd50fe5908aee17df464c21b1e7eafafde11496`) | See the list below | Real Track B package: 187 integration tests, 13 skips; 586 unit tests, 3 skips; Fedora/Ubuntu CI green | M–L |
 | UX2 | **System** — **done 2026-10-28** ([CI](https://github.com/caiolombello/nulavio/actions/runs/40751057936), `0dd29501fff5156c1c3e10837ed7a12202f439c5`) | Tokens v2, component layers, real gallery and identity migration | 600 unit tests (1 skip), 194 real Track B integration tests (13 skips), 208/208 contrast pairs; Fedora/Ubuntu CI green | L |
-| UX3 | **Window** | See the list below | Security-visibility matrix: each state × each preset × both themes; on screen, opacity 1, `elementFromPoint`, host not truncated | L |
-| UX4 | **Shell pages** | See the list below | Integration tests per page state, both themes; every `data-state` captured | L |
-| UX5 | **Assistant** (Dia-like, under ADR 0007) | See the list below | Assistant tests: chips, drift, private refusal, cancel, stream, truncation, approval in front | L |
-| UX6 | **Safe personalisation** | See the list below | No option can turn a protection off (test over the option list); contrast pairs for every variant | M |
-| UX7 | **Motion and finish** | See the list below | Captures and docs current; reduced-motion test; perf budget recorded | M |
+| UX3 | **Window** — **merged 2026-11-04** (pull request #3, `6e1b349`) | See the list below | Security-visibility matrix: each state × each preset × both themes; on screen, opacity 1, `elementFromPoint`, host not truncated | L |
+| UX4 | **Shell pages** — **merged 2026-11-04** (pull request #3, `6e1b349`) | See the list below | Integration tests per page state, both themes; every `data-state` captured | L |
+| UX5 | **Assistant** (Dia-like, under ADR 0007) — **merged 2026-11-04** (pull request #3, `6e1b349`) | See the list below | Assistant tests: chips, drift, private refusal, cancel, stream, truncation, approval in front | L |
+| UX6 | **Safe personalisation** — **merged 2026-11-04** (pull request #3, `6e1b349`) | See the list below | No option can turn a protection off (test over the option list); contrast pairs for every variant | M |
+| UX7 | **Motion and finish** — **merged 2026-11-04** (pull request #3, `6e1b349`) | See the list below | Captures and docs current; reduced-motion test; perf budget recorded | M |
 
 **UX1 — Security, consent and honesty fixes**
 - **Assistant.** It finds the page in 158+ (AI-01), together with consent bound to a tab (AI-02) and no assistant in private windows (AI-15). The emergency stop also stops Ask, and the approval tab opens in front.
@@ -173,7 +173,7 @@ The maintainer's brief: make the experience and look of Nulavio exceptional, wit
   - the temporary seal and the fullscreen line;
   - the downloads program badge and the Guard bar.
 - **Layout presets.** Set by prefs.
-- **Sidebar tools.** Curated, with the bookmarks bar (D-UX13).
+- **Sidebar tools.** Curated, with the bookmarks bar (D-UX13). Done: the launcher's default tools drop Mozilla's chatbot and synced tabs (`da78ba9`, `test_mozilla_features` 02); the bookmarks bar ships hidden (D-UX13).
 
 **UX3A — band and safety grammar (rebuilt and locally verified, 2026-10-29).**
 The trusted identity/protection band, principal-derived system-page header,
@@ -261,6 +261,7 @@ Publication/exact-SHA remote CI and human approval are separate gates. UX3 is
 not complete: D-UX2's safe new-profile adoption/migration and first-run choice
 belong to the next slice; D-UX13, D-UX17, D-UX23, extra sidebar curation,
 Shell/assistant redesign, command palette and split view remain open.
+(Later: D-UX13, D-UX23, the sidebar tools and the assistant (UX5) shipped; D-UX17's title option, the command palette and split view are still open.)
 
 **UX3E — Lateral for new profiles and the first-run choice (locally verified, 2026-11-02).** On base `5a98bd703233` (D-UX2):
 - **New profiles.** A genuinely new profile starts in Lateral, and its first new tab asks once, in pt-BR and en-US, whether to keep it, with the three presets live and synced with Settings.
