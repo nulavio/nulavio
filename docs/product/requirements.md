@@ -20,9 +20,9 @@ Status legend: **Done** (implemented and verified by a test or recorded evidence
 | FR-12 | Bitwarden official extension works | **Preview**: install, signature, background, popup Done; desktop-app host name verified in Bitwarden's source. No manual certification planned by the maintainer | `test_password_extensions` |
 | FR-13 | Choose the credential provider; only one autofills | **Done (Track B)**: Settings → Passwords (real state, pinned official extension installed after one confirmation, browser prompts off; disable integration keeps the extension). Track A: CLI `provider set` | provider unit tests, `test_passwords` |
 | FR-14 | User can install their own extensions | **Done** (engine/AMO) | E4 normal installs |
-| FR-15 | Settings essentials explained | **Preview** (`nulavio prefs explain`; engine settings UI) | — |
+| FR-15 | Settings essentials explained | **Done** (Track B): Nulavio Settings, one section per subject, each saying how far a change reaches (this profile or all), with the result next to its control. Track A: `nulavio prefs explain` | `test_settings_ui` 01–09 |
 | FR-16 | Private window | **Done** (engine; `nulavio run --private`) | engine unit test |
-| FR-17 | Onboarding | **Prototype** (CLI plan + flows in [ux-flows](../brand/ux-flows.md)) | — |
+| FR-17 | Onboarding | **Done** (Track B): a new profile starts in Lateral and the new tab asks one thing at a time (layout, then protections), skippable, never again; not in an AI workspace or a temporary profile. Open: a brand-new profile's first start loses a link given on the command line (execution plan, K3) | `test_newtab_ui` 05–07, `test_layout_presets` (first-run choice) |
 | FR-18 | Privacy dashboard / per-site panel | **Done (Track B)**: the engine's site panel (real blocked-tracker log, per-site switch, clear site data) and Settings → Site exceptions (all exceptions, removable; uBlock Origin's own list opened, never edited) | `test_privacy` |
 | FR-19 | Environment and profile diagnostics | **Done** (`nulavio doctor`) | manual |
 | FR-20 | Desktop integration without root | **Done** (`nulavio desktop install/uninstall`) | desktop unit tests |
@@ -49,10 +49,10 @@ Status legend: **Done** (implemented and verified by a test or recorded evidence
 | SEC-07 | Pinned, verified inputs (extensions, source releases) | **Done** | integrity tests, `verify_firefox_release.py` |
 | SEC-08 | Crashes never auto-submitted | **Done** | `test_02` |
 | SEC-09 | Conservative failure: refuse to launch weakened profiles | **Done** (Guard critical) | `test_10` |
-| SEC-10 | Never fill credentials without origin validation and user action | **Planned** (provider certification + flow D) | — |
+| SEC-10 | Never fill credentials without origin validation and user action | **Partly done.** Origin: the engine and the supported providers fill only on the saved origin, and Track B warns on a look-alike login page before anything is typed (flow D). User action: **Planned**; the browser's own password manager still fills on page load (`signon.autofillForms`, the engine's default for that provider), and the provider checklist is pending | `test_passwords` 01–03, 06 |
 | SEC-11 | Contextual, revocable device permissions | **Done** upstream; dashboard Planned | — |
 | SEC-12 | SBOM | **Done** (CycloneDX for the preview, each package and the Companion app; each pinned component with a purl, and a CPE where the NVD has one) | `scripts/release/sbom.py`, `test_sbom` |
-| SEC-13 | Signed artefacts and secure updates | **Planned** (Track B) | — |
+| SEC-13 | Signed artefacts and secure updates | **Blocked** (no release key or package host yet, maintainer). Ready: RPM/DEB built from the release build, a signed repository that refuses unsigned packages and tampered metadata (throwaway key), SBOM per package; updates come only from the distribution package (no in-app updater) | `scripts/release/test_signed_repo.sh` (run on the 159.0.1 release build, pull request #17) |
 | SEC-14 | What you type in the address bar is not sent anywhere without consent; consent is per search provider | **Done (Track B)**; Track A: remote suggestions and trending off (one global switch upstream) | `test_search` 02, 03, 05 |
 | SEC-15 | Profiles never share cookies or site storage; a running profile is not deleted; switching never starts a duplicate instance | **Done (Track B)** | `test_profiles` 05 |
 | SEC-16 | An unlock opens a profile only when a method releases its key: no method, a phone approval without the key, or a copy of the files does not reveal it; requests expire, are one-shot and signed; nothing secret in logs or files | **Done in the prototype (S3, simulated phone)**; applies to real profiles from S5 | `test_vault` |
@@ -65,8 +65,8 @@ Status legend: **Done** (implemented and verified by a test or recorded evidence
 
 | ID | Requirement | Status |
 |---|---|---|
-| NFR-01 | Accessibility: keyboard, screen readers, scaling, contrast WCAG AA | Tokens AA-verified (78 pairs); engine a11y upstream; Nulavio pages semantic HTML |
-| NFR-02 | Performance comparable to the engine (no extra processes at runtime) | Launcher exits via `exec`; zero runtime overhead |
+| NFR-01 | Accessibility: keyboard, screen readers, scaling, contrast WCAG AA | Tokens AA-verified (306 pairs, every appearance variant, `scripts/brand/contrast.py`); rendered window contrast, focus and target size tested; reduced motion respected. Pending: manual Orca pass, forced colours on a real high-contrast theme, 125/150 % on real hardware ([accessibility](../design/accessibility.md)) |
+| NFR-02 | Performance comparable to the engine (no extra processes at runtime) | Track A: the launcher exits via `exec`. Track B: the Shell runs inside the engine (built-in add-on, no extra process); frame-time budget measured against the previous build (sidebar, dialog, tab switch, new tab, idle), with two documented exceptions ([UX7 budget](../design/design-system.md#ux7-motion-and-performance-budget-2026-11-04)) |
 | NFR-03 | Zero third-party runtime dependencies in the launcher | Done (Python stdlib; no pip packages). The Vault loads the system libsodium through `ctypes` (decision D1), listed in the SBOM |
 | NFR-04 | Reproducible brand assets | Done (generators + determinism tests) |
 | NFR-05 | Works offline after setup | Done (start page local; uBO ships lists) |

@@ -6,7 +6,7 @@ It complements the [pull request flow](pull-requests.md).
 
 ## The problem
 
-Coding agents work as the maintainer. Their commits carry his name, and `gh` on this machine holds his classic token with the scopes `repo`, `workflow`, `gist` and `read:org`, valid for every repository he can reach. So an agent that makes a mistake, or that was steered by text it read (a web page, an issue, a file in a pull request), can push to `main`, change workflows and with them how secrets are used, merge or approve, and GitHub cannot tell it apart from him. With a private repository on GitHub Free there is no branch protection to stop any of this.
+Coding agents work as the maintainer. Their commits carry his name, and `gh` on this machine holds his classic token with the scopes `repo`, `workflow`, `gist` and `read:org`, valid for every repository he can reach. So an agent that makes a mistake, or that was steered by text it read (a web page, an issue, a file in a pull request), can push to `main`, change workflows and with them how secrets are used, merge or approve, and GitHub cannot tell it apart from him. Branch protection on `main` (read 2026-11-10) now refuses a direct push and a merge whose required checks fail; it asks for no approval, so the rest still holds.
 
 The layers below go from the only one GitHub enforces to the ones that only prevent accidents.
 
@@ -34,7 +34,7 @@ export GH_CONFIG_DIR="$HOME/.config/gh-agent"
 
 What changes: agents can no longer add a workflow that reads secrets, or change CI or the AI review workflow. A change to a workflow goes into the pull request description as a patch, and the maintainer applies and pushes it with his own token. The classic token stays for his own interactive use.
 
-What it does not change: agents can still push to `main` (that needs Contents write, which they need for branches). Only branch protection stops that, on GitHub Pro or a public repository. Any program running as the same user can read the token file (trust boundary TB6).
+What it does not change: agents can still merge a pull request whose required checks pass (that needs Contents write, which they need for branches); only the rule never to merge stops that. Branch protection already refuses a direct push to `main`, with either token. Any program running as the same user can read the token file (trust boundary TB6).
 
 Later, on GitHub Pro: a separate machine account for agents (GitHub's terms allow one per person), so that authorship and approvals mean something.
 
@@ -116,6 +116,6 @@ Settings only the maintainer can change:
 ## What this still does not stop
 
 - An agent that still uses the classic token.
-- A push to `main` with the fine-grained token (needs branch protection).
+- A merge by an agent: branch protection asks for no approval, so any token that can push a branch can merge a pull request with green required checks.
 - Programs running as the same user reading tokens (TB6, see [residual risks](../security/residual-risks.md)).
 - An agent steered within what these layers allow. Reading every pull request before merging stays the main control.
