@@ -9,3 +9,5 @@
 0006-xre-use-the-system-mozilla-directory-the-distribution-has.patch
 0007-downloads-never-open-a-program-from-the-downloads-ui.patch
 0008-sidebar-let-prefs-set-the-launcher-animation-curve.patch
+0009-http-keep-firefox-as-the-name-in-the-user-agent.patch
+0010-gfx-apply-the-font-visibility-lists-on-every-fedora.patch
