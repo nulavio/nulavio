@@ -49,6 +49,8 @@ Each item was checked again on 2026-10-27 against the Nulavio build of Firefox 1
 
 ## Public alpha (decided 2026-11-04)
 
+**Published on 2026-11-10: [v160.0-0.1](https://github.com/nulavio/nulavio/releases/tag/v160.0-0.1)** (Firefox 160.0, Fedora, signed dnf repository at `packages.nulavio.net`).
+
 The maintainer's decisions [D8–D11](execution-plan.md#decisions-for-the-public-release-maintainer-2026-11-04): a public alpha first, Fedora only through the signed dnf repository; R15 accepted; phone and FIDO2 unlock out of 1.0; the independent audit limited to the Vault and the release chain.
 
 What is in place for it (2026-11-04): `publish_release.sh` signs only what a rehearsal of reviewed, committed history checked and stages the repository and the GitHub release assets; `make_release_key.sh` creates the key and puts only its public part in the repository; the site's download pages (`/baixar/`, `/en/download/`) appear only once `packaging/release.json` names a version and a key the repository holds ([build](../architecture/build.md#publishing-a-release)).

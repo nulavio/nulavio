@@ -14,7 +14,7 @@
   <a href="LICENSE"><img alt="Licença: MPL-2.0" src="https://img.shields.io/badge/licen%C3%A7a-MPL--2.0-0F7A68"></a>
   <img alt="Plataforma: Linux" src="https://img.shields.io/badge/plataforma-Linux-0B1623">
   <img alt="Motor: Firefox 160" src="https://img.shields.io/badge/motor-Firefox%20160-0F7A68">
-  <img alt="Status: pré-alpha" src="https://img.shields.io/badge/status-pr%C3%A9--alpha-B45309">
+  <a href="https://github.com/nulavio/nulavio/releases/latest"><img alt="Release: alpha" src="https://img.shields.io/github/v/release/nulavio/nulavio?include_prereleases&label=alpha&color=B45309"></a>
 </p>
 
 <p align="center">
@@ -46,22 +46,20 @@ O Nulavio é um navegador de código aberto para Linux, compilado a partir do c�
 
 ## Status
 
-**Pré-alpha.** A primeira alpha pública sai para o **Fedora**, por um repositório dnf assinado; o Ubuntu (APT) vem depois. Desbloquear um perfil pelo celular ou por uma chave de segurança FIDO2 fica para depois da 1.0 e aparece no navegador como "ainda não disponível". Os [critérios de release](docs/product/release-criteria.md) mostram o que está pronto e o que falta, e o [roadmap](docs/product/roadmap.md), as fases.
+**Alpha.** A primeira alpha pública, [v160.0-0.1](https://github.com/nulavio/nulavio/releases/tag/v160.0-0.1) (Firefox 160.0), já saiu para o **Fedora**, por um repositório dnf assinado; o Ubuntu (APT) vem depois. Desbloquear um perfil pelo celular ou por uma chave de segurança FIDO2 fica para depois da 1.0 e aparece no navegador como "ainda não disponível". Os [critérios de release](docs/product/release-criteria.md) mostram o que está pronto e o que falta, e o [roadmap](docs/product/roadmap.md), as fases.
 
 O Nulavio acompanha o canal de releases do Firefox e busca publicar cada atualização de segurança do Firefox em até 24 horas, 72 no máximo ([política de atualização](docs/architecture/update-policy.md)).
 
 ## Instalar
 
-> A primeira alpha está sendo publicada. Até lá, [entre na lista de espera](https://nulavio.net/) e você recebe um e-mail quando o seu sistema for suportado.
-
-Com a primeira alpha, no Fedora:
+No Fedora 44 ou mais novo, x86_64:
 
 ```sh
 sudo dnf config-manager addrepo --from-repofile=https://packages.nulavio.net/rpm/nulavio.repo
 sudo dnf install nulavio
 ```
 
-Os pacotes e os metadados do repositório são assinados com a chave OpenPGP `298A 9093 BAAB B26F 79BB  29F4 BF47 E5FA 9EDB 8DB1` ([chave pública](https://nulavio.net/keys/nulavio-packages.asc)). Cada release vem com um SBOM CycloneDX.
+Os pacotes e os metadados do repositório são assinados com a chave OpenPGP `298A 9093 BAAB B26F 79BB  29F4 BF47 E5FA 9EDB 8DB1` ([chave pública](https://nulavio.net/keys/nulavio-packages.asc)). Cada [release](https://github.com/nulavio/nulavio/releases) vem com um SBOM CycloneDX e um `SHA256SUMS` assinado. Outros sistemas: [entre na lista de espera](https://nulavio.net/) e você recebe um e-mail quando o seu for suportado.
 
 ## Compilar a partir do código
 

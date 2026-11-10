@@ -14,7 +14,7 @@
   <a href="LICENSE"><img alt="License: MPL-2.0" src="https://img.shields.io/badge/license-MPL--2.0-0F7A68"></a>
   <img alt="Platform: Linux" src="https://img.shields.io/badge/platform-Linux-0B1623">
   <img alt="Engine: Firefox 160" src="https://img.shields.io/badge/engine-Firefox%20160-0F7A68">
-  <img alt="Status: pre-alpha" src="https://img.shields.io/badge/status-pre--alpha-B45309">
+  <a href="https://github.com/nulavio/nulavio/releases/latest"><img alt="Release: alpha" src="https://img.shields.io/github/v/release/nulavio/nulavio?include_prereleases&label=alpha&color=B45309"></a>
 </p>
 
 <p align="center">
@@ -46,22 +46,20 @@ Nulavio is an open-source desktop browser for Linux, built from Mozilla's signat
 
 ## Status
 
-**Pre-alpha.** The first public alpha ships for **Fedora**, through a signed dnf repository; Ubuntu (APT) follows. Unlocking a profile with a phone or a FIDO2 security key comes after 1.0 and is shown as "not available yet" in the browser. The [release criteria](docs/product/release-criteria.md) list what is done and what is left, and the [roadmap](docs/product/roadmap.md) the phases.
+**Alpha.** The first public alpha, [v160.0-0.1](https://github.com/nulavio/nulavio/releases/tag/v160.0-0.1) (Firefox 160.0), is out for **Fedora**, through a signed dnf repository; Ubuntu (APT) follows. Unlocking a profile with a phone or a FIDO2 security key comes after 1.0 and is shown as "not available yet" in the browser. The [release criteria](docs/product/release-criteria.md) list what is done and what is left, and the [roadmap](docs/product/roadmap.md) the phases.
 
 Nulavio follows Firefox's release channel and aims to ship each Firefox security release within 24 hours, 72 at most ([update policy](docs/architecture/update-policy.md)).
 
 ## Install
 
-> The first alpha is being published. Until it is, [join the waitlist](https://nulavio.net/en/) and you get an e-mail when your system is supported.
-
-With the first alpha, on Fedora:
+On Fedora 44 or later, x86_64:
 
 ```sh
 sudo dnf config-manager addrepo --from-repofile=https://packages.nulavio.net/rpm/nulavio.repo
 sudo dnf install nulavio
 ```
 
-Packages and the repository metadata are signed with the OpenPGP key `298A 9093 BAAB B26F 79BB  29F4 BF47 E5FA 9EDB 8DB1` ([public key](https://nulavio.net/keys/nulavio-packages.asc)). Every release comes with a CycloneDX SBOM.
+Packages and the repository metadata are signed with the OpenPGP key `298A 9093 BAAB B26F 79BB  29F4 BF47 E5FA 9EDB 8DB1` ([public key](https://nulavio.net/keys/nulavio-packages.asc)). Every [release](https://github.com/nulavio/nulavio/releases) comes with a CycloneDX SBOM and a signed `SHA256SUMS`. Other systems: [join the waitlist](https://nulavio.net/en/) and you get an e-mail when yours is supported.
 
 ## Build from source
 

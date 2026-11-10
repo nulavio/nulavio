@@ -599,10 +599,13 @@ class DownloadPagesTest(unittest.TestCase):
     def test_no_release_no_download_pages(self):
         self.assertIsNone(build_site.release_values(self.source("none", "", "", None)))
         self.assertIsNone(build_site.release_values(self.source("no-key", "159.0.1-0.1", "", None)))
-        out = self.tmp / "unreleased"
+        # The real tree: the pages follow packaging/release.json (out before the first release,
+        # in since v160.0-0.1), and a named release must have its key in the repository.
+        released = build_site.release_values(ROOT) is not None
+        out = self.tmp / "current"
         files = build_site.build(out)
         for page in build_site.DOWNLOAD_PAGES:
-            self.assertNotIn(page, files)
+            self.assertEqual(page in files, released, page)
         self.assertTrue((out / "en" / "index.html").exists())
 
     def test_the_key_must_match_the_fingerprint(self):
