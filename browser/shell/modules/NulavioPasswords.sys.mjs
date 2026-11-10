@@ -27,6 +27,8 @@ ChromeUtils.defineESModuleGetters(lazy, {
 const DATA_URL = "resource://builtin-addons/nulavio-shell/shared/providers.json";
 const ORDER = ["builtin", "proton-pass", "keepassxc", "bitwarden"];
 export const PREF_DISMISSED = "nulavio.passwords.lookalikeDismissed";
+// The engine's own permission name (LoginManager.sys.mjs); test_vault_ui checks it still decides.
+const PERMISSION_SAVE_LOGINS = "login-saving";
 const LOGIN_WORDS = ["login", "signin", "secure", "account", "verify", "update", "support", "auth", "conta", "seguro", "acesso", "entrar", "senha"];
 
 export class PasswordsError extends Error {
@@ -291,6 +293,21 @@ class Passwords {
       return { suspicious: false };
     }
     return { suspicious: true, site: displayHost(siteOf(parsed.hostname)), similar };
+  }
+
+  /** Nulavio's own pages take a protected profile's password (unlock, protection, phone). The engine's
+     password manager must never offer to keep it: it would copy that password into the logins of the
+     profile that happens to be open, which may have no protection at all. Saving is turned off for the
+     Shell's origin, the exception a person sets with "never save for this site". The engine checks it
+     before a submitted form and before an edited password field (LoginManagerParent), and offers no
+     generated password where saving is off. Set again at every start, so removing the exception in
+     the engine's settings does not last. The permission service is used directly: Services.logins
+     would load the password manager during startup. */
+  excludeShellPages(origin) {
+    const principal = Services.scriptSecurityManager.createContentPrincipal(Services.io.newURI(origin), {});
+    if (Services.perms.testExactPermissionFromPrincipal(principal, PERMISSION_SAVE_LOGINS) !== Services.perms.DENY_ACTION) {
+      Services.perms.addFromPrincipal(principal, PERMISSION_SAVE_LOGINS, Services.perms.DENY_ACTION);
+    }
   }
 
   /** Watch password fields in web pages (top documents only), through the engine's window actors. */
