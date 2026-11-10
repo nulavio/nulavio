@@ -30,6 +30,10 @@ const bandSheet = Services.io.newURI("resource://builtin-addons/nulavio-shell/sh
 // about: URLs inside the sheet, so web pages never see it.
 const inContent = Services.io.newURI("resource://builtin-addons/nulavio-shell/shared/in-content.css");
 const AREA = "nulavio-band";
+// The engine calls NulavioWindow.prepareWindow(window) from this category for each new browser
+// window, before CustomizableUI handles it (browser-init.js onDOMContentLoaded).
+const EARLY_WINDOW = "browser-window-domcontentloaded-before-tabbrowser";
+const EARLY_ENTRY = "resource://builtin-addons/nulavio-shell/modules/NulavioWindow.sys.mjs#band";
 const WIDGET = "nulavio-band-widget";
 const QUICK_ACTION = "nulavio-assistant"; // the address bar quick action (UX5-H)
 // UX6 (D8): Nulavio's other quick actions after ">". None of them unlocks, resumes, grants or turns
@@ -156,6 +160,10 @@ class WindowUI {
     }
     const cui = lazy.CustomizableUI;
     cui.registerArea(AREA, { type: cui.TYPE_TOOLBAR, defaultPlacements: [WIDGET], defaultCollapsed: false });
+    // Review 2026-11-09 F2: CustomizableUI builds every registered toolbar area when a window's
+    // DOM has loaded. Without the band's toolbar in it by then, its handler threw and skipped the
+    // rest of its work (the vertical tab strip's setup) in every window after the first.
+    Services.catMan.addCategoryEntry(EARLY_WINDOW, EARLY_ENTRY, "NulavioWindow.prepareWindow", false, true);
     cui.createWidget({
       id: WIDGET, type: "custom", defaultArea: AREA, removable: false, overflows: false,
       localized: false, label: "Nulavio", onBuild: doc => {
@@ -317,6 +325,26 @@ class WindowUI {
     };
   }
 
+  /** For each new browser window, before CustomizableUI builds its toolbars: the band's toolbar. */
+  prepareWindow(win) {
+    const doc = win.document;
+    if (this.#started && doc.documentElement.getAttribute("windowtype") === "navigator:browser" && !doc.getElementById(AREA)) {
+      this.#insertToolbar(doc);
+    }
+  }
+
+  #insertToolbar(doc) {
+    const bar = doc.createXULElement("toolbar");
+    bar.id = AREA;
+    bar.setAttribute("customizable", "true");
+    bar.setAttribute("mode", "icons");
+    bar.setAttribute("defaultset", WIDGET);
+    bar.setAttribute("toolbarname", "Nulavio");
+    // Above both tab orientations; insertion leaves every native node in place.
+    doc.getElementById("navigator-toolbox").insertBefore(bar, doc.getElementById("TabsToolbar"));
+    return bar;
+  }
+
   #attach(win) {
     if (!this.#started || this.#windows.has(win) || !win.gBrowser || win.closed) {
       return;
@@ -336,14 +364,9 @@ class WindowUI {
       sheet.href = bandSheet.spec;
       doc.head.append(sheet);
     }
-    const bar = doc.createXULElement("toolbar");
-    bar.id = AREA;
-    bar.setAttribute("customizable", "true");
-    bar.setAttribute("mode", "icons");
-    bar.setAttribute("defaultset", WIDGET);
-    bar.setAttribute("toolbarname", "Nulavio");
-    // Above both tab orientations; insertion leaves every native node in place.
-    win.gNavToolbox.insertBefore(bar, doc.getElementById("TabsToolbar"));
+    // The toolbar is usually there already (prepareWindow); a window that was open before the
+    // Shell started gets it now. Registering a toolbar CustomizableUI already built does nothing.
+    const bar = doc.getElementById(AREA) ?? this.#insertToolbar(doc);
     lazy.CustomizableUI.registerToolbarNode(bar);
     const compact = this.#build(doc, true);
     const fullscreen = element(doc, "div");
@@ -846,6 +869,7 @@ class WindowUI {
     for (const win of this.#windows.keys()) {
       this.#detach(win);
     }
+    Services.catMan.deleteCategoryEntry(EARLY_WINDOW, EARLY_ENTRY, false);
     lazy.CustomizableUI.destroyWidget(WIDGET);
     lazy.CustomizableUI.unregisterArea(AREA);
     for (const uri of [sidebarFocus, inContent]) {

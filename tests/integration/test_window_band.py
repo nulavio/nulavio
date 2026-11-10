@@ -268,6 +268,67 @@ class WindowBandTest(unittest.TestCase):
         )
         self.assertEqual(result, {"ok": {"before": [1, 1], "stopped": [0, 0], "restarted": [1, 1]}})
 
+    def test_03b_a_new_window_has_the_band_before_customizableui_builds_it(self):
+        """Review 2026-11-09 F2: CustomizableUI builds every registered toolbar when a window's DOM has
+        loaded. The band's toolbar must already be there, or its handler throws and leaves the vertical
+        tab strip half set up (tabbrowser-tabs stays removable) in every window after the first."""
+        result = chrome_async(
+            self.m,
+            """
+          const wasVertical = Services.prefs.getBoolPref('sidebar.verticalTabs');
+          Services.prefs.setBoolPref('sidebar.verticalTabs', true);
+          const errors = [];
+          const listener = {observe(message) {
+            const text = String(message.message ?? message);
+            if (/handleNewBrowserWindow|aToolbar is null/.test(text)) errors.push(text.slice(0, 200));
+          }};
+          // Module console.error calls reach the Console API storage, not the console service.
+          const storage = Cc['@mozilla.org/consoleAPI-storage;1'].getService(Ci.nsIConsoleAPIStorage);
+          const api = event => listener.observe({message: (event.arguments ?? []).map(a => String(a?.message ?? a)).join(' ')});
+          Services.console.registerListener(listener);
+          storage.addLogEventListener(api, Services.scriptSecurityManager.getSystemPrincipal());
+          let win;
+          try {
+            win = OpenBrowserWindow();
+            await new Promise(resolve => {
+              const obs = subject => { if (subject === win) {
+                Services.obs.removeObserver(obs, 'browser-delayed-startup-finished'); resolve();
+              } };
+              Services.obs.addObserver(obs, 'browser-delayed-startup-finished');
+            });
+            await new Promise(r => win.setTimeout(r, 500));
+            const doc = win.document, tabs = doc.getElementById('tabbrowser-tabs');
+            const band = doc.getElementById('nulavio-band');
+            return {
+              errors,
+              band: doc.querySelectorAll('#nulavio-band').length,
+              beforeTabsToolbar: band?.nextElementSibling?.id ?? null,
+              widget: !!band?.querySelector('#nulavio-band-widget'),
+              tabsRemovable: tabs.getAttribute('removable'),
+              tabsSkipped: tabs.hasAttribute('skipintoolbarset'),
+            };
+          } finally {
+            Services.console.unregisterListener(listener);
+            storage.removeLogEventListener(api);
+            win?.close();
+            Services.prefs.setBoolPref('sidebar.verticalTabs', wasVertical);
+          }
+        """,
+        )
+        self.assertEqual(
+            result,
+            {
+                "ok": {
+                    "errors": [],
+                    "band": 1,
+                    "beforeTabsToolbar": "TabsToolbar",
+                    "widget": True,
+                    "tabsRemovable": "false",
+                    "tabsSkipped": False,
+                }
+            },
+        )
+
     def test_04_themes_orientation_density_narrow_scaling_and_fullscreen(self):
         shots = harness.artifacts_dir() / "window-band"
         shots.mkdir(parents=True, exist_ok=True)
