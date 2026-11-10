@@ -6,6 +6,7 @@ import itertools
 import json
 import os
 import subprocess
+import tempfile
 import threading
 from pathlib import Path
 
@@ -23,7 +24,8 @@ class McpClient:
         self.process = subprocess.Popen(
             [str(ROOT / "bin" / "nulavio"), "ai", "serve", *args],
             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-            env={"PATH": os.environ.get("PATH", ""), "HOME": os.environ.get("HOME", ""), **env},
+            # TMPDIR too: the bridge makes its disposable workspaces there, and the tests look for them in their own.
+            env={"PATH": os.environ.get("PATH", ""), "HOME": os.environ.get("HOME", ""), "TMPDIR": tempfile.gettempdir(), **env},
         )  # fmt: skip
         self._ids = itertools.count(1)
         self.stderr: list[str] = []

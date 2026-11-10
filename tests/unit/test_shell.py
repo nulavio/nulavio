@@ -101,6 +101,21 @@ class LocaleTest(unittest.TestCase):
         referenced |= {m[6:-2] for m in re.findall(r"__MSG_[A-Za-z0-9]+__", json.dumps(make_shell.manifest()))}
         self.assertEqual(referenced - keys, set())
 
+    # design-system.md, Calmaria: no Unicode pseudo-icons in messages or in what the pages draw. They
+    # changed with the desktop font and were read aloud; states use SVG icons and words.
+    PSEUDO_ICONS = "◇⌑◷◈▤⯃⚠■Ⅱ✓●▸"
+
+    def test_no_unicode_pseudo_icons(self):
+        found = []
+        for name in ("en", "pt_BR"):
+            for key, entry in locale(name).items():
+                found += [f"{name}:{key}" for ch in self.PSEUDO_ICONS if ch in entry["message"]]
+        for path in [*SHELL.rglob("*.js"), *SHELL.rglob("*.mjs"), *SHELL.rglob("*.html"), *SHELL.rglob("*.css")]:
+            code = re.sub(r"/\*.*?\*/|<!--.*?-->", "", path.read_text(encoding="utf-8"), flags=re.S)
+            code = re.sub(r"(^|\s)//.*", "", code)  # line comments (not "https://")
+            found += [f"{path.relative_to(SHELL)}:{ch}" for ch in self.PSEUDO_ICONS if ch in code]
+        self.assertEqual(found, [])
+
 
 MODULES = SHELL / "modules"
 

@@ -134,7 +134,7 @@ class LayoutPresetsTest(unittest.TestCase):
                   const s=SidebarController.getUIState(), tabs=gBrowser.tabContainer;
                   const r=tabs.getBoundingClientRect();
                   return {orientation:tabs.getAttribute('orient'),parent:tabs.parentElement.id,
-                    expanded:s.launcherExpanded,visible:s.launcherVisible,w:r.width,h:r.height,
+                    expanded:s.launcherExpanded,visible:SidebarController._state.launcherVisible,w:r.width,h:r.height,
                     hover:document.documentElement.hasAttribute('sidebar-expand-on-hover')};
                 """)
                 self.assertEqual(native["orientation"], "horizontal" if preset == "top" else "vertical")
@@ -349,10 +349,10 @@ class LayoutPresetsTest(unittest.TestCase):
                         {"surface": surface, "preset": preset, "delay_ms": delay, "settled_s": round(time.monotonic() - start, 2)}
                     )
                     self.assertEqual(self.state()["preset"], preset)
-                    self.assertEqual(
-                        self.m.chrome("return [...Services.wm.getEnumerator('navigator:browser')].filter(w=>!w.closed).length;"),
-                        1,
-                    )
+                    # The test closes the window itself, delay_ms after the write; on Firefox 160 the
+                    # choice can settle before that, so wait for the close it scheduled.
+                    open_windows = "return [...Services.wm.getEnumerator('navigator:browser')].filter(w=>!w.closed).length;"
+                    self.assertTrue(harness.wait_until(lambda js=open_windows: self.m.chrome(js) == 1, 5))
                     error = SURFACE_STATUS[group].replace("-current", "-error")
                     self.assertEqual(
                         self.m.execute("return document.querySelector(arguments[0]).textContent.trim();", [error]), ""
@@ -634,7 +634,7 @@ class LayoutPresetsTest(unittest.TestCase):
             second_init = self.m.chrome("""
               const s=SidebarController.getUIState();
               return {hover:document.documentElement.hasAttribute('sidebar-expand-on-hover'),
-                visible:s.launcherVisible,expanded:s.launcherExpanded,
+                visible:SidebarController._state.launcherVisible,expanded:s.launcherExpanded,
                 orient:gBrowser.tabContainer.getAttribute('orient')};
             """)
             self.assertEqual(
