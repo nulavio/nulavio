@@ -1,6 +1,6 @@
 # Pull requests, branches and the advisory AI review
 
-Status: convention adopted 2026-10-27. On the current GitHub plan (private repository, GitHub Free) most of it is **advisory**: the table under [What is enforced](#what-is-enforced-and-what-is-advisory) says which parts GitHub itself enforces.
+Status: convention adopted 2026-10-27. `main` has branch protection (settings read from GitHub on 2026-11-10). The table under [What is enforced](#what-is-enforced-and-what-is-advisory) says which parts GitHub enforces and which stay advisory.
 
 In short:
 
@@ -45,11 +45,11 @@ Pushes to branches cost no Actions minutes: CI runs on pushes to `main` and on p
 
 | Control | Today | What enforces it |
 |---|---|---|
-| Changes reach `main` only through a pull request | **Advisory** | Convention; the pre-push hook (opt-in, skipped by `git push --no-verify`); agent permission rules ([proposal](agent-guardrails.md)) |
-| A commit that reached `main` without a merged pull request is reported | **Ready, off** | Workflow `main-via-pr.yml` ("main changed only through merged pull requests"), on when the repository variable `REQUIRE_PR_FOR_MAIN` is `true` (set it after adopting this flow, or every direct push fails CI) |
-| CI must pass before merging | **Advisory** | The maintainer reads CI. Required status checks need branch protection, which this plan does not offer for private repositories |
-| A person approves | **Advisory** | Only the maintainer merges. `GITHUB_TOKEN` cannot approve pull requests (repository setting) |
-| Code owners review their paths | **Documentation** | [`.github/CODEOWNERS`](../../.github/CODEOWNERS) has no effect on this plan |
+| Changes reach `main` only through a pull request | **Enforced by GitHub** | Branch protection on `main`: a pull request is required, administrators included; no force pushes or deletion; linear history (squash merges only, head branches deleted after merging) |
+| A commit that reached `main` without a merged pull request is reported | **On** | Workflow `main-via-pr.yml` ("main changed only through merged pull requests"); the repository variable `REQUIRE_PR_FOR_MAIN` is `true` |
+| CI must pass before merging | **Enforced for four checks** | Required status checks, branch up to date with `main`: "lint, unit tests, generated files, SBOM", "security scanners (…)", "Companion app (lint, release build)" and "does this change need the engine integration run". The engine integration result itself is not required yet: the maintainer reads it (see [Upgrading the plan](#if-the-plan-changes)) |
+| A person approves | **Advisory** | Branch protection asks for no approval (one maintainer, whose account the agents also use). Only the maintainer merges, by this convention. Open review conversations must be resolved before merging. `GITHUB_TOKEN` cannot approve pull requests (repository setting) |
+| Code owners review their paths | **Documentation** | [`.github/CODEOWNERS`](../../.github/CODEOWNERS): code-owner review is not a merge requirement |
 | AI review | **Advisory, never required** | [`ai-review.yml`](../../.github/workflows/ai-review.yml); it can miss problems and can be misled |
 | Agents cannot change workflows | **Proposed** | A fine-grained token without the Workflows permission ([proposal](agent-guardrails.md)); GitHub enforces it once agents use it |
 | Actions pinned by commit SHA, least-privilege permissions | **Enforced in the repository** | `tests/unit/test_repo_hygiene.py` in CI; the matching GitHub setting is a maintainer item ([proposal](agent-guardrails.md#5-repository-settings)) |
@@ -135,7 +135,7 @@ When Mozilla publishes a security release, the [update policy](../architecture/u
 
 ### GitHub Pro (repository stays private)
 
-- A ruleset on `main`: require a pull request; require the status checks "lint, unit tests, generated files, SBOM", "Companion app (lint, release build)", "security scanners (…)" and the engine integration result, never "AI review (advisory)". A matrix job skipped by the Markdown-only gate reports no per-image check name, so first add a small job that needs `changes` and `integration` and fails unless `changes` succeeded and `integration` succeeded or was skipped, and require that job; linear history; block force pushes and deletion; let only the maintainer bypass it (for the update deadline).
+- Protection on `main` (in place as branch protection, read 2026-11-10): a pull request, the status checks "lint, unit tests, generated files, SBOM", "Companion app (lint, release build)", "security scanners (…)" and "does this change need the engine integration run", never "AI review (advisory)"; linear history; no force pushes or deletion; administrators included, so an urgent engine update also goes through a pull request. **Still open:** the engine integration result. A matrix job skipped by the Markdown-only gate reports no per-image check name, so first add a small job that needs `changes` and `integration` and fails unless `changes` succeeded and `integration` succeeded or was skipped, then require that job.
 - Require one approval and code-owner review only after agents use a separate machine account. Otherwise the maintainer could not approve pull requests that agents opened under his own account.
 - An environment `release`, with the maintainer as required reviewer and limited to `main`, for signing and publishing jobs once the release key exists. An environment `ai-review` holding `ANTHROPIC_API_KEY` (if not using federation), limited to `main`.
 - 3,000 Actions minutes a month are included.

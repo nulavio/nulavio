@@ -100,6 +100,23 @@ export function normalizeProfileName(raw) {
   return name;
 }
 
+// A new install's profiles come with the engine's own names ("default-release", "default"), and
+// the engine names the first profile it puts in a group "Original profile". Neither is a name the
+// person chose. The profile they started with keeps its name, or is "Personal" (the first template).
+const ENGINE_PROFILE_NAME = /^default(-[a-z]+)?$/;
+
+/** The name the profile the person started with shows, before and after the group exists. */
+export function startingProfileName(toolkitName) {
+  if (toolkitName && !ENGINE_PROFILE_NAME.test(toolkitName)) {
+    try {
+      return normalizeProfileName(toolkitName);
+    } catch {
+      // Not a usable name: fall through to the template's.
+    }
+  }
+  return WebExtensionPolicy.getByID("shell@nulavio.net")?.extension?.localizeMessage("templatePersonal") || "Personal";
+}
+
 function checkColor(color) {
   if (!COLORS.includes(color)) {
     fail("invalid-color");
@@ -163,7 +180,15 @@ class NulavioProfilesClass {
     if (!this.#storeSetup) {
       const setup = (async () => {
         await this.#service.init();
+        const joining = !this.#service.currentProfile;
+        const name = startingProfileName(this.#service.groupToolkitProfile?.name);
         await this.#service.maybeSetupDataStore();
+        // The engine named this profile "Original profile" as it joined the group: keep the name the
+        // band showed until now (review 2026-11-09 V3).
+        const current = this.#service.currentProfile;
+        if (joining && current && current.name !== name) {
+          await current.setNameAsync(name);
+        }
         // Setting up the store can give this profile its id and group name: the band's cached
         // summary (and the new tab's rules here) must not wait 30 s to see them.
         this.#band = null;
@@ -409,7 +434,7 @@ class NulavioProfilesClass {
     }
     const current = service.currentProfile;
     if (!current) {
-      const name = service.groupToolkitProfile?.name ?? "";
+      const name = startingProfileName(service.groupToolkitProfile?.name);
       return { ...availability, profiles: [{ id: null, name, avatar: "default-favicon", color: COLORS[0], isCurrent: true }] };
     }
     const all = await service.getAllProfiles();
@@ -499,7 +524,7 @@ class NulavioProfilesClass {
     }
     const current = service.currentProfile;
     if (!current) {
-      const name = service.groupToolkitProfile?.name ?? "";
+      const name = startingProfileName(service.groupToolkitProfile?.name);
       return { id: null, name, avatar: "default-favicon", color: COLORS[0], isCurrent: true };
     }
     // currentProfile is not refreshed when another instance renames the profile; the database is.

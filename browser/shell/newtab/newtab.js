@@ -111,7 +111,7 @@ async function showHere() {
     h("strong", { class: "here__name", text: here.temporary ? t("profilesTemporary") : here.name }),
     ...states.map(stateBadge),
     // One term everywhere for a profile without a password (audit 2026-11 T3): a quiet badge.
-    ...(plain ? [h("span", { class: "badge badge--quiet here__plain", text: `◇ ${t("profileUnprotected")}` })] : [])
+    ...(plain ? [h("span", { class: "badge badge--quiet here__plain", text: t("profileUnprotected") })] : [])
   );
   who.hidden = false;
   if (here.routeCount) {

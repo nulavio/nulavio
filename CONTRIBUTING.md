@@ -40,7 +40,7 @@ Tests never use your real profile: integration tests set `NULAVIO_HOME` to a tem
 ## Track B (building Nulavio from source)
 
 ```sh
-scripts/build/build_nulavio.sh 159.0     # verified source -> branding -> patches -> container build
+scripts/build/build_nulavio.sh 160.0     # verified source -> branding -> patches -> container build
 ```
 
 Everything happens in rootless podman containers and in `~/.cache/nulavio-build` (about 23 GB). Nothing is installed on the host. See [docs/architecture/build.md](docs/architecture/build.md).
@@ -62,14 +62,18 @@ Integration tests against your build: `NULAVIO_ENGINE=~/.cache/nulavio-build/ins
 
 ## Website (nulavio.net)
 
-The site is static (`site/`): no JavaScript, no third-party resources, no cookies, security headers in `site/_headers`. Build it with the brand assets and check it with the unit tests:
+The pages are static (`site/`): no JavaScript in them, no third-party resources, no cookies, security headers in `site/_headers`. There are three kinds: the landing (`index.html`, `en/index.html`, styled by `landing.css`), which presents Nulavio as it is meant to ship and carries the comparison and the waitlist form; the waitlist pages (`lista/`, `en/waitlist/`); and the engineering document (`engenharia/`, `en/engineering/`, styled by `site.css`), which says what is ready today. Build the site with the brand assets and check it with the unit tests:
 
 ```sh
 python3 -I scripts/site/build_site.py          # -> dist/site/
 python3 -I tests/run.py unit                   # tests/unit/test_site.py
 ```
 
-It is hosted on Cloudflare Pages (project `nulavio`, production branch `main`). The `site` workflow (`.github/workflows/site.yml`) deploys it: on a push to `main` that changes what the build reads, or by hand (Actions → site → Run workflow). It builds the site, runs the site tests, uploads it with `wrangler` (locked in `ci/site/package-lock.json`) and checks that https://nulavio.net/ serves that build with the headers of `site/_headers` (`scripts/site/verify_live.py`). It needs the repository secret `CLOUDFLARE_API_TOKEN` (an API token limited to Account → Cloudflare Pages → Edit) and the repository variable `CLOUDFLARE_ACCOUNT_ID`. To go back to an earlier version: Pages → `nulavio` → Deployments → that deployment → Rollback. Keep email addresses out of the HTML: Cloudflare's email obfuscation would inject a script. Renew `site/.well-known/security.txt` before its `Expires` date (the unit test fails once it has passed).
+It is hosted on Cloudflare Pages (project `nulavio`, production branch `main`). The `site` workflow (`.github/workflows/site.yml`) deploys it: on a push to `main` that changes what the build reads, or by hand (Actions → site → Run workflow). It builds the site, runs the site tests, uploads it with `wrangler` (locked in `ci/site/package-lock.json`) and checks that https://nulavio.net/ serves that build with the headers of `site/_headers` (`scripts/site/verify_live.py`). It needs the repository secret `CLOUDFLARE_API_TOKEN` (an API token limited to Account → Cloudflare Pages → Edit) and the repository variable `CLOUDFLARE_ACCOUNT_ID`. To go back to an earlier version: Pages → `nulavio` → Deployments → that deployment → Rollback. Cloudflare's email obfuscation would rewrite the addresses in the HTML and inject a script that the site's own policy blocks, so the build wraps every page in `<!--email_off-->` (checked by `test_site`). Renew `site/.well-known/security.txt` before its `Expires` date (the unit test fails once it has passed).
+
+The waitlist is the one piece that runs on a server: `site/_worker.js`, which Cloudflare Pages calls for `/api/*` only (`site/_routes.json`). It stores the address, the language, the platform and the time of each sign-up in a D1 database, and nothing else. It needs that database bound to the Pages project once, by the maintainer: `wrangler d1 create nulavio-waitlist`, then Pages → `nulavio` → Settings → Bindings → Add → D1 database, variable name `WAITLIST`, and a new deployment. Until then the forms answer "the list is unavailable" and keep nothing. To read the list: `wrangler d1 execute nulavio-waitlist --remote --command "SELECT * FROM waitlist ORDER BY joined"`. The forms have no CAPTCHA (it would need a script): add a rate-limiting rule for `/api/waitlist` in the zone's WAF. `tests/unit/test_site.py` runs the worker under Node and replays its SQL in SQLite.
+
+When a comparison row or a claim of the landing changes, change both languages (the tests compare their structure) and keep the comparison's date current. The link-preview images (`site/assets/og-*.png`) come from `scripts/site/og-template.html`.
 
 ## Window theme (Nulavio Horizon, Track B)
 

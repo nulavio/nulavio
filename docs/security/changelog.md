@@ -27,6 +27,17 @@ Urgency: <urgent | standard> (<reasons>). Source SHA-256 <digest> (Mozilla's sig
 **Nulavio fixes**: <none, or the table above>.
 ```
 
+## Unreleased (development, Firefox 160.0)
+
+**Upstream**: Firefox 160.0, staged on archive.mozilla.org, not yet released by Mozilla ([update issue #14](https://github.com/caiolombello/nulavio/issues/14)); no advisory yet.
+Urgency: urgent until 6 h after Mozilla's release (no advisory yet, update policy). Source SHA-256 2b23d2bf6716ea16b45c10aa5c275c78a1d7ff50ad53150809ab27424c58fd81 (Mozilla's signed SHA256SUMS, verified against the pinned release key).
+
+| Mozilla's release | Detected | Ready to sign | Published | Target | Deadline |
+|---|---|---|---|---|---|
+| not yet | staged, 2026-11-09 23:35 UTC (upstream issue) | not yet | not published | 24 h from release | 72 h from release |
+
+**Nulavio fixes**: engine pin and signed source digest moved from Firefox 159.0.1 to 160.0. Patch 0008 is gone: Firefox 160 animates the sidebar launcher with a view transition whose timing is CSS, so Horizon sets Nulavio's expand and collapse times there. Patches 0001–0007 apply unchanged. No change to what a user must do.
+
 ## Unreleased (development, Firefox 159.0.1)
 
 **Upstream**: Firefox 159.0.1, released by Mozilla on 2026-11-03 14:09:02 UTC ([mfsa2026-123](https://www.mozilla.org/security/advisories/mfsa2026-123/), [update issue #4](https://github.com/caiolombello/nulavio/issues/4)).
@@ -34,9 +45,9 @@ Urgency: urgent (impact high: CVE-2026-120572, incorrect boundary conditions in 
 
 | Mozilla's release | Detected | Ready to sign | Published | Target | Deadline |
 |---|---|---|---|---|---|
-| 2026-11-03 14:09:02 UTC | published, by 20:39:45 UTC (+6.5 h; upstream issue) | blocked at 2026-11-04 12:28:26 UTC: release `gkrust` with Rust LTO needs more memory than the 32 GiB laptop leaves above the 4 GiB reserve | not published | 2026-11-04 14:09:02 UTC (24 h): missed | 2026-11-06 14:09:02 UTC (72 h): open |
+| 2026-11-03 14:09:02 UTC | published, by 20:39:45 UTC (+6.5 h; upstream issue) | blocked on 2026-11-04 (release `gkrust` with fat Rust LTO needs more memory than the 32 GiB laptop leaves above the 4 GiB reserve); the release build completed on 2026-11-09 23:42:10 UTC (+153.6 h) with thin Rust LTO | not published (no release key or host yet) | 2026-11-04 14:09:02 UTC (24 h): missed | 2026-11-06 14:09:02 UTC (72 h): missed. No package has been published yet, so no user ran an affected build |
 
-**Nulavio fixes**: engine pin and signed source digest updated from Firefox 159.0 to 159.0.1. The initial release rehearsal failed during compilation (a `rustc` received SIGKILL). Resource containment was then added and checked with controlled cgroup, OOM, signal and disconnect probes. Both the two-job guarded build and its single permitted one-job retry were aborted by the host-memory reserve guard, without recorded OOM; the full rehearsal remains blocked ([evidence](../research/evidence/release-rehearsal-2026-11-04.md)). After freeing host memory and an opt-in 20 GiB budget, two more guarded attempts compiled every Rust crate except release `gkrust` (Rust LTO), which passed 17 GiB. A local build without Rust LTO (`--disable-release`, not a release configuration) completed on 2026-11-04 for the maintainer's own use; it is not signed, packaged or distributed. The rehearsal now passes its private install path to RPM/DEB packaging, with a regression test. Signing and publishing remain pending; no ready-to-sign package or distributed build is certified.
+**Nulavio fixes**: engine pin and signed source digest updated from Firefox 159.0 to 159.0.1. The initial release rehearsal failed during compilation (a `rustc` received SIGKILL). Resource containment was then added and checked with controlled cgroup, OOM, signal and disconnect probes. Both the two-job guarded build and its single permitted one-job retry were aborted by the host-memory reserve guard, without recorded OOM; the full rehearsal remains blocked ([evidence](../research/evidence/release-rehearsal-2026-11-04.md)). After freeing host memory and an opt-in 20 GiB budget, two more guarded attempts compiled every Rust crate except release `gkrust` (Rust LTO), which passed 17 GiB. A local build without Rust LTO (`--disable-release`, not a release configuration) completed on 2026-11-04 for the maintainer's own use; it is not signed, packaged or distributed. The rehearsal now passes its private install path to RPM/DEB packaging, with a regression test. On 2026-11-09 the release configuration moved to thin Rust LTO (`CARGO_RUSTCFLAGS=-Clto=thin`) and the guarded release build of 159.0.1 completed within the default 16 GiB budget (peak 13.0 GiB, [evidence](../research/evidence/release-rehearsal-2026-11-09.md)). Signing and publishing remain pending: there is no release key or repository host yet.
 
 ## Unreleased (development, Firefox 159.0)
 
@@ -59,11 +70,15 @@ Earlier: Firefox 158.0.1, released by Mozilla on 2026-10-20; the development bui
 | 2026-10-26 | An AI Workspace engine kept running when an agent killed its MCP bridge | Its automation endpoint stayed open on 127.0.0.1 until the user closed it (any process of the user could drive that workspace) | `46aced7`: engines start with a parent-death signal (`setpriv --pdeathsig`) |
 | 2026-10-27 | The Companion formatted the 6-digit pairing code and JSON escapes with the phone's language | On a phone set to Persian, Arabic, Hindi or Thai the code would show in that script's digits, so the person could not compare it with the desktop's; the signed bytes were not affected (hexadecimal escapes are never localised) | `Locale.ROOT` in `Nv1.sasDigits` and `Json`, a test in four locales, and the Opengrep rule `nulavio-java-default-locale` |
 | 2026-10-26 | The Shell's background page did not start with the browser after a profile's first run | AI permission requests did not appear in the browser on later runs (the fallback denied them), and the temporary-profile bar waited for an event | `725d792`: the page now starts with every run |
+| 2026-11-09 | After a password was typed on the unlock page of a protected profile, the engine's password manager offered to save it ("Salvar senha de moz-extension://…?") | Accepting the offer copied that profile's password into the saved logins of the profile that was open, which may have no protection | [#15](https://github.com/caiolombello/nulavio/pull/15): saving is off for the Shell's own pages, set at every start; `test_vault_ui` 02 types a password with real keys and checks that no tab offers to save it. No package had been published |
+| 2026-11-10 | The Nulavio build's User-Agent ended in `Nulavio/<version>` instead of `Firefox/<version>` | Every site visited, and every request, could tell a Nulavio user from the far larger group of Firefox users, and saw the point release; sites that look for Firefox did not recognise the browser | Patch 0009: the User-Agent is Firefox's own, in pages and on the wire (`test_fingerprinting` 01). No package had been published |
+| 2026-11-10 | The engine's font protection never applied on Fedora (its lists stop at release 39 and the release number is not read from Fedora's `os-release`), and its quick canvas mode leaves raw pixel reads unchanged | With tracking protection in Strict, every installed font and the plain canvas pixels were still readable by any page, while the docs named font limits among the protections | Patch 0010 and `privacy.fingerprintingProtection.overrides`; `test_fingerprinting` 03 and 05. The same defect is in Firefox on Fedora; to be reported to Mozilla |
 
 **New protections and their limits**
 
 | Date | Protection | Limit |
 |---|---|---|
+| 2026-11-10 | Fingerprinting: canvas, offscreen-canvas and WebGL reads differ per site; no graphics card model, toolbar size, window position, desktop colours or motion sensors for pages; installed fonts hidden on Fedora and Ubuntu | It reduces what a page reads and does not make people identical; a site can tell the build from a stock Firefox by these protections ([R56](residual-risks.md)) |
 | 2026-10-27 | Engine security fast path: urgency from Mozilla's advisories (24-hour target for urgent releases, 72-hour deadline), an issue per release that @mentions the maintainer, verified engine bump, opt-in local timer that pre-builds staged releases | Signing and publishing wait for the maintainer; detection can lag about 14 hours with the timer off, more if Actions does not run ([R51](residual-risks.md), [R52](residual-risks.md)) |
 | 2026-10-27 | Dependency watch (OSV.dev, the AMO blocklist, registries), Dependabot, Gradle locking and checksum verification, base images pinned by digest | Ten build-time advisories accepted until 2026-12-31; new Gradle artifacts trusted on first download ([R53](residual-risks.md)) |
 | 2026-10-27 | Code scanning in CI: secrets (gitleaks), Nulavio's own Opengrep rules, ShellCheck, workflow audits (zizmor, actionlint); advisory AI review of pull requests | Findings arrive after the push; no CodeQL; the AI review is advisory and off until a credential is added ([R54](residual-risks.md)) |
