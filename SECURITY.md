@@ -7,7 +7,7 @@ Nulavio has **no releases yet**. The `main` branch (Track A preview) is the only
 ## Reporting a vulnerability
 
 - **Do not open a public issue.**
-- Preferred channel once the repository is public: **GitHub private vulnerability reporting** ("Report a vulnerability" under the Security tab).
+- Preferred channel: **GitHub private vulnerability reporting** ("Report a vulnerability" under the [Security tab](https://github.com/nulavio/nulavio/security/advisories/new); on since 2026-11-10).
 - Email: **security@nulavio.net** (Portuguese or English). It is forwarded to the maintainer; no other `@nulavio.net` address receives mail. Also published as [`https://nulavio.net/.well-known/security.txt`](https://nulavio.net/.well-known/security.txt) (RFC 9116).
 - Include affected commit or version, environment (distribution, desktop, engine version), reproduction steps and impact. Never include real credentials, cookies or personal data; use throwaway accounts.
 
