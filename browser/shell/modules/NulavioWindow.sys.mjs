@@ -21,6 +21,7 @@ ChromeUtils.defineESModuleGetters(lazy, {
   profileInitial: "resource://builtin-addons/nulavio-shell/modules/NulavioAvatars.sys.mjs",
   NulavioProfiles: "resource://builtin-addons/nulavio-shell/modules/NulavioProfiles.sys.mjs",
   NulavioRouting: "resource://builtin-addons/nulavio-shell/modules/NulavioRouting.sys.mjs",
+  webrtcUI: "resource:///modules/webrtcUI.sys.mjs",
   PrivateBrowsingUtils: "resource://gre/modules/PrivateBrowsingUtils.sys.mjs",
   profileLockState: "resource://builtin-addons/nulavio-shell/modules/NulavioVaultState.sys.mjs",
 });
@@ -44,7 +45,7 @@ const SHELL = "shell@nulavio.net";
 const HTML = "http://www.w3.org/1999/xhtml";
 // nulavio-ai-agent-files-changed: the driving agent's registry or the emergency stop changed (NulavioAI).
 const TOPICS = ["browser-delayed-startup-finished", "nulavio-ai-window-changed", "nulavio-guard-changed",
-  "nulavio-ai-agent-files-changed", "nulavio-ai-activity-changed"];
+  "nulavio-ai-agent-files-changed", "nulavio-ai-activity-changed", "recording-device-events"];
 // Fixed paths only. Query strings, fragments, titles and page text never name a trusted surface.
 const SURFACES = Object.freeze({
   "/newtab/newtab.html": "newtabTitle",
@@ -213,6 +214,11 @@ class WindowUI {
     }
     if (topic === "browser-delayed-startup-finished") {
       this.#attach(win);
+    } else if (topic === "recording-device-events") {
+      // A camera, a microphone or a screen started or stopped being shared: Immersive follows (ADR 0009).
+      for (const window of this.#windows.keys()) {
+        this.#applyImmersive(window);
+      }
     } else if (topic === "nulavio-ai-activity-changed") {
       // The assistant's task shows in every normal window (Q10); memory only: nothing is read or started.
       for (const window of this.#windows.keys()) {
@@ -445,6 +451,11 @@ class WindowUI {
     doc.getElementById("browser").prepend(edge);
     win.gBrowser.addProgressListener(progress);
     win.gBrowser.tabContainer.addEventListener("TabSelect", header);
+    // ADR 0009: a panel or a menu anchored on the toolbar or on the tab list keeps it shown for its whole life.
+    const popup = event => this.#popupHold(win, event);
+    for (const type of ["popupshowing", "popupshown", "popuphidden"]) {
+      win.addEventListener(type, popup, true);
+    }
     const unload = () => this.#detach(win);
     win.addEventListener("unload", unload, { once: true });
     const reveal = () => this.#showNotice(win);
@@ -465,7 +476,7 @@ class WindowUI {
       identityObserver.observe(identityBox, { attributes: true, attributeFilter: ["class"] });
     }
     this.#windows.set(win, { bar, compact, fullscreen, line, sheet, progress, header, unload, pointer, screenObserver, identityObserver, edge,
-      noticeTimer: null, safety: null, restoreGroupPalette: this.#groupPalette(win) });
+      popup, holds: new Map(), named: false, noticeTimer: null, safety: null, restoreGroupPalette: this.#groupPalette(win) });
     this.#paint(win);
     this.#unifyStartPage(win);
   }
@@ -577,10 +588,13 @@ class WindowUI {
     }
     const state = this.#windows.get(win);
     state?.bar.toggleAttribute("nv-named", trust);
-    if (state && state.stage !== stage) {
+    const staged = Boolean(state && state.stage !== stage);
+    if (staged) {
       state.stage = stage;
       win.document.documentElement.toggleAttribute("nulavio-stage", stage);
-      win.document.documentElement.toggleAttribute("nulavio-immersive", this.#immersive(win));
+    }
+    this.#origin(win, Boolean(text));
+    if (staged) {
       state.bar.toggleAttribute("nv-neutral", this.#neutral(win));
       if (stage) {
         // The stage's question is in the page: the keyboard starts there, not in an address field that is out of view.
@@ -589,12 +603,89 @@ class WindowUI {
     }
     this.#markOwnPagePending(win);
     this.#routeNotice(win);
-    this.#origin(win, Boolean(text));
   }
 
-  /** Immersive (ADR 0009): no chrome but the band, and only when nothing must be seen in full. */
+  /** Immersive (ADR 0009): the mode is on for this window (the person's switch, or the first run's stage). */
+  #immersiveWanted(win) {
+    return Services.prefs.getBoolPref(PREF_IMMERSIVE, false) || Boolean(this.#windows.get(win)?.stage);
+  }
+
+  /**
+   * Why a window that wants Immersive shows its full chrome anyway (ADR 0009, decision 6): the first
+   * reason that applies, or "". Whenever something must be seen in full, or the band cannot vouch
+   * for the page, the toolbar stays.
+   */
+  #immersiveBlock(win) {
+    if (this.#agent) {
+      return "agent"; // an AI Workspace, raw automation included
+    }
+    if (!win.toolbar.visible) {
+      return "popup"; // a pop-up or any window without the full toolbar
+    }
+    try {
+      if (lazy.webrtcUI.getActiveStreams(true, true, true, true).some(stream => stream.browser?.ownerGlobal === win)) {
+        return "sharing"; // the engine's own indicators are the cue while a device is shared
+      }
+    } catch (e) {
+      console.error("Nulavio band: sharing state", e);
+      return "sharing"; // not known: as if shared
+    }
+    if (!this.#windows.get(win)?.named) {
+      return "page"; // a document the band has no defined name for (about:blank, data:, blob:, view-source:)
+    }
+    return "";
+  }
+
   #immersive(win) {
-    return !this.#agent && (Services.prefs.getBoolPref(PREF_IMMERSIVE, false) || Boolean(this.#windows.get(win)?.stage));
+    return this.#immersiveWanted(win) && !this.#immersiveBlock(win);
+  }
+
+  /** Draw the decision on the window: the mode, why it is held back, and what keeps the chrome shown. */
+  #applyImmersive(win) {
+    const state = this.#windows.get(win);
+    if (!state) {
+      return;
+    }
+    const root = win.document.documentElement;
+    const wanted = this.#immersiveWanted(win);
+    const block = wanted ? this.#immersiveBlock(win) : "";
+    root.toggleAttribute("nulavio-immersive", wanted && !block);
+    const mark = (name, value) => (value ? setAttr(root, name, value) : root.removeAttribute(name));
+    mark("nulavio-immersive-off", block);
+    for (const [node] of state.holds) {
+      if (!node.isConnected || node.state === "closed") {
+        state.holds.delete(node); // a popup that never opened, or went away without its event
+      }
+    }
+    mark("nulavio-immersive-hold", [...new Set(state.holds.values())].sort().join(" "));
+    const neutral = this.#neutral(win);
+    if (state.bar.hasAttribute("nv-neutral") !== neutral) {
+      state.bar.toggleAttribute("nv-neutral", neutral);
+    }
+  }
+
+  /** A panel or menu anchored on the toolbar or on the tab list: that part stays shown from before the
+      engine positions it until it is gone. A menu on the page (no anchor in the chrome) holds nothing. */
+  #popupHold(win, event) {
+    const state = this.#windows.get(win);
+    const node = event.target;
+    if (!state || event.currentTarget !== win || !["panel", "menupopup"].includes(node?.localName)) {
+      return;
+    }
+    if (event.type === "popuphidden") {
+      if (state.holds.delete(node)) {
+        this.#applyImmersive(win);
+      }
+      return;
+    }
+    const anchor = node.anchorNode ?? node.triggerNode ?? node.parentNode;
+    const doc = win.document;
+    const part = doc.getElementById("navigator-toolbox")?.contains(anchor) ? "toolbar"
+      : doc.getElementById("sidebar-container")?.contains(anchor) ? "tabs" : "";
+    if (part && state.holds.get(node) !== part) {
+      state.holds.set(node, part);
+      this.#applyImmersive(win);
+    }
   }
 
   /** The selected tab's site for the band: the committed document's host as the engine displays it
@@ -628,9 +719,10 @@ class WindowUI {
           state = fine ? "" : t("bandOriginNotSecure");
         } else if (uri.schemeIs("file")) {
           host = t("bandOriginFile");
-        } else if (uri.spec !== "about:blank") {
-          host = uri.scheme === "about" ? uri.spec.split(/[?#]/)[0] : uri.scheme + ":";
+        } else if (uri.schemeIs("about") && uri.spec !== "about:blank") {
+          host = uri.spec.split(/[?#]/)[0];
         }
+        // Anything else (about:blank, data:, blob:, view-source:) has no defined name: full chrome.
       }
     } catch {
       sub = host = state = ""; // an uncommitted or destroyed tab names no site
@@ -647,6 +739,11 @@ class WindowUI {
       if (node.hidden !== !host) {
         node.hidden = !host;
       }
+    }
+    const window = this.#windows.get(win);
+    if (window) {
+      window.named = ownPage || Boolean(host);
+      this.#applyImmersive(win);
     }
   }
 
@@ -719,7 +816,7 @@ class WindowUI {
     const root = win.document.documentElement;
     root.toggleAttribute("nulavio-window-agent", Boolean(agent));
     root.toggleAttribute("nulavio-window-raw", Boolean(agent?.raw));
-    root.toggleAttribute("nulavio-immersive", this.#immersive(win));
+    this.#applyImmersive(win);
     const direction = Services.prefs.getStringPref(PREF_DIRECTION, "");
     if (direction) {
       root.setAttribute("nulavio-direction", direction);
@@ -900,14 +997,18 @@ class WindowUI {
     win.gBrowser.tabContainer.removeEventListener("TabSelect", state.header);
     win.removeEventListener("unload", state.unload);
     win.removeEventListener("mousemove", state.pointer, true);
+    for (const type of ["popupshowing", "popupshown", "popuphidden"]) {
+      win.removeEventListener(type, state.popup, true);
+    }
     win.clearTimeout(state.noticeTimer);
     state.screenObserver.disconnect();
     state.identityObserver.disconnect();
     state.bar.remove();
     state.fullscreen.remove();
     state.edge.remove();
-    win.document.documentElement.removeAttribute("nulavio-immersive");
-    win.document.documentElement.removeAttribute("nulavio-stage");
+    for (const name of ["nulavio-immersive", "nulavio-immersive-off", "nulavio-immersive-hold", "nulavio-stage"]) {
+      win.document.documentElement.removeAttribute(name);
+    }
     if (state.sheet) {
       state.sheet.remove();
     } else {

@@ -451,7 +451,10 @@
         transition: translate var(--nv-motion-duration-base) var(--nv-motion-easing-exit) var(--nv-motion-duration-hold), opacity var(--nv-motion-duration-base) var(--nv-motion-easing-exit) var(--nv-motion-duration-hold);
       }
     }
-    #navigator-toolbox:is(:hover, :focus-within, :has([open]:not([open="false"]))) > toolbar:not(#nulavio-band) {
+    /* Shown for the pointer and the keyboard, and held by the window (NulavioWindow) for as long as a panel or a
+       menu anchored on it is open: a permission request, a download warning, the site's identity, an extension. */
+    #navigator-toolbox:is(:hover, :focus-within, :has([open]:not([open="false"]))) > toolbar:not(#nulavio-band),
+    &[nulavio-immersive-hold~="toolbar"] #navigator-toolbox > toolbar:not(#nulavio-band) {
       translate: 0;
       opacity: 1;
       pointer-events: auto;
@@ -488,6 +491,7 @@
       translate: calc(100% + var(--nv-space-5)) 0;
     }
     #browser:has(> #nulavio-immersive-edge:hover) > #sidebar-container,
+    &[nulavio-immersive-hold~="tabs"] #sidebar-container,
     #sidebar-container:is(:hover, :focus-within, :has([open]:not([open="false"]))) {
       translate: 0;
       pointer-events: auto;
