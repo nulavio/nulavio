@@ -31,6 +31,7 @@ WRITE_PERMISSIONS = {
     ("upstream.yml", "firefox-release", "issues"): "one issue per newer Firefox release (scripts/release/upstream_issue.py)",
     ("scorecard.yml", "analysis", "security-events"): "uploads Scorecard's SARIF to the Security tab",
     ("scorecard.yml", "analysis", "id-token"): "signs the published result for scorecard.dev (publish_results)",
+    ("release-signing-check.yml", "sign", "id-token"): "OIDC to AWS: the role only the release environment may assume (ci/aws/)",
 }
 # Expressions that carry text an attacker or a model can choose; they never go inside a run: script.
 UNTRUSTED_IN_RUN = re.compile(r"\$\{\{[^}]*\b(github\.event\.|github\.head_ref|steps\.|needs\.|inputs\.)")

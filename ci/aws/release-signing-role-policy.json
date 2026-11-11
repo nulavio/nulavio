@@ -1,0 +1,11 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "SignWithTheReleaseKeyOnly",
+      "Effect": "Allow",
+      "Action": ["kms:Sign", "kms:GetPublicKey", "kms:DescribeKey"],
+      "Resource": "__KEY_ARN__"
+    }
+  ]
+}
