@@ -254,13 +254,7 @@ def _change(args) -> int:
     if current is None:
         _err("no way to ask for the current password; use --password-stdin")
         return 1
-    try:
-        vault.unlock_password(current)
-    except VaultError:
-        try:
-            vault.unlock_recovery_code(current)
-        except VaultError:
-            raise VaultError("wrong-secret") from None
+    _reauth(vault, current)
     try:
         if args.vault_cmd == "add-password":
             new = read_secret("New password", from_stdin=args.password_stdin, confirm=True)
@@ -346,6 +340,11 @@ def _reauth(vault, current: str) -> None:
             vault.unlock_recovery_code(current)
         except VaultError:
             raise VaultError("wrong-secret") from None
+    if vault.tampered:
+        # Before any change, and before anything outside the file (the system keyring, a phone):
+        # save() refuses a tampered vault too, but a removed keyring secret cannot be put back.
+        vault.lock()
+        raise VaultError("metadata-tampered", "the profile's key file was changed outside Nulavio")
 
 
 def api_request(request: dict) -> dict:

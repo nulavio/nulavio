@@ -494,6 +494,13 @@ class PolicyTest(Home):
 
 
 class AuditTest(Home):
+    def setUp(self):
+        super().setUp()
+        # Unit tests use no network: public names count as public, not "did not resolve here".
+        patcher = mock.patch.object(policy, "_resolves_locally", return_value=False)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def test_allow_list_and_rotation(self):
         with self.assertRaises(ValueError):
             audit.record(tool="type", text="secret")

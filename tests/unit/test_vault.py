@@ -852,6 +852,28 @@ class TamperTest(VaultTestCase):
         again.unlock_password("weak-old-password")
         self.assertTrue(again.tampered)  # still flagged: the injected envelope never became valid
 
+    def test_a_tampered_vault_is_refused_before_the_keyring_is_touched(self):
+        # Review of #44: remove-method on an os-keyring envelope cleared the system keyring
+        # before save() refused the tampered file, so that method was lost for good.
+        from nulavio_launcher.vault import cli as vault_cli
+
+        vault, _, _ = self.new_vault(recovery=True)
+        vault.save()
+        meta = json.loads(vault.path.read_text())
+        meta["policy"] = {"note": "changed outside Nulavio"}
+        vault.path.write_text(json.dumps(meta))
+        vault.lock()
+        box = mock.Mock(load_vault=lambda: Vault.load(vault.path))
+        request = {"op": "remove-method", "path": str(self.dir / "profile"), "current": PASSWORD, "envelope": "any"}
+        with (
+            mock.patch.object(vault_cli.profiles, "container", return_value=box),
+            mock.patch.object(vault_cli, "remove_os_keyring", side_effect=AssertionError("keyring touched")),
+            mock.patch.object(vault_cli, "keyring", side_effect=AssertionError("keyring touched")),
+            self.assertRaises(VaultError) as ctx,
+        ):
+            vault_cli.api_request(request)
+        self.assertEqual(ctx.exception.code, "metadata-tampered")
+
     def test_removed_envelope_is_detected(self):
         vault, _, _ = self.new_vault(recovery=True)
         vault.save()
