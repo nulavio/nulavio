@@ -22,6 +22,27 @@ export async function setUpLayout() {
   let listening = false;
   let keyboard = null;
 
+  // Immersive (ADR 0009): one switch, read from the profile and written through the layout module.
+  const immersive = document.getElementById("immersive");
+  const immersiveError = document.getElementById("immersive-error");
+  const showImmersive = state => {
+    immersive.checked = state.on;
+    immersive.disabled = state.locked;
+  };
+  const readImmersive = () => api.immersive().then(showImmersive, () => {});
+  immersive.addEventListener("change", async () => {
+    immersiveError.textContent = "";
+    try {
+      showImmersive(await api.setImmersive(immersive.checked));
+    } catch (e) {
+      immersiveError.textContent = errorText(e);
+      await readImmersive();
+    }
+  });
+  // The key (Ctrl+Alt+I) may have changed it while this tab was in the background.
+  document.addEventListener("visibilitychange", () => document.hidden || readImmersive());
+  readImmersive();
+
   const showUnavailable = err => {
     current.textContent = t("layoutUnavailable");
     error.textContent = errorText(err);

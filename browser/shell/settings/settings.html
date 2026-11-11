@@ -108,6 +108,15 @@
         </fieldset>
         <p class="hint" id="layout-current" role="status" aria-live="polite" data-i18n="layoutLoading"></p>
         <p class="form-error" id="layout-error" role="alert"></p>
+        <!-- ADR 0009: a switch on top of the layout chosen above; off unless the person turns it on. -->
+        <div class="stack stack--tight" id="layout-immersive" data-option="immersive">
+          <label class="check check--switch">
+            <input type="checkbox" role="switch" id="immersive" aria-describedby="immersive-hint" data-focus-key="immersive" disabled>
+            <span data-i18n="immersiveLabel"></span>
+          </label>
+          <p class="hint" id="immersive-hint" data-i18n="immersiveHint"></p>
+          <p class="form-error" id="immersive-error" role="alert"></p>
+        </div>
         <!-- QA M-2: the first-run choice stays reachable here when the new tab card is not shown -->
         <p class="hint" id="layout-pending" hidden data-i18n="layoutPendingHint"></p>
         <div class="actions">

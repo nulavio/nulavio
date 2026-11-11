@@ -84,6 +84,7 @@ PREF_WRITERS = {
     "NulavioLayout.sys.mjs": {
         'setBoolPref("sidebar.verticalTabs")': 2,
         "setBoolPref(PREF_CHOICE_PENDING)": 4,
+        "setBoolPref(PREF_IMMERSIVE)": 1,
         "setBoolPref(PREF_SHELL_START)": 1,
         "setIntPref(PREF_ADOPTION_VERSION)": 1,
         'setStringPref("sidebar.visibility")': 2,
@@ -363,6 +364,7 @@ class CommandsTest(unittest.TestCase):
                 "_execute_action": "Alt+Shift+P",
                 "open-assistant": "Alt+Shift+A",
                 "toggle-focus": "Ctrl+Alt+F",
+                "toggle-immersive": "Ctrl+Alt+I",
                 "lock-profile": "Ctrl+Alt+B",
             },
         )

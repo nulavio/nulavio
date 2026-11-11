@@ -47,6 +47,13 @@ this.nulavioLayout = class extends ExtensionAPI {
           const say = key => win.A11yUtils?.announce({ raw: context.extension.localizeMessage(key) }).catch(() => {});
           return layout.toggleFocus(win, say);
         }),
+        immersive: call(() => layout.immersive()),
+        // From Settings (a page) or from the key (the background page, with the tab it was pressed in).
+        setImmersive: call((on, tabId) => {
+          const win = tabId === null || tabId === undefined ? null : context.extension.tabManager.get(tabId).window;
+          const say = key => win?.A11yUtils?.announce({ raw: context.extension.localizeMessage(key) }).catch(() => {});
+          return layout.setImmersive(on ?? !layout.immersive().on, say);
+        }),
         onChanged: new ExtensionCommon.EventManager({
           context,
           name: "nulavioLayout.onChanged",

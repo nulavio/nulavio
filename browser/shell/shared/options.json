@@ -24,6 +24,23 @@
       ]
     },
     {
+      "id": "immersive",
+      "kind": "cosmetic",
+      "prefs": [
+        "nulavio.layout.immersive"
+      ],
+      "values": [
+        false,
+        true
+      ],
+      "default": false,
+      "writer": "NulavioLayout",
+      "labelKey": "immersiveLabel",
+      "ui": [
+        "settings/settings.html#layout-immersive"
+      ]
+    },
+    {
       "id": "density",
       "kind": "cosmetic",
       "prefs": [
@@ -145,6 +162,7 @@
         "_execute_action",
         "open-assistant",
         "toggle-focus",
+        "toggle-immersive",
         "lock-profile"
       ],
       "default": "_execute_action",

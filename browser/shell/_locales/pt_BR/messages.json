@@ -1362,5 +1362,11 @@
   "firstrunProfileExample": {"message": "Trabalho"},
   "firstrunSummaryProfile": {"message": "Perfil"},
   "firstrunWelcomeTitleProfile": {"message": "Perfil novo: $NAME$", "placeholders": {"name": {"content": "$1"}}},
-  "firstrunWelcomeLeadProfile": {"message": "Cada perfil tem as suas próprias escolhas: as próximas valem só para este. A faixa do topo mostra em qual você está e como ele está protegido."}
+  "firstrunWelcomeLeadProfile": {"message": "Cada perfil tem as suas próprias escolhas: as próximas valem só para este. A faixa do topo mostra em qual você está e como ele está protegido."},
+  "immersiveLabel": {"message": "Imersivo"},
+  "immersiveHint": {"message": "Tira de vista a barra de endereço e as abas. A faixa do topo continua mostrando o perfil e o site. Elas voltam com o ponteiro no alto ou na lateral da janela, com o teclado, e sozinhas sempre que o navegador precisa mostrar algo: um pedido de permissão, um aviso de download, uma câmera ou um microfone em uso, ou uma página que a faixa não sabe nomear."},
+  "commandToggleImmersive": {"message": "Ligar ou desligar o modo Imersivo"},
+  "layoutImmersiveOn": {"message": "Imersivo ligado. A barra de endereço volta com Ctrl+L."},
+  "layoutImmersiveOff": {"message": "Imersivo desligado."},
+  "keyImmersive": {"message": "Imersivo"}
 }

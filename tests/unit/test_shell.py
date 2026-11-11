@@ -182,7 +182,11 @@ class PrivilegedApiTest(unittest.TestCase):
         api = self.manifest["experiment_apis"]["nulavioLayout"]
         self.assertEqual(api["parent"]["events"], ["startup"])
         schema = json.loads((SHELL / api["schema"]).read_text())[0]
-        self.assertEqual({f["name"] for f in schema["functions"]}, {"state", "apply", "dismissChoice", "toggleFocus"})
+        names = {f["name"] for f in schema["functions"]}
+        self.assertEqual(names, {"state", "apply", "dismissChoice", "toggleFocus", "immersive", "setImmersive"})
+        # ADR 0009: Immersive is one boolean; the tab only says in which window the outcome is announced.
+        switch = next(f for f in schema["functions"] if f["name"] == "setImmersive")
+        self.assertEqual([(a["name"], a["type"]) for a in switch["parameters"]], [("on", "boolean"), ("tabId", "integer")])
         toggle = next(f for f in schema["functions"] if f["name"] == "toggleFocus")
         self.assertEqual(toggle["parameters"], [{"name": "tabId", "type": "integer", "minimum": 0}])
         for name in ("state", "dismissChoice"):
@@ -561,6 +565,7 @@ class LayoutModuleTest(unittest.TestCase):
                 "PREF_ADOPTION_VERSION",
                 "PREF_BEFORE_FOCUS",
                 "PREF_CHOICE_PENDING",
+                "PREF_IMMERSIVE",  # ADR 0009: the Immersive switch, a layout pref and no protection
                 "PREF_SHELL_START",
             },
         )

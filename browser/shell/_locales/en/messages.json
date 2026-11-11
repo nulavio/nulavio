@@ -1362,5 +1362,11 @@
   "firstrunProfileExample": {"message": "Work"},
   "firstrunSummaryProfile": {"message": "Profile"},
   "firstrunWelcomeTitleProfile": {"message": "New profile: $NAME$", "placeholders": {"name": {"content": "$1"}}},
-  "firstrunWelcomeLeadProfile": {"message": "Each profile has its own choices: the next ones apply to this one only. The band at the top shows which one you are in and how it is protected."}
+  "firstrunWelcomeLeadProfile": {"message": "Each profile has its own choices: the next ones apply to this one only. The band at the top shows which one you are in and how it is protected."},
+  "immersiveLabel": {"message": "Immersive"},
+  "immersiveHint": {"message": "Takes the address bar and the tabs out of view. The band at the top keeps showing the profile and the site. They come back with the pointer at the top or the side of the window, with the keyboard, and by themselves whenever the browser has something to show: a permission request, a download warning, a camera or a microphone in use, or a page the band cannot name."},
+  "commandToggleImmersive": {"message": "Turn Immersive on or off"},
+  "layoutImmersiveOn": {"message": "Immersive on. The address bar comes back with Ctrl+L."},
+  "layoutImmersiveOff": {"message": "Immersive off."},
+  "keyImmersive": {"message": "Immersive"}
 }

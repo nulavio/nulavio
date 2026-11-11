@@ -48,6 +48,12 @@
       },
       "description": "__MSG_commandToggleFocus__"
     },
+    "toggle-immersive": {
+      "suggested_key": {
+        "default": "Ctrl+Alt+I"
+      },
+      "description": "__MSG_commandToggleImmersive__"
+    },
     "lock-profile": {
       "suggested_key": {
         "default": "Ctrl+Alt+B"
