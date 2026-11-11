@@ -179,8 +179,8 @@ pref("browser.newtabpage.activity-stream.showWeather", false);
 pref("browser.newtabpage.activity-stream.widgets.weather.enabled", false);
 pref("browser.newtabpage.activity-stream.feeds.section.topstories", false);
 
-// Unlocking with a phone is not part of 1.0 (decision D10, 2026-11-04): the
-// Companion app is not published, so connecting a phone is not offered and
-// the pages say "not available yet". A phone that is already connected keeps
-// unlocking and can be removed. Developers testing the Companion turn this on.
-pref("nulavio.vault.phone.pairing", false);
+// Connecting a phone (the Nulavio Companion app, on F-Droid) is offered since
+// the app passed its device test on a real phone (2026-11-10; D10 revised).
+// Off, the pages say "not available yet" and the Shell refuses to start a
+// pairing; a phone already connected keeps unlocking and can be removed.
+pref("nulavio.vault.phone.pairing", true);

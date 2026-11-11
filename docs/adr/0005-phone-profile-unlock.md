@@ -77,16 +77,16 @@ Evidence and per-platform states: [compatibility report](../research/phone-unloc
 
 **Desktop binding (2026-11-11, audit V3).** The 2026-11-10 security audit found that a phone answered any desktop it is paired with for any envelope that desktop could name: one holding a copy of another desktop's `vault.json` could get that profile's key under harmless names. The fix, before phone unlock is offered: the phone envelope's KEK derivation includes the signing key of the desktop that made it (the phone uses the key of the desktop whose request it verified), the phone shows the desktop name from its own pairing record, and it refuses requests that claim to stay valid longer than 60 s plus clock skew. Envelopes made earlier report `phone-needs-pairing`; nothing shipped with them (pairing was off in every release). Tests: `test_vault.DesktopBindingTest` (the attack fails before the fix and is refused after it), the Java side against the same vectors (`nv1-vectors.json`, `VectorsTest`, `test_companion_protocol`).
 
-## Availability (decision D10, 2026-11-04)
+## Availability (decision D10, 2026-11-04; revised 2026-11-10)
 
-Phone unlock is not part of 1.0: the Companion is not published yet (its device test passed on 2026-11-10; the manual pass above is open). Until it is, the browser does not offer to connect a phone:
+D10 took phone unlock out of 1.0 while the Companion had not run on a real phone. After the device test passed on the Galaxy S24+ (2026-11-10) and the desktop binding closed audit V3 (2026-11-11), the maintainer put it back: the browser offers to connect a phone, and the Companion ships on F-Droid.
 
-- The unlock-methods page says that unlocking with a phone or a security key is not available yet in this version (FIDO2, slice S10, is not built).
-- The phone page offers no code, and the Shell refuses to start a pairing (`phone-not-yet`).
-- A phone that is already connected keeps unlocking its profile and can be removed, so nobody is locked out by this.
+- `nulavio.vault.phone.pairing` is on in the build. The unlock-methods page links to the phones and says only that the security key is not available yet (FIDO2, slice S10, is not built); the phone page tells people without the app to install it from F-Droid.
+- With the pref off, the page offers no code and the Shell refuses to start a pairing (`phone-not-yet`); a phone already connected keeps unlocking its profile and can be removed, so nobody is locked out.
 - The pages' "no master key" line names no method, so it is true for every profile.
+- Release order: the browser release that turns the offer on goes out once the Companion is on F-Droid (or its APK is attached to the release), so the page never sends people to an app they cannot get.
 
-`nulavio.vault.phone.pairing` (off in the build) turns the offer on for people testing the Companion. `test_vault_ui` 08 and 09 run with it on, 13 with the default.
+`test_vault_ui` 08 and 09 run with the offer on (the default), 13 with it off.
 
 ## Threat model summary
 
