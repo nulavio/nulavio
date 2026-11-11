@@ -1,0 +1,45 @@
+name: Bug report
+description: Something in Nulavio does not work as it should. Not for security problems (see SECURITY.md).
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. English or Portuguese. Do not include passwords, recovery codes, tokens or private browsing data.
+        Security problems go through private reporting: https://github.com/nulavio/nulavio/security/advisories/new
+  - type: input
+    id: version
+    attributes:
+      label: Nulavio version
+      description: From `rpm -q nulavio`, or the preview launcher's `bin/nulavio doctor`.
+      placeholder: nulavio-160.0-0.1
+    validations:
+      required: true
+  - type: input
+    id: system
+    attributes:
+      label: Distribution and desktop
+      placeholder: Fedora 44, KDE Plasma 6.5, Wayland
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open …
+        2. Click …
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected, and what happened instead
+    validations:
+      required: true
+  - type: checkboxes
+    id: firefox
+    attributes:
+      label: Firefox
+      options:
+        - label: The same thing does not happen in Firefox (if it does, it is probably an engine bug for Mozilla's Bugzilla).
