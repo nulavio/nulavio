@@ -45,6 +45,8 @@ class FlatpakManifestTest(unittest.TestCase):
             self.source(manifest), {"type": "archive", "path": self.archive.name, "sha256": self.digest, "dest": "nulavio"}
         )
         self.assertTrue((out / self.archive.name).is_file())
+        # Flathub builds aarch64 too unless told otherwise; the archive is x86_64 only.
+        self.assertEqual(json.loads((out / "flathub.json").read_text(encoding="utf-8")), {"only-arches": ["x86_64"]})
 
     def test_the_flathub_manifest_downloads_the_release_asset(self):
         _, manifest = self.render("--url")

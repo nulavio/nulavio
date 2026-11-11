@@ -10,7 +10,7 @@ rehearse_release.sh makes and publish_release.sh attaches to the GitHub release.
 that is the manifest for Flathub. Without it, the manifest points at the local file, for
 a test build (release.yml builds one for every release).
 
-DIR gets net.nulavio.Nulavio.json, the desktop entry (from packaging/linux/nulavio.desktop,
+DIR gets net.nulavio.Nulavio.json, flathub.json (x86_64 only: the build is), the desktop entry (from packaging/linux/nulavio.desktop,
 renamed to the app ID), the AppStream metadata with this release, the entry point and the
 Flatpak-only preferences. Runtime: org.freedesktop.Platform, whose codecs-extra extension
 (installed with it) brings the patented codecs. Permissions: docs/architecture/build.md.
@@ -133,6 +133,8 @@ def main(argv: list[str] | None = None) -> int:
         source = {"type": "archive", "path": args.archive.name}
     source["sha256"] = sha256(args.archive)
     (args.out / f"{APP_ID}.json").write_text(json.dumps(manifest(source), indent=2) + "\n", encoding="utf-8")
+    # The build is x86_64 only; Flathub would otherwise also build aarch64 with this binary.
+    (args.out / "flathub.json").write_text(json.dumps({"only-arches": ["x86_64"]}, indent=2) + "\n", encoding="utf-8")
     (args.out / f"{APP_ID}.desktop").write_text(desktop_entry(), encoding="utf-8")
     (args.out / f"{APP_ID}.metainfo.xml").write_text(metainfo(version, args.date), encoding="utf-8")
     for name in ("nulavio.sh", "flatpak-prefs.js"):
