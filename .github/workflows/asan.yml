@@ -4,12 +4,13 @@ name: asan
 # pinned Firefox with AddressSanitizer (browser/build/mozconfig.asan) on a Blacksmith
 # runner and run the integration suite against it. AddressSanitizer writes a report
 # for any memory error (out-of-bounds, use-after-free, double free); one report, or a
-# failing test, fails the run. Weekly and by hand, from main only; never a release.
+# failing test, fails the run. Monthly and by hand (run it after an engine update), from
+# main only; never a release.
 # docs/security/code-scanning.md says what to do with a report.
 
 on:
   schedule:
-    - cron: "23 3 * * 2" # weekly, Tuesday early UTC
+    - cron: "23 3 1 * *" # monthly, on the 1st (Blacksmith minutes: about US$3 a run)
   workflow_dispatch:
 
 permissions: {}
