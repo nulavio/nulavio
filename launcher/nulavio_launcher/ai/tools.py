@@ -78,7 +78,8 @@ INSPECT_FN = r"""(el) => {
   const button = el.closest('button,input[type=submit],input[type=image]');
   return {connected: el.isConnected, href: link ? String(link.href) : null,
     submits: !!(button && button.form && (button.type === 'submit' || button.type === 'image')),
-    editable: !!(el.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName))};
+    editable: !!(el.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName)),
+    multiline: !!(el.isContentEditable || el.tagName === 'TEXTAREA')};
 }"""
 SCROLL_FN = "(el) => { el.scrollIntoView({block: 'center', inline: 'center'}); return true; }"
 FOCUS_FN = r"""(el, clear) => {
@@ -288,6 +289,13 @@ class Bridge:
     def require_here(self, capability: str, url: str, *, checked: list[str]) -> None:
         self.require(capability, url, checked=checked)
         self.require_needs(url, checked=checked)
+
+    def still_at(self, tab: str, url: str, cancel) -> None:
+        """After an approval (which can wait for minutes): the tab is still on the origin the
+        person approved. A page that navigated meanwhile would otherwise get the action."""
+        now = self._url_of(tab, cancel)
+        if policy.origin(now) != policy.origin(url):
+            raise ToolError(f"the tab moved to {policy.origin(now)} while waiting for approval; nothing was done")
 
     def list_tools(self) -> list[dict]:
         agent = self._agent()
@@ -640,6 +648,7 @@ class Bridge:
         tab = args["tab"]
         url = self._url_of(tab, cancel)
         self.require_here("read_pages", url, checked=checked)
+        self.still_at(tab, url, cancel)
         limit = args.get("max_chars", 20000)
         page = self._eval(tab, READ_EXPR % (limit + 1), cancel)
         text = page.get("text") or ""
@@ -651,6 +660,7 @@ class Bridge:
         tab = args["tab"]
         url = self._url_of(tab, cancel)
         self.require_here("read_pages", url, checked=checked)
+        self.still_at(tab, url, cancel)
         pairs = self._call_fn(tab, SNAPSHOT_FN, [{"type": "number", "value": args.get("max_elements", 200)}], cancel)
         mapping, elements = {}, []
         for index, (node, info) in enumerate(pairs or [], start=1):
@@ -665,6 +675,7 @@ class Bridge:
         tab = args["tab"]
         url = self._url_of(tab, cancel)
         self.require_here("screenshots", url, checked=checked)
+        self.still_at(tab, url, cancel)
         png = self.bidi(tab).command("browsingContext.captureScreenshot", {"context": tab}, cancel=cancel)["data"]
         data = {"tab": tab, "url": url, "bytes": len(png) * 3 // 4}
         return self._ok(data, f"Screenshot of {url}", [{"type": "image", "data": png, "mimeType": "image/png"}]), url
@@ -674,6 +685,7 @@ class Bridge:
         url = self._url_of(tab, cancel)
         element = self._element(tab, args["element"])
         self.require_here("interact", url, checked=checked)
+        self.still_at(tab, url, cancel)
         info = self._call_fn(tab, INSPECT_FN, [element], cancel)
         if not info.get("connected"):
             raise ToolError("the element is gone; call page_snapshot again")
@@ -681,6 +693,7 @@ class Bridge:
             self.require("submit_forms", url, checked=checked)
         if info.get("href") and not info["href"].startswith(("javascript:", "#")):
             self.require_url(info["href"], checked=checked)
+        self.still_at(tab, url, cancel)
         self._call_fn(tab, SCROLL_FN, [element], cancel)
         mark = self.bidi(tab).mark()
         actions = [{"type": "pointer", "id": "nulavio-mouse", "parameters": {"pointerType": "mouse"}, "actions": [
@@ -698,9 +711,13 @@ class Bridge:
 
     def _t_type(self, args, cancel, checked):
         tab = args["tab"]
+        if any("\ue000" <= char <= "\uf8ff" for char in args["text"]):
+            # WebDriver reads these as keys (U+E007 is Enter, U+E006 Return): they are not text.
+            raise ToolError("special keys (U+E000 to U+F8FF) are not typed; use submit=true to press Enter")
         url = self._url_of(tab, cancel)
         element = self._element(tab, args["element"])
         self.require_here("interact", url, checked=checked)
+        self.still_at(tab, url, cancel)
         if args.get("submit"):
             self.require("submit_forms", url, checked=checked)
         info = self._call_fn(tab, INSPECT_FN, [element], cancel)
@@ -708,6 +725,10 @@ class Bridge:
             raise ToolError("the element is gone; call page_snapshot again")
         if not info.get("editable"):
             raise ToolError("that element does not take text")
+        if not info.get("multiline") and ("\n" in args["text"] or "\r" in args["text"]):
+            # Enter in a single-line field sends its form: the same capability as submit=true.
+            self.require("submit_forms", url, checked=checked)
+        self.still_at(tab, url, cancel)
         self._call_fn(tab, SCROLL_FN, [element], cancel)
         if not self._call_fn(tab, FOCUS_FN, [element, {"type": "boolean", "value": bool(args.get("clear"))}], cancel):
             raise ToolError("could not focus the element")
@@ -729,6 +750,7 @@ class Bridge:
         tab = args["tab"]
         url = self._url_of(tab, cancel)
         self.require_here("interact", url, checked=checked)
+        self.still_at(tab, url, cancel)
         if self._open_dialog(tab) is None:
             raise ToolError("no dialog is open in that tab")
         params = {"context": tab, "accept": bool(args["accept"])}
@@ -755,6 +777,7 @@ class Bridge:
         url = self._url_of(tab, cancel)
         element = self._element(tab, args["element"])
         self.require_here("files", url, checked=checked)
+        self.still_at(tab, url, cancel)
         if self._owner(tab):
             raise ToolError("uploads work only in the AI Workspace, from its uploads folder")
         folder = _uploads(self).resolve()
@@ -770,6 +793,7 @@ class Bridge:
         tab = args["tab"]
         url = self._url_of(tab, cancel)
         self.require_here("execute_js", url, checked=checked)
+        self.still_at(tab, url, cancel)
         value = self._eval(tab, args["expression"], cancel)
         text = json.dumps(value, ensure_ascii=False, default=str)
         if len(text) > 100_000:
