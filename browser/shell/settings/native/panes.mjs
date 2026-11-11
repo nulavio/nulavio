@@ -331,6 +331,61 @@
     // No profile to name (the engine's profile service is off for this start): say so instead of nothing.
     setting({ id: "nulavio-here-none", setup: profile.watch, visible: () => profile.state.ready && !profile.state.value });
 
+    // -- every profile of the group, with its protection as it is now (ADR 0011: a list the registry
+    // cannot describe is a custom element; it is built with the engine's rows and the DOM, never from
+    // markup, and it renders its words so the page's search finds them) ---------------------------
+    const profileList = source(() => shell.NulavioProfiles.list());
+    const PROFILE_ROW = profile => {
+      if (profile.temporary) {
+        return "nulavio-profile-temporary";
+      }
+      return profile.encrypted ? (profile.locked ? "nulavio-profile-locked" : "nulavio-profile-unlocked") : "nulavio-profile-plain";
+    };
+    if (!customElements.get("nulavio-profile-list")) {
+      customElements.define(
+        "nulavio-profile-list",
+        class extends HTMLElement {
+          #stop = null;
+          connectedCallback() {
+            this.#stop = profileList.listen(() => this.draw());
+            this.draw();
+          }
+          disconnectedCallback() {
+            this.#stop?.();
+            this.#stop = null;
+          }
+          draw() {
+            const profiles = profileList.state.ready ? (profileList.state.value?.profiles ?? []) : [];
+            const group = document.createElement("moz-box-group");
+            for (const profile of profiles) {
+              const row = document.createElement("moz-box-item");
+              row.dataset.profile = String(profile.id ?? "");
+              // The name is the person's own text: it goes in as a Fluent argument, never as markup.
+              document.l10n.setAttributes(row, PROFILE_ROW(profile), {
+                name: profile.name || "",
+                here: profile.isCurrent ? "yes" : "no",
+              });
+              group.append(row);
+            }
+            this.replaceChildren(...(profiles.length ? [group] : []));
+          }
+        }
+      );
+    }
+    setting({
+      id: "nulavio-profile-list",
+      setup(emitChange, stops) {
+        stops.push(profileList.listen(emitChange));
+        profileList.refresh();
+        try {
+          stops.push(shell.NulavioProfiles.subscribe(profileList.refresh)); // created, renamed, locked or removed elsewhere
+        } catch (e) {
+          console.error(e);
+        }
+      },
+      visible: () => profileList.state.ready && (profileList.state.value?.profiles?.length ?? 0) > 0,
+    });
+
     // -- passwords: which manager is in use now ---------------------------------------------------
     const passwords = source(() => shell.NulavioPasswords.state());
     setting({
@@ -521,6 +576,8 @@
         l10nId: "nulavio-profiles-group",
         headingLevel: 2,
         items: [
+          failureNote("nulavio-profile-list-failed", profileList),
+          { id: "nulavio-profile-list", control: "nulavio-profile-list" },
           {
             id: "nulavio-profiles-box",
             control: "moz-box-group",

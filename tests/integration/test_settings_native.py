@@ -403,6 +403,53 @@ class NativeSettingsTest(unittest.TestCase):
         # The layout was read: its card is unaffected.
         self.assertEqual(self.control("#nulavio-layout", lambda s: s.get("value") == "lateral")["value"], "lateral")
 
+    def test_06b_every_profile_is_listed_with_its_protection(self):
+        rows = (
+            DOC
+            + """
+          const list = d.querySelector("nulavio-profile-list");
+          if (!list) return null;
+          return [...list.querySelectorAll("moz-box-item")].map(row => [row.label, row.description]);
+        """
+        )
+        self.open()
+        self.groups("paneNulavioProfiles")
+        seen = harness.wait_until(lambda: (self.m.chrome(rows) or [None])[0] and self.m.chrome(rows), 15)
+        self.assertEqual(seen, [["NativeSettings", "Este perfil. Sem senha."]])
+        # A profile created elsewhere (the profile menu, another window) joins the list without a reload.
+        profiles = 'const P = ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioProfiles.sys.mjs").NulavioProfiles;'
+        self.m.chrome(profiles + 'return P.create({ templateId: "work", name: "Trabalho" }).then(() => true);')
+        two = harness.wait_until(lambda: len(self.m.chrome(rows) or []) == 2 and self.m.chrome(rows), 20)
+        self.assertEqual(two, [["NativeSettings", "Este perfil. Sem senha."], ["Trabalho", "Sem senha."]], two)
+        # The rows are part of the page: its own search finds a profile by name.
+        found = self.m.chrome(
+            DOC
+            + """
+          const input = w.gSearchResultsPane.searchInput;
+          input.value = "Trabalho";
+          return w.gSearchResultsPane.searchFunction({ target: input }).then(() => {
+            const list = d.querySelector("nulavio-profile-list");
+            return Boolean(list && list.getBoundingClientRect().height > 0 && !list.closest("[hidden]"));
+          });
+        """
+        )
+        self.assertTrue(found, "the page's search does not find a profile's name")
+        # A list that cannot be read is not drawn, and the group says so.
+        broken = (
+            profiles
+            + """
+          if (arguments[0]) { window.__nulavioList = P.list; P.list = () => Promise.reject(new Error("test: unreadable")); }
+          else { delete P.list; }
+        """
+        )
+        self.m.chrome(broken, [True])
+        self.addCleanup(self.m.chrome, broken, [False])
+        self.open()
+        self.groups("paneNulavioProfiles")
+        note = self.control("#nulavio-profile-list-failed")
+        self.assertIn("Não foi possível ler", note["message"], note)
+        self.assertEqual(self.m.chrome(rows) or [], [])
+
     def test_07_every_way_in_leads_to_the_one_page(self):
         where = "return gBrowser.selectedBrowser.currentURI.spec;"
         host = 'ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioSettings.sys.mjs").NulavioSettings'

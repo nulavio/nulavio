@@ -75,6 +75,28 @@ nulavio-here-unknown =
 nulavio-here-none =
     .label = Default profile
     .description = This window was opened outside Nulavio's profile group.
+# One row per profile of the group. $name is the profile's name, chosen by the person; $here is "yes" for the
+# profile of this window.
+nulavio-profile-plain =
+    .label = { $name }
+    .description =
+        { $here ->
+            [yes] This profile. No password.
+           *[no] No password.
+        }
+nulavio-profile-unlocked =
+    .label = { $name }
+    .description =
+        { $here ->
+            [yes] This profile. Protected and unlocked.
+           *[no] Protected. Unlocked now.
+        }
+nulavio-profile-locked =
+    .label = { $name }
+    .description = Protected and locked: encrypted on disk.
+nulavio-profile-temporary =
+    .label = Temporary profile
+    .description = Temporary. Erased when closed.
 nulavio-profiles-group =
     .label = Your profiles
     .description = Each profile keeps its own logins, history and extensions. A protected profile stays encrypted on disk while it is locked.

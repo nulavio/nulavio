@@ -75,6 +75,28 @@ nulavio-here-unknown =
 nulavio-here-none =
     .label = Perfil padrão
     .description = Esta janela foi aberta fora do grupo de perfis do Nulavio.
+# One row per profile of the group. $name is the profile's name, chosen by the person; $here is "yes" for the
+# profile of this window.
+nulavio-profile-plain =
+    .label = { $name }
+    .description =
+        { $here ->
+            [yes] Este perfil. Sem senha.
+           *[no] Sem senha.
+        }
+nulavio-profile-unlocked =
+    .label = { $name }
+    .description =
+        { $here ->
+            [yes] Este perfil. Protegido e desbloqueado.
+           *[no] Protegido. Desbloqueado agora.
+        }
+nulavio-profile-locked =
+    .label = { $name }
+    .description = Protegido e bloqueado: criptografado no disco.
+nulavio-profile-temporary =
+    .label = Perfil temporário
+    .description = Temporário. Apagado ao fechar.
 nulavio-profiles-group =
     .label = Seus perfis
     .description = Cada perfil guarda seus próprios logins, histórico e extensões. Um perfil protegido fica criptografado no disco enquanto está bloqueado.
