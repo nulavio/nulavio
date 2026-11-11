@@ -55,8 +55,10 @@ class RehearsalInstallTest(unittest.TestCase):
                     )
                     path.write_text("#!/bin/sh\n" + (body if name == f"make_{packager}.sh" else "exit 0\n"))
                     path.chmod(0o755)
+                # Not what a surrounding rehearsal exported (NULAVIO_RELEASE, NULAVIO_BUILD_PROFILE, …):
+                # this suite also runs inside rehearse_release.sh.
                 env = {
-                    **os.environ,
+                    **{k: v for k, v in os.environ.items() if not k.startswith("NULAVIO_")},
                     "HOME": str(tmp / "home"),
                     "NULAVIO_BUILD_DIR": str(work),
                     "NULAVIO_INSTALL_DIR": str(tmp / "unrelated-install"),
