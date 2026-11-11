@@ -31,6 +31,7 @@
     <string name="unlocked">“%1$s” está desbloqueado em %2$s.</string>
     <string name="working">Trabalhando…</string>
     <string name="local_network_needed">O Nulavio precisa de acesso aos dispositivos da sua rede local para alcançar o computador.</string>
+    <string name="camera_needed">O Nulavio precisa da câmera para ler o código no computador.</string>
     <string name="error_expired">Este código expirou. Peça um novo no computador.</string>
     <string name="error_replay">Este pedido já foi respondido.</string>
     <string name="error_unpaired">Este computador não está pareado com este celular.</string>
@@ -39,4 +40,11 @@
     <string name="error_unreachable">O computador não se conectou. Confira se os dois estão na mesma rede e tente de novo.</string>
     <string name="error_keys_invalidated">As chaves deste celular não podem mais ser usadas (as digitais ou o bloqueio de tela mudaram). Configure-o de novo e pareie de novo com seus computadores.</string>
     <string name="error_generic">Algo deu errado (%1$s). Nada foi desbloqueado.</string>
+    <string name="remove_title">Remover %1$s?</string>
+    <string name="remove_body">Este celular não vai mais desbloquear perfis em %1$s.</string>
+    <string name="cancel">Cancelar</string>
+    <string name="unlock_profile">Perfil: %1$s</string>
+    <string name="unlock_computer">Computador: %1$s</string>
+    <string name="compare_hint">Se forem diferentes, alguém pode estar se passando pelo seu computador. Nada é salvo.</string>
+    <string name="footer">Versão %1$s · Software livre · Sem conta, sem nuvem</string>
 </resources>

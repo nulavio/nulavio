@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Nulavio brand tokens (docs/brand/tokens.json), light theme. -->
+<resources>
+    <color name="canvas">#F1F7F5</color>
+    <color name="surface">#FFFFFF</color>
+    <color name="text_primary">#0B1623</color>
+    <color name="text_secondary">#3A6273</color>
+    <color name="text_muted">#4F7383</color>
+    <color name="border">#BFD0D6</color>
+    <color name="control">#6B8794</color>
+    <color name="accent">#0F7A68</color>
+    <color name="on_accent">#FFFFFF</color>
+    <color name="accent_tint">#DDF8F0</color>
+    <color name="critical_text">#A8323A</color>
+    <color name="critical_tint">#F9DEDF</color>
+</resources>
