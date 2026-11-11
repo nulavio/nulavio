@@ -1,0 +1,50 @@
+name: scorecard
+
+# OpenSSF Scorecard: rates how the repository is maintained (branch protection, pinned
+# dependencies, token permissions, signed releases, code review, and more), publishes the result
+# to scorecard.dev for the README badge, and uploads the findings to the Security tab.
+# docs/security/code-scanning.md, "OpenSSF Scorecard".
+#
+# It runs on pushes to main, weekly, when branch protection changes, and by hand; never on pull
+# requests. publish_results requires the job to use only actions Scorecard allows and no
+# workflow-level env or defaults. No secret: without an admin token the Branch-Protection check
+# reads only what a public token can see.
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "17 9 * * 3" # Wednesdays 09:17 UTC, after the weekly Dependabot run
+  branch_protection_rule:
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: scorecard
+  cancel-in-progress: true
+
+jobs:
+  analysis:
+    name: OpenSSF Scorecard
+    if: ${{ github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      actions: read
+      security-events: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ossf/scorecard-action@fa7117db83c52d787ae5a89f350999701505d78e # v2.5.0
+        with:
+          results_file: results.sarif
+          results_format: sarif
+          publish_results: true
+      - uses: github/codeql-action/upload-sarif@1fc58d04a4d4374f921bdac573c3811c240f9c26 # v4.39.2
+        with:
+          sarif_file: results.sarif
+          category: scorecard
