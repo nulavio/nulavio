@@ -388,7 +388,8 @@ class PackagingTest(unittest.TestCase):
         self.assertNotIn("/gnupg-ro", sign)
         self.assertNotIn("export-secret", sign)
         self.assertIn('rm -rf "$GNUPGHOME"', sign)
-        self.assertIn("repo_gpgcheck=1", sign)
+        # Both checks are on in the .repo file, which the site serves from git (not the bucket).
+        self.assertIn("repo_gpgcheck=1", (ROOT / "site" / "rpm" / "nulavio.repo").read_text(encoding="utf-8"))
         test = (ROOT / "scripts" / "release" / "test_signed_repo.sh").read_text(encoding="utf-8")
         self.assertIn("tampered", test)
 
