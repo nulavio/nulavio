@@ -638,7 +638,8 @@ async function firstRun() {
       return;
     }
     providersList.replaceChildren(...state.providers.map(item => {
-      const inUse = state.current === item.key;
+      // Every manager that is active says so: choosing one does not turn another off, so two can be in use.
+      const inUse = state.current === item.key || Boolean(item.extension?.enabled);
       const use = inUse ? null : h("button", { class: "button button--secondary", type: "button", text: t("passwordsUse"), "aria-label": t("firstrunProviderUse", [providerName(item)]) });
       use?.addEventListener("click", async () => {
         passwordsError.textContent = "";
