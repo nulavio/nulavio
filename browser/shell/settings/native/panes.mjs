@@ -360,6 +360,28 @@
       Object.assign(view, changes);
       viewListeners.forEach(emit => emit());
     };
+    /** After the list is drawn again, the keyboard goes where the person's action left off (never lost to the page). */
+    const focusWhenDrawn = selector => {
+      let tries = 0;
+      const attempt = () => {
+        const target = document.querySelector(selector);
+        if (target?.getBoundingClientRect().height > 0) {
+          target.focus();
+        } else if (++tries < 30) {
+          window.requestAnimationFrame(attempt);
+        }
+      };
+      window.requestAnimationFrame(attempt);
+    };
+    const rowButton$ = (key, action) => `#nulavio-profile-list moz-button[data-action="${action}"][data-profile="${key}"]`;
+    /** Close the editor and give the keyboard back to the button that opened it. */
+    const closeEditor = (extra = {}) => {
+      const key = view.editing;
+      show({ editing: null, draft: null, ...extra });
+      if (key !== null) {
+        focusWhenDrawn(rowButton$(key, "edit"));
+      }
+    };
     /** One action at a time. An error is said in the Shell's words for its code; the list is read again either way. */
     const act = async (action, said = "") => {
       if (view.busy) {
@@ -520,9 +542,10 @@
             // Not in the group's store yet: the engine's own page edits it.
             await act(() => shell.NulavioProfiles.openCurrentPage("edit"));
           } else if (view.editing === key) {
-            show({ editing: null, draft: null });
+            closeEditor();
           } else {
             show({ editing: key, draft: { name, avatar: profile.avatar, color: profile.color }, error: "", said: "" });
+            focusWhenDrawn("#nulavio-profile-name");
           }
           break;
         case "delete-here": // the engine's own page deletes the profile in use: it closes this instance safely
@@ -530,7 +553,11 @@
           break;
         case "delete":
           if (await confirmDanger(msg("profilesDeleteTitle", name), msg("profilesDeleteBody"), msg("profilesDeleteConfirm"))) {
-            await act(() => shell.NulavioProfiles.remove(profile.id), msg("profilesDeleted"));
+            // Its row goes away with it: the keyboard moves to the profile before it in the list.
+            const before = profilesNow()[Math.max(0, profilesNow().indexOf(profile) - 1)];
+            if (await act(() => shell.NulavioProfiles.remove(profile.id), msg("profilesDeleted"))) {
+              focusWhenDrawn(rowButton$(keyOf(before), "edit"));
+            }
           }
           break;
       }
@@ -613,7 +640,7 @@
         const action = event.target.closest?.("[data-action]")?.dataset.action;
         const profile = editing();
         if (action === "cancel" || !profile || !view.draft) {
-          show({ editing: null, draft: null, error: "" });
+          closeEditor({ error: "" });
           return;
         }
         if (action !== "save") {
@@ -622,7 +649,7 @@
         // Only what changed is written: an untouched icon or colour is never sent back to be checked again.
         const changed = Object.fromEntries(Object.entries(view.draft).filter(([field, value]) => value !== profile[field]));
         if (!Object.keys(changed).length || (await act(() => shell.NulavioProfiles.update(profile.id, changed), msg("doneSaved")))) {
-          show({ editing: null, draft: null });
+          closeEditor();
         }
       },
       getControlConfig: config => ({

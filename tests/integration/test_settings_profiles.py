@@ -164,6 +164,9 @@ class SettingsProfilesTest(unittest.TestCase):
         self.m.chrome(CLICK_ROW, ["Trabalho", "edit"])
         now = self.seen(lambda n: n["editor"])
         self.assertEqual(now["edit"], {"name": "Trabalho", "avatar": "briefcase", "color": "sky"})
+        # The keyboard follows: into the editor when it opens, back to the row's button when it closes.
+        focus = DOC + "const el = d.activeElement; return [el?.id || null, el?.dataset?.action ?? null, el?.ariaLabel ?? null];"
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome(focus)[0] == "nulavio-profile-name", 5), self.m.chrome(focus))
         # Icon and colour are chosen by looking at them; each choice has a name for who cannot see it.
         choices = (
             DOC
@@ -197,6 +200,8 @@ class SettingsProfilesTest(unittest.TestCase):
         self.m.chrome(CLICK, ['#nulavio-profile-editor-buttons moz-button[data-action="save"]'])
         saved = self.seen(lambda n: n["said"] and not n["editor"])
         self.assertEqual(saved["said"], "Salvo.")
+        back = harness.wait_until(lambda: self.m.chrome(focus)[1] == "edit" and self.m.chrome(focus), 5)
+        self.assertEqual(back, [None, "edit", "Editar nome, ícone e cor: Estudos"], self.m.chrome(focus))
         self.assertIsNone(saved["error"])
         self.assertEqual(self.profiles()["Estudos"], ("book", "violet"))
         self.assertNotIn("Trabalho", self.profiles())
@@ -235,6 +240,10 @@ class SettingsProfilesTest(unittest.TestCase):
         self.m.send("WebDriver:AcceptAlert")
         gone = self.seen(lambda n: n["said"] and all(row["name"] != "Bancos" for row in n["rows"]))
         self.assertEqual(gone["said"], "Perfil excluído.")
+        # The deleted row took the focused button with it: the keyboard is on the profile before it, not lost.
+        focus = DOC + "const el = d.activeElement; return [el?.dataset?.action ?? null, el?.ariaLabel ?? null];"
+        kept = harness.wait_until(lambda: self.m.chrome(focus)[0] == "edit" and self.m.chrome(focus), 5)
+        self.assertEqual(kept, ["edit", "Editar nome, ícone e cor: Pessoal"], self.m.chrome(focus))
         self.assertNotIn("Bancos", self.profiles())
         # The profile in use is deleted on the engine's own page, which closes this instance safely.
         self.stub("P", "openCurrentPage", "return Promise.resolve();")
