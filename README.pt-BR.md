@@ -49,7 +49,7 @@ O Nulavio é um navegador de código aberto para Linux, compilado a partir do c�
 
 ## Status
 
-**Alpha.** A alpha pública, agora na [v160.0-0.2](https://github.com/nulavio/nulavio/releases/tag/v160.0-0.2) (Firefox 160.0, uma atualização de segurança da v160.0-0.1), já saiu para o **Fedora**, por um repositório dnf assinado; o Ubuntu (APT) vem depois. Desbloquear um perfil pelo celular ou por uma chave de segurança FIDO2 fica para depois da 1.0 e aparece no navegador como "ainda não disponível". Os [critérios de release](docs/product/release-criteria.md) mostram o que está pronto e o que falta, e o [roadmap](docs/product/roadmap.md), as fases.
+**Alpha.** A alpha pública, agora na [v160.0-0.2](https://github.com/nulavio/nulavio/releases/tag/v160.0-0.2) (Firefox 160.0, uma atualização de segurança da v160.0-0.1), já saiu para o **Fedora**, por um repositório dnf assinado; o Ubuntu (APT) vem depois. Desbloquear um perfil pelo celular chega no próximo release, junto com o app Nulavio Companion no F-Droid; a chave de segurança FIDO2 fica para depois da 1.0 e aparece no navegador como "ainda não disponível". Os [critérios de release](docs/product/release-criteria.md) mostram o que está pronto e o que falta, e o [roadmap](docs/product/roadmap.md), as fases.
 
 O Nulavio acompanha o canal de releases do Firefox e busca publicar cada atualização de segurança do Firefox em até 24 horas, 72 no máximo ([política de atualização](docs/architecture/update-policy.md)).
 

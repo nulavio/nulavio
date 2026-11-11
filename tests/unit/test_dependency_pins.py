@@ -36,7 +36,9 @@ IMAGE_REF = re.compile(
 PINNED_IMAGE = re.compile(
     r"^[a-z0-9-]+(\.[a-z0-9-]+)+(:\d+)?(/[a-z0-9._-]+)+:[\w.-]+@sha256:[0-9a-f]{64}$"
 )  # registry host first
-RELEASE_SCRIPTS = ("make_rpm.sh", "make_deb.sh", "check_rpm.sh", "check_deb.sh", "sign_repo.sh", "test_signed_repo.sh")
+RELEASE_SCRIPTS = (
+    "make_rpm.sh", "make_deb.sh", "check_rpm.sh", "check_deb.sh", "sign_repo.sh", "test_signed_repo.sh", "test_kms_signing.sh",
+)  # fmt: skip
 # Android lint's Security checks that default to a warning (lint 9.4, `lint --show`), promoted to errors in app/lint.xml.
 LINT_SECURITY = {
     "AcceptsUserCertificates", "AddJavascriptInterface", "AllowAllHostnameVerifier", "AuthLeak", "BadHostnameVerifier",
