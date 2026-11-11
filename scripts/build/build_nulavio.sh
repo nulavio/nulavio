@@ -53,7 +53,13 @@ mkdir -p "$work/mozbuild" "$work/logs"
 python3 -I "$repo/scripts/upstream/fetch_firefox_source.py" "$version" --dest "$work"
 python3 -I "$repo/scripts/upstream/fetch_firefox_l10n.py" --source "$src" \
     --dest "$work/mozbuild/l10n-central" --git-dir "$work/l10n-git" "${locales[@]}"
-python3 -I "$repo/scripts/build/make_branding.py" --source "$src"
+# The icons are rendered in the pinned Fedora image on every machine (ImageMagick 7 with
+# librsvg), so they do not depend on the host's tools: the same bytes on the laptop and in CI.
+podman run --rm --security-opt label=disable -v "$repo:/repo:ro" -v "$src:/src" \
+    "$("$repo/scripts/release/base_image.sh" fedora-build)" bash -euc '
+    dnf -y -q --setopt=install_weak_deps=False install python3 ImageMagick >/dev/null 2>&1 ||
+        { echo "nulavio-build: dnf failed (branding)" >&2; exit 1; }
+    python3 -I /repo/scripts/build/make_branding.py --source /src'
 python3 -I "$repo/scripts/build/apply_patches.py" --source "$src"
 cp "$repo/browser/build/mozconfig" "$src/mozconfig"
 # Bootstrap also respects the requested memory budget and fixed two-CPU quota.
