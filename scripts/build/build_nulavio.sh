@@ -83,6 +83,12 @@ podman build --memory="${memory_gib}g" --memory-swap="${memory_gib}g" \
     --cpu-period=100000 --cpu-quota="$cpu_quota" --jobs=1 -q -t "$image" \
     -f "$repo/ci/containers/fedora-build.Containerfile" "$repo/ci/containers" >/dev/null
 
+# Repeatable builds: the build ID (application.ini, about:buildconfig) and the tools that
+# read SOURCE_DATE_EPOCH take the time of the Nulavio commit, not the clock, so the same
+# commit gives the same bytes (.github/workflows/repeatable.yml compares two builds).
+commit_time=$(git -C "$repo" log -1 --format=%ct)
+build_date=$(TZ=UTC date -d "@$commit_time" +%Y%m%d%H%M%S)
+
 # Single-quoted command expands inside the container.
 control="$work/logs/guard-$(date +%Y%m%dT%H%M%S)-$$"
 # shellcheck disable=SC2016
@@ -91,6 +97,8 @@ exec python3 -B -I "$repo/scripts/build/build_guard.py" --control "$control" -- 
     -v "$work/mozbuild":/root/.mozbuild:Z \
     "${secret_mounts[@]}" \
     -e MOZCONFIG=/src/mozconfig \
+    -e MOZ_BUILD_DATE="$build_date" \
+    -e SOURCE_DATE_EPOCH="$commit_time" \
     -e MOZBUILD_STATE_PATH=/root/.mozbuild \
     -e NULAVIO_LOCALES="${locales[*]}" \
     "$image" -- \

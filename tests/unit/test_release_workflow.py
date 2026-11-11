@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import io
 import os
 import shutil
 import stat
 import subprocess
+import sys
+import tarfile
 import tempfile
 import unittest
 from pathlib import Path
@@ -148,6 +151,53 @@ class AsanWorkflowTest(unittest.TestCase):
         self.assertIn("never a release", out.stderr)
         build = (ROOT / "scripts" / "build" / "build_nulavio.sh").read_text(encoding="utf-8")
         self.assertIn("NULAVIO_MOZCONFIG_EXTRA =~ ^mozconfig", build)
+
+
+class RepeatableBuildTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.tmp)
+        sys.path.insert(0, str(RELEASE))
+        import compare_builds
+
+        self.compare = compare_builds
+
+    def archive(self, name, files, mode=0o644):
+        path = self.tmp / name
+        with tarfile.open(path, "w:xz") as archive:
+            for member_name, body in files.items():
+                info = tarfile.TarInfo(member_name)
+                info.size, info.mode, info.mtime = len(body), mode, 1_700_000_000
+                archive.addfile(info, io.BytesIO(body))
+        return path
+
+    def test_identical_archives_pass(self):
+        first = self.archive("a.tar.xz", {"nulavio/libxul.so": b"same"})
+        second = self.tmp / "b.tar.xz"
+        second.write_bytes(first.read_bytes())
+        self.assertEqual(self.compare.main([str(first), str(second)]), 0)
+
+    def test_a_difference_fails_and_names_the_file(self):
+        first = self.archive("a.tar.xz", {"nulavio/libxul.so": b"one", "nulavio/same": b"x"})
+        second = self.archive("b.tar.xz", {"nulavio/libxul.so": b"two", "nulavio/same": b"x"})
+        summary = self.tmp / "summary.md"
+        code = self.compare.main([str(first), str(second), "--summary", str(summary), "--extract", str(self.tmp / "d")])
+        self.assertEqual(code, 1)
+        report = summary.read_text(encoding="utf-8")
+        self.assertIn("`nulavio/libxul.so`: content", report)
+        self.assertNotIn("nulavio/same", report)
+        self.assertEqual((self.tmp / "d" / "second" / "nulavio" / "libxul.so").read_bytes(), b"two")
+
+    def test_the_build_date_is_the_commit_time_and_the_workflow_builds_twice(self):
+        build = (ROOT / "scripts" / "build" / "build_nulavio.sh").read_text(encoding="utf-8")
+        self.assertIn('-e MOZ_BUILD_DATE="$build_date"', build)
+        self.assertIn('-e SOURCE_DATE_EPOCH="$commit_time"', build)
+        text = (ROOT / ".github" / "workflows" / "repeatable.yml").read_text(encoding="utf-8")
+        self.assertIn("copy: [first, second]", text)
+        self.assertIn("runs-on: blacksmith-", text)
+        self.assertIn("scripts/release/compare_builds.py", text)
+        self.assertNotIn("R2_", text)
+        self.assertNotIn("id-token", text)
 
 
 if __name__ == "__main__":

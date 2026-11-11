@@ -55,11 +55,7 @@ jobs:
       - name: Install the build
         run: |
           firefox=$(python3 -I -c 'import json; print(json.load(open("browser/build/engine.json"))["firefox"])')
-          tarball=$(find "$HOME/.cache/nulavio-build/firefox-$firefox/obj-nulavio/dist" -maxdepth 1 -name 'nulavio-*.tar.xz' | head -1)
-          mkdir -p "$RUNNER_TEMP/install"
-          tar -xJf "$tarball" -C "$RUNNER_TEMP/install"
-          python3 -I scripts/build/make_distribution.py --out "$RUNNER_TEMP/install/nulavio/distribution"
-          python3 -I scripts/build/make_tools.py --out "$RUNNER_TEMP/install/nulavio/nulavio-tools"
+          scripts/build/install_build.sh "$firefox" "$RUNNER_TEMP/install"
           # The whole listing goes to a file first: grep -q on a pipe would stop nm with SIGPIPE.
           nm -D "$RUNNER_TEMP/install/nulavio/libxul.so" > "$RUNNER_TEMP/libxul.symbols"
           grep -q __asan_init "$RUNNER_TEMP/libxul.symbols" || { echo "::error::libxul.so is not instrumented"; exit 1; }

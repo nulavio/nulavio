@@ -1,0 +1,100 @@
+name: repeatable build
+
+# Build the same commit twice, on two separate Blacksmith machines, and require the same
+# bytes: the portable archive (scripts/release/make_archive.sh) of each installed tree is
+# compared by scripts/release/compare_builds.py. A difference fails the run and lists what
+# differs, with diffoscope's report on the first files as an artifact. OpenSSF Best
+# Practices `build_repeatable`. Monthly and by hand, from main only (about US$1 a run).
+
+on:
+  schedule:
+    - cron: "41 4 15 * *" # monthly, on the 15th (the ASan run is on the 1st)
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: repeatable
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: build ${{ matrix.copy }} (Blacksmith)
+    if: github.ref == 'refs/heads/main'
+    runs-on: blacksmith-16vcpu-ubuntu-2404
+    environment: build
+    timeout-minutes: 120
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        copy: [first, second]
+    env:
+      NULAVIO_BUILD_PROFILE: runner
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Google Safe Browsing key (as in a release build)
+        env:
+          KEY: ${{ secrets.GOOGLE_SAFEBROWSING_API_KEY }}
+        run: |
+          [ -n "$KEY" ] || { echo "::error::the build environment has no GOOGLE_SAFEBROWSING_API_KEY"; exit 1; }
+          umask 077
+          mkdir -p "$HOME/.config/nulavio-build"
+          printf '%s' "$KEY" > "$HOME/.config/nulavio-build/google-safebrowsing.key"
+      - name: Build
+        run: |
+          firefox=$(python3 -I -c 'import json; print(json.load(open("browser/build/engine.json"))["firefox"])')
+          scripts/build/build_nulavio.sh "$firefox"
+      - name: Remove the Safe Browsing key
+        if: always()
+        run: rm -f "$HOME/.config/nulavio-build/google-safebrowsing.key"
+      - name: Install and pack (the release's portable archive)
+        run: |
+          firefox=$(python3 -I -c 'import json; print(json.load(open("browser/build/engine.json"))["firefox"])')
+          scripts/build/install_build.sh "$firefox" "$RUNNER_TEMP/install"
+          scripts/release/make_archive.sh "$RUNNER_TEMP/install/nulavio" "$RUNNER_TEMP/nulavio.tar.xz"
+          sha256sum "$RUNNER_TEMP/nulavio.tar.xz" | tee -a "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: build-${{ matrix.copy }}
+          path: ${{ runner.temp }}/nulavio.tar.xz
+          if-no-files-found: error
+          retention-days: 7
+
+  compare:
+    name: the two builds are the same bytes
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: build-*
+          path: ${{ runner.temp }}/builds
+      - name: Compare
+        id: compare
+        run: |
+          python3 -I scripts/release/compare_builds.py "$RUNNER_TEMP/builds/build-first/nulavio.tar.xz" \
+            "$RUNNER_TEMP/builds/build-second/nulavio.tar.xz" --summary "$GITHUB_STEP_SUMMARY" --extract "$RUNNER_TEMP/differ"
+      - name: diffoscope on the first differing files
+        if: failure() && steps.compare.outcome == 'failure'
+        run: |
+          sudo apt-get update -q && sudo apt-get install -y --no-install-recommends diffoscope-minimal
+          mkdir -p "$RUNNER_TEMP/diffoscope"
+          timeout 900 diffoscope --max-report-size 20000000 --text "$RUNNER_TEMP/diffoscope/report.txt" \
+            --html-dir "$RUNNER_TEMP/diffoscope/html" "$RUNNER_TEMP/differ/first" "$RUNNER_TEMP/differ/second" || true
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: failure() && steps.compare.outcome == 'failure'
+        with:
+          name: diffoscope
+          path: ${{ runner.temp }}/diffoscope/
+          if-no-files-found: ignore
+          retention-days: 14

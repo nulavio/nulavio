@@ -288,6 +288,17 @@ Every release run builds it: the `flatpak` job of `release.yml` builds and insta
 
 Submitting to Flathub (once, by the maintainer): open a pull request to `flathub/flathub` (branch `new-pr`) with that folder; after it is merged, Flathub creates the repository `flathub/net.nulavio.Nulavio`, where each release is a pull request with the new folder. Verify the app on Flathub's developer page: it gives a token to serve at `https://nulavio.net/.well-known/org.flathub.VerifiedApps.txt`.
 
+### Repeatable builds
+
+The same commit must give the same bytes (OpenSSF Best Practices `build_repeatable`). What makes that hold:
+- every build runs in the pinned `fedora-build` image with the same paths (`/src`, `/root/.mozbuild`);
+- the toolchains come from Mozilla's bootstrap, pinned by the source release;
+- the branding icons are rendered in the pinned image;
+- the build ID (`MOZ_BUILD_DATE`) and `SOURCE_DATE_EPOCH` are the Nulavio commit's time, not the clock;
+- the portable archive is packed reproducibly (`make_archive.sh`: sorted, owner 0, normalized modes, one time).
+
+`.github/workflows/repeatable.yml` checks it monthly and by hand. It builds the pinned Firefox twice, on two separate Blacksmith machines, installs and packs each build (`install_build.sh`, `make_archive.sh`), and `compare_builds.py` requires identical archives. On a difference, it lists the entries that differ and what differs (content, mode, link, time, owner), and attaches diffoscope's report on the first files.
+
 ### Publishing a release
 
 | Step | Command | What it does |
