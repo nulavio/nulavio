@@ -33,6 +33,14 @@ this.nulavioPersonalise = class extends ExtensionAPI {
         openKeyboardShortcuts: call(() =>
           NulavioPersonalise.openKeyboardShortcuts(context.xulBrowser?.browsingContext?.topChromeWindow)
         ),
+        // One settings page (ADR 0008). The caller names where; the host knows which pane that is.
+        openSettings: call((where, replace) =>
+          ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioSettings.sys.mjs").NulavioSettings.openFor(
+            context.xulBrowser?.browsingContext?.topChromeWindow,
+            where ?? "",
+            replace ? context.xulBrowser : null
+          )
+        ),
         onChanged: new ExtensionCommon.EventManager({
           context,
           name: "nulavioPersonalise.onChanged",

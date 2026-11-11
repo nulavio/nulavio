@@ -369,7 +369,15 @@ async function openShellPage(path) {
   window.close();
 }
 document.getElementById("manage").addEventListener("click", () => openShellPage("settings/settings.html#profiles"));
-document.getElementById("settings").addEventListener("click", () => openShellPage("settings/settings.html"));
+// One settings page (ADR 0008): "Configurações" is the browser's page, opened in this window.
+document.getElementById("settings").addEventListener("click", async () => {
+  if (browser.nulavioPersonalise?.openSettings) {
+    await browser.nulavioPersonalise.openSettings("");
+    window.close();
+  } else {
+    await openShellPage("settings/settings.html");
+  }
+});
 document.getElementById("new-profile").addEventListener("click", openSheet);
 document.getElementById("new-temporary").addEventListener("click", () =>
   act(() => profiles.openTemporary(), t("profilesTemporaryOpening"))

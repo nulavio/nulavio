@@ -4,6 +4,11 @@
 
 ## Nulavio's panes and groups inside the engine's settings page (ADR 0008).
 
+nulavio-read-failed =
+    .message = Não foi possível ler esta opção agora. Recarregue a página para tentar de novo.
+
+## Aparência
+
 nulavio-layout-group =
     .label = Abas e organização da janela
     .description = Onde ficam as abas nas janelas deste perfil. A barra de endereço e os sinais de segurança continuam visíveis em qualquer organização; só o modo Imersivo, abaixo, os tira de vista.
@@ -19,7 +24,7 @@ nulavio-layout-focus =
 
 nulavio-immersive =
     .label = Imersivo
-    .description = Tira de vista a barra de endereço e as abas. A faixa do topo continua mostrando o perfil e o site. Elas voltam com o ponteiro no alto ou na lateral da janela, com o teclado, e sozinhas sempre que o navegador precisa mostrar algo: um pedido de permissão, um aviso de download, uma câmera ou um microfone em uso, ou uma página que a faixa não sabe nomear.
+    .description = Tira de vista a barra de endereço e as abas; a faixa do topo continua mostrando o perfil e o site. Elas voltam com o ponteiro na borda da janela, com o teclado, e sozinhas sempre que o navegador precisa mostrar algo.
 
 nulavio-look-group =
     .label = Cores do Nulavio
@@ -36,12 +41,132 @@ nulavio-more-contrast =
 nulavio-newtab-ambience =
     .label = Fundo suave na nova aba
     .description = Um fundo colorido atrás dos cartões da nova aba. Nunca em janelas privativas.
+nulavio-reduce-transparency =
+    .label = Reduzir transparência
+    .description = Deixa sólidos os cartões da nova aba.
+
+## Geral (the engine's first pane, while accounts are turned off)
+
+nulavio-pane-general =
+    .heading = Geral
+nulavio-pane-general-nav = Geral
+
+## Perfis e proteção
 
 nulavio-pane-profiles =
     .heading = Perfis e proteção
 nulavio-pane-profiles-nav = Perfis e proteção
+nulavio-here-group =
+    .label = Você está em
+    .description = O perfil desta janela e como ele está protegido agora.
+# $name is the profile's name, chosen by the person.
+nulavio-here-plain =
+    .label = { $name }
+    .description = Sem senha. O Nulavio não criptografa os dados deste perfil.
+nulavio-here-protected =
+    .label = { $name }
+    .description = Protegido e desbloqueado. Fica criptografado no disco enquanto está bloqueado.
+nulavio-here-temporary =
+    .label = { $name }
+    .description = Temporário. Apagado ao fechar.
+nulavio-here-unknown =
+    .label = { $name }
+    .description = Não foi possível ler a proteção deste perfil.
+nulavio-here-none =
+    .label = Perfil padrão
+    .description = Esta janela foi aberta fora do grupo de perfis do Nulavio.
 nulavio-profiles-group =
     .label = Seus perfis
     .description = Cada perfil guarda seus próprios logins, histórico e extensões. Um perfil protegido fica criptografado no disco enquanto está bloqueado.
 nulavio-open-profiles =
-    .label = Gerenciar perfis e proteção
+    .label = Perfis e métodos de desbloqueio
+    .description = Criar, renomear, proteger com senha ou abrir um perfil temporário.
+nulavio-open-routing =
+    .label = Qual site abre em qual perfil
+    .description = Regras para links vindos de outros aplicativos e endereços digitados.
+
+## Privacidade e segurança
+
+nulavio-protections-group =
+    .label = Proteções do Nulavio
+    .description = O que o Nulavio acrescenta às proteções do navegador.
+nulavio-open-exceptions =
+    .label = Exceções de sites
+    .description = Sites em que uma proteção está desligada ou relaxada, por você ou pelo próprio navegador.
+# $count is the number of changes waiting for a decision.
+nulavio-guard-review =
+    .label = Mudanças feitas fora do Nulavio
+    .description =
+        { $count ->
+            [0] Nada para rever.
+            [one] 1 mudança para rever.
+           *[other] { $count } mudanças para rever.
+        }
+
+## Senhas
+
+nulavio-passwords-group =
+    .label = Quem guarda suas senhas
+    .description = Um gerenciador por perfil. O Nulavio nunca lê o seu cofre.
+nulavio-passwords-now-builtin =
+    .label = Em uso: o gerenciador do próprio navegador
+    .description = As opções dele ficam logo abaixo.
+nulavio-passwords-now-none =
+    .label = Nenhum gerenciador ligado
+    .description = O navegador não salva nem preenche senhas neste perfil.
+# $name is the name of a password manager extension.
+nulavio-passwords-now-extension =
+    .label = Em uso: { $name }
+    .description = Uma extensão. O gerenciador do próprio navegador fica desligado.
+nulavio-open-passwords =
+    .label = Trocar de gerenciador
+    .description = O do navegador ou um dos que o Nulavio sabe instalar pela extensão oficial.
+
+## Pesquisa
+
+nulavio-search-group =
+    .label = Mecanismos do Nulavio
+    .description = Sugestões de busca ligadas por mecanismo, e mecanismos que o navegador não traz.
+nulavio-open-search =
+    .label = Mecanismos e sugestões por mecanismo
+
+## Assistente e IA
+
+nulavio-pane-assistant =
+    .heading = Assistente e IA
+nulavio-pane-assistant-nav = Assistente e IA
+nulavio-assistant-group =
+    .label = Assistente e agentes
+    .description = O assistente do Nulavio e agentes como Claude Code ou Codex usam um perfil separado (a Área de IA), só com as permissões que você define.
+nulavio-open-assistant =
+    .label = Assistente, agentes e atividade
+    .description = Ligar o assistente, conectar um agente, pausar, revogar e ver o que foi feito.
+
+## Abas e navegação
+
+nulavio-layout-moved-group =
+    .label = Disposição das abas
+nulavio-layout-moved =
+    .label = Abas na lateral, no topo ou em Foco
+    .description = A escolha fica em Aparência.
+nulavio-shortcuts-group =
+    .label = Atalhos do Nulavio
+    .description = Teclas para as ações do Nulavio. Você pode trocar cada uma.
+nulavio-key-none =
+    .description = Sem tecla
+nulavio-keys-change =
+    .label = Mudar os atalhos do Nulavio
+    .description = Na tela do navegador, que confere cada tecla contra as do sistema e das extensões.
+nulavio-keys-reset =
+    .label = Restaurar os atalhos padrão
+
+## Integrações
+
+nulavio-pane-integrations =
+    .heading = Integrações
+nulavio-pane-integrations-nav = Integrações
+nulavio-integrations-group =
+    .label = Seu desktop
+    .description = O que o seu desktop oferece ao Nulavio, verificado neste computador. A verificação não muda nada e não envia nada a lugar nenhum.
+nulavio-open-integrations =
+    .label = Ver as integrações

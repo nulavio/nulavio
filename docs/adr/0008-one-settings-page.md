@@ -1,6 +1,6 @@
 # ADR 0008 — One settings page: Nulavio's options inside the engine's about:preferences
 
-- **Status:** Proposed (2026-11-11), with a working proof of concept on the engine (below). Not merged.
+- **Status:** Proposed (2026-11-11). The proof of concept and slice 1 (the host hardened, the journey's navigation, every way in) work on the engine, below. Not merged.
 - **Related:** [references](../design/references/2026-11/README.md), the frontend audit of 2026-11 (pull request #41), [ADR 0003](0003-nulavio-profiles-and-routing.md), [ADR 0007](0007-ai-bridge.md), [UX principles](../design/ux-principles.md).
 
 ## Context
@@ -33,39 +33,43 @@ Firefox 160's settings page is built from data: a pane is a list of groups (`Set
 2. **Mechanism.** `NulavioSettings.sys.mjs` observes `chrome-document-global-created`. For a system-principal `about:preferences` (or `about:settings`) document, and nothing else, it imports `settings/native/panes.mjs` into that document's own global at `DOMContentLoaded`, before the page's own listener, through the window's own module loader (`win.ChromeUtils.importESModule(…, { global: "current" })`, a fixed `resource://` address). No script loader and no evaluated text: the Shell's rule against `loadSubScript` stands. The module calls the same registry the engine's panes call. Words are Fluent (`l10n/<locale>/nulavio/settings.ftl`, registered as an `L10nFileSource`), en-US and pt-BR together.
 3. **One seam.** The page registers its own panes right after our module runs, so an engine pane that gains a Nulavio group is edited as it is registered (a wrapper around `SettingPaneManager.registerPane`). That is the only place the page's code is intercepted, and `test_settings_native` fails if the seam stops working.
 4. **What happens when it fails, stated as a contract and not as a promise.**
-   - *Before anything is registered* (the module cannot load, the registry is missing or has another shape): a preflight checks the registry's functions first; nothing is changed and the page is the engine's stock page.
-   - *While registering*: every Nulavio group and pane is added inside one guarded step that records what it added; on an exception the wrapper is removed, what was added is unregistered, and the page continues as the engine's. A Nulavio option that could not be shown is reachable from the band's menu until the old page is removed, and after that from a plain fallback page.
-   - *After the page is built* (a setting cannot be read or written): the control shows the unknown or failed state in words and is disabled; it never shows a value it did not read.
-   - Nothing of the engine is hidden before Nulavio's part is in place, in any of the three.
-   The proof of concept implements the first and the last line; the middle two are part of slice 1.
-5. **Organised by what the person is doing**, not by origin. A Nulavio group goes into the engine pane it belongs to; a pane is new only when the engine has no home for it:
+   - *Before anything is registered* (the module cannot load, the registry is missing or has another shape, the page already registered its panes): a preflight checks the registry's functions and stores first; nothing is changed and the page is the engine's stock page.
+   - *While registering*: every Nulavio setting, group, pane and navigation entry is added inside one guarded step that records what it added; on an exception the wrapper is removed, what was added is unregistered, the engine's navigation goes back to its order, an engine group that had been edited gets its rows back, and the page continues as the engine's. A Nulavio option that could not be shown is still reachable from the band and the profile menu, which open the Shell's own pages.
+   - *While the engine registers a pane that gains a Nulavio group*: if the edit of that pane throws, the engine's pane is registered as it was.
+   - *After the page is built*: a value read from a Shell module is not drawn until the read answered, so a control never shows a default as if it were the person's choice; a read that failed leaves its controls out and says so in words in their group. An answer that a later read overtook is dropped.
+   - Nothing of the engine is hidden before Nulavio's part is in place, in any of these.
+   Slice 1 implements all of them; `test_settings_native` breaks the registry halfway and a read on purpose.
+5. **Organised by what the person is doing**, not by origin. A Nulavio group goes into the engine pane it belongs to; a pane is new only when the engine has no home for it. The order is the journey: settle in, how it looks, who you are, what protects you, what helps you, how you browse. As built in slice 1:
 
    | Order | Pane | Engine groups | Nulavio groups |
    |---|---|---|---|
-   | 1 | Início | default browser, import | where you are (profile, protection), continue the first-run steps |
-   | 2 | Aparência | website appearance, theme, density | **tabs and window layout** (first), Nulavio colours |
-   | 3 | Perfis e proteção (new) | — | profiles, protection methods, temporary profiles, routing rules |
-   | 4 | Privacidade e segurança | as today | site exceptions, DNS, what changed outside Nulavio (Guard) |
-   | 5 | Pesquisa | as today | engines with per-engine suggestion consent |
-   | 6 | Senhas | as today | which manager is in use |
-   | 7 | Assistente e IA (new) | — | assistant, agents, emergency stop, activity |
-   | 8 | Abas e navegação, Página inicial, Downloads | as today | — |
-   | 9 | Atalhos (new) | — | Nulavio's keys and the link to the engine's |
-   | 10 | Acessibilidade, Idiomas, Permissões e dados | as today | — |
-   | 11 | Integrações (new) | — | desktop integrations |
-   | 12 | Sobre o Nulavio | as today | — |
+   | 1 | Geral (the engine's first pane) | default browser, import, backup; "accounts are unavailable" last | — |
+   | 2 | Aparência | website appearance, theme, density, related settings | **tabs and window layout with Immersive** (first), Nulavio colours |
+   | 3 | Perfis e proteção (new) | — | where you are (this profile and its protection, read now); profiles and unlock methods; which site opens in which profile |
+   | 4 | Privacidade e segurança | all of them, in their order | Nulavio's protections, after the engine's tracking protection: site exceptions, what changed outside Nulavio (the Guard's count, read now) |
+   | 5 | Senhas e preenchimento automático | all of them | who keeps your passwords (the manager in use, read now), first |
+   | 6 | Pesquisa | all of them | Nulavio's engines, after the default engine |
+   | 7 | Assistente e IA (new), then the engine's AI controls | as today | assistant, agents, activity |
+   | 8 | Abas e navegação | all but the two-way layout picker | a pointer to Aparência where that picker was; Nulavio's keys, after the engine's keyboard group |
+   | 9 | Página inicial, Downloads, Acessibilidade, Idiomas, Permissões e dados | as today | — |
+   | 10 | Integrações (new) | — | desktop integrations |
+   | 11 | Sobre o Nulavio | as today | — |
 
-6. **Nothing that is a protection moves or changes meaning.** The engine's privacy, security, permissions and password panes keep their code, order and wording. Nulavio adds groups next to them; it never replaces one.
+   Three things differ from the first draft of this table. The first pane is called "Geral", not "Início": the engine already has "Página inicial e início". Nulavio's keys are a group next to the engine's own keyboard group, not a pane of their own. DNS is not listed: see "What stays undecided".
+
+6. **Nothing that is a protection moves or changes meaning.** The engine's privacy, security, permissions and password panes keep their code, order and wording. Nulavio adds groups next to them; it never replaces one. Three things of the engine give way, none of them a protection, each because it asked the same question twice: the two-way "Disposição do navegador" picker (Nulavio's three-way one in Aparência writes the same preference and more), the "Perfis" entry of the first pane (it opens the engine's profile pages, which know nothing of a profile's protection), and the row of Aparência's "related settings" that sent people to the pane whose picker now points back.
 7. **Three ways to host a Nulavio section**, chosen per section:
    - *Declarative* (layout, colours, DNS choice, search consent, shortcuts list): settings and groups only. This is the default.
    - *Custom element* in a group (profiles list, routing rules, agents): a small web component registered by the same script, drawn with the engine's widgets and tokens.
    - *Not embedded*: the existing security moments (unlock, create a protected profile, agent request, Guard review) stay their own pages with the band naming them. Settings link to them; they are not settings.
-8. **Entry points.** Every "Configurações do Nulavio" entry (band, new tab, quick action, profile menu, add-ons manager) opens `about:preferences` at the right pane. The old address redirects while sections remain there.
+8. **Entry points.** Every "Configurações" entry of the Shell (new tab, first run, profile menu, quick action) opens `about:preferences`, at the pane it names, in the window that asked. A Shell page cannot link to that address, so it goes through one bridge (`nulavioPersonalise.openSettings`) that takes a name from a fixed list and never an address. The Shell's own page (`settings/settings.html`) stops being a settings page with its own navigation: it holds the detail screens not yet drawn natively (profiles, routing, assistant, search engines, password manager, site exceptions, DNS, integrations), each reached from its pane, and its first entry goes back to that pane in the same tab. Entry points that name one of those screens (the band's protection and routing marks, the assistant's panel) still open it directly.
 
 ## What stays undecided (maintainer)
 
+- **DNS: two controls for one preference.** The engine's privacy pane has its own "DNS sobre HTTPS" group (four levels, the engine's words); Nulavio's first run and its detail screen ask the same thing as three choices in plain words, with Quad9 and Mullvad next to the engine's default. Both write `network.trr.mode`. Slice 1 leaves the engine's group alone (decision 6) and does not add a second control next to it, so the plain-words version is reachable from the first run only. Recommendation: put Nulavio's three choices where the engine's summary box is and keep the engine's advanced screen behind it; it replaces a group of a protection pane, so it waits for a decision.
+
 - **"Seu navegador está sendo gerenciado pela sua organização."** Everyone sees it, because Nulavio ships its own `policies.json`. It is true and it trains people to ignore a line that would also be the only sign of a policy someone else added. Recommendation: keep the line only when the active policies differ from the ones Nulavio ships (the Guard already tracks policy changes), and say "Nulavio aplica N políticas próprias" in "Sobre" otherwise. It touches a security cue, so it is not changed without a decision.
-- **"Conta e sincronização", "Controles de inteligência artificial", "Firefox Labs".** Recommendation: hide each only while the feature behind it is unavailable **as read at that moment** (accounts disabled by policy, every engine AI feature off, no experiment offered), never on the assumption that it is; a pane with one live control stays, and its address keeps working. With accounts off the landing pane becomes "Início". Nulavio's "Assistente e IA" pane sits next to the engine's AI controls when both exist; it does not replace them.
+- **"Conta e sincronização", "Controles de inteligência artificial", "Firefox Labs".** Recommendation: hide each only while the feature behind it is unavailable **as read at that moment** (accounts disabled by policy, every engine AI feature off, no experiment offered), never on the assumption that it is; a pane with one live control stays, and its address keeps working. Slice 1 does the smallest part of this: while `identity.fxaccounts.enabled` is false when the page is built, the first pane is named "Geral" and its "accounts are unavailable" group goes last; nothing is hidden, and with accounts on the pane keeps the engine's name. Nulavio's "Assistente e IA" pane sits before the engine's AI controls; it does not replace them.
 
 ## Consequences
 
@@ -92,6 +96,27 @@ On the alpha's engine (Nulavio 160.0-0.2 build, `dev_sync`, no engine build), br
 
 Not yet proven: the rollback of a failure halfway; session restore, `about:settings`, two windows and the back-forward cache; a custom element for the profiles list; the redirect of the old address; removal of the add-on page; the page under a screen reader.
 
+## Slice 1 (2026-11-11)
+
+On the alpha's engine (`dev_sync`, no engine build), branch `agent/claude/feat-settings-one-page`.
+
+Before, the engine's page with the proof of concept's two additions:
+
+![The settings page before slice 1: "Conta e sincronização" first, the engine's two-way layout picker in Abas e navegação, the engine's own DNS and password groups with nothing of Nulavio's next to them](../design/screenshots/experience-2026-11/settings-before-pt-light.png)
+
+After, in pt-BR (light) and en-US (dark):
+
+![Six panes of the one settings page in Portuguese: Geral, Aparência with the layout card, Perfis e proteção, Nulavio's protections in Privacidade, who keeps the passwords, Nulavio's keys](../design/screenshots/experience-2026-11/settings-sheet-pt-light.png)
+
+![The same six panes in English, dark theme](../design/screenshots/experience-2026-11/settings-sheet-en-dark.png)
+
+- `settings/native/panes.mjs`: the preflight, one guarded registration with an undo, `source()` for values read from Shell modules, three new panes, eight groups, the navigation in the journey's order, the edits of five engine panes and one engine group.
+- `NulavioSettings.sys.mjs`: `open`, `openFor` and `detail`, with the fixed lists of panes and of the old page's sections.
+- `tests/integration/test_settings_native.py`, nine tests on the package after `dev_sync`: the navigation and the groups of every edited pane, with the protection panes losing nothing; the layout card and the Immersive switch; English; **the registry broken halfway leaves the engine's stock page, with nothing of Nulavio's left in the registry or the document**; the `about:settings` alias, a reload, leaving and coming back, and a second window; values read now (profile and protection, password manager following the engine's own checkbox, the Guard's count, a key) and **a read made to fail on purpose**; every way in, and the way back from a detail page in the same tab. Seven of the nine fail on the package without this slice.
+- Seen and not changed: the engine's "related settings" row says "Página inicial do Firefox"; the management notice (below) is on every pane.
+
+Not yet proven: session restore with the page open; the page under a screen reader; a custom element for the profiles list; `stop()` with a settings page open (the page keeps Nulavio's part until it is reloaded).
+
 ## Independent review (2026-11-11)
 
 Reviewed from the source by a second model (Codex, read-only); verdict "accept with changes". Each point was checked before it changed this record:
@@ -101,16 +126,17 @@ Reviewed from the source by a second model (Codex, read-only); verdict "accept w
 | The fail-open promise was universal; it holds only before registration | True: a throw halfway left the wrapper installed | Decision 4 rewritten as a contract; slice 1 implements it |
 | The ordering against the page's own listener is observed, not a contract (session restore, the `about:settings` alias, two windows, a document from the back-forward cache) | True for the cases not run | Listed under "not yet proven"; each gets a test in slice 1 |
 | Management, account and AI controls must not be hidden on assumptions | Agreed | Rewritten above; still the maintainer's decision |
-| A setting backed by an async read shows its default until the read returns | True in `panes.mjs` (`layout` starts as "lateral") | Slice 1: the control is disabled and says "lendo…" until the first read; a stale answer is dropped |
-| `stop()` leaves open settings pages extended; the layout subscription is tied to the window the tab was in | True | Slice 1 |
+| A setting backed by an async read shows its default until the read returns | True in `panes.mjs` (`layout` starts as "lateral") | Fixed in slice 1: nothing is marked or drawn until the read answered; a stale answer is dropped; a failed read says so |
+| `stop()` leaves open settings pages extended; the layout subscription is tied to the window the tab was in | True | Slice 1 fixes the second (the subscription follows the tab); the first is listed under "not yet proven" |
 | Search finds only what is rendered | True: a custom element must render its words to be found | A rule for decision 7's custom elements |
 
 Found while answering the review: the first proof of concept used `loadSubScript`, which the Shell's own static check forbids. It now imports a module through the page's loader (decision 2), and the check passes.
 
 ## Implementation order
 
-1. The host module, the layout and colours groups, the navigation order, tests (this proof of concept, hardened).
-2. Search, DNS, site exceptions, passwords provider, shortcuts (declarative).
-3. Profiles and protection, routing (custom elements).
-4. Assistant and agents (custom elements; the consent dialogs stay as they are).
-5. Entry points and the redirect; remove the add-on page.
+1. Done: the host hardened to the contract, the layout, colours and keys natively, the journey's navigation, a summary and a way in for every other section, every entry point, tests.
+2. Remove the old page's Layout, Aparência and Atalhos sections, which nothing links to any more, and port their tests to the native controls (`test_layout_presets`, `test_appearance`, `test_shortcuts` drive the old markup today).
+3. Search engines, site exceptions and the password manager choice natively (declarative, with one custom element for a list). DNS after its decision.
+4. Profiles and protection, routing (custom elements).
+5. Assistant and agents (custom elements; the consent dialogs stay as they are).
+6. Remove the add-on page.

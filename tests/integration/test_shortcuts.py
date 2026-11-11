@@ -270,9 +270,8 @@ class ShortcutsTest(unittest.TestCase):
         self.assertTrue(harness.wait_until(lambda: self.preset() == "lateral", 15), self.preset())
         before = self.m.chrome("return gBrowser.tabs.length;")
         self.m.chrome(actions + "Q.getAction('nulavio-settings').onPick(null, {browserWindow: window});")
-        opened = (
-            "return gBrowser.tabs.map(t => t.linkedBrowser.currentURI.spec).some(u => u.endsWith('/settings/settings.html'));"
-        )
+        # ADR 0008: one settings page, the browser's own, in this window.
+        opened = "return gBrowser.tabs.map(t => t.linkedBrowser.currentURI.spec).some(u => u === 'about:preferences');"
         self.assertTrue(harness.wait_until(lambda: self.m.chrome(opened), 10))
         self.m.chrome("while (gBrowser.tabs.length > arguments[0]) gBrowser.removeTab(gBrowser.tabs.at(-1));", [before])
 

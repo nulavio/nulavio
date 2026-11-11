@@ -4,10 +4,14 @@
    [hidden] while their feature is unavailable; the rail hides their entries too. */
 
 import { t } from "../lib/i18n.js";
+import { openSettings } from "../lib/settings.js";
 
 const main = document.getElementById("settings-main");
 const sections = [...main.querySelectorAll(":scope > .section")];
 const links = [...document.querySelectorAll(".settings-nav a[data-section]")];
+// ADR 0008: a section the settings page draws itself has no entry here any more; it stays out of
+// this page's search too, so one option is never offered in two places.
+const listed = new Set(links.map(link => link.dataset.section));
 const search = document.getElementById("settings-search");
 const results = document.getElementById("settings-results");
 let active = null;
@@ -112,7 +116,7 @@ function filter() {
   }
   for (const section of sections) {
     let any = false;
-    if (!section.hidden) {
+    if (!section.hidden && listed.has(section.id)) {
       const title = fold(section.querySelector(".section__title").textContent);
       for (const item of section.querySelectorAll(":scope > :not(.section__head)")) {
         const hit = !item.hidden && (matches(title) || matches(fold(`${title} ${item.textContent}`)));
@@ -128,6 +132,11 @@ function filter() {
 }
 
 export function setUpNav() {
+  // Back to the one settings page, at the pane this section belongs to, in this same tab.
+  document.getElementById("settings-back").addEventListener("click", event => {
+    event.preventDefault();
+    openSettings(active?.id ?? "", { replace: true }).catch(console.error);
+  });
   syncLinks();
   show(location.hash.slice(1));
   // A section becomes available after its feature answers: offer it, and show it if it was asked for.

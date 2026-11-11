@@ -327,9 +327,15 @@ class AppearanceApiTest(unittest.TestCase):
                 "setNewtabAmbience",
                 "setReduceTransparency",
                 "openKeyboardShortcuts",
+                "openSettings",
             },
         )
         self.assertEqual(functions["openKeyboardShortcuts"]["parameters"], [])
+        # ADR 0008: a page names a pane or a section; the host maps it to a fixed list. No address crosses.
+        self.assertEqual(
+            [(p["name"], p["type"], p.get("optional")) for p in functions["openSettings"]["parameters"]],
+            [("where", "string", True), ("replace", "boolean", True)],
+        )
         for name in ("setNewtabAmbience", "setReduceTransparency"):
             self.assertEqual(functions[name]["parameters"][0]["type"], "boolean")
         self.assertEqual(functions["setDensity"]["parameters"][0]["enum"], declared["density"]["values"])

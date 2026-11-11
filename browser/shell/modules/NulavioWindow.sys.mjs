@@ -1113,9 +1113,9 @@ class WindowUI {
         isUnsupported: workspace, // an agent's window has no Nulavio settings to open
         onPick: (_queryContext, controller) => {
           const win = controller?.browserWindow ?? top();
-          const url = WebExtensionPolicy.getByID(SHELL)?.getURL("settings/settings.html");
-          if (win && url) {
-            win.openTrustedLinkIn(url, "tab");
+          if (win) {
+            // One settings page (ADR 0008): the browser's own, with Nulavio's options in it.
+            ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioSettings.sys.mjs").NulavioSettings.open(win, "");
           }
           return null;
         },

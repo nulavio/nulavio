@@ -1084,6 +1084,17 @@ Added to the UX7 table. The times come from the motion tokens; `motion.duration.
 
 `tests/unit/test_motion_sheet.py` already enforces the first two columns for every sheet (movement only under `prefers-reduced-motion: no-preference`, times and curves only from tokens); the Immersive prototype failed it until it was brought to these rules.
 
+### Settings: one page, drawn by the engine's widgets (ADR 0008)
+
+| Part | Rule |
+|---|---|
+| Where an option goes | In the pane where the person would look for it, next to the engine's group on the same subject. A pane is new only when the engine has none for it |
+| What draws it | The engine's own widgets, through its registry: `moz-visual-picker` for a choice with a picture, `moz-toggle` for on or off, `moz-radio-group` for a few named choices, `moz-box-item` for a fact, `moz-box-button` for a row that opens a detail screen. No hand-made form control in that page |
+| A fact that is read | Not drawn until it was read. A read that failed leaves its controls out and a `moz-message-bar` in their group says so. Never a default shown as the person's choice |
+| A detail screen | Opens in the same tab; its first entry goes back to the pane it came from. It is not a second settings page: it has no entry for anything the settings page draws |
+| The engine's part | Its protection panes keep every group, in their order. An engine group gives way only when it asks a question Nulavio's group already asks, and never a protection |
+| When it breaks | The page is the engine's stock page: the registry's shape is checked first, and a failure halfway undoes Nulavio's whole part |
+
 ### Sounds
 
 Nulavio plays no sound today, and none of the browsers studied did. The rules for the first one:
@@ -1110,7 +1121,7 @@ Each rule has a check. A change that breaks a check is not finished; a rule with
 | 5 | Movement only under "no preference"; security cues never move | `test_motion_sheet`, `test_motion` |
 | 6 | One primary action per group; the safe action is the primary one in a warning | `test_experience_rules`; component gallery |
 | 7 | pt-BR and en-US change together, in the same commit | Locale parity tests; `test_experience_rules` for Fluent |
-| 8 | One settings page. A new option is a group in the pane where the person would look for it, never a new page | `test_settings_native` (ADR 0008) |
+| 8 | One settings page. A new option is a group in the pane where the person would look for it, never a new page; a link to "the settings" opens that page, and one question is asked in one place | `test_settings_native` (ADR 0008); `test_experience_rules` (settings links go to the one page) |
 | 9 | One decision per screen in a sequence; the card and its actions keep their place | `test_firstrun_stage` (the card's rectangle is the same on every step; it caught a 14 px jump in the prototype) |
 | 10 | No sound outside `NulavioSound.sys.mjs`, and none by default | `test_experience_rules` |
 | 11 | Ideas from other browsers are re-derived, never copied: no file, asset, name or wording. GPL code is never read into the product | Review; `LICENSES.md` when a file is ever taken |

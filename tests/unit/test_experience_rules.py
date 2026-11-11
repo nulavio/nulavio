@@ -86,6 +86,22 @@ class ExperienceRulesTest(unittest.TestCase):
                     f"sounds are played only by {SOUND_MODULE}, which follows the system's setting",
                 )
 
+    def test_settings_links_go_to_the_one_page(self):
+        # ADR 0008: "the settings" is about:preferences. A link of a Shell page to the old page as a whole, or to a
+        # section the settings page draws itself, goes through the bridge (data-settings names the pane or section).
+        moved = re.compile(r"settings/settings\.html(#(layout|appearance|shortcuts)\b)?[\"']")
+        for page in sorted(SHELL.rglob("*.html")):
+            for line in page.read_text(encoding="utf-8").splitlines():
+                if "<a " in line and moved.search(line):
+                    with self.subTest(page=str(page.relative_to(SHELL)), line=line.strip()[:80]):
+                        self.assertIn("data-settings=", line)
+        sections = set(
+            re.findall(r'<section class="section" id="([a-z]+)"', (SHELL / "settings/settings.html").read_text(encoding="utf-8"))
+        )
+        host = (SHELL / "modules/NulavioSettings.sys.mjs").read_text(encoding="utf-8")
+        mapped = set(re.findall(r"^  ([a-z]+): \"", host.split("export const SECTIONS")[1].split("});")[0], flags=re.M))
+        self.assertEqual(sections, mapped, "every section of the old page names the pane it belongs to")
+
     def test_fluent_words_exist_in_both_languages(self):
         ids = {}
         for locale in ("en-US", "pt-BR"):

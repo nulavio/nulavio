@@ -17,6 +17,8 @@
     <!-- UX4 (SPA-04): two panes. The rail lists one section per address (#dns, #routing…),
          grouped by how far a change reaches; the search filters the cards of every section. -->
     <aside class="settings-rail">
+      <!-- ADR 0008: this page holds the detail screens of the one settings page; this goes back to it. -->
+      <a class="settings-back" id="settings-back" href="#" data-i18n="settingsBack" data-i18n-attr="title:settingsBackHint"></a>
       <label class="settings-search">
         <span class="visually-hidden" data-i18n="settingsSearchLabel"></span>
         <input class="input settings-search__input" type="search" id="settings-search" autocomplete="off"
@@ -25,9 +27,7 @@
       <nav class="settings-nav" data-i18n-attr="aria-label:settingsNav">
         <p class="settings-nav__group" id="nav-profile" data-i18n="scopeProfile"></p>
         <ul aria-labelledby="nav-profile">
-          <li><a href="#layout" data-section="layout" data-i18n="layoutHeading">Layout</a></li>
-          <li><a href="#appearance" data-section="appearance" data-i18n="appearanceHeading">Appearance</a></li>
-          <li><a href="#shortcuts" data-section="shortcuts" data-i18n="shortcutsHeading">Shortcuts</a></li>
+          <!-- Layout, Aparência and Atalhos are drawn by the settings page itself now (Aparência, Abas e navegação). -->
           <li><a href="#search" data-section="search" data-i18n="searchHeading">Search</a></li>
           <li><a href="#passwords" data-section="passwords" data-i18n="passwordsHeading">Passwords</a></li>
           <li><a href="#exceptions" data-section="exceptions" data-i18n="exceptionsHeading">Site exceptions</a></li>

@@ -55,6 +55,7 @@ Order: the password step; the recovery code with a wrong group caught; the unloc
 | New-user QA | Changing the search engine, the layout and the contrast took about 7 clicks and one miss: choosing "Foco" moves the settings navigation under the pointer (F4). "Mais contraste" says it is for Nulavio's windows and that site contrast is "nas configurações do navegador", without saying where (F5). A panel opened in the side bar was clipped behind the tab rail once (F9, not reproduced) |
 | References | Zen puts its panes inside `about:preferences`. Floorp keeps a second hub with a banner pointing at it: the same split, and the clearest argument against it |
 | To be | **One page** (ADR 0008): Nulavio's options are native groups inside the engine's panes, ordered by what the person is doing. Proven on the engine: the layout choice is the first card of "Aparência", and the page's search finds the engine's "Contraste de sites" and Nulavio's "Cores do Nulavio" together, which answers F5. F4 goes away with the page: the engine's settings navigation does not move with the tab layout |
+| Built (slice 1) | Every "Configurações" of the Shell opens that one page. Its navigation follows the journey: Geral, Aparência, Perfis e proteção, Privacidade e segurança, Senhas, Pesquisa, Assistente e IA, then how you browse. Layout, Immersive, colours and Nulavio's keys are drawn by the page; each other section has a group in the pane it belongs to, which says what is true now (the profile and its protection, the password manager in use, how many changes wait for a review) and opens the detail screen in the same tab, with a way back. The layout is asked in one place: the engine's two-way picker in "Abas e navegação" gives way to a pointer to Aparência. Walked on the engine from the new tab to a detail screen and back: one tab, three clicks |
 
 ## 6. Daily use
 
@@ -93,7 +94,7 @@ The same second model walked the journeys again as a first-time user, this time 
 
 | # | Moment | Journey | Evidence | Answered by |
 |---|---|---|---|---|
-| 1 | Two settings pages; the person guesses which one owns an option | Configure | walked; F5 | ADR 0008, proof of concept and first tests |
+| 1 | Two settings pages; the person guesses which one owns an option | Configure | walked; F5 | ADR 0008: one page with the journey's navigation and every way in (slice 1, built); the detail screens still to be drawn natively |
 | 2 | "Protegido" beside a warning on the first frame | First use | walked; F1 (the filter part; "Senhas" was an artefact of the test session) | Only true facts on the welcome, the filter read again for the summary |
 | 3 | The first run never shows profiles, protection or the band | First use, profile | walked | First-run slice: the welcome draws the band with the real profile; the last question offers a protected profile |
 | 4 | The assistant cannot be found, then asks for a provider form | Assistant | F8 | To do |

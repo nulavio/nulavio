@@ -4,6 +4,7 @@
 import { localize, t } from "../lib/i18n.js";
 import { keyElements, nulavioKeys } from "../lib/keys.js";
 import { providerName, providerStatus } from "../lib/providers.js";
+import { wireSettingsLinks } from "../lib/settings.js";
 import { chip, confirmDialog, errorText, h, settleRadioChanges, stateBadge } from "../lib/ui.js";
 
 const UBLOCK_ID = "uBlock0@raymondhill.net";
@@ -758,6 +759,8 @@ async function firstRun() {
 // Search settings and Nulavio settings exist only where the Shell is built in (privileged API).
 document.getElementById("search-settings").hidden = !browser.nulavioSearch;
 document.getElementById("open-settings").hidden = !browser.nulavioSearch;
+// One settings page (ADR 0008): these links open about:preferences at the pane they name.
+wireSettingsLinks();
 
 // UX6: Nulavio's keys in "Atalhos e ajuda", as the engine has them now.
 async function showNulavioKeys() {

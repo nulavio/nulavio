@@ -31,7 +31,7 @@
         <button class="button button--primary" type="submit" data-i18n="searchButton">Search</button>
       </form>
       <p class="hero__hint"><span data-i18n="searchHint">or use the address bar</span> <kbd>Ctrl</kbd> <kbd>L</kbd>
-        <a class="hero__link" id="search-settings" href="../settings/settings.html#search" hidden data-i18n="searchSettingsLink">Search settings</a></p>
+        <a class="hero__link" id="search-settings" href="../settings/settings.html#search" data-settings="search" hidden data-i18n="searchSettingsLink">Search settings</a></p>
     </header>
 
     <!-- First run (audit 2026-11 FR-01; ADR 0010): one card at a time, in a genuinely new profile. Every card has
@@ -150,7 +150,7 @@
     <section class="card firstrun" id="firstrun-done" aria-labelledby="firstrun-done-heading" hidden>
       <div class="firstrun__say">
         <h2 class="layout-choice__title" id="firstrun-done-heading" data-i18n="firstrunDoneTitle"></h2>
-        <p class="firstrun__lead"><span data-i18n="firstrunDoneLater"></span> <a href="../settings/settings.html" data-i18n="settingsTitle"></a>.</p>
+        <p class="firstrun__lead"><span data-i18n="firstrunDoneLater"></span> <a href="../settings/settings.html" data-settings="" data-i18n="settingsOpen"></a>.</p>
       </div>
       <div class="firstrun__show">
         <dl class="facts firstrun__summary" id="firstrun-summary"></dl>
@@ -216,7 +216,7 @@
         <div class="actions">
           <button class="button button--primary" type="button" id="layout-choice-done" data-i18n="layoutChoiceDone"></button>
           <button class="button button--secondary" type="button" id="layout-choice-retry" hidden data-i18n="layoutRetry"></button>
-          <a class="button button--quiet" id="layout-choice-settings" href="../settings/settings.html#layout" data-i18n="layoutChoiceSettings"></a>
+          <a class="button button--quiet" id="layout-choice-settings" href="../settings/settings.html#layout" data-settings="layout" data-i18n="layoutChoiceSettings"></a>
         </div>
       </div>
     </section>
@@ -251,7 +251,7 @@
         <span class="here__who" id="here-who" hidden></span>
         <span class="here__summary" id="here-summary" data-level="unknown">…</span>
         <span class="here__routes" id="here-routes" hidden></span>
-        <a class="here__settings" id="open-settings" href="../settings/settings.html" hidden data-i18n="settingsTitle"></a>
+        <a class="here__settings" id="open-settings" href="../settings/settings.html" data-settings="" hidden data-i18n="settingsOpen"></a>
       </p>
       <details class="more here__details" id="here-details">
         <summary data-i18n="newtabDetails">Details</summary>

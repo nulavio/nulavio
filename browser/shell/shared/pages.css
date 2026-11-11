@@ -80,6 +80,28 @@
   padding: var(--nv-space-8) var(--nv-space-4) var(--nv-space-6);
   border-inline-end: 1px solid var(--nv-color-border-subtle);
 }
+/* ADR 0008: the way back to the one settings page, above everything else in the rail.
+   The chevron is drawn, so it flips with the writing direction. */
+.settings-back {
+  display: flex;
+  align-items: center;
+  gap: var(--nv-space-2);
+  padding: var(--nv-space-2) var(--nv-space-4);
+  border-radius: var(--nv-radius-md);
+  color: var(--nv-color-text-primary);
+  font-weight: var(--nv-font-weight-semibold);
+  text-decoration: none;
+}
+.settings-back::before {
+  content: "";
+  inline-size: 0.5em;
+  block-size: 0.5em;
+  border: solid currentColor;
+  border-width: 0 0 2px 2px;
+  rotate: 45deg;
+}
+.settings-back:dir(rtl)::before { rotate: -135deg; }
+.settings-back:hover { background: color-mix(in srgb, currentColor 8%, transparent); }
 .settings-search__input { inline-size: 100%; }
 .settings-nav { display: grid; gap: var(--nv-space-2); }
 .settings-nav ul { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--nv-space-1); }

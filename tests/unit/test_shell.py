@@ -591,11 +591,12 @@ class LayoutModuleTest(unittest.TestCase):
         self.assertEqual(settings, newtab)
 
     def test_layout_names_bridge_to_the_engine_settings(self):
-        # QA B-9: about:preferences > Browser layout says "Vertical/Horizontal tabs" and has no Focus;
-        # the presets name that native term, and the card's link says which Settings it opens.
-        for name, vertical, horizontal, nulavio in (
-            ("pt_BR", "Abas na vertical", "Abas na horizontal", "Nulavio"),
-            ("en", "Vertical tabs", "Horizontal tabs", "Nulavio"),
+        # QA B-9: the engine's own words for the two arrangements are "Vertical/Horizontal tabs", and it has
+        # no Focus; the presets name that native term. ADR 0008: there is one Settings, so the card's link
+        # names the pane the choice lives in.
+        for name, vertical, horizontal, pane in (
+            ("pt_BR", "Abas na vertical", "Abas na horizontal", "Aparência"),
+            ("en", "Vertical tabs", "Horizontal tabs", "Appearance"),
         ):
             with self.subTest(locale=name):
                 msg = {k: v["message"] for k, v in locale(name).items()}
@@ -604,7 +605,7 @@ class LayoutModuleTest(unittest.TestCase):
                 self.assertIn(horizontal.lower(), msg["layoutTopHint"].lower())
                 self.assertIn(vertical, msg["layoutScope"])
                 self.assertIn(horizontal, msg["layoutScope"])
-                self.assertIn(nulavio, msg["layoutChoiceSettings"])
+                self.assertIn(pane, msg["layoutChoiceSettings"])
 
     def test_layout_surfaces_guard_listener_registration(self):
         for rel in ("settings/layout.js", "newtab/newtab.js"):

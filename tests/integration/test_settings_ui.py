@@ -114,7 +114,13 @@ class SettingsPanesTest(unittest.TestCase):
         self.assertEqual(groups, [self.message(k) for k in ("scopeProfile", "scopeAllProfiles", "scopeComputer")])
         # Every entry of the rail points to a section that exists, in the order of its group.
         entries = self.m.execute("return [...document.querySelectorAll('.settings-nav a')].map(a => a.dataset.section);")
-        self.assertEqual(entries, list(SCOPES))
+        # ADR 0008: Layout, Aparência and Atalhos are drawn by the settings page itself; this page keeps no entry for them.
+        self.assertEqual(entries, [section for section in SCOPES if section not in ("layout", "appearance", "shortcuts")])
+        # ...and its own search does not offer them either: one option, one place.
+        self.type_search(self.message("layoutHeading").lower())
+        self.assertTrue(harness.wait_until(lambda: self.view()["view"] == "search", 5))
+        self.assertNotIn("layout", self.view()["shown"])
+        self.type_search("")
         self.assertNotIn(self.message("settingsIntro"), ["", "settingsIntro"])
 
     def test_04_search_filters_the_cards_of_every_section(self):
