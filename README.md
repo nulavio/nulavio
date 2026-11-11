@@ -15,6 +15,7 @@
   <img alt="Platform: Linux" src="https://img.shields.io/badge/platform-Linux-0B1623">
   <img alt="Engine: Firefox 160" src="https://img.shields.io/badge/engine-Firefox%20160-0F7A68">
   <a href="https://github.com/nulavio/nulavio/releases/latest"><img alt="Release: alpha" src="https://img.shields.io/github/v/release/nulavio/nulavio?include_prereleases&label=alpha&color=B45309"></a>
+  <a href="https://scorecard.dev/viewer/?uri=github.com/nulavio/nulavio"><img alt="OpenSSF Scorecard" src="https://api.scorecard.dev/projects/github.com/nulavio/nulavio/badge"></a>
 </p>
 
 <p align="center">
@@ -22,6 +23,7 @@
   <a href="#install">Install</a> ·
   <a href="#build-from-source">Build from source</a> ·
   <a href="#documentation">Documentation</a> ·
+  <a href="https://github.com/nulavio/nulavio/discussions">Discussions</a> ·
   <a href="SECURITY.md">Security</a> ·
   <a href="README.pt-BR.md">Português</a>
 </p>
