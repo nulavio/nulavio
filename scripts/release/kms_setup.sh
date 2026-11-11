@@ -61,9 +61,11 @@ else
     echo "key $alias created: $key_arn"
 fi
 
-spec=$(aws kms describe-key --key-id "$key_arn" --query '[KeyMetadata.KeySpec, KeyMetadata.KeyUsage, KeyMetadata.Origin, KeyMetadata.KeyState]' --output text)
-echo "key: $spec"
-[[ $spec == "RSA_4096	SIGN_VERIFY	EXTERNAL	"* ]] || { echo "kms_setup: $alias is not an RSA_4096 SIGN_VERIFY key with imported material" >&2; exit 1; }
+read -r spec usage origin state < <(aws kms describe-key --key-id "$key_arn" \
+    --query '[KeyMetadata.KeySpec, KeyMetadata.KeyUsage, KeyMetadata.Origin, KeyMetadata.KeyState]' --output text)
+echo "key: $spec $usage $origin $state"
+[[ $spec == RSA_4096 && $usage == SIGN_VERIFY && $origin == EXTERNAL ]] ||
+    { echo "kms_setup: $alias is not an RSA_4096 SIGN_VERIFY key with imported material" >&2; exit 1; }
 
 render release-signing-role-policy.json
 aws iam put-role-policy --role-name "$role" --policy-name sign-with-release-key \

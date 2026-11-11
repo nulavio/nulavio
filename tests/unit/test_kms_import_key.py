@@ -165,7 +165,13 @@ class KmsImportKeyTest(unittest.TestCase):
         bin_dir.mkdir()
         (bin_dir / "aws").write_text(FAKE_KMS.replace("#!/usr/bin/env python3", f"#!{sys.executable}"))
         (bin_dir / "aws").chmod(0o700)
-        env = {"PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}", "FAKE_KMS_STATE": str(state)}
+        runtime = self.tmp / "runtime"  # the import keeps its files in XDG_RUNTIME_DIR; a test run may have none
+        runtime.mkdir(mode=0o700)
+        env = {
+            "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}",
+            "FAKE_KMS_STATE": str(state),
+            "XDG_RUNTIME_DIR": str(runtime),
+        }
         argv = ["--gnupghome", str(self.home), "--fingerprint", self.key.hex, "--kms-key-id", "alias/test"]
         with mock.patch.dict(os.environ, env):
             # A wrong passphrase stops before anything is imported, and says why (gpg's error, or ours
