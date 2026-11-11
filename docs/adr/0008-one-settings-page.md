@@ -115,7 +115,23 @@ After, in pt-BR (light) and en-US (dark):
 - `tests/integration/test_settings_native.py`, nine tests on the package after `dev_sync`: the navigation and the groups of every edited pane, with the protection panes losing nothing; the layout card and the Immersive switch; English; **the registry broken halfway leaves the engine's stock page, with nothing of Nulavio's left in the registry or the document**; the `about:settings` alias, a reload, leaving and coming back, and a second window; values read now (profile and protection, password manager following the engine's own checkbox, the Guard's count, a key) and **a read made to fail on purpose**; every way in, and the way back from a detail page in the same tab. Seven of the nine fail on the package without this slice.
 - Seen and not changed: the engine's "related settings" row says "Página inicial do Firefox"; the management notice (below) is on every pane.
 
-Not yet proven: session restore with the page open; the page under a screen reader; a custom element for the profiles list; `stop()` with a settings page open (the page keeps Nulavio's part until it is reloaded).
+Not yet proven: session restore with the page open; the page under a screen reader; a custom element for the profiles list; `stop()` with a settings page open (the page keeps Nulavio's part until it is reloaded); a throw inside the engine's own `registerPane` for a pane Nulavio edited, or while a control is drawn (both are after the guarded step, and no natural cause is known).
+
+### Independent review of slice 1 (2026-11-11)
+
+Reviewed from the source and the engine's own files by a second model (Codex, read-only): no HIGH, five MEDIUM, two LOW. Each was checked before it changed anything; all seven were true and are fixed in the slice.
+
+| Point | Checked | Result |
+|---|---|---|
+| After an undo the page still held the removed pane's entries in its own category maps, and the link to Nulavio's words | True: `gCategoryInits` and `gCategoryModules` are the page's, and its search runs the init of every entry | The undo deletes both entries and removes the link; the test runs the search's own initialisation after a failure |
+| Something the registry changes and then throws on escaped the undo: a pane was noted only after `registerPane` returned, a setting only after `addSetting` | True | Each addition is noted before it is made; a setup that throws halfway stops what it had started |
+| The page could say "Nada para rever" before the Guard had checked this start, and kept a stale count | True: `findings()` is empty until the check, which waits for the windows to be back | The count is read after the Guard's check and follows `nulavio-guard-changed`; a profile the Guard does not watch says so |
+| With the browser's manager off and a password extension the Shell does not know turned on, the row said "Nenhum gerenciador ligado" | True: the Shell only knows its own list | The row says what was read: the browser's manager is off, none of the known ones is on, another extension may be doing it |
+| A profile renamed or protected, or a manager changed, in another tab left the old summary | True | Every read is made again when the person comes back to the tab; the profile and the password rows also follow their own changes |
+| A reset of a key that failed was still announced as done | True | Announced only when the reset happened |
+| The engine's old address of its layout picker (`#general-layout`) lost its target | True: the target is the group's `subcategory` | The pointer that replaced the picker carries it |
+
+The review also showed that the first version of the failure test broke the page too early to prove much: it now breaks it twice, once in the group registry and once after a pane was registered, and checks the page's own maps. The tests fail at each of these points on the commit before the fixes.
 
 ## Independent review (2026-11-11)
 

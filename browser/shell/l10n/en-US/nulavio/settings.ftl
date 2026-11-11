@@ -102,6 +102,9 @@ nulavio-guard-review =
             [one] 1 change to review.
            *[other] { $count } changes to review.
         }
+nulavio-guard-review-unwatched =
+    .label = Changes made outside Nulavio
+    .description = The Guard does not watch this profile: it is temporary or an agent's AI Workspace.
 
 ## Passwords
 
@@ -112,8 +115,8 @@ nulavio-passwords-now-builtin =
     .label = In use: the browser's own manager
     .description = Its options are right below.
 nulavio-passwords-now-none =
-    .label = No manager turned on
-    .description = The browser does not save or fill passwords in this profile.
+    .label = The browser's own manager is off
+    .description = None of the managers Nulavio knows is on. Another extension may be handling passwords.
 # $name is the name of a password manager extension.
 nulavio-passwords-now-extension =
     .label = In use: { $name }

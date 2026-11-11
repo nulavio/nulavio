@@ -72,21 +72,32 @@ JOURNEY_NAV = [
     "category-home",
     "category-downloads",
 ]
-# Makes the page's group registry throw on one of Nulavio's groups, after several were added: the
-# window's capture listener runs before the Shell's own DOMContentLoaded listener on the document.
+# Makes the page throw while Nulavio's part is being added; the window's capture listener runs before the
+# Shell's own DOMContentLoaded listener on the document. "group": the group registry refuses one of Nulavio's
+# groups, after several settings and groups were added. "pane": the page's own register_module throws AFTER
+# doing its work for Nulavio's second pane, when the wrapper, a pane and its navigation entry are already in.
 BREAK_HALFWAY = """
+const [where] = arguments;
 const breaker = {
   observe(win) {
     let uri; try { uri = win.document.documentURIObject; } catch { return; }
     if (!uri?.schemeIs("about") || uri.filePath !== "preferences") return;
     win.addEventListener("DOMContentLoaded", () => {
-      const { SettingGroupManager } = win.ChromeUtils.importESModule(
-        "chrome://browser/content/preferences/config/SettingGroupManager.mjs", { global: "current" });
-      const real = SettingGroupManager.registerGroup;
-      SettingGroupManager.registerGroup = function (id, config) {
-        if (id === "nulavioProtections") throw new Error("test: the registry broke halfway");
-        return real.call(this, id, config);
-      };
+      if (where === "group") {
+        const { SettingGroupManager } = win.ChromeUtils.importESModule(
+          "chrome://browser/content/preferences/config/SettingGroupManager.mjs", { global: "current" });
+        const real = SettingGroupManager.registerGroup;
+        SettingGroupManager.registerGroup = function (id, config) {
+          if (id === "nulavioProtections") throw new Error("test: the registry broke halfway");
+          return real.call(this, id, config);
+        };
+      } else {
+        const real = win.register_module;
+        win.register_module = function (name, module) {
+          real.call(this, name, module);
+          if (name === "paneNulavioAssistant") throw new Error("test: the page broke after registering a pane");
+        };
+      }
     }, { capture: true, once: true });
   },
 };
@@ -108,7 +119,13 @@ const ours = keys => [...keys].filter(k => /^nulavio/i.test(k));
 return {
   groups: ours(SettingGroupManager._data.keys()), panes: ours(SettingPaneManager._data.keys()),
   settings: ours(Preferences._settings.keys()),
-  nodes: [...d.querySelectorAll('[id^="category-nulavio"], setting-pane[data-category^="paneNulavio"]')].length,
+  // What the page itself keeps for a pane (its search runs every init it finds), the pane elements, the
+  // navigation entries and the link to Nulavio's words.
+  inits: [...w.gCategoryInits.keys(), ...w.gCategoryModules.keys()].filter(k => /^paneNulavio/.test(k)),
+  nodes: [...d.querySelectorAll('[id^="category-nulavio"]')].length
+    + [...d.querySelectorAll("setting-pane")].filter(pane => /^paneNulavio/.test(pane.name)).length,
+  words: [...d.querySelectorAll('link[rel="localization"]')].map(link => link.getAttribute("href"))
+    .filter(href => href.startsWith("nulavio/")).length,
 };
 """
 )
@@ -175,6 +192,11 @@ class NativeSettingsTest(unittest.TestCase):
             self.assertIn(group, tabs)
         self.m.chrome(DOC + 'd.querySelector("#nulavio-layout-moved").click();')
         self.assertEqual(self.groups("paneAppearance")[0], "nulavioLayout")
+        # The engine's old address of its picker still lands on something: the pointer keeps the target's name.
+        self.assertEqual(
+            self.m.chrome(DOC + 'return d.querySelector("#nulavio-layout-moved").closest("setting-group").dataset.subcategory;'),
+            "layout",
+        )
         # ...and Aparência no longer sends people to that pane "for the layout": the two would point at each other.
         self.assertEqual(self.m.chrome(RELATED), ["about:preferences#accessibility", "about:preferences#home"])
         # The engine's first pane: its own "Perfis" entry gives way to the profiles pane.
@@ -219,23 +241,32 @@ class NativeSettingsTest(unittest.TestCase):
         self.assertEqual(self.control("#nulavio-open-routing")["label"], "Which site opens in which profile")
 
     def test_04_a_failure_halfway_leaves_the_engines_page(self):
-        self.m.chrome(BREAK_HALFWAY)
-        try:
-            page = self.open()
-            # Nothing of Nulavio's is left, and nothing of the engine's is missing or moved.
-            self.assertIsNone(page["extended"], page)
-            self.assertEqual(page["nav"][: len(ENGINE_NAV)], ENGINE_NAV, page)
-            self.assertEqual(page["general"], "pane-account-sync-title2", page)
-            self.assertEqual(self.m.chrome(LEFTOVERS), {"groups": [], "panes": [], "settings": [], "nodes": 0})
-            appearance = self.groups("paneAppearance")
-            self.assertEqual([g for g in appearance if g in ENGINE_APPEARANCE], ENGINE_APPEARANCE, appearance)
-            self.assertFalse([g for g in appearance if g.startswith("nulavio")], appearance)
-            self.assertIn("about:preferences#tabsBrowsing", self.m.chrome(RELATED))
-            self.assertEqual(self.groups("paneTabsBrowsing")[0], "browserLayout")
-            self.assertIn("profiles", self.groups("paneSync"))
-        finally:
-            self.m.chrome(UNBREAK)
-        # The next page load, with the registry whole again, has Nulavio's part.
+        nothing = {"groups": [], "panes": [], "settings": [], "inits": [], "nodes": 0, "words": 0}
+        for where in ("group", "pane"):
+            with self.subTest(broken=where):
+                self.m.chrome(BREAK_HALFWAY, [where])
+                try:
+                    page = self.open()
+                    # Nothing of Nulavio's is left, and nothing of the engine's is missing or moved.
+                    self.assertIsNone(page["extended"], page)
+                    self.assertEqual(page["nav"][: len(ENGINE_NAV)], ENGINE_NAV, page)
+                    self.assertEqual(page["general"], "pane-account-sync-title2", page)
+                    self.assertEqual(self.m.chrome(LEFTOVERS), nothing)
+                    # The engine's panes are registered as the engine wrote them: the wrapper is gone too.
+                    appearance = self.groups("paneAppearance")
+                    self.assertEqual([g for g in appearance if g in ENGINE_APPEARANCE], ENGINE_APPEARANCE, appearance)
+                    self.assertFalse([g for g in appearance if g.startswith("nulavio")], appearance)
+                    self.assertIn("about:preferences#tabsBrowsing", self.m.chrome(RELATED))
+                    self.assertEqual(self.groups("paneTabsBrowsing")[0], "browserLayout")
+                    self.assertIn("profiles", self.groups("paneSync"))
+                    # The page's own search still runs: it starts every pane it knows, and none is a removed one.
+                    searched = self.m.chrome(
+                        DOC + "return w.gSearchResultsPane.runCategoryInitialization().then(() => true, e => String(e));"
+                    )
+                    self.assertIs(searched, True)
+                finally:
+                    self.m.chrome(UNBREAK)
+        # The next page load, with the page whole again, has Nulavio's part.
         self.assertEqual(self.open()["extended"], "1")
 
     def test_05_the_alias_a_reload_a_second_window_and_coming_back(self):
@@ -298,10 +329,28 @@ class NativeSettingsTest(unittest.TestCase):
         self.assertEqual(self.control("#nulavio-passwords-now")["label"], "Em uso: o gerenciador do próprio navegador")
         # The engine's own checkbox, in the group below, changes the answer above it.
         self.m.chrome('Services.prefs.setBoolPref("signon.rememberSignons", false);')
-        none = self.control("#nulavio-passwords-now", lambda s: s.get("label") == "Nenhum gerenciador ligado")
-        self.assertEqual(none["label"], "Nenhum gerenciador ligado", none)
+        # With it off and none of the known managers on, the row says only what was read: another extension may do it.
+        off = "O gerenciador do navegador está desligado"
+        none = self.control("#nulavio-passwords-now", lambda s: s.get("label") == off)
+        self.assertEqual(none["label"], off, none)
+        self.assertIn("Outra extensão pode", none["description"])
         self.groups("panePrivacy")
         self.assertEqual(self.control("#nulavio-guard-review")["description"], "Nada para rever.")
+        # The Guard's count follows the Guard: a finding that arrives, or one decided on the review page.
+        guard = 'const G = ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioGuard.sys.mjs").NulavioGuard;'
+        self.m.chrome(guard + 'G.findings = () => [{}, {}]; Services.obs.notifyObservers(null, "nulavio-guard-changed");')
+        self.addCleanup(self.m.chrome, guard + "delete G.findings;")
+        two = "2 mudanças para rever."
+        self.assertEqual(self.control("#nulavio-guard-review", lambda s: s.get("description") == two)["description"], two)
+        # Coming back to the tab reads again: a profile renamed or protected elsewhere shows as it is now.
+        profiles = 'const P = ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioProfiles.sys.mjs").NulavioProfiles;'
+        self.m.chrome(profiles + 'P.here = async () => ({ name: "Outro nome", protection: "unlocked", temporary: false });')
+        self.addCleanup(self.m.chrome, profiles + "delete P.here;")
+        self.m.chrome(DOC + 'd.dispatchEvent(new w.Event("visibilitychange"));')
+        self.groups("paneNulavioProfiles")
+        renamed = self.control("#nulavio-here", lambda s: s.get("label") == "Outro nome")
+        self.assertEqual(renamed["label"], "Outro nome", renamed)
+        self.assertIn("Protegido", renamed["description"], renamed)
         self.groups("paneTabsBrowsing")
         key = self.control("#nulavio-key-toggle-immersive", lambda s: s.get("shown") and s.get("description"))
         self.assertEqual(key["description"], "Ctrl+Alt+I", key)

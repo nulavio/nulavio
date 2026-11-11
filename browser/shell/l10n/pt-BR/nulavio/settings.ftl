@@ -102,6 +102,9 @@ nulavio-guard-review =
             [one] 1 mudança para rever.
            *[other] { $count } mudanças para rever.
         }
+nulavio-guard-review-unwatched =
+    .label = Mudanças feitas fora do Nulavio
+    .description = O Guard não vigia este perfil: ele é temporário ou é a Área de IA de um agente.
 
 ## Senhas
 
@@ -112,8 +115,8 @@ nulavio-passwords-now-builtin =
     .label = Em uso: o gerenciador do próprio navegador
     .description = As opções dele ficam logo abaixo.
 nulavio-passwords-now-none =
-    .label = Nenhum gerenciador ligado
-    .description = O navegador não salva nem preenche senhas neste perfil.
+    .label = O gerenciador do navegador está desligado
+    .description = Nenhum dos gerenciadores que o Nulavio conhece está ligado. Outra extensão pode estar cuidando das senhas.
 # $name is the name of a password manager extension.
 nulavio-passwords-now-extension =
     .label = Em uso: { $name }

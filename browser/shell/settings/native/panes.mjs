@@ -70,6 +70,8 @@
   // -- what this file added, so a failure can take it all back --------------------------------------
   const added = { settings: [], groups: [], panes: [], nodes: [], cleanups: [] };
   const undoOnly = []; // what a failure puts back in the engine's own configuration
+  const FLUENT = "nulavio/settings.ftl";
+  let fluentLink = null;
   const navOrder = [...nav.children];
   const registerPane = SettingPaneManager.registerPane;
   const hadOwnRegisterPane = Object.hasOwn(SettingPaneManager, "registerPane");
@@ -89,8 +91,22 @@
     } else {
       delete SettingPaneManager.registerPane;
     }
-    for (const id of added.panes.splice(0)) {
+    for (const { id, view } of added.panes.splice(0)) {
       SettingPaneManager._data.delete(id);
+      // What registerPane left in the page: the pane's element and its entries in the page's own maps
+      // (the page's search runs the init of every entry it finds there).
+      for (const pane of document.querySelectorAll("#mainPrefPane > setting-pane")) {
+        if (pane.name === view) {
+          pane.remove();
+        }
+      }
+      window.gCategoryInits?.delete?.(view);
+      window.gCategoryModules?.delete?.(view);
+    }
+    if (fluentLink) {
+      document.l10n?.removeResourceIds?.([FLUENT]);
+      fluentLink.remove();
+      fluentLink = null;
     }
     for (const id of added.groups.splice(0)) {
       SettingGroupManager._data.delete(id);
@@ -109,14 +125,40 @@
     nav.append(...navOrder); // the engine's buttons, back in the engine's order
     root.removeAttribute("nulavio-settings");
   }
+  // Each of these notes what it is about to add before it adds it, so a throw inside the registry's
+  // own function (after it changed something) is undone too.
   const setting = config => {
-    Preferences.addSetting(config);
     added.settings.push(config.id);
+    const { setup } = config;
+    if (!setup) {
+      Preferences.addSetting(config);
+      return;
+    }
+    Preferences.addSetting({
+      ...config,
+      // A setup here is setup(emitChange, stops): whatever it starts, it pushes the way to stop it. The
+      // engine runs it while it builds the setting; if it throws halfway, what had started is stopped.
+      setup(emitChange) {
+        const stops = [];
+        const stop = () => {
+          for (const fn of stops.splice(0)) {
+            fn();
+          }
+        };
+        try {
+          setup.call(this, emitChange, stops);
+        } catch (e) {
+          stop();
+          throw e;
+        }
+        return stop;
+      },
+    });
   };
   const groups = configs => {
     for (const [id, config] of Object.entries(configs)) {
-      SettingGroupManager.registerGroup(id, config);
       added.groups.push(id);
+      SettingGroupManager.registerGroup(id, config);
     }
   };
 
@@ -125,11 +167,13 @@
    * one threw. A read that a later one overtook is dropped, so an old answer never lands on top
    * of a newer one.
    */
+  const started = new Set(); // the reads that ran at least once: asked again when the person comes back to this tab
   function source(read) {
     const state = { ready: false, failed: false, value: null };
     const listeners = new Set();
     let turn = 0;
     const refresh = async () => {
+      started.add(refresh);
       const mine = ++turn;
       let next;
       try {
@@ -146,16 +190,21 @@
     return {
       state,
       refresh,
-      /** For a setting's setup(): redraw on every read; returns the teardown. */
+      /** Redraw on every read; returns the way to stop. */
       listen(emit) {
         listeners.add(emit);
         return () => listeners.delete(emit);
+      },
+      /** A setup that only redraws on every read. */
+      watch(emit, stops) {
+        listeners.add(emit);
+        stops.push(() => listeners.delete(emit));
       },
     };
   }
   /** "Could not read this" in a group, shown only while the read behind it failed. */
   const failureNote = (id, from) => {
-    setting({ id, setup: from.listen, visible: () => from.state.failed });
+    setting({ id, setup: from.watch, visible: () => from.state.failed });
     return { id, control: "moz-message-bar", l10nId: "nulavio-read-failed", controlAttrs: { type: "warning" } };
   };
   /** A row that opens a detail page of the Shell in this tab ("back" returns here). */
@@ -175,26 +224,32 @@
   };
 
   function register() {
-    MozXULElement.insertFTLIfNeeded("nulavio/settings.ftl");
+    const links = () => [...document.querySelectorAll('link[rel="localization"]')];
+    const linksBefore = new Set(links());
+    MozXULElement.insertFTLIfNeeded(FLUENT);
+    fluentLink = links().find(link => !linksBefore.has(link)) ?? null;
+    // Coming back to this tab: what was read is read again (a profile renamed, a manager changed, a key remapped elsewhere).
+    const again = () => {
+      if (document.visibilityState === "visible") {
+        started.forEach(refresh => refresh());
+      }
+    };
+    document.addEventListener("visibilitychange", again);
+    added.cleanups.push(() => document.removeEventListener("visibilitychange", again));
 
     // -- layout: Lateral, Abas no topo, Foco (NulavioLayout owns the change) ---------------------
     const layout = source(() => shell.NulavioLayout.state(tab()));
     const layoutOpen = () => layout.state.ready && !layout.state.value.locked && layout.state.value.available;
     setting({
       id: "nulavio-layout",
-      setup(emitChange) {
-        const forget = layout.listen(emitChange);
+      setup(emitChange, stops) {
+        stops.push(layout.listen(emitChange));
         layout.refresh();
-        let unsubscribe = () => {};
         try {
-          unsubscribe = shell.NulavioLayout.subscribe(tab(), layout.refresh);
+          stops.push(shell.NulavioLayout.subscribe(tab(), layout.refresh));
         } catch (e) {
           console.error(e); // no live updates; the value still comes from the read above
         }
-        return () => {
-          forget();
-          unsubscribe();
-        };
       },
       // Nothing is marked until the layout was read; a hand-made arrangement marks none either.
       get: () => (layout.state.ready && layout.state.value.preset !== "custom" ? layout.state.value.preset : ""),
@@ -210,14 +265,11 @@
     setting({
       id: "nulavio-immersive",
       deps: ["nulavio-layout"],
-      setup(emitChange) {
-        const forget = immersive.listen(emitChange);
+      setup(emitChange, stops) {
+        stops.push(immersive.listen(emitChange));
         immersive.refresh();
         Services.prefs.addObserver(PREF_IMMERSIVE, immersive.refresh); // the key (Ctrl+Alt+I) or another window changed it
-        return () => {
-          forget();
-          Services.prefs.removeObserver(PREF_IMMERSIVE, immersive.refresh);
-        };
+        stops.push(() => Services.prefs.removeObserver(PREF_IMMERSIVE, immersive.refresh));
       },
       get: () => Boolean(immersive.state.value?.on),
       set(value) {
@@ -237,7 +289,7 @@
     const lookSetting = (id, option, toValue = v => v) =>
       setting({
         id,
-        setup: look.listen,
+        setup: look.watch,
         get: () => (look.state.ready ? toValue(look.state.value[option]) : toValue(undefined)),
         set(value) {
           shell.NulavioPersonalise.set(option, toValue(value)).then(look.refresh, look.refresh);
@@ -257,10 +309,14 @@
     const HERE = { plain: "nulavio-here-plain", unlocked: "nulavio-here-protected" };
     setting({
       id: "nulavio-here",
-      setup(emitChange) {
-        const forget = profile.listen(emitChange);
+      setup(emitChange, stops) {
+        stops.push(profile.listen(emitChange));
         profile.refresh();
-        return forget;
+        try {
+          stops.push(shell.NulavioProfiles.subscribe(profile.refresh)); // renamed or protected from another tab or window
+        } catch (e) {
+          console.error(e);
+        }
       },
       visible: () => profile.state.ready && Boolean(profile.state.value),
       getControlConfig(config) {
@@ -273,21 +329,24 @@
       },
     });
     // No profile to name (the engine's profile service is off for this start): say so instead of nothing.
-    setting({ id: "nulavio-here-none", setup: profile.listen, visible: () => profile.state.ready && !profile.state.value });
+    setting({ id: "nulavio-here-none", setup: profile.watch, visible: () => profile.state.ready && !profile.state.value });
 
     // -- passwords: which manager is in use now ---------------------------------------------------
     const passwords = source(() => shell.NulavioPasswords.state());
     setting({
       id: "nulavio-passwords-now",
-      setup(emitChange) {
-        const forget = passwords.listen(emitChange);
+      setup(emitChange, stops) {
+        stops.push(passwords.listen(emitChange));
         passwords.refresh();
-        // The engine's own checkbox, in the group below this one, changes the answer.
+        // The engine's own checkbox, in the group below this one, changes the answer...
         Services.prefs.addObserver("signon.rememberSignons", passwords.refresh);
-        return () => {
-          forget();
-          Services.prefs.removeObserver("signon.rememberSignons", passwords.refresh);
-        };
+        stops.push(() => Services.prefs.removeObserver("signon.rememberSignons", passwords.refresh));
+        // ...and so does a manager's extension installed, removed, turned on or off.
+        const { AddonManager } = ChromeUtils.importESModule("resource://gre/modules/AddonManager.sys.mjs");
+        const changed = () => passwords.refresh();
+        const listener = { onInstalled: changed, onUninstalled: changed, onEnabled: changed, onDisabled: changed };
+        AddonManager.addAddonListener(listener);
+        stops.push(() => AddonManager.removeAddonListener(listener));
       },
       visible: () => passwords.state.ready,
       getControlConfig(config) {
@@ -304,13 +363,20 @@
     });
 
     // -- what changed outside Nulavio (the Guard's pending findings; the review is its own page) --
-    const guard = source(async () => shell.NulavioGuard.findings().length);
+    // The count is read after the Guard's own check of this start (it waits for the windows to be back):
+    // before that the Guard has no findings to give, which is not the same as "nothing to review".
+    const guard = source(async () => {
+      const { state } = await shell.NulavioGuard.check();
+      return { watched: state !== "skipped", count: shell.NulavioGuard.findings().length };
+    });
     setting({
       id: "nulavio-guard-review",
-      setup(emitChange) {
-        const forget = guard.listen(emitChange);
+      setup(emitChange, stops) {
+        stops.push(guard.listen(emitChange));
         guard.refresh();
-        return forget;
+        const changed = () => guard.refresh(); // a finding decided on the review page, or a new one
+        Services.obs.addObserver(changed, "nulavio-guard-changed");
+        stops.push(() => Services.obs.removeObserver(changed, "nulavio-guard-changed"));
       },
       visible: () => guard.state.ready,
       onUserClick(event) {
@@ -320,7 +386,14 @@
           top().openTrustedLinkIn(url, "current");
         }
       },
-      getControlConfig: config => ({ ...config, l10nArgs: { count: guard.state.value ?? 0 } }),
+      getControlConfig(config) {
+        const now = guard.state.value;
+        if (!now) {
+          return config;
+        }
+        // A temporary profile and an agent's own profile are not watched: say that, not "nothing to review".
+        return now.watched ? { ...config, l10nArgs: { count: now.count } } : { ...config, l10nId: "nulavio-guard-review-unwatched" };
+      },
     });
 
     // -- Nulavio's keys: what each one is now; changing them is the engine's own view -------------
@@ -335,7 +408,7 @@
       const id = `nulavio-key-${name}`;
       setting({
         id,
-        setup: keys.listen,
+        setup: keys.watch,
         visible: () => keys.state.ready && keys.state.value.has(name),
         getControlConfig(config) {
           const command = keys.state.value?.get(name);
@@ -355,11 +428,7 @@
       setting({
         id: "nulavio-keys",
         setup() {
-          keys.refresh();
-          // A key changed in the engine's view shows when the person comes back to this tab.
-          const again = () => document.visibilityState === "visible" && keys.refresh();
-          document.addEventListener("visibilitychange", again);
-          return () => document.removeEventListener("visibilitychange", again);
+          keys.refresh(); // and again when the person comes back from the engine's view, where a key is changed
         },
       });
       setting({
@@ -371,13 +440,18 @@
       });
       setting({
         id: "nulavio-keys-reset",
-        setup: keys.listen,
+        setup: keys.watch,
         visible: () => changedKeys().length > 0,
         async onUserClick(event) {
           event.preventDefault();
           for (const name of changedKeys()) {
             const before = keys.state.value.get(name)?.shortcut ?? "";
-            await shortcuts.resetCommand(name).catch(console.error);
+            try {
+              await shortcuts.resetCommand(name);
+            } catch (e) {
+              console.error(e);
+              continue; // nothing changed: nothing is announced, and the list read below shows the key as it is
+            }
             // The engine's reset announces nothing; the Shell's background listens to this to rename its button.
             shortcuts.onShortcutChanged?.({ name, newShortcut: shortcuts.manifestCommands.get(name)?.shortcut ?? "", oldShortcut: before });
           }
@@ -429,6 +503,7 @@
       },
       // Where the engine's two-way "Disposição do navegador" was: one arrangement control, in Aparência.
       nulavioLayoutMoved: {
+        subcategory: "layout", // the engine's old addresses for its picker (#general-layout) land on this pointer
         l10nId: "nulavio-layout-moved-group",
         headingLevel: 2,
         items: [{ id: "nulavio-layout-moved", l10nId: "nulavio-layout-moved", control: "moz-box-button", loadPane: "appearance" }],
@@ -540,12 +615,15 @@
         }
         // What can be done here comes first; "accounts are unavailable" goes last.
         groupIds = [...groupIds.filter(id => id !== "accountDisabled"), ...groupIds.filter(id => id === "accountDisabled")];
+        const iconSrc = "chrome://browser/skin/preferences/category-general.svg";
+        const edited = { ...config, groupIds, l10nId: "nulavio-pane-general", iconSrc };
+        // The button last, once nothing above can throw: the pane and its entry are renamed together or not at all.
         const button = document.getElementById("category-sync");
-        button?.setAttribute("data-l10n-id", "nulavio-pane-general-nav");
         if (button) {
-          button.iconSrc = "chrome://browser/skin/preferences/category-general.svg";
+          button.setAttribute("data-l10n-id", "nulavio-pane-general-nav");
+          button.iconSrc = iconSrc;
         }
-        return { ...config, groupIds, l10nId: "nulavio-pane-general", iconSrc: "chrome://browser/skin/preferences/category-general.svg" };
+        return edited;
       },
       privacy: config => ({ ...config, groupIds: after(config.groupIds, "etpStatus", "nulavioProtections") }),
       passwordsAutofill: config => ({ ...config, groupIds: ["nulavioPasswordManager", ...config.groupIds] }),
@@ -600,9 +678,8 @@
     };
 
     const pane = (id, view, navId, icon, groupIds) => {
+      added.panes.push({ id, view });
       registerPane.call(SettingPaneManager, id, { l10nId: `nulavio-pane-${navId}`, iconSrc: icon, groupIds });
-      added.panes.push(id);
-      added.nodes.push(document.getElementById("mainPrefPane").lastElementChild); // the pane registerPane just appended
       const button = document.createElement("moz-page-nav-button");
       button.id = `category-nulavio-${navId}`;
       button.setAttribute("view", view);
