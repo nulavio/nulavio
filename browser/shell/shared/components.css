@@ -188,6 +188,9 @@ kbd {
   background: var(--nv-color-bg-sunken);
   color: var(--nv-color-text-primary);
 }
+/* Text to copy as it is (an agent's configuration, a command): a long line scrolls inside its block
+   and never widens the card or the page (audit 2026-11 S-03). */
+pre.notice { min-inline-size: 0; max-inline-size: 100%; overflow-x: auto; }
 .status { margin: 0; min-height: 1.5em; font-weight: var(--nv-font-weight-medium); }
 .status:empty { min-height: 0; }
 /* Levels set by announce() in lib/ui.js: info has no mark; ✓ only for a result that happened */
