@@ -830,7 +830,7 @@
   "phoneExplain": {"message": "Conecte um celular com o Nulavio Companion. Ele vira mais um jeito de desbloquear este perfil: você lê um código e aprova no celular com a digital, o rosto ou o bloqueio de tela. A senha e o código de recuperação continuam valendo."},
   "phoneCurrentLabel": {"message": "Senha ou código de recuperação deste perfil"},
   "phoneShowCode": {"message": "Mostrar QR para o celular"},
-  "phoneScanHint": {"message": "Abra o Nulavio Companion no celular e leia este código. O celular e este computador precisam estar na mesma rede."},
+  "phoneScanHint": {"message": "Abra o Nulavio Companion no celular e leia este código. O celular e este computador precisam estar na mesma rede. Ainda não tem o app? Instale o Nulavio Companion pelo F-Droid."},
   "phoneCompare": {"message": "Estes 6 dígitos são iguais aos do seu celular?"},
   "phoneDigitsSpoken": {"message": "Os 6 dígitos: $DIGITS$", "placeholders": {"digits": {"content": "$1"}}},
   "phoneDigitsMatch": {"message": "São iguais"},

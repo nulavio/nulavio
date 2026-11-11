@@ -143,7 +143,7 @@
 </li>
 <li class="ledger-row is-partly">
 <p class="state"><svg class="icon" aria-hidden="true" focusable="false"><use href="#i-partly"/></svg><span>Partly</span></p>
-<p class="item"><strong>Phone unlock</strong> <span>The Android app is built and tested against the desktop code, but it has not run on a real phone, so it stays off the alpha's feature list.</span></p>
+<p class="item"><strong>Phone unlock</strong> <span>The Android app passed its device test on a real phone (Galaxy S24+, 2026-11-10). It comes with the next release, together with the app on F-Droid; the published alpha does not offer it yet.</span></p>
 <ul class="refs"><li><code class="ref" translate="no">docs/adr/0005-phone-profile-unlock.md</code></li><li><code class="ref" translate="no">docs/security/residual-risks.md › R48</code></li></ul>
 </li>
 <li class="ledger-row is-partly">
@@ -932,7 +932,7 @@
 <li class="limit"><strong>Limit:</strong> The computer login opens the profile for anyone using your account. On a shared account, choose the password.</li>
 <li class="limit"><strong>Limit:</strong> If the watcher that locks the profile is killed, the profile stays open until you lock it in Settings. <code class="ref" translate="no">(R32)</code></li>
 <li class="limit"><strong>Limit:</strong> Encrypting a profile that already existed does not erase its old content from SSDs, snapshots or backups. <code class="ref" translate="no">(R31)</code></li>
-<li class="limit"><strong>Limit:</strong> Phone unlock is built but has not run on a real phone yet, and the FIDO2 security key does not exist yet. <code class="ref" translate="no">(R48)</code></li>
+<li class="limit"><strong>Limit:</strong> Phone unlock has run on one real phone only, and the FIDO2 security key does not exist yet. <code class="ref" translate="no">(R48)</code></li>
 </ul>
 </section>
 <section id="guard" aria-labelledby="guard-h">

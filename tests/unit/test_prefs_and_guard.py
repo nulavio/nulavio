@@ -125,7 +125,7 @@ TRACK_B_ONLY = {  # Mozilla account, promos and artwork in the Nulavio build (D-
     "browser.aboutaddons.novaThemesPickerEnabled": False,
     "browser.topsites.useRemoteSetting": False,
     "browser.newtabpage.activity-stream.default.sites": "",
-    "nulavio.vault.phone.pairing": False,  # D10: connecting a phone is not offered in 1.0
+    "nulavio.vault.phone.pairing": True,  # D10 revised 2026-11-10: connecting a phone is offered
 }
 
 

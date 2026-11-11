@@ -69,4 +69,4 @@ What is in place for it (2026-11-04): `publish_release.sh` signs only what a reh
 
 ## Scope of 1.0 (decided 2026-11-04)
 
-1.0 is the public alpha's scope made stable: every phase's DoD except phone unlock (U6/U7, S11) and FIDO2 unlock (S10), which the UI and the site show as not available yet; an independent review of the Vault and of the release chain with its findings fixed or recorded; at least one month of alpha releases inside the update SLA; the remaining Proton Pass checklist (unlock after restart, autosave, passkeys); and the UX DoD (both themes, every preset, WCAG 2.2 AA checks).
+1.0 is the public alpha's scope made stable: every phase's DoD except FIDO2 unlock (S10), which the UI and the site show as not available yet (phone unlock, U6/U7 and S11, came back in on 2026-11-10 after its device test on a real phone, with the Companion on F-Droid); an independent review of the Vault and of the release chain with its findings fixed or recorded; at least one month of alpha releases inside the update SLA; the remaining Proton Pass checklist (unlock after restart, autosave, passkeys); and the UX DoD (both themes, every preset, WCAG 2.2 AA checks).

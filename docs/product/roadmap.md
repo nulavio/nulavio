@@ -58,7 +58,7 @@ Each milestone has a definition of done (DoD). "Done" requires the DoD to be ver
 
 **DoD:** each item verified on the Nulavio build by an integration test that uses the engine's real services.
 
-## Phase 2c — Secure Profiles: Vault and unlock · **built; phone and security key not offered yet (D10)** ([brief](briefs/2026-10-26-profile-unlock.md), [execution plan](execution-plan.md) S2, S3, S5, S6, S10, S11)
+## Phase 2c — Secure Profiles: Vault and unlock · **built; phone unlock offered from the next release with the Companion on F-Droid; security key not offered yet (D10, revised 2026-11-10)** ([brief](briefs/2026-10-26-profile-unlock.md), [execution plan](execution-plan.md) S2, S3, S5, S6, S10, S11)
 
 Unlock encrypted profiles with, in order of convenience: the phone (biometrics/PIN), the operating system, the profile's own password, or a FIDO2 security key. A successful authentication only unlocks data if it takes part in releasing the key. Components: Nulavio Vault, Unlock Coordinator, Platform Key Provider, Phone Unlock, Hardware Key Provider. This is not a passkey manager for websites and does not change WebAuthn for pages.
 

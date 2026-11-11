@@ -74,8 +74,7 @@ class VaultUiTest(unittest.TestCase):
         cls.session.env["NULAVIO_BUSCTL"] = str(busctl)
         cls.session.env["NV_FAKE_AVAHI"] = str(cls.avahi)
         cls.m = cls.session.start()
-        # Connecting a phone is not offered by default (D10). The phone tests turn it on, as someone
-        # testing the Companion would; test 13 runs with the build's default.
+        # Connecting a phone is offered by default (D10 revised 2026-11-10); test 13 turns it off.
         cls.m.chrome('Services.prefs.setBoolPref("nulavio.vault.phone.pairing", true);')
         cls.base = cls.m.chrome('return WebExtensionPolicy.getByID("shell@nulavio.net").getURL("");')
         cls.shots = harness.artifacts_dir() / "vault-ui"
@@ -733,12 +732,13 @@ class VaultUiTest(unittest.TestCase):
         self.shoot("methods-keyring")
 
     def test_13_connecting_a_phone_is_not_offered_yet(self):
-        """D10: phone and security-key unlock are not in 1.0. With the build's default no page offers to
-        connect a phone and the Shell refuses to start one; a phone connected before keeps working."""
+        """With the pref off (the build offers it since D10 was revised) no page offers to connect a phone
+        and the Shell refuses to start one; a phone connected before keeps working."""
         pref = "nulavio.vault.phone.pairing"
         self.m.chrome("Services.prefs.clearUserPref(arguments[0]);", [pref])
         try:
-            self.assertFalse(self.m.chrome("return Services.prefs.getBoolPref(arguments[0], true);", [pref]), "the build default")
+            self.assertTrue(self.m.chrome("return Services.prefs.getBoolPref(arguments[0], false);", [pref]), "the build default")
+            self.m.chrome("Services.prefs.setBoolPref(arguments[0], false);", [pref])
             profile_id, _ = self.create_via_api("SemCelular", password=PASSWORD, keyring=False)
             # The unlock-methods page: no link to the phones, and it says what is not available yet.
             self.open_page(f"vault/methods.html?p={profile_id}")
