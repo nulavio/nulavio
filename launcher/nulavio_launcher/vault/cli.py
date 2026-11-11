@@ -233,7 +233,8 @@ def _change(args) -> int:
             vault.add_password(new or "")
         elif args.vault_cmd == "new-recovery-code":
             code = vault.replace_recovery_code()
-            print(f"New recovery code (the old one no longer opens this profile; a copy of it made before now still would):\n\n    {code}\n")
+            print("New recovery code (the old one no longer opens this profile; a copy of it made before now still would):")
+            print(f"\n    {code}\n")
         elif args.vault_cmd == "add-keyring":
             add_os_keyring(vault, keyring(), label="computer login")
         elif args.vault_cmd == "remove-method":
