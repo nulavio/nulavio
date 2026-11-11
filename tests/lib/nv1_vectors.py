@@ -100,7 +100,8 @@ def build() -> dict:
             "envelope_id": "env-1",
             "phone_id": "phone-1",
             "eph_pk": b64e(other),
-            "out": b64e(phone_kek(shared, "prof-1", "env-1", "phone-1", other)),
+            "dsig_pk": b64e(sign_pk),
+            "out": b64e(phone_kek(shared, "prof-1", "env-1", "phone-1", other, sign_pk)),
         },
         "response_key": {"shared": b64e(shared), "request_hash": b64e(pattern(9)), "out": b64e(response_key(shared, pattern(9)))},
     }

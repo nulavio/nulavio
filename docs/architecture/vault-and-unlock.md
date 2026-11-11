@@ -62,13 +62,15 @@ An invite takes one `hello`: a second one, or one that fails to decrypt (no QR s
 
 ### Phone envelope
 
-`eph` fresh X25519; `Z = X25519(eph, Pkx_pk)`; `KEK = KDF(Z, "envelope/phone", profile_id, envelope_id, phone_id, eph_pk)`; store `{eph_pk, phone_id, nonce, AEAD(KEK, DEK)}`; wipe `eph`.
+`eph` fresh X25519; `Z = X25519(eph, Pkx_pk)`; `KEK = KDF(Z, "envelope/phone/desktop-bound", profile_id, envelope_id, phone_id, eph_pk, Dsig_pk)`, where `Dsig_pk` is the signing key of the desktop that paired the phone and makes the envelope; store `{eph_pk, phone_id, dsig_pk, nonce, AEAD(KEK, DEK)}`; wipe `eph`.
+
+The binding to `Dsig_pk` (audit V3, 2026-11-10): the phone derives `KEK` with the key of the desktop whose request it verified, so a request signed by any other desktop the phone is paired with, even one holding a copy of this `vault.json`, yields a key that opens nothing. The desktop asks only for envelopes bound to its own key. Envelopes made before the binding have no `dsig_pk`: the desktop reports `phone-needs-pairing`, and the phone is removed and connected again.
 
 ### Unlock
 
 1. Desktop creates `R = {v:1, req_id(16), op:"unlock-profile", profile_id, profile_name, desktop_name, envelope_id, eph_pk, s_pk, expiry(+60 s)}` with a fresh session key `s`, signs it (`Ed25519(Dsig, "nv1/unlock/request" ‖ canonical(R))`) and shows it as a QR (and over the local network when the app is reachable).
-2. Phone checks: paired desktop, signature, expiry (±120 s skew), `req_id` never seen, `envelope` is for this phone. It shows profile and desktop name, then asks for biometrics/PIN.
-3. Phone computes `KEK` as above (with `Pkx`), then `rk = KDF(X25519(Pkx, s_pk), "unlock/response", BLAKE2b(R))` and sends `{req_id, phone_id, box: AEAD(rk, KEK, ad=req_id), sig_P = Ed25519(Psig, "nv1/unlock/response" ‖ BLAKE2b(R) ‖ canonical(box))}`. A refusal is `{req_id, phone_id, error, sig_P}` with the signature over `{"error": code}` instead of the box; codes: `declined`, `biometric-unavailable`, `device-locked` (anything else is shown as a generic phone error).
+2. Phone checks: paired desktop, signature, expiry (±120 s skew), an expiry no later than now + 180 s (one request's 60 s plus the skew; otherwise `bad-expiry`), `req_id` never seen, `envelope` is for this phone. It shows the profile name and the desktop's name **from its own pairing record** (the `desktop_name` in the request is not shown), then asks for biometrics/PIN.
+3. Phone computes `KEK` as above (with `Pkx`, and the `Dsig_pk` of the desktop that signed `R`), then `rk = KDF(X25519(Pkx, s_pk), "unlock/response", BLAKE2b(R))` and sends `{req_id, phone_id, box: AEAD(rk, KEK, ad=req_id), sig_P = Ed25519(Psig, "nv1/unlock/response" ‖ BLAKE2b(R) ‖ canonical(box))}`. A refusal is `{req_id, phone_id, error, sig_P}` with the signature over `{"error": code}` instead of the box; codes: `declined`, `biometric-unavailable`, `device-locked` (anything else is shown as a generic phone error).
 4. Desktop accepts once, before expiry: verifies `sig_P`, derives `rk` with `s`, opens `KEK`, unwraps the DEK, checks `dek_check`, wipes `s` and `KEK`. A response that is not signed by the phone named in the envelope is ignored without cancelling the request, so a stranger on the network cannot cancel the user's unlock.
 
 Replay: `s` and `req_id` are one-shot; the desktop keeps the last 1024 request ids and the phone every id it answered. Substitution: `sig_P` covers the request hash, and `rk` needs both the phone's and the session's private keys. Cancellation: dropping `s` makes any later answer useless. One pending request per profile: a new request cancels the previous one.

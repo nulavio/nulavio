@@ -14,6 +14,7 @@ from nulavio_launcher.vault import sodium
 from nulavio_launcher.vault.core import b64d, b64e, canonical
 from nulavio_launcher.vault.phone import (
     CLOCK_SKEW,
+    MAX_REQUEST_AHEAD,
     PairedPhone,
     ProtocolError,
     desktop_id_for,
@@ -71,8 +72,8 @@ class ReferencePhone:
         phone.desktops = {k: {"dsig_pk": b64d(v["dsig_pk"]), "name": v["name"]} for k, v in state["desktops"].items()}
         return phone
 
-    def as_paired(self) -> PairedPhone:
-        return PairedPhone(self.phone_id, self.sig_pk, self.kx_pk, self.name)
+    def as_paired(self, dsig_pk: bytes = b"") -> PairedPhone:
+        return PairedPhone(self.phone_id, self.sig_pk, self.kx_pk, self.name, dsig_pk)
 
     # -- pairing -------------------------------------------------------------------
 
@@ -115,7 +116,9 @@ class ReferencePhone:
 
     # -- unlock --------------------------------------------------------------------
 
-    def handle(self, signed: dict, approve: bool = True) -> dict:
+    def check(self, signed: dict) -> dict:
+        """What the phone shows before asking the user: the request, with the desktop's name taken
+        from the phone's own pairing record, never from the request (audit V3)."""
         r = signed["r"]
         desktop = self.desktops.get(r.get("desktop_id"))
         if desktop is None:
@@ -124,10 +127,18 @@ class ReferencePhone:
             raise PhoneRejected("bad-signature")
         if self.clock() > r["expiry"] + CLOCK_SKEW:
             raise PhoneRejected("expired")
+        if r["expiry"] > self.clock() + MAX_REQUEST_AHEAD:
+            raise PhoneRejected("bad-expiry")  # made to stay valid longer than one request may
         if r["req_id"] in self.seen:
             raise PhoneRejected("replay")
         if r.get("phone_id") != self.phone_id or r.get("op") != "unlock-profile":
             raise PhoneRejected("not-for-this-phone")
+        return {**r, "desktop_name": desktop["name"]}
+
+    def handle(self, signed: dict, approve: bool = True) -> dict:
+        self.check(signed)
+        r = signed["r"]
+        desktop = self.desktops[r["desktop_id"]]
         self.seen.add(r["req_id"])
         request_hash = sodium.hash32(canonical(r))
         if self.biometric != "ok" or not approve:
@@ -138,7 +149,7 @@ class ReferencePhone:
             )
             return self._signed(r, request_hash, {"error": code}, error=True)
         z = sodium.x25519(self.kx_sk, b64d(r["eph_pk"]))
-        kek = phone_kek(z, r["profile_id"], r["envelope_id"], self.phone_id, b64d(r["eph_pk"]))
+        kek = phone_kek(z, r["profile_id"], r["envelope_id"], self.phone_id, b64d(r["eph_pk"]), desktop["dsig_pk"])
         shared = sodium.x25519(self.kx_sk, b64d(r["s_pk"]))
         rk = response_key(shared, request_hash)
         box = seal(rk, kek, r["req_id"].encode())

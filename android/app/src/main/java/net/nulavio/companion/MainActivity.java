@@ -507,6 +507,7 @@ public final class MainActivity extends Activity {
             case "replay": return getString(R.string.error_replay);
             case "unpaired-desktop": return getString(R.string.error_unpaired);
             case "bad-signature": return getString(R.string.error_bad_signature);
+            case "bad-expiry": return getString(R.string.error_bad_expiry);
             case "not-for-this-phone": return getString(R.string.error_not_for_this_phone);
             case "unreachable": case "timeout": case "closed": return getString(R.string.error_unreachable);
             case "sas-mismatch": return getString(R.string.pairing_cancelled);

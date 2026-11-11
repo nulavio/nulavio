@@ -39,6 +39,9 @@ CONTEXT = b"nulavio/nv1/"
 PAIRING_TTL = 300
 REQUEST_TTL = 60
 CLOCK_SKEW = 120
+# The phone refuses a request that claims to stay valid longer than one request's lifetime (plus clock
+# skew): a request cannot be prepared long in advance and kept for later.
+MAX_REQUEST_AHEAD = REQUEST_TTL + CLOCK_SKEW
 REPLAY_CACHE = 1024
 PHONE_REFUSALS = ("declined", "biometric-unavailable", "device-locked")
 
@@ -104,8 +107,11 @@ def sas_digits(shared: bytes | bytearray, t: bytes) -> str:
         sodium.memzero(raw)
 
 
-def phone_kek(z: bytes | bytearray, profile_id: str, envelope_id: str, phone_id: str, eph_pk: bytes) -> bytearray:
-    return nkdf(z, "envelope/phone", profile_id, envelope_id, phone_id, eph_pk)
+def phone_kek(z: bytes | bytearray, profile_id: str, envelope_id: str, phone_id: str, eph_pk: bytes, dsig_pk: bytes) -> bytearray:
+    """The KEK a phone envelope opens with. It is bound to the desktop that made the envelope (its signing
+    key): the phone derives it with the key of the desktop whose request it verified, so a request signed by
+    any other paired desktop yields a key that opens nothing (audit V3, residual risk R59)."""
+    return nkdf(z, "envelope/phone/desktop-bound", profile_id, envelope_id, phone_id, eph_pk, dsig_pk)
 
 
 def response_key(shared: bytes | bytearray, request_hash: bytes) -> bytearray:
@@ -172,13 +178,21 @@ class PairedPhone:
     psig_pk: bytes
     pkx_pk: bytes
     name: str
+    dsig_pk: bytes = b""  # the signing key of the desktop this phone was paired with
 
     def fields(self) -> dict:
-        return {"phone_id": self.phone_id, "psig_pk": b64e(self.psig_pk), "pkx_pk": b64e(self.pkx_pk), "name": self.name}
+        return {
+            "phone_id": self.phone_id,
+            "psig_pk": b64e(self.psig_pk),
+            "pkx_pk": b64e(self.pkx_pk),
+            "name": self.name,
+            "dsig_pk": b64e(self.dsig_pk),
+        }
 
     @classmethod
     def from_fields(cls, obj: dict) -> PairedPhone:
-        return cls(obj["phone_id"], b64d(obj["psig_pk"]), b64d(obj["pkx_pk"]), obj.get("name", ""))
+        dsig = obj.get("dsig_pk")
+        return cls(obj["phone_id"], b64d(obj["psig_pk"]), b64d(obj["pkx_pk"]), obj.get("name", ""), b64d(dsig) if dsig else b"")
 
 
 # -- pairing ------------------------------------------------------------------------------
@@ -250,7 +264,7 @@ class Pairing:
         finally:
             sodium.memzero(k2)
         self._shared, self._t = shared, t
-        self._phone = PairedPhone(phone_id_for(psig_pk), psig_pk, pkx_pk, name)
+        self._phone = PairedPhone(phone_id_for(psig_pk), psig_pk, pkx_pk, name, self.identity.sig_pk)
         self.sas = sas_digits(shared, t)
         self.state = "compare"
         return {"i": self.invite_id, "box": box}
@@ -285,13 +299,15 @@ class Pairing:
 
 
 def _phone_fields(vault: Vault, phone: PairedPhone, envelope_id: str) -> tuple[dict, bytearray]:
+    if len(phone.dsig_pk) != sodium.ED25519_PK_BYTES:
+        raise ProtocolError("phone-needs-pairing")  # no desktop to bind the envelope to
     eph_sk, eph_pk = sodium.x25519_keypair()
     try:
         z = sodium.x25519(eph_sk, phone.pkx_pk)
     finally:
         sodium.memzero(eph_sk)
     try:
-        kek = phone_kek(z, vault.profile_id, envelope_id, phone.phone_id, eph_pk)
+        kek = phone_kek(z, vault.profile_id, envelope_id, phone.phone_id, eph_pk, phone.dsig_pk)
     finally:
         sodium.memzero(z)
     return {**phone.fields(), "eph_pk": b64e(eph_pk)}, kek
@@ -332,14 +348,23 @@ def phone_part(env: Envelope) -> dict | None:
     return None
 
 
-def _phone_keys(part: dict) -> tuple[str, bytes, bytes, str]:
-    """phone_id, Psig_pk, Pkx_pk, eph_pk from an envelope; a damaged envelope is an error, not a crash."""
+def _phone_keys(part: dict) -> tuple[str, bytes, bytes, str, bytes]:
+    """phone_id, Psig_pk, Pkx_pk, eph_pk and the binding desktop's Dsig_pk from an envelope; a damaged
+    envelope is an error, not a crash. An envelope made before desktop binding has no Dsig_pk: the phone
+    can no longer open it, so it needs pairing again."""
+    if "dsig_pk" not in part:
+        raise ProtocolError("phone-needs-pairing")
     try:
-        keys = (part["phone_id"], b64d(part["psig_pk"]), b64d(part["pkx_pk"]), part["eph_pk"])
+        keys = (part["phone_id"], b64d(part["psig_pk"]), b64d(part["pkx_pk"]), part["eph_pk"], b64d(part["dsig_pk"]))
         b64d(keys[3])
     except (KeyError, TypeError, ValueError):
         raise ProtocolError("damaged-envelope") from None
-    if not isinstance(keys[0], str) or len(keys[1]) != sodium.ED25519_PK_BYTES or len(keys[2]) != sodium.X25519_BYTES:
+    if (
+        not isinstance(keys[0], str)
+        or len(keys[1]) != sodium.ED25519_PK_BYTES
+        or len(keys[2]) != sodium.X25519_BYTES
+        or len(keys[4]) != sodium.ED25519_PK_BYTES
+    ):
         raise ProtocolError("damaged-envelope")
     return keys
 
@@ -380,7 +405,9 @@ class PhoneUnlock:
         part = phone_part(env) if env else None
         if part is None:
             raise ProtocolError("unpaired")
-        phone_id, _, _, eph_pk = _phone_keys(part)
+        phone_id, _, _, eph_pk, dsig_pk = _phone_keys(part)
+        if dsig_pk != self.identity.sig_pk:
+            raise ProtocolError("phone-needs-pairing")  # made by another desktop identity: the phone answers for ours
         for req_id in [r for r, p in self.pending.items() if p.profile_id == vault.profile_id]:
             self.cancel(req_id)  # one pending request per profile
         session_sk, session_pk = sodium.x25519_keypair()
@@ -426,7 +453,7 @@ class PhoneUnlock:
         if self.clock() > pending.expiry:
             self.cancel(req_id)
             raise ProtocolError("expired")
-        phone_id, psig_pk, pkx_pk, _ = _phone_keys(phone_part(pending.envelope))
+        phone_id, psig_pk, pkx_pk, _, _ = _phone_keys(phone_part(pending.envelope))
         if response.get("phone_id") != phone_id:
             raise ProtocolError("unpaired")
         refused = "error" in response

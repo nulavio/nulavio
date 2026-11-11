@@ -389,6 +389,7 @@
   "err_wrong_container": {"message": "Este arquivo de chaves pertence a outro perfil. Nada foi aberto."},
   "err_not_encrypted": {"message": "Esse perfil não é protegido."},
   "err_damaged_envelope": {"message": "O arquivo de chaves do perfil está danificado. Use o código de recuperação."},
+  "err_phone_needs_pairing": {"message": "Este celular foi conectado antes de uma mudança de segurança e não consegue mais desbloquear este perfil. Remova-o e conecte de novo."},
   "err_unsupported_version": {"message": "Este perfil foi protegido por um Nulavio mais novo. Atualize o Nulavio para abri-lo."},
   "err_unreadable": {"message": "O arquivo de chaves do perfil não pode ser lido."},
   "err_unlocked": {"message": "Bloqueie este perfil primeiro e tente de novo."},

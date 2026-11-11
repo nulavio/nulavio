@@ -36,6 +36,7 @@
     <string name="error_replay">This request was already answered.</string>
     <string name="error_unpaired">This computer is not paired with this phone.</string>
     <string name="error_bad_signature">This request is not from a paired computer. Nothing was sent.</string>
+    <string name="error_bad_expiry">This request says it stays valid for too long, so it was refused. Nothing was sent. Ask the computer for a new one.</string>
     <string name="error_not_for_this_phone">This request is for another phone.</string>
     <string name="error_unreachable">The computer did not connect. Check that both are on the same network, then try again.</string>
     <string name="error_keys_invalidated">This phone\'s keys can no longer be used (its fingerprints or screen lock changed). Set it up again and pair it again with your computers.</string>

@@ -10,6 +10,8 @@ import java.util.Map;
 public final class Nv1 {
     public static final byte[] CONTEXT = "nulavio/nv1/".getBytes(StandardCharsets.US_ASCII);
     public static final long CLOCK_SKEW = 120;
+    /** A request may not claim to stay valid longer than one request lifetime (60 s) plus clock skew. */
+    public static final long MAX_REQUEST_AHEAD = 60 + CLOCK_SKEW;
 
     private Nv1() {}
 
@@ -99,8 +101,13 @@ public final class Nv1 {
         return String.format(Locale.ROOT, "%06d", n % 1_000_000L); // ASCII digits in every locale
     }
 
-    public static byte[] phoneKek(byte[] z, String profileId, String envelopeId, String phoneId, byte[] ephPk) {
-        return kdf(z, "envelope/phone", profileId, envelopeId, phoneId, ephPk);
+    /**
+     * The key a phone envelope opens with, bound to the desktop that made it: the phone passes the signing
+     * key of the desktop whose request it verified, so another paired desktop gets a key that opens
+     * nothing (audit V3).
+     */
+    public static byte[] phoneKek(byte[] z, String profileId, String envelopeId, String phoneId, byte[] ephPk, byte[] dsigPk) {
+        return kdf(z, "envelope/phone/desktop-bound", profileId, envelopeId, phoneId, ephPk, dsigPk);
     }
 
     public static byte[] responseKey(byte[] shared, byte[] requestHash) {

@@ -18,6 +18,7 @@ import sys
 import tempfile
 import textwrap
 import unittest
+from dataclasses import replace
 from pathlib import Path
 from unittest import mock
 
@@ -38,6 +39,9 @@ from nulavio_launcher.vault.phone import (
     add_password_and_phone,
     add_phone,
     remove_phone,
+    request_signing_input,
+    response_key,
+    unseal,
 )
 from nulavio_launcher.vault.providers import Keyring, add_os_keyring, remove_os_keyring
 from phone_reference import PhoneRejected, ReferencePhone, pair
@@ -454,7 +458,7 @@ class UnpairedDeviceTest(VaultTestCase):
     def test_phone_ignores_unpaired_desktop(self):
         other = DesktopIdentity.generate()
         vault, _, _ = self.new_vault("other.json")
-        env = add_phone(vault, self.paired)
+        env = add_phone(vault, replace(self.paired, dsig_pk=other.sig_pk))  # an envelope that desktop could make
         request = PhoneUnlock(other, "Unknown desktop", self.clock).request(vault, env.id, "Work")
         with self.assertRaises(PhoneRejected) as ctx:
             self.phone.handle(request)
@@ -468,6 +472,75 @@ class UnpairedDeviceTest(VaultTestCase):
         self.assertIsNone(c.start_phone(self.env.id, "Work"))
         self.assertEqual(c.error, "unpaired")
         self.assertEqual(vault.envelopes("phone"), [])
+
+
+# Audit V3 (2026-11-10): one phone paired with two desktops. Desktop A has a copy of desktop B's
+# vault.json and asks the phone for B's profile under harmless names.
+class DesktopBindingTest(VaultTestCase):
+    def setUp(self):
+        super().setUp()
+        self.phone = self.pair_phone()  # paired with self.identity: desktop B, the victim
+        self.attacker = DesktopIdentity.generate()
+        pair(Pairing(self.attacker, "Desktop A", clock=self.clock), self.phone)
+        vault, self.dek, _ = self.new_vault()
+        self.env = add_phone(vault, self.paired)
+        self.victim = self.reopen(vault)
+
+    def forged_request(self, name: str = "Desktop B", expiry: int | None = None) -> dict:
+        """What desktop A can sign: B's envelope fields from the copied vault.json, its own desktop id."""
+        part = self.env.data
+        request = {
+            "v": 1,
+            "req_id": b64e(os.urandom(16)),
+            "op": "unlock-profile",
+            "profile_id": self.victim.profile_id,
+            "profile_name": "Banking",
+            "desktop_id": self.attacker.desktop_id,
+            "desktop_name": name,
+            "envelope_id": self.env.id,
+            "phone_id": part["phone_id"],
+            "eph_pk": part["eph_pk"],
+            "s_pk": b64e(self.session_pk),
+            "expiry": int(self.clock()) + 60 if expiry is None else expiry,
+        }
+        return {"r": request, "sig": b64e(sodium.sign(self.attacker.sig_sk, request_signing_input(request)))}
+
+    def test_another_desktops_request_yields_a_key_that_opens_nothing(self):
+        session_sk, self.session_pk = sodium.x25519_keypair()
+        forged = self.forged_request()
+        response = self.phone.handle(forged)  # the phone answers its paired desktop A ...
+        shared = sodium.x25519(session_sk, self.phone.kx_pk)
+        rk = response_key(shared, sodium.hash32(canonical(forged["r"])))
+        kek = unseal(rk, response["box"], forged["r"]["req_id"].encode())
+        with self.assertRaises(VaultError):  # ... but with A's key in the derivation: B's envelope stays shut
+            self.victim.unlock_kek(self.env.id, kek)
+        self.assert_locked(self.victim)
+
+    def test_the_phone_shows_the_name_it_paired_with(self):
+        _, self.session_pk = sodium.x25519_keypair()
+        shown = self.phone.check(self.forged_request(name="Desktop B"))
+        self.assertEqual(shown["desktop_name"], "Desktop A")  # its own record, not the request's words
+
+    def test_a_request_valid_for_too_long_is_refused(self):
+        _, self.session_pk = sodium.x25519_keypair()
+        with self.assertRaises(PhoneRejected) as ctx:
+            self.phone.handle(self.forged_request(expiry=int(self.clock()) + 3600))
+        self.assertEqual(ctx.exception.code, "bad-expiry")
+
+    def test_the_desktop_will_not_ask_for_another_desktops_envelope(self):
+        with self.assertRaises(ProtocolError) as ctx:
+            PhoneUnlock(self.attacker, "Desktop A", self.clock).request(self.victim, self.env.id, "Banking")
+        self.assertEqual(ctx.exception.code, "phone-needs-pairing")
+
+    def test_the_rightful_desktop_still_unlocks(self):
+        c = self.coordinator(self.victim)
+        self.assertEqual(c.receive(self.phone.handle(c.start_phone(self.env.id, "Banking"))), State.UNLOCKED)
+        self.assertEqual(bytes(self.victim.dek), self.dek)
+
+    def test_an_envelope_for_a_phone_without_a_desktop_is_refused(self):
+        with self.assertRaises(ProtocolError) as ctx:
+            add_phone(self.victim, replace(self.paired, dsig_pk=b""))
+        self.assertEqual(ctx.exception.code, "phone-needs-pairing")
 
 
 # 8. Pareamento substituído falha.
@@ -673,12 +746,14 @@ class UpgradeTest(VaultTestCase):
         vault.unlock_recovery_code(self.secrets["recovery_code"])
         self.assertEqual(b64e(sodium.hash32(bytes(vault.dek))), self.secrets["dek_hash"])
         vault.lock()
-        phone = ReferencePhone.from_state(self.secrets["phone"], self.clock)
+        # Its phone envelope predates desktop binding (audit V3): the phone could no longer open it, so the
+        # desktop asks to pair the phone again instead of sending a request.
         identity = DesktopIdentity.load_or_create(self.dir / "fixture" / "desktop.json")
         c = Coordinator(vault, phone=PhoneUnlock(identity, "Fixture desktop", self.clock), transport=Loopback(), clock=self.clock)
         env = vault.envelopes("phone")[0]
-        self.assertEqual(c.receive(phone.handle(c.start_phone(env.id, "Fixture"))), State.UNLOCKED)
-        self.assertEqual(b64e(sodium.hash32(bytes(vault.dek))), self.secrets["dek_hash"])
+        self.assertIsNone(c.start_phone(env.id, "Fixture"))
+        self.assertEqual(c.error, "phone-needs-pairing")
+        self.assert_locked(vault)
 
     def test_newer_format_is_refused_not_downgraded(self):
         path = self.dir / "fixture" / "vault.json"
