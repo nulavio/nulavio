@@ -692,7 +692,7 @@ class WorkspaceTest(Home):
         root = Path(__file__).resolve().parents[2]
         shell = (root / "browser" / "shell" / "modules" / "NulavioAI.sys.mjs").read_text(encoding="utf-8")
         self.assertIn(f'const WORKSPACE_ENV = "{workspace.WORKSPACE_ENV}";', shell)
-        self.assertIn("this.#workspaceValue ||= Services.env.get(WORKSPACE_ENV)", shell)
+        self.assertIn("const value = Services.env.get(WORKSPACE_ENV) || Services.prefs.getStringPref(WORKSPACE_PREF", shell)
 
     def test_the_bar_takes_only_its_own_words_and_a_live_bridge(self):
         # Audit A12: markWorkspace kept any texts it was given. A13: a reused PID kept a window "driven".
