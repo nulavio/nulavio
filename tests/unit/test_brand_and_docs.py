@@ -159,6 +159,9 @@ class DocsTest(unittest.TestCase):
         "README.md",
         "CONTRIBUTING.md",
         "SECURITY.md",
+        "CHANGELOG.md",  # OpenSSF Best Practices looks for it (release_notes)
+        "CODE_OF_CONDUCT.md",
+        "GOVERNANCE.md",
         "LICENSES.md",
         "LICENSE",
         "docs/adr/0001-engine-selection.md",
@@ -176,6 +179,7 @@ class DocsTest(unittest.TestCase):
         "docs/security/threat-matrix.md",
         "docs/security/hardening.md",
         "docs/security/residual-risks.md",
+        "docs/security/assurance-case.md",
         "docs/brand/strategy.md",
         "docs/brand/explorations.md",
         "docs/brand/guidelines.md",

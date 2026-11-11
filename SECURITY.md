@@ -2,7 +2,7 @@
 
 ## Supported versions
 
-Nulavio has **no releases yet**. The `main` branch (Track A preview) is the only supported code. Once releases exist, the latest release and the previous one will receive security fixes.
+Nulavio is in public alpha. Only the **latest release** receives security fixes: each fix, including every Firefox security release, ships as a new version in the signed dnf repository, so `sudo dnf upgrade nulavio` is the upgrade path. Older alpha versions are not patched. The `main` branch is also supported. Releases and their notes: [CHANGELOG.md](CHANGELOG.md).
 
 ## Reporting a vulnerability
 

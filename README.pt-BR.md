@@ -16,6 +16,7 @@
   <img alt="Motor: Firefox 160" src="https://img.shields.io/badge/motor-Firefox%20160-0F7A68">
   <a href="https://github.com/nulavio/nulavio/releases/latest"><img alt="Release: alpha" src="https://img.shields.io/github/v/release/nulavio/nulavio?include_prereleases&label=alpha&color=B45309"></a>
   <a href="https://scorecard.dev/viewer/?uri=github.com/nulavio/nulavio"><img alt="OpenSSF Scorecard" src="https://api.scorecard.dev/projects/github.com/nulavio/nulavio/badge"></a>
+  <a href="https://www.bestpractices.dev/projects/16551"><img alt="OpenSSF Best Practices" src="https://www.bestpractices.dev/projects/16551/badge"></a>
 </p>
 
 <p align="center">
@@ -108,9 +109,9 @@ A documentação técnica está em inglês.
 | Decisões | [ADRs](docs/adr/): motor, busca, perfis e roteamento, Connect, desbloqueio pelo celular, Vault, AI Bridge |
 | Produto | [visão](docs/product/vision.md) · [requisitos](docs/product/requirements.md) · [roadmap](docs/product/roadmap.md) · [critérios de release](docs/product/release-criteria.md) |
 | Arquitetura | [visão geral](docs/architecture/overview.md) · [build](docs/architecture/build.md) · [política de atualização](docs/architecture/update-policy.md) · [fronteiras de confiança](docs/architecture/trust-boundaries.md) |
-| Segurança | [modelo de ameaças](docs/security/threat-model.md) · [endurecimento](docs/security/hardening.md) · [riscos residuais](docs/security/residual-risks.md) · [changelog](docs/security/changelog.md) |
+| Segurança | [modelo de ameaças](docs/security/threat-model.md) · [endurecimento](docs/security/hardening.md) · [riscos residuais](docs/security/residual-risks.md) · [assurance case](docs/security/assurance-case.md) · [changelog](docs/security/changelog.md) |
 | Design | [design system](docs/design/design-system.md) · [princípios de UX](docs/design/ux-principles.md) · [acessibilidade](docs/design/accessibility.md) |
-| Processo | [como contribuir](CONTRIBUTING.md) · [pull requests](docs/process/pull-requests.md) |
+| Processo | [como contribuir](CONTRIBUTING.md) · [pull requests](docs/process/pull-requests.md) · [governança](GOVERNANCE.md) · [código de conduta](CODE_OF_CONDUCT.md) · [notas de versão](CHANGELOG.md) |
 
 ## Segurança
 

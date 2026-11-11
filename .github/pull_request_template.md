@@ -41,6 +41,7 @@ It becomes the squash-merge commit. Process: docs/process/pull-requests.md.
 ## Checklist
 
 - [ ] Conventional commits, signed off (`git commit -s`)
+- [ ] New behaviour has tests; a bug fix has a test that fails without the fix, or this description says why not ([policy](https://github.com/nulavio/nulavio/blob/main/CONTRIBUTING.md#tests-are-part-of-the-change))
 - [ ] `ruff check .`, `ruff format --check .` and `python3 -I tests/run.py unit` pass locally
 - [ ] Integration tests run where the change touches the engine, profiles or the Shell (or listed under "Not verified")
 - [ ] Docs updated where behaviour changed

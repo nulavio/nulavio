@@ -16,6 +16,7 @@
   <img alt="Engine: Firefox 160" src="https://img.shields.io/badge/engine-Firefox%20160-0F7A68">
   <a href="https://github.com/nulavio/nulavio/releases/latest"><img alt="Release: alpha" src="https://img.shields.io/github/v/release/nulavio/nulavio?include_prereleases&label=alpha&color=B45309"></a>
   <a href="https://scorecard.dev/viewer/?uri=github.com/nulavio/nulavio"><img alt="OpenSSF Scorecard" src="https://api.scorecard.dev/projects/github.com/nulavio/nulavio/badge"></a>
+  <a href="https://www.bestpractices.dev/projects/16551"><img alt="OpenSSF Best Practices" src="https://www.bestpractices.dev/projects/16551/badge"></a>
 </p>
 
 <p align="center">
@@ -106,9 +107,9 @@ The integration suite drives the real browser through Marionette: 363 tests on t
 | Decisions | [ADRs](docs/adr/): engine, search, profiles and routing, Connect, phone unlock, Vault, AI Bridge |
 | Product | [vision](docs/product/vision.md) · [requirements](docs/product/requirements.md) · [roadmap](docs/product/roadmap.md) · [release criteria](docs/product/release-criteria.md) |
 | Architecture | [overview](docs/architecture/overview.md) · [build](docs/architecture/build.md) · [update policy](docs/architecture/update-policy.md) · [trust boundaries](docs/architecture/trust-boundaries.md) |
-| Security | [threat model](docs/security/threat-model.md) · [hardening](docs/security/hardening.md) · [residual risks](docs/security/residual-risks.md) · [changelog](docs/security/changelog.md) |
+| Security | [threat model](docs/security/threat-model.md) · [hardening](docs/security/hardening.md) · [residual risks](docs/security/residual-risks.md) · [assurance case](docs/security/assurance-case.md) · [changelog](docs/security/changelog.md) |
 | Design | [design system](docs/design/design-system.md) · [UX principles](docs/design/ux-principles.md) · [accessibility](docs/design/accessibility.md) |
-| Process | [contributing](CONTRIBUTING.md) · [pull requests](docs/process/pull-requests.md) |
+| Process | [contributing](CONTRIBUTING.md) · [pull requests](docs/process/pull-requests.md) · [governance](GOVERNANCE.md) · [code of conduct](CODE_OF_CONDUCT.md) · [release notes](CHANGELOG.md) |
 
 ## Security
 
