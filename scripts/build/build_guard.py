@@ -23,6 +23,15 @@ GIB = 1024**3
 HERE = Path(__file__).resolve().parent
 
 
+# Budgets. "laptop" (default): the maintainer's 32 GiB laptop, shared with other
+# applications. "runner": a disposable CI machine that does nothing else (Blacksmith,
+# 16 vCPU and 64 GiB): more jobs and memory, Cargo in parallel, and it requires a
+# host with at least the container's memory plus RUNNER_HOST_RESERVE_GIB.
+RUNNER_MAX_MEMORY_GIB = 56
+RUNNER_MAX_JOBS = 16
+RUNNER_HOST_RESERVE_GIB = 6
+
+
 @dataclasses.dataclass
 class Config:
     memory_gib: int = 16
@@ -34,9 +43,17 @@ class Config:
     psi_seconds: float = 30
     interval: float = 5
     lease_seconds: float = 30
+    profile: str = "laptop"
+    pids: int = 512
+    max_rustc: int = 1
 
     @classmethod
     def from_env(cls, env):
+        profile = env.get("NULAVIO_BUILD_PROFILE", "laptop")
+        if profile == "runner":
+            return cls.runner_from_env(env)
+        if profile != "laptop":
+            raise ValueError(f"unknown NULAVIO_BUILD_PROFILE {profile!r} (laptop or runner)")
         config = cls(
             memory_gib=int(env.get("NULAVIO_BUILD_MEMORY_GIB", "16")),
             jobs=int(env.get("MOZ_PARALLEL_BUILD", "2")),
@@ -48,9 +65,32 @@ class Config:
         # The host reserve below still stops the build first.
         if not 1 <= config.memory_gib <= 20 or config.jobs not in (1, 2) or env.get("CARGO_BUILD_JOBS", "1") != "1":
             raise ValueError("build budget: at most 20 GiB, MOZ_PARALLEL_BUILD=1 or 2, CARGO_BUILD_JOBS=1")
-        if not 1 <= config.min_available_gib <= 16 or not 0 < config.psi_limit <= 100 or not 0 < config.psi_seconds <= 300:
-            raise ValueError("invalid memory/PSI thresholds")
+        config.check_thresholds()
         return config
+
+    @classmethod
+    def runner_from_env(cls, env):
+        jobs = int(env.get("MOZ_PARALLEL_BUILD", str(RUNNER_MAX_JOBS)))
+        config = cls(
+            memory_gib=int(env.get("NULAVIO_BUILD_MEMORY_GIB", "48")),
+            jobs=jobs,
+            cargo_jobs=jobs,
+            cpus=jobs,
+            min_available_gib=float(env.get("NULAVIO_BUILD_MIN_AVAILABLE_GIB", "4")),
+            psi_limit=float(env.get("NULAVIO_BUILD_PSI_LIMIT", "10")),
+            psi_seconds=float(env.get("NULAVIO_BUILD_PSI_SECONDS", "30")),
+            profile="runner",
+            pids=8192,
+            max_rustc=jobs,
+        )
+        if not 1 <= config.memory_gib <= RUNNER_MAX_MEMORY_GIB or not 1 <= jobs <= RUNNER_MAX_JOBS:
+            raise ValueError(f"runner budget: at most {RUNNER_MAX_MEMORY_GIB} GiB and MOZ_PARALLEL_BUILD={RUNNER_MAX_JOBS}")
+        config.check_thresholds()
+        return config
+
+    def check_thresholds(self):
+        if not 1 <= self.min_available_gib <= 16 or not 0 < self.psi_limit <= 100 or not 0 < self.psi_seconds <= 300:
+            raise ValueError("invalid memory/PSI thresholds")
 
 
 class PressurePolicy:
@@ -61,7 +101,8 @@ class PressurePolicy:
     def reason(self, now, available, psi):
         if available < self.min_available:
             return f"available memory below reserve ({available / GIB:.2f} GiB)"
-        if psi > self.psi_limit:
+        # psi is None where the kernel has no PSI (a runner): the reserve above still applies.
+        if psi is not None and psi > self.psi_limit:
             if self.since is None:
                 self.since = now
             if now - self.since >= self.psi_seconds:
@@ -75,7 +116,7 @@ def retry_jobs(config, previous):
     if previous.get("oom") or previous.get("memory_failure"):
         if previous.get("jobs") == 1:
             raise ValueError("previous memory failure at one job; inspect logs before another attempt")
-        return 1
+        return max(1, min(config.jobs, previous.get("jobs", config.jobs)) // 2)
     return min(config.jobs, previous.get("jobs", config.jobs))
 
 
@@ -94,10 +135,19 @@ def read_json(path):
 
 def host_sample():
     mem = {line.split(":")[0]: int(line.split()[1]) * 1024 for line in Path("/proc/meminfo").read_text().splitlines()}
-    full = next(line for line in Path("/proc/pressure/memory").read_text().splitlines() if line.startswith("full "))
-    psi = float(dict(field.split("=") for field in full.split()[1:])["avg10"])
+    try:
+        full = next(line for line in Path("/proc/pressure/memory").read_text().splitlines() if line.startswith("full "))
+        psi = float(dict(field.split("=") for field in full.split()[1:])["avg10"])
+    except FileNotFoundError:
+        psi = None  # kernel without PSI
     cpu = list(map(int, Path("/proc/stat").read_text().splitlines()[0].split()[1:9]))
-    return {"available": mem["MemAvailable"], "swap_used": mem["SwapTotal"] - mem["SwapFree"], "psi_full_avg10": psi, "cpu": cpu}
+    return {
+        "total": mem["MemTotal"],
+        "available": mem["MemAvailable"],
+        "swap_used": mem["SwapTotal"] - mem["SwapFree"],
+        "psi_full_avg10": psi,
+        "cpu": cpu,
+    }
 
 
 def cpu_percent(before, after):
@@ -114,7 +164,15 @@ def call(*args, check=True):
 
 def preflight(config):
     sample = host_sample()
-    if sample["available"] < config.min_available_gib * GIB or sample["psi_full_avg10"] > config.psi_limit:
+    psi = sample["psi_full_avg10"]
+    if psi is None and config.profile == "laptop":
+        raise ValueError("this kernel reports no memory pressure (PSI), which the laptop budget relies on")
+    if config.profile == "runner" and sample["total"] < (config.memory_gib + RUNNER_HOST_RESERVE_GIB) * GIB:
+        raise ValueError(
+            f"the runner budget needs {config.memory_gib + RUNNER_HOST_RESERVE_GIB} GiB of RAM, this host has "
+            f"{sample['total'] / GIB:.1f}: use the laptop budget"
+        )
+    if sample["available"] < config.min_available_gib * GIB or (psi is not None and psi > config.psi_limit):
         raise ValueError(f"host lacks build headroom: {sample}")
     running = call("podman", "ps", "--format", "{{.Names}}").stdout.splitlines()
     if any(name.startswith("nulavio-build-") for name in running):
@@ -144,7 +202,7 @@ def stop_container(cid):
 def inside(control, config, command):
     """Fail closed before exec, and guard the entire workload even without the host client."""
     root = Path("/sys/fs/cgroup")
-    expected = {"memory.max": config.memory_gib * GIB, "memory.swap.max": 0, "memory.oom.group": 1, "pids.max": 512}
+    expected = {"memory.max": config.memory_gib * GIB, "memory.swap.max": 0, "memory.oom.group": 1, "pids.max": config.pids}
     actual = {key: int((root / key).read_text()) for key in expected}
     quota, period = (root / "cpu.max").read_text().split()
     if actual != expected or quota == "max" or int(quota) / int(period) > config.cpus:
@@ -182,8 +240,8 @@ def inside(control, config, command):
             )
             if time.time() - (control / "heartbeat").stat().st_mtime > config.lease_seconds:
                 reason = "supervisor heartbeat expired"
-            elif sum(p["name"] == "rustc" for p in processes) > 1:
-                reason = "more than one simultaneous rustc"
+            elif sum(p["name"] == "rustc" for p in processes) > config.max_rustc:
+                reason = f"more than {config.max_rustc} simultaneous rustc"
             elif events.get("oom", 0):
                 reason = "cgroup OOM event"
             elif signal_reason:
@@ -215,7 +273,7 @@ def supervise(control, config, options):
         "--cpus",
         str(config.cpus),
         "--pids-limit",
-        "512",
+        str(config.pids),
         "--cgroup-conf=memory.oom.group=1",
         "--restart=no",
         "--timeout=86400",
@@ -226,7 +284,7 @@ def supervise(control, config, options):
         "-e",
         f"MOZ_PARALLEL_BUILD={config.jobs}",
         "-e",
-        "CARGO_BUILD_JOBS=1",
+        f"CARGO_BUILD_JOBS={config.cargo_jobs}",
         "-e",
         "CMAKE_BUILD_PARALLEL_LEVEL=1",
         "-e",
@@ -243,6 +301,8 @@ def supervise(control, config, options):
         "NINJAFLAGS=-j1",
         "-e",
         f"NULAVIO_BUILD_MEMORY_GIB={config.memory_gib}",
+        "-e",
+        f"NULAVIO_BUILD_PROFILE={config.profile}",
         "--entrypoint",
         "python3",
     ]
@@ -366,6 +426,9 @@ def main():
             print("build guard: host headroom and no overlapping build: OK")
             return 0
         config.jobs = retry_jobs(config, read_json(args.control.parent / "last-result.json"))
+        if config.profile == "runner":
+            # The container's entry point derives these from MOZ_PARALLEL_BUILD again.
+            config.cpus = config.cargo_jobs = config.max_rustc = config.jobs
         return supervise(args.control, config, options)
 
 

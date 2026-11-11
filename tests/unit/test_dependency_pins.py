@@ -38,6 +38,7 @@ PINNED_IMAGE = re.compile(
 )  # registry host first
 RELEASE_SCRIPTS = (
     "make_rpm.sh", "make_deb.sh", "check_rpm.sh", "check_deb.sh", "sign_repo.sh", "test_signed_repo.sh", "test_kms_signing.sh",
+    "check_published.sh",
 )  # fmt: skip
 # Android lint's Security checks that default to a warning (lint 9.4, `lint --show`), promoted to errors in app/lint.xml.
 LINT_SECURITY = {

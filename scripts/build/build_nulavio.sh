@@ -57,9 +57,16 @@ python3 -I "$repo/scripts/build/make_branding.py" --source "$src"
 python3 -I "$repo/scripts/build/apply_patches.py" --source "$src"
 cp "$repo/browser/build/mozconfig" "$src/mozconfig"
 # Bootstrap also respects the requested memory budget and fixed two-CPU quota.
-memory_gib=${NULAVIO_BUILD_MEMORY_GIB:-16}
+# NULAVIO_BUILD_PROFILE=runner: a disposable CI machine (build_guard.py, docs/architecture/build.md).
+if [[ ${NULAVIO_BUILD_PROFILE:-laptop} == runner ]]; then
+    memory_gib=${NULAVIO_BUILD_MEMORY_GIB:-48}
+    cpu_quota=$(( ${MOZ_PARALLEL_BUILD:-16} * 100000 ))
+else
+    memory_gib=${NULAVIO_BUILD_MEMORY_GIB:-16}
+    cpu_quota=200000
+fi
 podman build --memory="${memory_gib}g" --memory-swap="${memory_gib}g" \
-    --cpu-period=100000 --cpu-quota=200000 --jobs=1 -q -t "$image" \
+    --cpu-period=100000 --cpu-quota="$cpu_quota" --jobs=1 -q -t "$image" \
     -f "$repo/ci/containers/fedora-build.Containerfile" "$repo/ci/containers" >/dev/null
 
 # Single-quoted command expands inside the container.
@@ -75,9 +82,11 @@ exec python3 -B -I "$repo/scripts/build/build_guard.py" --control "$control" -- 
     "$image" -- \
     bash -c 'set -e; cd /src
              printf "\nmk_add_options MOZ_PARALLEL_BUILD=%s\n" "$MOZ_PARALLEL_BUILD" >> mozconfig
-             printf "ac_add_options CARGO=/nulavio-build/cargo_serial.sh\n" >> mozconfig
-             if [ "$MOZ_PARALLEL_BUILD" -gt 1 ]; then
-                 printf "ac_add_options CARGOFLAGS=--jobs=1\n" >> mozconfig
+             if [ "$NULAVIO_BUILD_PROFILE" != runner ]; then
+                 printf "ac_add_options CARGO=/nulavio-build/cargo_serial.sh\n" >> mozconfig
+                 if [ "$MOZ_PARALLEL_BUILD" -gt 1 ]; then
+                     printf "ac_add_options CARGOFLAGS=--jobs=1\n" >> mozconfig
+                 fi
              fi
              ./mach --no-interactive build --jobs "$MOZ_PARALLEL_BUILD"
              ./mach --no-interactive package-multi-locale --locales en-US $NULAVIO_LOCALES'
