@@ -11,6 +11,7 @@
 set -euo pipefail
 
 version=${1:?usage: rehearse_release.sh <firefox-version> [out-dir]}
+[[ -z ${NULAVIO_MOZCONFIG_EXTRA:-} ]] || { echo "rehearse_release: unset NULAVIO_MOZCONFIG_EXTRA: a variant build is never a release" >&2; exit 2; }
 repo=$(cd "$(dirname "$0")/../.." && pwd)
 work=${NULAVIO_BUILD_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/nulavio-build}
 install="$work/install/nulavio"

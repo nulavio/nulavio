@@ -108,5 +108,32 @@ class ReleaseWorkflowTest(unittest.TestCase):
         self.assertIn("NULAVIO_BUILD_PROFILE: runner", self.build)
 
 
+class AsanWorkflowTest(unittest.TestCase):
+    def test_weekly_asan_build_runs_the_integration_suite_and_fails_on_a_report(self):
+        text = (ROOT / ".github" / "workflows" / "asan.yml").read_text(encoding="utf-8")
+        self.assertIn("schedule:", text)
+        self.assertIn("NULAVIO_MOZCONFIG_EXTRA: mozconfig.asan", text)
+        self.assertIn("tests/run.py integration", text)
+        self.assertIn('grep -l "ERROR: AddressSanitizer"', text)
+        self.assertIn("__asan_init", text)
+        self.assertNotIn("R2_", text)
+        self.assertNotIn("id-token", text)
+        asan = (ROOT / "browser" / "build" / "mozconfig.asan").read_text(encoding="utf-8")
+        self.assertIn("--enable-address-sanitizer", asan)
+
+    @unittest.skipUnless(shutil.which("bash"), "bash not available")
+    def test_a_variant_build_is_never_rehearsed_as_a_release(self):
+        out = subprocess.run(
+            ["bash", str(RELEASE / "rehearse_release.sh"), "160.0", "/nonexistent"],
+            env={**os.environ, "NULAVIO_MOZCONFIG_EXTRA": "mozconfig.asan"},
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(out.returncode, 2)
+        self.assertIn("never a release", out.stderr)
+        build = (ROOT / "scripts" / "build" / "build_nulavio.sh").read_text(encoding="utf-8")
+        self.assertIn("NULAVIO_MOZCONFIG_EXTRA =~ ^mozconfig", build)
+
+
 if __name__ == "__main__":
     unittest.main()

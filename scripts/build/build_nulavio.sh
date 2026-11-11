@@ -62,6 +62,14 @@ podman run --rm --security-opt label=disable -v "$repo:/repo:ro" -v "$src:/src" 
     python3 -I /repo/scripts/build/make_branding.py --source /src'
 python3 -I "$repo/scripts/build/apply_patches.py" --source "$src"
 cp "$repo/browser/build/mozconfig" "$src/mozconfig"
+# NULAVIO_MOZCONFIG_EXTRA=mozconfig.<variant>: appended from browser/build/ (asan.yml uses
+# mozconfig.asan). A variant build is never a release: rehearse_release.sh refuses it.
+if [[ -n ${NULAVIO_MOZCONFIG_EXTRA:-} ]]; then
+    [[ $NULAVIO_MOZCONFIG_EXTRA =~ ^mozconfig\.[a-z0-9-]+$ && -f $repo/browser/build/$NULAVIO_MOZCONFIG_EXTRA ]] ||
+        { echo "nulavio-build: NULAVIO_MOZCONFIG_EXTRA must name a browser/build/mozconfig.<variant>" >&2; exit 2; }
+    cat "$repo/browser/build/$NULAVIO_MOZCONFIG_EXTRA" >> "$src/mozconfig"
+    echo "nulavio-build: variant $NULAVIO_MOZCONFIG_EXTRA (not a release build)"
+fi
 # Bootstrap also respects the requested memory budget and fixed two-CPU quota.
 # NULAVIO_BUILD_PROFILE=runner: a disposable CI machine (build_guard.py, docs/architecture/build.md).
 if [[ ${NULAVIO_BUILD_PROFILE:-laptop} == runner ]]; then
