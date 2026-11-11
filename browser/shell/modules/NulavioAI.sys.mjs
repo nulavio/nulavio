@@ -36,17 +36,6 @@ const SHELL_ID = "shell@nulavio.net";
 const SIDEBAR_ID = "shell_nulavio_net-sidebar-action"; // the assistant panel in the side panel
 const WORKSPACE_PREF = "nulavio.ai.workspace";
 const WORKSPACE_ENV = "NULAVIO_AI_WORKSPACE"; // launcher/nulavio_launcher/ai/workspace.py WORKSPACE_ENV
-
-/** Whether `pid` is still an agent bridge (`nulavio ai serve`), not another process that got the
-    number after the bridge ended (audit A13): its command line says so. */
-async function isBridge(pid) {
-  try {
-    const args = new TextDecoder().decode(await IOUtils.read(`/proc/${pid}/cmdline`)).split("\0");
-    return args.some((arg, i) => arg === "ai" && args[i + 1] === "serve");
-  } catch (e) {
-    return false;
-  }
-}
 const TARGET_PREF = "nulavio.ai.target";
 const TARGET_LABEL_PREF = "nulavio.ai.target.label";
 const RAW_MARKER = "nulavio-raw.json"; // launcher/nulavio_launcher/ai/workspace.py RAW_MARKER
@@ -194,12 +183,16 @@ class AI {
     // The environment first: the bridge sets it and nothing in the browser can change it, so resetting
     // the pref in about:config does not turn an agent's window back into an ordinary one (audit A6).
     // The pref carries the same value and still counts on its own (it can only add the restriction).
-    const value = Services.env.get(WORKSPACE_ENV) || Services.prefs.getStringPref(WORKSPACE_PREF, "");
+    const fromEnv = Services.env.get(WORKSPACE_ENV);
+    const value = fromEnv || Services.prefs.getStringPref(WORKSPACE_PREF, "");
     if (!value) {
       return "";
     }
     const [id, pid] = value.split(":");
-    if (pid && !(/^\d+$/.test(pid) && (await isBridge(pid)))) {
+    // "agent:pid" (one of the user's profiles, opened for an agent) counts only in the engine that
+    // bridge started (it sets the environment) and while the bridge lives. The same pref left in
+    // prefs.js is read again by later ordinary runs, where a reused PID must not count (audit A13).
+    if (pid && !(fromEnv && /^\d+$/.test(pid) && (await IOUtils.exists(`/proc/${pid}`)))) {
       return ""; // the agent's session ended: an ordinary window again
     }
     return id;

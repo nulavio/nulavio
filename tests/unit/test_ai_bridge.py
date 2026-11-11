@@ -692,7 +692,7 @@ class WorkspaceTest(Home):
         root = Path(__file__).resolve().parents[2]
         shell = (root / "browser" / "shell" / "modules" / "NulavioAI.sys.mjs").read_text(encoding="utf-8")
         self.assertIn(f'const WORKSPACE_ENV = "{workspace.WORKSPACE_ENV}";', shell)
-        self.assertIn("const value = Services.env.get(WORKSPACE_ENV) || Services.prefs.getStringPref(WORKSPACE_PREF", shell)
+        self.assertIn("const value = fromEnv || Services.prefs.getStringPref(WORKSPACE_PREF", shell)
 
     def test_the_bar_takes_only_its_own_words_and_a_live_bridge(self):
         # Audit A12: markWorkspace kept any texts it was given. A13: a reused PID kept a window "driven".
@@ -702,7 +702,7 @@ class WorkspaceTest(Home):
         keys = re.search(r"const BAR_TEXT_KEYS = \[([^\]]*)\]", shell)[1]
         self.assertEqual(sorted(re.findall(r'"(\w+)"', keys)), sorted(re.findall(r"^\s+(\w+):", built, re.M)))
         self.assertIn("texts: clean", shell)
-        self.assertIn('arg === "ai" && args[i + 1] === "serve"', shell)  # what bin/nulavio ai serve runs as
+        self.assertIn("if (pid && !(fromEnv && ", shell)  # a mark left in prefs.js by an ended session
 
     def test_command_and_prefs(self):
         engine = mock.Mock(path=Path("/opt/engine/nulavio"))
