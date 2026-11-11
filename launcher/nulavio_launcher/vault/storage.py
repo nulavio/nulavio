@@ -15,8 +15,11 @@ to detect a rolled-back vault.json (threat model U-T21).
 
 from __future__ import annotations
 
+import contextlib
+import fcntl
 import json
 import os
+import signal
 import shutil
 import subprocess
 import tempfile
@@ -209,35 +212,124 @@ class Container:
                 shutil.rmtree(top)
 
 
+MIGRATED = "migrated"  # in P.vault/: the copy into the volume is complete
+
+
+class _Interrupted(BaseException):
+    pass
+
+
+@contextlib.contextmanager
+def _signals_as_exceptions():
+    """SIGTERM and SIGHUP (a closed terminal) end the migration through its clean-up path."""
+
+    def interrupted(signum, _frame):
+        raise _Interrupted(signal.Signals(signum).name)
+
+    previous = {}
+    try:
+        for sig in (signal.SIGTERM, signal.SIGHUP):
+            previous[sig] = signal.signal(sig, interrupted)
+    except ValueError:  # not the main thread: the caller's own handling applies
+        pass
+    try:
+        yield
+    finally:
+        for sig, handler in previous.items():
+            signal.signal(sig, handler)
+
+
+def _migration_lock(path: Path, *, wait: bool) -> int | None:
+    """An exclusive lock held for the whole migration; released by the kernel if the process dies."""
+    fd = os.open(path.with_name(path.name + ".migrating.lock"), os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | (0 if wait else fcntl.LOCK_NB))
+    except BlockingIOError:
+        os.close(fd)
+        return None
+    return fd
+
+
+def _release(path: Path, fd: int) -> None:
+    path.with_name(path.name + ".migrating.lock").unlink(missing_ok=True)
+    os.close(fd)
+
+
+def _undo(path: Path, staging: Path) -> None:
+    container = Container(path)
+    if container.mounted():
+        container.unmount(lazy_after=True)
+    shutil.rmtree(container.root, ignore_errors=True)
+    if path.exists():
+        for dirpath, _dirs, _files in os.walk(path):
+            os.chmod(dirpath, 0o700)
+        shutil.rmtree(path, ignore_errors=True)
+    os.rename(staging, path)
+
+
+def recover_interrupted(path: Path) -> str | None:
+    """Finish or undo a migration that a crash, SIGKILL or power loss interrupted (audit V5).
+
+    Without this the plaintext copy stayed next to the profile, unnoticed, while the
+    profile was reported as protected. A complete copy is finished (the plaintext is
+    deleted); anything else is undone (the profile is back as it was, unprotected).
+    Returns "finished", "undone", or None (nothing to do, or a migration is running).
+    """
+    path = Path(path)
+    staging = path.with_name(path.name + ".plaintext-migrating")
+    if not staging.exists():
+        return None
+    fd = _migration_lock(path, wait=False)
+    if fd is None:
+        return None  # another process is migrating it now
+    try:
+        if not staging.exists():
+            return None
+        marker = Container(path).root / MIGRATED
+        if marker.exists():
+            shutil.rmtree(staging)
+            marker.unlink()
+            return "finished"
+        _undo(path, staging)
+        return "undone"
+    finally:
+        _release(path, fd)
+
+
 def encrypt_existing(path: Path, vault: Vault) -> Container:
     """Move an existing profile directory into a new container (engine must not be using it).
 
     The plaintext originals are deleted afterwards; on SSDs and in backups, fragments may remain.
+    An interruption the clean-up below cannot catch (SIGKILL, power loss) is finished or
+    undone by recover_interrupted() the next time the profile is used.
     """
     path = Path(path)
     if not path.is_dir():
         raise StorageError("missing", str(path))  # the caller checks that no engine is using it
     staging = path.with_name(path.name + ".plaintext-migrating")
-    os.rename(path, staging)
-    container = Container(path)
+    if staging.exists():
+        raise StorageError("exists", str(staging))
+    fd = _migration_lock(path, wait=True)
     try:
-        container.init(vault)
-        container.mount(vault)
-        for item in staging.iterdir():
-            target = path / item.name
-            if item.is_dir() and not item.is_symlink():
-                shutil.copytree(item, target, symlinks=True)
-            else:
-                shutil.copy2(item, target, follow_symlinks=False)
-        container.unmount()
-    except BaseException:
-        if container.mounted():
-            container.unmount()
-        shutil.rmtree(container.root, ignore_errors=True)
-        if path.exists():
-            os.chmod(path, 0o700)
-            shutil.rmtree(path, ignore_errors=True)
-        os.rename(staging, path)
-        raise
-    shutil.rmtree(staging)
+        with _signals_as_exceptions():
+            os.rename(path, staging)
+            container = Container(path)
+            try:
+                container.init(vault)
+                container.mount(vault)
+                for item in staging.iterdir():
+                    target = path / item.name
+                    if item.is_dir() and not item.is_symlink():
+                        shutil.copytree(item, target, symlinks=True)
+                    else:
+                        shutil.copy2(item, target, follow_symlinks=False)
+                container.unmount()
+                (container.root / MIGRATED).touch(mode=0o600)
+            except BaseException:
+                _undo(path, staging)
+                raise
+            shutil.rmtree(staging)
+            (container.root / MIGRATED).unlink()
+    finally:
+        _release(path, fd)
     return container

@@ -15,12 +15,16 @@ import time
 from .. import log, profile
 from .core import RECOVERY_KDF, Vault, VaultError
 from .providers import Keyring, add_os_keyring, unlock_os_keyring
-from .storage import Container, StorageError
+from .storage import Container, StorageError, recover_interrupted
 
 
 def container(prof: profile.Profile) -> Container:
+    # Every launcher path that touches a protected profile comes here first.
+    outcome = recover_interrupted(prof.path)
+    if outcome:
+        log.event("vault.migration-recovered", profile=prof.name, outcome=outcome)
     box = Container(prof.path)
-    box.secure_if_locked()  # every launcher path that touches a protected profile comes here first
+    box.secure_if_locked()
     return box
 
 
