@@ -3,7 +3,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 /* Runs inside about:preferences (system principal), loaded by NulavioSettings before the
-   page builds its panes (ADR 0009). It only uses what the engine's own panes use: Preferences
+   page builds its panes (ADR 0008). It only uses what the engine's own panes use: Preferences
    settings, SettingGroupManager groups and SettingPaneManager panes, drawn by the engine's
    widgets. Words come from l10n/<locale>/nulavio/settings.ftl. */
 

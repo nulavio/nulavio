@@ -20,7 +20,7 @@ this.nulavioSearch = class extends ExtensionAPI {
     // This always-on Shell lifecycle also installs the scoped native-window sheet;
     // it exposes no additional API to extension pages or web content.
     ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioWindow.sys.mjs").NulavioWindow.start();
-    // One settings page (ADR 0009): Nulavio's panes inside the engine's about:preferences.
+    // One settings page (ADR 0008): Nulavio's panes inside the engine's about:preferences.
     try {
       ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioSettings.sys.mjs").NulavioSettings.start();
     } catch (e) {

@@ -2,7 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-/* One settings page (ADR 0009): Nulavio's options live inside the engine's own
+/* One settings page (ADR 0008): Nulavio's options live inside the engine's own
    about:preferences, as native panes and groups, instead of a second page.
 
    No engine patch: when a preferences document is created, this module runs
