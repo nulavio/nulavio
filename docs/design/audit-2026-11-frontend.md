@@ -2,7 +2,7 @@
 
 Every Nulavio surface a person sees, audited on the real engine after `v160.0-0.1`: the window (band, Horizon, cues), the Shell pages, the launcher's start page and nulavio.net. One finding per item, with severity, evidence, cause and the proposed fix. Corrections follow in separate pull requests, MEDIUM first (no HIGH finding was confirmed).
 
-**Result: 0 HIGH, 9 MEDIUM, 15 LOW**, plus one product decision for the maintainer (N-01). The one HIGH carried in from the browser review of 2026-11-09 (V1, the unlock page offered the profile's password to the engine's password manager) is fixed on `main` (#15) and was verified again here.
+**Result: 0 HIGH, 10 MEDIUM, 14 LOW**, plus one product decision for the maintainer (N-01). S-06 was LOW on the audited build and became MEDIUM on 2026-11-11, when connecting a phone was turned on (#42). The one HIGH carried in from the browser review of 2026-11-09 (V1, the unlock page offered the profile's password to the engine's password manager) is fixed on `main` (#15) and was verified again here.
 
 ## How it was done
 
@@ -122,9 +122,9 @@ The configuration (`#ai-config`) and the wizard's command (`#ai-wizard-command`)
 - **Fix.** After a decision, focus goes to the first action of the finding that took its place (the next one, or the previous when the last of the list was resolved).
 - **Test.** Integration (the Guard fixture of `test_guard`): after resolving the first of several findings, `document.activeElement` is a button inside the list.
 
-#### S-06 · LOW — The phone page takes the profile's secret without pointing at the band
+#### S-06 · MEDIUM (was LOW) — The phone page takes the profile's secret without pointing at the band
 
-`vault/phone.html` asks for "Senha ou código de recuperação deste perfil". The other pages that take a secret open with "Antes de digitar uma senha, confira o alto da janela…"; this one does not, because `lib/moment.js:31` lists `unlock`, `create` and `methods` only. LOW because connecting a phone is off in this release (`nulavio.vault.phone.pairing`, D10); it becomes MEDIUM the day it ships, and #42 proposes to turn it on. Fixed together with S-04.
+`vault/phone.html` asks for "Senha ou código de recuperação deste perfil". The other pages that take a secret open with "Antes de digitar uma senha, confira o alto da janela…"; this one does not, because `lib/moment.js:31` lists `unlock`, `create` and `methods` only. It was LOW while connecting a phone was off (`nulavio.vault.phone.pairing`, D10 as audited). #42 turned it on (2026-11-11), so the page is now reachable by everyone with a protected profile: MEDIUM. Fixed together with S-04.
 
 - **Evidence.** [capture](screenshots/audit-2026-11/s06-phone-no-band-line.png).
 - **Fix.** Add `phone` to `SECRET_KINDS`; a test that every Shell page with a password field has the line.
@@ -181,7 +181,7 @@ The footer sends the reader to `docs/security/residual-risks.md`, a path that ex
 
 Since 2026-11-09 the landing sells the intended launch in the present tense, by the maintainer's decision. On 2026-11-10 the alpha became downloadable from the same page ("Alpha para o Fedora · Baixar"). The page says a protected profile opens with "uma chave de segurança FIDO2 ou a biometria do celular", shows both in the unlock mock-up and lists them in the comparison table ("Sim: senha, sistema, chave FIDO2 ou celular"); the alpha it links to says "ainda não disponível nesta versão" for both (D10, #13). "Pacotes assinados para Fedora e Ubuntu" has the same shape (Ubuntu is next, the page says so elsewhere).
 
-Nothing here is an invented proof (no testimonial, count or audit), and the numbers in the proof row are backed by the repository. It is a product decision whether the landing keeps the launch tense now that a release exists: see "Decisions" below. No change is made in this round. If #42 ships (phone unlock on, once the Companion can be installed), the phone half of this finding goes away; the security key and Ubuntu stay.
+Nothing here is an invented proof (no testimonial, count or audit), and the numbers in the proof row are backed by the repository. It is a product decision whether the landing keeps the launch tense now that a release exists: see "Decisions" below. No change is made in this round. #42 has since turned phone unlock on in `main`; once a release with it is out and the Companion can be installed, the phone half of this finding goes away. The security key and Ubuntu stay.
 
 - **Evidence.** `site/index.html` (feature text, the `role="img"` unlock panel, the "Perfis cifrados no disco" row) and `site/en/index.html`; `vault/methods.html` "not yet" line.
 
