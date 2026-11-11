@@ -304,6 +304,29 @@ class InterruptedMigrationTest(StorageCase):
         profiles.lock(prof)
 
 
+class CoreDumpTest(unittest.TestCase):
+    def test_vault_commands_and_gocryptfs_write_no_core_dumps(self):
+        # Threat model U-T13, audit V8: a crash would write the password, the DEK or the volume key.
+        script = (
+            "import resource, sys\n"
+            f"sys.path.insert(0, {str(ROOT / 'launcher')!r})\n"
+            "from nulavio_launcher.vault import cli\n"
+            "cli.no_core_dumps()\n"
+            "print(resource.getrlimit(resource.RLIMIT_CORE)[0])\n"
+            "import subprocess\n"
+            "print(subprocess.run(['sh', '-c', 'ulimit -c'], capture_output=True, text=True).stdout.strip())\n"
+        )
+        out = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True, timeout=30, check=True)
+        lines = out.stdout.split()
+        self.assertEqual(lines[0], "0")  # no core file from this process
+        self.assertEqual(lines[-1], "0")  # nor from gocryptfs, which it starts
+        dumpable = script.replace(
+            "print(resource", "import ctypes\nprint(ctypes.CDLL(None).prctl(3, 0, 0, 0, 0))\nprint(resource"
+        )
+        out = subprocess.run([sys.executable, "-c", dumpable], capture_output=True, text=True, timeout=30, check=True)
+        self.assertEqual(out.stdout.split()[0], "0")  # PR_GET_DUMPABLE: no debugger from other processes either
+
+
 class EncryptedProfileTest(StorageCase):
     def test_create_unlock_lock(self):
         prof, code = self.encrypted_profile()
