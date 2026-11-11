@@ -245,6 +245,20 @@ class EncryptedProfileTest(StorageCase):
         profiles.unlock(prof, recovery_code=code).lock()
         profiles.lock(prof)
 
+    def test_a_volume_that_ended_without_a_lock_is_read_only_again(self):
+        # Audit V6: a crash, a killed gocryptfs or its -idle timer left the empty mount point
+        # writable (0700); an engine started on it would write a new profile in the clear.
+        prof, _ = self.encrypted_profile()
+        profiles.unlock(prof, password=PASSWORD).lock()
+        box = profiles.container(prof)
+        subprocess.run(["fusermount3", "-u", "-z", str(box.mountpoint)], check=True, capture_output=True)  # not unmount()
+        self.assertFalse(box.mounted())
+        self.assertEqual(os.stat(box.mountpoint).st_mode & 0o777, 0o700)
+        self.assertTrue(profiles.status(prof)["locked"])
+        self.assertEqual(os.stat(box.mountpoint).st_mode & 0o777, 0o500)
+        with self.assertRaises(PermissionError):
+            (box.mountpoint / "prefs.js").write_text("plaintext")
+
     def test_keyring_profile(self):
         tool = self.tmp / "secret-tool"
         tool.write_text(FAKE_SECRET_TOOL.format(python=sys.executable))
