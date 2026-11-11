@@ -544,6 +544,37 @@ class AuditTest(Home):
         with at("https://example.org/", _eval=page):
             self.assertFalse(bridge.call("page_read", {"tab": "t1"})["isError"])
 
+    def test_typing_cannot_send_a_form_without_submit_forms(self):
+        # Audit A3: U+E007 is Enter for WebDriver, and Enter in a single-line field sends the form.
+        agent, _ = registry.add("typist", "other", "assisted")
+        bridge = tools.Bridge(agent["id"], "s-1", approver=registry.Approver())
+        bridge.elements["t1"] = {"e1": "shared-1"}
+        single = {"connected": True, "editable": True, "multiline": False}
+        with (
+            mock.patch.object(tools.Bridge, "_url_of", return_value="https://example.org/"),
+            mock.patch.object(tools.Bridge, "_call_fn", return_value=single) as call_fn,
+            mock.patch.object(tools.Bridge, "bidi", side_effect=AssertionError("typed")),
+        ):
+            result = bridge.call("type", {"tab": "t1", "element": "e1", "text": "x\ue007"})
+            self.assertIn("special keys", result["content"][0]["text"])
+            call_fn.assert_not_called()
+            result = bridge.call("type", {"tab": "t1", "element": "e1", "text": "x\n"})
+            self.assertTrue(result["isError"])
+            entry = json.loads(audit.audit_path().read_text().splitlines()[-1])
+            self.assertIn("submit_forms", json.dumps(entry))
+
+    def test_an_approval_does_not_follow_the_tab_to_another_site(self):
+        # Audit A4: the page navigated while the request was open; the action ran on the new site.
+        agent, _ = registry.add("js", "other", "full_control", accept_full_control=True)
+        registry.grant(agent["id"], "execute_js", "allow")
+        bridge = tools.Bridge(agent["id"], "s-1", approver=registry.Approver())
+        with (
+            mock.patch.object(tools.Bridge, "_url_of", side_effect=["https://blog.example/", "https://bank.example/"]),
+            mock.patch.object(tools.Bridge, "_eval", side_effect=AssertionError("ran")),
+        ):
+            result = bridge.call("evaluate", {"tab": "t1", "expression": "1"})
+        self.assertIn("moved to https://bank.example", result["content"][0]["text"])
+
     def test_denied_call_is_audited_without_arguments(self):
         agent, _ = registry.add("d", "other", "assisted")
         bridge = tools.Bridge(agent["id"], "s-1", approver=registry.Approver())
