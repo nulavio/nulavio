@@ -375,6 +375,52 @@ export function announce(text, level = "ok", { control } = {}) {
   }
 }
 
+/* A refused field (accessibility.md): marked with aria-invalid (the 2 px critical edge), described
+   by its message and focused, so a screen reader hears the reason with the field. The mark and the
+   message belong to that attempt: both go when the person types in the field again. `message` is the
+   element that shows the reason; `text` sets it (omit it when the page already wrote it, as the
+   status line does); `onClear` runs when the mark goes. One field is refused at a time per message. */
+export function refuseField(field, message, text, onClear = null) {
+  if (text !== undefined && text !== null) {
+    message.textContent = text;
+  }
+  message.id ||= `${field.id}-error`;
+  for (const other of document.querySelectorAll(`[aria-invalid="true"][data-refused-by="${CSS.escape(message.id)}"]`)) {
+    acceptField(other);
+  }
+  const described = (field.getAttribute("aria-describedby") ?? "").split(/\s+/).filter(Boolean);
+  field.dataset.refusedBy = message.id;
+  field.dataset.describedBefore = described.join(" ");
+  field.setAttribute("aria-describedby", [...new Set([...described, message.id])].join(" "));
+  field.setAttribute("aria-invalid", "true");
+  const clear = () => {
+    if (field.dataset.refusedBy === message.id) {
+      acceptField(field);
+      if (text !== undefined && text !== null) {
+        message.textContent = "";
+      }
+      onClear?.();
+    }
+  };
+  field.addEventListener("input", clear, { once: true });
+  field.focus();
+}
+
+/** Take a refusal's mark and description off a field (refuseField). */
+export function acceptField(field) {
+  if (field.dataset.refusedBy === undefined) {
+    return;
+  }
+  field.removeAttribute("aria-invalid");
+  if (field.dataset.describedBefore) {
+    field.setAttribute("aria-describedby", field.dataset.describedBefore);
+  } else {
+    field.removeAttribute("aria-describedby");
+  }
+  delete field.dataset.refusedBy;
+  delete field.dataset.describedBefore;
+}
+
 /** Where a temporary profile is kept, in the words the UI may use (never "memory only" if swap on disk is active). */
 export function temporaryStorageText(state) {
   if (!state?.inMemory) {
