@@ -16,8 +16,12 @@ const win = arguments[0] ? [...Services.wm.getEnumerator("navigator:browser")].f
 const doc = win.document;
 const tone = el => win.getComputedStyle(el).backgroundColor;
 const box = doc.getElementById("tabbrowser-tabbox");
-const card = win.getComputedStyle(box);
-const rect = box.getBoundingClientRect();
+const margins = win.getComputedStyle(box);
+// The card is the content container of the selected tab (where the engine rounds and clips the page);
+// its margin is the tab box's, which is never clipped.
+const container = win.gBrowser.selectedBrowser.closest(".browserContainer");
+const card = win.getComputedStyle(container);
+const rect = container.getBoundingClientRect();
 const band = doc.getElementById("nulavio-band");
 const px = value => Math.round(parseFloat(value));
 return {
@@ -34,7 +38,11 @@ return {
   outline: [card.outlineStyle, px(card.outlineWidth)],
   shadow: card.boxShadow,
   // The gap between the page and each edge of the window, in pixels: 0 where chrome sits on that side.
-  gap: { left: px(card.marginLeft), right: px(card.marginRight), bottom: px(card.marginBottom), top: px(card.marginTop) },
+  gap: {
+    left: px(margins.marginLeft), right: px(margins.marginRight),
+    bottom: px(margins.marginBottom), top: px(margins.marginTop),
+  },
+  tabBoxClips: margins.overflow !== "visible",
   edges: {
     left: Math.round(rect.left),
     right: Math.round(win.innerWidth - rect.right),
@@ -113,6 +121,33 @@ class WindowFrameTest(unittest.TestCase):
         seen = harness.wait_until(lambda: self.m.chrome(panel), 15)
         self.assertEqual(seen, {"radius": 10, "outline": ["solid", 1], "bottom": 8, "gap": 8, "pageBottom": 8})
 
+    def test_01c_a_dialog_of_the_tab_still_overlaps_the_toolbar(self):
+        # The engine draws a tab's dialog a few pixels over the toolbar, where no page can draw. The card must not cut that.
+        self.assertFalse(self.frame()["tabBoxClips"])
+        self.m.chrome(
+            "gBrowser.getTabDialogBox(gBrowser.selectedBrowser).open('chrome://global/content/aboutAbout.html',"
+            " {features: 'resizable=no', modalType: Services.prompt.MODAL_TYPE_TAB});"
+        )
+        self.addCleanup(self.m.chrome, "gBrowser.selectedBrowser.tabDialogBox.getTabDialogManager().abortDialogs();")
+        dialog = """
+          const container = gBrowser.selectedBrowser.closest(".browserContainer");
+          const boxes = gBrowser.selectedBrowser.closest(".browserSidebarContainer").querySelectorAll(".dialogBox");
+          const box = [...boxes].find(el => el.getBoundingClientRect().height > 0);
+          if (!box) return null;
+          let clipped = null;
+          for (let el = box.parentElement; el && el.id !== "browser"; el = el.parentElement) {
+            if (getComputedStyle(el).overflow !== "visible") {
+              const r = el.getBoundingClientRect();
+              if (r.top > box.getBoundingClientRect().top) clipped = el.id || el.className;
+            }
+          }
+          return { over: Math.round(container.getBoundingClientRect().top - box.getBoundingClientRect().top), clipped };
+        """
+        seen = harness.wait_until(lambda: self.m.chrome(dialog), 15)
+        self.assertIsNotNone(seen)
+        self.assertGreaterEqual(seen["over"], 5, seen)
+        self.assertIsNone(seen["clipped"], seen)
+
     def test_02_the_margin_is_on_the_sides_without_chrome(self):
         # The tab column on the other side: the margin changes sides with it.
         self.m.chrome("Services.prefs.setBoolPref('sidebar.position_start', false);")
@@ -154,15 +189,14 @@ class WindowFrameTest(unittest.TestCase):
         self.assertEqual(self.settled(lambda f: f["radius"] == 10)["radius"], 10)
 
     def test_03b_a_short_window_keeps_every_pixel_for_the_page(self):
-        # A 1280 x 800 screen at 150 % is 853 x 533 CSS pixels: no margin and no radius there.
+        # A 1280 x 800 screen at 150 % is 853 x 533 CSS pixels: the page is flush with the window there, as the
+        # engine draws it (no margin, no hairline of ours).
         self.m.send("WebDriver:SetWindowRect", {"width": 853, "height": 533})
         self.addCleanup(self.m.send, "WebDriver:SetWindowRect", {"width": 1280, "height": 800})
-        frame = self.settled(lambda f: f["radius"] == 0)
-        self.assertEqual(
-            (frame["radius"], frame["gap"]["bottom"], frame["gap"]["right"], frame["edges"]["bottom"]), (0, 0, 0, 0), frame
-        )
+        frame = self.settled(lambda f: f["gap"]["bottom"] == 0)
+        self.assertEqual((frame["gap"]["bottom"], frame["gap"]["right"], frame["edges"]["bottom"]), (0, 0, 0), frame)
         self.m.send("WebDriver:SetWindowRect", {"width": 1280, "height": 800})
-        self.assertEqual(self.settled(lambda f: f["radius"] == 10)["gap"]["bottom"], 8)
+        self.assertEqual(self.settled(lambda f: f["gap"]["bottom"] == 8)["radius"], 10)
 
     def test_04_a_band_that_states_something_keeps_its_fill_and_its_line(self):
         plain = self.settled(lambda f: f["gap"]["right"] == 8)
@@ -185,7 +219,7 @@ class WindowFrameTest(unittest.TestCase):
         self.assertNotEqual(private["frame"], plain["frame"], private)
 
     def test_05_more_contrast_and_forced_colours_keep_the_cards_edge(self):
-        edge = "return getComputedStyle(document.getElementById('tabbrowser-tabbox')).outlineColor;"
+        edge = "return getComputedStyle(gBrowser.selectedBrowser.closest('.browserContainer')).outlineColor;"
         normal = self.m.chrome(edge)
         # The system's contrast setting (the engine exempts its own windows from forced colours on some
         # platforms, so the sheet answers to either query, as it does for the band).
@@ -200,6 +234,50 @@ class WindowFrameTest(unittest.TestCase):
         self.assertEqual(forced, canvas_text)
         frame = self.frame()
         self.assertEqual(frame["outline"], ["solid", 1], frame)
+        # A themed window too (a private one uses the engine's dark theme): contrast comes before the theme's colours.
+        opened = self.m.chrome("""
+          const win = OpenBrowserWindow({ private: true });
+          return new Promise(resolve => win.addEventListener("load", () => resolve(true), { once: true }));
+        """)
+        self.assertTrue(opened)
+        self.addCleanup(self.m.chrome, "[...Services.wm.getEnumerator('navigator:browser')].find(w => w !== window)?.close();")
+        themed = """
+          const win = [...Services.wm.getEnumerator("navigator:browser")].find(w => w !== window);
+          const container = win.gBrowser.selectedBrowser.closest(".browserContainer");
+          return win.document.documentElement.hasAttribute("lwtheme") && win.getComputedStyle(container).outlineColor;
+        """
+        edge = harness.wait_until(lambda: self.m.chrome(themed), 15)
+        # That window is dark where the page sits, so the system's text colour there is its own: read it in place.
+        there = self.m.chrome(
+            "const win = [...Services.wm.getEnumerator('navigator:browser')].find(w => w !== window);"
+            "const p = win.document.createElement('div'); p.style.color = 'CanvasText';"
+            "win.gBrowser.selectedBrowser.closest('.browserContainer').append(p);"
+            "const c = win.getComputedStyle(p).color; p.remove(); return c;"
+        )
+        self.assertEqual(edge, there)
+
+    def test_06_the_splitters_keep_their_highlight_under_the_pointer(self):
+        # At rest they draw nothing; under the pointer the engine's highlight shows where to drag.
+        self.m.chrome("SidebarController.show('viewBookmarksSidebar');")
+        self.addCleanup(self.m.chrome, "SidebarController.hide();")
+        tone = """
+          const el = document.getElementById(arguments[0]);
+          if (!el || el.hidden || !el.getBoundingClientRect().height) return null;
+          const rest = getComputedStyle(el).backgroundColor;
+          InspectorUtils.addPseudoClassLock(el, ":hover");
+          // The engine fades the highlight in over half a second.
+          return new Promise(resolve => setTimeout(() => {
+            const hover = getComputedStyle(el).backgroundColor;
+            InspectorUtils.clearPseudoClassLocks(el);
+            resolve({ rest, hover });
+          }, 800));
+        """
+        for splitter in ("sidebar-splitter", "sidebar-launcher-splitter"):
+            with self.subTest(splitter=splitter):
+                seen = harness.wait_until(lambda splitter=splitter: self.m.chrome(tone, [splitter]), 15)
+                self.assertIsNotNone(seen)
+                self.assertEqual(seen["rest"], "rgba(0, 0, 0, 0)", seen)
+                self.assertNotEqual(seen["hover"], "rgba(0, 0, 0, 0)", seen)
 
 
 if __name__ == "__main__":

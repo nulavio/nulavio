@@ -1033,7 +1033,7 @@ From the experience review of 2026-11 ([references](references/2026-11/README.md
 | Part | Rule | Tokens |
 |---|---|---|
 | Frame: band, tab strip, toolbar, tab column, the margin around the page | One tone. No rule line between them. The neutral band is part of it; a band that states something keeps its own fill and its line | `color.chrome.toolbar` for all (`color.band.bg` points to it) |
-| Page | A card inside the frame: a margin on the sides that have no chrome, a radius, one hairline, no shadow. In every theme; never in full screen, nor in a window 600 px tall or less (the page keeps every pixel of height there) | `space.3` (8 px), `radius.md` (10 px), `color.border.subtle` |
+| Page | A card inside the frame: a margin on the sides that have no chrome (the tab box's), a radius, one hairline, no shadow (the content container's, where the engine rounds and clips the page). The tab box is never clipped: a tab's dialog is drawn over the toolbar on purpose. In every theme; never in full screen, nor in a window 600 px tall or less (the page keeps every pixel of height there) | `space.3` (8 px), `radius.md` (10 px), `color.border.subtle` |
 | A panel beside the tabs | A second card of the same shape; the splitter between it and the page is their gap and still resizes it | as the page |
 | Where it lives | The theme sheet (`horizon.css`), so the theme's pref turns it off with the rest of the look. Colours only for the default theme at normal contrast, never with `!important`; the band is styled only by its own sheet | `test_horizon_theme`, `test_horizon`, `test_window_frame` |
 | Under a theme, or the system's contrast setting | The shape stays. The edge follows the theme's text colour, or takes the system's text colour | `test_window_frame` |

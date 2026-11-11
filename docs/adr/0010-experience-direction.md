@@ -101,7 +101,19 @@ What changed from the prototype, each for a reason found on the engine or in the
 | A side panel as a square white area down to the window's edge | A second card of the same shape; the splitter is the gap and still resizes | It was the one surface that did not follow the frame |
 | The card in a window of any size | None in a window 600 px tall or less | The existing first-run test failed: on a 1280×800 screen at 150 % the layout choice's main action ended 7 px below the first screen. The margin gives the height back there |
 
-`tests/integration/test_window_frame.py` (seven tests): one tone and the card's shape; the side panel as a card; the margin with the tabs on either side, right to left, in Immersive, with tabs on top and in Foco; no card in full screen or in a short window; a private window keeps its band's fill and line and its own colours, with the card's shape; the system's contrast setting gives the edge the text colour.
+`tests/integration/test_window_frame.py` (nine tests): one tone and the card's shape; the side panel as a card; a dialog of the tab still drawn over the toolbar; the margin with the tabs on either side, right to left, in Immersive, with tabs on top and in Foco; no card in full screen or in a short window; the splitters' highlight under the pointer; a private window keeps its band's fill and line and its own colours, with the card's shape; the system's contrast setting gives the edge the text colour.
+
+### Independent review of the frame (2026-11-11)
+
+Reviewed from the source and the engine's own style sheets by a second model (Codex, read-only): no HIGH, two MEDIUM, one LOW. Each was checked on the engine before it changed anything; all three were true.
+
+| Point | Checked | Result |
+|---|---|---|
+| Clipping the tab box cut the 5 px by which the engine draws a tab's dialog over the toolbar | True, and it matters more than the review said: that overlap is where a site's prompt shows it is the browser's, because no page can draw there | The tab box keeps only the margin and is never clipped. The radius, the hairline and the clipping are on the content container, where the engine itself rounds and clips the page. A test opens a dialog and measures the overlap |
+| Under a theme, the system's contrast setting did not reach the card's edge (the theme's rule was more specific) | True | Contrast is decided first; the theme's colour applies only at normal contrast. Tested in a private window |
+| The splitters lost the highlight that shows where to drag | True: the engine fades it in under the pointer | They draw nothing at rest only. Tested with the pointer state forced |
+
+Not determined by reading, and still open: the link's address at the bottom corner and overlay scrollbars against the rounded corners (the scrollbar insets the engine uses for its own rounding are set, for macOS); expand-on-hover of the tab column; Windows' high-contrast mode.
 
 Not verified: a theme installed by the person (only the engine's private theme was run); the devtools docked in the window; a real desktop compositor (the captures are from a private X display with no window manager).
 

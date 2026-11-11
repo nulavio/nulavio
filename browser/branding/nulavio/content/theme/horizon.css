@@ -131,16 +131,17 @@
      as a heavier frame than the references draw). Nothing is hidden and nothing moves. Every theme gets
      the shape; full screen has none (the page is the screen), and neither has a short window: on a
      1280 x 800 or 1366 x 768 screen at 150 % the page keeps every pixel of height (the first run's main
-     action must end on the first screen there). */
+     action must end on the first screen there).
+
+     The margin is the tab box's; the radius, the hairline and the clipping are the content container's,
+     where the engine itself rounds and clips the page. The tab box is never clipped: a dialog of the tab
+     (a site's prompt, a sign-in request) is drawn 5 px over the toolbar on purpose, where no page can
+     draw, and that has to stay in view. */
   @media (min-height: 601px) {
     :root:not([inFullscreen], [inDOMFullscreen]) {
       #tabbrowser-tabbox {
         margin-block: 0 var(--nv-space-3);
         margin-inline: 0 var(--nv-space-3);
-        border-radius: var(--nv-radius-md);
-        overflow: clip;
-        outline: 1px solid var(--nv-color-border-subtle);
-        box-shadow: none;
       }
       /* The tab column on the other side: the margin changes sides with it. */
       &[sidebar-positionend] #tabbrowser-tabbox { margin-inline: var(--nv-space-3) 0; }
@@ -149,8 +150,28 @@
       &:not([nulavio-immersive]) #browser:not(:has(> #sidebar-container:not([hidden]))) #tabbrowser-tabbox {
         margin-inline: var(--nv-space-3);
       }
+      /* The engine draws this container's edges only where they face chrome, and rounds one corner; here
+         every edge faces the frame. (#browser in the selector: the engine's own rule names two ids.) */
+      #browser #tabbrowser-tabbox #tabbrowser-tabpanels > :not(.split-view-panel) .browserContainer {
+        border: 0;
+        border-radius: var(--nv-radius-md);
+        overflow: clip;
+        outline: 1px solid var(--nv-color-border-subtle);
+        box-shadow: none;
+        /* Where scrollbars overlay the page (macOS), they stay clear of the rounded corners. */
+        @media (-moz-platform: macos) {
+          --content-scrollbar-inset-block: var(--nv-radius-md);
+          --content-scrollbar-inset-inline-start: var(--nv-radius-md);
+          --content-scrollbar-inset-inline-end: var(--nv-radius-md);
+        }
+      }
+      /* The veil behind a dialog of the tab follows the card's corners; the dialog itself is not clipped. */
+      #tabbrowser-tabbox .browserSidebarContainer:not(.responsive-mode) .dialogOverlay[topmost="true"] {
+        border-radius: var(--nv-radius-md);
+      }
       /* A panel opened beside the tabs (bookmarks, history, the assistant) is a second card of the same
-         shape; the splitter between it and the page is their gap, and still the handle that resizes it. */
+         shape; the splitter between it and the page is their gap, and still the handle that resizes it
+         (it keeps the engine's highlight under the pointer). */
       #sidebar-box {
         margin-block-end: var(--nv-space-3);
         border-radius: var(--nv-radius-md);
@@ -161,13 +182,21 @@
         inline-size: var(--nv-space-3);
         min-inline-size: var(--nv-space-3);
         border: 0;
-        background: transparent;
       }
+      #sidebar-splitter:not(:hover) { background-color: transparent; }
       /* A theme brings its own colours (the dark one of a private window too): the edge follows its text. */
-      &[lwtheme] :is(#tabbrowser-tabbox, #sidebar-box) { outline-color: color-mix(in srgb, currentColor 24%, transparent); }
-      /* The system's contrast setting: the edge takes the text colour, as the band's does. */
+      &[lwtheme] #sidebar-box,
+      &[lwtheme] #browser #tabbrowser-tabbox #tabbrowser-tabpanels > :not(.split-view-panel) .browserContainer {
+        outline-color: color-mix(in srgb, currentColor 24%, transparent);
+      }
+      /* The system's contrast setting comes before any theme: the edge takes the text colour, as the band's
+         does. (&:root repeats the root so these rules weigh as much as the themed ones above and, coming
+         later, win.) */
       @media (forced-colors) or (prefers-contrast) {
-        :is(#tabbrowser-tabbox, #sidebar-box) { outline-color: CanvasText; }
+        &:root #sidebar-box,
+        &:root #browser #tabbrowser-tabbox #tabbrowser-tabpanels > :not(.split-view-panel) .browserContainer {
+          outline-color: CanvasText;
+        }
       }
     }
   }
@@ -251,11 +280,12 @@
 
     /* ADR 0010: no rule line between the parts of the frame, and the margin around the page in its tone.
        The splitter beside the tab column stays where it is and still resizes it; it only stops drawing a
-       line. The identity band is not styled here: its neutral fill is the token band.bg, the same tone,
+       line at rest (under the pointer it keeps the engine's highlight, which shows where to drag). The identity band is not styled here: its neutral fill is the token band.bg, the same tone,
        and its own sheet (window-band.css) owns the rest. */
     :root:not([lwtheme], [inFullscreen], [inDOMFullscreen]) {
       #navigator-toolbox { border-bottom: 0; }
-      #sidebar-launcher-splitter { border: 0; background: transparent; }
+      #sidebar-launcher-splitter { border: 0; }
+      #sidebar-launcher-splitter:not(:hover) { background-color: transparent; }
       #sidebar-container { background-color: var(--nv-color-chrome-toolbar); border: 0; }
       #browser { background-color: var(--nv-color-chrome-toolbar); }
     }
