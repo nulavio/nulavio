@@ -11,10 +11,24 @@ drawn from a list the test gives the module, and the test checks which entry of 
 
 from __future__ import annotations
 
+import json
+import time
 import unittest
+from pathlib import Path
 
 import harness
 from marionette import MarionetteError
+
+TOKENS = json.loads((Path(__file__).resolve().parents[2] / "docs" / "brand" / "tokens.json").read_text(encoding="utf-8"))["color"]
+
+
+def token(theme: str, kind: str, name: str) -> str:
+    return TOKENS[theme][kind][name]["$value"]
+
+
+def rgb(colour: str) -> str:
+    return "rgb({}, {}, {})".format(*(int(colour[i : i + 2], 16) for i in (1, 3, 5)))
+
 
 DOC = "const d = gBrowser.selectedBrowser.contentDocument; const w = gBrowser.selectedBrowser.contentWindow;"
 READY = DOC + 'return d?.documentURI.startsWith("about:") && d.readyState === "complete" && !!d.querySelector("setting-pane");'
@@ -129,7 +143,9 @@ class SettingsProfilesTest(unittest.TestCase):
         work = self.row(now, "Trabalho")
         self.assertEqual(work["icon"], "chrome://browser/content/profiles/assets/16_briefcase.svg")
         self.assertEqual(work["color"], "nulavio-profile-sky")
-        self.assertTrue(work["disc"], "the row's icon has no colour from the profile")
+        self.assertEqual(
+            work["disc"], f"light-dark({token('light', 'identityTile', 'sky')}, {token('dark', 'identityTile', 'sky')})"
+        )
         self.assertNotEqual(work["disc"], self.row(now, "Bancos")["disc"])
         self.assertEqual(now["doors"], ["nulavio-profile-temporary", "nulavio-profile-protected", "nulavio-profile-manager"])
 
@@ -174,7 +190,7 @@ class SettingsProfilesTest(unittest.TestCase):
           const named = id => [...d.querySelectorAll(`#${id} moz-visual-picker-item`)].map(item => [item.value, item.ariaLabel]);
           const image = d.querySelector("#nulavio-profile-color moz-visual-picker-item").shadowRoot.querySelector("img");
           return { avatars: named("nulavio-profile-avatar"), colors: named("nulavio-profile-color"),
-                   drawn: [image.src, w.getComputedStyle(image).fill !== "rgb(0, 0, 0)"] };
+                   drawn: [image.src, w.getComputedStyle(image).fill, w.getComputedStyle(image).stroke] };
         """
         )
         offered = self.m.chrome(choices)
@@ -185,7 +201,12 @@ class SettingsProfilesTest(unittest.TestCase):
             [[c, n] for c, n in zip(COLORS, ("Lima", "Céu", "Violeta", "Coral", "Areia", "Ardósia"), strict=True)],
         )
         # A colour is shown as this profile's icon in that colour.
-        self.assertEqual(offered["drawn"], ["chrome://browser/content/profiles/assets/16_briefcase.svg", True])
+        # (The first colour is lima: its tile behind the icon and its glyph for the drawing, in the page's scheme.)
+        self.assertEqual(offered["drawn"][0], "chrome://browser/content/profiles/assets/16_briefcase.svg")
+        pairs = [
+            [rgb(token(theme, "identityTile", "lima")), rgb(token(theme, "identityGlyph", "lima"))] for theme in ("light", "dark")
+        ]
+        self.assertIn(offered["drawn"][1:], pairs)
         # A name another profile has: said in words, nothing written, the editor stays with what was typed.
         self.m.chrome(CHANGE, ["nulavio-profile-name", "bancos"])
         self.m.chrome(CLICK, ['#nulavio-profile-editor-buttons moz-button[data-action="save"]'])
@@ -334,6 +355,57 @@ class SettingsProfilesTest(unittest.TestCase):
         wanted = f"/vault/methods.html?p={ids['Bancos']}"
         self.assertTrue(harness.wait_until(lambda: self.m.chrome(where).endswith(wanted), 15), self.m.chrome(where))
         self.assertEqual(self.m.chrome("return gBrowser.tabs.length;"), tabs + 1)
+
+    def test_05b_what_changes_elsewhere_and_what_is_still_running(self):
+        """Review of 2026-11-11: an editor open while the profile changes elsewhere, a second click while an
+        action runs, and words that outlive what they said."""
+        update = P + "return P.update(arguments[0], arguments[1]).then(() => true);"
+        ids = self.m.chrome(P + "return P.list().then(list => Object.fromEntries(list.profiles.map(p => [p.name, p.id])));")
+        self.open()
+        self.m.chrome(CLICK_ROW, ["Trabalho", "edit"])
+        self.seen(lambda n: n["editor"] and n["edit"]["name"] == "Trabalho")
+        # Renamed in another window while the editor is open: the untouched field follows, it never shows the old name.
+        self.m.chrome(update, [ids["Trabalho"], {"name": "Escritório"}])
+        self.seen(lambda n: n["edit"]["name"] == "Escritório" and any(r["name"] == "Escritório" for r in n["rows"]))
+        # Only the colour is changed here: saving does not put the old name back.
+        self.m.chrome(CHANGE, ["nulavio-profile-color", "coral"])
+        self.m.chrome(CLICK, ['#nulavio-profile-editor-buttons moz-button[data-action="save"]'])
+        self.seen(lambda n: n["said"] == "Salvo." and not n["editor"])
+        self.assertEqual(self.profiles()["Escritório"], ("briefcase", "coral"))
+        self.assertNotIn("Trabalho", self.profiles())
+        # A field the person did change keeps what they typed when the profile changes elsewhere.
+        self.m.chrome(CLICK_ROW, ["Escritório", "edit"])
+        self.seen(lambda n: n["editor"])
+        self.m.chrome(CHANGE, ["nulavio-profile-name", "Estúdio"])
+        self.m.chrome(update, [ids["Trabalho"], {"name": "Oficina", "color": "sand"}])
+        both = self.seen(lambda n: n["edit"]["color"] == "sand" and any(r["name"] == "Oficina" for r in n["rows"]))
+        self.assertEqual(both["edit"]["name"], "Estúdio")
+
+        # While an action runs, the list's buttons are disabled: a second click is never dropped unseen.
+        # ("Cancelar" stays: it starts nothing.)
+        self.m.chrome(
+            P + "P.update = () => new Promise(resolve => { window.__release = resolve; });"
+            "window.__busy = () => [...gBrowser.selectedBrowser.contentDocument"
+            ".querySelectorAll('#nulavio-profile-list moz-button[data-action]:not([data-action=cancel]),"
+            " #nulavio-profile-new-create')]"
+            ".map(b => Boolean(b.disabled));"
+        )
+        self.addCleanup(self.m.chrome, P + "delete P.update;")
+        self.m.chrome(CLICK, ['#nulavio-profile-editor-buttons moz-button[data-action="save"]'])
+        waiting = harness.wait_until(lambda: all(self.m.chrome("return window.__busy();")), 10)
+        self.assertTrue(waiting, self.m.chrome("return window.__busy();"))
+        self.assertTrue(self.m.chrome(LIST)["editor"], "the editor closed before its save answered")
+        self.m.chrome("window.__release();")
+        done = self.seen(lambda n: n["said"] == "Salvo." and not n["editor"])
+        self.assertFalse(any(self.m.chrome("return window.__busy();")), "the buttons stayed disabled")
+        self.m.chrome(P + "delete P.update;")
+
+        # What an action said stays while the list stays as it was, and leaves when the list changes again.
+        self.m.chrome(DOC + 'd.dispatchEvent(new w.Event("visibilitychange"));')  # the same list, read again
+        time.sleep(1.5)
+        self.assertEqual(self.m.chrome(LIST)["said"], done["said"])
+        self.m.chrome(update, [ids["Bancos"], {"name": "Banco"}])
+        self.seen(lambda n: any(r["name"] == "Banco" for r in n["rows"]) and not n["said"])
 
     def test_06_a_group_that_cannot_be_used_says_why_and_offers_nothing(self):
         self.m.chrome(P + 'P.list = async () => ({ available: false, reason: "disabled", profiles: [] });')
