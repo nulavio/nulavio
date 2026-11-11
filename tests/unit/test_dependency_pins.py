@@ -149,7 +149,7 @@ class OtherPinsTest(unittest.TestCase):
         refs = []
         for path in sorted((ROOT / "ci" / "containers").glob("*.Containerfile")):
             refs += [(path.name, ref) for ref in re.findall(r"^FROM\s+(\S+)", path.read_text(encoding="utf-8"), re.M)]
-        self.assertEqual(len(refs), 3)
+        self.assertEqual(len(refs), 4)  # fedora-build, fedora-itest, fedora-release-itest, ubuntu-itest
         self.assertEqual([r for r in refs if not PINNED_IMAGE.match(r[1])], [])
         by_tag: dict[str, set[str]] = {}
         for _, ref in refs:

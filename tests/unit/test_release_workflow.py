@@ -128,7 +128,8 @@ class AsanWorkflowTest(unittest.TestCase):
         text = (ROOT / ".github" / "workflows" / "asan.yml").read_text(encoding="utf-8")
         self.assertIn("schedule:", text)
         self.assertIn("NULAVIO_MOZCONFIG_EXTRA: mozconfig.asan", text)
-        self.assertIn("tests/run.py integration", text)
+        self.assertIn("scripts/release/run_integration.sh", text)
+        self.assertIn("NULAVIO_INTEGRATION_IMAGE: fedora-release-itest", text)
         self.assertIn('grep -l "ERROR: AddressSanitizer"', text)
         self.assertIn("__asan_init", text)
         self.assertNotRegex(text, r"\| *grep -q")  # SIGPIPE with pipefail

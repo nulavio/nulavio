@@ -73,6 +73,7 @@ jobs:
         env:
           FIREFOX: ${{ steps.pin.outputs.firefox }}
           NULAVIO_BUILD_PROFILE: runner
+          NULAVIO_INTEGRATION_IMAGE: fedora-release-itest # the gallery baselines' fonts (run_integration.sh)
         run: scripts/release/rehearse_release.sh "$FIREFOX" "$RUNNER_TEMP/rehearsal"
       - name: Remove the Safe Browsing key
         if: always()

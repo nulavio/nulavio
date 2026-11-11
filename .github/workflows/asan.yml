@@ -62,13 +62,14 @@ jobs:
       - name: Integration suite against the AddressSanitizer build
         env:
           NULAVIO_ENGINE: ${{ runner.temp }}/install/nulavio/nulavio # the executable, as rehearse_release.sh
+          NULAVIO_INTEGRATION_IMAGE: fedora-release-itest # the same container as the release rehearsal
         run: |
           mkdir -p "$RUNNER_TEMP/asan" "$RUNNER_TEMP/artifacts"
-          export ASAN_OPTIONS="log_path=$RUNNER_TEMP/asan/asan:detect_leaks=0"
           # The engine tests skip without a Nulavio engine: make sure they will run against this build.
           python3 -I -c 'import sys; sys.path.insert(0, "launcher"); from nulavio_launcher import engine
           found = engine.find_engine(); sys.exit(0 if found.vendor == "Nulavio" else f"not the Nulavio build: {found}")'
-          NULAVIO_TEST_ARTIFACTS="$RUNNER_TEMP/artifacts" python3 -I tests/run.py integration
+          NULAVIO_ASAN_LOG_DIR="$RUNNER_TEMP/asan" NULAVIO_TEST_ARTIFACTS="$RUNNER_TEMP/artifacts" \
+            scripts/release/run_integration.sh "$RUNNER_TEMP/install/nulavio"
       - name: AddressSanitizer reports
         if: always()
         run: |
