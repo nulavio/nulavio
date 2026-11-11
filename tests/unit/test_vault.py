@@ -827,6 +827,31 @@ class TamperTest(VaultTestCase):
         tampered.lock()
         self.assertEqual(Coordinator(Vault.load(vault.path)).unlock_password(PASSWORD), State.UNLOCKED)
 
+    def test_a_method_change_does_not_sign_a_tampered_file_again(self):
+        # Audit V4: re-inserting a revoked envelope, then any method change, made it valid again.
+        vault, _, _ = self.new_vault(recovery=True)
+        weak = vault.add_password("weak-old-password", FAST, label="old")
+        vault.save()
+        injected = json.loads(vault.path.read_text())["envelopes"]
+        vault.remove(weak.id)
+        vault.save()
+        meta = json.loads(vault.path.read_text())
+        meta["envelopes"] = injected
+        vault.path.write_text(json.dumps(meta))
+        vault.lock()
+        tampered = Vault.load(vault.path)
+        tampered.unlock_password(PASSWORD)  # the CLI and the Settings page unlock like this before a change
+        self.assertTrue(tampered.tampered)
+        tampered.add_password("another-password", FAST)
+        with self.assertRaises(VaultError) as ctx:
+            tampered.save()
+        self.assertEqual(ctx.exception.code, "metadata-tampered")
+        tampered.lock()
+        self.assertTrue(Vault.load(vault.path).meta["envelopes"] == injected)  # nothing was written
+        again = Vault.load(vault.path)
+        again.unlock_password("weak-old-password")
+        self.assertTrue(again.tampered)  # still flagged: the injected envelope never became valid
+
     def test_removed_envelope_is_detected(self):
         vault, _, _ = self.new_vault(recovery=True)
         vault.save()
