@@ -35,6 +35,7 @@ export const PANES = Object.freeze([
   "passwordsAutofill",
   "search",
   "nulavioAssistant",
+  "ai",
   "tabsBrowsing",
   "nulavioIntegrations",
 ]);
@@ -103,7 +104,11 @@ class SettingsHost {
 
   /** As open(), for a caller that names a pane or one of the old page's sections ("layout", "dns"…). */
   openFor(win, where = "", browser = null) {
-    const pane = Object.hasOwn(SECTIONS, where) ? SECTIONS[where] : where;
+    let pane = Object.hasOwn(SECTIONS, where) ? SECTIONS[where] : where;
+    // Where the engine shows its AI pane, the assistant's group is in it (panes.mjs); otherwise it has its own.
+    if (pane === "nulavioAssistant" && Services.prefs.getBoolPref("browser.preferences.aiControls", false)) {
+      pane = "ai";
+    }
     if (!PANES.includes(pane)) {
       throw Object.assign(new Error("invalid-section"), { code: "invalid-section" });
     }

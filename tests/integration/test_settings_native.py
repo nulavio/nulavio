@@ -66,7 +66,6 @@ JOURNEY_NAV = [
     "category-privacy",
     "category-passwords-autofill",
     "category-search",
-    "category-nulavio-assistant",
     "category-ai-features",
     "category-tabs-browsing",
     "category-home",
@@ -95,7 +94,7 @@ const breaker = {
         const real = win.register_module;
         win.register_module = function (name, module) {
           real.call(this, name, module);
-          if (name === "paneNulavioAssistant") throw new Error("test: the page broke after registering a pane");
+          if (name === "paneNulavioIntegrations") throw new Error("test: the page broke after registering a pane");
         };
       }
     }, { capture: true, once: true });
@@ -204,6 +203,33 @@ class NativeSettingsTest(unittest.TestCase):
         self.assertNotIn("profiles", general)
         self.assertIn("defaultBrowserSync", general)
         self.assertEqual(self.groups("paneNulavioProfiles"), ["nulavioHere", "nulavioProfilesManage"])
+
+    def test_01c_the_assistant_and_the_engines_ai_controls_are_one_pane(self):
+        label = DOC + "return d.getElementById(arguments[0])?.textContent.trim() ?? null;"
+        self.open()
+        # Where the engine shows its AI pane: Nulavio's assistant first in it, under one name, every control kept.
+        ai = self.groups("paneAi")
+        self.assertEqual(ai[0], "nulavioAssistantEntry", ai)
+        self.assertIn("aiFeatures", ai)
+        self.assertNotIn("aiControlsDescription", ai)
+        self.assertEqual(self.m.chrome(label, ["category-ai-features"]), "Assistente e IA")
+        self.assertIsNone(self.m.chrome(label, ["category-nulavio-assistant"]))
+        host = 'ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioSettings.sys.mjs").NulavioSettings'
+        where = "return gBrowser.selectedBrowser.currentURI.spec;"
+        self.m.chrome(f'{host}.openFor(window, "ai");')
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome(where) == "about:preferences#ai", 15), self.m.chrome(where))
+        # Where it does not (read when the page is built), the assistant has a pane of its own.
+        self.m.chrome('Services.prefs.setBoolPref("browser.preferences.aiControls", false);')
+        self.addCleanup(self.m.chrome, 'Services.prefs.clearUserPref("browser.preferences.aiControls");')
+        self.m.chrome("gBrowser.removeTab(gBrowser.selectedTab);")  # the page built before the change keeps its panes
+        page = self.open("about:preferences")
+        self.assertIn("category-nulavio-assistant", page["nav"])
+        self.assertNotIn("category-ai-features", page["nav"])
+        self.assertEqual(self.groups("paneNulavioAssistant"), ["nulavioAssistantEntry"])
+        self.m.chrome(f'{host}.openFor(window, "ai");')
+        self.assertTrue(
+            harness.wait_until(lambda: self.m.chrome(where) == "about:preferences#nulavioAssistant", 15), self.m.chrome(where)
+        )
 
     def test_02_the_card_changes_the_real_layout(self):
         self.open()

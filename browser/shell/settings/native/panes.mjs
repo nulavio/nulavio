@@ -625,6 +625,18 @@
         }
         return edited;
       },
+      // The engine's AI controls and Nulavio's assistant are one subject: one pane, "Assistente e IA", with
+      // the assistant first. The engine's opening card (a promise of "more controls soon", with the engine
+      // maker's mascot) gives way; every control of the pane stays.
+      ai(config) {
+        const edited = {
+          ...config,
+          l10nId: "nulavio-pane-assistant",
+          groupIds: ["nulavioAssistantEntry", ...config.groupIds.filter(id => id !== "aiControlsDescription")],
+        };
+        document.getElementById("category-ai-features")?.setAttribute("data-l10n-id", "nulavio-pane-assistant-nav");
+        return edited;
+      },
       privacy: config => ({ ...config, groupIds: after(config.groupIds, "etpStatus", "nulavioProtections") }),
       passwordsAutofill: config => ({ ...config, groupIds: ["nulavioPasswordManager", ...config.groupIds] }),
       search: config => ({ ...config, groupIds: after(config.groupIds, "defaultEngine", "nulavioSearch") }),
@@ -692,9 +704,16 @@
       "nulavioHere",
       "nulavioProfilesManage",
     ]);
-    const assistantButton = pane("nulavioAssistant", "paneNulavioAssistant", "assistant", "chrome://browser/content/firefoxview/view-chats.svg", [
-      "nulavioAssistantEntry",
-    ]);
+    // The assistant has a pane of its own only where the engine shows no AI pane to put it in (read now).
+    const engineAiPane = Services.prefs.getBoolPref("browser.preferences.aiControls", false);
+    if (!engineAiPane) {
+      delete edits.ai;
+    }
+    const assistantButton = engineAiPane
+      ? document.getElementById("category-ai-features")
+      : pane("nulavioAssistant", "paneNulavioAssistant", "assistant", "chrome://browser/content/firefoxview/view-chats.svg", [
+          "nulavioAssistantEntry",
+        ]);
     const integrationsButton = pane("nulavioIntegrations", "paneNulavioIntegrations", "integrations", "chrome://global/skin/icons/plugin.svg", [
       "nulavioIntegrationsEntry",
     ]);
@@ -711,7 +730,6 @@
       byId("category-passwords-autofill"),
       byId("category-search"),
       assistantButton,
-      byId("category-ai-features"),
       byId("category-tabs-browsing"),
       byId("category-home"),
       byId("category-downloads"),
