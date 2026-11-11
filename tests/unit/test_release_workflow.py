@@ -116,6 +116,9 @@ class AsanWorkflowTest(unittest.TestCase):
         self.assertIn("tests/run.py integration", text)
         self.assertIn('grep -l "ERROR: AddressSanitizer"', text)
         self.assertIn("__asan_init", text)
+        self.assertNotRegex(text, r"\| *grep -q")  # SIGPIPE with pipefail
+        self.assertIn("NULAVIO_ENGINE: ${{ runner.temp }}/install/nulavio/nulavio", text)  # the executable
+        self.assertIn('found.vendor == "Nulavio"', text)  # the engine tests cannot skip silently
         self.assertNotIn("R2_", text)
         self.assertNotIn("id-token", text)
         asan = (ROOT / "browser" / "build" / "mozconfig.asan").read_text(encoding="utf-8")

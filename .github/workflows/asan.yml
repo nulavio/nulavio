@@ -60,13 +60,19 @@ jobs:
           tar -xJf "$tarball" -C "$RUNNER_TEMP/install"
           python3 -I scripts/build/make_distribution.py --out "$RUNNER_TEMP/install/nulavio/distribution"
           python3 -I scripts/build/make_tools.py --out "$RUNNER_TEMP/install/nulavio/nulavio-tools"
-          nm -D "$RUNNER_TEMP/install/nulavio/libxul.so" | grep -q __asan_init || { echo "::error::libxul.so is not instrumented"; exit 1; }
+          # The whole listing goes to a file first: grep -q on a pipe would stop nm with SIGPIPE.
+          nm -D "$RUNNER_TEMP/install/nulavio/libxul.so" > "$RUNNER_TEMP/libxul.symbols"
+          grep -q __asan_init "$RUNNER_TEMP/libxul.symbols" || { echo "::error::libxul.so is not instrumented"; exit 1; }
       - name: Integration suite against the AddressSanitizer build
+        env:
+          NULAVIO_ENGINE: ${{ runner.temp }}/install/nulavio/nulavio # the executable, as rehearse_release.sh
         run: |
           mkdir -p "$RUNNER_TEMP/asan" "$RUNNER_TEMP/artifacts"
           export ASAN_OPTIONS="log_path=$RUNNER_TEMP/asan/asan:detect_leaks=0"
-          NULAVIO_ENGINE="$RUNNER_TEMP/install/nulavio" NULAVIO_TEST_ARTIFACTS="$RUNNER_TEMP/artifacts" \
-            python3 -I tests/run.py integration
+          # The engine tests skip without a Nulavio engine: make sure they will run against this build.
+          python3 -I -c 'import sys; sys.path.insert(0, "launcher"); from nulavio_launcher import engine
+          found = engine.find_engine(); sys.exit(0 if found.vendor == "Nulavio" else f"not the Nulavio build: {found}")'
+          NULAVIO_TEST_ARTIFACTS="$RUNNER_TEMP/artifacts" python3 -I tests/run.py integration
       - name: AddressSanitizer reports
         if: always()
         run: |
