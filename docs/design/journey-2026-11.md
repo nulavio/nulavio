@@ -76,6 +76,19 @@ Opening pages, switching tabs, a private window and back all worked for the new 
 | Where the person gets lost | At the first step: nothing says where the assistant is. Then at the form |
 | To be | One entry with a name ("Assistente") in the side bar and in the quick actions. Opened with no provider, it says what it does, what leaves the computer and when (nothing before "Enviar"), and offers "Conectar um serviço" as a short sequence: pick a service from a list, paste the key, test. The raw fields stay under "Avançado". The consent rules of ADR 0007 do not change. Not prototyped in this round |
 
+## New-user QA, second round (2026-11-11)
+
+The same second model walked the journeys again as a first-time user, this time with the engine started as the package starts it, an empty home, a real pointer and keyboard, and no automation attached; it judged from screenshots only. Four journeys done, one not run (the defaults path in English). Each finding was checked before use:
+
+| Finding | Checked | Result |
+|---|---|---|
+| First start to the summary: 10 clicks, 1 to 2 minutes; every step was understood as what it asks, DNS included ("the chosen service sees the lookups; the network answers if it fails") | The walk's screenshots | None needed |
+| Creating, unlocking and opening a protected profile: 9 clicks, about a minute, no hesitation; "Abrir Bancos" led to the unlock page | Same | None needed (the fix of the first-run slice) |
+| With Immersive on, the profile and the site stayed identifiable at every moment; the page got about 97 % of the window | Same | None needed |
+| Ctrl+T and typing at once went nowhere while the first run was unfinished: the new tab showed the first run and the keyboard was in the page | True: the stage took the keyboard every time it was entered | Fixed: once per window; a tab opened later keeps the keyboard in the address field. `test_firstrun_stage` `test_04b` |
+| At the second start a Guard alert said "1 mudança feita fora do Nulavio" without saying which | True, and the record says which: the content filter updated itself (uBlock Origin 1.75.0 to 1.76.0) between the two sessions | Open, the maintainer's decision: the Guard reports the browser's own automatic update of its own filter as a change made outside it, and the alert does not name it |
+| A click on a service in the DNS step's list did not change it; the keyboard did | Not confirmed: the private display has no window manager (Alt+Tab did nothing there either) | Open: to be tried on a real desktop |
+
 ## Where nobody thought about the journey
 
 | # | Moment | Journey | Evidence | Answered by |

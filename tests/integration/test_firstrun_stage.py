@@ -152,6 +152,17 @@ class FirstRunStageTest(unittest.TestCase):
         self.m.chrome("gBrowser.selectedTab = gBrowser.tabs[0];")
         harness.wait_until(lambda: self.window()["stage"], 10)
 
+    def test_04b_a_tab_opened_later_keeps_the_keyboard_in_the_address_field(self):
+        """New-user QA (2026-11-11): Ctrl+T and typing at once went nowhere, because the stage took the keyboard."""
+        harness.wait_until(lambda: self.window()["stage"], 10)
+        self.m.chrome('gBrowser.selectedTab = gBrowser.addTrustedTab("about:license");')
+        harness.wait_until(lambda: not self.window()["stage"], 10)
+        self.m.chrome("BrowserCommands.openTab();")
+        self.addCleanup(self.m.chrome, "while (gBrowser.tabs.length > 1) gBrowser.removeTab(gBrowser.tabs.at(-1));")
+        harness.wait_until(lambda: self.window()["stage"], 10)  # the first run is not finished: the new tab shows it
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome("return gURLBar.focused;"), 5), "the stage took the keyboard")
+        self.assertTrue(self.window()["toolbarShown"], "the address field has the keyboard and is not in view")
+
     def test_05_two_panes_and_the_band_drawn_small_says_what_the_band_says(self):
         harness.wait_until(lambda: self.window()["stage"], 10)
         panes = self.page()["panes"]

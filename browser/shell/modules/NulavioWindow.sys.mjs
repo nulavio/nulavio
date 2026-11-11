@@ -609,8 +609,11 @@ class WindowUI {
     this.#origin(win, Boolean(text));
     if (staged) {
       state.bar.toggleAttribute("nv-neutral", this.#neutral(win));
-      if (stage) {
-        // The stage's question is in the page: the keyboard starts there, not in an address field that is out of view.
+      if (stage && !state.stageFocused) {
+        // The stage's question is in the page: the keyboard starts there, not in an address field that is out of
+        // view. Once per window: a tab the person opens later (Ctrl+T) keeps the keyboard in the address field,
+        // which shows the toolbar, so what they type goes where they meant it.
+        state.stageFocused = true;
         win.gBrowser.selectedBrowser.focus();
       }
     }
