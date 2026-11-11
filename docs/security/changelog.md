@@ -27,6 +27,20 @@ Urgency: <urgent | standard> (<reasons>). Source SHA-256 <digest> (Mozilla's sig
 **Nulavio fixes**: <none, or the table above>.
 ```
 
+## Nulavio 160.0-0.3 (Firefox 160.0), published 2026-11-11
+
+The first release built, tested and signed by the release workflow ([release](https://github.com/nulavio/nulavio/releases/tag/v160.0-0.3), [run 43102367281](https://github.com/nulavio/nulavio/actions/runs/43102367281)): built on a Blacksmith runner, signed through the release key held in AWS KMS after the maintainer approved, installed from `https://nulavio.net/rpm/nulavio.repo` in a clean Fedora with both signature checks on. Every file has a GitHub build-provenance attestation.
+
+**Upstream**: unchanged, Firefox 160.0.
+
+**Nulavio fixes** (what a user does: `sudo dnf upgrade nulavio`): R59 (audit V3), left open in 160.0-0.2 while phone unlock was off, is resolved before phone unlock is offered. A desktop the phone is paired with, holding a copy of another desktop's `vault.json`, could get that profile's key; each phone envelope is now bound to the signing key of the desktop that made it, and the phone shows the desktop name from its own pairing record (#48).
+
+**New protections and their limits**:
+
+- Connecting a phone is offered by default (`nulavio.vault.phone.pairing`, #42). The pairing screen tells people to install the Companion from F-Droid, where it is still in review; until F-Droid publishes it, they cannot.
+- The release key no longer signs from a laptop: KMS holds it, and only the `release` environment, after approval, on main, can use it (#54, #56, #58, #64; TB19, R61).
+- A portable archive (`nulavio-160.0-0.3.linux-x86_64.tar.xz`) is published with the packages; it is what the Flatpak is built from.
+
 ## Nulavio 160.0-0.2 (Firefox 160.0), published 2026-11-11
 
 A security update of the alpha, with the same engine ([release](https://github.com/nulavio/nulavio/releases/tag/v160.0-0.2), [advisory GHSA-5mmp-gx3p-m7j8](https://github.com/nulavio/nulavio/security/advisories/GHSA-5mmp-gx3p-m7j8)). Prepared in the advisory's private fork and published together with the packages.
