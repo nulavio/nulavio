@@ -67,8 +67,6 @@ const SURFACES = Object.freeze({
 const PLAIN_SURFACES = Object.freeze(new Set(["newtabTitle", "settingsTitle", "profilesButton"]));
 // ADR 0009: the toolbar and the tab list hide; the band stays and carries the origin.
 const PREF_IMMERSIVE = "nulavio.layout.immersive";
-// Prototype only (ADR 0010): which window direction is drawn. Not shipped.
-const PREF_DIRECTION = "nulavio.proto.direction";
 // The first run owns the window (ADR 0010): the same pref the new tab's sequence writes.
 const PREF_FIRSTRUN = "nulavio.firstrun.done";
 
@@ -189,7 +187,6 @@ class WindowUI {
       Services.obs.addObserver(this, topic);
     }
     Services.prefs.addObserver(PREF_IMMERSIVE, this);
-    Services.prefs.addObserver(PREF_DIRECTION, this);
     Services.prefs.addObserver(PREF_FIRSTRUN, this);
     this.#unsubscribe = lazy.NulavioProfiles.subscribe(() => this.refresh());
     for (const win of Services.wm.getEnumerator("navigator:browser")) {
@@ -870,12 +867,6 @@ class WindowUI {
     root.toggleAttribute("nulavio-window-agent", Boolean(agent));
     root.toggleAttribute("nulavio-window-raw", Boolean(agent?.raw));
     this.#applyImmersive(win);
-    const direction = Services.prefs.getStringPref(PREF_DIRECTION, "");
-    if (direction) {
-      root.setAttribute("nulavio-direction", direction);
-    } else {
-      root.removeAttribute("nulavio-direction");
-    }
     const state = this.#windows.get(win);
     const activity = lazy.NulavioAI.activityState(win);
     const kinds = { normal: true, temporary: this.#temporary, private: privateWindow,
@@ -1155,7 +1146,6 @@ class WindowUI {
       Services.obs.removeObserver(this, topic);
     }
     Services.prefs.removeObserver(PREF_IMMERSIVE, this);
-    Services.prefs.removeObserver(PREF_DIRECTION, this);
     Services.prefs.removeObserver(PREF_FIRSTRUN, this);
     lazy.CustomizableUI.removeListener(this);
     for (const action of QUICK_ACTIONS) {

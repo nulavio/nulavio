@@ -126,6 +126,52 @@
     }
   }
 
+  /* The frame (ADR 0010, "Uma superfície"): the page is a card inside the window's frame. A margin on the
+     sides that have no chrome, a radius and one hairline; no shadow (a second line around the page reads
+     as a heavier frame than the references draw). Nothing is hidden and nothing moves. Every theme gets
+     the shape; full screen has none (the page is the screen), and neither has a short window: on a
+     1280 x 800 or 1366 x 768 screen at 150 % the page keeps every pixel of height (the first run's main
+     action must end on the first screen there). */
+  @media (min-height: 601px) {
+    :root:not([inFullscreen], [inDOMFullscreen]) {
+      #tabbrowser-tabbox {
+        margin-block: 0 var(--nv-space-3);
+        margin-inline: 0 var(--nv-space-3);
+        border-radius: var(--nv-radius-md);
+        overflow: clip;
+        outline: 1px solid var(--nv-color-border-subtle);
+        box-shadow: none;
+      }
+      /* The tab column on the other side: the margin changes sides with it. */
+      &[sidebar-positionend] #tabbrowser-tabbox { margin-inline: var(--nv-space-3) 0; }
+      /* No chrome on either side (Immersive, the first run's stage, a window without a tab column). */
+      &[nulavio-immersive] #tabbrowser-tabbox,
+      &:not([nulavio-immersive]) #browser:not(:has(> #sidebar-container:not([hidden]))) #tabbrowser-tabbox {
+        margin-inline: var(--nv-space-3);
+      }
+      /* A panel opened beside the tabs (bookmarks, history, the assistant) is a second card of the same
+         shape; the splitter between it and the page is their gap, and still the handle that resizes it. */
+      #sidebar-box {
+        margin-block-end: var(--nv-space-3);
+        border-radius: var(--nv-radius-md);
+        overflow: clip;
+        outline: 1px solid var(--nv-color-border-subtle);
+      }
+      #sidebar-splitter {
+        inline-size: var(--nv-space-3);
+        min-inline-size: var(--nv-space-3);
+        border: 0;
+        background: transparent;
+      }
+      /* A theme brings its own colours (the dark one of a private window too): the edge follows its text. */
+      &[lwtheme] :is(#tabbrowser-tabbox, #sidebar-box) { outline-color: color-mix(in srgb, currentColor 24%, transparent); }
+      /* The system's contrast setting: the edge takes the text colour, as the band's does. */
+      @media (forced-colors) or (prefers-contrast) {
+        :is(#tabbrowser-tabbox, #sidebar-box) { outline-color: CanvasText; }
+      }
+    }
+  }
+
   /* 2. Colours: default theme, normal contrast ----------------------------- */
 
   @media not ((forced-colors) or (prefers-contrast)) {
@@ -142,9 +188,10 @@
         --icon-color-warning: var(--nv-color-downloads-attention-warning);
       }
 
-      /* Tab strip */
-      --toolbox-background-color: var(--nv-color-chrome-toolbox);
-      --toolbox-background-color-inactive: var(--nv-color-chrome-toolbox);
+      /* Tab strip. ADR 0010: one tone for the whole frame (band, tab strip, toolbar, tab column and the
+         margin around the page), the toolbar's. */
+      --toolbox-background-color: var(--nv-color-chrome-toolbar);
+      --toolbox-background-color-inactive: var(--nv-color-chrome-toolbar);
       --toolbox-text-color: var(--nv-color-text-primary);
       --toolbox-text-color-inactive: var(--nv-color-chrome-tabText);
       --tab-text-color: var(--nv-color-chrome-tabText);
@@ -200,6 +247,17 @@
          system's -moz-sidebar grey (#36363A dark, #FAFAFB light on GTK). */
       --sidebar-background-color: var(--nv-color-bg-surface);
       --sidebar-text-color: var(--nv-color-text-primary);
+    }
+
+    /* ADR 0010: no rule line between the parts of the frame, and the margin around the page in its tone.
+       The splitter beside the tab column stays where it is and still resizes it; it only stops drawing a
+       line. The identity band is not styled here: its neutral fill is the token band.bg, the same tone,
+       and its own sheet (window-band.css) owns the rest. */
+    :root:not([lwtheme], [inFullscreen], [inDOMFullscreen]) {
+      #navigator-toolbox { border-bottom: 0; }
+      #sidebar-launcher-splitter { border: 0; background: transparent; }
+      #sidebar-container { background-color: var(--nv-color-chrome-toolbar); border: 0; }
+      #browser { background-color: var(--nv-color-chrome-toolbar); }
     }
 
     /* UX3G M2: a clearer step from rest to focus. The rest edge stays the

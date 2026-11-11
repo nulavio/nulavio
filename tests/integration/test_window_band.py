@@ -351,7 +351,8 @@ class WindowBandTest(unittest.TestCase):
                     if fused:
                         self.assertEqual(state["bg"], "rgba(0, 0, 0, 0)")
                     else:
-                        self.assertEqual(state["bg"], "rgb(6, 12, 20)" if dark else "rgb(226, 235, 238)")
+                        # ADR 0010: the frame is one tone, the toolbar's (band.bg follows chrome.toolbar).
+                        self.assertEqual(state["bg"], "rgb(15, 28, 42)" if dark else "rgb(241, 247, 245)")
                     rows.append({"dark": dark, "vertical": vertical, "width": width, "scale": scale, **state})
                     self.m.set_context("chrome")
                     try:

@@ -1,6 +1,6 @@
 # ADR 0010 — Experience direction: one surface, the band as the constant, the first run as a stage
 
-- **Status:** Proposed (2026-11-11), with prototypes on the engine (below). Not merged.
+- **Status:** Proposed (2026-11-11), with prototypes on the engine (below). The frame (direction A) is built into the theme in its own slice, below. Not merged.
 - **Related:** [references](../design/references/2026-11/README.md), [journeys](../design/journey-2026-11.md), [ADR 0008](0008-one-settings-page.md), [ADR 0009](0009-immersive-layout.md), [design system](../design/design-system.md), [UX principles](../design/ux-principles.md).
 
 ## Context
@@ -72,7 +72,38 @@ A second critique (same model, closed brief, 2026-11-11) looked at the first-run
 
 - The reference captures of the window change in one slice (A), on purpose.
 - The first run's tests change: the page has one card at a time already; the window around it is new.
-- `nulavio.proto.direction` exists only on the prototype branch. It is removed when A moves into the theme.
+- `nulavio.proto.direction` existed only on the prototype branch. It is gone: A is the theme (see "The frame in the theme").
+
+## The frame in the theme (2026-11-11)
+
+Branch `agent/claude/feat-window-one-surface`. The prototype was twenty lines behind a pref in the band's sheet; this is the frame as the theme draws it, in every layout and state, on the alpha's engine by `dev_sync`.
+
+Before:
+
+![The window before: lateral, tabs on top, Foco, a side panel, Immersive, a private window](../design/screenshots/experience-2026-11/frame-before-pt-light.png)
+
+After, pt-BR (light) and en-US (dark):
+
+![The same six states with the frame in one tone and the page as a card, light, pt-BR](../design/screenshots/experience-2026-11/frame-sheet-pt-light.png)
+![The same, dark, en-US](../design/screenshots/experience-2026-11/frame-sheet-en-dark.png)
+
+What changed from the prototype, each for a reason found on the engine or in the existing tests:
+
+| Prototype | Now | Why |
+|---|---|---|
+| In the band's sheet, which is always on, behind `nulavio.proto.direction` | In the theme sheet (`horizon.css`), under `nulavio.horizon.enabled`; no pref of its own | "Pref off restores the upstream look" is a rule of the theme with a test; the frame is a look |
+| Frame colours with `!important`, in every contrast mode | The theme's own colour block: default theme, normal contrast, no `!important` | The existing high-contrast test failed: the frame's tone overrode the system's contrast colours. The theme's rule against author `!important` exists for this |
+| The neutral band recoloured by the frame's rule | The band's token (`band.bg`) is the toolbar's tone; the band's own sheet drops its rule line while neutral | The theme may not style security UI (rule 4 of the theme, with a test). A band that states something keeps its fill and its line |
+| The splitter beside the tab column hidden | Kept, drawing no line | Hiding it removed the handle that resizes the tab column |
+| A hairline and a shadow around the page | One hairline | Side by side with Zen and Helium at the corner, the two lines read as a heavier frame than either |
+| The card only without a theme | Every theme gets the shape; only Nulavio's colours wait for "no theme" | A private window uses the engine's dark theme and had no card at all |
+| Physical margins; none at the window's edge with the tabs on the right | Logical margins, on the sides that have no chrome | Right to left, and the tab column on the other side, were wrong |
+| A side panel as a square white area down to the window's edge | A second card of the same shape; the splitter is the gap and still resizes | It was the one surface that did not follow the frame |
+| The card in a window of any size | None in a window 600 px tall or less | The existing first-run test failed: on a 1280×800 screen at 150 % the layout choice's main action ended 7 px below the first screen. The margin gives the height back there |
+
+`tests/integration/test_window_frame.py` (seven tests): one tone and the card's shape; the side panel as a card; the margin with the tabs on either side, right to left, in Immersive, with tabs on top and in Foco; no card in full screen or in a short window; a private window keeps its band's fill and line and its own colours, with the card's shape; the system's contrast setting gives the edge the text colour.
+
+Not verified: a theme installed by the person (only the engine's private theme was run); the devtools docked in the window; a real desktop compositor (the captures are from a private X display with no window manager).
 
 ## Prototypes
 

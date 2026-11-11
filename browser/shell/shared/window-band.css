@@ -18,6 +18,10 @@
     color: var(--nv-color-band-text) !important;
     -moz-window-dragging: drag;
   }
+  /* ADR 0010: the neutral band is part of the frame's one surface and draws no rule line under itself.
+     A band that states something (private, temporary, an agent's window, raw automation, the Guard) is
+     not neutral and keeps its line with its fill. */
+  #nulavio-band[nv-neutral] { border-block-end-color: transparent; }
   #nulavio-band-widget {
     display: flex;
     flex: 1;
@@ -535,32 +539,5 @@
       background: var(--nv-color-security-guard-fill);
       color: var(--nv-color-security-guard-text);
     }
-  }
-}
-
-/* PROTOTYPE (ADR 0010): direction A, "Uma superfície", behind nulavio.proto.direction = surface until its
-   slice moves it into the theme with new reference captures. Direction C was compared and dropped. */
-@-moz-document url("chrome://browser/content/browser.xhtml") {
-  /* A. "Uma superfície": one tone for the whole frame, the page as a card inside it. */
-  :root[nulavio-direction="surface"]:not([lwtheme], [inFullscreen], [inDOMFullscreen]) {
-    --toolbox-background-color: var(--nv-color-chrome-toolbar) !important;
-    --toolbox-background-color-inactive: var(--nv-color-chrome-toolbar) !important;
-    --toolbar-background-color: var(--nv-color-chrome-toolbar) !important;
-    --sidebar-background-color: var(--nv-color-chrome-toolbar) !important;
-    --tabpanel-background-color: var(--nv-color-chrome-toolbar) !important;
-    #navigator-toolbox { border-bottom: 0 !important; }
-    #nulavio-band { border-block-end-color: transparent !important; background: var(--nv-color-chrome-toolbar) !important; }
-    .nv-band-row { background-color: transparent; }
-    #sidebar-launcher-splitter { display: none; }
-    #sidebar-container, #sidebar-main { background-color: var(--nv-color-chrome-toolbar) !important; border: 0 !important; }
-    #tabbrowser-tabbox {
-      margin: 0 var(--nv-space-3) var(--nv-space-3) 0;
-      border-radius: var(--nv-radius-md);
-      overflow: clip;
-      outline: 1px solid var(--nv-color-border-subtle);
-      box-shadow: var(--nv-elevation-1);
-    }
-    &[nulavio-immersive] #tabbrowser-tabbox { margin-inline-start: var(--nv-space-3); }
-    &:not([nulavio-immersive]) #browser:not(:has(> #sidebar-container:not([hidden]))) #tabbrowser-tabbox { margin-inline-start: var(--nv-space-3); }
   }
 }
