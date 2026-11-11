@@ -34,7 +34,31 @@ function expired() {
   setState("expired", t("aiRequestExpired"), "warn");
 }
 
+// The two answers that allow work only after the page has been visible for a moment, so keys
+// meant for another tab (Tab, then Enter, as the page opened in front) cannot approve (audit A5).
+const ARM_MS = 1500;
+let armTimer = null;
+
+function setAllowArmed(armed) {
+  for (const name of ["once", "session"]) {
+    byId(name).disabled = !armed;
+  }
+}
+
+function armAllow() {
+  clearTimeout(armTimer);
+  setAllowArmed(false);
+  if (document.visibilityState === "visible" && document.body.dataset.state === "asking") {
+    armTimer = setTimeout(() => setAllowArmed(true), ARM_MS);
+  }
+}
+
 async function answer(value) {
+  if (value !== "deny" && byId(value)?.disabled) {
+    return; // not armed yet
+  }
+  clearTimeout(armTimer);
+  document.removeEventListener("visibilitychange", armAllow);
   for (const button of document.querySelectorAll("#actions button")) {
     button.disabled = true;
   }
@@ -87,6 +111,8 @@ async function render() {
   byId("session").addEventListener("click", () => answer("session"));
   byId("deny").addEventListener("click", () => answer("deny"));
   setState("asking");
+  armAllow();
+  document.addEventListener("visibilitychange", armAllow);
   if (request.expires) {
     showExpiry(request.expires);
   }
