@@ -12,7 +12,7 @@ Each browser came from its project's release page as a tarball, was unpacked in 
 |---|---|---|---|---|---|
 | Zen | 1.24.1b (2026-11-06) | Gecko | MPL-2.0 | `zen-browser/desktop` release `zen.linux-x86_64.tar.xz` | `c592a31f…5cb9cd` |
 | Helium | 0.21.2.1 (2026-11-10) | Chromium 157 | GPL-3.0 | `imputnet/helium-linux` release `helium-0.21.2.1-x86_64_linux.tar.xz` | `e55c253e…60b519` |
-| Floorp | 12.21.1 (2026-11-04) | Gecko 159.0.1 | MPL-2.0 | `Floorp-Projects/Floorp` release `floorp-linux-x86_64.tar.xz` | recorded with the others in the scratch `SHA256SUMS` |
+| Floorp | 12.21.1 (2026-11-04) | Gecko 159.0.1 | MPL-2.0 | `Floorp-Projects/Floorp` release `floorp-linux-x86_64.tar.xz` | `7dcedcbf…30d613` |
 | Nulavio | 160.0-0.2 build + `main` at `388800e` by `dev_sync` | Gecko 160.0 | MPL-2.0 | this repository | n/a |
 
 ### What the licences allow
