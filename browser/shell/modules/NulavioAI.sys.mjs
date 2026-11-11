@@ -184,7 +184,6 @@ class AI {
   // Conversations (UX5-D, Q16): per window, in memory only, never on disk or in the activity. Gone when the
   // window closes or on "Começar conversa nova". {turns, recipient, model, pageLeftOut}
   #threads = new WeakMap();
-  #workspaceValue = "";
   #runListeners = new Set();
   #runWatch = null;
   #filesTimer = null;
@@ -192,11 +191,10 @@ class AI {
   /** The agent driving this window, if any. "agent:pid" (one of the user's profiles, opened for an agent)
       counts only while that bridge process lives; a bare agent id is an AI Workspace. */
   async workspaceAgent() {
-    // The environment first: the bridge sets it and nothing in the browser can change it. The pref is
-    // the same value; once either has been seen it is kept for this process, so resetting the pref in
-    // about:config later does not turn the window back into an ordinary one (audit A6).
-    this.#workspaceValue ||= Services.env.get(WORKSPACE_ENV) || Services.prefs.getStringPref(WORKSPACE_PREF, "");
-    const value = this.#workspaceValue;
+    // The environment first: the bridge sets it and nothing in the browser can change it, so resetting
+    // the pref in about:config does not turn an agent's window back into an ordinary one (audit A6).
+    // The pref carries the same value and still counts on its own (it can only add the restriction).
+    const value = Services.env.get(WORKSPACE_ENV) || Services.prefs.getStringPref(WORKSPACE_PREF, "");
     if (!value) {
       return "";
     }
