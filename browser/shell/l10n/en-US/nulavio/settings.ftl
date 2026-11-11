@@ -100,9 +100,9 @@ nulavio-profile-temporary =
 nulavio-profiles-group =
     .label = Your profiles
     .description = Each profile keeps its own logins, history and extensions. A protected profile stays encrypted on disk while it is locked.
-nulavio-open-routing =
+nulavio-routing-group =
     .label = Which site opens in which profile
-    .description = Rules for links coming from other apps and for typed addresses.
+    .description = Links from other apps and typed addresses follow these rules and open straight in the right profile, before anything loads. Rules stay on this computer and only you create them.
 
 ## Privacy and security
 

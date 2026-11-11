@@ -347,19 +347,80 @@
     const profilesNow = () => (profileList.state.ready ? (profileList.state.value?.profiles ?? []) : []);
     const profilesUsable = () => profileList.state.ready && Boolean(profileList.state.value?.available);
     const keyOf = profile => String(profile.id ?? "");
-    // What this page holds about the list while the person works on it: the row being edited and its
-    // unsaved values, the new profile being typed, and what the last action said. None of it is a
-    // profile's state: that is only ever what NulavioProfiles.list() answered.
-    const view = { editing: null, draft: null, fresh: { name: "", template: "", suggested: "" }, error: "", said: "", busy: false };
-    const viewListeners = new Set();
-    const viewWatch = (emit, stops) => {
-      viewListeners.add(emit);
-      stops.push(() => viewListeners.delete(emit));
+    /**
+     * What this page holds about a list while the person works on it (a row being edited, a new row being
+     * typed, what the last action said), and one action at a time on it. None of it is the list's own
+     * state: that is only ever what the Shell's module answered. An error is said in the Shell's words for
+     * its code; the list is read again after every action, whether it worked or not. What an action said
+     * stays until the list changes again: "Trabalho está bloqueado." must not outlive its unlocking elsewhere.
+     * While an action runs, the list's buttons are disabled (`state.busy`): a click is never dropped unseen.
+     */
+    const workbench = (initial, list) => {
+      const state = { ...initial, error: "", said: "", busy: false };
+      const listeners = new Set();
+      let settled = true; // false from an action until the list was read again: that read is the action's own result
+      let saidFor = ""; // the list as that read found it; the words stay while it stays like that
+      const show = changes => {
+        Object.assign(state, changes);
+        listeners.forEach(emit => emit());
+      };
+      const watch = (emit, stops) => {
+        listeners.add(emit);
+        stops.push(() => listeners.delete(emit));
+      };
+      const act = async (action, said = "") => {
+        if (state.busy) {
+          return false;
+        }
+        show({ busy: true, error: "", said: "" });
+        try {
+          const answer = await action();
+          show({ busy: false, said: typeof said === "function" ? said(answer) : said });
+          return true;
+        } catch (e) {
+          if (!e?.code) {
+            console.error(e);
+          }
+          const code = String(e?.code ?? "unexpected").replace(/[^a-z_-]/gi, "").replaceAll("-", "_");
+          show({ busy: false, error: msg(`err_${code}`) || msg("err_unexpected") });
+          return false;
+        } finally {
+          settled = false;
+          list.refresh();
+        }
+      };
+      added.cleanups.push(
+        list.listen(() => {
+          if (!list.state.ready) {
+            return;
+          }
+          const now = JSON.stringify(list.state.value);
+          if (!settled) {
+            settled = true;
+            saidFor = now;
+          } else if (!state.busy && (state.said || state.error) && now !== saidFor) {
+            show({ said: "", error: "" });
+          }
+        })
+      );
+      /** A message bar of this list: shown while `visible`, saying `text`. */
+      const bar = (id, type, text, visible) => {
+        setting({
+          id,
+          setup(emitChange, stops) {
+            watch(emitChange, stops);
+            stops.push(list.listen(emitChange));
+          },
+          visible,
+          getControlConfig: config => ({ ...config, controlAttrs: { ...config.controlAttrs, type, message: text() } }),
+        });
+        return { id, control: "moz-message-bar" };
+      };
+      return { state, show, watch, act, bar };
     };
-    const show = changes => {
-      Object.assign(view, changes);
-      viewListeners.forEach(emit => emit());
-    };
+    // The profiles' own: the row being edited and its unsaved values, and the new profile being typed.
+    const profileBench = workbench({ editing: null, draft: null, original: null, fresh: { name: "", template: "", suggested: "" } }, profileList);
+    const { state: view, show, watch: viewWatch, act } = profileBench;
     /** After the list is drawn again, the keyboard goes where the person's action left off (never lost to the page). */
     const focusWhenDrawn = selector => {
       let tries = 0;
@@ -377,40 +438,24 @@
     /** Close the editor and give the keyboard back to the button that opened it. */
     const closeEditor = (extra = {}) => {
       const key = view.editing;
-      show({ editing: null, draft: null, ...extra });
+      show({ editing: null, draft: null, original: null, ...extra });
       if (key !== null) {
         focusWhenDrawn(rowButton$(key, "edit"));
-      }
-    };
-    /** One action at a time. An error is said in the Shell's words for its code; the list is read again either way. */
-    const act = async (action, said = "") => {
-      if (view.busy) {
-        return false;
-      }
-      show({ busy: true, error: "", said: "" });
-      try {
-        const answer = await action();
-        show({ busy: false, said: typeof said === "function" ? said(answer) : said });
-        return true;
-      } catch (e) {
-        if (!e?.code) {
-          console.error(e);
-        }
-        const code = String(e?.code ?? "unexpected").replace(/[^a-z_-]/gi, "").replaceAll("-", "_");
-        show({ busy: false, error: msg(`err_${code}`) || msg("err_unexpected") });
-        return false;
-      } finally {
-        profileList.refresh();
       }
     };
     /** A destructive confirmation in the engine's own prompt. Cancel is the default button, as on the Shell's pages. */
     const confirmDanger = async (title, body, confirm) => {
       const prompt = Services.prompt;
       const flags = prompt.BUTTON_POS_0 * prompt.BUTTON_TITLE_IS_STRING + prompt.BUTTON_POS_1 * prompt.BUTTON_TITLE_CANCEL + prompt.BUTTON_POS_1_DEFAULT;
-      const answer = await prompt.asyncConfirmEx(window.browsingContext, prompt.MODAL_TYPE_CONTENT, title, body, flags, confirm, null, null, null, false, {
-        useTitle: true,
-      });
-      return answer.get("buttonNumClicked") === 0;
+      try {
+        const answer = await prompt.asyncConfirmEx(window.browsingContext, prompt.MODAL_TYPE_CONTENT, title, body, flags, confirm, null, null, null, false, {
+          useTitle: true,
+        });
+        return answer.get("buttonNumClicked") === 0;
+      } catch (e) {
+        console.error(e); // the prompt was taken away (its tab is closing): nothing was confirmed
+        return false;
+      }
     };
 
     const PROFILE_ROW = profile => {
@@ -426,6 +471,7 @@
       key: `${action}-${keyOf(profile)}`,
       control: "moz-button",
       slot: "actions",
+      disabled: view.busy,
       // The accessible name keeps the visible words and adds whose button it is ("Abrir Trabalho").
       controlAttrs: { label, "aria-label": named, "data-action": action, "data-profile": keyOf(profile), ...extra },
     });
@@ -434,6 +480,7 @@
       control: "moz-button",
       slot: "actions",
       iconSrc,
+      disabled: view.busy,
       controlAttrs: { title: named, "aria-label": named, "data-action": action, "data-profile": keyOf(profile) },
     });
     const profileRows = profile => {
@@ -544,7 +591,8 @@
           } else if (view.editing === key) {
             closeEditor();
           } else {
-            show({ editing: key, draft: { name, avatar: profile.avatar, color: profile.color }, error: "", said: "" });
+            const now = { name, avatar: profile.avatar, color: profile.color };
+            show({ editing: key, draft: { ...now }, original: now, error: "", said: "" });
             focusWhenDrawn("#nulavio-profile-name");
           }
           break;
@@ -554,8 +602,9 @@
         case "delete":
           if (await confirmDanger(msg("profilesDeleteTitle", name), msg("profilesDeleteBody"), msg("profilesDeleteConfirm"))) {
             // Its row goes away with it: the keyboard moves to the profile before it in the list.
-            const before = profilesNow()[Math.max(0, profilesNow().indexOf(profile) - 1)];
-            if (await act(() => shell.NulavioProfiles.remove(profile.id), msg("profilesDeleted"))) {
+            // (By its key: the list may have been read again while the prompt was open.)
+            const before = profilesNow()[Math.max(0, profilesNow().findIndex(each => keyOf(each) === key) - 1)];
+            if ((await act(() => shell.NulavioProfiles.remove(profile.id), msg("profilesDeleted"))) && before) {
               focusWhenDrawn(rowButton$(keyOf(before), "edit"));
             }
           }
@@ -589,6 +638,30 @@
 
     // The editor's fields hold the unsaved values of the row being edited; nothing is written before "Salvar".
     const editing = () => profilesNow().find(each => keyOf(each) === view.editing) ?? null;
+    // The profile being edited changed elsewhere: a field the person did not touch follows it (the editor
+    // never shows an old name as the current one); one they changed keeps what they typed. Gone: the editor closes.
+    added.cleanups.push(
+      profileList.listen(() => {
+        if (view.editing === null || !view.draft || !profileList.state.ready) {
+          return;
+        }
+        const profile = editing();
+        if (!profile) {
+          show({ editing: null, draft: null, original: null });
+          return;
+        }
+        const draft = { ...view.draft };
+        const original = { ...view.original };
+        for (const field of Object.keys(original)) {
+          if (profile[field] !== original[field] && draft[field] === original[field]) {
+            draft[field] = original[field] = profile[field];
+          }
+        }
+        if (Object.keys(original).some(field => original[field] !== view.original[field])) {
+          show({ draft, original });
+        }
+      })
+    );
     const choice = (value, label, iconSrc) => ({ value, controlAttrs: { label, ...(iconSrc ? { iconsrc: iconSrc } : {}) } });
     const options = shell.NulavioProfiles.options();
     setting({
@@ -600,7 +673,7 @@
           view.draft.name = value;
         }
       },
-      getControlConfig: config => ({ ...config, controlAttrs: { ...config.controlAttrs, label: msg("profilesNameLabel"), maxlength: "60" } }),
+      getControlConfig: config => ({ ...config, controlAttrs: { ...config.controlAttrs, label: msg("profilesNameLabel") } }),
     });
     // Icon and colour are chosen by looking at them: the engine's picker, with the profile's icon in
     // each choice. A choice is named for someone who cannot see it (its name is also its tooltip).
@@ -636,6 +709,7 @@
     // "Salvar" and "Cancelar" are the engine's button pair: it puts them in the order of the desktop.
     setting({
       id: "nulavio-profile-editor-buttons",
+      setup: viewWatch,
       async onUserClick(event) {
         const action = event.target.closest?.("[data-action]")?.dataset.action;
         const profile = editing();
@@ -646,17 +720,21 @@
         if (action !== "save") {
           return;
         }
-        // Only what changed is written: an untouched icon or colour is never sent back to be checked again.
-        const changed = Object.fromEntries(Object.entries(view.draft).filter(([field, value]) => value !== profile[field]));
+        // Only what the person changed since the editor opened is written: a name changed elsewhere meanwhile
+        // is not put back, and an untouched icon or colour is never sent to be checked again.
+        const key = view.editing;
+        const changed = Object.fromEntries(Object.entries(view.draft).filter(([field, value]) => value !== view.original[field]));
         if (!Object.keys(changed).length || (await act(() => shell.NulavioProfiles.update(profile.id, changed), msg("doneSaved")))) {
-          closeEditor();
+          if (view.editing === key) {
+            closeEditor(); // another row's editor, opened while this one was being saved, stays open
+          }
         }
       },
       getControlConfig: config => ({
         ...config,
         options: [
           { key: "cancel", control: "moz-button", controlAttrs: { label: msg("confirmCancel"), "data-action": "cancel" } },
-          { key: "save", control: "moz-button", controlAttrs: { label: msg("profilesSave"), type: "primary", "data-action": "save" } },
+          { key: "save", control: "moz-button", disabled: view.busy, controlAttrs: { label: msg("profilesSave"), type: "primary", "data-action": "save" } },
         ],
       }),
     });
@@ -690,7 +768,7 @@
       // The first field of the row says what the row is for; the placeholder says what to type.
       getControlConfig: config => ({
         ...config,
-        controlAttrs: { ...config.controlAttrs, label: msg("profilesNew"), placeholder: msg("profilesNameLabel"), maxlength: "60" },
+        controlAttrs: { ...config.controlAttrs, label: msg("profilesNew"), placeholder: msg("profilesNameLabel") },
       }),
     });
     setting({
@@ -703,22 +781,13 @@
           show({ fresh: { name: "", template: "", suggested: "" } });
         }
       },
+      setup: viewWatch,
+      disabled: () => view.busy,
       getControlConfig: config => ({ ...config, controlAttrs: { ...config.controlAttrs, label: msg("profilesCreateButton") } }),
     });
 
     // What the last action said, and why the list cannot be used when it cannot.
-    const bar = (id, type, text, visible) => {
-      setting({
-        id,
-        setup(emitChange, stops) {
-          viewWatch(emitChange, stops);
-          stops.push(profileList.listen(emitChange));
-        },
-        visible,
-        getControlConfig: config => ({ ...config, controlAttrs: { ...config.controlAttrs, type, message: text() } }),
-      });
-      return { id, control: "moz-message-bar" };
-    };
+    const bar = profileBench.bar;
     const profileBars = [
       bar(
         "nulavio-profiles-unavailable",
@@ -748,8 +817,12 @@
     const profileDoor = (id, label, description, open) => {
       setting({
         id,
-        setup: (emitChange, stops) => stops.push(profileList.listen(emitChange)),
+        setup(emitChange, stops) {
+          stops.push(profileList.listen(emitChange));
+          viewWatch(emitChange, stops);
+        },
         visible: () => profilesUsable(),
+        disabled: () => view.busy,
         onUserClick(event) {
           event.preventDefault();
           open();
@@ -770,6 +843,221 @@
         }
       }),
       profileDoor("nulavio-profile-manager", "profilesFullManager", null, () => act(() => shell.NulavioProfiles.openManager())),
+    ];
+
+    // -- which site opens in which profile (ADR 0003): NulavioRouting owns the rules and checks every one;
+    // this is the same kind of list as the profiles above it. -------------------------------------------
+    const routes = source(() => shell.NulavioRouting.state());
+    const routesNow = () => (routes.state.ready ? routes.state.value : null);
+    const routingUsable = () => Boolean(routesNow()?.available);
+    const targets = () => profilesNow().filter(each => each.id !== null && !each.temporary);
+    // With one profile there is nowhere to send a site: the group says so instead of offering an empty form.
+    const routingAlone = () => targets().length < 2 && !routesNow()?.rules.length;
+    const routeBench = workbench({ fresh: { site: "", match: "domain", action: "open-in", profileId: "" } }, routes);
+    const route = routeBench.state;
+    const routeSetup = (emitChange, stops) => {
+      stops.push(routes.listen(emitChange), profileList.listen(emitChange));
+      routeBench.watch(emitChange, stops);
+    };
+    const routeSetting = config => setting({ setup: routeSetup, visible: () => routingUsable(), ...config });
+    const labelled = (label, description) => config => ({
+      ...config,
+      controlAttrs: { ...config.controlAttrs, label: msg(label), ...(description ? { description: msg(description) } : {}) },
+    });
+    routeSetting({
+      id: "nulavio-routing-enabled",
+      setup(emitChange, stops) {
+        routeSetup(emitChange, stops);
+        routes.refresh();
+        try {
+          // A rule added from the profile menu, or a profile created, renamed or deleted anywhere.
+          stops.push(shell.NulavioRouting.subscribe(routes.refresh), shell.NulavioProfiles.subscribe(routes.refresh));
+        } catch (e) {
+          console.error(e);
+        }
+      },
+      get: () => Boolean(routesNow()?.enabled),
+      set(value) {
+        routeBench.act(() => shell.NulavioRouting.setEnabled(Boolean(value)), msg("doneSaved"));
+      },
+      getControlConfig: labelled("routingEnabledLabel"),
+    });
+    routeSetting({
+      id: "nulavio-routing-in-page",
+      get: () => Boolean(routesNow()?.inPage),
+      set(value) {
+        routeBench.act(() => shell.NulavioRouting.setInPage(Boolean(value)), msg("doneSaved"));
+      },
+      disabled: () => !routesNow()?.enabled || route.busy,
+      getControlConfig: labelled("routingInPageLabel", "routingInPageHint"),
+    });
+    // Where a link from another app opens when no rule names its site.
+    routeSetting({
+      id: "nulavio-routing-fallback",
+      visible: () => routingUsable() && !routingAlone(),
+      disabled: () => !routesNow()?.enabled || route.busy,
+      get: () => (routesNow()?.fallback.missing ? "missing" : String(routesNow()?.fallback.profileId || 0)),
+      set(value) {
+        if (value !== "missing") {
+          routeBench.act(() => shell.NulavioRouting.setFallback(Number(value)), msg("doneSaved"));
+        }
+      },
+      getControlConfig: config => ({
+        ...labelled("routingFallbackLabel", "routingFallbackHint")(config),
+        options: [
+          choice("0", msg("routingFallbackLast")),
+          ...targets().map(each => choice(keyOf(each), msg(each.encrypted ? "routingFallbackAlwaysProtected" : "routingFallbackAlways", each.name))),
+          // A deleted destination keeps its own entry: a profile created later can take the same id, and
+          // choosing this entry must never make that profile the destination.
+          ...(routesNow()?.fallback.missing ? [{ ...choice("missing", msg("routingFallbackGone")), disabled: true }] : []),
+        ],
+      }),
+    });
+    const ruleKey = rule => String(rule.id);
+    const ruleRow = rule => {
+      const target = rule.action === "stay" ? null : targets().find(each => each.id === rule.profileId);
+      // What the rule does, as the Shell's page said it: where it opens and how, or that its profile is gone.
+      const does =
+        rule.action === "stay"
+          ? msg("routingActionStay")
+          : rule.missing
+            ? msg("routingTargetMissing")
+            : `${rule.profileName} · ${msg({ "open-in": "routingActionOpen", ask: "routingActionAsk" }[rule.action] ?? "routingActionOpen")}`;
+      return {
+        key: `rule-${ruleKey(rule)}`,
+        control: "moz-box-item",
+        iconSrc: target ? avatarIcon(target.avatar) : undefined,
+        controlAttrs: {
+          // The site is the person's own text: it is set as the row's label, never parsed.
+          label: rule.match === "domain" ? msg("routingScopeDomain", rule.display) : rule.display,
+          description: does,
+          class: target ? `nulavio-profile nulavio-profile-${target.color}` : "nulavio-rule",
+          layout: "medium-icon",
+          "data-rule": ruleKey(rule),
+        },
+        options: [
+          {
+            key: `remove-${ruleKey(rule)}`,
+            control: "moz-button",
+            slot: "actions",
+            iconSrc: "chrome://global/skin/icons/delete.svg",
+            disabled: route.busy,
+            controlAttrs: {
+              title: `${msg("engineRemove")} ${rule.display}`,
+              "aria-label": `${msg("engineRemove")} ${rule.display}`,
+              "data-action": "remove",
+              "data-rule": ruleKey(rule),
+            },
+          },
+        ],
+      };
+    };
+    routeSetting({
+      id: "nulavio-routing-rules",
+      visible: () => routingUsable() && !routingAlone(),
+      getControlConfig(config) {
+        const rules = routesNow()?.rules ?? [];
+        const rows = rules.length
+          ? rules.map(ruleRow)
+          : [{ key: "no-rules", control: "moz-box-item", controlAttrs: { label: msg("routingNoRules"), class: "nulavio-rule-none" } }];
+        const form = {
+          key: "new-rule",
+          control: "moz-box-item",
+          slot: "footer",
+          controlAttrs: { class: "nulavio-profile-new" },
+          items: [
+            { id: "nulavio-routing-site", control: "moz-input-text" },
+            { id: "nulavio-routing-match", control: "moz-select" },
+            { id: "nulavio-routing-profile", control: "moz-select" },
+            { id: "nulavio-routing-action", control: "moz-select" },
+            { id: "nulavio-routing-add", control: "moz-button" },
+          ],
+        };
+        return { ...config, options: [...rows, form] };
+      },
+      onUserClick(event) {
+        const button = event.target.closest?.('[data-action="remove"]');
+        const rule = (routesNow()?.rules ?? []).find(each => ruleKey(each) === button?.dataset.rule);
+        if (rule) {
+          routeBench.act(() => shell.NulavioRouting.removeRule(rule.id), msg("doneRemoved")).then(removed => {
+            if (removed) {
+              focusWhenDrawn("#nulavio-routing-site"); // its row is gone: the keyboard goes to the next thing to do
+            }
+          });
+        }
+      },
+    });
+    // The new rule's fields hold what was typed; nothing is written before "Adicionar regra".
+    const freshRoute = (id, field, extra) =>
+      routeSetting({
+        id,
+        visible: () => routingUsable() && !routingAlone(),
+        get: () => route.fresh[field],
+        set(value) {
+          routeBench.show({ fresh: { ...route.fresh, [field]: value } });
+        },
+        ...extra,
+      });
+    freshRoute("nulavio-routing-site", "site", {
+      getControlConfig: config => ({
+        ...config,
+        controlAttrs: { ...config.controlAttrs, label: msg("routingAddHeading"), placeholder: "example.com" },
+      }),
+    });
+    freshRoute("nulavio-routing-match", "match", {
+      getControlConfig: config => ({
+        ...labelled("routingMatchLabel")(config),
+        options: [choice("domain", msg("routingMatchDomain")), choice("host", msg("routingMatchHost"))],
+      }),
+    });
+    freshRoute("nulavio-routing-action", "action", {
+      getControlConfig: config => ({
+        ...labelled("routingActionLabel")(config),
+        options: [
+          choice("open-in", msg("routingActionOpen")),
+          choice("ask", msg("routingActionAsk")),
+          choice("stay", msg("routingActionStay")),
+        ],
+      }),
+    });
+    // The profile a rule opens in; "never switch" names no profile, so the choice leaves with it.
+    const routeTarget = () => (targets().some(each => keyOf(each) === route.fresh.profileId) ? route.fresh.profileId : keyOf(targets()[0] ?? {}));
+    freshRoute("nulavio-routing-profile", "profileId", {
+      visible: () => routingUsable() && !routingAlone() && route.fresh.action !== "stay",
+      get: routeTarget,
+      getControlConfig: config => ({ ...labelled("routingProfileLabel")(config), options: targets().map(each => choice(keyOf(each), each.name)) }),
+    });
+    routeSetting({
+      id: "nulavio-routing-add",
+      visible: () => routingUsable() && !routingAlone(),
+      async onUserClick(event) {
+        event.preventDefault();
+        const { site, match, action } = route.fresh;
+        const rule = { site, match, action, ...(action === "stay" ? {} : { profileId: Number(routeTarget()) }) };
+        if (await routeBench.act(() => shell.NulavioRouting.addRule(rule), msg("doneAdded"))) {
+          routeBench.show({ fresh: { ...route.fresh, site: "" } });
+        }
+      },
+      disabled: () => route.busy,
+      getControlConfig: labelled("routingAddButton"),
+    });
+    const routeBar = routeBench.bar;
+    const routingBars = [
+      routeBar(
+        "nulavio-routing-alone",
+        "info",
+        () => `${msg("routingNeedsTwoTitle")}. ${msg("routingNeedsTwoText")}`,
+        () => routingUsable() && profileList.state.ready && routingAlone()
+      ),
+      // The note says links stop at a warning page: true only while the rules are in use.
+      routeBar(
+        "nulavio-routing-fallback-missing",
+        "warning",
+        () => msg("routingFallbackMissing"),
+        () => routingUsable() && Boolean(routesNow()?.fallback.missing) && Boolean(routesNow()?.enabled)
+      ),
+      routeBar("nulavio-routing-error", "error", () => route.error, () => Boolean(route.error)),
+      routeBar("nulavio-routing-said", "success", () => route.said, () => Boolean(route.said)),
     ];
 
     // -- passwords: which manager is in use now ---------------------------------------------------
@@ -994,8 +1282,22 @@
           {
             id: "nulavio-profiles-box",
             control: "moz-box-group",
-            items: [...profileDoors, detailRow("nulavio-open-routing", "routing")],
+            items: profileDoors,
           },
+        ],
+      },
+      nulavioRouting: {
+        l10nId: "nulavio-routing-group",
+        headingLevel: 2,
+        items: [
+          failureNote("nulavio-routing-failed", routes),
+          ...routingBars.slice(0, 1),
+          ...routingBars.slice(2),
+          { id: "nulavio-routing-enabled", control: "moz-toggle" },
+          { id: "nulavio-routing-in-page", control: "moz-toggle" },
+          { id: "nulavio-routing-fallback", control: "moz-select" },
+          routingBars[1],
+          { id: "nulavio-routing-rules", control: "moz-box-group" },
         ],
       },
       nulavioPasswordManager: {
@@ -1175,6 +1477,7 @@
     const profilesButton = pane("nulavioProfiles", "paneNulavioProfiles", "profiles", "chrome://browser/skin/fxa/avatar-empty.svg", [
       "nulavioHere",
       "nulavioProfilesManage",
+      "nulavioRouting",
     ]);
     // The assistant has a pane of its own only where the engine shows no AI pane to put it in (read now).
     const engineAiPane = Services.prefs.getBoolPref("browser.preferences.aiControls", false);

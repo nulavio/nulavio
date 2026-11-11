@@ -202,7 +202,7 @@ class NativeSettingsTest(unittest.TestCase):
         general = self.groups("paneSync")
         self.assertNotIn("profiles", general)
         self.assertIn("defaultBrowserSync", general)
-        self.assertEqual(self.groups("paneNulavioProfiles"), ["nulavioHere", "nulavioProfilesManage"])
+        self.assertEqual(self.groups("paneNulavioProfiles"), ["nulavioHere", "nulavioProfilesManage", "nulavioRouting"])
 
     def test_01c_the_assistant_and_the_engines_ai_controls_are_one_pane(self):
         label = DOC + "return d.getElementById(arguments[0])?.textContent.trim() ?? null;"
@@ -264,7 +264,15 @@ class NativeSettingsTest(unittest.TestCase):
         items = self.m.chrome(DOC + 'return [...d.querySelectorAll("#nulavio-layout moz-visual-picker-item")].map(i => i.label);')
         self.assertEqual(items, ["Lateral", "Tabs on top", "Focus"])
         self.groups("paneNulavioProfiles")
-        self.assertEqual(self.control("#nulavio-open-routing")["label"], "Which site opens in which profile")
+        # The page's own words (Fluent) and the Shell's messages for the actions, both in English.
+        heading = (
+            DOC
+            + """const group = d.querySelector('setting-group[groupid="nulavioRouting"]');"""
+            + """return group?.querySelector("moz-fieldset")?.label ?? null;"""
+        )
+        self.assertEqual(harness.wait_until(lambda: self.m.chrome(heading), 15), "Which site opens in which profile")
+        self.assertEqual(self.control("#nulavio-routing-enabled", lambda s: s.get("label"))["label"], "Use routing rules")
+        self.assertEqual(self.control("#nulavio-profile-new-create", lambda s: s.get("label"))["label"], "Create profile")
 
     def test_04_a_failure_halfway_leaves_the_engines_page(self):
         nothing = {"groups": [], "panes": [], "settings": [], "inits": [], "nodes": 0, "words": 0}
@@ -510,38 +518,31 @@ class NativeSettingsTest(unittest.TestCase):
 
         # From the settings page to a detail page and back, in the same tab.
         self.assertTrue(harness.wait_until(lambda: self.m.chrome(READY), 20))
-        self.groups("paneNulavioProfiles")
-        self.control("#nulavio-open-routing")
-        self.m.chrome(DOC + 'd.querySelector("#nulavio-open-routing").click();')
-        self.assertTrue(
-            harness.wait_until(lambda: self.m.chrome(where).endswith("/settings/settings.html#routing"), 15), self.m.chrome(where)
-        )
+        self.groups("panePrivacy")
+        self.control("#nulavio-open-exceptions")
+        self.m.chrome(DOC + 'd.querySelector("#nulavio-open-exceptions").click();')
+        detail = "/settings/settings.html#exceptions"
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome(where).endswith(detail), 15), self.m.chrome(where))
         for handle in self.m.window_handles():
             self.m.switch_to(handle)
-            if self.m.current_url().endswith("/settings/settings.html#routing"):
+            if self.m.current_url().endswith(detail):
                 break
-        self.assertTrue(
-            harness.wait_until(lambda: self.m.execute("return document.documentElement.dataset.ready === 'true';"), 20)
-        )
+        ready = "return document.documentElement.dataset.ready === 'true';"
+        self.assertTrue(harness.wait_until(lambda: self.m.execute(ready), 20))
         rail = self.m.execute(
             "return [...document.querySelectorAll('.settings-nav a[data-section]')].map(a => a.dataset.section);"
         )
-        for moved in ("layout", "appearance", "shortcuts", "profiles"):
+        # What the settings page draws itself has no entry on a detail page (ADR 0008, ADR 0011).
+        for moved in ("layout", "appearance", "shortcuts", "profiles", "routing"):
             self.assertNotIn(moved, rail)
         self.assertEqual(self.m.execute("return document.getElementById('settings-back').textContent;"), "Configurações")
         self.m.send("WebDriver:ElementClick", {"id": self.m.find_element("#settings-back")})
-        self.assertTrue(
-            harness.wait_until(lambda: self.m.chrome(where) == "about:preferences#nulavioProfiles", 15), self.m.chrome(where)
-        )
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome(where) == "about:preferences#privacy", 15), self.m.chrome(where))
         self.assertEqual(self.m.chrome("return gBrowser.tabs.length;"), tabs)
-        # The detail page's own way to a new profile ("Criar perfil", in the routing rules) is the settings page too.
-        self.m.chrome(DOC + 'd.querySelector("#nulavio-open-routing").click();')
-        self.assertTrue(
-            harness.wait_until(lambda: self.m.chrome(where).endswith("/settings/settings.html#routing"), 15), self.m.chrome(where)
-        )
-        self.assertTrue(
-            harness.wait_until(lambda: self.m.execute("return document.documentElement.dataset.ready === 'true';"), 20)
-        )
+        # The old routing section, still there by its address, sends "Criar perfil" to the settings page too.
+        shell = self.m.chrome("return WebExtensionPolicy.getByID('shell@nulavio.net').getURL('settings/settings.html#routing');")
+        self.m.navigate(shell)
+        self.assertTrue(harness.wait_until(lambda: self.m.execute(ready), 20))
         self.m.execute("document.querySelector('a[data-settings=\"profiles\"]').click();")
         self.assertTrue(
             harness.wait_until(lambda: self.m.chrome(where) == "about:preferences#nulavioProfiles", 15), self.m.chrome(where)

@@ -64,9 +64,23 @@ Branch `agent/claude/feat-settings-profile-actions`, on the alpha's engine by `d
 - **Every change goes through `NulavioProfiles` and `NulavioVault`**, the modules the Shell's pages call, with the same checks; a refusal is said in the Shell's words for its code ("Esse nome já está em uso."). A group that cannot be used (a temporary profile, profiles turned off, a window started with `--profile`) says why and offers nothing.
 - The Shell's old page keeps its profiles section by address only: it left that page's navigation and search, and its "Criar perfil" link in the routing rules opens the settings page.
 
-`tests/integration/test_settings_profiles.py` (6 tests) acts as a person does and reads the result from the module: the actions per row and their names, opening and a refusal, the doors around the list; editing with a taken name, saving name, icon and colour, cancelling, writing only what changed; deleting with the prompt cancelled and then accepted; creating with and without a template; a group that cannot be used. The rows and actions of a **protected** profile are checked with a list the test gives the module and with the Vault's entries replaced: no protected profile is created there (that needs the Vault's tools), so locking and unlocking for real stay covered by the Vault's own tests.
+**Independent review** (Codex gpt-6-astra, high effort, read-only, 2026-11-11; 0 high, 4 medium, 3 low). Each point was checked against the code before anything changed; all seven were true.
 
-Still the old page's: the routing rules. Then search, passwords, exceptions and the assistant, and the removal of the old page's sections with their tests.
+| Point | What was wrong | What changed |
+|---|---|---|
+| A save could put an old name back | The editor compared its fields with the profile as read now, not as it was when the editor opened: renamed elsewhere, a save of the colour alone sent the old name too | The editor keeps what it opened with and writes only what the person changed since. A field they did not touch follows the profile while the editor is open; one they changed keeps what they typed |
+| A save closed another row's editor | The editor that was open when a save answered was closed, whichever it was | A save closes only its own editor |
+| A click while an action ran was dropped unseen | One action at a time, and a second click did nothing, with its button still enabled | While an action runs, the list's buttons are disabled |
+| Words that outlived what they said | "Trabalho está bloqueado." stayed after it was unlocked elsewhere | What an action said stays while the list stays as that action left it, and leaves when the list changes again |
+| Focus after a deletion | The profile before the deleted one was found by object, lost when the list was read again under the prompt | Found by its key |
+| A prompt taken away | A rejected prompt was an unhandled rejection | Nothing was confirmed: logged, and nothing happens |
+| A length limit that limited nothing | `maxlength` on the engine's text field is not passed to its input | Removed; the module's own check answers ("Informe um nome (até 60 caracteres).") |
+
+The review also named the weakest assertions (a colour only had to be non-empty): the tests now compare the row's and the picker's colours with the design tokens. `test_05b` covers the first four points. Not covered by a test: the focus after a deletion with the list re-read under the prompt, and a rejected prompt (the test driver cannot act while the engine's prompt is open).
+
+`tests/integration/test_settings_profiles.py` (7 tests) acts as a person does and reads the result from the module: the actions per row and their names, opening and a refusal, the doors around the list; editing with a taken name, saving name, icon and colour, cancelling, writing only what changed; deleting with the prompt cancelled and then accepted; creating with and without a template; a group that cannot be used. The rows and actions of a **protected** profile are checked with a list the test gives the module and with the Vault's entries replaced: no protected profile is created there (that needs the Vault's tools), so locking and unlocking for real stay covered by the Vault's own tests.
+
+Still the old page's after this step: the routing rules (step 4). Then search, passwords, exceptions and the assistant, and the removal of the old page's sections with their tests.
 
 ## Step 3 (2026-11-11): what the content filter blocks, one row away
 
@@ -77,4 +91,21 @@ Branch `agent/claude/feat-settings-filter-lists`.
 Ads, trackers and cookie notices are blocked by uBlock Origin's lists, and nothing in Settings led to them. "Privacidade e Segurança" now has a row that opens uBlock Origin's own "Filter lists" page. Nulavio reads only whether uBlock Origin is on (the add-on manager's answer, as before) and never its data: which lists are ticked is said on its page, not guessed here. With uBlock Origin off or missing, the row says so and opens "Extensões e temas". `test_settings_native` `test_06a` covers both states and the address the module opens.
 
 Not decided (maintainer): showing the real state in the row ("cookie notices: hidden" or "shown") means reading uBlock Origin's own settings. Recommendation: allow reading, never writing, and say so in the words that today promise Nulavio "never alters" its data.
+
+## Step 4 (2026-11-11): which site opens in which profile
+
+Branch `agent/claude/feat-settings-routing-native`.
+
+![The routing rules in the "Perfis e proteção" pane, pt-BR light and en-US dark](../design/screenshots/experience-2026-11/settings-routing-sheet.png)
+
+- The routing rules are a group of the profiles pane, under the profiles they point to: the two switches (use the rules; also for links clicked in pages, off unless the person turns it on), the default destination for links from other apps, the rules, and a new rule as the last row of the list.
+- A rule's row shows the icon of the profile it opens in, the site, and what it does ("Bancos · Abrir nele"); a rule whose profile was deleted says so. A default destination that was deleted keeps its own disabled entry and a warning, as on the old page: a profile created later can take the same id and must never become the destination by itself.
+- With one profile there is nowhere to send a site: the group says so and offers no empty form; the list above it is where a profile is made.
+- Every change goes through `NulavioRouting`, which checks each rule as before; a refusal is said in the Shell's words ("Esse endereço de site não é válido.").
+- The list and the working state share one small helper with the profiles (`workbench`: what the page holds while the person works, one action at a time, the bars).
+- The old page's routing section left its navigation and search; it still opens by address, and the pages that explain a routed link ("As regras ficam em Configurações, em Perfis e proteção") already named this pane.
+
+`tests/integration/test_settings_routing.py` (3 tests): a refused site, a rule added, "never switch" without a profile, a rule made elsewhere joining the list, a rule removed (and where the keyboard goes), a rule whose profile was deleted; the switches and what they disable; the default destination chosen, deleted and reset; one profile alone, then a second one.
+
+Still the old page's: search, passwords, exceptions, DNS and the assistant, and the removal of the old page's sections with their tests.
 

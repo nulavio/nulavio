@@ -100,9 +100,9 @@ nulavio-profile-temporary =
 nulavio-profiles-group =
     .label = Seus perfis
     .description = Cada perfil guarda seus próprios logins, histórico e extensões. Um perfil protegido fica criptografado no disco enquanto está bloqueado.
-nulavio-open-routing =
+nulavio-routing-group =
     .label = Qual site abre em qual perfil
-    .description = Regras para links vindos de outros aplicativos e endereços digitados.
+    .description = Links de outros aplicativos e endereços digitados seguem estas regras e abrem direto no perfil certo, antes de qualquer carregamento. As regras ficam neste computador e só você as cria.
 
 ## Privacidade e segurança
 
