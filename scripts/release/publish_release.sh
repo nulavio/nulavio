@@ -4,6 +4,11 @@
 #
 #   GNUPGHOME=<key-home> scripts/release/publish_release.sh <rehearsal-out> <key-fingerprint> [stage-dir]
 #
+# or, with the release key in AWS KMS (credentials from AWS_PROFILE or the environment):
+#
+#   NULAVIO_KMS_KEY_ID=alias/nulavio-release AWS_PROFILE=lombello-dev AWS_REGION=us-east-1 \
+#       scripts/release/publish_release.sh <rehearsal-out> <key-fingerprint> [stage-dir]
+#
 # 1. release_manifest.py verify: the rehearsal finished, from a committed tree on
 #    origin/main, and every package and SBOM still has the SHA-256 it recorded.
 # 2. sign_repo.sh with NULAVIO_RELEASE_MANIFEST: signs only those RPMs and builds
@@ -24,7 +29,14 @@ repo=$(cd "$(dirname "$0")/../.." && pwd)
 out=$(realpath "${1:?usage: publish_release.sh <rehearsal-out> <key-fingerprint> [stage-dir]}")
 key=${2:?key fingerprint}
 stage=$(realpath -m "${3:-$out/publish}")
-gnupg=${GNUPGHOME:?set GNUPGHOME to the release key home}
+kms=${NULAVIO_KMS_KEY_ID:-}
+if [[ -n $kms ]]; then
+    gnupg=
+    signer="AWS KMS ($kms)"
+else
+    gnupg=${GNUPGHOME:?set GNUPGHOME to the release key home, or NULAVIO_KMS_KEY_ID}
+    signer="the gpg-agent of $gnupg"
+fi
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 mkdir -m 700 "$tmp/gpg"
@@ -53,7 +65,7 @@ commit=$(field commit)
 firefox=$(field firefox)
 
 mkdir -p "$stage/github"
-NULAVIO_RELEASE_MANIFEST="$out/manifest.json" GNUPGHOME=$gnupg \
+NULAVIO_RELEASE_MANIFEST="$out/manifest.json" GNUPGHOME=$gnupg NULAVIO_PUBLIC_KEY=$published \
     "$repo/scripts/release/sign_repo.sh" "$out/packages" "$stage/rpm" "$key"
 exported=$(fingerprint "$stage/rpm/nulavio-packages.asc")
 [[ $exported == "$key" ]] || { echo "publish_release: the repository was signed with $exported" >&2; exit 1; }
@@ -65,7 +77,12 @@ done < <(field rpms)
 cp "$out/manifest.json" "$stage/github/manifest.json"
 cp "$published" "$stage/github/nulavio-packages.asc"
 (cd "$stage/github" && sha256sum -- * >SHA256SUMS)
-GNUPGHOME=$gnupg gpg --batch --yes --local-user "$key" --armor --detach-sign "$stage/github/SHA256SUMS"
+if [[ -n $kms ]]; then
+    python3 -I "$repo/scripts/release/openpgp_sign.py" --public-key "$published" --kms-key-id "$kms" \
+        --armor -o "$stage/github/SHA256SUMS.asc" "$stage/github/SHA256SUMS"
+else
+    GNUPGHOME=$gnupg gpg --batch --yes --local-user "$key" --armor --detach-sign "$stage/github/SHA256SUMS"
+fi
 # Check the signature the way a user would: with only the published public key.
 gpg --homedir "$tmp/gpg" --quiet --import "$published" 2>/dev/null
 gpg --homedir "$tmp/gpg" --quiet --verify "$stage/github/SHA256SUMS.asc" "$stage/github/SHA256SUMS" 2>/dev/null ||
@@ -75,7 +92,7 @@ cat >"$stage/NEXT.md" <<EOF
 # Publishing $tag (Firefox $firefox, commit ${commit:0:12})
 
 Checked: the rehearsal manifest, the packages' SHA-256, the base commit on
-$ref; signed with $key. Not done by the script: everything below.
+$ref; signed with $key by $signer. Not done by the script: everything below.
 
 1. Upload the dnf repository (the host decides the command; with Cloudflare R2):
 
