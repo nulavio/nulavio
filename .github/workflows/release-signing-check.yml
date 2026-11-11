@@ -1,0 +1,41 @@
+name: release signing check
+
+# Manual. Proves that a job in the `release` environment can sign with the release key
+# held in AWS KMS (GitHub OIDC -> role nulavio-release-signing -> key alias/nulavio-release,
+# policies in ci/aws/), and that the signature verifies with the key users have
+# (site/keys/nulavio-packages.asc). The environment asks the maintainer to approve the run
+# and accepts only `main`. Signs a throwaway text file; nothing is published.
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  sign:
+    name: sign a test file through KMS and verify it
+    runs-on: ubuntu-24.04
+    environment: release
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ vars.NULAVIO_SIGNING_ROLE_ARN }}
+          aws-region: ${{ vars.NULAVIO_AWS_REGION }}
+          role-session-name: nulavio-signing-check
+      - name: Sign through KMS, verify with the published key
+        env:
+          KEY: ${{ vars.NULAVIO_KMS_KEY_ARN }}
+        run: |
+          printf 'Nulavio KMS signing check, run %s\n' "$GITHUB_RUN_ID" >check.txt
+          python3 -I scripts/release/openpgp_sign.py --public-key site/keys/nulavio-packages.asc \
+              --kms-key-id "$KEY" --armor -o check.txt.asc check.txt
+          export GNUPGHOME="$RUNNER_TEMP/gnupg"
+          mkdir -m 700 "$GNUPGHOME"
+          gpg --batch --quiet --import site/keys/nulavio-packages.asc
+          gpg --batch --status-fd 1 --verify check.txt.asc check.txt | grep "VALIDSIG 298A9093BAABB26F79BB29F4BF47E5FA9EDB8DB1"

@@ -10,29 +10,31 @@ The KMS key must already exist, empty: RSA_4096, SIGN_VERIFY, origin EXTERNAL
 
 What it does:
 
-1. Copies the key's home to a private directory in memory ($XDG_RUNTIME_DIR, tmpfs)
-   and runs `gpg --passwd` there: type the current passphrase, then leave the new one
-   empty and confirm. Only the copy loses its passphrase; the original is not touched.
-2. Reads the RSA numbers from the copy, checks them against the public key, and
-   builds the PKCS#8 key material KMS expects.
+1. Asks for the key's passphrase on the terminal and has gpg export the secret key
+   with it (the passphrase goes to gpg on standard input). The key's home is only
+   read; its passphrase does not change.
+2. Decrypts the exported key's OpenPGP protection (S2K, AES-CFB, SHA-1 check), checks
+   the RSA numbers against the public key, and builds the PKCS#8 key material KMS
+   expects.
 3. Wraps it for KMS (RSA_AES_KEY_WRAP_SHA_256 with a fresh wrapping key and import
    token from GetParametersForImport) and imports it with no expiry.
 4. Checks that KMS now holds the release key: same modulus, and a signature made by
    KMS verifies with the public key.
-5. Deletes the copy, whatever happened.
 
-The AES key wrap uses the `cryptography` package (python3-cryptography on Fedora),
-because the standard library has no AES; nothing else here leaves it. The key never
-reaches a command line, a log or the disk outside the in-memory directory.
+AES (the key's protection and the KMS wrap) comes from the `cryptography` package
+(python3-cryptography on Fedora), because the standard library has none. The key and
+its passphrase never reach a command line, a log or the disk; the wrapped material
+and the import token are written to a private directory in memory and deleted.
 """
 
 from __future__ import annotations
 
 import argparse
 import base64
+import getpass
+import hashlib
 import json
 import os
-import re
 import shutil
 import subprocess
 import sys
@@ -43,29 +45,95 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import openpgp_sign as ops
 
-FIELDS = ("n", "e", "d", "p", "q", "u")
+FIELDS = ("n", "e", "d", "p", "q")
 
 
 class KeyImportError(Exception):
     """The key cannot be imported safely."""
 
 
-def rsa_numbers(key_file_text: str) -> dict[str, int]:
-    """n, e, d, p, q from an unprotected gpg-agent key file (extended format)."""
-    if "protected-private-key" in key_file_text or "shadowed-private-key" in key_file_text:
-        raise KeyImportError("the key file is still protected (did gpg --passwd set an empty passphrase?)")
-    flat = re.sub(r"\s+", "", key_file_text)
-    if "(private-key(rsa" not in flat:
-        raise KeyImportError("not an RSA private key file")
-    numbers = {name: int(value, 16) for name, value in re.findall(r"\((n|e|d|p|q|u)#([0-9A-Fa-f]+)#\)", flat)}
-    missing = [name for name in FIELDS[:5] if name not in numbers]
-    if missing:
-        raise KeyImportError(f"key file lacks {', '.join(missing)}")
-    if numbers["p"] * numbers["q"] != numbers["n"]:
-        raise KeyImportError("p * q is not n")
-    if pow(pow(2, numbers["e"], numbers["n"]), numbers["d"], numbers["n"]) != 2:
-        raise KeyImportError("d does not invert e")
-    return numbers
+CIPHER_KEY_SIZES = {7: 16, 8: 24, 9: 32}  # AES-128, AES-192, AES-256 (RFC 9580, 9.3)
+S2K_HASHES = {2: "sha1", 8: "sha256", 9: "sha384", 10: "sha512", 11: "sha224"}
+
+
+def _aes_cfb_decrypt(key: bytes, iv: bytes, data: bytes) -> bytes:
+    """AES in CFB mode, which OpenPGP uses to protect version 4 secret keys."""
+    try:
+        from cryptography.hazmat.primitives.ciphers import Cipher, algorithms
+    except ModuleNotFoundError as error:
+        raise KeyImportError("needs python3-cryptography (sudo dnf install python3-cryptography)") from error
+    try:  # cryptography 44 and later keep CFB with the legacy modes
+        from cryptography.hazmat.decrepit.ciphers.modes import CFB
+    except ModuleNotFoundError:
+        from cryptography.hazmat.primitives.ciphers.modes import CFB
+    decryptor = Cipher(algorithms.AES(key), CFB(iv)).decryptor()
+    return decryptor.update(data) + decryptor.finalize()
+
+
+def s2k_key(passphrase: bytes, spec: bytes, size: int) -> tuple[bytes, int]:
+    """(key, bytes of `spec` used): OpenPGP string-to-key, simple, salted or iterated and salted."""
+    kind = spec[0]
+    if kind not in (0, 1, 3) or spec[1] not in S2K_HASHES:
+        raise KeyImportError(f"unsupported S2K (type {kind}, hash {spec[1]})")
+    salt = spec[2:10] if kind in (1, 3) else b""
+    used = {0: 2, 1: 10, 3: 11}[kind]
+    data = salt + passphrase
+    count = len(data)
+    if kind == 3:
+        c = spec[10]
+        count = max(count, (16 + (c & 15)) << ((c >> 4) + 6))
+    out = b""
+    preload = 0
+    while len(out) < size:
+        h = hashlib.new(S2K_HASHES[spec[1]], b"\0" * preload)
+        full, rest = divmod(count, len(data))
+        for _ in range(full):
+            h.update(data)
+        h.update(data[:rest])
+        out += h.digest()
+        preload += 1
+    return out[:size], used
+
+
+def secret_numbers(export: bytes, passphrase: bytes) -> dict[str, int]:
+    """n, e, d, p, q of the primary key in `gpg --export-secret-keys` output (version 4, RSA)."""
+    for tag, body in ops.packets(export):
+        if tag != 5:
+            continue
+        if body[0] != 4 or body[5] != ops.RSA:
+            raise KeyImportError("only version 4 RSA keys are supported")
+        n, offset = ops.read_mpi(body, 6)
+        e, offset = ops.read_mpi(body, offset)
+        usage = body[offset]
+        offset += 1
+        if usage == 0:
+            secret, check = body[offset:-2], body[-2:]
+            if sum(secret) % 65536 != int.from_bytes(check, "big"):
+                raise KeyImportError("damaged secret key (checksum)")
+        elif usage == 254:
+            cipher = body[offset]
+            if cipher not in CIPHER_KEY_SIZES:
+                raise KeyImportError(f"unsupported cipher {cipher} protecting the key")
+            key, used = s2k_key(passphrase, body[offset + 1 :], CIPHER_KEY_SIZES[cipher])
+            offset += 1 + used
+            iv, encrypted = body[offset : offset + 16], body[offset + 16 :]
+            plain = _aes_cfb_decrypt(key, iv, encrypted)
+            secret, digest = plain[:-20], plain[-20:]
+            # SHA-1 is the format's own check of the decrypted numbers (S2K usage 254); it only tells a
+            # wrong passphrase. The numbers are then checked against the public key (p * q = n, d, n, e).
+            if hashlib.sha1(secret, usedforsecurity=False).digest() != digest:
+                raise KeyImportError("wrong passphrase")
+        else:
+            raise KeyImportError(f"unsupported key protection (S2K usage {usage})")
+        d, offset = ops.read_mpi(secret, 0)
+        p, offset = ops.read_mpi(secret, offset)
+        q, _ = ops.read_mpi(secret, offset)
+        if p * q != n:
+            raise KeyImportError("p * q is not n")
+        if pow(pow(2, e, n), d, n) != 2:
+            raise KeyImportError("d does not invert e")
+        return {"n": n, "e": e, "d": d, "p": p, "q": q}
+    raise KeyImportError("no secret key packet in the export")
 
 
 def _der(tag: int, body: bytes) -> bytes:
@@ -121,11 +189,9 @@ def main(argv: list[str] | None = None) -> int:
         print("kms_import_key: XDG_RUNTIME_DIR (an in-memory directory) is needed", file=sys.stderr)
         return 1
     work = Path(tempfile.mkdtemp(prefix="nulavio-kms-import-", dir=runtime))
-    home = work / "gnupg"
+    home = str(args.gnupghome)
     try:
-        shutil.copytree(args.gnupghome, home, ignore=shutil.ignore_patterns("S.*", "*.lock", "random_seed"))
-        home.chmod(0o700)
-        cert = _run("gpg", "--homedir", str(home), "--batch", "--armor", "--export", args.fingerprint, capture_output=True).stdout
+        cert = _run("gpg", "--homedir", home, "--batch", "--armor", "--export", args.fingerprint, capture_output=True).stdout
         key = ops.primary_key(cert)
         if key.hex != args.fingerprint.replace(" ", "").upper():
             raise KeyImportError(f"{args.fingerprint} is not the primary key of the exported certificate")
@@ -138,23 +204,20 @@ def main(argv: list[str] | None = None) -> int:
             raise KeyImportError("the KMS key must be RSA_4096, SIGN_VERIFY, with origin EXTERNAL")
         if meta.get("KeyState") != "PendingImport":
             raise KeyImportError("the KMS key already has key material (KeyState is not PendingImport)")
+        key_arn = meta["Arn"]  # GetParametersForImport and ImportKeyMaterial take no alias
 
-        print("In the dialog: type the current passphrase, then leave the new one EMPTY and confirm.")
-        print(f"Only the copy in {work} changes; the original key keeps its passphrase.")
-        _run("gpg", "--homedir", str(home), "--pinentry-mode", "ask", "--passwd", key.hex)
-        _run("gpgconf", "--homedir", str(home), "--kill", "gpg-agent")
-        grip_line = _run(
-            "gpg", "--homedir", str(home), "--batch", "--with-colons", "--with-keygrip", "--list-secret-keys", key.hex,
-            capture_output=True, text=True,
+        passphrase = getpass.getpass(f"Passphrase of the release key {key.hex[-16:]}: ").encode()
+        export = _run(
+            "gpg", "--homedir", home, "--batch", "--pinentry-mode", "loopback", "--passphrase-fd", "0",
+            "--export-secret-keys", key.hex, input=passphrase, capture_output=True,
         ).stdout  # fmt: skip
-        keygrip = next(line.split(":")[9] for line in grip_line.splitlines() if line.startswith("grp:"))
-        numbers = rsa_numbers((home / "private-keys-v1.d" / f"{keygrip}.key").read_text(encoding="ascii"))
+        numbers = secret_numbers(export, passphrase)
         if (numbers["n"], numbers["e"]) != (key.modulus, key.exponent):
             raise KeyImportError("the private key does not match the public key")
         material = pkcs8(numbers)
 
         params = _run(
-            "aws", "kms", "get-parameters-for-import", "--key-id", args.kms_key_id,
+            "aws", "kms", "get-parameters-for-import", "--key-id", key_arn,
             "--wrapping-algorithm", "RSA_AES_KEY_WRAP_SHA_256", "--wrapping-key-spec", "RSA_4096",
             "--query", "[PublicKey, ImportToken]", "--output", "text", capture_output=True, text=True,
         ).stdout.split()  # fmt: skip
@@ -163,7 +226,7 @@ def main(argv: list[str] | None = None) -> int:
         wrapped.write_bytes(wrap_for_kms(material, base64.b64decode(params[0])))
         token.write_bytes(base64.b64decode(params[1]))
         _run(
-            "aws", "kms", "import-key-material", "--key-id", args.kms_key_id,
+            "aws", "kms", "import-key-material", "--key-id", key_arn,
             "--encrypted-key-material", f"fileb://{wrapped}", "--import-token", f"fileb://{token}",
             "--expiration-model", "KEY_MATERIAL_DOES_NOT_EXPIRE", capture_output=True,
         )  # fmt: skip
@@ -172,10 +235,13 @@ def main(argv: list[str] | None = None) -> int:
         print(f"KMS key {args.kms_key_id} now signs as {key.hex}.")
     except (KeyImportError, ops.SignError, subprocess.CalledProcessError, OSError, StopIteration) as error:
         detail = getattr(error, "stderr", None)
-        print(f"kms_import_key: {error}{(': ' + detail.strip()) if isinstance(detail, str) and detail else ''}", file=sys.stderr)
+        if isinstance(detail, bytes):
+            detail = detail.decode("utf-8", "replace")
+        if isinstance(error, subprocess.CalledProcessError):
+            error = f"{error.cmd[0]} {error.cmd[1]} {error.cmd[2]} failed (exit {error.returncode})"
+        print(f"kms_import_key: {error}{(': ' + detail.strip()) if detail else ''}", file=sys.stderr)
         return 1
     finally:
-        subprocess.run(["gpgconf", "--homedir", str(home), "--kill", "gpg-agent"], capture_output=True, check=False)
         shutil.rmtree(work, ignore_errors=True)
     return 0
 

@@ -1,0 +1,42 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "AccountAdministersTheKey",
+      "Effect": "Allow",
+      "Principal": {"AWS": "arn:aws:iam::__ACCOUNT__:root"},
+      "Action": "kms:*",
+      "Resource": "*"
+    },
+    {
+      "Sid": "ReleaseRoleSigns",
+      "Effect": "Allow",
+      "Principal": {"AWS": "arn:aws:iam::__ACCOUNT__:role/__ROLE__"},
+      "Action": ["kms:Sign", "kms:GetPublicKey", "kms:DescribeKey"],
+      "Resource": "*"
+    },
+    {
+      "Sid": "OnlyTheReleaseRoleAndAdministratorsSign",
+      "Effect": "Deny",
+      "Principal": "*",
+      "Action": "kms:Sign",
+      "Resource": "*",
+      "Condition": {
+        "StringNotLike": {
+          "aws:PrincipalArn": [
+            "arn:aws:iam::__ACCOUNT__:role/__ROLE__",
+            "arn:aws:iam::__ACCOUNT__:role/aws-reserved/sso.amazonaws.com/AWSReservedSSO_AWSAdministratorAccess*"
+          ]
+        }
+      }
+    },
+    {
+      "Sid": "OnlyRsaPkcs1Sha256",
+      "Effect": "Deny",
+      "Principal": "*",
+      "Action": "kms:Sign",
+      "Resource": "*",
+      "Condition": {"StringNotEquals": {"kms:SigningAlgorithm": "RSASSA_PKCS1_V1_5_SHA_256"}}
+    }
+  ]
+}
