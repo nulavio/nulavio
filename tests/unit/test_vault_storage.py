@@ -228,6 +228,82 @@ class ContainerTest(StorageCase):
         self.assertEqual(storage.mounted_paths() & {str(plain)}, set())
 
 
+INTERRUPTED_MIGRATION = """
+import os, shutil, signal, sys
+sys.path.insert(0, sys.argv[1])
+from pathlib import Path
+from nulavio_launcher.vault import storage
+from nulavio_launcher.vault.core import Vault
+path, how, password = Path(sys.argv[2]), sys.argv[3], sys.argv[4]
+vault = Vault.create(storage.Container(path).vault_path)
+vault.add_password(password, {"ops": 1, "mem": 8 * 1024 * 1024})
+vault.save()
+copied = []
+real_copy, real_rmtree = shutil.copy2, shutil.rmtree
+def copy(*args, **kwargs):
+    copied.append(args[0])
+    if len(copied) == 3 and how in ("kill-mid-copy", "term-mid-copy"):
+        os.kill(os.getpid(), signal.SIGKILL if how == "kill-mid-copy" else signal.SIGTERM)
+    return real_copy(*args, **kwargs)
+def rmtree(target, *args, **kwargs):
+    if how == "kill-after-copy" and str(target).endswith(".plaintext-migrating"):
+        os.kill(os.getpid(), signal.SIGKILL)
+    return real_rmtree(target, *args, **kwargs)
+shutil.copy2, shutil.rmtree = copy, rmtree
+storage.encrypt_existing(path, vault)
+"""
+
+
+class InterruptedMigrationTest(StorageCase):
+    # Audit V5: an interrupted migration left the whole profile in the clear next to it,
+    # marked as protected, and nothing ever looked at it again.
+    def plain_profile(self) -> Path:
+        path = self.tmp / "work"
+        path.mkdir()
+        for index in range(10):
+            (path / f"file{index}.txt").write_text(f"{MARKER} {index}")
+        return path
+
+    def interrupt(self, path: Path, how: str) -> subprocess.CompletedProcess:
+        script = self.tmp / "migrate.py"
+        script.write_text(INTERRUPTED_MIGRATION)
+        args = [sys.executable, str(script), str(ROOT / "launcher"), str(path), how, PASSWORD]
+        return subprocess.run(args, capture_output=True, text=True, timeout=120)
+
+    def staging(self, path: Path) -> Path:
+        return path.with_name(path.name + ".plaintext-migrating")
+
+    def test_sigterm_is_cleaned_up_at_once(self):
+        path = self.plain_profile()
+        self.assertNotEqual(self.interrupt(path, "term-mid-copy").returncode, 0)
+        self.assertFalse(self.staging(path).exists())
+        self.assertFalse(storage.Container(path).root.exists())
+        self.assertEqual(len(list(path.iterdir())), 10)
+
+    def test_a_killed_copy_is_undone_the_next_time(self):
+        path = self.plain_profile()
+        self.assertEqual(self.interrupt(path, "kill-mid-copy").returncode, -signal.SIGKILL)
+        self.assertTrue(self.staging(path).exists())
+        prof = profile.Profile(name="work", path=path)
+        self.assertFalse(profiles.is_encrypted(prof))  # the profile is back as it was, unprotected
+        self.assertFalse(self.staging(path).exists())
+        self.assertFalse(storage.Container(path).mounted())
+        self.assertEqual(sorted(p.name for p in path.iterdir()), [f"file{i}.txt" for i in range(10)])
+
+    def test_a_complete_copy_is_finished_the_next_time(self):
+        path = self.plain_profile()
+        self.assertEqual(self.interrupt(path, "kill-after-copy").returncode, -signal.SIGKILL)
+        self.assertTrue(self.staging(path).exists())
+        prof = profile.Profile(name="work", path=path)
+        self.assertTrue(profiles.is_encrypted(prof))
+        self.assertFalse(self.staging(path).exists())  # the plaintext copy is gone
+        self.assertFalse((storage.Container(path).root / storage.MIGRATED).exists())
+        self.assertFalse(contains(self.tmp, MARKER.encode()))
+        profiles.unlock(prof, password=PASSWORD).lock()
+        self.assertEqual(len(list(path.iterdir())), 10 + 1)  # and the state directory
+        profiles.lock(prof)
+
+
 class EncryptedProfileTest(StorageCase):
     def test_create_unlock_lock(self):
         prof, code = self.encrypted_profile()
