@@ -50,7 +50,7 @@ A second model (Antigravity, from the captures only, closed brief) ranked A firs
 | C: the address field is cut, the menu lands on the first tab, an icon rail stays | True | Part of the reason C is dropped |
 | Narrow the tab column to 196 px, the top row to 38 px, widen the address field | Not checked against 1366×768 at 150 % and the 24 px target rule | Candidates for the window slice, each with a measurement |
 
-A second critique (same model, closed brief, 2026-11-11) looked at the first-run slice's captures next to Zen's and Helium's setup screens. It quoted two button labels that are in no capture, so every point was checked on the images before use:
+A second critique (same model, closed brief, 2026-11-11) looked at the first-run slice's captures next to Zen's and Helium's setup screens. Its final text names a button label that is in no capture and lists a reference image it was not given, so every point was checked on the images before use:
 
 | Point | Checked | Result |
 |---|---|---|
