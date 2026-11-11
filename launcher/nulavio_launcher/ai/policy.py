@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import datetime as _dt
 import ipaddress
+import re
 import socket
 import urllib.parse
 from dataclasses import dataclass
@@ -183,8 +184,46 @@ def _resolves_locally(host: str) -> bool:
     try:
         infos = socket.getaddrinfo(host, None, proto=socket.IPPROTO_TCP)
     except (OSError, UnicodeError):
-        return False  # the browser will fail to load it too
+        # Fail closed: the engine may resolve it where this process cannot (its own
+        # resolver, DNS over HTTPS, a proxy), and then it may well be local.
+        return True
     return any(_local_address(info[4][0]) for info in infos)
+
+
+_IPV4_PART = re.compile(r"0[xX][0-9a-fA-F]*|[0-9]+")
+
+
+def _ipv4_number(part: str) -> int | None:
+    if not _IPV4_PART.fullmatch(part):
+        return None
+    if part[:2] in ("0x", "0X"):
+        return int(part[2:] or "0", 16)
+    if len(part) > 1 and part[0] == "0":
+        return int(part[1:], 8) if re.fullmatch(r"[0-7]+", part[1:]) else None
+    return int(part)
+
+
+def _ends_in_number(host: str) -> bool:
+    last = host.split(".")[-1]
+    return bool(last) and (last.isdigit() or bool(re.fullmatch(r"0[xX][0-9a-fA-F]*", last)))
+
+
+def _whatwg_ipv4(host: str) -> str | None:
+    """The address a browser reads from a host ending in a number (127.1, 0x7f.0.0.1, 2130706433), or None.
+
+    Python's ipaddress accepts only the dotted-quad form; the engine follows the URL
+    standard, which accepts these too, so the check must read them the same way.
+    """
+    parts = host.split(".")
+    if len(parts) > 4:
+        return None
+    numbers = [_ipv4_number(p) for p in parts]
+    if any(n is None for n in numbers) or any(n > 255 for n in numbers[:-1]) or numbers[-1] >= 256 ** (5 - len(numbers)):
+        return None
+    value = numbers[-1]
+    for index, number in enumerate(numbers[:-1]):
+        value += number << (8 * (3 - index))
+    return str(ipaddress.IPv4Address(value))
 
 
 def classify_url(url: str, resolve: bool = True) -> Target:
@@ -196,17 +235,35 @@ def classify_url(url: str, resolve: bool = True) -> Target:
     if url == "about:blank":
         return Target(url, None, ())
     if scheme in ("http", "https"):
-        if parsed.username or parsed.password:
+        # The engine reads "\\" as "/" and decodes "%" in the host: refuse what this
+        # parser would read differently, so the host checked is the host opened.
+        if "\\" in url:
+            raise UrlRefused("addresses with a backslash are not opened")
+        if parsed.username or parsed.password or "@" in parsed.netloc:
             raise UrlRefused("addresses with a user name or password are not opened")
-        host = (parsed.hostname or "").lower()
+        if "%" in parsed.netloc:
+            raise UrlRefused("addresses with an encoded host are not opened")
+        try:
+            host = (parsed.hostname or "").encode("idna").decode("ascii").lower().rstrip(".")
+        except UnicodeError:
+            raise UrlRefused("the address has a host the browser would read differently") from None
         if not host:
             raise UrlRefused("the address has no host")
+        if ":" not in host and _ends_in_number(host):  # an IPv6 literal has its own syntax
+            ipv4 = _whatwg_ipv4(host)
+            if ipv4 is None:
+                raise UrlRefused("the address has a host that is not a valid IPv4 address")
+            host = ipv4
         local = host == "localhost" or host.endswith(LOCAL_SUFFIXES) or _local_address(host)
         if not local and resolve:
             local = _resolves_locally(host)
         return Target(url, host, ("local_resources",) if local else ())
     if scheme in INTERNAL_SCHEMES:
-        privileged = scheme in ("chrome", "resource") or (scheme == "about" and url not in ("about:blank",))
+        # moz-extension: is the Shell's own pages (Settings, Vault, profiles); view-source:
+        # can wrap any of these. Both need the raw-automation opt-in, like about:config.
+        privileged = scheme in ("chrome", "resource", "moz-extension", "view-source") or (
+            scheme == "about" and url not in ("about:blank",)
+        )
         return Target(url, None, ("local_resources", "debugging") if privileged else ("local_resources",))
     if scheme == "javascript":
         raise UrlRefused("javascript: addresses are not opened; scripts need the evaluate tool")

@@ -273,6 +273,22 @@ class Bridge:
             self.require(capability, url, checked=checked)
         return target
 
+    def require_needs(self, url: str, *, checked: list[str]) -> None:
+        """What the address a tab is at needs (local network, the Shell's pages), whatever
+        took it there: a redirect or the page's own navigation never passed require_url."""
+        if not url:
+            return
+        try:
+            target = policy.classify_url(url)
+        except policy.UrlRefused as exc:
+            raise ToolError(f"the tab is at an address agents do not act on: {exc}") from None
+        for capability in target.needs:
+            self.require(capability, url, checked=checked)
+
+    def require_here(self, capability: str, url: str, *, checked: list[str]) -> None:
+        self.require(capability, url, checked=checked)
+        self.require_needs(url, checked=checked)
+
     def list_tools(self) -> list[dict]:
         agent = self._agent()
         if agent is None or agent.get("revoked") or agent.get("paused") or registry.stopped():
@@ -558,6 +574,7 @@ class Bridge:
         self.owner[tab] = owner
         if url:
             bidi.command("browsingContext.navigate", {"context": tab, "url": url, "wait": "complete"}, timeout=60, cancel=cancel)
+            self.require_needs(self._url_of(tab, cancel), checked=checked)  # where a redirect took it
         data = {
             "tab": tab,
             "profile": owner or "AI Workspace",
@@ -615,12 +632,14 @@ class Bridge:
         self.elements.pop(tab, None)
         self.bidi(tab).command("browsingContext.navigate", {"context": tab, "url": url, "wait": "complete"},
                             timeout=60, cancel=cancel)  # fmt: skip
-        return self._ok({"tab": tab, "url": self._url_of(tab, cancel), "title": self._title(tab, cancel)}), url
+        final = self._url_of(tab, cancel)
+        self.require_needs(final, checked=checked)  # where a redirect took it
+        return self._ok({"tab": tab, "url": final, "title": self._title(tab, cancel)}), url
 
     def _t_page_read(self, args, cancel, checked):
         tab = args["tab"]
         url = self._url_of(tab, cancel)
-        self.require("read_pages", url, checked=checked)
+        self.require_here("read_pages", url, checked=checked)
         limit = args.get("max_chars", 20000)
         page = self._eval(tab, READ_EXPR % (limit + 1), cancel)
         text = page.get("text") or ""
@@ -631,7 +650,7 @@ class Bridge:
     def _t_page_snapshot(self, args, cancel, checked):
         tab = args["tab"]
         url = self._url_of(tab, cancel)
-        self.require("read_pages", url, checked=checked)
+        self.require_here("read_pages", url, checked=checked)
         pairs = self._call_fn(tab, SNAPSHOT_FN, [{"type": "number", "value": args.get("max_elements", 200)}], cancel)
         mapping, elements = {}, []
         for index, (node, info) in enumerate(pairs or [], start=1):
@@ -645,7 +664,7 @@ class Bridge:
     def _t_screenshot(self, args, cancel, checked):
         tab = args["tab"]
         url = self._url_of(tab, cancel)
-        self.require("screenshots", url, checked=checked)
+        self.require_here("screenshots", url, checked=checked)
         png = self.bidi(tab).command("browsingContext.captureScreenshot", {"context": tab}, cancel=cancel)["data"]
         data = {"tab": tab, "url": url, "bytes": len(png) * 3 // 4}
         return self._ok(data, f"Screenshot of {url}", [{"type": "image", "data": png, "mimeType": "image/png"}]), url
@@ -654,7 +673,7 @@ class Bridge:
         tab = args["tab"]
         url = self._url_of(tab, cancel)
         element = self._element(tab, args["element"])
-        self.require("interact", url, checked=checked)
+        self.require_here("interact", url, checked=checked)
         info = self._call_fn(tab, INSPECT_FN, [element], cancel)
         if not info.get("connected"):
             raise ToolError("the element is gone; call page_snapshot again")
@@ -681,7 +700,7 @@ class Bridge:
         tab = args["tab"]
         url = self._url_of(tab, cancel)
         element = self._element(tab, args["element"])
-        self.require("interact", url, checked=checked)
+        self.require_here("interact", url, checked=checked)
         if args.get("submit"):
             self.require("submit_forms", url, checked=checked)
         info = self._call_fn(tab, INSPECT_FN, [element], cancel)
@@ -709,7 +728,7 @@ class Bridge:
     def _t_dialog(self, args, cancel, checked):
         tab = args["tab"]
         url = self._url_of(tab, cancel)
-        self.require("interact", url, checked=checked)
+        self.require_here("interact", url, checked=checked)
         if self._open_dialog(tab) is None:
             raise ToolError("no dialog is open in that tab")
         params = {"context": tab, "accept": bool(args["accept"])}
@@ -735,7 +754,7 @@ class Bridge:
         tab = args["tab"]
         url = self._url_of(tab, cancel)
         element = self._element(tab, args["element"])
-        self.require("files", url, checked=checked)
+        self.require_here("files", url, checked=checked)
         if self._owner(tab):
             raise ToolError("uploads work only in the AI Workspace, from its uploads folder")
         folder = _uploads(self).resolve()
@@ -750,7 +769,7 @@ class Bridge:
     def _t_evaluate(self, args, cancel, checked):
         tab = args["tab"]
         url = self._url_of(tab, cancel)
-        self.require("execute_js", url, checked=checked)
+        self.require_here("execute_js", url, checked=checked)
         value = self._eval(tab, args["expression"], cancel)
         text = json.dumps(value, ensure_ascii=False, default=str)
         if len(text) > 100_000:

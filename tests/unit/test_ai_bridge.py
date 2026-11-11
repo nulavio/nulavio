@@ -7,6 +7,7 @@ and Codex runs in tests/integration/test_ai_agents_real.py (opt-in).
 from __future__ import annotations
 
 import base64
+import contextlib
 import datetime as _dt
 import hashlib
 import io
@@ -221,6 +222,28 @@ class AddressTest(unittest.TestCase):
                     "https://example.org/\nx", "ftp://example.org/", "x" * 9000):  # fmt: skip
             with self.assertRaises(policy.UrlRefused, msg=url):
                 policy.classify_url(url, resolve=False)
+
+    def test_forms_the_engine_reads_differently_are_refused_or_classified_alike(self):
+        # Audit A1 (2026-11-10): Python's parser and the engine's disagreed on these hosts.
+        for url in ("http://192.168.1.1\\.x.example/", "http://%31%32%37.0.0.1:8080/", "http://evil.example\\.intranet.example/",
+                    "http://1.2.3.4.5/", "http://999.1/"):  # fmt: skip
+            with self.assertRaises(policy.UrlRefused, msg=url):
+                policy.classify_url(url, resolve=False)
+        for url in ("http://127.1/", "http://0x7f.0.0.1/", "http://0177.0.0.1/", "http://2130706433/", "http://１２７.0.0.1/",
+                    "http://localhost./", "http://10.0.0.1./", "http://[::ffff:127.0.0.1]/"):  # fmt: skip
+            self.assertIn("local_resources", policy.classify_url(url, resolve=False).needs, url)
+        self.assertEqual(policy.classify_url("http://[::ffff:8.8.8.8]/", resolve=False).needs, ())
+
+    def test_a_name_that_does_not_resolve_here_counts_as_local(self):
+        # The engine may resolve it where this process cannot (DoH, a proxy).
+        with mock.patch.object(policy.socket, "getaddrinfo", side_effect=OSError("no answer")):
+            self.assertIn("local_resources", policy.classify_url("https://nas.example/").needs)
+
+    def test_the_shells_own_pages_need_raw_automation(self):
+        # Audit A2: Settings, Vault and profile pages were reachable with local_resources alone.
+        for url in ("moz-extension://0e3a/settings/settings.html#profiles", "moz-extension://0e3a/vault/unlock.html",
+                    "view-source:https://example.org/"):  # fmt: skip
+            self.assertEqual(policy.classify_url(url).needs, ("local_resources", "debugging"), url)
 
     def test_origin_drops_path_and_query(self):
         self.assertEqual(policy.origin("https://bank.example:8443/acct?id=123#x"), "https://bank.example:8443")
@@ -483,6 +506,43 @@ class AuditTest(Home):
             audit.record(tool="a")
             audit.record(tool="b")
         self.assertTrue(audit.audit_path().with_suffix(".jsonl.1").exists())
+
+    def test_tools_check_where_the_tab_is_now(self):
+        # Audit A1/A2: a redirect or the page's own navigation put the tab where navigate would
+        # have asked; reading it, or acting on it, now needs the same capabilities.
+        def at(url, **more):
+            stack = contextlib.ExitStack()
+            stack.enter_context(mock.patch.object(tools.Bridge, "_url_of", return_value=url))
+            for name in ("_eval", "_call_fn", "bidi"):
+                patch = {"return_value": more[name]} if name in more else {"side_effect": AssertionError("ran")}
+                stack.enter_context(mock.patch.object(tools.Bridge, name, **patch))
+            stack.enter_context(mock.patch.object(tools.Bridge, "_open_dialog", return_value=None))
+            return stack
+
+        agent, _ = registry.add("here", "other", "full_control", accept_full_control=True)
+        bridge = tools.Bridge(agent["id"], "s-1", approver=registry.Approver())
+        bridge.elements["t1"] = {"e1": "shared-1"}
+        calls = (
+            ("page_read", {"tab": "t1"}),
+            ("screenshot", {"tab": "t1"}),
+            ("click", {"tab": "t1", "element": "e1"}),
+            ("evaluate", {"tab": "t1", "expression": "1"}),
+        )
+        for url in ("moz-extension://0e3a/settings/settings.html#profiles", "about:config"):
+            for name, args in calls:
+                with self.subTest(url=url, tool=name), at(url):
+                    result = bridge.call(name, args)
+                    self.assertTrue(result["isError"], result)
+                    entry = json.loads(audit.audit_path().read_text().splitlines()[-1])
+                    self.assertEqual(entry["decision"], "deny")
+                    self.assertIn("debugging", json.dumps(entry))
+        restricted, _ = registry.add("near", "other", "restricted")
+        bridge = tools.Bridge(restricted["id"], "s-1", approver=registry.Approver())
+        with at("http://192.168.1.1/"):
+            self.assertTrue(bridge.call("page_read", {"tab": "t1"})["isError"])
+        page = {"text": "ok", "url": "https://example.org/", "title": "t"}
+        with at("https://example.org/", _eval=page):
+            self.assertFalse(bridge.call("page_read", {"tab": "t1"})["isError"])
 
     def test_denied_call_is_audited_without_arguments(self):
         agent, _ = registry.add("d", "other", "assisted")
