@@ -650,6 +650,8 @@ class DownloadPagesTest(unittest.TestCase):
                 self.assertNotIn("<script", html)
                 self.assertNotIn("style=", html)
                 self.assertIn(values["key_fpr"], html)
+                # The key from the release assets is checked against that fingerprint before import (audit R5).
+                self.assertLess(html.index("gpg --show-keys --with-fingerprint"), html.index("gpg --import"))
                 self.assertIn("dnf config-manager addrepo --from-repofile=https://nulavio.net/rpm/nulavio.repo", html)
                 self.assertIn("159.0.1-0.1", html)
                 for url in re.findall(r'(?:src|href|srcset)="(https?://[^"]+)"', html):
