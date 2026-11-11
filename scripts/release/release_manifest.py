@@ -28,6 +28,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 EMPTY_DIFF = hashlib.sha256(b"").hexdigest()
+# The portable archive of the same tree (GitHub release asset; the Flatpak is built from it).
+ARCHIVE_SUFFIX = ".linux-x86_64.tar.xz"
 RPM = re.compile(r"^nulavio-(?P<version>\d+(?:\.\d+)+)-(?P<release>[0-9.]+)\.[a-z0-9_]+\.x86_64\.rpm$")
 
 
@@ -155,6 +157,7 @@ def verify(out: Path, repo: Path, ref: str) -> dict:
         "firefox": manifest["firefox"],
         "commit": manifest["nulavio_base_commit"],
         "rpms": rpms,
+        "archives": [e["file"] for e in manifest["packages"] if e["file"].endswith(ARCHIVE_SUFFIX)],
         "sboms": [e["file"] for e in manifest["sboms"]],
     }
 
@@ -162,7 +165,9 @@ def verify(out: Path, repo: Path, ref: str) -> dict:
 def check_packages(manifest_path: Path, packages: Path) -> list[str]:
     manifest = load(manifest_path)
     listed = {e["sha256"] for e in manifest["packages"]}
-    found = sorted([*packages.rglob("nulavio-*.rpm"), *packages.rglob("nulavio_*.deb")])
+    found = sorted(
+        [*packages.rglob("nulavio-*.rpm"), *packages.rglob("nulavio_*.deb"), *packages.rglob(f"nulavio-*{ARCHIVE_SUFFIX}")]
+    )
     if not found:
         raise ManifestError(f"{packages}: no Nulavio packages")
     extra = [str(p.relative_to(packages)) for p in found if sha256(p) not in listed]

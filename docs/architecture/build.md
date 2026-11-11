@@ -269,6 +269,25 @@ Goal: release builds signed by CI after the maintainer approves the run, so a Fi
 
 The maintainer then publishes the draft (which creates the tag), sets `version` in `packaging/release.json` by pull request (the site workflow rebuilds the download pages), and adds the changelog entry; the job summary lists these steps. `publish: false` stops after the build: a rehearsal in CI. The build machine never holds the signing role or the upload token.
 
+### Flatpak (Flathub)
+
+The Flatpak `net.nulavio.Nulavio` packages the same signed build as the RPM: the portable archive `nulavio-<firefox>-<release>.linux-x86_64.tar.xz` that `rehearse_release.sh` makes from the installed tree (sorted, owner 0, the commit's time), that the manifest lists with its SHA-256 and that `publish_release.sh` attaches to the GitHub release. It is not built from source on Flathub: a Firefox build does not fit Flathub's builders, and the binary then differs from the one the RPM users run (Mozilla's and LibreWolf's Flatpaks do the same).
+
+`scripts/release/flatpak_manifest.py` writes the build directory (manifest `net.nulavio.Nulavio.json`, desktop entry renamed to the app ID, AppStream metadata from `packaging/flatpak/` with this release, entry point, Flatpak-only preferences). Runtime `org.freedesktop.Platform` 26.08; its `codecs-extra` extension brings the patented codecs.
+
+| Permission | Why |
+|---|---|
+| `--share=network`, `--share=ipc`, `--socket=wayland`, `--socket=fallback-x11`, `--socket=pulseaudio`, `--device=all`, `--socket=pcsc` | A browser: network, display, sound, cameras and FIDO2 security keys (WebAuthn), smart cards; as Mozilla's Flatpak |
+| `--persist=.nulavio`, `--filesystem=xdg-download` | Profiles stay in the app's own directory (`~/.var/app/net.nulavio.Nulavio`); downloads go to the Downloads folder; nothing else of the home |
+| `--talk-name=org.freedesktop.NativeMessagingProxy` with the preference `widget.use-xdg-desktop-portal.native-messaging-proxy=1` | Password-manager apps (KeePassXC, Bitwarden) through `xdg-native-messaging-proxy` on the host ([spike](../security/phase5-spikes.md#flatpak-and-native-messaging)) |
+| `--own-name=org.mozilla.nulavio.*`, `--talk-name=org.freedesktop.FileManager1`, `org.a11y.Bus`, NetworkManager (system bus) | Remoting (a second start opens a window in the running browser), "show in folder", accessibility, online state |
+
+Not in the Flatpak: the Vault (it needs `gocryptfs` and FUSE on the host), `nulavio run --confined` (bubblewrap inside the sandbox), and the Connect features that talk to desktop services over D-Bus (KRunner, KDE Connect, activities). The AppStream text says so. `tests/unit/test_flatpak.py` refuses permissions that undo the sandbox (the home, the host, any D-Bus name, the Flatpak service).
+
+Every release run builds it: the `flatpak` job of `release.yml` builds and installs it from the archive that run made with Flathub's own builder (`org.flatpak.Builder`), runs `flatpak-builder-lint` on the manifest and the repository, and `check_flatpak.sh` starts it headless in the sandbox and requires a rendered page. Measured on 2026-11-11 with the 159.0 tree: builds, renders, manifest lint clean. The `publish` job writes the Flathub manifest (`--url`: the GitHub release asset and its SHA-256) into the `published` artifact.
+
+Submitting to Flathub (once, by the maintainer): open a pull request to `flathub/flathub` (branch `new-pr`) with that folder; after it is merged, Flathub creates the repository `flathub/net.nulavio.Nulavio`, where each release is a pull request with the new folder. Verify the app on Flathub's developer page: it gives a token to serve at `https://nulavio.net/.well-known/org.flathub.VerifiedApps.txt`.
+
 ### Publishing a release
 
 | Step | Command | What it does |

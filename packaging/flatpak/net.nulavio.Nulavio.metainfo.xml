@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- AppStream metadata for the Flatpak (Flathub). scripts/release/flatpak_manifest.py
+     fills in <releases> for the release it packages. -->
+<component type="desktop-application">
+  <id>net.nulavio.Nulavio</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MPL-2.0</project_license>
+  <name>Nulavio</name>
+  <summary>The Linux browser that is protected from the start</summary>
+  <summary xml:lang="pt-BR">O navegador para Linux que já vem protegido</summary>
+  <developer id="net.nulavio">
+    <name>Nulavio</name>
+  </developer>
+  <description>
+    <p>
+      Nulavio is an open-source desktop browser for Linux, built from Mozilla's
+      signature-verified Firefox source. It blocks ads and trackers from the first
+      launch, keeps each part of your life in its own profile, and sends nothing to
+      servers of its own: there is no telemetry and no Nulavio account.
+    </p>
+    <ul>
+      <li>Ad and tracker blocking from the first start</li>
+      <li>Profiles for work, personal life and sensitive sites, each with its own color</li>
+      <li>Firefox's engine and extensions, with security updates within days of Mozilla's</li>
+    </ul>
+    <p>
+      In the Flatpak, the encrypted profiles (Vault) and the confined mode are not
+      available: they need programs outside the sandbox. Password-manager apps work
+      when the system has xdg-native-messaging-proxy.
+    </p>
+  </description>
+  <launchable type="desktop-id">net.nulavio.Nulavio.desktop</launchable>
+  <url type="homepage">https://nulavio.net/en/</url>
+  <url type="bugtracker">https://github.com/nulavio/nulavio/issues</url>
+  <url type="vcs-browser">https://github.com/nulavio/nulavio</url>
+  <url type="help">https://github.com/nulavio/nulavio/discussions</url>
+  <screenshots>
+    <screenshot type="default">
+      <caption>A work profile: the band names the profile, tabs on the side</caption>
+      <image>https://nulavio.net/assets/flathub/window-en-US-light.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>The same window in the dark theme</caption>
+      <image>https://nulavio.net/assets/flathub/window-en-US-dark.png</image>
+    </screenshot>
+  </screenshots>
+  <branding>
+    <color type="primary" scheme_preference="light">#F1F7F5</color>
+    <color type="primary" scheme_preference="dark">#0B1623</color>
+  </branding>
+  <categories>
+    <category>Network</category>
+    <category>WebBrowser</category>
+  </categories>
+  <provides>
+    <binary>nulavio</binary>
+  </provides>
+  <supports>
+    <control>pointing</control>
+    <control>keyboard</control>
+    <control>touch</control>
+  </supports>
+  <requires>
+    <display_length compare="ge">768</display_length>
+  </requires>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <!-- releases -->
+  </releases>
+</component>

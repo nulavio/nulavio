@@ -17,6 +17,10 @@ name: release
 #    files and drafts the GitHub release. The maintainer reviews and publishes the
 #    draft, then does the steps in the job summary (release.json, site, changelog).
 #
+# 3. flatpak (GitHub-hosted, no secrets): builds net.nulavio.Nulavio from the portable
+#    archive with Flathub's builder, lints it and starts it in the sandbox
+#    (packaging/flatpak/, docs/architecture/build.md#flatpak-flathub).
+#
 # The signing job never runs on the build machine: Blacksmith sees the code and the
 # Safe Browsing key (it ships inside the browser anyway), never the release key or
 # the upload token. "publish: false" stops after the build (a rehearsal in CI).
@@ -93,6 +97,7 @@ jobs:
           subject-path: |
             ${{ runner.temp }}/rehearsal/packages/x86_64/nulavio-*.rpm
             ${{ runner.temp }}/rehearsal/packages/nulavio_*.deb
+            ${{ runner.temp }}/rehearsal/packages/nulavio-*.linux-x86_64.tar.xz
             ${{ runner.temp }}/rehearsal/manifest.json
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -103,6 +108,38 @@ jobs:
             ${{ runner.temp }}/rehearsal/packages/
           if-no-files-found: error
           retention-days: 30
+
+  flatpak:
+    name: Flatpak from the portable archive (test build and Flathub's linter)
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: rehearsal
+          path: ${{ runner.temp }}/rehearsal
+      - name: Flatpak and Flathub's builder (org.flatpak.Builder, with flatpak-builder-lint)
+        run: |
+          sudo apt-get update -q && sudo apt-get install -y --no-install-recommends flatpak dbus-daemon
+          flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+          flatpak install --user -y --noninteractive flathub org.flatpak.Builder
+      - name: Build and install net.nulavio.Nulavio from the archive this run built
+        run: |
+          archive=$(find "$RUNNER_TEMP/rehearsal/packages" -maxdepth 1 -name 'nulavio-*.linux-x86_64.tar.xz')
+          python3 -I scripts/release/flatpak_manifest.py --archive "$archive" --out "$RUNNER_TEMP/flatpak"
+          cd "$RUNNER_TEMP/flatpak"
+          flatpak run --command=flatpak-builder-lint org.flatpak.Builder manifest net.nulavio.Nulavio.json
+          dbus-run-session -- flatpak run org.flatpak.Builder --user --sandbox --disable-rofiles-fuse --force-clean --install --install-deps-from=flathub \
+            --mirror-screenshots-url=https://dl.flathub.org/media/ --repo=repo builddir net.nulavio.Nulavio.json
+          flatpak run --command=flatpak-builder-lint org.flatpak.Builder repo repo
+      - name: The browser starts in the sandbox and renders a page
+        run: scripts/release/check_flatpak.sh
 
   publish:
     name: sign through KMS and publish (maintainer approval)
@@ -131,7 +168,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           OUT=$RUNNER_TEMP/rehearsal
-          for file in "$OUT"/manifest.json "$OUT"/packages/x86_64/nulavio-*.rpm "$OUT"/packages/nulavio_*.deb; do
+          for file in "$OUT"/manifest.json "$OUT"/packages/x86_64/nulavio-*.rpm "$OUT"/packages/nulavio_*.deb \
+              "$OUT"/packages/nulavio-*.linux-x86_64.tar.xz; do
             gh attestation verify "$file" --repo "$GITHUB_REPOSITORY" \
               --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release.yml" --source-ref refs/heads/main >/dev/null
             echo "provenance ok: ${file#"$OUT"/}"
@@ -160,6 +198,10 @@ jobs:
       - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-path: ${{ runner.temp }}/publish/github/*
+      - name: Flathub manifest for this release (downloads the archive from the GitHub release)
+        run: |
+          archive=$(find "$RUNNER_TEMP/publish/github" -maxdepth 1 -name 'nulavio-*.linux-x86_64.tar.xz')
+          python3 -I scripts/release/flatpak_manifest.py --archive "$archive" --url --out "$RUNNER_TEMP/flathub"
       - name: Draft the GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -179,11 +221,14 @@ jobs:
             printf '1. Review and publish the draft release %s (creates the tag).\n' "$tag"
             printf '2. Set "version" in packaging/release.json to %s (pull request); the site workflow rebuilds the download pages.\n' "${tag#v}"
             printf '3. Add the entry to docs/security/changelog.md (hours to "published").\n'
+            printf '4. Flathub: copy the flathub/ folder of the "published" artifact into the net.nulavio.Nulavio repository (pull request).\n'
           } >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: published
-          path: ${{ runner.temp }}/publish/
+          path: |
+            ${{ runner.temp }}/publish/
+            ${{ runner.temp }}/flathub/
           if-no-files-found: ignore
           retention-days: 90

@@ -82,6 +82,7 @@ class ReleaseWorkflowTest(unittest.TestCase):
     def setUp(self):
         self.text = WORKFLOW.read_text(encoding="utf-8")
         self.build, self.publish = self.text.split("\n  publish:\n", 1)
+        self.build, self.flatpak = self.build.split("\n  flatpak:\n", 1)
 
     def test_manual_from_main_with_approval_before_signing(self):
         self.assertIn("on:\n  workflow_dispatch:", self.text)
@@ -97,6 +98,17 @@ class ReleaseWorkflowTest(unittest.TestCase):
             self.assertNotIn(secret, self.build)
         self.assertIn("runs-on: ubuntu-24.04", self.publish)
         self.assertNotIn("GOOGLE_SAFEBROWSING", self.publish)
+
+    def test_the_flatpak_is_built_and_started_from_this_run_without_secrets(self):
+        self.assertIn("needs: build", self.flatpak)
+        self.assertIn("runs-on: ubuntu-24.04", self.flatpak)
+        for held in ("secrets.", "environment:", "id-token", "configure-aws-credentials"):
+            self.assertNotIn(held, self.flatpak)
+        self.assertIn("flatpak-builder-lint org.flatpak.Builder manifest", self.flatpak)
+        self.assertIn("flatpak-builder-lint org.flatpak.Builder repo", self.flatpak)
+        self.assertIn("scripts/release/check_flatpak.sh", self.flatpak)
+        self.assertIn("flatpak_manifest.py --archive", self.publish)
+        self.assertIn("--url", self.publish)
 
     def test_provenance_is_checked_before_signing_and_the_release_is_a_draft(self):
         verify = self.publish.index("gh attestation verify")
