@@ -4,6 +4,7 @@
 
 import { localize, t } from "../lib/i18n.js";
 import { TEMPLATE_NAMES, freeName, templateHintKey } from "../lib/names.js";
+import { providerName, providerStatus } from "../lib/providers.js";
 import {
   announce,
   avatarPicker,
@@ -783,28 +784,6 @@ function setUpIntegrations() {
 // -- passwords (flows B and H) ------------------------------------------------
 
 const passwords = browser.nulavioPasswords;
-
-function providerName(item) {
-  return item.key === "builtin" ? t("passwordsBuiltin") : item.extension.name;
-}
-
-function providerStatus(item) {
-  if (item.key === "builtin") {
-    return t("passwordsBuiltinNote");
-  }
-  const ext = item.extension;
-  const parts = [
-    ext.enabled
-      ? t("passwordsInstalled", [ext.version])
-      : ext.installed
-        ? t("passwordsInstalledOff")
-        : t("passwordsNotInstalled", [ext.pinned]),
-  ];
-  if (item.native && !item.native.found) {
-    parts.push(t(item.native.required ? "passwordsNativeMissing" : "passwordsNativeOptional"));
-  }
-  return parts.join(" ");
-}
 
 function providerRow(item, state) {
   const inUse = state.current === item.key;

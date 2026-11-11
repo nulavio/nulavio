@@ -1041,21 +1041,24 @@ From the experience review of 2026-11 ([references](references/2026-11/README.md
 
 In every layout, mode and page the band is the one row only the browser draws. What it carries, left to right: the profile and its protection; in the middle, the trusted name of a Nulavio page **or**, when the address bar is out of view, the site (host as the engine displays it, the registrable part emphasised, the connection state in words when it is not secure); the state seals on the right. No mode hides it, shrinks it to nothing or makes it translucent (`test_experience_rules`: no mode hides the band). The registrable domain is never cut: the row grows first, and if that is not enough the toolbar stays.
 
-### The stage (first run, prototype)
+### The stage (first run)
 
 A stage is a page that owns the window for a sequence the person must finish or dismiss. Today there is one: the first run.
 
 | Rule | Value |
 |---|---|
 | Window | The band and the page. The toolbar and the tabs are out of view and return to the pointer and the keyboard, as in Imersivo. The band names the stage ("Nulavio · Boas-vindas") |
-| Card | One, centred, the same size on every step: 46 rem wide at most, 29 rem high at least, `space.7` padding. Its place does not change between steps |
-| Content | One decision per step. A choice is drawn as the thing itself when it can be (the layout step). At most two sentences before the choice |
-| Actions | In one place on every step: the bottom of the card, primary first. One primary. "Not now" is a quiet button, never a link in the text |
-| First screen | What the product is in one sentence that points at the band; two exits, "set up" and "use the defaults", and the defaults said in one line |
+| Card | One, centred, the same size and place on every step: 64 rem wide at most, 34 rem high. Two panes, 5 to 6: on the left what is asked and, at the bottom, the actions; on the right, on the sunken tone, the choice itself. Below 52 rem of width or 40 rem of height the panes stack (asked, choice, actions) and the page scrolls |
+| Parts | Every card has the same three, in reading and keyboard order: `.firstrun__say` (title, at most two sentences), `.firstrun__show` (the choice or the picture), `.firstrun__do` (errors, then the actions). No part cuts its content: `test_firstrun_stage` checks it on every step and in a short window |
+| Content | One decision per step. A choice is drawn as the thing itself when it can be: the layouts as miniatures, the band as this window drawn small with the real profile and state, read and never invented. An example (a protected profile's band) is labelled as one and is not read to assistive technology |
+| Options | A choice among a few things, each said in a line or two: `.options` of `.option`. A radio card when one is picked and applied by the main action (DNS); a row with its own secondary button when choosing acts at once (password managers). The one in use wears the accent, a ring and a word ("Como está agora", "em uso"), never colour alone. An option that gives a protection up says so in its name |
+| Actions | In one place on every step: the bottom of the left pane, the main one first, full width. One primary. "Agora não" and "Decidir depois" are quiet buttons, never links in the text. Nothing changes before the main action, except where the step says the choice applies at once (the layout, a manager's "Usar este") |
+| First screen | What the product is in one sentence that points at the band; two exits, "set up" and "use the defaults", and the defaults said in one line under them. A profile that is not the browser's first says "Perfil novo: …" instead of welcoming again |
 | Facts | Only what was read and is true now. A fact still arriving is not shown as a warning and not shown as done: it is read again where the sequence ends |
-| Progress | "Etapa N de M" above the card; its line keeps its height on the steps that have no number |
+| Progress | "Etapa N de M" centred under the card; its line keeps its height on the steps that have no number |
+| Focus | When a step comes after an answer, the keyboard goes to it: to the main action where going on is the likely answer (welcome, layout, default browser, summary), to the title as a reading position (an underline, not a ring) where the step asks to read first (DNS, passwords, the protected profile) |
 | Motion | None between steps. The card does not slide, fade or resize |
-| Who is never staged | Private windows, temporary profiles, AI Workspaces, any tab other than the first run's |
+| Who is never staged | Private windows, temporary profiles, AI Workspaces, any tab other than the first run's. A page the first run opens (the Vault's steps) is an ordinary tab with the address bar |
 
 ### Motion: chrome that hides (ADR 0009)
 

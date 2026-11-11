@@ -96,7 +96,9 @@ class DnsChoiceTest(unittest.TestCase):
         self.open("newtab/newtab.html")
         self.assertFalse(self.m.execute("return document.getElementById('dns-choice').hidden;"))
         self.shoot("newtab-choice")
-        self.m.execute("document.getElementById('dns-keep-system').click();")
+        # The option in use is the one checked: the main action keeps it, as the choice it now is.
+        self.assertEqual(self.card()["options"], [["system", True, True], ["fallback", False, False]])
+        self.m.execute("document.getElementById('dns-apply').click();")
         self.assertTrue(harness.wait_until(lambda: self.m.execute("return document.getElementById('dns-choice').hidden;"), 10))
         self.assertEqual(
             self.m.execute("return document.querySelector('[data-status=dns]').textContent;"), "Resolvedor do computador"
@@ -154,6 +156,10 @@ class DnsChoiceTest(unittest.TestCase):
             "const card = document.getElementById('dns-choice');"
             "const shown = [...card.querySelectorAll('button, a.button')].filter(b => !b.closest('[hidden]'));"
             "return {hidden: card.hidden, encrypted: card.dataset.encrypted,"
+            " options: [...card.querySelectorAll('.option')].map(o => [o.dataset.value,"
+            "   o.querySelector('input').checked, Boolean(o.querySelector('.badge'))]),"
+            " titles: Object.fromEntries([...card.querySelectorAll('.option')].map(o => [o.dataset.value,"
+            "   o.querySelector('.option__title > span').textContent])),"
             " buttons: shown.map(b => [b.id, b.textContent.trim(), b.classList.contains('button--primary')])};"
         )
 
@@ -169,18 +175,14 @@ class DnsChoiceTest(unittest.TestCase):
             self.open("newtab/newtab.html")
             card = self.card()
             self.assertEqual((card["hidden"], card["encrypted"]), (False, "true"))
-            ids = [b[0] for b in card["buttons"]]
-            self.assertEqual(ids, ["dns-keep-encrypted", "dns-choose-other", "dns-use-system"])
-            labels = dict((b[0], b[1]) for b in card["buttons"])
-            self.assertEqual(labels["dns-keep-encrypted"], "Manter criptografado (padrão atual)")
-            self.assertEqual(labels["dns-choose-other"], "Escolher outro resolvedor…")
-            self.assertEqual(labels["dns-use-system"], "Usar o resolvedor do computador (sem criptografia)")
-            self.assertEqual([b[0] for b in card["buttons"] if b[2]], ["dns-keep-encrypted"], "keeping is the primary action")
-            for button_id, label in labels.items():
-                if button_id != "dns-keep-encrypted":
-                    self.assertNotIn("manter", label.lower(), "a change is never labelled as keeping")
+            # What is in use (encrypted) is the option checked and marked; the others are changes, and the
+            # one that gives the encryption up says so in its name.
+            self.assertEqual(card["options"], [["keep", True, True], ["fallback", False, False], ["system", False, False]])
+            self.assertEqual(card["titles"]["keep"], "Com criptografia, pelo padrão do navegador")
+            self.assertEqual(card["titles"]["system"], "A sua rede responde, sem criptografia")
+            self.assertEqual([b[0] for b in card["buttons"] if b[2]], ["dns-apply"], "one main action")
             self.shoot("newtab-choice-encrypted")
-            self.m.execute("document.getElementById('dns-keep-encrypted').click();")
+            self.m.execute("document.getElementById('dns-apply').click();")
             self.assertTrue(
                 harness.wait_until(lambda: self.m.execute("return document.getElementById('dns-choice').hidden;"), 10)
             )
@@ -190,7 +192,9 @@ class DnsChoiceTest(unittest.TestCase):
             # The downgrade, when the person picks it, is the computer's resolver, off by choice.
             self.m.chrome("Services.prefs.clearUserPref('nulavio.dns.chosen');")
             self.open("newtab/newtab.html")
-            self.m.execute("document.getElementById('dns-use-system').click();")
+            self.m.execute("document.querySelector('#dns-options [data-value=system] input').click();")
+            self.assertEqual(self.state()["choice"], "default", "picking an option changed the resolver")
+            self.m.execute("document.getElementById('dns-apply').click();")
             self.assertTrue(harness.wait_until(lambda: self.state()["choice"] == "system", 10))
             self.assertEqual(self.m.chrome("return Services.prefs.getIntPref('network.trr.mode');"), 5)
         finally:

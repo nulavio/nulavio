@@ -108,7 +108,7 @@ export const DNS_PROVIDERS = Object.freeze([
 export const PREF_DNS_CHOSEN = "nulavio.dns.chosen";
 /* The new tab's first run (audit 2026-11 FR-01): the steps answered or skipped, comma-separated. */
 export const PREF_FIRSTRUN = "nulavio.firstrun.done";
-export const FIRSTRUN_STEPS = Object.freeze(["welcome", "layout", "dns", "passwords", "default-browser", "finished"]);
+export const FIRSTRUN_STEPS = Object.freeze(["welcome", "layout", "dns", "passwords", "default-browser", "profile", "finished"]);
 // NulavioLayout.PREF_SHELL_START: set once, for a genuinely new profile (the layout adoption's rule).
 const PREF_NEW_PROFILE = "nulavio.startpage.shellFirstTab";
 const MODE = { system: Ci.nsIDNSService.MODE_TRROFF, fallback: Ci.nsIDNSService.MODE_TRRFIRST, strict: Ci.nsIDNSService.MODE_TRRONLY };

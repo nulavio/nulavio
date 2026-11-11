@@ -10,8 +10,9 @@
 }
 /* QA B-8: on an 18 px radio or checkbox a 2 px ring reads as thin; give it 3 px */
 input:is([type="radio"], [type="checkbox"]):focus-visible { outline-width: max(3px, var(--nv-state-focusRingWidth)); }
-/* A section title that takes focus from a link (settings nav): visible, without looking like a field. */
-.section__title[tabindex="-1"]:focus-visible {
+/* A title that takes focus as a reading position (from a settings nav link, or when a first-run step comes):
+   visible, without looking like a field. */
+:is(.section__title, .layout-choice__title)[tabindex="-1"]:focus-visible {
   outline: none;
   text-decoration: underline 2px var(--nv-color-focus);
   text-underline-offset: 6px;

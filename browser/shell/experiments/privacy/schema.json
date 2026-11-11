@@ -30,8 +30,8 @@
       {
         "name": "firstRunDone", "type": "function", "async": true,
         "parameters": [{
-          "name": "steps", "type": "array", "maxItems": 6,
-          "items": { "type": "string", "enum": ["welcome", "layout", "dns", "passwords", "default-browser", "finished"] }
+          "name": "steps", "type": "array", "maxItems": 7,
+          "items": { "type": "string", "enum": ["welcome", "layout", "dns", "passwords", "default-browser", "profile", "finished"] }
         }]
       }
     ],

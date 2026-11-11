@@ -33,8 +33,10 @@ Order in each sheet: today, A / B, C.
 5. **The first run is a stage.** In a genuinely new profile, while the first run's page is the selected tab, the window shows the band (naming it "Nulavio · Boas-vindas") and that page only: one card of a fixed size in the middle, one decision in it, the actions in one place. The first screen offers "Configurar em 1 minuto" and "Usar os padrões", with the defaults said in one line. The welcome lists only what is already true; whatever is still arriving is read again for the summary. Any other tab, a private window, a temporary profile and an AI Workspace are never staged, and the toolbar still returns to the pointer and the keyboard.
 6. **Settings are one page** (ADR 0008).
 
-![The first run as a stage, light, pt-BR](../design/screenshots/experience-2026-11/stage-sheet-pt-light.png)
-![The same, dark, en-US](../design/screenshots/experience-2026-11/stage-sheet-en-dark.png)
+![The first run as a stage, light, pt-BR](../design/screenshots/experience-2026-11/firstrun-sheet-pt-light.png)
+![The same, dark, en-US](../design/screenshots/experience-2026-11/firstrun-sheet-en-dark.png)
+
+The captures are of the first-run slice, which gave the card its two panes and the steps their content (the [design system](../design/design-system.md) has the rules, the [journeys](../design/journey-2026-11.md) what each step answers). The prototype this ADR was written with is kept for comparison: [light, pt-BR](../design/screenshots/experience-2026-11/stage-sheet-pt-light.png), [dark, en-US](../design/screenshots/experience-2026-11/stage-sheet-en-dark.png).
 
 ## Independent critique (2026-11-11)
 
@@ -65,5 +67,5 @@ A second model (Antigravity, from the captures only, closed brief) ranked A firs
 Branch `agent/claude/proto-experience-directions`, on the alpha's engine by `dev_sync`:
 
 - `nulavio.proto.direction = surface` draws A; with `nulavio.layout.immersive` it draws B. C was captured and its code removed.
-- The stage: `NulavioWindow` marks the window (`nulavio-stage`) while the selected tab is the Shell's new tab and `NulavioPrivacy.firstRun()` is active; the page marks itself (`data-stage`) while a first-run card is its question. Measured: the card is 688×464 on every step; the page gets 1439×875; when the last step is answered the window is the ordinary one again.
-- `tests/integration/test_firstrun_stage.py` (four tests): the welcome owns the window and lists only true facts; the card keeps its place and size on every step and the ordinary window returns at the end; "Usar os padrões" ends it at once; another tab is never staged. The existing first-run, new-tab, band and layout suites pass with the stage on.
+- The stage: `NulavioWindow` marks the window (`nulavio-stage`) while the selected tab is the Shell's new tab and `NulavioPrivacy.firstRun()` is active; the page marks itself (`data-stage`) while a first-run card is its question. Measured at 1440×900: the card is 976×544 on every step (688×464 in the prototype); the page gets 1439×875; when the last step is answered the window is the ordinary one again.
+- `tests/integration/test_firstrun_stage.py` (nine tests): the welcome owns the window and lists only true facts; the card keeps its place and size on every step, no pane cuts its content, and the ordinary window returns at the end; "Usar os padrões" ends it at once; another tab is never staged; the two panes, and the band drawn small says what the band says; DNS changes nothing before the main action; a password manager is chosen in the card; a protected profile is offered last and made in the Vault's steps; in a short window the panes stack. The existing first-run, new-tab, DNS, vault and layout suites pass with it.

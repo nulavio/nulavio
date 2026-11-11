@@ -6,11 +6,13 @@ Seven journeys a person takes with Nulavio, each walked on the alpha (160.0-0.2 
 - **New-user QA**: a second model (Codex) walked the journeys in a clean profile from a closed brief, with real clicks and its own captures. Its findings are numbered F1–F9 below. Each was checked before it was used; one was a limit of the test launcher and is marked.
 - **Not walked**: said so. Nothing is inferred for those.
 
+**How the browser was started matters, and the first round got it wrong.** The first captures and the new-user QA started the engine on a profile directory (`--profile`), as the test tools do. Started that way the engine's profile service is off: the band says "Perfil padrão", the new tab cannot name the profile, and no profile can be created or opened. The package starts the engine with no such flag. The second round (same day) did the same, in a throwaway home: the profile is "Pessoal", profiles work, and journeys 3 and 4 could be walked. Two things seen in the first round were artefacts of the test session and are marked below: the pink stripes on the address field (F3), and "Senhas" needing attention on the first frame (the automation turns the engine's password saving off; a person starts with it on).
+
 The complaint that started this: "it looks like nobody thought about the journey". The table at the end says where that is true.
 
 ## 1. Install
 
-**Not walked in this round.** The browsers here ran from unpacked packages. What a person meets between the site and the first window (the repository file, the package manager's key prompt, the launcher entry) needs a clean machine or a container with a desktop session. It is the first slice's first task, because the first run below starts where the install ends.
+**Not walked.** The browsers here ran from unpacked packages. What a person meets between the site and the first window (the repository file, the package manager's key prompt, the launcher entry) needs a clean machine or a container with a desktop session. What was walked is the first start as the package makes it (the engine with no flags, in an empty home): the first frame is the welcome below, in a 1280×810 window.
 
 ## 2. First use
 
@@ -20,20 +22,30 @@ The complaint that started this: "it looks like nobody thought about the journey
 | Where the person gets lost | Protected or not? (F1). "Resolvedor" and encrypted DNS with no recommendation in plain words (F2). Three password managers named with no reason to pick one. "Regras de roteamento" mentioned in the last step and never explained. The toolbar, the tab column and the page all compete while a question is being asked |
 | References | Zen: the welcome owns the window, one decision per screen, the choice drawn as the thing itself. Helium: "Use defaults / Configure" on the first screen with the consequence of the default in one line; every option with its trade-off; a password-manager step |
 | To be | **The first run is a stage** ([ADR 0010](../adr/0010-experience-direction.md)): the window shows the band and one card of a fixed size. First screen: what Nulavio is in one sentence that points at the band, then "Configurar em 1 minuto" or "Usar os padrões", with the defaults said in one line. Only facts that are already true are listed; something still arriving (the filter) is read again for the summary, where a real problem is reported as one. Each step keeps the card's place and size and its actions' place. Prototype on the engine: [light, pt-BR](screenshots/experience-2026-11/stage-sheet-pt-light.png), [dark, en-US](screenshots/experience-2026-11/stage-sheet-en-dark.png) |
-| Still to do in the slice | The DNS step in plain words with a recommendation ("Deixar como está" first, said as what it means); the password step with one line per manager and what it costs; a step that shows the band and offers to protect the profile now or later; the choices as pictures in a second pane, as the layout step already is; tests |
+| Built in the first-run slice | The card has two panes, as the references' setup cards do: on the left what is asked and, at the bottom, the actions; on the right the choice itself. The welcome draws this window small with its real band (the profile and its state are read, not drawn). DNS is asked as "Quem responde quando você procura um site?", with the option in use checked and marked "Como está agora", the encrypted service picked in the card, nothing changed before "Continuar", and one line of advice ("Na dúvida, deixe como está"). Password managers are rows with one line each and "Usar este" in the row; "Continuar" goes on with whatever is in use. The last question is "Quer um perfil com senha?" (journey 3). A second profile's welcome says "Perfil novo: …" and that its choices are its own. Captures: [light, pt-BR](screenshots/experience-2026-11/firstrun-sheet-pt-light.png), [dark, en-US](screenshots/experience-2026-11/firstrun-sheet-en-dark.png); tests in `test_firstrun_stage` |
+| Still open | No way back to a step already answered (both references have one; here each answer applies at once and the summary points to Settings). The window shows its full frame for a moment before the stage takes it, when a profile's first window opens |
 
 ## 3. Create and protect a profile
 
 | | |
 |---|---|
-| Today | Reached from "Perfis" in Nulavio's settings, from the band's menu or from the profile manager. Creating, the recovery code, locking and unlocking exist as their own pages, named in the band ("Nulavio · Desbloqueio") |
-| Walked | **Not walked end to end in this round.** The clean-profile launcher starts with `--profile`, and in that mode the profile manager refuses to switch and says so in the launcher's terms (F6). That refusal is correct, but the page still offers "Abrir o gerenciador completo", which leads to the same refusal |
-| Where the person gets lost | The first run never says profiles exist. A person who finds "Perfil padrão · Sem senha" in the band has no next step offered there. Under `--profile` the manager link is a dead end |
-| To be | The first run's band step. In the band's menu, "Sem senha" is followed by "Proteger este perfil". In the unified settings, "Perfis e proteção" is the second pane ([ADR 0008](../adr/0008-one-settings-page.md)). Under `--profile` the manager link is not offered; the page says in plain words that this window was opened for one profile |
+| Today | Reached from "Perfis" in Nulavio's settings, from the band's menu or from the profile manager. Creating, the recovery code, locking and unlocking exist as their own pages, named in the band ("Nulavio · Novo perfil protegido", "Nulavio · Desbloqueio") |
+| Walked (second round) | Three steps: name and template; a password (at least 8 characters, typed twice), or the computer's login; the recovery code in 7 numbered groups, with two of them asked back before the page goes on. A wrong group is caught in words. The last screen says "Bancos está criptografado e bloqueado. Ele abre depois que você desbloquear." and offers "Abrir Bancos" |
+| Where the person gets lost | **"Abrir Bancos" answered "Esse perfil está bloqueado. Desbloqueie primeiro." and stopped** (the page asked to switch to a profile it had just created locked). Fixed in the first-run slice: the button opens the profile's unlock page, as the profile menu and Settings do. The first run never said profiles exist; a person who read "Pessoal · Sem senha" in the band had no next step offered |
+| To be | The first run's last question, "Quer um perfil com senha?", says what this profile is, what a protected one is in the Vault's own words, and opens the Vault's steps in their own tab (built). In the unified settings, "Perfis e proteção" is the second pane ([ADR 0008](../adr/0008-one-settings-page.md)). In a window started for one profile directory the question is not asked, and the manager link there should not be offered (F6, still open) |
 
 ## 4. Unlock
 
-**Not walked in this round** (it needs a protected profile, see 3). The frontend audit of 2026-11 covered the unlock page's states and found no HIGH or MEDIUM defect in the page itself. Its journey (cold start to first page, a wrong password, the phone) is part of the profile slice's QA.
+![Creating a protected profile, the unlock page, the engine's chooser at a cold start and what choosing the locked profile there gives, the profile's own window](screenshots/experience-2026-11/journey-profile-unlock-pt-light.png)
+
+Order: the password step; the recovery code with a wrong group caught; the unlock page; the engine's chooser at a cold start; the error after choosing the locked profile there; the protected profile's own first window. The password and the code are of a throwaway profile that no longer exists.
+
+| | |
+|---|---|
+| Walked (second round), from a running window | The profile menu, Settings and now the creation page open "Nulavio · Desbloqueio" in a tab: the profile's icon and name, one field, "Desbloquear", "Usar o código de recuperação". A wrong password is answered "Essa senha não desbloqueou o perfil." The right one opens the profile's own window, with "Bancos · Protegido" in its band and its own first run |
+| Walked, from a cold start | **Once a second profile exists, every start opens the engine's own profile chooser, not Nulavio's.** It is the stock page: its own colours and drawings instead of the profiles' icons and colours, the engine's text ("Mantenha totalmente separada sua navegação profissional da pessoal…"), and nothing that says a profile is protected or locked. **Choosing the protected profile there gives a black window for about 15 s, then "O Nulavio já está em execução, mas não está respondendo", then the browser quits.** The locked profile's folder is an empty read-only directory until the Vault opens it, and nothing at start-up knows that. The only way in is to choose an unprotected profile first and unlock from its menu |
+| Where the person gets lost | At the first start after creating the profile the product told them to create. Nothing on screen explains it |
+| To be | Its own slice and a decision for the maintainer (see the table at the end): either Nulavio starts in the profile used last and the band's menu is the one place to switch and unlock, or Nulavio draws the chooser itself, with each profile's icon, colour and lock state, and a locked one leads to the unlock page. Until one of them is built, a locked profile must not be offered by a page that cannot open it |
 
 ## 5. Configure
 
@@ -69,13 +81,16 @@ Opening pages, switching tabs, a private window and back all worked for the new 
 | # | Moment | Journey | Evidence | Answered by |
 |---|---|---|---|---|
 | 1 | Two settings pages; the person guesses which one owns an option | Configure | walked; F5 | ADR 0008, proof of concept and first tests |
-| 2 | "Protegido" beside a warning on the first frame | First use | walked; F1 | Stage prototype: only true facts on the welcome, the filter read again for the summary |
-| 3 | The first run never shows profiles, protection or the band | First use, profile | walked | Stage: the first sentence points at the band; the band step is the slice's |
+| 2 | "Protegido" beside a warning on the first frame | First use | walked; F1 (the filter part; "Senhas" was an artefact of the test session) | Only true facts on the welcome, the filter read again for the summary |
+| 3 | The first run never shows profiles, protection or the band | First use, profile | walked | First-run slice: the welcome draws the band with the real profile; the last question offers a protected profile |
 | 4 | The assistant cannot be found, then asks for a provider form | Assistant | F8 | To do |
-| 5 | DNS asked in the vocabulary of the implementation | First use | F2 | To do (copy, in the first-run slice) |
+| 5 | DNS asked in the vocabulary of the implementation | First use | F2 | First-run slice: plain words, the option in use marked, one line of advice |
 | 6 | The page gets 80 % and there is no mode that gives more with the names kept | Daily use | measured | ADR 0009 prototype (97 %) |
 | 7 | A link that leads to a refusal under `--profile` | Profile | F6 (launcher mode only) | To do (small) |
 | 8 | The card and the navigation move under the pointer | First use, configure | walked; F4 | Stage (fixed card); ADR 0008 |
-| 9 | Install: unknown | Install | not walked | First task of the first-run slice |
+| 9 | Install: unknown | Install | not walked | Still not walked: it needs a clean machine or a container with a desktop session |
+| 10 | The engine's chooser at every start once a second profile exists; a locked profile chosen there ends in an error and the browser quits | Unlock | walked (second round) | To do: own slice, maintainer's decision |
+| 11 | "Abrir <perfil>" after creating a protected profile answered with an error | Profile | walked (second round) | Fixed in the first-run slice, with a test |
+| 12 | Each new profile greets with "Boas-vindas ao Nulavio" again | Profile, first use | walked (second round) | First-run slice: "Perfil novo: …" |
 
 The pink stripes on the address field in the QA captures (F3) are the engine's "under remote control" cue of the test session. A person never sees them; they are not a finding.
