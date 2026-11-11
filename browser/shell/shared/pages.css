@@ -53,8 +53,10 @@
 .here__label, .here__plain, .here__routes { color: var(--nv-color-text-secondary); }
 .here__who .badge { margin-inline-start: 0; }
 .here__summary { display: inline-flex; align-items: baseline; gap: var(--nv-space-2); font-weight: var(--nv-font-weight-medium); }
-/* A state is not a "safe" seal: the line carries no mark when all is on; attention keeps its own. */
-.here__summary[data-level="ok"]::before { content: none; }
+/* A state is not a "safe" seal: the line carries no mark when all is on; attention keeps its own.
+   The selector names the line too, so it outweighs the shared mark rule above (its :is() list counts
+   as its most specific entry); without that the check was drawn (audit 2026-11 S-02). */
+.here__line > .here__summary[data-level="ok"]::before { content: none; }
 .here__summary[data-level="warn"] { color: var(--nv-color-status-warning); }
 .here__summary[data-level="unknown"] { color: var(--nv-color-text-secondary); }
 .here__settings { margin-inline-start: auto; font-size: var(--nv-type-label-size); }

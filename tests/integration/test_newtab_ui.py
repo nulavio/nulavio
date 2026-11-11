@@ -31,6 +31,7 @@ return {
     text: who.textContent,
   },
   summary: {level: summary.dataset.level, text: summary.textContent},
+  mark: getComputedStyle(summary, '::before').content,
   warn: facts.filter(d => d.dataset.level === 'warn').map(d => d.previousElementSibling.textContent),
   detailsOpen: document.getElementById('here-details').open,
   helpOpen: document.getElementById('help').open,
@@ -106,6 +107,16 @@ class NewTabHereTest(unittest.TestCase):
         else:
             self.assertEqual(state["summary"], {"level": "ok", "text": self.message("protectionsOn")})
             self.assertFalse(state["detailsOpen"])
+            # "Proteções ativas" is a state, not a seal: no check mark before it (audit 2026-11 S-02).
+            self.assertEqual(state["mark"], "none")
+        # What needs attention, or could not be read, keeps its mark before the words.
+        marks = self.m.execute(
+            "const s = document.getElementById('here-summary'), was = s.dataset.level, out = {};"
+            "for (const level of ['warn', 'unknown']) {"
+            "  s.dataset.level = level; out[level] = getComputedStyle(s, '::before').content; }"
+            "s.dataset.level = was; return out;"
+        )
+        self.assertEqual(marks, {"warn": '""', "unknown": '""'})
         self.assertFalse(state["helpOpen"])
         self.assertEqual(state["live"], [], "a live region at load would read the whole status aloud")
         self.shoot("here")
