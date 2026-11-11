@@ -246,7 +246,7 @@ Each scenario lists: assets · adversary · preconditions · trust boundary · i
 | Assets | A6 |
 | Adversary | T-SUPPLY, T-NET |
 | Preconditions | Unsigned or downgradeable update channel |
-| Boundary | TB8, TB18 (signing in CI) |
+| Boundary | TB8, TB18 (signing in CI), TB19 (build on Blacksmith) |
 | Impact | Malicious engine or extension installed; rollback to a vulnerable version |
 | Preventive | **Now:** engine updates via Fedora's signed RPM repositories; AMO updates over HTTPS and signed; launcher removes `MOZ_ALLOW_DOWNGRADE` (keeps profile-downgrade protection). **Planned (B):** signed RPM repo, metadata expiry, no silent downgrade |
 | Detective | `doctor` reports engine package ownership |
