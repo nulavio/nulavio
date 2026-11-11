@@ -393,6 +393,26 @@ class PackagingTest(unittest.TestCase):
         test = (ROOT / "scripts" / "release" / "test_signed_repo.sh").read_text(encoding="utf-8")
         self.assertIn("tampered", test)
 
+    def test_kms_signing_passes_credentials_by_name_only(self):
+        sign = (ROOT / "scripts" / "release" / "sign_repo.sh").read_text(encoding="utf-8")
+        # AWS credentials reach the signing container as inherited variables (podman -e NAME), never as
+        # NAME=value on a command line, where other users could read them in /proc.
+        self.assertIn("-e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY -e AWS_SESSION_TOKEN -e AWS_REGION", sign)
+        self.assertNotRegex(sign, r"-e AWS_[A-Z_]+=")
+        self.assertIn("aws configure export-credentials --format env", sign)
+        # KMS does only the RSA operation: the packages and the metadata are signed by openpgp_sign.py,
+        # against the published key, and the public key copied to the repository is that one.
+        self.assertIn('--define "_openpgp_sign kms"', sign)
+        self.assertIn("/nulavio-release/openpgp_sign.py --public-key /public/key.asc", sign)
+        self.assertIn("cp /public/key.asc /repo/nulavio-packages.asc", sign)
+        publish = (ROOT / "scripts" / "release" / "publish_release.sh").read_text(encoding="utf-8")
+        self.assertIn('openpgp_sign.py" --public-key "$published" --kms-key-id "$kms"', publish)
+        # Whatever signed it, SHA256SUMS is checked with only the published key before anything is staged.
+        self.assertIn('--verify "$stage/github/SHA256SUMS.asc"', publish)
+        test = (ROOT / "scripts" / "release" / "test_kms_signing.sh").read_text(encoding="utf-8")
+        self.assertIn("tampered", test)
+        self.assertIn("test_kms_signing.sh", (ROOT / "scripts" / "release" / "rehearse_release.sh").read_text(encoding="utf-8"))
+
 
 class UpstreamWatchTest(unittest.TestCase):
     """Update SLA: the watcher's verdicts from Mozilla's release history."""

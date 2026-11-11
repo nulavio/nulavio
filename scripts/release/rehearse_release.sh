@@ -74,6 +74,7 @@ step deb "$repo/scripts/release/make_deb.sh" "$out/packages"
 # shellcheck disable=SC2016 # as above
 step check-deb bash -c '"$0" "$1"/nulavio_*.deb' "$repo/scripts/release/check_deb.sh" "$out/packages"
 step signed-repository "$repo/scripts/release/test_signed_repo.sh" "$out/packages"
+step kms-signing "$repo/scripts/release/test_kms_signing.sh"
 step sbom sbom
 
 # <out>/manifest.json: what this rehearsal verified, built and checked. Signing
