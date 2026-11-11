@@ -1096,7 +1096,7 @@ Each rule has a check. A change that breaks a check is not finished; a rule with
 | 6 | One primary action per group; the safe action is the primary one in a warning | `test_experience_rules`; component gallery |
 | 7 | pt-BR and en-US change together, in the same commit | Locale parity tests; `test_experience_rules` for Fluent |
 | 8 | One settings page. A new option is a group in the pane where the person would look for it, never a new page | `test_settings_native` (ADR 0008) |
-| 9 | One decision per screen in a sequence; the card and its actions keep their place | No check yet: a rendered test of the stage's card rectangle per step is part of the first-run slice |
+| 9 | One decision per screen in a sequence; the card and its actions keep their place | `test_firstrun_stage` (the card's rectangle is the same on every step; it caught a 14 px jump in the prototype) |
 | 10 | No sound outside `NulavioSound.sys.mjs`, and none by default | `test_experience_rules` |
 | 11 | Ideas from other browsers are re-derived, never copied: no file, asset, name or wording. GPL code is never read into the product | Review; `LICENSES.md` when a file is ever taken |
 | 12 | A second opinion (a reviewer model, a critique from captures) is a hypothesis: check it on the engine or the source before changing anything, and record what was checked | The "independent review" tables in the ADRs |

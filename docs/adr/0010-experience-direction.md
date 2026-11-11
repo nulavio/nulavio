@@ -66,4 +66,4 @@ Branch `agent/claude/proto-experience-directions`, on the alpha's engine by `dev
 
 - `nulavio.proto.direction = surface` draws A; with `nulavio.layout.immersive` it draws B. C was captured and its code removed.
 - The stage: `NulavioWindow` marks the window (`nulavio-stage`) while the selected tab is the Shell's new tab and `NulavioPrivacy.firstRun()` is active; the page marks itself (`data-stage`) while a first-run card is its question. Measured: the card is 688×464 on every step; the page gets 1439×875; when the last step is answered the window is the ordinary one again.
-- Not done: the stage has no tests yet, and the existing first-run tests were not run against it.
+- `tests/integration/test_firstrun_stage.py` (four tests): the welcome owns the window and lists only true facts; the card keeps its place and size on every step and the ordinary window returns at the end; "Usar os padrões" ends it at once; another tab is never staged. The existing first-run, new-tab, band and layout suites pass with the stage on.

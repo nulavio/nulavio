@@ -535,8 +535,6 @@ body[data-state="loading"] .moment__context::after {
 .hero__link { margin-left: var(--nv-space-4); color: var(--nv-color-accent-default); }
 .hero__link[hidden] { display: none; }
 
-}
-
 /* The first run is a stage (ADR 0010): one centred card of a fixed size, one decision in it, and nothing
    else on the page. The card keeps its place and size between steps; its actions keep theirs. */
 html[data-page="newtab"][data-stage] .page {
@@ -565,3 +563,4 @@ html[data-page="newtab"][data-stage] #firstrun-welcome .firstrun__head { flex-di
 html[data-page="newtab"][data-stage] #firstrun-welcome .firstrun__symbol { inline-size: 3rem; block-size: 3rem; }
 html[data-page="newtab"][data-stage] :is(.layout-choice__title) { font-size: var(--nv-font-size-2xl); }
 html[data-page="newtab"][data-stage] #firstrun-welcome .callout { display: none; }
+}
