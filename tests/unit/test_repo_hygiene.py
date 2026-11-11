@@ -29,6 +29,8 @@ WRITE_PERMISSIONS = {
     ("ai-review.yml", "review", "id-token"): "Workload Identity Federation to the Claude API (no GitHub write)",
     ("ai-review.yml", "publish", "pull-requests"): "one advisory comment, posted by scripts/ci/post_ai_review.py",
     ("upstream.yml", "firefox-release", "issues"): "one issue per newer Firefox release (scripts/release/upstream_issue.py)",
+    ("scorecard.yml", "analysis", "security-events"): "uploads Scorecard's SARIF to the Security tab",
+    ("scorecard.yml", "analysis", "id-token"): "signs the published result for scorecard.dev (publish_results)",
 }
 # Expressions that carry text an attacker or a model can choose; they never go inside a run: script.
 UNTRUSTED_IN_RUN = re.compile(r"\$\{\{[^}]*\b(github\.event\.|github\.head_ref|steps\.|needs\.|inputs\.)")
