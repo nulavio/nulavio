@@ -605,6 +605,34 @@ class AuditTest(Home):
         self.assertTrue(result["isError"])
         self.assertIn("cookies_storage", audit.audit_path().read_text().splitlines()[-1])
 
+    def test_a_burst_of_calls_does_not_hide_earlier_actions(self):
+        # Audit A7: ~10 000 cheap calls rotated the log twice and Activity read only the current file.
+        audit.record(agent="ag-x", tool="evaluate", decision="allow", target="https://bank.example")
+        with mock.patch.object(audit, "MAX_BYTES", 10):  # every record rotates the log
+            for _ in range(audit.KEEP):
+                audit.record(agent="ag-x", tool="session_state", decision="allow")
+        self.assertTrue(audit.audit_path().with_suffix(f".jsonl.{audit.KEEP}").exists())
+        tools_seen = [e["tool"] for e in audit.read(limit=1000, agent="ag-x")]
+        self.assertEqual(tools_seen, ["evaluate"] + ["session_state"] * audit.KEEP)
+        audit.clear()
+        self.assertEqual(audit.read(), [])
+
+    def test_a_new_key_ends_a_session_opened_with_the_old_one(self):
+        # Audit A11: "Nova chave" left a session that started with the old key working.
+        agent, _ = registry.add("keyed", "other", "full_control", accept_full_control=True)
+        bridge = tools.Bridge(agent["id"], "s-1", approver=registry.Approver(), key_sha256=agent["token_sha256"])
+        page = {"text": "ok", "url": "https://example.org/", "title": "t"}
+        with (
+            mock.patch.object(tools.Bridge, "_url_of", return_value="https://example.org/"),
+            mock.patch.object(tools.Bridge, "_eval", return_value=page),
+            mock.patch.object(tools.Bridge, "_open_dialog", return_value=None),
+        ):
+            self.assertFalse(bridge.call("page_read", {"tab": "t1"})["isError"])
+            registry.rotate_token(agent["id"])
+            result = bridge.call("page_read", {"tab": "t1"})
+        self.assertTrue(result["isError"])
+        self.assertIn("replaced this agent's key", result["content"][0]["text"])
+
     def test_denied_call_is_audited_without_arguments(self):
         agent, _ = registry.add("d", "other", "assisted")
         bridge = tools.Bridge(agent["id"], "s-1", approver=registry.Approver())
@@ -665,6 +693,16 @@ class WorkspaceTest(Home):
         shell = (root / "browser" / "shell" / "modules" / "NulavioAI.sys.mjs").read_text(encoding="utf-8")
         self.assertIn(f'const WORKSPACE_ENV = "{workspace.WORKSPACE_ENV}";', shell)
         self.assertIn("this.#workspaceValue ||= Services.env.get(WORKSPACE_ENV)", shell)
+
+    def test_the_bar_takes_only_its_own_words_and_a_live_bridge(self):
+        # Audit A12: markWorkspace kept any texts it was given. A13: a reused PID kept a window "driven".
+        root = Path(__file__).resolve().parents[2]
+        shell = (root / "browser" / "shell" / "modules" / "NulavioAI.sys.mjs").read_text(encoding="utf-8")
+        built = (root / "browser" / "shell" / "lib" / "agent-texts.js").read_text(encoding="utf-8")
+        keys = re.search(r"const BAR_TEXT_KEYS = \[([^\]]*)\]", shell)[1]
+        self.assertEqual(sorted(re.findall(r'"(\w+)"', keys)), sorted(re.findall(r"^\s+(\w+):", built, re.M)))
+        self.assertIn("texts: clean", shell)
+        self.assertIn('arg === "ai" && args[i + 1] === "serve"', shell)  # what bin/nulavio ai serve runs as
 
     def test_command_and_prefs(self):
         engine = mock.Mock(path=Path("/opt/engine/nulavio"))

@@ -222,7 +222,7 @@ def _serve(args) -> int:
     try:
         with contextlib.suppress(OSError):
             marker = registry.mark_session(agent, session)
-        Server(Bridge(agent["id"], session, headless=args.headless)).serve()
+        Server(Bridge(agent["id"], session, headless=args.headless, key_sha256=agent["token_sha256"])).serve()
     finally:
         if marker is not None:
             marker.unlink(missing_ok=True)
