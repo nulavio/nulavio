@@ -199,7 +199,8 @@ function finish(event) {
   byId("done-text").textContent = t("vaultCreated", [state.name]);
   byId("done-actions").replaceChildren(
     h("button", { class: "button button--primary", type: "button", text: t("vaultOpenProfile", [state.name]),
-      onclick: () => profiles.switchTo(state.id).catch(e => announce(errorText(e), "error")) }),
+      // It was created locked: opening it goes through its unlock page, as in the profile menu and in Settings.
+      onclick: () => vault.openUnlockPage(state.id).catch(e => announce(errorText(e), "error")) }),
     h("a", { class: "button button--secondary", href: "../settings/settings.html#profiles", text: t("vaultToSettings") })
   );
   step("done");

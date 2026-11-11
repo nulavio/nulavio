@@ -295,6 +295,21 @@ class VaultUiTest(unittest.TestCase):
         self.assertEqual(list(path.iterdir()), [])
         self.assertTrue((path.parent / f"{path.name}.vault" / "vault.json").exists())
         type(self).created_id = profile["id"]
+        # "Abrir <perfil>" on the last screen: the profile was created locked, so it opens through its unlock
+        # page (it used to answer "Esse perfil está bloqueado" and stop there).
+        self.click("#done-actions .button--primary")
+        unlock = f"/vault/unlock.html?p={profile['id']}"
+        tabs = "return gBrowser.tabs.map(tab => tab.linkedBrowser.currentURI.pathQueryRef);"
+        self.m.set_context("chrome")
+        try:
+            opened = harness.wait_until(lambda: any(t.startswith(unlock) for t in self.m.execute(tabs)), 10)
+            self.assertTrue(opened, self.m.execute(tabs))
+            self.m.execute(
+                "gBrowser.removeTab(gBrowser.tabs.find(tab => tab.linkedBrowser.currentURI.filePath === '/vault/unlock.html'));"
+            )
+        finally:
+            self.m.set_context("content")
+        self.assertEqual(self.m.execute("return document.getElementById('status').textContent;"), "")
 
     def test_02_unlock_page_wrong_then_right_password_opens_the_profile_and_relocks(self):
         profile_id = self.created_id
