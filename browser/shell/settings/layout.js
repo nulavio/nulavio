@@ -25,9 +25,16 @@ export async function setUpLayout() {
   // Immersive (ADR 0009): one switch, read from the profile and written through the layout module.
   const immersive = document.getElementById("immersive");
   const immersiveError = document.getElementById("immersive-error");
+  // It follows the card: while the layout cannot be changed here (not available in this window, or locked by
+  // an administrator), neither can the switch on top of it.
+  let layoutUsable = false;
+  let immersiveLocked = true;
   const showImmersive = state => {
-    immersive.checked = state.on;
-    immersive.disabled = state.locked;
+    if (state) {
+      immersive.checked = state.on;
+      immersiveLocked = state.locked;
+    }
+    immersive.disabled = immersiveLocked || !layoutUsable;
   };
   const readImmersive = () => api.immersive().then(showImmersive, () => {});
   immersive.addEventListener("change", async () => {
@@ -44,6 +51,8 @@ export async function setUpLayout() {
   readImmersive();
 
   const showUnavailable = err => {
+    layoutUsable = false;
+    showImmersive();
     current.textContent = t("layoutUnavailable");
     error.textContent = errorText(err);
     for (const radio of radios) radio.disabled = true;
@@ -51,6 +60,8 @@ export async function setUpLayout() {
     retry.hidden = false;
   };
   const render = state => {
+    layoutUsable = state.available && !state.locked;
+    showImmersive();
     section.dataset.preset = state.preset;
     current.textContent = !state.available ? t("layoutUnavailable") : state.locked ? t("layoutLocked")
       : t(`layoutCurrent_${state.preset}`);
