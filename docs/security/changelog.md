@@ -27,6 +27,29 @@ Urgency: <urgent | standard> (<reasons>). Source SHA-256 <digest> (Mozilla's sig
 **Nulavio fixes**: <none, or the table above>.
 ```
 
+## Nulavio 160.0-0.2 (Firefox 160.0), published 2026-11-11
+
+A security update of the alpha, with the same engine ([release](https://github.com/nulavio/nulavio/releases/tag/v160.0-0.2), [advisory GHSA-5mmp-gx3p-m7j8](https://github.com/nulavio/nulavio/security/advisories/GHSA-5mmp-gx3p-m7j8)). Prepared in the advisory's private fork and published together with the packages.
+
+**Upstream**: unchanged, Firefox 160.0.
+
+**Nulavio fixes** (security audit of 160.0-0.1, 2026-11-10; what a user does: `sudo dnf upgrade nulavio`):
+
+| Severity | Area | Fix |
+|---|---|---|
+| High | Repository | `nulavio.repo`, which turns dnf's signature checks on, was uploaded to the package bucket; it is now `site/rpm/nulavio.repo`, served by the site from git (R1) |
+| High | Vault | `vault.json.bak` kept removed or replaced unlock methods, which still opened the profile; the copy now holds the current file and a stale one is removed (V2) |
+| High | AI Bridge | Address checks read hosts differently from the engine (backslash, encoded host, IPv4 shorthand) and missed redirects: the local network was reachable without `local_resources` (A1) |
+| High | AI Bridge | The Shell's own pages (`moz-extension:`) needed only `local_resources`; they now need raw automation (A2) |
+| Medium | Release | Every package was release 0.1, so a fix would not reach installed copies; the release now counts up and publishing refuses one that is not newer (R2) |
+| Medium | Vault | A method change re-signed a tampered key file (V4); an interrupted encryption left the profile in the clear (V5); a crash left a locked profile's folder writable (V6) |
+| Medium | AI Bridge | Typing could send a form without `submit_forms` (A3); an approval followed the tab to another site (A4); "Permitir" worked at once on a page that opened in front (A5); the agent-window lock rested on a pref (A6) |
+| Low | Vault | Lock paths that failed open (V7); core dumps while keys were in memory (V8) |
+| Low | AI Bridge | Activity lost earlier actions after a burst (A7); `tabs_list` ignored the site list (A8); scripts read cookies without `cookies_storage` (A9); the assistant followed redirects with its API key (A10); a new key left the old session open (A11); the agent bar took any text (A12); a reused PID kept a window marked (A13) |
+| Low | Site | Manual verification imported the key without checking its fingerprint (R5) |
+
+**Not fixed, residual risks**: repository metadata without expiry (R57), release-key rotation (R58), phone unlock bound to one desktop (R59; phone unlock is off).
+
 ## Nulavio 160.0-0.1 (Firefox 160.0), published 2026-11-10
 
 The first public alpha, for Fedora ([release](https://github.com/nulavio/nulavio/releases/tag/v160.0-0.1), dnf repository at `packages.nulavio.net`, signed with `298A 9093 BAAB B26F 79BB  29F4 BF47 E5FA 9EDB 8DB1`).

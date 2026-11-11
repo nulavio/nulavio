@@ -75,6 +75,7 @@ PAGES = {
 STYLESHEETS = ("site.css", "landing.css")  # served from /assets/
 DOWNLOAD_PAGES = {"baixar/index.html": "pt-BR", "en/download/index.html": "en-US"}
 PUBLIC_KEY = Path("site/keys/nulavio-packages.asc")
+REPO_FILE = Path("site/rpm/nulavio.repo")
 E1_CATEGORIES = ("tracking", "https")
 SCALE = 2  # captures are taken at devPixelsPerPx=2; width/height attributes are CSS px
 # Notes appended to a commit outside --release, so a development build never passes for a release.
@@ -174,6 +175,13 @@ def release_values(src: Path) -> dict[str, str] | None:
         raise BuildError(f"packaging/release.json names a key but {PUBLIC_KEY} is missing")
     if armored_fingerprint(key) != fpr:
         raise BuildError(f"{PUBLIC_KEY} is not the key {fpr} that packaging/release.json names")
+    # The .repo file turns dnf's signature checks on: it is served from this tree, never from the
+    # package bucket, where whoever can upload packages could also turn the checks off.
+    if release["repo_file"] != f"https://nulavio.net/{REPO_FILE.relative_to('site')}":
+        raise BuildError(f"packaging/release.json: repo_file must be the site's own {REPO_FILE}")
+    repo_lines = (src / REPO_FILE).read_text(encoding="utf-8").splitlines() if (src / REPO_FILE).is_file() else []
+    if not {"gpgcheck=1", "repo_gpgcheck=1", f"gpgkey={release['key_url']}"} <= set(repo_lines):
+        raise BuildError(f"{REPO_FILE} must have gpgcheck=1, repo_gpgcheck=1 and gpgkey={release['key_url']}")
     return {
         "release_version": version,
         "key_fpr": " ".join(fpr[i : i + 4] for i in range(0, len(fpr), 4)),

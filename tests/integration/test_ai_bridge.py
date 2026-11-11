@@ -211,6 +211,7 @@ class AiBridgeTest(unittest.TestCase):
     def test_11_grants_persist_and_expire(self):
         agent, env = self.agent("assisted")
         registry.grant(agent["id"], "execute_js", "allow")
+        registry.grant(agent["id"], "cookies_storage", "allow")  # a script reads cookies too (audit A9)
         for _ in range(2):  # two bridge processes: the grant survives a restart
             c = self.client(env)
             tab = c.call("tab_new", url=self.fx.url("/page/js"))["structuredContent"]["tab"]
@@ -307,6 +308,7 @@ class AiBridgeTest(unittest.TestCase):
         registry.set_profiles(agent["id"], [{"label": "Trabalho", "path": str(work)}])
         registry.set_routes(agent["id"], [{"site": "127.0.0.1", "profile": "Trabalho"}])
         registry.grant(agent["id"], "execute_js", "allow")
+        registry.grant(agent["id"], "cookies_storage", "allow")
         c = self.client(env)
         listed = c.call("profiles_list")["structuredContent"]
         self.assertEqual([p["profile"] for p in listed["profiles"]], ["AI Workspace", "Trabalho"])

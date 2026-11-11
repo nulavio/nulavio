@@ -297,6 +297,42 @@ class CopiedFilesTest(VaultTestCase):
         stolen.unlock_password(PASSWORD)  # the copy is only as strong as the factors
         self.assertTrue(stolen.unlocked)
 
+    def test_a_revoked_secret_opens_no_file_left_on_disk(self):
+        # Audit V2 (2026-11-10): the .bak kept the previous file, so a replaced recovery
+        # code or a removed password still opened the profile through it.
+        vault, _, old_code = self.new_vault(recovery=True)
+        weak = vault.add_password("weak-old-password", FAST, label="old")
+        vault.save()
+        vault.save()
+        vault.replace_recovery_code(FAST)
+        vault.remove(weak.id)
+        vault.save()
+        for name in ("vault.json", "vault.json.bak"):
+            copy = self.dir / f"check-{name}"
+            copy.mkdir()
+            shutil.copy2(self.dir / name, copy / "vault.json")
+            left = Vault.load(copy / "vault.json")
+            with self.subTest(file=name):
+                with self.assertRaises(VaultError):
+                    left.unlock_recovery_code(old_code)
+                with self.assertRaises(VaultError):
+                    left.unlock_password("weak-old-password")
+                left.unlock_password(PASSWORD)
+                self.assertTrue(left.unlocked)
+
+    def test_a_backup_left_by_an_older_version_is_removed(self):
+        # Up to 160.0-0.1 the .bak was the previous file, possibly with a revoked envelope.
+        vault, _, _ = self.new_vault()
+        vault.save()
+        path = self.dir / "vault.json"
+        shutil.copy2(path, self.dir / "previous.json")
+        vault.save()
+        shutil.copy2(self.dir / "previous.json", path.with_suffix(".json.bak"))
+        self.assertFalse(Vault.load(path).from_backup)
+        self.assertFalse(path.with_suffix(".json.bak").exists())
+        vault.save()  # the next save writes the copy again
+        self.assertTrue(path.with_suffix(".json.bak").exists())
+
     def test_envelope_cannot_be_moved_to_another_profile(self):
         a, _, _ = self.new_vault("a.json")
         b, _, _ = self.new_vault("b.json")
@@ -717,25 +753,34 @@ class CrashTest(VaultTestCase):
         reloaded.unlock_password(PASSWORD)
         self.assertEqual(bytes(reloaded.dek), dek)
 
-    def test_crash_between_renames_uses_the_backup(self):
-        vault, dek, _ = self.new_vault()
-        vault.save()
-        real_replace = os.replace
-        calls = []
+    def test_crash_between_writes_keeps_a_valid_file(self):
+        # save() writes the .bak copy, then vault.json: a crash at either step leaves
+        # a vault.json that opens (the previous one: the change did not happen).
+        for crash_at in (1, 2):
+            with self.subTest(crash_at=crash_at):
+                for name in ("vault.json", "vault.json.bak"):
+                    (self.dir / name).unlink(missing_ok=True)
+                vault, dek, _ = self.new_vault()
+                vault.save()
+                real_replace = os.replace
+                calls = []
 
-        def replace(src, dst):
-            calls.append(dst)
-            if len(calls) == 2:
-                raise OSError("killed")
-            real_replace(src, dst)
+                def replace(src, dst, calls=calls, crash_at=crash_at, real_replace=real_replace):
+                    calls.append(dst)
+                    if len(calls) == crash_at:
+                        raise OSError("killed")
+                    real_replace(src, dst)
 
-        with mock.patch("nulavio_launcher.vault.core.os.replace", side_effect=replace), self.assertRaises(OSError):
-            vault.save()
-        self.assertFalse((self.dir / "vault.json").exists())
-        reloaded = Vault.load(self.dir / "vault.json")
-        self.assertTrue(reloaded.from_backup)
-        reloaded.unlock_password(PASSWORD)
-        self.assertEqual(bytes(reloaded.dek), dek)
+                with mock.patch("nulavio_launcher.vault.core.os.replace", side_effect=replace), self.assertRaises(OSError):
+                    vault.save()
+                reloaded = Vault.load(self.dir / "vault.json")
+                self.assertFalse(reloaded.from_backup)
+                self.assertEqual(reloaded.meta["generation"], 1)
+                reloaded.unlock_password(PASSWORD)
+                self.assertEqual(bytes(reloaded.dek), dek)
+                # And when vault.json is damaged, the copy opens too.
+                (self.dir / "vault.json").write_text("{")
+                self.assertTrue(Vault.load(self.dir / "vault.json").from_backup)
 
     def test_killed_process_while_unlocked(self):
         vault, dek, _ = self.new_vault()
@@ -781,6 +826,53 @@ class TamperTest(VaultTestCase):
         self.assertEqual(repaired.unlock_password(PASSWORD), State.UNLOCKED)
         tampered.lock()
         self.assertEqual(Coordinator(Vault.load(vault.path)).unlock_password(PASSWORD), State.UNLOCKED)
+
+    def test_a_method_change_does_not_sign_a_tampered_file_again(self):
+        # Audit V4: re-inserting a revoked envelope, then any method change, made it valid again.
+        vault, _, _ = self.new_vault(recovery=True)
+        weak = vault.add_password("weak-old-password", FAST, label="old")
+        vault.save()
+        injected = json.loads(vault.path.read_text())["envelopes"]
+        vault.remove(weak.id)
+        vault.save()
+        meta = json.loads(vault.path.read_text())
+        meta["envelopes"] = injected
+        vault.path.write_text(json.dumps(meta))
+        vault.lock()
+        tampered = Vault.load(vault.path)
+        tampered.unlock_password(PASSWORD)  # the CLI and the Settings page unlock like this before a change
+        self.assertTrue(tampered.tampered)
+        tampered.add_password("another-password", FAST)
+        with self.assertRaises(VaultError) as ctx:
+            tampered.save()
+        self.assertEqual(ctx.exception.code, "metadata-tampered")
+        tampered.lock()
+        self.assertTrue(Vault.load(vault.path).meta["envelopes"] == injected)  # nothing was written
+        again = Vault.load(vault.path)
+        again.unlock_password("weak-old-password")
+        self.assertTrue(again.tampered)  # still flagged: the injected envelope never became valid
+
+    def test_a_tampered_vault_is_refused_before_the_keyring_is_touched(self):
+        # Review of #44: remove-method on an os-keyring envelope cleared the system keyring
+        # before save() refused the tampered file, so that method was lost for good.
+        from nulavio_launcher.vault import cli as vault_cli
+
+        vault, _, _ = self.new_vault(recovery=True)
+        vault.save()
+        meta = json.loads(vault.path.read_text())
+        meta["policy"] = {"note": "changed outside Nulavio"}
+        vault.path.write_text(json.dumps(meta))
+        vault.lock()
+        box = mock.Mock(load_vault=lambda: Vault.load(vault.path))
+        request = {"op": "remove-method", "path": str(self.dir / "profile"), "current": PASSWORD, "envelope": "any"}
+        with (
+            mock.patch.object(vault_cli.profiles, "container", return_value=box),
+            mock.patch.object(vault_cli, "remove_os_keyring", side_effect=AssertionError("keyring touched")),
+            mock.patch.object(vault_cli, "keyring", side_effect=AssertionError("keyring touched")),
+            self.assertRaises(VaultError) as ctx,
+        ):
+            vault_cli.api_request(request)
+        self.assertEqual(ctx.exception.code, "metadata-tampered")
 
     def test_removed_envelope_is_detected(self):
         vault, _, _ = self.new_vault(recovery=True)

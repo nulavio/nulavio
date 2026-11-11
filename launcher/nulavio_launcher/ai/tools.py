@@ -78,7 +78,8 @@ INSPECT_FN = r"""(el) => {
   const button = el.closest('button,input[type=submit],input[type=image]');
   return {connected: el.isConnected, href: link ? String(link.href) : null,
     submits: !!(button && button.form && (button.type === 'submit' || button.type === 'image')),
-    editable: !!(el.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName))};
+    editable: !!(el.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName)),
+    multiline: !!(el.isContentEditable || el.tagName === 'TEXTAREA')};
 }"""
 SCROLL_FN = "(el) => { el.scrollIntoView({block: 'center', inline: 'center'}); return true; }"
 FOCUS_FN = r"""(el, clear) => {
@@ -216,8 +217,10 @@ class Bridge:
     """One agent's tools over one AI Workspace, for the lifetime of the MCP server process."""
 
     def __init__(self, agent_id: str, session_id: str, *, approver: registry.Approver | None = None,
-                 headless: bool = False, workspace_factory: Callable[[dict], Workspace] | None = None):  # fmt: skip
+                 headless: bool = False, workspace_factory: Callable[[dict], Workspace] | None = None,
+                 key_sha256: str | None = None):  # fmt: skip
         self.agent_id = agent_id
+        self.key_sha256 = key_sha256  # the key this session started with; a new key ends it (audit A11)
         self.session_id = session_id
         self.approver = approver or registry.default_approver()
         self.headless = headless
@@ -253,6 +256,11 @@ class Bridge:
     def require(self, capability: str, url: str | None = None, *, checked: list[str]) -> None:
         if url:
             self._target = url
+        agent = self._agent()
+        if self.key_sha256 and agent is not None and agent.get("token_sha256") != self.key_sha256:
+            checked.append(capability)
+            self.close()
+            raise Denied(policy.Decision(False, "block", capability, "key-replaced"))
         host = urllib.parse.urlsplit(url).hostname if url else None
         decision = registry.decide(self.agent_id, capability, host=host, target=policy.origin(url),
                                    session_id=self.session_id, approver=self.approver, place=self._place(),
@@ -272,6 +280,29 @@ class Bridge:
         for capability in target.needs:
             self.require(capability, url, checked=checked)
         return target
+
+    def require_needs(self, url: str, *, checked: list[str]) -> None:
+        """What the address a tab is at needs (local network, the Shell's pages), whatever
+        took it there: a redirect or the page's own navigation never passed require_url."""
+        if not url:
+            return
+        try:
+            target = policy.classify_url(url)
+        except policy.UrlRefused as exc:
+            raise ToolError(f"the tab is at an address agents do not act on: {exc}") from None
+        for capability in target.needs:
+            self.require(capability, url, checked=checked)
+
+    def require_here(self, capability: str, url: str, *, checked: list[str]) -> None:
+        self.require(capability, url, checked=checked)
+        self.require_needs(url, checked=checked)
+
+    def still_at(self, tab: str, url: str, cancel) -> None:
+        """After an approval (which can wait for minutes): the tab is still on the origin the
+        person approved. A page that navigated meanwhile would otherwise get the action."""
+        now = self._url_of(tab, cancel)
+        if policy.origin(now) != policy.origin(url):
+            raise ToolError(f"the tab moved to {policy.origin(now)} while waiting for approval; nothing was done")
 
     def list_tools(self) -> list[dict]:
         agent = self._agent()
@@ -532,10 +563,17 @@ class Bridge:
 
     def _t_tabs_list(self, args, cancel, checked):
         self.require("read_pages", checked=checked)
-        tabs = [
-            {"tab": c["context"], "profile": c["profile"], "url": c.get("url", ""), "title": self._title(c["context"], cancel)}
-            for c in self._tabs(cancel)[:50]
-        ]
+        agent = self._agent() or {}
+        tabs = []
+        for c in self._tabs(cancel)[:50]:
+            url = c.get("url", "")
+            if policy.in_scope(agent, urllib.parse.urlsplit(url).hostname if url else None):
+                tabs.append(
+                    {"tab": c["context"], "profile": c["profile"], "url": url, "title": self._title(c["context"], cancel)}
+                )
+            else:
+                # Outside the agent's sites: the tab exists, but not where it is or what it shows (audit A8).
+                tabs.append({"tab": c["context"], "profile": c["profile"], "url": None, "title": None, "outside_sites": True})
         return self._ok({"tabs": tabs}), None
 
     def _t_tab_new(self, args, cancel, checked):
@@ -558,6 +596,7 @@ class Bridge:
         self.owner[tab] = owner
         if url:
             bidi.command("browsingContext.navigate", {"context": tab, "url": url, "wait": "complete"}, timeout=60, cancel=cancel)
+            self.require_needs(self._url_of(tab, cancel), checked=checked)  # where a redirect took it
         data = {
             "tab": tab,
             "profile": owner or "AI Workspace",
@@ -615,12 +654,15 @@ class Bridge:
         self.elements.pop(tab, None)
         self.bidi(tab).command("browsingContext.navigate", {"context": tab, "url": url, "wait": "complete"},
                             timeout=60, cancel=cancel)  # fmt: skip
-        return self._ok({"tab": tab, "url": self._url_of(tab, cancel), "title": self._title(tab, cancel)}), url
+        final = self._url_of(tab, cancel)
+        self.require_needs(final, checked=checked)  # where a redirect took it
+        return self._ok({"tab": tab, "url": final, "title": self._title(tab, cancel)}), url
 
     def _t_page_read(self, args, cancel, checked):
         tab = args["tab"]
         url = self._url_of(tab, cancel)
-        self.require("read_pages", url, checked=checked)
+        self.require_here("read_pages", url, checked=checked)
+        self.still_at(tab, url, cancel)
         limit = args.get("max_chars", 20000)
         page = self._eval(tab, READ_EXPR % (limit + 1), cancel)
         text = page.get("text") or ""
@@ -631,7 +673,8 @@ class Bridge:
     def _t_page_snapshot(self, args, cancel, checked):
         tab = args["tab"]
         url = self._url_of(tab, cancel)
-        self.require("read_pages", url, checked=checked)
+        self.require_here("read_pages", url, checked=checked)
+        self.still_at(tab, url, cancel)
         pairs = self._call_fn(tab, SNAPSHOT_FN, [{"type": "number", "value": args.get("max_elements", 200)}], cancel)
         mapping, elements = {}, []
         for index, (node, info) in enumerate(pairs or [], start=1):
@@ -645,7 +688,8 @@ class Bridge:
     def _t_screenshot(self, args, cancel, checked):
         tab = args["tab"]
         url = self._url_of(tab, cancel)
-        self.require("screenshots", url, checked=checked)
+        self.require_here("screenshots", url, checked=checked)
+        self.still_at(tab, url, cancel)
         png = self.bidi(tab).command("browsingContext.captureScreenshot", {"context": tab}, cancel=cancel)["data"]
         data = {"tab": tab, "url": url, "bytes": len(png) * 3 // 4}
         return self._ok(data, f"Screenshot of {url}", [{"type": "image", "data": png, "mimeType": "image/png"}]), url
@@ -654,7 +698,8 @@ class Bridge:
         tab = args["tab"]
         url = self._url_of(tab, cancel)
         element = self._element(tab, args["element"])
-        self.require("interact", url, checked=checked)
+        self.require_here("interact", url, checked=checked)
+        self.still_at(tab, url, cancel)
         info = self._call_fn(tab, INSPECT_FN, [element], cancel)
         if not info.get("connected"):
             raise ToolError("the element is gone; call page_snapshot again")
@@ -662,6 +707,7 @@ class Bridge:
             self.require("submit_forms", url, checked=checked)
         if info.get("href") and not info["href"].startswith(("javascript:", "#")):
             self.require_url(info["href"], checked=checked)
+        self.still_at(tab, url, cancel)
         self._call_fn(tab, SCROLL_FN, [element], cancel)
         mark = self.bidi(tab).mark()
         actions = [{"type": "pointer", "id": "nulavio-mouse", "parameters": {"pointerType": "mouse"}, "actions": [
@@ -679,9 +725,13 @@ class Bridge:
 
     def _t_type(self, args, cancel, checked):
         tab = args["tab"]
+        if any("\ue000" <= char <= "\uf8ff" for char in args["text"]):
+            # WebDriver reads these as keys (U+E007 is Enter, U+E006 Return): they are not text.
+            raise ToolError("special keys (U+E000 to U+F8FF) are not typed; use submit=true to press Enter")
         url = self._url_of(tab, cancel)
         element = self._element(tab, args["element"])
-        self.require("interact", url, checked=checked)
+        self.require_here("interact", url, checked=checked)
+        self.still_at(tab, url, cancel)
         if args.get("submit"):
             self.require("submit_forms", url, checked=checked)
         info = self._call_fn(tab, INSPECT_FN, [element], cancel)
@@ -689,6 +739,10 @@ class Bridge:
             raise ToolError("the element is gone; call page_snapshot again")
         if not info.get("editable"):
             raise ToolError("that element does not take text")
+        if not info.get("multiline") and ("\n" in args["text"] or "\r" in args["text"]):
+            # Enter in a single-line field sends its form: the same capability as submit=true.
+            self.require("submit_forms", url, checked=checked)
+        self.still_at(tab, url, cancel)
         self._call_fn(tab, SCROLL_FN, [element], cancel)
         if not self._call_fn(tab, FOCUS_FN, [element, {"type": "boolean", "value": bool(args.get("clear"))}], cancel):
             raise ToolError("could not focus the element")
@@ -709,7 +763,8 @@ class Bridge:
     def _t_dialog(self, args, cancel, checked):
         tab = args["tab"]
         url = self._url_of(tab, cancel)
-        self.require("interact", url, checked=checked)
+        self.require_here("interact", url, checked=checked)
+        self.still_at(tab, url, cancel)
         if self._open_dialog(tab) is None:
             raise ToolError("no dialog is open in that tab")
         params = {"context": tab, "accept": bool(args["accept"])}
@@ -735,7 +790,8 @@ class Bridge:
         tab = args["tab"]
         url = self._url_of(tab, cancel)
         element = self._element(tab, args["element"])
-        self.require("files", url, checked=checked)
+        self.require_here("files", url, checked=checked)
+        self.still_at(tab, url, cancel)
         if self._owner(tab):
             raise ToolError("uploads work only in the AI Workspace, from its uploads folder")
         folder = _uploads(self).resolve()
@@ -750,7 +806,10 @@ class Bridge:
     def _t_evaluate(self, args, cancel, checked):
         tab = args["tab"]
         url = self._url_of(tab, cancel)
-        self.require("execute_js", url, checked=checked)
+        self.require_here("execute_js", url, checked=checked)
+        # A page script reads document.cookie and the site's storage: the same as cookies_storage (audit A9).
+        self.require("cookies_storage", url, checked=checked)
+        self.still_at(tab, url, cancel)
         value = self._eval(tab, args["expression"], cancel)
         text = json.dumps(value, ensure_ascii=False, default=str)
         if len(text) > 100_000:
@@ -767,6 +826,7 @@ def _why(decision: policy.Decision) -> str:
     return {
         "stopped": "blocked: the user pressed the emergency stop",
         "revoked": "blocked: the user revoked this agent's access",
+        "key-replaced": "blocked: the user replaced this agent's key; reconnect with the new one",
         "paused": "blocked for now: the user paused this agent",
         "out-of-scope": "blocked on this site: it is outside the sites this agent may use",
         "profile-not-authorized": "blocked: that profile is not one this agent may use",

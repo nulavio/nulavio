@@ -21,6 +21,7 @@ import json
 import os
 import re
 import shutil
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -35,6 +36,41 @@ USER_JS_HEADER = (
     "changes here are overwritten. Use Settings, about:config, or\n"
     "`nulavio` commands instead. Source: browser/config/prefs/."
 )
+
+
+ENGINE_NAMES = {"nulavio", "nulavio-bin", "firefox", "firefox-bin"}
+
+
+def _reused_pid(pid: int, lock: Path, profile_dir: Path) -> bool:
+    """Whether `pid` is a later process that got the number of the engine that made the lock.
+
+    It must have started after the lock was made *and* not look like an engine for this
+    profile. The start time alone is not enough: a step of the wall clock (time sync, a manual
+    correction) moves it, and a live engine must never be taken for gone (autolock would
+    unmount its profile).
+    """
+    if not _started_after(pid, lock):
+        return False
+    try:
+        if Path(os.readlink(f"/proc/{pid}/exe")).name in ENGINE_NAMES:
+            return False
+        if str(profile_dir) in Path(f"/proc/{pid}/cmdline").read_bytes().decode(errors="replace").split("\0"):
+            return False
+    except OSError:
+        return False
+    return True
+
+
+def _started_after(pid: int, lock: Path) -> bool:
+    """Whether process `pid` started after the lock was made (by the wall clock)."""
+    try:
+        fields = Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[1].split()
+        started_ticks = int(fields[19])  # field 22, starttime, in clock ticks after boot
+        uptime = float(Path("/proc/uptime").read_text().split()[0])
+        started = time.time() - uptime + started_ticks / os.sysconf("SC_CLK_TCK")
+        return started > os.lstat(lock).st_mtime + 2.0  # slack for clock rounding
+    except (OSError, ValueError, IndexError):
+        return False
 
 
 class ProfileError(RuntimeError):
@@ -102,6 +138,8 @@ class Profile:
             return None  # stale lock after a crash
         except PermissionError:
             return pid
+        if _reused_pid(pid, lock, self.path):
+            return None  # the engine is gone and another process got its PID (audit V7)
         return pid
 
     def require_not_running(self) -> None:

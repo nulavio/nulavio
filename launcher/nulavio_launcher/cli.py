@@ -132,12 +132,14 @@ def _run_encrypted(args: argparse.Namespace, eng, prof) -> int:
     from .vault.core import VaultError
     from .vault.storage import StorageError
 
+    core_limit = vault_cli.no_core_dumps()  # this process holds the password and the DEK for a moment
     try:
         vault = vault_cli.unlock_for_run(prof, password_stdin=args.password_stdin)
     except (VaultError, StorageError) as exc:
         _err(vault_cli.MESSAGES.get(exc.code, str(exc)))
         return 1
     vault.lock()  # the DEK is not needed while the volume is mounted
+    vault_cli.restore_core_limit(core_limit)  # the engine keeps the system's own setting
     try:
         return _run(args, eng, prof, supervise=True)
     finally:

@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import argparse
+import ctypes
 import getpass
 import json
 import os
+import resource
 import shutil
 import subprocess
 import sys
@@ -18,6 +20,8 @@ from . import profiles, sodium
 from .core import Vault, VaultError
 from .providers import Keyring, add_os_keyring, remove_os_keyring
 from .storage import Container, StorageError, encrypt_existing, tools_available
+
+PR_SET_DUMPABLE = 4
 
 MESSAGES = {
     "wrong-secret": "that did not unlock the profile",
@@ -33,6 +37,35 @@ MESSAGES = {
     "password-too-short": "use at least 8 characters",
     "last-method": "a profile needs at least one way to unlock it",
 }
+
+
+def no_core_dumps() -> tuple[int, int] | None:
+    """Keep key material out of core dumps (threat model U-T13, audit V8).
+
+    A crash would otherwise write the password, the DEK or gocryptfs's key (gocryptfs
+    inherits the limit) to systemd-coredump. Not dumpable also stops other processes
+    of the same user from attaching a debugger. Returns the previous core limit.
+    """
+    previous = None
+    try:
+        previous = resource.getrlimit(resource.RLIMIT_CORE)
+        resource.setrlimit(resource.RLIMIT_CORE, (0, previous[1]))
+    except (OSError, ValueError):
+        pass
+    try:
+        libc = ctypes.CDLL(None, use_errno=True)
+        libc.prctl(PR_SET_DUMPABLE, 0, 0, 0, 0)
+    except (OSError, AttributeError):
+        pass
+    return previous
+
+
+def restore_core_limit(previous: tuple[int, int] | None) -> None:
+    if previous is not None:
+        try:
+            resource.setrlimit(resource.RLIMIT_CORE, previous)
+        except (OSError, ValueError):
+            pass
 
 
 def _err(message: str) -> None:
@@ -108,6 +141,7 @@ def cmd(args: argparse.Namespace) -> int:
     if not sodium.available():
         _err("encrypted profiles need libsodium (Fedora: dnf install libsodium)")
         return 1
+    no_core_dumps()
     try:
         return HANDLERS[args.vault_cmd](args)
     except (VaultError, StorageError) as exc:
@@ -220,20 +254,15 @@ def _change(args) -> int:
     if current is None:
         _err("no way to ask for the current password; use --password-stdin")
         return 1
-    try:
-        vault.unlock_password(current)
-    except VaultError:
-        try:
-            vault.unlock_recovery_code(current)
-        except VaultError:
-            raise VaultError("wrong-secret") from None
+    _reauth(vault, current)
     try:
         if args.vault_cmd == "add-password":
             new = read_secret("New password", from_stdin=args.password_stdin, confirm=True)
             vault.add_password(new or "")
         elif args.vault_cmd == "new-recovery-code":
             code = vault.replace_recovery_code()
-            print(f"New recovery code (the old one no longer works):\n\n    {code}\n")
+            print("New recovery code (the old one no longer opens this profile; a copy of it made before now still would):")
+            print(f"\n    {code}\n")
         elif args.vault_cmd == "add-keyring":
             add_os_keyring(vault, keyring(), label="computer login")
         elif args.vault_cmd == "remove-method":
@@ -311,6 +340,11 @@ def _reauth(vault, current: str) -> None:
             vault.unlock_recovery_code(current)
         except VaultError:
             raise VaultError("wrong-secret") from None
+    if vault.tampered:
+        # Before any change, and before anything outside the file (the system keyring, a phone):
+        # save() refuses a tampered vault too, but a removed keyring secret cannot be put back.
+        vault.lock()
+        raise VaultError("metadata-tampered", "the profile's key file was changed outside Nulavio")
 
 
 def api_request(request: dict) -> dict:
@@ -348,7 +382,11 @@ def api_request(request: dict) -> dict:
             raise VaultError("no-such-method")
         vault.lock()
         if request.get("autolock", True):
-            spawn_autolock(prof)
+            try:
+                spawn_autolock(prof)
+            except OSError:
+                profiles.lock(prof)  # no watcher would lock it again: fail closed (audit V7)
+                raise
         return {"unlocked": True}
     if op == "lock":
         profiles.lock(prof)

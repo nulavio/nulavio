@@ -49,7 +49,7 @@ Nulavio is an open-source desktop browser for Linux, built from Mozilla's signat
 
 ## Status
 
-**Alpha.** The first public alpha, [v160.0-0.1](https://github.com/nulavio/nulavio/releases/tag/v160.0-0.1) (Firefox 160.0), is out for **Fedora**, through a signed dnf repository; Ubuntu (APT) follows. Unlocking a profile with a phone or a FIDO2 security key comes after 1.0 and is shown as "not available yet" in the browser. The [release criteria](docs/product/release-criteria.md) list what is done and what is left, and the [roadmap](docs/product/roadmap.md) the phases.
+**Alpha.** The public alpha, now [v160.0-0.2](https://github.com/nulavio/nulavio/releases/tag/v160.0-0.2) (Firefox 160.0, a security update of v160.0-0.1), is out for **Fedora**, through a signed dnf repository; Ubuntu (APT) follows. Unlocking a profile with a phone or a FIDO2 security key comes after 1.0 and is shown as "not available yet" in the browser. The [release criteria](docs/product/release-criteria.md) list what is done and what is left, and the [roadmap](docs/product/roadmap.md) the phases.
 
 Nulavio follows Firefox's release channel and aims to ship each Firefox security release within 24 hours, 72 at most ([update policy](docs/architecture/update-policy.md)).
 
@@ -58,7 +58,7 @@ Nulavio follows Firefox's release channel and aims to ship each Firefox security
 On Fedora 44 or later, x86_64:
 
 ```sh
-sudo dnf config-manager addrepo --from-repofile=https://packages.nulavio.net/rpm/nulavio.repo
+sudo dnf config-manager addrepo --from-repofile=https://nulavio.net/rpm/nulavio.repo
 sudo dnf install nulavio
 ```
 

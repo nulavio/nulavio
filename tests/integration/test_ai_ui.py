@@ -226,6 +226,10 @@ class AiUiTest(unittest.TestCase):
             self.assertRegex(page["expires"], r"\d{1,2}:\d{2}")  # silence means no, at a clock time
             self.assertEqual(page["manage"], "_blank")  # "Gerenciar agentes" opens in a new tab
             self.shoot(shot)
+            if button != "#deny":
+                # The answers that allow are armed only after the page has been visible a moment (audit A5).
+                armed = f"return !document.querySelector('{button}').disabled;"
+                self.assertTrue(harness.wait_until(lambda script=armed: self.js(script), timeout=10))
             self.click(button)
             thread.join(30)
             self.assertEqual(result.get("answer"), expected)

@@ -222,7 +222,7 @@ class Coordinator:
                 self.vault.lock()
                 self._set(State.ERROR, "metadata-tampered")
                 return self.state
-            self.vault.save()  # the user reviewed the methods and accepted them: sign again
+            self.vault.save(accept_changes=True)  # the user reviewed the methods and accepted them: sign again
             self.vault.tampered = False
         self.alternatives = []
         self._set(State.UNLOCKED)

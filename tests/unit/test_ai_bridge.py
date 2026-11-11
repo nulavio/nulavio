@@ -7,6 +7,7 @@ and Codex runs in tests/integration/test_ai_agents_real.py (opt-in).
 from __future__ import annotations
 
 import base64
+import contextlib
 import datetime as _dt
 import hashlib
 import io
@@ -221,6 +222,28 @@ class AddressTest(unittest.TestCase):
                     "https://example.org/\nx", "ftp://example.org/", "x" * 9000):  # fmt: skip
             with self.assertRaises(policy.UrlRefused, msg=url):
                 policy.classify_url(url, resolve=False)
+
+    def test_forms_the_engine_reads_differently_are_refused_or_classified_alike(self):
+        # Audit A1 (2026-11-10): Python's parser and the engine's disagreed on these hosts.
+        for url in ("http://192.168.1.1\\.x.example/", "http://%31%32%37.0.0.1:8080/", "http://evil.example\\.intranet.example/",
+                    "http://1.2.3.4.5/", "http://999.1/"):  # fmt: skip
+            with self.assertRaises(policy.UrlRefused, msg=url):
+                policy.classify_url(url, resolve=False)
+        for url in ("http://127.1/", "http://0x7f.0.0.1/", "http://0177.0.0.1/", "http://2130706433/", "http://１２７.0.0.1/",
+                    "http://localhost./", "http://10.0.0.1./", "http://[::ffff:127.0.0.1]/"):  # fmt: skip
+            self.assertIn("local_resources", policy.classify_url(url, resolve=False).needs, url)
+        self.assertEqual(policy.classify_url("http://[::ffff:8.8.8.8]/", resolve=False).needs, ())
+
+    def test_a_name_that_does_not_resolve_here_counts_as_local(self):
+        # The engine may resolve it where this process cannot (DoH, a proxy).
+        with mock.patch.object(policy.socket, "getaddrinfo", side_effect=OSError("no answer")):
+            self.assertIn("local_resources", policy.classify_url("https://nas.example/").needs)
+
+    def test_the_shells_own_pages_need_raw_automation(self):
+        # Audit A2: Settings, Vault and profile pages were reachable with local_resources alone.
+        for url in ("moz-extension://0e3a/settings/settings.html#profiles", "moz-extension://0e3a/vault/unlock.html",
+                    "view-source:https://example.org/"):  # fmt: skip
+            self.assertEqual(policy.classify_url(url).needs, ("local_resources", "debugging"), url)
 
     def test_origin_drops_path_and_query(self):
         self.assertEqual(policy.origin("https://bank.example:8443/acct?id=123#x"), "https://bank.example:8443")
@@ -471,6 +494,13 @@ class PolicyTest(Home):
 
 
 class AuditTest(Home):
+    def setUp(self):
+        super().setUp()
+        # Unit tests use no network: public names count as public, not "did not resolve here".
+        patcher = mock.patch.object(policy, "_resolves_locally", return_value=False)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def test_allow_list_and_rotation(self):
         with self.assertRaises(ValueError):
             audit.record(tool="type", text="secret")
@@ -483,6 +513,132 @@ class AuditTest(Home):
             audit.record(tool="a")
             audit.record(tool="b")
         self.assertTrue(audit.audit_path().with_suffix(".jsonl.1").exists())
+
+    def test_tools_check_where_the_tab_is_now(self):
+        # Audit A1/A2: a redirect or the page's own navigation put the tab where navigate would
+        # have asked; reading it, or acting on it, now needs the same capabilities.
+        def at(url, **more):
+            stack = contextlib.ExitStack()
+            stack.enter_context(mock.patch.object(tools.Bridge, "_url_of", return_value=url))
+            for name in ("_eval", "_call_fn", "bidi"):
+                patch = {"return_value": more[name]} if name in more else {"side_effect": AssertionError("ran")}
+                stack.enter_context(mock.patch.object(tools.Bridge, name, **patch))
+            stack.enter_context(mock.patch.object(tools.Bridge, "_open_dialog", return_value=None))
+            return stack
+
+        agent, _ = registry.add("here", "other", "full_control", accept_full_control=True)
+        bridge = tools.Bridge(agent["id"], "s-1", approver=registry.Approver())
+        bridge.elements["t1"] = {"e1": "shared-1"}
+        calls = (
+            ("page_read", {"tab": "t1"}),
+            ("screenshot", {"tab": "t1"}),
+            ("click", {"tab": "t1", "element": "e1"}),
+            ("evaluate", {"tab": "t1", "expression": "1"}),
+        )
+        for url in ("moz-extension://0e3a/settings/settings.html#profiles", "about:config"):
+            for name, args in calls:
+                with self.subTest(url=url, tool=name), at(url):
+                    result = bridge.call(name, args)
+                    self.assertTrue(result["isError"], result)
+                    entry = json.loads(audit.audit_path().read_text().splitlines()[-1])
+                    self.assertEqual(entry["decision"], "deny")
+                    self.assertIn("debugging", json.dumps(entry))
+        restricted, _ = registry.add("near", "other", "restricted")
+        bridge = tools.Bridge(restricted["id"], "s-1", approver=registry.Approver())
+        with at("http://192.168.1.1/"):
+            self.assertTrue(bridge.call("page_read", {"tab": "t1"})["isError"])
+        page = {"text": "ok", "url": "https://example.org/", "title": "t"}
+        with at("https://example.org/", _eval=page):
+            self.assertFalse(bridge.call("page_read", {"tab": "t1"})["isError"])
+
+    def test_typing_cannot_send_a_form_without_submit_forms(self):
+        # Audit A3: U+E007 is Enter for WebDriver, and Enter in a single-line field sends the form.
+        agent, _ = registry.add("typist", "other", "assisted")
+        bridge = tools.Bridge(agent["id"], "s-1", approver=registry.Approver())
+        bridge.elements["t1"] = {"e1": "shared-1"}
+        single = {"connected": True, "editable": True, "multiline": False}
+        with (
+            mock.patch.object(tools.Bridge, "_url_of", return_value="https://example.org/"),
+            mock.patch.object(tools.Bridge, "_call_fn", return_value=single) as call_fn,
+            mock.patch.object(tools.Bridge, "bidi", side_effect=AssertionError("typed")),
+        ):
+            result = bridge.call("type", {"tab": "t1", "element": "e1", "text": "x\ue007"})
+            self.assertIn("special keys", result["content"][0]["text"])
+            call_fn.assert_not_called()
+            result = bridge.call("type", {"tab": "t1", "element": "e1", "text": "x\n"})
+            self.assertTrue(result["isError"])
+            entry = json.loads(audit.audit_path().read_text().splitlines()[-1])
+            self.assertIn("submit_forms", json.dumps(entry))
+
+    def test_an_approval_does_not_follow_the_tab_to_another_site(self):
+        # Audit A4: the page navigated while the request was open; the action ran on the new site.
+        agent, _ = registry.add("js", "other", "full_control", accept_full_control=True)
+        registry.grant(agent["id"], "execute_js", "allow")
+        bridge = tools.Bridge(agent["id"], "s-1", approver=registry.Approver())
+        with (
+            mock.patch.object(tools.Bridge, "_url_of", side_effect=["https://blog.example/", "https://bank.example/"]),
+            mock.patch.object(tools.Bridge, "_eval", side_effect=AssertionError("ran")),
+        ):
+            result = bridge.call("evaluate", {"tab": "t1", "expression": "1"})
+        self.assertIn("moved to https://bank.example", result["content"][0]["text"])
+
+    def test_tabs_outside_the_agents_sites_are_not_described(self):
+        # Audit A8: tabs_list gave every tab's full address and title, whatever the site list said.
+        agent, _ = registry.add("sites", "other", "restricted", domains=["example.org"])
+        bridge = tools.Bridge(agent["id"], "s-1", approver=registry.Approver())
+        tabs = [
+            {"context": "t1", "profile": "AI Workspace", "url": "https://docs.example.org/a"},
+            {"context": "t2", "profile": "AI Workspace", "url": "https://bank.example/acct?id=42"},
+        ]
+        with (
+            mock.patch.object(tools.Bridge, "_tabs", return_value=tabs),
+            mock.patch.object(tools.Bridge, "_title", side_effect=lambda tab, _c: f"title of {tab}"),
+        ):
+            listed = bridge.call("tabs_list", {})["structuredContent"]["tabs"]
+        self.assertEqual(listed[0]["url"], "https://docs.example.org/a")
+        self.assertEqual((listed[1]["url"], listed[1]["title"], listed[1]["outside_sites"]), (None, None, True))
+        self.assertNotIn("bank.example", json.dumps(listed))
+
+    def test_a_script_needs_cookies_and_storage_too(self):
+        # Audit A9: evaluate reads document.cookie; execute_js alone let it.
+        agent, _ = registry.add("scripts", "other", "autonomous")
+        registry.grant(agent["id"], "execute_js", "allow")
+        bridge = tools.Bridge(agent["id"], "s-1", approver=registry.Approver())
+        with (
+            mock.patch.object(tools.Bridge, "_url_of", return_value="https://example.org/"),
+            mock.patch.object(tools.Bridge, "_eval", side_effect=AssertionError("ran")),
+        ):
+            result = bridge.call("evaluate", {"tab": "t1", "expression": "document.cookie"})
+        self.assertTrue(result["isError"])
+        self.assertIn("cookies_storage", audit.audit_path().read_text().splitlines()[-1])
+
+    def test_a_burst_of_calls_does_not_hide_earlier_actions(self):
+        # Audit A7: ~10 000 cheap calls rotated the log twice and Activity read only the current file.
+        audit.record(agent="ag-x", tool="evaluate", decision="allow", target="https://bank.example")
+        with mock.patch.object(audit, "MAX_BYTES", 10):  # every record rotates the log
+            for _ in range(audit.KEEP):
+                audit.record(agent="ag-x", tool="session_state", decision="allow")
+        self.assertTrue(audit.audit_path().with_suffix(f".jsonl.{audit.KEEP}").exists())
+        tools_seen = [e["tool"] for e in audit.read(limit=1000, agent="ag-x")]
+        self.assertEqual(tools_seen, ["evaluate"] + ["session_state"] * audit.KEEP)
+        audit.clear()
+        self.assertEqual(audit.read(), [])
+
+    def test_a_new_key_ends_a_session_opened_with_the_old_one(self):
+        # Audit A11: "Nova chave" left a session that started with the old key working.
+        agent, _ = registry.add("keyed", "other", "full_control", accept_full_control=True)
+        bridge = tools.Bridge(agent["id"], "s-1", approver=registry.Approver(), key_sha256=agent["token_sha256"])
+        page = {"text": "ok", "url": "https://example.org/", "title": "t"}
+        with (
+            mock.patch.object(tools.Bridge, "_url_of", return_value="https://example.org/"),
+            mock.patch.object(tools.Bridge, "_eval", return_value=page),
+            mock.patch.object(tools.Bridge, "_open_dialog", return_value=None),
+        ):
+            self.assertFalse(bridge.call("page_read", {"tab": "t1"})["isError"])
+            registry.rotate_token(agent["id"])
+            result = bridge.call("page_read", {"tab": "t1"})
+        self.assertTrue(result["isError"])
+        self.assertIn("replaced this agent's key", result["content"][0]["text"])
 
     def test_denied_call_is_audited_without_arguments(self):
         agent, _ = registry.add("d", "other", "assisted")
@@ -510,6 +666,50 @@ class WorkspaceTest(Home):
         self.assertEqual(which.call_args.kwargs["path"], "/usr/bin:/bin")  # never a setpriv from the user's PATH
         with mock.patch.object(workspace.shutil, "which", return_value=None):
             self.assertEqual(workspace.die_with_parent(), [])
+
+    def test_the_window_lock_is_in_the_engine_environment(self):
+        # Audit A6: the lock rested on a pref an agent with raw automation could reset in about:config.
+        from nulavio_launcher.ai import workspace
+
+        class Started(Exception):
+            pass
+
+        seen = {}
+
+        def popen(_command, env, **_kwargs):
+            seen.update(env)
+            raise Started
+
+        engine = mock.Mock(path=Path("/opt/engine/nulavio"))
+        targets = (
+            (Workspace("ag-1", engine=engine, headless=True), "ag-1"),
+            (
+                workspace.ProfileTarget("ag-2", "Trabalho", self.home / "p", downloads_dir=self.home, engine=engine),
+                f"ag-2:{os.getpid()}",
+            ),
+        )
+        (self.home / "p").mkdir(parents=True)
+        for target, marker in targets:
+            seen.clear()
+            with mock.patch.object(workspace.subprocess, "Popen", side_effect=popen), self.assertRaises(Started):
+                target.start()
+            self.assertEqual(seen[workspace.WORKSPACE_ENV], marker)
+            user_js = (target.profile_dir / "user.js").read_text()
+            self.assertIn(f'user_pref("nulavio.ai.workspace", "{marker}");', user_js)
+        root = Path(__file__).resolve().parents[2]
+        shell = (root / "browser" / "shell" / "modules" / "NulavioAI.sys.mjs").read_text(encoding="utf-8")
+        self.assertIn(f'const WORKSPACE_ENV = "{workspace.WORKSPACE_ENV}";', shell)
+        self.assertIn("const value = fromEnv || Services.prefs.getStringPref(WORKSPACE_PREF", shell)
+
+    def test_the_bar_takes_only_its_own_words_and_a_live_bridge(self):
+        # Audit A12: markWorkspace kept any texts it was given. A13: a reused PID kept a window "driven".
+        root = Path(__file__).resolve().parents[2]
+        shell = (root / "browser" / "shell" / "modules" / "NulavioAI.sys.mjs").read_text(encoding="utf-8")
+        built = (root / "browser" / "shell" / "lib" / "agent-texts.js").read_text(encoding="utf-8")
+        keys = re.search(r"const BAR_TEXT_KEYS = \[([^\]]*)\]", shell)[1]
+        self.assertEqual(sorted(re.findall(r'"(\w+)"', keys)), sorted(re.findall(r"^\s+(\w+):", built, re.M)))
+        self.assertIn("texts: clean", shell)
+        self.assertIn("if (pid && !(fromEnv && ", shell)  # a mark left in prefs.js by an ended session
 
     def test_command_and_prefs(self):
         engine = mock.Mock(path=Path("/opt/engine/nulavio"))

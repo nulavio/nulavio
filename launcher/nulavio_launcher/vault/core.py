@@ -154,6 +154,18 @@ def _well_formed(meta: dict) -> bool:
         return False
 
 
+def _drop_stale_backup(path: Path, meta: dict) -> None:
+    """Remove a .bak older than vault.json: versions up to 160.0-0.1 kept the previous
+    file there, with envelopes that had been removed or replaced (audit V2)."""
+    backup = path.with_suffix(path.suffix + ".bak")
+    try:
+        old = json.loads(backup.read_text(encoding="utf-8"))
+        if int(old.get("generation", 0)) < int(meta.get("generation", 0)):
+            backup.unlink()
+    except (OSError, ValueError, TypeError, AttributeError):
+        pass
+
+
 class Vault:
     """One profile's key material. Load it locked; unlock with any envelope's method."""
 
@@ -205,12 +217,26 @@ class Vault:
                 continue
             vault = cls(path, meta)
             vault.from_backup = candidate != path
+            if not vault.from_backup:
+                _drop_stale_backup(path, meta)
             return vault
         raise VaultError("unreadable", str(path))
 
-    def save(self) -> None:
-        """Atomic replace, keeping the previous file as .bak. Requires the DEK (refreshes the MAC)."""
+    def save(self, *, accept_changes: bool = False) -> None:
+        """Atomic replace of vault.json and of its .bak copy. Requires the DEK (refreshes the MAC).
+
+        A vault whose MAC did not match at unlock is refused unless the person reviewed
+        its methods and accepted them (accept_changes): signing it again as a side effect
+        of another change would make an injected envelope legitimate (audit V4).
+
+        The .bak holds the same new content, never the previous file: a removed or
+        replaced envelope must not stay on disk where its old secret still opens it.
+        The copy is written first, so a crash in between leaves the previous
+        vault.json (the change did not happen) next to a valid new copy.
+        """
         self._require_unlocked()
+        if self.tampered and not accept_changes:
+            raise VaultError("metadata-tampered", "the profile's key file was changed outside Nulavio")
         if not self.meta["envelopes"]:
             raise VaultError("no-method")
         # A counter the encrypted storage will mirror (S5), so a rolled-back
@@ -219,16 +245,15 @@ class Vault:
         self.meta["mac"] = b64e(self._mac())
         data = json.dumps(self.meta, indent=1, sort_keys=True).encode()
         self.path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-        tmp = self.path.with_suffix(self.path.suffix + ".tmp")
-        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o600)
-        try:
-            os.write(fd, data)
-            os.fsync(fd)
-        finally:
-            os.close(fd)
-        if self.path.exists():
-            os.replace(self.path, self.path.with_suffix(self.path.suffix + ".bak"))
-        os.replace(tmp, self.path)
+        for target in (self.path.with_suffix(self.path.suffix + ".bak"), self.path):
+            tmp = self.path.with_suffix(self.path.suffix + ".tmp")
+            fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o600)
+            try:
+                os.write(fd, data)
+                os.fsync(fd)
+            finally:
+                os.close(fd)
+            os.replace(tmp, target)
         dir_fd = os.open(self.path.parent, os.O_RDONLY)
         try:
             os.fsync(dir_fd)

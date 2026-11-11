@@ -35,10 +35,12 @@ ChromeUtils.defineESModuleGetters(lazy, {
 const SHELL_ID = "shell@nulavio.net";
 const SIDEBAR_ID = "shell_nulavio_net-sidebar-action"; // the assistant panel in the side panel
 const WORKSPACE_PREF = "nulavio.ai.workspace";
+const WORKSPACE_ENV = "NULAVIO_AI_WORKSPACE"; // launcher/nulavio_launcher/ai/workspace.py WORKSPACE_ENV
 const TARGET_PREF = "nulavio.ai.target";
 const TARGET_LABEL_PREF = "nulavio.ai.target.label";
 const RAW_MARKER = "nulavio-raw.json"; // launcher/nulavio_launcher/ai/workspace.py RAW_MARKER
 const BAR = "nulavio-ai-workspace";
+const BAR_TEXT_KEYS = ["text", "rawText", "pausedText", "failedText", "stopLabel"]; // lib/agent-texts.js
 const RAW_BAR = "nulavio-ai-raw";
 const STATE_ATTR = "nulavio-state";
 const POLL_MS = 1500;
@@ -178,12 +180,19 @@ class AI {
   /** The agent driving this window, if any. "agent:pid" (one of the user's profiles, opened for an agent)
       counts only while that bridge process lives; a bare agent id is an AI Workspace. */
   async workspaceAgent() {
-    const value = Services.prefs.getStringPref(WORKSPACE_PREF, "");
+    // The environment first: the bridge sets it and nothing in the browser can change it, so resetting
+    // the pref in about:config does not turn an agent's window back into an ordinary one (audit A6).
+    // The pref carries the same value and still counts on its own (it can only add the restriction).
+    const fromEnv = Services.env.get(WORKSPACE_ENV);
+    const value = fromEnv || Services.prefs.getStringPref(WORKSPACE_PREF, "");
     if (!value) {
       return "";
     }
     const [id, pid] = value.split(":");
-    if (pid && !(/^\d+$/.test(pid) && (await IOUtils.exists(`/proc/${pid}`)))) {
+    // "agent:pid" (one of the user's profiles, opened for an agent) counts only in the engine that
+    // bridge started (it sets the environment) and while the bridge lives. The same pref left in
+    // prefs.js is read again by later ordinary runs, where a reused PID must not count (audit A13).
+    if (pid && !(fromEnv && /^\d+$/.test(pid) && (await IOUtils.exists(`/proc/${pid}`)))) {
       return ""; // the agent's session ended: an ordinary window again
     }
     return id;
@@ -1160,7 +1169,14 @@ class AI {
     }
     const target = this.workspaceTarget();
     const previous = this.#bar;
-    this.#bar = { agent, target, texts: { ...texts }, raw: previous?.raw ?? false, paused: false, failed: false };
+    // Only the bar's own words, plain and short (audit A12): what agent-texts.js builds from the locales.
+    const clean = {};
+    for (const key of BAR_TEXT_KEYS) {
+      if (typeof texts?.[key] === "string") {
+        clean[key] = texts[key].slice(0, 200);
+      }
+    }
+    this.#bar = { agent, target, texts: clean, raw: previous?.raw ?? false, paused: false, failed: false };
     this.#renderAll();
     if (!this.#observing) {
       this.#observing = true;

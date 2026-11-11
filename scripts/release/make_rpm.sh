@@ -7,7 +7,7 @@
 #   scripts/release/make_rpm.sh [out-dir]      (default: dist/packages)
 #
 # NULAVIO_INSTALL_DIR  the built tree (default ~/.cache/nulavio-build/install/nulavio)
-# NULAVIO_RELEASE      package release (default 0.1)
+# NULAVIO_RELEASE      package release (default 0.1; rehearse_release.sh sets the next one)
 set -euo pipefail
 
 repo=$(cd "$(dirname "$0")/../.." && pwd)

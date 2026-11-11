@@ -111,6 +111,44 @@ class AssistantTest(unittest.TestCase):
         with self.assertRaises(assistant.AssistantError):
             assistant.ask("Hello?", PROFILE)
 
+    def test_a_redirect_never_carries_the_key_elsewhere(self):
+        # Audit A10: urllib followed redirects with the API key to whatever host or port they named.
+        import http.server
+        import threading
+
+        seen = []
+
+        class Elsewhere(http.server.BaseHTTPRequestHandler):
+            def do_POST(self):
+                seen.append(dict(self.headers))
+                self.send_response(200)
+                self.end_headers()
+                self.wfile.write(b"{}")
+
+            def log_message(self, *_args):
+                pass
+
+        other = http.server.HTTPServer(("127.0.0.1", 0), Elsewhere)
+        target = f"http://127.0.0.1:{other.server_port}/v1/messages"
+
+        class Redirects(http.server.BaseHTTPRequestHandler):
+            def do_POST(self):
+                self.send_response(307)
+                self.send_header("Location", target)
+                self.end_headers()
+
+            def log_message(self, *_args):
+                pass
+
+        first = http.server.HTTPServer(("127.0.0.1", 0), Redirects)
+        for server in (first, other):
+            threading.Thread(target=server.serve_forever, daemon=True).start()
+            self.addCleanup(server.server_close)
+            self.addCleanup(server.shutdown)
+        with self.assertRaises(assistant.AssistantError):
+            assistant._post(f"http://127.0.0.1:{first.server_port}/v1/messages", {}, {"x-api-key": "SECRET-KEY"})
+        self.assertEqual(seen, [])
+
     def test_provider_errors_by_cause(self):
         """AI-09 / UX5-A: each status gives its own code; a 429 keeps Retry-After; the request reached it."""
         self.configure()

@@ -15,11 +15,17 @@ import time
 from .. import log, profile
 from .core import RECOVERY_KDF, Vault, VaultError
 from .providers import Keyring, add_os_keyring, unlock_os_keyring
-from .storage import Container, StorageError
+from .storage import Container, StorageError, recover_interrupted
 
 
 def container(prof: profile.Profile) -> Container:
-    return Container(prof.path)
+    # Every launcher path that touches a protected profile comes here first.
+    outcome = recover_interrupted(prof.path)
+    if outcome:
+        log.event("vault.migration-recovered", profile=prof.name, outcome=outcome)
+    box = Container(prof.path)
+    box.secure_if_locked()
+    return box
 
 
 def is_encrypted(prof: profile.Profile) -> bool:
@@ -138,7 +144,7 @@ def autolock(prof: profile.Profile, *, grace: float = 120.0, poll: float = 0.5) 
         if not box.mounted():
             return "already-locked"
         if time.monotonic() > deadline:
-            box.unmount()  # nobody opened it: do not leave it unlocked
+            box.unmount(lazy_after=True)  # nobody opened it: do not leave it unlocked, even with a file open
             log.event("vault.autolock", profile=prof.name, reason="unused")
             return "unused"
         time.sleep(poll)

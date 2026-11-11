@@ -307,10 +307,21 @@ def _provider_errors():
         raise AssistantError("provider-unavailable", type(exc).__name__, sent=True) from None
 
 
+class _NoRedirects(urllib.request.HTTPRedirectHandler):
+    """A redirect is an error: urllib would send the API key (Authorization, x-api-key) on to
+    whatever host or port the answer names, not only the checked endpoint (audit A10)."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+_OPENER = urllib.request.build_opener(_NoRedirects)
+
+
 def _open(url: str, body: dict, headers: dict):
     headers = {"Content-Type": "application/json", **headers}
     request = urllib.request.Request(url, json.dumps(body).encode(), headers)  # noqa: S310 - checked endpoint
-    return urllib.request.urlopen(request, timeout=TIMEOUT)  # noqa: S310 - checked endpoint
+    return _OPENER.open(request, timeout=TIMEOUT)
 
 
 def _post(url: str, body: dict, headers: dict) -> dict:
