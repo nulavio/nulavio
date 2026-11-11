@@ -11,6 +11,15 @@ Thanks for helping. Nulavio is a security-sensitive project, so the rules below 
 5. Separate implemented / prototype / planned in docs and PR descriptions. Never claim immunity or "100%" anything.
 6. No Mozilla or third-party trademarks or art in Nulavio assets.
 
+## Reporting bugs and asking for features
+
+- **Bugs:** open an [issue](https://github.com/nulavio/nulavio/issues/new/choose) with the bug form: the Nulavio version (Help → About Nulavio, or `rpm -q nulavio`), the distribution, the steps, and what you expected. English or Portuguese.
+- **Features and ideas:** open an issue with the feature form, or start a thread in [Discussions](https://github.com/nulavio/nulavio/discussions) when it is still a question.
+- **Firefox engine bugs** (they also happen in Firefox) go to [Mozilla's Bugzilla](https://bugzilla.mozilla.org/).
+- **Security problems:** never in a public issue; see [Reporting vulnerabilities](#reporting-vulnerabilities).
+
+Every issue gets a first answer, even if only a label or a question; the issue list is public and searchable, closed issues included.
+
 ## Development setup
 
 The launcher and test suites use only the Python standard library (≥ 3.11). No virtualenv is needed to run them.
@@ -94,6 +103,13 @@ When a comparison row or a claim of the landing changes, change both languages (
 | New integration or trust boundary | Add a row to `docs/architecture/trust-boundaries.md` and a scenario to the threat model |
 | Search provider | `PROVIDERS` in `browser/shell/modules/NulavioSearch.sys.mjs`, with URLs from the provider's own OpenSearch description; `firstRun: false` for paid services; never a public SearXNG instance. Run `test_search.py` on the build |
 | Shell privileged API | Logic in `browser/shell/modules/*.sys.mjs` (validates everything it receives), a thin `experiments/<name>/parent.js`, a schema; error codes need `err_*` messages in both locales (`tests/unit/test_shell.py`) |
+
+## Tests are part of the change
+
+- New behaviour comes with tests that exercise it: unit tests (`tests/unit/`) for logic, and integration tests (`tests/integration/`, the real engine through Marionette) when it touches the engine, profiles, the Shell or the build.
+- A bug fix comes with a test that fails without the fix, when the bug can be reproduced in a test; when it cannot, the pull request says why.
+- Never delete, skip or weaken a test to make a change pass. A test that is wrong is fixed in its own commit, with the reason.
+- The pull request lists the commands that were run and their results, and what was not verified ([template](.github/pull_request_template.md)). CI runs the unit tests, lint and the scanners on every push and pull request; `main` accepts only pull requests with those checks green.
 
 ## Commits and pull requests
 
