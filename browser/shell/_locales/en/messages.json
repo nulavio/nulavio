@@ -931,6 +931,10 @@
   "gallerySafeChoiceFirst": { "message": "Safe choice stays first and primary. Security cues are opaque, fixed and never animated." },
 
   "bandLabel": {"message": "Profile and window safety"},
+  "bandOriginNotSecure": {"message": "Not secure"},
+  "bandOriginFile": {"message": "File on this computer"},
+  "bandOriginNamed": {"message": "Site: $HOST$. Show the address bar", "placeholders": {"host": {"content": "$1"}}},
+  "bandOriginNamedNotSecure": {"message": "Site: $HOST$, connection not secure. Show the address bar", "placeholders": {"host": {"content": "$1"}}},
   "bandProfileUnavailable": {"message": "Profile identity unavailable"},
   "bandProfileDefault": {"message": "Default profile"},
   "bandProtected": {"message": "Protected · unlocked"},

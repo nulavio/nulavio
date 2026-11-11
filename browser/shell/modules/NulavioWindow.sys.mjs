@@ -64,6 +64,8 @@ const SURFACES = Object.freeze({
 // (window-band.css) the band does not repeat it. Every other surface asks for trust
 // and keeps its name in a full band row ([nv-named]).
 const PLAIN_SURFACES = Object.freeze(new Set(["newtabTitle", "settingsTitle", "profilesButton"]));
+// ADR 0009: the toolbar and the tab list hide; the band stays and carries the origin.
+const PREF_IMMERSIVE = "nulavio.layout.immersive";
 
 function policy() {
   return WebExtensionPolicy.getByID(SHELL);
@@ -181,6 +183,7 @@ class WindowUI {
     for (const topic of TOPICS) {
       Services.obs.addObserver(this, topic);
     }
+    Services.prefs.addObserver(PREF_IMMERSIVE, this);
     this.#unsubscribe = lazy.NulavioProfiles.subscribe(() => this.refresh());
     for (const win of Services.wm.getEnumerator("navigator:browser")) {
       if (win.gBrowserInit?.delayedStartupFinished) {
@@ -194,6 +197,12 @@ class WindowUI {
   }
 
   observe(win, topic) {
+    if (topic === "nsPref:changed") {
+      for (const window of this.#windows.keys()) {
+        this.#paint(window);
+      }
+      return;
+    }
     if (topic === "browser-delayed-startup-finished") {
       this.#attach(win);
     } else if (topic === "nulavio-ai-activity-changed") {
@@ -257,7 +266,12 @@ class WindowUI {
     const route = button(doc, "nv-band-route", () => this.#open(win, "settings/settings.html#routing"));
     route.hidden = true;
     const header = element(doc, "span", "nv-band-header");
-    row.append(identity, protection, route, header);
+    // ADR 0009: the site of this tab, from the engine's own state, shown while the address bar is
+    // out of view (Immersive). Pressing it brings the address bar back with the keyboard in it.
+    const origin = button(doc, "nv-band-origin", () => win.document.getElementById("Browser:OpenLocation")?.doCommand());
+    origin.append(element(doc, "span", "nv-band-origin-state"), element(doc, "span", "nv-band-origin-sub"), element(doc, "span", "nv-band-origin-host"));
+    origin.hidden = true;
+    row.append(identity, protection, route, header, origin);
     const seals = element(doc, "div", "nv-band-seals");
     for (const kind of ["temporary", "private", "agent", "raw", "status", "activity"]) {
       const seal = element(doc, "span", `nv-band-seal nv-band-${kind}`);
@@ -400,6 +414,7 @@ class WindowUI {
     const header = () => this.#header(win);
     const progress = {
       onLocationChange: header,
+      onSecurityChange: header,
       onStateChange: (_progress, _request, flags) => {
         if (flags & Ci.nsIWebProgressListener.STATE_START) {
           // Clear synchronously before a new principal commits. The current principal
@@ -415,6 +430,11 @@ class WindowUI {
       },
       QueryInterface: ChromeUtils.generateQI(["nsIWebProgressListener", "nsISupportsWeakReference"]),
     };
+    // ADR 0009: where the pointer brings the tab list back in Immersive (window-band.css).
+    const edge = element(doc, "div");
+    edge.id = "nulavio-immersive-edge";
+    edge.setAttribute("aria-hidden", "true");
+    doc.getElementById("browser").prepend(edge);
     win.gBrowser.addProgressListener(progress);
     win.gBrowser.tabContainer.addEventListener("TabSelect", header);
     const unload = () => this.#detach(win);
@@ -430,7 +450,13 @@ class WindowUI {
     win.addEventListener("mousemove", pointer, true);
     const screenObserver = new win.MutationObserver(reveal);
     screenObserver.observe(doc.documentElement, { attributes: true, attributeFilter: ["inFullscreen", "inDOMFullscreen"] });
-    this.#windows.set(win, { bar, compact, fullscreen, line, sheet, progress, header, unload, pointer, screenObserver,
+    // ADR 0009: the band's origin follows the engine's identity verdict as soon as it changes.
+    const identityObserver = new win.MutationObserver(header);
+    const identityBox = doc.getElementById("identity-box");
+    if (identityBox) {
+      identityObserver.observe(identityBox, { attributes: true, attributeFilter: ["class"] });
+    }
+    this.#windows.set(win, { bar, compact, fullscreen, line, sheet, progress, header, unload, pointer, screenObserver, identityObserver, edge,
       noticeTimer: null, safety: null, restoreGroupPalette: this.#groupPalette(win) });
     this.#paint(win);
     this.#unifyStartPage(win);
@@ -537,12 +563,71 @@ class WindowUI {
     this.#windows.get(win)?.bar.toggleAttribute("nv-named", trust);
     this.#markOwnPagePending(win);
     this.#routeNotice(win);
+    this.#origin(win, Boolean(text));
+  }
+
+  /** Immersive (ADR 0009): no chrome but the band, and only when nothing must be seen in full. */
+  #immersive() {
+    return Services.prefs.getBoolPref(PREF_IMMERSIVE, false) && !this.#agent;
+  }
+
+  /** The selected tab's site for the band: the committed document's host as the engine displays it
+      (IDN rules included), its registrable part apart, and the connection state in words when it
+      is not secure. Never from the page; nothing while a load is committing; Nulavio's own pages
+      have the band's trusted name instead. */
+  #origin(win, ownPage) {
+    let sub = "";
+    let host = "";
+    let state = "";
+    try {
+      const browser = win.gBrowser.selectedBrowser;
+      const uri = browser.currentURI;
+      if (!ownPage && uri) {
+        if (uri.schemeIs("http") || uri.schemeIs("https")) {
+          host = uri.displayHost;
+          try {
+            const base = Services.eTLD.getBaseDomainFromHost(host);
+            if (host.endsWith(base) && host.length > base.length) {
+              sub = host.slice(0, host.length - base.length);
+              host = base;
+            }
+          } catch {
+            // An IP address or a single label: the whole host is the site.
+          }
+          // The verdict is the engine's own: the classes its identity handler puts on the address
+          // bar's identity box (verified, local, or anything else), never a second opinion.
+          const identity = win.document.getElementById("identity-box")?.classList;
+          const fine = identity?.contains("verifiedDomain") || identity?.contains("mixedActiveBlocked")
+            || identity?.contains("localResource");
+          state = fine ? "" : t("bandOriginNotSecure");
+        } else if (uri.schemeIs("file")) {
+          host = t("bandOriginFile");
+        } else if (uri.spec !== "about:blank") {
+          host = uri.scheme === "about" ? uri.spec.split(/[?#]/)[0] : uri.scheme + ":";
+        }
+      }
+    } catch {
+      sub = host = state = ""; // an uncommitted or destroyed tab names no site
+    }
+    for (const row of this.#rows(win)) {
+      const node = row.querySelector(".nv-band-origin");
+      setText(node.querySelector(".nv-band-origin-state"), state);
+      setText(node.querySelector(".nv-band-origin-sub"), sub);
+      setText(node.querySelector(".nv-band-origin-host"), host);
+      const label = host ? t(state ? "bandOriginNamedNotSecure" : "bandOriginNamed", [sub + host]) : "";
+      setAttr(node, "aria-label", label);
+      setAttr(node, "title", label);
+      setAttr(node, "data-secure", state ? "false" : "true");
+      if (node.hidden !== !host) {
+        node.hidden = !host;
+      }
+    }
   }
 
   /** A window with no alert may carry the band inside the navigation row (UX3G A1). A routing notice
       also gives it back its own row, so the notice never squeezes the profile out (review F16). */
   #neutral(win) {
-    return !this.#temporary && !lazy.PrivateBrowsingUtils.isWindowPrivate(win) && !this.#agent
+    return !this.#immersive() && !this.#temporary && !lazy.PrivateBrowsingUtils.isWindowPrivate(win) && !this.#agent
       && this.#guardCount === 0 && !this.#actionError && !this.#windows.get(win)?.routed
       && !lazy.NulavioAI.activityState(win) && !this.#connected.some(c => c.agent !== this.#agent?.id);
   }
@@ -608,6 +693,7 @@ class WindowUI {
     const root = win.document.documentElement;
     root.toggleAttribute("nulavio-window-agent", Boolean(agent));
     root.toggleAttribute("nulavio-window-raw", Boolean(agent?.raw));
+    root.toggleAttribute("nulavio-immersive", this.#immersive());
     const state = this.#windows.get(win);
     const activity = lazy.NulavioAI.activityState(win);
     const kinds = { normal: true, temporary: this.#temporary, private: privateWindow,
@@ -784,8 +870,11 @@ class WindowUI {
     win.removeEventListener("mousemove", state.pointer, true);
     win.clearTimeout(state.noticeTimer);
     state.screenObserver.disconnect();
+    state.identityObserver.disconnect();
     state.bar.remove();
     state.fullscreen.remove();
+    state.edge.remove();
+    win.document.documentElement.removeAttribute("nulavio-immersive");
     if (state.sheet) {
       state.sheet.remove();
     } else {
@@ -873,6 +962,7 @@ class WindowUI {
     for (const topic of TOPICS) {
       Services.obs.removeObserver(this, topic);
     }
+    Services.prefs.removeObserver(PREF_IMMERSIVE, this);
     lazy.CustomizableUI.removeListener(this);
     for (const action of QUICK_ACTIONS) {
       try {

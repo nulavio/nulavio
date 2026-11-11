@@ -416,3 +416,120 @@
 :root[nulavio-own-page-pending] #identity-box.notSecure {
   visibility: hidden;
 }
+
+/* ADR 0009, Immersive: the toolbar and the tab list leave the layout and come back over the page;
+   the band's row stays, with the site of the tab in its middle. Nothing here removes or restyles an
+   engine indicator: the toolbar is the engine's own, out of view until the pointer, the keyboard or
+   the browser itself (an open panel) brings it back. Off in fullscreen and in customize mode. */
+@-moz-document url("chrome://browser/content/browser.xhtml") {
+  .nv-band-row .nv-band-origin {
+    display: none;
+  }
+  #nulavio-immersive-edge {
+    display: none;
+  }
+  :root[nulavio-immersive]:not([inFullscreen], [inDOMFullscreen], [customizing]) {
+    --nv-immersive-reveal: var(--nv-motion-duration-fast) var(--nv-motion-easing-enter);
+    --nv-immersive-leave: var(--nv-motion-duration-base) var(--nv-motion-easing-exit) 600ms;
+
+    /* The toolbox keeps the band's height in the layout; the other toolbars hang below it, over the page. */
+    #navigator-toolbox {
+      position: relative;
+      z-index: var(--nv-zIndex-band);
+      display: block;
+      block-size: var(--nv-space-6);
+      overflow: visible;
+    }
+    #nulavio-band {
+      block-size: var(--nv-space-6);
+      border-block-end: 1px solid var(--nv-color-border-subtle);
+    }
+    #navigator-toolbox > toolbar:not(#nulavio-band) {
+      /* Out of view, never out of reach: still focusable, so Ctrl+L, F6 and Tab bring it back. */
+      translate: 0 calc(-1 * var(--nv-space-3));
+      opacity: 0;
+      pointer-events: none;
+      box-shadow: var(--nv-elevation-2);
+      transition: translate var(--nv-immersive-leave), opacity var(--nv-immersive-leave);
+    }
+    #navigator-toolbox:is(:hover, :focus-within, :has([open]:not([open="false"]))) > toolbar:not(#nulavio-band) {
+      translate: 0;
+      opacity: 1;
+      pointer-events: auto;
+      transition: translate var(--nv-immersive-reveal), opacity var(--nv-immersive-reveal);
+    }
+
+    /* The tab list: out of the flow at the side, back when the pointer reaches the edge or the keyboard enters it. */
+    #sidebar-launcher-splitter {
+      display: none;
+    }
+    #nulavio-immersive-edge {
+      display: block;
+      position: fixed;
+      inset-block: var(--nv-space-6) 0;
+      inset-inline-start: 0;
+      inline-size: var(--nv-space-2);
+      z-index: calc(var(--nv-zIndex-band) - 2);
+    }
+    #sidebar-container {
+      position: fixed;
+      inset-block: calc(var(--nv-space-6) + 1px) 0;
+      inset-inline-start: 0;
+      z-index: calc(var(--nv-zIndex-band) - 1);
+      background-color: var(--toolbox-background-color, var(--nv-color-chrome-toolbox));
+      box-shadow: var(--nv-elevation-3);
+      translate: calc(-100% - var(--nv-space-5)) 0;
+      pointer-events: none;
+      transition: translate var(--nv-immersive-leave);
+    }
+    #sidebar-container:-moz-locale-dir(rtl) {
+      translate: calc(100% + var(--nv-space-5)) 0;
+    }
+    #browser:has(> #nulavio-immersive-edge:hover) > #sidebar-container,
+    #sidebar-container:is(:hover, :focus-within, :has([open]:not([open="false"]))) {
+      translate: 0;
+      pointer-events: auto;
+      transition: translate var(--nv-immersive-reveal);
+    }
+
+    /* The site, in the middle of the band: the registrable part in the band's text colour, the rest quieter. */
+    .nv-band-row {
+      flex-wrap: nowrap;
+    }
+    .nv-band-row .nv-band-header:empty {
+      display: none;
+    }
+    .nv-band-row .nv-band-origin:not([hidden]) {
+      display: flex;
+      flex: 1;
+      justify-content: center;
+      align-items: baseline;
+      min-inline-size: 0;
+      white-space: nowrap;
+      font-weight: var(--nv-font-weight-semibold);
+    }
+    .nv-band-origin-sub {
+      color: var(--nv-color-text-secondary);
+      font-weight: var(--nv-font-weight-medium);
+      overflow: hidden;
+      text-overflow: ellipsis; /* a long subdomain is the part that gives way: the registrable part never does */
+    }
+    .nv-band-origin-host {
+      flex: none;
+    }
+    .nv-band-origin-state:not(:empty) {
+      flex: none;
+      margin-inline-end: var(--nv-space-2);
+      padding-inline: var(--nv-space-2);
+      border: 1px solid var(--nv-color-security-guard-edge);
+      border-radius: var(--nv-radius-xs);
+      background: var(--nv-color-security-guard-fill);
+      color: var(--nv-color-security-guard-text);
+    }
+    @media (prefers-reduced-motion: reduce) {
+      #navigator-toolbox > toolbar:not(#nulavio-band), #sidebar-container {
+        transition-duration: 0s !important;
+      }
+    }
+  }
+}

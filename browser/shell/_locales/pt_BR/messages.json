@@ -931,6 +931,10 @@
   "gallerySafeChoiceFirst": { "message": "A opção segura permanece primeiro e como ação principal. Os sinais de segurança são opacos, fixos e nunca animados." },
 
   "bandLabel": {"message": "Perfil e segurança da janela"},
+  "bandOriginNotSecure": {"message": "Não seguro"},
+  "bandOriginFile": {"message": "Arquivo deste computador"},
+  "bandOriginNamed": {"message": "Site: $HOST$. Mostrar a barra de endereço", "placeholders": {"host": {"content": "$1"}}},
+  "bandOriginNamedNotSecure": {"message": "Site: $HOST$, conexão não segura. Mostrar a barra de endereço", "placeholders": {"host": {"content": "$1"}}},
   "bandProfileUnavailable": {"message": "Identidade do perfil indisponível"},
   "bandProfileDefault": {"message": "Perfil padrão"},
   "bandProtected": {"message": "Protegido · desbloqueado"},
