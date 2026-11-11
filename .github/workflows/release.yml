@@ -136,8 +136,9 @@ jobs:
           python3 -I scripts/release/flatpak_manifest.py --archive "$archive" --out "$RUNNER_TEMP/flatpak"
           cd "$RUNNER_TEMP/flatpak"
           flatpak run --command=flatpak-builder-lint org.flatpak.Builder manifest net.nulavio.Nulavio.json
+          # As Flathub builds (flathub-build): absolute media URLs, which the repo linter requires.
           dbus-run-session -- flatpak run org.flatpak.Builder --user --sandbox --disable-rofiles-fuse --force-clean --install --install-deps-from=flathub \
-            --mirror-screenshots-url=https://dl.flathub.org/media/ --repo=repo builddir net.nulavio.Nulavio.json
+            --mirror-screenshots-url=https://dl.flathub.org/media --compose-url-policy=full --repo=repo builddir net.nulavio.Nulavio.json
           flatpak run --command=flatpak-builder-lint org.flatpak.Builder repo repo
       - name: The browser starts in the sandbox and renders a page
         run: scripts/release/check_flatpak.sh

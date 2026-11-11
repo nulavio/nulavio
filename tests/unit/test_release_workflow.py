@@ -122,6 +122,10 @@ class ReleaseWorkflowTest(unittest.TestCase):
         self.assertIn("--draft", self.publish)
         self.assertIn("NULAVIO_BUILD_PROFILE: runner", self.build)
 
+    def test_the_flatpak_is_composed_and_linted_as_flathub_does(self):
+        self.assertIn("--compose-url-policy=full", self.text)
+        self.assertIn("flatpak-builder-lint org.flatpak.Builder repo repo", self.text)
+
 
 class AsanWorkflowTest(unittest.TestCase):
     def test_weekly_asan_build_runs_the_integration_suite_and_fails_on_a_report(self):
