@@ -205,6 +205,9 @@ def primary_key(data: bytes) -> PublicKey:
             raise SignError("the release key must be an RSA key (algorithm 1)")
         n, offset = read_mpi(body, 6)
         e, _ = read_mpi(body, offset)
+        # A version 4 fingerprint is SHA-1 of the public key packet by definition (RFC 9580, 5.5.4.2);
+        # it names the key in the signature. Nothing trusts it: the KMS key is checked by its whole
+        # modulus, and every signature against the public key, before anything is written.
         fingerprint = hashlib.sha1(b"\x99" + len(body).to_bytes(2, "big") + body, usedforsecurity=False).digest()
         return PublicKey(fingerprint, n, e)
     raise SignError("no public key packet in the certificate")
