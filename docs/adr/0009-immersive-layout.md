@@ -80,3 +80,23 @@ On the alpha's engine (160.0-0.2 build, `dev_sync`), branch `agent/claude/feat-i
 - The band shows `en.`**`wikipedia.org`**; an expired certificate shows "Não seguro" before the host; `localhost` is neutral, as in the address bar.
 - The pointer on the band brings the toolbar down over the page; the left edge brings the tab list; Ctrl+L shows the toolbar with the address field focused.
 - Known gaps: everything the review table sends to the slice; the tab list closes under its own context menu; tabs on top and a tab list on the right are not done.
+
+## Controller slice (2026-11-11)
+
+Branch `agent/claude/feat-immersive-controller`, same engine. What decision 7 called the per-window controller now exists in `NulavioWindow`, and the mode can be reached by a person:
+
+| Built | How it is decided | Test (`test_immersive`, on the engine) |
+|---|---|---|
+| The switch | One profile pref, `nulavio.layout.immersive`, written only by `NulavioLayout.setImmersive`: the switch "Imersivo" in Settings → Layout and the key Ctrl+Alt+I (remappable, no clash with the browser's keys). Off by default; a locked pref is refused and the reason is said | `test_07`, `test_08`; `test_shortcuts` `test_02b` |
+| Where it is off | The window marks why (`nulavio-immersive-off`): `agent` (an AI Workspace, raw automation included), `popup` (a window without the full toolbar), `sharing` (a camera, a microphone or a screen shared from any tab of the window), `page` (a document with no defined name: `about:blank`, `data:`, `blob:`, `view-source:`) | `test_03`, `test_05`, `test_06` |
+| Holds | A panel or a menu anchored on the toolbar or on the tab list keeps that part shown from `popupshowing`, before the engine positions it, until `popuphidden`: a permission request, the site's identity, downloads, the application menu, an extension's popup. A menu opened on the page holds nothing | `test_04` |
+| The origin | A port that is not the scheme's own is shown with the site | `test_02` |
+
+![Off, on, held by a permission request, the switch in Settings: light, pt-BR](../design/screenshots/experience-2026-11/immersive-sheet-pt-light.png)
+![The same, dark, en-US](../design/screenshots/experience-2026-11/immersive-sheet-en-dark.png)
+
+Measured at 1440×900: the page gets 1215×855 with the mode off and 1439×875 with it on; while a permission request is open the toolbar is back by itself, over the page.
+
+Not built yet, in this order: the pin for touch (today a tap on the band's site puts the keyboard in the address field, which shows the toolbar); a drag towards the edge; the two-line row for a very long site; the delay after start-up and session restore until the identity is ready (today the mode applies as soon as the band has named the selected page); tabs on top and a tab list on the right; the security-visibility matrix repeated with the mode on.
+
+Not verified: a real camera, microphone or screen capture. The engine's test mode for capture (fake devices, no prompt) bypasses its own sharing indicators, so the test sets the tab's sharing state where the engine sets it for a real capture.

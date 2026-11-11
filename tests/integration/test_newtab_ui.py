@@ -164,6 +164,7 @@ class NewTabHereTest(unittest.TestCase):
                 ("lock-profile", "Ctrl+Alt+B"),
                 ("open-assistant", "Alt+Shift+A"),
                 ("toggle-focus", "Ctrl+Alt+F"),
+                ("toggle-immersive", "Ctrl+Alt+I"),
             ],
         )
         self.shoot("help")

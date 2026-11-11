@@ -176,7 +176,10 @@ class ImmersiveTest(unittest.TestCase):
             "return WebExtensionPolicy.getByID('shell@nulavio.net').getURL('settings/settings.html#layout');"
         )
         self.m.navigate(settings)
-        switch = "return (e => [e.checked, e.disabled, e.closest('[data-option]')?.dataset.option])(document.getElementById('immersive'));"
+        switch = (
+            "return (e => [e.checked, e.disabled, e.closest('[data-option]')?.dataset.option])"
+            "(document.getElementById('immersive'));"
+        )
         self.assertTrue(
             harness.wait_until(lambda: self.m.execute(switch) == [False, False, "immersive"], 15), self.m.execute(switch)
         )

@@ -51,7 +51,7 @@ class ShortcutsTest(unittest.TestCase):
 
     def test_01_the_keys_are_in_the_shell_keyset_without_clashing_with_the_browser(self):
         ours = self.m.chrome(f"{NORM} return {KEYSET}.map(combo);")
-        self.assertEqual(sorted(ours), ["alt,control+B", "alt,control+F", "alt,shift+A", "alt,shift+P"])
+        self.assertEqual(sorted(ours), ["alt,control+B", "alt,control+F", "alt,control+I", "alt,shift+A", "alt,shift+P"])
         clashes = self.m.chrome(
             f"{NORM} const ours = {KEYSET}.map(combo);"
             "return [...document.querySelectorAll('key')].filter(k => !k.closest('#ext-keyset-id-shell_nulavio_net'))"
@@ -75,6 +75,20 @@ class ShortcutsTest(unittest.TestCase):
                 self.assertTrue(harness.wait_until(lambda want=start: self.preset() == want, 15), self.preset())
                 self.assertTrue(harness.wait_until(lambda: self.announced() == "Layout Foco desligado.", 5), self.announced())
         self.apply("lateral")
+
+    def test_02b_the_immersive_key_turns_the_mode_on_and_off_and_says_so(self):
+        """ADR 0009: one key, one layout pref; where the mode applies is the window's decision (test_immersive)."""
+        key = key_of("alt,control+I")
+        pref = "return Services.prefs.getBoolPref('nulavio.layout.immersive', false);"
+        self.addCleanup(self.m.chrome, "Services.prefs.clearUserPref('nulavio.layout.immersive');")
+        self.assertFalse(self.m.chrome(pref))
+        self.m.chrome(f"{key}.doCommand();")
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome(pref), 10))
+        said = "Imersivo ligado. A barra de endereço volta com Ctrl+L."
+        self.assertTrue(harness.wait_until(lambda: self.announced() == said, 5), self.announced())
+        self.m.chrome(f"{key}.doCommand();")
+        self.assertTrue(harness.wait_until(lambda: not self.m.chrome(pref), 10))
+        self.assertTrue(harness.wait_until(lambda: self.announced() == "Imersivo desligado.", 5), self.announced())
 
     def test_02b_foco_chosen_elsewhere_still_returns_to_the_preset_it_came_from(self):
         """Review: Foco chosen in Settings (or the first run) from Lateral; the key goes back to Lateral.
@@ -146,7 +160,8 @@ class ShortcutsTest(unittest.TestCase):
         self.assertEqual(
             sorted(map(tuple, rows())),
             sorted([("_execute_action", "Alt+Shift+P", False), ("open-assistant", "Alt+Shift+A", False),
-                    ("toggle-focus", "Ctrl+Alt+F", False), ("lock-profile", "Ctrl+Alt+B", False)]),
+                    ("toggle-focus", "Ctrl+Alt+F", False), ("toggle-immersive", "Ctrl+Alt+I", False),
+                    ("lock-profile", "Ctrl+Alt+B", False)]),
         )  # fmt: skip
         self.m.execute("return browser.commands.update({name: 'toggle-focus', shortcut: 'Ctrl+Alt+G'});")
         self.m.execute("window.dispatchEvent(new Event('focus'));")

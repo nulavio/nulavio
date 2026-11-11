@@ -1060,6 +1060,18 @@ A stage is a page that owns the window for a sequence the person must finish or 
 | Motion | None between steps. The card does not slide, fade or resize |
 | Who is never staged | Private windows, temporary profiles, AI Workspaces, any tab other than the first run's. A page the first run opens (the Vault's steps) is an ordinary tab with the address bar |
 
+### Immersive: who decides (ADR 0009)
+
+CSS draws two states; the window decides them. Three attributes on the window's root say what was decided, and nothing else may hide the toolbar:
+
+| Attribute | Meaning |
+|---|---|
+| `nulavio-immersive` | The mode is drawn: the person turned it on (or the first run's stage asked for it) and nothing below holds it back |
+| `nulavio-immersive-off="agent \| popup \| sharing \| page"` | The mode is wanted and the full window is shown anyway, with the first reason that applies |
+| `nulavio-immersive-hold="toolbar"`, `"tabs"` or both | A panel or a menu anchored there is open: that part stays shown for its whole life |
+
+A new way to hide chrome goes through the same decision: it adds a reason or a hold, never a selector of its own.
+
 ### Motion: chrome that hides (ADR 0009)
 
 Added to the UX7 table. The times come from the motion tokens; `motion.duration.hold` (600 ms) is new.
