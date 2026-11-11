@@ -1023,3 +1023,80 @@ come from the X server's pixels, because WebDriver's own window screenshot drops
 disclosure chevrons and the narrow Settings rail). The [manifest](screenshots/ux7/manifest.json) holds
 each file's sha256 and size, the build and the commit whose Shell was synced onto it.
 `scripts/research/ux7_captures.py` takes them again.
+
+## Experience 2026-11: one surface, the stage, hidden chrome, sounds, and the rules
+
+From the experience review of 2026-11 ([references](references/2026-11/README.md), [journeys](journey-2026-11.md), [ADR 0008](../adr/0008-one-settings-page.md), [ADR 0009](../adr/0009-immersive-layout.md), [ADR 0010](../adr/0010-experience-direction.md)). Tokens, type, spacing and components above stay as they are; this section adds what the review decided and how each rule is checked. Parts marked *prototype* are on the prototype branches and not in the shipped theme yet.
+
+### The frame (direction A, prototype)
+
+| Part | Rule | Tokens |
+|---|---|---|
+| Frame: band, toolbar, tab column, the margin around the page | One tone. No rule line between them; the band's own border appears only when the band is a full row with a state to state | `color.chrome.toolbar` for all four |
+| Page | A card inside the frame: margin on the sides that have no chrome, a radius, a thin outline. Never a shadow that reaches the page's own pixels | `space.3` (8 px), `radius.md` (10 px), `color.border.subtle`, `elevation.1` |
+| Selected tab | The only raised surface in the frame, with the route mark | as UX3F |
+| Accent | One primary action per group of actions, and at most one accent-filled control in the frame. Mint is for the selected state and the primary action, never for a whole surface | `test_experience_rules` (one main action per group) |
+
+### The band is the constant
+
+In every layout, mode and page the band is the one row only the browser draws. What it carries, left to right: the profile and its protection; in the middle, the trusted name of a Nulavio page **or**, when the address bar is out of view, the site (host as the engine displays it, the registrable part emphasised, the connection state in words when it is not secure); the state seals on the right. No mode hides it, shrinks it to nothing or makes it translucent (`test_experience_rules`: no mode hides the band). The registrable domain is never cut: the row grows first, and if that is not enough the toolbar stays.
+
+### The stage (first run, prototype)
+
+A stage is a page that owns the window for a sequence the person must finish or dismiss. Today there is one: the first run.
+
+| Rule | Value |
+|---|---|
+| Window | The band and the page. The toolbar and the tabs are out of view and return to the pointer and the keyboard, as in Imersivo. The band names the stage ("Nulavio · Boas-vindas") |
+| Card | One, centred, the same size on every step: 46 rem wide at most, 29 rem high at least, `space.7` padding. Its place does not change between steps |
+| Content | One decision per step. A choice is drawn as the thing itself when it can be (the layout step). At most two sentences before the choice |
+| Actions | In one place on every step: the bottom of the card, primary first. One primary. "Not now" is a quiet button, never a link in the text |
+| First screen | What the product is in one sentence that points at the band; two exits, "set up" and "use the defaults", and the defaults said in one line |
+| Facts | Only what was read and is true now. A fact still arriving is not shown as a warning and not shown as done: it is read again where the sequence ends |
+| Progress | "Etapa N de M" above the card; its line keeps its height on the steps that have no number |
+| Motion | None between steps. The card does not slide, fade or resize |
+| Who is never staged | Private windows, temporary profiles, AI Workspaces, any tab other than the first run's |
+
+### Motion: chrome that hides (ADR 0009)
+
+Added to the UX7 table. The times come from the motion tokens; `motion.duration.hold` (600 ms) is new.
+
+| Element | What moves | Tokens | Never moves | Reduced motion |
+|---|---|---|---|---|
+| Toolbar in Imersivo and on the stage | `translate` and `opacity`, over the page; the page never reflows | reveal: `fast`, `enter`; leave: `base`, `exit`, after `hold` | The band, the origin in it, the seals | No transition: shown and hidden at once |
+| Tab list in Imersivo | `translate`, over the page | the same | — | The same |
+| A prompt, a warning, a device being shared | The chrome is in place **before** the engine anchors anything to it, and stays for as long as it is open | — | — | — |
+
+`tests/unit/test_motion_sheet.py` already enforces the first two columns for every sheet (movement only under `prefers-reduced-motion: no-preference`, times and curves only from tokens); the Immersive prototype failed it until it was brought to these rules.
+
+### Sounds
+
+Nulavio plays no sound today, and none of the browsers studied did. The rules for the first one:
+
+1. **Off unless the system says yes.** A sound is played only through the engine's system event sounds (`nsISound.playEventSound`), which follow the desktop's sound theme and its "event sounds" switch. Nulavio ships no audio file and never opens an audio device itself.
+2. **One switch, easy to find**: "Sons do Nulavio" in Acessibilidade of the one settings page, and it is off in a new profile until the maintainer decides otherwise.
+3. **Only for something that happened while the person was not looking**, and at most once per event: a download that needs a decision, an agent waiting for consent, a profile that locked itself. Never for a click, a navigation, a success, a tab or a hover.
+4. **Never the only cue.** Every sound has its visible state, in words, in the band or the page.
+5. **Never for security theatre.** No sound for "secure", none that imitates the system's own alerts for something that is not one.
+6. **One module.** `NulavioSound.sys.mjs` is the only file that may play anything (`test_experience_rules`: no sound outside the sound module).
+
+Not verified: nothing here could be heard on the private display. The first sound ships only after it has been heard on a real desktop.
+
+### Rules for whoever changes the interface, person or model
+
+Each rule has a check. A change that breaks a check is not finished; a rule with no check yet says so.
+
+| # | Rule | Check |
+|---|---|---|
+| 1 | Work from something seen: a capture of the engine before and after, at the same size, in both themes and both languages. Never describe a state that was not captured | Captures in the pull request; reference PNGs updated on purpose |
+| 2 | Never weaken a protection and never show a state that was not read. An unknown is said as unknown | `shared/options.json` test (no option writes a protection pref); Shell unit tests; `test_security_moments` |
+| 3 | The band is never hidden, and nothing else does its job | `test_experience_rules`, `test_window_band` |
+| 4 | Colours, sizes, radii, times and curves come from `docs/brand/tokens.json`. No literal | Token tests in `test_brand_and_docs`; `test_motion_sheet` |
+| 5 | Movement only under "no preference"; security cues never move | `test_motion_sheet`, `test_motion` |
+| 6 | One primary action per group; the safe action is the primary one in a warning | `test_experience_rules`; component gallery |
+| 7 | pt-BR and en-US change together, in the same commit | Locale parity tests; `test_experience_rules` for Fluent |
+| 8 | One settings page. A new option is a group in the pane where the person would look for it, never a new page | `test_settings_native` (ADR 0008) |
+| 9 | One decision per screen in a sequence; the card and its actions keep their place | No check yet: a rendered test of the stage's card rectangle per step is part of the first-run slice |
+| 10 | No sound outside `NulavioSound.sys.mjs`, and none by default | `test_experience_rules` |
+| 11 | Ideas from other browsers are re-derived, never copied: no file, asset, name or wording. GPL code is never read into the product | Review; `LICENSES.md` when a file is ever taken |
+| 12 | A second opinion (a reviewer model, a critique from captures) is a hypothesis: check it on the engine or the source before changing anything, and record what was checked | The "independent review" tables in the ADRs |
