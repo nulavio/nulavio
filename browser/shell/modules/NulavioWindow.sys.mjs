@@ -453,6 +453,21 @@ class WindowUI {
     // ...and a device that starts or stops being shared in any tab is decided at once.
     const sharing = event => event.detail?.changed?.includes("sharing") && this.#applyImmersive(win);
     win.gBrowser.tabContainer.addEventListener("TabAttrModified", sharing);
+    // ...as is a prompt that opens or closes on a tab (the engine's tab dialogs), once more after the event
+    // because the dialog is still listed while "dialogclose" is dispatched.
+    const dialog = () => {
+      this.#applyImmersive(win);
+      win.setTimeout(() => this.#windows.has(win) && this.#applyImmersive(win), 0);
+    };
+    for (const type of ["dialogopen", "dialogclose"]) {
+      win.addEventListener(type, dialog, true);
+    }
+    // ...and a download that needs attention, which only marks its button.
+    const downloads = new win.MutationObserver(() => this.#downloadHold(win));
+    const downloadsButton = doc.getElementById("downloads-button");
+    if (downloadsButton) {
+      downloads.observe(downloadsButton, { attributes: true, attributeFilter: ["attention"] });
+    }
     const unload = () => this.#detach(win);
     win.addEventListener("unload", unload, { once: true });
     const reveal = () => this.#showNotice(win);
@@ -473,7 +488,8 @@ class WindowUI {
       identityObserver.observe(identityBox, { attributes: true, attributeFilter: ["class"] });
     }
     this.#windows.set(win, { bar, compact, fullscreen, line, sheet, progress, header, unload, pointer, screenObserver, identityObserver, edge,
-      popup, sharing, holds: new Map(), named: false, noticeTimer: null, safety: null, restoreGroupPalette: this.#groupPalette(win) });
+      popup, sharing, dialog, downloads, holds: new Map(), named: false, noticeTimer: null, safety: null, restoreGroupPalette: this.#groupPalette(win) });
+    this.#downloadHold(win);
     this.#paint(win);
     this.#unifyStartPage(win);
   }
@@ -619,10 +635,24 @@ class WindowUI {
     if (!win.toolbar.visible) {
       return "popup"; // a pop-up or any window without the full toolbar
     }
-    // A camera, a microphone or a screen shared from any tab of this window: the engine's own indicators are
-    // the cue, so the toolbar stays. Read from what those indicators are drawn from (the tab's sharing state).
-    if ([...win.gBrowser.tabs].some(tab => tab._sharingState?.webRTC?.sharing || tab.hasAttribute("sharing"))) {
+    // A camera, a microphone or a screen shared from any tab of this window, paused or not: the engine's own
+    // indicators are the cue, so the toolbar stays. Read from what those indicators are drawn from (the
+    // browser's sharing state; the tab's attribute goes away while a capture is paused).
+    if ([...win.gBrowser.tabs].some(tab => tab.linkedBrowser?._sharingState?.webRTC?.sharing || tab.hasAttribute("sharing"))) {
       return "sharing";
+    }
+    // A prompt on the selected tab (HTTP authentication, alert, confirm, before-unload). For a cross-site
+    // authentication request the engine rewrites the address bar and the tab's label to the site that asks
+    // (currentAuthPromptURI): that must be seen, and the band's site would be the wrong one.
+    try {
+      const browser = win.gBrowser.selectedBrowser;
+      const box = browser.tabDialogBox;
+      if (browser.currentAuthPromptURI || box?._tabDialogManager?.hasDialogs || box?._contentDialogManager?.hasDialogs) {
+        return "prompt";
+      }
+    } catch (e) {
+      console.error("Nulavio band: prompt state", e);
+      return "prompt"; // not known: as if one were open
     }
     if (!this.#windows.get(win)?.named) {
       return "page"; // a document the band has no defined name for (about:blank, data:, blob:, view-source:)
@@ -679,6 +709,27 @@ class WindowUI {
     if (part && state.holds.get(node) !== part) {
       state.holds.set(node, part);
       this.#applyImmersive(win);
+      // A popup whose opening was cancelled sends no "popuphidden": look again once this event is over.
+      win.setTimeout(() => this.#windows.has(win) && this.#applyImmersive(win), 0);
+    }
+  }
+
+  /** A download that needs the person's attention (blocked, or flagged as dangerous) marks its toolbar button
+      and opens nothing: the toolbar stays shown until the mark is gone (the person opened the downloads). */
+  #downloadHold(win) {
+    const state = this.#windows.get(win);
+    const button = win.document.getElementById("downloads-button");
+    if (!state || !button) {
+      return;
+    }
+    const needs = ["warning", "severe"].includes(button.getAttribute("attention"));
+    if (needs !== state.holds.has(button)) {
+      if (needs) {
+        state.holds.set(button, "toolbar");
+      } else {
+        state.holds.delete(button);
+      }
+      this.#applyImmersive(win);
     }
   }
 
@@ -717,7 +768,8 @@ class WindowUI {
           state = fine ? "" : t("bandOriginNotSecure");
         } else if (uri.schemeIs("file")) {
           host = t("bandOriginFile");
-        } else if (uri.schemeIs("about") && uri.spec !== "about:blank") {
+        } else if (uri.schemeIs("about") && uri.spec.split(/[?#]/)[0] !== "about:blank") {
+          // "about:blank#x" and "about:blank?x" are about:blank too (a document that inherits its opener).
           host = uri.spec.split(/[?#]/)[0];
         }
         // Anything else (about:blank, data:, blob:, view-source:) has no defined name: full chrome.
@@ -999,6 +1051,10 @@ class WindowUI {
       win.removeEventListener(type, state.popup, true);
     }
     win.gBrowser.tabContainer.removeEventListener("TabAttrModified", state.sharing);
+    for (const type of ["dialogopen", "dialogclose"]) {
+      win.removeEventListener(type, state.dialog, true);
+    }
+    state.downloads.disconnect();
     win.clearTimeout(state.noticeTimer);
     state.screenObserver.disconnect();
     state.identityObserver.disconnect();

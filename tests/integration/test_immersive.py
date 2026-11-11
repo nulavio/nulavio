@@ -74,7 +74,7 @@ class ImmersiveTest(unittest.TestCase):
         self.assertFalse(self.settled(False)["toolbar"])
 
     def test_03_a_page_the_band_cannot_name_keeps_the_full_window(self):
-        for address in ("about:blank", "data:text/html,<h1>x</h1>", f"view-source:{self.page}"):
+        for address in ("about:blank", "about:blank#x", "about:blank?x", "data:text/html,<h1>x</h1>", f"view-source:{self.page}"):
             with self.subTest(address=address):
                 self.m.chrome(
                     "gBrowser.selectedBrowser.fixupAndLoadURIString(arguments[0],"
@@ -147,8 +147,48 @@ class ImmersiveTest(unittest.TestCase):
         self.addCleanup(self.m.chrome, "while (gBrowser.tabs.length > 1) gBrowser.removeTab(gBrowser.tabs.at(-1));")
         harness.wait_until(lambda: self.m.chrome("return !gBrowser.selectedBrowser.webProgress.isLoadingDocument;"), 15)
         self.assertEqual(self.window()["off"], "sharing", self.window())
+        # A capture that is paused is still a capture: the tab's mark may go, the browser's state stays.
+        self.m.chrome(
+            "const first = gBrowser.tabs[0];"
+            "gBrowser.updateBrowserSharing(first.linkedBrowser, {webRTC: {sharing: 'microphone', paused: true}});"
+            "first.removeAttribute('sharing'); gBrowser._tabAttrModified(first, ['sharing']);"
+        )
+        self.assertEqual(self.window()["off"], "sharing", self.window())
         self.m.chrome("gBrowser.updateBrowserSharing(gBrowser.tabs[0].linkedBrowser, {webRTC: null});")
         self.assertTrue(harness.wait_until(lambda: self.window()["on"], 15), self.window())
+
+    def test_06b_a_prompt_on_the_tab_brings_the_full_window_back(self):
+        """Independent review (2026-11-11): the engine's tab prompts are not panels. For a cross-site HTTP
+        authentication request it rewrites the address bar to the site that asks; that must be in view."""
+        self.assertFalse(self.settled(False)["toolbar"])
+        # A dialog in the engine's tab dialog box, where its prompts live. (Not an alert: the test driver
+        # dismisses those by itself.)
+        self.m.chrome(
+            "gBrowser.getTabDialogBox(gBrowser.selectedBrowser).open('chrome://global/content/aboutAbout.html',"
+            " {features: 'resizable=no', modalType: Services.prompt.MODAL_TYPE_TAB});"
+        )
+        self.assertTrue(harness.wait_until(lambda: self.window()["off"] == "prompt", 10), self.window())
+        self.assertTrue(self.settled(True)["toolbar"], "the toolbar is not shown under a tab prompt")
+        self.m.chrome("gBrowser.selectedBrowser.tabDialogBox.getTabDialogManager().abortDialogs();")
+        self.assertTrue(harness.wait_until(lambda: self.window()["on"], 10), self.window())
+        # The state the engine sets for a cross-site authentication request, before its dialog opens.
+        mark = "gBrowser.selectedBrowser.currentAuthPromptURI = arguments[0] ? Services.io.newURI(arguments[0]) : null;"
+        refresh = "gBrowser.tabContainer.dispatchEvent(new CustomEvent('TabSelect', {bubbles: true}));"
+        self.m.chrome(mark + refresh, ["https://other.example/"])
+        self.addCleanup(self.m.chrome, mark + refresh, [None])
+        self.assertEqual(self.window()["off"], "prompt", self.window())
+        self.m.chrome(mark + refresh, [None])
+        self.assertTrue(harness.wait_until(lambda: self.window()["on"], 10), self.window())
+
+    def test_06c_a_download_that_needs_attention_keeps_the_toolbar(self):
+        self.assertFalse(self.settled(False)["toolbar"])
+        button = "document.getElementById('downloads-button')"
+        self.m.chrome(f"{button}.setAttribute('attention', 'severe');")
+        self.addCleanup(self.m.chrome, f"{button}.removeAttribute('attention');")
+        self.assertTrue(harness.wait_until(lambda: self.window()["hold"] == "toolbar", 10), self.window())
+        self.assertTrue(self.settled(True)["toolbar"])
+        self.m.chrome(f"{button}.setAttribute('attention', 'success');")  # a finished download is no warning
+        self.assertTrue(harness.wait_until(lambda: self.window()["hold"] is None, 10), self.window())
 
     def test_07_the_switch_and_the_key_write_one_pref_and_say_so(self):
         pref = "return Services.prefs.getBoolPref('nulavio.layout.immersive', false);"
