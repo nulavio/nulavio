@@ -403,6 +403,44 @@ class NativeSettingsTest(unittest.TestCase):
         # The layout was read: its card is unaffected.
         self.assertEqual(self.control("#nulavio-layout", lambda s: s.get("value") == "lateral")["value"], "lateral")
 
+    def test_06a_what_the_content_filter_blocks_is_one_row_away(self):
+        privacy = 'const N = ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioPrivacy.sys.mjs").NulavioPrivacy;'
+        where = "return gBrowser.selectedBrowser.currentURI.spec;"
+        # The module's own entry, with uBlock Origin as it is in this profile (the policy installs it from the network).
+        real = self.m.chrome(
+            privacy
+            + """
+          const active = N.filter().active;
+          try { N.openFilterLists(); return { active, opened: true }; } catch (e) { return { active, code: e.code }; }
+        """
+        )
+        if real["active"]:
+            self.assertTrue(real["opened"], real)
+            lists = "/dashboard.html#3p-filters.html"
+            self.assertTrue(harness.wait_until(lambda: self.m.chrome(where).endswith(lists), 15), self.m.chrome(where))
+        else:
+            self.assertEqual(real["code"], "filter-missing", real)
+
+        # The row says what was read from the add-on manager (never uBlock Origin's own data) and opens its page.
+        state = privacy + "window.__lists ??= 0; N.filter = () => ({ installed: true, active: arguments[0] });"
+        self.m.chrome(state + "N.openFilterLists = () => { window.__lists++; };", [True])
+        self.addCleanup(self.m.chrome, privacy + "delete N.filter; delete N.openFilterLists;")
+        self.open()
+        self.groups("panePrivacy")
+        row = self.control("#nulavio-filter-lists", lambda s: s.get("shown") and s.get("label"))
+        self.assertEqual(row["label"], "O que o uBlock Origin bloqueia", row)
+        self.assertIn("avisos de cookies", row["description"])
+        self.m.chrome(DOC + 'd.querySelector("#nulavio-filter-lists").click();')
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome("return window.__lists;") == 1, 10))
+        # Turned off: the row says so, and leads to where it is turned on.
+        self.m.chrome(state, [False])
+        self.m.chrome(DOC + 'd.dispatchEvent(new w.Event("visibilitychange"));')
+        off = "O uBlock Origin não está ligado neste perfil"
+        self.assertEqual(self.control("#nulavio-filter-lists", lambda s: s.get("label") == off)["label"], off)
+        self.m.chrome(DOC + 'd.querySelector("#nulavio-filter-lists").click();')
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome(where) == "about:addons", 15), self.m.chrome(where))
+        self.assertEqual(self.m.chrome("return window.__lists;"), 1)
+
     def test_06b_every_profile_is_listed_with_its_protection(self):
         rows = (
             DOC

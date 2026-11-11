@@ -274,6 +274,19 @@ class Privacy {
     win.openTrustedLinkIn(policy.getURL("dashboard.html#whitelist.html"), "tab");
   }
 
+  /** Open uBlock Origin's own "Filter lists" (what it blocks: ads, trackers, cookie notices), in a tab. */
+  openFilterLists() {
+    const policy = WebExtensionPolicy.getByID(UBLOCK);
+    if (!policy?.active) {
+      throw new PrivacyError("filter-missing");
+    }
+    const win = Services.wm.getMostRecentBrowserWindow();
+    if (!win) {
+      throw new PrivacyError("no-window");
+    }
+    win.openTrustedLinkIn(policy.getURL("dashboard.html#3p-filters.html"), "tab");
+  }
+
   // -- change notifications -------------------------------------------------
 
   observe(subject) {

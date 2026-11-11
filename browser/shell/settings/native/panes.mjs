@@ -776,6 +776,32 @@
       },
     });
 
+    // -- what the content filter blocks: uBlock Origin's own lists, on its own page. Nulavio reads only
+    // whether it is on (the add-on manager's answer), never its data: which lists are ticked is said there. --
+    const filter = source(async () => shell.NulavioPrivacy.filter());
+    setting({
+      id: "nulavio-filter-lists",
+      setup(emitChange, stops) {
+        stops.push(filter.listen(emitChange));
+        filter.refresh();
+        const { AddonManager } = ChromeUtils.importESModule("resource://gre/modules/AddonManager.sys.mjs");
+        const changed = () => filter.refresh();
+        const listener = { onInstalled: changed, onUninstalled: changed, onEnabled: changed, onDisabled: changed };
+        AddonManager.addAddonListener(listener);
+        stops.push(() => AddonManager.removeAddonListener(listener));
+      },
+      visible: () => filter.state.ready,
+      onUserClick(event) {
+        event.preventDefault();
+        if (filter.state.value?.active) {
+          shell.NulavioPrivacy.openFilterLists();
+        } else {
+          top().BrowserAddonUI.openAddonsMgr("addons://list/extension"); // where it is turned on, or seen to be missing
+        }
+      },
+      getControlConfig: config => (filter.state.value?.active === false ? { ...config, l10nId: "nulavio-filter-lists-off" } : config),
+    });
+
     // -- what changed outside Nulavio (the Guard's pending findings; the review is its own page) --
     // The count is read after the Guard's own check of this start (it waits for the windows to be back):
     // before that the Guard has no findings to give, which is not the same as "nothing to review".
@@ -962,10 +988,12 @@
         headingLevel: 2,
         items: [
           failureNote("nulavio-guard-failed", guard),
+          failureNote("nulavio-filter-failed", filter),
           {
             id: "nulavio-protections-box",
             control: "moz-box-group",
             items: [
+              { id: "nulavio-filter-lists", l10nId: "nulavio-filter-lists", control: "moz-box-button" },
               detailRow("nulavio-open-exceptions", "exceptions"),
               { id: "nulavio-guard-review", l10nId: "nulavio-guard-review", control: "moz-box-button" },
             ],

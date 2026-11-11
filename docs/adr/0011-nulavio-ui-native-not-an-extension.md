@@ -67,3 +67,14 @@ Branch `agent/claude/feat-settings-profile-actions`, on the alpha's engine by `d
 `tests/integration/test_settings_profiles.py` (6 tests) acts as a person does and reads the result from the module: the actions per row and their names, opening and a refusal, the doors around the list; editing with a taken name, saving name, icon and colour, cancelling, writing only what changed; deleting with the prompt cancelled and then accepted; creating with and without a template; a group that cannot be used. The rows and actions of a **protected** profile are checked with a list the test gives the module and with the Vault's entries replaced: no protected profile is created there (that needs the Vault's tools), so locking and unlocking for real stay covered by the Vault's own tests.
 
 Still the old page's: the routing rules. Then search, passwords, exceptions and the assistant, and the removal of the old page's sections with their tests.
+
+## Step 3 (2026-11-11): what the content filter blocks, one row away
+
+Branch `agent/claude/feat-settings-filter-lists`.
+
+![The "Proteções do Nulavio" group with the row that opens uBlock Origin's filter lists](../design/screenshots/experience-2026-11/settings-filter-lists.png)
+
+Ads, trackers and cookie notices are blocked by uBlock Origin's lists, and nothing in Settings led to them. "Privacidade e Segurança" now has a row that opens uBlock Origin's own "Filter lists" page. Nulavio reads only whether uBlock Origin is on (the add-on manager's answer, as before) and never its data: which lists are ticked is said on its page, not guessed here. With uBlock Origin off or missing, the row says so and opens "Extensões e temas". `test_settings_native` `test_06a` covers both states and the address the module opens.
+
+Not decided (maintainer): showing the real state in the row ("cookie notices: hidden" or "shown") means reading uBlock Origin's own settings. Recommendation: allow reading, never writing, and say so in the words that today promise Nulavio "never alters" its data.
+
