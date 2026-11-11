@@ -91,6 +91,10 @@ class CompanionBuildTest(unittest.TestCase):
         self.assertIn(f"versionName: {version_name}", recipe)
         self.assertIn("subdir: android/app", recipe)
         self.assertIn("License: MPL-2.0", recipe)
+        self.assertNotIn("Summary:", recipe)  # fdroiddata's tools/make-summary-translatable.py refuses it
+        for locale in ("en-US", "pt-BR"):
+            summary = (ANDROID / "fdroid" / "net.nulavio.companion" / locale / "summary.txt").read_text(encoding="utf-8")
+            self.assertLessEqual(len(summary.strip()), 80)  # F-Droid's limit for a summary
         self.assertIn('applicationId = "net.nulavio.companion"', gradle)
         self.assertIn("includeInApk = false", gradle)  # no Google-encrypted dependency block
 

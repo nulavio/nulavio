@@ -1,5 +1,6 @@
-# Recipe for fdroiddata (metadata/net.nulavio.companion.yml), to submit when the first Companion
-# release is tagged (ADR 0005, decision D4: F-Droid first). Checked by tests/unit/test_companion_build.py.
+# The recipe as submitted to fdroiddata (metadata/net.nulavio.companion.yml) on 2026-11-11, for tag
+# companion-v0.1.0 (ADR 0005, decision D4: F-Droid first). fdroiddata keeps the summary out of the recipe,
+# in net.nulavio.companion/<locale>/summary.txt (mirrored next to this file). Checked by tests/unit/test_companion_build.py.
 Categories:
   - Security
 License: MPL-2.0
@@ -9,7 +10,6 @@ SourceCode: https://github.com/nulavio/nulavio
 IssueTracker: https://github.com/nulavio/nulavio/issues
 
 AutoName: Nulavio Companion
-Summary: Unlock protected Nulavio profiles with your phone
 Description: |-
   Nulavio Companion unlocks the protected (encrypted) profiles of the Nulavio
   web browser on your computer. The key that opens a profile is kept on the
