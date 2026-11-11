@@ -106,14 +106,25 @@ function methodRow(method, count, confirmers) {
   );
 }
 
+/* Nothing can be changed here (not a protected profile, a profile that no longer exists, a failed
+   read): the page says why and shows no method, no action and no field for a secret
+   (audit 2026-11 S-01). */
+function unavailable(text) {
+  byId("explain").textContent = text;
+  byId("explain").hidden = !text;
+  for (const id of ["few", "methods", "add-actions", "not-yet", "current-error", "password-form", "code-step"]) {
+    byId(id).hidden = true;
+  }
+  byId("current").closest(".field").hidden = true;
+  document.querySelector("details.why").hidden = true;
+  document.body.dataset.secret = "none"; // no field left: pages.css takes the "look at the band first" line away
+  setState("unavailable");
+}
+
 async function render() {
   profile = await vault.status(profileId);
   if (!profile.encrypted) {
-    byId("explain").textContent = t("methodsNotProtected", [profile.name]);
-    for (const id of ["few", "methods", "add-actions"]) {
-      byId(id).hidden = true;
-    }
-    setState("unavailable");
+    unavailable(t("methodsNotProtected", [profile.name]));
     return;
   }
   byId("who").replaceChildren(chip(profile, "lg"), h("span", { class: "popup__name", text: profile.name }), ...profileStates(profile).map(stateBadge));
@@ -243,8 +254,10 @@ vault
   })
   .then(render)
   .catch(e => {
-    setState("unavailable");
-    announce(errorText(e), "error");
+    const gone = String(e?.message) === "not-found";
+    byId("headline").textContent = t(gone ? "vaultGoneHeadline" : "vaultUnreadHeadline");
+    unavailable("");
+    announce(gone ? t("vaultGone") : errorText(e), "error");
   })
   .finally(() => {
     document.documentElement.dataset.ready = "true";

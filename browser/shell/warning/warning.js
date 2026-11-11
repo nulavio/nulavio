@@ -34,7 +34,9 @@ function finish(message, level) {
   result.textContent = message;
   result.dataset.level = level;
   result.hidden = false;
-  document.getElementById("actions").hidden = true;
+  // A failed delete leaves the file where it was: "Mostrar na pasta" and another try stay
+  // (audit 2026-11 S-01). Only a file that is gone has nothing left to act on.
+  document.getElementById("actions").hidden = level === "ok";
   document.documentElement.dataset.state = level === "ok" ? "deleted" : "error";
 }
 

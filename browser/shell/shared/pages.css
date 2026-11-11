@@ -480,6 +480,8 @@ html[data-page="newtab"][data-ambience="on"][data-transparency="reduced"] .card 
   font-size: var(--nv-type-label-size);
   color: var(--nv-color-text-secondary);
 }
+/* A page that ended with no field for a secret (a profile that is gone) has nothing to check first. */
+body[data-secret="none"] .moment__check { display: none; }
 /* The level, in the same place on every page: glyph and word, from the page's own callout */
 .moment__severity {
   display: inline-flex;
