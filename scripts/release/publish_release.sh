@@ -12,6 +12,10 @@
 #    SHA256SUMS and its detached signature (assets of the GitHub release).
 # 4. stage/NEXT.md: the upload, tag and release commands for this version.
 #
+# NULAVIO_PUBLISH_REF: the reviewed branch the rehearsed commit must be on
+# (default origin/main). A security release is prepared in a private GitHub
+# advisory fork and merged into main when it is published: name that branch.
+#
 # The alpha ships for Fedora only (RPM). The .deb stays unsigned and unpublished
 # until there is an APT repository (decision of 2026-11-04).
 set -euo pipefail
@@ -38,8 +42,9 @@ if [[ -e $stage ]] && [[ -n $(ls -A "$stage") ]]; then
     exit 2
 fi
 
+ref=${NULAVIO_PUBLISH_REF:-origin/main}
 git -C "$repo" fetch --quiet origin main
-info=$(python3 -I "$repo/scripts/release/release_manifest.py" verify "$out" --repo "$repo" --on origin/main)
+info=$(python3 -I "$repo/scripts/release/release_manifest.py" verify "$out" --repo "$repo" --on "$ref")
 # Before anything is written: no package in the directory that the manifest does not list.
 python3 -I "$repo/scripts/release/release_manifest.py" packages "$out/manifest.json" "$out/packages" >/dev/null
 field() { python3 -I -c 'import json, sys; v = json.loads(sys.argv[1])[sys.argv[2]]; print(*v, sep="\n") if isinstance(v, list) else print(v)' "$info" "$1"; }
@@ -70,7 +75,7 @@ cat >"$stage/NEXT.md" <<EOF
 # Publishing $tag (Firefox $firefox, commit ${commit:0:12})
 
 Checked: the rehearsal manifest, the packages' SHA-256, the base commit on
-origin/main; signed with $key. Not done by the script: everything below.
+$ref; signed with $key. Not done by the script: everything below.
 
 1. Upload the dnf repository (the host decides the command; with Cloudflare R2):
 
