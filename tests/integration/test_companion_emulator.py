@@ -125,6 +125,10 @@ class CompanionOnEmulatorTest(unittest.TestCase):
 
     def tap(self, needle: str, timeout: float = 30) -> None:
         node = self.wait_text(needle, timeout)
+        # A button whose label is exactly the needle wins over a title that only contains it
+        # ("Unlock" vs "Unlock “cofre” on vaio?").
+        exact = [n for n in self.ui() if n["text"].lower() == needle.lower()]
+        node = exact[0] if exact else node
         adb("shell", "input", "tap", str(node["x"]), str(node["y"]))
 
     def enter_pin(self) -> None:
@@ -225,7 +229,9 @@ class CompanionOnEmulatorTest(unittest.TestCase):
         self.hand_code(first["qr"])
         self.tap("Not now")
         time.sleep(3)
-        self.assertIn(session.state, ("waiting-for-phone",))
+        # The phone connects as soon as it shows the request (emulator: not forwarded here), so the computer
+        # may already show "approve on your phone"; either way nothing was sent.
+        self.assertIn(session.state, ("waiting-for-phone", "approve-on-phone"))
         session.handle({"action": "cancel"})
         thread.join(30)
         self.assertEqual(session.state, "cancelled")

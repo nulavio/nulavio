@@ -53,7 +53,7 @@ Evidence and per-platform states: [compatibility report](../research/phone-unloc
 
 ## Implementation (S11, 2026-10-27)
 
-**Built and tested, except on the real phone.** Everything below runs; the one criterion still open is the test on the maintainer's Galaxy S24+ (Android 17), which needs the phone (see *Pending*).
+**Built and tested, on the real phone since 2026-11-10.** Everything below runs; the device test passed on the maintainer's Galaxy S24+ (Android 17) over the real network path (see *Real-phone run*); a short manual pass is still open (see *Pending*).
 
 - **Desktop:** the transport above (`vault/link.py`), pairing and unlock sessions in a short-lived helper process (`vault/phone_session.py`), browser API ops `phone-pair-start`, `phone-unlock-start`, `phone-session`. Pairing re-authenticates with the profile's password or recovery code and refuses unless the profile has a recovery code and one other method (§6).
 - **Browser:** Settings → Profiles → *Phones* on a protected profile opens `vault/phone.html` (current secret, code, the 6 digits with "They match"/"They are different", phones listed and removable); the locked-profile page offers *Unlock with phone* (code, "Approve on your phone", then the profile and any held-back address open). The code is drawn as SVG from the engine's own QR encoder (`moz-src:///toolkit/components/qrcode/encoder.mjs`), always dark on light.
@@ -65,11 +65,19 @@ Evidence and per-platform states: [compatibility report](../research/phone-unloc
 
 **Tests:** `tests/unit/test_phone_link.py` (transport and sessions with the reference phone over TCP against real encrypted profiles; with `NULAVIO_LAN_TESTS=1` through the machine's real Avahi, pairing and unlocking in 3 s), `tests/unit/test_companion_protocol.py` (the Java phone against the Python desktop: pairing, unlock that mounts the profile, replay, tampered, unknown-desktop and expired requests refused), `android/nv1` JUnit (vectors, JSON, public state without secrets), `tests/integration/test_vault_ui.py` 08–09 (the browser pages, Nulavio build), `tests/unit/test_companion_build.py` (no Google services, the four permissions, per-use key, debug-only hooks, pinned inputs, recipe matches the build), and `tests/integration/test_companion_emulator.py` (the app driven over adb against the real desktop; opt-in).
 
-**Pending (needs the maintainer):** running `test_companion_emulator.py`'s steps on the Galaxy S24+ (USB or wireless debugging) and a manual pass: set up, pair, unlock a test profile, decline, airplane mode, lost-phone removal. The Android emulator (37.2 and 37.3) crashes at start on the reference desktop (kernel 7.2, with or without KVM), so no emulated run was possible here.
+**Real-phone run (2026-11-10).** `test_companion_emulator.py` passed 5/5 on the Galaxy S24+ (SM-S926B, Android 17, keys in StrongBox) over wireless debugging, with the desktop finding the phone through Avahi on the home network (no adb port forward): set up, pairing with the same six digits on both sides, unlock that mounts an encrypted profile, the answered request refused again, *Not now*. A screenshot pass covered every screen in pt-BR and en-US, dark and light. The Android emulator still crashes on the reference desktop, so the phone is the only device run. What the run found and fixed:
+
+- **Scanning crashed the app.** The scanner library's own activity asks for the camera through AndroidX, which the APK does not ship (`isTransitive = false`); the debug-intent path of the test never opened the camera. The app now has its own `ScanActivity` (platform permission request, the library's view only) and removes the library's activity from the manifest; `test_companion_build` refuses any code path that needs AndroidX.
+- **The unlock request's profile and computer were hidden.** Apps that target Android 15+ are drawn edge to edge; the first lines of each screen sat under the action bar. The app now has no action bar (each screen has its own title) and pads every screen by the system bars.
+- **A cancel on the desktop did not stop a held request.** The phone connects as soon as it shows the request; the desktop then waited for its answer without watching for a cancel, so an approval on the phone after a cancel on the computer would still have unlocked the profile. The desktop now ends the session at once (`test_phone_link` 06), and *Not now* on the phone closes the accepted connection so the computer offers its other methods immediately.
+- **An expired request said "the computer did not connect".** It now says the request expired.
+- **Screens.** Brand colours (light and dark), a filled primary and an outlined secondary button with space between them, problems in red and news in mint, a confirmation before removing a computer, a progress indicator, the version in a footer.
+
+**Pending (needs the maintainer):** a short manual pass: scan a real code from the browser's page with the camera (the build's pairing offer is off, see *Availability*), airplane mode during an unlock, and removing a lost phone on the desktop.
 
 ## Availability (decision D10, 2026-11-04)
 
-Phone unlock is not part of 1.0: the Companion is not published and the run on a real phone is still open. Until it is, the browser does not offer to connect a phone:
+Phone unlock is not part of 1.0: the Companion is not published yet (its device test passed on 2026-11-10; the manual pass above is open). Until it is, the browser does not offer to connect a phone:
 
 - The unlock-methods page says that unlocking with a phone or a security key is not available yet in this version (FIDO2, slice S10, is not built).
 - The phone page offers no code, and the Shell refuses to start a pairing (`phone-not-yet`).

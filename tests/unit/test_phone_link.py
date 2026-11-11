@@ -249,6 +249,27 @@ class PhoneSessionTest(unittest.TestCase):
         self.assertEqual(session.state, "unreachable")
         self.assertFalse(profiles.container(self.prof).mounted())
 
+    def test_06_cancel_on_the_desktop_while_the_phone_holds_the_request(self):
+        # Found on the real phone (2026-11-10): the phone connects as soon as it shows the request; a cancel
+        # on the desktop must end the session at once, so a later approval on the phone opens nothing.
+        self.pair()
+        holder = socket.socket()
+        holder.bind(("127.0.0.1", 0))
+        holder.listen(1)
+        self.addCleanup(holder.close)
+        address = ("127.0.0.1", holder.getsockname()[1])
+        session, _first, thread = self.start("unlock", {"autolock": False}, lambda name: address)
+        conn, _ = holder.accept()  # connected, never answers
+        self.addCleanup(conn.close)
+        self.assertEqual(self.wait_state(session, "approve-on-phone"), "approve-on-phone")
+        started = time.monotonic()
+        session.handle({"action": "cancel"})
+        thread.join(10)
+        self.assertFalse(thread.is_alive())
+        self.assertLess(time.monotonic() - started, 5)
+        self.assertEqual(session.state, "cancelled")
+        self.assertFalse(profiles.container(self.prof).mounted())
+
 
 @unittest.skipUnless(sodium.available() and storage.tools_available(), "needs gocryptfs, FUSE and libsodium")
 class PhoneApiTest(unittest.TestCase):

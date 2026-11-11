@@ -280,7 +280,10 @@ def unlock(session: Session, request: dict, emit, resolver: link.Resolver = link
             try:
                 coordinator.phone_acknowledged()
                 session.set("approve-on-phone")  # the phone has the request; the user decides there
-                message = channel.recv(deadline)
+                # Ends early on a cancel here: an approval on the phone after that must open nothing.
+                message = _answer(channel, session, deadline)
+                if session.cancelled.is_set():
+                    raise link.LinkError("cancelled")
                 if message.get("t") != "response":
                     raise link.LinkError("bad-message")
                 state = coordinator.receive({k: v for k, v in message.items() if k != "t"})

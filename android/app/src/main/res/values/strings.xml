@@ -31,6 +31,7 @@
     <string name="unlocked">“%1$s” is unlocked on %2$s.</string>
     <string name="working">Working…</string>
     <string name="local_network_needed">Nulavio needs access to devices on your local network to reach your computer.</string>
+    <string name="camera_needed">Nulavio needs the camera to read the code on your computer.</string>
     <string name="error_expired">This code has expired. Ask the computer for a new one.</string>
     <string name="error_replay">This request was already answered.</string>
     <string name="error_unpaired">This computer is not paired with this phone.</string>
@@ -39,4 +40,11 @@
     <string name="error_unreachable">The computer did not connect. Check that both are on the same network, then try again.</string>
     <string name="error_keys_invalidated">This phone\'s keys can no longer be used (its fingerprints or screen lock changed). Set it up again and pair it again with your computers.</string>
     <string name="error_generic">Something went wrong (%1$s). Nothing was unlocked.</string>
+    <string name="remove_title">Remove %1$s?</string>
+    <string name="remove_body">This phone will no longer unlock profiles on %1$s.</string>
+    <string name="cancel">Cancel</string>
+    <string name="unlock_profile">Profile: %1$s</string>
+    <string name="unlock_computer">Computer: %1$s</string>
+    <string name="compare_hint">If they are different, someone may be pretending to be your computer. Nothing is saved.</string>
+    <string name="footer">Version %1$s · Free software · No account, no cloud</string>
 </resources>

@@ -2,10 +2,14 @@ package net.nulavio.companion;
 
 import android.Manifest;
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.app.KeyguardManager;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.content.res.ColorStateList;
 import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.RippleDrawable;
 import android.hardware.biometrics.BiometricManager;
 import android.hardware.biometrics.BiometricPrompt;
 import android.os.Build;
@@ -16,13 +20,13 @@ import android.os.Looper;
 import android.provider.Settings;
 import android.security.keystore.KeyPermanentlyInvalidatedException;
 import android.util.TypedValue;
+import android.view.Gravity;
 import android.view.View;
 import android.widget.Button;
 import android.widget.LinearLayout;
+import android.widget.ProgressBar;
 import android.widget.ScrollView;
 import android.widget.TextView;
-import com.google.zxing.integration.android.IntentIntegrator;
-import com.google.zxing.integration.android.IntentResult;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
@@ -44,6 +48,7 @@ import net.nulavio.nv1.Secrets;
  */
 public final class MainActivity extends Activity {
     private static final int LOCAL_NETWORK_REQUEST = 7;
+    private static final int SCAN_REQUEST = 9;
     private static final int API_37 = 37;
     private static final long SKEW_MILLIS = 120_000;
 
@@ -54,6 +59,8 @@ public final class MainActivity extends Activity {
     private LinearLayout root;
     private Operation operation;
     private Link.Channel channel;
+    /** An unlock request's connection, accepted while the user decides; closed by "Not now". */
+    private volatile CompletableFuture<Link.Channel> pending;
     private Runnable afterPermission;
 
     @Override
@@ -61,6 +68,7 @@ public final class MainActivity extends Activity {
         super.onCreate(state);
         box = new KeyBox(this);
         ScrollView scroll = new ScrollView(this);
+        Insets.pad(scroll);
         root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         int pad = dp(20);
@@ -98,30 +106,36 @@ public final class MainActivity extends Activity {
     // -- screens -------------------------------------------------------------------------
 
     private void showHome(String message) {
+        showHome(message, false);
+    }
+
+    /** The home screen, with an optional notice on top: a problem (nothing happened) or news. */
+    private void showHome(String message, boolean problem) {
         endOperation();
         root.removeAllViews();
         title(getString(R.string.app_name));
         if (message != null) {
-            text(message, 16, true);
+            notice(message, problem);
         }
         if (!box.ready()) {
             text(getString(R.string.intro), 16, false);
-            button(getString(R.string.setup_button), v -> setUp());
+            primaryButton(getString(R.string.setup_button), v -> setUp());
+            footer();
             return;
         }
         try {
             phone = Phone.fromState(box.loadState(), () -> System.currentTimeMillis() / 1000);
         } catch (Exception e) {
             box.reset();
-            showHome(getString(R.string.error_generic, "state"));
+            showProblem(getString(R.string.error_generic, "state"));
             return;
         }
         text(getString(R.string.phone_name, phone.name()), 16, false);
         String level = box.securityLevel();
         text(getString(level.equals("STRONGBOX") ? R.string.protection_strongbox
                 : level.equals("TEE") ? R.string.protection_tee : R.string.protection_software), 14, false);
-        button(getString(R.string.scan_button), v -> scan());
-        text(getString(R.string.computers_heading), 18, true);
+        primaryButton(getString(R.string.scan_button), v -> scan());
+        heading(getString(R.string.computers_heading));
         Map<String, String> computers = phone.desktops();
         if (computers.isEmpty()) {
             text(getString(R.string.no_computers), 14, false);
@@ -129,41 +143,64 @@ public final class MainActivity extends Activity {
         for (Map.Entry<String, String> computer : computers.entrySet()) {
             LinearLayout row = new LinearLayout(this);
             row.setOrientation(LinearLayout.HORIZONTAL);
+            row.setGravity(Gravity.CENTER_VERTICAL);
+            row.setPadding(dp(16), dp(8), dp(8), dp(8));
+            row.setBackground(rounded(color(R.color.surface), color(R.color.border), dp(12)));
             TextView name = new TextView(this);
             name.setText(computer.getValue());
+            name.setTextColor(color(R.color.text_primary));
             name.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16);
             row.addView(name, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
-            Button remove = new Button(this);
+            Button remove = styled(new Button(this), false);
             remove.setText(R.string.remove);
-            remove.setOnClickListener(v -> {
-                phone.forget(computer.getKey());
-                save();
-                showHome(getString(R.string.removed));
-            });
-            row.addView(remove);
-            root.addView(row);
+            remove.setTextColor(color(R.color.critical_text));
+            remove.setOnClickListener(v -> confirmRemove(computer.getKey(), computer.getValue()));
+            row.addView(remove, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, dp(44)));
+            root.addView(row, spaced(dp(8)));
         }
+        footer();
+    }
+
+    private void confirmRemove(String id, String name) {
+        new AlertDialog.Builder(this)
+                .setTitle(getString(R.string.remove_title, name))
+                .setMessage(getString(R.string.remove_body, name))
+                .setNegativeButton(R.string.cancel, null)
+                .setPositiveButton(R.string.remove, (dialog, which) -> {
+                    phone.forget(id);
+                    save();
+                    showHome(getString(R.string.removed));
+                })
+                .show();
+    }
+
+    private void showProblem(String message) {
+        showHome(message, true);
     }
 
     private void showWorking(String message) {
         root.removeAllViews();
         title(getString(R.string.app_name));
-        text(message, 16, false);
-        button(getString(R.string.not_now), v -> showHome(null));
+        ProgressBar spinner = new ProgressBar(this);
+        spinner.setIndeterminateTintList(ColorStateList.valueOf(color(R.color.accent)));
+        root.addView(spinner, spaced(dp(16)));
+        TextView status = text(message, 16, false);
+        status.setGravity(Gravity.CENTER_HORIZONTAL);
+        secondaryButton(getString(R.string.not_now), v -> showHome(null));
     }
 
     // -- set-up --------------------------------------------------------------------------
 
     private void setUp() {
         if (!getSystemService(KeyguardManager.class).isDeviceSecure()) {
-            showHome(getString(R.string.setup_needs_lock));
+            showProblem(getString(R.string.setup_needs_lock));
             return;
         }
         Cipher cipher;
         try {
             cipher = box.newKeyEncryptCipher();
         } catch (Exception e) {
-            showHome(getString(R.string.error_generic, e.getClass().getSimpleName()));
+            showProblem(getString(R.string.error_generic, e.getClass().getSimpleName()));
             return;
         }
         authenticate(getString(R.string.setup_prompt_title), cipher, authenticated -> {
@@ -175,7 +212,7 @@ public final class MainActivity extends Activity {
                 showHome(null);
             } catch (Exception e) {
                 box.reset();
-                showHome(getString(R.string.error_generic, e.getClass().getSimpleName()));
+                showProblem(getString(R.string.error_generic, e.getClass().getSimpleName()));
             } finally {
                 secrets.wipe();
             }
@@ -190,29 +227,24 @@ public final class MainActivity extends Activity {
     // -- scanning --------------------------------------------------------------------------
 
     private void scan() {
-        withLocalNetwork(() -> {
-            IntentIntegrator integrator = new IntentIntegrator(this);
-            integrator.setDesiredBarcodeFormats(IntentIntegrator.QR_CODE);
-            integrator.setPrompt(getString(R.string.scan_prompt));
-            integrator.setBeepEnabled(false);
-            integrator.setOrientationLocked(false);
-            integrator.initiateScan();
-        });
+        withLocalNetwork(() -> startActivityForResult(new Intent(this, ScanActivity.class), SCAN_REQUEST));
     }
 
     @Override
     @SuppressWarnings("deprecation")
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-        IntentResult result = IntentIntegrator.parseActivityResult(requestCode, resultCode, data);
-        if (result == null) {
+        if (requestCode != SCAN_REQUEST) {
             super.onActivityResult(requestCode, resultCode, data);
             return;
         }
-        if (result.getContents() == null) {
+        String code = data == null ? null : data.getStringExtra(ScanActivity.EXTRA_CODE);
+        if (resultCode == RESULT_OK && code != null) {
+            handleCode(code);
+        } else if (data != null && data.getBooleanExtra(ScanActivity.EXTRA_CAMERA_DENIED, false)) {
+            showProblem(getString(R.string.camera_needed));
+        } else {
             showHome(null);
-            return;
         }
-        handleCode(result.getContents());
     }
 
     private void handleCode(String contents) {
@@ -220,7 +252,7 @@ public final class MainActivity extends Activity {
         try {
             qr = Json.parseObject(contents);
         } catch (PhoneRejected e) {
-            showHome(getString(R.string.not_a_nulavio_code));
+            showProblem(getString(R.string.not_a_nulavio_code));
             return;
         }
         String kind = Phone.kindOf(qr);
@@ -229,7 +261,7 @@ public final class MainActivity extends Activity {
         } else if ("unlock".equals(kind)) {
             unlock(qr);
         } else {
-            showHome(getString(R.string.not_a_nulavio_code));
+            showProblem(getString(R.string.not_a_nulavio_code));
         }
     }
 
@@ -240,7 +272,7 @@ public final class MainActivity extends Activity {
         try {
             hello = phone.scan(qr);
         } catch (PhoneRejected e) {
-            showHome(errorText(e.code));
+            showProblem(errorText(e.code));
             return;
         }
         long deadline = ((Long) qr.get("e")) * 1000;
@@ -268,10 +300,15 @@ public final class MainActivity extends Activity {
     private void showDigits(String digits, String computer, long deadline) {
         root.removeAllViews();
         title(getString(R.string.compare_title, computer));
-        TextView big = text(digits.substring(0, 3) + " " + digits.substring(3), 40, true);
+        TextView big = text(digits.substring(0, 3) + " " + digits.substring(3), 44, true);
         big.setTypeface(Typeface.MONOSPACE, Typeface.BOLD);
+        big.setTextColor(color(R.color.text_primary));
+        big.setGravity(Gravity.CENTER);
+        big.setPadding(0, dp(20), 0, dp(20));
+        big.setBackground(rounded(color(R.color.surface), color(R.color.border), dp(16)));
         big.setContentDescription(digits.replace("", " ").trim());
-        button(getString(R.string.digits_match), v -> {
+        text(getString(R.string.compare_hint), 14, false);
+        primaryButton(getString(R.string.digits_match), v -> {
             Cipher cipher = openCipher();
             if (cipher == null) {
                 return;
@@ -302,7 +339,7 @@ public final class MainActivity extends Activity {
                 });
             });
         });
-        button(getString(R.string.digits_differ), v -> io.execute(() -> {
+        secondaryButton(getString(R.string.digits_differ), v -> io.execute(() -> {
             try {
                 Map<String, Object> cancel = new TreeMap<>();
                 cancel.put("t", "cancel");
@@ -323,12 +360,13 @@ public final class MainActivity extends Activity {
         try {
             request = phone.check(signed);
         } catch (PhoneRejected e) {
-            showHome(errorText(e.code));
+            showProblem(errorText(e.code));
             return;
         }
         String profile = String.valueOf(request.get("profile_name"));
         String computer = String.valueOf(request.get("desktop_name"));
-        long deadline = ((Long) request.get("expiry")) * 1000 + SKEW_MILLIS;
+        long expiresAt = ((Long) request.get("expiry")) * 1000;
+        long deadline = expiresAt + SKEW_MILLIS;
         // Listen now, so the computer can show that the phone has the request while the user decides.
         CompletableFuture<Link.Channel> connected = CompletableFuture.supplyAsync(() -> {
             try {
@@ -338,10 +376,25 @@ public final class MainActivity extends Activity {
                 throw new java.util.concurrent.CompletionException(e);
             }
         }, io);
+        pending = connected;
         root.removeAllViews();
         title(getString(R.string.unlock_title, profile, computer));
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setPadding(dp(16), dp(12), dp(16), dp(12));
+        card.setBackground(rounded(color(R.color.surface), color(R.color.border), dp(12)));
+        for (String line : new String[] {getString(R.string.unlock_profile, profile),
+                getString(R.string.unlock_computer, computer)}) {
+            TextView item = new TextView(this);
+            item.setText(line);
+            item.setTextColor(color(R.color.text_primary));
+            item.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16);
+            item.setPadding(0, dp(4), 0, dp(4));
+            card.addView(item);
+        }
+        root.addView(card, spaced(dp(8)));
         text(getString(R.string.unlock_hint), 14, false);
-        button(getString(R.string.unlock_button), v -> {
+        primaryButton(getString(R.string.unlock_button), v -> {
             Cipher cipher = openCipher();
             if (cipher == null) {
                 return;
@@ -359,6 +412,7 @@ public final class MainActivity extends Activity {
                         }
                         box.saveState(phone.toState()); // remember the answered request at once (replay)
                         channel = connected.get(remaining(deadline), TimeUnit.MILLISECONDS);
+                        pending = null; // now held as the channel
                         Map<String, Object> message = new TreeMap<>(response);
                         message.put("t", "response");
                         channel.send(message);
@@ -368,7 +422,9 @@ public final class MainActivity extends Activity {
                         }
                         main.post(() -> showHome(getString(R.string.unlocked, profile, computer)));
                     } catch (java.util.concurrent.TimeoutException e) {
-                        fail(new PhoneRejected("unreachable"));
+                        // Past the request's expiry the computer has stopped waiting: say so, not "unreachable".
+                        boolean expired = System.currentTimeMillis() > expiresAt;
+                        fail(new PhoneRejected(expired ? "expired" : "unreachable"));
                     } catch (Exception e) {
                         fail(e);
                     }
@@ -376,7 +432,7 @@ public final class MainActivity extends Activity {
             });
         });
         // Not now: nothing is sent; the computer offers its other methods.
-        button(getString(R.string.not_now), v -> showHome(null));
+        secondaryButton(getString(R.string.not_now), v -> showHome(null));
     }
 
     // -- helpers ---------------------------------------------------------------------------
@@ -386,9 +442,9 @@ public final class MainActivity extends Activity {
             return box.decryptCipher();
         } catch (KeyPermanentlyInvalidatedException e) {
             box.reset();
-            showHome(getString(R.string.error_keys_invalidated));
+            showProblem(getString(R.string.error_keys_invalidated));
         } catch (Exception e) {
-            showHome(getString(R.string.error_generic, e.getClass().getSimpleName()));
+            showProblem(getString(R.string.error_generic, e.getClass().getSimpleName()));
         }
         return null;
     }
@@ -435,14 +491,14 @@ public final class MainActivity extends Activity {
         if (results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED && action != null) {
             action.run();
         } else {
-            showHome(getString(R.string.local_network_needed));
+            showProblem(getString(R.string.local_network_needed));
         }
     }
 
     private void fail(Exception e) {
         String code = e instanceof PhoneRejected ? ((PhoneRejected) e).code
                 : e.getCause() instanceof PhoneRejected ? ((PhoneRejected) e.getCause()).code : e.getClass().getSimpleName();
-        main.post(() -> showHome(errorText(code)));
+        main.post(() -> showProblem(errorText(code)));
     }
 
     private String errorText(String code) {
@@ -462,7 +518,7 @@ public final class MainActivity extends Activity {
         try {
             box.saveState(phone.toState());
         } catch (Exception e) {
-            showHome(getString(R.string.error_generic, "save"));
+            showProblem(getString(R.string.error_generic, "save"));
         }
     }
 
@@ -475,6 +531,11 @@ public final class MainActivity extends Activity {
     }
 
     private void endOperation() {
+        if (pending != null) {
+            // Nothing is sent: closing tells the computer at once to offer its other methods.
+            pending.thenAccept(Link.Channel::close);
+            pending = null;
+        }
         if (channel != null) {
             channel.close();
             channel = null;
@@ -493,8 +554,20 @@ public final class MainActivity extends Activity {
         return (int) (value * getResources().getDisplayMetrics().density);
     }
 
+    private int color(int id) {
+        return getColor(id);
+    }
+
     private void title(String value) {
-        TextView view = text(value, 22, true);
+        TextView view = text(value, 24, true);
+        view.setTextColor(color(R.color.text_primary));
+        view.setAccessibilityHeading(true);
+    }
+
+    private void heading(String value) {
+        TextView view = text(value, 18, true);
+        view.setTextColor(color(R.color.text_primary));
+        view.setPadding(0, dp(20), 0, dp(4));
         view.setAccessibilityHeading(true);
     }
 
@@ -502,6 +575,7 @@ public final class MainActivity extends Activity {
         TextView view = new TextView(this);
         view.setText(value);
         view.setTextSize(TypedValue.COMPLEX_UNIT_SP, sp);
+        view.setTextColor(color(R.color.text_secondary));
         if (bold) {
             view.setTypeface(view.getTypeface(), Typeface.BOLD);
         }
@@ -510,10 +584,69 @@ public final class MainActivity extends Activity {
         return view;
     }
 
-    private void button(String label, View.OnClickListener listener) {
-        Button button = new Button(this);
+    /** A notice above the screen's content: tinted red for a problem, mint for news. */
+    private void notice(String message, boolean problem) {
+        TextView view = new TextView(this);
+        view.setText(message);
+        view.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15);
+        view.setTextColor(color(problem ? R.color.critical_text : R.color.text_primary));
+        view.setPadding(dp(16), dp(12), dp(16), dp(12));
+        view.setBackground(rounded(color(problem ? R.color.critical_tint : R.color.accent_tint), 0, dp(12)));
+        view.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);
+        root.addView(view, spaced(dp(8)));
+    }
+
+    private void footer() {
+        TextView view = text(getString(R.string.footer, BuildConfig.VERSION_NAME), 12, false);
+        view.setTextColor(color(R.color.text_muted));
+        view.setPadding(0, dp(32), 0, dp(8));
+    }
+
+    private void primaryButton(String label, View.OnClickListener listener) {
+        button(label, listener, true);
+    }
+
+    private void secondaryButton(String label, View.OnClickListener listener) {
+        button(label, listener, false);
+    }
+
+    private void button(String label, View.OnClickListener listener, boolean primary) {
+        Button button = styled(new Button(this), primary);
         button.setText(label);
         button.setOnClickListener(listener);
-        root.addView(button);
+        LinearLayout.LayoutParams params = spaced(dp(12));
+        params.height = dp(52);
+        root.addView(button, params);
+    }
+
+    /** Primary: filled with the brand accent. Secondary: outlined. Both with the system's ripple. */
+    private Button styled(Button button, boolean primary) {
+        button.setAllCaps(false);
+        button.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16);
+        button.setStateListAnimator(null);
+        button.setTextColor(color(primary ? R.color.on_accent : R.color.text_primary));
+        GradientDrawable shape = primary
+                ? rounded(color(R.color.accent), 0, dp(26))
+                : rounded(0x00000000, color(R.color.control), dp(26));
+        button.setBackground(new RippleDrawable(ColorStateList.valueOf(0x33808080), shape, null));
+        button.setPadding(dp(20), 0, dp(20), 0);
+        return button;
+    }
+
+    private GradientDrawable rounded(int fill, int stroke, int radius) {
+        GradientDrawable shape = new GradientDrawable();
+        shape.setColor(fill);
+        shape.setCornerRadius(radius);
+        if (stroke != 0) {
+            shape.setStroke(dp(1), stroke);
+        }
+        return shape;
+    }
+
+    private LinearLayout.LayoutParams spaced(int top) {
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        params.topMargin = top;
+        return params;
     }
 }

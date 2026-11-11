@@ -33,6 +33,25 @@ class CompanionBuildTest(unittest.TestCase):
         application = manifest.find("application")
         self.assertEqual(application.get(f"{ns}allowBackup"), "false")
 
+    def test_no_code_path_needs_androidx(self):
+        # The APK ships no AndroidX (the scanner library is added without its transitive set), so the
+        # library's classes that call AndroidX crash at run time: found on the real phone (2026-11-10).
+        needs_androidx = re.compile(r"\bandroidx\.|IntentIntegrator|CaptureManager|CaptureActivity|ScanContract")
+        for path in (APP / "src").rglob("*.java"):
+            code = re.sub(r"//[^\n]*|/\*.*?\*/", "", path.read_text(encoding="utf-8"), flags=re.S)
+            self.assertIsNone(needs_androidx.search(code), path)
+        ns = "{http://schemas.android.com/apk/res/android}"
+        manifest = ET.parse(APP / "src" / "main" / "AndroidManifest.xml").getroot()
+        removed = [a.get(f"{ns}name") for a in manifest.iter("activity")
+                   if a.get("{http://schemas.android.com/tools}node") == "remove"]  # fmt: skip
+        self.assertEqual(removed, ["com.journeyapps.barcodescanner.CaptureActivity"])
+
+    def test_every_screen_keeps_clear_of_the_system_bars(self):
+        # Edge to edge from Android 15: without insets the unlock request's profile and computer are hidden.
+        java = APP / "src" / "main" / "java" / "net" / "nulavio" / "companion"
+        for name in ("MainActivity.java", "ScanActivity.java"):
+            self.assertIn("Insets.pad(", (java / name).read_text(encoding="utf-8"), name)
+
     def test_keys_need_authentication_for_every_use(self):
         box = (APP / "src" / "main" / "java" / "net" / "nulavio" / "companion" / "KeyBox.java").read_text(encoding="utf-8")
         self.assertIn(".setUserAuthenticationRequired(true)", box)
