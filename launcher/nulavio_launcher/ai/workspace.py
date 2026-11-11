@@ -35,6 +35,10 @@ from .. import paths, prefs, profile
 from .bidi import Bidi
 
 APP_ID = "nulavio-ai-workspace"
+# The same value as the nulavio.ai.workspace pref, in the engine's environment: nothing in the
+# browser (about:config included) can change it, so the window's lock does not rest on a pref
+# an agent with raw automation could reset (audit A6). browser/shell/modules/NulavioAI.sys.mjs.
+WORKSPACE_ENV = "NULAVIO_AI_WORKSPACE"
 # Written into the AI Workspace's profile when raw_automation hands the endpoint over, removed when
 # the workspace starts or stops: {"agent", "pid" (the bridge), "since"}. A cue for the window only;
 # the bridge's own state (Bridge.raw) and its watcher are what end the workspace.
@@ -91,6 +95,10 @@ class Workspace:
         for folder in (self.downloads_dir, self.uploads_dir):
             folder.mkdir(mode=0o700, exist_ok=True)
 
+    def marker(self) -> str:
+        """Which agent drives this window (nulavio.ai.workspace and WORKSPACE_ENV)."""
+        return self.agent_id
+
     def _write_prefs(self) -> None:
         paths.ensure_private_dir(self.profile_dir)
         merged = {p.name: p.value for p in profile.baseline_prefs()}
@@ -98,7 +106,7 @@ class Workspace:
         merged.update(WORKSPACE_PREFS)
         # Tells Nulavio's own pages in this window that an agent drives it: they show who, and never
         # answer permission requests here (the agent could click them).
-        merged["nulavio.ai.workspace"] = self.agent_id
+        merged["nulavio.ai.workspace"] = self.marker()
         merged["nulavio.ai.target"] = "workspace"
         if self.uploads:
             # Only for agents that may use files. The content sandbox stays on; page processes may
@@ -140,6 +148,7 @@ class Workspace:
         port_file.unlink(missing_ok=True)
         env = engine_mod.launch_env()  # sandboxes stay on; no MOZ_* debugging knobs
         env["MOZ_APP_REMOTINGNAME"] = APP_ID
+        env[WORKSPACE_ENV] = self.marker()
         self.process = subprocess.Popen(
             [*die_with_parent(), *self.command()], env=env, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL, start_new_session=True, preexec_fn=lambda: os.umask(0o077),
@@ -242,12 +251,15 @@ class ProfileTarget(Workspace):
         if Profile(name=self.label, path=self.profile_dir).running_pid():
             raise TargetError("profile-in-use", self.label)
 
+    def marker(self) -> str:
+        return f"{self.agent_id}:{os.getpid()}"  # counts only while this bridge process lives
+
     def _write_prefs(self) -> None:
         user_js = self.profile_dir / "user.js"
         self._remove_temporary()
         lines = [
             f'user_pref("remote.prefs.recommended", false); {TEMPORARY}',
-            f'user_pref("nulavio.ai.workspace", "{self.agent_id}:{os.getpid()}"); {TEMPORARY}',
+            f'user_pref("nulavio.ai.workspace", "{self.marker()}"); {TEMPORARY}',
             # The window says that an agent uses *this* profile of the user's, not an AI Workspace.
             f'user_pref("nulavio.ai.target", "profile"); {TEMPORARY}',
             f"{prefs.format_pref('nulavio.ai.target.label', self.label)} {TEMPORARY}",

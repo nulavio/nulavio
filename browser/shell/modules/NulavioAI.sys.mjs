@@ -35,6 +35,7 @@ ChromeUtils.defineESModuleGetters(lazy, {
 const SHELL_ID = "shell@nulavio.net";
 const SIDEBAR_ID = "shell_nulavio_net-sidebar-action"; // the assistant panel in the side panel
 const WORKSPACE_PREF = "nulavio.ai.workspace";
+const WORKSPACE_ENV = "NULAVIO_AI_WORKSPACE"; // launcher/nulavio_launcher/ai/workspace.py WORKSPACE_ENV
 const TARGET_PREF = "nulavio.ai.target";
 const TARGET_LABEL_PREF = "nulavio.ai.target.label";
 const RAW_MARKER = "nulavio-raw.json"; // launcher/nulavio_launcher/ai/workspace.py RAW_MARKER
@@ -171,6 +172,7 @@ class AI {
   // Conversations (UX5-D, Q16): per window, in memory only, never on disk or in the activity. Gone when the
   // window closes or on "Começar conversa nova". {turns, recipient, model, pageLeftOut}
   #threads = new WeakMap();
+  #workspaceValue = "";
   #runListeners = new Set();
   #runWatch = null;
   #filesTimer = null;
@@ -178,7 +180,11 @@ class AI {
   /** The agent driving this window, if any. "agent:pid" (one of the user's profiles, opened for an agent)
       counts only while that bridge process lives; a bare agent id is an AI Workspace. */
   async workspaceAgent() {
-    const value = Services.prefs.getStringPref(WORKSPACE_PREF, "");
+    // The environment first: the bridge sets it and nothing in the browser can change it. The pref is
+    // the same value; once either has been seen it is kept for this process, so resetting the pref in
+    // about:config later does not turn the window back into an ordinary one (audit A6).
+    this.#workspaceValue ||= Services.env.get(WORKSPACE_ENV) || Services.prefs.getStringPref(WORKSPACE_PREF, "");
+    const value = this.#workspaceValue;
     if (!value) {
       return "";
     }
