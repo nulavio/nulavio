@@ -536,3 +536,32 @@ body[data-state="loading"] .moment__context::after {
 .hero__link[hidden] { display: none; }
 
 }
+
+/* The first run is a stage (ADR 0010): one centred card of a fixed size, one decision in it, and nothing
+   else on the page. The card keeps its place and size between steps; its actions keep theirs. */
+html[data-page="newtab"][data-stage] .page {
+  min-block-size: 100vh;
+  box-sizing: border-box;
+  padding: var(--nv-space-6);
+  gap: var(--nv-space-3);
+  justify-content: center;
+  max-width: 46rem;
+}
+html[data-page="newtab"][data-stage] .page > :not(.firstrun, .firstrun__progress, .layout-choice, .dns-choice) { display: none; }
+html[data-page="newtab"][data-stage] .page > :is(.firstrun, .layout-choice, .dns-choice) {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nv-space-4);
+  min-block-size: 29rem;
+  max-width: none;
+  padding: var(--nv-space-7);
+  box-sizing: border-box;
+}
+html[data-page="newtab"][data-stage] .page > :is(.firstrun, .layout-choice, .dns-choice)[hidden] { display: none; }
+html[data-page="newtab"][data-stage] .page > * > .actions { margin-block-start: auto; }
+html[data-page="newtab"][data-stage] .firstrun__progress { max-width: none; min-block-size: 1lh; }
+html[data-page="newtab"][data-stage] .firstrun__progress[hidden] { display: block !important; visibility: hidden; }
+html[data-page="newtab"][data-stage] #firstrun-welcome .firstrun__head { flex-direction: column; align-items: flex-start; gap: var(--nv-space-4); }
+html[data-page="newtab"][data-stage] #firstrun-welcome .firstrun__symbol { inline-size: 3rem; block-size: 3rem; }
+html[data-page="newtab"][data-stage] :is(.layout-choice__title) { font-size: var(--nv-font-size-2xl); }
+html[data-page="newtab"][data-stage] #firstrun-welcome .callout { display: none; }

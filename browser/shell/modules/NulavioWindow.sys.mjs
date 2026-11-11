@@ -15,6 +15,7 @@ ChromeUtils.defineESModuleGetters(lazy, {
   NulavioAI: "resource://builtin-addons/nulavio-shell/modules/NulavioAI.sys.mjs",
   NulavioGuard: "resource://builtin-addons/nulavio-shell/modules/NulavioGuard.sys.mjs",
   NulavioLayout: "resource://builtin-addons/nulavio-shell/modules/NulavioLayout.sys.mjs",
+  NulavioPrivacy: "resource://builtin-addons/nulavio-shell/modules/NulavioPrivacy.sys.mjs",
   AVATAR_GLYPHS: "resource://builtin-addons/nulavio-shell/modules/NulavioAvatars.sys.mjs",
   SPECIAL_GLYPHS: "resource://builtin-addons/nulavio-shell/modules/NulavioAvatars.sys.mjs",
   profileInitial: "resource://builtin-addons/nulavio-shell/modules/NulavioAvatars.sys.mjs",
@@ -66,6 +67,10 @@ const SURFACES = Object.freeze({
 const PLAIN_SURFACES = Object.freeze(new Set(["newtabTitle", "settingsTitle", "profilesButton"]));
 // ADR 0009: the toolbar and the tab list hide; the band stays and carries the origin.
 const PREF_IMMERSIVE = "nulavio.layout.immersive";
+// Prototype only (ADR 0010): which window direction is drawn. Not shipped.
+const PREF_DIRECTION = "nulavio.proto.direction";
+// The first run owns the window (ADR 0010): the same pref the new tab's sequence writes.
+const PREF_FIRSTRUN = "nulavio.firstrun.done";
 
 function policy() {
   return WebExtensionPolicy.getByID(SHELL);
@@ -184,6 +189,8 @@ class WindowUI {
       Services.obs.addObserver(this, topic);
     }
     Services.prefs.addObserver(PREF_IMMERSIVE, this);
+    Services.prefs.addObserver(PREF_DIRECTION, this);
+    Services.prefs.addObserver(PREF_FIRSTRUN, this);
     this.#unsubscribe = lazy.NulavioProfiles.subscribe(() => this.refresh());
     for (const win of Services.wm.getEnumerator("navigator:browser")) {
       if (win.gBrowserInit?.delayedStartupFinished) {
@@ -199,6 +206,7 @@ class WindowUI {
   observe(win, topic) {
     if (topic === "nsPref:changed") {
       for (const window of this.#windows.keys()) {
+        this.#header(window);
         this.#paint(window);
       }
       return;
@@ -541,6 +549,7 @@ class WindowUI {
   #header(win) {
     let text = "";
     let trust = false;
+    let stage = false;
     try {
       const browser = win.gBrowser.selectedBrowser;
       const global = browser.browsingContext.currentWindowGlobal;
@@ -552,6 +561,12 @@ class WindowUI {
             && browser.currentURI.spec === global.documentURI.spec) {
           text = t("bandSystemPage", [t(key)]);
           trust = !PLAIN_SURFACES.has(key);
+          // The first run's welcome is the Shell's own new tab in a genuinely new profile: while it is the
+          // selected tab the window shows the band and that page only (the band still names it).
+          stage = key === "newtabTitle" && !lazy.PrivateBrowsingUtils.isWindowPrivate(win) && lazy.NulavioPrivacy.firstRun().active;
+          if (stage) {
+            text = t("bandSystemPage", [t("bandSurfaceWelcome")]);
+          }
         }
       }
     } catch {
@@ -560,15 +575,26 @@ class WindowUI {
     for (const row of this.#rows(win)) {
       named(row.querySelector(".nv-band-header"), text);
     }
-    this.#windows.get(win)?.bar.toggleAttribute("nv-named", trust);
+    const state = this.#windows.get(win);
+    state?.bar.toggleAttribute("nv-named", trust);
+    if (state && state.stage !== stage) {
+      state.stage = stage;
+      win.document.documentElement.toggleAttribute("nulavio-stage", stage);
+      win.document.documentElement.toggleAttribute("nulavio-immersive", this.#immersive(win));
+      state.bar.toggleAttribute("nv-neutral", this.#neutral(win));
+      if (stage) {
+        // The stage's question is in the page: the keyboard starts there, not in an address field that is out of view.
+        win.gBrowser.selectedBrowser.focus();
+      }
+    }
     this.#markOwnPagePending(win);
     this.#routeNotice(win);
     this.#origin(win, Boolean(text));
   }
 
   /** Immersive (ADR 0009): no chrome but the band, and only when nothing must be seen in full. */
-  #immersive() {
-    return Services.prefs.getBoolPref(PREF_IMMERSIVE, false) && !this.#agent;
+  #immersive(win) {
+    return !this.#agent && (Services.prefs.getBoolPref(PREF_IMMERSIVE, false) || Boolean(this.#windows.get(win)?.stage));
   }
 
   /** The selected tab's site for the band: the committed document's host as the engine displays it
@@ -627,7 +653,7 @@ class WindowUI {
   /** A window with no alert may carry the band inside the navigation row (UX3G A1). A routing notice
       also gives it back its own row, so the notice never squeezes the profile out (review F16). */
   #neutral(win) {
-    return !this.#immersive() && !this.#temporary && !lazy.PrivateBrowsingUtils.isWindowPrivate(win) && !this.#agent
+    return !this.#immersive(win) && !this.#temporary && !lazy.PrivateBrowsingUtils.isWindowPrivate(win) && !this.#agent
       && this.#guardCount === 0 && !this.#actionError && !this.#windows.get(win)?.routed
       && !lazy.NulavioAI.activityState(win) && !this.#connected.some(c => c.agent !== this.#agent?.id);
   }
@@ -693,7 +719,13 @@ class WindowUI {
     const root = win.document.documentElement;
     root.toggleAttribute("nulavio-window-agent", Boolean(agent));
     root.toggleAttribute("nulavio-window-raw", Boolean(agent?.raw));
-    root.toggleAttribute("nulavio-immersive", this.#immersive());
+    root.toggleAttribute("nulavio-immersive", this.#immersive(win));
+    const direction = Services.prefs.getStringPref(PREF_DIRECTION, "");
+    if (direction) {
+      root.setAttribute("nulavio-direction", direction);
+    } else {
+      root.removeAttribute("nulavio-direction");
+    }
     const state = this.#windows.get(win);
     const activity = lazy.NulavioAI.activityState(win);
     const kinds = { normal: true, temporary: this.#temporary, private: privateWindow,
@@ -875,6 +907,7 @@ class WindowUI {
     state.fullscreen.remove();
     state.edge.remove();
     win.document.documentElement.removeAttribute("nulavio-immersive");
+    win.document.documentElement.removeAttribute("nulavio-stage");
     if (state.sheet) {
       state.sheet.remove();
     } else {
@@ -963,6 +996,8 @@ class WindowUI {
       Services.obs.removeObserver(this, topic);
     }
     Services.prefs.removeObserver(PREF_IMMERSIVE, this);
+    Services.prefs.removeObserver(PREF_DIRECTION, this);
+    Services.prefs.removeObserver(PREF_FIRSTRUN, this);
     lazy.CustomizableUI.removeListener(this);
     for (const action of QUICK_ACTIONS) {
       try {

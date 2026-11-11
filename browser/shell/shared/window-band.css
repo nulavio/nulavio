@@ -533,3 +533,56 @@
     }
   }
 }
+
+/* PROTOTYPE ONLY (ADR 0010): three window directions, chosen by nulavio.proto.direction, to be
+   compared on the engine. The one that is kept moves into the theme; the others are deleted. */
+@-moz-document url("chrome://browser/content/browser.xhtml") {
+  /* A. "Uma superfície": one tone for the whole frame, the page as a card inside it. */
+  :root[nulavio-direction="surface"]:not([lwtheme], [inFullscreen], [inDOMFullscreen]) {
+    --toolbox-background-color: var(--nv-color-chrome-toolbar) !important;
+    --toolbox-background-color-inactive: var(--nv-color-chrome-toolbar) !important;
+    --toolbar-background-color: var(--nv-color-chrome-toolbar) !important;
+    --sidebar-background-color: var(--nv-color-chrome-toolbar) !important;
+    --tabpanel-background-color: var(--nv-color-chrome-toolbar) !important;
+    #navigator-toolbox { border-bottom: 0 !important; }
+    #nulavio-band { border-block-end-color: transparent !important; background: var(--nv-color-chrome-toolbar) !important; }
+    .nv-band-row { background-color: transparent; }
+    #sidebar-launcher-splitter { display: none; }
+    #sidebar-container, #sidebar-main { background-color: var(--nv-color-chrome-toolbar) !important; border: 0 !important; }
+    #tabbrowser-tabbox {
+      margin: 0 var(--nv-space-3) var(--nv-space-3) 0;
+      border-radius: var(--nv-radius-md);
+      overflow: clip;
+      outline: 1px solid var(--nv-color-border-subtle);
+      box-shadow: var(--nv-elevation-1);
+    }
+    &[nulavio-immersive] #tabbrowser-tabbox { margin-inline-start: var(--nv-space-3); }
+    &:not([nulavio-immersive]) #browser:not(:has(> #sidebar-container:not([hidden]))) #tabbrowser-tabbox { margin-inline-start: var(--nv-space-3); }
+  }
+
+  /* C. "Linha única": tabs on top share one row with the address field (needs "Abas no topo"). */
+  @media not -moz-pref("sidebar.verticalTabs") {
+    :root[nulavio-direction="row"]:not([inFullscreen], [inDOMFullscreen], [customizing], [nulavio-immersive]) {
+      --toolbox-background-color: var(--nv-color-chrome-toolbar) !important;
+      --toolbox-background-color-inactive: var(--nv-color-chrome-toolbar) !important;
+      #navigator-toolbox {
+        display: grid !important;
+        grid-template-columns: auto minmax(22rem, 34%) minmax(0, 1fr);
+        align-items: center;
+        border-bottom: 0 !important;
+      }
+      #navigator-toolbox > * { grid-column: 1 / -1; }
+      #navigator-toolbox > #nulavio-band { grid-row: 1; grid-column: 1; border-block-end: 0; min-inline-size: 0; background: var(--nv-color-chrome-toolbar) !important; }
+      #navigator-toolbox > #nav-bar { grid-row: 1; grid-column: 2; }
+      #navigator-toolbox > #TabsToolbar { grid-row: 1; grid-column: 3; min-inline-size: 0; }
+      #nulavio-band .nv-band-row { flex-wrap: nowrap; background-color: transparent; }
+      #nulavio-band .nv-band-header { display: none; }
+      #tabbrowser-tabbox {
+        margin: 0 var(--nv-space-3) var(--nv-space-3);
+        border-radius: var(--nv-radius-md);
+        overflow: clip;
+        outline: 1px solid var(--nv-color-border-subtle);
+      }
+    }
+  }
+}

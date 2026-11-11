@@ -480,6 +480,8 @@ async function firstRun() {
   };
   const show = step => {
     current = step;
+    // The first run is a stage (ADR 0010): one centred card and nothing else; the new tab comes back when it ends.
+    document.documentElement.toggleAttribute("data-stage", Boolean(step));
     for (const [name, id] of Object.entries(STEP_CARDS)) {
       const card = document.getElementById(id);
       card.toggleAttribute("data-gated", name !== step);
@@ -533,12 +535,16 @@ async function firstRun() {
   const fact = key => document.querySelector(`#status [data-status="${key}"]`);
   const factLine = key => `${fact(key).previousElementSibling.textContent}: ${fact(key).textContent}`;
   document.getElementById("firstrun-facts").replaceChildren(
-    ...["tracking", "https", "filter"].map(key => h("li", { "data-level": fact(key).dataset.level, text: factLine(key) })),
+    // Only what is already true is listed here. Something still missing (the content filter is installed
+    // in the first seconds of a new profile) is reported where it is checked again: "Tudo pronto" and the new tab.
+    ...["tracking", "https", "filter"].filter(key => fact(key).dataset.level === "ok")
+      .map(key => h("li", { "data-level": "ok", text: factLine(key) })),
     h("li", { "data-level": "ok", text: t("firstrunNothingSent") })
   );
   document.getElementById("firstrun-passwords-now").textContent = t("firstrunPasswordsNow", [fact("passwords").textContent]);
 
   async function fillSummary() {
+    await refresh().then(summarise).catch(() => {}); // read again: the filter may have arrived since the first frame
     const [layoutNow, dnsNow, defaultNow] = await Promise.all([
       layoutApi?.state().catch(() => null),
       privacy.dns().catch(() => null),
@@ -550,6 +556,7 @@ async function firstRun() {
       presetKey ? [t("firstrunSummaryTabs"), t(presetKey)] : null,
       dnsKey ? [t("dnsHeading"), t(dnsKey)] : null,
       [t("statusPasswords"), fact("passwords").textContent],
+      [t("statusFilter"), fact("filter").textContent],
       defaultNow ? [t("firstrunSummaryDefault"), t(defaultNow.state === "enabled" ? "firstrunDefaultIsNulavio" : "firstrunDefaultIsOther")] : null,
     ].filter(Boolean);
     document.getElementById("firstrun-summary").replaceChildren(
