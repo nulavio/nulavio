@@ -80,6 +80,8 @@ Firefox 160's settings page is built from data: a pane is a list of groups (`Set
 
 On the alpha's engine (Nulavio 160.0-0.2 build, `dev_sync`, no engine build), branch `agent/claude/feat-unified-settings`:
 
+![The layout card in Aparência with "Abas no topo" applied, Nulavio's colours after the engine's density group, the new "Perfis e proteção" pane, and the policies Nulavio ships](../design/screenshots/experience-2026-11/settings-poc.png)
+
 - `NulavioSettings.sys.mjs` (about 70 lines) and `settings/native/panes.mjs` (about 170 lines) register: the layout choice (Lateral, Abas no topo, Foco) as the first group of the engine's Aparência pane, drawn by `moz-visual-picker`; "Cores do Nulavio" (accent, more contrast, new-tab background) after the engine's density group; and a new "Perfis e proteção" pane with its navigation entry.
 - Choosing "Abas no topo" in that card moved the tabs of the real window (`sidebar.verticalTabs` false, checked in the window).
 - pt-BR and en-US, light and dark: the same card style as the engine's groups; the previews follow the colour scheme.
