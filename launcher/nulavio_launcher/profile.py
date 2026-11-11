@@ -21,6 +21,7 @@ import json
 import os
 import re
 import shutil
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -35,6 +36,21 @@ USER_JS_HEADER = (
     "changes here are overwritten. Use Settings, about:config, or\n"
     "`nulavio` commands instead. Source: browser/config/prefs/."
 )
+
+
+def _started_after(pid: int, lock: Path) -> bool:
+    """Whether process `pid` started after the lock was made: then it is not the engine that made it.
+
+    The engine starts, then creates its lock; a PID reused after a crash belongs to a later process.
+    """
+    try:
+        fields = Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[1].split()
+        started_ticks = int(fields[19])  # field 22, starttime, in clock ticks after boot
+        uptime = float(Path("/proc/uptime").read_text().split()[0])
+        started = time.time() - uptime + started_ticks / os.sysconf("SC_CLK_TCK")
+        return started > os.lstat(lock).st_mtime + 2.0  # slack for clock rounding
+    except (OSError, ValueError, IndexError):
+        return False
 
 
 class ProfileError(RuntimeError):
@@ -102,6 +118,8 @@ class Profile:
             return None  # stale lock after a crash
         except PermissionError:
             return pid
+        if _started_after(pid, lock):
+            return None  # the engine is gone and another process got its PID (audit V7)
         return pid
 
     def require_not_running(self) -> None:

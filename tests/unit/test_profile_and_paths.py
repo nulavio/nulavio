@@ -7,6 +7,7 @@ import os
 import stat
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -176,6 +177,16 @@ class ProfileTest(TempHome):
         self.assertIn('lang="pt-BR"', page)
         for asset in ("tokens.css", "startpage.css", "nulavio-symbol.svg", "nulavio-symbol-dark-on-light.svg"):
             self.assertTrue((prof.startpage_dir / asset).is_file(), asset)
+
+    def test_a_reused_pid_is_not_the_engine(self):
+        # Audit V7: after a crash, another process got the engine's PID; the profile never locked
+        # and `lock --force` would have sent SIGTERM to that unrelated process.
+        prof = self.make()
+        lock = prof.path / "lock"
+        os.symlink(f"127.0.0.1:+{os.getpid()}", lock)
+        made = time.time() - 3600  # the lock is older than this process
+        os.utime(lock, (made, made), follow_symlinks=False)
+        self.assertIsNone(prof.running_pid())
 
     def test_running_profile_is_protected(self):
         prof = self.make()

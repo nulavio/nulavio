@@ -144,7 +144,7 @@ def autolock(prof: profile.Profile, *, grace: float = 120.0, poll: float = 0.5) 
         if not box.mounted():
             return "already-locked"
         if time.monotonic() > deadline:
-            box.unmount()  # nobody opened it: do not leave it unlocked
+            box.unmount(lazy_after=True)  # nobody opened it: do not leave it unlocked, even with a file open
             log.event("vault.autolock", profile=prof.name, reason="unused")
             return "unused"
         time.sleep(poll)
