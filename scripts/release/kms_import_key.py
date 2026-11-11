@@ -204,6 +204,7 @@ def main(argv: list[str] | None = None) -> int:
             raise KeyImportError("the KMS key must be RSA_4096, SIGN_VERIFY, with origin EXTERNAL")
         if meta.get("KeyState") != "PendingImport":
             raise KeyImportError("the KMS key already has key material (KeyState is not PendingImport)")
+        key_arn = meta["Arn"]  # GetParametersForImport and ImportKeyMaterial take no alias
 
         passphrase = getpass.getpass(f"Passphrase of the release key {key.hex[-16:]}: ").encode()
         export = _run(
@@ -216,7 +217,7 @@ def main(argv: list[str] | None = None) -> int:
         material = pkcs8(numbers)
 
         params = _run(
-            "aws", "kms", "get-parameters-for-import", "--key-id", args.kms_key_id,
+            "aws", "kms", "get-parameters-for-import", "--key-id", key_arn,
             "--wrapping-algorithm", "RSA_AES_KEY_WRAP_SHA_256", "--wrapping-key-spec", "RSA_4096",
             "--query", "[PublicKey, ImportToken]", "--output", "text", capture_output=True, text=True,
         ).stdout.split()  # fmt: skip
@@ -225,7 +226,7 @@ def main(argv: list[str] | None = None) -> int:
         wrapped.write_bytes(wrap_for_kms(material, base64.b64decode(params[0])))
         token.write_bytes(base64.b64decode(params[1]))
         _run(
-            "aws", "kms", "import-key-material", "--key-id", args.kms_key_id,
+            "aws", "kms", "import-key-material", "--key-id", key_arn,
             "--encrypted-key-material", f"fileb://{wrapped}", "--import-token", f"fileb://{token}",
             "--expiration-model", "KEY_MATERIAL_DOES_NOT_EXPIRE", capture_output=True,
         )  # fmt: skip
@@ -234,7 +235,11 @@ def main(argv: list[str] | None = None) -> int:
         print(f"KMS key {args.kms_key_id} now signs as {key.hex}.")
     except (KeyImportError, ops.SignError, subprocess.CalledProcessError, OSError, StopIteration) as error:
         detail = getattr(error, "stderr", None)
-        print(f"kms_import_key: {error}{(': ' + detail.strip()) if isinstance(detail, str) and detail else ''}", file=sys.stderr)
+        if isinstance(detail, bytes):
+            detail = detail.decode("utf-8", "replace")
+        if isinstance(error, subprocess.CalledProcessError):
+            error = f"{error.cmd[0]} {error.cmd[1]} {error.cmd[2]} failed (exit {error.returncode})"
+        print(f"kms_import_key: {error}{(': ' + detail.strip()) if detail else ''}", file=sys.stderr)
         return 1
     finally:
         shutil.rmtree(work, ignore_errors=True)

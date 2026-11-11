@@ -7,12 +7,14 @@ the release key (gpg --export-secret-keys, passphrase on standard input).
 from __future__ import annotations
 
 import hashlib
+import io
 import os
 import shutil
 import subprocess
 import sys
 import tempfile
 import unittest
+from contextlib import redirect_stderr
 from pathlib import Path
 from unittest import mock
 
@@ -45,8 +47,12 @@ def arg(name):
 def out(obj):
     print(json.dumps(obj) if "--query" not in args else obj)
 material = state / "material.der"
+ARN = "arn:aws:kms:us-east-1:111122223333:key/test"
+if args[1] in ("get-parameters-for-import", "import-key-material") and arg("--key-id") != ARN:
+    sys.stderr.write("InvalidArnException: Key Aliases are not supported for this operation.\n")
+    sys.exit(254)
 if args[:2] == ["kms", "describe-key"]:
-    out({"KeyMetadata": {"Origin": "EXTERNAL", "KeySpec": "RSA_4096", "KeyUsage": "SIGN_VERIFY",
+    out({"KeyMetadata": {"Arn": ARN, "Origin": "EXTERNAL", "KeySpec": "RSA_4096", "KeyUsage": "SIGN_VERIFY",
                          "KeyState": "Enabled" if material.exists() else "PendingImport"}})
 elif args[:2] == ["kms", "get-parameters-for-import"]:
     assert arg("--wrapping-algorithm") == "RSA_AES_KEY_WRAP_SHA_256"
@@ -161,10 +167,18 @@ class KmsImportKeyTest(unittest.TestCase):
         (bin_dir / "aws").chmod(0o700)
         env = {"PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}", "FAKE_KMS_STATE": str(state)}
         argv = ["--gnupghome", str(self.home), "--fingerprint", self.key.hex, "--kms-key-id", "alias/test"]
-        with mock.patch.dict(os.environ, env), mock.patch.object(kik.getpass, "getpass", return_value=PASSPHRASE.decode()):
-            self.assertEqual(kik.main(argv), 0)
-            # A second run finds the key material already there and changes nothing.
-            self.assertEqual(kik.main(argv), 1)
+        with mock.patch.dict(os.environ, env):
+            # A wrong passphrase stops before anything is imported, and says why (gpg's error, or ours
+            # when gpg-agent still caches the right one).
+            stderr = io.StringIO()
+            with mock.patch.object(kik.getpass, "getpass", return_value="wrong"), redirect_stderr(stderr):
+                self.assertEqual(kik.main(argv), 1)
+            self.assertRegex(stderr.getvalue(), r"gpg --homedir|wrong passphrase")
+            self.assertNotIn("import-key-material", (state / "calls").read_text())
+            with mock.patch.object(kik.getpass, "getpass", return_value=PASSPHRASE.decode()):
+                self.assertEqual(kik.main(argv), 0)
+                # A second run finds the key material already there and changes nothing.
+                self.assertEqual(kik.main(argv), 1)
         calls = (state / "calls").read_text().split("\n")
         self.assertIn("kms import-key-material", calls)
         self.assertEqual(calls.count("kms import-key-material"), 1)
