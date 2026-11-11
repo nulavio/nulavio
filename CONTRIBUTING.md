@@ -1,6 +1,6 @@
 # Contributing to Nulavio
 
-Thanks for helping. Nulavio is a security-sensitive project, so the rules below are strict and short.
+Thanks for helping. Nulavio is a security-sensitive project, so the rules below are strict and short. Everyone taking part follows the [code of conduct](CODE_OF_CONDUCT.md); how decisions are made and who does what is in [GOVERNANCE.md](GOVERNANCE.md).
 
 ## Non-negotiables (reviewers will block on these)
 
