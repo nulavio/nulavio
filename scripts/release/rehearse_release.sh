@@ -67,7 +67,7 @@ step verify-source python3 -I "$repo/scripts/upstream/verify_firefox_release.py"
 step build "$repo/scripts/build/build_nulavio.sh" "$version"
 step install install_tree
 step unit-tests python3 -I "$repo/tests/run.py" unit
-step integration-tests env NULAVIO_ENGINE="$install/nulavio" python3 -I "$repo/tests/run.py" integration
+step integration-tests "$repo/scripts/release/run_integration.sh" "$install"
 step rpm "$repo/scripts/release/make_rpm.sh" "$out/packages"
 # shellcheck disable=SC2016 # the inner bash expands $0 and $1 (the checker and the package directory)
 step check-rpm bash -c '"$0" "$1"/x86_64/nulavio-*.rpm' "$repo/scripts/release/check_rpm.sh" "$out/packages"
