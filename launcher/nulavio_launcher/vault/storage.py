@@ -95,6 +95,19 @@ class Container:
     def load_vault(self) -> Vault:
         return Vault.load(self.vault_path)
 
+    def secure_if_locked(self) -> None:
+        """Make the mount point read-only again when the volume is not mounted.
+
+        unmount() does it after a clean lock; a crash, a reboot, a killed gocryptfs or its
+        -idle timer leave it writable, and an engine started on it directly would write a
+        new profile there in the clear (audit V6).
+        """
+        try:
+            if self.exists() and self.mountpoint.is_dir() and not self.mounted():
+                os.chmod(self.mountpoint, LOCKED_MODE)
+        except OSError:
+            pass
+
     # -- lifecycle ----------------------------------------------------------------
 
     def _gocryptfs(self, args: list[str], password: str, timeout: float = TIMEOUT) -> None:

@@ -19,7 +19,9 @@ from .storage import Container, StorageError
 
 
 def container(prof: profile.Profile) -> Container:
-    return Container(prof.path)
+    box = Container(prof.path)
+    box.secure_if_locked()  # every launcher path that touches a protected profile comes here first
+    return box
 
 
 def is_encrypted(prof: profile.Profile) -> bool:
