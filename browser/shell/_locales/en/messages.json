@@ -1241,7 +1241,7 @@
   "firstrunSummaryTabs": {"message": "Tabs"},
   "firstrunSummaryDefault": {"message": "Default browser"},
   "firstrunDefaultIsNulavio": {"message": "Nulavio"},
-  "firstrunDefaultIsOther": {"message": "Another browser (change it in Integrations)"},
+  "firstrunDefaultIsOther": {"message": "Another browser"},
   "warnMissingTitle": {"message": "Download not found"},
   "warnMissingHeadline": {"message": "This download is no longer in the list"},
   "warnOpenFolder": {"message": "Open downloads folder"},

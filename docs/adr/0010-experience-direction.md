@@ -50,6 +50,18 @@ A second model (Antigravity, from the captures only, closed brief) ranked A firs
 | C: the address field is cut, the menu lands on the first tab, an icon rail stays | True | Part of the reason C is dropped |
 | Narrow the tab column to 196 px, the top row to 38 px, widen the address field | Not checked against 1366×768 at 150 % and the 24 px target rule | Candidates for the window slice, each with a measurement |
 
+A second critique (same model, closed brief, 2026-11-11) looked at the first-run slice's captures next to Zen's and Helium's setup screens. It quoted two button labels that are in no capture, so every point was checked on the images before use:
+
+| Point | Checked | Result |
+|---|---|---|
+| In a short window (911×512) the panes stack and the actions fall below the fold | True | Fixed: stacked, the actions stay at the bottom of the window while the choice scrolls under them (`test_firstrun_stage` `test_09`) |
+| The protected-profile step shows two thin strips in a large pane; the default-browser drawing is small | True | Both drawn larger: two small windows with their bands, a wider drawing |
+| The last summary row wraps | True | The value is shorter; where to change it is said once, beside the summary |
+| "Stray underlines" under three titles; the main button "grows" on two steps | False as defects: the underline is the reading-position focus and the larger outline is the standard focus ring; both are in the captures because a script moved the focus. After a real pointer click the title has no underline (checked on the DNS step) | None |
+| The gap between the text and the actions in the left pane | By design, as in Zen's card (title at the top, action at the bottom) | None |
+| The service list in the DNS step has no trade-off per service, as Helium's lists have | True | Open: it needs facts about each service that can be cited; today the option says who sees the lookups |
+| In dark, the border of an option not chosen is faint | True; the fill still separates it from the pane and the radio has its own border | Open, with the theme slice |
+
 ## What this does not decide
 
 - Anything about protections: none changes. Where a direction touches a security cue (B), the decision is the maintainer's and is in ADR 0009.

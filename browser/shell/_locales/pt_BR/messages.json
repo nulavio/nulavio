@@ -1241,7 +1241,7 @@
   "firstrunSummaryTabs": {"message": "Abas"},
   "firstrunSummaryDefault": {"message": "Navegador padrão"},
   "firstrunDefaultIsNulavio": {"message": "Nulavio"},
-  "firstrunDefaultIsOther": {"message": "Outro navegador (dá para mudar em Integrações)"},
+  "firstrunDefaultIsOther": {"message": "Outro navegador"},
   "warnMissingTitle": {"message": "Download não encontrado"},
   "warnMissingHeadline": {"message": "Este download não está mais na lista"},
   "warnOpenFolder": {"message": "Abrir pasta de downloads"},

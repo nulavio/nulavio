@@ -42,6 +42,7 @@ return {
     return [name, pane && { rect, cut: pane.scrollHeight - pane.clientHeight }];
   })),
   sideways: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  height: innerHeight,
 };
 """
 PRIVACY = "resource://builtin-addons/nulavio-shell/modules/NulavioPrivacy.sys.mjs"
@@ -222,7 +223,7 @@ class FirstRunStageTest(unittest.TestCase):
         # The first run went on in its own tab and waits there.
         self.assertEqual(self.page()["card"], "firstrun-done")
 
-    def test_09_in_a_short_window_the_panes_stack_and_nothing_is_cut(self):
+    def test_09_in_a_short_window_the_panes_stack_and_the_actions_stay_on_screen(self):
         size = self.m.chrome("return [window.outerWidth, window.outerHeight];")
         self.addCleanup(self.m.chrome, "window.resizeTo(arguments[0], arguments[1]);", size)
         self.m.chrome("window.resizeTo(911, 512);")
@@ -238,7 +239,8 @@ class FirstRunStageTest(unittest.TestCase):
             with self.subTest(card=page["card"]):
                 say, show, do = (page["panes"][name] for name in ("say", "show", "do"))
                 self.assertGreaterEqual(show["rect"][1], say["rect"][3], "stacked: the choice comes under what is asked")
-                self.assertGreaterEqual(do["rect"][1], show["rect"][3], "stacked: the actions come last")
+                # The actions stay on screen while the choice scrolls under them: never below the fold.
+                self.assertLessEqual(do["rect"][3], page["height"], "the actions are below the fold")
                 self.assertEqual([say["cut"], show["cut"], do["cut"]], [0, 0, 0])
                 self.assertLessEqual(page["sideways"], 0, "the page scrolls sideways")
 

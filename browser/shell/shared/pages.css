@@ -335,7 +335,7 @@ html[data-page="newtab"]:not([data-painted]) .page {
 .firstrun__symbol { inline-size: 3rem; block-size: 3rem; flex: none; }
 .firstrun__lead { margin: 0; max-inline-size: 62ch; }
 .firstrun__caption { margin: 0; font-size: var(--nv-type-caption-size); color: var(--nv-color-text-secondary); }
-.firstrun__picture { inline-size: 100%; max-inline-size: 20rem; block-size: auto; justify-self: center; }
+.firstrun__picture { inline-size: 100%; max-inline-size: 26rem; block-size: auto; justify-self: center; }
 .firstrun__facts { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--nv-space-2); }
 .firstrun__facts li { display: flex; gap: var(--nv-space-2); align-items: baseline; }
 /* "Seguro" is neutral (no green); what needs attention says so with its own mark. */
@@ -369,7 +369,7 @@ html[data-page="newtab"]:not([data-painted]) .page {
 .option__title { display: flex; flex-wrap: wrap; align-items: center; gap: var(--nv-space-2) var(--nv-space-3); font-weight: var(--nv-font-weight-semibold); }
 .option__extra { padding-inline-start: calc(1.125rem + var(--nv-space-3)); }
 .option:not(:has(input[type="radio"]:checked)) > .option__extra { display: none; }
-.option--row { grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: var(--nv-space-4); }
+.option--row { grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: var(--nv-space-5); }
 @media (forced-colors: active) {
   .option:has(input[type="radio"]:checked), .option[data-in-use="true"] { border: 2px solid Highlight; }
 }
@@ -394,7 +394,6 @@ html[data-page="newtab"]:not([data-painted]) .page {
   box-shadow: inset 0 0 0 2px var(--nv-color-accent-default);
   border-radius: var(--nv-radius-md) var(--nv-radius-md) 0 0;
 }
-.miniwin__band--alone { border-radius: var(--nv-radius-md); background: var(--nv-color-chrome-toolbox); box-shadow: inset 0 0 0 1px var(--nv-color-border-control); }
 .miniwin__name { font-weight: var(--nv-font-weight-semibold); }
 .miniwin__state { color: var(--nv-color-text-secondary); }
 .miniwin__body { display: grid; grid-template-columns: 5.5rem minmax(0, 1fr); gap: var(--nv-space-3); block-size: 6.5rem; padding: var(--nv-space-3); }
@@ -403,7 +402,8 @@ html[data-page="newtab"]:not([data-painted]) .page {
 .miniwin__tab--on { background: var(--nv-color-chrome-tabSelected); box-shadow: inset 0 0 0 1px var(--nv-color-border-control); }
 .miniwin__page { border: 1px solid var(--nv-color-border-subtle); border-radius: var(--nv-radius-sm); background: var(--nv-color-bg-surface); }
 .bandpair { display: grid; gap: var(--nv-space-3); }
-.bandpair > .miniwin__band + .firstrun__caption { margin-block-start: var(--nv-space-4); }
+.bandpair > .miniwin + .firstrun__caption { margin-block-start: var(--nv-space-4); }
+.bandpair .miniwin__body { block-size: 3.5rem; }
 @media (forced-colors: active) {
   .miniwin, .miniwin__band, .miniwin__page { border: 1px solid CanvasText; box-shadow: none; }
   .miniwin__tab { background: CanvasText; }
@@ -622,11 +622,21 @@ html[data-page="newtab"][data-stage] .page {
   max-width: 64rem;
 }
 html[data-page="newtab"][data-stage] .page > :not(.firstrun, .firstrun__progress, .layout-choice, .dns-choice) { display: none; }
-html[data-page="newtab"][data-stage] .page > :is(.firstrun, .layout-choice, .dns-choice) { max-width: none; padding: 0; overflow: hidden; }
+/* `clip`, not `hidden`: the corners are kept and the actions can still stick to the window's bottom edge (below). */
+html[data-page="newtab"][data-stage] .page > :is(.firstrun, .layout-choice, .dns-choice) { max-width: none; padding: 0; overflow: clip; }
 html[data-page="newtab"][data-stage] .page > :is(.firstrun, .layout-choice, .dns-choice)[hidden] { display: none; }
 html[data-page="newtab"][data-stage] :is(.firstrun__say, .firstrun__do, .firstrun__show) { padding: var(--nv-space-6); }
 html[data-page="newtab"][data-stage] .firstrun__say { padding-block-end: 0; }
 html[data-page="newtab"][data-stage] .firstrun__show { background: var(--nv-color-bg-sunken); border-block: 1px solid var(--nv-color-border-subtle); }
+/* Stacked (a short or narrow window): the actions stay on screen while the choice scrolls under them, so the
+   main action is never below the fold. */
+html[data-page="newtab"][data-stage] .firstrun__do {
+  position: sticky;
+  inset-block-end: 0;
+  background: var(--nv-color-bg-surface);
+  border-block-start: 1px solid var(--nv-color-border-subtle);
+  padding-block: var(--nv-space-4);
+}
 html[data-page="newtab"][data-stage] .firstrun__progress { order: 1; max-width: none; min-block-size: 1lh; text-align: center; }
 html[data-page="newtab"][data-stage] .firstrun__progress[hidden] { display: block !important; visibility: hidden; }
 html[data-page="newtab"][data-stage] .layout-choice__title { font-size: var(--nv-font-size-2xl); text-wrap: balance; }
@@ -641,7 +651,12 @@ html[data-page="newtab"][data-stage] #layout-choice-settings { display: none; }
     block-size: 34rem;
   }
   html[data-page="newtab"][data-stage] .firstrun__say { grid-area: say; padding: var(--nv-space-8) var(--nv-space-8) 0; overflow: auto; }
-  html[data-page="newtab"][data-stage] .firstrun__do { grid-area: do; padding: var(--nv-space-6) var(--nv-space-8) var(--nv-space-8); }
+  html[data-page="newtab"][data-stage] .firstrun__do {
+    grid-area: do;
+    position: static;
+    border-block-start: 0;
+    padding: var(--nv-space-6) var(--nv-space-8) var(--nv-space-8);
+  }
   html[data-page="newtab"][data-stage] .firstrun__show {
     grid-area: show;
     align-content: center;
