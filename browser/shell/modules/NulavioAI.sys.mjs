@@ -36,10 +36,22 @@ const SHELL_ID = "shell@nulavio.net";
 const SIDEBAR_ID = "shell_nulavio_net-sidebar-action"; // the assistant panel in the side panel
 const WORKSPACE_PREF = "nulavio.ai.workspace";
 const WORKSPACE_ENV = "NULAVIO_AI_WORKSPACE"; // launcher/nulavio_launcher/ai/workspace.py WORKSPACE_ENV
+
+/** Whether `pid` is still an agent bridge (`nulavio ai serve`), not another process that got the
+    number after the bridge ended (audit A13): its command line says so. */
+async function isBridge(pid) {
+  try {
+    const args = new TextDecoder().decode(await IOUtils.read(`/proc/${pid}/cmdline`)).split("\0");
+    return args.some((arg, i) => arg === "ai" && args[i + 1] === "serve");
+  } catch (e) {
+    return false;
+  }
+}
 const TARGET_PREF = "nulavio.ai.target";
 const TARGET_LABEL_PREF = "nulavio.ai.target.label";
 const RAW_MARKER = "nulavio-raw.json"; // launcher/nulavio_launcher/ai/workspace.py RAW_MARKER
 const BAR = "nulavio-ai-workspace";
+const BAR_TEXT_KEYS = ["text", "rawText", "pausedText", "failedText", "stopLabel"]; // lib/agent-texts.js
 const RAW_BAR = "nulavio-ai-raw";
 const STATE_ATTR = "nulavio-state";
 const POLL_MS = 1500;
@@ -189,7 +201,7 @@ class AI {
       return "";
     }
     const [id, pid] = value.split(":");
-    if (pid && !(/^\d+$/.test(pid) && (await IOUtils.exists(`/proc/${pid}`)))) {
+    if (pid && !(/^\d+$/.test(pid) && (await isBridge(pid)))) {
       return ""; // the agent's session ended: an ordinary window again
     }
     return id;
@@ -1166,7 +1178,14 @@ class AI {
     }
     const target = this.workspaceTarget();
     const previous = this.#bar;
-    this.#bar = { agent, target, texts: { ...texts }, raw: previous?.raw ?? false, paused: false, failed: false };
+    // Only the bar's own words, plain and short (audit A12): what agent-texts.js builds from the locales.
+    const clean = {};
+    for (const key of BAR_TEXT_KEYS) {
+      if (typeof texts?.[key] === "string") {
+        clean[key] = texts[key].slice(0, 200);
+      }
+    }
+    this.#bar = { agent, target, texts: clean, raw: previous?.raw ?? false, paused: false, failed: false };
     this.#renderAll();
     if (!this.#observing) {
       this.#observing = true;

@@ -217,8 +217,10 @@ class Bridge:
     """One agent's tools over one AI Workspace, for the lifetime of the MCP server process."""
 
     def __init__(self, agent_id: str, session_id: str, *, approver: registry.Approver | None = None,
-                 headless: bool = False, workspace_factory: Callable[[dict], Workspace] | None = None):  # fmt: skip
+                 headless: bool = False, workspace_factory: Callable[[dict], Workspace] | None = None,
+                 key_sha256: str | None = None):  # fmt: skip
         self.agent_id = agent_id
+        self.key_sha256 = key_sha256  # the key this session started with; a new key ends it (audit A11)
         self.session_id = session_id
         self.approver = approver or registry.default_approver()
         self.headless = headless
@@ -254,6 +256,11 @@ class Bridge:
     def require(self, capability: str, url: str | None = None, *, checked: list[str]) -> None:
         if url:
             self._target = url
+        agent = self._agent()
+        if self.key_sha256 and agent is not None and agent.get("token_sha256") != self.key_sha256:
+            checked.append(capability)
+            self.close()
+            raise Denied(policy.Decision(False, "block", capability, "key-replaced"))
         host = urllib.parse.urlsplit(url).hostname if url else None
         decision = registry.decide(self.agent_id, capability, host=host, target=policy.origin(url),
                                    session_id=self.session_id, approver=self.approver, place=self._place(),
@@ -819,6 +826,7 @@ def _why(decision: policy.Decision) -> str:
     return {
         "stopped": "blocked: the user pressed the emergency stop",
         "revoked": "blocked: the user revoked this agent's access",
+        "key-replaced": "blocked: the user replaced this agent's key; reconnect with the new one",
         "paused": "blocked for now: the user paused this agent",
         "out-of-scope": "blocked on this site: it is outside the sites this agent may use",
         "profile-not-authorized": "blocked: that profile is not one this agent may use",
