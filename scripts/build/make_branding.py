@@ -7,7 +7,8 @@ artwork is copied and nothing binary needs to be committed.
 
     python3 -I scripts/build/make_branding.py --source ~/.cache/nulavio-build/firefox-158.0.1
 
-Requires ImageMagick 7 (`magick`) with the librsvg delegate.
+Requires ImageMagick 7 (`magick`) with the librsvg delegate; build_nulavio.sh runs it in the
+pinned Fedora image (scripts/release/base_image.sh fedora-build), so the icons do not depend on the host.
 """
 
 from __future__ import annotations
