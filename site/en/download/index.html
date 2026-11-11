@@ -57,8 +57,9 @@ sudo dnf install nulavio</code></pre></div>
 
 <section id="verify" aria-labelledby="verify-h">
 <h2 id="verify-h">Check a manual download</h2>
-<p class="prose">The same packages, with a <code translate="no">SHA256SUMS</code> list signed by the key above, the SBOM and the build manifest, are on the release page on GitHub: <code translate="no">github.com/nulavio/nulavio/releases</code>.</p>
-<div class="pre-scroll" role="region" aria-label="Verification commands" tabindex="0"><pre translate="no"><code>gpg --import nulavio-packages.asc
+<p class="prose">The same packages, with a <code translate="no">SHA256SUMS</code> list signed by the key above, the SBOM and the build manifest, are on the release page on GitHub: <code translate="no">github.com/nulavio/nulavio/releases</code>. The key that comes with them counts only if its fingerprint is the one shown above: check it before importing.</p>
+<div class="pre-scroll" role="region" aria-label="Verification commands" tabindex="0"><pre translate="no"><code>gpg --show-keys --with-fingerprint nulavio-packages.asc
+gpg --import nulavio-packages.asc
 gpg --verify SHA256SUMS.asc SHA256SUMS
 sha256sum --check --ignore-missing SHA256SUMS</code></pre></div>
 </section>

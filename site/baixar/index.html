@@ -57,8 +57,9 @@ sudo dnf install nulavio</code></pre></div>
 
 <section id="verify" aria-labelledby="verify-h">
 <h2 id="verify-h">Conferir um download manual</h2>
-<p class="prose">Os mesmos pacotes, com a lista <code translate="no">SHA256SUMS</code> assinada pela chave acima, o SBOM e o manifesto do build, ficam na página da versão no GitHub: <code translate="no">github.com/nulavio/nulavio/releases</code>.</p>
-<div class="pre-scroll" role="region" aria-label="Comandos de verificação" tabindex="0"><pre translate="no"><code>gpg --import nulavio-packages.asc
+<p class="prose">Os mesmos pacotes, com a lista <code translate="no">SHA256SUMS</code> assinada pela chave acima, o SBOM e o manifesto do build, ficam na página da versão no GitHub: <code translate="no">github.com/nulavio/nulavio/releases</code>. A chave que vem junto só vale se a impressão digital for a mostrada acima: confira antes de importar.</p>
+<div class="pre-scroll" role="region" aria-label="Comandos de verificação" tabindex="0"><pre translate="no"><code>gpg --show-keys --with-fingerprint nulavio-packages.asc
+gpg --import nulavio-packages.asc
 gpg --verify SHA256SUMS.asc SHA256SUMS
 sha256sum --check --ignore-missing SHA256SUMS</code></pre></div>
 </section>
