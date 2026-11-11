@@ -10,10 +10,11 @@ rehearse_release.sh makes and publish_release.sh attaches to the GitHub release.
 that is the manifest for Flathub. Without it, the manifest points at the local file, for
 a test build (release.yml builds one for every release).
 
-DIR gets net.nulavio.Nulavio.json, flathub.json (x86_64 only: the build is), the desktop entry (from packaging/linux/nulavio.desktop,
-renamed to the app ID), the AppStream metadata with this release, the entry point and the
-Flatpak-only preferences. Runtime: org.freedesktop.Platform, whose codecs-extra extension
-(installed with it) brings the patented codecs. Permissions: docs/architecture/build.md.
+DIR gets net.nulavio.Nulavio.json, flathub.json (x86_64 only: the build is), the desktop
+entry (from packaging/linux/nulavio.desktop, renamed to the app ID), the AppStream metadata
+with this release, the entry point and the Flatpak-only preferences. Runtime:
+org.freedesktop.Platform, whose codecs-extra extension (installed with it) brings the
+patented codecs. Permissions: docs/architecture/build.md.
 """
 
 from __future__ import annotations
