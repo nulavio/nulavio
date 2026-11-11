@@ -602,6 +602,40 @@ class WorkspaceTest(Home):
         with mock.patch.object(workspace.shutil, "which", return_value=None):
             self.assertEqual(workspace.die_with_parent(), [])
 
+    def test_the_window_lock_is_in_the_engine_environment(self):
+        # Audit A6: the lock rested on a pref an agent with raw automation could reset in about:config.
+        from nulavio_launcher.ai import workspace
+
+        class Started(Exception):
+            pass
+
+        seen = {}
+
+        def popen(_command, env, **_kwargs):
+            seen.update(env)
+            raise Started
+
+        engine = mock.Mock(path=Path("/opt/engine/nulavio"))
+        targets = (
+            (Workspace("ag-1", engine=engine, headless=True), "ag-1"),
+            (
+                workspace.ProfileTarget("ag-2", "Trabalho", self.home / "p", downloads_dir=self.home, engine=engine),
+                f"ag-2:{os.getpid()}",
+            ),
+        )
+        (self.home / "p").mkdir(parents=True)
+        for target, marker in targets:
+            seen.clear()
+            with mock.patch.object(workspace.subprocess, "Popen", side_effect=popen), self.assertRaises(Started):
+                target.start()
+            self.assertEqual(seen[workspace.WORKSPACE_ENV], marker)
+            user_js = (target.profile_dir / "user.js").read_text()
+            self.assertIn(f'user_pref("nulavio.ai.workspace", "{marker}");', user_js)
+        root = Path(__file__).resolve().parents[2]
+        shell = (root / "browser" / "shell" / "modules" / "NulavioAI.sys.mjs").read_text(encoding="utf-8")
+        self.assertIn(f'const WORKSPACE_ENV = "{workspace.WORKSPACE_ENV}";', shell)
+        self.assertIn("this.#workspaceValue ||= Services.env.get(WORKSPACE_ENV)", shell)
+
     def test_command_and_prefs(self):
         engine = mock.Mock(path=Path("/opt/engine/nulavio"))
         ws = Workspace("ag-1", engine=engine, headless=True)
