@@ -124,7 +124,7 @@ The configuration (`#ai-config`) and the wizard's command (`#ai-wizard-command`)
 
 #### S-06 · LOW — The phone page takes the profile's secret without pointing at the band
 
-`vault/phone.html` asks for "Senha ou código de recuperação deste perfil". The other pages that take a secret open with "Antes de digitar uma senha, confira o alto da janela…"; this one does not, because `lib/moment.js:31` lists `unlock`, `create` and `methods` only. LOW because connecting a phone is off in this release (`nulavio.vault.phone.pairing`, D10); it becomes MEDIUM the day it ships.
+`vault/phone.html` asks for "Senha ou código de recuperação deste perfil". The other pages that take a secret open with "Antes de digitar uma senha, confira o alto da janela…"; this one does not, because `lib/moment.js:31` lists `unlock`, `create` and `methods` only. LOW because connecting a phone is off in this release (`nulavio.vault.phone.pairing`, D10); it becomes MEDIUM the day it ships, and #42 proposes to turn it on. Fixed together with S-04.
 
 - **Evidence.** [capture](screenshots/audit-2026-11/s06-phone-no-band-line.png).
 - **Fix.** Add `phone` to `SECRET_KINDS`; a test that every Shell page with a password field has the line.
@@ -181,7 +181,7 @@ The footer sends the reader to `docs/security/residual-risks.md`, a path that ex
 
 Since 2026-11-09 the landing sells the intended launch in the present tense, by the maintainer's decision. On 2026-11-10 the alpha became downloadable from the same page ("Alpha para o Fedora · Baixar"). The page says a protected profile opens with "uma chave de segurança FIDO2 ou a biometria do celular", shows both in the unlock mock-up and lists them in the comparison table ("Sim: senha, sistema, chave FIDO2 ou celular"); the alpha it links to says "ainda não disponível nesta versão" for both (D10, #13). "Pacotes assinados para Fedora e Ubuntu" has the same shape (Ubuntu is next, the page says so elsewhere).
 
-Nothing here is an invented proof (no testimonial, count or audit), and the numbers in the proof row are backed by the repository. It is a product decision whether the landing keeps the launch tense now that a release exists: see "Decisions" below. No change is made in this round.
+Nothing here is an invented proof (no testimonial, count or audit), and the numbers in the proof row are backed by the repository. It is a product decision whether the landing keeps the launch tense now that a release exists: see "Decisions" below. No change is made in this round. If #42 ships (phone unlock on, once the Companion can be installed), the phone half of this finding goes away; the security key and Ubuntu stay.
 
 - **Evidence.** `site/index.html` (feature text, the `role="img"` unlock panel, the "Perfis cifrados no disco" row) and `site/en/index.html`; `vault/methods.html` "not yet" line.
 
@@ -197,19 +197,23 @@ In the agent-permissions mock-up, "Autônomo" and "Controle total" end in an ell
 
 The figure comes from `docs/research/site-regression-2026-10.md`, run in October on the previous engine. Say when ("em outubro de 2026") or run it again on 160.
 
-## Correction plan
+## Corrections
 
-One slice per pull request, each with a test that fails before it, run on the packaged build with `dev_sync`:
+One slice per pull request, each with a test that fails before it, run on the packaged build with `dev_sync`. Every MEDIUM finding has a pull request open (2026-11-11); none is merged yet.
 
-1. S-01 error states of the security moments
-2. W-01 and W-02 the band in agent windows and in failed reads
-3. S-02 the new tab's summary mark
-4. S-04 (with S-06) refused fields and the band line on the phone page
-5. S-05 focus in the Guard review
-6. S-03 the agent configuration block
-7. P-01 the start page
+| Slice | Findings | Pull request |
+|---|---|---|
+| Error states of the security moments | S-01 | [#46](https://github.com/nulavio/nulavio/pull/46) |
+| The band in an agent's window and after a failed read | W-01, W-02, W-04 | [#47](https://github.com/nulavio/nulavio/pull/47) |
+| The new tab's summary mark | S-02 | [#49](https://github.com/nulavio/nulavio/pull/49) |
+| Refused fields on the Vault's forms; the band line on the phone page | S-04, S-06 | [#50](https://github.com/nulavio/nulavio/pull/50) |
+| Focus in the Guard review | S-05 | [#51](https://github.com/nulavio/nulavio/pull/51) |
+| The agent's configuration block in Settings | S-03 | [#52](https://github.com/nulavio/nulavio/pull/52) |
+| The start page with the Nulavio engine | P-01 | [#53](https://github.com/nulavio/nulavio/pull/53) |
 
-LOW findings are fixed where a slice already touches the same lines (S-06 with S-04, W-04 with W-01); the rest wait for a polish round.
+LOW findings were fixed where a slice already touched the same lines (S-06 with S-04, W-04 with W-01). The others (W-03, W-05, S-07 to S-12, P-02, N-02 to N-04) wait for a polish round or for a decision below.
+
+The audit ran on the build of `v160.0-0.1`. `main` has since moved to `v160.0-0.2` (the security release, #44); the corrections were rebased on it and verified on that release's build with `dev_sync`.
 
 ## Decisions for the maintainer
 
