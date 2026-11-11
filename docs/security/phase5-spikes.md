@@ -69,6 +69,8 @@ Measured:
 
 Decision: **not now**. The blocker is gone on the two target systems, but a Flatpak brings no confinement that the bubblewrap mode does not, and it costs a second packaging and update path (runtime updates, Flathub review, a second SLA). The proxy is the path when a Flatpak is wanted (for example for immutable systems); it would need a test with a stand-in native host through the proxy before release. Not installed here: the spike does not install system packages.
 
+**Revisited 2026-11-11: adopted as a second channel, for reach.** Flathub installs on distributions Nulavio has no repository for (Arch, openSUSE, Mint, immutable systems), and the release workflow now builds the Flatpak from the same signed build in every run, so it adds no build and its update path is a pull request per release. The confinement argument above still holds: the Flatpak is for reach, not for more isolation. It turns the proxy on (`widget.use-xdg-desktop-portal.native-messaging-proxy=1`); the Vault, the confined mode and the D-Bus Connect features stay out of it ([build](../architecture/build.md#flatpak-flathub)). Still open: the test with a stand-in native host through the proxy.
+
 ## SELinux
 
 Measured: SELinux enforcing; the Nulavio engine runs as `unconfined_u:unconfined_r:unconfined_t`, as Fedora's Firefox does (Fedora's old `mozilla_t` domain is not used for the browser).

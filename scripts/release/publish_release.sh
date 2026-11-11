@@ -13,7 +13,7 @@
 #    origin/main, and every package and SBOM still has the SHA-256 it recorded.
 # 2. sign_repo.sh with NULAVIO_RELEASE_MANIFEST: signs only those RPMs and builds
 #    the dnf repository (stage/rpm/, uploaded to https://packages.nulavio.net/rpm/).
-# 3. stage/github/: the signed RPM, its SBOM, manifest.json, the public key,
+# 3. stage/github/: the signed RPM, its SBOM, the portable archive (Flatpak source), manifest.json, the public key,
 #    SHA256SUMS and its detached signature (assets of the GitHub release).
 # 4. stage/NEXT.md: the upload, tag and release commands for this version.
 #
@@ -74,6 +74,9 @@ while IFS= read -r rpm; do
     cp "$stage/rpm/x86_64/$(basename "$rpm")" "$stage/github/"
     cp "$out/$rpm.cdx.json" "$stage/github/"
 done < <(field rpms)
+while IFS= read -r archive; do
+    [[ -n $archive ]] && cp "$out/$archive" "$stage/github/"
+done < <(field archives)
 cp "$out/manifest.json" "$stage/github/manifest.json"
 cp "$published" "$stage/github/nulavio-packages.asc"
 (cd "$stage/github" && sha256sum -- * >SHA256SUMS)

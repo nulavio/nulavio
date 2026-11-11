@@ -76,6 +76,7 @@ step deb "$repo/scripts/release/make_deb.sh" "$out/packages"
 step check-deb bash -c '"$0" "$1"/nulavio_*.deb' "$repo/scripts/release/check_deb.sh" "$out/packages"
 step signed-repository "$repo/scripts/release/test_signed_repo.sh" "$out/packages"
 step kms-signing "$repo/scripts/release/test_kms_signing.sh"
+step archive "$repo/scripts/release/make_archive.sh" "$install" "$out/packages/nulavio-$version-$NULAVIO_RELEASE.linux-x86_64.tar.xz"
 step sbom sbom
 
 # <out>/manifest.json: what this rehearsal verified, built and checked. Signing
@@ -120,7 +121,9 @@ def git(*args):
     return subprocess.run(["git", "-C", repo, *args], check=True, capture_output=True).stdout
 
 
-packages = sorted([*out.glob("packages/x86_64/nulavio-*.rpm"), *out.glob("packages/nulavio_*.deb")])
+packages = sorted(
+    [*out.glob("packages/x86_64/nulavio-*.rpm"), *out.glob("packages/nulavio_*.deb"), *out.glob("packages/nulavio-*.linux-x86_64.tar.xz")]
+)
 sboms = sorted(out.glob("packages/**/*.cdx.json"))
 if not packages:
     sys.exit("manifest: no packages to list")
