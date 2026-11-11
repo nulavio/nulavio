@@ -59,6 +59,24 @@ class NativeSettingsTest(unittest.TestCase):
         harness.wait_until(lambda: not self.m.chrome('return Services.prefs.getBoolPref("sidebar.verticalTabs");'), 10)
         harness.wait_until(lambda: self.m.chrome(PROBE)["value"] == "top", 10)
 
+    def test_02b_the_immersive_switch_sits_under_the_layout_and_writes_through_the_layout_module(self):
+        self.open()
+        switch = """
+          const toggle = gBrowser.selectedBrowser.contentDocument.querySelector("#nulavio-immersive");
+          return toggle && { group: toggle.closest("setting-group")?.getAttribute("groupid"), label: toggle.label,
+            pressed: toggle.pressed, disabled: toggle.disabled };
+        """
+        pref = 'return Services.prefs.getBoolPref("nulavio.layout.immersive", false);'
+        self.addCleanup(self.m.chrome, 'Services.prefs.clearUserPref("nulavio.layout.immersive");')
+        self.assertEqual(
+            self.m.chrome(switch), {"group": "nulavioLayout", "label": "Imersivo", "pressed": False, "disabled": False}
+        )
+        self.m.chrome('gBrowser.selectedBrowser.contentDocument.querySelector("#nulavio-immersive").click();')
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome(pref), 10))
+        # Changed from elsewhere (the key): the switch follows.
+        self.m.chrome('Services.prefs.setBoolPref("nulavio.layout.immersive", false);')
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome(switch)["pressed"] is False, 10), self.m.chrome(switch))
+
     def test_03_words_come_in_english_too(self):
         self.m.chrome('Services.locale.requestedLocales = ["en-US"];')
         self.m = self.session.restart()

@@ -6,7 +6,7 @@
 
 nulavio-layout-group =
     .label = Abas e organização da janela
-    .description = Onde ficam as abas nas janelas deste perfil. A barra de endereço e os sinais de segurança continuam visíveis em qualquer organização.
+    .description = Onde ficam as abas nas janelas deste perfil. A barra de endereço e os sinais de segurança continuam visíveis em qualquer organização; só o modo Imersivo, abaixo, os tira de vista.
 nulavio-layout-lateral =
     .label = Lateral
     .description = Abas na lateral, sempre com os nomes.
@@ -16,6 +16,10 @@ nulavio-layout-top =
 nulavio-layout-focus =
     .label = Foco
     .description = Uma faixa fina na lateral, que abre quando o ponteiro chega nela.
+
+nulavio-immersive =
+    .label = Imersivo
+    .description = Tira de vista a barra de endereço e as abas. A faixa do topo continua mostrando o perfil e o site. Elas voltam com o ponteiro no alto ou na lateral da janela, com o teclado, e sozinhas sempre que o navegador precisa mostrar algo: um pedido de permissão, um aviso de download, uma câmera ou um microfone em uso, ou uma página que a faixa não sabe nomear.
 
 nulavio-look-group =
     .label = Cores do Nulavio

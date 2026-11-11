@@ -6,7 +6,7 @@
 
 nulavio-layout-group =
     .label = Tabs and window layout
-    .description = Where the tabs go in this profile's windows. The address bar and the security signs stay visible in every layout.
+    .description = Where the tabs go in this profile's windows. The address bar and the security signs stay visible in every layout; only Immersive, below, takes them out of view.
 nulavio-layout-lateral =
     .label = Lateral
     .description = Tabs down the side, always with their names.
@@ -16,6 +16,10 @@ nulavio-layout-top =
 nulavio-layout-focus =
     .label = Focus
     .description = A thin side strip that opens when the pointer reaches it.
+
+nulavio-immersive =
+    .label = Immersive
+    .description = Takes the address bar and the tabs out of view. The band at the top keeps showing the profile and the site. They come back with the pointer at the top or the side of the window, with the keyboard, and by themselves whenever the browser has something to show: a permission request, a download warning, a camera or a microphone in use, or a page the band cannot name.
 
 nulavio-look-group =
     .label = Nulavio colours

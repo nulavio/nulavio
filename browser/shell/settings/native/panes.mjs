@@ -55,6 +55,34 @@
     disabled: () => layout.locked || !layout.available,
   });
 
+  // -- Immersive (ADR 0009): one switch on top of the layout; NulavioLayout is the only writer ----
+  const PREF_IMMERSIVE = "nulavio.layout.immersive";
+  const immersive = { on: false, locked: false };
+  let immersiveChanged = () => {};
+  const readImmersive = () => {
+    Object.assign(immersive, shell.NulavioLayout.immersive());
+    immersiveChanged();
+  };
+  Preferences.addSetting({
+    id: "nulavio-immersive",
+    setup(emitChange) {
+      immersiveChanged = emitChange;
+      readImmersive();
+      Services.prefs.addObserver(PREF_IMMERSIVE, readImmersive); // the key (Ctrl+Alt+I) or the other page changed it
+      return () => Services.prefs.removeObserver(PREF_IMMERSIVE, readImmersive);
+    },
+    get: () => immersive.on,
+    set(value) {
+      try {
+        shell.NulavioLayout.setImmersive(Boolean(value));
+      } catch (e) {
+        console.error(e); // locked by an administrator: the switch shows what is true
+      }
+      readImmersive();
+    },
+    disabled: () => immersive.locked || layout.locked || !layout.available,
+  });
+
   // -- look: accent, more contrast, new-tab ambience (NulavioPersonalise owns the prefs) ----------
   const look = { accent: "mint", moreContrast: false, newtabAmbience: false, locked: {} };
   const lookListeners = new Set();
@@ -106,6 +134,7 @@
             controlAttrs: { id: `nulavio-layout-${value}`, class: "setting-chooser-item", imagesrc: `${IMAGES}layout-${value}.svg` },
           })),
         },
+        { id: "nulavio-immersive", l10nId: "nulavio-immersive", control: "moz-toggle" },
       ],
     },
     nulavioLook: {
