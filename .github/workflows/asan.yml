@@ -36,7 +36,7 @@ jobs:
         with:
           persist-credentials: false
       - name: libsodium and gocryptfs for the Vault tests (decisions D1, D2)
-        run: sudo apt-get update -q && sudo apt-get install -y --no-install-recommends libsodium23 gocryptfs fuse3
+        run: scripts/ci/apt_install.sh libsodium23 gocryptfs fuse3
       - name: Google Safe Browsing key (the build is otherwise the release configuration)
         env:
           KEY: ${{ secrets.GOOGLE_SAFEBROWSING_API_KEY }}

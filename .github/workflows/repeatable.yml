@@ -87,7 +87,7 @@ jobs:
       - name: diffoscope on the first differing files
         if: failure() && steps.compare.outcome == 'failure'
         run: |
-          sudo apt-get update -q && sudo apt-get install -y --no-install-recommends diffoscope-minimal
+          scripts/ci/apt_install.sh diffoscope-minimal
           mkdir -p "$RUNNER_TEMP/diffoscope"
           timeout 900 diffoscope --max-report-size 20000000 --text "$RUNNER_TEMP/diffoscope/report.txt" \
             --html-dir "$RUNNER_TEMP/diffoscope/html" "$RUNNER_TEMP/differ/first" "$RUNNER_TEMP/differ/second" || true
