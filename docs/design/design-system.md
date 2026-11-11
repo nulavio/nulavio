@@ -1067,7 +1067,7 @@ CSS draws two states; the window decides them. Three attributes on the window's 
 | Attribute | Meaning |
 |---|---|
 | `nulavio-immersive` | The mode is drawn: the person turned it on (or the first run's stage asked for it) and nothing below holds it back |
-| `nulavio-immersive-off="agent \| popup \| sharing \| page"` | The mode is wanted and the full window is shown anyway, with the first reason that applies |
+| `nulavio-immersive-off="agent \| popup \| sharing \| prompt \| page"` | The mode is wanted and the full window is shown anyway, with the first reason that applies |
 | `nulavio-immersive-hold="toolbar"`, `"tabs"` or both | A panel or a menu anchored there is open: that part stays shown for its whole life |
 
 A new way to hide chrome goes through the same decision: it adds a reason or a hold, never a selector of its own.
