@@ -83,6 +83,15 @@ Never switch a rule or a check off, leave a directory out of a scan, or make the
 
 Change the version, URL and SHA-256 in `scripts/security/fetch_tools.sh` together, in one commit that says why. Take the SHA-256 from the release's checksum file where there is one (actionlint, gitleaks) and compare it with the digest GitHub shows for the asset. Read the release notes: new checks can bring new findings, which the same commit fixes or suppresses. Wait about a week after a release unless it fixes a problem that affects Nulavio. Opengrep 1.33.0 came out on 2026-10-27 and is not adopted yet for that reason. The daily [dependency watch](dependency-updates.md) does not check these tools yet, so look at each one's security advisories when bumping it.
 
+## LESIS (external, supporter)
+
+[LESIS](https://lesis.lat) supports Nulavio with free use of its vulnerability platform, which scans code automatically with AI help and also takes manual findings and produces reports. It runs outside CI and is not a required check: its results reach the maintainer and are handled like any other report ([SECURITY.md](../../SECURITY.md)), privately until a fix ships.
+
+| Date | Scan | Result |
+|---|---|---|
+| 2026-11-11 | Leaked secrets | Nothing found |
+| 2026-11-11 | Code (vulnerabilities) | Running |
+
 ## OpenSSF Scorecard
 
 The `scorecard` workflow (`.github/workflows/scorecard.yml`) runs [OpenSSF Scorecard](https://scorecard.dev) on every push to `main`, weekly and when branch protection changes. It rates how the repository is maintained (branch protection, pinned dependencies, token permissions, signed releases, code review, fuzzing and others), publishes the score to scorecard.dev for the README badge, and uploads its findings to the Security tab under the category `scorecard`. It needs no secret; without an admin token the Branch-Protection check sees only what a public token can read, so that check may score lower than the protection actually configured. A low check is a prompt to look, not a defect by itself: read the finding, then fix it or record why it does not apply.

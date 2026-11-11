@@ -121,6 +121,10 @@ A browser cannot protect you from malware that already runs as your user or as r
 
 Read [CONTRIBUTING.md](CONTRIBUTING.md). In short: conventional commits signed off (`git commit -s`), one change per pull request, and a description that says how it was verified and what was not. Changes reach `main` only through a pull request with green CI.
 
+## Supporters
+
+- **[LESIS](https://lesis.lat)** gives Nulavio free use of its vulnerability platform. Automated code scans run on this repository, and a scan for leaked secrets found nothing (2026-11-11). Findings go through the usual [security process](SECURITY.md).
+
 ## License and trademarks
 
 Code under the [Mozilla Public License 2.0](LICENSE); brand assets as described in [LICENSES.md](LICENSES.md). "Nulavio" is not a registered trademark yet. Nulavio is not affiliated with Mozilla; Firefox is a trademark of the Mozilla Foundation.
