@@ -21,7 +21,6 @@ ChromeUtils.defineESModuleGetters(lazy, {
   profileInitial: "resource://builtin-addons/nulavio-shell/modules/NulavioAvatars.sys.mjs",
   NulavioProfiles: "resource://builtin-addons/nulavio-shell/modules/NulavioProfiles.sys.mjs",
   NulavioRouting: "resource://builtin-addons/nulavio-shell/modules/NulavioRouting.sys.mjs",
-  webrtcUI: "resource:///modules/webrtcUI.sys.mjs",
   PrivateBrowsingUtils: "resource://gre/modules/PrivateBrowsingUtils.sys.mjs",
   profileLockState: "resource://builtin-addons/nulavio-shell/modules/NulavioVaultState.sys.mjs",
 });
@@ -45,7 +44,7 @@ const SHELL = "shell@nulavio.net";
 const HTML = "http://www.w3.org/1999/xhtml";
 // nulavio-ai-agent-files-changed: the driving agent's registry or the emergency stop changed (NulavioAI).
 const TOPICS = ["browser-delayed-startup-finished", "nulavio-ai-window-changed", "nulavio-guard-changed",
-  "nulavio-ai-agent-files-changed", "nulavio-ai-activity-changed", "recording-device-events"];
+  "nulavio-ai-agent-files-changed", "nulavio-ai-activity-changed"];
 // Fixed paths only. Query strings, fragments, titles and page text never name a trusted surface.
 const SURFACES = Object.freeze({
   "/newtab/newtab.html": "newtabTitle",
@@ -214,11 +213,6 @@ class WindowUI {
     }
     if (topic === "browser-delayed-startup-finished") {
       this.#attach(win);
-    } else if (topic === "recording-device-events") {
-      // A camera, a microphone or a screen started or stopped being shared: Immersive follows (ADR 0009).
-      for (const window of this.#windows.keys()) {
-        this.#applyImmersive(window);
-      }
     } else if (topic === "nulavio-ai-activity-changed") {
       // The assistant's task shows in every normal window (Q10); memory only: nothing is read or started.
       for (const window of this.#windows.keys()) {
@@ -456,6 +450,9 @@ class WindowUI {
     for (const type of ["popupshowing", "popupshown", "popuphidden"]) {
       win.addEventListener(type, popup, true);
     }
+    // ...and a device that starts or stops being shared in any tab is decided at once.
+    const sharing = event => event.detail?.changed?.includes("sharing") && this.#applyImmersive(win);
+    win.gBrowser.tabContainer.addEventListener("TabAttrModified", sharing);
     const unload = () => this.#detach(win);
     win.addEventListener("unload", unload, { once: true });
     const reveal = () => this.#showNotice(win);
@@ -476,7 +473,7 @@ class WindowUI {
       identityObserver.observe(identityBox, { attributes: true, attributeFilter: ["class"] });
     }
     this.#windows.set(win, { bar, compact, fullscreen, line, sheet, progress, header, unload, pointer, screenObserver, identityObserver, edge,
-      popup, holds: new Map(), named: false, noticeTimer: null, safety: null, restoreGroupPalette: this.#groupPalette(win) });
+      popup, sharing, holds: new Map(), named: false, noticeTimer: null, safety: null, restoreGroupPalette: this.#groupPalette(win) });
     this.#paint(win);
     this.#unifyStartPage(win);
   }
@@ -622,13 +619,10 @@ class WindowUI {
     if (!win.toolbar.visible) {
       return "popup"; // a pop-up or any window without the full toolbar
     }
-    try {
-      if (lazy.webrtcUI.getActiveStreams(true, true, true, true).some(stream => stream.browser?.ownerGlobal === win)) {
-        return "sharing"; // the engine's own indicators are the cue while a device is shared
-      }
-    } catch (e) {
-      console.error("Nulavio band: sharing state", e);
-      return "sharing"; // not known: as if shared
+    // A camera, a microphone or a screen shared from any tab of this window: the engine's own indicators are
+    // the cue, so the toolbar stays. Read from what those indicators are drawn from (the tab's sharing state).
+    if ([...win.gBrowser.tabs].some(tab => tab._sharingState?.webRTC?.sharing || tab.hasAttribute("sharing"))) {
+      return "sharing";
     }
     if (!this.#windows.get(win)?.named) {
       return "page"; // a document the band has no defined name for (about:blank, data:, blob:, view-source:)
@@ -710,6 +704,10 @@ class WindowUI {
             }
           } catch {
             // An IP address or a single label: the whole host is the site.
+          }
+          // A port that is not the scheme's own is part of what the site is: never left out.
+          if (uri.port !== -1) {
+            host += `:${uri.port}`;
           }
           // The verdict is the engine's own: the classes its identity handler puts on the address
           // bar's identity box (verified, local, or anything else), never a second opinion.
@@ -1000,6 +998,7 @@ class WindowUI {
     for (const type of ["popupshowing", "popupshown", "popuphidden"]) {
       win.removeEventListener(type, state.popup, true);
     }
+    win.gBrowser.tabContainer.removeEventListener("TabAttrModified", state.sharing);
     win.clearTimeout(state.noticeTimer);
     state.screenObserver.disconnect();
     state.identityObserver.disconnect();
