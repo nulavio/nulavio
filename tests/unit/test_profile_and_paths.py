@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import stat
+import subprocess
 import sys
 import tempfile
 import time
@@ -187,6 +188,19 @@ class ProfileTest(TempHome):
         made = time.time() - 3600  # the lock is older than this process
         os.utime(lock, (made, made), follow_symlinks=False)
         self.assertIsNone(prof.running_pid())
+
+    def test_a_clock_step_does_not_make_a_live_engine_look_gone(self):
+        # Review of #44: a wall-clock step moved the computed start time past the lock's
+        # mtime, and autolock would have unmounted a profile in use.
+        prof = self.make()
+        engine = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)", "--profile", str(prof.path)])
+        self.addCleanup(engine.wait)
+        self.addCleanup(engine.kill)
+        lock = prof.path / "lock"
+        os.symlink(f"127.0.0.1:+{engine.pid}", lock)
+        made = time.time() - 3600  # as if the clock had stepped an hour forward since
+        os.utime(lock, (made, made), follow_symlinks=False)
+        self.assertEqual(prof.running_pid(), engine.pid)
 
     def test_running_profile_is_protected(self):
         prof = self.make()

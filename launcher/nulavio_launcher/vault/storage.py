@@ -255,6 +255,22 @@ def _release(path: Path, fd: int) -> None:
     os.close(fd)
 
 
+def _mark_complete(root: Path) -> None:
+    """Record, durably, that the copy is complete, before any plaintext original is deleted:
+    recovery after a power loss during the clean-up must finish it, never undo it."""
+    os.sync()  # the copy itself (written through the volume) reaches the disk first
+    fd = os.open(root / MIGRATED, os.O_WRONLY | os.O_CREAT | os.O_NOFOLLOW, 0o600)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+    dir_fd = os.open(root, os.O_RDONLY)
+    try:
+        os.fsync(dir_fd)
+    finally:
+        os.close(dir_fd)
+
+
 def _undo(path: Path, staging: Path) -> None:
     container = Container(path)
     if container.mounted():
@@ -324,7 +340,7 @@ def encrypt_existing(path: Path, vault: Vault) -> Container:
                     else:
                         shutil.copy2(item, target, follow_symlinks=False)
                 container.unmount()
-                (container.root / MIGRATED).touch(mode=0o600)
+                _mark_complete(container.root)
             except BaseException:
                 _undo(path, staging)
                 raise
