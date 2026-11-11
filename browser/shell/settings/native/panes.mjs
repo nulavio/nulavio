@@ -2,19 +2,25 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-/* Runs inside about:preferences (system principal), loaded by NulavioSettings before the
+/* Runs inside about:preferences (system principal), imported by NulavioSettings before the
    page builds its panes (ADR 0008). It only uses what the engine's own panes use: Preferences
    settings, SettingGroupManager groups and SettingPaneManager panes, drawn by the engine's
    widgets. Words come from l10n/<locale>/nulavio/settings.ftl. */
-
-"use strict";
 
 (() => {
   const here = { global: "current" };
   const { SettingGroupManager } = ChromeUtils.importESModule("chrome://browser/content/preferences/config/SettingGroupManager.mjs", here);
   const { SettingPaneManager } = ChromeUtils.importESModule("chrome://browser/content/preferences/config/SettingPaneManager.mjs", here);
   const { Preferences } = ChromeUtils.importESModule("chrome://global/content/preferences/Preferences.mjs", here);
-  const shell = name => ChromeUtils.importESModule(`resource://builtin-addons/nulavio-shell/modules/${name}.sys.mjs`)[name];
+  // The Shell's own modules, from the shared system global (fixed addresses; loaded when first used).
+  const shell = {
+    get NulavioLayout() {
+      return ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioLayout.sys.mjs").NulavioLayout;
+    },
+    get NulavioPersonalise() {
+      return ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioPersonalise.sys.mjs").NulavioPersonalise;
+    },
+  };
   const top = () => window.browsingContext.topChromeWindow;
   const IMAGES = "resource://builtin-addons/nulavio-shell/settings/native/";
 
@@ -24,7 +30,7 @@
   const layout = { preset: "lateral", locked: false, available: true };
   let layoutChanged = () => {};
   const readLayout = () =>
-    shell("NulavioLayout").state(top()).then(state => {
+    shell.NulavioLayout.state(top()).then(state => {
       Object.assign(layout, state);
       layoutChanged();
     }, console.error);
@@ -36,7 +42,7 @@
       readLayout();
       let unsubscribe = () => {};
       try {
-        unsubscribe = shell("NulavioLayout").subscribe(top(), readLayout);
+        unsubscribe = shell.NulavioLayout.subscribe(top(), readLayout);
       } catch (e) {
         console.error(e);
       }
@@ -44,7 +50,7 @@
     },
     get: () => (layout.preset === "custom" ? "" : layout.preset),
     set(value) {
-      shell("NulavioLayout").apply(top(), value).then(readLayout, readLayout);
+      shell.NulavioLayout.apply(top(), value).then(readLayout, readLayout);
     },
     disabled: () => layout.locked || !layout.available,
   });
@@ -53,7 +59,7 @@
   const look = { accent: "mint", moreContrast: false, newtabAmbience: false, locked: {} };
   const lookListeners = new Set();
   const readLook = () =>
-    shell("NulavioPersonalise").state().then(state => {
+    shell.NulavioPersonalise.state().then(state => {
       Object.assign(look, state);
       lookListeners.forEach(emit => emit());
     }, console.error);
@@ -66,7 +72,7 @@
       },
       get: () => fromValue(look[option]),
       set(value) {
-        shell("NulavioPersonalise").set(option, toValue(value)).then(readLook, readLook);
+        shell.NulavioPersonalise.set(option, toValue(value)).then(readLook, readLook);
       },
       disabled: () => Boolean(look.locked?.[option]),
     });
@@ -74,7 +80,7 @@
   lookSetting("nulavio-more-contrast", "moreContrast", Boolean, Boolean);
   lookSetting("nulavio-newtab-ambience", "newtabAmbience", Boolean, Boolean);
   readLook();
-  const unsubscribeLook = shell("NulavioPersonalise").subscribe(readLook);
+  const unsubscribeLook = shell.NulavioPersonalise.subscribe(readLook);
   window.addEventListener("unload", () => unsubscribeLook?.(), { once: true });
 
   Preferences.addSetting({

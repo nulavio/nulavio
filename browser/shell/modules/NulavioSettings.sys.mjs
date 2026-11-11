@@ -5,16 +5,17 @@
 /* One settings page (ADR 0008): Nulavio's options live inside the engine's own
    about:preferences, as native panes and groups, instead of a second page.
 
-   No engine patch: when a preferences document is created, this module runs
-   settings/native/panes.js in that document's own global, before the page builds
-   its panes. That script uses the engine's public pane registry (SettingPaneManager,
-   SettingGroupManager, Preferences) exactly as the engine's own panes do.
+   No engine patch: when a preferences document is created, this module imports
+   settings/native/panes.mjs into that document's own global (the page's own module
+   loader, a fixed resource:// address), before the page builds its panes. That module
+   uses the engine's pane registry (SettingPaneManager, SettingGroupManager, Preferences)
+   exactly as the engine's own panes do.
 
    Only a system-principal about:preferences (or its alias about:settings) is ever
-   touched; web content and extension pages never match. If the script fails, the
+   touched; web content and extension pages never match. If the module fails, the
    page stays the engine's stock page: nothing of it is removed before ours is in. */
 
-const PANES = "resource://builtin-addons/nulavio-shell/settings/native/panes.js";
+const PANES = "resource://builtin-addons/nulavio-shell/settings/native/panes.mjs";
 const L10N = "resource://builtin-addons/nulavio-shell/l10n/{locale}/";
 const TOPIC = "chrome-document-global-created";
 const PAGES = new Set(["preferences", "settings"]);
@@ -61,7 +62,9 @@ class SettingsHost {
 
   #extend(win) {
     try {
-      Services.scriptloader.loadSubScript(PANES, win);
+      // The window's own ChromeUtils: "current" is then the page's global, so the module gets the page's
+      // registry instances, the ones its panes are read from.
+      win.ChromeUtils.importESModule(PANES, { global: "current" });
     } catch (e) {
       console.error("Nulavio settings: the engine's page is shown as it is", e);
     }
