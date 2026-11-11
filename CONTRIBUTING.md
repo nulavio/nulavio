@@ -96,7 +96,7 @@ When a comparison row or a claim of the landing changes, change both languages (
 |---|---|
 | Add or modify a default pref | Edit `browser/config/prefs/baseline.js` with `@mode`, `@category`, `@why`, `@tradeoff`. Run the unit tests (they reject weakening prefs) and the integration tests (they reject prefs unknown to the engine). Update `docs/security/hardening.md` if relevant |
 | Guard rule | `browser/config/guard-rules.json` + a unit test in `tests/unit/test_prefs_and_guard.py` |
-| Extension update | `python3 -I scripts/upstream/refresh_extensions_lock.py`, review hash **and permission** changes, then `--write` and run all tests |
+| Extension update | `python3 -I scripts/upstream/refresh_extensions_lock.py`, review hash **and permission** changes, then `--write` (it re-copies uBlock Origin's list registry and says when a default list of `browser/distribution/content-filter.json` is gone) and run all tests |
 | Design tokens | Edit `docs/brand/tokens.json`, run `scripts/brand/build_tokens.py` and `scripts/brand/contrast.py` |
 | Logo/icons | Edit `scripts/brand/build_logo.py` (never hand-edit generated SVGs), then run `build_logo.py` and `build_icons.py` |
 | Mockups | Edit `docs/brand/mockups/`, then run `scripts/brand/render_mockups.py` |

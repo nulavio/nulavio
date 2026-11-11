@@ -1,0 +1,13 @@
+{
+  "schema": 1,
+  "comment": "Lists Nulavio switches on in uBlock Origin for a new profile, on top of uBlock Origin's own defaults. A default only: the person's later choice in uBlock Origin's dashboard is never overwritten. ublock-origin/assets.json is uBlock Origin's list registry, copied unchanged from the pinned package (GPL-3.0, ublock-origin/LICENSE.txt); refresh it with scripts/upstream/refresh_extensions_lock.py --registry.",
+  "extension": "ublock-origin",
+  "registry": {
+    "version": "1.75.0",
+    "sha256": "61488d15d26dfb7a8c73e8e2692ebf636300eb4fb6b98bc8356e317631487996"
+  },
+  "default_on": [
+    "fanboy-cookiemonster",
+    "ublock-cookies-easylist"
+  ]
+}

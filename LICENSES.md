@@ -12,13 +12,14 @@ The name "Nulavio" is a candidate trademark and is **not registered** ([status](
 
 ## Third-party components
 
-Nothing below is **redistributed** by the Track A preview. Nulavio downloads pinned files from their official source, or uses software installed by the user's distribution.
+Nothing below is **redistributed** by the Track A preview. Nulavio downloads pinned files from their official source, or uses software installed by the user's distribution. One data file is the exception: uBlock Origin's list registry, in the row below it.
 
 | Component | Version | Licence | How Nulavio uses it |
 |---|---|---|---|
 | Mozilla Firefox (Gecko) | ≥ 140 (tested 158.0.1) | MPL-2.0; Firefox name and logo are Mozilla trademarks | Executes the distribution package unmodified. **Not redistributed; no Mozilla marks in Nulavio assets.** A modified build (Track B) must carry no Mozilla marks ([distribution policy](https://www.mozilla.org/en-US/foundation/trademarks/distribution-policy/)) |
 | Firefox language packs | match engine | MPL-2.0 | Copied from the distribution package into the user's profile |
 | uBlock Origin | 1.75.0 | GPL-3.0-only | Downloaded from AMO on user setup, SHA-256 pinned |
+| uBlock Origin's list registry (`assets/assets.json`) | 1.75.0 | GPL-3.0-only (Raymond Hill and contributors) | **Redistributed.** Copied unchanged into `browser/distribution/ublock-origin/` with uBlock Origin's `LICENSE.txt`. A build's `distribution/policies.json` carries it with one change, `"off": false` on the lists of `browser/distribution/content-filter.json`, and `distribution/uBlock-Origin-LICENSE.txt` goes with it. A data file read by uBlock Origin, not linked with Nulavio's code |
 | Proton Pass extension | 1.41.1 | GPL-3.0-only | Downloaded on explicit request |
 | KeePassXC-Browser | 1.10.4.1 | GPL-3.0-only | Downloaded on explicit request |
 | Bitwarden extension | 2026.10.0 | Not declared on AMO. The upstream repo mixes GPL-3.0 and the Bitwarden License | Downloaded on explicit request; **must not be bundled** until clarified |

@@ -2,13 +2,18 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
+import urllib.parse
+import zipfile
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts" / "build"))
@@ -306,6 +311,84 @@ class DistributionTest(unittest.TestCase):
         self.assertTrue(ublock["install_url"].startswith("https://addons.mozilla.org/"))
         self.assertTrue(ublock["private_browsing"])
         self.assertNotIn("*", settings, "do not block user-installed extensions by default")
+
+    UBLOCK = "uBlock0@raymondhill.net"
+    DEFAULT_ON = frozenset({"fanboy-cookiemonster", "ublock-cookies-easylist"})  # EasyList and uBlock filters: cookie notices
+
+    def bootstrap_address(self) -> str:
+        managed = make_distribution.policies()["policies"]["3rdparty"]["Extensions"]
+        self.assertEqual(list(managed), [self.UBLOCK])
+        # `toOverwrite`, `userSettings` and the rest are applied by uBlock Origin at every start: they would
+        # undo what the person chose in its dashboard. Only the registry of a new profile is Nulavio's.
+        self.assertEqual(list(managed[self.UBLOCK]), ["adminSettings"])
+        admin = json.loads(managed[self.UBLOCK]["adminSettings"])
+        self.assertEqual(list(admin), ["assetsBootstrapLocation"])
+        return admin["assetsBootstrapLocation"]
+
+    def test_a_new_profile_starts_with_cookie_notice_lists_on_and_nothing_else_changed(self):
+        address = self.bootstrap_address()
+        prefix = "data://application/json,"
+        # What uBlock Origin 1.75 needs to load it without the network: `scheme://`, and a closing `#` that
+        # swallows the cache token it appends. ASCII, because the engine reads the unknown type as US-ASCII.
+        self.assertTrue(address.startswith(prefix) and address.endswith("#"), address[:40])
+        self.assertTrue(address.isascii())
+        self.assertEqual(address.count("#"), 1)
+        self.assertNotRegex(address, r"[?\s\"\\]")
+        registry = json.loads(urllib.parse.unquote(address[len(prefix) : -1]))
+        stock = json.loads((make_distribution.REGISTRY_DIR / "assets.json").read_text(encoding="utf-8"))
+        self.assertEqual(list(registry), list(stock))
+        self.assertEqual({key for key in stock if registry[key] != stock[key]}, self.DEFAULT_ON)
+        for key in self.DEFAULT_ON:
+            self.assertIs(stock[key]["off"], True)
+            # `false`, not absent: a list without `off` is part of the stock default set, and uBlock Origin
+            # drops it from the selection when a registry update no longer has it there.
+            self.assertEqual(registry[key], {**stock[key], "off": False})
+
+    def test_the_registry_is_the_pinned_packages(self):
+        config = json.loads(make_distribution.CONTENT_FILTER.read_text(encoding="utf-8"))
+        ublock = make_distribution.extensions.load_lock()[config["extension"]]
+        raw = (make_distribution.REGISTRY_DIR / "assets.json").read_bytes()
+        self.assertEqual(config["registry"], {"version": ublock.version, "sha256": hashlib.sha256(raw).hexdigest()})
+        self.assertEqual(set(config["default_on"]), self.DEFAULT_ON)
+        licence = (make_distribution.REGISTRY_DIR / "LICENSE.txt").read_text(encoding="utf-8")
+        self.assertIn("GNU GENERAL PUBLIC LICENSE", licence[:200])
+        self.assertIn("Version 3", licence[:200])
+        package = make_distribution.extensions.cached_path(ublock)
+        if not package.is_file() or make_distribution.extensions.sha256_file(package) != ublock.sha256:
+            self.skipTest("the pinned uBlock Origin package is not in the local cache: the copy is compared by hash only")
+        with zipfile.ZipFile(package) as archive:
+            self.assertEqual(archive.read("assets/assets.json"), raw)
+            self.assertEqual(archive.read("LICENSE.txt").decode("utf-8"), licence)
+
+    def test_a_stale_default_stops_the_build(self):
+        config = json.loads(make_distribution.CONTENT_FILTER.read_text(encoding="utf-8"))
+        stale = (
+            {**config, "registry": {**config["registry"], "version": "0.0.1"}},  # the pin moved, the copy did not
+            {**config, "registry": {**config["registry"], "sha256": "0" * 64}},  # the copy was edited
+            {**config, "default_on": ["nulavio-no-such-list"]},
+            {**config, "default_on": ["easylist"]},  # already on upstream: nothing for Nulavio to switch on
+            {**config, "default_on": ["assets.json"]},  # not a list
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            changed = Path(tmp) / "content-filter.json"
+            for case in stale:
+                changed.write_text(json.dumps(case), encoding="utf-8")
+                with mock.patch.object(make_distribution, "CONTENT_FILTER", changed), self.assertRaises(SystemExit, msg=case):
+                    make_distribution.policies()
+            # No default list: no managed setting at all, and no registry in the package.
+            changed.write_text(json.dumps({**config, "default_on": []}), encoding="utf-8")
+            with mock.patch.object(make_distribution, "CONTENT_FILTER", changed):
+                self.assertNotIn("3rdparty", make_distribution.policies()["policies"])
+
+    def test_the_licence_goes_out_with_the_registry(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            script = ROOT / "scripts" / "build" / "make_distribution.py"
+            subprocess.run([sys.executable, "-I", str(script), "--out", tmp], check=True, capture_output=True)
+            names = sorted(path.name for path in Path(tmp).iterdir())
+            self.assertEqual(names, ["distribution.ini", "policies.json", "uBlock-Origin-LICENSE.txt"])
+            licence = (make_distribution.REGISTRY_DIR / "LICENSE.txt").read_bytes()
+            self.assertEqual((Path(tmp) / "uBlock-Origin-LICENSE.txt").read_bytes(), licence)
+            self.assertEqual(json.loads((Path(tmp) / "policies.json").read_text()), make_distribution.policies())
 
 
 if __name__ == "__main__":

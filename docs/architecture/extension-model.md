@@ -24,6 +24,18 @@ No extension is installed silently: everything Nulavio adds is listed in the set
 - `extensions.lock.json` keeps the permissions a maintainer reviewed (`reviewed_permissions`). `scripts/upstream/refresh_extensions_lock.py` flags additions before the lock can change.
 - Planned (Guard runtime): show high-risk permissions (`<all_urls>`, `cookies`, `webRequestBlocking`, `nativeMessaging`, `clipboardRead`, `privacy`) in plain language at install, and alert when the installed set changes outside the browser UI.
 
+## The lists a new profile starts with
+
+uBlock Origin's own defaults block ads, trackers and malware domains and leave every "annoyances" list off, cookie notices included. Nulavio switches on **EasyList – Cookie Notices** and its **uBlock filters – Cookie Notices** companion for a new profile (`browser/distribution/content-filter.json`). A cookie notice is hidden, not answered: nothing is accepted on the person's behalf.
+
+![uBlock Origin's own "Filter lists" page on a new profile: the cookie notices are ticked beside the stock lists and the list for the person's language](../design/screenshots/content-filter/ublock-lists-new-profile.png)
+
+- **A default, never a lock.** `distribution/policies.json` gives uBlock Origin, as managed storage, only `adminSettings.assetsBootstrapLocation`: its own list registry (`assets/assets.json` of the pinned package, copied unchanged into `browser/distribution/ublock-origin/`) with `"off": false` on those lists. uBlock Origin reads that registry once, when a profile has none, and selects what is not off. Every other managed key (`toOverwrite.filterLists`, `userSettings`, the rest of `adminSettings`) is applied at each start and would undo the person's choice in the dashboard, so none is used; a unit test keeps it that way.
+- **No server of Nulavio's.** The registry travels inside `policies.json` as a `data:` address (`scripts/build/make_distribution.py`, `registry_address`, says why it has the form it has). A registry on a web server would let that server choose the filter lists of every new profile.
+- **What it does not do.** A profile that already exists keeps its selection: there is no way to add a list there without overwriting, so the person ticks "Cookie notices" in uBlock Origin's "Filter lists" page. When uBlock Origin later fetches upstream's registry, the lists stay selected (`false` keeps them out of the stock default set, which is what uBlock Origin reconciles).
+- **When the pin changes.** `refresh_extensions_lock.py --write` re-copies the registry and says when a default list is gone or already on upstream; the build stops if the copy is not the pinned version's. `tests/integration/test_content_filter.py` starts a new profile with the signed package: the lists are on beside the stock ones and the one for the person's language, a cookie notice is hidden, upstream's registry update keeps them, and a list switched off in the dashboard stays off after a restart.
+- **Checked against Helium 0.21.2.1** (a fresh profile, read from its uBlock Origin 1.75.4, 2026-11-11): it also turns on AdGuard – Ads, AdGuard/uBO – URL Tracking Protection, AdGuard – Cookie Notices, EasyList – Newsletter Notices and Notifications, uBlock filters – Annoyances and two short lists of its own. It has no list against paywalls. Nulavio starts with the cookie notices only; adding a list is one line in `content-filter.json`.
+
 ## Track B mechanics (planned)
 
 - `distribution/policies.json` → `ExtensionSettings`: uBO `normal_installed` (user can disable; not removable while the policy stands) with `private_browsing: true`. Everything else `allowed`. No `force_installed` for user-facing extensions.
