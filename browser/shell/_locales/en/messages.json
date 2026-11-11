@@ -573,7 +573,7 @@
   "guardEmpty": {"message": "This profile matches what Nulavio last saw."},
   "guardLimitsSummary": {"message": "What Guard can and cannot do"},
   "guardLimits": {"message": "Guard notices changes that tools and common malware leave behind in a profile: extensions, trusted authorities, security modules, programs registered for extensions, managed settings, user.js and settings that protect you. It cannot stop a program running as you from reading your data or from also editing Guard's own record. A protected profile keeps the record encrypted while it is locked."},
-  "guardBar": {"message": "Nulavio Guard: $COUNT$ change(s) made outside Nulavio since it last ran.", "placeholders": {"count": {"content": "$1"}}},
+  "guardBar": {"message": "Nulavio Guard: $COUNT$ changes made outside Nulavio since it last ran.", "placeholders": {"count": {"content": "$1"}}},
   "guardReviewButton": {"message": "Review"},
   "guardUndone": {"message": "Undone."},
   "guardKept": {"message": "Kept."},
@@ -586,7 +586,7 @@
   "guardExtensionWhy": {"message": "Extensions can read and change the pages you visit. This one was added outside the browser and is running."},
   "guardExtensionWhyOff": {"message": "Extensions can read and change the pages you visit. This one was added outside the browser; it stays off until you allow it in Add-ons."},
   "guardExtensionChanged": {"message": "Extension changed: $NAME$", "placeholders": {"name": {"content": "$1"}}},
-  "guardExtensionChangedWhy": {"message": "It was replaced or turned on outside the browser. Updates normally happen while the browser runs."},
+  "guardExtensionChangedWhy": {"message": "It was replaced or turned on outside the browser. The updates the browser makes itself, while it runs or as it starts, are not listed here."},
   "guardExtensionRemoved": {"message": "Extension removed: $NAME$", "placeholders": {"name": {"content": "$1"}}},
   "guardExtensionRemovedWhy": {"message": "It was removed outside the browser. If you rely on it (uBlock Origin, your password manager), install it again from Add-ons."},
   "guardPrefChanged": {"message": "Protective setting changed"},
@@ -1335,5 +1335,6 @@
   "routingWhyDefault": {"message": "Links from other apps with no rule open in $PROFILE$. This is in Nulavio's settings, under Smart routing.", "placeholders": {"profile": {"content": "$1"}}},
   "bandRoutedDefault": {"message": "Opened by the default destination · Change"},
   "bandRoutedDefaultNamed": {"message": "Opened by the default destination · Change: links from other apps with no rule open in $PROFILE$. Change the destination", "placeholders": {"profile": {"content": "$1"}}},
-  "profilesButtonNamedKey": {"message": "Profile: $NAME$. Switch profile ($KEYS$)", "placeholders": {"name": {"content": "$1"}, "keys": {"content": "$2"}}}
+  "profilesButtonNamedKey": {"message": "Profile: $NAME$. Switch profile ($KEYS$)", "placeholders": {"name": {"content": "$1"}, "keys": {"content": "$2"}}},
+  "guardBarOne": {"message": "Nulavio Guard: one change made outside Nulavio since it last ran. $WHAT$.", "placeholders": {"what": {"content": "$1"}}}
 }

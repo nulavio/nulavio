@@ -257,6 +257,85 @@ class GuardTest(unittest.TestCase):
         script = "return document.getElementById('shell_nulavio_net-BAP')?.getAttribute('tooltiptext') ?? '';"
         self.assertTrue(harness.wait_until(lambda: "Pessoal" in self.m.chrome(script), timeout=20), self.m.chrome(script))
 
+    def test_04_an_update_the_engine_held_for_this_start_is_not_a_change_made_outside(self):
+        # What counts as held: an update of an installed extension, in the engine's "postponed" state. Nothing else.
+        held = self.guard(
+            """
+            const installs = [
+              { state: AddonManager.STATE_POSTPONED, existingAddon: { id: "held@x" }, version: "2.0" },
+              { state: AddonManager.STATE_DOWNLOADING, existingAddon: { id: "downloading@x" }, version: "9" },
+              { state: AddonManager.STATE_POSTPONED, existingAddon: null, version: "1" },
+            ];
+            return G.constructor.heldUpdates(installs);
+            """
+        )
+        self.assertEqual(held, {"held@x": "2.0"})
+        kept = self.guard(
+            """
+            const ext = (version, active = true) => ({ name: "X", version, active, foreign: false, policy: false });
+            const kind = "extension-changed";
+            const changed = (id, before, after) => ({ id: `${kind}:${id}`, kind, key: id, before, after });
+            const findings = [
+              changed("held@x", ext("1.0"), ext("2.0")),                 // the version the engine held: the browser's own update
+              changed("other@x", ext("1.0"), ext("2.1")),                // another version than the one held
+              changed("on@x", ext("1.0", false), ext("2.0", true)),      // the held version, but also turned on while closed
+              changed("unknown@x", ext("1.0"), ext("2.0")),              // nothing was held for it
+              { id: "extension-added:held@x", kind: "extension-added", key: "held@x", after: ext("2.0") },
+              { id: "pref-changed:network.proxy.type", kind: "pref-changed", key: "network.proxy.type", before: null, after: 1 },
+            ];
+            const expected = { "held@x": "2.0", "other@x": "2.0", "on@x": "2.0" };
+            return G.constructor.withoutHeldUpdates(findings, expected).map(f => f.id);
+            """
+        )
+        self.assertEqual(
+            kept,
+            [
+                "extension-changed:other@x",
+                "extension-changed:on@x",
+                "extension-changed:unknown@x",
+                "extension-added:held@x",
+                "pref-changed:network.proxy.type",
+            ],
+        )
+        record = self.profile / "nulavio-guard.json"
+        self.assertEqual(json.loads(record.read_text())["expected"], {}, "the record says what the engine holds: nothing now")
+
+        # The same through a real start, with a real extension in the profile.
+        entry, xpi = cached_extension()
+        if not xpi:
+            self.skipTest("no pinned extension in the local cache")
+        self.session.stop()
+        (self.profile / "extensions").mkdir(exist_ok=True)
+        shutil.copyfile(xpi, self.profile / "extensions" / entry.xpi_name)
+        self.m = type(self).m = self.session.restart()
+        added = f"extension-added:{entry.id}"
+        self.assertTrue(harness.wait_until(lambda: any(f["id"] == added for f in self.guard("return G.findings();")), 30))
+        self.guard("await G.resolve(args[0], 'keep');", added)
+        version = self.guard("return (await AddonManager.getAddonByID(args[0])).version;", entry.id)
+
+        def start_as_if(seen: str, held: dict) -> list:
+            """The last session saw version `seen` and noted `held`; this start finds the real one."""
+            self.session.stop()
+            data = json.loads(record.read_text())
+            data["snapshot"]["extensions"][entry.id]["version"] = seen
+            data["expected"] = held
+            record.write_text(json.dumps(data))
+            self.m = type(self).m = self.session.restart()
+            return self.guard("return (await G.check()).findings;")
+
+        # The engine held exactly this version for this start: nothing to report, no bar.
+        self.assertEqual(start_as_if("0.0.1", {entry.id: version}), [])
+        self.assertEqual(self.bar(), "")
+        self.assertEqual(json.loads(record.read_text())["snapshot"]["extensions"][entry.id]["version"], version)
+        # It held another version: what is there now did not come from the engine. Reported, and named in the bar.
+        findings = start_as_if("0.0.1", {entry.id: "0.0.2"})
+        self.assertEqual([f["id"] for f in findings], [f"extension-changed:{entry.id}"])
+        self.assertTrue(harness.wait_until(lambda: "Nulavio Guard" in self.bar(), timeout=30), "no Guard bar")
+        name = findings[0]["after"]["name"]
+        self.assertIn(f"Extensão alterada: {name}", self.bar())
+        self.assertIn("uma mudança", self.bar())
+        self.guard("await G.resolve(args[0], 'undo');", f"extension-changed:{entry.id}")
+
 
 if __name__ == "__main__":
     unittest.main()

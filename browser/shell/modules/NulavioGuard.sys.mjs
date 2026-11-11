@@ -155,7 +155,7 @@ class Guard {
   #listening = false;
   #observer = null;
   #barObserver = null;
-  #bar = null; // { textFor(count), button }
+  #bar = null; // { textFor(count, theOnlyFinding), button }
   #own = []; // prefs (names or "branch." prefixes) Nulavio itself changed at this start
   #timer = null;
   #checked = null;
@@ -399,23 +399,53 @@ class Guard {
     return findings;
   }
 
+  /**
+   * Updates the engine itself holds for the next start, from its list of installs: { id: version }.
+   * An extension can ask the engine to wait before it is replaced (uBlock Origin does); the engine
+   * then keeps the verified file and installs it when the browser starts again.
+   */
+  static heldUpdates(installs) {
+    const out = {};
+    for (const install of installs ?? []) {
+      const id = install?.existingAddon?.id;
+      if (install?.state === lazy.AddonManager.STATE_POSTPONED && id && install.version) {
+        out[id] = String(install.version);
+      }
+    }
+    return out;
+  }
+
+  /**
+   * Findings without the engine's own held updates: an extension that only went to the version the
+   * record expected. Anything else about it (another version, turned on while closed) is still reported.
+   */
+  static withoutHeldUpdates(findings, expected) {
+    const held = f =>
+      f.kind === "extension-changed" &&
+      Object.hasOwn(expected ?? {}, f.key) &&
+      expected[f.key] === f.after.version &&
+      f.before.active === f.after.active;
+    return findings.filter(f => !held(f));
+  }
+
   // -- the record ----------------------------------------------------------------
 
   async #load() {
     try {
       const data = await IOUtils.readJSON(this.#recordPath);
       if (data?.schema === SCHEMA && data.snapshot && typeof data.snapshot === "object") {
-        return { snapshot: data.snapshot, pending: Array.isArray(data.pending) ? data.pending : [] };
+        const expected = data.expected && typeof data.expected === "object" && !Array.isArray(data.expected) ? data.expected : {};
+        return { snapshot: data.snapshot, pending: Array.isArray(data.pending) ? data.pending : [], expected };
       }
     } catch {}
     return null;
   }
 
   async #save() {
-    const { snapshot, pending } = this.#state;
+    const { snapshot, pending, expected = {} } = this.#state;
     await IOUtils.writeJSON(
       this.#recordPath,
-      { schema: SCHEMA, updated: new Date().toISOString(), snapshot, pending },
+      { schema: SCHEMA, updated: new Date().toISOString(), snapshot, pending, expected },
       { tmpPath: `${this.#recordPath}.tmp` }
     );
     await IOUtils.setPermissions(this.#recordPath, 0o600).catch(() => {});
@@ -454,19 +484,28 @@ class Guard {
     this.#listen(); // changes made while the snapshot is taken are recorded right after it
     const now = await this.snapshot();
     const saved = await this.#load();
+    const expected = await this.#heldUpdates(); // what the engine holds now, for the start after this one
     if (!saved) {
-      this.#state = { snapshot: now, pending: [] };
+      this.#state = { snapshot: now, pending: [], expected };
       await this.#save();
       return { state: "first", findings: [] };
     }
     const own = name => this.#own.some(entry => (entry.endsWith(".") ? name.startsWith(entry) : name === entry));
-    const fresh = Guard.compare(saved.snapshot, now).filter(f => f.kind !== "pref-changed" || !own(f.key));
+    // An update the engine downloaded during the last session and installed as this one started is the
+    // browser's own doing, like an update made while it runs: not a change made outside it.
+    const fresh = Guard.withoutHeldUpdates(Guard.compare(saved.snapshot, now), saved.expected).filter(
+      f => f.kind !== "pref-changed" || !own(f.key)
+    );
     const seen = new Set(fresh.map(f => f.id));
     const at = new Date().toISOString();
     const pending = [...saved.pending.filter(f => !seen.has(f.id)), ...fresh.map(f => ({ ...f, at }))];
-    this.#state = { snapshot: now, pending };
+    this.#state = { snapshot: now, pending, expected };
     await this.#save();
     return { state: pending.length ? "changed" : "clean", findings: this.findings() };
+  }
+
+  async #heldUpdates() {
+    return Guard.heldUpdates(await lazy.AddonManager.getAllInstalls().catch(() => []));
   }
 
   /** Settings Nulavio itself changes at this start (its own defaults): not changes made outside the browser. */
@@ -499,6 +538,8 @@ class Guard {
       onEnabled: refresh,
       onDisabled: refresh,
     });
+    // The engine downloaded an update and keeps it for the next start: the record notes the version to expect.
+    lazy.AddonManager.addInstallListener({ onInstallPostponed: refresh, onInstallCancelled: refresh });
     // Held for the whole session (the observers below are weak).
     this.#observer = { observe: refresh, QueryInterface: ChromeUtils.generateQI(["nsIObserver", "nsISupportsWeakReference"]) };
     for (const entry of WATCHED_PREFS) {
@@ -522,7 +563,7 @@ class Guard {
     if (!this.#state) {
       return;
     }
-    const [extensions, search] = await Promise.all([this.#extensions(), this.#search()]);
+    const [extensions, search, expected] = await Promise.all([this.#extensions(), this.#search(), this.#heldUpdates()]);
     // An extension another program placed in the profile is never taken into the record unseen,
     // even when the engine registers it during the session.
     const before = { extensions: this.#state.snapshot.extensions };
@@ -536,6 +577,7 @@ class Guard {
       }
     }
     this.#state.snapshot = { ...this.#state.snapshot, extensions, prefs: this.#prefs(), search };
+    this.#state.expected = expected;
     await this.#save();
     if (grew) {
       this.showBar();
@@ -680,7 +722,8 @@ class Guard {
     if (!pending || !url || !this.#bar) {
       return;
     }
-    const text = String(this.#bar.textFor(pending));
+    // One change is named in the bar; more than one are counted, and the review names each.
+    const text = String(this.#bar.textFor(pending, pending === 1 ? this.findings()[0] : null));
     const mark = win => {
       const box = win.gNotificationBox;
       if (!box) {
