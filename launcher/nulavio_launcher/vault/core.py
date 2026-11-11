@@ -222,8 +222,12 @@ class Vault:
             return vault
         raise VaultError("unreadable", str(path))
 
-    def save(self) -> None:
+    def save(self, *, accept_changes: bool = False) -> None:
         """Atomic replace of vault.json and of its .bak copy. Requires the DEK (refreshes the MAC).
+
+        A vault whose MAC did not match at unlock is refused unless the person reviewed
+        its methods and accepted them (accept_changes): signing it again as a side effect
+        of another change would make an injected envelope legitimate (audit V4).
 
         The .bak holds the same new content, never the previous file: a removed or
         replaced envelope must not stay on disk where its old secret still opens it.
@@ -231,6 +235,8 @@ class Vault:
         vault.json (the change did not happen) next to a valid new copy.
         """
         self._require_unlocked()
+        if self.tampered and not accept_changes:
+            raise VaultError("metadata-tampered", "the profile's key file was changed outside Nulavio")
         if not self.meta["envelopes"]:
             raise VaultError("no-method")
         # A counter the encrypted storage will mirror (S5), so a rolled-back
