@@ -88,7 +88,8 @@ class SettingsPanesTest(unittest.TestCase):
             self.assertTrue(
                 harness.wait_until(lambda section=section: self.view()["shown"] == [section], 10), (address, self.view())
             )
-            self.assertEqual(self.view()["current"], [section])
+            # A section the settings page draws itself (ADR 0011) still opens by its address, with no entry in the rail.
+            self.assertEqual(self.view()["current"], [] if section == "profiles" else [section])
         # A card's own address (the assistant panel links there) scrolls it into view.
         self.open("#ai-assistant")
         harness.wait_until(lambda: self.view()["shown"] == ["ai"], 10)
@@ -114,13 +115,16 @@ class SettingsPanesTest(unittest.TestCase):
         self.assertEqual(groups, [self.message(k) for k in ("scopeProfile", "scopeAllProfiles", "scopeComputer")])
         # Every entry of the rail points to a section that exists, in the order of its group.
         entries = self.m.execute("return [...document.querySelectorAll('.settings-nav a')].map(a => a.dataset.section);")
-        # ADR 0008: Layout, Aparência and Atalhos are drawn by the settings page itself; this page keeps no entry for them.
-        self.assertEqual(entries, [section for section in SCOPES if section not in ("layout", "appearance", "shortcuts")])
+        # ADR 0008 and 0011: Layout, Aparência, Atalhos and the profiles are drawn by the settings page itself;
+        # this page keeps no entry for them.
+        native = ("layout", "appearance", "shortcuts", "profiles")
+        self.assertEqual(entries, [section for section in SCOPES if section not in native])
         # ...and its own search does not offer them either: one option, one place.
-        self.type_search(self.message("layoutHeading").lower())
-        self.assertTrue(harness.wait_until(lambda: self.view()["view"] == "search", 5))
-        self.assertNotIn("layout", self.view()["shown"])
-        self.type_search("")
+        for heading, section in (("layoutHeading", "layout"), ("profilesHeading", "profiles")):
+            self.type_search(self.message(heading).lower())
+            self.assertTrue(harness.wait_until(lambda: self.view()["view"] == "search", 5))
+            self.assertNotIn(section, self.view()["shown"])
+            self.type_search("")
         self.assertNotIn(self.message("settingsIntro"), ["", "settingsIntro"])
 
     def test_04_search_filters_the_cards_of_every_section(self):

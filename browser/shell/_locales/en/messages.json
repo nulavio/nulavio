@@ -1371,5 +1371,6 @@
   "keyImmersive": {"message": "Immersive"},
   "settingsOpen": {"message": "Settings"},
   "settingsBack": {"message": "Settings"},
-  "settingsBackHint": {"message": "Back to the browser's settings page, where every option is."}
+  "settingsBackHint": {"message": "Back to the browser's settings page, where every option is."},
+  "profilesTemplateNone": {"message": "No template"}
 }

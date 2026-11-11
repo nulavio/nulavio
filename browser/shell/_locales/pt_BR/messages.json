@@ -1371,5 +1371,6 @@
   "keyImmersive": {"message": "Imersivo"},
   "settingsOpen": {"message": "Configurações"},
   "settingsBack": {"message": "Configurações"},
-  "settingsBackHint": {"message": "Volta para a página de configurações do navegador, onde ficam todas as opções."}
+  "settingsBackHint": {"message": "Volta para a página de configurações do navegador, onde ficam todas as opções."},
+  "profilesTemplateNone": {"message": "Sem modelo"}
 }

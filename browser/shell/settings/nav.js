@@ -4,7 +4,7 @@
    [hidden] while their feature is unavailable; the rail hides their entries too. */
 
 import { t } from "../lib/i18n.js";
-import { openSettings } from "../lib/settings.js";
+import { openSettings, wireSettingsLinks } from "../lib/settings.js";
 
 const main = document.getElementById("settings-main");
 const sections = [...main.querySelectorAll(":scope > .section")];
@@ -137,6 +137,8 @@ export function setUpNav() {
     event.preventDefault();
     openSettings(active?.id ?? "", { replace: true }).catch(console.error);
   });
+  // A link of this page to something the settings page draws itself ("Criar perfil", in the routing rules).
+  wireSettingsLinks(main);
   syncLinks();
   show(location.hash.slice(1));
   // A section becomes available after its feature answers: offer it, and show it if it was asked for.

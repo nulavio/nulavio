@@ -331,51 +331,215 @@
     // No profile to name (the engine's profile service is off for this start): say so instead of nothing.
     setting({ id: "nulavio-here-none", setup: profile.watch, visible: () => profile.state.ready && !profile.state.value });
 
-    // -- every profile of the group, with its protection as it is now (ADR 0011: a list the registry
-    // cannot describe is a custom element; it is built with the engine's rows and the DOM, never from
-    // markup, and it renders its words so the page's search finds them) ---------------------------
+    // -- every profile of the group: what it is now and what can be done with it (ADR 0011). Drawn the
+    // way the engine draws its own lists (containers, home pages): one setting whose rows come from
+    // getControlConfig, made of the engine's rows, buttons and fields. The words of the actions, the
+    // confirmations and the errors are the Shell's own messages, the ones the band and the menu use;
+    // every change goes through NulavioProfiles and NulavioVault, which check it as they always did. --
+    const extension = WebExtensionPolicy.getByID(SHELL)?.extension;
+    const msg = (key, ...subs) => extension?.localizeMessage(key, subs) ?? "";
+    const pageOf = path => WebExtensionPolicy.getByID(SHELL)?.getURL(path);
+    const { freeName, TEMPLATE_NAMES, templateHintKey } = ChromeUtils.importESModule(
+      "resource://builtin-addons/nulavio-shell/lib/names.js",
+      here
+    );
     const profileList = source(() => shell.NulavioProfiles.list());
+    const profilesNow = () => (profileList.state.ready ? (profileList.state.value?.profiles ?? []) : []);
+    const profilesUsable = () => profileList.state.ready && Boolean(profileList.state.value?.available);
+    const keyOf = profile => String(profile.id ?? "");
+    // What this page holds about the list while the person works on it: the row being edited and its
+    // unsaved values, the new profile being typed, and what the last action said. None of it is a
+    // profile's state: that is only ever what NulavioProfiles.list() answered.
+    const view = { editing: null, draft: null, fresh: { name: "", template: "", suggested: "" }, error: "", said: "", busy: false };
+    const viewListeners = new Set();
+    const viewWatch = (emit, stops) => {
+      viewListeners.add(emit);
+      stops.push(() => viewListeners.delete(emit));
+    };
+    const show = changes => {
+      Object.assign(view, changes);
+      viewListeners.forEach(emit => emit());
+    };
+    /** One action at a time. An error is said in the Shell's words for its code; the list is read again either way. */
+    const act = async (action, said = "") => {
+      if (view.busy) {
+        return false;
+      }
+      show({ busy: true, error: "", said: "" });
+      try {
+        const answer = await action();
+        show({ busy: false, said: typeof said === "function" ? said(answer) : said });
+        return true;
+      } catch (e) {
+        if (!e?.code) {
+          console.error(e);
+        }
+        const code = String(e?.code ?? "unexpected").replace(/[^a-z_-]/gi, "").replaceAll("-", "_");
+        show({ busy: false, error: msg(`err_${code}`) || msg("err_unexpected") });
+        return false;
+      } finally {
+        profileList.refresh();
+      }
+    };
+    /** A destructive confirmation in the engine's own prompt. Cancel is the default button, as on the Shell's pages. */
+    const confirmDanger = async (title, body, confirm) => {
+      const prompt = Services.prompt;
+      const flags = prompt.BUTTON_POS_0 * prompt.BUTTON_TITLE_IS_STRING + prompt.BUTTON_POS_1 * prompt.BUTTON_TITLE_CANCEL + prompt.BUTTON_POS_1_DEFAULT;
+      const answer = await prompt.asyncConfirmEx(window.browsingContext, prompt.MODAL_TYPE_CONTENT, title, body, flags, confirm, null, null, null, false, {
+        useTitle: true,
+      });
+      return answer.get("buttonNumClicked") === 0;
+    };
+
     const PROFILE_ROW = profile => {
       if (profile.temporary) {
         return "nulavio-profile-temporary";
       }
       return profile.encrypted ? (profile.locked ? "nulavio-profile-locked" : "nulavio-profile-unlocked") : "nulavio-profile-plain";
     };
-    if (!customElements.get("nulavio-profile-list")) {
-      customElements.define(
-        "nulavio-profile-list",
-        class extends HTMLElement {
-          #stop = null;
-          connectedCallback() {
-            this.#stop = profileList.listen(() => this.draw());
-            this.draw();
-          }
-          disconnectedCallback() {
-            this.#stop?.();
-            this.#stop = null;
-          }
-          draw() {
-            const profiles = profileList.state.ready ? (profileList.state.value?.profiles ?? []) : [];
-            const group = document.createElement("moz-box-group");
-            for (const profile of profiles) {
-              const row = document.createElement("moz-box-item");
-              row.dataset.profile = String(profile.id ?? "");
-              // The name is the person's own text: it goes in as a Fluent argument, never as markup.
-              document.l10n.setAttributes(row, PROFILE_ROW(profile), {
-                name: profile.name || "",
-                here: profile.isCurrent ? "yes" : "no",
-              });
-              group.append(row);
-            }
-            this.replaceChildren(...(profiles.length ? [group] : []));
-          }
+    // The engine's own profile icons: a disc (context-fill) and a drawing (context-stroke), which the
+    // row colours with the profile's tile and glyph (in-content.css, from the design tokens).
+    const avatarIcon = avatar => (/^[a-z-]+$/.test(avatar ?? "") ? `chrome://browser/content/profiles/assets/16_${avatar}.svg` : undefined);
+    const rowButton = (action, profile, label, named = label, extra = {}) => ({
+      key: `${action}-${keyOf(profile)}`,
+      control: "moz-button",
+      slot: "actions",
+      // The accessible name keeps the visible words and adds whose button it is ("Abrir Trabalho").
+      controlAttrs: { label, "aria-label": named, "data-action": action, "data-profile": keyOf(profile), ...extra },
+    });
+    const iconButton = (action, profile, iconSrc, named) => ({
+      key: `${action}-${keyOf(profile)}`,
+      control: "moz-button",
+      slot: "actions",
+      iconSrc,
+      controlAttrs: { title: named, "aria-label": named, "data-action": action, "data-profile": keyOf(profile) },
+    });
+    const profileRows = profile => {
+      const actions = [];
+      if (!profile.temporary) {
+        const name = profile.name;
+        if (!profile.isCurrent) {
+          actions.push(
+            profile.locked
+              ? rowButton("unlock", profile, msg("vaultUnlockButton"), msg("profilesUnlockNamed", name))
+              : rowButton("open", profile, msg("profilesOpen"), msg("profilesOpenNamed", name))
+          );
         }
-      );
-    }
+        if (profile.encrypted && !profile.locked) {
+          actions.push(
+            profile.isCurrent
+              ? rowButton("lock-here", profile, msg("vaultLockNow"), msg("vaultLockCurrent", name))
+              : rowButton("lock", profile, msg("vaultLockNow"), `${msg("vaultLockNow")}: ${name}`)
+          );
+        }
+        if (profile.encrypted) {
+          actions.push(iconButton("methods", profile, "chrome://browser/skin/login.svg", msg("methodsNamed", name)));
+        }
+        actions.push(iconButton("edit", profile, "chrome://global/skin/icons/edit-outline.svg", `${msg("profilesEdit")}: ${name}`));
+        actions.push(
+          iconButton(
+            profile.isCurrent ? "delete-here" : "delete",
+            profile,
+            "chrome://global/skin/icons/delete.svg",
+            profile.isCurrent ? msg("profilesDeleteCurrent") : `${msg("profilesDelete")} ${name}`
+          )
+        );
+      }
+      const row = {
+        key: `profile-${keyOf(profile)}`,
+        control: "moz-box-item",
+        l10nId: PROFILE_ROW(profile),
+        // The name is the person's own text: it goes in as a Fluent argument, never as markup.
+        l10nArgs: { name: profile.name || "", here: profile.isCurrent ? "yes" : "no" },
+        iconSrc: avatarIcon(profile.avatar),
+        controlAttrs: { class: `nulavio-profile nulavio-profile-${profile.color}`, layout: "medium-icon", "data-profile": keyOf(profile) },
+        options: actions,
+      };
+      if (view.editing !== keyOf(profile) || profile.id === null) {
+        return [row];
+      }
+      // The editor opens under its row: the same three things the Shell's page edited, saved together.
+      const editor = {
+        key: `editor-${keyOf(profile)}`,
+        control: "moz-box-item",
+        controlAttrs: { class: "nulavio-profile-editor", "data-editor": keyOf(profile) },
+        items: [
+          { id: "nulavio-profile-name", control: "moz-input-text" },
+          { id: "nulavio-profile-avatar", control: "moz-visual-picker" },
+          { id: "nulavio-profile-color", control: "moz-visual-picker" },
+          { id: "nulavio-profile-editor-buttons", control: "moz-button-group" },
+        ],
+      };
+      return [row, editor];
+    };
+    // "Novo perfil", the last row of the list: a template only fills the name; nothing exists before "Criar perfil".
+    const newProfileRow = () => ({
+      key: "new-profile",
+      control: "moz-box-item",
+      slot: "footer",
+      controlAttrs: { class: "nulavio-profile-new" },
+      items: [
+        { id: "nulavio-profile-new-name", control: "moz-input-text" },
+        { id: "nulavio-profile-new-template", control: "moz-select" },
+        { id: "nulavio-profile-new-create", control: "moz-button" },
+      ],
+    });
+    const profileAction = async (action, key) => {
+      const profile = profilesNow().find(each => keyOf(each) === key);
+      if (!profile) {
+        return;
+      }
+      const name = profile.name;
+      switch (action) {
+        case "open":
+          await act(() => shell.NulavioProfiles.switchTo(profile.id), msg("profilesOpening", name));
+          break;
+        case "unlock": // the unlock page is the Vault's own (a page of the Shell, never this one)
+          await act(() => shell.NulavioVault.openUnlockPage(profile.id, null, "selector"));
+          break;
+        case "lock":
+          await act(() => shell.NulavioVault.lock(profile.id), msg("vaultLockedNow", name));
+          break;
+        case "lock-here": // closes every window of this profile, so it asks first
+          if (await confirmDanger(msg("vaultLockCurrentTitle", name), msg("vaultLockCurrentBody"), msg("vaultLockCurrentConfirm"))) {
+            await act(
+              () => shell.NulavioVault.lockCurrent(),
+              answer => msg(answer?.quit ? "vaultLockCurrentClosing" : "vaultLockCurrentKept")
+            );
+          }
+          break;
+        case "methods": {
+          const url = pageOf("vault/methods.html");
+          if (url) {
+            top().openTrustedLinkIn(`${url}?p=${Number(profile.id)}`, "tab");
+          }
+          break;
+        }
+        case "edit":
+          if (profile.id === null) {
+            // Not in the group's store yet: the engine's own page edits it.
+            await act(() => shell.NulavioProfiles.openCurrentPage("edit"));
+          } else if (view.editing === key) {
+            show({ editing: null, draft: null });
+          } else {
+            show({ editing: key, draft: { name, avatar: profile.avatar, color: profile.color }, error: "", said: "" });
+          }
+          break;
+        case "delete-here": // the engine's own page deletes the profile in use: it closes this instance safely
+          await act(() => shell.NulavioProfiles.openCurrentPage("delete"));
+          break;
+        case "delete":
+          if (await confirmDanger(msg("profilesDeleteTitle", name), msg("profilesDeleteBody"), msg("profilesDeleteConfirm"))) {
+            await act(() => shell.NulavioProfiles.remove(profile.id), msg("profilesDeleted"));
+          }
+          break;
+      }
+    };
     setting({
       id: "nulavio-profile-list",
       setup(emitChange, stops) {
         stops.push(profileList.listen(emitChange));
+        viewWatch(emitChange, stops);
         profileList.refresh();
         try {
           stops.push(shell.NulavioProfiles.subscribe(profileList.refresh)); // created, renamed, locked or removed elsewhere
@@ -383,8 +547,203 @@
           console.error(e);
         }
       },
-      visible: () => profileList.state.ready && (profileList.state.value?.profiles?.length ?? 0) > 0,
+      visible: () => profilesNow().length > 0,
+      getControlConfig(config) {
+        const rows = profilesNow().flatMap(profileRows);
+        return { ...config, options: profilesUsable() ? [...rows, newProfileRow()] : rows };
+      },
+      onUserClick(event) {
+        const button = event.target.closest?.("[data-action]");
+        if (button) {
+          profileAction(button.dataset.action, button.dataset.profile);
+        }
+      },
     });
+
+    // The editor's fields hold the unsaved values of the row being edited; nothing is written before "Salvar".
+    const editing = () => profilesNow().find(each => keyOf(each) === view.editing) ?? null;
+    const choice = (value, label, iconSrc) => ({ value, controlAttrs: { label, ...(iconSrc ? { iconsrc: iconSrc } : {}) } });
+    const options = shell.NulavioProfiles.options();
+    setting({
+      id: "nulavio-profile-name",
+      setup: viewWatch,
+      get: () => view.draft?.name ?? "",
+      set(value) {
+        if (view.draft) {
+          view.draft.name = value;
+        }
+      },
+      getControlConfig: config => ({ ...config, controlAttrs: { ...config.controlAttrs, label: msg("profilesNameLabel"), maxlength: "60" } }),
+    });
+    // Icon and colour are chosen by looking at them: the engine's picker, with the profile's icon in
+    // each choice. A choice is named for someone who cannot see it (its name is also its tooltip).
+    const chip = (value, name, avatar, color) => ({
+      value,
+      controlAttrs: { imagesrc: avatarIcon(avatar), "aria-label": name, title: name, class: `nulavio-chip nulavio-profile-${color}` },
+    });
+    const draftSetting = (id, field, label, choices) =>
+      setting({
+        id,
+        setup: viewWatch,
+        get: () => view.draft?.[field] ?? "",
+        set(value) {
+          if (view.draft) {
+            show({ draft: { ...view.draft, [field]: value } }); // the other picker follows: the icon in the new colour
+          }
+        },
+        getControlConfig: config => ({
+          ...config,
+          controlAttrs: { ...config.controlAttrs, label: msg(label), class: "nulavio-chips" },
+          options: view.draft ? choices(view.draft) : [],
+        }),
+      });
+    draftSetting("nulavio-profile-avatar", "avatar", "profilesIconLabel", draft => {
+      // An icon the engine gave the profile and Nulavio does not offer stays listed, so saving a new name keeps it.
+      const now = editing()?.avatar;
+      const names = now && !options.avatars.includes(now) ? [now, ...options.avatars] : options.avatars;
+      return names.map(name => chip(name, msg(`avatar_${name.replaceAll("-", "_")}`) || msg("profilesIconCurrent"), name, draft.color));
+    });
+    draftSetting("nulavio-profile-color", "color", "profilesColorLabel", draft =>
+      options.colors.map(color => chip(color, msg(`color_${color}`), draft.avatar, color))
+    );
+    // "Salvar" and "Cancelar" are the engine's button pair: it puts them in the order of the desktop.
+    setting({
+      id: "nulavio-profile-editor-buttons",
+      async onUserClick(event) {
+        const action = event.target.closest?.("[data-action]")?.dataset.action;
+        const profile = editing();
+        if (action === "cancel" || !profile || !view.draft) {
+          show({ editing: null, draft: null, error: "" });
+          return;
+        }
+        if (action !== "save") {
+          return;
+        }
+        // Only what changed is written: an untouched icon or colour is never sent back to be checked again.
+        const changed = Object.fromEntries(Object.entries(view.draft).filter(([field, value]) => value !== profile[field]));
+        if (!Object.keys(changed).length || (await act(() => shell.NulavioProfiles.update(profile.id, changed), msg("doneSaved")))) {
+          show({ editing: null, draft: null });
+        }
+      },
+      getControlConfig: config => ({
+        ...config,
+        options: [
+          { key: "cancel", control: "moz-button", controlAttrs: { label: msg("confirmCancel"), "data-action": "cancel" } },
+          { key: "save", control: "moz-button", controlAttrs: { label: msg("profilesSave"), type: "primary", "data-action": "save" } },
+        ],
+      }),
+    });
+
+    // A new profile: a template fills the name with one that is free ("Trabalho 2"); the person can change it.
+    setting({
+      id: "nulavio-profile-new-template",
+      setup: viewWatch,
+      get: () => view.fresh.template,
+      set(value) {
+        const fresh = { ...view.fresh, template: value };
+        if (!fresh.name.trim() || fresh.name === fresh.suggested) {
+          fresh.suggested = value ? freeName(msg(TEMPLATE_NAMES[value]), profilesNow().map(each => each.name)) : "";
+          fresh.name = fresh.suggested;
+        }
+        show({ fresh });
+      },
+      getControlConfig: config => ({
+        ...config,
+        controlAttrs: { ...config.controlAttrs, label: msg("profilesTemplates"), description: msg(templateHintKey(view.fresh.template || null)) },
+        options: [choice("", msg("profilesTemplateNone")), ...options.templates.map(template => choice(template.id, msg(TEMPLATE_NAMES[template.id])))],
+      }),
+    });
+    setting({
+      id: "nulavio-profile-new-name",
+      setup: viewWatch,
+      get: () => view.fresh.name,
+      set(value) {
+        view.fresh.name = value;
+      },
+      // The first field of the row says what the row is for; the placeholder says what to type.
+      getControlConfig: config => ({
+        ...config,
+        controlAttrs: { ...config.controlAttrs, label: msg("profilesNew"), placeholder: msg("profilesNameLabel"), maxlength: "60" },
+      }),
+    });
+    setting({
+      id: "nulavio-profile-new-create",
+      async onUserClick(event) {
+        event.preventDefault();
+        const { name, template } = view.fresh;
+        const created = await act(() => shell.NulavioProfiles.create({ name, ...(template ? { templateId: template } : {}) }), msg("profilesCreated"));
+        if (created) {
+          show({ fresh: { name: "", template: "", suggested: "" } });
+        }
+      },
+      getControlConfig: config => ({ ...config, controlAttrs: { ...config.controlAttrs, label: msg("profilesCreateButton") } }),
+    });
+
+    // What the last action said, and why the list cannot be used when it cannot.
+    const bar = (id, type, text, visible) => {
+      setting({
+        id,
+        setup(emitChange, stops) {
+          viewWatch(emitChange, stops);
+          stops.push(profileList.listen(emitChange));
+        },
+        visible,
+        getControlConfig: config => ({ ...config, controlAttrs: { ...config.controlAttrs, type, message: text() } }),
+      });
+      return { id, control: "moz-message-bar" };
+    };
+    const profileBars = [
+      bar(
+        "nulavio-profiles-unavailable",
+        "info",
+        () => {
+          const reason = profileList.state.value?.reason;
+          return msg(reason === "temporary" ? "profilesTemporaryBar" : reason === "disabled" ? "profilesDisabled" : "profilesUnavailable");
+        },
+        () => profileList.state.ready && !profilesUsable()
+      ),
+      // 2026-11: profiles that used the old "menta" colour now use "lima"; said once per profile, next to the list.
+      bar(
+        "nulavio-profiles-migrated",
+        "info",
+        () =>
+          profilesNow()
+            .filter(each => each.colorMigration === "mint-to-lima")
+            .map(each => msg("profilesColorMigrated", each.name))
+            .join(" "),
+        () => profilesNow().some(each => each.colorMigration === "mint-to-lima")
+      ),
+      bar("nulavio-profile-error", "error", () => view.error, () => Boolean(view.error)),
+      bar("nulavio-profile-said", "success", () => view.said, () => Boolean(view.said)),
+    ];
+
+    // Around the list: a temporary window, a profile protected from its first day, the engine's own manager.
+    const profileDoor = (id, label, description, open) => {
+      setting({
+        id,
+        setup: (emitChange, stops) => stops.push(profileList.listen(emitChange)),
+        visible: () => profilesUsable(),
+        onUserClick(event) {
+          event.preventDefault();
+          open();
+        },
+        getControlConfig: config => ({ ...config, controlAttrs: { ...config.controlAttrs, label: msg(label), ...(description ? { description: msg(description) } : {}) } }),
+      });
+      return { id, control: "moz-box-button" };
+    };
+    const profileDoors = [
+      profileDoor("nulavio-profile-temporary", "profilesTemporaryNew", "profilesTemporaryHint", () =>
+        act(() => shell.NulavioProfiles.openTemporary(), msg("profilesTemporaryOpening"))
+      ),
+      // Creating a protected profile shows its recovery code once: that ceremony is the Vault's own page.
+      profileDoor("nulavio-profile-protected", "vaultNewProtected", null, () => {
+        const url = pageOf("vault/create.html");
+        if (url) {
+          top().openTrustedLinkIn(url, "tab");
+        }
+      }),
+      profileDoor("nulavio-profile-manager", "profilesFullManager", null, () => act(() => shell.NulavioProfiles.openManager())),
+    ];
 
     // -- passwords: which manager is in use now ---------------------------------------------------
     const passwords = source(() => shell.NulavioPasswords.state());
@@ -577,11 +936,12 @@
         headingLevel: 2,
         items: [
           failureNote("nulavio-profile-list-failed", profileList),
-          { id: "nulavio-profile-list", control: "nulavio-profile-list" },
+          ...profileBars,
+          { id: "nulavio-profile-list", control: "moz-box-group" },
           {
             id: "nulavio-profiles-box",
             control: "moz-box-group",
-            items: [detailRow("nulavio-open-profiles", "profiles"), detailRow("nulavio-open-routing", "routing")],
+            items: [...profileDoors, detailRow("nulavio-open-routing", "routing")],
           },
         ],
       },

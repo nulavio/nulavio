@@ -1097,6 +1097,10 @@ Added to the UX7 table. The times come from the motion tokens; `motion.duration.
 | A detail screen | Opens in the same tab; its first entry goes back to the pane it came from. It is not a second settings page: it has no entry for anything the settings page draws |
 | The engine's part | Its protection panes keep every group, in their order. An engine group gives way only when it asks a question Nulavio's group already asks, and never a protection |
 | When it breaks | The page is the engine's stock page: the registry's shape is checked first, and a failure halfway undoes Nulavio's whole part |
+| A list of the person's things (profiles; later rules, agents) | One registry setting whose rows come from what was read, as the engine's containers list: a `moz-box-item` per thing with its icon, its state in words and its actions as `moz-button`s at the end (a word for the main one, the engine's edit and delete icons for the rest, each named with whose it is). The editor opens under its row; "new" is the last row of the list ([ADR 0011](../adr/0011-nulavio-ui-native-not-an-extension.md)) |
+| A profile's icon | The engine's profile icon in the profile's tile and glyph (`identityTile`, `identityGlyph`), the same pair the band and the menu use. Choosing an icon or a colour is the engine's `moz-visual-picker` with that icon in every choice; each choice has a name |
+| Words of an action | The Shell's own messages: a button, a confirmation and an error say the same thing in the band, the menu, a Shell page and the settings page (`test_experience_rules`) |
+| A destructive confirmation | The engine's own prompt, with the Shell's words and Cancel as the default button |
 
 ### Sounds
 

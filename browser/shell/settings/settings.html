@@ -35,7 +35,7 @@
         </ul>
         <p class="settings-nav__group" id="nav-all" data-i18n="scopeAllProfiles"></p>
         <ul aria-labelledby="nav-all">
-          <li><a href="#profiles" data-section="profiles" data-i18n="profilesHeading">Profiles</a></li>
+          <!-- Profiles are listed, edited and created by the settings page itself now (Perfis e proteção, ADR 0011). -->
           <li><a href="#routing" data-section="routing" data-i18n="routingHeading">Smart routing</a></li>
           <li><a href="#ai" data-section="ai" data-i18n="aiHeading">AI &amp; Automation</a></li>
         </ul>
@@ -350,7 +350,7 @@
         <div class="empty-state" id="routing-empty" hidden>
           <p class="empty-state__title" data-i18n="routingNeedsTwoTitle"></p>
           <p class="hint" data-i18n="routingNeedsTwoText"></p>
-          <div class="actions"><a class="button button--secondary" href="#profiles-new" data-i18n="routingCreateProfile"></a></div>
+          <div class="actions"><a class="button button--secondary" href="#profiles-new" data-settings="profiles" data-i18n="routingCreateProfile"></a></div>
         </div>
         <form class="stack stack--tight" id="add-rule" novalidate>
           <h4 class="subhead" data-i18n="routingAddHeading"></h4>

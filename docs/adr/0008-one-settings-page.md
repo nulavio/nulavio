@@ -154,7 +154,9 @@ Found while answering the review: the first proof of concept used `loadSubScript
 
 1. Done: the host hardened to the contract, the layout, colours and keys natively, the journey's navigation, a summary and a way in for every other section, every entry point, tests.
 2. Remove the old page's Layout, Aparência and Atalhos sections, which nothing links to any more, and port their tests to the native controls (`test_layout_presets`, `test_appearance`, `test_shortcuts` drive the old markup today).
-3. Search engines, site exceptions and the password manager choice natively (declarative, with one custom element for a list). DNS after its decision.
-4. Profiles and protection, routing (custom elements).
-5. Assistant and agents (custom elements; the consent dialogs stay as they are).
+3. Search engines, site exceptions and the password manager choice natively. DNS after its decision.
+4. Profiles and protection (done: [ADR 0011](0011-nulavio-ui-native-not-an-extension.md), steps 1 and 2), routing.
+5. Assistant and agents (the consent dialogs stay as they are).
+
+Lists in steps 3 to 5 are registry lists, as the engine's own are (ADR 0011, decision 2); the custom elements first planned here were not needed.
 6. Remove the add-on page.

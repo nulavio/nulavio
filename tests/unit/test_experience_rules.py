@@ -3,6 +3,7 @@ per group, the band never hidden by a mode, no sound outside the one sound modul
 
 from __future__ import annotations
 
+import json
 import re
 import unittest
 from html.parser import HTMLParser
@@ -113,6 +114,31 @@ class ExperienceRulesTest(unittest.TestCase):
             }
         self.assertTrue(ids["en-US"], "no Fluent messages found")
         self.assertEqual(ids["en-US"] ^ ids["pt-BR"], set())
+
+    def test_the_settings_page_says_the_shells_own_words_and_builds_no_markup(self):
+        """ADR 0011: the profile actions in the engine's settings page reuse the Shell's messages (one set of
+        words for an action, wherever it is offered) and are built from the engine's widgets, never from text."""
+        panes = (SHELL / "settings/native/panes.mjs").read_text(encoding="utf-8")
+        keys = set(re.findall(r'\bmsg\("(\w+)"', panes))
+        self.assertGreater(len(keys), 20)
+        # Keys built from a value: every value the code can give has its message.
+        names = (SHELL / "lib/names.js").read_text(encoding="utf-8")
+        profiles = (SHELL / "modules/NulavioProfiles.sys.mjs").read_text(encoding="utf-8")
+        keys |= set(re.findall(r'"(template\w+|profiles\w+)"', names))
+        colors = re.search(r"export const COLORS = Object\.freeze\(\[([^\]]+)\]", profiles).group(1)
+        avatars = re.search(r"export const AVATARS = Object\.freeze\(\[([^\]]+)\]", profiles).group(1)
+        keys |= {f"color_{name}" for name in re.findall(r'"([a-z-]+)"', colors)}
+        keys |= {f"avatar_{name.replace('-', '_')}" for name in re.findall(r'"([a-z-]+)"', avatars)}
+        keys |= {f"err_{code.replace('-', '_')}" for code in re.findall(r'fail\("([a-z-]+)"', profiles)}
+        for locale in ("en", "pt_BR"):
+            have = set(json.loads((SHELL / "_locales" / locale / "messages.json").read_text(encoding="utf-8")))
+            self.assertEqual(keys - have, set(), f"{locale}: the settings page asks for words that do not exist")
+        self.assertNotRegex(panes, r"innerHTML|outerHTML|insertAdjacentHTML|createContextualFragment|document\.write")
+        # A destructive confirmation keeps "Cancelar" as the default button, as on the Shell's own pages.
+        confirm = panes[panes.index("const confirmDanger") :].split("};", 1)[0]
+        self.assertIn("BUTTON_POS_1 * prompt.BUTTON_TITLE_CANCEL", confirm)
+        self.assertIn("BUTTON_POS_1_DEFAULT", confirm)
+        self.assertNotIn("BUTTON_POS_0_DEFAULT", confirm)
 
 
 if __name__ == "__main__":

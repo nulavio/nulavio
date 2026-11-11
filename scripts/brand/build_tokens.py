@@ -417,6 +417,59 @@ BRAND_RULES = (
 )
 
 
+def profile_chip_rules(tokens: dict[str, dict]) -> str:
+    """A profile's row in Settings (ADR 0011): the engine's profile icon in the profile's tile and glyph.
+
+    The icon is a disc (context-fill) with a drawing (context-stroke); the engine's row takes both from
+    its own variables. Identity, not theme: it does not depend on nulavio.horizon.enabled. With forced
+    colours the disc and the drawing are the system's pair.
+    """
+
+    def pair(kind: str, name: str) -> str:
+        return f"light-dark({resolve(tokens, f'color.light.{kind}.{name}')}, {resolve(tokens, f'color.dark.{kind}.{name}')})"
+
+    names = sorted(key.rsplit(".", 1)[1] for key in tokens if key.startswith("color.light.identityTile."))
+    rules = ""
+    for name in names:
+        rules += (
+            f"  :is(moz-box-item, moz-visual-picker-item).nulavio-profile-{name} {{\n"
+            f"    --box-icon-fill: {pair('identityTile', name)} !important;\n"
+            f"    --box-icon-stroke: {pair('identityGlyph', name)} !important;\n"
+            "  }\n"
+        )
+    # The editor's pickers: the profile's icon in each choice, the size of a control, as many per line as fit.
+    rules += (
+        "  moz-visual-picker-item.nulavio-chip {\n"
+        "    flex: 0 0 auto !important;\n"
+        "    inline-size: calc(var(--button-min-height) + var(--space-large)) !important;\n"
+        "  }\n"
+        # An agent sheet reaches the picker's own image inside its shadow tree; ::part() from here does not.
+        '  img[part="image"][src^="chrome://browser/content/profiles/assets/"] {\n'
+        "    -moz-context-properties: fill, stroke !important;\n"
+        "    fill: var(--box-icon-fill) !important;\n"
+        "    stroke: var(--box-icon-stroke) !important;\n"
+        "    box-sizing: border-box !important;\n"
+        "    padding: var(--space-small) !important;\n"
+        "  }\n"
+    )
+    # The editor under a row and the "new profile" row hold a few fields, one under the other.
+    rules += (
+        "  moz-box-item:is(.nulavio-profile-editor, .nulavio-profile-new) > setting-control:not(:first-child) {\n"
+        "    display: block !important;\n"
+        "    margin-block-start: var(--space-medium) !important;\n"
+        "  }\n"
+    )
+    rules += (
+        "  @media (forced-colors) {\n"
+        "    :is(moz-box-item.nulavio-profile, moz-visual-picker-item.nulavio-chip) {\n"
+        "      --box-icon-fill: Canvas !important;\n"
+        "      --box-icon-stroke: CanvasText !important;\n"
+        "    }\n"
+        "  }\n"
+    )
+    return rules
+
+
 def in_content_lines(tokens: dict[str, dict], scale: str) -> list[str]:
     """The engine variables about: pages get, with the accent's primitive scale (mint, or a variant's)."""
 
@@ -523,6 +576,7 @@ def build_in_content(data: dict) -> str:
         HEADER
         + f"@-moz-document {urls} {{\n"
         + BRAND_RULES
+        + profile_chip_rules(tokens)
         + '  @media -moz-pref("nulavio.horizon.enabled") {\n'
         + '    @media -moz-pref("extensions.activeThemeID", "default-theme@mozilla.org") or\n'
         + '      -moz-pref("extensions.activeThemeID", "firefox-compact-light@mozilla.org") or\n'

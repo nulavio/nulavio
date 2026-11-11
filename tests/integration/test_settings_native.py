@@ -407,9 +407,9 @@ class NativeSettingsTest(unittest.TestCase):
         rows = (
             DOC
             + """
-          const list = d.querySelector("nulavio-profile-list");
-          if (!list) return null;
-          return [...list.querySelectorAll("moz-box-item")].map(row => [row.label, row.description]);
+          const list = d.querySelector("#nulavio-profile-list");
+          if (!list || list.closest("setting-control")?.hidden) return null;
+          return [...list.querySelectorAll("moz-box-item.nulavio-profile")].map(row => [row.label, row.description]);
         """
         )
         self.open()
@@ -428,7 +428,7 @@ class NativeSettingsTest(unittest.TestCase):
           const input = w.gSearchResultsPane.searchInput;
           input.value = "Trabalho";
           return w.gSearchResultsPane.searchFunction({ target: input }).then(() => {
-            const list = d.querySelector("nulavio-profile-list");
+            const list = d.querySelector("#nulavio-profile-list");
             return Boolean(list && list.getBoundingClientRect().height > 0 && !list.closest("[hidden]"));
           });
         """
@@ -488,7 +488,7 @@ class NativeSettingsTest(unittest.TestCase):
         rail = self.m.execute(
             "return [...document.querySelectorAll('.settings-nav a[data-section]')].map(a => a.dataset.section);"
         )
-        for moved in ("layout", "appearance", "shortcuts"):
+        for moved in ("layout", "appearance", "shortcuts", "profiles"):
             self.assertNotIn(moved, rail)
         self.assertEqual(self.m.execute("return document.getElementById('settings-back').textContent;"), "Configurações")
         self.m.send("WebDriver:ElementClick", {"id": self.m.find_element("#settings-back")})
@@ -496,6 +496,18 @@ class NativeSettingsTest(unittest.TestCase):
             harness.wait_until(lambda: self.m.chrome(where) == "about:preferences#nulavioProfiles", 15), self.m.chrome(where)
         )
         self.assertEqual(self.m.chrome("return gBrowser.tabs.length;"), tabs)
+        # The detail page's own way to a new profile ("Criar perfil", in the routing rules) is the settings page too.
+        self.m.chrome(DOC + 'd.querySelector("#nulavio-open-routing").click();')
+        self.assertTrue(
+            harness.wait_until(lambda: self.m.chrome(where).endswith("/settings/settings.html#routing"), 15), self.m.chrome(where)
+        )
+        self.assertTrue(
+            harness.wait_until(lambda: self.m.execute("return document.documentElement.dataset.ready === 'true';"), 20)
+        )
+        self.m.execute("document.querySelector('a[data-settings=\"profiles\"]').click();")
+        self.assertTrue(
+            harness.wait_until(lambda: self.m.chrome(where) == "about:preferences#nulavioProfiles", 15), self.m.chrome(where)
+        )
 
 
 if __name__ == "__main__":
