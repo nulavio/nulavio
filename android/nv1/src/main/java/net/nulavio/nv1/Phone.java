@@ -229,11 +229,20 @@ public final class Phone {
     // -- unlock ------------------------------------------------------------------------------
 
     /**
-     * Check a signed unlock request before asking the user. Returns the request (profile and desktop
-     * names to show) or throws: unpaired-desktop, bad-signature, expired, replay, not-for-this-phone.
+     * Check a signed unlock request before asking the user. Returns what to show: the request with the
+     * desktop's name from this phone's own pairing record, never the name the request carries (audit V3).
+     * Throws: unpaired-desktop, bad-signature, expired, bad-expiry, replay, not-for-this-phone.
      */
-    @SuppressWarnings("unchecked")
     public Map<String, Object> check(Map<String, Object> signed) {
+        Map<String, Object> r = verify(signed);
+        Map<String, Object> shown = new TreeMap<>(r);
+        shown.put("desktop_name", desktops.get(r.get("desktop_id")).get("name"));
+        return shown;
+    }
+
+    /** The signed request itself, checked; the answer is computed over exactly these bytes. */
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> verify(Map<String, Object> signed) {
         if (!(signed.get("r") instanceof Map)) {
             throw new PhoneRejected("bad-message");
         }
@@ -249,6 +258,9 @@ public final class Phone {
         if (!(r.get("expiry") instanceof Long) || now() > (Long) r.get("expiry") + Nv1.CLOCK_SKEW) {
             throw new PhoneRejected("expired");
         }
+        if ((Long) r.get("expiry") > now() + Nv1.MAX_REQUEST_AHEAD) {
+            throw new PhoneRejected("bad-expiry"); // made to stay valid longer than one request may
+        }
         if (seen.contains(str(r, "req_id"))) {
             throw new PhoneRejected("replay");
         }
@@ -263,7 +275,7 @@ public final class Phone {
         if (!owns(secrets)) {
             throw new PhoneRejected("bad-state");
         }
-        Map<String, Object> r = check(signed);
+        Map<String, Object> r = verify(signed);
         String reqId = str(r, "req_id");
         seen.add(reqId);
         while (seen.size() > SEEN_LIMIT) {
@@ -279,7 +291,8 @@ public final class Phone {
         }
         byte[] ephPk = B64.decode(str(r, "eph_pk"));
         byte[] z = Crypto.x25519(secrets.kxSk, ephPk);
-        byte[] kek = Nv1.phoneKek(z, str(r, "profile_id"), str(r, "envelope_id"), phoneId, ephPk);
+        byte[] dsigPk = B64.decode((String) desktops.get(r.get("desktop_id")).get("dsig_pk"));
+        byte[] kek = Nv1.phoneKek(z, str(r, "profile_id"), str(r, "envelope_id"), phoneId, ephPk, dsigPk);
         byte[] shared = Crypto.x25519(secrets.kxSk, B64.decode(str(r, "s_pk")));
         byte[] rk = Nv1.responseKey(shared, requestHash);
         Map<String, Object> box = Nv1.seal(rk, kek, Nv1.ascii(reqId));

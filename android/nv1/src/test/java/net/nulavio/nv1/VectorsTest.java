@@ -75,7 +75,7 @@ public class VectorsTest {
         assertEquals(s.get("digits"), Nv1.sasDigits(b(s, "shared"), b(s, "t")));
         Map<String, Object> pk = m("phone_kek");
         assertArrayEquals(b(pk, "out"), Nv1.phoneKek(b(pk, "z"), (String) pk.get("profile_id"),
-                (String) pk.get("envelope_id"), (String) pk.get("phone_id"), b(pk, "eph_pk")));
+                (String) pk.get("envelope_id"), (String) pk.get("phone_id"), b(pk, "eph_pk"), b(pk, "dsig_pk")));
         Map<String, Object> rk = m("response_key");
         assertArrayEquals(b(rk, "out"), Nv1.responseKey(b(rk, "shared"), b(rk, "request_hash")));
         Map<String, Object> ids = m("ids");

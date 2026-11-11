@@ -75,6 +75,8 @@ Evidence and per-platform states: [compatibility report](../research/phone-unloc
 
 **Pending (needs the maintainer):** a short manual pass: scan a real code from the browser's page with the camera (the build's pairing offer is off, see *Availability*), airplane mode during an unlock, and removing a lost phone on the desktop.
 
+**Desktop binding (2026-11-11, audit V3).** The 2026-11-10 security audit found that a phone answered any desktop it is paired with for any envelope that desktop could name: one holding a copy of another desktop's `vault.json` could get that profile's key under harmless names. The fix, before phone unlock is offered: the phone envelope's KEK derivation includes the signing key of the desktop that made it (the phone uses the key of the desktop whose request it verified), the phone shows the desktop name from its own pairing record, and it refuses requests that claim to stay valid longer than 60 s plus clock skew. Envelopes made earlier report `phone-needs-pairing`; nothing shipped with them (pairing was off in every release). Tests: `test_vault.DesktopBindingTest` (the attack fails before the fix and is refused after it), the Java side against the same vectors (`nv1-vectors.json`, `VectorsTest`, `test_companion_protocol`).
+
 ## Availability (decision D10, 2026-11-04)
 
 Phone unlock is not part of 1.0: the Companion is not published yet (its device test passed on 2026-11-10; the manual pass above is open). Until it is, the browser does not offer to connect a phone:

@@ -389,6 +389,7 @@
   "err_wrong_container": {"message": "This key file belongs to another profile. Nothing was opened."},
   "err_not_encrypted": {"message": "That profile is not protected."},
   "err_damaged_envelope": {"message": "The profile's key file is damaged. Use the recovery code."},
+  "err_phone_needs_pairing": {"message": "This phone was connected before a security change and can no longer unlock this profile. Remove it and connect it again."},
   "err_unsupported_version": {"message": "This profile was protected by a newer Nulavio. Update Nulavio to open it."},
   "err_unreadable": {"message": "The profile's key file cannot be read."},
   "err_unlocked": {"message": "Lock this profile first, then try again."},

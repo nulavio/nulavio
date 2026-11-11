@@ -63,9 +63,10 @@
   ]
  },
  "phone_kek": {
+  "dsig_pk": "JUO5L_EJVRFHatyDadtt3JM2ZaEZeN2hQE7hBmypVZ0",
   "envelope_id": "env-1",
   "eph_pk": "ICEiIyQlJicoKSorLC0uLzAxMjM0NTY3ODk6Ozw9Pj8",
-  "out": "SnBwIeaORNCSIWN-r71Y6bB3MJGYeXcW9InSlpJkPR0",
+  "out": "BD3OYdyHSZsTM0QkcHLQklpTfxcUSpnZab7MFRXN6I0",
   "phone_id": "phone-1",
   "profile_id": "prof-1",
   "z": "lmOqHal-hIqRSkNtBBY9-7iRePEH8bW3ftOFQgM4KFQ"

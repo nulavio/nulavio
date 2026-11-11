@@ -36,6 +36,7 @@
     <string name="error_replay">Este pedido já foi respondido.</string>
     <string name="error_unpaired">Este computador não está pareado com este celular.</string>
     <string name="error_bad_signature">Este pedido não veio de um computador pareado. Nada foi enviado.</string>
+    <string name="error_bad_expiry">Este pedido diz que vale por tempo demais, então foi recusado. Nada foi enviado. Peça um novo no computador.</string>
     <string name="error_not_for_this_phone">Este pedido é para outro celular.</string>
     <string name="error_unreachable">O computador não se conectou. Confira se os dois estão na mesma rede e tente de novo.</string>
     <string name="error_keys_invalidated">As chaves deste celular não podem mais ser usadas (as digitais ou o bloqueio de tela mudaram). Configure-o de novo e pareie de novo com seus computadores.</string>
