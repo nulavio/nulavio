@@ -556,10 +556,17 @@ class Bridge:
 
     def _t_tabs_list(self, args, cancel, checked):
         self.require("read_pages", checked=checked)
-        tabs = [
-            {"tab": c["context"], "profile": c["profile"], "url": c.get("url", ""), "title": self._title(c["context"], cancel)}
-            for c in self._tabs(cancel)[:50]
-        ]
+        agent = self._agent() or {}
+        tabs = []
+        for c in self._tabs(cancel)[:50]:
+            url = c.get("url", "")
+            if policy.in_scope(agent, urllib.parse.urlsplit(url).hostname if url else None):
+                tabs.append(
+                    {"tab": c["context"], "profile": c["profile"], "url": url, "title": self._title(c["context"], cancel)}
+                )
+            else:
+                # Outside the agent's sites: the tab exists, but not where it is or what it shows (audit A8).
+                tabs.append({"tab": c["context"], "profile": c["profile"], "url": None, "title": None, "outside_sites": True})
         return self._ok({"tabs": tabs}), None
 
     def _t_tab_new(self, args, cancel, checked):
@@ -793,6 +800,8 @@ class Bridge:
         tab = args["tab"]
         url = self._url_of(tab, cancel)
         self.require_here("execute_js", url, checked=checked)
+        # A page script reads document.cookie and the site's storage: the same as cookies_storage (audit A9).
+        self.require("cookies_storage", url, checked=checked)
         self.still_at(tab, url, cancel)
         value = self._eval(tab, args["expression"], cancel)
         text = json.dumps(value, ensure_ascii=False, default=str)

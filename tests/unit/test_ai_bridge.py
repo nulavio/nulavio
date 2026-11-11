@@ -575,6 +575,36 @@ class AuditTest(Home):
             result = bridge.call("evaluate", {"tab": "t1", "expression": "1"})
         self.assertIn("moved to https://bank.example", result["content"][0]["text"])
 
+    def test_tabs_outside_the_agents_sites_are_not_described(self):
+        # Audit A8: tabs_list gave every tab's full address and title, whatever the site list said.
+        agent, _ = registry.add("sites", "other", "restricted", domains=["example.org"])
+        bridge = tools.Bridge(agent["id"], "s-1", approver=registry.Approver())
+        tabs = [
+            {"context": "t1", "profile": "AI Workspace", "url": "https://docs.example.org/a"},
+            {"context": "t2", "profile": "AI Workspace", "url": "https://bank.example/acct?id=42"},
+        ]
+        with (
+            mock.patch.object(tools.Bridge, "_tabs", return_value=tabs),
+            mock.patch.object(tools.Bridge, "_title", side_effect=lambda tab, _c: f"title of {tab}"),
+        ):
+            listed = bridge.call("tabs_list", {})["structuredContent"]["tabs"]
+        self.assertEqual(listed[0]["url"], "https://docs.example.org/a")
+        self.assertEqual((listed[1]["url"], listed[1]["title"], listed[1]["outside_sites"]), (None, None, True))
+        self.assertNotIn("bank.example", json.dumps(listed))
+
+    def test_a_script_needs_cookies_and_storage_too(self):
+        # Audit A9: evaluate reads document.cookie; execute_js alone let it.
+        agent, _ = registry.add("scripts", "other", "autonomous")
+        registry.grant(agent["id"], "execute_js", "allow")
+        bridge = tools.Bridge(agent["id"], "s-1", approver=registry.Approver())
+        with (
+            mock.patch.object(tools.Bridge, "_url_of", return_value="https://example.org/"),
+            mock.patch.object(tools.Bridge, "_eval", side_effect=AssertionError("ran")),
+        ):
+            result = bridge.call("evaluate", {"tab": "t1", "expression": "document.cookie"})
+        self.assertTrue(result["isError"])
+        self.assertIn("cookies_storage", audit.audit_path().read_text().splitlines()[-1])
+
     def test_denied_call_is_audited_without_arguments(self):
         agent, _ = registry.add("d", "other", "assisted")
         bridge = tools.Bridge(agent["id"], "s-1", approver=registry.Approver())
