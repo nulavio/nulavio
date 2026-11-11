@@ -443,7 +443,9 @@ def profile_chip_rules(tokens: dict[str, dict]) -> str:
         "    flex: 0 0 auto !important;\n"
         "    inline-size: calc(var(--button-min-height) + var(--space-large)) !important;\n"
         "  }\n"
-        # An agent sheet reaches the picker's own image inside its shadow tree; ::part() from here does not.
+        # An agent sheet reaches the picker's own image inside its shadow tree; ::part() and :host() from here
+        # do not. The engine's own pages give their pickers no image of a profile icon (its avatar selector
+        # slots a button), so the address of the image is what scopes this rule to Nulavio's picker.
         '  img[part="image"][src^="chrome://browser/content/profiles/assets/"] {\n'
         "    -moz-context-properties: fill, stroke !important;\n"
         "    fill: var(--box-icon-fill) !important;\n"
