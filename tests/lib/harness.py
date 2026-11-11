@@ -545,6 +545,10 @@ class GeckoProfileSession:
             for variable in ("WAYLAND_DISPLAY", "DISPLAY", "GDK_BACKEND", "MOZ_ENABLE_WAYLAND"):
                 if os.environ.get(variable):
                     self.env[variable] = os.environ[variable]
+        # The AddressSanitizer build's options (asan.yml: where reports go), when set.
+        for variable in ("ASAN_OPTIONS", "UBSAN_OPTIONS"):
+            if os.environ.get(variable):
+                self.env[variable] = os.environ[variable]
         self.name = name
         self.profile_dir = self.tmp / "profiles" / "first"
         self.process: subprocess.Popen | None = None

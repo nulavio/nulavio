@@ -1,0 +1,10 @@
+# AddressSanitizer variant, appended to mozconfig by build_nulavio.sh when
+# NULAVIO_MOZCONFIG_EXTRA=mozconfig.asan (.github/workflows/asan.yml). Dynamic
+# analysis of the C++ that Nulavio ships (Gecko and patches 0006, 0010): the
+# integration suite runs against this build and any AddressSanitizer report fails
+# the run. Never packaged or published (rehearse_release.sh refuses a variant).
+# Options follow Mozilla's own ASan builds (build/unix/mozconfig.asan): ASan
+# replaces jemalloc as the allocator; line tables keep reports readable.
+ac_add_options --enable-address-sanitizer
+ac_add_options --disable-jemalloc
+ac_add_options --enable-debug-symbols=-gline-tables-only
