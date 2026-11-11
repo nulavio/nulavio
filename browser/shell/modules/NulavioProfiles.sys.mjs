@@ -28,6 +28,12 @@ ChromeUtils.defineESModuleGetters(lazy, {
 
 /** Identity colour per profile id, shared by every profile of the group (JSON). */
 export const PREF_COLORS = "nulavio.profiles.colors";
+/* The engine turns its own start-up profile chooser on when a profile group is made. That page knows
+   nothing of the Vault: a protected profile is listed there like any other, and choosing it ends the
+   start in an error (its folder is empty until the Vault opens it). Profiles are switched and unlocked
+   from the band's menu instead, so Nulavio turns the chooser off once per group; this shared pref
+   records it, and a later choice of the person (the engine's own checkbox) stays. */
+export const PREF_START_CHOOSER = "nulavio.profiles.startChooserAdopted";
 // The band's profile summary is rebuilt at least this often, even without a change notice.
 const BAND_CACHE_MS = 30000;
 const PREF_COLOR_MIGRATION = "nulavio.profiles.colors.farol";
@@ -189,6 +195,7 @@ class NulavioProfilesClass {
         if (joining && current && current.name !== name) {
           await current.setNameAsync(name);
         }
+        await this.#adoptStartChooser();
         // Setting up the store can give this profile its id and group name: the band's cached
         // summary (and the new tab's rules here) must not wait 30 s to see them.
         this.#band = null;
@@ -200,6 +207,21 @@ class NulavioProfilesClass {
       this.#storeSetup = setup;
     }
     return this.#storeSetup;
+  }
+
+  /** Once per profile group: the engine's start-up chooser off (PREF_START_CHOOSER). */
+  async #adoptStartChooser() {
+    const service = this.#service;
+    if (Services.prefs.getBoolPref(PREF_START_CHOOSER, false) || !service.currentProfile) {
+      return;
+    }
+    try {
+      await service.setShowProfileSelectorWindow(false);
+      Services.prefs.setBoolPref(PREF_START_CHOOSER, true);
+      await service.trackPref(PREF_START_CHOOSER);
+    } catch (e) {
+      console.error("Nulavio Profiles: start-up chooser", e);
+    }
   }
 
   // -- colours (shared across the group) ---------------------------------
@@ -527,6 +549,8 @@ class NulavioProfilesClass {
       const name = startingProfileName(service.groupToolkitProfile?.name);
       return { id: null, name, avatar: "default-favicon", color: COLORS[0], isCurrent: true };
     }
+    // A group made before Nulavio adopted the chooser (the alpha): once, on the first window after the update.
+    await this.#adoptStartChooser();
     // currentProfile is not refreshed when another instance renames the profile; the database is.
     const profile = (await service.getProfile(current.id)) ?? current;
     return { id: profile.id, name: profile.name, avatar: profile.avatar, color: this.#colorFor(profile, this.colors()), isCurrent: true };
