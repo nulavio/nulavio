@@ -123,6 +123,10 @@ Um navegador não protege contra um programa malicioso que já roda com o seu us
 
 Leia o [CONTRIBUTING.md](CONTRIBUTING.md). Em resumo: commits convencionais com sign-off (`git commit -s`), uma mudança por pull request e uma descrição que diga como foi verificada e o que não foi. As mudanças só entram no `main` por pull request com o CI verde.
 
+## Apoio
+
+- **[LESIS](https://lesis.lat)** oferece ao Nulavio, sem custo, sua plataforma de vulnerabilidades. Varreduras automáticas de código rodam neste repositório, e uma varredura de segredos vazados não encontrou nada (11/11/2026). Os achados seguem o [processo de segurança](SECURITY.md) de sempre.
+
 ## Licença e marcas
 
 Código sob a [Mozilla Public License 2.0](LICENSE); os elementos de marca, como descrito em [LICENSES.md](LICENSES.md). "Nulavio" ainda não é marca registrada. O Nulavio não tem vínculo com a Mozilla; Firefox é marca da Mozilla Foundation.
