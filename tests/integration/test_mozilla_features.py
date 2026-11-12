@@ -248,8 +248,9 @@ class MozillaFeaturesTest(unittest.TestCase):
         libpulse versions and without Nulavio's name (issue #126). Because these are update channels: the two
         addresses are the engine's own with only those three fields replaced (read from the engine's own files, so
         an engine that changes them fails here); both answers come back; OpenH264 is in Mozilla's list itself, not in
-        the engine's built-in fallback; and Mozilla answers the full form and this one alike. In a profile of its
-        own: the built-in add-on check may install what it is given."""
+        the engine's built-in fallback; and Mozilla answers the full form and this one alike, for the system this runs
+        on (a rule aimed at another kernel, GTK or libpulse version is not seen from here). In a profile of its own:
+        the built-in add-on check may install what it is given."""
         session = harness.GeckoProfileSession(name="Checagens")
         self.addCleanup(session.cleanup)
         m = session.start()
@@ -261,7 +262,7 @@ class MozillaFeaturesTest(unittest.TestCase):
             "const asked = {}, answered = {};"
             "const watch = { observe(subject, topic) { const c = subject.QueryInterface(Ci.nsIHttpChannel);"
             ' if (c.URI.host !== "aus5.mozilla.org" || c.loadInfo.triggeringPrincipal.isSystemPrincipal === false) return;'
-            ' const product = c.URI.spec.split("/update/3/")[1]?.split("/")[0];'
+            ' const product = c.URI.spec.split("/update/3/")[1]?.split("/")[0] ?? c.URI.spec;'
             ' if (topic === "http-on-opening-request") { asked[product] ??= c.URI.spec; }'
             " else { answered[product] ??= c.responseStatus; } } };"
             'const topics = ["http-on-opening-request", "http-on-examine-response"];'
@@ -270,9 +271,13 @@ class MozillaFeaturesTest(unittest.TestCase):
             "const own = async (file, name) => { const text = await (await fetch(file)).text();"
             ' const at = text.indexOf(`pref("${name}"`); if (at < 0) return null;'
             ' return text.slice(at, text.indexOf("\\n", at)).split(\'"\')[3] ?? null; };'
-            "const body = async address => { const r = await fetch(address, { credentials: 'omit', cache: 'no-store' });"
+            # `force=1`: the server's answer without the draw of a staged rollout, which is made per request and would
+            # make two requests differ with nothing wrong.
+            "const body = async address => {"
+            " const r = await fetch(address + '?force=1', { credentials: 'omit', cache: 'no-store' });"
             " return r.ok ? r.text() : `status ${r.status}`; };"
-            "(async () => { const out = { asked, answered };"
+            "const unwatch = () => topics.splice(0).forEach(t => Services.obs.removeObserver(watch, t));"
+            "(async () => { const out = {};"
             ' const names = { GMP: "media.gmp-manager.url", SystemAddons: "extensions.systemAddon.update.url" };'
             " const defaults = Services.prefs.getDefaultBranch('');"
             " out.ours = Object.fromEntries(Object.entries(names).map(([k, n]) => [k, defaults.getCharPref(n)]));"
@@ -286,6 +291,8 @@ class MozillaFeaturesTest(unittest.TestCase):
             " out.openh264 = openh264 ? { fallback: Boolean(openh264.usedFallback), address: Boolean(openh264.URL),"
             "  hash: Boolean(openh264.hashValue) } : null;"
             " await XPIInstall.updateSystemAddons();"
+            # What the engine's two checks asked and were answered, before this test asks anything itself.
+            " unwatch(); out.asked = { ...asked }; out.answered = { ...answered };"
             # Mozilla's answer to the engine's full form and to this one, for each check.
             " out.same = {};"
             " for (const [product, template] of Object.entries(out.engine)) {"
@@ -295,7 +302,7 @@ class MozillaFeaturesTest(unittest.TestCase):
             "   out.same[product] = alike ? true : [full.slice(0, 300), short.slice(0, 300)]; }"
             "  catch (e) { out.same[product] = `could not ask: ${e}`; } }"
             " return out; })()"
-            ".finally(() => topics.forEach(t => Services.obs.removeObserver(watch, t)))"
+            ".finally(unwatch)"
             ".then(done, e => done({ error: String(e) }));"
         )
         m.set_context("chrome")
@@ -338,7 +345,7 @@ class MozillaFeaturesTest(unittest.TestCase):
         self.assertEqual(
             state["same"],
             {"GMP": True, "SystemAddons": True},
-            "Mozilla answers the full form and this one differently (or could not be asked): decide #126 again",
+            "Mozilla answers the full form and this one differently on this system (or could not be asked): decide #126 again",
         )
 
     def test_04_no_account_button_or_sync_promo(self):
