@@ -161,11 +161,9 @@ class Guard {
   #timer = null;
   #checked = null;
   #wanted = false; // a look at the record was asked for while the start-up check was still at work
+  #looks = Promise.resolve(); // one look at a time
   #touched = new Set(); // extensions the browser itself installed, removed, turned on or off since the last look
   #scanning = 0; // our own readings of the extensions folders under way
-  #notices = 0; // times the engine said it took in what it found in those folders
-  #accounted = 0; // of those, how many the record already reflects
-  #listedAt = new WeakMap(); // a list of extensions -> #notices when it was read
 
   get #profileDir() {
     return Services.dirsvc.get("ProfD", Ci.nsIFile).path;
@@ -187,7 +185,6 @@ class Guard {
       this.#scanning--;
     }
     const out = {};
-    this.#listedAt.set(out, this.#notices); // what the engine took in up to here is in the list read next
     for (const addon of await lazy.AddonManager.getAddonsByTypes(["extension"])) {
       if (addon.isBuiltin || addon.isSystem || addon.hidden) {
         continue; // the engine's own and Nulavio's built-in Shell
@@ -437,15 +434,15 @@ class Guard {
   /**
    * Whether a difference in the extensions, found while the browser runs, was made outside it. An extension that
    * appeared: when another program placed it (the engine marks those). Any other difference (another version,
-   * turned on, gone): when the engine has just taken in what it found on disk (`onDisk`) and the browser itself
-   * did not install, remove, turn on or off that extension meanwhile (`touched`). The rest is the browser's own
-   * doing and is followed, not reported.
+   * turned on, gone): unless the browser itself installed, updated, removed, turned on or off that extension
+   * since the last look (`touched`: the engine announces each of those). What the browser did is followed, not
+   * reported; what it did not announce was done to its files.
    */
-  static madeOutside(finding, { onDisk = false, touched = new Set() } = {}) {
+  static madeOutside(finding, touched = new Set()) {
     if (finding.kind === "extension-added") {
       return Boolean(finding.after?.foreign);
     }
-    return Boolean(onDisk) && !touched.has(finding.key);
+    return !touched.has(finding.key);
   }
 
   static withoutHeldUpdates(findings, expected, installed = {}) {
@@ -516,7 +513,6 @@ class Guard {
     const now = await this.snapshot();
     const saved = await this.#load();
     const expected = await this.#heldUpdates(); // what the engine holds now, for the start after this one
-    this.#accounted = Math.max(this.#accounted, this.#listedAt.get(now.extensions) ?? 0);
     if (!saved) {
       this.#state = { snapshot: now, pending: [], expected };
       await this.#save();
@@ -595,8 +591,8 @@ class Guard {
     }
     this.#listening = true;
     const refresh = () => this.#scheduleRefresh();
-    // What the browser itself does to an extension is followed, and remembered until the record has it: a
-    // difference found on disk for that extension is then the browser's own.
+    // What the browser itself does to an extension is followed. The engine announces each of these as it begins
+    // and as it ends; a difference in an extension that it did not announce is not the browser's doing.
     const touched = addon => {
       if (addon?.id) {
         this.#touched.add(addon.id);
@@ -613,6 +609,7 @@ class Guard {
       onEnabled: touched,
       onDisabling: touched,
       onDisabled: touched,
+      onOperationCancelled: touched, // "Undo" after "Remove": on again, and nothing else is said
     });
     const installing = install => touched(install?.existingAddon ?? install?.addon);
     lazy.AddonManager.addInstallListener({
@@ -631,12 +628,11 @@ class Guard {
     // The engine reads the profile's extensions folder a little after start-up, and its reading can end after
     // the start-up check took its snapshot (its scan and ours can overlap, and the one that came second does not
     // wait for the first). This is the engine saying it has taken in what it found on disk: an extension placed
-    // there, a file replaced by another version. Look again, and report what the browser did not do itself.
-    // Our own reading can cause the notice too (the list is read after it, so it needs no second look): asking
-    // again then would have the Guard answer itself once a second for as long as the engine finds something.
+    // there, a file replaced by another version. Look again. Our own reading can cause the notice too, and the
+    // look under way reads the list after it: asking again then would have the Guard answer itself once a second
+    // for as long as the engine finds something.
     this.#diskObserver = {
       observe: () => {
-        this.#notices++;
         if (!this.#scanning) {
           this.#scheduleRefresh();
         }
@@ -655,7 +651,14 @@ class Guard {
     this.#timer.initWithCallback(() => this.#refresh().catch(e => console.error("Nulavio Guard", e)), 1000, Ci.nsITimer.TYPE_ONE_SHOT);
   }
 
-  async #refresh() {
+  /** Bring the record up to date with what the browser did, and report what it did not do. One at a time. */
+  #refresh() {
+    const look = this.#looks.then(() => this.#look());
+    this.#looks = look.catch(() => {});
+    return look;
+  }
+
+  async #look() {
     this.#timer?.cancel();
     this.#timer = null;
     if (!this.#state) {
@@ -664,10 +667,13 @@ class Guard {
     }
     const earlier = this.#touched;
     this.#touched = new Set(); // what the browser does from here on is for the next look as well
-    const [extensions, search, expected] = await Promise.all([this.#extensions(), this.#search(), this.#heldUpdates()]);
-    const listed = this.#listedAt.get(extensions) ?? 0;
-    const onDisk = listed > this.#accounted;
-    this.#accounted = Math.max(this.#accounted, listed);
+    let extensions, search, expected;
+    try {
+      [extensions, search, expected] = await Promise.all([this.#extensions(), this.#search(), this.#heldUpdates()]);
+    } catch (e) {
+      earlier.forEach(id => this.#touched.add(id)); // nothing was read: what the browser did still counts
+      throw e;
+    }
     const touched = new Set([...earlier, ...this.#touched]);
     // What another program did to the extensions is never taken into the record unseen, even when the engine
     // only finds it during the session: an extension placed in the profile, a file replaced or deleted.
@@ -676,7 +682,7 @@ class Guard {
     const at = new Date().toISOString();
     let grew = false;
     for (const finding of Guard.compare(before, { extensions })) {
-      if (Guard.madeOutside(finding, { onDisk, touched }) && !pendingIds.has(finding.id)) {
+      if (Guard.madeOutside(finding, touched) && !pendingIds.has(finding.id)) {
         this.#state.pending.push({ ...finding, at });
         grew = true;
       }

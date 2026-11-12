@@ -317,24 +317,23 @@ class GuardTest(unittest.TestCase):
             const changed = id => ({ id: `extension-changed:${id}`, kind: "extension-changed", key: id,
                                      before: ext("1.0"), after: ext("2.0") });
             const removed = id => ({ id: `extension-removed:${id}`, kind: "extension-removed", key: id, before: ext("1.0") });
-            const touched = new Set(["mine@x"]);
-            const is = (finding, onDisk) => G.constructor.madeOutside(finding, { onDisk, touched });
+            const is = finding => G.constructor.madeOutside(finding, new Set(["mine@x"]));
             return {
-              placed: is(added("placed@x", true), false),          // another program placed it: always
-              installed: is(added("mine@x", false), true),         // installed in the browser
-              replaced: is(changed("theirs@x"), true),             // the engine found another file on disk
-              updated: is(changed("mine@x"), true),                // the browser updated it, whatever was found on disk
-              quiet: is(changed("theirs@x"), false),               // nothing found on disk: the browser's own doing
-              deleted: is(removed("theirs@x"), true),
-              uninstalled: is(removed("mine@x"), true),
+              placed: is(added("placed@x", true)),         // another program placed it
+              placedAsMine: is(added("mine@x", true)),     // and it stays so, whatever the browser did meanwhile
+              installed: is(added("mine@x", false)),       // installed in the browser
+              replaced: is(changed("theirs@x")),           // another version, and the browser did not update it
+              updated: is(changed("mine@x")),              // the browser updated it
+              deleted: is(removed("theirs@x")),
+              uninstalled: is(removed("mine@x")),
               bare: G.constructor.madeOutside(changed("theirs@x")),
             };
             """
         )
         self.assertEqual(
             outside,
-            {"placed": True, "installed": False, "replaced": True, "updated": False, "quiet": False, "deleted": True,
-             "uninstalled": False, "bare": False},
+            {"placed": True, "placedAsMine": True, "installed": False, "replaced": True, "updated": False, "deleted": True,
+             "uninstalled": False, "bare": True},
         )  # fmt: skip
         record = self.profile / "nulavio-guard.json"
         self.assertEqual(json.loads(record.read_text())["expected"], {}, "the record says what the engine holds: nothing now")
@@ -427,19 +426,27 @@ class GuardTest(unittest.TestCase):
         self.assertTrue(harness.wait_until(lambda: self.bar() == "", timeout=10), "the bar stayed with nothing waiting")
         self.assertTrue(harness.wait_until(lambda: not placed.exists(), timeout=10), "undone, and the file is still there")
 
-        # While the browser runs. Installed in the browser: its own doing, followed and not reported, even when the
-        # engine says at that moment that it took in something it found on disk.
+        # While the browser runs. What the browser itself does to an extension is followed and not reported:
+        # installed, turned off and on again, removed and the removal undone.
+        in_record = lambda: json.loads(record.read_text())["snapshot"]["extensions"].get(entry.id)  # noqa: E731
+        mine = "const addon = await AddonManager.getAddonByID(args[0]); "
         self.guard(
             """
             const file = Cc["@mozilla.org/file/local;1"].createInstance(Ci.nsIFile);
             file.initWithPath(args[0]);
             await (await AddonManager.getInstallForFile(file)).install();
-            Services.obs.notifyObservers(null, "xpi-provider:database-updated");
             """,
             str(xpi),
         )
-        followed = lambda: entry.id in json.loads(record.read_text())["snapshot"]["extensions"]  # noqa: E731
-        self.assertTrue(harness.wait_until(followed, timeout=10), "an extension installed in the browser is not in the record")
+        self.assertTrue(harness.wait_until(lambda: (in_record() or {}).get("active") is True, timeout=10), in_record())
+        self.guard(mine + "await addon.disable();", entry.id)
+        self.assertTrue(harness.wait_until(lambda: in_record()["active"] is False, timeout=10), in_record())
+        self.guard(mine + "await addon.enable();", entry.id)
+        self.assertTrue(harness.wait_until(lambda: in_record()["active"] is True, timeout=10), in_record())
+        self.guard(mine + "await addon.uninstall(true);", entry.id)  # as about:addons does: it can still be undone
+        self.assertTrue(harness.wait_until(lambda: in_record()["active"] is False, timeout=10), in_record())
+        self.guard(mine + "addon.cancelUninstall();", entry.id)
+        self.assertTrue(harness.wait_until(lambda: in_record()["active"] is True, timeout=10), in_record())
         self.assertEqual(waiting(), [])
         self.assertEqual(self.bar(), "")
         # Its file deleted by another program: not the browser's doing. Reported at the Guard's next look, which a
