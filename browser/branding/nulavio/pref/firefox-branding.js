@@ -184,6 +184,20 @@ pref("browser.region.update.enabled", false);
 // list and verified against that hash.
 pref("media.gmp-widevinecdm.allow-chromium-update", false);
 
+// The media plugin check and the built-in add-on check ask Mozilla's update
+// server once a day, and the engine writes into the address the kernel, GTK
+// and libpulse versions (%OS_VERSION%) and "nulavio" with Nulavio's version
+// (%DISTRIBUTION%, %DISTRIBUTION_VERSION%). Every other request the browser
+// makes by itself shows Firefox's own User-Agent and nothing about the system
+// (docs/security/new-profile-connections.md). These are the engine's two
+// addresses with a fixed "Linux" and "default/default" in those places, which
+// is what a Firefox with no distribution sends for the last two. Mozilla's
+// answers were the same for both forms on 2026-11-12; an integration test
+// keeps asking for the plugin list this way. Track B only: a seed in Track A
+// would freeze an address that the distribution's own engine may change.
+pref("media.gmp-manager.url", "https://aus5.mozilla.org/update/3/GMP/%VERSION%/%BUILD_ID%/%BUILD_TARGET%/%LOCALE%/%CHANNEL%/Linux/default/default/update.xml");
+pref("extensions.systemAddon.update.url", "https://aus5.mozilla.org/update/3/SystemAddons/%VERSION%/%BUILD_ID%/%BUILD_TARGET%/%LOCALE%/%CHANNEL%/Linux/default/default/update.xml");
+
 // Performance and privacy: about:home (still the start page of profiles that
 // came from earlier builds) does not fetch the weather or stories in the
 // background. Defaults only: a person who turns them on keeps that choice.

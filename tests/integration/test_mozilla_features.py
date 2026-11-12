@@ -12,6 +12,7 @@ from __future__ import annotations
 import sys
 import time
 import unittest
+import urllib.parse
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
@@ -214,6 +215,45 @@ class MozillaFeaturesTest(unittest.TestCase):
         if state.get("listed") is False:
             self.skipTest("the media plugin list did not name Widevine, so the check had nothing to ask about (network?)")
         self.assertEqual(state, {"listed": True, "asked": [], "allowed": False, "userSet": False, "drm": False, "installed": ""})
+
+    def test_03d_the_update_checks_name_neither_the_system_nor_the_distribution(self):
+        """The media plugin check and the built-in add-on check ask Mozilla's update server without the kernel, GTK and
+        libpulse versions and without Nulavio's name (issue #126), and the plugin list still comes back."""
+        state = self.chrome_async(
+            "const done = arguments[arguments.length - 1];"
+            'const { GMPInstallManager } = ChromeUtils.importESModule("resource://gre/modules/GMPInstallManager.sys.mjs");'
+            'const { XPIInstall } = ChromeUtils.importESModule("resource://gre/modules/addons/XPIInstall.sys.mjs");'
+            'const { UpdateUtils } = ChromeUtils.importESModule("resource://gre/modules/UpdateUtils.sys.mjs");'
+            "const asked = [];"
+            "const watch = { observe(channel) { const uri = channel.QueryInterface(Ci.nsIHttpChannel).URI;"
+            ' if (uri.host === "aus5.mozilla.org") asked.push(uri.spec); } };'
+            'Services.obs.addObserver(watch, "http-on-opening-request");'
+            "(async () => { const { addons } = await new GMPInstallManager().checkForAddons();"
+            " await XPIInstall.updateSystemAddons();"
+            " return { asked, plugins: addons.map(a => a.id).sort(),"
+            ' wouldSend: await UpdateUtils.formatUpdateURL("%OS_VERSION%/%DISTRIBUTION%/%DISTRIBUTION_VERSION%"),'
+            ' kernel: Services.sysinfo.getProperty("version"),'
+            ' distribution: Services.prefs.getDefaultBranch("").getCharPref("distribution.id", ""),'
+            "}; })()"
+            '.finally(() => Services.obs.removeObserver(watch, "http-on-opening-request"))'
+            ".then(done, e => done({ error: String(e) }));"
+        )
+        self.assertNotIn("error", state, state)
+        # What the engine would put there is really something to leave out: this build is a distribution on a real kernel.
+        self.assertEqual(state["distribution"], "nulavio")
+        self.assertIn("nulavio", state["wouldSend"])
+        self.assertIn(state["kernel"], urllib.parse.unquote(urllib.parse.unquote(state["wouldSend"])))
+        products = sorted(address.split("/update/3/")[1].split("/")[0] for address in state["asked"])
+        self.assertEqual(products, ["GMP", "SystemAddons"], state["asked"])
+        for address in state["asked"]:
+            with self.subTest(address=address):
+                self.assertTrue(address.endswith("/Linux/default/default/update.xml"), address)
+                plain = urllib.parse.unquote(urllib.parse.unquote(address))
+                for detail in (state["kernel"], "GTK", "libpulse", "nulavio"):
+                    self.assertNotIn(detail, plain)
+        if not state["plugins"]:
+            self.skipTest("the media plugin list came back empty (network?)")
+        self.assertIn("gmp-gmpopenh264", state["plugins"])
 
     def test_04_no_account_button_or_sync_promo(self):
         state = self.m.chrome(
