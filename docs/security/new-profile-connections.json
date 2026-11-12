@@ -69,12 +69,11 @@
         "pgl.yoyo.org",
         "malware-filter.gitlab.io",
         "curbengh.github.io",
-        "publicsuffix.org"
+        "publicsuffix.org",
+        "filters.adtidy.org",
+        "secure.fanboy.co.nz"
       ],
-      "mirrors_not_recorded": ["malware-filter.pages.dev", "raw.githubusercontent.com"],
-      "hosts_by_language": {
-        "pt": ["filters.adtidy.org"]
-      }
+      "mirrors_not_recorded": ["malware-filter.pages.dev", "raw.githubusercontent.com"]
     }
   ]
 }

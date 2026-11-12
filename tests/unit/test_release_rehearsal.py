@@ -28,6 +28,7 @@ class RehearsalInstallTest(unittest.TestCase):
             (repo / "packaging" / "release.json").write_text('{"version": "159.0.1-0.1"}')
             for name in (
                 "scripts/upstream/verify_firefox_release.py",
+                "scripts/upstream/refresh_extensions_lock.py",
                 "scripts/build/make_distribution.py",
                 "scripts/build/make_tools.py",
                 "tests/run.py",

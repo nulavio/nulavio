@@ -8,10 +8,17 @@ flagged so reviewers re-check the extension before merging.
     python3 -I scripts/upstream/refresh_extensions_lock.py           # dry run
     python3 -I scripts/upstream/refresh_extensions_lock.py --write   # update the lock
     python3 -I scripts/upstream/refresh_extensions_lock.py --registry   # only re-copy uBlock Origin's list registry
+    python3 -I scripts/upstream/refresh_extensions_lock.py --check-registry   # is the copy the pinned package's?
 
 uBlock Origin's list registry (browser/distribution/ublock-origin/) is copied from the pinned package, because
 new profiles start from it with Nulavio's default lists on (browser/distribution/content-filter.json). `--write`
 re-copies it when uBlock Origin's pin changes and says when a default list is gone or already on upstream.
+
+`--check-registry` is the gate CI and the release rehearsal run: it gets the pinned package (from the local cache
+or from AMO, checked against the lock's SHA-256 either way) and compares the copy with it byte for byte. The
+checksum in content-filter.json only says that the copy and that file agree with each other; someone who edits
+the copy can edit the checksum too. Exit 1 when the copy is not the package's, 2 when the package could not be
+had: a copy that was not compared is not a copy that passed.
 """
 
 from __future__ import annotations
@@ -87,6 +94,50 @@ def bootstrap_report(package: zipfile.ZipFile) -> list[str]:
     return missing
 
 
+def registry_report(package: zipfile.ZipFile, registry_dir: Path = REGISTRY_DIR) -> list[str]:
+    """How the copy in the repository differs from this package, one line per difference. Empty when it is its."""
+    report = []
+    for inside, name in (("assets/assets.json", "assets.json"), ("LICENSE.txt", "LICENSE.txt")):
+        try:
+            theirs = package.read(inside)
+        except KeyError:
+            report.append(f"{inside}: not in the package")
+            continue
+        ours = (registry_dir / name).read_bytes()
+        if ours == theirs:
+            continue
+        report.append(f"{name}: not the package's {inside}")
+        if name == "assets.json":
+            try:
+                mine, upstream = json.loads(ours), json.loads(theirs)
+            except ValueError:
+                continue
+            report += [f"    {key}: only in the package" for key in upstream if key not in mine]
+            report += [f"    {key}: only in the copy" for key in mine if key not in upstream]
+            report += [f"    {key}: differs" for key in mine if key in upstream and mine[key] != upstream[key]]
+    return report + [f"{line} (what the default lists rest on)" for line in bootstrap_report(package)]
+
+
+def check_registry() -> int:
+    """Compare the copy with the pinned, hash-verified package: 0 the same, 1 not the same, 2 no package to compare with."""
+    config = json.loads(CONTENT_FILTER.read_text(encoding="utf-8"))
+    entry = extensions.load_lock()[config["extension"]]
+    try:
+        path = extensions.fetch(entry)
+    except (OSError, extensions.IntegrityError) as error:
+        print(f"uBlock Origin {entry.version} could not be had, so the list registry was not compared: {error}", file=sys.stderr)
+        return 2
+    with zipfile.ZipFile(path) as package:
+        report = registry_report(package, REGISTRY_DIR)
+    for line in report:
+        print(line, file=sys.stderr)
+    if report:
+        print(f"the list registry is not uBlock Origin {entry.version}'s: run with --registry and read the diff", file=sys.stderr)
+        return 1
+    print(f"the list registry is uBlock Origin {entry.version}'s (package sha256 {entry.sha256})")
+    return 0
+
+
 def refresh_registry() -> None:
     """Copy the list registry and the licence out of the pinned, hash-verified uBlock Origin package."""
     config = json.loads(CONTENT_FILTER.read_text(encoding="utf-8"))
@@ -114,7 +165,10 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--write", action="store_true")
     parser.add_argument("--registry", action="store_true", help="re-copy uBlock Origin's list registry from the pinned package")
+    parser.add_argument("--check-registry", action="store_true", help="compare the list registry with the pinned package")
     args = parser.parse_args()
+    if args.check_registry:
+        return check_registry()
     if args.registry:
         refresh_registry()
         return 0

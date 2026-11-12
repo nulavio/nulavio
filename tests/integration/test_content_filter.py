@@ -7,7 +7,8 @@ person gets: the lists are on beside uBlock Origin's own defaults, a cookie noti
 registry from uBlock Origin's servers keeps them, and a list the person switches off stays off.
 
 It needs the network, as a first start does: the policy downloads uBlock Origin and uBlock Origin downloads
-the lists. Without it the module is skipped and says so.
+the lists. When uBlock Origin could not be installed the module is skipped and says so, or fails where the run
+requires the network (NULAVIO_REQUIRE_NETWORK=1); a uBlock Origin that is installed and selected no list fails.
 """
 
 from __future__ import annotations
@@ -107,9 +108,21 @@ class ContentFilterDefaultsTest(unittest.TestCase):
             "Services.perms.addFromPrincipal(p, 'https-only-load-insecure', Ci.nsIPermissionManager.ALLOW_ACTION);",
             [HOST, f"http://{HOST}:{cls.server.port}"],
         )
-        if not harness.wait_until(lambda: (cls.state() or {}).get("selected"), timeout=120, interval=1.0):
+        # Two things can keep the lists from being there, and only one of them is the network. uBlock Origin not
+        # installed: the policy could not download it. That is a skip, unless the run says it needs the network
+        # (NULAVIO_REQUIRE_NETWORK=1, which the release's integration run sets): then it fails. uBlock Origin
+        # installed and running with no selection, or an empty one: the mechanism this module tests is broken,
+        # and that always fails.
+        if not harness.wait_until(lambda: cls.state() is not None, timeout=120, interval=1.0):
             cls.tearDownClass()
-            raise unittest.SkipTest("uBlock Origin was not installed by the policy in two minutes (no network?)")
+            message = "uBlock Origin was not installed by the policy in two minutes (no network?)"
+            if os.environ.get("NULAVIO_REQUIRE_NETWORK") == "1":
+                raise AssertionError(message)
+            raise unittest.SkipTest(message)
+        if not harness.wait_until(lambda: cls.state().get("selected"), timeout=120, interval=1.0):
+            state = cls.state()
+            cls.tearDownClass()
+            raise AssertionError(f"uBlock Origin {state['version']} is running and selected no list: {state['selected']!r}")
 
     @classmethod
     def tearDownClass(cls):

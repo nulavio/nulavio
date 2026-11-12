@@ -109,7 +109,7 @@ A new profile starts with the lists of `browser/distribution/content-filter.json
 **How it is noticed, in the order it would happen:**
 
 1. `refresh_extensions_lock.py` reads the new package for that code and prints `! THE DEFAULT LISTS MAY NO LONGER APPLY`, naming the file and the line that is gone (`BOOTSTRAP_MARKERS`). It also says when a default list is gone or already on upstream.
-2. `tests/unit/test_track_b.py` fails on the same reading when the pinned package is in the local cache, and the build stops when the registry copy is not the pinned version's.
+2. `refresh_extensions_lock.py --check-registry` gets the pinned package (from the local cache or from AMO, checked against the lock's SHA-256) and compares the registry copy and the licence with it byte for byte, and reads it for the same code. CI runs it on every change and the release rehearsal runs it before it writes `policies.json`; it fails when the copy differs and when the package cannot be had. This is the check that the copy is uBlock Origin's: the checksum in `content-filter.json`, which the build compares the copy with, sits beside the copy and can be edited with it. `tests/unit/test_track_b.py` makes the same comparison when the package is in the local cache.
 3. `tests/integration/test_content_filter.py` starts a new profile with the real package: this is the proof. Run it on every change of uBlock Origin's pin.
 
 **If it broke, nothing is unprotected:** a new profile gets uBlock Origin's own defaults (ads, trackers, malware), without the extra lists. A profile that already exists is never touched by this mechanism.

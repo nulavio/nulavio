@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
+import io
 import json
 import re
 import shutil
@@ -389,6 +391,77 @@ class DistributionTest(unittest.TestCase):
             report,
             ["js/storage.js: µb.assetsBootstrapLocation = data.assetsBootstrapLocation;", "js/assets.js: the file is gone"],
         )
+
+    def test_a_copy_that_is_not_the_packages_is_refused_whatever_its_checksum_says(self):
+        """The gate of CI and of the release rehearsal (`--check-registry`), on a stand-in for the pinned package."""
+        raw = (make_distribution.REGISTRY_DIR / "assets.json").read_bytes()
+        licence = (make_distribution.REGISTRY_DIR / "LICENSE.txt").read_bytes()
+        with tempfile.TemporaryDirectory() as tmp:
+            package, copy, changed = Path(tmp) / "pinned.xpi", Path(tmp) / "ublock-origin", Path(tmp) / "content-filter.json"
+            with zipfile.ZipFile(package, "w") as archive:
+                archive.writestr("assets/assets.json", raw)
+                archive.writestr("LICENSE.txt", licence)
+                for name, markers in refresh_extensions_lock.BOOTSTRAP_MARKERS.items():
+                    archive.writestr(name, "\n".join(markers))
+            copy.mkdir()
+            (copy / "assets.json").write_bytes(raw)
+            (copy / "LICENSE.txt").write_bytes(licence)
+
+            def gate(**fetch) -> int:
+                said = io.StringIO()
+                with (
+                    mock.patch.object(refresh_extensions_lock.extensions, "fetch", **fetch),
+                    mock.patch.object(refresh_extensions_lock, "REGISTRY_DIR", copy),
+                    contextlib.redirect_stdout(said),
+                    contextlib.redirect_stderr(said),
+                ):
+                    return refresh_extensions_lock.check_registry()
+
+            self.assertEqual(gate(return_value=package), 0)
+            # One of uBlock Origin's own default lists taken out of the copy, and the checksum in content-filter.json
+            # brought along: the copy and the checksum agree, so the build's own check has nothing to say.
+            edited = json.loads(raw)
+            del edited["easyprivacy"]
+            edited_raw = json.dumps(edited, indent="\t").encode("utf-8")
+            (copy / "assets.json").write_bytes(edited_raw)
+            config = json.loads(make_distribution.CONTENT_FILTER.read_text(encoding="utf-8"))
+            config["registry"]["sha256"] = hashlib.sha256(edited_raw).hexdigest()
+            changed.write_text(json.dumps(config), encoding="utf-8")
+            with (
+                mock.patch.object(make_distribution, "CONTENT_FILTER", changed),
+                mock.patch.object(make_distribution, "REGISTRY_DIR", copy),
+            ):
+                self.assertNotIn("easyprivacy", make_distribution.filter_registry())
+            # The comparison with the package says which list, and the gate refuses.
+            with zipfile.ZipFile(package) as archive:
+                report = refresh_extensions_lock.registry_report(archive, copy)
+            self.assertEqual(
+                report, ["assets.json: not the package's assets/assets.json", "    easyprivacy: only in the package"]
+            )
+            self.assertEqual(gate(return_value=package), 1)
+            # No package to compare with (no network and nothing cached, or a download that is not the pinned file):
+            # not compared is not passed.
+            (copy / "assets.json").write_bytes(raw)
+            for error in (OSError("no network"), refresh_extensions_lock.extensions.IntegrityError("integrity mismatch")):
+                self.assertEqual(gate(side_effect=error), 2)
+            # A package that lost what the default rests on is refused as well, with the copy byte for byte its own.
+            with zipfile.ZipFile(package, "w") as archive:
+                archive.writestr("assets/assets.json", raw)
+                archive.writestr("LICENSE.txt", licence)
+            self.assertEqual(gate(return_value=package), 1)
+
+    def test_the_gate_runs_in_ci_and_before_the_release_writes_the_policies(self):
+        ci = (ROOT / ".github" / "workflows" / "ci.yml").read_text()
+        self.assertEqual(ci.count("run: python3 -I scripts/upstream/refresh_extensions_lock.py --check-registry\n"), 1)
+        rehearsal = (ROOT / "scripts" / "release" / "rehearse_release.sh").read_text()
+        gate = rehearsal.find('python3 -I "$repo/scripts/upstream/refresh_extensions_lock.py" --check-registry\n')
+        self.assertTrue(0 < gate < rehearsal.find('python3 -I "$repo/scripts/build/make_distribution.py"'), "no gate")
+        # The release's integration run does not skip the test of the lists for want of the network.
+        runner = (ROOT / "scripts" / "release" / "run_integration.sh").read_text()
+        self.assertIn("export NULAVIO_REQUIRE_NETWORK=${NULAVIO_REQUIRE_NETWORK:-1}", runner)
+        self.assertIn('-e "NULAVIO_REQUIRE_NETWORK=$NULAVIO_REQUIRE_NETWORK"', runner)
+        module = (ROOT / "tests" / "integration" / "test_content_filter.py").read_text()
+        self.assertIn('os.environ.get("NULAVIO_REQUIRE_NETWORK") == "1"', module)
 
     def test_a_stale_default_stops_the_build(self):
         config = json.loads(make_distribution.CONTENT_FILTER.read_text(encoding="utf-8"))

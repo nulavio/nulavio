@@ -52,6 +52,10 @@ install_tree() {
     rm -rf "$install"
     mkdir -p "$work/install"
     tar -xJf "$tarball" -C "$work/install"
+    # policies.json carries uBlock Origin's list registry from the repository. make_distribution.py compares that
+    # copy with a checksum kept beside it; this compares it with the pinned package itself (from the cache or from
+    # AMO, checked against the lock), and stops the release when it differs or the package cannot be had.
+    python3 -I "$repo/scripts/upstream/refresh_extensions_lock.py" --check-registry
     python3 -I "$repo/scripts/build/make_distribution.py" --out "$install/distribution"
     python3 -I "$repo/scripts/build/make_tools.py" --out "$install/nulavio-tools"
 }
