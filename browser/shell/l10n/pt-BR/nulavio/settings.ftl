@@ -44,6 +44,21 @@ nulavio-newtab-ambience =
 nulavio-reduce-transparency =
     .label = Reduzir transparência
     .description = Deixa sólidos os cartões da nova aba.
+# The same two switches when they cannot change anything, with the reason in place of the description.
+nulavio-more-contrast-system =
+    .label = Mais contraste
+    .description = O seu sistema já pede alto contraste, e o Nulavio usa as cores dele.
+nulavio-reduce-transparency-idle =
+    .label = Reduzir transparência
+    .description = Nada está transparente agora: o fundo suave está desligado.
+nulavio-reduce-transparency-system =
+    .label = Reduzir transparência
+    .description = O seu sistema já pede menos transparência, então os cartões já ficam sólidos.
+nulavio-reduce-transparency-contrast =
+    .label = Reduzir transparência
+    .description = “Mais contraste” já deixa os cartões sólidos.
+nulavio-look-locked =
+    .message = Algumas destas opções são gerenciadas pelo administrador.
 
 ## Geral (the engine's first pane, while accounts are turned off)
 

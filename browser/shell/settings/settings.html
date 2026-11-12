@@ -119,71 +119,7 @@
       </div>
     </section>
 
-    <section class="section" id="appearance" aria-labelledby="appearance-heading" hidden>
-      <div class="section__head">
-        <h2 class="section__title" id="appearance-heading" data-i18n="appearanceHeading">Appearance</h2>
-        <p class="scope" data-i18n="scopeProfile"></p>
-      </div>
-      <div class="card stack">
-        <!-- UX6: only Nulavio's own look. No option here can touch a protection (tests/unit/test_personalisation.py). -->
-        <p class="hint" data-i18n="appearanceIntro"></p>
-        <details class="more" data-open-key="appearanceIntroMore"><summary data-i18n="howItWorks"></summary><p class="hint" data-i18n="appearanceIntroMore"></p></details>
-        <fieldset class="stack stack--tight" id="appearance-density" data-option="density">
-          <legend class="field__label" data-i18n="densityLabel"></legend>
-        <label class="check"><input type="radio" name="density" value="auto" data-focus-key="density-auto"> <span><strong data-i18n="densityAuto"></strong><span class="hint" data-i18n="densityAutoHint"></span></span></label>
-        <label class="check"><input type="radio" name="density" value="normal" data-focus-key="density-normal"> <span><strong data-i18n="densityNormal"></strong><span class="hint" data-i18n="densityNormalHint"></span></span></label>
-        <label class="check"><input type="radio" name="density" value="compact" data-focus-key="density-compact"> <span><strong data-i18n="densityCompact"></strong><span class="hint" data-i18n="densityCompactHint"></span></span></label>
-        <label class="check"><input type="radio" name="density" value="touch" data-focus-key="density-touch"> <span><strong data-i18n="densityTouch"></strong><span class="hint" data-i18n="densityTouchHint"></span></span></label>
-        </fieldset>
-        <fieldset class="stack stack--tight" id="appearance-accent" data-option="accent" aria-describedby="accent-hint">
-          <legend class="field__label" data-i18n="accentLabel"></legend>
-          <p class="hint" id="accent-hint" data-i18n="accentHint"></p>
-          <div class="accent-choices">
-            <label class="check accent-choice"><input type="radio" name="accent" value="mint" data-focus-key="accent-mint"><span class="accent-choice__dot" data-accent="mint" aria-hidden="true"></span><span data-i18n="accentMint"></span></label>
-            <label class="check accent-choice"><input type="radio" name="accent" value="blue" data-focus-key="accent-blue"><span class="accent-choice__dot" data-accent="blue" aria-hidden="true"></span><span data-i18n="accentBlue"></span></label>
-          </div>
-        </fieldset>
-        <div class="stack stack--tight" id="appearance-contrast" data-option="moreContrast">
-          <label class="check check--switch">
-            <input type="checkbox" role="switch" id="more-contrast" aria-describedby="more-contrast-hint" data-focus-key="more-contrast">
-            <span data-i18n="moreContrastLabel"></span>
-          </label>
-          <p class="hint" id="more-contrast-hint" data-i18n="moreContrastHint"></p>
-          <p class="hint" id="more-contrast-system" data-i18n="moreContrastSystem" hidden></p>
-        </div>
-        <div class="stack stack--tight" id="appearance-ambience" data-option="newtabAmbience">
-          <label class="check check--switch">
-            <input type="checkbox" role="switch" id="newtab-ambience" aria-describedby="newtab-ambience-hint" data-focus-key="newtab-ambience">
-            <span data-i18n="ambienceLabel"></span>
-          </label>
-          <p class="hint" id="newtab-ambience-hint" data-i18n="ambienceHint"></p>
-        </div>
-        <!-- D5: disabled with its reason while nothing is transparent, so it is never a switch that changes nothing. -->
-        <label class="check" id="appearance-transparency" data-option="reduceTransparency">
-          <input type="checkbox" id="reduce-transparency" aria-describedby="reduce-transparency-why" data-focus-key="reduce-transparency">
-          <span><span data-i18n="reduceTransparencyLabel"></span><span class="hint" id="reduce-transparency-why"></span></span>
-        </label>
-        <p class="hint" id="appearance-locked" data-i18n="appearanceLocked" hidden></p>
-      </div>
-    </section>
-
-    <section class="section" id="shortcuts" aria-labelledby="shortcuts-heading" hidden>
-      <div class="section__head">
-        <h2 class="section__title" id="shortcuts-heading" data-i18n="shortcutsHeading">Shortcuts</h2>
-        <p class="scope" data-i18n="scopeProfile"></p>
-      </div>
-      <div class="card stack">
-        <p class="hint" data-i18n="shortcutsIntro"></p>
-        <details class="more" data-open-key="shortcutsIntroMore"><summary data-i18n="howItWorks"></summary><p class="hint" data-i18n="shortcutsIntroMore"></p></details>
-        <!-- UX6 (D7): keys change in the engine's extension shortcuts view, which checks clashes. -->
-        <ul class="list" id="shortcut-list" data-option="shortcuts"></ul>
-        <div class="card__footer">
-          <button class="button button--link button--go" type="button" id="shortcuts-browser" data-i18n="shortcutsBrowser"></button>
-        </div>
-      </div>
-    </section>
-
-    <!-- Search, profiles, routing, passwords, site exceptions and DNS are drawn by the settings page itself
+    <!-- The look, the keys, search, profiles, routing, passwords, site exceptions and DNS are drawn by the settings page itself
          (ADR 0011); an address of one of them (#routing, #profiles-new…) opens that page at its pane (nav.js). -->
 
     <section class="section" id="integrations" aria-labelledby="integrations-heading" hidden>

@@ -1,13 +1,11 @@
 /* What is left of the Shell's own settings page: the agents (their permissions, consent and activity) and
-   the desktop integrations, plus the three sections still waiting to be removed (layout, look, shortcuts).
+   the desktop integrations, plus the one section still waiting to be removed (layout).
    Everything else is drawn by the browser's settings page (ADR 0008, ADR 0011); nav.js sends an old address
    there. This page keeps no state of its own. */
 
 import { localize, t } from "../lib/i18n.js";
 import { announce, chip, confirmDialog, errorText, h, profileStates, rerender, stateBadge } from "../lib/ui.js";
 import { setUpAI } from "./ai.js";
-import { setUpAppearance } from "./appearance.js";
-import { setUpShortcuts } from "./shortcuts.js";
 import { setUpLayout } from "./layout.js";
 import { setUpNav } from "./nav.js";
 
@@ -192,9 +190,6 @@ localize();
 const ready = [];
 if (browser.nulavioLayout) {
   ready.push(setUpLayout());
-}
-if (browser.nulavioPersonalise) {
-  ready.push(setUpAppearance(), setUpShortcuts());
 }
 if (profiles && connect) {
   const where = () => profiles.list().then(renderWhere, console.error);

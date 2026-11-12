@@ -296,7 +296,9 @@
 
     // -- look: accent, more contrast, new-tab ambience, less transparency (NulavioPersonalise) ----
     const look = source(() => shell.NulavioPersonalise.state());
-    const lookSetting = (id, option, toValue = v => v) =>
+    const lookNow = () => (look.state.ready ? look.state.value : null);
+    const lookLocked = option => Boolean(lookNow()?.locked?.[option]);
+    const lookSetting = (id, option, toValue = v => v, special = {}) =>
       setting({
         id,
         setup: look.watch,
@@ -305,12 +307,35 @@
           shell.NulavioPersonalise.set(option, toValue(value)).then(look.refresh, look.refresh);
         },
         visible: () => look.state.ready,
-        disabled: () => Boolean(look.state.value?.locked?.[option]),
+        disabled: () => lookLocked(option),
+        ...special,
       });
+    // What the system already asks for is shown as in effect, with its reason, never as a switch that changes nothing.
+    const contrastBySystem = () => Boolean(lookNow()?.system.moreContrast || lookNow()?.system.forcedColors);
+    // Why the new tab's cards are solid already or cannot be anything else: the system asks, "Mais contraste" does it,
+    // or nothing is transparent (the soft background is off).
+    const solidBy = () => {
+      const now = lookNow();
+      if (!now) {
+        return null;
+      }
+      return now.system.reducedTransparency ? "system" : now.moreContrast || contrastBySystem() ? "contrast" : now.newtabAmbience ? null : "idle";
+    };
     lookSetting("nulavio-accent", "accent", value => value ?? "");
-    lookSetting("nulavio-more-contrast", "moreContrast", Boolean);
+    lookSetting("nulavio-more-contrast", "moreContrast", Boolean, {
+      get: () => Boolean(lookNow()?.moreContrast) || contrastBySystem(),
+      disabled: () => contrastBySystem() || lookLocked("moreContrast"),
+      getControlConfig: config => (contrastBySystem() ? { ...config, l10nId: "nulavio-more-contrast-system" } : config),
+    });
     lookSetting("nulavio-newtab-ambience", "newtabAmbience", Boolean);
-    lookSetting("nulavio-reduce-transparency", "reduceTransparency", Boolean);
+    lookSetting("nulavio-reduce-transparency", "reduceTransparency", Boolean, {
+      get: () => Boolean(lookNow()?.reduceTransparency) || ["system", "contrast"].includes(solidBy()),
+      disabled: () => Boolean(solidBy()) || lookLocked("reduceTransparency"),
+      getControlConfig: config => (solidBy() ? { ...config, l10nId: `nulavio-reduce-transparency-${solidBy()}` } : config),
+    });
+    // An option an administrator set cannot be changed here: said once, for the group.
+    const LOOK = ["accent", "moreContrast", "newtabAmbience", "reduceTransparency"];
+    setting({ id: "nulavio-look-locked", setup: look.watch, visible: () => LOOK.some(lookLocked) });
     look.refresh();
     added.cleanups.push(shell.NulavioPersonalise.subscribe(look.refresh));
 
@@ -1937,18 +1962,25 @@
         headingLevel: 2,
         items: [
           failureNote("nulavio-look-failed", look),
+          { id: "nulavio-look-locked", control: "moz-message-bar", l10nId: "nulavio-look-locked", controlAttrs: { type: "info" } },
           {
             id: "nulavio-accent",
             control: "moz-radio-group",
             l10nId: "nulavio-accent",
+            controlAttrs: { "data-option": "accent" }, // shared/options.json
             options: [
               { value: "mint", l10nId: "nulavio-accent-mint" },
               { value: "blue", l10nId: "nulavio-accent-blue" },
             ],
           },
-          { id: "nulavio-more-contrast", l10nId: "nulavio-more-contrast", control: "moz-toggle" },
-          { id: "nulavio-newtab-ambience", l10nId: "nulavio-newtab-ambience", control: "moz-toggle" },
-          { id: "nulavio-reduce-transparency", l10nId: "nulavio-reduce-transparency", control: "moz-toggle" },
+          { id: "nulavio-more-contrast", l10nId: "nulavio-more-contrast", control: "moz-toggle", controlAttrs: { "data-option": "moreContrast" } },
+          { id: "nulavio-newtab-ambience", l10nId: "nulavio-newtab-ambience", control: "moz-toggle", controlAttrs: { "data-option": "newtabAmbience" } },
+          {
+            id: "nulavio-reduce-transparency",
+            l10nId: "nulavio-reduce-transparency",
+            control: "moz-toggle",
+            controlAttrs: { "data-option": "reduceTransparency" },
+          },
         ],
       },
       // Where the engine's two-way "Disposição do navegador" was: one arrangement control, in Aparência.
@@ -2065,7 +2097,7 @@
           headingLevel: 2,
           items: [
             failureNote("nulavio-keys-failed", keys),
-            { id: "nulavio-keys", control: "moz-box-group", items: keyRows },
+            { id: "nulavio-keys", control: "moz-box-group", items: keyRows, controlAttrs: { "data-option": "shortcuts" } }, // shared/options.json
             { id: "nulavio-keys-change", l10nId: "nulavio-keys-change", control: "moz-box-button" },
             { id: "nulavio-keys-reset", l10nId: "nulavio-keys-reset", control: "moz-button" },
           ],

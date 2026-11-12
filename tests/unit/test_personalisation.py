@@ -191,7 +191,7 @@ def page_ids(relative: str) -> _Ids:
     source = (SHELL / relative).read_text(encoding="utf-8")
     if relative.endswith(".mjs"):
         # The settings page's own controls (ADR 0011): an item of a group, { id: "…", …, controlAttrs: { "data-option": "…" } }.
-        for element, option in re.findall(r'\{ id: "([\w-]+)"[^{}]*controlAttrs: \{[^{}]*"data-option": "(\w+)"', source):
+        for element, option in re.findall(r'\{\s*id: "([\w-]+)"[^{}]*controlAttrs: \{[^{}]*"data-option": "(\w+)"', source):
             parser.by_id[element] = option
         parser.marked = re.findall(r'"data-option": "(\w+)"', source)
     else:

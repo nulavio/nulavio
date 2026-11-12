@@ -44,6 +44,21 @@ nulavio-newtab-ambience =
 nulavio-reduce-transparency =
     .label = Reduce transparency
     .description = Makes the new tab's cards solid.
+# The same two switches when they cannot change anything, with the reason in place of the description.
+nulavio-more-contrast-system =
+    .label = More contrast
+    .description = Your system already asks for high contrast, and Nulavio uses its colours.
+nulavio-reduce-transparency-idle =
+    .label = Reduce transparency
+    .description = Nothing is transparent now: the soft background is off.
+nulavio-reduce-transparency-system =
+    .label = Reduce transparency
+    .description = Your system already asks for less transparency, so the cards are solid.
+nulavio-reduce-transparency-contrast =
+    .label = Reduce transparency
+    .description = “More contrast” already makes the cards solid.
+nulavio-look-locked =
+    .message = Some of these options are managed by your administrator.
 
 ## General (the engine's first pane, while accounts are turned off)
 

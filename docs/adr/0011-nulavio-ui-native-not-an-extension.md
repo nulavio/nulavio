@@ -218,3 +218,19 @@ Six sections of the Shell's own page were still reachable by their address after
 
 What the old page still holds: the agents (connecting one, permissions, consent, activity), the desktop integrations, and, until the next steps, Layout, Aparência and Atalhos by their address and its own copies of the emergency stop and of the assistant's form.
 
+## Step 12 (2026-11-12): the old Aparência and Atalhos sections go, and the switches say why
+
+Branch `agent/claude/refactor-settings-old-look`.
+
+![With the soft background off, "Reduzir transparência" says nothing is transparent (pt-BR light); with "More contrast" on, it is shown on with that reason (en-US dark)](../design/screenshots/experience-2026-11/settings-look-reasons-sheet.png)
+
+The settings page has drawn Nulavio's colours and keys since ADR 0008; the old sections stayed by their address and held three things the new group did not say. They are said there now, from the same reading (`NulavioPersonalise.state`), and the old sections are removed with their two scripts and 27 messages in each language.
+
+- **"Mais contraste"** is shown on, and cannot be changed, while the system itself asks for high contrast or forced colours; its description gives that reason. Nothing is saved as the person's choice.
+- **"Reduzir transparência"** is never a switch that changes nothing: with the soft background off it is disabled and says nothing is transparent; while the system asks for less transparency or "Mais contraste" is on, it is shown on with that reason.
+- **An option an administrator locked** is disabled, and the group says once that some options are managed.
+- **Density** is the engine's own group in the same pane ("Densidade da janela": Automático, Normal, Compacto, Toque), which writes the pref Nulavio's option wrote (`browser.uidensity`, cleared by Automático). `shared/options.json` declares the option with no control of Nulavio's; the other options are declared at their control in `settings/native/panes.mjs`, each carrying its `data-option`.
+- **Keys**: the page lists each key as the engine has it, one button opens the engine's shortcuts view on the Shell's card, and one restores the defaults (and tells the background, so the profile button's name follows). The old page's link to every browser shortcut is the engine's own group below.
+
+`test_appearance` (13 tests) and `test_shortcuts` (14) drive the settings page; what reaches a page of the Shell is read on what is left of the old page. Old addresses (`#appearance`, `#shortcuts`) open the settings page at their pane.
+

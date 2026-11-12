@@ -1,5 +1,5 @@
 {
-  "comment": "Every personalisation option Nulavio offers (UX6), read by NulavioPersonalise and by tests/unit/test_personalisation.py. No option may write a protection pref; the test proves it against the Guard's lists, the baseline and a guarded prefix set. kind: cosmetic | routing | command | quick-action. ui: the page (under browser/shell) and the id of the element that holds the control, which carries data-option=<id>; for a control the settings page draws (settings/native/panes.mjs), the id of its setting, whose control carries data-option=<id> too. prefType and prefValues (one per value, null = clear the pref, which is the default) are read by NulavioPersonalise for the options it writes.",
+  "comment": "Every personalisation option Nulavio offers (UX6), read by NulavioPersonalise and by tests/unit/test_personalisation.py. No option may write a protection pref; the test proves it against the Guard's lists, the baseline and a guarded prefix set. kind: cosmetic | routing | command | quick-action. ui: the page (under browser/shell) and the id of the element that holds the control, which carries data-option=<id>; for a control the settings page draws (settings/native/panes.mjs), the id of its setting, whose control carries data-option=<id> too. An option with no ui is offered by the engine's own control (density: \"Densidade da janela\" in the settings page writes the same pref). prefType and prefValues (one per value, null = clear the pref, which is the default) are read by NulavioPersonalise for the options it writes.",
   "options": [
     {
       "id": "layout",
@@ -62,9 +62,7 @@
       "default": "auto",
       "writer": "NulavioPersonalise",
       "labelKey": "densityLabel",
-      "ui": [
-        "settings/settings.html#appearance-density"
-      ]
+      "ui": []
     },
     {
       "id": "accent",
@@ -85,7 +83,7 @@
       "writer": "NulavioPersonalise",
       "labelKey": "accentLabel",
       "ui": [
-        "settings/settings.html#appearance-accent"
+        "settings/native/panes.mjs#nulavio-accent"
       ]
     },
     {
@@ -107,7 +105,7 @@
       "writer": "NulavioPersonalise",
       "labelKey": "moreContrastLabel",
       "ui": [
-        "settings/settings.html#appearance-contrast"
+        "settings/native/panes.mjs#nulavio-more-contrast"
       ]
     },
     {
@@ -129,7 +127,7 @@
       "writer": "NulavioPersonalise",
       "labelKey": "ambienceLabel",
       "ui": [
-        "settings/settings.html#appearance-ambience"
+        "settings/native/panes.mjs#nulavio-newtab-ambience"
       ]
     },
     {
@@ -151,7 +149,7 @@
       "writer": "NulavioPersonalise",
       "labelKey": "reduceTransparencyLabel",
       "ui": [
-        "settings/settings.html#appearance-transparency"
+        "settings/native/panes.mjs#nulavio-reduce-transparency"
       ]
     },
     {
@@ -169,7 +167,7 @@
       "writer": "engine",
       "labelKey": "shortcutsHeading",
       "ui": [
-        "settings/settings.html#shortcut-list"
+        "settings/native/panes.mjs#nulavio-keys"
       ]
     },
     {

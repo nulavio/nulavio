@@ -1,6 +1,7 @@
-"""UX6 Settings > Aparência on the real build: density, accent and "Mais contraste".
+"""UX6 Nulavio's look on the real build: density, accent, "Mais contraste", the new tab's background.
 
-Each option writes only the pref options.json declares, reaches the window, the Shell pages and the
+The options are in the settings page's Aparência pane (ADR 0008, ADR 0011; the density is the engine's own
+group there). Each writes only the pref options.json declares, reaches the window, the Shell pages and the
 about: pages, never the security, private-window or focus colours, and walking every value of every
 option leaves every other pref as it was. Headless, throwaway profile.
 """
@@ -14,6 +15,7 @@ import unittest
 from pathlib import Path
 
 import harness
+import settings_page
 from test_window_band import BAND_PROBE, assert_band
 
 # Times the engine records for its Safe Browsing list updates, written in the background.
@@ -23,6 +25,11 @@ ROOT = Path(__file__).resolve().parents[2]
 OPTIONS = json.loads((ROOT / "browser" / "shell" / "shared" / "options.json").read_text(encoding="utf-8"))["options"]
 APPEARANCE = {o["id"]: o for o in OPTIONS if o["writer"] == "NulavioPersonalise"}
 OPTION_PREFS = {pref for o in APPEARANCE.values() for pref in o["prefs"]}
+# The engine's own density group names "Normal" its own way.
+DENSITY = {"auto": "auto", "normal": "standard", "compact": "compact", "touch": "touch"}
+PERSONALISE = (
+    'ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioPersonalise.sys.mjs").NulavioPersonalise'
+)
 
 USER_PREFS = """
 const out = {};
@@ -73,12 +80,19 @@ class AppearanceTest(unittest.TestCase):
     # -- helpers -----------------------------------------------------------------------------------
 
     def open(self) -> None:
-        self.m.navigate(self.base + "settings/settings.html#appearance")
+        """The settings page at Aparência, with Nulavio's colours drawn."""
+        settings_page.open_pane(self.m, "appearance")
+        settings_page.wait_control(self.m, "nulavio-accent")
+
+    def shell_page(self) -> None:
+        """A page of the Shell, to see what reaches them (what is left of its own settings page)."""
+        self.m.navigate(self.base + "settings/settings.html#integrations")
         ready = "return document.documentElement.dataset.ready === 'true';"
         self.assertTrue(harness.wait_until(lambda: self.m.execute(ready), 20))
 
-    def choose(self, selector: str) -> None:
-        self.m.send("WebDriver:ElementClick", {"id": self.m.find_element(f"label:has(> {selector})")})
+    def switch(self, control: str) -> None:
+        settings_page.wait_control(self.m, control, lambda now: now["shown"] and not now["disabled"])
+        settings_page.click(self.m, f"#{control}")
 
     def pref(self, name: str):
         return self.m.chrome(
@@ -99,20 +113,29 @@ class AppearanceTest(unittest.TestCase):
 
     def test_01_density_writes_only_uidensity_and_automatic_clears_it(self):
         self.open()
-        self.assertEqual(self.m.execute("return document.querySelector('input[name=density]:checked').value;"), "auto")
+        self.assertEqual(settings_page.wait_control(self.m, "uiDensity")["value"], "auto")
         for value, stored in (("compact", 1), ("touch", 2), ("normal", 0), ("auto", None)):
-            self.choose(f'input[name="density"][value="{value}"]')
+            settings_page.choose(self.m, "uiDensity", DENSITY[value])
             self.wait_pref("browser.uidensity", stored)
             if stored is not None:
                 window = self.m.chrome("return document.documentElement.getAttribute('uidensity');")
                 self.assertEqual(window, {1: "compact", 2: "touch", 0: None}[stored])
 
     def test_02_accent_reaches_the_window_shell_and_about_pages_but_not_security_private_or_focus(self):
-        self.open()
+        self.shell_page()
         base_window = self.m.chrome(COLOURS)
         base_page = self.m.execute(COLOURS)
-        self.choose('input[name="accent"][value="blue"]')
+        self.open()
+        settings_page.choose(self.m, "nulavio-accent", "blue")
         self.wait_pref("nulavio.appearance.accent", "blue")
+        accent_var = "return getComputedStyle(document.documentElement).getPropertyValue('--color-accent-primary');"
+
+        def about():
+            return self.m.execute(accent_var)
+
+        self.assertTrue(harness.wait_until(lambda: "#2D64B5" in about(), 10), about())
+        self.shoot("about-preferences-blue")
+        self.shell_page()
         page = lambda: self.m.execute(COLOURS)  # noqa: E731
         self.assertTrue(harness.wait_until(lambda: page()["accent"] == "#2D64B5", 10), page())
         self.assertEqual(self.m.execute("return document.documentElement.dataset.accent;"), "blue")
@@ -124,64 +147,58 @@ class AppearanceTest(unittest.TestCase):
         self.assertIn("#2D64B5", window["accent"])
         for key in ("focus", "acting", "privateAccent"):
             self.assertEqual(window[key], base_window[key], key)
-        self.m.navigate("about:preferences")
-        accent_var = "return getComputedStyle(document.documentElement).getPropertyValue('--color-accent-primary');"
-
-        def about():
-            return self.m.execute(accent_var)
-
-        self.assertTrue(harness.wait_until(lambda: "#2D64B5" in about(), 10), about())
-        self.shoot("about-preferences-blue")
         self.open()
-        self.choose('input[name="accent"][value="mint"]')
+        settings_page.choose(self.m, "nulavio-accent", "mint")
         self.wait_pref("nulavio.appearance.accent", None)
+        self.shell_page()
         self.assertTrue(harness.wait_until(lambda: page()["accent"] == base_page["accent"], 10), page())
 
     def test_03_more_contrast_raises_text_and_borders_in_the_window_and_pages(self):
         self.open()
-        self.m.send("WebDriver:ElementClick", {"id": self.m.find_element("label:has(> #more-contrast)")})
+        self.switch("nulavio-more-contrast")
         self.wait_pref("nulavio.appearance.moreContrast", True)
+        self.shoot("settings-more-contrast")
+        self.shell_page()
         page = lambda: self.m.execute(COLOURS)  # noqa: E731
         self.assertTrue(harness.wait_until(lambda: page()["text2"] == "#23495A", 10), page())
         self.assertEqual(self.m.execute("return document.documentElement.dataset.contrast;"), "more")
         card = self.m.execute(
-            "const c = getComputedStyle(document.querySelector('#appearance .card'));"
+            "const c = getComputedStyle(document.querySelector('#integrations .card'));"
             "return [c.borderTopWidth, c.borderTopColor, getComputedStyle(document.body).color];"
         )
         self.assertEqual(card[0], "1px")
         self.assertEqual(card[1], card[2], "cards are framed in the text colour")
         self.assertIn("#23495A", self.m.chrome(COLOURS)["text2"])
-        self.shoot("settings-more-contrast")
-        self.m.send("WebDriver:ElementClick", {"id": self.m.find_element("label:has(> #more-contrast)")})
+        self.open()
+        self.switch("nulavio-more-contrast")
         self.wait_pref("nulavio.appearance.moreContrast", None)
 
     def test_04_the_system_asking_for_high_contrast_turns_the_switch_on_with_its_reason(self):
         self.open()
         self.m.chrome("Services.prefs.setIntPref('ui.useAccessibilityTheme', 1);")
         try:
-            state = lambda: self.m.execute(  # noqa: E731
-                "const s = document.getElementById('more-contrast');"
-                "return [s.checked, s.disabled, document.getElementById('more-contrast-system').hidden,"
-                " document.documentElement.dataset.contrast];"
-            )
-            self.assertTrue(harness.wait_until(lambda: state() == [True, True, False, "more"], 10), state())
+            by_system = lambda now: now["shown"] and now["pressed"] and now["disabled"]  # noqa: E731
+            switch = settings_page.wait_control(self.m, "nulavio-more-contrast", by_system)
+            self.assertEqual(switch["description"], "O seu sistema já pede alto contraste, e o Nulavio usa as cores dele.")
             self.assertIsNone(self.pref("nulavio.appearance.moreContrast"), "the system's request is not saved as a choice")
         finally:
             self.m.chrome("Services.prefs.clearUserPref('ui.useAccessibilityTheme');")
-        self.assertTrue(
-            harness.wait_until(lambda: not self.m.execute("return document.getElementById('more-contrast').disabled;"), 10)
-        )
+        free = settings_page.wait_control(self.m, "nulavio-more-contrast", lambda now: not now["disabled"] and not now["pressed"])
+        self.assertIn("Textos e bordas mais fortes", free["description"])
 
     def test_05_walking_every_option_changes_only_its_own_prefs(self):
         """UX6 done criterion: no option can turn a protection off. Every value of every appearance option,
-        through Settings: at each step only the options' own prefs differ from the start, and at the end
+        through the settings page: at each step only the options' own prefs differ from the start, and at the end
         nothing does. The one exception is the engine's own record of when it last fetched the Safe
         Browsing lists, which a background update can write at any moment (it failed a run that way)."""
         self.open()
         before = self.snapshot()
         walk = [("density", v) for v in APPEARANCE["density"]["values"]] + [("accent", v) for v in APPEARANCE["accent"]["values"]]
         for option, value in walk:
-            self.choose(f'input[name="{option}"][value="{value}"]')
+            if option == "density":
+                settings_page.choose(self.m, "uiDensity", DENSITY[value])
+            else:
+                settings_page.choose(self.m, "nulavio-accent", value)
             pref = APPEARANCE[option]["prefs"][0]
             expected = APPEARANCE[option]["prefValues"][APPEARANCE[option]["values"].index(value)]
             self.wait_pref(pref, expected)
@@ -192,21 +209,21 @@ class AppearanceTest(unittest.TestCase):
             self.assertEqual(now["permissions"], before["permissions"])
         # The ambience first: "Reduzir transparência" only applies while something is transparent.
         for switch, pref in (
-            ("#newtab-ambience", "nulavio.appearance.newtabAmbience"),
-            ("#reduce-transparency", "nulavio.appearance.reduceTransparency"),
-            ("#more-contrast", "nulavio.appearance.moreContrast"),
+            ("nulavio-newtab-ambience", "nulavio.appearance.newtabAmbience"),
+            ("nulavio-reduce-transparency", "nulavio.appearance.reduceTransparency"),
+            ("nulavio-more-contrast", "nulavio.appearance.moreContrast"),
         ):
-            self.m.send("WebDriver:ElementClick", {"id": self.m.find_element(f"label:has(> {switch})")})
+            self.switch(switch)
             self.wait_pref(pref, True)
             now = self.snapshot()
             changed = {k for k in set(now["prefs"]) | set(before["prefs"]) if now["prefs"].get(k) != before["prefs"].get(k)}
             changed = {k for k in changed if not SAFE_BROWSING_CLOCK.fullmatch(k)}
             self.assertLessEqual(changed, OPTION_PREFS, switch)
-        for switch in ("#more-contrast", "#reduce-transparency", "#newtab-ambience"):
-            self.m.send("WebDriver:ElementClick", {"id": self.m.find_element(f"label:has(> {switch})")})
+        for switch in ("nulavio-more-contrast", "nulavio-reduce-transparency", "nulavio-newtab-ambience"):
+            self.switch(switch)
             time.sleep(0.3)
-        self.choose('input[name="density"][value="auto"]')
-        self.choose('input[name="accent"][value="mint"]')
+        settings_page.choose(self.m, "uiDensity", "auto")
+        settings_page.choose(self.m, "nulavio-accent", "mint")
         for pref in OPTION_PREFS:
             self.wait_pref(pref, None)
         after = self.snapshot()
@@ -252,7 +269,7 @@ class AppearanceTest(unittest.TestCase):
             self.m.chrome("Services.prefs.clearUserPref(arguments[0]);", [pref])
 
     def test_07_a_change_reaches_every_open_shell_page(self):
-        self.open()
+        self.shell_page()
         settings = self.m.send("WebDriver:GetWindowHandle")["value"]
         handles = set(self.m.window_handles())
         self.m.chrome(
@@ -280,12 +297,15 @@ class AppearanceTest(unittest.TestCase):
         self.m.send("WebDriver:CloseWindow")
         self.m.switch_to(settings)
 
-    def test_08_captures_the_section_in_both_themes_and_accents(self):
+    def test_08_captures_the_group_in_both_themes_and_accents(self):
         self.open()
-        painted = "return document.documentElement.dataset.accent;"
-        for accent in ("mint", "blue"):
-            self.m.execute("return browser.nulavioPersonalise.setAccent(arguments[0]);", [accent])
-            self.assertTrue(harness.wait_until(lambda want=accent: self.m.execute(painted) == want, 10))
+        accent_var = "return getComputedStyle(document.documentElement).getPropertyValue('--color-accent-primary');"
+        for accent, colour in (("blue", "#2D64B5"), ("mint", None)):
+            settings_page.choose(self.m, "nulavio-accent", accent)
+            self.wait_pref("nulavio.appearance.accent", colour and accent)
+            if colour:
+                self.assertTrue(harness.wait_until(lambda colour=colour: colour in self.m.execute(accent_var), 10))
+            self.m.chrome(settings_page.DOC + 'd.getElementById("nulavio-accent").scrollIntoView({ block: "center" });')
             self.shoot(f"settings-appearance-{accent}")
 
     def newtab(self) -> None:
@@ -363,33 +383,35 @@ class AppearanceTest(unittest.TestCase):
 
     def test_11_reduce_transparency_says_why_when_it_cannot_change_anything(self):
         self.open()
-        why = lambda: self.m.execute(  # noqa: E731
-            "const c = document.getElementById('reduce-transparency');"
-            "return [c.disabled, c.checked, document.getElementById('reduce-transparency-why').textContent];"
-        )
-        self.assertEqual(why(), [True, False, self.message("reduceTransparencyIdle")])
-        self.m.send("WebDriver:ElementClick", {"id": self.m.find_element("label:has(> #newtab-ambience)")})
-        self.assertTrue(harness.wait_until(lambda: why() == [False, False, self.message("reduceTransparencyHint")], 10), why())
-        self.m.send("WebDriver:ElementClick", {"id": self.m.find_element("label:has(> #more-contrast)")})
-        self.assertTrue(harness.wait_until(lambda: why() == [True, True, self.message("reduceTransparencyContrast")], 10), why())
+
+        def why(want):
+            matches = lambda now: [now["disabled"], bool(now["pressed"]), now["description"]] == want  # noqa: E731
+            return settings_page.wait_control(self.m, "nulavio-reduce-transparency", matches)
+
+        why([True, False, "Nada está transparente agora: o fundo suave está desligado."])
+        self.switch("nulavio-newtab-ambience")
+        why([False, False, "Deixa sólidos os cartões da nova aba."])
+        self.switch("nulavio-more-contrast")
+        why([True, True, "“Mais contraste” já deixa os cartões sólidos."])
+        self.assertIsNone(self.pref("nulavio.appearance.reduceTransparency"), "shown as in effect, not saved as a choice")
 
     def test_12_a_value_an_administrator_locked_is_the_one_shown(self):
-        """Review: a locked accent (autoconfig lockPref) paints the window blue; Settings and Shell pages say so too."""
+        """Review: a locked accent (autoconfig lockPref) paints the window blue; the settings page and Shell pages say so too."""
         self.m.chrome(
             "Services.prefs.getDefaultBranch('').setStringPref('nulavio.appearance.accent', 'blue');"
             "Services.prefs.lockPref('nulavio.appearance.accent');"
         )
         try:
             self.open()
-            state = lambda: self.m.execute(  # noqa: E731
-                "const r = document.querySelector('input[name=accent]:checked');"
-                "return [r?.value, r?.disabled, document.documentElement.dataset.accent,"
-                " document.getElementById('appearance-locked').hidden];"
-            )
-            self.assertTrue(harness.wait_until(lambda: state() == ["blue", True, "blue", False], 10), state())
+            locked = lambda now: now["shown"] and now["value"] == "blue" and now["disabled"]  # noqa: E731
+            settings_page.wait_control(self.m, "nulavio-accent", locked)
+            note = settings_page.wait_control(self.m, "nulavio-look-locked")
+            self.assertEqual(note["message"], "Algumas destas opções são gerenciadas pelo administrador.")
             # The window is painted a moment after the page says so (it failed one run in three on a busy machine).
             accent = lambda: self.m.chrome(COLOURS)["accent"]  # noqa: E731
             self.assertTrue(harness.wait_until(lambda: "#2D64B5" in accent(), 10), accent())
+            self.shell_page()
+            self.assertEqual(self.m.execute("return document.documentElement.dataset.accent;"), "blue")
         finally:
             self.m.chrome(
                 "Services.prefs.unlockPref('nulavio.appearance.accent');"
@@ -399,24 +421,19 @@ class AppearanceTest(unittest.TestCase):
     def test_12b_a_locked_density_reads_as_the_engine_draws_it(self):
         """Review: a policy lock writes the default branch only. The engine (gUIDensity) then compacts
         short windows on top of that default: a locked Normal is Automático, a locked Toque is Toque
-        (the window draws it), both disabled."""
-        state = lambda: self.m.execute(  # noqa: E731
-            "const r = document.querySelector('input[name=density]:checked'); return [r?.value, r?.disabled];"
-        )
+        (the window draws it). The module says so to whoever asks."""
+        read = f"return {PERSONALISE}.state().then(state => [state.density, state.locked.density]);"
         drawn = "return document.documentElement.getAttribute('uidensity') || 'normal';"
         lock = "Services.prefs.getDefaultBranch('').setIntPref('browser.uidensity', arguments[0]);"
         for locked, shown, window in ((0, "auto", "normal"), (2, "touch", "touch")):
             with self.subTest(locked=locked):
                 self.m.chrome(lock + "Services.prefs.lockPref('browser.uidensity');", [locked])
                 try:
-                    self.open()
-                    self.assertTrue(harness.wait_until(lambda want=shown: state() == [want, True], 10), state())
+                    reads = lambda want=shown: self.m.chrome(read) == [want, True]  # noqa: E731
+                    self.assertTrue(harness.wait_until(reads, 10), self.m.chrome(read))
                     self.assertEqual(self.m.chrome(drawn), window)  # 1366x768: not short, so no auto-compact
                 finally:
                     self.m.chrome("Services.prefs.unlockPref('browser.uidensity');" + lock, [0])
-
-    def message(self, key: str) -> str:
-        return self.m.execute("return browser.i18n.getMessage(arguments[0]);", [key])
 
     def shoot(self, name: str) -> None:
         for dark in (0, 1):

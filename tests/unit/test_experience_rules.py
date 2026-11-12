@@ -106,7 +106,7 @@ class ExperienceRulesTest(unittest.TestCase):
         # A section the settings page draws itself is gone from the old page; its address still opens the right pane.
         nav = (SHELL / "settings/nav.js").read_text(encoding="utf-8")
         redirected = set(re.findall(r'"([a-z]+)"', nav.split("export const MOVED = [")[1].split("]")[0]))
-        self.assertEqual(redirected, mapped - sections - {"layout", "appearance", "shortcuts"})
+        self.assertEqual(redirected, mapped - sections)
         self.assertFalse(redirected & sections, "a section is either in the old page or sent to the settings page")
 
     def test_fluent_words_exist_in_both_languages(self):

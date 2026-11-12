@@ -18,6 +18,9 @@ import harness
 
 # ADR 0011: what the settings page draws itself is gone from this page; its old address opens that page at this pane.
 MOVED = {
+    "#appearance": "appearance",
+    "#appearance-accent": "appearance",
+    "#shortcuts": "tabsBrowsing",
     "#dns": "privacy",
     "#exceptions": "privacy",
     "#passwords": "passwordsAutofill",
@@ -29,8 +32,6 @@ MOVED = {
 }
 SCOPES = {
     "layout": "scopeProfile",
-    "appearance": "scopeProfile",
-    "shortcuts": "scopeProfile",
     "ai": "scopeAllProfiles",
     "integrations": "scopeComputer",
 }
@@ -146,9 +147,8 @@ class SettingsPanesTest(unittest.TestCase):
         self.assertEqual(groups, [self.message(k) for k in ("scopeAllProfiles", "scopeComputer")])
         # Every entry of the rail points to a section that exists, in the order of its group.
         entries = self.m.execute("return [...document.querySelectorAll('.settings-nav a')].map(a => a.dataset.section);")
-        # ADR 0008: Layout, Aparência and Atalhos are drawn by the settings page itself; this page keeps no entry for them.
-        native = ("layout", "appearance", "shortcuts")
-        self.assertEqual(entries, [section for section in SCOPES if section not in native])
+        # ADR 0008: Layout is drawn by the settings page itself; this page keeps no entry for it.
+        self.assertEqual(entries, [section for section in SCOPES if section != "layout"])
         # ...and its own search does not offer them either: one option, one place.
         self.type_search(self.message("layoutHeading").lower())
         self.assertTrue(harness.wait_until(lambda: self.view()["view"] == "search", 5))

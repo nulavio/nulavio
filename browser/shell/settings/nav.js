@@ -19,7 +19,7 @@ let active = null;
 // ADR 0011: the sections the settings page draws itself are gone from this page. An address of one of them
 // (#routing, #profiles-new: a bookmark, a tab left open, a link not yet rewritten) opens that page at the
 // pane that holds it, in this tab.
-export const MOVED = ["search", "profiles", "routing", "passwords", "exceptions", "dns"];
+export const MOVED = ["appearance", "shortcuts", "search", "profiles", "routing", "passwords", "exceptions", "dns"];
 
 function moved(id) {
   return MOVED.find(section => id === section || id.startsWith(`${section}-`)) ?? null;
