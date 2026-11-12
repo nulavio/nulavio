@@ -1,6 +1,6 @@
 # ADR 0011 — Nulavio's own interface reads as the browser, not as an extension
 
-- **Status:** Proposed (2026-11-11). The maintainer asked for this direction on 2026-11-11; the first two steps are built (below). Not merged.
+- **Status:** Accepted (2026-11-12). The maintainer asked for this direction on 2026-11-11 and follows the recommendations under "What was undecided"; steps 1 to 15 are built (below). Not merged.
 - **Related:** [ADR 0001](0001-engine-selection.md) (patch policy), [ADR 0008](0008-one-settings-page.md) (one settings page), [extension model](../architecture/extension-model.md).
 
 ## Context
@@ -32,7 +32,9 @@ The split exists because of ADR 0001's patch policy ("patches only for what pref
 5. **How those pages look in the address bar is a separate, small question**, listed for the maintainer: the label patch, the `about:` addresses with one hashed inline script per page, or leaving it. They are not made privileged pages.
 6. **Code moves into the engine tree only piece by piece**, when a piece cannot be done from a module, a theme sheet or the settings registry. Each such piece is a patch with its own reason, as today.
 
-## What stays undecided (maintainer)
+## What was undecided (maintainer; decided on 2026-11-12 as recommended)
+
+The label patch is the chosen way and is **not built**: it needs an engine build to verify. No Shell page becomes privileged.
 
 - **The address bar on the security moments.** Recommendation: the label patch first (it is one condition in one engine file, and the result reads like the browser's own pages); `about:` addresses only if the inline script and its hash are accepted as an exception to the Shell's rules. Either needs a real build to verify, so neither is done here.
 - **Whether any Shell page should become privileged.** Recommendation: none. The boundary is a protection; removing it is the kind of change this project lists instead of making.
@@ -240,7 +242,7 @@ Branch `agent/claude/refactor-settings-old-assistant`.
 
 The form for the assistant's service (step 10 put it in the settings page) is removed from the Shell's page. Its old address (`settings.html#ai-assistant`) opens the "Assistente e IA" pane, and so do the assistant panel's own "settings" button and the message shown when the assistant was revoked. `test_assistant_ui` stores the key through the settings page with its stand-in keyring; `test_ai_ui` configures the assistant there and finds it listed with the other agents.
 
-The emergency stop is still in two places, on purpose for now: the switch in the settings page (step 10) and the switch on the agents' page, next to the agents it stops. Removing the second makes stopping one step longer from the page where a person watches the agents; that is a protection's reach, so it is the maintainer's decision (recommendation: keep both; they write the same state through the same module and each follows the other).
+The emergency stop is still in two places, on purpose for now: the switch in the settings page (step 10) and the switch on the agents' page, next to the agents it stops. Removing the second makes stopping one step longer from the page where a person watches the agents; that is a protection's reach, so it was the maintainer's decision. Decided on 2026-11-12: both stay (they write the same state through the same module and each follows the other).
 
 What the Shell's own page holds after this: the agents (connecting one, permissions, consent, pause, revoke, the emergency stop, the activity record), the desktop integrations, and Layout by its address until its tests are ported.
 

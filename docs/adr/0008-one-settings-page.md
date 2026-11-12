@@ -1,6 +1,6 @@
 # ADR 0008 — One settings page: Nulavio's options inside the engine's about:preferences
 
-- **Status:** Proposed (2026-11-11). The proof of concept and slice 1 (the host hardened, the journey's navigation, every way in) work on the engine, below. Not merged.
+- **Status:** Accepted (2026-11-12): the maintainer follows the recommendations listed under "What was undecided". The proof of concept and slice 1 (the host hardened, the journey's navigation, every way in) work on the engine, below; ADR 0011 carries the rest. Not merged.
 - **Related:** [references](../design/references/2026-11/README.md), the frontend audit of 2026-11 (pull request #41), [ADR 0003](0003-nulavio-profiles-and-routing.md), [ADR 0007](0007-ai-bridge.md), [UX principles](../design/ux-principles.md).
 
 ## Context
@@ -64,7 +64,9 @@ Firefox 160's settings page is built from data: a pane is a list of groups (`Set
    - *Not embedded*: the existing security moments (unlock, create a protected profile, agent request, Guard review) stay their own pages with the band naming them. Settings link to them; they are not settings.
 8. **Entry points.** Every "Configurações" entry of the Shell (new tab, first run, profile menu, quick action) opens `about:preferences`, at the pane it names, in the window that asked. A Shell page cannot link to that address, so it goes through one bridge (`nulavioPersonalise.openSettings`) that takes a name from a fixed list and never an address. The Shell's own page (`settings/settings.html`) stops being a settings page with its own navigation: it holds the detail screens not yet drawn natively (profiles, routing, assistant, search engines, password manager, site exceptions, DNS, integrations), each reached from its pane, and its first entry goes back to that pane in the same tab. Entry points that name one of those screens (the band's protection and routing marks, the assistant's panel) still open it directly.
 
-## What stays undecided (maintainer)
+## What was undecided (maintainer; decided on 2026-11-12 as recommended)
+
+DNS is built (ADR 0011, step 9). The management line and the panes of unavailable features are decided and **not built yet**: until they are, the line shows for everyone and no pane is hidden.
 
 - **DNS: two controls for one preference.** The engine's privacy pane has its own "DNS sobre HTTPS" group (four levels, the engine's words); Nulavio's first run and its detail screen ask the same thing as three choices in plain words, with Quad9 and Mullvad next to the engine's default. Both write `network.trr.mode`. Slice 1 leaves the engine's group alone (decision 6) and does not add a second control next to it, so the plain-words version is reachable from the first run only. Recommendation: put Nulavio's three choices where the engine's summary box is and keep the engine's advanced screen behind it; it replaces a group of a protection pane, so it waits for a decision.
 

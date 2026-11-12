@@ -1,6 +1,6 @@
 # ADR 0009 — Immersive layout: the chrome hides, the band keeps the origin on screen
 
-- **Status:** Proposed (2026-11-11), with a prototype on the engine (below). Not merged. One point needs the maintainer (see "Decision needed").
+- **Status:** Accepted (2026-11-12): the maintainer follows the recommendation under "Decided" below, and the guarantees are in the [UX principles](../design/ux-principles.md). Built as a prototype and a controller on the engine (below). Not merged.
 - **Related:** [references](../design/references/2026-11/README.md), [UX principles](../design/ux-principles.md), [design system: UX3A band](../design/design-system.md), [ADR 0008](0008-one-settings-page.md).
 
 ## Context
@@ -42,11 +42,13 @@ Nulavio already has something the references lack: the band, a row only the brow
    - At startup and after session restore, until the band, its listeners and the selected tab's committed identity are ready. A restored preference alone hides nothing.
 7. **Mechanism.** No engine patch. CSS draws the two states (in the band's sheet: the toolbar and the tab list leave the flow and return over the page; times from the motion tokens, `hold` 600 ms; no transition under reduced motion). A **per-window controller** in `NulavioWindow` decides them, because CSS alone cannot: it computes eligibility (decision 6) and keeps a set of *holds* that keep the chrome shown: pointer, keyboard focus, a pin toggled from the band (the way in for touch and for anyone who cannot hover), the address results, every open panel and its anchor, permission, authentication and before-unload prompts, download warnings, a drag over the edge, an extension popup. The chrome is shown **before** the engine positions a prompt on it and stays for the prompt's whole life. It leaves only when no hold remains. The band's origin comes from one snapshot of the selected tab (committed URI, principal, the engine's identity verdict), taken on location, security and tab-switch events; a stale answer is dropped, and while there is none the chrome is shown.
 
-## Decision needed (maintainer)
+## Decided (maintainer, 2026-11-12)
 
 Immersive hides the engine's tracking-protection and permission icons while the toolbar is out of view. The origin, the connection state, the profile and active camera/microphone/screen use stay on screen in the band; everything else is one pointer move or one key away, and the browser shows the toolbar itself for every prompt.
 
 This contradicts the letter of two current principles ("a layout never hides them", "there is no toolbar autohide"). **Recommendation: accept it for an opt-in mode, with the guarantees written into the principle** ("in Immersive the band carries the origin and the connection state; the toolbar is back by itself for every prompt, while a device is shared and whenever the band cannot name the page"). The alternative is option C, which Nulavio already ships, and the request stays unanswered.
+
+**Decided on 2026-11-12: accepted as recommended.** The two principle rows carry the exception and its guarantees. What the controller does not do yet (a pin for touch, tabs on top and on the right, the security-visibility matrix repeated with the mode on) is still to build, and the mode stays off by default.
 
 ## Independent review (2026-11-11)
 
