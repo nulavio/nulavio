@@ -323,9 +323,19 @@ class NativeSettingsTest(unittest.TestCase):
         self.assertTrue(harness.wait_until(lambda: self.m.chrome(READY) and self.m.chrome(NAV)["extended"] == "1", 20))
         self.assertEqual(self.groups("paneAppearance")[0], "nulavioLayout")
         # A second window: its page follows that window's layout, not the first one's.
+        # (Once the window's own start-up is over: until then it loads its home page into whatever tab is selected,
+        # and a tab opened at "load" lost its page to it about one time in three.)
         second = self.m.chrome("""
           const win = window.OpenBrowserWindow();
-          return new Promise(resolve => win.addEventListener("load", () => resolve(true), { once: true }));
+          return new Promise(resolve => {
+            const started = subject => {
+              if (subject === win) {
+                Services.obs.removeObserver(started, "browser-delayed-startup-finished");
+                resolve(true);
+              }
+            };
+            Services.obs.addObserver(started, "browser-delayed-startup-finished");
+          });
         """)
         self.assertTrue(second)
         script = """

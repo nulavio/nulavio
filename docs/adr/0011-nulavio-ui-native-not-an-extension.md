@@ -149,5 +149,9 @@ Branch `agent/claude/feat-settings-filter-state`.
 - The words that promised Nulavio "never alters" uBlock Origin's data now say exactly what happens: it reads which lists are on, and changes nothing.
 - **A defect found on the way, present since ADR 0008's first slice**: the engine hands a control's `getControlConfig` the config it returned the time before, so words chosen for one state stayed when a later state returned the config as it came. "Sem tecla" could stay after a key was set, and "o uBlock Origin não está ligado" after it was turned on again. Every control of this module now starts from the config its group declared (`fromFirst` in `setting()`), so no control can keep a previous state's words. `test_06a` turns uBlock Origin off and on again with the page open.
 
+![The row in "Proteções do Nulavio" on a profile with no cookie-notice list on](../design/screenshots/experience-2026-11/settings-filter-state.png)
+
+- **A test that failed one time in three, explained.** `test_settings_native` `test_05` opened a tab in a second window as soon as the window fired "load". Until a window's own start-up is over, the engine loads the window's home page into whatever tab is selected, so the settings page was sometimes never loaded there (a probe opening a window sixteen times showed the tab holding `about:home`, and no settings document created). The test now waits for the window's start-up, as a person's first click does; the page itself was not at fault. Thirty-two rounds of the probe and six runs of the test passed after the change.
+
 `test_settings_native` `test_06a`: the module's answer equals what uBlock Origin's storage holds, and reading leaves it as it was; the row's three states (hidden, shown, not read) and off and on again. `test_experience_rules`: the four list names are uBlock Origin's own cookie-notice lists (compared with its registry when the tree has it), the storage is opened once and never written.
 
