@@ -11,7 +11,7 @@ Everything Nulavio pins, except the Firefox engine, and how it stays current. Th
 | Gradle | `android/gradle/wrapper/gradle-wrapper.properties` | version and `distributionSha256Sum` | Dependabot, monthly | the daily watch (OSV lists Gradle's own advisories under "Bitnami") |
 | Companion libraries and the Android Gradle plugin | `android/*/build.gradle.kts` | version, SHA-256 of every artifact in `android/gradle/verification-metadata.xml`, and the APK's classpath in `android/app/gradle.lockfile` (`nv1` in `android/nv1/gradle.lockfile`) | Dependabot, monthly, plus a local step (below) | the daily watch, for every component in the metadata (213 today), build-time ones included |
 | Base images | `ci/containers/*.Containerfile` | `tag@sha256:digest`; the release scripts read it there (`scripts/release/base_image.sh`) | Dependabot, monthly (new digest of the same release) | the daily watch reports a newer build |
-| Extensions | `browser/distribution/extensions.lock.json` | version and SHA-256 | `scripts/upstream/refresh_extensions_lock.py`, with review | the daily watch: Mozilla's blocklist, a replaced file, more than 30 days behind AMO |
+| Extensions | `browser/distribution/extensions.lock.json` | version and SHA-256 | `scripts/upstream/refresh_extensions_lock.py`, with review; it also re-copies uBlock Origin's list registry (`browser/distribution/ublock-origin/`), which new profiles start from | the daily watch: Mozilla's blocklist, a replaced file, more than 30 days behind AMO |
 | Claude Code and Bun (AI review only) | `CLAUDE_CODE_VERSION` and `BUN_VERSION` in `.github/workflows/ai-review.yml` | version and SHA-256 | by hand, with the pinned action ([updating the pins](../process/pull-requests.md#updating-the-pins)) | the daily watch, as the npm packages `@anthropic-ai/claude-code` and `bun` (Dependabot cannot see these pins); it stops with an error if either line is gone |
 | Security scanners | `scripts/security/fetch_tools.sh` | version and SHA-256 | by hand ([code scanning](code-scanning.md#updating-a-tool)) | none yet: read the tool's advisories when bumping it (next steps) |
 
@@ -101,6 +101,32 @@ skopeo inspect --format '{{.Digest}}' docker://docker.io/library/ubuntu:26.10
 ```
 
 Put the digest after the tag in the Containerfiles (the same digest for the same tag), run the unit tests, and run `check_rpm.sh` and `check_deb.sh` (or `rehearse_release.sh`).
+
+## uBlock Origin's default lists
+
+A new profile starts with the lists of `browser/distribution/content-filter.json` switched on in uBlock Origin ([how](../architecture/extension-model.md#the-lists-a-new-profile-starts-with)). That rests on uBlock Origin's own code, which Nulavio does not control: an older managed setting (`adminSettings.assetsBootstrapLocation`), the rule that only `scheme://` is an external address, and the way `off` decides what a new profile selects. The policy always installs the **pinned** version first, so the lists are switched on by the version that was tested; the risk there is in moving the pin. uBlock Origin then updates itself from AMO like any extension (on 2026-11-12 the engine had 1.76.0 downloaded within the first minute of a first session, and it ran from the next start at the latest), and what a newer version does with lists that are already selected is not something the suite sees: it runs with add-on updates off.
+
+**How it is noticed, in the order it would happen:**
+
+1. `refresh_extensions_lock.py` reads the new package for that code and prints `! THE DEFAULT LISTS MAY NO LONGER APPLY`, naming the file and the line that is gone (`BOOTSTRAP_MARKERS`). It also says when a default list is gone or already on upstream.
+2. `refresh_extensions_lock.py --check-registry` gets the pinned package (from the local cache or from AMO, checked against the lock's SHA-256) and compares the registry copy and the licence with it byte for byte, and reads it for the same code. CI runs it on every change and the release rehearsal runs it before it writes `policies.json`; it fails when the copy differs and when the package cannot be had. This is the check that the copy is uBlock Origin's: the checksum in `content-filter.json`, which the build compares the copy with, sits beside the copy and can be edited with it. `tests/unit/test_track_b.py` makes the same comparison when the package is in the local cache.
+3. `tests/integration/test_content_filter.py` starts a new profile with the real package: this is the proof. Run it on every change of uBlock Origin's pin.
+
+**If it broke, nothing is unprotected:** a new profile gets uBlock Origin's own defaults (ads, trackers, malware), without the extra lists. A profile that already exists is never touched by this mechanism.
+
+**What to do, first that fits:**
+
+| What changed | What to do |
+|---|---|
+| A default list was renamed or removed upstream | Edit `default_on` in `content-filter.json` (the registry copy names the lists of the pinned version) and set `changed_on` to that day: it is the date in the notice that goes out with the modified copy |
+| A default list is on by default upstream now | Remove it from `default_on` and set `changed_on`; the build asks for the first |
+| The address is no longer loaded (the rule for external addresses, or the cache token, changed in `js/assets.js`) | Read `assets.fetchText` and `getAssetSourceRegistry` in the new package and adjust `registry_address` in `scripts/build/make_distribution.py`; its unit test states the form expected |
+| `off` no longer decides the selection (`autoSelectRegionalFilterLists`, the `assets.json-updated` handler in `js/storage.js`) | Read both in the new package. The registry must mark a list so that a new profile selects it **and** a later registry update does not take it for a stock default; if no value of `off` does both, treat it as the next row |
+| `assetsBootstrapLocation` is gone, or no change above fits | Keep the pin where it is (the daily watch allows 30 days) and ask upstream for a supported default (below). If the pin must move, set `default_on` to `[]`: the build then ships no managed setting, and the row in Settings that opens uBlock Origin's lists is how a person switches them on |
+
+**Never** use `toOverwrite.filterLists` or `adminSettings.selectedFilterLists` as the fix: they replace the person's selection at every start (a unit test refuses any managed key but the registry's address).
+
+**The lasting fix is upstream's**: a managed key that adds lists to a new profile's selection without overwriting it later (the counterpart of `toAdd.trustedSiteDirectives` for filter lists). Asking for it is the maintainer's to do; until it exists, the steps above are the procedure.
 
 ## Settings only the maintainer can change
 
