@@ -185,3 +185,20 @@ Branch `agent/claude/feat-settings-dns-native`. The maintainer follows the recom
 
 `tests/integration/test_settings_dns.py` (2 tests): nothing chosen (four options, nothing to save, the engine's summary gone and its advanced button there); a choice in the form leaves the prefs alone until saved; the computer's resolver saved; an encrypted service by name; only-encrypted with an address that is not https refused with nothing changed, then accepted; a change of the engine's prefs followed by the form.
 
+## Step 10 (2026-11-12): the emergency stop and the assistant's service
+
+Branch `agent/claude/feat-settings-assistant-native`.
+
+![The "Assistente e agentes" group with no provider (pt-BR light) and with a local model and the emergency stop on (en-US dark)](../design/screenshots/experience-2026-11/settings-assistant-sheet.png)
+
+What is a setting went into the "Assistente e IA" pane; what is a moment of consent or a record stays the Shell's own page (decision 4).
+
+- **In the pane**: the emergency stop, one switch, with a warning that stays while it is on; the assistant's service (provider type, model, address, API key) with what is saved in a sentence; whether this profile may send anything to that service, a switch of its own saved when it changes; removing the assistant, after the engine's prompt.
+- **The API key** is typed in the engine's password field, handed to `NulavioAI.assistantConfigure` once with the save and dropped from the page at once, also when the save is refused. It is never read back: the field is empty and an empty field keeps the key there is. The module sends it to the system keyring through the Nulavio tools, as before.
+- **Still the Shell's page**, behind "Agentes, permissões e atividade": connecting an agent (its configuration is shown once), each agent's permissions with their consent dialogs, pausing and revoking, and the activity record.
+- **A window an agent drives** shows a sentence where the controls would be and none of them, not even the way to the agents' page. `NulavioAI` refuses every change asked from such a window whoever asks; that check is in the module and did not move.
+
+`tests/integration/test_settings_assistant.py` (3 tests), with the real Nulavio tools for the stop and for a provider without a key: the stop on and off, with the module's state and the warning; an address refused in words with the typed key dropped; a local model saved; the profile's switch; a key handed to the module once and absent from the page afterwards (the module's entry replaced: no keyring here, `test_assistant_ui.py` covers the key with a stand-in keyring); removing the assistant, prompt closed and then accepted; an agent's window with no control.
+
+Still to do: the old page keeps its own copies of the stop switch and of the assistant's form until its sections are removed.
+

@@ -173,8 +173,8 @@ nulavio-assistant-group =
     .label = Assistant and agents
     .description = Nulavio's assistant and agents such as Claude Code or Codex use a separate profile (the AI Workspace), with only the permissions you set.
 nulavio-open-assistant =
-    .label = Assistant, agents and activity
-    .description = Turn the assistant on, connect an agent, pause, revoke and see what was done.
+    .label = Agents, permissions and activity
+    .description = Connect an agent such as Claude Code or Codex, give or take permissions, pause, revoke, and see what was done.
 
 ## Tabs and browsing
 

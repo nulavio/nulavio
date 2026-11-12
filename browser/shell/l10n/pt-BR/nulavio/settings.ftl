@@ -173,8 +173,8 @@ nulavio-assistant-group =
     .label = Assistente e agentes
     .description = O assistente do Nulavio e agentes como Claude Code ou Codex usam um perfil separado (a Área de IA), só com as permissões que você define.
 nulavio-open-assistant =
-    .label = Assistente, agentes e atividade
-    .description = Ligar o assistente, conectar um agente, pausar, revogar e ver o que foi feito.
+    .label = Agentes, permissões e atividade
+    .description = Conectar um agente como Claude Code ou Codex, dar ou tirar permissões, pausar, revogar e ver o que foi feito.
 
 ## Abas e navegação
 

@@ -1669,6 +1669,148 @@
       { id: "nulavio-dns-save", control: "moz-button" },
     ];
 
+    // -- assistant and agents: what is a setting is here (the emergency stop, and the service the assistant
+    // talks to). Granting an agent its permissions, connecting one and the activity record are moments of
+    // consent and a record: they stay the Shell's own page, behind the row at the end. NulavioAI refuses every
+    // change asked from a window an agent drives, whoever asks; here such a window shows no control at all. --
+    const ai = source(async () => {
+      const agent = await shell.NulavioAI.workspaceAgent();
+      if (agent) {
+        const { agents } = await shell.NulavioAI.overview().catch(() => ({ agents: [] }));
+        return { workspace: agents.find(each => each.id === agent)?.name ?? agent };
+      }
+      const [overview, assistant] = await Promise.all([shell.NulavioAI.overview(), shell.NulavioAI.assistantState(top())]);
+      return { workspace: "", stopped: Boolean(overview.stopped), assistant };
+    });
+    const aiBench = workbench({ draft: null }, ai);
+    const aiNow = () => (ai.state.ready ? ai.state.value : null);
+    const aiOpen = () => Boolean(aiNow()) && !aiNow().workspace; // read, and not a window an agent drives
+    const aiSetup = (emitChange, stops) => {
+      stops.push(ai.listen(emitChange));
+      aiBench.watch(emitChange, stops);
+    };
+    const aiSetting = config => setting({ setup: aiSetup, visible: aiOpen, ...config });
+    aiSetting({
+      id: "nulavio-ai-stop",
+      setup(emitChange, stops) {
+        aiSetup(emitChange, stops);
+        ai.refresh();
+      },
+      get: () => Boolean(aiNow()?.stopped),
+      set(value) {
+        aiBench.act(() => shell.NulavioAI.setStopped(Boolean(value)), msg(value ? "aiStoppedNow" : "aiResumedNow"));
+      },
+      disabled: () => aiBench.state.busy,
+      getControlConfig: config => ({ ...config, controlAttrs: { ...config.controlAttrs, label: msg("aiStopLabel"), description: msg("aiStopHint") } }),
+    });
+    // The assistant's service: what is saved, with what the person changed and has not saved yet on top.
+    // The API key is never read back: the field is empty, and an empty field keeps the key there is.
+    const assistantNow = () => aiNow()?.assistant ?? null;
+    const assistantForm = () => {
+      const now = assistantNow();
+      const base = { kind: now?.provider?.kind ?? "openai", model: now?.provider?.model ?? "", baseUrl: now?.provider?.base_url ?? "", key: "" };
+      return { ...base, ...(aiBench.state.draft ?? {}) };
+    };
+    const assistantDraft = (field, value) => aiBench.show({ draft: { ...(aiBench.state.draft ?? {}), [field]: value } });
+    aiSetting({
+      id: "nulavio-assistant-now",
+      getControlConfig(config) {
+        const now = assistantNow();
+        const says = now?.configured
+          ? msg("assistantStateConfigured", now.provider.model, now.recipient, msg(now.hasKey ? "assistantKeyStored" : "assistantKeyNone"))
+          : msg("assistantStateNone");
+        return { ...config, controlAttrs: { ...config.controlAttrs, label: msg("assistantTitle"), description: `${msg("assistantIntro")} ${says}` } };
+      },
+    });
+    const assistantField = (id, field, control, words) => {
+      aiSetting({
+        id,
+        get: () => assistantForm()[field],
+        set(value) {
+          assistantDraft(field, value);
+        },
+        disabled: () => aiBench.state.busy,
+        getControlConfig: config => ({ ...config, ...words(config) }),
+      });
+      return { id, control };
+    };
+    const assistantFields = [
+      assistantField("nulavio-assistant-kind", "kind", "moz-select", config => ({
+        controlAttrs: { ...config.controlAttrs, label: msg("assistantKindLabel") },
+        options: [choice("openai", msg("assistantKindOpenai")), choice("anthropic", msg("assistantKindAnthropic"))],
+      })),
+      assistantField("nulavio-assistant-model", "model", "moz-input-text", config => ({
+        controlAttrs: { ...config.controlAttrs, label: msg("assistantModelLabel") },
+      })),
+      assistantField("nulavio-assistant-url", "baseUrl", "moz-input-text", config => ({
+        controlAttrs: { ...config.controlAttrs, label: msg("assistantUrlLabel"), placeholder: "https://" },
+      })),
+      assistantField("nulavio-assistant-key", "key", "moz-input-password", config => ({
+        controlAttrs: { ...config.controlAttrs, label: msg("assistantKeyLabel"), description: msg("assistantKeyNote") },
+      })),
+    ];
+    aiSetting({
+      id: "nulavio-assistant-save",
+      disabled: () => aiBench.state.busy,
+      async onUserClick(event) {
+        event.preventDefault();
+        const form = assistantForm();
+        const details = { kind: form.kind, baseUrl: form.baseUrl.trim(), model: form.model.trim(), ...(form.key ? { key: form.key } : {}) };
+        // The key goes to the system keyring through the Nulavio tools and is dropped from this page at once.
+        if (await aiBench.act(() => shell.NulavioAI.assistantConfigure(details), msg("assistantSaved"))) {
+          aiBench.show({ draft: null });
+        } else {
+          assistantDraft("key", "");
+        }
+      },
+      getControlConfig: config => ({ ...config, controlAttrs: { ...config.controlAttrs, label: msg("assistantSave"), type: "primary" } }),
+    });
+    // Whether this profile may send anything to the service: a switch, saved when it changes; each profile decides for itself.
+    aiSetting({
+      id: "nulavio-assistant-allowed",
+      get: () => Boolean(assistantNow()?.profileAllowed),
+      set(value) {
+        aiBench.act(() => shell.NulavioAI.assistantAllow(Boolean(value)), msg("doneSaved"));
+      },
+      disabled: () => aiBench.state.busy,
+      getControlConfig: config => ({
+        ...config,
+        controlAttrs: {
+          ...config.controlAttrs,
+          label: msg("assistantAllowLabel"),
+          description: msg("assistantAllowHint", assistantNow()?.recipient ?? msg("assistantRecipientUnknown")),
+        },
+      }),
+    });
+    aiSetting({
+      id: "nulavio-assistant-forget",
+      visible: () => aiOpen() && Boolean(assistantNow()?.configured),
+      disabled: () => aiBench.state.busy,
+      async onUserClick(event) {
+        event.preventDefault();
+        if (await confirmDanger(msg("assistantForgetTitle"), msg("assistantForgetBody"), msg("assistantForget"))) {
+          if (await aiBench.act(() => shell.NulavioAI.assistantForget(), msg("doneRemoved"))) {
+            aiBench.show({ draft: null });
+          }
+        }
+      },
+      getControlConfig: config => ({ ...config, controlAttrs: { ...config.controlAttrs, label: msg("assistantForget") } }),
+    });
+    const aiItems = [
+      failureNote("nulavio-ai-failed", ai),
+      // A window an agent drives: said where the controls would be, and none of them is on the page.
+      aiBench.bar("nulavio-ai-workspace", "info", () => msg("settingsAiInWorkspace", aiNow()?.workspace ?? ""), () => Boolean(aiNow()?.workspace)),
+      aiBench.bar("nulavio-ai-stopped", "warning", () => msg("aiStoppedBanner"), () => aiOpen() && Boolean(aiNow().stopped)),
+      aiBench.bar("nulavio-ai-error", "error", () => aiBench.state.error, () => Boolean(aiBench.state.error)),
+      aiBench.bar("nulavio-ai-said", "success", () => aiBench.state.said, () => Boolean(aiBench.state.said)),
+      { id: "nulavio-ai-stop", control: "moz-toggle" },
+      { id: "nulavio-assistant-now", control: "moz-box-item" },
+      ...assistantFields,
+      { id: "nulavio-assistant-save", control: "moz-button" },
+      { id: "nulavio-assistant-allowed", control: "moz-toggle" },
+      { id: "nulavio-assistant-forget", control: "moz-button" },
+    ];
+
     // -- what changed outside Nulavio (the Guard's pending findings; the review is its own page) --
     // The count is read after the Guard's own check of this start (it waits for the windows to be back):
     // before that the Guard has no findings to give, which is not the same as "nothing to review".
@@ -1907,7 +2049,7 @@
       nulavioAssistantEntry: {
         l10nId: "nulavio-assistant-group",
         headingLevel: 2,
-        items: [detailRow("nulavio-open-assistant", "ai")],
+        items: [...aiItems, detailRow("nulavio-open-assistant", "ai", { setup: aiSetup, visible: aiOpen })],
       },
       nulavioIntegrationsEntry: {
         l10nId: "nulavio-integrations-group",
