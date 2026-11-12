@@ -109,6 +109,9 @@ NO_REGION_LOOKUP = {  # no request to Mozilla's location service on a new profil
     "browser.region.network.url": "",
     "browser.region.update.enabled": False,
 }
+NO_DRM_UPDATE_PROBE = {  # no request to Google about a DRM module that is off (issue #103)
+    "media.gmp-widevinecdm.allow-chromium-update": False,
+}
 FINGERPRINTING = "privacy.fingerprintingProtection.overrides"  # docs/research/fingerprinting.md
 # Changing these breaks sites or accessibility; they belong to an opt-in mode, never to the default.
 NEVER_BY_DEFAULT = {
@@ -157,6 +160,20 @@ class MozillaAiAndAccountTest(unittest.TestCase):
                 self.assertEqual(baseline[name].value, value, "Track A (baseline.js)")
                 self.assertEqual(baseline[name].mode, "seed")
                 self.assertEqual(branding.get(name), value, "Track B default (firefox-branding.js)")
+
+    def test_no_drm_update_probe_in_either_track(self):
+        baseline = {p.name: p for p in profile.baseline_prefs()}
+        branding = branding_prefs()
+        for name, value in NO_DRM_UPDATE_PROBE.items():
+            with self.subTest(pref=name):
+                self.assertEqual(baseline[name].value, value, "Track A (baseline.js)")
+                self.assertEqual(baseline[name].mode, "seed")
+                self.assertEqual(branding.get(name), value, "Track B default (firefox-branding.js)")
+        for names in (set(baseline), set(branding)):
+            self.assertFalse(
+                {"media.eme.enabled", "media.gmp-widevinecdm.enabled", "media.gmp-provider.enabled"} & names,
+                "DRM itself stays the engine's and the person's switch",
+            )
 
     def test_fingerprinting_additions_are_the_same_in_both_tracks_and_watched(self):
         baseline = {p.name: p for p in profile.baseline_prefs()}

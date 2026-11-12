@@ -189,6 +189,32 @@ class MozillaFeaturesTest(unittest.TestCase):
         )
         self.assertEqual(state, {"url": "", "update": False, "userSet": [], "asked": [], "home": None})
 
+    def test_03c_no_question_to_google_about_a_drm_module_that_is_off(self):
+        """The media plugin check reads the list Mozilla serves and stops there: nothing is asked of Google's component
+        update service about the Widevine module (issue #103). DRM stays the engine's switch, off in a new profile."""
+        state = self.chrome_async(
+            "const done = arguments[arguments.length - 1];"
+            'const { GMPInstallManager } = ChromeUtils.importESModule("resource://gre/modules/GMPInstallManager.sys.mjs");'
+            'const guid = Services.prefs.getStringPref("media.gmp-widevinecdm.chromium-guid", "");'
+            "const asked = [];"
+            "const watch = { observe(channel) { const uri = channel.QueryInterface(Ci.nsIHttpChannel).URI;"
+            ' if (uri.host === "update.googleapis.com" || (guid && uri.spec.includes(guid))) asked.push(uri.host); } };'
+            'Services.obs.addObserver(watch, "http-on-opening-request");'
+            "(async () => { const { addons } = await new GMPInstallManager().checkForAddons(); return {"
+            ' listed: addons.some(a => a.id === "gmp-widevinecdm"),'
+            " asked,"
+            ' allowed: Services.prefs.getBoolPref("media.gmp-widevinecdm.allow-chromium-update"),'
+            ' userSet: Services.prefs.prefHasUserValue("media.gmp-widevinecdm.allow-chromium-update"),'
+            ' drm: Services.prefs.getBoolPref("media.eme.enabled"),'
+            ' installed: Services.prefs.getStringPref("media.gmp-widevinecdm.version", ""),'
+            "}; })()"
+            '.finally(() => Services.obs.removeObserver(watch, "http-on-opening-request"))'
+            ".then(done, e => done({ error: String(e) }));"
+        )
+        if state.get("listed") is False:
+            self.skipTest("the media plugin list did not name Widevine, so the check had nothing to ask about (network?)")
+        self.assertEqual(state, {"listed": True, "asked": [], "allowed": False, "userSet": False, "drm": False, "installed": ""})
+
     def test_04_no_account_button_or_sync_promo(self):
         state = self.m.chrome(
             "const b = document.getElementById('fxa-toolbar-menu-button');"

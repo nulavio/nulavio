@@ -156,6 +156,12 @@ user_pref("browser.region.update.enabled", false);
 
 // @mode seed
 // @category network
+// @why Do not ask Google's component update service about the Widevine DRM module at every media plugin check; DRM is off until the person switches it on.
+// @tradeoff None for playback: once DRM is switched on, the module comes from the address, size and hash in the list Mozilla serves.
+user_pref("media.gmp-widevinecdm.allow-chromium-update", false);
+
+// @mode seed
+// @category network
 // @why WebRTC only offers the default route's address, so local/VPN-side interfaces are not exposed to peers.
 // @tradeoff Rare peer-to-peer setups on multi-homed hosts may need a TURN relay.
 user_pref("media.peerconnection.ice.default_address_only", true);
