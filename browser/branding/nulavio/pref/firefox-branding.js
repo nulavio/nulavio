@@ -172,6 +172,18 @@ pref("signon.firefoxRelay.feature", "");
 pref("browser.region.network.url", "");
 pref("browser.region.update.enabled", false);
 
+// No question to Google about a DRM module nobody switched on. DRM video is
+// off in a new profile (the engine's own default on Linux: a page that needs
+// it shows "Ativar DRM" first), and the Widevine module is not installed. The
+// media plugin check still ran its extra step for it: one request to Google's
+// component update service (update.googleapis.com, redirected to dl.google.com
+// or www.google.com) about ten seconds after every first start and on each
+// later check. Without that step the check uses only the list Mozilla serves,
+// which already carries the module's version, address, size and hash; once a
+// person switches DRM on, the module is downloaded from the address in that
+// list and verified against that hash.
+pref("media.gmp-widevinecdm.allow-chromium-update", false);
+
 // Performance and privacy: about:home (still the start page of profiles that
 // came from earlier builds) does not fetch the weather or stories in the
 // background. Defaults only: a person who turns them on keeps that choice.
