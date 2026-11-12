@@ -31,6 +31,9 @@ import connections  # noqa: E402
 
 
 def record(engine: Path, seconds: int, lang: str, folder: Path) -> None:
+    # The engine's log holds whole addresses, and one of them carries the build's Safe Browsing key.
+    os.umask(0o077)
+    folder.chmod(0o700)
     home = folder / "home"
     (home / "run").mkdir(parents=True, mode=0o700)
     env = {
@@ -52,8 +55,9 @@ def record(engine: Path, seconds: int, lang: str, folder: Path) -> None:
                 process.wait(20)
             except subprocess.TimeoutExpired:
                 os.killpg(process.pid, signal.SIGKILL)
+                process.wait()
             except OSError:
-                pass
+                pass  # already gone
 
 
 def main() -> int:
@@ -64,7 +68,7 @@ def main() -> int:
     parser.add_argument("--keep", type=Path, help="keep the home directory and the engine's log in this new directory")
     args = parser.parse_args()
     if args.keep:
-        args.keep.mkdir(parents=True)
+        args.keep.mkdir(parents=True, mode=0o700)
     folder = (args.keep or Path(tempfile.mkdtemp(prefix="nulavio-connections-"))).resolve()
     try:
         record(args.engine.resolve(), args.seconds, args.lang, folder)

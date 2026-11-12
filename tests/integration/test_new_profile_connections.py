@@ -4,8 +4,8 @@ No setting says what the browser contacts by itself: the page was written from a
 blocker update can add to it unseen (the region lookup and the question to Google's update service were both found by
 chance). This starts a new profile with the engine's own network log on from the first moment of the process, waits
 for the start-up work the record shows (the last of it is the second network check, a minute in) and compares every
-address asked for and every name resolved with the list. It reaches the real services, like a person's first start;
-without a network the requests are still made and still compared.
+address asked for and every name resolved with the list. It reaches the real services, like a person's first start,
+and needs them: offline the engine does not ask Remote Settings at all, and the test then says it could not measure.
 """
 
 from __future__ import annotations
@@ -41,9 +41,12 @@ class NewProfileConnectionsTest(unittest.TestCase):
         asked = {(urlsplit(a).scheme, urlsplit(a).hostname): a for a in reversed(addresses)}  # the first address of each
         # The measurement sees the engine's work: Remote Settings is asked at every first start, and the second
         # network check is the last thing the record shows.
-        self.assertIn(("https", "firefox.settings.services.mozilla.com"), asked, sorted(asked))
+        # What the test needs before it can say anything, told apart from a finding.
+        needs = "could not measure (this is not an unlisted address): "
+        remote_settings = ("https", "firefox.settings.services.mozilla.com")
+        self.assertIn(remote_settings, asked, needs + "the engine asked nothing of Remote Settings; is the network reachable?")
         portal = [a for a in addresses if urlsplit(a).path == "/generate_204"]
-        self.assertGreaterEqual(len(portal), 2, "the second network check did not run: the wait is too short")
+        self.assertGreaterEqual(len(portal), 2, needs + "the second network check did not run in the time waited")
         unlisted = sorted(connections.without_query(address) for key, address in asked.items() if key not in listed)
         self.assertEqual(unlisted, [], "asked for by a new profile and not in docs/security/new-profile-connections.json")
         hosts = {host for _, host in listed}
