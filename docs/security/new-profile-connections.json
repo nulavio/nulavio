@@ -5,7 +5,8 @@
     "on": "2026-11-12",
     "engine": "160.0",
     "language": "pt-BR",
-    "seconds": 600
+    "seconds": 600,
+    "added_later": "filters.adtidy.org and secure.fanboy.co.nz: two runs of 150 seconds (pt-BR and en-US) on 2026-11-12, of the same build with the lists of browser/distribution/content-filter.json switched on"
   },
   "connections": [
     {

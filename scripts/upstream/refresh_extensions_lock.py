@@ -154,6 +154,9 @@ def refresh_registry() -> None:
             print(f"    ! DEFAULT LIST GONE in {entry.version}: {key} (edit content-filter.json before building)")
         elif listed.get("off") is not True:
             print(f"    ! {key} is on by default in {entry.version}: remove it from content-filter.json")
+    if raw != (REGISTRY_DIR / "assets.json").read_bytes():
+        # Another original: the copy that goes out with Nulavio's lists switched on is modified anew, today.
+        config["changed_on"] = dt.date.today().isoformat()
     (REGISTRY_DIR / "assets.json").write_bytes(raw)
     (REGISTRY_DIR / "LICENSE.txt").write_bytes(licence)
     config["registry"] = {"version": entry.version, "sha256": hashlib.sha256(raw).hexdigest()}

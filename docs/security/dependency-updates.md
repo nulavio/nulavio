@@ -104,7 +104,7 @@ Put the digest after the tag in the Containerfiles (the same digest for the same
 
 ## uBlock Origin's default lists
 
-A new profile starts with the lists of `browser/distribution/content-filter.json` switched on in uBlock Origin ([how](../architecture/extension-model.md#the-lists-a-new-profile-starts-with)). That rests on uBlock Origin's own code, which Nulavio does not control: an older managed setting (`adminSettings.assetsBootstrapLocation`), the rule that only `scheme://` is an external address, and the way `off` decides what a new profile selects. The policy always installs the **pinned** version first, so the lists are switched on by the version that was tested; the risk there is in moving the pin. uBlock Origin then updates itself from AMO like any extension (on 2026-11-12, to 1.76.0 half a minute after a first start), and what a newer version does with lists that are already selected is not something the suite sees: it runs with add-on updates off.
+A new profile starts with the lists of `browser/distribution/content-filter.json` switched on in uBlock Origin ([how](../architecture/extension-model.md#the-lists-a-new-profile-starts-with)). That rests on uBlock Origin's own code, which Nulavio does not control: an older managed setting (`adminSettings.assetsBootstrapLocation`), the rule that only `scheme://` is an external address, and the way `off` decides what a new profile selects. The policy always installs the **pinned** version first, so the lists are switched on by the version that was tested; the risk there is in moving the pin. uBlock Origin then updates itself from AMO like any extension (on 2026-11-12 the engine had 1.76.0 downloaded within the first minute of a first session, and it ran from the next start at the latest), and what a newer version does with lists that are already selected is not something the suite sees: it runs with add-on updates off.
 
 **How it is noticed, in the order it would happen:**
 
@@ -118,8 +118,8 @@ A new profile starts with the lists of `browser/distribution/content-filter.json
 
 | What changed | What to do |
 |---|---|
-| A default list was renamed or removed upstream | Edit `default_on` in `content-filter.json` (the registry copy names the lists of the pinned version) |
-| A default list is on by default upstream now | Remove it from `default_on`; the build asks for that |
+| A default list was renamed or removed upstream | Edit `default_on` in `content-filter.json` (the registry copy names the lists of the pinned version) and set `changed_on` to that day: it is the date in the notice that goes out with the modified copy |
+| A default list is on by default upstream now | Remove it from `default_on` and set `changed_on`; the build asks for the first |
 | The address is no longer loaded (the rule for external addresses, or the cache token, changed in `js/assets.js`) | Read `assets.fetchText` and `getAssetSourceRegistry` in the new package and adjust `registry_address` in `scripts/build/make_distribution.py`; its unit test states the form expected |
 | `off` no longer decides the selection (`autoSelectRegionalFilterLists`, the `assets.json-updated` handler in `js/storage.js`) | Read both in the new package. The registry must mark a list so that a new profile selects it **and** a later registry update does not take it for a stock default; if no value of `off` does both, treat it as the next row |
 | `assetsBootstrapLocation` is gone, or no change above fits | Keep the pin where it is (the daily watch allows 30 days) and ask upstream for a supported default (below). If the pin must move, set `default_on` to `[]`: the build then ships no managed setting, and the row in Settings that opens uBlock Origin's lists is how a person switches them on |
