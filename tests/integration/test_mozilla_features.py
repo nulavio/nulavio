@@ -189,6 +189,59 @@ class MozillaFeaturesTest(unittest.TestCase):
         )
         self.assertEqual(state, {"url": "", "update": False, "userSet": [], "asked": [], "home": None})
 
+    def test_03c_no_question_to_google_about_a_drm_module_that_is_off(self):
+        """The media plugin check reads the list Mozilla serves and stops there: nothing is asked of Google's component
+        update service about the Widevine module (issue #103). DRM stays the engine's switch, off in a new profile, and
+        the plugin check itself stays on. The step is run on a Widevine entry made here, so it needs no list from the
+        network, then with the engine's own check; the control switches the step on and sees the question (stopped
+        before it leaves)."""
+        state = self.chrome_async(
+            "const done = arguments[arguments.length - 1];"
+            "const { GMPInstallManager, GMPAddon } ="
+            ' ChromeUtils.importESModule("resource://gre/modules/GMPInstallManager.sys.mjs");'
+            'const ALLOW = "media.gmp-widevinecdm.allow-chromium-update";'
+            'const guid = Services.prefs.getStringPref("media.gmp-widevinecdm.chromium-guid", "");'
+            "const asked = []; let stop = false;"
+            "const watch = { observe(channel) { const uri = channel.QueryInterface(Ci.nsIHttpChannel).URI;"
+            ' if (uri.host === "update.googleapis.com" || (guid && uri.spec.includes(guid))) {'
+            "  asked.push(uri.host); if (stop) channel.cancel(Cr.NS_BINDING_ABORTED); } } };"
+            'Services.obs.addObserver(watch, "http-on-opening-request");'
+            'const widevine = () => [new GMPAddon({ id: "gmp-widevinecdm", version: "1.0.0.0",'
+            ' URL: "https://plugins.invalid/widevine.crx3", hashFunction: "sha512", hashValue: "00", size: 1 })];'
+            "(async () => { const out = { guid: Boolean(guid),"
+            "  allowed: Services.prefs.getBoolPref(ALLOW), userSet: Services.prefs.prefHasUserValue(ALLOW),"
+            '  drm: Services.prefs.getBoolPref("media.eme.enabled"),'
+            '  installed: Services.prefs.getStringPref("media.gmp-widevinecdm.version", ""),'
+            '  checks: Services.prefs.getBoolPref("media.gmp-manager.updateEnabled", true) };'
+            " await new GMPInstallManager().adjustForChromiumUpdateService(widevine());"
+            " out.shipped = [...asked];"
+            " await new GMPInstallManager().checkForAddons().catch(() => null);"
+            " out.live = [...asked];"
+            " asked.length = 0; stop = true; Services.prefs.setBoolPref(ALLOW, true);"
+            # The stopped request never answers, so the step is not waited for: only for its question.
+            " new GMPInstallManager().adjustForChromiumUpdateService(widevine()).catch(() => null);"
+            " for (let i = 0; i < 100 && !asked.length; i++) await new Promise(r => setTimeout(r, 50));"
+            " Services.prefs.clearUserPref(ALLOW);"
+            " out.control = [...asked];"
+            " return out; })()"
+            '.finally(() => Services.obs.removeObserver(watch, "http-on-opening-request"))'
+            ".then(done, e => done({ error: String(e) }));"
+        )
+        self.assertEqual(
+            state,
+            {
+                "guid": True,
+                "allowed": False,
+                "userSet": False,
+                "drm": False,
+                "installed": "",
+                "checks": True,
+                "shipped": [],
+                "live": [],
+                "control": ["update.googleapis.com"],
+            },
+        )
+
     def test_04_no_account_button_or_sync_promo(self):
         state = self.m.chrome(
             "const b = document.getElementById('fxa-toolbar-menu-button');"

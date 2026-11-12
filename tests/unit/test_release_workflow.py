@@ -92,7 +92,8 @@ class ReleaseWorkflowTest(unittest.TestCase):
         self.assertNotIn("pull_request", self.text)
         self.assertIn("if: github.ref == 'refs/heads/main'", self.build)
         self.assertIn("environment: release", self.publish)
-        self.assertIn("needs: build", self.publish)
+        self.assertIn("needs: [build, flatpak]", self.publish)
+        self.assertIn("needs.build.result == 'success'", self.publish)  # a failed Flatpak never holds back a release
 
     def test_the_build_machine_never_holds_signing_or_upload_credentials(self):
         self.assertIn("runs-on: blacksmith-", self.build)
@@ -121,6 +122,19 @@ class ReleaseWorkflowTest(unittest.TestCase):
         self.assertIn("gh release create", self.publish)
         self.assertIn("--draft", self.publish)
         self.assertIn("NULAVIO_BUILD_PROFILE: runner", self.build)
+
+    def test_the_flatpak_is_composed_and_linted_as_flathub_does(self):
+        self.assertIn("--compose-url-policy=full", self.text)
+        self.assertIn("flatpak-builder-lint org.flatpak.Builder repo repo", self.text)
+
+    def test_the_bundle_is_attested_checked_and_signed_with_the_release(self):
+        flatpak_job = self.text[self.text.index("\n  flatpak:\n") :]
+        self.assertLess(flatpak_job.index("check_flatpak.sh"), flatpak_job.index("flatpak build-bundle"))
+        sign = self.publish.index("NULAVIO_FLATPAK_BUNDLE=$bundle scripts/release/publish_release.sh")
+        self.assertLess(sign, self.publish.index("subject-path: ${{ runner.temp }}/publish/github/*"))
+        publish = (RELEASE / "publish_release.sh").read_text(encoding="utf-8")
+        self.assertLess(publish.index('cp "$bundle" "$stage/github/"'), publish.index("sha256sum -- * >SHA256SUMS"))
+        self.assertIn('"nulavio-${tag#v}.x86_64.flatpak"', publish)
 
 
 class AsanWorkflowTest(unittest.TestCase):
