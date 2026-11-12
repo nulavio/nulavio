@@ -235,6 +235,11 @@ class NulavioProfilesClass {
     }
   }
 
+  /** "plain", "locked" or "unlocked"; "unknown" when it could not be read, which is never taken for unprotected. */
+  async #protection(profile) {
+    return lazy.profileLockState(profile.path).catch(() => "unknown");
+  }
+
   /** Once per instance: a protected profile is never left as the start-up profile (PREF_START_PROFILE). */
   async #keepStartProfile() {
     const service = this.#service;
@@ -242,12 +247,19 @@ class NulavioProfilesClass {
       return;
     }
     this.#startKept = true;
-    const plain = async profile => (await lazy.profileLockState(profile.path).catch(() => "plain")) === "plain";
-    /** The profile to start in instead of a protected one: the unprotected one used last, else the oldest. */
+    const plain = async profile => (await this.#protection(profile)) === "plain";
+    /** The profile to start in instead of a protected one: the unprotected one used last, else the oldest.
+        Read from the group as it is now, so a profile deleted since is never chosen. */
     const instead = async wanted => {
+      const here = service.currentProfile;
       const others = [];
       for (const each of await service.getAllProfiles()) {
-        if (each.id !== wanted.id && (await plain(each))) {
+        // Never the one asked for. And when another profile than this instance's was asked for, never this
+        // instance's own either: the engine asks for another one only as it deletes or resets this one.
+        if (each.id === wanted.id || (here && wanted.id !== here.id && each.id === here.id)) {
+          continue;
+        }
+        if (await plain(each)) {
           others.push(each);
         }
       }
@@ -255,10 +267,11 @@ class NulavioProfilesClass {
       return others.find(each => each.id === last) ?? others.sort((a, b) => a.id - b.id)[0] ?? null;
     };
     const engine = service.setDefaultProfileForGroup.bind(service);
-    // The engine calls this by name as it starts, on every window activation and when a profile is deleted.
+    /** The engine calls this by name as it starts, on every window activation and when a profile is deleted
+        or reset. Answers the profile that was made the start-up one, or null when there was none to make. */
     service.setDefaultProfileForGroup = async (wanted = service.currentProfile) => {
       if (!wanted) {
-        return;
+        return null;
       }
       if (await plain(wanted)) {
         await engine(wanted);
@@ -266,13 +279,14 @@ class NulavioProfilesClass {
           Services.prefs.setIntPref(PREF_START_PROFILE, wanted.id);
           await service.trackPref(PREF_START_PROFILE);
         }
-        return;
+        return wanted;
       }
       // With no unprotected profile left there is nothing to start in: the entry stays as the engine wrote it.
       const start = await instead(wanted);
       if (start) {
         await engine(start);
       }
+      return start;
     };
     // The engine's own pages delete the profile of their window through this.
     const remove = service.deleteCurrentProfile.bind(service);
@@ -281,15 +295,26 @@ class NulavioProfilesClass {
       return remove(...args);
     };
     try {
-      await service.setDefaultProfileForGroup(); // the engine already ran its own, before any window
+      const start = await service.setDefaultProfileForGroup(); // the engine already ran its own, before any window
       if (!(await plain(service.currentProfile))) {
         // Seen on 160.0: the engine's write inside the call above does not reach profiles.ini while the write it
         // made as this profile started is still under way (a write waits up to five seconds for an instance that
         // is starting), and that one can land last. So the entry is written again now, once more when that wait
-        // is over, and when this instance closes.
+        // is over, and when this instance closes. Each time the start-up profile is worked out again from the
+        // group as it is then: the one chosen before may have been deleted, or another may have been used since.
         const profiles = Cc["@mozilla.org/toolkit/profile-service;1"].getService(Ci.nsIToolkitProfileService);
-        const again = () => profiles.asyncFlushCurrentProfile().catch(e => console.error("Nulavio Profiles: start-up profile", e));
-        await again();
+        const again = async () => {
+          try {
+            if (await service.setDefaultProfileForGroup()) {
+              await profiles.asyncFlushCurrentProfile();
+            }
+          } catch (e) {
+            console.error("Nulavio Profiles: start-up profile", e);
+          }
+        };
+        if (start) {
+          await profiles.asyncFlushCurrentProfile(); // at once: every moment before it is one a kill leaves the entry wrong
+        }
         lazy.setTimeout(again, 6000);
         lazy.AsyncShutdown.quitApplicationGranted.addBlocker("Nulavio: the start-up profile is not a protected one", again);
       }
@@ -299,15 +324,15 @@ class NulavioProfilesClass {
   }
 
   /** A plain start needs a profile it can open without a password: while a protected profile exists, the last
-      unprotected one is not deleted. Without it every start made a new, empty profile outside the group. */
+      unprotected one is not deleted. Without it every start made a new, empty profile outside the group. A
+      profile whose state could not be read counts as neither: it is not the spare one, and it may be the last. */
   async #keepOneUnprotected(target) {
-    const plain = async profile => (await lazy.profileLockState(profile.path).catch(() => "plain")) === "plain";
-    if (!target || !(await plain(target))) {
+    if (!target || ["locked", "unlocked"].includes(await this.#protection(target))) {
       return;
     }
     const others = (await this.#service.getAllProfiles()).filter(each => each.id !== target.id);
-    const states = await Promise.all(others.map(plain));
-    if (others.length && !states.includes(true)) {
+    const states = await Promise.all(others.map(each => this.#protection(each)));
+    if (others.length && !states.includes("plain")) {
       fail("last-unprotected");
     }
   }

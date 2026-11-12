@@ -807,6 +807,10 @@ class VaultUiTest(unittest.TestCase):
         the group (the first run again, and no way back to the person's profiles). The start-up entry is given back
         to the unprotected profile used last, and a plain start afterwards makes no profile."""
         here = str(self.session.profile_dir)
+        # The tests above end a protected profile's process within a moment of its start, which is the gap R18
+        # names: the entry may still be that profile's. This profile gets it back as the engine does on its
+        # next window activation.
+        self.call("return SPS.setDefaultProfileForGroup().then(() => true);")
         self.assertEqual(self.start_entry()[0], here)
         profile_id, _code = self.create_via_api("Início", password=PASSWORD, keyring=False)
         path = self.profile_path(profile_id)
@@ -863,8 +867,22 @@ class VaultUiTest(unittest.TestCase):
             "for (const t of gBrowser.tabs.filter(t => t.linkedBrowser.currentURI.spec.startsWith('about:deleteprofile')))"
             " gBrowser.removeTab(t, { skipPermitUnload: true });"
         )
+        # The engine asks for another profile to start in only as it deletes or resets this one. Asked for a
+        # protected one, the stand-in is the other unprotected profile: never this one, which would be going away.
+        here = str(self.session.profile_dir)
+        protected = self.call("return (await P.list()).profiles.find(p => p.encrypted).id;")
+        asked = (
+            "return SPS.setDefaultProfileForGroup(args[0] ? await SPS.getProfile(args[0]) : undefined).then(p => p?.id ?? null);"
+        )
+        self.assertEqual(self.call(asked, protected), other)
+        self.assertEqual(self.start_entry()[0], str(self.profile_path(other)))
+        self.assertNotEqual(self.call(asked, None), other)  # asked for this instance's own: it is unprotected
+        self.assertEqual(self.start_entry()[0], here)
         self.call("return P.remove(args[0]);", other)
         self.assertEqual(len(self.call("return (await P.list()).profiles;")), len(listed))
+        # With the other one gone there is no stand-in: nothing is made the start-up profile, and it stays this one.
+        self.assertIsNone(self.call(asked, protected))
+        self.assertEqual(self.start_entry()[0], here)
 
 
 if __name__ == "__main__":
