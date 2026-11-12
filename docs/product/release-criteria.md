@@ -49,7 +49,7 @@ Each item was checked again on 2026-10-27 against the Nulavio build of Firefox 1
 
 ## Public alpha (decided 2026-11-04)
 
-**Published on 2026-11-10: [v160.0-0.1](https://github.com/nulavio/nulavio/releases/tag/v160.0-0.1)** (Firefox 160.0, Fedora, signed dnf repository at `packages.nulavio.net`). Security update [v160.0-0.2](https://github.com/nulavio/nulavio/releases/tag/v160.0-0.2) on 2026-11-11 ([advisory GHSA-5mmp-gx3p-m7j8](https://github.com/nulavio/nulavio/security/advisories/GHSA-5mmp-gx3p-m7j8)).
+**Published on 2026-11-10: [v160.0-0.1](https://github.com/nulavio/nulavio/releases/tag/v160.0-0.1)** (Firefox 160.0, Fedora, signed dnf repository at `packages.nulavio.net`). Security update [v160.0-0.2](https://github.com/nulavio/nulavio/releases/tag/v160.0-0.2) on 2026-11-11 ([advisory GHSA-5mmp-gx3p-m7j8](https://github.com/nulavio/nulavio/security/advisories/GHSA-5mmp-gx3p-m7j8)). [v160.0-0.3](https://github.com/nulavio/nulavio/releases/tag/v160.0-0.3) on 2026-11-11, the first from the release workflow (built on Blacksmith, signed through KMS after approval).
 
 The maintainer's decisions [D8–D11](execution-plan.md#decisions-for-the-public-release-maintainer-2026-11-04): a public alpha first, Fedora only through the signed dnf repository; R15 accepted; phone and FIDO2 unlock out of 1.0; the independent audit limited to the Vault and the release chain.
 

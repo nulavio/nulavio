@@ -35,9 +35,11 @@ class RehearsalInstallTest(unittest.TestCase):
                 path = repo / name
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_text("# Test stub: no host state or network.\n")
-            build = repo / "scripts" / "build" / "build_nulavio.sh"
-            build.write_text("#!/bin/sh\nexit 0\n")
-            build.chmod(0o755)
+            for stub in ("scripts/build/build_nulavio.sh", "scripts/release/run_integration.sh"):
+                path = repo / stub
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text("#!/bin/sh\nexit 0\n")
+                path.chmod(0o755)
             tree = tmp / "nulavio"
             tree.mkdir()
             (tree / "application.ini").write_text("Version=159.0.1\n")
@@ -55,8 +57,10 @@ class RehearsalInstallTest(unittest.TestCase):
                     )
                     path.write_text("#!/bin/sh\n" + (body if name == f"make_{packager}.sh" else "exit 0\n"))
                     path.chmod(0o755)
+                # Not what a surrounding rehearsal exported (NULAVIO_RELEASE, NULAVIO_BUILD_PROFILE, …):
+                # this suite also runs inside rehearse_release.sh.
                 env = {
-                    **os.environ,
+                    **{k: v for k, v in os.environ.items() if not k.startswith("NULAVIO_")},
                     "HOME": str(tmp / "home"),
                     "NULAVIO_BUILD_DIR": str(work),
                     "NULAVIO_INSTALL_DIR": str(tmp / "unrelated-install"),

@@ -11,6 +11,7 @@
 set -euo pipefail
 
 version=${1:?usage: rehearse_release.sh <firefox-version> [out-dir]}
+[[ -z ${NULAVIO_MOZCONFIG_EXTRA:-} ]] || { echo "rehearse_release: unset NULAVIO_MOZCONFIG_EXTRA: a variant build is never a release" >&2; exit 2; }
 repo=$(cd "$(dirname "$0")/../.." && pwd)
 work=${NULAVIO_BUILD_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/nulavio-build}
 install="$work/install/nulavio"
@@ -66,7 +67,7 @@ step verify-source python3 -I "$repo/scripts/upstream/verify_firefox_release.py"
 step build "$repo/scripts/build/build_nulavio.sh" "$version"
 step install install_tree
 step unit-tests python3 -I "$repo/tests/run.py" unit
-step integration-tests env NULAVIO_ENGINE="$install/nulavio" python3 -I "$repo/tests/run.py" integration
+step integration-tests "$repo/scripts/release/run_integration.sh" "$install"
 step rpm "$repo/scripts/release/make_rpm.sh" "$out/packages"
 # shellcheck disable=SC2016 # the inner bash expands $0 and $1 (the checker and the package directory)
 step check-rpm bash -c '"$0" "$1"/x86_64/nulavio-*.rpm' "$repo/scripts/release/check_rpm.sh" "$out/packages"
@@ -75,6 +76,7 @@ step deb "$repo/scripts/release/make_deb.sh" "$out/packages"
 step check-deb bash -c '"$0" "$1"/nulavio_*.deb' "$repo/scripts/release/check_deb.sh" "$out/packages"
 step signed-repository "$repo/scripts/release/test_signed_repo.sh" "$out/packages"
 step kms-signing "$repo/scripts/release/test_kms_signing.sh"
+step archive "$repo/scripts/release/make_archive.sh" "$install" "$out/packages/nulavio-$version-$NULAVIO_RELEASE.linux-x86_64.tar.xz"
 step sbom sbom
 
 # <out>/manifest.json: what this rehearsal verified, built and checked. Signing
@@ -119,7 +121,9 @@ def git(*args):
     return subprocess.run(["git", "-C", repo, *args], check=True, capture_output=True).stdout
 
 
-packages = sorted([*out.glob("packages/x86_64/nulavio-*.rpm"), *out.glob("packages/nulavio_*.deb")])
+packages = sorted(
+    [*out.glob("packages/x86_64/nulavio-*.rpm"), *out.glob("packages/nulavio_*.deb"), *out.glob("packages/nulavio-*.linux-x86_64.tar.xz")]
+)
 sboms = sorted(out.glob("packages/**/*.cdx.json"))
 if not packages:
     sys.exit("manifest: no packages to list")

@@ -6,7 +6,7 @@ It complements the [pull request flow](pull-requests.md).
 
 ## The problem
 
-Coding agents work as the maintainer. Their commits carry his name, and `gh` on this machine holds his classic token with the scopes `repo`, `workflow`, `gist` and `read:org`, valid for every repository he can reach. So an agent that makes a mistake, or that was steered by text it read (a web page, an issue, a file in a pull request), can push to `main`, change workflows and with them how secrets are used, merge or approve, and GitHub cannot tell it apart from him. Branch protection on `main` (read 2026-11-10) now refuses a direct push and a merge whose required checks fail; it asks for no approval, so the rest still holds.
+Coding agents work as the maintainer. Their commits carry his name, and `gh` on this machine holds his classic token with the scopes `repo`, `workflow`, `gist` and `read:org`, valid for every repository he can reach. So an agent that makes a mistake, or that was steered by text it read (a web page, an issue, a file in a pull request), can push to `main`, change workflows and with them how secrets are used, merge or approve, and GitHub cannot tell it apart from him. Since 2026-11-12 agents do review and merge their own pull requests ([review and merging](pull-requests.md#review-and-merging)); the layers below are about everything else. Branch protection on `main` (read 2026-11-10) now refuses a direct push and a merge whose required checks fail; it asks for no approval, so the rest still holds.
 
 The layers below go from the only one GitHub enforces to the ones that only prevent accidents.
 
@@ -34,7 +34,7 @@ export GH_CONFIG_DIR="$HOME/.config/gh-agent"
 
 What changes: agents can no longer add a workflow that reads secrets, or change CI or the AI review workflow. A change to a workflow goes into the pull request description as a patch, and the maintainer applies and pushes it with his own token. The classic token stays for his own interactive use.
 
-What it does not change: agents can still merge a pull request whose required checks pass (that needs Contents write, which they need for branches); only the rule never to merge stops that. Branch protection already refuses a direct push to `main`, with either token. Any program running as the same user can read the token file (trust boundary TB6).
+What it does not change: agents merge a pull request whose required checks pass (that needs Contents write, which they need for branches), as the [review and merging](pull-requests.md#review-and-merging) rules now ask of them. Branch protection already refuses a direct push to `main`, with either token. Any program running as the same user can read the token file (trust boundary TB6).
 
 Later, on GitHub Pro: a separate machine account for agents (GitHub's terms allow one per person), so that authorship and approvals mean something.
 
@@ -62,11 +62,6 @@ Proposed content of `.claude/settings.json`:
       "Bash(git push *--no-verify*)",
       "Bash(git config *core.hooksPath*)",
       "Bash(git -c *core.hooksPath*)",
-      "Bash(gh pr merge *)",
-      "Bash(gh pr review *--approve*)",
-      "Bash(gh pr review * -a)",
-      "Bash(gh pr review * -a *)",
-      "Bash(gh api *merge*)",
       "Bash(gh secret *)",
       "Bash(gh variable *)",
       "Bash(gh repo edit *)",
@@ -85,7 +80,7 @@ Proposed content of `.claude/settings.json`:
 What each group does:
 
 - pushing to `main`, force-pushing (`--force-with-lease` on the agent's own branch stays allowed), skipping hooks and turning the pre-push hook off are refused;
-- merging, approving, and changing secrets, variables or repository settings are refused;
+- changing secrets, variables or repository settings is refused (merging is not: agents review and merge their own pull requests);
 - the agent cannot edit its own Claude Code settings;
 - editing the workflows, the AI review files, the comment script or the hooks asks the person first (in a run nobody watches, asking means refusing).
 
@@ -99,7 +94,7 @@ These rules match the command text. `git -C . push origin main`, an alias, a scr
 git config core.hooksPath scripts/git-hooks
 ```
 
-`git push --no-verify` skips it, and `NULAVIO_ALLOW_MAIN_PUSH=1` lets the maintainer push to `main` on the [emergency path](pull-requests.md#emergency-path-engine-security-update). The rules in section 2 refuse both for Claude Code. `core.hooksPath` takes one directory, so any other hook (for example a pre-commit hook) belongs in `scripts/git-hooks/` as well.
+`git push --no-verify` skips it, and `NULAVIO_ALLOW_MAIN_PUSH=1` silences it (GitHub's branch protection still refuses the push, see the [emergency path](pull-requests.md#emergency-path-engine-security-update)). The rules in section 2 refuse both for Claude Code. `core.hooksPath` takes one directory, so any other hook (for example a pre-commit hook) belongs in `scripts/git-hooks/` as well.
 
 ## 4. Detection after the fact
 
@@ -116,6 +111,6 @@ Settings only the maintainer can change:
 ## What this still does not stop
 
 - An agent that still uses the classic token.
-- A merge by an agent: branch protection asks for no approval, so any token that can push a branch can merge a pull request with green required checks.
+- A merge by an agent that was misled: agents merge their own pull requests after their own review, and branch protection asks for no approval, so a change written, reviewed and merged by a steered agent is stopped only by the required checks and the second review for the sensitive paths ([R62](../security/residual-risks.md)).
 - Programs running as the same user reading tokens (TB6, see [residual risks](../security/residual-risks.md)).
-- An agent steered within what these layers allow. Reading every pull request before merging stays the main control.
+- An agent steered within what these layers allow. Until 2026-11-12 the maintainer reading every pull request was the main control; it is now the recorded review and the second independent review for the sensitive paths. His approval of a release is a rule agents keep, not something the shared account enforces ([R62](../security/residual-risks.md)).

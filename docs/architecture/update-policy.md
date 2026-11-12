@@ -10,7 +10,7 @@
 ## Pinned dependencies
 
 - Dependabot (`.github/dependabot.yml`) opens grouped pull requests: actions weekly on Wednesdays with a 7-day cooldown; ruff, Gradle and the base-image digests monthly. Distribution upgrades (Fedora 45, Ubuntu 27.04) are product decisions and are not proposed.
-- Nothing merges automatically. A pull request is merged only with green CI, after a person read the diff. Branch protection on `main` enforces the quick checks and refuses direct pushes, administrators included; the engine integration result is read by hand.
+- Nothing merges automatically. A pull request is merged only with green CI, after a recorded review of the diff ([review and merging](../process/pull-requests.md#review-and-merging)). Branch protection on `main` enforces the quick checks and refuses direct pushes, administrators included; the engine integration result is read by hand.
 - Gradle pull requests fail CI until a maintainer regenerates `android/gradle/verification-metadata.xml` and the lockfiles locally and reviews them with `scripts/upstream/review_gradle_verification.py`. CI or a bot never writes that file.
 - A security fix does not wait for these schedules: `scripts/release/watch_dependencies.py` fails the daily `upstream` run on a known vulnerability without a dated exception (`docs/security/vulnerability-exceptions.json`), and the dependency is updated that day.
 

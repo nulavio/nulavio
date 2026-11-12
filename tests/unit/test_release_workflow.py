@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import io
 import os
 import shutil
 import stat
 import subprocess
+import sys
+import tarfile
 import tempfile
 import unittest
 from pathlib import Path
@@ -82,13 +85,15 @@ class ReleaseWorkflowTest(unittest.TestCase):
     def setUp(self):
         self.text = WORKFLOW.read_text(encoding="utf-8")
         self.build, self.publish = self.text.split("\n  publish:\n", 1)
+        self.build, self.flatpak = self.build.split("\n  flatpak:\n", 1)
 
     def test_manual_from_main_with_approval_before_signing(self):
         self.assertIn("on:\n  workflow_dispatch:", self.text)
         self.assertNotIn("pull_request", self.text)
         self.assertIn("if: github.ref == 'refs/heads/main'", self.build)
         self.assertIn("environment: release", self.publish)
-        self.assertIn("needs: build", self.publish)
+        self.assertIn("needs: [build, flatpak]", self.publish)
+        self.assertIn("needs.build.result == 'success'", self.publish)  # a failed Flatpak never holds back a release
 
     def test_the_build_machine_never_holds_signing_or_upload_credentials(self):
         self.assertIn("runs-on: blacksmith-", self.build)
@@ -98,6 +103,17 @@ class ReleaseWorkflowTest(unittest.TestCase):
         self.assertIn("runs-on: ubuntu-24.04", self.publish)
         self.assertNotIn("GOOGLE_SAFEBROWSING", self.publish)
 
+    def test_the_flatpak_is_built_and_started_from_this_run_without_secrets(self):
+        self.assertIn("needs: build", self.flatpak)
+        self.assertIn("runs-on: ubuntu-24.04", self.flatpak)
+        for held in ("secrets.", "environment:", "id-token", "configure-aws-credentials"):
+            self.assertNotIn(held, self.flatpak)
+        self.assertIn("flatpak-builder-lint org.flatpak.Builder manifest", self.flatpak)
+        self.assertIn("flatpak-builder-lint org.flatpak.Builder repo", self.flatpak)
+        self.assertIn("scripts/release/check_flatpak.sh", self.flatpak)
+        self.assertIn("flatpak_manifest.py --archive", self.publish)
+        self.assertIn("--url", self.publish)
+
     def test_provenance_is_checked_before_signing_and_the_release_is_a_draft(self):
         verify = self.publish.index("gh attestation verify")
         self.assertLess(verify, self.publish.index('scripts/release/publish_release.sh "'))
@@ -106,6 +122,97 @@ class ReleaseWorkflowTest(unittest.TestCase):
         self.assertIn("gh release create", self.publish)
         self.assertIn("--draft", self.publish)
         self.assertIn("NULAVIO_BUILD_PROFILE: runner", self.build)
+
+    def test_the_flatpak_is_composed_and_linted_as_flathub_does(self):
+        self.assertIn("--compose-url-policy=full", self.text)
+        self.assertIn("flatpak-builder-lint org.flatpak.Builder repo repo", self.text)
+
+    def test_the_bundle_is_attested_checked_and_signed_with_the_release(self):
+        flatpak_job = self.text[self.text.index("\n  flatpak:\n") :]
+        self.assertLess(flatpak_job.index("check_flatpak.sh"), flatpak_job.index("flatpak build-bundle"))
+        sign = self.publish.index("NULAVIO_FLATPAK_BUNDLE=$bundle scripts/release/publish_release.sh")
+        self.assertLess(sign, self.publish.index("subject-path: ${{ runner.temp }}/publish/github/*"))
+        publish = (RELEASE / "publish_release.sh").read_text(encoding="utf-8")
+        self.assertLess(publish.index('cp "$bundle" "$stage/github/"'), publish.index("sha256sum -- * >SHA256SUMS"))
+        self.assertIn('"nulavio-${tag#v}.x86_64.flatpak"', publish)
+
+
+class AsanWorkflowTest(unittest.TestCase):
+    def test_weekly_asan_build_runs_the_integration_suite_and_fails_on_a_report(self):
+        text = (ROOT / ".github" / "workflows" / "asan.yml").read_text(encoding="utf-8")
+        self.assertIn("schedule:", text)
+        self.assertIn("NULAVIO_MOZCONFIG_EXTRA: mozconfig.asan", text)
+        self.assertIn("scripts/release/run_integration.sh", text)
+        self.assertIn("NULAVIO_INTEGRATION_IMAGE: fedora-release-itest", text)
+        self.assertIn('grep -l "ERROR: AddressSanitizer"', text)
+        self.assertIn("__asan_init", text)
+        self.assertNotRegex(text, r"\| *grep -q")  # SIGPIPE with pipefail
+        self.assertIn("NULAVIO_ENGINE: ${{ runner.temp }}/install/nulavio/nulavio", text)  # the executable
+        self.assertIn('found.vendor == "Nulavio"', text)  # the engine tests cannot skip silently
+        self.assertNotIn("R2_", text)
+        self.assertNotIn("id-token", text)
+        asan = (ROOT / "browser" / "build" / "mozconfig.asan").read_text(encoding="utf-8")
+        self.assertIn("--enable-address-sanitizer", asan)
+
+    @unittest.skipUnless(shutil.which("bash"), "bash not available")
+    def test_a_variant_build_is_never_rehearsed_as_a_release(self):
+        out = subprocess.run(
+            ["bash", str(RELEASE / "rehearse_release.sh"), "160.0", "/nonexistent"],
+            env={**os.environ, "NULAVIO_MOZCONFIG_EXTRA": "mozconfig.asan"},
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(out.returncode, 2)
+        self.assertIn("never a release", out.stderr)
+        build = (ROOT / "scripts" / "build" / "build_nulavio.sh").read_text(encoding="utf-8")
+        self.assertIn("NULAVIO_MOZCONFIG_EXTRA =~ ^mozconfig", build)
+
+
+class RepeatableBuildTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.tmp)
+        sys.path.insert(0, str(RELEASE))
+        import compare_builds
+
+        self.compare = compare_builds
+
+    def archive(self, name, files, mode=0o644):
+        path = self.tmp / name
+        with tarfile.open(path, "w:xz") as archive:
+            for member_name, body in files.items():
+                info = tarfile.TarInfo(member_name)
+                info.size, info.mode, info.mtime = len(body), mode, 1_700_000_000
+                archive.addfile(info, io.BytesIO(body))
+        return path
+
+    def test_identical_archives_pass(self):
+        first = self.archive("a.tar.xz", {"nulavio/libxul.so": b"same"})
+        second = self.tmp / "b.tar.xz"
+        second.write_bytes(first.read_bytes())
+        self.assertEqual(self.compare.main([str(first), str(second)]), 0)
+
+    def test_a_difference_fails_and_names_the_file(self):
+        first = self.archive("a.tar.xz", {"nulavio/libxul.so": b"one", "nulavio/same": b"x"})
+        second = self.archive("b.tar.xz", {"nulavio/libxul.so": b"two", "nulavio/same": b"x"})
+        summary = self.tmp / "summary.md"
+        code = self.compare.main([str(first), str(second), "--summary", str(summary), "--extract", str(self.tmp / "d")])
+        self.assertEqual(code, 1)
+        report = summary.read_text(encoding="utf-8")
+        self.assertIn("`nulavio/libxul.so`: content", report)
+        self.assertNotIn("nulavio/same", report)
+        self.assertEqual((self.tmp / "d" / "second" / "nulavio" / "libxul.so").read_bytes(), b"two")
+
+    def test_the_build_date_is_the_commit_time_and_the_workflow_builds_twice(self):
+        build = (ROOT / "scripts" / "build" / "build_nulavio.sh").read_text(encoding="utf-8")
+        self.assertIn('-e MOZ_BUILD_DATE="$build_date"', build)
+        self.assertIn('-e SOURCE_DATE_EPOCH="$commit_time"', build)
+        text = (ROOT / ".github" / "workflows" / "repeatable.yml").read_text(encoding="utf-8")
+        self.assertIn("copy: [first, second]", text)
+        self.assertIn("runs-on: blacksmith-", text)
+        self.assertIn("scripts/release/compare_builds.py", text)
+        self.assertNotIn("R2_", text)
+        self.assertNotIn("id-token", text)
 
 
 if __name__ == "__main__":
