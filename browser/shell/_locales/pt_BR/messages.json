@@ -574,7 +574,7 @@
   "guardEmpty": {"message": "Este perfil está como o Nulavio o viu da última vez."},
   "guardLimitsSummary": {"message": "O que o Guard consegue e não consegue fazer"},
   "guardLimits": {"message": "O Guard percebe mudanças que ferramentas e malwares comuns deixam num perfil: extensões, autoridades confiáveis, módulos de segurança, programas registrados para extensões, configurações gerenciadas, user.js e configurações que protegem você. Ele não impede que um programa rodando como você leia seus dados ou edite também o registro do próprio Guard. Num perfil protegido, o registro fica criptografado enquanto ele está bloqueado."},
-  "guardBar": {"message": "Nulavio Guard: $COUNT$ mudança(s) feita(s) fora do Nulavio desde a última vez que ele rodou.", "placeholders": {"count": {"content": "$1"}}},
+  "guardBar": {"message": "Nulavio Guard: $COUNT$ mudanças feitas fora do Nulavio desde a última vez que ele rodou.", "placeholders": {"count": {"content": "$1"}}},
   "guardReviewButton": {"message": "Revisar"},
   "guardUndone": {"message": "Desfeito."},
   "guardKept": {"message": "Mantido."},
@@ -587,7 +587,7 @@
   "guardExtensionWhy": {"message": "Extensões podem ler e alterar as páginas que você visita. Esta foi adicionada fora do navegador e está funcionando."},
   "guardExtensionWhyOff": {"message": "Extensões podem ler e alterar as páginas que você visita. Esta foi adicionada fora do navegador; ela fica desligada até você permitir em Extensões."},
   "guardExtensionChanged": {"message": "Extensão alterada: $NAME$", "placeholders": {"name": {"content": "$1"}}},
-  "guardExtensionChangedWhy": {"message": "Ela foi substituída ou ativada fora do navegador. Atualizações normalmente acontecem com o navegador aberto."},
+  "guardExtensionChangedWhy": {"message": "Ela foi substituída ou ativada fora do navegador. As atualizações que o próprio navegador faz, com ele aberto ou ao abrir, não aparecem aqui."},
   "guardExtensionRemoved": {"message": "Extensão removida: $NAME$", "placeholders": {"name": {"content": "$1"}}},
   "guardExtensionRemovedWhy": {"message": "Ela foi removida fora do navegador. Se você depende dela (uBlock Origin, seu gerenciador de senhas), instale de novo em Extensões."},
   "guardPrefChanged": {"message": "Configuração de proteção alterada"},
@@ -1336,5 +1336,6 @@
   "routingWhyDefault": {"message": "Links de outros aplicativos sem regra abrem em $PROFILE$. Isso fica nas Configurações do Nulavio, em Roteamento inteligente.", "placeholders": {"profile": {"content": "$1"}}},
   "bandRoutedDefault": {"message": "Aberto pelo destino padrão · Mudar"},
   "bandRoutedDefaultNamed": {"message": "Aberto pelo destino padrão · Mudar: links de outros aplicativos sem regra abrem em $PROFILE$. Mudar o destino", "placeholders": {"profile": {"content": "$1"}}},
-  "profilesButtonNamedKey": {"message": "Perfil: $NAME$. Trocar de perfil ($KEYS$)", "placeholders": {"name": {"content": "$1"}, "keys": {"content": "$2"}}}
+  "profilesButtonNamedKey": {"message": "Perfil: $NAME$. Trocar de perfil ($KEYS$)", "placeholders": {"name": {"content": "$1"}, "keys": {"content": "$2"}}},
+  "guardBarOne": {"message": "Nulavio Guard: uma mudança feita fora do Nulavio desde a última vez que ele rodou. $WHAT$.", "placeholders": {"what": {"content": "$1"}}}
 }
