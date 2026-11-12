@@ -421,11 +421,11 @@ async function showDns() {
   const serviceName = id => t(DNS_SERVICES[id]);
   // The resolver answering now: one of the known services by name, any other by its address's host.
   const resolverNow = () => {
-    if (DNS_SERVICES[state.provider]) {
-      return serviceName(state.provider);
+    if (DNS_SERVICES[state.resolver]) {
+      return serviceName(state.resolver);
     }
     try {
-      return new URL(state.uri).host;
+      return new URL(state.resolverUri).host;
     } catch {
       return t("dnsCustom");
     }
@@ -660,19 +660,23 @@ async function firstRun() {
     focusStep();
   });
 
+  // The band's own words for a profile's protection: protected only when it is known to be.
+  const protectionWords = profile =>
+    profile.protection === "unlocked" ? "bandProtectedShort" : profile.protection === "plain" ? "bandUnprotected" : "bandProtectionUnknown";
   const fact = key => document.querySelector(`#status [data-status="${key}"]`);
   const factLine = key => `${fact(key).previousElementSibling.textContent}: ${fact(key).textContent}`;
   document.getElementById("firstrun-facts").replaceChildren(
-    // Only what is already true is listed here. Something still missing (the content filter is installed
-    // in the first seconds of a new profile) is reported where it is checked again: "Tudo pronto" and the new tab.
-    ...["tracking", "https", "filter"].filter(key => fact(key).dataset.level === "ok")
-      .map(key => h("li", { "data-level": "ok", text: factLine(key) })),
+    // Tracking protection and HTTPS-Only are settings, read at once: listed as they are, also when one is off.
+    // The content filter is installed in the first seconds of a new profile: listed here only once it is there,
+    // and reported where it is checked again ("Tudo pronto" and the new tab) while it is not.
+    ...["tracking", "https", "filter"].filter(key => key !== "filter" || fact(key).dataset.level === "ok")
+      .map(key => h("li", { "data-level": fact(key).dataset.level, text: factLine(key) })),
     h("li", { "data-level": "ok", text: t("firstrunNothingSent") })
   );
   // The band as it is in this window, drawn small: this profile, and its state in the band's own words.
   const band = (profile, state) => [chip(profile, "sm"), h("strong", { class: "miniwin__name", text: profile.name }), h("span", { class: "miniwin__state", text: state })];
   if (here) {
-    const state = t(here.protection === "unlocked" ? "bandProtectedShort" : here.protection === "plain" ? "bandUnprotected" : "bandProtectionUnknown");
+    const state = t(protectionWords(here));
     document.getElementById("firstrun-band").replaceChildren(...band(here, state));
     document.getElementById("firstrun-band-now").replaceChildren(...band(here, state));
     document.getElementById("firstrun-band-then").replaceChildren(
@@ -750,7 +754,7 @@ async function firstRun() {
     const dnsKey = dnsNow ? { system: "dnsStatusSystem", default: "dnsStatusDefault", strict: "dnsStatusStrict" }[dnsNow.choice] ?? "dnsStatusFallback" : null;
     const hereNow = await browser.nulavioProfiles?.here?.().catch(() => null);
     const rows = [
-      hereNow ? [t("firstrunSummaryProfile"), `${hereNow.name} · ${t(hereNow.protection === "plain" ? "bandUnprotected" : "bandProtectedShort")}`] : null,
+      hereNow ? [t("firstrunSummaryProfile"), `${hereNow.name} · ${t(protectionWords(hereNow))}`] : null,
       presetKey ? [t("firstrunSummaryTabs"), t(presetKey)] : null,
       dnsKey ? [t("dnsHeading"), t(dnsKey)] : null,
       [t("statusPasswords"), fact("passwords").textContent],

@@ -1,6 +1,6 @@
 # ADR 0010 — Experience direction: one surface, the band as the constant, the first run as a stage
 
-- **Status:** Accepted (2026-11-12): the maintainer follows the recommendations, so the principle "no floating content card" is withdrawn in the [UX principles](../design/ux-principles.md) and Imersivo stands under ADR 0009. Prototypes on the engine (below); the frame (direction A) is built into the theme in its own slice, below. Not merged.
+- **Status:** Accepted (2026-11-12): the maintainer follows the recommendations, so the principle "no floating content card" is withdrawn in the [UX principles](../design/ux-principles.md) and Imersivo stands under ADR 0009. Prototypes on the engine (below); the frame (direction A) is built into the theme in its own slice, below.
 - **Related:** [references](../design/references/2026-11/README.md), [journeys](../design/journey-2026-11.md), [ADR 0008](0008-one-settings-page.md), [ADR 0009](0009-immersive-layout.md), [design system](../design/design-system.md), [UX principles](../design/ux-principles.md).
 
 ## Context

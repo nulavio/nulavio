@@ -1,6 +1,6 @@
 # ADR 0008 — One settings page: Nulavio's options inside the engine's about:preferences
 
-- **Status:** Accepted (2026-11-12): the maintainer follows the recommendations listed under "What was undecided". The proof of concept and slice 1 (the host hardened, the journey's navigation, every way in) work on the engine, below; ADR 0011 carries the rest. Not merged.
+- **Status:** Accepted (2026-11-12): the maintainer follows the recommendations listed under "What was undecided". The proof of concept and slice 1 (the host hardened, the journey's navigation, every way in) work on the engine, below; ADR 0011 carries the rest.
 - **Related:** [references](../design/references/2026-11/README.md), the frontend audit of 2026-11 (pull request #41), [ADR 0003](0003-nulavio-profiles-and-routing.md), [ADR 0007](0007-ai-bridge.md), [UX principles](../design/ux-principles.md).
 
 ## Context

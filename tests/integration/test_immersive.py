@@ -337,6 +337,20 @@ class ImmersiveTest(unittest.TestCase):
         words = "return WebExtensionPolicy.getByID('shell@nulavio.net').extension.localizeMessage(...arguments);"
         self.assertEqual(plain["state"], self.m.chrome(words, ["bandOriginNotSecure"]), plain)
         self.assertIn(self.m.chrome(words, ["bandOriginNamedNotSecure", [plain["host"]]]), plain["label"], plain)
+        # The band follows the engine's verdict, read from the identity box: "verified" is fine, and "verified" by
+        # an exception the person added is not (the engine draws a warning on that padlock). No test server has a
+        # certificate, so the verdict is put on the box as the engine would write it.
+        verdict = "document.getElementById('identity-box').className = arguments[0];"
+        self.m.chrome(verdict, ["verifiedDomain"])
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome(BAND)["secure"] == "true", 6), self.m.chrome(BAND))
+        self.assertFalse(self.m.chrome(BAND)["state"], "a verified site carries no warning in words")
+        self.m.chrome(verdict, ["verifiedDomain mixedActiveBlocked"])
+        self.assertEqual(self.m.chrome(BAND)["secure"], "true")
+        self.m.chrome(verdict, ["verifiedDomain certUserOverridden"])
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome(BAND)["secure"] == "false", 6), self.m.chrome(BAND))
+        self.assertEqual(self.m.chrome(BAND)["state"], plain["state"])
+        self.m.chrome(verdict, [" ".join(plain["engine"])])
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome(BAND)["state"] == plain["state"], 6))
         away = cues()
         # And its warning in the address bar is the engine's, untouched, once the toolbar is back.
         self.m.chrome("document.getElementById('Browser:OpenLocation').doCommand();")
@@ -391,6 +405,56 @@ class ImmersiveTest(unittest.TestCase):
         self.assertEqual((state["on"], state["off"], state["toolbar"]), (False, "page", True), state)
         self.m.navigate(self.page)
         self.assertTrue(harness.wait_until(lambda: self.window()["on"], 10), self.window())
+
+    def test_12_a_notification_bar_keeps_the_toolbar_and_is_seen(self):
+        """The engine's notification bars (a blocked pop-up, a page opened past a Safe Browsing warning) and the
+        Guard's sit in a toolbar of their own under the address bar. Immersive takes the toolbars out of view: while
+        one of those bars is shown, in the window or on the selected tab, they stay, and so does the bar."""
+        seen = """
+        const bar = document.getElementById("notifications-toolbar");
+        const note = (arguments[0] === "window" ? gNotificationBox : gBrowser.getNotificationBox())
+          .getNotificationWithValue("nulavio-test");
+        const style = getComputedStyle(bar), box = note?.getBoundingClientRect();
+        return { there: Boolean(note), opacity: style.opacity, events: style.pointerEvents,
+                 inside: Boolean(box) && box.height > 0 && box.top >= 0 && box.bottom <= window.innerHeight };
+        """
+        show = """
+        const box = arguments[0] === "window" ? gNotificationBox : gBrowser.getNotificationBox();
+        box.appendNotification("nulavio-test", { label: "Nulavio test", priority: box.PRIORITY_WARNING_MEDIUM }, []);
+        """
+        close = """
+        (arguments[0] === "window" ? gNotificationBox : gBrowser.getNotificationBox())
+          .getNotificationWithValue("nulavio-test")?.close();
+        """
+        in_view = lambda bar: bar["inside"] and bar["opacity"] == "1"  # noqa: E731
+        self.assertFalse(self.settled(False)["toolbar"])
+        for where in ("window", "tab"):
+            with self.subTest(where=where):
+                self.addCleanup(self.m.chrome, close, [where])
+                self.m.chrome(show, [where])
+                state = self.settled(True)
+                self.assertEqual((state["on"], state["toolbar"]), (True, True), state)
+                self.assertTrue(harness.wait_until(lambda where=where: in_view(self.m.chrome(seen, [where])), 6))
+                self.assertEqual(self.m.chrome(seen, [where])["events"], "auto")
+                if where == "tab":
+                    # A bar on a tab in the background holds nothing; back on its tab, it does again.
+                    first = self.m.chrome("return gBrowser.tabs.indexOf(gBrowser.selectedTab);")
+                    self.addCleanup(
+                        self.m.chrome,
+                        "if (window.nvOther) { gBrowser.removeTab(window.nvOther); delete window.nvOther; }",
+                    )
+                    self.m.chrome(
+                        "window.nvOther = gBrowser.addTrustedTab(arguments[0]); gBrowser.selectedTab = window.nvOther;",
+                        [self.server.url("/page/Outra")],
+                    )
+                    self.assertTrue(harness.wait_until(lambda: self.window()["on"], 15), self.window())
+                    self.m.chrome("gBrowser.selectedBrowser.focus();")
+                    self.assertFalse(self.settled(False)["toolbar"], "a bar on another tab kept this one's toolbar")
+                    self.m.chrome("gBrowser.selectedTab = gBrowser.tabs[arguments[0]];", [first])
+                    self.assertTrue(self.settled(True)["toolbar"])
+                self.m.chrome(close, [where])
+                self.m.chrome("gBrowser.selectedBrowser.focus();")
+                self.assertFalse(self.settled(False)["toolbar"], "the bar is gone and the toolbar stayed")
 
 
 if __name__ == "__main__":

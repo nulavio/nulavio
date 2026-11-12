@@ -180,6 +180,10 @@ class DnsChoiceTest(unittest.TestCase):
         try:
             self.assertTrue(harness.wait_until(lambda: self.state()["encryptedNow"], 10), self.state())
             self.assertEqual((self.state()["choice"], self.state()["chosen"]), ("default", False))
+            # Which resolver answers is the engine's word for the one in use, not the address in the settings.
+            in_use = self.m.chrome("return Services.dns.currentTrrURI;")
+            self.assertTrue(in_use.startswith("https://"), in_use)
+            self.assertEqual(self.state()["resolverUri"], in_use)
             self.open("newtab/newtab.html")
             card = self.card()
             self.assertEqual((card["hidden"], card["encrypted"]), (False, "true"))

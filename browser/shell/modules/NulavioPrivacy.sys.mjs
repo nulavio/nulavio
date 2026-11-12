@@ -148,7 +148,16 @@ class Privacy {
     // What the resolver does right now (the engine's regional roll-out can turn DoH on under "default").
     const effective = Services.dns.currentTrrMode;
     const encryptedNow = effective === MODE.fallback || effective === MODE.strict;
-    return { choice, provider, uri, encryptedNow, chosen: Services.prefs.getBoolPref(PREF_DNS_CHOSEN, false), providers: DNS_PROVIDERS };
+    // ...and which resolver that is: the engine's word for the one it is using, which under "default" can be
+    // another than the address in the settings.
+    let resolverUri = "";
+    try {
+      resolverUri = encryptedNow ? Services.dns.currentTrrURI : "";
+    } catch (e) {
+      console.error("Nulavio privacy: the resolver in use", e);
+    }
+    const resolver = resolverUri ? (DNS_PROVIDERS.find(p => p.uri === resolverUri)?.id ?? "custom") : null;
+    return { choice, provider, uri, encryptedNow, resolver, resolverUri, chosen: Services.prefs.getBoolPref(PREF_DNS_CHOSEN, false), providers: DNS_PROVIDERS };
   }
 
   /**

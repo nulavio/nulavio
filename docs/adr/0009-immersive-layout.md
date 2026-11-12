@@ -1,6 +1,6 @@
 # ADR 0009 — Immersive layout: the chrome hides, the band keeps the origin on screen
 
-- **Status:** Accepted (2026-11-12): the maintainer follows the recommendation under "Decided" below, and the guarantees are in the [UX principles](../design/ux-principles.md). Built as a prototype and a controller on the engine (below). Not merged.
+- **Status:** Accepted (2026-11-12): the maintainer follows the recommendation under "Decided" below, and the guarantees are in the [UX principles](../design/ux-principles.md). Built as a prototype and a controller on the engine (below).
 - **Related:** [references](../design/references/2026-11/README.md), [UX principles](../design/ux-principles.md), [design system: UX3A band](../design/design-system.md), [ADR 0008](0008-one-settings-page.md).
 
 ## Context
@@ -110,7 +110,7 @@ A second model (Codex, read-only, closed brief) read the controller against the 
 | A download that needs attention only marks its toolbar button; nothing opened, so nothing showed | True (`downloads/indicator.js`) | Fixed: the toolbar is held while the button's mark is "warning" or "severe". `test_06c` |
 | A paused capture drops the tab's mark; the state was read from the tab, the engine keeps it on the browser | True | Fixed: read from the browser's sharing state. `test_06` |
 | A popup whose opening is cancelled sends no "popuphidden" and could leave a hold until the next change | Plausible, not reproduced | The holds are looked at again right after the event |
-| A blocked pop-up with the engine's message bar turned off shows only an icon in the address bar | True, with a pref that is not the default (the bar is inside the page area and stays visible) | Open |
+| A blocked pop-up with the engine's message bar turned off shows only an icon in the address bar | True, with a pref that is not the default. With the default, the message bar is what is seen: it sits in a toolbar of its own, with every other notification bar (a page opened past a Safe Browsing warning, the Guard's), and that toolbar went out of view with the others until the review of 2026-11-12 found it. A notification bar in the window or on the selected tab now keeps the toolbar shown (`test_immersive` 12) | Open for the pref; fixed for the bars |
 | The site's identity while a load is committing | Measured on 2026-11-12 (every change of the mode and of the band's site recorded across navigations, back and forward): at each change of address the band already names the document that was committed, in the same task as the engine's own notice. One case differed, a tab being restored (below) | Fixed: the mode waits for the document; `test_immersive` 10 and 11 |
 | IPv6 with a port; a real capture device | Not determined by reading | Open: they need cases on the engine |
 

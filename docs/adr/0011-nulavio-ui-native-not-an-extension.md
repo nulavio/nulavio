@@ -1,6 +1,6 @@
 # ADR 0011 — Nulavio's own interface reads as the browser, not as an extension
 
-- **Status:** Accepted (2026-11-12). The maintainer asked for this direction on 2026-11-11 and follows the recommendations under "What was undecided"; steps 1 to 15 are built (below). Not merged.
+- **Status:** Accepted (2026-11-12). The maintainer asked for this direction on 2026-11-11 and follows the recommendations under "What was undecided"; steps 1 to 15 are built (below).
 - **Related:** [ADR 0001](0001-engine-selection.md) (patch policy), [ADR 0008](0008-one-settings-page.md) (one settings page), [extension model](../architecture/extension-model.md).
 
 ## Context

@@ -112,6 +112,24 @@ class FirstRunStageTest(unittest.TestCase):
         self.assertEqual(set(page["levels"]), {"ok"}, "the welcome lists only facts that are true now")
         self.assertEqual(page["primary"], 1, page)
 
+    def test_01b_the_welcome_says_so_when_a_protection_is_off(self):
+        """A profile whose HTTPS-Only was switched off (a managed setting, a `user.js`): the welcome lists it with
+        its warning, not only what is fine."""
+        self.m.chrome("Services.prefs.setBoolPref('dom.security.https_only_mode', false);")
+        self.addCleanup(self.m.chrome, "Services.prefs.clearUserPref('dom.security.https_only_mode');")
+        self.m.navigate(self.newtab)
+        self.assertTrue(harness.wait_until(lambda: self.page()["card"] == "firstrun-welcome", 15), self.page())
+        self.assertTrue(harness.wait_until(lambda: "warn" in self.page()["levels"], 10), self.page()["levels"])
+        facts = self.m.execute(
+            "return [...document.querySelectorAll('#firstrun-facts li')].map(li => [li.dataset.level, li.textContent]);"
+        )
+        status = self.m.execute(
+            "const dd = document.querySelector('#status [data-status=https]');"
+            " return [dd.dataset.level, `${dd.previousElementSibling.textContent}: ${dd.textContent}`];"
+        )
+        self.assertEqual(status[0], "warn", status)
+        self.assertIn(status, facts, "the welcome leaves out what the status card says about HTTPS-Only")
+
     def test_02_the_card_keeps_its_place_and_size_on_every_step(self):
         welcome = self.page()
         seen = [welcome["card"]]

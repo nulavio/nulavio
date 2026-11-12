@@ -477,7 +477,10 @@ class WindowUI {
     }
     fullscreen.append(line, compact);
     doc.getElementById("browser").before(fullscreen);
-    const header = () => this.#header(win);
+    const header = () => {
+      this.#noticeHold(win); // another tab, another page: its own notification bar, or none
+      this.#header(win);
+    };
     const progress = {
       onLocationChange: header,
       onSecurityChange: header,
@@ -526,6 +529,14 @@ class WindowUI {
     if (downloadsButton) {
       downloads.observe(downloadsButton, { attributes: true, attributeFilter: ["attention"] });
     }
+    // ...and a notification bar: the engine's (a blocked pop-up, a page opened past a Safe Browsing warning, a
+    // sign-in network) and Nulavio's own (the Guard's). They live in a toolbar of their own, which would go out
+    // of view with the others.
+    const notices = new win.MutationObserver(() => this.#noticeHold(win));
+    const noticesBar = doc.getElementById("notifications-toolbar");
+    if (noticesBar) {
+      notices.observe(noticesBar, { childList: true, subtree: true });
+    }
     const unload = () => this.#detach(win);
     win.addEventListener("unload", unload, { once: true });
     const reveal = () => this.#showNotice(win);
@@ -546,9 +557,10 @@ class WindowUI {
       identityObserver.observe(identityBox, { attributes: true, attributeFilter: ["class"] });
     }
     this.#windows.set(win, { bar, compact, fullscreen, line, sheet, progress, header, unload, pointer, screenObserver, identityObserver, edge,
-      popup, sharing, dialog, downloads, holds: new Map(), named: false, noticeTimer: null, safety: null, restoreGroupPalette: this.#groupPalette(win),
+      popup, sharing, dialog, downloads, notices, holds: new Map(), named: false, noticeTimer: null, safety: null, restoreGroupPalette: this.#groupPalette(win),
       restoreIdentity: this.#ownPagesIdentity(win) });
     this.#downloadHold(win);
+    this.#noticeHold(win);
     this.#paint(win);
     this.#unifyStartPage(win);
   }
@@ -802,6 +814,32 @@ class WindowUI {
     }
   }
 
+  /** A notification bar in this window or on the selected tab: the toolbar stays shown, and the bar with it,
+      until it is closed. A bar on a tab in the background holds nothing until that tab is selected. */
+  #noticeHold(win) {
+    const state = this.#windows.get(win);
+    const bar = win.document.getElementById("notifications-toolbar");
+    if (!state || !bar) {
+      return;
+    }
+    let shown;
+    try {
+      const boxes = [win.gNotificationBox, win.gBrowser.readNotificationBox(win.gBrowser.selectedBrowser)];
+      shown = boxes.some(box => box?.allNotifications.length);
+    } catch (e) {
+      console.error("Nulavio band: notification bars", e);
+      shown = true; // not known: as if one were shown
+    }
+    if (shown !== state.holds.has(bar)) {
+      if (shown) {
+        state.holds.set(bar, "toolbar");
+      } else {
+        state.holds.delete(bar);
+      }
+      this.#applyImmersive(win);
+    }
+  }
+
   /** A download that needs the person's attention (blocked, or flagged as dangerous) marks its toolbar button
       and opens nothing: the toolbar stays shown until the mark is gone (the person opened the downloads). */
   #downloadHold(win) {
@@ -849,9 +887,11 @@ class WindowUI {
             host += `:${uri.port}`;
           }
           // The verdict is the engine's own: the classes its identity handler puts on the address
-          // bar's identity box (verified, local, or anything else), never a second opinion.
+          // bar's identity box (verified, local, or anything else), never a second opinion. A certificate the
+          // person accepted with an exception is "verified" there with a second class, a warning on its padlock
+          // and "connection not secure" in its panel: not fine here either.
           const identity = win.document.getElementById("identity-box")?.classList;
-          const fine = identity?.contains("verifiedDomain") || identity?.contains("mixedActiveBlocked")
+          const fine = (identity?.contains("verifiedDomain") && !identity.contains("certUserOverridden"))
             || identity?.contains("localResource");
           state = fine ? "" : t("bandOriginNotSecure");
         } else if (uri.schemeIs("file")) {
@@ -1138,6 +1178,7 @@ class WindowUI {
       win.removeEventListener(type, state.dialog, true);
     }
     state.downloads.disconnect();
+    state.notices.disconnect();
     win.clearTimeout(state.noticeTimer);
     state.screenObserver.disconnect();
     state.identityObserver.disconnect();
