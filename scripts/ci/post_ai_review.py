@@ -88,7 +88,7 @@ SECRET_PATTERNS = (
     re.compile(r"\beyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}"),
     re.compile(r"(?i)\bbearer\s+[A-Za-z0-9._~+/-]{20,}=*"),
 )
-DISCLAIMER = "**Not an approval.** It can miss problems and can be misled by the content it reviews. A human reviewer decides."
+DISCLAIMER = "**Not an approval.** It can miss problems and can be misled by the content it reviews. Whoever merges decides."
 
 
 class InvalidResult(Exception):
@@ -443,7 +443,7 @@ def comment_for(args: argparse.Namespace, env: dict, ctx: Context, stdin: Any, a
     if status == "too-large":
         size = env.get("DIFF_BYTES", "")
         size_text = f" ({size} bytes)" if size.isdigit() else ""
-        reason = f"The diff{size_text} is over the size limit for an AI review. It needs a human-only review."
+        reason = f"The diff{size_text} is over the size limit for this AI review. Review it another way before merging."
         return render_notice(ctx, reason), 0
     if status != "ready" or outcome != "success":
         shown = outcome if LABEL_RE.match(outcome) else "unknown"
