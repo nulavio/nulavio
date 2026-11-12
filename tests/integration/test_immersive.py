@@ -8,6 +8,7 @@ from __future__ import annotations
 import unittest
 
 import harness
+import settings_page
 
 LAYOUT = 'ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioLayout.sys.mjs").NulavioLayout'
 # The window: whether Immersive is drawn, why not, what holds the chrome, and what is really in view.
@@ -212,23 +213,18 @@ class ImmersiveTest(unittest.TestCase):
 
     def test_08_the_switch_in_settings_turns_it_on_and_off(self):
         self.m.chrome("Services.prefs.clearUserPref('nulavio.layout.immersive');")
-        settings = self.m.chrome(
-            "return WebExtensionPolicy.getByID('shell@nulavio.net').getURL('settings/settings.html#layout');"
-        )
-        self.m.navigate(settings)
-        switch = (
-            "return (e => [e.checked, e.disabled, e.closest('[data-option]')?.dataset.option])"
-            "(document.getElementById('immersive'));"
-        )
-        self.assertTrue(
-            harness.wait_until(lambda: self.m.execute(switch) == [False, False, "immersive"], 15), self.m.execute(switch)
-        )
-        self.m.send("WebDriver:ElementClick", {"id": self.m.find_element("#immersive")})
+        # The switch is in the settings page's Aparência pane, under the arrangement (ADR 0009, ADR 0011).
+        settings_page.open_pane(self.m, "appearance")
+        off = lambda now: now["shown"] and not now["pressed"] and not now["disabled"]  # noqa: E731
+        settings_page.wait_control(self.m, "nulavio-immersive", off, timeout=15)
+        marked = settings_page.DOC + 'return d.getElementById("nulavio-immersive").dataset.option;'
+        self.assertEqual(self.m.chrome(marked), "immersive")
+        settings_page.click(self.m, "#nulavio-immersive")
         pref = "return Services.prefs.getBoolPref('nulavio.layout.immersive', false);"
         self.assertTrue(harness.wait_until(lambda: self.m.chrome(pref), 10))
-        # Settings is one of Nulavio's named pages: the band vouches for it, so the mode applies here too.
+        # The settings page is the browser's own page: the mode applies while it is in front, as on any page.
         self.assertTrue(harness.wait_until(lambda: self.window()["on"], 10), self.window())
-        self.m.send("WebDriver:ElementClick", {"id": self.m.find_element("#immersive")})
+        settings_page.click(self.m, "#nulavio-immersive")
         self.assertTrue(harness.wait_until(lambda: not self.m.chrome(pref), 10))
         self.assertTrue(self.settled(True)["toolbar"])
 

@@ -19,6 +19,8 @@ import settings_page
 
 # ADR 0011: what the settings page draws itself is gone from this page; its old address opens that page at this pane.
 MOVED = {
+    "#layout": "appearance",
+    "#layout-immersive": "appearance",
     "#appearance": "appearance",
     "#appearance-accent": "appearance",
     "#shortcuts": "tabsBrowsing",
@@ -32,7 +34,6 @@ MOVED = {
     "#routing-fallback-field": "nulavioProfiles",
 }
 SCOPES = {
-    "layout": "scopeProfile",
     "ai": "scopeAllProfiles",
     "integrations": "scopeComputer",
 }
@@ -90,13 +91,12 @@ class SettingsPanesTest(unittest.TestCase):
         self.assertEqual(state["view"], "section")
         self.assertEqual(len(state["shown"]), 1, state)
         self.assertEqual(state["current"], state["shown"])  # the rail marks the section on screen
-        for address, section in (("#ai-activity-card", "ai"), ("#integrations", "integrations"), ("#layout", "layout")):
+        for address, section in (("#ai-activity-card", "ai"), ("#integrations", "integrations")):
             self.open(address)
             self.assertTrue(
                 harness.wait_until(lambda section=section: self.view()["shown"] == [section], 10), (address, self.view())
             )
-            # Layout is drawn by the settings page too (ADR 0008): it still opens by its address, with no entry in the rail.
-            self.assertEqual(self.view()["current"], [] if section == "layout" else [section])
+            self.assertEqual(self.view()["current"], [section])
         # A card's own address (the assistant panel links there) scrolls it into view.
         self.open("#ai-activity-card")
         harness.wait_until(lambda: self.view()["shown"] == ["ai"], 10)
@@ -150,17 +150,11 @@ class SettingsPanesTest(unittest.TestCase):
         self.assertEqual(groups, [self.message(k) for k in ("scopeAllProfiles", "scopeComputer")])
         # Every entry of the rail points to a section that exists, in the order of its group.
         entries = self.m.execute("return [...document.querySelectorAll('.settings-nav a')].map(a => a.dataset.section);")
-        # ADR 0008: Layout is drawn by the settings page itself; this page keeps no entry for it.
-        self.assertEqual(entries, [section for section in SCOPES if section != "layout"])
-        # ...and its own search does not offer them either: one option, one place.
-        self.type_search(self.message("layoutHeading").lower())
-        self.assertTrue(harness.wait_until(lambda: self.view()["view"] == "search", 5))
-        self.assertNotIn("layout", self.view()["shown"])
-        self.type_search("")
+        self.assertEqual(entries, list(SCOPES))
         self.assertNotIn(self.message("settingsIntro"), ["", "settingsIntro"])
 
     def test_04_search_filters_the_cards_of_every_section(self):
-        self.open("#layout")
+        self.open("#ai")
         # A word of the integrations' introduction ("verificação"), typed without accents, in lower case.
         words = [w.strip(".,;:") for w in self.message("connectIntro").split()]
         word = max(words, key=len)
@@ -169,7 +163,7 @@ class SettingsPanesTest(unittest.TestCase):
         self.assertTrue(harness.wait_until(lambda: self.view()["view"] == "search", 5))
         state = self.view()
         self.assertIn("integrations", state["shown"])
-        self.assertNotIn("layout", state["shown"])
+        self.assertNotIn("ai", state["shown"])
         self.assertEqual(state["current"], [])  # results span sections: the rail marks none
         self.assertTrue(state["results"])
         self.shoot("search-results")
@@ -188,7 +182,7 @@ class SettingsPanesTest(unittest.TestCase):
         self.assertEqual(self.view()["shown"], [])
         # Escape leaves the search and returns to the section of the address.
         self.m.send("WebDriver:ElementSendKeys", {"id": self.m.find_element("#settings-search"), "text": ""})
-        self.assertTrue(harness.wait_until(lambda: self.view()["shown"] == ["layout"], 5))
+        self.assertTrue(harness.wait_until(lambda: self.view()["shown"] == ["ai"], 5))
         self.assertIsNone(self.view()["results"])
 
     def test_05_header_names_the_profile_being_configured(self):

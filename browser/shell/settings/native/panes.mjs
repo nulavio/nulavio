@@ -288,6 +288,29 @@
       });
       return { id, control: "moz-message-bar" };
     };
+    // While the first-run choice is still open, the arrangement in use can be kept from here too, so the question
+    // is never out of reach (the new tab may have been handed to another page). Choosing another one answers it as well.
+    const PRESETS = ["lateral", "top", "focus"];
+    const layoutPending = () => layoutOpen() && Boolean(layout.state.value.choicePending);
+    setting({
+      id: "nulavio-layout-keep",
+      setup: layout.watch,
+      visible: layoutPending,
+      onUserClick(event) {
+        event.preventDefault();
+        try {
+          shell.NulavioLayout.dismissChoice();
+        } catch (e) {
+          console.error(e);
+        }
+        layout.refresh();
+      },
+      getControlConfig(config) {
+        const preset = layout.state.value?.preset;
+        const label = msg(PRESETS.includes(preset) ? `layoutChoiceKeep_${preset}` : "layoutChoiceDone");
+        return { ...config, controlAttrs: { ...config.controlAttrs, label, title: msg("layoutPendingHint") } };
+      },
+    });
     const layoutNotes = [
       layoutNote("nulavio-layout-why", "info", () =>
         !layout.state.ready || layoutOpen() ? "" : msg(layout.state.value.available ? "layoutLocked" : "layoutUnavailable")
@@ -1982,6 +2005,7 @@
               controlAttrs: { id: `nulavio-layout-${value}`, class: "setting-chooser-item", imagesrc: `${IMAGES}layout-${value}.svg` },
             })),
           },
+          { id: "nulavio-layout-keep", control: "moz-button" },
           { id: "nulavio-immersive", l10nId: "nulavio-immersive", control: "moz-toggle", controlAttrs: { "data-option": "immersive" } },
         ],
       },

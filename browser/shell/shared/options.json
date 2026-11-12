@@ -19,7 +19,7 @@
       "writer": "NulavioLayout",
       "labelKey": "layoutHeading",
       "ui": [
-        "settings/settings.html#layout-choices",
+        "settings/native/panes.mjs#nulavio-layout",
         "newtab/newtab.html#layout-choice-options"
       ]
     },
@@ -37,7 +37,7 @@
       "writer": "NulavioLayout",
       "labelKey": "immersiveLabel",
       "ui": [
-        "settings/settings.html#layout-immersive"
+        "settings/native/panes.mjs#nulavio-immersive"
       ]
     },
     {

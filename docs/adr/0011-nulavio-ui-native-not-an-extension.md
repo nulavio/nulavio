@@ -250,5 +250,18 @@ Branch `agent/claude/feat-settings-layout-notes`.
 
 The old Layout card said two things the picker in Aparência did not. The picker's group says them now: why it takes no change (an administrator's lock, or no sidebar in this window), and that a change could not be applied, with the picker back on the arrangement the window really has (choosing again is the retry). `tests/integration/test_settings_layout.py` (2 tests).
 
-Still to do before the old card can be removed: `test_layout_presets` drives that card in eleven of its tests (two windows, a tab moved between windows, a window closed while a change applies) and `test_immersive` in one; they are to be ported to the picker, and two things only the old card has are to be decided: "Manter Lateral" while the first-run choice is pending (the new tab's card has it), and the measured reflow of the card at 320 px and 200 % text, which on the settings page is the engine's layout.
+The old card itself goes in step 15.
 
+
+## Step 15 (2026-11-12): the old Layout card goes; the Shell's page is the agents and the integrations
+
+Branch `agent/claude/refactor-settings-old-layout`.
+
+The last copy: the Layout section of the Shell's page, with `settings/layout.js`. Its address (`settings.html#layout`, `#layout-immersive`) opens the settings page at Aparência.
+
+- **"Manter Lateral" while the first-run choice is open** is a button under the picker, shown only then, so the question is never out of reach when the new tab was handed to another page. Choosing another arrangement answers it too, as before.
+- **`shared/options.json`** declares the arrangement and Immersive at their controls in `settings/native/panes.mjs`.
+- **`test_layout_presets`** (23 tests) drives the picker where it drove the card: two windows with different arrangements, a locked sidebar pref (disabled, with its reason), a window closed while a change applies (both surfaces), the keyboard route of Foco, a failed change and a failed read, a settings tab moved to another window and still following it, the choice kept from the settings page. `test_immersive` uses the switch under the picker.
+- **Not carried over**: the old card's measured reflow at 320 px and 200 % text. On the settings page that is the engine's layout with Nulavio's groups in it, and measuring it is its own piece of work (issue #108). What the system asks for (reduced motion, contrast, transparency) is still checked on the window.
+
+What the Shell's own settings page holds now: the agents (connecting one, permissions, consent, pause, revoke, the emergency stop, the activity record) and the desktop integrations. Every setting is in the browser's settings page.

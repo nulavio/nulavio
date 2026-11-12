@@ -574,8 +574,8 @@ class LayoutModuleTest(unittest.TestCase):
         privacy = module_text("NulavioPrivacy.sys.mjs")
         self.assertLess(privacy.index("lazy.NulavioLayout.adoptInitialLayout()"), privacy.index("setIntPref(PREF_SEEDED"))
 
-    def test_layout_pictures_match_between_settings_and_the_first_run(self):
-        """UX6 S1: the two copies of each preset's picture (Settings and the first-run card) stay equal."""
+    def test_layout_pictures_exist_in_settings_and_in_the_first_run(self):
+        """UX6 S1: each preset has its picture on both surfaces (the first-run card and the settings page's picker)."""
 
         def pictures(page: str) -> dict[str, str]:
             html = (SHELL / page).read_text(encoding="utf-8")
@@ -586,9 +586,11 @@ class LayoutModuleTest(unittest.TestCase):
                 found[value] = re.sub(r"\s+", " ", svg).strip()
             return found
 
-        settings, newtab = pictures("settings/settings.html"), pictures("newtab/newtab.html")
-        self.assertEqual(set(settings), {"lateral", "top", "focus"})
-        self.assertEqual(settings, newtab)
+        # The first-run card draws each arrangement inline; the settings page's picker shows a picture file per
+        # arrangement (settings/native). Both exist for the same three.
+        self.assertEqual(set(pictures("newtab/newtab.html")), {"lateral", "top", "focus"})
+        for value in ("lateral", "top", "focus"):
+            self.assertTrue((SHELL / "settings" / "native" / f"layout-{value}.svg").is_file(), value)
 
     def test_layout_names_bridge_to_the_engine_settings(self):
         # QA B-9: the engine's own words for the two arrangements are "Vertical/Horizontal tabs", and it has
@@ -608,10 +610,12 @@ class LayoutModuleTest(unittest.TestCase):
                 self.assertIn(pane, msg["layoutChoiceSettings"])
 
     def test_layout_surfaces_guard_listener_registration(self):
-        for rel in ("settings/layout.js", "newtab/newtab.js"):
-            with self.subTest(script=rel):
-                source = (SHELL / rel).read_text(encoding="utf-8")
-                self.assertRegex(source, r"try\s*\{\s*api\.onChanged\.addListener\(")
+        # The new tab's card listens through the extension API; the settings page's picker subscribes in the module,
+        # inside its own try (settings/native/panes.mjs).
+        source = (SHELL / "newtab/newtab.js").read_text(encoding="utf-8")
+        self.assertRegex(source, r"try\s*\{\s*api\.onChanged\.addListener\(")
+        panes = (SHELL / "settings/native/panes.mjs").read_text(encoding="utf-8")
+        self.assertRegex(panes, r"try\s*\{\s*stops\.push\(shell\.NulavioLayout\.subscribe\(")
 
 
 if __name__ == "__main__":
