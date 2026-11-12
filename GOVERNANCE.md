@@ -15,7 +15,7 @@ Decisions are made in public, in writing:
 | What gets built next | An issue or a [Discussion](https://github.com/nulavio/nulavio/discussions) | [`docs/product/roadmap.md`](docs/product/roadmap.md) |
 | Accepted security risks | The pull request that accepts them | [`docs/security/residual-risks.md`](docs/security/residual-risks.md) |
 
-Anyone can propose a change or argue against one in the issue or pull request. The maintainer decides, and says why when a proposal is declined. A decision recorded in an ADR is changed by a new ADR that supersedes it, not by editing the old one.
+Anyone can propose a change or argue against one in the issue or pull request. The maintainer decides what the project is and does: its direction, its ADRs, the risks it accepts. Day-to-day changes are reviewed and merged by the coding agents that work for him ([how](docs/process/pull-requests.md#review-and-merging)), and a proposal that is declined is told why. A decision recorded in an ADR is changed by a new ADR that supersedes it, not by editing the old one.
 
 Some rules are not up for a case-by-case decision: the non-negotiables in [CONTRIBUTING.md](CONTRIBUTING.md#non-negotiables-reviewers-will-block-on-these) and the security invariants reviewers check ([`.github/ai-review/instructions.md`](.github/ai-review/instructions.md)).
 
@@ -23,11 +23,11 @@ Some rules are not up for a case-by-case decision: the non-negotiables in [CONTR
 
 | Role | Who today | Responsibilities |
 |---|---|---|
-| Maintainer | Caio Barbieri | Reviews and merges pull requests (every merge is the maintainer's decision); answers every issue at least once; keeps the roadmap and the ADRs current; enforces the [code of conduct](CODE_OF_CONDUCT.md) |
+| Maintainer | Caio Barbieri | Sets the direction and decides what the project leaves to him (ADRs, accepted risks, what gets built next); answers for what is merged in his name and can revert it; answers every issue at least once; keeps the roadmap and the ADRs current; enforces the [code of conduct](CODE_OF_CONDUCT.md) |
 | Security contact | Caio Barbieri | Receives reports ([SECURITY.md](SECURITY.md)): acknowledges within 3 working days, assesses within 10, coordinates disclosure within 90; publishes GitHub security advisories and credits reporters who want credit |
 | Release manager | Caio Barbieri | Holds the release signing key (`298A 9093 BAAB B26F 79BB  29F4 BF47 E5FA 9EDB 8DB1`); ships Mozilla's security releases within 72 hours ([update policy](docs/architecture/update-policy.md)); signs and publishes packages; writes the [security changelog](docs/security/changelog.md) entry |
 | Contributor | Anyone | Opens issues and pull requests following [CONTRIBUTING.md](CONTRIBUTING.md): tests with every change, signed-off commits (DCO), what was verified and what was not |
-| Coding agent | AI tools working for the maintainer | Writes code and opens pull requests that name the tool; never approves, and never merges unless the maintainer tells it to for that pull request. The advisory AI review is not an approval ([pull requests](docs/process/pull-requests.md)) |
+| Coding agent | AI tools working for the maintainer | Writes code and opens pull requests that name the tool; reviews them, records the review and merges them when the required checks pass, with a second independent review for the security-sensitive paths. Does not merge a change that weakens a protection, does not settle what is the maintainer's to decide, and does not release ([review and merging](docs/process/pull-requests.md#review-and-merging)) |
 
 Mozilla maintains the Firefox engine. Engine bugs go to [Bugzilla](https://bugzilla.mozilla.org/); Nulavio's job is to ship Mozilla's fixes on time and keep its own patches small ([update and patch policy](docs/architecture/update-policy.md)).
 

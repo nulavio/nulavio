@@ -181,6 +181,8 @@ class MozillaAiAndAccountTest(unittest.TestCase):
             )
 
     def test_the_update_checks_name_neither_the_system_nor_the_distribution(self):
+        """The values as written. That they are still the engine's own addresses with only those three fields
+        replaced is checked against the engine's files, on the engine (test_mozilla_features 03d)."""
         baseline = {p.name for p in profile.baseline_prefs()}
         branding = branding_prefs()
         for name, product in UPDATE_CHECKS.items():

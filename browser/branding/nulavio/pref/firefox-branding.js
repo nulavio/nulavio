@@ -192,9 +192,11 @@ pref("media.gmp-widevinecdm.allow-chromium-update", false);
 // (docs/security/new-profile-connections.md). These are the engine's two
 // addresses with a fixed "Linux" and "default/default" in those places, which
 // is what a Firefox with no distribution sends for the last two. Mozilla's
-// answers were the same for both forms on 2026-11-12; an integration test
-// keeps asking for the plugin list this way. Track B only: a seed in Track A
-// would freeze an address that the distribution's own engine may change.
+// server can choose an answer by those fields; its answers were the same for
+// both forms on 2026-11-12, and an integration test asks both forms and
+// compares these two values with the engine's own. Track B only: a seed in
+// Track A would freeze an address that the distribution's own engine may
+// change.
 pref("media.gmp-manager.url", "https://aus5.mozilla.org/update/3/GMP/%VERSION%/%BUILD_ID%/%BUILD_TARGET%/%LOCALE%/%CHANNEL%/Linux/default/default/update.xml");
 pref("extensions.systemAddon.update.url", "https://aus5.mozilla.org/update/3/SystemAddons/%VERSION%/%BUILD_ID%/%BUILD_TARGET%/%LOCALE%/%CHANNEL%/Linux/default/default/update.xml");
 

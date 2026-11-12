@@ -60,9 +60,17 @@ class NewProfileConnectionsListTest(unittest.TestCase):
         rows = [line for line in table.splitlines() if line.startswith("| `")]
         self.assertEqual(len(rows), len(self.entries))
         in_page = set()
-        for row in rows:
-            in_page.update(re.findall(r"`([^`]+)`", row.split("|")[1]))
+        cells = [row.split("|")[1] for row in rows]
+        for cell in cells:
+            in_page.update(name for name in re.findall(r"`([^`]+)`", cell) if "." in name)
         self.assertEqual(in_page, self.every_host())
+        # A host for one language is named with that language, and only the languages recorded are named.
+        for entry, cell in zip(self.entries, cells, strict=True):
+            languages = entry.get("hosts_by_language", {})
+            self.assertEqual(set(re.findall(r"\(`([a-z]{2})`\): ", cell)), set(languages), entry["id"])
+            for language, hosts in languages.items():
+                named = cell.split(f"(`{language}`): ", 1)[1].split(";", 1)[0]
+                self.assertEqual(set(re.findall(r"`([^`]+)`", named)), set(hosts), (entry["id"], language))
         for entry in self.entries:
             for name in entry.get("names_only", []):
                 self.assertIn(f"`{name}`", table)

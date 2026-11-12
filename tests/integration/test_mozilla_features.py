@@ -192,68 +192,154 @@ class MozillaFeaturesTest(unittest.TestCase):
 
     def test_03c_no_question_to_google_about_a_drm_module_that_is_off(self):
         """The media plugin check reads the list Mozilla serves and stops there: nothing is asked of Google's component
-        update service about the Widevine module (issue #103). DRM stays the engine's switch, off in a new profile."""
+        update service about the Widevine module (issue #103). DRM stays the engine's switch, off in a new profile, and
+        the plugin check itself stays on. The step is run on a Widevine entry made here, so it needs no list from the
+        network, then with the engine's own check; the control switches the step on and sees the question (stopped
+        before it leaves)."""
         state = self.chrome_async(
             "const done = arguments[arguments.length - 1];"
-            'const { GMPInstallManager } = ChromeUtils.importESModule("resource://gre/modules/GMPInstallManager.sys.mjs");'
+            "const { GMPInstallManager, GMPAddon } ="
+            ' ChromeUtils.importESModule("resource://gre/modules/GMPInstallManager.sys.mjs");'
+            'const ALLOW = "media.gmp-widevinecdm.allow-chromium-update";'
             'const guid = Services.prefs.getStringPref("media.gmp-widevinecdm.chromium-guid", "");'
-            "const asked = [];"
+            "const asked = []; let stop = false;"
             "const watch = { observe(channel) { const uri = channel.QueryInterface(Ci.nsIHttpChannel).URI;"
-            ' if (uri.host === "update.googleapis.com" || (guid && uri.spec.includes(guid))) asked.push(uri.host); } };'
+            ' if (uri.host === "update.googleapis.com" || (guid && uri.spec.includes(guid))) {'
+            "  asked.push(uri.host); if (stop) channel.cancel(Cr.NS_BINDING_ABORTED); } } };"
             'Services.obs.addObserver(watch, "http-on-opening-request");'
-            "(async () => { const { addons } = await new GMPInstallManager().checkForAddons(); return {"
-            ' listed: addons.some(a => a.id === "gmp-widevinecdm"),'
-            " asked,"
-            ' allowed: Services.prefs.getBoolPref("media.gmp-widevinecdm.allow-chromium-update"),'
-            ' userSet: Services.prefs.prefHasUserValue("media.gmp-widevinecdm.allow-chromium-update"),'
-            ' drm: Services.prefs.getBoolPref("media.eme.enabled"),'
-            ' installed: Services.prefs.getStringPref("media.gmp-widevinecdm.version", ""),'
-            "}; })()"
+            'const widevine = () => [new GMPAddon({ id: "gmp-widevinecdm", version: "1.0.0.0",'
+            ' URL: "https://plugins.invalid/widevine.crx3", hashFunction: "sha512", hashValue: "00", size: 1 })];'
+            "(async () => { const out = { guid: Boolean(guid),"
+            "  allowed: Services.prefs.getBoolPref(ALLOW), userSet: Services.prefs.prefHasUserValue(ALLOW),"
+            '  drm: Services.prefs.getBoolPref("media.eme.enabled"),'
+            '  installed: Services.prefs.getStringPref("media.gmp-widevinecdm.version", ""),'
+            '  checks: Services.prefs.getBoolPref("media.gmp-manager.updateEnabled", true) };'
+            " await new GMPInstallManager().adjustForChromiumUpdateService(widevine());"
+            " out.shipped = [...asked];"
+            " await new GMPInstallManager().checkForAddons().catch(() => null);"
+            " out.live = [...asked];"
+            " asked.length = 0; stop = true; Services.prefs.setBoolPref(ALLOW, true);"
+            # The stopped request never answers, so the step is not waited for: only for its question.
+            " new GMPInstallManager().adjustForChromiumUpdateService(widevine()).catch(() => null);"
+            " for (let i = 0; i < 100 && !asked.length; i++) await new Promise(r => setTimeout(r, 50));"
+            " Services.prefs.clearUserPref(ALLOW);"
+            " out.control = [...asked];"
+            " return out; })()"
             '.finally(() => Services.obs.removeObserver(watch, "http-on-opening-request"))'
             ".then(done, e => done({ error: String(e) }));"
         )
-        if state.get("listed") is False:
-            self.skipTest("the media plugin list did not name Widevine, so the check had nothing to ask about (network?)")
-        self.assertEqual(state, {"listed": True, "asked": [], "allowed": False, "userSet": False, "drm": False, "installed": ""})
+        self.assertEqual(
+            state,
+            {
+                "guid": True,
+                "allowed": False,
+                "userSet": False,
+                "drm": False,
+                "installed": "",
+                "checks": True,
+                "shipped": [],
+                "live": [],
+                "control": ["update.googleapis.com"],
+            },
+        )
 
     def test_03d_the_update_checks_name_neither_the_system_nor_the_distribution(self):
         """The media plugin check and the built-in add-on check ask Mozilla's update server without the kernel, GTK and
-        libpulse versions and without Nulavio's name (issue #126), and the plugin list still comes back."""
-        state = self.chrome_async(
+        libpulse versions and without Nulavio's name (issue #126). Because these are update channels: the two
+        addresses are the engine's own with only those three fields replaced (read from the engine's own files, so
+        an engine that changes them fails here); both answers come back; OpenH264 is in Mozilla's list itself, not in
+        the engine's built-in fallback; and Mozilla answers the full form and this one alike. In a profile of its
+        own: the built-in add-on check may install what it is given."""
+        session = harness.GeckoProfileSession(name="Checagens")
+        self.addCleanup(session.cleanup)
+        m = session.start()
+        script = (
             "const done = arguments[arguments.length - 1];"
             'const { GMPInstallManager } = ChromeUtils.importESModule("resource://gre/modules/GMPInstallManager.sys.mjs");'
             'const { XPIInstall } = ChromeUtils.importESModule("resource://gre/modules/addons/XPIInstall.sys.mjs");'
             'const { UpdateUtils } = ChromeUtils.importESModule("resource://gre/modules/UpdateUtils.sys.mjs");'
-            "const asked = [];"
-            "const watch = { observe(channel) { const uri = channel.QueryInterface(Ci.nsIHttpChannel).URI;"
-            ' if (uri.host === "aus5.mozilla.org") asked.push(uri.spec); } };'
-            'Services.obs.addObserver(watch, "http-on-opening-request");'
-            "(async () => { const { addons } = await new GMPInstallManager().checkForAddons();"
+            "const asked = {}, answered = {};"
+            "const watch = { observe(subject, topic) { const c = subject.QueryInterface(Ci.nsIHttpChannel);"
+            ' if (c.URI.host !== "aus5.mozilla.org" || c.loadInfo.triggeringPrincipal.isSystemPrincipal === false) return;'
+            ' const product = c.URI.spec.split("/update/3/")[1]?.split("/")[0];'
+            ' if (topic === "http-on-opening-request") { asked[product] ??= c.URI.spec; }'
+            " else { answered[product] ??= c.responseStatus; } } };"
+            'const topics = ["http-on-opening-request", "http-on-examine-response"];'
+            "topics.forEach(t => Services.obs.addObserver(watch, t));"
+            # The engine's own value of a pref, from the file the build carries it in.
+            "const own = async (file, name) => { const text = await (await fetch(file)).text();"
+            ' const at = text.indexOf(`pref("${name}"`); if (at < 0) return null;'
+            ' return text.slice(at, text.indexOf("\\n", at)).split(\'"\')[3] ?? null; };'
+            "const body = async address => { const r = await fetch(address, { credentials: 'omit', cache: 'no-store' });"
+            " return r.ok ? r.text() : `status ${r.status}`; };"
+            "(async () => { const out = { asked, answered };"
+            ' const names = { GMP: "media.gmp-manager.url", SystemAddons: "extensions.systemAddon.update.url" };'
+            " const defaults = Services.prefs.getDefaultBranch('');"
+            " out.ours = Object.fromEntries(Object.entries(names).map(([k, n]) => [k, defaults.getCharPref(n)]));"
+            ' out.engine = { GMP: await own("resource://gre/greprefs.js", names.GMP),'
+            '  SystemAddons: await own("resource:///defaults/preferences/firefox.js", names.SystemAddons) };'
+            ' out.wouldSend = await UpdateUtils.formatUpdateURL("%OS_VERSION%/%DISTRIBUTION%/%DISTRIBUTION_VERSION%");'
+            ' out.kernel = Services.sysinfo.getProperty("version");'
+            " out.distribution = Services.prefs.getDefaultBranch('').getCharPref('distribution.id', '');"
+            " const { addons } = await new GMPInstallManager().checkForAddons();"
+            ' const openh264 = addons.find(a => a.id === "gmp-gmpopenh264");'
+            " out.openh264 = openh264 ? { fallback: Boolean(openh264.usedFallback), address: Boolean(openh264.URL),"
+            "  hash: Boolean(openh264.hashValue) } : null;"
             " await XPIInstall.updateSystemAddons();"
-            " return { asked, plugins: addons.map(a => a.id).sort(),"
-            ' wouldSend: await UpdateUtils.formatUpdateURL("%OS_VERSION%/%DISTRIBUTION%/%DISTRIBUTION_VERSION%"),'
-            ' kernel: Services.sysinfo.getProperty("version"),'
-            ' distribution: Services.prefs.getDefaultBranch("").getCharPref("distribution.id", ""),'
-            "}; })()"
-            '.finally(() => Services.obs.removeObserver(watch, "http-on-opening-request"))'
+            # Mozilla's answer to the engine's full form and to this one, for each check.
+            " out.same = {};"
+            " for (const [product, template] of Object.entries(out.engine)) {"
+            "  try { const full = await body(await UpdateUtils.formatUpdateURL(template));"
+            "   const short = await body(await UpdateUtils.formatUpdateURL(out.ours[product]));"
+            "   const alike = full === short && !full.startsWith('status ');"
+            "   out.same[product] = alike ? true : [full.slice(0, 300), short.slice(0, 300)]; }"
+            "  catch (e) { out.same[product] = `could not ask: ${e}`; } }"
+            " return out; })()"
+            ".finally(() => topics.forEach(t => Services.obs.removeObserver(watch, t)))"
             ".then(done, e => done({ error: String(e) }));"
         )
+        m.set_context("chrome")
+        try:
+            state = m.execute_async(script, [])
+        finally:
+            m.set_context("content")
         self.assertNotIn("error", state, state)
         # What the engine would put there is really something to leave out: this build is a distribution on a real kernel.
         self.assertEqual(state["distribution"], "nulavio")
         self.assertIn("nulavio", state["wouldSend"])
         self.assertIn(state["kernel"], urllib.parse.unquote(urllib.parse.unquote(state["wouldSend"])))
-        products = sorted(address.split("/update/3/")[1].split("/")[0] for address in state["asked"])
-        self.assertEqual(products, ["GMP", "SystemAddons"], state["asked"])
-        for address in state["asked"]:
+        # The two values are the engine's own with only the three fields replaced.
+        fields = {"%OS_VERSION%": "Linux", "%DISTRIBUTION%": "default", "%DISTRIBUTION_VERSION%": "default"}
+        for product, template in state["engine"].items():
+            with self.subTest(product=product):
+                self.assertTrue(
+                    template and all(field in template for field in fields), f"the engine's address changed: {template}"
+                )
+                expected = template
+                for field, fixed in fields.items():
+                    expected = expected.replace(field, fixed)
+                self.assertEqual(state["ours"][product], expected, "the engine's address changed: update the two prefs")
+        # What was really asked carries none of it.
+        self.assertEqual(sorted(state["asked"]), ["GMP", "SystemAddons"], state["asked"])
+        for address in state["asked"].values():
             with self.subTest(address=address):
                 self.assertTrue(address.endswith("/Linux/default/default/update.xml"), address)
                 plain = urllib.parse.unquote(urllib.parse.unquote(address))
                 for detail in (state["kernel"], "GTK", "libpulse", "nulavio"):
                     self.assertNotIn(detail, plain)
-        if not state["plugins"]:
-            self.skipTest("the media plugin list came back empty (network?)")
-        self.assertIn("gmp-gmpopenh264", state["plugins"])
+        # The update channels still work. These need Mozilla's server: without it the test says it could not measure.
+        needs = "could not measure (is the network reachable?): "
+        self.assertEqual(state["answered"], {"GMP": 200, "SystemAddons": 200}, needs + "an update check got no answer")
+        self.assertEqual(
+            state["openh264"],
+            {"fallback": False, "address": True, "hash": True},
+            needs + "OpenH264 did not come from Mozilla's list",
+        )
+        self.assertEqual(
+            state["same"],
+            {"GMP": True, "SystemAddons": True},
+            "Mozilla answers the full form and this one differently (or could not be asked): decide #126 again",
+        )
 
     def test_04_no_account_button_or_sync_promo(self):
         state = self.m.chrome(
