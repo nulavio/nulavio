@@ -40,7 +40,7 @@ O Nulavio é um navegador de código aberto para Linux, compilado a partir do c�
 
 ## Destaques
 
-- **Protegido antes do primeiro clique.** uBlock Origin, proteção contra rastreamento no modo Estrito, só HTTPS, Global Privacy Control e Google Safe Browsing já vêm ligados num perfil novo. As leituras de canvas e WebGL mudam de um site para outro, e as páginas não veem suas fontes extras nem a sua placa de vídeo ([o que uma página consegue ler](docs/research/fingerprinting.md)).
+- **Protegido antes do primeiro clique.** uBlock Origin com avisos de cookies, de newsletter e de notificações escondidos, proteção contra rastreamento no modo Estrito, só HTTPS, Global Privacy Control e Google Safe Browsing já vêm ligados num perfil novo. As leituras de canvas e WebGL mudam de um site para outro, e as páginas não veem suas fontes extras nem a sua placa de vídeo ([o que uma página consegue ler](docs/research/fingerprinting.md)).
 - **Um perfil para cada parte da sua vida.** Pessoal, trabalho, banco e pesquisa, cada um numa instância própria, com seus cookies, logins e extensões. Links de outros programas e endereços digitados abrem no perfil que as suas regras mandarem.
 - **Perfis cifrados no disco, e a chave é sua.** Um perfil protegido abre com a senha dele, um código de recuperação ou o login do computador. Não existe chave mestra, nem para o Nulavio ([ADR 0006](docs/adr/0006-nulavio-vault.md)).
 - **Você fica sabendo do que mudou por fora.** O Nulavio Guard compara cada abertura com a anterior: extensões, autoridades certificadoras, módulos de segurança, configurações de proteção, `user.js`. Você desfaz ou mantém cada mudança.
@@ -109,7 +109,7 @@ A documentação técnica está em inglês.
 | Decisões | [ADRs](docs/adr/): motor, busca, perfis e roteamento, Connect, desbloqueio pelo celular, Vault, AI Bridge |
 | Produto | [visão](docs/product/vision.md) · [requisitos](docs/product/requirements.md) · [roadmap](docs/product/roadmap.md) · [critérios de release](docs/product/release-criteria.md) |
 | Arquitetura | [visão geral](docs/architecture/overview.md) · [build](docs/architecture/build.md) · [política de atualização](docs/architecture/update-policy.md) · [fronteiras de confiança](docs/architecture/trust-boundaries.md) |
-| Segurança | [modelo de ameaças](docs/security/threat-model.md) · [endurecimento](docs/security/hardening.md) · [riscos residuais](docs/security/residual-risks.md) · [assurance case](docs/security/assurance-case.md) · [changelog](docs/security/changelog.md) |
+| Segurança | [modelo de ameaças](docs/security/threat-model.md) · [endurecimento](docs/security/hardening.md) · [o que um perfil novo contata](docs/security/new-profile-connections.md) · [riscos residuais](docs/security/residual-risks.md) · [assurance case](docs/security/assurance-case.md) · [changelog](docs/security/changelog.md) |
 | Design | [design system](docs/design/design-system.md) · [princípios de UX](docs/design/ux-principles.md) · [acessibilidade](docs/design/accessibility.md) |
 | Processo | [como contribuir](CONTRIBUTING.md) · [pull requests](docs/process/pull-requests.md) · [governança](GOVERNANCE.md) · [código de conduta](CODE_OF_CONDUCT.md) · [notas de versão](CHANGELOG.md) |
 

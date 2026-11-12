@@ -45,6 +45,6 @@ It becomes the squash-merge commit. Process: docs/process/pull-requests.md.
 - [ ] `ruff check .`, `ruff format --check .` and `python3 -I tests/run.py unit` pass locally
 - [ ] Integration tests run where the change touches the engine, profiles or the Shell (or listed under "Not verified")
 - [ ] Docs updated where behaviour changed
-- [ ] Opened by an agent: name the tool below; the agent does not merge
+- [ ] Opened by an agent: name the tool below; before merging, the review is recorded in a comment ([how](https://github.com/nulavio/nulavio/blob/main/docs/process/pull-requests.md#review-and-merging))
 
-<!-- Agent: tool and model, if any. The advisory AI review comment, if one appears, is not an approval. -->
+<!-- Agent: tool and model, if any. The automatic AI review comment, if one appears, is not the review. -->

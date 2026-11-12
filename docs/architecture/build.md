@@ -59,6 +59,15 @@ in that case; inspect it and use `podman rm` with its recorded ID. Artifacts,
 source and object directories remain for incremental builds. A 24-hour runtime
 ceiling is an additional backstop, not the disconnect detector.
 
+**Runner budget** (`NULAVIO_BUILD_PROFILE=runner`, the release workflow on a
+disposable 16 vCPU / 64 GiB CI machine that runs nothing else): 48 GiB (at most 56),
+`MOZ_PARALLEL_BUILD=16` (at most 16) with the same number of CPUs, Cargo in parallel
+(no serializing wrapper; at most as many `rustc` as jobs), 8192 tasks. The guard
+refuses this budget on a host with less RAM than the container plus 6 GiB, so it
+cannot be used on the laptop by mistake. Kernels without memory PSI (Blacksmith's)
+are accepted only with this budget; the available-memory reserve still applies.
+After a memory failure the next run halves the jobs.
+
 Adjustments are per invocation: `NULAVIO_BUILD_MEMORY_GIB=1..20` (default 16,
 which the release build fits since it uses thin Rust LTO: 13 GiB at its peak on
 2026-11-09; above 16 only on explicit request; the 4 GiB host reserve still applies),
@@ -236,7 +245,7 @@ Measured on the reference laptop (2026-10-26): RPM 91 MB, built in about 2.5 min
 
 Still with the maintainer: the release key, the repository host for `packages.nulavio.net`, and a .deb repository (APT) when Ubuntu users need updates through `apt` (the alpha is Fedora only, D8).
 
-### Signing in CI through AWS KMS (in progress)
+### Signing in CI through AWS KMS
 
 Goal: release builds signed by CI after the maintainer approves the run, so a Firefox security release does not wait for the maintainer's laptop. Decided on 2026-11-11: the existing release key (`298A 9093 BAAB B26F 79BB  29F4 BF47 E5FA 9EDB 8DB1`) is imported into AWS KMS, where it cannot be exported, so users keep the key they already trust. The original stays offline, with the revocation certificate.
 
@@ -244,10 +253,55 @@ Goal: release builds signed by CI after the maintainer approves the run, so a Fi
 |---|---|
 | `scripts/release/openpgp_sign.py`: builds the OpenPGP signature (version 4, SHA-256) and asks KMS only for the RSA operation; refuses a KMS key whose modulus is not the release key's; works as rpm 6's signer (`%_openpgp_sign kms`) and for detached signatures (`repomd.xml`, `SHA256SUMS`) | **Done**: unit tests check every signature with gpg; `test_kms_signing.sh` checks rpm and dnf |
 | `scripts/release/kms_import_key.py`: run once by the maintainer. Asks for the key's passphrase on the terminal, has gpg export the secret key with it (on standard input; the key's home is only read), decrypts the export's OpenPGP protection and checks the numbers against the public key, builds the PKCS#8 key material, wraps it with KMS's import parameters (RSA_AES_KEY_WRAP_SHA_256) and imports it without expiry, checks that KMS now signs as the release key | **Done**: unit tests for decrypting the export (and refusing a wrong passphrase), S2K, the PKCS#8 material (`openssl pkey -check`), the wrapping, and the whole run against a stand-in KMS; not yet run against KMS |
-| `scripts/release/kms_setup.sh` with the policies in `ci/aws/`: the KMS key `alias/nulavio-release` (RSA_4096, SIGN_VERIFY, origin EXTERNAL) and the role `nulavio-release-signing`, which only a job of this repository in the `release` environment can assume (GitHub OIDC, immutable repository subject), allowed Sign, GetPublicKey and DescribeKey on that key only. The key policy lets only that role and the account's administrator SSO roles sign, only with RSASSA_PKCS1_V1_5_SHA_256. The GitHub environment `release` needs the maintainer's approval, accepts only `main`, and holds the key and role ARNs as variables | **Done** 2026-11-11 (account `lombello-dev`, us-east-1); the key is empty until `kms_import_key.py` runs |
-| `.github/workflows/release-signing-check.yml` (manual): signs a test file through KMS in the `release` environment and verifies it with `site/keys/nulavio-packages.asc` | Ready; first run after the import |
+| `scripts/release/kms_setup.sh` with the policies in `ci/aws/`: the KMS key `alias/nulavio-release` (RSA_4096, SIGN_VERIFY, origin EXTERNAL) and the role `nulavio-release-signing`, which only a job of this repository in the `release` environment can assume (GitHub OIDC, immutable repository subject), allowed Sign, GetPublicKey and DescribeKey on that key only. The key policy lets only that role and the account's administrator SSO roles sign, only with RSASSA_PKCS1_V1_5_SHA_256. The GitHub environment `release` asks for an approval by the maintainer's account (which coding agents also work with: [R62](../security/residual-risks.md)), accepts only `main`, and holds the key and role ARNs as variables | **Done** 2026-11-11 (account `lombello-dev`, us-east-1); the key is empty until `kms_import_key.py` runs |
+| `.github/workflows/release-signing-check.yml` (manual): signs a test file through KMS in the `release` environment and verifies it with `site/keys/nulavio-packages.asc` | **Done** 2026-11-11: run 42963429141, `VALIDSIG 298A9093BAABB26F79BB29F4BF47E5FA9EDB8DB1` |
 | `sign_repo.sh` and `publish_release.sh` sign through KMS when `NULAVIO_KMS_KEY_ID` is set (packages, `repomd.xml`, `SHA256SUMS`); the gpg-agent path stays for a release without AWS | **Done** 2026-11-11: the 160.0-0.2 RPM signed through the real KMS key installed in a clean Fedora 44 with both checks on (`RSA/SHA256, Key ID bf47e5fa9edb8db1`); nothing was published |
-| Release workflow: build and rehearse, then a signing job in the `release` environment (maintainer approval), then upload | Planned (needs the build runners) |
+| `.github/workflows/release.yml`: build and rehearse on Blacksmith, then a signing job in the `release` environment (maintainer approval) that uploads and drafts the GitHub release (section below) | Written 2026-11-11; first run pending |
+
+### Release workflow (CI)
+
+`.github/workflows/release.yml`, started by hand from `main` (Actions → release → Run workflow), builds the Firefox release that `browser/build/engine.json` pins. Bump the pin first (`bump_engine.py`, a pull request).
+
+| Job | Runs on | Holds | Does |
+|---|---|---|---|
+| `build` | Blacksmith `blacksmith-16vcpu-ubuntu-2404` (16 vCPU, 62 GiB, 738 GB disk, rootless Podman 5.8 with cgroup v2 limits; measured 2026-11-11), environment `build` (main only) | the Google Safe Browsing key (secret `GOOGLE_SAFEBROWSING_API_KEY`; it ships inside the browser anyway) | `rehearse_release.sh` with the runner budget: verified source, build, unit and integration tests, RPM and .deb checked in clean containers, the signed-repository checks, SBOMs, `manifest.json`; a GitHub build-provenance attestation of the packages and the manifest |
+| `publish` | GitHub-hosted `ubuntu-24.04`, environment `release` (the maintainer approves, see R62; main only) | the KMS signing role (OIDC) and the bucket-scoped R2 upload token (secrets `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`) | checks the attestation (this workflow, `refs/heads/main`), `publish_release.sh` through KMS, `upload_repo.sh` (packages first, signed metadata last, nothing deleted), `check_published.sh` (installs from `https://nulavio.net/rpm/nulavio.repo` in a clean Fedora with both checks on, and requires the new version), attests the signed files, drafts the GitHub release |
+
+The integration step runs in the pinned container `ci/containers/fedora-release-itest.Containerfile` (`NULAVIO_INTEGRATION_IMAGE`, `scripts/release/run_integration.sh`), the same on the laptop and in CI. It fixes the fonts the component gallery's pixel baselines were made with (Noto and Liberation, as on the reference Fedora 44 KDE laptop) and has the tools the tests use. Run on Blacksmith's Ubuntu host, the gallery rendered 44 px taller and its baselines failed. FUSE works there for the Vault tests: `/dev/fuse` is passed in, and `SYS_ADMIN` applies only inside the rootless user namespace. Without the variable, the suite runs on the host as before.
+
+The maintainer then publishes the draft (which creates the tag), sets `version` in `packaging/release.json` by pull request (the site workflow rebuilds the download pages), and adds the changelog entry; the job summary lists these steps. `publish: false` stops after the build: a rehearsal in CI. The build machine never holds the signing role or the upload token.
+
+### Flatpak (Flathub)
+
+The Flatpak `net.nulavio.Nulavio` packages the same signed build as the RPM: the portable archive `nulavio-<firefox>-<release>.linux-x86_64.tar.xz` that `rehearse_release.sh` makes from the installed tree (sorted, owner 0, the commit's time), that the manifest lists with its SHA-256 and that `publish_release.sh` attaches to the GitHub release. It is not built from source on Flathub: a Firefox build does not fit Flathub's builders, and the binary then differs from the one the RPM users run (Mozilla's and LibreWolf's Flatpaks do the same).
+
+`scripts/release/flatpak_manifest.py` writes the build directory (manifest `net.nulavio.Nulavio.json`, desktop entry renamed to the app ID, AppStream metadata from `packaging/flatpak/` with this release, entry point, Flatpak-only preferences). Runtime `org.freedesktop.Platform` 26.08; its `codecs-extra` extension brings the patented codecs.
+
+| Permission | Why |
+|---|---|
+| `--share=network`, `--share=ipc`, `--socket=wayland`, `--socket=fallback-x11`, `--socket=pulseaudio`, `--device=all`, `--socket=pcsc` | A browser: network, display, sound, cameras and FIDO2 security keys (WebAuthn), smart cards; as Mozilla's Flatpak |
+| `--persist=.nulavio`, `--filesystem=xdg-download` | Profiles stay in the app's own directory (`~/.var/app/net.nulavio.Nulavio`); downloads go to the Downloads folder; nothing else of the home |
+| `--talk-name=org.freedesktop.NativeMessagingProxy` with the preference `widget.use-xdg-desktop-portal.native-messaging-proxy=1` | Password-manager apps (KeePassXC, Bitwarden) through `xdg-native-messaging-proxy` on the host ([spike](../security/phase5-spikes.md#flatpak-and-native-messaging)) |
+| `--own-name=org.mozilla.nulavio.*`, `--talk-name=org.freedesktop.FileManager1`, `org.a11y.Bus`, NetworkManager (system bus) | Remoting (a second start opens a window in the running browser), "show in folder", accessibility, online state |
+
+Not in the Flatpak: the Vault (it needs `gocryptfs` and FUSE on the host), `nulavio run --confined` (bubblewrap inside the sandbox), and the Connect features that talk to desktop services over D-Bus (KRunner, KDE Connect, activities). The AppStream text says so. `tests/unit/test_flatpak.py` refuses permissions that undo the sandbox (the home, the host, any D-Bus name, the Flatpak service).
+
+Every release run builds it: the `flatpak` job of `release.yml` builds and installs it from the archive that run made with Flathub's own builder (`org.flatpak.Builder`, with `--compose-url-policy=full` as `flathub-build` does), runs `flatpak-builder-lint` on the manifest and the repository, and `check_flatpak.sh` starts it headless in the sandbox and requires a rendered page. Measured on 2026-11-11 with 160.0-0.3: builds, renders, both lints clean. The `publish` job writes the Flathub manifest (`--url`: the GitHub release asset and its SHA-256) into the `published` artifact.
+
+Until it is on Flathub, the release carries the Flatpak itself: the job bundles what it built (`flatpak build-bundle`, `nulavio-<version>.x86_64.flatpak`, with Flathub as the runtime's source), and `publish_release.sh` adds the bundle to the assets (`NULAVIO_FLATPAK_BUNDLE`, which must be this release's name), so `SHA256SUMS.asc` and the `publish` job's attestation cover it. The `flatpak` job cannot attest (no OIDC token): it runs Flathub's builder, which must not be able to attest anything; the bundle is as trustworthy as that builder and the runtime it pulls from Flathub. `flatpak install --user nulavio-<version>.x86_64.flatpak` installs it and adds Flathub for the runtime; a bundle has no update channel, so the next release is installed the same way. A failed Flatpak job does not hold back the release: `publish` goes on without the bundle and warns, because a security update has a deadline.
+
+Submitting to Flathub (once, by the maintainer): open a pull request to `flathub/flathub` (branch `new-pr`) with that folder; after it is merged, Flathub creates the repository `flathub/net.nulavio.Nulavio`, where each release is a pull request with the new folder. Verify the app on Flathub's developer page: it gives a token to serve at `https://nulavio.net/.well-known/org.flathub.VerifiedApps.txt`.
+
+### Repeatable builds
+
+The same commit must give the same bytes (OpenSSF Best Practices `build_repeatable`). What makes that hold:
+- every build runs in the pinned `fedora-build` image with the same paths (`/src`, `/root/.mozbuild`);
+- the toolchains come from Mozilla's bootstrap, pinned by the source release;
+- the branding icons are rendered in the pinned image;
+- the build ID (`MOZ_BUILD_DATE`) and `SOURCE_DATE_EPOCH` are the Nulavio commit's time, not the clock;
+- the portable archive is packed reproducibly (`make_archive.sh`: sorted, owner 0, normalized modes, one time).
+
+`.github/workflows/repeatable.yml` checks it monthly and by hand. It builds the pinned Firefox twice, on two separate Blacksmith machines, installs and packs each build (`install_build.sh`, `make_archive.sh`), and `compare_builds.py` requires identical archives. On a difference, it lists the entries that differ and what differs (content, mode, link, time, owner), and attaches diffoscope's report on the first files.
 
 ### Publishing a release
 
@@ -256,6 +310,6 @@ Goal: release builds signed by CI after the maintainer approves the run, so a Fi
 | Release key (once) | `scripts/release/make_release_key.sh <new-gnupg-home>` | RSA 4096 signing key, two years, in a new GnuPG home outside the repository; writes only the public key to `site/keys/nulavio-packages.asc` (served at `https://nulavio.net/keys/nulavio-packages.asc`) and prints the fingerprint for `packaging/release.json` and the backup steps |
 | Check the rehearsal | `scripts/release/release_manifest.py verify <rehearsal-out>` | Refuses an unfinished rehearsal, a tree with uncommitted or untracked changes, an `engine.json` that does not pin the source built, a package or SBOM whose SHA-256 changed, or a base commit not on `origin/main`; prints the tag `v<firefox>-<release>` |
 | Sign and stage | `GNUPGHOME=<key-home> scripts/release/publish_release.sh <rehearsal-out> <fingerprint>`, or with `NULAVIO_KMS_KEY_ID` (and AWS credentials) instead of `GNUPGHOME` | Runs the check above, then `sign_repo.sh` with `NULAVIO_RELEASE_MANIFEST` (any package not listed with the same SHA-256 stops it), and stages `publish/rpm/` (the dnf repository) and `publish/github/` (signed RPM, SBOM, manifest, public key, `SHA256SUMS` and its signature, checked with only the published key). Uploads nothing; writes the upload, tag and release commands to `publish/NEXT.md` |
-| Upload | the host's own tool (for Cloudflare R2: `rclone sync`) | `publish/rpm/` goes to `https://packages.nulavio.net/rpm/` as it is: `repodata/` at the top; `rclone sync` also removes a `nulavio.repo` left there by 160.0-0.1 |
+| Upload | `R2_ACCESS_KEY_ID=… R2_SECRET_ACCESS_KEY=… R2_ACCOUNT=<account id> scripts/release/upload_repo.sh publish/rpm` | `publish/rpm/` goes to `https://packages.nulavio.net/rpm/` as it is (`repodata/` at the top): packages and hash-named metadata first, `repomd.xml.asc` and `repomd.xml` last; nothing is deleted. Then `scripts/release/check_published.sh <version>-<release>` installs it from the site's repository file in a clean Fedora |
 | Download pages | `packaging/release.json` → `scripts/site/build_site.py --release` | `/baixar/` and `/en/download/` appear only when the file names a version and a key fingerprint and the public key in the repository has that fingerprint |
 

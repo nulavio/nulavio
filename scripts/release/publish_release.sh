@@ -13,9 +13,13 @@
 #    origin/main, and every package and SBOM still has the SHA-256 it recorded.
 # 2. sign_repo.sh with NULAVIO_RELEASE_MANIFEST: signs only those RPMs and builds
 #    the dnf repository (stage/rpm/, uploaded to https://packages.nulavio.net/rpm/).
-# 3. stage/github/: the signed RPM, its SBOM, manifest.json, the public key,
-#    SHA256SUMS and its detached signature (assets of the GitHub release).
+# 3. stage/github/: the signed RPM, its SBOM, the portable archive (Flatpak source), the Flatpak
+#    bundle when given, manifest.json, the public key, SHA256SUMS and its detached signature
+#    (assets of the GitHub release).
 # 4. stage/NEXT.md: the upload, tag and release commands for this version.
+#
+# NULAVIO_FLATPAK_BUNDLE: nulavio-<version>.x86_64.flatpak, built by the release workflow's
+# flatpak job from this rehearsal's portable archive (optional; SHA256SUMS covers it).
 #
 # NULAVIO_PUBLISH_REF: the reviewed branch the rehearsed commit must be on
 # (default origin/main). A security release is prepared in a private GitHub
@@ -63,6 +67,11 @@ field() { python3 -I -c 'import json, sys; v = json.loads(sys.argv[1])[sys.argv[
 tag=$(field tag)
 commit=$(field commit)
 firefox=$(field firefox)
+bundle=${NULAVIO_FLATPAK_BUNDLE:-}
+if [[ -n $bundle ]] && { [[ $(basename "$bundle") != "nulavio-${tag#v}.x86_64.flatpak" ]] || [[ ! -f $bundle ]]; }; then
+    echo "publish_release: $bundle is not the Flatpak bundle of $tag" >&2
+    exit 2
+fi
 
 mkdir -p "$stage/github"
 NULAVIO_RELEASE_MANIFEST="$out/manifest.json" GNUPGHOME=$gnupg NULAVIO_PUBLIC_KEY=$published \
@@ -74,6 +83,10 @@ while IFS= read -r rpm; do
     cp "$stage/rpm/x86_64/$(basename "$rpm")" "$stage/github/"
     cp "$out/$rpm.cdx.json" "$stage/github/"
 done < <(field rpms)
+while IFS= read -r archive; do
+    [[ -n $archive ]] && cp "$out/$archive" "$stage/github/"
+done < <(field archives)
+[[ -n $bundle ]] && cp "$bundle" "$stage/github/"
 cp "$out/manifest.json" "$stage/github/manifest.json"
 cp "$published" "$stage/github/nulavio-packages.asc"
 (cd "$stage/github" && sha256sum -- * >SHA256SUMS)

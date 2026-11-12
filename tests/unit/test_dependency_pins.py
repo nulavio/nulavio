@@ -38,6 +38,7 @@ PINNED_IMAGE = re.compile(
 )  # registry host first
 RELEASE_SCRIPTS = (
     "make_rpm.sh", "make_deb.sh", "check_rpm.sh", "check_deb.sh", "sign_repo.sh", "test_signed_repo.sh", "test_kms_signing.sh",
+    "check_published.sh",
 )  # fmt: skip
 # Android lint's Security checks that default to a warning (lint 9.4, `lint --show`), promoted to errors in app/lint.xml.
 LINT_SECURITY = {
@@ -148,7 +149,7 @@ class OtherPinsTest(unittest.TestCase):
         refs = []
         for path in sorted((ROOT / "ci" / "containers").glob("*.Containerfile")):
             refs += [(path.name, ref) for ref in re.findall(r"^FROM\s+(\S+)", path.read_text(encoding="utf-8"), re.M)]
-        self.assertEqual(len(refs), 3)
+        self.assertEqual(len(refs), 4)  # fedora-build, fedora-itest, fedora-release-itest, ubuntu-itest
         self.assertEqual([r for r in refs if not PINNED_IMAGE.match(r[1])], [])
         by_tag: dict[str, set[str]] = {}
         for _, ref in refs:

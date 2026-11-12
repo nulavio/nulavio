@@ -1,0 +1,93 @@
+name: asan
+
+# Dynamic analysis of the C++ Nulavio ships (Gecko and patches 0006, 0010): build the
+# pinned Firefox with AddressSanitizer (browser/build/mozconfig.asan) on a Blacksmith
+# runner and run the integration suite against it. AddressSanitizer writes a report
+# for any memory error (out-of-bounds, use-after-free, double free); one report, or a
+# failing test, fails the run. Monthly and by hand (run it after an engine update), from
+# main only; never a release.
+# docs/security/code-scanning.md says what to do with a report.
+
+on:
+  schedule:
+    - cron: "23 3 1 * *" # monthly, on the 1st (Blacksmith minutes: about US$3 a run)
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: asan
+  cancel-in-progress: false
+
+jobs:
+  asan:
+    name: AddressSanitizer build and integration suite (Blacksmith)
+    if: github.ref == 'refs/heads/main'
+    runs-on: blacksmith-16vcpu-ubuntu-2404
+    environment: build
+    timeout-minutes: 360
+    permissions:
+      contents: read
+    env:
+      NULAVIO_BUILD_PROFILE: runner
+      NULAVIO_MOZCONFIG_EXTRA: mozconfig.asan
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: libsodium and gocryptfs for the Vault tests (decisions D1, D2)
+        run: scripts/ci/apt_install.sh libsodium23 gocryptfs fuse3
+      - name: Google Safe Browsing key (the build is otherwise the release configuration)
+        env:
+          KEY: ${{ secrets.GOOGLE_SAFEBROWSING_API_KEY }}
+        run: |
+          [ -n "$KEY" ] || { echo "::error::the build environment has no GOOGLE_SAFEBROWSING_API_KEY"; exit 1; }
+          umask 077
+          mkdir -p "$HOME/.config/nulavio-build"
+          printf '%s' "$KEY" > "$HOME/.config/nulavio-build/google-safebrowsing.key"
+      - name: Build with AddressSanitizer
+        run: |
+          firefox=$(python3 -I -c 'import json; print(json.load(open("browser/build/engine.json"))["firefox"])')
+          scripts/build/build_nulavio.sh "$firefox"
+      - name: Remove the Safe Browsing key
+        if: always()
+        run: rm -f "$HOME/.config/nulavio-build/google-safebrowsing.key"
+      - name: Install the build
+        run: |
+          firefox=$(python3 -I -c 'import json; print(json.load(open("browser/build/engine.json"))["firefox"])')
+          scripts/build/install_build.sh "$firefox" "$RUNNER_TEMP/install"
+          # The whole listing goes to a file first: grep -q on a pipe would stop nm with SIGPIPE.
+          nm -D "$RUNNER_TEMP/install/nulavio/libxul.so" > "$RUNNER_TEMP/libxul.symbols"
+          grep -q __asan_init "$RUNNER_TEMP/libxul.symbols" || { echo "::error::libxul.so is not instrumented"; exit 1; }
+      - name: Integration suite against the AddressSanitizer build
+        env:
+          NULAVIO_ENGINE: ${{ runner.temp }}/install/nulavio/nulavio # the executable, as rehearse_release.sh
+          NULAVIO_INTEGRATION_IMAGE: fedora-release-itest # the same container as the release rehearsal
+        run: |
+          mkdir -p "$RUNNER_TEMP/asan" "$RUNNER_TEMP/artifacts"
+          # The engine tests skip without a Nulavio engine: make sure they will run against this build.
+          python3 -I -c 'import sys; sys.path.insert(0, "launcher"); from nulavio_launcher import engine
+          found = engine.find_engine(); sys.exit(0 if found.vendor == "Nulavio" else f"not the Nulavio build: {found}")'
+          NULAVIO_ASAN_LOG_DIR="$RUNNER_TEMP/asan" NULAVIO_TEST_ARTIFACTS="$RUNNER_TEMP/artifacts" \
+            scripts/release/run_integration.sh "$RUNNER_TEMP/install/nulavio"
+      - name: AddressSanitizer reports
+        if: always()
+        run: |
+          reports=$(grep -l "ERROR: AddressSanitizer" "$RUNNER_TEMP"/asan/asan.* 2>/dev/null || true)
+          if [ -n "$reports" ]; then
+            for report in $reports; do
+              echo "::error title=AddressSanitizer::$(grep -m1 "ERROR: AddressSanitizer" "$report")"
+              { echo '```'; head -60 "$report"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+            done
+            exit 1
+          fi
+          echo "No AddressSanitizer report." | tee -a "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: asan-reports
+          path: |
+            ${{ runner.temp }}/asan/
+            ${{ runner.temp }}/artifacts/
+          if-no-files-found: ignore
+          retention-days: 30

@@ -92,6 +92,12 @@ Change the version, URL and SHA-256 in `scripts/security/fetch_tools.sh` togethe
 | 2026-11-11 | Leaked secrets | Nothing found |
 | 2026-11-11 | Code (vulnerabilities) | Running |
 
+## Dynamic analysis: AddressSanitizer
+
+The `asan` workflow (`.github/workflows/asan.yml`) builds the pinned Firefox with Nulavio's patches and AddressSanitizer (`browser/build/mozconfig.asan`, appended through `NULAVIO_MOZCONFIG_EXTRA`) on a Blacksmith runner, monthly and by hand (after an engine update), and runs the whole integration suite against it. AddressSanitizer stops the process at the first memory error in C or C++ (out-of-bounds access, use after free, double free) and writes a report; the job fails on any report or failing test and puts the first lines of each report in the summary. Leak detection is off, as in Mozilla's own ASan builds.
+
+When it fails with a report: download the `asan-reports` artifact, find the first frame in Nulavio's code (patches 0006 and 0010 are the C++ Nulavio adds) or in Gecko. A frame in a Nulavio patch is our bug: fix it, with a test. One only in Gecko goes to Mozilla privately (Bugzilla, security group); record it in [residual risks](residual-risks.md) until a Firefox release fixes it. The variant is never packaged: `rehearse_release.sh` refuses to run with `NULAVIO_MOZCONFIG_EXTRA` set.
+
 ## OpenSSF Scorecard
 
 The `scorecard` workflow (`.github/workflows/scorecard.yml`) runs [OpenSSF Scorecard](https://scorecard.dev) on every push to `main`, weekly and when branch protection changes. It rates how the repository is maintained (branch protection, pinned dependencies, token permissions, signed releases, code review, fuzzing and others), publishes the score to scorecard.dev for the README badge, and uploads its findings to the Security tab under the category `scorecard`. It needs no secret; without an admin token the Branch-Protection check sees only what a public token can read, so that check may score lower than the protection actually configured. A low check is a prompt to look, not a defect by itself: read the finding, then fix it or record why it does not apply.

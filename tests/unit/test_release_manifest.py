@@ -139,6 +139,21 @@ class ReleaseManifestTest(unittest.TestCase):
             release_manifest.check_packages(self.out / "manifest.json", packages)
         self.assertIn("0.2", str(caught.exception))
 
+    def test_the_portable_archive_is_listed_checked_and_published(self):
+        archive = "packages/nulavio-159.0.1-0.1.linux-x86_64.tar.xz"
+        (self.out / archive).write_bytes(b"tree")
+        packages = self.out / "packages"
+        with self.assertRaises(release_manifest.ManifestError):  # not listed yet: nothing is signed
+            release_manifest.check_packages(self.out / "manifest.json", packages)
+        self.manifest["packages"].append({"file": archive, "sha256": digest(self.out / archive)})
+        self.write()
+        self.assertEqual(self.verify()["archives"], [archive])
+        self.assertEqual(len(release_manifest.check_packages(self.out / "manifest.json", packages)), 3)
+        (self.out / archive).write_bytes(b"changed")
+        self.refused("changed since the rehearsal")
+        publish = (ROOT / "scripts" / "release" / "publish_release.sh").read_text(encoding="utf-8")
+        self.assertIn("field archives", publish)
+
     def test_sign_repo_runs_the_check_before_signing(self):
         script = (ROOT / "scripts" / "release" / "sign_repo.sh").read_text(encoding="utf-8")
         check, sign = script.index("release_manifest.py"), script.index("rpmsign")

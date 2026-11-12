@@ -32,6 +32,11 @@ WRITE_PERMISSIONS = {
     ("scorecard.yml", "analysis", "security-events"): "uploads Scorecard's SARIF to the Security tab",
     ("scorecard.yml", "analysis", "id-token"): "signs the published result for scorecard.dev (publish_results)",
     ("release-signing-check.yml", "sign", "id-token"): "OIDC to AWS: the role only the release environment may assume (ci/aws/)",
+    ("release.yml", "build", "id-token"): "signs the build-provenance attestation of the packages (Sigstore)",
+    ("release.yml", "build", "attestations"): "stores that attestation with the repository",
+    ("release.yml", "publish", "id-token"): "OIDC to AWS (KMS signing role, ci/aws/) and the attestation of the signed files",
+    ("release.yml", "publish", "attestations"): "stores the attestation of the signed files",
+    ("release.yml", "publish", "contents"): "drafts the GitHub release; the maintainer publishes it",
 }
 # Expressions that carry text an attacker or a model can choose; they never go inside a run: script.
 UNTRUSTED_IN_RUN = re.compile(r"\$\{\{[^}]*\b(github\.event\.|github\.head_ref|steps\.|needs\.|inputs\.)")

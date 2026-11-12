@@ -53,14 +53,41 @@ mkdir -p "$work/mozbuild" "$work/logs"
 python3 -I "$repo/scripts/upstream/fetch_firefox_source.py" "$version" --dest "$work"
 python3 -I "$repo/scripts/upstream/fetch_firefox_l10n.py" --source "$src" \
     --dest "$work/mozbuild/l10n-central" --git-dir "$work/l10n-git" "${locales[@]}"
-python3 -I "$repo/scripts/build/make_branding.py" --source "$src"
+# The icons are rendered in the pinned Fedora image on every machine (ImageMagick 7 with
+# librsvg), so they do not depend on the host's tools: the same bytes on the laptop and in CI.
+podman run --rm --security-opt label=disable -v "$repo:/repo:ro" -v "$src:/src" \
+    "$("$repo/scripts/release/base_image.sh" fedora-build)" bash -euc '
+    dnf -y -q --setopt=install_weak_deps=False install python3 ImageMagick >/dev/null 2>&1 ||
+        { echo "nulavio-build: dnf failed (branding)" >&2; exit 1; }
+    python3 -I /repo/scripts/build/make_branding.py --source /src'
 python3 -I "$repo/scripts/build/apply_patches.py" --source "$src"
 cp "$repo/browser/build/mozconfig" "$src/mozconfig"
+# NULAVIO_MOZCONFIG_EXTRA=mozconfig.<variant>: appended from browser/build/ (asan.yml uses
+# mozconfig.asan). A variant build is never a release: rehearse_release.sh refuses it.
+if [[ -n ${NULAVIO_MOZCONFIG_EXTRA:-} ]]; then
+    [[ $NULAVIO_MOZCONFIG_EXTRA =~ ^mozconfig\.[a-z0-9-]+$ && -f $repo/browser/build/$NULAVIO_MOZCONFIG_EXTRA ]] ||
+        { echo "nulavio-build: NULAVIO_MOZCONFIG_EXTRA must name a browser/build/mozconfig.<variant>" >&2; exit 2; }
+    cat "$repo/browser/build/$NULAVIO_MOZCONFIG_EXTRA" >> "$src/mozconfig"
+    echo "nulavio-build: variant $NULAVIO_MOZCONFIG_EXTRA (not a release build)"
+fi
 # Bootstrap also respects the requested memory budget and fixed two-CPU quota.
-memory_gib=${NULAVIO_BUILD_MEMORY_GIB:-16}
+# NULAVIO_BUILD_PROFILE=runner: a disposable CI machine (build_guard.py, docs/architecture/build.md).
+if [[ ${NULAVIO_BUILD_PROFILE:-laptop} == runner ]]; then
+    memory_gib=${NULAVIO_BUILD_MEMORY_GIB:-48}
+    cpu_quota=$(( ${MOZ_PARALLEL_BUILD:-16} * 100000 ))
+else
+    memory_gib=${NULAVIO_BUILD_MEMORY_GIB:-16}
+    cpu_quota=200000
+fi
 podman build --memory="${memory_gib}g" --memory-swap="${memory_gib}g" \
-    --cpu-period=100000 --cpu-quota=200000 --jobs=1 -q -t "$image" \
+    --cpu-period=100000 --cpu-quota="$cpu_quota" --jobs=1 -q -t "$image" \
     -f "$repo/ci/containers/fedora-build.Containerfile" "$repo/ci/containers" >/dev/null
+
+# Repeatable builds: the build ID (application.ini, about:buildconfig) and the tools that
+# read SOURCE_DATE_EPOCH take the time of the Nulavio commit, not the clock, so the same
+# commit gives the same bytes (.github/workflows/repeatable.yml compares two builds).
+commit_time=$(git -C "$repo" log -1 --format=%ct)
+build_date=$(TZ=UTC date -d "@$commit_time" +%Y%m%d%H%M%S)
 
 # Single-quoted command expands inside the container.
 control="$work/logs/guard-$(date +%Y%m%dT%H%M%S)-$$"
@@ -70,14 +97,18 @@ exec python3 -B -I "$repo/scripts/build/build_guard.py" --control "$control" -- 
     -v "$work/mozbuild":/root/.mozbuild:Z \
     "${secret_mounts[@]}" \
     -e MOZCONFIG=/src/mozconfig \
+    -e MOZ_BUILD_DATE="$build_date" \
+    -e SOURCE_DATE_EPOCH="$commit_time" \
     -e MOZBUILD_STATE_PATH=/root/.mozbuild \
     -e NULAVIO_LOCALES="${locales[*]}" \
     "$image" -- \
     bash -c 'set -e; cd /src
              printf "\nmk_add_options MOZ_PARALLEL_BUILD=%s\n" "$MOZ_PARALLEL_BUILD" >> mozconfig
-             printf "ac_add_options CARGO=/nulavio-build/cargo_serial.sh\n" >> mozconfig
-             if [ "$MOZ_PARALLEL_BUILD" -gt 1 ]; then
-                 printf "ac_add_options CARGOFLAGS=--jobs=1\n" >> mozconfig
+             if [ "$NULAVIO_BUILD_PROFILE" != runner ]; then
+                 printf "ac_add_options CARGO=/nulavio-build/cargo_serial.sh\n" >> mozconfig
+                 if [ "$MOZ_PARALLEL_BUILD" -gt 1 ]; then
+                     printf "ac_add_options CARGOFLAGS=--jobs=1\n" >> mozconfig
+                 fi
              fi
              ./mach --no-interactive build --jobs "$MOZ_PARALLEL_BUILD"
              ./mach --no-interactive package-multi-locale --locales en-US $NULAVIO_LOCALES'

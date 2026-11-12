@@ -1,0 +1,4 @@
+# Runner labels actionlint does not know: Blacksmith's machines (release.yml builds there).
+self-hosted-runner:
+  labels:
+    - blacksmith-16vcpu-ubuntu-2404
