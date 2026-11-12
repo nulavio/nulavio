@@ -454,6 +454,9 @@ def profile_chip_rules(tokens: dict[str, dict]) -> str:
         "    padding: var(--space-small) !important;\n"
         "  }\n"
     )
+    # The arrangement picker's three choices share a line while each has room for its words; in a narrow page, or
+    # with large text, they go one under the other instead of breaking words (issue #108).
+    rules += '  moz-visual-picker-item[id^="nulavio-layout-"] {\n    min-inline-size: min(10em, 100%) !important;\n  }\n'
     # A row's action is one or two words: they stay on one line next to a long description.
     rules += '  moz-box-item[class*="nulavio-"] > moz-button {\n    white-space: nowrap !important;\n  }\n'
     # The editor under a row and the "new profile" row hold a few fields, one under the other.

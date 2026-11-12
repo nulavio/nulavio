@@ -313,3 +313,25 @@ Nulavio ships a few policies of its own (its content blocker, no telemetry, no s
 `tests/integration/test_settings_policies.py` (3 tests): only Nulavio's policies on three panes, the row and its door; another policy, a failed read and back again, and a page loaded while another policy is in effect; what counts as the same set (order, empty values, one added, removed or changed, an unreadable file).
 
 Not verified: a policy added for real by a system file (`/etc/…/policies`), which the test session cannot write: the state is given to the module by the test, and the comparison is tested on its own with such sets. A screen reader was not run.
+
+## Step 19 (2026-11-12): Nulavio's groups measured in a narrow page and at 200 % text
+
+Branch `agent/claude/test-settings-reflow`. Issue #108: the old Layout card had a reflow test, and nothing measured the settings page after the card went.
+
+![The arrangement picker at 390 px before and after, and the profile list at 320 px](../design/screenshots/experience-2026-11/settings-reflow-sheet.png)
+
+What was measured, on every pane that holds a Nulavio group, with the engine's groups hidden so that only Nulavio's part counts:
+
+| Size | The engine's page with nothing in it | Nulavio's groups |
+|---|---|---|
+| 1180 px, 200 % text | no sideways scroll | nothing cut, nothing added |
+| 390 px | scrolls sideways 8 px | nothing cut, nothing added; **the arrangement picker broke words** ("Later/al", "naveg/ador/es"): fixed here |
+| 320 px | scrolls sideways 8 px; its own Search pane 44 to 54 px, Home 87 px, with selects cut | three lists add 5 to 51 px: the profile list, the known search providers, the password managers |
+
+- **Fixed**: the three choices of the arrangement picker keep a width that holds their words and go one under the other when the page is narrow or the text large (`in-content.css`, one rule on Nulavio's own items).
+- **Left, and named in the test**: at 320 px a row of those three lists keeps its buttons beside its name, and the engine's row (`moz-box-item`) does not wrap them, so the name is left a few pixels and breaks letter by letter. The row's layout is inside the engine's widget, where Nulavio's sheet cannot tell its rows from the engine's. The two ways out are a change to the engine's widget (a patch, or upstream) or drawing the buttons as a second row from the settings code; neither is done here.
+- **The engine's**: the 8 px of sideways scroll of the empty page, the cut selects of its Home and Search panes at 320 px, and the size of its switch and radio (32×16 and 16×16 px, with the label as the larger target) are the same in panes Nulavio adds nothing to.
+
+`tests/integration/test_settings_reflow.py` (2 tests): at 390 px and at 200 % text no Nulavio group adds sideways scroll, has a control or a text cut by the page's edge, or a word broken across lines (it fails on the picker without the fix); at 320 px the controls that add to the engine's own scroll are exactly the three lists, so a fourth fails and a fix shortens the list.
+
+Not verified: other fonts than this machine's (widths depend on them), a real 400 % zoom on a large screen (the test narrows the window instead), a screen reader.

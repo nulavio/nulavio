@@ -18,8 +18,11 @@ import harness
 import settings_page
 from test_window_band import BAND_PROBE, assert_band
 
-# Times the engine records for its Safe Browsing list updates, written in the background.
-SAFE_BROWSING_CLOCK = re.compile(r"browser\.safebrowsing\.provider\.[a-z0-9]+\.(lastupdatetime|nextupdatetime|backofftime)")
+# Times the engine records for its own background updates (the Safe Browsing lists, Remote Settings), written at any moment.
+BACKGROUND_CLOCK = re.compile(
+    r"browser\.safebrowsing\.provider\.[a-z0-9]+\.(lastupdatetime|nextupdatetime|backofftime)"
+    r"|services\.settings\.(last_update_seconds|clock_skew_seconds|last_etag)"
+)
 
 ROOT = Path(__file__).resolve().parents[2]
 OPTIONS = json.loads((ROOT / "browser" / "shell" / "shared" / "options.json").read_text(encoding="utf-8"))["options"]
@@ -190,7 +193,7 @@ class AppearanceTest(unittest.TestCase):
         """UX6 done criterion: no option can turn a protection off. Every value of every appearance option,
         through the settings page: at each step only the options' own prefs differ from the start, and at the end
         nothing does. The one exception is the engine's own record of when it last fetched the Safe
-        Browsing lists, which a background update can write at any moment (it failed a run that way)."""
+        Browsing lists and Remote Settings, which a background update can write at any moment (each failed a run that way)."""
         self.open()
         before = self.snapshot()
         walk = [("density", v) for v in APPEARANCE["density"]["values"]] + [("accent", v) for v in APPEARANCE["accent"]["values"]]
@@ -204,7 +207,7 @@ class AppearanceTest(unittest.TestCase):
             self.wait_pref(pref, expected)
             now = self.snapshot()
             changed = {k for k in set(now["prefs"]) | set(before["prefs"]) if now["prefs"].get(k) != before["prefs"].get(k)}
-            changed = {k for k in changed if not SAFE_BROWSING_CLOCK.fullmatch(k)}
+            changed = {k for k in changed if not BACKGROUND_CLOCK.fullmatch(k)}
             self.assertLessEqual(changed, OPTION_PREFS, (option, value))
             self.assertEqual(now["permissions"], before["permissions"])
         # The ambience first: "Reduzir transparência" only applies while something is transparent.
@@ -217,7 +220,7 @@ class AppearanceTest(unittest.TestCase):
             self.wait_pref(pref, True)
             now = self.snapshot()
             changed = {k for k in set(now["prefs"]) | set(before["prefs"]) if now["prefs"].get(k) != before["prefs"].get(k)}
-            changed = {k for k in changed if not SAFE_BROWSING_CLOCK.fullmatch(k)}
+            changed = {k for k in changed if not BACKGROUND_CLOCK.fullmatch(k)}
             self.assertLessEqual(changed, OPTION_PREFS, switch)
         for switch in ("nulavio-more-contrast", "nulavio-reduce-transparency", "nulavio-newtab-ambience"):
             self.switch(switch)
@@ -227,7 +230,7 @@ class AppearanceTest(unittest.TestCase):
         for pref in OPTION_PREFS:
             self.wait_pref(pref, None)
         after = self.snapshot()
-        steady = lambda prefs: {k: v for k, v in prefs.items() if not SAFE_BROWSING_CLOCK.fullmatch(k)}  # noqa: E731
+        steady = lambda prefs: {k: v for k, v in prefs.items() if not BACKGROUND_CLOCK.fullmatch(k)}  # noqa: E731
         self.assertEqual(steady(after["prefs"]), steady(before["prefs"]))
 
     def test_06_security_indicators_stay_whole_in_every_variant(self):
