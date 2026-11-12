@@ -230,16 +230,6 @@ class Vault {
     return { opened: (await lazy.NulavioProfiles.switchTo(Number(profileId))).action };
   }
 
-  /** The page for connecting and removing phones. */
-  async openPhonePage(profileId) {
-    const win = Services.wm.getMostRecentBrowserWindow();
-    const policy = WebExtensionPolicy.getByID(SHELL_ID);
-    if (!win || !policy) {
-      fail("no-window");
-    }
-    win.openTrustedLinkIn(`${policy.getURL("vault/phone.html")}?p=${Number(profileId)}`, "tab");
-  }
-
   /** The page shown instead of a locked profile: never the site, never the profile itself. */
   async openUnlockPage(profileId, url = null, source = null) {
     const win = Services.wm.getMostRecentBrowserWindow();

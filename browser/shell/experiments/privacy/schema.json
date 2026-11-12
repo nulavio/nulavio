@@ -3,16 +3,6 @@
     "namespace": "nulavioPrivacy",
     "description": "Site exceptions from the engine's permission store, and uBlock Origin's own page for its trusted sites (docs/brand/ux-flows.md, flow C). Built-in Shell only.",
     "functions": [
-      { "name": "exceptions", "type": "function", "async": true, "parameters": [] },
-      {
-        "name": "remove", "type": "function", "async": true,
-        "parameters": [
-          { "name": "type", "type": "string", "maxLength": 64 },
-          { "name": "origin", "type": "string", "maxLength": 2048 }
-        ]
-      },
-      { "name": "filter", "type": "function", "async": true, "parameters": [] },
-      { "name": "openFilterList", "type": "function", "async": true, "parameters": [] },
       { "name": "dns", "type": "function", "async": true, "parameters": [] },
       {
         "name": "setDns", "type": "function", "async": true,

@@ -284,13 +284,13 @@ class AppearanceTest(unittest.TestCase):
         painted = "return document.documentElement?.hasAttribute('data-painted') ?? false;"
         self.assertTrue(harness.wait_until(lambda: self.m.execute(painted), 20))
         self.m.switch_to(settings)
-        self.m.execute("browser.nulavioPersonalise.setAccent('blue');")
+        self.m.chrome(f"return {PERSONALISE}.set('accent', 'blue');")
         self.wait_pref("nulavio.appearance.accent", "blue")
         self.m.switch_to(newtab)
         self.assertTrue(
             harness.wait_until(lambda: self.m.execute("return document.documentElement.dataset.accent;") == "blue", 10)
         )
-        self.m.execute("browser.nulavioPersonalise.setAccent('mint');")
+        self.m.chrome(f"return {PERSONALISE}.set('accent', 'mint');")
         self.assertTrue(
             harness.wait_until(lambda: self.m.execute("return document.documentElement.dataset.accent;") == "mint", 10)
         )
@@ -328,7 +328,7 @@ class AppearanceTest(unittest.TestCase):
     def test_09_the_ambience_is_opt_in_and_never_in_a_private_window(self):
         self.newtab()
         self.assertEqual(self.look(), {"ambience": "off", "gradient": False, "blur": "none", "solid": True})
-        self.m.execute("return browser.nulavioPersonalise.setNewtabAmbience(true);")
+        self.m.chrome(f"return {PERSONALISE}.set('newtabAmbience', true);")
         self.assertTrue(harness.wait_until(lambda: self.look()["gradient"], 10), self.look())
         on = self.look()
         self.assertEqual((on["ambience"], on["solid"]), ("on", False), on)

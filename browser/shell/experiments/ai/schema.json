@@ -276,44 +276,6 @@
         "parameters": []
       },
       {
-        "name": "assistantConfigure",
-        "type": "function",
-        "async": true,
-        "parameters": [
-          {
-            "name": "details",
-            "type": "object",
-            "properties": {
-              "kind": {
-                "type": "string",
-                "enum": [
-                  "openai",
-                  "anthropic"
-                ]
-              },
-              "baseUrl": {
-                "type": "string",
-                "maxLength": 2048
-              },
-              "model": {
-                "type": "string",
-                "maxLength": 200
-              },
-              "label": {
-                "type": "string",
-                "optional": true,
-                "maxLength": 60
-              },
-              "key": {
-                "type": "string",
-                "optional": true,
-                "maxLength": 512
-              }
-            }
-          }
-        ]
-      },
-      {
         "name": "assistantAllow",
         "type": "function",
         "async": true,
@@ -323,12 +285,6 @@
             "type": "boolean"
           }
         ]
-      },
-      {
-        "name": "assistantForget",
-        "type": "function",
-        "async": true,
-        "parameters": []
       },
       {
         "name": "assistantPage",
@@ -381,86 +337,6 @@
         "type": "function",
         "async": true,
         "parameters": []
-      },
-      {
-        "name": "assistantAsk",
-        "type": "function",
-        "async": true,
-        "parameters": [
-          {
-            "name": "question",
-            "type": "string",
-            "maxLength": 8000
-          },
-          {
-            "name": "options",
-            "type": "object",
-            "description": "The context items of this message (from assistantInclude) and what the panel showed.",
-            "properties": {
-              "chips": {
-                "type": "array",
-                "items": {
-                  "type": "string",
-                  "maxLength": 64
-                },
-                "maxItems": 4
-              },
-              "expected": {
-                "type": "object",
-                "optional": false,
-                "description": "Where the panel said the request goes, and its size: the tools refuse it if either changed.",
-                "properties": {
-                  "recipient": {
-                    "type": "string",
-                    "maxLength": 300
-                  },
-                  "model": {
-                    "type": "string",
-                    "maxLength": 200
-                  },
-                  "chars": {
-                    "type": "integer",
-                    "minimum": 0,
-                    "optional": true
-                  }
-                }
-              }
-            }
-          }
-        ]
-      },
-      {
-        "name": "assistantTask",
-        "type": "function",
-        "async": true,
-        "parameters": [
-          {
-            "name": "task",
-            "type": "string",
-            "maxLength": 8000
-          },
-          {
-            "name": "expected",
-            "type": "object",
-            "description": "Where the panel said the request goes, and its size: the tools refuse it if either changed.",
-            "properties": {
-              "recipient": {
-                "type": "string",
-                "maxLength": 300
-              },
-              "model": {
-                "type": "string",
-                "maxLength": 200
-              },
-              "chars": {
-                "type": "integer",
-                "minimum": 0,
-                "optional": true
-              }
-            },
-            "optional": true
-          }
-        ]
       },
       {
         "name": "assistantStart",

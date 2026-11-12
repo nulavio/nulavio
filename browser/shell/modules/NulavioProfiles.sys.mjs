@@ -16,7 +16,6 @@
 const lazy = {};
 ChromeUtils.defineESModuleGetters(lazy, {
   callTool: "resource://builtin-addons/nulavio-shell/modules/NulavioTools.sys.mjs",
-  NetUtil: "resource://gre/modules/NetUtil.sys.mjs",
   profileLockState: "resource://builtin-addons/nulavio-shell/modules/NulavioVaultState.sys.mjs",
   vaultHelper: "resource://builtin-addons/nulavio-shell/modules/NulavioVault.sys.mjs",
   SelectableProfileService: "resource:///modules/profiles/SelectableProfileService.sys.mjs",
@@ -134,7 +133,6 @@ function checkAvatar(avatar) {
 class NulavioProfilesClass {
   #listeners = new Set();
   #observing = false;
-  #avatarCache = new Map();
   #temporary = null;
   #migratingColors = null;
   // The band's view of the current profile (name, colour, avatar), rebuilt only
@@ -671,35 +669,6 @@ class NulavioProfilesClass {
   }
 
   // -- icons ----------------------------------------------------------------
-
-  /**
-   * The engine's icon as SVG text for an extension page (which cannot load
-   * chrome:// images). Its round background is dropped (the page draws the
-   * profile's colour from the design tokens) and the drawing takes `ink`.
-   */
-  async avatarSvg(avatar, ink) {
-    checkAvatar(avatar);
-    if (!/^#[0-9a-fA-F]{6}$/.test(ink)) {
-      fail("invalid-color");
-    }
-    let svg = this.#avatarCache.get(avatar);
-    if (!svg) {
-      svg = await new Promise((resolve, reject) => {
-        lazy.NetUtil.asyncFetch(
-          { uri: `chrome://browser/content/profiles/assets/16_${avatar}.svg`, loadUsingSystemPrincipal: true },
-          (stream, status) => {
-            if (!Components.isSuccessCode(status)) {
-              reject(new ProfilesError("not-found"));
-              return;
-            }
-            resolve(lazy.NetUtil.readInputStreamToString(stream, stream.available(), { charset: "UTF-8" }));
-          }
-        );
-      });
-      this.#avatarCache.set(avatar, svg);
-    }
-    return svg.replaceAll('fill="context-fill"', 'fill="none"').replaceAll("context-stroke", ink);
-  }
 
   // -- change notifications ---------------------------------------------------
 

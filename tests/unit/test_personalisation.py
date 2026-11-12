@@ -320,34 +320,21 @@ class AppearanceApiTest(unittest.TestCase):
         self.assertEqual(set(re.findall(r"root\.dataset\.(\w+) =", painter)), {"accent", "contrast", "ambience", "transparency"})
         self.assertNotIn("innerHTML", painter)
 
-    def test_the_api_takes_only_declared_values(self):
+    def test_the_api_reads_and_opens_settings_and_sets_nothing(self):
+        # The options are set by the browser's settings page, which calls the module (it refuses a value
+        # that is not declared). A Shell page can read the look and ask for the settings page: no setter
+        # crosses to it.
         schema = json.loads((SHELL / "experiments" / "personalise" / "schema.json").read_text(encoding="utf-8"))[0]
-        declared = {o["id"]: o for o in options()}
         functions = {f["name"]: f for f in schema["functions"]}
-        self.assertEqual(
-            set(functions),
-            {
-                "state",
-                "setDensity",
-                "setAccent",
-                "setMoreContrast",
-                "setNewtabAmbience",
-                "setReduceTransparency",
-                "openKeyboardShortcuts",
-                "openSettings",
-            },
-        )
-        self.assertEqual(functions["openKeyboardShortcuts"]["parameters"], [])
+        self.assertEqual(set(functions), {"state", "openSettings"})
         # ADR 0008: a page names a pane or a section; the host maps it to a fixed list. No address crosses.
         self.assertEqual(
             [(p["name"], p["type"], p.get("optional")) for p in functions["openSettings"]["parameters"]],
             [("where", "string", True), ("replace", "boolean", True)],
         )
-        for name in ("setNewtabAmbience", "setReduceTransparency"):
-            self.assertEqual(functions[name]["parameters"][0]["type"], "boolean")
-        self.assertEqual(functions["setDensity"]["parameters"][0]["enum"], declared["density"]["values"])
-        self.assertEqual(functions["setAccent"]["parameters"][0]["enum"], declared["accent"]["values"])
-        self.assertEqual(functions["setMoreContrast"]["parameters"][0]["type"], "boolean")
+        module = (SHELL / "modules" / "NulavioPersonalise.sys.mjs").read_text(encoding="utf-8")
+        self.assertIn('throw new PersonaliseError("invalid-value")', module)
+        declared = {o["id"]: o for o in options()}
         self.assertEqual(declared["moreContrast"]["values"], [False, True])
 
     def test_the_options_match_the_token_variants(self):
@@ -446,7 +433,7 @@ class PrefWriterInventoryTest(unittest.TestCase):
 
     def test_the_appearance_module_writes_only_inside_set(self):
         source = (SHELL / "modules" / "NulavioPersonalise.sys.mjs").read_text(encoding="utf-8")
-        body = source[source.index("  async set(id, value) {") : source.index("  /** Settings > Atalhos")]
+        body = source[source.index("  async set(id, value) {") : source.index("  /** Calls `listener` when")]
         self.assertEqual(len(WRITER.findall(body)), 4)
         self.assertEqual(len(WRITER.findall(source)), 4)
         self.assertEqual(re.findall(r"\bconst \[?pref\]? =", source), ["const [pref] =", "const [pref] ="])

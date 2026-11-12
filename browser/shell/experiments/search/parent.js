@@ -56,15 +56,6 @@ this.nulavioSearch = class extends ExtensionAPI {
     return {
       nulavioSearch: {
         state: call(() => search.state()),
-        addProvider: call(key => search.addProvider(key)),
-        addSearxng: call(details => search.addSearxng(details)),
-        addCustom: call(details => search.addCustom(details)),
-        addOpenSearch: call(details => search.addOpenSearch(details)),
-        remove: call(id => search.remove(id)),
-        setDefault: call((id, options) => search.setDefault(id, options ?? {})),
-        setAlias: call((id, alias) => search.setAlias(id, alias)),
-        setSuggestOptIn: call((id, enabled) => search.setSuggestOptIn(id, enabled)),
-        setSuggestPrivate: call(enabled => search.setSuggestPrivate(enabled)),
         onChanged: new ExtensionCommon.EventManager({
           context,
           name: "nulavioSearch.onChanged",

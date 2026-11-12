@@ -267,3 +267,17 @@ The last copy: the Layout section of the Shell's page, with `settings/layout.js`
 - **Not carried over**: the old card's measured reflow at 320 px and 200 % text. On the settings page that is the engine's layout with Nulavio's groups in it, and measuring it is its own piece of work (issue #108). What the system asks for (reduced motion, contrast, transparency) is still checked on the window.
 
 What the Shell's own settings page holds now: the agents (connecting one, permissions, consent, pause, revoke, the emergency stop, the activity record) and the desktop integrations. Every setting is in the browser's settings page.
+
+## Step 16 (2026-11-12): a Shell page can ask privileged code only what a Shell page asks
+
+Branch `agent/claude/refactor-shell-api-unused`.
+
+With every setting drawn by the settings page, which calls the modules directly, the Shell's pages no longer change settings. Their API (the experiment schemas a page reaches as `browser.nulavio…`) still offered every setter the old page used. 38 functions that no Shell page calls are removed from the schemas and their parent scripts: all the setters of the look and the open-shortcuts call, adding, removing, defaulting and aliasing search engines, the routing switches, updating and deleting a profile, removing a site exception, the look-alike list, configuring and forgetting the assistant's service (the call that carried its key), and a few reads and doors nobody opens from a page.
+
+- **What it buys.** A Shell page is unprivileged content. If one were ever made to run someone else's script, the damage is bounded by this API; it can no longer, for example, delete a profile, make a search engine the default or hand the assistant a new address.
+- **A unit test keeps it so** (`test_the_api_offers_pages_nothing_they_do_not_call`): a function stays in a schema only while a page that uses its namespace names it.
+- **How the unused ones were found**: a script over the pages, then by hand, then the integration suite. The script missed one call written across two lines (`guard` / `.findings()`), and the suite caught it: `test_guard` failed until the function was put back. The check now allows line breaks.
+- Module methods left without any caller went too (`avatarSvg`, `openPhonePage`, `openKeyboardShortcuts`), and nine messages only the old page showed.
+- The assistant panel's two doors are clicked by a test now (`test_assistant_ui` 39): the settings page where the profile is not allowed, the agents' page while the agents are stopped.
+
+Not done: the events a page no longer listens to (`onChanged` of the look, privacy and routing) are still offered; listening changes nothing. Module methods that only tests call were left.

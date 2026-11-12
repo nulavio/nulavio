@@ -1774,6 +1774,42 @@ class AssistantUiTest(unittest.TestCase):
             self.show_sidebar(reload=True)
             self.close_other_tabs()
 
+    def test_39_the_panels_doors_open_the_settings_page_and_the_agents_page(self):
+        """The panel holds no settings: where this profile is not allowed, "Abrir configurações" opens the
+        browser's settings page on the assistant; while the agents are stopped, the door opens the agents' page."""
+        self.close_other_tabs()
+        urls = "return gBrowser.browsers.map(b => b.currentURI.spec);"
+
+        def opened(prefix: str) -> list[str]:
+            return harness.wait_until(lambda: [u for u in self.m.chrome(urls) if u.startswith(prefix)], 15) or []
+
+        self.addCleanup(self.close_other_tabs)
+        self.addCleanup(chrome_async, self.m, f"return await {AI}.assistantAllow(true);")
+        chrome_async(self.m, f"return await {AI}.assistantAllow(false);")
+        self.show_sidebar(reload=True)
+        self.wait_view(lambda v: v["state"] == "not-allowed")
+        door = "const b = document.getElementById('%s'); return { shown: !b.closest('[hidden]'), text: b.textContent };"
+        self.assertEqual(
+            self.panel(door % "open-settings"), {"shown": True, "text": MESSAGES["assistantOpenSettings"]["message"]}
+        )
+        self.panel("document.getElementById('open-settings').click();")
+        self.assertEqual(opened("about:preferences"), [f"about:preferences#{settings_page.assistant_pane(self.m)}"])
+        chrome_async(self.m, f"return await {AI}.assistantAllow(true);")
+
+        self.close_other_tabs()
+        self.addCleanup(chrome_async, self.m, f"return await {AI}.setStopped(false);")
+        chrome_async(self.m, f"return await {AI}.setStopped(true);")
+        self.show_sidebar(reload=True)
+        self.wait_view(lambda v: v["state"] == "blocked")
+        self.assertTrue(self.panel(door % "resume-settings")["shown"])
+        self.panel("document.getElementById('resume-settings').click();")
+        agents = opened("moz-extension://")
+        self.assertEqual(len(agents), 1, agents)
+        self.assertTrue(agents[0].endswith("/settings/settings.html#ai-agents-card"), agents)
+        chrome_async(self.m, f"return await {AI}.setStopped(false);")
+        self.show_sidebar(reload=True)
+        self.wait_view(lambda v: v["state"] == "ready")
+
 
 if __name__ == "__main__":
     unittest.main()

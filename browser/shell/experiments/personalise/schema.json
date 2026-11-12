@@ -5,18 +5,6 @@
     "functions": [
       { "name": "state", "type": "function", "async": true, "parameters": [] },
       {
-        "name": "setDensity", "type": "function", "async": true,
-        "parameters": [{ "name": "density", "type": "string", "enum": ["auto", "normal", "compact", "touch"] }]
-      },
-      {
-        "name": "setAccent", "type": "function", "async": true,
-        "parameters": [{ "name": "accent", "type": "string", "enum": ["mint", "blue"] }]
-      },
-      { "name": "setMoreContrast", "type": "function", "async": true, "parameters": [{ "name": "on", "type": "boolean" }] },
-      { "name": "setNewtabAmbience", "type": "function", "async": true, "parameters": [{ "name": "on", "type": "boolean" }] },
-      { "name": "setReduceTransparency", "type": "function", "async": true, "parameters": [{ "name": "on", "type": "boolean" }] },
-      { "name": "openKeyboardShortcuts", "type": "function", "async": true, "parameters": [] },
-      {
         "name": "openSettings",
         "type": "function",
         "async": true,

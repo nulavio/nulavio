@@ -183,7 +183,7 @@ class PrivilegedApiTest(unittest.TestCase):
         self.assertEqual(api["parent"]["events"], ["startup"])
         schema = json.loads((SHELL / api["schema"]).read_text())[0]
         names = {f["name"] for f in schema["functions"]}
-        self.assertEqual(names, {"state", "apply", "dismissChoice", "toggleFocus", "immersive", "setImmersive"})
+        self.assertEqual(names, {"state", "apply", "dismissChoice", "toggleFocus", "setImmersive"})
         # ADR 0009: Immersive is one boolean; the tab only says in which window the outcome is announced.
         switch = next(f for f in schema["functions"] if f["name"] == "setImmersive")
         self.assertEqual([(a["name"], a["type"]) for a in switch["parameters"]], [("on", "boolean"), ("tabId", "integer")])
@@ -194,6 +194,26 @@ class PrivilegedApiTest(unittest.TestCase):
             self.assertEqual(fn["parameters"], [])
         apply = next(f for f in schema["functions"] if f["name"] == "apply")
         self.assertEqual(apply["parameters"], [{"name": "preset", "type": "string", "enum": ["lateral", "top", "focus"]}])
+
+    def test_the_api_offers_pages_nothing_they_do_not_call(self):
+        # Least privilege (ADR 0011): the settings live in the browser's own page, which calls the modules
+        # directly. What a Shell page can ask of privileged code is only what some Shell page asks: a function
+        # stays in a schema while a page that uses its namespace names it.
+        pages = [
+            p.read_text(encoding="utf-8")
+            for p in SHELL.rglob("*.js")
+            if not {"experiments", "modules"} & set(p.relative_to(SHELL).parts)
+        ]
+        for name, api in self.manifest["experiment_apis"].items():
+            schema = json.loads((SHELL / api["schema"]).read_text())[0]
+            users = [text for text in pages if re.search(rf"\b{name}\b", text)]
+            self.assertTrue(users, f"{name}: no Shell page uses it")
+            for fn in schema.get("functions", []):
+                with self.subTest(api=name, function=fn["name"]):
+                    self.assertTrue(
+                        any(re.search(rf"\.{fn['name']}\b", text) for text in users),
+                        "no Shell page calls it: remove it from the schema and the parent script",
+                    )
 
     def test_profile_selector_is_on_the_toolbar_with_a_shortcut(self):
         self.assertEqual(self.manifest["action"]["default_area"], "navbar")
@@ -593,20 +613,12 @@ class LayoutModuleTest(unittest.TestCase):
             self.assertTrue((SHELL / "settings" / "native" / f"layout-{value}.svg").is_file(), value)
 
     def test_layout_names_bridge_to_the_engine_settings(self):
-        # QA B-9: the engine's own words for the two arrangements are "Vertical/Horizontal tabs", and it has
-        # no Focus; the presets name that native term. ADR 0008: there is one Settings, so the card's link
-        # names the pane the choice lives in.
-        for name, vertical, horizontal, pane in (
-            ("pt_BR", "Abas na vertical", "Abas na horizontal", "Aparência"),
-            ("en", "Vertical tabs", "Horizontal tabs", "Appearance"),
-        ):
+        # ADR 0008: there is one Settings, and the engine's own two-way "Vertical/Horizontal tabs" control is
+        # replaced there by Nulavio's picker (QA B-9's bridge to the engine's words went with the second
+        # control). The first-run card's link names the pane the choice lives in.
+        for name, pane in (("pt_BR", "Aparência"), ("en", "Appearance")):
             with self.subTest(locale=name):
                 msg = {k: v["message"] for k, v in locale(name).items()}
-                self.assertIn(vertical.lower(), msg["layoutLateralHint"].lower())
-                self.assertIn(vertical.lower(), msg["layoutFocusHint"].lower())
-                self.assertIn(horizontal.lower(), msg["layoutTopHint"].lower())
-                self.assertIn(vertical, msg["layoutScope"])
-                self.assertIn(horizontal, msg["layoutScope"])
                 self.assertIn(pane, msg["layoutChoiceSettings"])
 
     def test_layout_surfaces_guard_listener_registration(self):
