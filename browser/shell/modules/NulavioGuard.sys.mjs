@@ -675,8 +675,9 @@ class Guard {
       throw e;
     }
     const touched = new Set([...earlier, ...this.#touched]);
-    // What another program did to the extensions is never taken into the record unseen, even when the engine
-    // only finds it during the session: an extension placed in the profile, a file replaced or deleted.
+    // What the engine shows of an extension that the browser did not do is reported, not taken into the record,
+    // also when the engine only finds it during the session: an extension placed in the profile, another
+    // version, a file gone. (What the engine does not show is not seen here: docs/security/hardening.md.)
     const before = { extensions: this.#state.snapshot.extensions };
     const pendingIds = new Set(this.#state.pending.map(f => f.id));
     const at = new Date().toISOString();
