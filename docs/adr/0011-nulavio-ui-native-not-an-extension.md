@@ -123,5 +123,20 @@ Branch `agent/claude/feat-settings-exceptions-native`.
 
 `tests/integration/test_settings_exceptions.py` (2 tests): exceptions made through the engine's permission manager are listed in words and join the list without a reload; removing one removes it from the engine and says so; one that is gone before the click is said in words; a browser default asks first (closed: kept; accepted: removed); none left.
 
-Still the old page's: search, passwords, DNS and the assistant, and the removal of the old page's sections with their tests.
+Still the old page's after this step: search, passwords (step 6), DNS and the assistant.
+
+## Step 6 (2026-11-12): who keeps the passwords, and the look-alike sites that were confirmed
+
+Branch `agent/claude/feat-settings-passwords-native`.
+
+![The password manager choice and the confirmed look-alike sites in "Senhas e preenchimento automático", pt-BR light and en-US dark](../design/screenshots/experience-2026-11/settings-passwords-sheet.png)
+
+- "Quem guarda suas senhas" now holds the choice itself: one row per manager (the browser's own, and those Nulavio can install from their official extension) with what is true of it now (installed and its version, installed but off, not installed and what would be installed, a desktop app that is missing), and the count of logins the browser's own manager holds.
+- Choosing a manager that is not installed asks first, in the engine's prompt, with the words that say what is installed, which version and from where; giving the job back to the browser asks too. These are steps, not dangers: the confirmation is the default button, as on the old page. `NulavioPasswords.choose` still pins and checks the file it installs.
+- "Sites parecidos que você confirmou" lists the look-alike sites the person chose to continue on; removing one brings the warning back for it.
+- The old page's passwords section left its navigation and search; it still opens by address.
+
+`tests/integration/test_settings_passwords.py` (2 tests): the rows and their words for three states; a manager that is not installed (prompt closed: nothing asked of the module; accepted: chosen, the rows follow); one that is installed, chosen with no question; back to the browser's own, after a prompt; a refusal said in words; two confirmed sites, removed one by one. **No extension is installed by these tests**: the state shown is given to the module by the test, and what the page asks of `choose` is recorded. Installing for real stays covered by `test_passwords.py`.
+
+Still the old page's: search, DNS and the assistant, and the removal of the old page's sections with their tests.
 

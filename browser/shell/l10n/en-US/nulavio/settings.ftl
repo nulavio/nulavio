@@ -135,20 +135,13 @@ nulavio-guard-review-unwatched =
 
 nulavio-passwords-group =
     .label = Who keeps your passwords
-    .description = One manager per profile. Nulavio never reads your vault.
-nulavio-passwords-now-builtin =
-    .label = In use: the browser's own manager
-    .description = Its options are right below.
+    .description = One manager per profile. Nulavio never reads your vault. With an extension, the browser's own save and fill prompts turn off, so only one manager offers to fill.
 nulavio-passwords-now-none =
     .label = The browser's own manager is off
     .description = None of the managers Nulavio knows is on. Another extension may be handling passwords.
-# $name is the name of a password manager extension.
-nulavio-passwords-now-extension =
-    .label = In use: { $name }
-    .description = An extension. The browser's own manager stays off.
-nulavio-open-passwords =
-    .label = Change manager
-    .description = The browser's own or one of those Nulavio can install from its official extension.
+nulavio-confirmed-group =
+    .label = Look-alike sites you confirmed
+    .description = You chose to continue on these sites although they look like a site where you keep a saved login, so Nulavio does not warn about them in this profile. Remove one to get the warning back.
 
 ## Search
 

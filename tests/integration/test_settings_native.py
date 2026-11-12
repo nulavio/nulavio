@@ -360,7 +360,14 @@ class NativeSettingsTest(unittest.TestCase):
         self.assertIn("Sem senha", here["description"], here)
         self.assertFalse(self.m.chrome(CONTROL, ["#nulavio-here-failed"])["shown"])
         self.groups("panePasswordsAutofill")
-        self.assertEqual(self.control("#nulavio-passwords-now")["label"], "Em uso: o gerenciador do próprio navegador")
+        # The manager in use is marked in the list of managers; the row above it only speaks when none is on.
+        in_use = (
+            DOC
+            + """const rows = d.querySelectorAll('#nulavio-passwords-providers moz-box-item[data-in-use="true"]');"""
+            + "return [...rows].map(r => r.label);"
+        )
+        self.assertEqual(harness.wait_until(lambda: self.m.chrome(in_use), 15), ["O gerenciador de senhas do navegador (em uso)"])
+        self.assertFalse(self.m.chrome(CONTROL, ["#nulavio-passwords-now"])["shown"])
         # The engine's own checkbox, in the group below, changes the answer above it.
         self.m.chrome('Services.prefs.setBoolPref("signon.rememberSignons", false);')
         # With it off and none of the known managers on, the row says only what was read: another extension may do it.
@@ -518,10 +525,10 @@ class NativeSettingsTest(unittest.TestCase):
 
         # From the settings page to a detail page and back, in the same tab.
         self.assertTrue(harness.wait_until(lambda: self.m.chrome(READY), 20))
-        self.groups("panePasswordsAutofill")
-        self.control("#nulavio-open-passwords")
-        self.m.chrome(DOC + 'd.querySelector("#nulavio-open-passwords").click();')
-        detail = "/settings/settings.html#passwords"
+        self.groups("paneSearch")
+        self.control("#nulavio-open-search")
+        self.m.chrome(DOC + 'd.querySelector("#nulavio-open-search").click();')
+        detail = "/settings/settings.html#search"
         self.assertTrue(harness.wait_until(lambda: self.m.chrome(where).endswith(detail), 15), self.m.chrome(where))
         for handle in self.m.window_handles():
             self.m.switch_to(handle)
@@ -533,11 +540,11 @@ class NativeSettingsTest(unittest.TestCase):
             "return [...document.querySelectorAll('.settings-nav a[data-section]')].map(a => a.dataset.section);"
         )
         # What the settings page draws itself has no entry on a detail page (ADR 0008, ADR 0011).
-        for moved in ("layout", "appearance", "shortcuts", "profiles", "routing", "exceptions"):
+        for moved in ("layout", "appearance", "shortcuts", "profiles", "routing", "exceptions", "passwords"):
             self.assertNotIn(moved, rail)
         self.assertEqual(self.m.execute("return document.getElementById('settings-back').textContent;"), "Configurações")
         self.m.send("WebDriver:ElementClick", {"id": self.m.find_element("#settings-back")})
-        back = "about:preferences#passwordsAutofill"
+        back = "about:preferences#search"
         self.assertTrue(harness.wait_until(lambda: self.m.chrome(where) == back, 15), self.m.chrome(where))
         self.assertEqual(self.m.chrome("return gBrowser.tabs.length;"), tabs)
         # The old routing section, still there by its address, sends "Criar perfil" to the settings page too.

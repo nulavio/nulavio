@@ -454,6 +454,8 @@ def profile_chip_rules(tokens: dict[str, dict]) -> str:
         "    padding: var(--space-small) !important;\n"
         "  }\n"
     )
+    # A row's action is one or two words: they stay on one line next to a long description.
+    rules += '  moz-box-item[class*="nulavio-"] > moz-button {\n    white-space: nowrap !important;\n  }\n'
     # The editor under a row and the "new profile" row hold a few fields, one under the other.
     rules += (
         "  moz-box-item:is(.nulavio-profile-editor, .nulavio-profile-new) > setting-control:not(:first-child) {\n"

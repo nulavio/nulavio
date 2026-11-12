@@ -135,10 +135,13 @@ class ExperienceRulesTest(unittest.TestCase):
             self.assertEqual(keys - have, set(), f"{locale}: the settings page asks for words that do not exist")
         self.assertNotRegex(panes, r"innerHTML|outerHTML|insertAdjacentHTML|createContextualFragment|document\.write")
         # A destructive confirmation keeps "Cancelar" as the default button, as on the Shell's own pages.
-        confirm = panes[panes.index("const confirmDanger") :].split("};", 1)[0]
-        self.assertIn("BUTTON_POS_1 * prompt.BUTTON_TITLE_CANCEL", confirm)
-        self.assertIn("BUTTON_POS_1_DEFAULT", confirm)
-        self.assertNotIn("BUTTON_POS_0_DEFAULT", confirm)
+        ask = panes[panes.index("const ask = async (title, body, confirm, danger)") :].split("    };", 1)[0]
+        self.assertIn("BUTTON_POS_1 * prompt.BUTTON_TITLE_CANCEL", ask)
+        self.assertIn("(danger ? prompt.BUTTON_POS_1_DEFAULT : prompt.BUTTON_POS_0_DEFAULT)", ask)
+        self.assertIn("const confirmDanger = (title, body, confirm) => ask(title, body, confirm, true);", panes)
+        # Deleting a profile, locking the one in use and removing a browser default are dangers, never plain steps.
+        for words in ("profilesDeleteTitle", "vaultLockCurrentTitle", "exceptionRemoveBuiltInTitle"):
+            self.assertRegex(panes, r"confirmDanger\(\s*msg\(\"" + words)
 
 
 if __name__ == "__main__":

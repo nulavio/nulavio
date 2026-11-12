@@ -368,11 +368,11 @@
         listeners.add(emit);
         stops.push(() => listeners.delete(emit));
       };
-      const act = async (action, said = "") => {
+      const act = async (action, said = "", during = "") => {
         if (state.busy) {
           return false;
         }
-        show({ busy: true, error: "", said: "" });
+        show({ busy: true, error: "", said: during }); // `during`: what is happening, for an action that takes a while
         try {
           const answer = await action();
           show({ busy: false, said: typeof said === "function" ? said(answer) : said });
@@ -443,10 +443,13 @@
         focusWhenDrawn(rowButton$(key, "edit"));
       }
     };
-    /** A destructive confirmation in the engine's own prompt. Cancel is the default button, as on the Shell's pages. */
-    const confirmDanger = async (title, body, confirm) => {
+    /** The engine's own prompt with the Shell's words. `danger`: Cancel is the default button, as on the Shell's pages. */
+    const ask = async (title, body, confirm, danger) => {
       const prompt = Services.prompt;
-      const flags = prompt.BUTTON_POS_0 * prompt.BUTTON_TITLE_IS_STRING + prompt.BUTTON_POS_1 * prompt.BUTTON_TITLE_CANCEL + prompt.BUTTON_POS_1_DEFAULT;
+      const flags =
+        prompt.BUTTON_POS_0 * prompt.BUTTON_TITLE_IS_STRING +
+        prompt.BUTTON_POS_1 * prompt.BUTTON_TITLE_CANCEL +
+        (danger ? prompt.BUTTON_POS_1_DEFAULT : prompt.BUTTON_POS_0_DEFAULT);
       try {
         const answer = await prompt.asyncConfirmEx(window.browsingContext, prompt.MODAL_TYPE_CONTENT, title, body, flags, confirm, null, null, null, false, {
           useTitle: true,
@@ -457,6 +460,10 @@
         return false;
       }
     };
+    /** A destructive confirmation: something is deleted, closed or loses a protection. */
+    const confirmDanger = (title, body, confirm) => ask(title, body, confirm, true);
+    /** A step the person asked for that changes what is installed or in use, said before it is done. */
+    const confirmStep = (title, body, confirm) => ask(title, body, confirm, false);
 
     const PROFILE_ROW = profile => {
       if (profile.temporary) {
@@ -1077,19 +1084,158 @@
         AddonManager.addAddonListener(listener);
         stops.push(() => AddonManager.removeAddonListener(listener));
       },
+      // The list below marks the manager in use; this row speaks only when none of the managers Nulavio knows is on.
+      visible: () => passwords.state.ready && passwords.state.value?.current === "none",
+      getControlConfig: config => ({ ...config, l10nId: "nulavio-passwords-now-none" }),
+    });
+
+    // -- who saves and fills passwords in this profile: the browser's own manager or one of the managers
+    // Nulavio knows how to install from the official extension (NulavioPasswords pins and checks the file).
+    const passwordBench = workbench({}, passwords);
+    const providerName = item => (item.key === "builtin" ? msg("passwordsBuiltin") : item.extension.name);
+    const providerStatus = item => {
+      if (item.key === "builtin") {
+        return msg("passwordsBuiltinNote");
+      }
+      const extension = item.extension;
+      const parts = [
+        extension.enabled
+          ? msg("passwordsInstalled", extension.version)
+          : extension.installed
+            ? msg("passwordsInstalledOff")
+            : msg("passwordsNotInstalled", extension.pinned),
+      ];
+      if (item.native && !item.native.found) {
+        parts.push(msg(item.native.required ? "passwordsNativeMissing" : "passwordsNativeOptional"));
+      }
+      return parts.join(" ");
+    };
+    const providerRow = item => {
+      const inUse = passwords.state.value.current === item.key;
+      const name = providerName(item);
+      const button = (action, label) => ({
+        key: `${action}-${item.key}`,
+        control: "moz-button",
+        slot: "actions",
+        disabled: passwordBench.state.busy,
+        controlAttrs: { label, "aria-label": `${label}: ${name}`, "data-action": action, "data-provider": item.key },
+      });
+      return {
+        key: `provider-${item.key}`,
+        control: "moz-box-item",
+        controlAttrs: {
+          label: inUse ? `${name} (${msg("passwordsInUse")})` : name,
+          description: providerStatus(item),
+          class: "nulavio-provider",
+          "data-provider": item.key,
+          "data-in-use": String(inUse),
+        },
+        // The one in use has nothing to choose; an extension in use can give the job back to the browser.
+        options: inUse ? (item.key === "builtin" ? [] : [button("off", msg("passwordsDisableIntegration"))]) : [button("use", msg("passwordsUse"))],
+      };
+    };
+    setting({
+      id: "nulavio-passwords-providers",
+      setup(emitChange, stops) {
+        stops.push(passwords.listen(emitChange));
+        passwordBench.watch(emitChange, stops);
+      },
       visible: () => passwords.state.ready,
-      getControlConfig(config) {
-        const now = passwords.state.value;
-        if (!now) {
-          return config;
+      getControlConfig: config => ({ ...config, options: (passwords.state.value?.providers ?? []).map(providerRow) }),
+      async onUserClick(event) {
+        const button = event.target.closest?.("[data-action]");
+        const item = (passwords.state.value?.providers ?? []).find(each => each.key === button?.dataset.provider);
+        if (!item) {
+          return;
         }
-        if (now.current === "builtin" || now.current === "none") {
-          return { ...config, l10nId: `nulavio-passwords-now-${now.current}` };
+        const name = providerName(item);
+        if (button.dataset.action === "off") {
+          if (await confirmStep(msg("passwordsDisableTitle"), msg("passwordsDisableBody", name), msg("passwordsDisableIntegration"))) {
+            await passwordBench.act(() => shell.NulavioPasswords.choose("builtin"), msg("passwordsChosen", msg("passwordsBuiltin")));
+          }
+          return;
         }
-        const name = now.providers.find(item => item.key === now.current)?.extension?.name ?? now.current;
-        return { ...config, l10nId: "nulavio-passwords-now-extension", l10nArgs: { name } };
+        // An extension that is not there yet is installed only after the page said what will be installed, and from where.
+        const installs = Boolean(item.extension && !item.extension.installed);
+        if (
+          installs &&
+          !(await confirmStep(msg("passwordsConfirmTitle", name), msg("passwordsConfirmBody", name, item.extension.pinned), msg("passwordsConfirmButton")))
+        ) {
+          return;
+        }
+        await passwordBench.act(() => shell.NulavioPasswords.choose(item.key), msg("passwordsChosen", name), installs ? msg("passwordsInstalling", name) : "");
       },
     });
+    // How many logins the browser's own manager holds here (a count; they are kept when the manager changes).
+    setting({
+      id: "nulavio-passwords-logins",
+      setup: (emitChange, stops) => stops.push(passwords.listen(emitChange)),
+      visible: () => passwords.state.ready,
+      getControlConfig(config) {
+        const count = passwords.state.value?.engineLogins ?? 0;
+        const label = count === 0 ? msg("passwordsEngineLoginsNone") : count === 1 ? msg("passwordsEngineLoginsOne") : msg("passwordsEngineLogins", String(count));
+        return { ...config, controlAttrs: { ...config.controlAttrs, label } };
+      },
+    });
+    const passwordBars = [
+      passwordBench.bar("nulavio-passwords-error", "error", () => passwordBench.state.error, () => Boolean(passwordBench.state.error)),
+      passwordBench.bar("nulavio-passwords-said", "success", () => passwordBench.state.said, () => Boolean(passwordBench.state.said)),
+    ];
+
+    // -- look-alike sites the person chose to continue on: each can be removed, and the warning comes back --
+    const confirmed = source(async () => shell.NulavioPasswords.listConfirmed());
+    const confirmedBench = workbench({}, confirmed);
+    setting({
+      id: "nulavio-confirmed-sites",
+      setup(emitChange, stops) {
+        stops.push(confirmed.listen(emitChange));
+        confirmedBench.watch(emitChange, stops);
+        confirmed.refresh();
+      },
+      visible: () => confirmed.state.ready,
+      getControlConfig(config) {
+        const rows = (confirmed.state.value ?? []).map(pair => ({
+          key: `confirmed-${pair.site} ${pair.similar}`,
+          control: "moz-box-item",
+          controlAttrs: {
+            label: pair.site,
+            description: msg("passwordsConfirmedLooksLike", pair.similar),
+            class: "nulavio-confirmed",
+            "data-site": pair.site,
+            "data-similar": pair.similar,
+          },
+          options: [
+            {
+              key: `remove-${pair.site} ${pair.similar}`,
+              control: "moz-button",
+              slot: "actions",
+              iconSrc: "chrome://global/skin/icons/delete.svg",
+              disabled: confirmedBench.state.busy,
+              controlAttrs: {
+                title: msg("passwordsConfirmedRemoveNamed", pair.site),
+                "aria-label": msg("passwordsConfirmedRemoveNamed", pair.site),
+                "data-action": "remove",
+                "data-site": pair.site,
+                "data-similar": pair.similar,
+              },
+            },
+          ],
+        }));
+        const none = { key: "none", control: "moz-box-item", controlAttrs: { label: msg("passwordsConfirmedNone"), class: "nulavio-confirmed-none" } };
+        return { ...config, options: rows.length ? rows : [none] };
+      },
+      async onUserClick(event) {
+        const button = event.target.closest?.('[data-action="remove"]');
+        const pair = (confirmed.state.value ?? []).find(each => each.site === button?.dataset.site && each.similar === button?.dataset.similar);
+        if (pair && (await confirmedBench.act(async () => shell.NulavioPasswords.removeConfirmed(pair.site, pair.similar), msg("passwordsConfirmedRemoved", pair.site)))) {
+          focusWhenDrawn('#nulavio-confirmed-sites moz-button[data-action="remove"]');
+        }
+      },
+    });
+    const confirmedBars = [
+      confirmedBench.bar("nulavio-confirmed-error", "error", () => confirmedBench.state.error, () => Boolean(confirmedBench.state.error)),
+      confirmedBench.bar("nulavio-confirmed-said", "success", () => confirmedBench.state.said, () => Boolean(confirmedBench.state.said)),
+    ];
 
     // -- what the content filter blocks: uBlock Origin's own lists, on its own page. Nulavio reads only
     // whether it is on (the add-on manager's answer), never its data: which lists are ticked is said there. --
@@ -1321,7 +1467,7 @@
       });
     }
 
-    for (const id of ["nulavio-layout-moved", "nulavio-profiles-box", "nulavio-passwords-box", "nulavio-protections-box"]) {
+    for (const id of ["nulavio-layout-moved", "nulavio-profiles-box", "nulavio-protections-box"]) {
       setting({ id });
     }
 
@@ -1411,12 +1557,16 @@
         headingLevel: 2,
         items: [
           failureNote("nulavio-passwords-failed", passwords),
-          {
-            id: "nulavio-passwords-box",
-            control: "moz-box-group",
-            items: [{ id: "nulavio-passwords-now", control: "moz-box-item" }, detailRow("nulavio-open-passwords", "passwords")],
-          },
+          { id: "nulavio-passwords-now", control: "moz-box-item" },
+          ...passwordBars,
+          { id: "nulavio-passwords-providers", control: "moz-box-group" },
+          { id: "nulavio-passwords-logins", control: "moz-box-item" },
         ],
+      },
+      nulavioConfirmedSites: {
+        l10nId: "nulavio-confirmed-group",
+        headingLevel: 2,
+        items: [failureNote("nulavio-confirmed-failed", confirmed), ...confirmedBars, { id: "nulavio-confirmed-sites", control: "moz-box-group" }],
       },
       nulavioProtections: {
         l10nId: "nulavio-protections-group",
@@ -1527,7 +1677,7 @@
         return edited;
       },
       privacy: config => ({ ...config, groupIds: after(config.groupIds, "etpStatus", "nulavioProtections", "nulavioExceptions") }),
-      passwordsAutofill: config => ({ ...config, groupIds: ["nulavioPasswordManager", ...config.groupIds] }),
+      passwordsAutofill: config => ({ ...config, groupIds: ["nulavioPasswordManager", ...config.groupIds, "nulavioConfirmedSites"] }),
       search: config => ({ ...config, groupIds: after(config.groupIds, "defaultEngine", "nulavioSearch") }),
       tabsBrowsing: config => ({
         ...config,

@@ -135,20 +135,13 @@ nulavio-guard-review-unwatched =
 
 nulavio-passwords-group =
     .label = Quem guarda suas senhas
-    .description = Um gerenciador por perfil. O Nulavio nunca lê o seu cofre.
-nulavio-passwords-now-builtin =
-    .label = Em uso: o gerenciador do próprio navegador
-    .description = As opções dele ficam logo abaixo.
+    .description = Um gerenciador por perfil. O Nulavio nunca lê o seu cofre. Com uma extensão, os pedidos de salvar e preencher do próprio navegador são desligados, para que só um gerenciador ofereça o preenchimento.
 nulavio-passwords-now-none =
     .label = O gerenciador do navegador está desligado
     .description = Nenhum dos gerenciadores que o Nulavio conhece está ligado. Outra extensão pode estar cuidando das senhas.
-# $name is the name of a password manager extension.
-nulavio-passwords-now-extension =
-    .label = Em uso: { $name }
-    .description = Uma extensão. O gerenciador do próprio navegador fica desligado.
-nulavio-open-passwords =
-    .label = Trocar de gerenciador
-    .description = O do navegador ou um dos que o Nulavio sabe instalar pela extensão oficial.
+nulavio-confirmed-group =
+    .label = Sites parecidos que você confirmou
+    .description = Você escolheu continuar nestes sites, mesmo parecidos com um site onde você tem login salvo, então o Nulavio não avisa sobre eles neste perfil. Remova um para o aviso voltar.
 
 ## Pesquisa
 
