@@ -619,7 +619,7 @@
   "exceptionsIntro": {"message": "Sites where a protection is off or relaxed, by you or by the browser itself."},
   "exceptionsEmpty": {"message": "No exceptions: every protection applies to every site."},
   "exceptionsFilterTitle": {"message": "uBlock Origin"},
-  "exceptionsFilterOn": {"message": "uBlock Origin keeps its own list of trusted sites, where it does not filter. Nulavio opens its page and never changes its data."},
+  "exceptionsFilterOn": {"message": "uBlock Origin keeps its own list of trusted sites, where it does not filter. Nulavio opens its page; of its data it only reads which lists are switched on, and never changes anything."},
   "exceptionsFilterOff": {"message": "uBlock Origin is installed but turned off in this profile."},
   "exceptionsFilterMissing": {"message": "uBlock Origin is not installed in this profile."},
   "exceptionsFilterOpen": {"message": "Open uBlock Origin's trusted sites"},

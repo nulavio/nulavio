@@ -90,7 +90,7 @@ Branch `agent/claude/feat-settings-filter-lists`.
 
 Ads, trackers and cookie notices are blocked by uBlock Origin's lists, and nothing in Settings led to them. "Privacidade e Segurança" now has a row that opens uBlock Origin's own "Filter lists" page. Nulavio reads only whether uBlock Origin is on (the add-on manager's answer, as before) and never its data: which lists are ticked is said on its page, not guessed here. With uBlock Origin off or missing, the row says so and opens "Extensões e temas". `test_settings_native` `test_06a` covers both states and the address the module opens.
 
-Not decided (maintainer): showing the real state in the row ("cookie notices: hidden" or "shown") means reading uBlock Origin's own settings. Recommendation: allow reading, never writing, and say so in the words that today promise Nulavio "never alters" its data.
+Decided by the maintainer on 2026-11-12: the row shows the real state, read from uBlock Origin's own settings and never written (step 7).
 
 ## Step 4 (2026-11-11): which site opens in which profile
 
@@ -139,4 +139,15 @@ Branch `agent/claude/feat-settings-passwords-native`.
 `tests/integration/test_settings_passwords.py` (2 tests): the rows and their words for three states; a manager that is not installed (prompt closed: nothing asked of the module; accepted: chosen, the rows follow); one that is installed, chosen with no question; back to the browser's own, after a prompt; a refusal said in words; two confirmed sites, removed one by one. **No extension is installed by these tests**: the state shown is given to the module by the test, and what the page asks of `choose` is recorded. Installing for real stays covered by `test_passwords.py`.
 
 Still the old page's: search, DNS and the assistant, and the removal of the old page's sections with their tests.
+
+## Step 7 (2026-11-12): the row says whether cookie notices are hidden
+
+Branch `agent/claude/feat-settings-filter-state`.
+
+- `NulavioPrivacy.filterLists()` reads one thing of uBlock Origin's own settings, which lists are switched on, and answers whether one of its four cookie-notice lists is among them. It opens uBlock Origin's storage with the engine's own reader, reads, and closes; nothing in the module writes there. Lists are switched on and off on uBlock Origin's page, where the row leads.
+- The row in "Proteções do Nulavio" says "Avisos de cookies: escondidos" or "à mostra" only when that was read. When it was not (uBlock Origin is still starting, or keeps its settings elsewhere), the row claims nothing about cookie notices and says what depends on the lists, as before.
+- The words that promised Nulavio "never alters" uBlock Origin's data now say exactly what happens: it reads which lists are on, and changes nothing.
+- **A defect found on the way, present since ADR 0008's first slice**: the engine hands a control's `getControlConfig` the config it returned the time before, so words chosen for one state stayed when a later state returned the config as it came. "Sem tecla" could stay after a key was set, and "o uBlock Origin não está ligado" after it was turned on again. Every control of this module now starts from the config its group declared (`fromFirst` in `setting()`), so no control can keep a previous state's words. `test_06a` turns uBlock Origin off and on again with the page open.
+
+`test_settings_native` `test_06a`: the module's answer equals what uBlock Origin's storage holds, and reading leaves it as it was; the row's three states (hidden, shown, not read) and off and on again. `test_experience_rules`: the four list names are uBlock Origin's own cookie-notice lists (compared with its registry when the tree has it), the storage is opened once and never written.
 

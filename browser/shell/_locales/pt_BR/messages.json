@@ -619,7 +619,7 @@
   "exceptionsIntro": {"message": "Sites em que uma proteção está desligada ou relaxada, por você ou pelo próprio navegador."},
   "exceptionsEmpty": {"message": "Nenhuma exceção: todas as proteções valem para todos os sites."},
   "exceptionsFilterTitle": {"message": "uBlock Origin"},
-  "exceptionsFilterOn": {"message": "O uBlock Origin tem a própria lista de sites confiáveis, onde ele não filtra. O Nulavio abre a página dele e nunca altera os dados dele."},
+  "exceptionsFilterOn": {"message": "O uBlock Origin tem a própria lista de sites confiáveis, onde ele não filtra. O Nulavio abre a página dele; dos dados dele, só lê quais listas estão ligadas, e nunca altera nada."},
   "exceptionsFilterOff": {"message": "O uBlock Origin está instalado, mas desligado neste perfil."},
   "exceptionsFilterMissing": {"message": "O uBlock Origin não está instalado neste perfil."},
   "exceptionsFilterOpen": {"message": "Abrir sites confiáveis do uBlock Origin"},

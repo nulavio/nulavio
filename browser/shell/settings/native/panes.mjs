@@ -127,8 +127,18 @@
   }
   // Each of these notes what it is about to add before it adds it, so a throw inside the registry's
   // own function (after it changed something) is undone too.
-  const setting = config => {
-    added.settings.push(config.id);
+  // The engine hands getControlConfig the config it returned the time before, so words chosen for one state
+  // would stay when a later state returns the config as it came ("Sem tecla" after a key was set, "desligado"
+  // after it was turned on again). Every call here starts from the control's first config instead.
+  const FIRST = Symbol("the control's config as the group declared it");
+  const fromFirst = getControlConfig =>
+    function (config, ...rest) {
+      const first = config?.[FIRST] ?? config;
+      return { ...getControlConfig.call(this, first, ...rest), [FIRST]: first };
+    };
+  const setting = declared => {
+    added.settings.push(declared.id);
+    const config = declared.getControlConfig ? { ...declared, getControlConfig: fromFirst(declared.getControlConfig) } : declared;
     const { setup } = config;
     if (!setup) {
       Preferences.addSetting(config);
@@ -1237,9 +1247,9 @@
       confirmedBench.bar("nulavio-confirmed-said", "success", () => confirmedBench.state.said, () => Boolean(confirmedBench.state.said)),
     ];
 
-    // -- what the content filter blocks: uBlock Origin's own lists, on its own page. Nulavio reads only
-    // whether it is on (the add-on manager's answer), never its data: which lists are ticked is said there. --
-    const filter = source(async () => shell.NulavioPrivacy.filter());
+    // -- what the content filter blocks: uBlock Origin's own lists, on its own page. Nulavio reads whether it
+    // is on and whether a cookie-notice list is switched on, and writes nothing there: lists change on its page. --
+    const filter = source(async () => ({ ...shell.NulavioPrivacy.filter(), lists: await shell.NulavioPrivacy.filterLists() }));
     setting({
       id: "nulavio-filter-lists",
       setup(emitChange, stops) {
@@ -1260,7 +1270,15 @@
           top().BrowserAddonUI.openAddonsMgr("addons://list/extension"); // where it is turned on, or seen to be missing
         }
       },
-      getControlConfig: config => (filter.state.value?.active === false ? { ...config, l10nId: "nulavio-filter-lists-off" } : config),
+      // Whether cookie notices are hidden is said only when it was read; otherwise the row says what depends on the lists.
+      getControlConfig(config) {
+        const now = filter.state.value;
+        if (now?.active === false) {
+          return { ...config, l10nId: "nulavio-filter-lists-off" };
+        }
+        const cookies = now?.lists?.cookieNotices;
+        return typeof cookies === "boolean" ? { ...config, l10nId: `nulavio-filter-lists-cookies-${cookies ? "hidden" : "shown"}` } : config;
+      },
     });
 
     // -- site exceptions: where a protection is off or relaxed for one site. NulavioPrivacy reads them from

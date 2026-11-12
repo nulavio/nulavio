@@ -143,6 +143,21 @@ class ExperienceRulesTest(unittest.TestCase):
         for words in ("profilesDeleteTitle", "vaultLockCurrentTitle", "exceptionRemoveBuiltInTitle"):
             self.assertRegex(panes, r"confirmDanger\(\s*msg\(\"" + words)
 
+    def test_the_cookie_notice_lists_are_ublock_origins_own(self):
+        """The Shell reads one thing of uBlock Origin's data: whether one of its cookie-notice lists is on."""
+        privacy = (SHELL / "modules/NulavioPrivacy.sys.mjs").read_text(encoding="utf-8")
+        named = re.search(r"export const COOKIE_NOTICE_LISTS = Object\.freeze\(\[([^\]]+)\]\)", privacy)
+        keys = set(re.findall(r'"([a-z-]+)"', named.group(1)))
+        self.assertEqual(len(keys), 4)
+        # Read with the storage's own reader and closed; nothing in the module writes to another extension's storage.
+        self.assertEqual(privacy.count("ExtensionStorageIDB.open("), 1)
+        self.assertNotRegex(privacy, r"store\.(set|remove|clear)\(")
+        registry = ROOT / "browser" / "distribution" / "ublock-origin" / "assets.json"
+        if not registry.is_file():
+            self.skipTest("uBlock Origin's registry is not in this tree (it comes with the default-lists change)")
+        lists = json.loads(registry.read_text(encoding="utf-8"))
+        self.assertEqual(keys, {key for key, entry in lists.items() if entry.get("group2") == "cookies"})
+
 
 if __name__ == "__main__":
     unittest.main()
