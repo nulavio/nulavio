@@ -282,6 +282,49 @@ class SearchPrivacyTest(unittest.TestCase):
             self.search("await S.setDefault(args[0]);", previous)
             self.search("await S.remove(args[0]);", fixture)
 
+    def test_05c_a_hand_added_plain_http_engine_sends_nothing_in_the_clear(self):
+        """Issue #112: the engine's own "add search engine" dialog takes a plain-http address (it calls the search
+        service's addUserEngine, as here), and Nulavio's old form, which refused one, is gone. What stands in the way
+        is HTTPS-Only, on by default: the suggestion request is upgraded and the search stops at the engine's warning,
+        so nothing typed reaches the http server. With HTTPS-Only switched off by the person it does: the control."""
+        self.require_nulavio()
+        host = "nulavio-plain.test"  # not this computer by name: HTTPS-Only leaves loopback addresses alone
+        self.m.chrome("Services.prefs.setStringPref('network.dns.localDomains', arguments[0]);", [host])
+        self.addCleanup(self.m.chrome, "Services.prefs.clearUserPref('network.dns.localDomains');")
+        base = f"http://{host}:{self.server.port}"
+        added = self.search(
+            'const { SearchService } = ChromeUtils.importESModule("moz-src:///toolkit/components/search/SearchService.sys.mjs");'
+            'const engine = await SearchService.addUserEngine({ name: "Plain", url: args[0], suggestUrl: args[1] });'
+            'return { id: engine.id, search: engine.getSubmission("nvplainsearch").uri.spec };',
+            f"{base}/search?q={{searchTerms}}",
+            f"{base}/suggest?q={{searchTerms}}",
+        )
+        self.assertEqual(added["search"], f"{base}/search?q=nvplainsearch", "the engine keeps the address as given")
+        previous = self.search("return (await S.list()).find(e => e.isDefault).id;")
+        self.search("await S.setDefault(args[0]);", added["id"])
+        self.search("await S.setSuggestOptIn(args[0], true);", added["id"])
+        try:
+            self.assertTrue(self.pref("dom.security.https_only_mode"))
+            seen = self.type_in_urlbar("nvplainsuggest")
+            self.assertIn(f"https://{host}:{self.server.port}/suggest?q=nvplainsuggest", seen, "the request was not upgraded")
+            self.m.chrome("openTrustedLinkIn(arguments[0], 'current');", [added["search"]])
+            shown = "return gBrowser.selectedBrowser.documentURI?.spec.startsWith('about:httpsonlyerror') ?? false;"
+            self.assertTrue(harness.wait_until(lambda: self.m.chrome(shown), 20), "the search did not stop at the warning")
+            self.assertEqual([hit for hit in self.server.hits if "nvplain" in hit], [], "typed text reached the http server")
+            # The control: the same engine with HTTPS-Only switched off sends what is typed, in the clear.
+            self.m.chrome("Services.prefs.setBoolPref('dom.security.https_only_mode', false);")
+            try:
+                self.type_in_urlbar("nvplaincontrol")
+                in_the_clear = lambda: any("nvplaincontrol" in hit for hit in self.server.requests_to("/suggest"))  # noqa: E731
+                self.assertTrue(harness.wait_until(in_the_clear, 10))
+            finally:
+                self.m.chrome("Services.prefs.clearUserPref('dom.security.https_only_mode');")
+        finally:
+            self.m.navigate("about:blank")
+            self.search("await S.setSuggestOptIn(args[0], false);", added["id"])
+            self.search("await S.setDefault(args[0]);", previous)
+            self.search("await S.remove(args[0]);", added["id"])
+
     def test_06_alias_search_goes_straight_to_its_engine(self):
         self.require_nulavio()
         fixture = self.search(
