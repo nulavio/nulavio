@@ -2209,6 +2209,8 @@
         return edited;
       },
       privacy: config => ({ ...config, groupIds: after(config.groupIds, "etpStatus", "nulavioProtections", "nulavioExceptions") }),
+      // "Sobre": how many managed policies are in effect and whose they are.
+      about: config => ({ ...config, groupIds: [...config.groupIds, "nulavioPolicies"] }),
       passwordsAutofill: config => ({ ...config, groupIds: ["nulavioPasswordManager", ...config.groupIds, "nulavioConfirmedSites"] }),
       // Next to the engine's own groups on the same subject: who receives what is typed after its suggestions
       // group, and the engines Nulavio adds after its list of engines.
@@ -2225,6 +2227,66 @@
         ),
       }),
     };
+    // -- "Seu navegador está sendo gerenciado pela sua organização" (ADR 0008) ----------------------
+    // Nulavio ships three policies of its own, so the engine's line was on every pane for everyone, and it
+    // would also be the only sign of a policy somebody else added. It is dropped only while the policies in
+    // effect were read and are exactly the build's own; "Sobre" then says how many those are. Anything else
+    // (another policy, a read that failed, a state not read yet) leaves the engine's line as the engine shows it.
+    const policies = source(() => shell.NulavioGuard.policiesOrigin());
+    const managedNotice = document.getElementById("policies-container-content");
+    if (managedNotice) {
+      let shownByEngine = !managedNotice.hidden;
+      let ours = false; // the hidden attribute as this file last set it
+      const settle = () => {
+        const own = policies.state.ready && policies.state.value.origin === "own";
+        ours = true;
+        managedNotice.hidden = own || !shownByEngine;
+        ours = false;
+        root.toggleAttribute("nulavio-own-policies", own);
+      };
+      // The engine un-hides its line when the page starts, after this file ran: that is the engine's word.
+      const watcher = new MutationObserver(() => {
+        if (!ours && !managedNotice.hidden) {
+          shownByEngine = true;
+          settle();
+        }
+      });
+      watcher.observe(managedNotice, { attributes: true, attributeFilter: ["hidden"] });
+      const stop = policies.listen(settle);
+      added.cleanups.push(() => {
+        stop();
+        watcher.disconnect();
+        managedNotice.hidden = !shownByEngine;
+        root.removeAttribute("nulavio-own-policies");
+      });
+    }
+    setting({
+      id: "nulavio-policies",
+      setup(emitChange, stops) {
+        stops.push(policies.listen(emitChange));
+        policies.refresh();
+      },
+      visible: () => policies.state.ready && policies.state.value.origin !== "none",
+      onUserClick(event) {
+        event.preventDefault();
+        top().openTrustedLinkIn("about:policies", "tab");
+      },
+      getControlConfig(config) {
+        const now = policies.state.value;
+        if (!now) {
+          return config;
+        }
+        return { ...config, l10nId: now.origin === "own" ? "nulavio-policies-own" : "nulavio-policies-other", l10nArgs: { count: now.count } };
+      },
+    });
+    groups({
+      nulavioPolicies: {
+        l10nId: "nulavio-policies-group",
+        headingLevel: 2,
+        items: [failureNote("nulavio-policies-failed", policies), { id: "nulavio-policies", l10nId: "nulavio-policies-own", control: "moz-box-button" }],
+      },
+    });
+
     // An engine group is registered when its module loads: with the page for some, when the pane is first
     // opened for others. One of them has a row that only made
     // sense with the engine's own layout picker: "Personalizar layout do navegador", in Aparência, led to

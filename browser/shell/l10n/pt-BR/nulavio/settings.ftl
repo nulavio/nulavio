@@ -225,3 +225,23 @@ nulavio-integrations-group =
     .description = O que o seu desktop oferece ao Nulavio, verificado neste computador. A verificação não muda nada e não envia nada a lugar nenhum.
 nulavio-open-integrations =
     .label = Ver as integrações
+
+## Sobre: as políticas em vigor (no lugar da linha "gerenciado pela sua organização" quando são só as do Nulavio)
+
+nulavio-policies-group =
+    .label = Políticas do navegador
+    .description = Regras fixadas por quem distribui ou administra o navegador. As configurações não mudam essas regras.
+nulavio-policies-own =
+    .label =
+        { $count ->
+            [one] O Nulavio aplica 1 política própria
+           *[other] O Nulavio aplica { $count } políticas próprias
+        }
+    .description = Elas vêm com o Nulavio, e nenhuma outra está em vigor. Veja quais são.
+nulavio-policies-other =
+    .label =
+        { $count ->
+            [one] 1 política em vigor
+           *[other] { $count } políticas em vigor
+        }
+    .description = Elas não são exatamente as que vêm com o Nulavio: um arquivo do sistema ou um administrador acrescentou, tirou ou mudou alguma. Veja quais são.

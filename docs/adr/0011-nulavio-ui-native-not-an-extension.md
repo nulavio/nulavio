@@ -297,3 +297,19 @@ On unlock, the Guard's review, consent, the warnings and the new tab, the identi
 `tests/integration/test_window_band.py` 02b: a Shell page (label, mark, tooltip, kind for the panel, principal still the add-on's), the engine's own page for comparison, an add-on named "Nulavio Shell" with another id, the Shell stopped and started again, a site. It fails without the change with `'Extensão (Nulavio Shell)'`.
 
 Not verified: the identity panel open on a Shell page was not captured (it did not stay open on the private display); only the kind it is given ("chrome", the engine's "secure page of the browser" text) was read. A screen reader was not run.
+
+## Step 18 (2026-11-12): "managed by your organization" only when a policy is not Nulavio's own
+
+Branch `agent/claude/feat-settings-managed-notice`. Issue #115; ADR 0008's decision.
+
+Nulavio ships a few policies of its own (its content blocker, no telemetry, no studies), so the engine's line "Seu navegador está sendo gerenciado pela sua organização" was on every pane for everyone. It is true, and it would also be the only sign of a policy somebody else added, which nobody would notice any more.
+
+![Before and after in Privacidade, and the row in Sobre, pt-BR light and en-US dark](../design/screenshots/experience-2026-11/settings-policies-sheet.png)
+
+- **The line is dropped only on a positive read**: `NulavioGuard.policiesOrigin()` compares the policies in effect with the build's `distribution/policies.json` and answers "own" only when they set exactly the same things. One added, removed or changed, a shipped file that cannot be read, a read that failed, a state not read yet: the engine's line stays as the engine shows it. The comparison ignores policies that set nothing, which the engine fills in from the second start on (the Guard's existing rule).
+- **"Sobre" says what is in effect**: "O Nulavio aplica 3 políticas próprias", or "N políticas em vigor" with "they are not exactly the ones that come with Nulavio"; the row opens the engine's own list (`about:policies`).
+- The engine's line is never restyled or reworded: it is shown or not.
+
+`tests/integration/test_settings_policies.py` (3 tests): only Nulavio's policies on three panes, the row and its door; another policy, a failed read and back again, and a page loaded while another policy is in effect; what counts as the same set (order, empty values, one added, removed or changed, an unreadable file).
+
+Not verified: a policy added for real by a system file (`/etc/…/policies`), which the test session cannot write: the state is given to the module by the test, and the comparison is tested on its own with such sets. A screen reader was not run.

@@ -66,7 +66,7 @@ Firefox 160's settings page is built from data: a pane is a list of groups (`Set
 
 ## What was undecided (maintainer; decided on 2026-11-12 as recommended)
 
-DNS is built (ADR 0011, step 9). The management line and the panes of unavailable features are decided and **not built yet**: until they are, the line shows for everyone and no pane is hidden.
+DNS is built (ADR 0011, step 9), and so is the management line (ADR 0011, step 18). The panes of unavailable features are decided and **not built yet**: until they are, no pane is hidden.
 
 - **DNS: two controls for one preference.** The engine's privacy pane has its own "DNS sobre HTTPS" group (four levels, the engine's words); Nulavio's first run and its detail screen ask the same thing as three choices in plain words, with Quad9 and Mullvad next to the engine's default. Both write `network.trr.mode`. Slice 1 leaves the engine's group alone (decision 6) and does not add a second control next to it, so the plain-words version is reachable from the first run only. Recommendation: put Nulavio's three choices where the engine's summary box is and keep the engine's advanced screen behind it; it replaces a group of a protection pane, so it waits for a decision.
 

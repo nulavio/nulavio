@@ -136,6 +136,19 @@ function watchedNames() {
   return [...names].sort();
 }
 
+// From the second start on, the engine fills some policies with empty defaults (SitePolicies: []):
+// only policies that set something count.
+function settingPolicies(policies) {
+  const empty = v => v === null || v === undefined || (typeof v === "object" && !Object.keys(v).length);
+  return Object.fromEntries(Object.entries(policies ?? {}).filter(([, v]) => !empty(v)));
+}
+
+/** Whether two sets of policies set the same things. A set that is not an object equals nothing. */
+export function samePolicies(active, shipped) {
+  const usable = v => !!v && typeof v === "object" && !Array.isArray(v);
+  return usable(active) && usable(shipped) && sortedJSON(settingPolicies(active)) === sortedJSON(settingPolicies(shipped));
+}
+
 function sortedJSON(value) {
   if (Array.isArray(value)) {
     return `[${value.map(sortedJSON).join(",")}]`;
@@ -245,11 +258,30 @@ class Guard {
     if (Services.policies.status !== Ci.nsIEnterprisePolicies.ACTIVE) {
       return null;
     }
-    // From the second start on, the engine fills some policies with empty defaults (SitePolicies: []):
-    // only policies that set something count.
-    const empty = v => v === null || v === undefined || (typeof v === "object" && !Object.keys(v).length);
-    const active = Object.fromEntries(Object.entries(Services.policies.getActivePolicies() ?? {}).filter(([, v]) => !empty(v)));
+    const active = settingPolicies(Services.policies.getActivePolicies());
     return { names: Object.keys(active).sort(), digest: sha256(new TextEncoder().encode(sortedJSON(active))) };
+  }
+
+  /**
+   * Whose the managed policies in effect are: "none" (no policy is active), "own" (exactly the ones this
+   * build ships in distribution/policies.json) or "other" (anything else: one added, removed or changed by
+   * a system file or an administrator, or a shipped file that could not be read). `count` is how many are
+   * in effect. Never "own" on a doubt: the settings page drops the engine's "managed" line only for "own".
+   */
+  async policiesOrigin() {
+    if (Services.policies.status !== Ci.nsIEnterprisePolicies.ACTIVE) {
+      return { origin: "none", count: 0 };
+    }
+    const active = settingPolicies(Services.policies.getActivePolicies());
+    let shipped = null;
+    try {
+      const file = Services.dirsvc.get("XREAppDist", Ci.nsIFile);
+      file.append("policies.json");
+      shipped = JSON.parse(await IOUtils.readUTF8(file.path)).policies;
+    } catch (e) {
+      console.error("Nulavio Guard: the build's policies.json could not be read", e);
+    }
+    return { origin: samePolicies(active, shipped) ? "own" : "other", count: Object.keys(active).length };
   }
 
   async #hosts() {

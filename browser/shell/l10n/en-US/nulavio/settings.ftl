@@ -225,3 +225,23 @@ nulavio-integrations-group =
     .description = What your desktop offers Nulavio, checked on this computer. The check changes nothing and sends nothing anywhere.
 nulavio-open-integrations =
     .label = See the integrations
+
+## About: the policies in effect (in place of the "managed by your organization" line when they are only Nulavio's)
+
+nulavio-policies-group =
+    .label = Browser policies
+    .description = Rules fixed by whoever distributes or administers the browser. Settings do not change these rules.
+nulavio-policies-own =
+    .label =
+        { $count ->
+            [one] Nulavio applies 1 policy of its own
+           *[other] Nulavio applies { $count } policies of its own
+        }
+    .description = They come with Nulavio, and no other is in effect. See which they are.
+nulavio-policies-other =
+    .label =
+        { $count ->
+            [one] 1 policy in effect
+           *[other] { $count } policies in effect
+        }
+    .description = They are not exactly the ones that come with Nulavio: a system file or an administrator added, removed or changed one. See which they are.
