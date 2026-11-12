@@ -19,7 +19,10 @@ Name:           nulavio
 Version:        %{nulavio_version}
 Release:        %{nulavio_release}%{?dist}
 Summary:        Private, calm web browser built on the Gecko engine
-License:        MPL-2.0
+# The browser is MPL-2.0. One data file in it is not: distribution/policies.json carries a modified copy of
+# uBlock Origin's filter list registry, GPL-3.0-only, with the licence text and a notice of the change beside it
+# (uBlock-Origin-LICENSE.txt, uBlock-Origin-NOTICE.txt); LICENSES.md lists it.
+License:        MPL-2.0 AND GPL-3.0-only
 URL:            https://nulavio.net
 Source0:        nulavio-tree.tar
 Source1:        nulavio.desktop
