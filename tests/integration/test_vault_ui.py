@@ -9,8 +9,10 @@ each state go to tests/artifacts/ (light and dark) for design review.
 
 from __future__ import annotations
 
+import configparser
 import os
 import shutil
+import subprocess
 import sys
 import time
 import unittest
@@ -219,6 +221,17 @@ class VaultUiTest(unittest.TestCase):
             for pid in self.session.processes_for(path)
             if Path(f"/proc/{pid}/cmdline").read_bytes().split(b"\0")[0].decode() == engine
         ]
+
+    def start_entry(self) -> tuple[str, list[str]]:
+        """The folder a plain start opens (the profile group's entry in profiles.ini), and every profile the file names."""
+        ini = next(self.session.tmp.rglob("profiles.ini"))
+        parsed = configparser.ConfigParser(interpolation=None)
+        parsed.optionxform = str
+        parsed.read(ini, encoding="utf-8")
+        profiles = [parsed[name] for name in parsed.sections() if name.startswith("Profile")]
+        group = next(section for section in profiles if section.get("StoreID"))
+        folder = Path(group["Path"])
+        return str(folder if folder.is_absolute() else ini.parent / folder), [section["Name"] for section in profiles]
 
     def stop_instance(self, path: Path) -> None:
         for pid in self.instances(path):
@@ -787,6 +800,89 @@ class VaultUiTest(unittest.TestCase):
             self.assertIsNotNone(self.m.execute("return document.getElementById('use-phone');"))
         finally:
             self.m.chrome("Services.prefs.setBoolPref(arguments[0], true);", [pref])
+
+    def test_14_a_protected_profile_used_last_is_not_the_one_a_plain_start_opens(self):
+        """The engine makes the profile used last the one a plain start opens. A protected profile is locked again
+        when it closes, and its folder is then empty: started there, the engine made a new, empty profile outside
+        the group (the first run again, and no way back to the person's profiles). The start-up entry is given back
+        to the unprotected profile used last, and a plain start afterwards makes no profile."""
+        here = str(self.session.profile_dir)
+        # The tests above end a protected profile's process within a moment of its start, which is the gap R18
+        # names: the entry may still be that profile's. This profile gets it back as the engine does on its
+        # next window activation.
+        self.call("return SPS.setDefaultProfileForGroup().then(() => true);")
+        self.assertEqual(self.start_entry()[0], here)
+        profile_id, _code = self.create_via_api("Início", password=PASSWORD, keyring=False)
+        path = self.profile_path(profile_id)
+        self.assertEqual(
+            self.call("return V.unlock(args[0], 'password', args[1]);", profile_id, PASSWORD), {"opened": "launched"}
+        )
+        self.assertTrue(harness.wait_until(lambda: self.instances(path), timeout=60), "the profile did not start")
+        given_back = harness.wait_until(lambda: self.start_entry()[0] == here, timeout=30)
+        self.assertTrue(given_back, f"the start-up entry is {self.start_entry()[0]}")
+        time.sleep(7)  # a write the engine made as that profile started can wait five seconds and land late
+        self.assertEqual(self.start_entry()[0], here)
+        self.stop_instance(path)
+        self.assertTrue(harness.wait_until(lambda: not storage.Container(path).mounted(), timeout=30))
+        entry, names = self.start_entry()
+        self.assertEqual(entry, here)
+        # A start with no flags, as the desktop entry makes it: it reaches the running instance and ends.
+        env = {name: value for name, value in self.session.env.items() if name != "MOZ_MARIONETTE"}
+        plain = subprocess.Popen(
+            [str(self.session.engine.path)], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True
+        )
+        try:
+            self.assertEqual(plain.wait(60), 0, "the plain start did not hand over to the running instance")
+        finally:
+            if plain.poll() is None:
+                plain.kill()
+        self.assertEqual(self.start_entry(), (here, names), "a plain start made a profile")
+        self.assertEqual(list(path.iterdir()), [])
+
+    def test_15_the_last_profile_without_a_password_stays_while_a_protected_one_exists(self):
+        """A plain start needs a profile it can open without a password. With only protected profiles left, every
+        start made a new, empty profile outside the group (seen on 160.0 after deleting the unprotected one from
+        inside a protected one). So the last unprotected profile is not deleted while a protected one exists: not
+        from Nulavio's settings, and not through the engine's own page for the profile of the window."""
+        listed = self.call("return (await P.list()).profiles.map(p => [p.encrypted, p.isCurrent]);")
+        self.assertEqual([encrypted for encrypted, current in listed if current], [False])
+        self.assertEqual(sum(not encrypted for encrypted, _ in listed), 1, "this session's profile is the only unprotected one")
+        self.assertTrue(any(encrypted for encrypted, _ in listed))
+        delete_tabs = (
+            "return gBrowser.tabs.filter(t => t.linkedBrowser.currentURI.spec.startsWith('about:deleteprofile')).length;"
+        )
+        for door in ("return P.openCurrentPage('delete');", "return SPS.deleteCurrentProfile();"):
+            with self.subTest(door=door), self.assertRaises(AssertionError) as refused:
+                self.call(door)
+            self.assertEqual(str(refused.exception), "last-unprotected")
+        self.assertEqual(self.m.chrome(delete_tabs), 0)
+        self.assertEqual(len(self.call("return (await P.list()).profiles;")), len(listed))
+        self.open_page("settings/settings.html")
+        self.assertIn("único perfil sem senha", self.m.execute("return browser.i18n.getMessage('err_last_unprotected');"))
+        # With another profile without a password, this one's delete page opens as before, and that other one can go.
+        other = self.call("return P.create({ name: 'Outro sem senha' });")
+        self.call("return P.openCurrentPage('delete');")
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome(delete_tabs) == 1, timeout=15))
+        self.m.chrome(
+            "for (const t of gBrowser.tabs.filter(t => t.linkedBrowser.currentURI.spec.startsWith('about:deleteprofile')))"
+            " gBrowser.removeTab(t, { skipPermitUnload: true });"
+        )
+        # The engine asks for another profile to start in only as it deletes or resets this one. Asked for a
+        # protected one, the stand-in is the other unprotected profile: never this one, which would be going away.
+        here = str(self.session.profile_dir)
+        protected = self.call("return (await P.list()).profiles.find(p => p.encrypted).id;")
+        asked = (
+            "return SPS.setDefaultProfileForGroup(args[0] ? await SPS.getProfile(args[0]) : undefined).then(p => p?.id ?? null);"
+        )
+        self.assertEqual(self.call(asked, protected), other)
+        self.assertEqual(self.start_entry()[0], str(self.profile_path(other)))
+        self.assertNotEqual(self.call(asked, None), other)  # asked for this instance's own: it is unprotected
+        self.assertEqual(self.start_entry()[0], here)
+        self.call("return P.remove(args[0]);", other)
+        self.assertEqual(len(self.call("return (await P.list()).profiles;")), len(listed))
+        # With the other one gone there is no stand-in: nothing is made the start-up profile, and it stays this one.
+        self.assertIsNone(self.call(asked, protected))
+        self.assertEqual(self.start_entry()[0], here)
 
 
 if __name__ == "__main__":
