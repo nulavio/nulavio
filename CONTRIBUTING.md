@@ -115,9 +115,9 @@ When a comparison row or a claim of the landing changes, change both languages (
 
 - Conventional commits (`feat:`, `fix:`, `docs:`, `security:`, `test:`, `chore:`), small and verifiable.
 - Sign off your commits (`git commit -s`, Developer Certificate of Origin).
-- Branch names, how to open a pull request, and what coding agents may do: [docs/process/pull-requests.md](docs/process/pull-requests.md). Agents push only their own branch and open a pull request; they never push to `main`, merge or approve.
+- Branch names, how to open a pull request, and what coding agents may do: [docs/process/pull-requests.md](docs/process/pull-requests.md). Agents push only their own branch and open a pull request; they never push to `main`. They review and merge their own pull requests as that page says.
 - A PR description states: what changed, how it was verified (commands + results), and what remains unverified ([template](.github/pull_request_template.md)).
-- Security-relevant PRs need a second reviewer. The AI review comment is advisory: a person decides, and an empty AI review proves nothing.
+- Security-relevant PRs need a second, independent review, which may be another AI reviewer. The automatic AI review comment is advisory: whoever merges decides, and an empty AI review proves nothing.
 
 ## Reporting vulnerabilities
 

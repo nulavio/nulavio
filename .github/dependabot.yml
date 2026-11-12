@@ -3,7 +3,8 @@
 # billed minutes), so updates are grouped and batched. Security fixes do not wait for these
 # schedules: scripts/release/watch_dependencies.py checks every pin daily against OSV.dev, the
 # AMO blocklist and the registries. No registries or credentials are configured here, nothing
-# auto-merges, and a pull request is merged only with green CI after a human review.
+# auto-merges, and a pull request is merged only with green CI after a recorded review
+# (docs/process/pull-requests.md, "Review and merging").
 version: 2
 updates:
   # Workflow actions, pinned by commit SHA with the tag in a same-line comment

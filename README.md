@@ -107,7 +107,7 @@ The integration suite drives the real browser through Marionette: 363 tests on t
 | Decisions | [ADRs](docs/adr/): engine, search, profiles and routing, Connect, phone unlock, Vault, AI Bridge |
 | Product | [vision](docs/product/vision.md) · [requirements](docs/product/requirements.md) · [roadmap](docs/product/roadmap.md) · [release criteria](docs/product/release-criteria.md) |
 | Architecture | [overview](docs/architecture/overview.md) · [build](docs/architecture/build.md) · [update policy](docs/architecture/update-policy.md) · [trust boundaries](docs/architecture/trust-boundaries.md) |
-| Security | [threat model](docs/security/threat-model.md) · [hardening](docs/security/hardening.md) · [residual risks](docs/security/residual-risks.md) · [assurance case](docs/security/assurance-case.md) · [changelog](docs/security/changelog.md) |
+| Security | [threat model](docs/security/threat-model.md) · [hardening](docs/security/hardening.md) · [what a new profile contacts](docs/security/new-profile-connections.md) · [residual risks](docs/security/residual-risks.md) · [assurance case](docs/security/assurance-case.md) · [changelog](docs/security/changelog.md) |
 | Design | [design system](docs/design/design-system.md) · [UX principles](docs/design/ux-principles.md) · [accessibility](docs/design/accessibility.md) |
 | Process | [contributing](CONTRIBUTING.md) · [pull requests](docs/process/pull-requests.md) · [governance](GOVERNANCE.md) · [code of conduct](CODE_OF_CONDUCT.md) · [release notes](CHANGELOG.md) |
 

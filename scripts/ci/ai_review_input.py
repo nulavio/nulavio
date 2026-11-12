@@ -11,7 +11,7 @@ pull request only as data:
   ``.gitattributes`` in the pull request cannot hide a file from the diff by
   marking it binary or ``-diff``;
 - the number of files git still shows only as binary (``binary_files``): the
-  model cannot read them, so the comment says they need a human look;
+  model cannot read them, so the comment says they need to be looked at another way;
 - the title, description, author and branch names, saved to
   ``pr-meta.untrusted.json`` and never interpolated into a command.
 
@@ -45,7 +45,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 SCHEMA = ROOT / ".github" / "ai-review" / "schema.json"
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
-MAX_DIFF_BYTES = 1_500_000  # about 40,000 lines with context; larger changes get a human-only review
+MAX_DIFF_BYTES = 1_500_000  # about 40,000 lines with context; larger changes are reviewed another way
 MAX_TITLE = 500
 MAX_BODY = 20_000
 GIT_DIFF = ["diff", "--no-color", "--no-ext-diff", "--no-textconv", "-U40"]
