@@ -157,7 +157,7 @@ When Mozilla publishes a security release, the [update policy](../architecture/u
 ### GitHub Pro (repository stays private)
 
 - Protection on `main` (in place as branch protection, read 2026-11-10): a pull request, the status checks "lint, unit tests, generated files, SBOM", "Companion app (lint, release build)", "security scanners (…)" and "does this change need the engine integration run", never "AI review (advisory)"; linear history; no force pushes or deletion; administrators included, so an urgent engine update also goes through a pull request. **Still open:** the engine integration result. A matrix job skipped by the Markdown-only gate reports no per-image check name, so first add a small job that needs `changes` and `integration` and fails unless `changes` succeeded and `integration` succeeded or was skipped, then require that job.
-- Require one approval and code-owner review only after agents use a separate machine account: then the reviewing agent's approval can be the one GitHub asks for. Under one account nobody could approve.
+- Require one approval and code-owner review only when the author and the reviewer are different accounts: one account for the agent that writes and another for the one that reviews (with code-owner rights), or the maintainer approving what an agent account wrote. A different model or session under the same account is still the same account to GitHub, so under one account nobody could approve.
 - An environment `release`, with the maintainer as required reviewer and limited to `main`, for signing and publishing jobs once the release key exists. An environment `ai-review` holding `ANTHROPIC_API_KEY` (if not using federation), limited to `main`.
 - 3,000 Actions minutes a month are included.
 
