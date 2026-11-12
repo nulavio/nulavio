@@ -551,6 +551,27 @@ class PackagingTest(unittest.TestCase):
         self.assertIn("printf '/etc/apparmor.d/nulavio\\n' > \"$pkg/DEBIAN/conffiles\"", make_deb)
         self.assertIn("apparmor_parser -Q -K /etc/apparmor.d/nulavio", (ROOT / "scripts/release/check_deb.sh").read_text())
 
+    def test_every_package_names_both_licences(self):
+        """A build carries one GPL-3.0 data file, uBlock Origin's list registry inside distribution/policies.json
+        (issue #137): each package's own licence field says so, and the .deb's copyright file says where the text is."""
+        config = json.loads(make_distribution.CONTENT_FILTER.read_text(encoding="utf-8"))
+        self.assertTrue(config["default_on"], "no registry is shipped any more: the licence fields can go back to MPL-2.0")
+        spec = (ROOT / "packaging" / "rpm" / "nulavio.spec").read_text(encoding="utf-8")
+        self.assertEqual(re.findall(r"(?m)^License:\s+(.+)$", spec), ["MPL-2.0 AND GPL-3.0-only"])
+        self.assertIn("%license nulavio/LICENSE*", spec)  # LICENSE and LICENSES.md, which make_rpm.sh puts in the tree
+        metainfo = (ROOT / "packaging" / "flatpak" / "net.nulavio.Nulavio.metainfo.xml").read_text(encoding="utf-8")
+        self.assertEqual(re.findall(r"<project_license>([^<]+)</project_license>", metainfo), ["MPL-2.0 AND GPL-3.0-only"])
+        deb = (ROOT / "scripts" / "release" / "make_deb.sh").read_text(encoding="utf-8")
+        note = deb.split("<<'NOTE'\n", 1)[1].split("\nNOTE\n", 1)[0]
+        for said in ("Mozilla Public License, version 2.0", "GNU General Public License, version 3 only",
+                     f"/usr/lib/nulavio/distribution/{make_distribution.LICENCE_NAME}", make_distribution.NOTICE_NAME,
+                     "/usr/share/doc/nulavio/LICENSES.md"):  # fmt: skip
+            self.assertIn(said, note)
+        self.assertIn('cat "$repo/LICENSE"\n} > "$pkg/usr/share/doc/nulavio/copyright"', deb)
+        self.assertIn('cp "$repo/LICENSES.md" "$pkg/usr/share/doc/nulavio/LICENSES.md"', deb)
+        for packager in ("make_rpm.sh", "make_archive.sh"):
+            self.assertIn('"$repo/LICENSES.md"', (ROOT / "scripts" / "release" / packager).read_text(encoding="utf-8"))
+
     def test_packages_install_under_system_directories_only(self):
         spec = (ROOT / "packaging" / "rpm" / "nulavio.spec").read_text(encoding="utf-8")
         self.assertIn("%global nulavio_dir %{_libdir}/nulavio", spec)

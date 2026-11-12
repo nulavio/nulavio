@@ -32,7 +32,23 @@ for size in 16 32 48 64 128; do
     install -Dm0644 "$install_dir/browser/chrome/icons/default/default$size.png" \
         "$pkg/usr/share/icons/hicolor/${size}x${size}/apps/nulavio.png"
 done
-cp "$repo/LICENSE" "$pkg/usr/share/doc/nulavio/copyright"
+# The browser is MPL-2.0 (the text below the note). One data file in it is GPL-3.0-only: said first, with where
+# its licence text and the notice of what was changed are. LICENSES.md, the list of third-party material, goes too.
+{
+    cat <<'NOTE'
+Nulavio is licensed under the Mozilla Public License, version 2.0, whose text follows this note.
+
+One data file is under another licence. /usr/lib/nulavio/distribution/policies.json carries a modified copy of
+uBlock Origin's filter list registry, which is under the GNU General Public License, version 3 only. Its licence
+text is /usr/lib/nulavio/distribution/uBlock-Origin-LICENSE.txt (on Debian and Ubuntu also
+/usr/share/common-licenses/GPL-3), and uBlock-Origin-NOTICE.txt beside it says what was changed, by whom and when.
+
+Third-party material and how each part is obtained: /usr/share/doc/nulavio/LICENSES.md.
+
+NOTE
+    cat "$repo/LICENSE"
+} > "$pkg/usr/share/doc/nulavio/copyright"
+cp "$repo/LICENSES.md" "$pkg/usr/share/doc/nulavio/LICENSES.md"
 # Ubuntu 24.04+: without a profile the engine may not create the user namespaces its content sandbox uses.
 install -Dm0644 "$repo/packaging/linux/apparmor-nulavio" "$pkg/etc/apparmor.d/nulavio"
 printf '/etc/apparmor.d/nulavio\n' > "$pkg/DEBIAN/conffiles"
