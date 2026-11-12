@@ -34,7 +34,7 @@ The split exists because of ADR 0001's patch policy ("patches only for what pref
 
 ## What was undecided (maintainer; decided on 2026-11-12 as recommended)
 
-The label patch is the chosen way and is **not built**: it needs an engine build to verify. No Shell page becomes privileged.
+The label is done (step 17), from the Shell's window module and not as an engine patch. No Shell page becomes privileged.
 
 - **The address bar on the security moments.** Recommendation: the label patch first (it is one condition in one engine file, and the result reads like the browser's own pages); `about:` addresses only if the inline script and its hash are accepted as an exception to the Shell's rules. Either needs a real build to verify, so neither is done here.
 - **Whether any Shell page should become privileged.** Recommendation: none. The boundary is a protection; removing it is the kind of change this project lists instead of making.
@@ -281,3 +281,19 @@ With every setting drawn by the settings page, which calls the modules directly,
 - The assistant panel's two doors are clicked by a test now (`test_assistant_ui` 39): the settings page where the profile is not allowed, the agents' page while the agents are stopped.
 
 Not done: the events a page no longer listens to (`onChanged` of the look, privacy and routing) are still offered; listening changes nothing. Module methods that only tests call were left.
+
+## Step 17 (2026-11-12): the address bar names the Shell's pages as the browser's own
+
+Branch `agent/claude/feat-shell-pages-named-as-browser`. Issue #117.
+
+On unlock, the Guard's review, consent, the warnings and the new tab, the identity label said "Extensão (Nulavio Shell)". It now says the brand, with the brand's mark, exactly as on the engine's internal pages (`about:preferences`), and the identity panel describes the page as one of the browser's own.
+
+![Before and after, pt-BR light and en-US dark](../design/screenshots/experience-2026-11/shell-pages-identity-sheet.png)
+
+- **Not an engine patch.** The decision recorded above was "the label patch first". Writing it showed two things: the stack is at nine patches of the "about ten" ADR 0001 allows, and the same result is within reach of the Shell's privileged window module, which `browser/patches/series` says is then not a patch. `NulavioWindow` wraps the window's identity handler (the function that writes the label, and the one that names the kind of page for the panel) and puts both back when the window or the Shell goes. It was verified on the engine without a build. If the engine changes the shape of that handler the wrap is not installed and the engine's own label shows: the test then fails, which is the signal.
+- **Which pages.** Only pages of the add-on whose id is the Shell's **and** that the application ships (`isAppProvided`). An add-on a person installs keeps "Extensão (…)", whatever it calls itself.
+- **What does not change.** The pages stay unprivileged content with the same principal; the address still shows `moz-extension://…`; the tracking shield and permission icons are as before; the band's naming ("Nulavio · Desbloqueio"), which is the part a page cannot fake, is untouched.
+
+`tests/integration/test_window_band.py` 02b: a Shell page (label, mark, tooltip, kind for the panel, principal still the add-on's), the engine's own page for comparison, an add-on named "Nulavio Shell" with another id, the Shell stopped and started again, a site. It fails without the change with `'Extensão (Nulavio Shell)'`.
+
+Not verified: the identity panel open on a Shell page was not captured (it did not stay open on the private display); only the kind it is given ("chrome", the engine's "secure page of the browser" text) was read. A screen reader was not run.

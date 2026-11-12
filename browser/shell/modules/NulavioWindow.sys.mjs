@@ -354,6 +354,58 @@ class WindowUI {
     };
   }
 
+  // ADR 0011: the Shell's pages are the browser's own interface (unlock, the Guard's review, the new tab), so
+  // the address bar names them as it names the engine's internal pages ("Nulavio") instead of "Extensão
+  // (Nulavio Shell)". Only the identity label, its icon and what its panel calls the page change: the pages
+  // stay unprivileged, the address stays, and every other extension keeps the engine's label. The Shell is
+  // known by its id and by being shipped with the application, never by a name a page or an add-on can give.
+  // Done here and not as an engine patch: it is what a built-in add-on can do (browser/patches/series).
+  #ownPagesIdentity(win) {
+    const handler = win.gIdentityHandler;
+    const refresh = handler?._refreshIdentityIcons;
+    const connection = handler?.getConnectionSecurityInformation;
+    if (typeof refresh !== "function" || typeof connection !== "function") {
+      return () => {}; // the engine changed shape: its own label stays
+    }
+    const own = () => {
+      const policy = handler._pageExtensionPolicy;
+      return policy?.id === SHELL && !!policy.extension?.isAppProvided;
+    };
+    const named = function () {
+      refresh.call(this);
+      if (!own()) {
+        return;
+      }
+      const box = win.document.getElementById("identity-box");
+      const label = win.document.getElementById("identity-icon-label");
+      const brand = win.document.getElementById("bundle_brand")?.getString("brandShorterName");
+      if (!box || !label || !brand) {
+        return;
+      }
+      box.className = "chromeUI";
+      label.setAttribute("value", brand);
+      label.collapsed = false;
+      win.document.getElementById("identity-icon")?.setAttribute("tooltiptext", "");
+    };
+    const said = function () {
+      return own() ? "chrome" : connection.call(this);
+    };
+    handler._refreshIdentityIcons = named;
+    handler.getConnectionSecurityInformation = said;
+    handler.refreshIdentityBlock?.();
+    return () => {
+      if (handler._refreshIdentityIcons === named) {
+        handler._refreshIdentityIcons = refresh;
+      }
+      if (handler.getConnectionSecurityInformation === said) {
+        handler.getConnectionSecurityInformation = connection;
+      }
+      if (!win.closed) {
+        handler.refreshIdentityBlock?.();
+      }
+    };
+  }
+
   /** For each new browser window, before CustomizableUI builds its toolbars: the band's toolbar. */
   prepareWindow(win) {
     const doc = win.document;
@@ -494,7 +546,8 @@ class WindowUI {
       identityObserver.observe(identityBox, { attributes: true, attributeFilter: ["class"] });
     }
     this.#windows.set(win, { bar, compact, fullscreen, line, sheet, progress, header, unload, pointer, screenObserver, identityObserver, edge,
-      popup, sharing, dialog, downloads, holds: new Map(), named: false, noticeTimer: null, safety: null, restoreGroupPalette: this.#groupPalette(win) });
+      popup, sharing, dialog, downloads, holds: new Map(), named: false, noticeTimer: null, safety: null, restoreGroupPalette: this.#groupPalette(win),
+      restoreIdentity: this.#ownPagesIdentity(win) });
     this.#downloadHold(win);
     this.#paint(win);
     this.#unifyStartPage(win);
@@ -1046,6 +1099,7 @@ class WindowUI {
     }
     this.#windows.delete(win);
     state.restoreGroupPalette();
+    state.restoreIdentity();
     win.gBrowser.removeProgressListener(state.progress);
     win.gBrowser.tabContainer.removeEventListener("TabSelect", state.header);
     win.removeEventListener("unload", state.unload);
