@@ -113,4 +113,4 @@ Settings only the maintainer can change:
 - An agent that still uses the classic token.
 - A merge by an agent that was misled: agents merge their own pull requests after their own review, and branch protection asks for no approval, so a change written, reviewed and merged by a steered agent is stopped only by the required checks and the second review for the sensitive paths ([R62](../security/residual-risks.md)).
 - Programs running as the same user reading tokens (TB6, see [residual risks](../security/residual-risks.md)).
-- An agent steered within what these layers allow. Until 2026-11-12 the maintainer reading every pull request was the main control; it is now the recorded review, the second independent review for the sensitive paths, and his approval before anything is signed.
+- An agent steered within what these layers allow. Until 2026-11-12 the maintainer reading every pull request was the main control; it is now the recorded review and the second independent review for the sensitive paths. His approval of a release is a rule agents keep, not something the shared account enforces ([R62](../security/residual-risks.md)).
