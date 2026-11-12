@@ -15,9 +15,11 @@
 
 const lazy = {};
 ChromeUtils.defineESModuleGetters(lazy, {
+  AsyncShutdown: "resource://gre/modules/AsyncShutdown.sys.mjs",
   callTool: "resource://builtin-addons/nulavio-shell/modules/NulavioTools.sys.mjs",
   NetUtil: "resource://gre/modules/NetUtil.sys.mjs",
   profileLockState: "resource://builtin-addons/nulavio-shell/modules/NulavioVaultState.sys.mjs",
+  setTimeout: "resource://gre/modules/Timer.sys.mjs",
   vaultHelper: "resource://builtin-addons/nulavio-shell/modules/NulavioVault.sys.mjs",
   SelectableProfileService: "resource:///modules/profiles/SelectableProfileService.sys.mjs",
   ENABLED_PREF: "resource://builtin-addons/nulavio-shell/modules/NulavioRouter.sys.mjs",
@@ -34,6 +36,13 @@ export const PREF_COLORS = "nulavio.profiles.colors";
    from the band's menu instead, so Nulavio turns the chooser off once per group; this shared pref
    records it, and a later choice of the person (the engine's own checkbox) stays. */
 export const PREF_START_CHOOSER = "nulavio.profiles.startChooserAdopted";
+/* The profile a plain start opens. The engine makes it the profile used last: it rewrites the group's entry in
+   profiles.ini as a profile starts and whenever one of its windows is activated. A protected profile is locked
+   again when its last window closes, and its folder is then empty: started there, the engine makes a new, empty
+   profile outside the group instead (seen on 160.0: the first run again, and no way back to the person's
+   profiles from that window). So a protected profile is never left as the start-up profile: the engine's own
+   function is given the unprotected profile used last, which this shared pref names (its id in the group). */
+export const PREF_START_PROFILE = "nulavio.profiles.startProfile";
 // The band's profile summary is rebuilt at least this often, even without a change notice.
 const BAND_CACHE_MS = 30000;
 const PREF_COLOR_MIGRATION = "nulavio.profiles.colors.farol";
@@ -148,6 +157,7 @@ class NulavioProfilesClass {
   #band = null;
   #bandAt = 0;
   #storeSetup = null;
+  #startKept = false;
 
   get #service() {
     return lazy.SelectableProfileService;
@@ -196,6 +206,7 @@ class NulavioProfilesClass {
           await current.setNameAsync(name);
         }
         await this.#adoptStartChooser();
+        await this.#keepStartProfile();
         // Setting up the store can give this profile its id and group name: the band's cached
         // summary (and the new tab's rules here) must not wait 30 s to see them.
         this.#band = null;
@@ -221,6 +232,63 @@ class NulavioProfilesClass {
       await service.trackPref(PREF_START_CHOOSER);
     } catch (e) {
       console.error("Nulavio Profiles: start-up chooser", e);
+    }
+  }
+
+  /** Once per instance: a protected profile is never left as the start-up profile (PREF_START_PROFILE). */
+  async #keepStartProfile() {
+    const service = this.#service;
+    if (this.#startKept || !service.currentProfile) {
+      return;
+    }
+    this.#startKept = true;
+    const plain = async profile => (await lazy.profileLockState(profile.path).catch(() => "plain")) === "plain";
+    /** The profile to start in instead of a protected one: the unprotected one used last, else the oldest. */
+    const instead = async wanted => {
+      const others = [];
+      for (const each of await service.getAllProfiles()) {
+        if (each.id !== wanted.id && (await plain(each))) {
+          others.push(each);
+        }
+      }
+      const last = Services.prefs.getIntPref(PREF_START_PROFILE, 0);
+      return others.find(each => each.id === last) ?? others.sort((a, b) => a.id - b.id)[0] ?? null;
+    };
+    const engine = service.setDefaultProfileForGroup.bind(service);
+    // The engine calls this by name as it starts, on every window activation and when a profile is deleted.
+    service.setDefaultProfileForGroup = async (wanted = service.currentProfile) => {
+      if (!wanted) {
+        return;
+      }
+      if (await plain(wanted)) {
+        await engine(wanted);
+        if (Services.prefs.getIntPref(PREF_START_PROFILE, 0) !== wanted.id) {
+          Services.prefs.setIntPref(PREF_START_PROFILE, wanted.id);
+          await service.trackPref(PREF_START_PROFILE);
+        }
+        return;
+      }
+      // With no unprotected profile left there is nothing to start in: the entry stays as the engine wrote it.
+      const start = await instead(wanted);
+      if (start) {
+        await engine(start);
+      }
+    };
+    try {
+      await service.setDefaultProfileForGroup(); // the engine already ran its own, before any window
+      if (!(await plain(service.currentProfile))) {
+        // Seen on 160.0: the engine's write inside the call above does not reach profiles.ini while the write it
+        // made as this profile started is still under way (a write waits up to five seconds for an instance that
+        // is starting), and that one can land last. So the entry is written again now, once more when that wait
+        // is over, and when this instance closes.
+        const profiles = Cc["@mozilla.org/toolkit/profile-service;1"].getService(Ci.nsIToolkitProfileService);
+        const again = () => profiles.asyncFlushCurrentProfile().catch(e => console.error("Nulavio Profiles: start-up profile", e));
+        await again();
+        lazy.setTimeout(again, 6000);
+        lazy.AsyncShutdown.quitApplicationGranted.addBlocker("Nulavio: the start-up profile is not a protected one", again);
+      }
+    } catch (e) {
+      console.error("Nulavio Profiles: start-up profile", e);
     }
   }
 
@@ -551,6 +619,7 @@ class NulavioProfilesClass {
     }
     // A group made before Nulavio adopted the chooser (the alpha): once, on the first window after the update.
     await this.#adoptStartChooser();
+    await this.#keepStartProfile();
     // currentProfile is not refreshed when another instance renames the profile; the database is.
     const profile = (await service.getProfile(current.id)) ?? current;
     return { id: profile.id, name: profile.name, avatar: profile.avatar, color: this.#colorFor(profile, this.colors()), isCurrent: true };

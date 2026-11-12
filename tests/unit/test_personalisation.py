@@ -107,6 +107,7 @@ PREF_WRITERS = {
     },
     "NulavioProfiles.sys.mjs": {
         "setBoolPref(PREF_START_CHOOSER)": 1,
+        "setIntPref(PREF_START_PROFILE)": 1,
         "setStringPref(PREF_COLORS)": 2,
         "setStringPref(PREF_COLOR_MIGRATION)": 3,
     },
