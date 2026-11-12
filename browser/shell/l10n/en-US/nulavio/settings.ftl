@@ -152,10 +152,11 @@ nulavio-confirmed-group =
 ## Search
 
 nulavio-search-group =
-    .label = Nulavio's engines
-    .description = Search suggestions turned on per engine, and engines the browser does not bring.
-nulavio-open-search =
-    .label = Engines and per-engine suggestions
+    .label = Suggestions: who receives what you type
+    .description = With suggestions on, what you type in the address bar goes to the engine before you search. In Nulavio, only the engines switched on here receive it.
+nulavio-search-add-group =
+    .label = Engines Nulavio knows how to add
+    .description = Known providers in one click, a SearXNG instance of yours, or a site's OpenSearch description. To build an engine by hand, use the add button of the list above.
 
 ## Assistant and AI
 

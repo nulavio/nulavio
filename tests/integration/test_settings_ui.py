@@ -83,7 +83,7 @@ class SettingsPanesTest(unittest.TestCase):
         self.assertEqual(state["view"], "section")
         self.assertEqual(len(state["shown"]), 1, state)
         self.assertEqual(state["current"], state["shown"])  # the rail marks the section on screen
-        native_sections = ("profiles", "routing", "exceptions", "passwords")  # no entry in this page's rail any more
+        native_sections = ("profiles", "routing", "exceptions", "passwords", "search")  # no entry in this page's rail any more
         for address, section in (("#dns", "dns"), ("#routing", "routing"), ("#ai-assistant", "ai"), ("#profiles", "profiles")):
             self.open(address)
             self.assertTrue(
@@ -118,7 +118,7 @@ class SettingsPanesTest(unittest.TestCase):
         entries = self.m.execute("return [...document.querySelectorAll('.settings-nav a')].map(a => a.dataset.section);")
         # ADR 0008 and 0011: Layout, Aparência, Atalhos, the profiles and the routing rules are drawn by the settings page itself;
         # this page keeps no entry for them.
-        native = ("layout", "appearance", "shortcuts", "profiles", "routing", "exceptions", "passwords")
+        native = ("layout", "appearance", "shortcuts", "profiles", "routing", "exceptions", "passwords", "search")
         self.assertEqual(entries, [section for section in SCOPES if section not in native])
         # ...and its own search does not offer them either: one option, one place.
         for heading, section in (("layoutHeading", "layout"), ("profilesHeading", "profiles"), ("routingHeading", "routing")):
@@ -209,7 +209,7 @@ class SettingsPanesTest(unittest.TestCase):
         sections = self.m.execute(
             "return [...document.querySelectorAll('.settings-nav li:not([hidden]) a')].map(a => a.dataset.section);"
         )
-        self.assertGreaterEqual(len(sections), 4)  # what is left in this page's rail (ADR 0008, ADR 0011)
+        self.assertGreaterEqual(len(sections), 3)  # what is left in this page's rail (ADR 0008, ADR 0011)
         for section in sections:
             self.open(f"#{section}")
             self.assertTrue(harness.wait_until(lambda section=section: self.view()["shown"] == [section], 10))

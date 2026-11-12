@@ -181,7 +181,9 @@ class NativeSettingsTest(unittest.TestCase):
         passwords = self.groups("panePasswordsAutofill")
         self.assertEqual(passwords[:2], ["nulavioPasswordManager", "passwords"], passwords)
         search = self.groups("paneSearch")
-        self.assertEqual(search[:2], ["defaultEngine", "nulavioSearch"], search)
+        # Nulavio's two groups sit right after the engine's groups on the same subject.
+        self.assertEqual(search[search.index("searchShortcuts") + 1], "nulavioSearchAdd", search)
+        self.assertEqual(search[search.index("searchSuggestions") + 1], "nulavioSearch", search)
         # One arrangement control: the engine's two-way picker gives way to a pointer to Aparência; its other groups stay.
         tabs = self.groups("paneTabsBrowsing")
         self.assertEqual(tabs[0], "nulavioLayoutMoved", tabs)
@@ -578,10 +580,10 @@ class NativeSettingsTest(unittest.TestCase):
 
         # From the settings page to a detail page and back, in the same tab.
         self.assertTrue(harness.wait_until(lambda: self.m.chrome(READY), 20))
-        self.groups("paneSearch")
-        self.control("#nulavio-open-search")
-        self.m.chrome(DOC + 'd.querySelector("#nulavio-open-search").click();')
-        detail = "/settings/settings.html#search"
+        self.groups("paneNulavioIntegrations")
+        self.control("#nulavio-open-integrations")
+        self.m.chrome(DOC + 'd.querySelector("#nulavio-open-integrations").click();')
+        detail = "/settings/settings.html#integrations"
         self.assertTrue(harness.wait_until(lambda: self.m.chrome(where).endswith(detail), 15), self.m.chrome(where))
         for handle in self.m.window_handles():
             self.m.switch_to(handle)
@@ -593,11 +595,11 @@ class NativeSettingsTest(unittest.TestCase):
             "return [...document.querySelectorAll('.settings-nav a[data-section]')].map(a => a.dataset.section);"
         )
         # What the settings page draws itself has no entry on a detail page (ADR 0008, ADR 0011).
-        for moved in ("layout", "appearance", "shortcuts", "profiles", "routing", "exceptions", "passwords"):
+        for moved in ("layout", "appearance", "shortcuts", "profiles", "routing", "exceptions", "passwords", "search"):
             self.assertNotIn(moved, rail)
         self.assertEqual(self.m.execute("return document.getElementById('settings-back').textContent;"), "Configurações")
         self.m.send("WebDriver:ElementClick", {"id": self.m.find_element("#settings-back")})
-        back = "about:preferences#search"
+        back = "about:preferences#nulavioIntegrations"
         self.assertTrue(harness.wait_until(lambda: self.m.chrome(where) == back, 15), self.m.chrome(where))
         self.assertEqual(self.m.chrome("return gBrowser.tabs.length;"), tabs)
         # The old routing section, still there by its address, sends "Criar perfil" to the settings page too.

@@ -152,10 +152,11 @@ nulavio-confirmed-group =
 ## Pesquisa
 
 nulavio-search-group =
-    .label = Mecanismos do Nulavio
-    .description = Sugestões de busca ligadas por mecanismo, e mecanismos que o navegador não traz.
-nulavio-open-search =
-    .label = Mecanismos e sugestões por mecanismo
+    .label = Sugestões: quem recebe o que você digita
+    .description = Com as sugestões ligadas, o que você digita na barra de endereço vai ao mecanismo antes de você pesquisar. No Nulavio, só os mecanismos ligados aqui recebem.
+nulavio-search-add-group =
+    .label = Mecanismos que o Nulavio sabe acrescentar
+    .description = Provedores conhecidos com um clique, uma instância SearXNG sua ou a descrição OpenSearch de um site. Para montar um mecanismo à mão, use o botão de adicionar da lista acima.
 
 ## Assistente e IA
 

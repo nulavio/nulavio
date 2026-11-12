@@ -1247,6 +1247,161 @@
       confirmedBench.bar("nulavio-confirmed-said", "success", () => confirmedBench.state.said, () => Boolean(confirmedBench.state.said)),
     ];
 
+    // -- search: what Nulavio adds to the engine's own Search pane. Which engines may receive what the person
+    // types (suggestions, engine by engine: NulavioSearch keeps that list and the engine's patch reads it), and
+    // the engines Nulavio knows how to add. Default engine, aliases and removal are the engine's own controls. --
+    const search = source(() => shell.NulavioSearch.state());
+    const searchBench = workbench({ fresh: { searxng: "", opensearch: "" } }, search);
+    const enginesNow = () => (search.state.ready ? (search.state.value?.engines ?? []) : []);
+    const searchSetup = (emitChange, stops) => {
+      stops.push(search.listen(emitChange));
+      searchBench.watch(emitChange, stops);
+    };
+    // One switch per engine, registered the first time the engine is seen (the engine's own list does the same).
+    const suggestSwitch = engine => {
+      const id = `nulavio-suggest-${engine.id}`;
+      if (!Preferences.getSetting(id)) {
+        setting({
+          id,
+          setup: searchSetup,
+          get: () => Boolean(enginesNow().find(each => each.id === engine.id)?.suggestOptIn),
+          set(value) {
+            searchBench.act(() => shell.NulavioSearch.setSuggestOptIn(engine.id, Boolean(value)), msg("doneSaved"));
+          },
+          disabled: () => searchBench.state.busy,
+        });
+      }
+      return id;
+    };
+    setting({
+      id: "nulavio-suggest-engines",
+      setup(emitChange, stops) {
+        searchSetup(emitChange, stops);
+        search.refresh();
+        try {
+          stops.push(shell.NulavioSearch.subscribe(search.refresh)); // an engine added, removed or switched in the engine's own list
+        } catch (e) {
+          console.error(e);
+        }
+      },
+      // Only the engines that offer suggestions have something to switch.
+      visible: () => enginesNow().some(engine => engine.canSuggest),
+      getControlConfig: config => ({
+        ...config,
+        options: enginesNow()
+          .filter(engine => engine.canSuggest)
+          .map(engine => ({
+            key: `suggest-${engine.id}`,
+            control: "moz-box-item",
+            controlAttrs: {
+              label: engine.name,
+              // What happens to what is typed, in words: where it goes when on, that nothing goes when off.
+              description: engine.suggestOptIn ? msg("engineSuggestOn", engine.suggestHost) : msg("engineSuggestOff"),
+              class: "nulavio-engine",
+              "data-engine": engine.id,
+            },
+            items: [
+              {
+                id: suggestSwitch(engine),
+                control: "moz-toggle",
+                slot: "actions",
+                controlAttrs: { "aria-label": `${msg("engineSuggestLabel")}: ${engine.name}`, "data-engine": engine.id },
+              },
+            ],
+          })),
+      }),
+    });
+    // The providers Nulavio offers by name and the person does not have yet: one click each.
+    const missingProviders = () => {
+      const have = new Set(enginesNow().map(engine => engine.provider).filter(Boolean));
+      return (search.state.value?.providers ?? []).filter(provider => !have.has(provider.key));
+    };
+    setting({
+      id: "nulavio-search-providers",
+      setup: searchSetup,
+      visible: () => search.state.ready,
+      getControlConfig(config) {
+        const rows = missingProviders().map(provider => ({
+          key: `provider-${provider.key}`,
+          control: "moz-box-item",
+          controlAttrs: {
+            label: provider.name,
+            ...(provider.key === "kagi" ? { description: msg("addProviderKagiNote") } : {}),
+            class: "nulavio-search-provider",
+            "data-provider": provider.key,
+          },
+          options: [
+            {
+              key: `add-${provider.key}`,
+              control: "moz-button",
+              slot: "actions",
+              disabled: searchBench.state.busy,
+              controlAttrs: { label: msg("addProviderButton", provider.name), "data-action": "add", "data-provider": provider.key },
+            },
+          ],
+        }));
+        const none = { key: "none", control: "moz-box-item", controlAttrs: { label: msg("addProvidersNone"), class: "nulavio-search-provider-none" } };
+        return { ...config, options: rows.length ? rows : [none] };
+      },
+      onUserClick(event) {
+        const key = event.target.closest?.('[data-action="add"]')?.dataset.provider;
+        if (missingProviders().some(provider => provider.key === key)) {
+          searchBench.act(() => shell.NulavioSearch.addProvider(key), msg("doneAdded"));
+        }
+      },
+    });
+    // An instance of the person's own, or a site's own description: an address typed here, added by the module's rules.
+    const addByAddress = (name, add, words) => {
+      setting({
+        id: `nulavio-search-${name}-url`,
+        setup: searchSetup,
+        visible: () => search.state.ready,
+        get: () => searchBench.state.fresh[name],
+        set(value) {
+          searchBench.state.fresh[name] = value;
+        },
+        getControlConfig: config => ({
+          ...config,
+          controlAttrs: { ...config.controlAttrs, label: msg(words.label), description: msg(words.note), placeholder: words.placeholder },
+        }),
+      });
+      setting({
+        id: `nulavio-search-${name}-add`,
+        setup: searchSetup,
+        visible: () => search.state.ready,
+        disabled: () => searchBench.state.busy,
+        async onUserClick(event) {
+          event.preventDefault();
+          if (await searchBench.act(() => add(searchBench.state.fresh[name]), msg("doneAdded"))) {
+            searchBench.show({ fresh: { ...searchBench.state.fresh, [name]: "" } });
+          }
+        },
+        getControlConfig: config => ({ ...config, controlAttrs: { ...config.controlAttrs, label: msg(words.button) } }),
+      });
+      return [
+        { id: `nulavio-search-${name}-url`, control: "moz-input-text" },
+        { id: `nulavio-search-${name}-add`, control: "moz-button" },
+      ];
+    };
+    const searchForms = [
+      ...addByAddress("searxng", url => shell.NulavioSearch.addSearxng({ url }), {
+        label: "addSearxngLabel",
+        note: "addSearxngNote",
+        button: "addSearxngButton",
+        placeholder: "https://searx.example.org/",
+      }),
+      ...addByAddress("opensearch", url => shell.NulavioSearch.addOpenSearch({ url }), {
+        label: "addOpenSearchLabel",
+        note: "addOpenSearchNote",
+        button: "addOpenSearchButton",
+        placeholder: "https://example.org/opensearch.xml",
+      }),
+    ];
+    const searchBars = [
+      searchBench.bar("nulavio-search-error", "error", () => searchBench.state.error, () => Boolean(searchBench.state.error)),
+      searchBench.bar("nulavio-search-said", "success", () => searchBench.state.said, () => Boolean(searchBench.state.said)),
+    ];
+
     // -- what the content filter blocks: uBlock Origin's own lists, on its own page. Nulavio reads whether it
     // is on and whether a cookie-notice list is switched on, and writes nothing there: lists change on its page. --
     const filter = source(async () => ({ ...shell.NulavioPrivacy.filter(), lists: await shell.NulavioPrivacy.filterLists() }));
@@ -1615,7 +1770,12 @@
       nulavioSearch: {
         l10nId: "nulavio-search-group",
         headingLevel: 2,
-        items: [detailRow("nulavio-open-search", "search")],
+        items: [failureNote("nulavio-search-failed", search), { id: "nulavio-suggest-engines", control: "moz-box-group" }],
+      },
+      nulavioSearchAdd: {
+        l10nId: "nulavio-search-add-group",
+        headingLevel: 2,
+        items: [...searchBars, { id: "nulavio-search-providers", control: "moz-box-group" }, ...searchForms],
       },
       nulavioAssistantEntry: {
         l10nId: "nulavio-assistant-group",
@@ -1696,7 +1856,12 @@
       },
       privacy: config => ({ ...config, groupIds: after(config.groupIds, "etpStatus", "nulavioProtections", "nulavioExceptions") }),
       passwordsAutofill: config => ({ ...config, groupIds: ["nulavioPasswordManager", ...config.groupIds, "nulavioConfirmedSites"] }),
-      search: config => ({ ...config, groupIds: after(config.groupIds, "defaultEngine", "nulavioSearch") }),
+      // Next to the engine's own groups on the same subject: who receives what is typed after its suggestions
+      // group, and the engines Nulavio adds after its list of engines.
+      search: config => ({
+        ...config,
+        groupIds: after(after(config.groupIds, "searchSuggestions", "nulavioSearch"), "searchShortcuts", "nulavioSearchAdd"),
+      }),
       tabsBrowsing: config => ({
         ...config,
         groupIds: after(

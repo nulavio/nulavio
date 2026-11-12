@@ -155,3 +155,18 @@ Branch `agent/claude/feat-settings-filter-state`.
 
 `test_settings_native` `test_06a`: the module's answer equals what uBlock Origin's storage holds, and reading leaves it as it was; the row's three states (hidden, shown, not read) and off and on again. `test_experience_rules`: the four list names are uBlock Origin's own cookie-notice lists (compared with its registry when the tree has it), the storage is opened once and never written.
 
+## Step 8 (2026-11-12): search, next to the engine's own controls
+
+Branch `agent/claude/feat-settings-search-native`.
+
+![Who receives what is typed (pt-BR light) and the engines Nulavio knows how to add (en-US dark)](../design/screenshots/experience-2026-11/settings-search-sheet.png)
+
+The engine's Search pane already chooses the default engine (also for private windows), lists the engines with their aliases, removes them and adds one by hand. The old page did those too, so the same thing could be done in two places. Only what Nulavio adds went into the pane, each part after the engine's group on the same subject:
+
+- **"Sugestões: quem recebe o que você digita"**, after the engine's suggestions group: one switch per engine that offers suggestions, with what happens to typed text in words ("Ligado: o que você digita é enviado a ac.duckduckgo.com…", "Desligado: nada é enviado até você pesquisar."). The list is `NulavioSearch`'s (the engine's patch reads it before sending anything); the engine's own "show suggestions" box and these switches follow each other, as before.
+- **"Mecanismos que o Nulavio sabe acrescentar"**, after the engine's list of engines: the known providers the person does not have yet (one click each), a SearXNG instance of their own, and a site's OpenSearch description. `NulavioSearch` checks each address as before (https, a real address) and a refusal is said in its words. An engine added here has its suggestions off, like any other.
+- **Not carried over**: Nulavio's own "custom engine" form, its default-engine pickers, alias editor and remove buttons. The engine's own controls in this pane do them. One difference stays as it always was: the engine's own "add" dialog does not ask for https the way Nulavio's form did.
+- The old page's search section left its navigation and search; it still opens by address.
+
+`tests/integration/test_settings_search.py` (2 tests): the switches are the module's list, off in a new profile; one on and off again, with the engine's own switch following; switched on from the engine's group; a refusal in words; a provider added in one click; a SearXNG address refused twice and then accepted, with its suggestions off; an OpenSearch address handed to the module (replaced in the test: nothing is downloaded) and a failed download said in words.
+
