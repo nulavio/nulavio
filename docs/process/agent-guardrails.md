@@ -94,7 +94,7 @@ These rules match the command text. `git -C . push origin main`, an alias, a scr
 git config core.hooksPath scripts/git-hooks
 ```
 
-`git push --no-verify` skips it, and `NULAVIO_ALLOW_MAIN_PUSH=1` lets the maintainer push to `main` on the [emergency path](pull-requests.md#emergency-path-engine-security-update). The rules in section 2 refuse both for Claude Code. `core.hooksPath` takes one directory, so any other hook (for example a pre-commit hook) belongs in `scripts/git-hooks/` as well.
+`git push --no-verify` skips it, and `NULAVIO_ALLOW_MAIN_PUSH=1` silences it (GitHub's branch protection still refuses the push, see the [emergency path](pull-requests.md#emergency-path-engine-security-update)). The rules in section 2 refuse both for Claude Code. `core.hooksPath` takes one directory, so any other hook (for example a pre-commit hook) belongs in `scripts/git-hooks/` as well.
 
 ## 4. Detection after the fact
 
