@@ -22,7 +22,28 @@ this.nulavioGuard = class extends ExtensionAPI {
     try {
       const NulavioGuard = this.module();
       const extension = this.extension;
-      NulavioGuard.atStartup(count => extension.localizeMessage("guardBar", [String(count)]), extension.localizeMessage("guardReviewButton"));
+      // What one finding is, in the review page's own titles (guard/review.js): the bar names it when it is the only one.
+      const TITLES = {
+        "extension-added": f => ["guardExtensionAdded", [f.after.name]],
+        "extension-changed": f => ["guardExtensionChanged", [f.after.name]],
+        "extension-removed": f => ["guardExtensionRemoved", [f.before.name]],
+        "pref-changed": () => ["guardPrefChanged", []],
+        "root-added": () => ["guardRootAdded", []],
+        "module-added": f => ["guardModuleAdded", [f.key]],
+        "host-added": f => ["guardHostAdded", [f.after.name]],
+        "host-changed": f => ["guardHostChanged", [f.after.name]],
+        "policies-changed": () => ["guardPolicies", []],
+        "userjs-added": () => ["guardUserJsAdded", []],
+        "userjs-changed": () => ["guardUserJsChanged", []],
+        "search-changed": () => ["guardSearchChanged", []],
+      };
+      const textFor = (count, only) => {
+        const named = only && Object.hasOwn(TITLES, only.kind) ? TITLES[only.kind](only) : null;
+        return named
+          ? extension.localizeMessage("guardBarOne", [extension.localizeMessage(named[0], named[1].map(String))])
+          : extension.localizeMessage("guardBar", [String(count)]);
+      };
+      NulavioGuard.atStartup(textFor, extension.localizeMessage("guardReviewButton"));
     } catch (e) {
       console.error("Nulavio Guard", e);
     }
