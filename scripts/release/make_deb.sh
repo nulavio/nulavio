@@ -32,18 +32,22 @@ for size in 16 32 48 64 128; do
     install -Dm0644 "$install_dir/browser/chrome/icons/default/default$size.png" \
         "$pkg/usr/share/icons/hicolor/${size}x${size}/apps/nulavio.png"
 done
-# The browser is MPL-2.0 (the text below the note). One data file in it is GPL-3.0-only: said first, with where
-# its licence text and the notice of what was changed are. LICENSES.md, the list of third-party material, goes too.
+# The code is MPL-2.0 (the text below the note). The brand is not, and one data file is GPL-3.0-only: said
+# first, with where that licence's text and the notice of what was changed are. LICENSES.md goes too.
 {
     cat <<'NOTE'
-Nulavio is licensed under the Mozilla Public License, version 2.0, whose text follows this note.
+Nulavio's code is licensed under the Mozilla Public License, version 2.0, whose text follows this note.
 
-One data file is under another licence. /usr/lib/nulavio/distribution/policies.json carries a modified copy of
-uBlock Origin's filter list registry, which is under the GNU General Public License, version 3 only. Its licence
-text is /usr/lib/nulavio/distribution/uBlock-Origin-LICENSE.txt (on Debian and Ubuntu also
-/usr/share/common-licenses/GPL-3), and uBlock-Origin-NOTICE.txt beside it says what was changed, by whom and when.
+Two things in this package are not under it:
 
-Third-party material and how each part is obtained: /usr/share/doc/nulavio/LICENSES.md.
+- The name "Nulavio", its symbol and its icons: all rights reserved, trademark rules apply.
+- One data file: /usr/lib/nulavio/distribution/policies.json carries a modified copy of uBlock Origin's filter
+  list registry, which is under the GNU General Public License, version 3 only. Its licence text is
+  /usr/lib/nulavio/distribution/uBlock-Origin-LICENSE.txt (on Debian and Ubuntu also
+  /usr/share/common-licenses/GPL-3), and uBlock-Origin-NOTICE.txt beside it says what was changed, by whom
+  and when.
+
+The licence of each kind of material, Nulavio's own and third parties': /usr/share/doc/nulavio/LICENSES.md.
 
 NOTE
     cat "$repo/LICENSE"

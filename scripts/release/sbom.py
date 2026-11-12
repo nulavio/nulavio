@@ -388,12 +388,15 @@ def main() -> int:
         "dependencies": [{"ref": "nulavio-preview", "dependsOn": [c["bom-ref"] for c in components]}],
     }
     if args.package:
+        # What the package's own licence field says: with uBlock Origin's list registry inside it, both licences.
+        both = [{"expression": "MPL-2.0 AND GPL-3.0-only"}]
+        package_licences = both if content_filter["default_on"] else [{"license": {"id": "MPL-2.0"}}]
         bom["metadata"]["component"] = {
             "type": "application",
             "bom-ref": "nulavio-preview",
             "name": "nulavio",
             "version": args.engine_version,
-            "licenses": [{"license": {"id": "MPL-2.0"}}],
+            "licenses": package_licences,
             "hashes": [{"alg": "SHA-256", "content": sha256(args.package)}],
             "properties": [
                 {"name": "nulavio:package-file", "value": args.package.name},

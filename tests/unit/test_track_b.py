@@ -563,7 +563,7 @@ class PackagingTest(unittest.TestCase):
         self.assertEqual(re.findall(r"<project_license>([^<]+)</project_license>", metainfo), ["MPL-2.0 AND GPL-3.0-only"])
         deb = (ROOT / "scripts" / "release" / "make_deb.sh").read_text(encoding="utf-8")
         note = deb.split("<<'NOTE'\n", 1)[1].split("\nNOTE\n", 1)[0]
-        for said in ("Mozilla Public License, version 2.0", "GNU General Public License, version 3 only",
+        for said in ("Mozilla Public License, version 2.0", "GNU General Public License, version 3 only", "all rights reserved",
                      f"/usr/lib/nulavio/distribution/{make_distribution.LICENCE_NAME}", make_distribution.NOTICE_NAME,
                      "/usr/share/doc/nulavio/LICENSES.md"):  # fmt: skip
             self.assertIn(said, note)
