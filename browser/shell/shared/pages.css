@@ -643,7 +643,7 @@ html[data-page="newtab"][data-stage] .page {
   justify-content: center;
   max-width: 64rem;
 }
-html[data-page="newtab"][data-stage] .page > :not(.firstrun, .firstrun__progress, .layout-choice, .dns-choice) { display: none; }
+html[data-page="newtab"][data-stage] .page > :not(.firstrun, .firstrun__progress, .firstrun__back, .layout-choice, .dns-choice) { display: none; }
 /* `clip`, not `hidden`: the corners are kept and the actions can still stick to the window's bottom edge (below). */
 html[data-page="newtab"][data-stage] .page > :is(.firstrun, .layout-choice, .dns-choice) { max-width: none; padding: 0; overflow: clip; }
 html[data-page="newtab"][data-stage] .page > :is(.firstrun, .layout-choice, .dns-choice)[hidden] { display: none; }
@@ -661,6 +661,11 @@ html[data-page="newtab"][data-stage] .firstrun__do {
 }
 html[data-page="newtab"][data-stage] .firstrun__progress { order: 1; max-width: none; min-block-size: 1lh; text-align: center; }
 html[data-page="newtab"][data-stage] .firstrun__progress[hidden] { display: block !important; visibility: hidden; }
+/* "Voltar" sits under the card, after the progress line, and keeps its room while there is no step before
+   (the card must not move between steps). */
+html[data-page="newtab"][data-stage] .firstrun__back { order: 2; align-self: center; }
+html[data-page="newtab"][data-stage] .firstrun__back[hidden] { display: inline-flex !important; visibility: hidden; }
+html:not([data-stage]) .firstrun__back { display: none; }
 html[data-page="newtab"][data-stage] .layout-choice__title { font-size: var(--nv-font-size-2xl); text-wrap: balance; }
 html[data-page="newtab"][data-stage] .firstrun__say > :is(.firstrun__lead, .hint) { text-wrap: pretty; }
 html[data-page="newtab"][data-stage] .layout-options { grid-template-columns: minmax(0, 1fr); gap: var(--nv-space-3); }

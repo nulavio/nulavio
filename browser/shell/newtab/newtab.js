@@ -367,11 +367,30 @@ async function showLayoutChoice() {
     error.textContent = "";
     if (await listen()) await refreshLayout();
   });
+  // The first run's "Voltar": the card comes back in this tab with the arrangement in use, to change or to keep.
+  reopenLayoutChoice = async () => {
+    dismissedInThisTab = false;
+    editingInThisTab = true;
+    if (await listen()) await refreshLayout();
+  };
+  // …and when the first run ends with the card shown again but not answered again, it is put away as answered.
+  settleLayoutChoice = () => {
+    if (editingInThisTab && !busy) {
+      editingInThisTab = false;
+      dismissedInThisTab = true;
+      card.hidden = true;
+    }
+  };
 
   if (await listen()) {
     await refreshLayout();
   }
 }
+
+// The first run's "Voltar" shows these two cards again after they were answered (set where each card is built).
+let reopenLayoutChoice = null;
+let settleLayoutChoice = null;
+let dnsShownAgain = false;
 
 // DNS (Nulavio build): how site names are looked up, and the one-time choice.
 const DNS_SERVICES = { cloudflare: "dnsCloudflare", quad9: "dnsQuad9", mullvad: "dnsMullvad" };
@@ -390,10 +409,12 @@ async function showDns() {
     show("dns", t(state.choice === "strict" ? "dnsStatusStrict" : "dnsStatusFallback"), "ok");
   }
   const card = document.getElementById("dns-choice");
-  card.hidden = state.chosen;
+  // Asked once; "Voltar" in the first run shows it again, with the resolver in use as the option checked.
+  const asked = !state.chosen || dnsShownAgain;
+  card.hidden = !asked;
   // The options follow what the resolver does now: the one in use is the one checked.
   card.dataset.encrypted = String(state.encryptedNow);
-  if (state.chosen) {
+  if (!asked) {
     return;
   }
   const services = state.providers.map(provider => provider.id);
@@ -438,6 +459,7 @@ async function showDns() {
       error.textContent = errorText(e);
       return;
     }
+    dnsShownAgain = false;
     card.hidden = true;
     await showDns();
   };
@@ -521,8 +543,11 @@ async function firstRun() {
   const questions = QUESTIONS.filter(step => applies[step]);
   const order = ["welcome", ...questions, "finished"];
   const progress = document.getElementById("firstrun-progress");
+  const backButton = document.getElementById("firstrun-back");
   const searchButton = document.querySelector("#search .button");
   let current = null;
+  // After "Voltar", going on walks the steps in order again, up to the first one not answered yet.
+  let walking = false;
 
   const pending = async step => {
     if (done.has(step)) {
@@ -554,6 +579,7 @@ async function firstRun() {
     const n = questions.indexOf(step);
     progress.hidden = n < 0;
     progress.textContent = n < 0 ? "" : t("firstrunProgress", [String(n + 1), String(questions.length)]);
+    backButton.hidden = order.indexOf(step) <= 0; // nothing before the welcome
     // In the sequence the DNS card's main action goes on; alone on the new tab it saves.
     document.getElementById("dns-apply").textContent = t(step ? "firstrunContinue" : "dnsSave");
     // While a first-run card is the page's question, the search is not its main action.
@@ -561,6 +587,13 @@ async function firstRun() {
     searchButton.classList.toggle("button--secondary", Boolean(step));
   };
   const leave = () => {
+    // A card shown again by "Voltar" and left as it was is not a question any more.
+    walking = false;
+    settleLayoutChoice?.();
+    if (dnsShownAgain) {
+      dnsShownAgain = false;
+      document.getElementById("dns-choice").hidden = true;
+    }
     show(null);
     for (const id of Object.values(STEP_CARDS)) {
       document.getElementById(id).removeAttribute("data-gated");
@@ -568,33 +601,64 @@ async function firstRun() {
   };
   // Go to the first step not answered yet. Focus follows only when the person was in a first-run card
   // (on load the keyboard stays where the browser put it).
+  const focusStep = () => {
+    const control = document.getElementById(FIRST_CONTROL[current]);
+    if (control?.matches("h2")) {
+      control.tabIndex = -1; // a heading takes focus only from here, as a reading position
+    }
+    control?.focus();
+  };
+  // A step already answered, shown again with what was answered. Each answer applied at once and stays applied:
+  // this is where it can be changed, with the same controls and the same rules as the first time.
+  const showAgain = async step => {
+    if (step === "finished") {
+      await fillSummary();
+    } else if (step === "layout") {
+      await reopenLayoutChoice?.();
+    } else if (step === "dns") {
+      dnsShownAgain = true;
+      await showDns();
+    }
+    show(step);
+  };
   const advance = async (answered, { focus = false } = {}) => {
     const wasInside = focus || Object.values(STEP_CARDS).some(id => document.getElementById(id).contains(document.activeElement));
+    const from = order.indexOf(current); // the step being left, when there is one
     if (answered) {
       await record(answered);
     }
+    let next = "finished";
     for (const step of order) {
-      if (step === "finished") {
-        await fillSummary();
-        show(step);
-        break;
-      }
-      if (await pending(step)) {
-        show(step);
+      if (step === "finished" || (await pending(step))) {
+        next = step;
         break;
       }
       if ((step === "layout" || step === "dns") && !done.has(step)) {
         await record(step); // answered in its card (or in Settings): never asked again
       }
     }
-    if (wasInside) {
-      const control = document.getElementById(FIRST_CONTROL[current]);
-      if (control?.matches("h2")) {
-        control.tabIndex = -1; // a heading takes focus only from here, as a reading position
+    if (walking && from >= 0 && from + 1 < order.indexOf(next)) {
+      await showAgain(order[from + 1]);
+    } else {
+      walking = false;
+      if (next === "finished") {
+        await fillSummary();
       }
-      control?.focus();
+      show(next);
+    }
+    if (wasInside) {
+      focusStep();
     }
   };
+  backButton.addEventListener("click", async () => {
+    const at = order.indexOf(current);
+    if (at <= 0) {
+      return;
+    }
+    walking = true;
+    await showAgain(order[at - 1]);
+    focusStep();
+  });
 
   const fact = key => document.querySelector(`#status [data-status="${key}"]`);
   const factLine = key => `${fact(key).previousElementSibling.textContent}: ${fact(key).textContent}`;

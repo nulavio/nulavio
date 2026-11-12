@@ -1246,6 +1246,7 @@
   "bandRoutedDefault": {"message": "Aberto pelo destino padrão · Mudar"},
   "bandRoutedDefaultNamed": {"message": "Aberto pelo destino padrão · Mudar: links de outros aplicativos sem regra abrem em $PROFILE$. Mudar o destino", "placeholders": {"profile": {"content": "$1"}}},
   "profilesButtonNamedKey": {"message": "Perfil: $NAME$. Trocar de perfil ($KEYS$)", "placeholders": {"name": {"content": "$1"}, "keys": {"content": "$2"}}},
+  "firstrunBack": {"message": "Voltar"},
   "firstrunContinue": {"message": "Continuar"},
   "firstrunBandCaption": {"message": "A faixa desta janela, agora."},
   "dnsOptionNow": {"message": "Como está agora"},

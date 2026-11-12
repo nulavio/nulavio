@@ -1246,6 +1246,7 @@
   "bandRoutedDefault": {"message": "Opened by the default destination · Change"},
   "bandRoutedDefaultNamed": {"message": "Opened by the default destination · Change: links from other apps with no rule open in $PROFILE$. Change the destination", "placeholders": {"profile": {"content": "$1"}}},
   "profilesButtonNamedKey": {"message": "Profile: $NAME$. Switch profile ($KEYS$)", "placeholders": {"name": {"content": "$1"}, "keys": {"content": "$2"}}},
+  "firstrunBack": {"message": "Back"},
   "firstrunContinue": {"message": "Continue"},
   "firstrunBandCaption": {"message": "This window's band, right now."},
   "dnsOptionNow": {"message": "As it is now"},

@@ -234,6 +234,58 @@ class FirstRunStageTest(unittest.TestCase):
         # The first run went on in its own tab and waits there.
         self.assertEqual(self.page()["card"], "firstrun-done")
 
+    def back(self, card):
+        self.click("firstrun-back")
+        self.assertTrue(harness.wait_until(lambda: self.page()["card"] == card, 10), self.page())
+
+    def test_08b_back_shows_an_answered_step_again_and_going_on_walks_the_steps_in_order(self):
+        back_shown = "return document.getElementById('firstrun-back').checkVisibility({ visibilityProperty: true });"
+        self.assertFalse(self.m.execute(back_shown), "there is nothing before the welcome")
+        self.go_to("firstrun-passwords")
+        self.addCleanup(
+            self.m.chrome, "Services.prefs.clearUserPref('network.trr.mode'); Services.prefs.clearUserPref('network.trr.uri');"
+        )
+        answered = self.m.chrome(DNS)
+        self.assertTrue(answered["chosen"])
+        self.assertTrue(self.m.execute(back_shown))
+        # Back to DNS: the card is the question again, with the resolver in use checked; nothing changed by looking.
+        self.back("dns-choice")
+        checked = "return document.querySelector('#dns-options input:checked')?.value ?? null;"
+        self.assertIn(self.m.execute(checked), ("system", "keep"))
+        self.assertEqual(self.m.execute("return document.getElementById('firstrun-progress').textContent;"), "Etapa 2 de 5")
+        self.assertEqual(self.m.chrome(DNS), answered)
+        # Back again, to the arrangement: another one is chosen there, and it applies as it did the first time.
+        self.back("layout-choice")
+        self.click('#layout-choice input[value="top"]')
+        layout = (
+            "return ChromeUtils.importESModule('resource://builtin-addons/nulavio-shell/modules/NulavioLayout.sys.mjs')"
+            ".NulavioLayout.state(window).then(state => state.preset);"
+        )
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome(layout) == "top", 10), self.m.chrome(layout))
+        # Going on from there does not jump to the first unanswered step: DNS comes next, as in the order asked.
+        harness.wait_until(
+            lambda: self.m.execute(
+                "return document.getElementById('layout-choice-done').getAttribute('aria-disabled') !== 'true';"
+            ),
+            10,
+        )
+        self.click("layout-choice-done")
+        self.assertTrue(harness.wait_until(lambda: self.page()["card"] == "dns-choice", 10), self.page())
+        self.click("dns-apply")
+        self.assertTrue(harness.wait_until(lambda: self.page()["card"] == "firstrun-passwords", 10), self.page())
+        self.assertEqual(self.m.chrome(DNS)["choice"], answered["choice"], "keeping the answer changed the resolver")
+        # From the last card, back reaches the question before it; the cards answered again stay answered.
+        self.go_to("firstrun-done")
+        self.back("firstrun-profile")
+        self.click("firstrun-profile-later")
+        self.assertTrue(harness.wait_until(lambda: self.page()["card"] == "firstrun-done", 10), self.page())
+        self.click("firstrun-finish")
+        self.assertTrue(harness.wait_until(lambda: not self.page()["stage"], 10), self.page())
+        after = self.m.execute(
+            "return ['layout-choice', 'dns-choice', 'firstrun-back'].map(id => document.getElementById(id).checkVisibility());"
+        )
+        self.assertEqual(after, [False, False, False], "a card shown again was left on the new tab")
+
     def test_09_in_a_short_window_the_panes_stack_and_the_actions_stay_on_screen(self):
         size = self.m.chrome("return [window.outerWidth, window.outerHeight];")
         self.addCleanup(self.m.chrome, "window.resizeTo(arguments[0], arguments[1]);", size)
