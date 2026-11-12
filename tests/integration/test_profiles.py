@@ -145,6 +145,28 @@ class ProfilesTest(unittest.TestCase):
         self.assertEqual(shared.get(str(work)), "sky", "the colour is not shared with the other profiles")
         type(self).work = work
 
+    def chooser(self) -> dict:
+        """The engine's start-up profile chooser: on or off, as the service and profiles.ini have it."""
+        ini = next(Path(self.session.env["HOME"]).rglob("profiles.ini")).read_text()
+        return {
+            "service": self.profiles("return SPS.groupToolkitProfile.showProfileSelector;"),
+            "ini": "ShowSelector=1" in ini,
+            "adopted": self.profiles("return Services.prefs.getBoolPref('nulavio.profiles.startChooserAdopted', false);"),
+        }
+
+    def test_02b_the_engine_start_chooser_is_off_and_a_later_choice_stays(self):
+        # The engine turns its chooser on as the group is made; it cannot open a protected profile
+        # (the start ends in an error), so Nulavio turns it off once per group.
+        self.assertEqual(self.chooser(), {"service": False, "ini": False, "adopted": True})
+        shared = self.profiles("return SPS.getDBPref('nulavio.profiles.startChooserAdopted');")
+        self.assertTrue(shared, "not shared with the group")
+        # The person turns it on (the engine's own checkbox): another profile made later does not undo that.
+        self.profiles("await SPS.setShowProfileSelectorWindow(true);")
+        extra = self.profiles("return P.create({name: 'Depois'});")
+        self.assertEqual(self.chooser(), {"service": True, "ini": True, "adopted": True})
+        self.profiles("await SPS.setShowProfileSelectorWindow(false);")
+        self.profiles("await P.remove(args[0]);", extra)
+
     def test_03_validation(self):
         cases = {
             "invalid-name": "return P.create({name: '   '});",

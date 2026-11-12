@@ -105,7 +105,12 @@ PREF_WRITERS = {
         'setStringPref("network.trr.uri")': 1,
         "setStringPref(PREF_FIRSTRUN)": 1,
     },
-    "NulavioProfiles.sys.mjs": {"setStringPref(PREF_COLORS)": 2, "setStringPref(PREF_COLOR_MIGRATION)": 3},
+    "NulavioProfiles.sys.mjs": {
+        "setBoolPref(PREF_START_CHOOSER)": 1,
+        "setIntPref(PREF_START_PROFILE)": 1,
+        "setStringPref(PREF_COLORS)": 2,
+        "setStringPref(PREF_COLOR_MIGRATION)": 3,
+    },
     "NulavioRouting.sys.mjs": {
         "clearUserPref(FALLBACK_PATH_PREF)": 1,
         "clearUserPref(FALLBACK_PREF)": 1,
