@@ -18,6 +18,8 @@ Thanks for helping. Nulavio is a security-sensitive project, so the rules below 
 - **Firefox engine bugs** (they also happen in Firefox) go to [Mozilla's Bugzilla](https://bugzilla.mozilla.org/).
 - **Security problems:** never in a public issue; see [Reporting vulnerabilities](#reporting-vulnerabilities).
 
+How maintainers and coding agents use issues to organise the work: [docs/process/issues.md](docs/process/issues.md).
+
 Every issue gets a first answer, even if only a label or a question; the issue list is public and searchable, closed issues included.
 
 ## Development setup

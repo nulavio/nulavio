@@ -1,0 +1,40 @@
+name: Spike
+description: A time-boxed study that ends in a go/no-go decision (maintainers and agents; docs/process/issues.md).
+labels: ["spike"]
+body:
+  - type: markdown
+    attributes:
+      value: A spike answers one question with measurements and ends in a decision, usually an ADR. Nothing it builds ships before that decision.
+  - type: textarea
+    id: question
+    attributes:
+      label: The question
+      description: One question, and why it matters now.
+    validations:
+      required: true
+  - type: textarea
+    id: plan
+    attributes:
+      label: Plan and time box
+      description: Phases, what each one measures, and the total time box. Link the plan document if there is one.
+    validations:
+      required: true
+  - type: textarea
+    id: criteria
+    attributes:
+      label: Approval criteria
+      description: Checkable thresholds, each with the evidence that proves it.
+    validations:
+      required: true
+  - type: textarea
+    id: stop
+    attributes:
+      label: Stop early when
+    validations:
+      required: false
+  - type: textarea
+    id: out-of-scope
+    attributes:
+      label: Out of scope
+    validations:
+      required: false
