@@ -31,8 +31,11 @@ step() {
     local name=$1 t0 status
     shift
     t0=$(date +%s)
+    # In a subshell with errexit on: a step that is a function of this script (install_tree, sbom, manifest)
+    # stops at its first failing command. Called plainly here, with errexit off to read the status, it would
+    # carry on past a failure and report "ok".
     set +e
-    "$@" > "$out/logs/$name.log" 2>&1
+    ( set -e; "$@" ) > "$out/logs/$name.log" 2>&1
     status=$?
     set -e
     local took=$(( $(date +%s) - t0 ))

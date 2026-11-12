@@ -104,7 +104,7 @@ Put the digest after the tag in the Containerfiles (the same digest for the same
 
 ## uBlock Origin's default lists
 
-A new profile starts with the lists of `browser/distribution/content-filter.json` switched on in uBlock Origin ([how](../architecture/extension-model.md#the-lists-a-new-profile-starts-with)). That rests on uBlock Origin's own code, which Nulavio does not control: an older managed setting (`adminSettings.assetsBootstrapLocation`), the rule that only `scheme://` is an external address, and the way `off` decides what a new profile selects. The policy always installs the **pinned** version first, so what ships is what was tested; the risk is in moving the pin.
+A new profile starts with the lists of `browser/distribution/content-filter.json` switched on in uBlock Origin ([how](../architecture/extension-model.md#the-lists-a-new-profile-starts-with)). That rests on uBlock Origin's own code, which Nulavio does not control: an older managed setting (`adminSettings.assetsBootstrapLocation`), the rule that only `scheme://` is an external address, and the way `off` decides what a new profile selects. The policy always installs the **pinned** version first, so the lists are switched on by the version that was tested; the risk there is in moving the pin. uBlock Origin then updates itself from AMO like any extension (on 2026-11-12, to 1.76.0 half a minute after a first start), and what a newer version does with lists that are already selected is not something the suite sees: it runs with add-on updates off.
 
 **How it is noticed, in the order it would happen:**
 

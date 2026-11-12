@@ -488,9 +488,18 @@ class DistributionTest(unittest.TestCase):
             script = ROOT / "scripts" / "build" / "make_distribution.py"
             subprocess.run([sys.executable, "-I", str(script), "--out", tmp], check=True, capture_output=True)
             names = sorted(path.name for path in Path(tmp).iterdir())
-            self.assertEqual(names, ["distribution.ini", "policies.json", "uBlock-Origin-LICENSE.txt"])
+            self.assertEqual(
+                names, ["distribution.ini", "policies.json", "uBlock-Origin-LICENSE.txt", "uBlock-Origin-NOTICE.txt"]
+            )
             licence = (make_distribution.REGISTRY_DIR / "LICENSE.txt").read_bytes()
             self.assertEqual((Path(tmp) / "uBlock-Origin-LICENSE.txt").read_bytes(), licence)
+            # The copy in policies.json is a modified one: the notice says so, by whom, when, and what was changed.
+            config = json.loads(make_distribution.CONTENT_FILTER.read_text(encoding="utf-8"))
+            notice = (Path(tmp) / "uBlock-Origin-NOTICE.txt").read_text(encoding="utf-8")
+            self.assertRegex(config["changed_on"], r"^20\d\d-\d\d-\d\d$")
+            for said in ("modified copy", f"uBlock Origin {config['registry']['version']}", "GNU General Public License",
+                         f"on {config['changed_on']}", "uBlock-Origin-LICENSE.txt", *config["default_on"]):  # fmt: skip
+                self.assertIn(said, notice)
             self.assertEqual(json.loads((Path(tmp) / "policies.json").read_text()), make_distribution.policies())
 
 

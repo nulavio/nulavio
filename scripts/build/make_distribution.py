@@ -60,6 +60,7 @@ def distribution_ini() -> str:
 CONTENT_FILTER = ROOT / "browser" / "distribution" / "content-filter.json"
 REGISTRY_DIR = CONTENT_FILTER.parent / "ublock-origin"
 LICENCE_NAME = "uBlock-Origin-LICENSE.txt"
+NOTICE_NAME = "uBlock-Origin-NOTICE.txt"
 
 
 def filter_registry() -> dict | None:
@@ -87,6 +88,23 @@ def filter_registry() -> dict | None:
             raise SystemExit(f"content-filter.json: {key} is not a list that uBlock Origin {ublock.version} ships switched off")
         entry["off"] = False
     return registry
+
+
+def registry_notice() -> str:
+    """What the licence of the registry asks of a modified copy: that it says it was modified, by whom and when."""
+    config = json.loads(CONTENT_FILTER.read_text(encoding="utf-8"))
+    lists = "\n".join(f"  {key}" for key in config["default_on"])
+    return (
+        "policies.json, in this directory, carries a modified copy of uBlock Origin's filter list registry.\n\n"
+        f"Original: assets/assets.json of uBlock Origin {config['registry']['version']} (https://github.com/gorhill/uBlock),\n"
+        "copyright Raymond Hill and contributors, under the GNU General Public License, version 3\n"
+        f"({LICENCE_NAME}, beside this file).\n\n"
+        f"Modified by the Nulavio project (https://github.com/nulavio/nulavio) on {config['changed_on']}: the lists below,\n"
+        'which the original marks "off": true, are marked "off": false, so that a new profile starts with them\n'
+        "switched on. Nothing else is changed, and the copy stays under the same licence.\n\n"
+        f"{lists}\n\n"
+        "The unmodified file is in Nulavio's source: browser/distribution/ublock-origin/assets.json.\n"
+    )
 
 
 def registry_address(registry: dict) -> str:
@@ -141,8 +159,10 @@ def main() -> int:
     if "3rdparty" in data["policies"]:
         # policies.json now carries uBlock Origin's registry (GPL-3.0): its licence goes with it.
         shutil.copyfile(REGISTRY_DIR / "LICENSE.txt", args.out / LICENCE_NAME)
+        (args.out / NOTICE_NAME).write_text(registry_notice(), encoding="utf-8")
     else:
         (args.out / LICENCE_NAME).unlink(missing_ok=True)
+        (args.out / NOTICE_NAME).unlink(missing_ok=True)
     print(f"wrote {args.out}/distribution.ini and policies.json")
     return 0
 
