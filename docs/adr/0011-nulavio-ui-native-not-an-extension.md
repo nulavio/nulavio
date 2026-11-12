@@ -234,3 +234,13 @@ The settings page has drawn Nulavio's colours and keys since ADR 0008; the old s
 
 `test_appearance` (13 tests) and `test_shortcuts` (14) drive the settings page; what reaches a page of the Shell is read on what is left of the old page. Old addresses (`#appearance`, `#shortcuts`) open the settings page at their pane.
 
+## Step 13 (2026-11-12): the assistant's form leaves the agents' page
+
+Branch `agent/claude/refactor-settings-old-assistant`.
+
+The form for the assistant's service (step 10 put it in the settings page) is removed from the Shell's page. Its old address (`settings.html#ai-assistant`) opens the "Assistente e IA" pane, and so do the assistant panel's own "settings" button and the message shown when the assistant was revoked. `test_assistant_ui` stores the key through the settings page with its stand-in keyring; `test_ai_ui` configures the assistant there and finds it listed with the other agents.
+
+The emergency stop is still in two places, on purpose for now: the switch in the settings page (step 10) and the switch on the agents' page, next to the agents it stops. Removing the second makes stopping one step longer from the page where a person watches the agents; that is a protection's reach, so it is the maintainer's decision (recommendation: keep both; they write the same state through the same module and each follows the other).
+
+What the Shell's own page holds after this: the agents (connecting one, permissions, consent, pause, revoke, the emergency stop, the activity record), the desktop integrations, and Layout by its address until its tests are ported.
+

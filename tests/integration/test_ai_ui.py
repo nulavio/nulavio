@@ -22,6 +22,7 @@ from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
 import harness
+import settings_page
 
 from nulavio_launcher.ai import audit, policy, registry
 
@@ -488,14 +489,17 @@ class AiUiTest(unittest.TestCase):
 
     def test_10_the_assistant_appears_as_an_agent_at_once(self):
         """AI-11: its client has a name, and the list refreshes after it is configured."""
+        # Configured where its service is set, in the settings page (ADR 0011, step 10)…
+        settings_page.open_pane(self.m, settings_page.assistant_pane(self.m))
+        settings_page.wait_control(self.m, "nulavio-assistant-kind")
+        settings_page.change(self.m, "nulavio-assistant-kind", "openai")
+        settings_page.change(self.m, "nulavio-assistant-model", "modelo-local")
+        settings_page.change(self.m, "nulavio-assistant-url", "http://127.0.0.1:9/v1")
+        settings_page.click(self.m, "#nulavio-assistant-save")
+        saved = lambda now: "modelo-local" in (now["description"] or "")  # noqa: E731
+        settings_page.wait_control(self.m, "nulavio-assistant-now", saved, timeout=30)
+        # …and listed with the other agents on their page.
         self.open_page("settings/settings.html#ai")
-        self.assertTrue(harness.wait_until(lambda: self.js("return !!document.querySelector('#ai-agents li');"), timeout=20))
-        form = "#ai-assistant"
-        self.js(
-            f"const f = document.querySelector('{form}'); f.elements.kind.value = 'openai';"
-            "f.elements.model.value = 'modelo-local'; f.elements.baseUrl.value = 'http://127.0.0.1:9/v1';"
-        )
-        self.click(f"{form} button[type=submit]")
         name = self.msg("aiClient_nulavio_assistant")
         self.assertTrue(
             harness.wait_until(lambda: name in self.js("return document.getElementById('ai-agents').textContent;"), timeout=30),

@@ -100,6 +100,11 @@ def open_pane(m, pane: str = "", timeout: float = 20) -> None:
         raise AssertionError(f"the settings page did not load at #{pane}")
 
 
+def assistant_pane(m) -> str:
+    """The pane that holds the assistant's group: the engine's own AI pane where it shows one, Nulavio's otherwise."""
+    return m.chrome('return Services.prefs.getBoolPref("browser.preferences.aiControls", false) ? "ai" : "nulavioAssistant";')
+
+
 def control(m, element_id: str) -> dict | None:
     """A control as the engine's widget drew it, or None when it is not in the page."""
     return m.chrome(CONTROL, [element_id])

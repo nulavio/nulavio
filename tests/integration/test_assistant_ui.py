@@ -36,6 +36,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
 import harness
+import settings_page
 from fake_llm import FakeProvider, Reply
 from fake_keyring import FAKE_SECRET_TOOL
 
@@ -310,26 +311,30 @@ class AssistantUiTest(unittest.TestCase):
     # -- settings and the module ------------------------------------------------------------
 
     def test_01_settings_store_the_key_in_the_keyring_only(self):
-        self.open("settings/settings.html#ai")
-        self.m.execute(
-            "const f = document.getElementById('ai-assistant'); f.elements.kind.value = 'openai';"
-            "f.elements.baseUrl.value = arguments[0]; f.elements.model.value = 'test-model'; f.elements.key.value = arguments[1];"
-            "f.elements.allowed.checked = true; f.requestSubmit();",
-            [self.provider.base, KEY],
-        )
-        configured = "return document.getElementById('ai-assistant').dataset.configured === 'true';"
-        self.assertTrue(harness.wait_until(lambda: self.m.execute(configured), 20))
-        status = self.m.execute("return document.getElementById('ai-assistant-state').textContent;")
-        self.assertIn("test-model", status)
+        # ADR 0011, step 10: the assistant's service is set in the settings page.
+        settings_page.open_pane(self.m, settings_page.assistant_pane(self.m))
+        settings_page.wait_control(self.m, "nulavio-assistant-kind")
+        settings_page.change(self.m, "nulavio-assistant-kind", "openai")
+        settings_page.change(self.m, "nulavio-assistant-url", self.provider.base)
+        settings_page.change(self.m, "nulavio-assistant-model", "test-model")
+        settings_page.change(self.m, "nulavio-assistant-key", KEY)
+        settings_page.click(self.m, "#nulavio-assistant-save")
+        saved = lambda now: "test-model" in (now["description"] or "")  # noqa: E731
+        status = settings_page.wait_control(self.m, "nulavio-assistant-now", saved, timeout=20)["description"]
         self.assertIn("127.0.0.1", status)
         self.assertIn("chaveiro", status)
-        self.assertEqual(self.m.execute("return document.querySelector('#ai-assistant [name=key]').value;"), "")
+        self.assertEqual(settings_page.control(self.m, "nulavio-assistant-key")["value"], "")
+        # Whether this profile may send anything to it is its own switch, saved when it changes.
+        settings_page.wait_control(self.m, "nulavio-assistant-allowed", lambda now: now["shown"] and not now["disabled"])
+        settings_page.click(self.m, "#nulavio-assistant-allowed")
+        allowed = lambda: chrome_async(self.m, f"return (await {AI}.assistantState(window)).profileAllowed;")["ok"]  # noqa: E731
+        self.assertTrue(harness.wait_until(allowed, 10), "the profile was not allowed to use the assistant")
         stored = json.loads(self.keyring.read_text())
         self.assertEqual([base64.b64decode(i["secret"]).decode() for i in stored], [KEY])  # in the (stand-in) keyring
         for path in self.session.profile_dir.rglob("*"):
             if path.is_file() and path.stat().st_size < 20_000_000:
                 self.assertNotIn(KEY.encode(), path.read_bytes(), f"key found in {path}")
-        self.shoot("settings", keep="ai")
+        settings_page.shoot(self.m, self.shots, "settings")
 
     def test_02_page_text_goes_only_for_the_included_tab(self):
         url = self.server.url("/agent-task?word=OBSIDIAN")

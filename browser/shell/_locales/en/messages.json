@@ -1159,7 +1159,6 @@
   "howItWorks": {"message": "How it works"},
   "layoutScopeMore": {"message": "Changes apply to the open windows of this profile at once and are kept when you restart. In the browser’s own settings (Browser layout), these choices show under those names."},
   "aiIntroMore": {"message": "They cannot change these settings. Changes apply to their next action."},
-  "assistantIntroMore": {"message": "Nulavio runs no model and has no account: the service is yours (any OpenAI-compatible one, including a model on this computer, or Anthropic). Nothing is sent before you click Send."},
   "firstrunWelcomeTitle": {"message": "Welcome to Nulavio"},
   "firstrunWelcomeLead": {"message": "Nulavio keeps your browsing in separate profiles and shows, in the band at the top, which one you are in and how it is protected."},
   "firstrunNothingSent": {"message": "Nothing is sent to Nulavio"},

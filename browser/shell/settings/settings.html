@@ -158,34 +158,8 @@
         <ul class="list" id="ai-agents" aria-busy="true"></ul>
       </div>
 
-      <form class="card stack" id="ai-assistant" novalidate>
-        <h3 class="card__title" data-i18n="assistantTitle"></h3>
-        <p class="hint" data-i18n="assistantIntro"></p>
-        <details class="more" data-open-key="assistantIntroMore"><summary data-i18n="howItWorks"></summary><p class="hint" data-i18n="assistantIntroMore"></p></details>
-        <p class="notice" id="ai-assistant-state" role="status"></p>
-        <!-- One per row: the provider names its examples, which a half-width select cut off (review V10). -->
-        <label class="field"><span class="field__label" data-i18n="assistantKindLabel"></span>
-          <select class="select" name="kind">
-            <option value="openai" data-i18n="assistantKindOpenai"></option>
-            <option value="anthropic" data-i18n="assistantKindAnthropic"></option>
-          </select></label>
-        <label class="field"><span class="field__label" data-i18n="assistantModelLabel"></span>
-          <input class="input mono" name="model" autocomplete="off" spellcheck="false" maxlength="200" required></label>
-        <label class="field"><span class="field__label" data-i18n="assistantUrlLabel"></span>
-          <input class="input mono" name="baseUrl" autocomplete="off" spellcheck="false" maxlength="2048" placeholder="https://api.openai.com/v1" required></label>
-        <label class="field"><span class="field__label" data-i18n="assistantKeyLabel"></span>
-          <input class="input" name="key" type="password" autocomplete="off" maxlength="512"></label>
-        <p class="hint" data-i18n="assistantKeyNote"></p>
-        <label class="check check--switch">
-          <input type="checkbox" role="switch" name="allowed" id="ai-assistant-allowed">
-          <span><span data-i18n="assistantAllowLabel"></span><span class="hint" id="ai-assistant-allowed-hint"></span></span>
-        </label>
-        <p class="form-error" role="alert"></p>
-        <div class="actions">
-          <button class="button button--primary" type="submit" data-i18n="assistantSave"></button>
-          <button class="button button--quiet" type="button" id="ai-assistant-forget" data-i18n="assistantForget" hidden></button>
-        </div>
-      </form>
+      <!-- The assistant's service (provider, model, address, key) is set in the settings page (ADR 0011, step 10);
+           #ai-assistant, the old address of its form, opens that page (nav.js). -->
 
       <div class="card stack" id="ai-connect">
         <h3 class="card__title" data-i18n="aiConnectTitle"></h3>

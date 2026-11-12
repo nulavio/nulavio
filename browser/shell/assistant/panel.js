@@ -68,10 +68,13 @@ const STATE_CHANGED = new Set([
   "recipient-changed",
 ]);
 
+// The assistant's service is set in the settings page ("Assistente e IA"); the agents and the activity record
+// are the Shell's own page.
+const SETTINGS = "settings:ai";
 const BLOCKED = {
   "emergency-stop": () => [t("assistantStoppedTitle"), t("assistantStoppedText"), "settings/settings.html#ai-agents-card"],
   "assistant-paused": () => [t("assistantPausedTitle"), t("assistantPausedText"), "settings/settings.html#ai-agents-card"],
-  "assistant-revoked": () => [t("assistantRevokedTitle"), t("err_assistant_revoked"), "settings/settings.html#ai-assistant"],
+  "assistant-revoked": () => [t("assistantRevokedTitle"), t("err_assistant_revoked"), SETTINGS],
 };
 
 function mode() {
@@ -937,8 +940,11 @@ $("moved-carry").addEventListener("click", async () => {
   await refreshThread();
   announce(t("assistantThreadCarried", [state.recipient]));
 });
-const openShell = page => browser.tabs.create({ url: browser.runtime.getURL(page) });
-$("open-settings").addEventListener("click", () => openShell("settings/settings.html#ai-assistant"));
+const openShell = page =>
+  page.startsWith("settings:") && browser.nulavioPersonalise?.openSettings
+    ? browser.nulavioPersonalise.openSettings(page.slice("settings:".length))
+    : browser.tabs.create({ url: browser.runtime.getURL(page.startsWith("settings:") ? "settings/settings.html#ai-assistant" : page) });
+$("open-settings").addEventListener("click", () => openShell(SETTINGS));
 $("resume-settings").addEventListener("click", event => openShell(event.currentTarget.dataset.page));
 $("open-activity").addEventListener("click", () => openShell("settings/settings.html#ai-activity-card"));
 $("allow-profile").addEventListener("click", () => ai.assistantAllow(true).then(render, e => announce(errorText(e), "error")));

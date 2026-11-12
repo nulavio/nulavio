@@ -15,6 +15,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
 import harness
+import settings_page
 
 # ADR 0011: what the settings page draws itself is gone from this page; its old address opens that page at this pane.
 MOVED = {
@@ -89,7 +90,7 @@ class SettingsPanesTest(unittest.TestCase):
         self.assertEqual(state["view"], "section")
         self.assertEqual(len(state["shown"]), 1, state)
         self.assertEqual(state["current"], state["shown"])  # the rail marks the section on screen
-        for address, section in (("#ai-assistant", "ai"), ("#integrations", "integrations"), ("#layout", "layout")):
+        for address, section in (("#ai-activity-card", "ai"), ("#integrations", "integrations"), ("#layout", "layout")):
             self.open(address)
             self.assertTrue(
                 harness.wait_until(lambda section=section: self.view()["shown"] == [section], 10), (address, self.view())
@@ -97,14 +98,16 @@ class SettingsPanesTest(unittest.TestCase):
             # Layout is drawn by the settings page too (ADR 0008): it still opens by its address, with no entry in the rail.
             self.assertEqual(self.view()["current"], [] if section == "layout" else [section])
         # A card's own address (the assistant panel links there) scrolls it into view.
-        self.open("#ai-assistant")
+        self.open("#ai-activity-card")
         harness.wait_until(lambda: self.view()["shown"] == ["ai"], 10)
-        top = self.m.execute("return document.getElementById('ai-assistant').getBoundingClientRect().top;")
+        top = self.m.execute("return document.getElementById('ai-activity-card').getBoundingClientRect().top;")
         self.assertLess(top, self.m.execute("return innerHeight;"))
 
     def test_01b_an_address_of_a_moved_section_opens_the_settings_page(self):
         where = lambda: self.m.chrome("return gBrowser.selectedBrowser.currentURI.spec;")  # noqa: E731
-        for address, pane in MOVED.items():
+        # The assistant's form moved out of a section that stays: its own address goes to the assistant's pane.
+        moved = {**MOVED, "#ai-assistant": settings_page.assistant_pane(self.m)}
+        for address, pane in moved.items():
             with self.subTest(address=address):
                 self.m.navigate("about:blank")
                 self.m.navigate(self.base + "settings/settings.html" + address)

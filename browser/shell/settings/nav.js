@@ -21,8 +21,11 @@ let active = null;
 // pane that holds it, in this tab.
 export const MOVED = ["appearance", "shortcuts", "search", "profiles", "routing", "passwords", "exceptions", "dns"];
 
+// A card that moved out of a section that stays: the assistant's form is in the settings page's "Assistente e IA".
+const MOVED_CARDS = { "ai-assistant": "ai" };
+
 function moved(id) {
-  return MOVED.find(section => id === section || id.startsWith(`${section}-`)) ?? null;
+  return MOVED_CARDS[id] ?? MOVED.find(section => id === section || id.startsWith(`${section}-`)) ?? null;
 }
 
 /** True when the address names a moved section: the settings page is opened in its place. */
