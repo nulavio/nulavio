@@ -26,6 +26,34 @@ return {
 };
 """
 
+# The engine's security cues of the address bar (the list of test_horizon 07, with the identity box): how each is
+# drawn, and where. Immersive must change none of them; it only takes the toolbar they sit in out of view.
+CUES = """
+const view = document.documentElement.getBoundingClientRect();
+return ["identity-box", "trust-icon-container", "tracking-protection-icon-container", "identity-permission-box",
+        "remote-control-box", "notification-popup-box"].map(id => {
+  const e = document.getElementById(id);
+  if (!e) return { id, missing: true };
+  const style = getComputedStyle(e), box = e.getBoundingClientRect();
+  return { id, display: style.display, visibility: style.visibility, opacity: style.opacity,
+           width: Math.round(box.width), height: Math.round(box.height),
+           inside: box.width > 0 && box.top >= view.top && box.bottom <= view.bottom };
+});
+"""
+# What the band says while the toolbar is away: who, how protected, which site, and what the engine thinks of the
+# connection (its own verdict: the identity box's classes).
+BAND = """
+const band = document.getElementById("nulavio-band");
+const text = name => {
+  const e = band.querySelector(`.nv-band-${name}`);
+  return e && e.checkVisibility() ? e.textContent.trim() : null;
+};
+const origin = band.querySelector(".nv-band-origin");
+return { name: text("name"), protection: text("protection"), host: text("origin-host"), state: text("origin-state"),
+         secure: origin.getAttribute("data-secure"), label: origin.getAttribute("aria-label"),
+         engine: [...document.getElementById("identity-box").classList] };
+"""
+
 
 @unittest.skipUnless(harness.nulavio_engine(), "Immersive needs the built-in Shell on the engine")
 class ImmersiveTest(unittest.TestCase):
@@ -227,6 +255,80 @@ class ImmersiveTest(unittest.TestCase):
         settings_page.click(self.m, "#nulavio-immersive")
         self.assertTrue(harness.wait_until(lambda: not self.m.chrome(pref), 10))
         self.assertTrue(self.settled(True)["toolbar"])
+
+    def test_09_the_security_cues_are_the_engines_with_the_mode_on(self):
+        """The security-visibility matrix with Immersive on (ADR 0009's accepted exception, issue #118). Out of view,
+        no cue is restyled and the band says who, how protected, which site and what the engine thinks of the
+        connection; back in view, every cue is drawn exactly as with the mode off."""
+
+        def cues() -> dict:
+            return {cue["id"]: cue for cue in self.m.chrome(CUES)}
+
+        def drawn(now: dict) -> dict:
+            return {name: (cue.get("display"), cue.get("visibility"), cue.get("opacity")) for name, cue in now.items()}
+
+        def sized(now: dict) -> dict:
+            return {name: (cue.get("width"), cue.get("height"), cue.get("inside")) for name, cue in now.items()}
+
+        # Off: the engine's own drawing, the reference.
+        self.m.chrome("Services.prefs.clearUserPref('nulavio.layout.immersive');")
+        self.assertTrue(self.settled(True)["toolbar"])
+        reference = cues()
+        self.assertTrue(reference["trust-icon-container"]["inside"], reference)
+        # On, the toolbar away: nothing about a cue changed (the toolbar is moved and made transparent as a whole),
+        # and the band carries what the address bar said.
+        self.m.chrome("Services.prefs.setBoolPref('nulavio.layout.immersive', true); gBrowser.selectedBrowser.focus();")
+        self.assertTrue(harness.wait_until(lambda: self.window()["on"], 10), self.window())
+        self.assertFalse(self.settled(False)["toolbar"])
+        self.assertEqual(drawn(cues()), drawn(reference))
+        band = self.m.chrome(BAND)
+        self.assertEqual(band["name"], "Imersivo", band)  # the profile
+        self.assertTrue(band["protection"], band)  # its protection, in words
+        self.assertEqual(band["host"], f"127.0.0.1:{self.server.port}", band)
+        self.assertIn("localResource", band["engine"], band)  # the engine's verdict for this page...
+        self.assertEqual((band["state"] or "", band["secure"]), ("", "true"), band)  # ...and the band's: no warning
+        # On, the toolbar back by the keyboard: every cue as with the mode off, same place and size.
+        self.m.chrome("document.getElementById('Browser:OpenLocation').doCommand();")
+        self.assertTrue(self.settled(True)["toolbar"])
+        back = cues()
+        self.assertEqual(drawn(back), drawn(reference))
+        self.assertEqual(sized(back), sized(reference))
+        self.m.chrome("gBrowser.selectedBrowser.focus();")
+        self.assertFalse(self.settled(False)["toolbar"])
+        # A connection the engine calls not secure (plain http to a name that is not this computer): with the
+        # toolbar away, the band says so in words, before the site's name.
+        host = "nulavio-plain.test"
+        self.m.chrome(
+            "Services.prefs.setStringPref('network.dns.localDomains', arguments[0]);"
+            "Services.prefs.setBoolPref('dom.security.https_only_mode', false);",
+            [host],
+        )
+        self.addCleanup(
+            self.m.chrome,
+            "for (const n of ['network.dns.localDomains', 'dom.security.https_only_mode']) Services.prefs.clearUserPref(n);",
+        )
+        self.m.navigate(f"http://{host}:{self.server.port}/page/Imersivo")
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome(BAND)["host"] == f"{host}:{self.server.port}", 10))
+        self.assertTrue(harness.wait_until(lambda: self.window()["on"], 10), self.window())
+        self.assertFalse(self.settled(False)["toolbar"])
+        plain = self.m.chrome(BAND)
+        self.assertIn("notSecure", plain["engine"], plain)
+        self.assertEqual(plain["secure"], "false", plain)
+        words = "return WebExtensionPolicy.getByID('shell@nulavio.net').extension.localizeMessage(...arguments);"
+        self.assertEqual(plain["state"], self.m.chrome(words, ["bandOriginNotSecure"]), plain)
+        self.assertIn(self.m.chrome(words, ["bandOriginNamedNotSecure", [plain["host"]]]), plain["label"], plain)
+        away = cues()
+        # And its warning in the address bar is the engine's, untouched, once the toolbar is back.
+        self.m.chrome("document.getElementById('Browser:OpenLocation').doCommand();")
+        self.assertTrue(self.settled(True)["toolbar"])
+        warned = cues()
+        self.assertTrue(warned["trust-icon-container"]["inside"], warned)
+        self.m.chrome("Services.prefs.clearUserPref('nulavio.layout.immersive');")
+        self.assertTrue(self.settled(True)["toolbar"])
+        off = cues()
+        self.assertEqual(drawn(away), drawn(off))
+        self.assertEqual(drawn(warned), drawn(off))
+        self.assertEqual(sized(warned), sized(off))
 
 
 if __name__ == "__main__":

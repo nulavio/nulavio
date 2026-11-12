@@ -48,7 +48,7 @@ Immersive hides the engine's tracking-protection and permission icons while the 
 
 This contradicts the letter of two current principles ("a layout never hides them", "there is no toolbar autohide"). **Recommendation: accept it for an opt-in mode, with the guarantees written into the principle** ("in Immersive the band carries the origin and the connection state; the toolbar is back by itself for every prompt, while a device is shared and whenever the band cannot name the page"). The alternative is option C, which Nulavio already ships, and the request stays unanswered.
 
-**Decided on 2026-11-12: accepted as recommended.** The two principle rows carry the exception and its guarantees. What the controller does not do yet (a pin for touch, tabs on top and on the right, the security-visibility matrix repeated with the mode on) is still to build, and the mode stays off by default.
+**Decided on 2026-11-12: accepted as recommended.** The two principle rows carry the exception and its guarantees. The security-visibility matrix is repeated with the mode on (`test_immersive` 09): with the toolbar away no cue of the address bar is restyled and the band says the profile, its protection, the site and, for a connection the engine calls not secure, that it is not; with the toolbar back every cue is drawn as with the mode off, in the same place and size. What the controller does not do yet (a pin for touch, tabs on top and on the right) is still to build (issue #118), and the mode stays off by default.
 
 ## Independent review (2026-11-11)
 
