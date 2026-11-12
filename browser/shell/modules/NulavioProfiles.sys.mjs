@@ -274,6 +274,12 @@ class NulavioProfilesClass {
         await engine(start);
       }
     };
+    // The engine's own pages delete the profile of their window through this.
+    const remove = service.deleteCurrentProfile.bind(service);
+    service.deleteCurrentProfile = async (...args) => {
+      await this.#keepOneUnprotected(service.currentProfile);
+      return remove(...args);
+    };
     try {
       await service.setDefaultProfileForGroup(); // the engine already ran its own, before any window
       if (!(await plain(service.currentProfile))) {
@@ -289,6 +295,20 @@ class NulavioProfilesClass {
       }
     } catch (e) {
       console.error("Nulavio Profiles: start-up profile", e);
+    }
+  }
+
+  /** A plain start needs a profile it can open without a password: while a protected profile exists, the last
+      unprotected one is not deleted. Without it every start made a new, empty profile outside the group. */
+  async #keepOneUnprotected(target) {
+    const plain = async profile => (await lazy.profileLockState(profile.path).catch(() => "plain")) === "plain";
+    if (!target || !(await plain(target))) {
+      return;
+    }
+    const others = (await this.#service.getAllProfiles()).filter(each => each.id !== target.id);
+    const states = await Promise.all(others.map(plain));
+    if (others.length && !states.includes(true)) {
+      fail("last-unprotected");
     }
   }
 
@@ -722,6 +742,7 @@ class NulavioProfilesClass {
     if (profile.id === this.#service.currentProfile?.id) {
       fail("is-current");
     }
+    await this.#keepOneUnprotected(profile);
     const lock = await lazy.profileLockState(profile.path);
     if (lock === "unlocked") {
       fail("unlocked"); // lock it first: its files are open
@@ -760,6 +781,9 @@ class NulavioProfilesClass {
       fail("unknown-page");
     }
     await this.ensureStore();
+    if (page === "delete") {
+      await this.#keepOneUnprotected(this.#service.currentProfile);
+    }
     this.#window().openTrustedLinkIn(page === "edit" ? "about:editprofile" : "about:deleteprofile", "tab");
   }
 

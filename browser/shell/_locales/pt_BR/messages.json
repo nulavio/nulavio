@@ -124,6 +124,7 @@
   "err_not_found": {"message": "Não encontrado. A lista foi atualizada."},
   "err_in_use": {"message": "Esse perfil está aberto. Feche as janelas dele e tente de novo."},
   "err_is_current": {"message": "Exclua o perfil em uso pela página dele."},
+  "err_last_unprotected": {"message": "Este é o único perfil sem senha, e o Nulavio inicia por um perfil sem senha. Crie outro perfil sem senha antes de apagar este."},
   "err_unexpected": {"message": "Algo deu errado. Nada foi alterado."},
   "profilesButton": {"message": "Perfis"},
   "profilesButtonNamed": {"message": "Perfil: $NAME$. Trocar de perfil", "placeholders": {"name": {"content": "$1"}}},

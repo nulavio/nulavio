@@ -835,6 +835,37 @@ class VaultUiTest(unittest.TestCase):
         self.assertEqual(self.start_entry(), (here, names), "a plain start made a profile")
         self.assertEqual(list(path.iterdir()), [])
 
+    def test_15_the_last_profile_without_a_password_stays_while_a_protected_one_exists(self):
+        """A plain start needs a profile it can open without a password. With only protected profiles left, every
+        start made a new, empty profile outside the group (seen on 160.0 after deleting the unprotected one from
+        inside a protected one). So the last unprotected profile is not deleted while a protected one exists: not
+        from Nulavio's settings, and not through the engine's own page for the profile of the window."""
+        listed = self.call("return (await P.list()).profiles.map(p => [p.encrypted, p.isCurrent]);")
+        self.assertEqual([encrypted for encrypted, current in listed if current], [False])
+        self.assertEqual(sum(not encrypted for encrypted, _ in listed), 1, "this session's profile is the only unprotected one")
+        self.assertTrue(any(encrypted for encrypted, _ in listed))
+        delete_tabs = (
+            "return gBrowser.tabs.filter(t => t.linkedBrowser.currentURI.spec.startsWith('about:deleteprofile')).length;"
+        )
+        for door in ("return P.openCurrentPage('delete');", "return SPS.deleteCurrentProfile();"):
+            with self.subTest(door=door), self.assertRaises(AssertionError) as refused:
+                self.call(door)
+            self.assertEqual(str(refused.exception), "last-unprotected")
+        self.assertEqual(self.m.chrome(delete_tabs), 0)
+        self.assertEqual(len(self.call("return (await P.list()).profiles;")), len(listed))
+        self.open_page("settings/settings.html")
+        self.assertIn("único perfil sem senha", self.m.execute("return browser.i18n.getMessage('err_last_unprotected');"))
+        # With another profile without a password, this one's delete page opens as before, and that other one can go.
+        other = self.call("return P.create({ name: 'Outro sem senha' });")
+        self.call("return P.openCurrentPage('delete');")
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome(delete_tabs) == 1, timeout=15))
+        self.m.chrome(
+            "for (const t of gBrowser.tabs.filter(t => t.linkedBrowser.currentURI.spec.startsWith('about:deleteprofile')))"
+            " gBrowser.removeTab(t, { skipPermitUnload: true });"
+        )
+        self.call("return P.remove(args[0]);", other)
+        self.assertEqual(len(self.call("return (await P.list()).profiles;")), len(listed))
+
 
 if __name__ == "__main__":
     unittest.main()
