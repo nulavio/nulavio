@@ -308,80 +308,148 @@ class GuardTest(unittest.TestCase):
                 "pref-changed:network.proxy.type",
             ],
         )
+        # A difference found while the browser runs: made outside it, or the browser's own doing?
+        outside = self.guard(
+            """
+            const ext = (version, active = true, foreign = false) => ({ name: "X", version, active, foreign, policy: false });
+            const added = (id, foreign) => ({ id: `extension-added:${id}`, kind: "extension-added", key: id,
+                                              after: ext("1.0", false, foreign) });
+            const changed = id => ({ id: `extension-changed:${id}`, kind: "extension-changed", key: id,
+                                     before: ext("1.0"), after: ext("2.0") });
+            const removed = id => ({ id: `extension-removed:${id}`, kind: "extension-removed", key: id, before: ext("1.0") });
+            const touched = new Set(["mine@x"]);
+            const is = (finding, onDisk) => G.constructor.madeOutside(finding, { onDisk, touched });
+            return {
+              placed: is(added("placed@x", true), false),          // another program placed it: always
+              installed: is(added("mine@x", false), true),         // installed in the browser
+              replaced: is(changed("theirs@x"), true),             // the engine found another file on disk
+              updated: is(changed("mine@x"), true),                // the browser updated it, whatever was found on disk
+              quiet: is(changed("theirs@x"), false),               // nothing found on disk: the browser's own doing
+              deleted: is(removed("theirs@x"), true),
+              uninstalled: is(removed("mine@x"), true),
+              bare: G.constructor.madeOutside(changed("theirs@x")),
+            };
+            """
+        )
+        self.assertEqual(
+            outside,
+            {"placed": True, "installed": False, "replaced": True, "updated": False, "quiet": False, "deleted": True,
+             "uninstalled": False, "bare": False},
+        )  # fmt: skip
         record = self.profile / "nulavio-guard.json"
         self.assertEqual(json.loads(record.read_text())["expected"], {}, "the record says what the engine holds: nothing now")
 
-        # The same through a real start, with a real extension in the profile.
+        def start_with(change) -> list:
+            """Close, let `change` edit the record as if the last session had left it so, and start again."""
+            self.session.stop()
+            data = json.loads(record.read_text())
+            change(data)
+            record.write_text(json.dumps(data))
+            self.m = type(self).m = self.session.restart()
+            return self.guard("return (await G.check()).findings;")
+
+        def later_window() -> str:
+            """What the bar says in a window opened now."""
+            return chrome_async(
+                self.m,
+                """
+                const win = OpenBrowserWindow();
+                let text = "";
+                for (let i = 0; i < 100 && !text; i++) {
+                  await new Promise(r => setTimeout(r, 100));
+                  text = win.gNotificationBox?.getNotificationWithValue("nulavio-guard")?.messageText?.textContent ?? "";
+                }
+                win.close();
+                return text;
+                """,
+            )
+
+        # The bar says what waits now. Two settings changed while closed: counted. One is settled: the bar names the
+        # one left, in this window and in one opened afterwards, and goes when nothing waits.
+        proxy, host = "pref-changed:network.proxy.type", "pref-changed:network.proxy.http"
+        findings = start_with(
+            lambda data: data["snapshot"]["prefs"].update({"network.proxy.type": 1, "network.proxy.http": "192.0.2.1"})
+        )
+        self.assertEqual({f["id"] for f in findings}, {proxy, host})
+        self.assertTrue(harness.wait_until(lambda: "2 mudanças" in self.bar(), timeout=30), self.bar())
+        self.guard("await G.resolve(args[0], 'keep');", host)
+        one = "uma mudança feita fora do Nulavio desde a última vez que ele rodou. Configuração de proteção alterada."
+        self.assertTrue(harness.wait_until(lambda: one in self.bar(), timeout=10), self.bar())
+        self.assertIn(one, later_window())
+        self.guard("await G.resolve(args[0], 'keep');", proxy)
+        self.assertTrue(harness.wait_until(lambda: self.bar() == "", timeout=10), "the bar stayed with nothing waiting")
+
+        # The rest needs a real extension in the profile.
         entry, xpi = cached_extension()
         if not xpi:
-            self.skipTest("no pinned extension in the local cache")
+            self.skipTest("no pinned extension in the local cache: the held update over real restarts was not tried")
+        placed = self.profile / "extensions" / entry.xpi_name
         self.session.stop()
-        (self.profile / "extensions").mkdir(exist_ok=True)
-        shutil.copyfile(xpi, self.profile / "extensions" / entry.xpi_name)
+        placed.parent.mkdir(exist_ok=True)
+        shutil.copyfile(xpi, placed)
         self.m = type(self).m = self.session.restart()
-        added = f"extension-added:{entry.id}"
+        added, changed, removed = (f"extension-{what}:{entry.id}" for what in ("added", "changed", "removed"))
+        waiting = lambda: [f["id"] for f in self.guard("return G.findings();")]  # noqa: E731
         # Nothing else changed while it was closed, so nothing else makes the Guard look again: the engine reads the
         # extensions folder after the start-up check, and the Guard has to hear that it did.
-        if not harness.wait_until(lambda: any(f["id"] == added for f in self.guard("return G.findings();")), 30):
+        if not harness.wait_until(lambda: added in waiting(), 30):
             data = json.loads(record.read_text())
             self.fail(f"the extension placed in the profile was not reported; the record: {data['snapshot']['extensions']}")
         self.guard("await G.resolve(args[0], 'keep');", added)
         version = self.guard("return (await AddonManager.getAddonByID(args[0])).version;", entry.id)
 
-        def start_as_if(seen: str, held: dict, settings: dict | None = None) -> list:
-            """The last session saw version `seen` (and `settings`) and noted `held`; this start finds the real ones."""
-            self.session.stop()
-            data = json.loads(record.read_text())
-            data["snapshot"]["extensions"][entry.id]["version"] = seen
-            data["snapshot"]["prefs"].update(settings or {})
-            data["expected"] = held
-            record.write_text(json.dumps(data))
-            self.m = type(self).m = self.session.restart()
-            return self.guard("return (await G.check()).findings;")
+        def start_as_if(seen: str, held: dict) -> list:
+            """The last session saw version `seen` and noted `held`; this start finds the real one."""
+
+            def change(data):
+                data["snapshot"]["extensions"][entry.id]["version"] = seen
+                data["expected"] = held
+
+            return start_with(change)
 
         # The engine held exactly this version and this file for this start: nothing to report, no bar.
-        digest = hashlib.sha256((self.profile / "extensions" / entry.xpi_name).read_bytes()).hexdigest()
+        digest = hashlib.sha256(placed.read_bytes()).hexdigest()
         self.assertEqual(start_as_if("0.0.1", {entry.id: {"version": version, "digest": digest}}), [])
         self.assertEqual(self.bar(), "")
         self.assertEqual(json.loads(record.read_text())["snapshot"]["extensions"][entry.id]["version"], version)
         # It held this version but another file: what is there now is not what the engine held. Reported.
         swapped = start_as_if("0.0.1", {entry.id: {"version": version, "digest": "0" * 64}})
-        self.assertEqual([f["id"] for f in swapped], [f"extension-changed:{entry.id}"])
-        self.guard("await G.resolve(args[0], 'keep');", f"extension-changed:{entry.id}")
+        self.assertEqual([f["id"] for f in swapped], [changed])
+        self.guard("await G.resolve(args[0], 'keep');", changed)
         # It held another version: what is there now did not come from the engine. Reported, and named in the bar.
         findings = start_as_if("0.0.1", {entry.id: {"version": "0.0.2", "digest": digest}})
-        self.assertEqual([f["id"] for f in findings], [f"extension-changed:{entry.id}"])
+        self.assertEqual([f["id"] for f in findings], [changed])
         self.assertTrue(harness.wait_until(lambda: "Nulavio Guard" in self.bar(), timeout=30), "no Guard bar")
         name = findings[0]["after"]["name"]
         self.assertIn(f"Extensão alterada: {name}", self.bar())
         self.assertIn("uma mudança", self.bar())
-        self.guard("await G.resolve(args[0], 'keep');", f"extension-changed:{entry.id}")
+        self.guard("await G.resolve(args[0], 'undo');", changed)  # undone: the extension is taken out
         self.assertTrue(harness.wait_until(lambda: self.bar() == "", timeout=10), "the bar stayed with nothing waiting")
+        self.assertTrue(harness.wait_until(lambda: not placed.exists(), timeout=10), "undone, and the file is still there")
 
-        # Two changes wait: the bar counts them. One is settled: the bar says what waits now, in this window and
-        # in one opened afterwards, and goes when nothing waits.
-        proxy = "pref-changed:network.proxy.type"
-        findings = start_as_if("0.0.1", {entry.id: {"version": "0.0.2", "digest": digest}}, {"network.proxy.type": 1})
-        self.assertEqual({f["id"] for f in findings}, {f"extension-changed:{entry.id}", proxy})
-        self.assertTrue(harness.wait_until(lambda: "2 mudanças" in self.bar(), timeout=30), self.bar())
-        self.guard("await G.resolve(args[0], 'keep');", proxy)
-        self.assertTrue(harness.wait_until(lambda: f"Extensão alterada: {name}" in self.bar(), timeout=10), self.bar())
-        later = chrome_async(
-            self.m,
+        # While the browser runs. Installed in the browser: its own doing, followed and not reported, even when the
+        # engine says at that moment that it took in something it found on disk.
+        self.guard(
             """
-            const win = OpenBrowserWindow();
-            let text = "";
-            for (let i = 0; i < 100 && !text; i++) {
-              await new Promise(r => setTimeout(r, 100));
-              text = win.gNotificationBox?.getNotificationWithValue("nulavio-guard")?.messageText?.textContent ?? "";
-            }
-            win.close();
-            return text;
+            const file = Cc["@mozilla.org/file/local;1"].createInstance(Ci.nsIFile);
+            file.initWithPath(args[0]);
+            await (await AddonManager.getInstallForFile(file)).install();
+            Services.obs.notifyObservers(null, "xpi-provider:database-updated");
             """,
+            str(xpi),
         )
-        self.assertIn(f"Extensão alterada: {name}", later)
-        self.assertIn("uma mudança", later)
-        self.guard("await G.resolve(args[0], 'undo');", f"extension-changed:{entry.id}")
+        followed = lambda: entry.id in json.loads(record.read_text())["snapshot"]["extensions"]  # noqa: E731
+        self.assertTrue(harness.wait_until(followed, timeout=10), "an extension installed in the browser is not in the record")
+        self.assertEqual(waiting(), [])
+        self.assertEqual(self.bar(), "")
+        # Its file deleted by another program: not the browser's doing. Reported at the Guard's next look, which a
+        # setting changed in the browser brings about, and not taken into the record unseen.
+        self.assertTrue(placed.exists(), "the engine keeps an installed extension somewhere else than expected")
+        placed.unlink()
+        self.m.chrome("Services.prefs.setBoolPref('signon.rememberSignons', true);")
+        self.assertTrue(harness.wait_until(lambda: removed in waiting(), timeout=20), waiting())
+        self.assertTrue(harness.wait_until(lambda: f"Extensão removida: {name}" in self.bar(), timeout=10), self.bar())
+        self.guard("await G.resolve(args[0], 'keep');", removed)
         self.assertTrue(harness.wait_until(lambda: self.bar() == "", timeout=10), "the bar stayed with nothing waiting")
 
 
