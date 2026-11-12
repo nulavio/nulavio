@@ -54,6 +54,26 @@ return { name: text("name"), protection: text("protection"), host: text("origin-
          engine: [...document.getElementById("identity-box").classList] };
 """
 
+# Hold the request for one address before it leaves, as a site that is slow to answer does; and let it go.
+HOLD = """
+const held = (window.nvHeld = { address: arguments[0], channel: null });
+window.nvHold = { observe(subject) {
+  const channel = subject.QueryInterface(Ci.nsIHttpChannel);
+  if (channel.URI.spec === held.address && !held.channel) { channel.suspend(); held.channel = channel; }
+} };
+Services.obs.addObserver(window.nvHold, "http-on-modify-request");
+"""
+RELEASE = """
+if (window.nvHold) { Services.obs.removeObserver(window.nvHold, "http-on-modify-request"); delete window.nvHold; }
+if (window.nvHeld?.channel) { window.nvHeld.channel.resume(); }
+delete window.nvHeld;
+"""
+# The selected tab: the address the engine shows for it, and the document that is really in it.
+DOCUMENT = """
+const browser = gBrowser.selectedBrowser;
+return { shown: browser.currentURI.spec, there: browser.browsingContext.currentWindowGlobal?.documentURI?.spec ?? null };
+"""
+
 
 @unittest.skipUnless(harness.nulavio_engine(), "Immersive needs the built-in Shell on the engine")
 class ImmersiveTest(unittest.TestCase):
@@ -329,6 +349,48 @@ class ImmersiveTest(unittest.TestCase):
         self.assertEqual(drawn(away), drawn(off))
         self.assertEqual(drawn(warned), drawn(off))
         self.assertEqual(sized(warned), sized(off))
+
+    def test_10_a_tab_being_restored_keeps_the_toolbar_until_its_document_is_there(self):
+        """ADR 0009, decision 6: a restored preference alone hides nothing. A tab that session restore left unloaded
+        shows its address as soon as it is selected, and its document only when the site answers: until then the
+        page is still about:blank, and the band would name a site that is not there. The toolbar stays."""
+        address = self.server.url("/page/Restaurada")
+        self.m.chrome(HOLD, [address])
+        self.addCleanup(self.m.chrome, RELEASE)
+        self.addCleanup(
+            self.m.chrome,
+            "gBrowser.selectedTab = gBrowser.tabs[0];"
+            " if (window.nvLazy) { gBrowser.removeTab(window.nvLazy); delete window.nvLazy; }",
+        )
+        self.m.chrome("window.nvLazy = gBrowser.addTrustedTab(arguments[0], { createLazyBrowser: true });", [address])
+        self.assertTrue(self.window()["on"], "an unloaded tab in the background changes nothing")
+        self.m.chrome("gBrowser.selectedTab = window.nvLazy;")
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome("return Boolean(window.nvHeld.channel);"), 15), "not asked for")
+        self.assertEqual(self.m.chrome(DOCUMENT), {"shown": address, "there": "about:blank"})
+        waiting = self.settled(True)
+        self.assertEqual((waiting["on"], waiting["off"], waiting["toolbar"]), (False, "page", True), waiting)
+        # The site answers: its document is there, the band names it, and the mode applies.
+        self.m.chrome("window.nvHeld.channel.resume(); window.nvHeld.channel = null;")
+        self.assertTrue(harness.wait_until(lambda: self.window()["on"], 15), self.window())
+        self.assertEqual(self.m.chrome(DOCUMENT), {"shown": address, "there": address})
+        self.assertEqual(self.m.chrome(BAND)["host"], f"127.0.0.1:{self.server.port}")
+
+    def test_11_an_error_page_keeps_the_full_window(self):
+        """An error page keeps the address of what failed, and the document is the engine's own page about it: the
+        band cannot say that site is what is on screen, so the toolbar stays."""
+        refused = "http://127.0.0.1:1/"  # nothing listens there
+        self.m.chrome(
+            "gBrowser.selectedBrowser.fixupAndLoadURIString(arguments[0],"
+            " {triggeringPrincipal: Services.scriptSecurityManager.getSystemPrincipal()});",
+            [refused],
+        )
+        failed = lambda: (self.m.chrome(DOCUMENT)["there"] or "").startswith("about:neterror")  # noqa: E731
+        self.assertTrue(harness.wait_until(failed, 15), self.m.chrome(DOCUMENT))
+        self.assertEqual(self.m.chrome(DOCUMENT)["shown"], refused)
+        state = self.settled(True)
+        self.assertEqual((state["on"], state["off"], state["toolbar"]), (False, "page", True), state)
+        self.m.navigate(self.page)
+        self.assertTrue(harness.wait_until(lambda: self.window()["on"], 10), self.window())
 
 
 if __name__ == "__main__":

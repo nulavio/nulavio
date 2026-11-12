@@ -719,7 +719,33 @@ class WindowUI {
     if (!this.#windows.get(win)?.named) {
       return "page"; // a document the band has no defined name for (about:blank, data:, blob:, view-source:)
     }
+    if (!this.#documentIsThere(win)) {
+      return "page"; // the address is shown before its document: a tab being restored, an error page
+    }
     return "";
+  }
+
+  /**
+   * Whether the document in the selected tab is the one its address names. The band names the address the
+   * engine shows, as the address bar does, and a tab being restored shows its address before its document is
+   * there (the page is still about:blank, for as long as the site takes to answer). An error page keeps the
+   * address of what failed. Until the document is that site's, the toolbar stays (ADR 0009, decision 6).
+   */
+  #documentIsThere(win) {
+    try {
+      const browser = win.gBrowser.selectedBrowser;
+      const shown = browser.currentURI;
+      const there = browser.browsingContext?.currentWindowGlobal?.documentURI;
+      if (!shown || !there) {
+        return false;
+      }
+      if (shown.schemeIs("http") || shown.schemeIs("https")) {
+        return there.scheme === shown.scheme && there.hostPort === shown.hostPort;
+      }
+      return there.spec.split(/[?#]/)[0] === shown.spec.split(/[?#]/)[0];
+    } catch {
+      return false; // not known: as if it were not there
+    }
   }
 
   #immersive(win) {
