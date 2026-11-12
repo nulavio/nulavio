@@ -248,6 +248,13 @@ class FirstRunStageTest(unittest.TestCase):
         answered = self.m.chrome(DNS)
         self.assertTrue(answered["chosen"])
         self.assertTrue(self.m.execute(back_shown))
+        # It is under the card on screen and after it in the page's order, so the keyboard meets it after the card's actions.
+        after_card = self.m.execute(
+            "const back = document.getElementById('firstrun-back'), card = document.getElementById('firstrun-passwords');"
+            "return [Boolean(card.compareDocumentPosition(back) & Node.DOCUMENT_POSITION_FOLLOWING),"
+            " back.getBoundingClientRect().top >= card.getBoundingClientRect().bottom];"
+        )
+        self.assertEqual(after_card, [True, True])
         # Back to DNS: the card is the question again, with the resolver in use checked; nothing changed by looking.
         self.back("dns-choice")
         checked = "return document.querySelector('#dns-options input:checked')?.value ?? null;"
