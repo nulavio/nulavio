@@ -7,6 +7,7 @@
 import { localize, t } from "../lib/i18n.js";
 import { TEMPLATE_NAMES, templateHintKey } from "../lib/names.js";
 import { clearCode, guardLeaving, printCode, showCode } from "../lib/recovery.js";
+import { wireSettingsLinks } from "../lib/settings.js";
 import { announce, chip, errorText, h } from "../lib/ui.js";
 import "../lib/moment.js";
 
@@ -201,8 +202,9 @@ function finish(event) {
     h("button", { class: "button button--primary", type: "button", text: t("vaultOpenProfile", [state.name]),
       // It was created locked: opening it goes through its unlock page, as in the profile menu and in Settings.
       onclick: () => vault.openUnlockPage(state.id).catch(e => announce(errorText(e), "error")) }),
-    h("a", { class: "button button--secondary", href: "../settings/settings.html#profiles", text: t("vaultToSettings") })
+    h("a", { class: "button button--secondary", href: "../settings/settings.html#profiles", dataset: { settings: "profiles" }, text: t("vaultToSettings") })
   );
+  wireSettingsLinks(byId("done-actions"));
   step("done");
 }
 

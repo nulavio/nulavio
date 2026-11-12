@@ -244,6 +244,15 @@ class WindowUI {
     }
   }
 
+  /** The settings page at the pane that holds `section` ("profiles", "routing"), in this window (ADR 0011). */
+  #settings(win, section) {
+    try {
+      ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioSettings.sys.mjs").NulavioSettings.openFor(win, section);
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
   #profiles(win) {
     const action = lazy.ExtensionParent.apiManager.global.browserActionFor?.(policy()?.extension);
     const placement = lazy.CustomizableUI.getPlacementOfWidget("shell_nulavio_net-browser-action");
@@ -266,9 +275,9 @@ class WindowUI {
     }
     const identity = button(doc, "nv-band-identity", () => this.#profiles(win));
     identity.append(element(doc, "span", "nv-band-flag"), element(doc, "span", "nv-band-name"));
-    const protection = button(doc, "nv-band-protection", () => this.#open(win, "settings/settings.html#profiles"));
+    const protection = button(doc, "nv-band-protection", () => this.#settings(win, "profiles"));
     // D-UX19: next to the profile, while this tab shows a site one of the group's rules sent here.
-    const route = button(doc, "nv-band-route", () => this.#open(win, "settings/settings.html#routing"));
+    const route = button(doc, "nv-band-route", () => this.#settings(win, "routing"));
     route.hidden = true;
     const header = element(doc, "span", "nv-band-header");
     // ADR 0009: the site of this tab, from the engine's own state, shown while the address bar is

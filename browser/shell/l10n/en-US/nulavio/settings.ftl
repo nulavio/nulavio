@@ -76,20 +76,26 @@ nulavio-here-none =
     .label = Default profile
     .description = This window was opened outside Nulavio's profile group.
 # One row per profile of the group. $name is the profile's name, chosen by the person; $here is "yes" for the
-# profile of this window.
+# profile of this window; $kind is "sensitive" for a profile made to clear itself every time it closes.
 nulavio-profile-plain =
     .label = { $name }
     .description =
         { $here ->
             [yes] This profile. No password.
            *[no] No password.
+        }{ $kind ->
+            [sensitive] { " " }Sensitive sites: cookies, site data, history and cache are deleted every time it closes.
+           *[other] { "" }
         }
 nulavio-profile-unlocked =
     .label = { $name }
     .description =
         { $here ->
-            [yes] This profile. Protected and unlocked.
-           *[no] Protected. Unlocked now.
+            [yes] This profile. Protected and unlocked: it locks again when you close its last window.
+           *[no] Protected. Unlocked now: it locks again when you close its last window.
+        }{ $kind ->
+            [sensitive] { " " }Sensitive sites: cookies, site data, history and cache are deleted every time it closes.
+           *[other] { "" }
         }
 nulavio-profile-locked =
     .label = { $name }

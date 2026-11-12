@@ -18,6 +18,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
 import harness
+import settings_page
 from fake_avahi import FAKE_BUSCTL
 from phone_link_ref import LinkedPhone
 from phone_reference import ReferencePhone
@@ -366,15 +367,11 @@ class VaultUiTest(unittest.TestCase):
         self.assertTrue(harness.wait_until(lambda: self.server.requests_to("/page/vault-opened"), timeout=60))
         # While it is open, Settings says when it locks again, next to "Lock now" (SB-14).
         self.m.switch_to(self.m.window_handles()[0])
-        self.m.navigate(self.base + "settings/settings.html#profiles")
-        note = harness.wait_until(
-            lambda: self.m.execute(
-                "return document.querySelector(`[data-profile-id='${arguments[0]}'] [data-relock]`)?.textContent ?? null;",
-                [profile_id],
-            ),
-            timeout=20,
+        settings_page.open_pane(self.m, "nulavioProfiles")
+        relocks = lambda found: any(  # noqa: E731
+            row["data"].get("profile") == str(profile_id) and "última janela" in (row["description"] or "") for row in found
         )
-        self.assertIn("última janela", note or "")
+        settings_page.wait_rows(self.m, "nulavio-profile-list", relocks, "moz-box-item.nulavio-profile", timeout=20)
         self.stop_instance(path)
         box = storage.Container(path)
         self.assertTrue(harness.wait_until(lambda: not box.mounted(), timeout=30), "not locked after the window closed")
@@ -464,28 +461,17 @@ class VaultUiTest(unittest.TestCase):
         self.assertTrue(shutil.which("gocryptfs"))  # sanity: the environment still has the tools
         # Settings: the locked profile offers "Unlock…" instead of "Open".
         self.m.switch_to(self.m.window_handles()[0])
-        self.m.navigate(self.base + "settings/settings.html#profiles")
-        self.assertTrue(
-            harness.wait_until(
-                lambda: self.m.execute(
-                    "return !!document.querySelector(`[data-focus-key='open-${arguments[0]}']`);", [locked["id"]]
-                ),
-                timeout=20,
-            )
-        )
-        label = self.m.execute(
-            "return document.querySelector(`[data-focus-key='open-${arguments[0]}']`).textContent;", [locked["id"]]
-        )
-        expected = self.m.execute("return browser.i18n?.getMessage?.('vaultUnlockButton') ?? null;")
-        self.assertTrue(label.endswith("…"), label)
-        if expected:
-            self.assertEqual(label, expected)
+        each = "moz-box-item.nulavio-profile"
+        mine = lambda found: [row for row in found if row["data"].get("profile") == str(locked["id"])]  # noqa: E731
+        drawn = lambda found: mine(found) and mine(found)[0]["description"]  # noqa: E731
+        settings_page.open_pane(self.m, "nulavioProfiles")
+        row = mine(settings_page.wait_rows(self.m, "nulavio-profile-list", drawn, each, 20))[0]
+        self.assertIn("bloqueado", row["description"])
+        unlock = row["buttons"][0]
+        self.assertEqual((unlock["action"], unlock["label"]), ("unlock", "Desbloquear…"))
         # The accessible name says the state and the action shown, not "Abrir" (SPA-10, SB-17).
-        name = self.m.execute(
-            "return document.querySelector(`[data-focus-key='open-${arguments[0]}']`).getAttribute('aria-label');", [locked["id"]]
-        )
-        self.assertEqual(name, "Cofre UI, bloqueado, desbloquear…")
-        self.assertIn(label.lower(), name.lower(), "WCAG 2.5.3: the visible label is in the name")
+        self.assertEqual(unlock["named"], "Cofre UI, bloqueado, desbloquear…")
+        self.assertIn(unlock["label"].lower(), unlock["named"].lower(), "WCAG 2.5.3: the visible label is in the name")
         # The same in the toolbar's profile selector, whose rows are buttons named by aria-label.
         self.m.navigate(self.base + "profiles/popup.html")
         popup = harness.wait_until(
@@ -499,16 +485,9 @@ class VaultUiTest(unittest.TestCase):
         self.assertTrue(popup, "locked profile missing from the selector")
         self.assertEqual(popup[0], "Cofre UI, bloqueado, desbloquear…")
         self.assertIn("Bloqueado", popup[1])  # the visible badge, now also in the name
-        self.m.navigate(self.base + "settings/settings.html#profiles")
-        self.assertTrue(
-            harness.wait_until(
-                lambda: self.m.execute(
-                    "return !!document.querySelector(`[data-focus-key='open-${arguments[0]}']`);", [locked["id"]]
-                ),
-                timeout=20,
-            )
-        )
-        self.shoot("settings-locked-profile", "#profiles-card")
+        settings_page.open_pane(self.m, "nulavioProfiles")
+        settings_page.wait_rows(self.m, "nulavio-profile-list", drawn, each, 20)
+        settings_page.shoot(self.m, self.shots, "settings-locked-profile")
         # Deleting a locked protected profile drops its keys, then the profile.
         path = self.profile_path(locked["id"])
         self.call("await P.remove(args[0]);", locked["id"])

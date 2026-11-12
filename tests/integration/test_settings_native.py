@@ -608,18 +608,16 @@ class NativeSettingsTest(unittest.TestCase):
             "return [...document.querySelectorAll('.settings-nav a[data-section]')].map(a => a.dataset.section);"
         )
         # What the settings page draws itself has no entry on a detail page (ADR 0008, ADR 0011).
-        for moved in ("layout", "appearance", "shortcuts", "profiles", "routing", "exceptions", "passwords", "search"):
+        for moved in ("layout", "appearance", "shortcuts", "profiles", "routing", "exceptions", "passwords", "search", "dns"):
             self.assertNotIn(moved, rail)
         self.assertEqual(self.m.execute("return document.getElementById('settings-back').textContent;"), "Configurações")
         self.m.send("WebDriver:ElementClick", {"id": self.m.find_element("#settings-back")})
         back = "about:preferences#nulavioIntegrations"
         self.assertTrue(harness.wait_until(lambda: self.m.chrome(where) == back, 15), self.m.chrome(where))
         self.assertEqual(self.m.chrome("return gBrowser.tabs.length;"), tabs)
-        # The old routing section, still there by its address, sends "Criar perfil" to the settings page too.
+        # An old address of the routing section (a bookmark, a tab left open) opens the settings page at its pane.
         shell = self.m.chrome("return WebExtensionPolicy.getByID('shell@nulavio.net').getURL('settings/settings.html#routing');")
         self.m.navigate(shell)
-        self.assertTrue(harness.wait_until(lambda: self.m.execute(ready), 20))
-        self.m.execute("document.querySelector('a[data-settings=\"profiles\"]').click();")
         self.assertTrue(
             harness.wait_until(lambda: self.m.chrome(where) == "about:preferences#nulavioProfiles", 15), self.m.chrome(where)
         )

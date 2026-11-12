@@ -188,7 +188,14 @@ class _Ids(HTMLParser):
 
 def page_ids(relative: str) -> _Ids:
     parser = _Ids()
-    parser.feed((SHELL / relative).read_text(encoding="utf-8"))
+    source = (SHELL / relative).read_text(encoding="utf-8")
+    if relative.endswith(".mjs"):
+        # The settings page's own controls (ADR 0011): an item of a group, { id: "…", …, controlAttrs: { "data-option": "…" } }.
+        for element, option in re.findall(r'\{ id: "([\w-]+)"[^{}]*controlAttrs: \{[^{}]*"data-option": "(\w+)"', source):
+            parser.by_id[element] = option
+        parser.marked = re.findall(r'"data-option": "(\w+)"', source)
+    else:
+        parser.feed(source)
     return parser
 
 
@@ -286,7 +293,7 @@ class OptionListTest(unittest.TestCase):
                 with self.subTest(location=location):
                     self.assertIn(element, parsed.by_id)
                     self.assertEqual(parsed.by_id[element], option["id"])
-        for page in ("settings/settings.html", "newtab/newtab.html", "profiles/popup.html"):
+        for page in ("settings/settings.html", "settings/native/panes.mjs", "newtab/newtab.html", "profiles/popup.html"):
             parsed = pages.setdefault(page, page_ids(page))
             for marked in parsed.marked:
                 self.assertIn(marked, declared, f"{page}: data-option={marked} is not in options.json")

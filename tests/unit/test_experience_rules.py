@@ -90,7 +90,8 @@ class ExperienceRulesTest(unittest.TestCase):
     def test_settings_links_go_to_the_one_page(self):
         # ADR 0008: "the settings" is about:preferences. A link of a Shell page to the old page as a whole, or to a
         # section the settings page draws itself, goes through the bridge (data-settings names the pane or section).
-        moved = re.compile(r"settings/settings\.html(#(layout|appearance|shortcuts)\b)?[\"']")
+        gone = "layout|appearance|shortcuts|search|profiles|routing|passwords|exceptions|dns"
+        moved = re.compile(rf"settings/settings\.html(#({gone})\b[\w-]*)?[\"']")
         for page in sorted(SHELL.rglob("*.html")):
             for line in page.read_text(encoding="utf-8").splitlines():
                 if "<a " in line and moved.search(line):
@@ -101,7 +102,12 @@ class ExperienceRulesTest(unittest.TestCase):
         )
         host = (SHELL / "modules/NulavioSettings.sys.mjs").read_text(encoding="utf-8")
         mapped = set(re.findall(r"^  ([a-z]+): \"", host.split("export const SECTIONS")[1].split("});")[0], flags=re.M))
-        self.assertEqual(sections, mapped, "every section of the old page names the pane it belongs to")
+        self.assertLessEqual(sections, mapped, "every section of the old page names the pane it belongs to")
+        # A section the settings page draws itself is gone from the old page; its address still opens the right pane.
+        nav = (SHELL / "settings/nav.js").read_text(encoding="utf-8")
+        redirected = set(re.findall(r'"([a-z]+)"', nav.split("export const MOVED = [")[1].split("]")[0]))
+        self.assertEqual(redirected, mapped - sections - {"layout", "appearance", "shortcuts"})
+        self.assertFalse(redirected & sections, "a section is either in the old page or sent to the settings page")
 
     def test_fluent_words_exist_in_both_languages(self):
         ids = {}

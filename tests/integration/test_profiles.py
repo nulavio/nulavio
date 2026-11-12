@@ -19,6 +19,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
 import harness
+import settings_page
 
 from marionette import MarionetteError
 
@@ -231,26 +232,21 @@ class ProfilesTest(unittest.TestCase):
 
     def test_08_settings_page_edits_and_deletes_with_confirmation(self):
         research = self.profiles("return P.create({templateId: 'research', name: 'Pesquisa'});")
-        self.m.navigate(self.shell_url + "settings/settings.html#profiles")
-        self.assertTrue(harness.wait_until(self.ready, timeout=15))
-        harness.wait_until(
-            lambda: self.m.execute("return document.querySelectorAll('#profile-list > li').length;") == 3, timeout=10
-        )
-        rows = self.m.execute(
-            "return [...document.querySelectorAll('#profile-list > li')].map(li => ({id: li.dataset.profileId,"
-            " current: Boolean(li.querySelector('.row__title .badge')),"
-            " buttons: [...li.querySelectorAll('.row__end button')].map(b => b.textContent)}));"
-        )
-        self.assertEqual(len(rows), 3)
-        self.assertEqual(sum(r["current"] for r in rows), 1, "the current profile is not marked")
+        # ADR 0011: the profiles are a list of the settings page; deleting asks in the engine's own prompt.
+        settings_page.open_pane(self.m, "nulavioProfiles")
+        each = "moz-box-item.nulavio-profile"
+        rows = settings_page.wait_rows(self.m, "nulavio-profile-list", lambda found: len(found) == 3, each)
+        self.assertEqual(sum("Este perfil" in (row["description"] or "") for row in rows), 1, "the current profile is not marked")
 
         # Delete asks first; cancelling keeps the profile.
-        self.m.send("WebDriver:ElementClick", {"id": self.m.find_element(f'[data-focus-key="delete-{research}"]')})
-        self.m.send("WebDriver:ElementClick", {"id": self.m.find_element('dialog button[value="cancel"]')})
+        settings_page.click_row(self.m, "nulavio-profile-list", str(research), "delete", each)
+        self.assertIn("apaga de vez", settings_page.wait_prompt(self.m))
+        settings_page.answer_prompt(self.m, False)
         time.sleep(0.5)
         self.assertIn("Pesquisa", self.listed())
-        self.m.send("WebDriver:ElementClick", {"id": self.m.find_element(f'[data-focus-key="delete-{research}"]')})
-        self.m.send("WebDriver:ElementClick", {"id": self.m.find_element('dialog button[value="confirm"]')})
+        settings_page.click_row(self.m, "nulavio-profile-list", str(research), "delete", each)
+        settings_page.wait_prompt(self.m)
+        settings_page.answer_prompt(self.m, True)
         harness.wait_until(lambda: "Pesquisa" not in self.listed(), timeout=10)
         self.assertNotIn("Pesquisa", self.listed())
         self.assertNotIn(str(research), json.loads(self.profiles("return SPS.getDBPref('nulavio.profiles.colors');")))
@@ -314,10 +310,13 @@ class ProfilesTest(unittest.TestCase):
         finally:
             self.close_instance(other, path)
 
-        self.m.navigate(self.shell_url + "settings/settings.html#profiles")
-        self.assertTrue(harness.wait_until(self.ready, timeout=15))
-        hint = f'#profile-list > li[data-profile-id="{sensitive}"] [data-kind="sensitive"]'
-        self.assertTrue(harness.wait_until(lambda: self.m.execute(f"return Boolean(document.querySelector('{hint}'));"), 10))
+        # The settings page says what this profile does when it closes, on its row.
+        settings_page.open_pane(self.m, "nulavioProfiles")
+        says = lambda found: any(  # noqa: E731
+            row["data"].get("profile") == str(sensitive) and "apagados sempre que ele fecha" in (row["description"] or "")
+            for row in found
+        )
+        settings_page.wait_rows(self.m, "nulavio-profile-list", says, "moz-box-item.nulavio-profile")
 
     def test_12_create_sheet_fills_and_creates_only_on_submit(self):
         """UX4 (audit SPA-09): "Novo perfil…" opens a sheet; a template only fills it."""
@@ -406,41 +405,6 @@ class ProfilesTest(unittest.TestCase):
         finally:
             for profile_id in made:
                 self.profiles("await P.remove(args[0]);", profile_id)
-
-    def test_14_the_icon_grid_follows_the_colour_and_saves(self):
-        """Visual audit (icons): a profile's icon is chosen on a grid of glyph tiles; the chosen tile wears the
-        colour chosen next to it, before saving, and "Salvar" keeps both."""
-        made = self.profiles("return P.create({name: 'Grade', avatar: 'leaf', color: 'sky'});")
-        try:
-            self.m.navigate(self.shell_url + "settings/settings.html#profiles")
-            self.assertTrue(harness.wait_until(self.ready, timeout=15))
-            row = f'#profile-list > li[data-profile-id="{made}"]'
-            found = f"return Boolean(document.querySelector('{row} details'));"
-            self.assertTrue(harness.wait_until(lambda: self.m.execute(found), 10))
-            self.m.execute(f"document.querySelector('{row} details').open = true;")
-            grid = f"{row} .swatches--glyphs"
-            self.assertEqual(
-                self.m.execute(GRID, [grid, "sky"]),
-                {"legend": "Ícone", "count": 14, "named": True, "glyphs": 14, "chosen": "leaf", "tinted": True, "quiet": True},
-            )
-            click = lambda selector: self.m.send("WebDriver:ElementClick", {"id": self.m.find_element(f"{row} {selector}")})  # noqa: E731
-            click('label:has(> input[name="color"][value="coral"])')
-            self.assertTrue(self.m.execute(GRID, [grid, "coral"])["tinted"], "the chosen icon kept the old colour")
-            click('label:has(> input[name="avatar"][value="star"])')
-            self.assertEqual(self.m.execute(GRID, [grid, "coral"])["chosen"], "star")
-            # Another profile changes meanwhile (another window): the list is drawn again and the
-            # unsaved choices stay.
-            other = self.profiles("return P.create({name: 'Outro'});")
-            time.sleep(1.5)
-            kept = self.m.execute(GRID, [grid, "coral"])
-            self.assertEqual((kept["chosen"], kept["tinted"]), ("star", True), kept)
-            self.profiles("await P.remove(args[0]);", other)
-            time.sleep(1)
-            click('form button[type="submit"]')
-            saved = lambda: {k: self.listed()["Grade"][k] for k in ("avatar", "color")}  # noqa: E731
-            self.assertTrue(harness.wait_until(lambda: saved() == {"avatar": "star", "color": "coral"}, 10), saved())
-        finally:
-            self.profiles("await P.remove(args[0]);", made)
 
 
 if __name__ == "__main__":

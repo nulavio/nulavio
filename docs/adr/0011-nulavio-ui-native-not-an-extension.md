@@ -202,3 +202,19 @@ What is a setting went into the "Assistente e IA" pane; what is a moment of cons
 
 Still to do: the old page keeps its own copies of the stop switch and of the assistant's form until its sections are removed.
 
+## Step 11 (2026-11-12): the old page loses what the settings page draws
+
+Branch `agent/claude/refactor-settings-old-sections`.
+
+![A profile made for sensitive sites says on its row what it does when it closes (pt-BR light, en-US dark)](../design/screenshots/experience-2026-11/settings-old-sections-sheet.png)
+
+Six sections of the Shell's own page were still reachable by their address after steps 1 to 9, each a second copy of something the settings page draws: search, profiles, routing, passwords, site exceptions and DNS. They are removed, with their script (about 850 lines of `settings/settings.js`) and their 61 messages in each language.
+
+- **An old address still answers.** `settings/settings.html#routing` (a bookmark, a tab left open, a link not yet rewritten) opens the settings page at the pane that holds it, in the same tab (`MOVED` in `settings/nav.js`, which `SECTIONS` in `NulavioSettings.sys.mjs` resolves). The address is replaced first, so going back lands on what the old page still holds and not on a second redirect.
+- **What linked there goes straight to the settings page**: the band's protection and route buttons (`NulavioWindow`), "Gerenciar perfis" in the profile menu, "Editar regras" on the routing question and on the blocked page, and the link shown after a protected profile is created. A unit test keeps a Shell page from linking to a moved section without the bridge.
+- **Two things the old list said and the new one did not** are said by the profile's row now, read from the same module: that a "sensitive sites" profile clears itself every time it closes (`kind`, which a locked profile cannot give, so a locked row says nothing about it), and that an unlocked protected profile locks again when its last window closes.
+- **The fallback destination** is declared in `shared/options.json` at its new place (`settings/native/panes.mjs#nulavio-routing-fallback`, whose control carries the same `data-option`), and `test_personalisation` reads that file as it reads the pages.
+- **Tests** that drove the old sections drive the settings page through one shared helper (`tests/lib/settings_page.py`): the DNS choice end to end against the local resolver, a tracking exception listed and removed, the password managers and the confirmed look-alike sites, an engine added, the routing rules, the in-page switch, the default destination and its deleted profile, deleting a profile with the engine's prompt, the colour migration, a temporary session, a locked and an unlocked protected profile. Two tests were of the old forms only and went with them (the alias field, the icon grid: `test_settings_search` and `test_settings_profiles` cover what replaced them); the alias rule itself is still tested on the module.
+
+What the old page still holds: the agents (connecting one, permissions, consent, activity), the desktop integrations, and, until the next steps, Layout, Aparência and Atalhos by their address and its own copies of the emergency stop and of the assistant's form.
+

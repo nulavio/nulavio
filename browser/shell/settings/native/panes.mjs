@@ -536,7 +536,8 @@
         control: "moz-box-item",
         l10nId: PROFILE_ROW(profile),
         // The name is the person's own text: it goes in as a Fluent argument, never as markup.
-        l10nArgs: { name: profile.name || "", here: profile.isCurrent ? "yes" : "no" },
+        // `kind` is what the profile's own files say ("sensitive": cleared when it closes); a locked one cannot be read, and says nothing.
+        l10nArgs: { name: profile.name || "", here: profile.isCurrent ? "yes" : "no", kind: profile.kind === "sensitive" ? "sensitive" : "plain" },
         iconSrc: avatarIcon(profile.avatar),
         controlAttrs: { class: `nulavio-profile nulavio-profile-${profile.color}`, layout: "medium-icon", "data-profile": keyOf(profile) },
         options: actions,
@@ -1989,7 +1990,7 @@
           ...routingBars.slice(2),
           { id: "nulavio-routing-enabled", control: "moz-toggle" },
           { id: "nulavio-routing-in-page", control: "moz-toggle" },
-          { id: "nulavio-routing-fallback", control: "moz-select" },
+          { id: "nulavio-routing-fallback", control: "moz-select", controlAttrs: { "data-option": "routingFallback" } }, // shared/options.json
           routingBars[1],
           { id: "nulavio-routing-rules", control: "moz-box-group" },
         ],

@@ -1,5 +1,5 @@
 /* Settings in two panes (UX4, audit SPA-04/05): the rail shows one section per address
-   (#dns, #routing… keep working, as do addresses of a card inside a section), marks it with
+   (#ai, #integrations…, as do addresses of a card inside a section), marks it with
    aria-current, and filters the cards of every section by what they say. Sections stay
    [hidden] while their feature is unavailable; the rail hides their entries too. */
 
@@ -15,6 +15,27 @@ const listed = new Set(links.map(link => link.dataset.section));
 const search = document.getElementById("settings-search");
 const results = document.getElementById("settings-results");
 let active = null;
+
+// ADR 0011: the sections the settings page draws itself are gone from this page. An address of one of them
+// (#routing, #profiles-new: a bookmark, a tab left open, a link not yet rewritten) opens that page at the
+// pane that holds it, in this tab.
+export const MOVED = ["search", "profiles", "routing", "passwords", "exceptions", "dns"];
+
+function moved(id) {
+  return MOVED.find(section => id === section || id.startsWith(`${section}-`)) ?? null;
+}
+
+/** True when the address names a moved section: the settings page is opened in its place. */
+function leaveIfMoved() {
+  const section = moved(location.hash.slice(1));
+  if (!section) {
+    return false;
+  }
+  // Going back from the settings page then lands on what this page still holds, not on a second redirect.
+  history.replaceState(null, "", location.pathname);
+  openSettings(section, { replace: true }).catch(console.error);
+  return true;
+}
 
 /** Lower case without accents, so "resolvedor" finds "Resolvedor" and "seguranca" finds "segurança". */
 export function fold(text) {
@@ -140,6 +161,7 @@ export function setUpNav() {
   // A link of this page to something the settings page draws itself ("Criar perfil", in the routing rules).
   wireSettingsLinks(main);
   syncLinks();
+  leaveIfMoved();
   show(location.hash.slice(1));
   // A section becomes available after its feature answers: offer it, and show it if it was asked for.
   const sectionsChanged = new MutationObserver(() => {
@@ -167,6 +189,7 @@ export function setUpNav() {
     }
   }).observe(main, { subtree: true, childList: true, attributes: true, attributeFilter: ["hidden"] });
   window.addEventListener("hashchange", () => {
+    leaveIfMoved();
     search.value = "";
     filter();
     show(location.hash.slice(1), { focus: true });

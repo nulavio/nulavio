@@ -312,7 +312,7 @@ class SettingsProfilesTest(unittest.TestCase):
             return { ...list, profiles: [
               { ...here, encrypted: true, locked: false },
               { ...others[0], encrypted: true, locked: true },
-              { ...others[1], encrypted: true, locked: false },
+              { ...others[1], encrypted: true, locked: false, kind: "sensitive" },
             ] };
           };
         """
@@ -320,7 +320,14 @@ class SettingsProfilesTest(unittest.TestCase):
         self.addCleanup(self.m.chrome, P + "delete P.list;")
         now = self.open()
         self.assertEqual(self.row(now, "Pessoal")["buttons"], ["lock-here", "methods", "edit", "delete-here"])
-        self.assertEqual(self.row(now, "Pessoal")["state"], "Este perfil. Protegido e desbloqueado.")
+        relocks = "volta a bloquear quando você fechar a última janela dele."
+        self.assertEqual(self.row(now, "Pessoal")["state"], f"Este perfil. Protegido e desbloqueado: {relocks}")
+        # One made for sensitive sites says what it does when it closes; a locked one cannot be read, and says nothing of it.
+        self.assertEqual(
+            self.row(now, "Trabalho")["state"],
+            f"Protegido. Desbloqueado agora: {relocks} "
+            "Sites sensíveis: cookies, dados de sites, histórico e cache são apagados sempre que ele fecha.",
+        )
         self.assertEqual(self.row(now, "Bancos")["buttons"], ["unlock", "methods", "edit", "delete"])
         self.assertEqual(self.row(now, "Bancos")["state"], "Protegido e bloqueado: criptografado no disco.")
         self.assertEqual(self.row(now, "Bancos")["names"][0], "Bancos, bloqueado, desbloquear…")
