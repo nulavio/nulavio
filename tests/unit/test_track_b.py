@@ -22,6 +22,7 @@ sys.path.insert(0, str(ROOT / "scripts" / "upstream"))
 import apply_patches  # noqa: E402
 import fetch_firefox_l10n  # noqa: E402
 import make_distribution  # noqa: E402
+import refresh_extensions_lock  # noqa: E402
 
 MOZCONFIG = ROOT / "browser" / "build" / "mozconfig"
 BRANDING = ROOT / "browser" / "branding" / "nulavio"
@@ -313,7 +314,20 @@ class DistributionTest(unittest.TestCase):
         self.assertNotIn("*", settings, "do not block user-installed extensions by default")
 
     UBLOCK = "uBlock0@raymondhill.net"
-    DEFAULT_ON = frozenset({"fanboy-cookiemonster", "ublock-cookies-easylist"})  # EasyList and uBlock filters: cookie notices
+    # What Helium switches on, of uBlock Origin's own lists: cookie, newsletter and notification notices, uBlock's
+    # annoyances, AdGuard's ads list and tracking parameters in addresses.
+    DEFAULT_ON = frozenset(
+        {
+            "adguard-generic",
+            "adguard-spyware-url",
+            "adguard-cookies",
+            "fanboy-cookiemonster",
+            "ublock-cookies-easylist",
+            "easylist-newsletters",
+            "easylist-notifications",
+            "ublock-annoyances",
+        }
+    )
 
     def bootstrap_address(self) -> str:
         managed = make_distribution.policies()["policies"]["3rdparty"]["Extensions"]
@@ -359,6 +373,22 @@ class DistributionTest(unittest.TestCase):
         with zipfile.ZipFile(package) as archive:
             self.assertEqual(archive.read("assets/assets.json"), raw)
             self.assertEqual(archive.read("LICENSE.txt").decode("utf-8"), licence)
+            # The pinned package still has what the default lists rest on (dependency-updates.md).
+            self.assertEqual(refresh_extensions_lock.bootstrap_report(archive), [])
+
+    def test_a_package_that_changed_what_the_default_rests_on_is_reported(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "changed.xpi"
+            with zipfile.ZipFile(path, "w") as archive:
+                for name, markers in refresh_extensions_lock.BOOTSTRAP_MARKERS.items():
+                    if name != "js/assets.js":  # one file gone, one marker gone
+                        archive.writestr(name, "\n".join(markers[1:] if name == "js/storage.js" else markers))
+            with zipfile.ZipFile(path) as archive:
+                report = refresh_extensions_lock.bootstrap_report(archive)
+        self.assertEqual(
+            report,
+            ["js/storage.js: µb.assetsBootstrapLocation = data.assetsBootstrapLocation;", "js/assets.js: the file is gone"],
+        )
 
     def test_a_stale_default_stops_the_build(self):
         config = json.loads(make_distribution.CONTENT_FILTER.read_text(encoding="utf-8"))

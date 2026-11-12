@@ -102,6 +102,32 @@ skopeo inspect --format '{{.Digest}}' docker://docker.io/library/ubuntu:26.10
 
 Put the digest after the tag in the Containerfiles (the same digest for the same tag), run the unit tests, and run `check_rpm.sh` and `check_deb.sh` (or `rehearse_release.sh`).
 
+## uBlock Origin's default lists
+
+A new profile starts with the lists of `browser/distribution/content-filter.json` switched on in uBlock Origin ([how](../architecture/extension-model.md#the-lists-a-new-profile-starts-with)). That rests on uBlock Origin's own code, which Nulavio does not control: an older managed setting (`adminSettings.assetsBootstrapLocation`), the rule that only `scheme://` is an external address, and the way `off` decides what a new profile selects. The policy always installs the **pinned** version first, so what ships is what was tested; the risk is in moving the pin.
+
+**How it is noticed, in the order it would happen:**
+
+1. `refresh_extensions_lock.py` reads the new package for that code and prints `! THE DEFAULT LISTS MAY NO LONGER APPLY`, naming the file and the line that is gone (`BOOTSTRAP_MARKERS`). It also says when a default list is gone or already on upstream.
+2. `tests/unit/test_track_b.py` fails on the same reading when the pinned package is in the local cache, and the build stops when the registry copy is not the pinned version's.
+3. `tests/integration/test_content_filter.py` starts a new profile with the real package: this is the proof. Run it on every change of uBlock Origin's pin.
+
+**If it broke, nothing is unprotected:** a new profile gets uBlock Origin's own defaults (ads, trackers, malware), without the extra lists. A profile that already exists is never touched by this mechanism.
+
+**What to do, first that fits:**
+
+| What changed | What to do |
+|---|---|
+| A default list was renamed or removed upstream | Edit `default_on` in `content-filter.json` (the registry copy names the lists of the pinned version) |
+| A default list is on by default upstream now | Remove it from `default_on`; the build asks for that |
+| The address is no longer loaded (the rule for external addresses, or the cache token, changed in `js/assets.js`) | Read `assets.fetchText` and `getAssetSourceRegistry` in the new package and adjust `registry_address` in `scripts/build/make_distribution.py`; its unit test states the form expected |
+| `off` no longer decides the selection (`autoSelectRegionalFilterLists`, the `assets.json-updated` handler in `js/storage.js`) | Read both in the new package. The registry must mark a list so that a new profile selects it **and** a later registry update does not take it for a stock default; if no value of `off` does both, treat it as the next row |
+| `assetsBootstrapLocation` is gone, or no change above fits | Keep the pin where it is (the daily watch allows 30 days) and ask upstream for a supported default (below). If the pin must move, set `default_on` to `[]`: the build then ships no managed setting, and the row in Settings that opens uBlock Origin's lists is how a person switches them on |
+
+**Never** use `toOverwrite.filterLists` or `adminSettings.selectedFilterLists` as the fix: they replace the person's selection at every start (a unit test refuses any managed key but the registry's address).
+
+**The lasting fix is upstream's**: a managed key that adds lists to a new profile's selection without overwriting it later (the counterpart of `toAdd.trustedSiteDirectives` for filter lists). Asking for it is the maintainer's to do; until it exists, the steps above are the procedure.
+
 ## Settings only the maintainer can change
 
 Everything above works without them; they add GitHub's own alerts (free on private repositories, also on the Free plan):

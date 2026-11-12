@@ -55,12 +55,47 @@ def query(guid: str) -> dict:
     }
 
 
+# What the default lists rest on inside uBlock Origin (scripts/build/make_distribution.py, `registry_address`): the
+# code that reads the registry's address from the managed settings, the rule for what counts as an external address,
+# and the two places that decide from `off` which lists a new profile selects and which a registry update reconciles.
+# Read as text from the package, so a new version that changed one of them is seen before anything is built.
+BOOTSTRAP_MARKERS = {
+    "managed_storage.json": ['"adminSettings"'],
+    "js/storage.js": [
+        "µb.assetsBootstrapLocation = data.assetsBootstrapLocation;",
+        "if ( list.off !== true ) {",
+        "const newDefaultListset = new Set(newDict['assets.json'].defaultListset || []);",
+    ],
+    "js/assets.js": [
+        "µb.assetsBootstrapLocation || µb.assetsJsonPath",
+        "const reIsExternalPath = /^(?:[a-z-]+):\\/\\//;",
+        ".filter(a => a[1].content === 'filters' && a[1].off === undefined)",
+    ],
+}
+
+
+def bootstrap_report(package: zipfile.ZipFile) -> list[str]:
+    """What the default lists rest on and this package no longer has, as "file: text". Empty when all is there."""
+    missing = []
+    for name, markers in BOOTSTRAP_MARKERS.items():
+        try:
+            text = package.read(name).decode("utf-8")
+        except KeyError:
+            missing.append(f"{name}: the file is gone")
+            continue
+        missing += [f"{name}: {marker}" for marker in markers if marker not in text]
+    return missing
+
+
 def refresh_registry() -> None:
     """Copy the list registry and the licence out of the pinned, hash-verified uBlock Origin package."""
     config = json.loads(CONTENT_FILTER.read_text(encoding="utf-8"))
     entry = extensions.load_lock()[config["extension"]]
     with zipfile.ZipFile(extensions.fetch(entry)) as package:
         raw, licence = package.read("assets/assets.json"), package.read("LICENSE.txt")
+        for line in bootstrap_report(package):
+            print(f"    ! THE DEFAULT LISTS MAY NO LONGER APPLY in {entry.version}: {line}")
+            print("      see docs/security/dependency-updates.md (uBlock Origin's default lists) and run test_content_filter.py")
     registry = json.loads(raw)
     for key in config["default_on"]:
         listed = registry.get(key)
