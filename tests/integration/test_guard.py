@@ -10,6 +10,7 @@ module with no reader, a pinned extension from the launcher's own cache.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import shutil
@@ -280,11 +281,18 @@ class GuardTest(unittest.TestCase):
               changed("other@x", ext("1.0"), ext("2.1")),                // another version than the one held
               changed("on@x", ext("1.0", false), ext("2.0", true)),      // the held version, but also turned on while closed
               changed("unknown@x", ext("1.0"), ext("2.0")),              // nothing was held for it
+              changed("swapped@x", ext("1.0"), ext("2.0")),              // the held version, but not the file the engine held
+              changed("unread@x", ext("1.0"), ext("2.0")),               // the held version, and no digest to compare
+              changed("old@x", ext("1.0"), ext("2.0")),                  // a record that only names the version
               { id: "extension-added:held@x", kind: "extension-added", key: "held@x", after: ext("2.0") },
               { id: "pref-changed:network.proxy.type", kind: "pref-changed", key: "network.proxy.type", before: null, after: 1 },
             ];
-            const expected = { "held@x": "2.0", "other@x": "2.0", "on@x": "2.0" };
-            return G.constructor.withoutHeldUpdates(findings, expected).map(f => f.id);
+            const kept = (version, digest) => ({ version, digest });
+            const expected = { "held@x": kept("2.0", "aa"), "other@x": kept("2.0", "aa"), "on@x": kept("2.0", "aa"),
+                               "swapped@x": kept("2.0", "aa"), "unread@x": kept("2.0", null), "old@x": "2.0" };
+            const installed = { "held@x": "aa", "other@x": "aa", "on@x": "aa", "swapped@x": "bb", "unread@x": null,
+                                "old@x": "aa" };
+            return G.constructor.withoutHeldUpdates(findings, expected, installed).map(f => f.id);
             """
         )
         self.assertEqual(
@@ -293,6 +301,9 @@ class GuardTest(unittest.TestCase):
                 "extension-changed:other@x",
                 "extension-changed:on@x",
                 "extension-changed:unknown@x",
+                "extension-changed:swapped@x",
+                "extension-changed:unread@x",
+                "extension-changed:old@x",
                 "extension-added:held@x",
                 "pref-changed:network.proxy.type",
             ],
@@ -309,32 +320,69 @@ class GuardTest(unittest.TestCase):
         shutil.copyfile(xpi, self.profile / "extensions" / entry.xpi_name)
         self.m = type(self).m = self.session.restart()
         added = f"extension-added:{entry.id}"
-        self.assertTrue(harness.wait_until(lambda: any(f["id"] == added for f in self.guard("return G.findings();")), 30))
+        # Nothing else changed while it was closed, so nothing else makes the Guard look again: the engine reads the
+        # extensions folder after the start-up check, and the Guard has to hear that it did.
+        if not harness.wait_until(lambda: any(f["id"] == added for f in self.guard("return G.findings();")), 30):
+            data = json.loads(record.read_text())
+            self.fail(f"the extension placed in the profile was not reported; the record: {data['snapshot']['extensions']}")
         self.guard("await G.resolve(args[0], 'keep');", added)
         version = self.guard("return (await AddonManager.getAddonByID(args[0])).version;", entry.id)
 
-        def start_as_if(seen: str, held: dict) -> list:
-            """The last session saw version `seen` and noted `held`; this start finds the real one."""
+        def start_as_if(seen: str, held: dict, settings: dict | None = None) -> list:
+            """The last session saw version `seen` (and `settings`) and noted `held`; this start finds the real ones."""
             self.session.stop()
             data = json.loads(record.read_text())
             data["snapshot"]["extensions"][entry.id]["version"] = seen
+            data["snapshot"]["prefs"].update(settings or {})
             data["expected"] = held
             record.write_text(json.dumps(data))
             self.m = type(self).m = self.session.restart()
             return self.guard("return (await G.check()).findings;")
 
-        # The engine held exactly this version for this start: nothing to report, no bar.
-        self.assertEqual(start_as_if("0.0.1", {entry.id: version}), [])
+        # The engine held exactly this version and this file for this start: nothing to report, no bar.
+        digest = hashlib.sha256((self.profile / "extensions" / entry.xpi_name).read_bytes()).hexdigest()
+        self.assertEqual(start_as_if("0.0.1", {entry.id: {"version": version, "digest": digest}}), [])
         self.assertEqual(self.bar(), "")
         self.assertEqual(json.loads(record.read_text())["snapshot"]["extensions"][entry.id]["version"], version)
+        # It held this version but another file: what is there now is not what the engine held. Reported.
+        swapped = start_as_if("0.0.1", {entry.id: {"version": version, "digest": "0" * 64}})
+        self.assertEqual([f["id"] for f in swapped], [f"extension-changed:{entry.id}"])
+        self.guard("await G.resolve(args[0], 'keep');", f"extension-changed:{entry.id}")
         # It held another version: what is there now did not come from the engine. Reported, and named in the bar.
-        findings = start_as_if("0.0.1", {entry.id: "0.0.2"})
+        findings = start_as_if("0.0.1", {entry.id: {"version": "0.0.2", "digest": digest}})
         self.assertEqual([f["id"] for f in findings], [f"extension-changed:{entry.id}"])
         self.assertTrue(harness.wait_until(lambda: "Nulavio Guard" in self.bar(), timeout=30), "no Guard bar")
         name = findings[0]["after"]["name"]
         self.assertIn(f"Extensão alterada: {name}", self.bar())
         self.assertIn("uma mudança", self.bar())
+        self.guard("await G.resolve(args[0], 'keep');", f"extension-changed:{entry.id}")
+        self.assertTrue(harness.wait_until(lambda: self.bar() == "", timeout=10), "the bar stayed with nothing waiting")
+
+        # Two changes wait: the bar counts them. One is settled: the bar says what waits now, in this window and
+        # in one opened afterwards, and goes when nothing waits.
+        proxy = "pref-changed:network.proxy.type"
+        findings = start_as_if("0.0.1", {entry.id: {"version": "0.0.2", "digest": digest}}, {"network.proxy.type": 1})
+        self.assertEqual({f["id"] for f in findings}, {f"extension-changed:{entry.id}", proxy})
+        self.assertTrue(harness.wait_until(lambda: "2 mudanças" in self.bar(), timeout=30), self.bar())
+        self.guard("await G.resolve(args[0], 'keep');", proxy)
+        self.assertTrue(harness.wait_until(lambda: f"Extensão alterada: {name}" in self.bar(), timeout=10), self.bar())
+        later = chrome_async(
+            self.m,
+            """
+            const win = OpenBrowserWindow();
+            let text = "";
+            for (let i = 0; i < 100 && !text; i++) {
+              await new Promise(r => setTimeout(r, 100));
+              text = win.gNotificationBox?.getNotificationWithValue("nulavio-guard")?.messageText?.textContent ?? "";
+            }
+            win.close();
+            return text;
+            """,
+        )
+        self.assertIn(f"Extensão alterada: {name}", later)
+        self.assertIn("uma mudança", later)
         self.guard("await G.resolve(args[0], 'undo');", f"extension-changed:{entry.id}")
+        self.assertTrue(harness.wait_until(lambda: self.bar() == "", timeout=10), "the bar stayed with nothing waiting")
 
 
 if __name__ == "__main__":

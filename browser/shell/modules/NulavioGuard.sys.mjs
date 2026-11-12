@@ -416,15 +416,19 @@ class Guard {
   }
 
   /**
-   * Findings without the engine's own held updates: an extension that only went to the version the
-   * record expected. Anything else about it (another version, turned on while closed) is still reported.
+   * Findings without the engine's own held updates: an extension that only went to the version the record
+   * expected, and whose file is the very one the engine held (`installed`: { id: digest of the file there
+   * now }). Anything else about it is still reported: another version, another file with that version, a
+   * file whose digest could not be taken on either side, turned on while closed.
    */
-  static withoutHeldUpdates(findings, expected) {
-    const held = f =>
-      f.kind === "extension-changed" &&
-      Object.hasOwn(expected ?? {}, f.key) &&
-      expected[f.key] === f.after.version &&
-      f.before.active === f.after.active;
+  static withoutHeldUpdates(findings, expected, installed = {}) {
+    const held = f => {
+      const kept = f.kind === "extension-changed" && Object.hasOwn(expected ?? {}, f.key) ? expected[f.key] : null;
+      return Boolean(
+        kept && typeof kept === "object" && kept.version === f.after.version &&
+        kept.digest && kept.digest === installed?.[f.key] && f.before.active === f.after.active
+      );
+    };
     return findings.filter(f => !held(f));
   }
 
@@ -493,7 +497,11 @@ class Guard {
     const own = name => this.#own.some(entry => (entry.endsWith(".") ? name.startsWith(entry) : name === entry));
     // An update the engine downloaded during the last session and installed as this one started is the
     // browser's own doing, like an update made while it runs: not a change made outside it.
-    const fresh = Guard.withoutHeldUpdates(Guard.compare(saved.snapshot, now), saved.expected).filter(
+    const installed = {};
+    for (const id of Object.keys(saved.expected)) {
+      installed[id] = await this.#installedDigest(id);
+    }
+    const fresh = Guard.withoutHeldUpdates(Guard.compare(saved.snapshot, now), saved.expected, installed).filter(
       f => f.kind !== "pref-changed" || !own(f.key)
     );
     const seen = new Set(fresh.map(f => f.id));
@@ -504,8 +512,25 @@ class Guard {
     return { state: pending.length ? "changed" : "clean", findings: this.findings() };
   }
 
+  /** What the engine holds for the next start: { id: { version, digest } }, the digest being that of the file it
+      keeps in the profile's staging folder. The version alone would also fit another file. */
   async #heldUpdates() {
-    return Guard.heldUpdates(await lazy.AddonManager.getAllInstalls().catch(() => []));
+    const out = {};
+    for (const [id, version] of Object.entries(Guard.heldUpdates(await lazy.AddonManager.getAllInstalls().catch(() => [])))) {
+      out[id] = { version, digest: await fileDigest(PathUtils.join(this.#profileDir, "extensions", "staged", `${id}.xpi`)) };
+    }
+    return out;
+  }
+
+  /** The digest of an installed extension's file as it is now, or null when it has none to read. */
+  async #installedDigest(id) {
+    try {
+      const uri = (await lazy.AddonManager.getAddonByID(id))?.getResourceURI();
+      const file = uri instanceof Ci.nsIJARURI ? uri.JARFile.QueryInterface(Ci.nsIFileURL).file : null;
+      return file ? await fileDigest(file.path) : null;
+    } catch {
+      return null;
+    }
   }
 
   /** Settings Nulavio itself changes at this start (its own defaults): not changes made outside the browser. */
@@ -546,6 +571,11 @@ class Guard {
       Services.prefs.addObserver(entry, this.#observer, true);
     }
     Services.obs.addObserver(this.#observer, "browser-search-engine-modified", true);
+    // The engine reads the profile's extensions folder a little after start-up, and its reading can end after
+    // the start-up check took its snapshot (its scan and ours can overlap, and the one that came second does not
+    // wait for the first). This is the engine saying it has taken in what it found on disk: look again, so an
+    // extension another program placed there is reported in this session, not at the next start.
+    Services.obs.addObserver(this.#observer, "xpi-provider:database-updated", true);
     lazy.AsyncShutdown.appShutdownConfirmed.addBlocker("Nulavio Guard: record", () => this.#refresh());
   }
 
@@ -605,6 +635,14 @@ class Guard {
       throw new GuardError("bad-action");
     }
     this.#state.pending = this.#state.pending.filter(f => f.id !== id);
+    if (this.#barObserver) {
+      // A bar still shown says what waits now: one change fewer, or nothing (and then it goes).
+      if (this.#state.pending.length) {
+        this.showBar();
+      } else {
+        this.hideBar();
+      }
+    }
     if (action === "undo") {
       const snapshot = this.#state.snapshot;
       if (finding.kind === "root-added" || finding.kind === "module-added") {
@@ -722,13 +760,15 @@ class Guard {
     if (!pending || !url || !this.#bar) {
       return;
     }
-    // One change is named in the bar; more than one are counted, and the review names each.
-    const text = String(this.#bar.textFor(pending, pending === 1 ? this.findings()[0] : null));
     const mark = win => {
       const box = win.gNotificationBox;
-      if (!box) {
+      const waiting = this.#state?.pending.length ?? 0;
+      if (!box || !waiting || !this.#bar) {
         return;
       }
+      // One change is named in the bar; more than one are counted, and the review names each. The words are
+      // worked out as each window is marked: a window opened later says what waits then, not what waited before.
+      const text = String(this.#bar.textFor(waiting, waiting === 1 ? this.findings()[0] : null));
       const existing = box.getNotificationWithValue("nulavio-guard");
       if (existing?.messageText?.textContent === text) {
         return;
