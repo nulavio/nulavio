@@ -439,9 +439,34 @@
      * stays until the list changes again: "Trabalho está bloqueado." must not outlive its unlocking elsewhere.
      * While an action runs, the list's buttons are disabled (`state.busy`): a click is never dropped unseen.
      */
+    // A row of a list is the engine's box item, which keeps the name and the buttons on one line and wraps neither:
+    // in a narrow page the name was left a few pixels and broke letter by letter (issue #128). There the buttons
+    // go in a row of their own, under the name. A row with more than three buttons needs the room sooner.
+    const narrowPage = window.matchMedia("(max-width: 500px)");
+    const tightPage = window.matchMedia("(max-width: 650px)");
+    const stacked = row => {
+      const kind = row.options ? "options" : "items"; // a row's buttons are options; a switch with a setting of its own is an item
+      const actions = (row[kind] ?? []).filter(each => each.slot === "actions");
+      // `below`: the words a control shows only under the name (a switch beside a name needs none of its own).
+      const beside = ({ below, ...control }) => control;
+      if (!actions.length || !(narrowPage.matches || (actions.length > 3 && tightPage.matches))) {
+        return [row[kind] ? { ...row, [kind]: row[kind].map(beside) } : row];
+      }
+      const under = ({ slot, below, ...control }) => (below ? { ...control, controlAttrs: { ...control.controlAttrs, label: below } } : control);
+      return [
+        { ...row, [kind]: row[kind].filter(each => each.slot !== "actions").map(beside) },
+        { key: `${row.key}-actions`, control: "moz-box-item", controlAttrs: { class: "nulavio-row-actions" }, [kind]: actions.map(under) },
+      ];
+    };
     const workbench = (initial, list) => {
       const state = { ...initial, error: "", said: "", busy: false };
       const listeners = new Set();
+      // The lists are drawn again when the page becomes narrow or wide: their rows change shape (`stacked`).
+      const redraw = () => listeners.forEach(emit => emit());
+      for (const page of [narrowPage, tightPage]) {
+        page.addEventListener("change", redraw);
+        added.cleanups.push(() => page.removeEventListener("change", redraw));
+      }
       let settled = true; // false from an action until the list was read again: that read is the action's own result
       let saidFor = ""; // the list as that read found it; the words stay while it stays like that
       const show = changes => {
@@ -617,7 +642,7 @@
         options: actions,
       };
       if (view.editing !== keyOf(profile) || profile.id === null) {
-        return [row];
+        return stacked(row);
       }
       // The editor opens under its row: the same three things the Shell's page edited, saved together.
       const editor = {
@@ -631,7 +656,7 @@
           { id: "nulavio-profile-editor-buttons", control: "moz-button-group" },
         ],
       };
-      return [row, editor];
+      return [...stacked(row), editor];
     };
     // "Novo perfil", the last row of the list: a template only fills the name; nothing exists before "Criar perfil".
     const newProfileRow = () => ({
@@ -1050,7 +1075,7 @@
       getControlConfig(config) {
         const rules = routesNow()?.rules ?? [];
         const rows = rules.length
-          ? rules.map(ruleRow)
+          ? rules.flatMap(rule => stacked(ruleRow(rule)))
           : [{ key: "no-rules", control: "moz-box-item", controlAttrs: { label: msg("routingNoRules"), class: "nulavio-rule-none" } }];
         const form = {
           key: "new-rule",
@@ -1226,7 +1251,7 @@
         passwordBench.watch(emitChange, stops);
       },
       visible: () => passwords.state.ready,
-      getControlConfig: config => ({ ...config, options: (passwords.state.value?.providers ?? []).map(providerRow) }),
+      getControlConfig: config => ({ ...config, options: (passwords.state.value?.providers ?? []).flatMap(item => stacked(providerRow(item))) }),
       async onUserClick(event) {
         const button = event.target.closest?.("[data-action]");
         const item = (passwords.state.value?.providers ?? []).find(each => each.key === button?.dataset.provider);
@@ -1279,7 +1304,7 @@
       },
       visible: () => confirmed.state.ready,
       getControlConfig(config) {
-        const rows = (confirmed.state.value ?? []).map(pair => ({
+        const rows = (confirmed.state.value ?? []).flatMap(pair => stacked({
           key: `confirmed-${pair.site} ${pair.similar}`,
           control: "moz-box-item",
           controlAttrs: {
@@ -1365,7 +1390,7 @@
         ...config,
         options: enginesNow()
           .filter(engine => engine.canSuggest)
-          .map(engine => ({
+          .flatMap(engine => stacked({
             key: `suggest-${engine.id}`,
             control: "moz-box-item",
             controlAttrs: {
@@ -1380,6 +1405,7 @@
                 id: suggestSwitch(engine),
                 control: "moz-toggle",
                 slot: "actions",
+                below: msg("engineSuggestLabel"),
                 controlAttrs: { "aria-label": `${msg("engineSuggestLabel")}: ${engine.name}`, "data-engine": engine.id },
               },
             ],
@@ -1396,7 +1422,7 @@
       setup: searchSetup,
       visible: () => search.state.ready,
       getControlConfig(config) {
-        const rows = missingProviders().map(provider => ({
+        const rows = missingProviders().flatMap(provider => stacked({
           key: `provider-${provider.key}`,
           control: "moz-box-item",
           controlAttrs: {
@@ -1575,7 +1601,7 @@
       },
       visible: () => exceptions.state.ready,
       getControlConfig(config) {
-        const rows = exceptionsNow().map(each => exceptionRow(each));
+        const rows = exceptionsNow().flatMap(each => stacked(exceptionRow(each)));
         const none = { key: "none", control: "moz-box-item", controlAttrs: { label: msg("exceptionsEmpty"), class: "nulavio-exception-none" } };
         return { ...config, options: rows.length ? rows : [none] };
       },

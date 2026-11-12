@@ -329,9 +329,25 @@ What was measured, on every pane that holds a Nulavio group, with the engine's g
 | 320 px | scrolls sideways 8 px; its own Search pane 44 to 54 px, Home 87 px, with selects cut | three lists add 5 to 51 px: the profile list, the known search providers, the password managers |
 
 - **Fixed**: the three choices of the arrangement picker keep a width that holds their words and go one under the other when the page is narrow or the text large (`in-content.css`, one rule on Nulavio's own items).
-- **Left, and named in the test**: at 320 px a row of those three lists keeps its buttons beside its name, and the engine's row (`moz-box-item`) does not wrap them, so the name is left a few pixels and breaks letter by letter. The row's layout is inside the engine's widget, where Nulavio's sheet cannot tell its rows from the engine's. The two ways out are a change to the engine's widget (a patch, or upstream) or drawing the buttons as a second row from the settings code; neither is done here.
+- **Left by this step, fixed by step 20**: at 320 px a row of those three lists keeps its buttons beside its name, and the engine's row (`moz-box-item`) does not wrap them, so the name is left a few pixels and breaks letter by letter. The row's layout is inside the engine's widget, where Nulavio's sheet cannot tell its rows from the engine's. The two ways out are a change to the engine's widget (a patch, or upstream) or drawing the buttons as a second row from the settings code; neither is done here.
 - **The engine's**: the 8 px of sideways scroll of the empty page, the cut selects of its Home and Search panes at 320 px, and the size of its switch and radio (32×16 and 16×16 px, with the label as the larger target) are the same in panes Nulavio adds nothing to.
 
 `tests/integration/test_settings_reflow.py` (2 tests): at 390 px and at 200 % text no Nulavio group adds sideways scroll, has a control or a text cut by the page's edge, or a word broken across lines (it fails on the picker without the fix); at 320 px the controls that add to the engine's own scroll are exactly the three lists, so a fourth fails and a fix shortens the list.
 
 Not verified: other fonts than this machine's (widths depend on them), a real 400 % zoom on a large screen (the test narrows the window instead), a screen reader.
+
+## Step 20 (2026-11-12): in a narrow page a row's buttons go under its name
+
+Branch `agent/claude/fix-settings-rows-narrow`. Issue #128, the part step 19 left.
+
+![The profile list at 320 px before and after, and the search providers at 320 px](../design/screenshots/experience-2026-11/settings-rows-narrow-sheet.png)
+
+A row of Nulavio's lists is the engine's `moz-box-item` with Nulavio's buttons in its `actions` slot. The widget keeps the name and the buttons on one line and wraps neither, and its layout is inside its shadow tree. At 320 px the name was left a few pixels and broke letter by letter; with a second profile ("Abrir" and two more buttons) it did so at 390 px too, which step 19 did not see because it measured a new profile's single row.
+
+- **The buttons become a row of their own, under the name**, when the page is at most 500 px wide, and at most 650 px for a row with more than three buttons (a protected profile's). `stacked(row)` in `panes.mjs` does it for every list: profiles, routing rules, password managers, look-alike sites, search providers, site exceptions and the suggestion switches. A switch under a name says what it switches ("Sugestões enquanto você digita"); beside the name it needs no words.
+- **Nothing else changes**: the same buttons with the same accessible names ("Abrir Trabalho"), found by the same selectors, so the keyboard returns to them as before; at ordinary widths the lists are drawn exactly as they were. The lists are drawn again when the page crosses either width.
+- The engine's own list of search engines breaks its names the same way at 320 px; that one is the engine's.
+
+`tests/integration/test_settings_reflow.py`: 320 px joins 390 px and 200 % text in the first test (no added sideways scroll, nothing cut, no word broken), and the list of known exceptions is gone; the second test puts a second profile in the list and follows the rows from wide to 390 px to 320 px and back, then opens and closes the editor from a button under its name.
+
+Not verified: a protected profile's five buttons (the test session has no vault), lists that are empty in a new profile and so drawn with no row (routing rules, look-alike sites, site exceptions: the same function, not seen with rows), other fonts, a screen reader.

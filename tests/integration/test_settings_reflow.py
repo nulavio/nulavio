@@ -3,12 +3,12 @@
 The page is the engine's and its groups are drawn by the engine's widgets, so what is measured is what Nulavio adds:
 each pane with the engine's groups hidden, against the same page with every group hidden.
 
-* At 390 px, and at 200 % text in a window of ordinary width, Nulavio's groups add no sideways scroll, none of their
-  controls or texts is cut by the edge of the page, and no word of theirs is broken across lines.
-* At 320 px the engine's page scrolls sideways by itself, with nothing in it, and its own Home and Search panes more.
-  Three of Nulavio's lists add to that there: a row keeps its buttons beside its name, and the engine's row does not
-  wrap them, so the name is left a few pixels. They are named in KNOWN_AT_320: another control fails this test, and a
-  fix shortens the list.
+* At 390 px, at 320 px and at 200 % text in a window of ordinary width, Nulavio's groups add no sideways scroll to
+  the engine's page (which scrolls by itself when narrow, with nothing in it), none of their controls or texts is
+  cut by the edge of the page, and no word of theirs is broken across lines.
+* A list's row is the engine's box item, which keeps the name and the buttons on one line and wraps neither. In a
+  narrow page the buttons are a row of their own under the name, still work there, and go back beside the name when
+  the page is wide again (issue #128).
 """
 
 from __future__ import annotations
@@ -30,8 +30,22 @@ PANES = (
     "paneNulavioIntegrations",
     "paneAbout",
 )
-# Controls that, alone on the page at 320 px, make it scroll sideways further than the empty page does.
-KNOWN_AT_320 = {"nulavio-profile-list", "nulavio-search-providers", "nulavio-passwords-providers"}
+PROFILES = 'ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioProfiles.sys.mjs").NulavioProfiles'
+# The profile list as drawn: each row's class, its name's width and lines, and where its buttons are.
+LIST = (
+    settings_page.DOC
+    + """
+const rows = [...d.querySelectorAll("#nulavio-profile-list > moz-box-item")].filter(r => r.getBoundingClientRect().height > 0);
+return rows.map(r => {
+  const label = r.shadowRoot?.querySelector(".label");
+  const range = d.createRange();
+  if (label) range.selectNodeContents(label);
+  return { row: r.classList[0], name: r.label ?? "",
+    lines: label ? new Set([...range.getClientRects()].map(b => Math.round(b.top))).size : 0,
+    buttons: [...r.querySelectorAll(":scope > moz-button")].map(b => `${b.slot || "below"}:${b.dataset.action}`) };
+});
+"""
+)
 
 MEASURE = (
     settings_page.DOC
@@ -57,7 +71,7 @@ const ours = groups.filter(g => id(g).startsWith("nulavio"));
 const only = (list, keep, measure) => { const saved = list.map(x => x.style.display);
   list.forEach(x => { if (!keep(x)) x.style.display = "none"; });
   try { return measure(); } finally { list.forEach((x, i) => { x.style.display = saved[i]; }); } };
-const report = { viewport: w.innerWidth, groups: ours.map(id), cut: [], broken: [], alone: {} };
+const report = { viewport: w.innerWidth, groups: ours.map(id), cut: [], broken: [] };
 report.empty = only(groups, () => false, extra);
 // Nulavio's groups with the engine's hidden: what they add, and what of theirs the page's edge cuts.
 only(groups, g => ours.includes(g), () => {
@@ -78,17 +92,6 @@ only(groups, g => ours.includes(g), () => {
     }
   }
 });
-// Each of Nulavio's controls alone on the page.
-for (const group of ours) {
-  only(groups, g => g === group, () => {
-    const controls = [...group.querySelectorAll("setting-control")]
-      .filter(c => c.getBoundingClientRect().height > 0 && !c.parentElement.closest("setting-control"));
-    for (const control of controls) {
-      const key = control.querySelector("[id]")?.id || control.firstElementChild?.localName;
-      report.alone[key] = only(controls, c => c === control, extra);
-    }
-  });
-}
 return report;
 """
 )
@@ -130,7 +133,7 @@ class SettingsReflowTest(unittest.TestCase):
         return (*PANES, "paneAi" if settings_page.assistant_pane(self.m) == "ai" else "paneNulavioAssistant")
 
     def test_01_narrow_window_and_large_text_cut_nothing_of_nulavios(self):
-        for width, text in ((390, 1), (1180, 2)):
+        for width, text in ((390, 1), (320, 1), (1180, 2)):
             for pane in self.panes():
                 with self.subTest(pane=pane, width=width, text=text):
                     report = self.measure(pane, width, text)
@@ -138,14 +141,38 @@ class SettingsReflowTest(unittest.TestCase):
                     self.assertEqual(report["cut"], [], "cut by the edge of the page")
                     self.assertEqual(report["broken"], [], "a word broken across lines")
 
-    def test_02_at_320_px_only_the_known_lists_add_to_the_engines_own_scroll(self):
-        empty, adding = set(), set()
-        for pane in self.panes():
-            report = self.measure(pane, 320)
-            empty.add(report["empty"])
-            adding.update(key for key, extra in report["alone"].items() if extra > report["empty"])
-        self.assertGreater(min(empty), 0, "the engine's empty page no longer scrolls sideways at 320 px: tighten this test")
-        self.assertEqual(adding, KNOWN_AT_320)
+    def test_02_a_rows_buttons_go_under_its_name_in_a_narrow_page_and_still_work(self):
+        self.m.chrome(f'return {PROFILES}.create({{ templateId: "work", name: "Trabalho" }}).then(() => true);')
+        settings_page.open_pane(self.m, "paneNulavioProfiles")
+        profiles = lambda: [row for row in self.m.chrome(LIST) if row["row"] in ("nulavio-profile", "nulavio-row-actions")]  # noqa: E731
+        beside = [
+            {"row": "nulavio-profile", "name": "Pessoal", "lines": 1, "buttons": ["actions:edit", "actions:delete-here"]},
+            {
+                "row": "nulavio-profile",
+                "name": "Trabalho",
+                "lines": 1,
+                "buttons": ["actions:open", "actions:edit", "actions:delete"],
+            },
+        ]
+        below = [
+            {"row": "nulavio-profile", "name": "Pessoal", "lines": 1, "buttons": []},
+            {"row": "nulavio-row-actions", "name": "", "lines": 0, "buttons": ["below:edit", "below:delete-here"]},
+            {"row": "nulavio-profile", "name": "Trabalho", "lines": 1, "buttons": []},
+            {"row": "nulavio-row-actions", "name": "", "lines": 0, "buttons": ["below:open", "below:edit", "below:delete"]},
+        ]
+        for width, wanted in ((1180, beside), (390, below), (320, below), (1180, beside)):
+            with self.subTest(width=width):
+                self.size(width, 1)
+                self.assertTrue(harness.wait_until(lambda wanted=wanted: profiles() == wanted, 10), profiles())
+        # A button under its name does what it did beside it: the editor opens for that profile, and closes.
+        self.size(390, 1)
+        harness.wait_until(lambda: profiles() == below, 10)
+        edit = '#nulavio-profile-list moz-button[data-action="edit"][data-profile]:not([data-action="delete-here"])'
+        settings_page.click(self.m, edit)
+        editor = lambda: [row["row"] for row in self.m.chrome(LIST)].count("nulavio-profile-editor")  # noqa: E731
+        self.assertTrue(harness.wait_until(lambda: editor() == 1, 10), self.m.chrome(LIST))
+        settings_page.click(self.m, edit)
+        self.assertTrue(harness.wait_until(lambda: editor() == 0, 10), self.m.chrome(LIST))
 
 
 if __name__ == "__main__":

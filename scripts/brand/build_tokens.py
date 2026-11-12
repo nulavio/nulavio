@@ -459,6 +459,15 @@ def profile_chip_rules(tokens: dict[str, dict]) -> str:
     rules += '  moz-visual-picker-item[id^="nulavio-layout-"] {\n    min-inline-size: min(10em, 100%) !important;\n  }\n'
     # A row's action is one or two words: they stay on one line next to a long description.
     rules += '  moz-box-item[class*="nulavio-"] > moz-button {\n    white-space: nowrap !important;\n  }\n'
+    # In a narrow page a row's buttons are a row of their own (panes.mjs, `stacked`): side by side, on to the
+    # next line when they do not fit, and a long one on two lines of its own.
+    rules += (
+        "  moz-box-item.nulavio-row-actions > moz-button {\n"
+        "    margin-block: var(--space-xxsmall) !important;\n"
+        "    margin-inline-end: var(--space-small) !important;\n"
+        "    white-space: normal !important;\n"
+        "  }\n"
+    )
     # The editor under a row and the "new profile" row hold a few fields, one under the other.
     rules += (
         "  moz-box-item:is(.nulavio-profile-editor, .nulavio-profile-new) > setting-control:not(:first-child) {\n"

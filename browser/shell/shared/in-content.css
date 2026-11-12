@@ -60,6 +60,11 @@
   moz-box-item[class*="nulavio-"] > moz-button {
     white-space: nowrap !important;
   }
+  moz-box-item.nulavio-row-actions > moz-button {
+    margin-block: var(--space-xxsmall) !important;
+    margin-inline-end: var(--space-small) !important;
+    white-space: normal !important;
+  }
   moz-box-item:is(.nulavio-profile-editor, .nulavio-profile-new) > setting-control:not(:first-child) {
     display: block !important;
     margin-block-start: var(--space-medium) !important;
