@@ -83,7 +83,14 @@ class SettingsPanesTest(unittest.TestCase):
         self.assertEqual(state["view"], "section")
         self.assertEqual(len(state["shown"]), 1, state)
         self.assertEqual(state["current"], state["shown"])  # the rail marks the section on screen
-        native_sections = ("profiles", "routing", "exceptions", "passwords", "search")  # no entry in this page's rail any more
+        native_sections = (
+            "profiles",
+            "routing",
+            "exceptions",
+            "passwords",
+            "search",
+            "dns",
+        )  # no entry in this page's rail any more
         for address, section in (("#dns", "dns"), ("#routing", "routing"), ("#ai-assistant", "ai"), ("#profiles", "profiles")):
             self.open(address)
             self.assertTrue(
@@ -98,11 +105,11 @@ class SettingsPanesTest(unittest.TestCase):
         self.assertLess(top, self.m.execute("return innerHeight;"))
 
     def test_02_rail_link_moves_the_keyboard_to_the_section(self):
-        self.open("#search")
-        self.m.send("WebDriver:ElementClick", {"id": self.m.find_element('.settings-nav a[data-section="dns"]')})
-        self.assertTrue(harness.wait_until(lambda: self.view()["shown"] == ["dns"], 10))
-        self.assertEqual(self.view()["focused"], "dns-heading")
-        self.assertEqual(self.m.execute("return location.hash;"), "#dns")
+        self.open("#ai")
+        self.m.send("WebDriver:ElementClick", {"id": self.m.find_element('.settings-nav a[data-section="integrations"]')})
+        self.assertTrue(harness.wait_until(lambda: self.view()["shown"] == ["integrations"], 10))
+        self.assertEqual(self.view()["focused"], "integrations-heading")
+        self.assertEqual(self.m.execute("return location.hash;"), "#integrations")
 
     def test_03_every_section_says_how_far_it_reaches(self):
         self.open()
@@ -113,12 +120,13 @@ class SettingsPanesTest(unittest.TestCase):
         for section, key in SCOPES.items():
             self.assertEqual(found.get(section), self.message(key), section)
         groups = self.m.execute("return [...document.querySelectorAll('.settings-nav__group')].map(g => g.textContent);")
-        self.assertEqual(groups, [self.message(k) for k in ("scopeProfile", "scopeAllProfiles", "scopeComputer")])
+        # ("This profile" has no entry left: all of it is drawn by the settings page itself.)
+        self.assertEqual(groups, [self.message(k) for k in ("scopeAllProfiles", "scopeComputer")])
         # Every entry of the rail points to a section that exists, in the order of its group.
         entries = self.m.execute("return [...document.querySelectorAll('.settings-nav a')].map(a => a.dataset.section);")
         # ADR 0008 and 0011: Layout, Aparência, Atalhos, the profiles and the routing rules are drawn by the settings page itself;
         # this page keeps no entry for them.
-        native = ("layout", "appearance", "shortcuts", "profiles", "routing", "exceptions", "passwords", "search")
+        native = ("layout", "appearance", "shortcuts", "profiles", "routing", "exceptions", "passwords", "search", "dns")
         self.assertEqual(entries, [section for section in SCOPES if section not in native])
         # ...and its own search does not offer them either: one option, one place.
         for heading, section in (("layoutHeading", "layout"), ("profilesHeading", "profiles"), ("routingHeading", "routing")):
@@ -130,23 +138,25 @@ class SettingsPanesTest(unittest.TestCase):
 
     def test_04_search_filters_the_cards_of_every_section(self):
         self.open("#layout")
-        word = max(self.message("dnsSystem").split(), key=len)  # "resolvedor": typed without accents, in lower case
+        # A word of the integrations' introduction ("verificação"), typed without accents, in lower case.
+        words = [w.strip(".,;:") for w in self.message("connectIntro").split()]
+        word = max(words, key=len)
         query = self.m.execute("return arguments[0].normalize('NFD').replace(/\\p{M}/gu, '').toLowerCase();", [word])
         self.type_search(query)
         self.assertTrue(harness.wait_until(lambda: self.view()["view"] == "search", 5))
         state = self.view()
-        self.assertIn("dns", state["shown"])
+        self.assertIn("integrations", state["shown"])
         self.assertNotIn("layout", state["shown"])
         self.assertEqual(state["current"], [])  # results span sections: the rail marks none
         self.assertTrue(state["results"])
         self.shoot("search-results")
         # Several words: each must be found, in any order.
         two = self.m.execute(
-            "return browser.i18n.getMessage('dnsStrict').normalize('NFD').replace(/\\p{M}/gu, '').toLowerCase()"
-            ".split(' ').filter(w => w.length > 3).reverse().join(' ');"
+            "return browser.i18n.getMessage('connectIntro').normalize('NFD').replace(/\\p{M}/gu, '').toLowerCase()"
+            ".replace(/[.,;:]/g, '').split(' ').filter(w => w.length > 5).slice(0, 2).reverse().join(' ');"
         )
         self.type_search(two)
-        self.assertTrue(harness.wait_until(lambda: "dns" in self.view()["shown"], 5), two)
+        self.assertTrue(harness.wait_until(lambda: "integrations" in self.view()["shown"], 5), two)
         self.type_search(f"{two} zzzz")
         self.assertTrue(harness.wait_until(lambda: self.view()["shown"] == [], 5))
         self.type_search("zzzz-nada")
@@ -209,7 +219,7 @@ class SettingsPanesTest(unittest.TestCase):
         sections = self.m.execute(
             "return [...document.querySelectorAll('.settings-nav li:not([hidden]) a')].map(a => a.dataset.section);"
         )
-        self.assertGreaterEqual(len(sections), 3)  # what is left in this page's rail (ADR 0008, ADR 0011)
+        self.assertGreaterEqual(len(sections), 2)  # what is left in this page's rail (ADR 0008, ADR 0011)
         for section in sections:
             self.open(f"#{section}")
             self.assertTrue(harness.wait_until(lambda section=section: self.view()["shown"] == [section], 10))
@@ -218,16 +228,16 @@ class SettingsPanesTest(unittest.TestCase):
         rect = self.m.send("WebDriver:GetWindowRect")
         self.m.send("WebDriver:SetWindowRect", {"width": 760, "height": 900})
         try:
-            self.open("#dns")
-            self.assertTrue(harness.wait_until(lambda: self.view()["shown"] == ["dns"], 10))
+            self.open("#ai")
+            self.assertTrue(harness.wait_until(lambda: self.view()["shown"] == ["ai"], 10))
             self.assertEqual(
                 self.m.execute(
                     "return getComputedStyle(document.querySelector('.settings')).gridTemplateColumns.split(' ').length;"
                 ),
                 1,
             )
-            self.assertEqual(self.view()["current"], ["dns"])
-            self.shoot("narrow-dns")
+            self.assertEqual(self.view()["current"], ["ai"])
+            self.shoot("narrow-ai")
             # QA R2-1: a section near the end keeps its entry in the visible part of the row.
             self.open("#integrations")
             self.assertTrue(harness.wait_until(lambda: self.view()["shown"] == ["integrations"], 10))

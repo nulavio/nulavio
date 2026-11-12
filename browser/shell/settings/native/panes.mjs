@@ -1542,6 +1542,133 @@
       exceptionBench.bar("nulavio-exceptions-said", "success", () => exceptionBench.state.said, () => Boolean(exceptionBench.state.said)),
     ];
 
+    // -- who answers when this profile looks up a site (DNS). Three choices in plain words, where the engine
+    // showed a one-line summary; the engine's own advanced screen stays behind its button. A wrong choice can
+    // stop sites from opening, so nothing is written before "Salvar escolha" (NulavioPrivacy.setDns checks it). --
+    const dns = source(async () => shell.NulavioPrivacy.dns());
+    const dnsBench = workbench({ draft: null }, dns);
+    const dnsNow = () => (dns.state.ready ? dns.state.value : null);
+    // What the form shows: what the person changed and has not saved yet, over what is in effect.
+    const dnsForm = () => {
+      const now = dnsNow();
+      const base = { choice: now?.choice ?? "", provider: now?.provider ?? "cloudflare", uri: now?.provider === "custom" ? now.uri : "" };
+      return { ...base, ...(dnsBench.state.draft ?? {}) };
+    };
+    const dnsChanged = () => {
+      const now = dnsNow();
+      const form = dnsForm();
+      if (!now || !form.choice || form.choice === "default") {
+        return false; // "Padrão do navegador (atual)" is what is in effect: nothing to save
+      }
+      if (form.choice !== now.choice) {
+        return true;
+      }
+      return form.choice !== "system" && (form.provider !== (now.provider ?? "cloudflare") || (form.provider === "custom" && form.uri !== now.uri));
+    };
+    const dnsProviderName = id => msg(`dns${id[0].toUpperCase()}${id.slice(1)}`);
+    const dnsSays = () => {
+      const now = dnsNow();
+      if (!now) {
+        return "";
+      }
+      if (now.choice === "system") {
+        return msg("dnsNowSystem");
+      }
+      if (now.choice === "default") {
+        return msg(now.encryptedNow ? "dnsNowDefaultEncrypted" : "dnsNowDefaultPlain"); // what the default does right now
+      }
+      return msg(now.choice === "strict" ? "dnsNowStrict" : "dnsNowFallback", now.provider === "custom" ? now.uri : dnsProviderName(now.provider));
+    };
+    const dnsSetup = (emitChange, stops) => {
+      stops.push(dns.listen(emitChange));
+      dnsBench.watch(emitChange, stops);
+    };
+    const dnsDraft = (field, value) => dnsBench.show({ draft: { ...(dnsBench.state.draft ?? {}), [field]: value } });
+    setting({
+      id: "nulavio-dns-choice",
+      setup(emitChange, stops) {
+        dnsSetup(emitChange, stops);
+        dns.refresh();
+        // Changed on the engine's advanced screen, or by a policy.
+        for (const pref of ["network.trr.mode", "network.trr.uri"]) {
+          Services.prefs.addObserver(pref, dns.refresh);
+          stops.push(() => Services.prefs.removeObserver(pref, dns.refresh));
+        }
+      },
+      visible: () => dns.state.ready,
+      get: () => dnsForm().choice,
+      set(value) {
+        dnsDraft("choice", value);
+      },
+      disabled: () => dnsBench.state.busy || Services.prefs.prefIsLocked("network.trr.mode"),
+      getControlConfig(config) {
+        const option = (value, label, note) => ({ value, controlAttrs: { label: msg(label), description: msg(note) } });
+        return {
+          ...config,
+          controlAttrs: { ...config.controlAttrs, label: msg("dnsChoiceLegend"), description: dnsSays() },
+          options: [
+            // Listed, and marked, only while nothing was chosen yet: choosing it saves nothing.
+            ...(dnsNow()?.choice === "default" ? [option("default", "dnsDefaultOption", "dnsDefaultOptionNote")] : []),
+            option("system", "dnsOptionNetwork", "dnsOptionNetworkNote"),
+            option("fallback", "dnsOptionService", "dnsOptionServiceNote"),
+            option("strict", "dnsStrict", "dnsStrictNote"),
+          ],
+        };
+      },
+    });
+    const dnsEncrypted = () => ["fallback", "strict"].includes(dnsForm().choice);
+    setting({
+      id: "nulavio-dns-provider",
+      setup: dnsSetup,
+      visible: () => dns.state.ready && dnsEncrypted(),
+      get: () => dnsForm().provider,
+      set(value) {
+        dnsDraft("provider", value);
+      },
+      disabled: () => dnsBench.state.busy,
+      getControlConfig: config => ({
+        ...config,
+        // Whoever is chosen sees which sites this profile looks up: said where the choice is made.
+        controlAttrs: { ...config.controlAttrs, label: msg("dnsOptionServiceLabel"), description: msg("dnsThirdParty") },
+        options: [...(dnsNow()?.providers ?? []).map(provider => choice(provider.id, dnsProviderName(provider.id))), choice("custom", msg("dnsCustom"))],
+      }),
+    });
+    setting({
+      id: "nulavio-dns-uri",
+      setup: dnsSetup,
+      visible: () => dns.state.ready && dnsEncrypted() && dnsForm().provider === "custom",
+      get: () => dnsForm().uri,
+      set(value) {
+        dnsDraft("uri", value);
+      },
+      disabled: () => dnsBench.state.busy,
+      getControlConfig: config => ({ ...config, controlAttrs: { ...config.controlAttrs, label: msg("dnsUriLabel"), placeholder: "https://" } }),
+    });
+    setting({
+      id: "nulavio-dns-save",
+      setup: dnsSetup,
+      visible: () => dns.state.ready,
+      // Only when the form says something other than what is in effect.
+      disabled: () => dnsBench.state.busy || !dnsChanged(),
+      async onUserClick(event) {
+        event.preventDefault();
+        const { choice: chosen, provider, uri } = dnsForm();
+        if (await dnsBench.act(async () => shell.NulavioPrivacy.setDns({ choice: chosen, provider, uri }), msg("dnsSaved"))) {
+          dnsBench.show({ draft: null });
+        }
+      },
+      getControlConfig: config => ({ ...config, controlAttrs: { ...config.controlAttrs, label: msg("dnsSave"), type: "primary" } }),
+    });
+    const dnsItems = [
+      failureNote("nulavio-dns-failed", dns),
+      dnsBench.bar("nulavio-dns-error", "error", () => dnsBench.state.error, () => Boolean(dnsBench.state.error)),
+      dnsBench.bar("nulavio-dns-said", "success", () => dnsBench.state.said, () => Boolean(dnsBench.state.said)),
+      { id: "nulavio-dns-choice", control: "moz-radio-group" },
+      { id: "nulavio-dns-provider", control: "moz-select" },
+      { id: "nulavio-dns-uri", control: "moz-input-text" },
+      { id: "nulavio-dns-save", control: "moz-button" },
+    ];
+
     // -- what changed outside Nulavio (the Guard's pending findings; the review is its own page) --
     // The count is read after the Guard's own check of this start (it waits for the windows to be back):
     // before that the Guard has no findings to give, which is not the same as "nothing to review".
@@ -1876,6 +2003,25 @@
     // sense with the engine's own layout picker: "Personalizar layout do navegador", in Aparência, led to
     // the pane whose picker now points back to Aparência. That row goes; the group keeps its other rows.
     const groupEdits = {
+      // The engine's one-line summary of DNS gives way to Nulavio's choices in plain words; its box keeps the
+      // button to the engine's own advanced screen, which stays as it is.
+      dnsOverHttps(config) {
+        const items = config.items;
+        const box = items?.find(item => item.id === "dohBox");
+        const rows = box?.items;
+        if (!Array.isArray(rows) || !rows.some(row => row.id === "dohAdvancedButton")) {
+          throw new Error("the engine's DNS group has another shape");
+        }
+        const { l10nId } = config;
+        box.items = rows.filter(row => row.id !== "dohModeBoxItem");
+        config.items = [...dnsItems, ...items];
+        config.l10nId = "nulavio-dns-group"; // what it is for, before what it is called
+        undoOnly.push(() => {
+          box.items = rows;
+          config.items = items;
+          config.l10nId = l10nId;
+        });
+      },
       relatedSettings(config) {
         for (const item of config.items ?? []) {
           if (Array.isArray(item.items)) {

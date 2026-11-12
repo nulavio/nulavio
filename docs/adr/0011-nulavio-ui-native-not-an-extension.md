@@ -170,3 +170,18 @@ The engine's Search pane already chooses the default engine (also for private wi
 
 `tests/integration/test_settings_search.py` (2 tests): the switches are the module's list, off in a new profile; one on and off again, with the engine's own switch following; switched on from the engine's group; a refusal in words; a provider added in one click; a SearXNG address refused twice and then accepted, with its suggestions off; an OpenSearch address handed to the module (replaced in the test: nothing is downloaded) and a failed download said in words.
 
+## Step 9 (2026-11-12): DNS, in the engine's own group
+
+Branch `agent/claude/feat-settings-dns-native`. The maintainer follows the recommendation of ADR 0008's DNS decision: Nulavio's choices in plain words in place of the engine's one-line summary, the engine's advanced screen behind.
+
+![The DNS group with nothing chosen yet (pt-BR light) and with an encrypted service chosen (en-US dark)](../design/screenshots/experience-2026-11/settings-dns-sheet.png)
+
+- The engine's DNS group in "Privacidade e Segurança" is edited in place: its one-line summary gives way to three choices ("A sua rede responde", "Um serviço que você escolhe, com criptografia", "Somente DNS criptografado"), each with its consequence in a sentence, and a line that says what is in effect now. The group is named for what it does ("DNS: quem responde quando você procura um site"); its "Configurações avançadas" button still opens the engine's own screen, untouched.
+- While nothing was chosen, "Padrão do navegador (atual)" is listed and marked, and says what the default does right now; choosing it saves nothing. Once something was chosen it is no longer offered.
+- A service is chosen from the list (or an https address of the person's own) where the form says who then sees the lookups.
+- **Nothing is written before "Salvar escolha"**: a wrong choice can stop sites from opening, so a choice in the form is not a choice in effect. `NulavioPrivacy.setDns` checks it as before, and a refusal is said in its words. A change made on the engine's advanced screen shows here.
+- If Nulavio's part fails halfway, the group is the engine's again, with its summary line and its own name (`test_04`).
+- The old page's DNS section left its navigation and search, and with it the "this profile" group of that navigation: nothing of it is left on the old page's rail.
+
+`tests/integration/test_settings_dns.py` (2 tests): nothing chosen (four options, nothing to save, the engine's summary gone and its advanced button there); a choice in the form leaves the prefs alone until saved; the computer's resolver saved; an encrypted service by name; only-encrypted with an address that is not https refused with nothing changed, then accepted; a change of the engine's prefs followed by the form.
+

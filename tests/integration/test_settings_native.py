@@ -295,6 +295,19 @@ class NativeSettingsTest(unittest.TestCase):
                     self.assertIn("about:preferences#tabsBrowsing", self.m.chrome(RELATED))
                     self.assertEqual(self.groups("paneTabsBrowsing")[0], "browserLayout")
                     self.assertIn("profiles", self.groups("paneSync"))
+                    # An engine group Nulavio edits in place (DNS) is the engine's again: its summary line and its
+                    # own name are back, and none of Nulavio's controls is in it.
+                    self.assertIn("dnsOverHttps", self.groups("panePrivacy"))
+                    dns = self.m.chrome(
+                        DOC
+                        + """
+                      const group = d.querySelector('setting-group[groupid="dnsOverHttps"]');
+                      return { summary: !!group?.querySelector("#dohModeBoxItem"),
+                               ours: !!group?.querySelector('[id^="nulavio-"]'),
+                               named: group?.querySelector("moz-fieldset")?.getAttribute("data-l10n-id") ?? null };
+                    """
+                    )
+                    self.assertEqual(dns, {"summary": True, "ours": False, "named": "dns-over-https-group2"}, where)
                     # The page's own search still runs: it starts every pane it knows, and none is a removed one.
                     searched = self.m.chrome(
                         DOC + "return w.gSearchResultsPane.runCategoryInitialization().then(() => true, e => String(e));"

@@ -137,6 +137,12 @@ nulavio-guard-review-unwatched =
     .label = Mudanças feitas fora do Nulavio
     .description = O Guard não vigia este perfil: ele é temporário ou é a Área de IA de um agente.
 
+## Privacidade e segurança: DNS (inside the engine's own DNS group)
+
+nulavio-dns-group =
+    .label = DNS: quem responde quando você procura um site
+    .description = Para abrir um site, o navegador pergunta o endereço dele a um serviço de nomes (DNS). Quem responde vê quais sites você procura. O Nulavio não recebe nada em nenhum caso.
+
 ## Senhas
 
 nulavio-passwords-group =
