@@ -244,3 +244,11 @@ The emergency stop is still in two places, on purpose for now: the switch in the
 
 What the Shell's own page holds after this: the agents (connecting one, permissions, consent, pause, revoke, the emergency stop, the activity record), the desktop integrations, and Layout by its address until its tests are ported.
 
+## Step 14 (2026-11-12): the arrangement picker says why, before the old Layout card goes
+
+Branch `agent/claude/feat-settings-layout-notes`.
+
+The old Layout card said two things the picker in Aparência did not. The picker's group says them now: why it takes no change (an administrator's lock, or no sidebar in this window), and that a change could not be applied, with the picker back on the arrangement the window really has (choosing again is the retry). `tests/integration/test_settings_layout.py` (2 tests).
+
+Still to do before the old card can be removed: `test_layout_presets` drives that card in eleven of its tests (two windows, a tab moved between windows, a window closed while a change applies) and `test_immersive` in one; they are to be ported to the picker, and two things only the old card has are to be decided: "Manter Lateral" while the first-run choice is pending (the new tab's card has it), and the measured reflow of the card at 320 px and 200 % text, which on the settings page is the engine's layout.
+

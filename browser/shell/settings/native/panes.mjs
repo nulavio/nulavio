@@ -250,6 +250,7 @@
     // -- layout: Lateral, Abas no topo, Foco (NulavioLayout owns the change) ---------------------
     const layout = source(() => shell.NulavioLayout.state(tab()));
     const layoutOpen = () => layout.state.ready && !layout.state.value.locked && layout.state.value.available;
+    let layoutFailed = "";
     setting({
       id: "nulavio-layout",
       setup(emitChange, stops) {
@@ -264,10 +265,35 @@
       // Nothing is marked until the layout was read; a hand-made arrangement marks none either.
       get: () => (layout.state.ready && layout.state.value.preset !== "custom" ? layout.state.value.preset : ""),
       set(value) {
-        shell.NulavioLayout.apply(tab(), value).then(layout.refresh, layout.refresh);
+        layoutFailed = "";
+        Promise.resolve()
+          .then(() => shell.NulavioLayout.apply(tab(), value))
+          .then(layout.refresh, e => {
+          // The change did not happen: the picker goes back to what the window has, and the group says why.
+          const code = String(e?.code ?? "layout-failed").replace(/[^a-z_-]/gi, "").replaceAll("-", "_");
+          layoutFailed = msg(`err_${code}`) || msg("err_layout_failed");
+          layout.refresh();
+        });
       },
       disabled: () => !layoutOpen(),
     });
+    // Why the arrangement cannot be chosen (an administrator's lock, or no sidebar in this window), and what the
+    // last choice answered when it could not be applied. Both in words, next to the picker they are about.
+    const layoutNote = (id, type, text) => {
+      setting({
+        id,
+        setup: layout.watch,
+        visible: () => Boolean(text()),
+        getControlConfig: config => ({ ...config, controlAttrs: { ...config.controlAttrs, type, message: text() } }),
+      });
+      return { id, control: "moz-message-bar" };
+    };
+    const layoutNotes = [
+      layoutNote("nulavio-layout-why", "info", () =>
+        !layout.state.ready || layoutOpen() ? "" : msg(layout.state.value.available ? "layoutLocked" : "layoutUnavailable")
+      ),
+      layoutNote("nulavio-layout-error", "error", () => layoutFailed),
+    ];
 
     // -- Immersive (ADR 0009): one switch on top of the layout; NulavioLayout is the only writer --
     const PREF_IMMERSIVE = "nulavio.layout.immersive";
@@ -1945,16 +1971,18 @@
         headingLevel: 2,
         items: [
           failureNote("nulavio-layout-failed", layout),
+          ...layoutNotes,
           {
             id: "nulavio-layout",
             control: "moz-visual-picker",
+            controlAttrs: { "data-option": "layout" }, // shared/options.json
             options: ["lateral", "top", "focus"].map(value => ({
               value,
               l10nId: `nulavio-layout-${value}`,
               controlAttrs: { id: `nulavio-layout-${value}`, class: "setting-chooser-item", imagesrc: `${IMAGES}layout-${value}.svg` },
             })),
           },
-          { id: "nulavio-immersive", l10nId: "nulavio-immersive", control: "moz-toggle" },
+          { id: "nulavio-immersive", l10nId: "nulavio-immersive", control: "moz-toggle", controlAttrs: { "data-option": "immersive" } },
         ],
       },
       nulavioLook: {
