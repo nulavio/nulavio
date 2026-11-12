@@ -518,10 +518,10 @@ class NativeSettingsTest(unittest.TestCase):
 
         # From the settings page to a detail page and back, in the same tab.
         self.assertTrue(harness.wait_until(lambda: self.m.chrome(READY), 20))
-        self.groups("panePrivacy")
-        self.control("#nulavio-open-exceptions")
-        self.m.chrome(DOC + 'd.querySelector("#nulavio-open-exceptions").click();')
-        detail = "/settings/settings.html#exceptions"
+        self.groups("panePasswordsAutofill")
+        self.control("#nulavio-open-passwords")
+        self.m.chrome(DOC + 'd.querySelector("#nulavio-open-passwords").click();')
+        detail = "/settings/settings.html#passwords"
         self.assertTrue(harness.wait_until(lambda: self.m.chrome(where).endswith(detail), 15), self.m.chrome(where))
         for handle in self.m.window_handles():
             self.m.switch_to(handle)
@@ -533,11 +533,12 @@ class NativeSettingsTest(unittest.TestCase):
             "return [...document.querySelectorAll('.settings-nav a[data-section]')].map(a => a.dataset.section);"
         )
         # What the settings page draws itself has no entry on a detail page (ADR 0008, ADR 0011).
-        for moved in ("layout", "appearance", "shortcuts", "profiles", "routing"):
+        for moved in ("layout", "appearance", "shortcuts", "profiles", "routing", "exceptions"):
             self.assertNotIn(moved, rail)
         self.assertEqual(self.m.execute("return document.getElementById('settings-back').textContent;"), "Configurações")
         self.m.send("WebDriver:ElementClick", {"id": self.m.find_element("#settings-back")})
-        self.assertTrue(harness.wait_until(lambda: self.m.chrome(where) == "about:preferences#privacy", 15), self.m.chrome(where))
+        back = "about:preferences#passwordsAutofill"
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome(where) == back, 15), self.m.chrome(where))
         self.assertEqual(self.m.chrome("return gBrowser.tabs.length;"), tabs)
         # The old routing section, still there by its address, sends "Criar perfil" to the settings page too.
         shell = self.m.chrome("return WebExtensionPolicy.getByID('shell@nulavio.net').getURL('settings/settings.html#routing');")

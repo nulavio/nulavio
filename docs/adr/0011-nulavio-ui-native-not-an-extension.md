@@ -107,5 +107,21 @@ Branch `agent/claude/feat-settings-routing-native`.
 
 `tests/integration/test_settings_routing.py` (3 tests): a refused site, a rule added, "never switch" without a profile, a rule made elsewhere joining the list, a rule removed (and where the keyboard goes), a rule whose profile was deleted; the switches and what they disable; the default destination chosen, deleted and reset; one profile alone, then a second one.
 
-Still the old page's: search, passwords, exceptions, DNS and the assistant, and the removal of the old page's sections with their tests.
+Still the old page's after this step: search, passwords, exceptions (step 5), DNS and the assistant.
+
+## Step 5 (2026-11-12): site exceptions
+
+Branch `agent/claude/feat-settings-exceptions-native`.
+
+![The site exceptions in "Privacidade e Segurança", pt-BR light and en-US dark](../design/screenshots/experience-2026-11/settings-exceptions-sheet.png)
+
+- "Exceções de sites" is a group of "Privacidade e Segurança", right under Nulavio's protections: one row per site where a protection is off or relaxed, with what is relaxed in words, for how long ("até você fechar o navegador"), where ("janelas privativas") and whether the browser itself put it there ("Padrão do navegador").
+- Removing a row removes the permission from the engine's own store (`NulavioPrivacy.remove`), so the protection applies to that site again. A browser default is removed only after the engine's prompt has said the consequence, with Cancel as the default button.
+- A row is found again by what it is (type and origin), never by its place in the list. With no exception left the list says that every protection applies to every site.
+- uBlock Origin's own list of trusted sites stays its page; the row that opens it is in this group.
+- The old page's exceptions section left its navigation and search; it still opens by address.
+
+`tests/integration/test_settings_exceptions.py` (2 tests): exceptions made through the engine's permission manager are listed in words and join the list without a reload; removing one removes it from the engine and says so; one that is gone before the click is said in words; a browser default asks first (closed: kept; accepted: removed); none left.
+
+Still the old page's: search, passwords, DNS and the assistant, and the removal of the old page's sections with their tests.
 

@@ -1117,6 +1117,112 @@
       getControlConfig: config => (filter.state.value?.active === false ? { ...config, l10nId: "nulavio-filter-lists-off" } : config),
     });
 
+    // -- site exceptions: where a protection is off or relaxed for one site. NulavioPrivacy reads them from
+    // the engine's own permission store; removing one puts the protection back for that site. ------------
+    const exceptions = source(() => shell.NulavioPrivacy.exceptions());
+    const exceptionsNow = () => (exceptions.state.ready ? (exceptions.state.value ?? []) : []);
+    const exceptionBench = workbench({}, exceptions);
+    const EXCEPTION_WORDS = {
+      trackingprotection: { allow: "exceptionTracking" },
+      "trackingprotection-pb": { allow: "exceptionTrackingPrivate" },
+      "https-only-load-insecure": { allow: "exceptionHttpsOnly", session: "exceptionHttpsOnlySession" },
+      cookie: { allow: "exceptionCookieAllow", deny: "exceptionCookieDeny", session: "exceptionCookieSession" },
+      install: { allow: "exceptionInstall" },
+      popup: { allow: "exceptionPopup" },
+    };
+    const exceptionWhat = entry => {
+      const key = EXCEPTION_WORDS[entry.type]?.[entry.capability] ?? EXCEPTION_WORDS[entry.type]?.allow;
+      return key ? msg(key) : `${entry.type} (${entry.capability})`;
+    };
+    const exceptionRow = entry => {
+      const what = exceptionWhat(entry);
+      // What is relaxed, for how long and where, and whether the browser itself put it there.
+      const notes = [
+        what,
+        entry.session ? msg("exceptionUntilClose") : null,
+        entry.private ? msg("exceptionPrivate") : null,
+        entry.builtIn ? msg("exceptionBuiltInBadge") : null,
+      ].filter(Boolean);
+      return {
+        key: `exception-${entry.type}-${entry.origin}`,
+        control: "moz-box-item",
+        // The site is set as the row's label, never parsed.
+        controlAttrs: { label: entry.site, description: notes.join(" · "), class: "nulavio-exception", "data-type": entry.type, "data-origin": entry.origin },
+        options: [
+          {
+            key: `remove-${entry.type}-${entry.origin}`,
+            control: "moz-button",
+            slot: "actions",
+            iconSrc: "chrome://global/skin/icons/delete.svg",
+            disabled: exceptionBench.state.busy,
+            controlAttrs: {
+              title: `${msg("engineRemove")}: ${entry.site} — ${what}`,
+              "aria-label": `${msg("engineRemove")}: ${entry.site} — ${what}`,
+              "data-action": "remove",
+              // Found again by what it is, never by its place in a list that may have been read again.
+              "data-type": entry.type,
+              "data-origin": entry.origin,
+            },
+          },
+        ],
+      };
+    };
+    setting({
+      id: "nulavio-exceptions",
+      setup(emitChange, stops) {
+        stops.push(exceptions.listen(emitChange));
+        exceptionBench.watch(emitChange, stops);
+        exceptions.refresh();
+        try {
+          stops.push(shell.NulavioPrivacy.subscribe(exceptions.refresh)); // allowed or removed from the site's own panel
+        } catch (e) {
+          console.error(e);
+        }
+      },
+      visible: () => exceptions.state.ready,
+      getControlConfig(config) {
+        const rows = exceptionsNow().map(each => exceptionRow(each));
+        const none = { key: "none", control: "moz-box-item", controlAttrs: { label: msg("exceptionsEmpty"), class: "nulavio-exception-none" } };
+        return { ...config, options: rows.length ? rows : [none] };
+      },
+      async onUserClick(event) {
+        const button = event.target.closest?.('[data-action="remove"]');
+        const entry = button ? exceptionsNow().find(each => each.type === button.dataset.type && each.origin === button.dataset.origin) : null;
+        if (!entry) {
+          return;
+        }
+        const what = exceptionWhat(entry);
+        // A browser default is removed only after its consequence is said.
+        if (
+          entry.builtIn &&
+          !(await confirmDanger(msg("exceptionRemoveBuiltInTitle"), msg("exceptionRemoveBuiltInBody", entry.site, what), msg("engineRemove")))
+        ) {
+          return;
+        }
+        if (await exceptionBench.act(() => shell.NulavioPrivacy.remove(entry.type, entry.origin), msg("doneRemoved"))) {
+          focusWhenDrawn('#nulavio-exceptions moz-button[data-action="remove"]'); // its row is gone with the focus on it
+        }
+      },
+    });
+    // uBlock Origin keeps its own list of sites where it does not filter: its page, never its data.
+    setting({
+      id: "nulavio-filter-trusted",
+      setup: (emitChange, stops) => stops.push(filter.listen(emitChange)),
+      visible: () => Boolean(filter.state.value?.active),
+      onUserClick(event) {
+        event.preventDefault();
+        shell.NulavioPrivacy.openFilterList();
+      },
+      getControlConfig: config => ({
+        ...config,
+        controlAttrs: { ...config.controlAttrs, label: msg("exceptionsFilterOpen"), description: msg("exceptionsFilterOn") },
+      }),
+    });
+    const exceptionBars = [
+      exceptionBench.bar("nulavio-exceptions-error", "error", () => exceptionBench.state.error, () => Boolean(exceptionBench.state.error)),
+      exceptionBench.bar("nulavio-exceptions-said", "success", () => exceptionBench.state.said, () => Boolean(exceptionBench.state.said)),
+    ];
+
     // -- what changed outside Nulavio (the Guard's pending findings; the review is its own page) --
     // The count is read after the Guard's own check of this start (it waits for the windows to be back):
     // before that the Guard has no findings to give, which is not the same as "nothing to review".
@@ -1323,10 +1429,19 @@
             control: "moz-box-group",
             items: [
               { id: "nulavio-filter-lists", l10nId: "nulavio-filter-lists", control: "moz-box-button" },
-              detailRow("nulavio-open-exceptions", "exceptions"),
               { id: "nulavio-guard-review", l10nId: "nulavio-guard-review", control: "moz-box-button" },
             ],
           },
+        ],
+      },
+      nulavioExceptions: {
+        l10nId: "nulavio-exceptions-group",
+        headingLevel: 2,
+        items: [
+          failureNote("nulavio-exceptions-failed", exceptions),
+          ...exceptionBars,
+          { id: "nulavio-exceptions", control: "moz-box-group" },
+          { id: "nulavio-filter-trusted", control: "moz-box-button" },
         ],
       },
       nulavioSearch: {
@@ -1411,7 +1526,7 @@
         document.getElementById("category-ai-features")?.setAttribute("data-l10n-id", "nulavio-pane-assistant-nav");
         return edited;
       },
-      privacy: config => ({ ...config, groupIds: after(config.groupIds, "etpStatus", "nulavioProtections") }),
+      privacy: config => ({ ...config, groupIds: after(config.groupIds, "etpStatus", "nulavioProtections", "nulavioExceptions") }),
       passwordsAutofill: config => ({ ...config, groupIds: ["nulavioPasswordManager", ...config.groupIds] }),
       search: config => ({ ...config, groupIds: after(config.groupIds, "defaultEngine", "nulavioSearch") }),
       tabsBrowsing: config => ({

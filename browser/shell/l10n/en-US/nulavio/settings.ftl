@@ -115,9 +115,9 @@ nulavio-filter-lists =
 nulavio-filter-lists-off =
     .label = uBlock Origin is not on in this profile
     .description = Without it, ads and cookie notices are not blocked. Open Extensions and themes to turn it on.
-nulavio-open-exceptions =
+nulavio-exceptions-group =
     .label = Site exceptions
-    .description = Sites where a protection is off or relaxed, by you or by the browser itself.
+    .description = Sites where a protection is off or relaxed, by you or by the browser itself. Remove an exception and the protection applies to that site again.
 # $count is the number of changes waiting for a decision.
 nulavio-guard-review =
     .label = Changes made outside Nulavio

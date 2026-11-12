@@ -115,9 +115,9 @@ nulavio-filter-lists =
 nulavio-filter-lists-off =
     .label = O uBlock Origin não está ligado neste perfil
     .description = Sem ele, anúncios e avisos de cookies não são bloqueados. Abra Extensões e temas para ligar.
-nulavio-open-exceptions =
+nulavio-exceptions-group =
     .label = Exceções de sites
-    .description = Sites em que uma proteção está desligada ou relaxada, por você ou pelo próprio navegador.
+    .description = Sites em que uma proteção está desligada ou relaxada, por você ou pelo próprio navegador. Remova uma exceção e a proteção volta a valer para aquele site.
 # $count is the number of changes waiting for a decision.
 nulavio-guard-review =
     .label = Mudanças feitas fora do Nulavio
