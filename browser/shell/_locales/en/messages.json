@@ -124,6 +124,7 @@
   "err_not_found": {"message": "Not found. The list was refreshed."},
   "err_in_use": {"message": "That profile is open. Close its windows, then try again."},
   "err_is_current": {"message": "Delete the profile you are using from its own page."},
+  "err_last_unprotected": {"message": "This is the only profile without a password, and Nulavio starts in a profile without one. Create another profile without a password before deleting this one."},
   "err_unexpected": {"message": "Something went wrong. Nothing was changed."},
   "profilesButton": {"message": "Profiles"},
   "profilesButtonNamed": {"message": "Profile: $NAME$. Switch profile", "placeholders": {"name": {"content": "$1"}}},

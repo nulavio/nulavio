@@ -1,0 +1,80 @@
+{
+  "schema": 1,
+  "comment": "What a new Nulavio profile contacts by itself, before the person does anything. new-profile-connections.md explains each entry; tests/unit/test_new_profile_connections.py keeps the two in step and tests/integration/test_new_profile_connections.py fails on an address that is not here. Add a host only together with its row in the page.",
+  "recorded": {
+    "on": "2026-11-12",
+    "engine": "160.0",
+    "language": "pt-BR",
+    "seconds": 600
+  },
+  "connections": [
+    {
+      "id": "content-blocker-install",
+      "by": "engine",
+      "hosts": ["addons.mozilla.org"]
+    },
+    {
+      "id": "add-on-details",
+      "by": "engine",
+      "hosts": ["services.addons.mozilla.org"]
+    },
+    {
+      "id": "add-on-updates",
+      "by": "engine",
+      "hosts": ["versioncheck-bg.addons.mozilla.org", "addons.mozilla.org"]
+    },
+    {
+      "id": "remote-settings",
+      "by": "engine",
+      "hosts": [
+        "firefox.settings.services.mozilla.com",
+        "firefox-settings-attachments.cdn.mozilla.net",
+        "content-signature-2.cdn.mozilla.net"
+      ]
+    },
+    {
+      "id": "push",
+      "by": "engine",
+      "hosts": ["push.services.mozilla.com"]
+    },
+    {
+      "id": "media-plugins",
+      "by": "engine",
+      "hosts": ["aus5.mozilla.org", "ciscobinary.openh264.org"]
+    },
+    {
+      "id": "system-add-ons",
+      "by": "engine",
+      "hosts": ["aus5.mozilla.org"]
+    },
+    {
+      "id": "safe-browsing",
+      "by": "engine",
+      "hosts": ["safebrowsing.googleapis.com"]
+    },
+    {
+      "id": "network-check",
+      "by": "engine",
+      "scheme": "http",
+      "hosts": ["firefox-portal-detection.com"],
+      "names_only": ["example.org", "cloudflare-dns.com", "ipv4only.arpa"]
+    },
+    {
+      "id": "content-blocker-lists",
+      "by": "uBlock Origin",
+      "hosts": [
+        "cdn.jsdelivr.net",
+        "ublockorigin.github.io",
+        "ublockorigin.pages.dev",
+        "pgl.yoyo.org",
+        "malware-filter.gitlab.io",
+        "curbengh.github.io",
+        "publicsuffix.org"
+      ],
+      "mirrors_not_recorded": ["malware-filter.pages.dev", "raw.githubusercontent.com"],
+      "hosts_by_language": {
+        "pt": ["filters.adtidy.org"]
+      }
+    }
+  ]
+}
