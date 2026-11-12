@@ -22,6 +22,20 @@ Not in a public issue: security vulnerabilities, which go through a [private adv
 | `needs-decision` | Blocked on a choice by the maintainer |
 | `upstream-firefox`, `target-24h` | Engine updates under the [update policy](../architecture/update-policy.md), opened by `scripts/release/upstream_issue.py` |
 | `good first issue`, `help wanted` | Open to outside contributors |
+| `P0` … `P3` | Priority; see below |
+
+### Priority
+
+Every open issue has exactly one priority label. The order of work is P0 first, then P1, and so on; inside one level, the issue that unblocks others goes first.
+
+| Label | Meaning | Examples |
+|---|---|---|
+| `P0` | Urgent: a broken release, a security fix, data loss. Other work stops. `target-24h` issues are P0 by definition | an engine security release under the 24 h target |
+| `P1` | Next: worked on in the current cycle | a bug users can hit in a shipped feature; a decision that blocks other work |
+| `P2` | Soon: after the P1s | measurement and CI that prevent future regressions |
+| `P3` | Later, or waiting on a condition the issue states | long-term spikes; steps that wait on time or on another issue |
+
+An agent that opens an issue gives it a priority and one sentence of reason in the body. The maintainer changes it when they disagree, and only the maintainer moves an issue to P0, except for the issues `upstream_issue.py` opens.
 
 New labels are added here first, in the same pull request that starts using them.
 
