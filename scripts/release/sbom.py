@@ -323,6 +323,7 @@ def main() -> int:
     if args.gradle_dependencies or args.apk:
         parser.error("--gradle-dependencies and --apk need --companion")
     lock = json.loads(LOCK.read_text())
+    content_filter = json.loads((LOCK.parent / "content-filter.json").read_text(encoding="utf-8"))
     components = [
         {
             "type": "application",
@@ -361,6 +362,10 @@ def main() -> int:
         if entry["id"] in EXTENSION_CPE and (extension_cpe := cpe(EXTENSION_CPE[entry["id"]], entry["version"])):
             component["cpe"] = extension_cpe
         component["licenses"] = [{"license": {"id": license_id}}] if license_id else [{"license": {"name": entry["license"]}}]
+        if entry["key"] == content_filter["extension"] and content_filter["default_on"]:
+            # The one part of an extension a build carries: its list registry, inside distribution/policies.json.
+            carried = f"assets/assets.json (sha256 {content_filter['registry']['sha256']}) in distribution/policies.json"
+            component["properties"].append({"name": "nulavio:redistributed", "value": carried})
         components.append(component)
     if args.package:
         components[0] = engine_built(args.engine_version)

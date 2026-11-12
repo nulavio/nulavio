@@ -10,6 +10,8 @@ Same single source as the Track A launcher:
 * policies.json -> uBlock Origin installed from AMO (`normal_installed`:
   the user can disable it; Firefox verifies the Mozilla signature), allowed
   in private windows. Policies are visible to the user in about:policies.
+  A new profile also starts with the lists of browser/distribution/content-filter.json
+  switched on (cookie notices); see `registry_address`.
 
     python3 -I scripts/build/make_distribution.py --out <install-dir>/distribution
 """
@@ -17,8 +19,11 @@ Same single source as the Track A launcher:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
+import shutil
 import sys
+import urllib.parse
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -52,9 +57,76 @@ def distribution_ini() -> str:
     return "\n".join(lines) + "\n"
 
 
+CONTENT_FILTER = ROOT / "browser" / "distribution" / "content-filter.json"
+REGISTRY_DIR = CONTENT_FILTER.parent / "ublock-origin"
+LICENCE_NAME = "uBlock-Origin-LICENSE.txt"
+NOTICE_NAME = "uBlock-Origin-NOTICE.txt"
+
+
+def filter_registry() -> dict | None:
+    """uBlock Origin's own list registry with Nulavio's default lists switched on, or None when there are none.
+
+    The registry is the pinned package's, unchanged but for `"off": false` on the lists of content-filter.json.
+    The build stops when the copy in the repository is not the pinned version's, or names a list that the
+    registry does not have (or already has on): a stale default must not ship silently.
+    """
+    config = json.loads(CONTENT_FILTER.read_text(encoding="utf-8"))
+    if not config["default_on"]:
+        return None
+    ublock = extensions.load_lock()[config["extension"]]
+    raw = (REGISTRY_DIR / "assets.json").read_bytes()
+    pinned = config["registry"]
+    if pinned["version"] != ublock.version or hashlib.sha256(raw).hexdigest() != pinned["sha256"]:
+        raise SystemExit(
+            f"content-filter.json: the list registry is not uBlock Origin {ublock.version}'s; "
+            "run scripts/upstream/refresh_extensions_lock.py --registry"
+        )
+    registry = json.loads(raw)
+    for key in config["default_on"]:
+        entry = registry.get(key)
+        if not isinstance(entry, dict) or entry.get("content") != "filters" or entry.get("off") is not True:
+            raise SystemExit(f"content-filter.json: {key} is not a list that uBlock Origin {ublock.version} ships switched off")
+        entry["off"] = False
+    return registry
+
+
+def registry_notice() -> str:
+    """What the licence of the registry asks of a modified copy: that it says it was modified, by whom and when."""
+    config = json.loads(CONTENT_FILTER.read_text(encoding="utf-8"))
+    lists = "\n".join(f"  {key}" for key in config["default_on"])
+    return (
+        "policies.json, in this directory, carries a modified copy of uBlock Origin's filter list registry.\n\n"
+        f"Original: assets/assets.json of uBlock Origin {config['registry']['version']} (https://github.com/gorhill/uBlock),\n"
+        "copyright Raymond Hill and contributors, under the GNU General Public License, version 3\n"
+        f"({LICENCE_NAME}, beside this file).\n\n"
+        f"Modified by the Nulavio project (https://github.com/nulavio/nulavio) on {config['changed_on']}: the lists below,\n"
+        'which the original marks "off": true, are marked "off": false, so that a new profile starts with them\n'
+        "switched on. Nothing else is changed, and the copy stays under the same licence.\n\n"
+        f"{lists}\n\n"
+        "The unmodified file is in Nulavio's source: browser/distribution/ublock-origin/assets.json.\n"
+    )
+
+
+def registry_address(registry: dict) -> str:
+    """The registry as an address uBlock Origin loads without the network (its `assetsBootstrapLocation`).
+
+    uBlock Origin reads that address once, when a profile has no registry yet, and at that first start selects
+    every list that is not `"off": true`. A list with `"off": false` is selected then and is not part of the
+    stock default set, so the registry updates that follow leave the selection alone, and so does every later
+    start: the person's own choice stays. (`toOverwrite.filterLists` would replace the selection at every start.)
+
+    The form of the address is what uBlock Origin 1.75 accepts: only `scheme://` counts as external (anything
+    else is read as a file of the extension), and a cache token `?_=n` is appended, which the closing `#` turns
+    into a fragment. The engine reads the unknown type `//application/json` as plain ASCII text, so the JSON
+    is ASCII only and percent-encoded.
+    """
+    text = json.dumps(registry, separators=(",", ":"), ensure_ascii=True)
+    return "data://application/json," + urllib.parse.quote(text, safe=",:/{}[]@") + "#"
+
+
 def policies() -> dict:
     ublock = extensions.load_lock()["ublock-origin"]
-    return {
+    data = {
         "policies": {
             "ExtensionSettings": {
                 ublock.id: {
@@ -67,6 +139,13 @@ def policies() -> dict:
             "DisableFirefoxStudies": True,
         }
     }
+    registry = filter_registry()
+    if registry is not None:
+        # uBlock Origin's schema wants `adminSettings` as a JSON string. Only the registry's address is in it:
+        # every other key of `adminSettings` would overwrite the person's settings at each start.
+        admin = json.dumps({"assetsBootstrapLocation": registry_address(registry)})
+        data["policies"]["3rdparty"] = {"Extensions": {ublock.id: {"adminSettings": admin}}}
+    return data
 
 
 def main() -> int:
@@ -75,7 +154,15 @@ def main() -> int:
     args = parser.parse_args()
     args.out.mkdir(parents=True, exist_ok=True)
     (args.out / "distribution.ini").write_text(distribution_ini(), encoding="utf-8")
-    (args.out / "policies.json").write_text(json.dumps(policies(), indent=2) + "\n", encoding="utf-8")
+    data = policies()
+    (args.out / "policies.json").write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+    if "3rdparty" in data["policies"]:
+        # policies.json now carries uBlock Origin's registry (GPL-3.0): its licence goes with it.
+        shutil.copyfile(REGISTRY_DIR / "LICENSE.txt", args.out / LICENCE_NAME)
+        (args.out / NOTICE_NAME).write_text(registry_notice(), encoding="utf-8")
+    else:
+        (args.out / LICENCE_NAME).unlink(missing_ok=True)
+        (args.out / NOTICE_NAME).unlink(missing_ok=True)
     print(f"wrote {args.out}/distribution.ini and policies.json")
     return 0
 

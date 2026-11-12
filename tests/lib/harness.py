@@ -227,6 +227,16 @@ class FixtureServer:
                 f'<img id="ad" src="/adbanners/nulavio-test.png?n={n}">'
             )
             return page.encode(), html, {}
+        if path == "/cookie-notice":
+            # Cookie-notice fixture (tests/integration/test_content_filter.py): elements named like two of the
+            # most common consent banners, which the cookie-notice lists hide, beside one no list knows.
+            page = (
+                "<!doctype html><title>cookie-notice</title>"
+                '<p id="content">page content</p>'
+                '<div id="onetrust-banner-sdk">We value your privacy. Accept all cookies?</div>'
+                '<div id="cookie-banner">This site uses cookies.</div>'
+            )
+            return page.encode(), html, {}
         if path == "/privacy-page":
             # Tracking-protection fixture (tests/integration/test_privacy.py): a script from "localhost", a
             # third party here, which the test lists as a tracker through the engine's own test-entries pref.

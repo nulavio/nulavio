@@ -31,8 +31,11 @@ step() {
     local name=$1 t0 status
     shift
     t0=$(date +%s)
+    # In a subshell with errexit on: a step that is a function of this script (install_tree, sbom, manifest)
+    # stops at its first failing command. Called plainly here, with errexit off to read the status, it would
+    # carry on past a failure and report "ok".
     set +e
-    "$@" > "$out/logs/$name.log" 2>&1
+    ( set -e; "$@" ) > "$out/logs/$name.log" 2>&1
     status=$?
     set -e
     local took=$(( $(date +%s) - t0 ))
@@ -52,6 +55,10 @@ install_tree() {
     rm -rf "$install"
     mkdir -p "$work/install"
     tar -xJf "$tarball" -C "$work/install"
+    # policies.json carries uBlock Origin's list registry from the repository. make_distribution.py compares that
+    # copy with a checksum kept beside it; this compares it with the pinned package itself (from the cache or from
+    # AMO, checked against the lock), and stops the release when it differs or the package cannot be had.
+    python3 -I "$repo/scripts/upstream/refresh_extensions_lock.py" --check-registry
     python3 -I "$repo/scripts/build/make_distribution.py" --out "$install/distribution"
     python3 -I "$repo/scripts/build/make_tools.py" --out "$install/nulavio-tools"
 }

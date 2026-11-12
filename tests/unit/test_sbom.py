@@ -3,6 +3,7 @@ the Companion app's libraries as Gradle resolved them."""
 
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
 import re
@@ -57,6 +58,17 @@ class IdentifiersTest(unittest.TestCase):
         self.assertRegex(bitwarden["cpe"], r"^cpe:2\.3:a:bitwarden:bitwarden:[\d.]+:\*:\*:\*:browser:")
         self.assertNotIn("cpe", components["xpi:78272b6fa58f4a1abaac99321d503a20@proton.me"])  # not in the NVD
         self.assertNotIn("cpe", components["engine:firefox"])  # the preview uses the distribution's engine, version unknown
+
+    def test_the_list_registry_a_build_carries_is_declared(self):
+        carried = {
+            c["bom-ref"]: prop["value"]
+            for c in run()["components"]
+            for prop in c.get("properties", [])
+            if prop["name"] == "nulavio:redistributed"
+        }
+        self.assertEqual(list(carried), ["xpi:uBlock0@raymondhill.net"])
+        registry = ROOT / "browser" / "distribution" / "ublock-origin" / "assets.json"
+        self.assertIn(hashlib.sha256(registry.read_bytes()).hexdigest(), carried["xpi:uBlock0@raymondhill.net"])
 
     def test_every_component_with_an_exact_version_has_a_purl(self):
         with tempfile.TemporaryDirectory() as tmp:
