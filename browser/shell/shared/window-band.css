@@ -514,6 +514,10 @@
     }
     .nv-band-row .nv-band-origin:not([hidden]) {
       display: flex;
+      /* A site's name reads left to right in every language: in a right-to-left interface the two parts would
+         otherwise swap places, and "paypal.com.evil.org" would read as "evil.org" then ".paypal.com". */
+      direction: ltr;
+      unicode-bidi: isolate;
       flex: 1;
       justify-content: center;
       align-items: baseline;

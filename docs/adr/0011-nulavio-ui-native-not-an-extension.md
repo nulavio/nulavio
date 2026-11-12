@@ -1,6 +1,6 @@
 # ADR 0011 — Nulavio's own interface reads as the browser, not as an extension
 
-- **Status:** Accepted (2026-11-12). The maintainer asked for this direction on 2026-11-11 and follows the recommendations under "What was undecided"; steps 1 to 15 are built (below).
+- **Status:** Accepted (2026-11-12). The maintainer asked for this direction on 2026-11-11 and follows the recommendations under "What was undecided"; steps 1 to 20 are built (below).
 - **Related:** [ADR 0001](0001-engine-selection.md) (patch policy), [ADR 0008](0008-one-settings-page.md) (one settings page), [extension model](../architecture/extension-model.md).
 
 ## Context
@@ -272,7 +272,7 @@ What the Shell's own settings page holds now: the agents (connecting one, permis
 
 Branch `agent/claude/refactor-shell-api-unused`.
 
-With every setting drawn by the settings page, which calls the modules directly, the Shell's pages no longer change settings. Their API (the experiment schemas a page reaches as `browser.nulavio…`) still offered every setter the old page used. 38 functions that no Shell page calls are removed from the schemas and their parent scripts: all the setters of the look and the open-shortcuts call, adding, removing, defaulting and aliasing search engines, the routing switches, updating and deleting a profile, removing a site exception, the look-alike list, configuring and forgetting the assistant's service (the call that carried its key), and a few reads and doors nobody opens from a page.
+With every setting drawn by the settings page, which calls the modules directly, the Shell's pages no longer change settings. Their API (the experiment schemas a page reaches as `browser.nulavio…`) still offered every setter the old page used. 37 functions that no Shell page calls are removed from the schemas and their parent scripts (38 were taken out and one put back): all the setters of the look and the open-shortcuts call, adding, removing, defaulting and aliasing search engines, the routing switches, updating and deleting a profile, removing a site exception, the look-alike list, configuring and forgetting the assistant's service (the call that carried its key), and a few reads and doors nobody opens from a page.
 
 - **What it buys.** A Shell page is unprivileged content. If one were ever made to run someone else's script, the damage is bounded by this API; it can no longer, for example, delete a profile, make a search engine the default or hand the assistant a new address.
 - **A unit test keeps it so** (`test_the_api_offers_pages_nothing_they_do_not_call`): a function stays in a schema only while a page that uses its namespace names it.

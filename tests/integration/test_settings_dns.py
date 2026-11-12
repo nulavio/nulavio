@@ -150,6 +150,44 @@ class SettingsDnsTest(unittest.TestCase):
         self.assertEqual(followed["says"], "Agora: o resolvedor do computador.")
         self.assertFalse(followed["save"])
 
+    def test_03_a_resolver_locked_by_a_policy_cannot_be_changed_and_nothing_says_it_was(self):
+        """An administrator's policy fixes the resolver and locks it. The engine takes a write to a locked setting
+        without an error and without effect, so "DNS changed" was said of a choice that changed nothing: every
+        control of the form is now out of use, and the module refuses."""
+        self.m.chrome(
+            """
+            const defaults = Services.prefs.getDefaultBranch("");
+            defaults.setIntPref("network.trr.mode", 2);
+            defaults.setStringPref("network.trr.uri", arguments[0]);
+            for (const name of ["network.trr.mode", "network.trr.uri"]) Services.prefs.lockPref(name);
+            """,
+            [QUAD9],
+        )
+        now = self.open()
+        self.assertEqual(now["value"], "fallback", now)
+        self.assertEqual(now["provider"], "quad9", now)
+        usable = (
+            DOC
+            + """
+        return Object.fromEntries(["nulavio-dns-choice", "nulavio-dns-provider", "nulavio-dns-save"]
+          .map(id => [id, !d.getElementById(id).disabled]));
+        """
+        )
+        self.assertEqual(
+            self.m.chrome(usable), {"nulavio-dns-choice": False, "nulavio-dns-provider": False, "nulavio-dns-save": False}
+        )
+        refused = self.m.chrome(
+            """
+            const { NulavioPrivacy } = ChromeUtils.importESModule(
+              "resource://builtin-addons/nulavio-shell/modules/NulavioPrivacy.sys.mjs");
+            const tries = [{ choice: "system" }, { choice: "strict", provider: "cloudflare" }];
+            return tries.map(choice => { try { NulavioPrivacy.setDns(choice); return "changed"; } catch (e) { return e.code; } });
+            """
+        )
+        self.assertEqual(refused, ["pref-locked", "pref-locked"])
+        self.assertEqual((self.prefs()["mode"], self.prefs()["uri"], self.prefs()["chosen"]), (2, QUAD9, False))
+        self.assertIsNone(self.m.chrome(PAGE)["said"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -151,6 +151,7 @@ class NativeSettingsTest(unittest.TestCase):
         harness.wait_until(lambda: wanted(self.m.chrome(CONTROL, [selector]) or {"shown": False}), 15)
         state = self.m.chrome(CONTROL, [selector])
         self.assertIsNotNone(state, selector)
+        self.assertTrue(wanted(state), (selector, state))
         return state
 
     def test_01_one_page_in_the_order_of_the_journey(self):

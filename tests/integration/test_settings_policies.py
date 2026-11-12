@@ -9,7 +9,6 @@ how many those are. Another policy, a read that failed or a state not read yet l
 from __future__ import annotations
 
 import json
-import os
 import unittest
 from pathlib import Path
 
@@ -35,7 +34,7 @@ class SettingsPoliciesTest(unittest.TestCase):
         self.session = harness.GeckoProfileSession(name="Pessoal")
         self.addCleanup(self.session.cleanup)
         self.m = self.session.start()
-        shipped = Path(os.environ["NULAVIO_ENGINE"]).parent / "distribution" / "policies.json"
+        shipped = Path(harness.nulavio_engine().path).parent / "distribution" / "policies.json"
         self.shipped = json.loads(shipped.read_text(encoding="utf-8"))["policies"]
 
     def notice(self, shown: bool) -> dict:

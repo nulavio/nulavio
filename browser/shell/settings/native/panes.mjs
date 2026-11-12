@@ -997,6 +997,7 @@
       set(value) {
         routeBench.act(() => shell.NulavioRouting.setEnabled(Boolean(value)), msg("doneSaved"));
       },
+      disabled: () => routeBench.state.busy, // a click while another change is under way would be dropped
       getControlConfig: labelled("routingEnabledLabel"),
     });
     routeSetting({
@@ -1649,6 +1650,15 @@
     const dns = source(async () => shell.NulavioPrivacy.dns());
     const dnsBench = workbench({ draft: null }, dns);
     const dnsNow = () => (dns.state.ready ? dns.state.value : null);
+    // A policy that locks the resolver: nothing here can change it, so nothing here looks as if it could.
+    const dnsLocked = () => Boolean(dnsNow()?.locked);
+    const hostOf = address => {
+      try {
+        return new URL(address).host;
+      } catch {
+        return msg("dnsCustom");
+      }
+    };
     // What the form shows: what the person changed and has not saved yet, over what is in effect.
     const dnsForm = () => {
       const now = dnsNow();
@@ -1676,7 +1686,13 @@
         return msg("dnsNowSystem");
       }
       if (now.choice === "default") {
-        return msg(now.encryptedNow ? "dnsNowDefaultEncrypted" : "dnsNowDefaultPlain"); // what the default does right now
+        // What the default does right now, and by which resolver: the engine's word for the one in use.
+        if (!now.encryptedNow) {
+          return msg("dnsNowDefaultPlain");
+        }
+        return now.resolver === "cloudflare"
+          ? msg("dnsNowDefaultEncrypted")
+          : msg("dnsNowDefaultEncryptedBy", now.resolver === "custom" ? hostOf(now.resolverUri) : dnsProviderName(now.resolver));
       }
       return msg(now.choice === "strict" ? "dnsNowStrict" : "dnsNowFallback", now.provider === "custom" ? now.uri : dnsProviderName(now.provider));
     };
@@ -1701,7 +1717,7 @@
       set(value) {
         dnsDraft("choice", value);
       },
-      disabled: () => dnsBench.state.busy || Services.prefs.prefIsLocked("network.trr.mode"),
+      disabled: () => dnsBench.state.busy || dnsLocked(),
       getControlConfig(config) {
         const option = (value, label, note) => ({ value, controlAttrs: { label: msg(label), description: msg(note) } });
         return {
@@ -1726,7 +1742,7 @@
       set(value) {
         dnsDraft("provider", value);
       },
-      disabled: () => dnsBench.state.busy,
+      disabled: () => dnsBench.state.busy || dnsLocked(),
       getControlConfig: config => ({
         ...config,
         // Whoever is chosen sees which sites this profile looks up: said where the choice is made.
@@ -1742,7 +1758,7 @@
       set(value) {
         dnsDraft("uri", value);
       },
-      disabled: () => dnsBench.state.busy,
+      disabled: () => dnsBench.state.busy || dnsLocked(),
       getControlConfig: config => ({ ...config, controlAttrs: { ...config.controlAttrs, label: msg("dnsUriLabel"), placeholder: "https://" } }),
     });
     setting({
@@ -1750,7 +1766,7 @@
       setup: dnsSetup,
       visible: () => dns.state.ready,
       // Only when the form says something other than what is in effect.
-      disabled: () => dnsBench.state.busy || !dnsChanged(),
+      disabled: () => dnsBench.state.busy || dnsLocked() || !dnsChanged(),
       async onUserClick(event) {
         event.preventDefault();
         const { choice: chosen, provider, uri } = dnsForm();
@@ -1967,9 +1983,9 @@
           }
           // The command's name comes from the Shell's own messages, already in the browser's language.
           const attrs = { ...config.controlAttrs, label: command.description || name };
-          return command.shortcut
-            ? { ...config, controlAttrs: { ...attrs, description: command.shortcut } }
-            : { ...config, l10nId: "nulavio-key-none", controlAttrs: attrs };
+          // Both as plain attributes: a Fluent message that sets only the description would take the label
+          // away with it (Fluent clears the attributes a message does not provide), and the row would lose its name.
+          return { ...config, controlAttrs: { ...attrs, description: command.shortcut || msg("keyNone") } };
         },
       });
       return { id, control: "moz-box-item" };

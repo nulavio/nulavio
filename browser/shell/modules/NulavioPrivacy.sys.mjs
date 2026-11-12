@@ -118,6 +118,8 @@ export const FIRSTRUN_STEPS = Object.freeze(["welcome", "layout", "dns", "passwo
 // NulavioLayout.PREF_SHELL_START: set once, for a genuinely new profile (the layout adoption's rule).
 const PREF_NEW_PROFILE = "nulavio.startpage.shellFirstTab";
 const MODE = { system: Ci.nsIDNSService.MODE_TRROFF, fallback: Ci.nsIDNSService.MODE_TRRFIRST, strict: Ci.nsIDNSService.MODE_TRRONLY };
+// The two settings a DNS choice writes; a policy that locks one of them leaves nothing to choose here.
+const DNS_PREFS = ["network.trr.mode", "network.trr.uri"];
 
 /** An https:// resolver address without credentials; returns it normalised or throws. */
 export function checkResolverUri(raw) {
@@ -157,7 +159,8 @@ class Privacy {
       console.error("Nulavio privacy: the resolver in use", e);
     }
     const resolver = resolverUri ? (DNS_PROVIDERS.find(p => p.uri === resolverUri)?.id ?? "custom") : null;
-    return { choice, provider, uri, encryptedNow, resolver, resolverUri, chosen: Services.prefs.getBoolPref(PREF_DNS_CHOSEN, false), providers: DNS_PROVIDERS };
+    const locked = DNS_PREFS.some(name => Services.prefs.prefIsLocked(name));
+    return { choice, provider, uri, encryptedNow, resolver, resolverUri, locked, chosen: Services.prefs.getBoolPref(PREF_DNS_CHOSEN, false), providers: DNS_PROVIDERS };
   }
 
   /**
@@ -168,6 +171,11 @@ class Privacy {
   setDns({ choice, provider, uri } = {}) {
     if (!Object.hasOwn(MODE, choice)) {
       throw new PrivacyError("invalid-choice");
+    }
+    // A policy that locks the resolver decides. The engine takes a write to a locked setting without an error
+    // and without effect: "saved" would then be said of a choice that changed nothing.
+    if (DNS_PREFS.some(name => Services.prefs.prefIsLocked(name))) {
+      throw new PrivacyError("pref-locked");
     }
     if (choice !== "system") {
       const known = DNS_PROVIDERS.find(p => p.id === provider);

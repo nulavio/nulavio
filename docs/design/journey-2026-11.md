@@ -33,7 +33,7 @@ The complaint that started this: "it looks like nobody thought about the journey
 | Today | Reached from "Perfis" in Nulavio's settings, from the band's menu or from the profile manager. Creating, the recovery code, locking and unlocking exist as their own pages, named in the band ("Nulavio · Novo perfil protegido", "Nulavio · Desbloqueio") |
 | Walked (second round) | Three steps: name and template; a password (at least 8 characters, typed twice), or the computer's login; the recovery code in 7 numbered groups, with two of them asked back before the page goes on. A wrong group is caught in words. The last screen says "Bancos está criptografado e bloqueado. Ele abre depois que você desbloquear." and offers "Abrir Bancos" |
 | Where the person gets lost | **"Abrir Bancos" answered "Esse perfil está bloqueado. Desbloqueie primeiro." and stopped** (the page asked to switch to a profile it had just created locked). Fixed in the first-run slice: the button opens the profile's unlock page, as the profile menu and Settings do. The first run never said profiles exist; a person who read "Pessoal · Sem senha" in the band had no next step offered |
-| To be | The first run's last question, "Quer um perfil com senha?", says what this profile is, what a protected one is in the Vault's own words, and opens the Vault's steps in their own tab (built). In the unified settings, "Perfis e proteção" is the second pane ([ADR 0008](../adr/0008-one-settings-page.md)). In a window started for one profile directory the question is not asked, and the manager link there should not be offered (F6, still open) |
+| To be | The first run's last question, "Quer um perfil com senha?", says what this profile is, what a protected one is in the Vault's own words, and opens the Vault's steps in their own tab (built). In the unified settings, "Perfis e proteção" is the third pane ([ADR 0008](../adr/0008-one-settings-page.md)). In a window started for one profile directory the question is not asked, and the manager link there should not be offered (F6, still open) |
 
 ## 4. Unlock
 
@@ -95,7 +95,7 @@ The same second model walked the journeys again as a first-time user, this time 
 
 | # | Moment | Journey | Evidence | Answered by |
 |---|---|---|---|---|
-| 1 | Two settings pages; the person guesses which one owns an option | Configure | walked; F5 | ADR 0008: one page with the journey's navigation and every way in (slice 1, built); the detail screens still to be drawn natively |
+| 1 | Two settings pages; the person guesses which one owns an option | Configure | walked; F5 | ADR 0008: one page with the journey's navigation and every way in (built); the detail screens drawn natively (ADR 0011), but for the assistant's agents and the integrations |
 | 2 | "Protegido" beside a warning on the first frame | First use | walked; F1 (the filter part; "Senhas" was an artefact of the test session) | Only true facts on the welcome, the filter read again for the summary |
 | 3 | The first run never shows profiles, protection or the band | First use, profile | walked | First-run slice: the welcome draws the band with the real profile; the last question offers a protected profile |
 | 4 | The assistant cannot be found, then asks for a provider form | Assistant | F8 | To do |

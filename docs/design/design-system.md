@@ -1026,7 +1026,7 @@ each file's sha256 and size, the build and the commit whose Shell was synced ont
 
 ## Experience 2026-11: one surface, the stage, hidden chrome, sounds, and the rules
 
-From the experience review of 2026-11 ([references](references/2026-11/README.md), [journeys](journey-2026-11.md), [ADR 0008](../adr/0008-one-settings-page.md), [ADR 0009](../adr/0009-immersive-layout.md), [ADR 0010](../adr/0010-experience-direction.md)). Tokens, type, spacing and components above stay as they are; this section adds what the review decided and how each rule is checked. Parts marked *prototype* are on the prototype branches and not in the shipped theme yet; the frame is in the theme.
+From the experience review of 2026-11 ([references](references/2026-11/README.md), [journeys](journey-2026-11.md), [ADR 0008](../adr/0008-one-settings-page.md), [ADR 0009](../adr/0009-immersive-layout.md), [ADR 0010](../adr/0010-experience-direction.md)). Tokens, type, spacing and components above stay as they are; this section adds what the review decided and how each rule is checked. What is not built is said where it applies.
 
 ### The frame
 
@@ -1042,7 +1042,7 @@ From the experience review of 2026-11 ([references](references/2026-11/README.md
 
 ### The band is the constant
 
-In every layout, mode and page the band is the one row only the browser draws. What it carries, left to right: the profile and its protection; in the middle, the trusted name of a Nulavio page **or**, when the address bar is out of view, the site (host as the engine displays it, the registrable part emphasised, the connection state in words when it is not secure); the state seals on the right. No mode hides it, shrinks it to nothing or makes it translucent (`test_experience_rules`: no mode hides the band). The registrable domain is never cut: the row grows first, and if that is not enough the toolbar stays.
+In every layout, mode and page the band is the one row only the browser draws. What it carries, left to right: the profile and its protection; in the middle, the trusted name of a Nulavio page **or**, when the address bar is out of view, the site (host as the engine displays it, the registrable part emphasised, the connection state in words when it is not secure); the state seals on the right. No mode hides it, shrinks it to nothing or makes it translucent (`test_experience_rules` reads the sheets for a rule on the band that sets `display: none`, `visibility: hidden`, `opacity: 0` or no height; translucency in between is not checked). The registrable domain is meant never to be cut, the row growing first and the toolbar staying if that is not enough: that is not built, the site is on one line ([ADR 0009](../adr/0009-immersive-layout.md), [R64](../security/residual-risks.md)).
 
 ### The stage (first run)
 
@@ -1061,7 +1061,7 @@ A stage is a page that owns the window for a sequence the person must finish or 
 | Progress | "Etapa N de M" centred under the card; its line keeps its height on the steps that have no number |
 | Focus | When a step comes after an answer, the keyboard goes to it: to the main action where going on is the likely answer (welcome, layout, default browser, summary), to the title as a reading position (an underline, not a ring) where the step asks to read first (DNS, passwords, the protected profile) |
 | Motion | None between steps. The card does not slide, fade or resize |
-| Who is never staged | Private windows, temporary profiles, AI Workspaces, any tab other than the first run's. A page the first run opens (the Vault's steps) is an ordinary tab with the address bar |
+| Who is never staged | Private windows, temporary profiles, AI Workspaces, any tab other than the first run's (the last is tested, `test_firstrun_stage` 04; the first three are in the code without a test). A page the first run opens (the Vault's steps) is an ordinary tab with the address bar |
 
 ### Immersive: who decides (ADR 0009)
 

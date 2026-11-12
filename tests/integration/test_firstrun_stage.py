@@ -168,7 +168,7 @@ class FirstRunStageTest(unittest.TestCase):
         harness.wait_until(lambda: not self.window()["stage"], 10)
         self.assertTrue(self.window()["toolbarShown"])
         self.m.chrome("gBrowser.selectedTab = gBrowser.tabs[0];")
-        harness.wait_until(lambda: self.window()["stage"], 10)
+        self.assertTrue(harness.wait_until(lambda: self.window()["stage"], 10), "back on the first run's tab, not staged")
 
     def test_04b_a_tab_opened_later_keeps_the_keyboard_in_the_address_field(self):
         """New-user QA (2026-11-11): Ctrl+T and typing at once went nowhere, because the stage took the keyboard."""
@@ -177,7 +177,8 @@ class FirstRunStageTest(unittest.TestCase):
         harness.wait_until(lambda: not self.window()["stage"], 10)
         self.m.chrome("BrowserCommands.openTab();")
         self.addCleanup(self.m.chrome, "while (gBrowser.tabs.length > 1) gBrowser.removeTab(gBrowser.tabs.at(-1));")
-        harness.wait_until(lambda: self.window()["stage"], 10)  # the first run is not finished: the new tab shows it
+        # The first run is not finished: the new tab shows it, staged.
+        self.assertTrue(harness.wait_until(lambda: self.window()["stage"], 10), "the new tab is not the first run's stage")
         self.assertTrue(harness.wait_until(lambda: self.m.chrome("return gURLBar.focused;"), 5), "the stage took the keyboard")
         self.assertTrue(self.window()["toolbarShown"], "the address field has the keyboard and is not in view")
 

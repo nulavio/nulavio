@@ -882,6 +882,11 @@ class WindowUI {
           } catch {
             // An IP address or a single label: the whole host is the site.
           }
+          // An IPv6 address is shown between brackets, as in an address: without them its last group and a
+          // port could not be told apart.
+          if (host.includes(":")) {
+            host = `[${host}]`;
+          }
           // A port that is not the scheme's own is part of what the site is: never left out.
           if (uri.port !== -1) {
             host += `:${uri.port}`;

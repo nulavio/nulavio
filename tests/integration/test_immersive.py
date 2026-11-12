@@ -133,8 +133,15 @@ class ImmersiveTest(unittest.TestCase):
                 self.assertTrue(harness.wait_until(lambda: self.window()["off"] == "page", 10), self.window())
                 state = self.settled(True)
                 self.assertEqual((state["on"], state["toolbar"]), (False, True), state)
-        self.m.navigate(self.page)
-        self.assertTrue(harness.wait_until(lambda: self.window()["on"], 10), self.window())
+        # Back to a site, loaded as the addresses above were: the remote's own "navigate" now and then leaves the
+        # tab on the page's source (same address, another kind of document), and the mode is then rightly off.
+        self.m.chrome(
+            "gBrowser.selectedBrowser.fixupAndLoadURIString(arguments[0],"
+            " {triggeringPrincipal: Services.scriptSecurityManager.getSystemPrincipal()});",
+            [self.page],
+        )
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome(DOCUMENT)["there"] == self.page, 15), self.m.chrome(DOCUMENT))
+        self.assertTrue(harness.wait_until(lambda: self.window()["on"], 10), (self.window(), self.m.chrome(DOCUMENT)))
 
     def test_04_a_panel_on_the_toolbar_holds_it_and_a_menu_on_the_page_does_not(self):
         self.assertFalse(self.settled(False)["toolbar"])
@@ -403,6 +410,14 @@ class ImmersiveTest(unittest.TestCase):
         self.assertEqual(self.m.chrome(DOCUMENT)["shown"], refused)
         state = self.settled(True)
         self.assertEqual((state["on"], state["off"], state["toolbar"]), (False, "page", True), state)
+        # The band's name for an IPv6 address has its brackets: without them its last group and a port read as one.
+        self.m.chrome(
+            "gBrowser.selectedBrowser.fixupAndLoadURIString(arguments[0],"
+            " {triggeringPrincipal: Services.scriptSecurityManager.getSystemPrincipal()});",
+            ["http://[::1]:1/"],
+        )
+        named = "return document.querySelector('#nulavio-band .nv-band-origin-host').textContent;"
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome(named) == "[::1]:1", 15), self.m.chrome(named))
         self.m.navigate(self.page)
         self.assertTrue(harness.wait_until(lambda: self.window()["on"], 10), self.window())
 

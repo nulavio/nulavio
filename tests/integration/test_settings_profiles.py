@@ -295,6 +295,7 @@ class SettingsProfilesTest(unittest.TestCase):
         self.m.chrome(CHANGE, ["nulavio-profile-new-template", "banking"])
         self.assertEqual(self.seen(lambda n: n["fresh"]["template"] == "banking")["fresh"]["name"], "Leituras")
         self.m.chrome(CHANGE, ["nulavio-profile-new-template", "research"])
+        self.assertEqual(len(self.profiles()), 3, "choosing a template or typing a name created a profile")
         self.m.chrome(CLICK, ["#nulavio-profile-new-create"])
         made = self.seen(lambda n: n["said"] and any(row["name"] == "Leituras" for row in n["rows"]))
         self.assertEqual(made["said"], "Perfil criado.")

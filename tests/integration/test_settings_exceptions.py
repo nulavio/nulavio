@@ -117,6 +117,7 @@ class SettingsExceptionsTest(unittest.TestCase):
     def test_02_a_browser_default_asks_first_and_none_left_says_so(self):
         now = self.open()
         built_in = [row for row in now["rows"] if "Padrão do navegador" in row["what"]]
+        self.assertTrue(built_in, "the engine ships no default exception any more: this test has nothing to ask about")
         if built_in:
             row = built_in[0]
             self.assertTrue(self.m.chrome(REMOVE, [row["type"], row["origin"]]))

@@ -183,6 +183,18 @@ class ShortcutsTest(unittest.TestCase):
         settings_page.click(self.m, "#nulavio-keys-reset")
         self.assertTrue(harness.wait_until(lambda: self.key("toggle-focus") == "Ctrl+Alt+F", 10), self.key("toggle-focus"))
         settings_page.wait_control(self.m, "nulavio-keys-reset", lambda now: not now["shown"])
+        # A command left without a key keeps its name in its row, which says there is none; and gets it back.
+        name = settings_page.control(self.m, "nulavio-key-toggle-focus")["label"]
+        self.assertEqual(name, "Ligar ou desligar o layout Foco")
+        self.shell_page()
+        self.m.execute("return browser.commands.update({name: 'toggle-focus', shortcut: ''});")
+        self.open_settings()
+        row = settings_page.control(self.m, "nulavio-key-toggle-focus")
+        self.assertEqual((row["label"], row["description"]), (name, "Sem tecla"), row)
+        settings_page.wait_control(self.m, "nulavio-keys-reset")
+        settings_page.click(self.m, "#nulavio-keys-reset")
+        self.assertTrue(harness.wait_until(lambda: self.key("toggle-focus") == "Ctrl+Alt+F", 10), self.key("toggle-focus"))
+        self.assertEqual(settings_page.control(self.m, "nulavio-key-toggle-focus")["label"], name)
 
     def test_06_hints_follow_a_changed_key(self):
         self.shell_page()
