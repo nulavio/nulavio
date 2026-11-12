@@ -58,7 +58,23 @@ gh api -X POST repos/nulavio/nulavio/issues/<parent-number>/sub_issues -F sub_is
 7. **Mention people only when you need them.** `@name` notifies a real account. Write roles and code (`@types/node`) in backticks.
 8. Write issues with `gh issue create --title "<outcome>" --label <label> --body-file <file>`, never by pasting secrets or private paths into the body.
 
+## The project board
+
+[Nulavio](https://github.com/orgs/nulavio/projects/1) (organization project 1, private, linked to this repository) shows every open issue in one place:
+
+- **Status**: `Todo`, `In Progress`, `Done`.
+- **Area**: `Browser & Shell`, `Launcher & profiles`, `Passwords & vault`, `Release & CI`, `Site`, `Android companion`, `Process & org`.
+
+Agents add each issue they open to the board, with its Area and the `Todo` status:
+
+```sh
+gh project item-add 1 --owner nulavio --url <issue-url>
+# then set Status and Area: gh project item-edit (field and option ids from gh project field-list 1 --owner nulavio)
+```
+
+An agent moves an issue to `In Progress` when it starts the work and leaves `Done` to GitHub (on merge) or to the maintainer. New fields or Area values are added here first.
+
 ## Not set up yet (maintainer items)
 
-- A GitHub Project board over these issues. The `gh` token in use lacks the `project` scope (`gh auth refresh -s project`).
 - Milestones per release, and the organization's issue types (Bug, Feature, Task) in place of the kind labels.
+- How the organization's repositories are laid out for the long term is open in #97.
