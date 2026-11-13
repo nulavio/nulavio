@@ -2,6 +2,32 @@
 
 Each milestone has a definition of done (DoD). "Done" requires the DoD to be verified, not just the UI to exist.
 
+## Road to 1.0
+
+Set by the maintainer on 2026-11-13: the stable release goes out when the [1.0 milestone](https://github.com/nulavio/nulavio/milestone/1) is closed. Its scope is the issues open on 2026-11-13, plus #224–#228 for the parts of the [scope of 1.0](release-criteria.md#scope-of-10-decided-2026-11-04) that had no issue. Four issues wait on someone outside the project (F-Droid, Flathub, uBlock Origin) and are in [After 1.0](https://github.com/nulavio/nulavio/milestone/2): #90, #91, #114, #207. An issue opened later joins 1.0 only if it is a bug, a regression or a security fix; anything else goes to After 1.0.
+
+The work is ordered in waves, recorded in the board's `Wave` field ([issues](../process/issues.md#the-project-board)). Waves 1 and 2 run side by side; inside a wave, priority labels and dependencies decide.
+
+| Wave | What | Issues |
+|---|---|---|
+| 0 Unblock | Repository settings, credentials and the APT pull request; one session where the maintainer decides the `needs-decision` issues | #182, #195, #201, #211 |
+| 1 Vault and fixes | Bugs in shipped features and the Vault's key handling, which the independent review (#224) reads once they land | #43, #103, #112, #135, #136, #138, #142, #177, #187, #204 |
+| 2 Release and process | Signed APK and APT, the release scripts' tests, release notes, the install journey, Flathub's build, instructions per area | #88, #89, #97, #120, #179, #180, #181, #189, #193, #198, #205, #215, #223, #227, #228 |
+| 3 Quality evidence | Fingerprinting, performance, fuzzing, compatibility with Google, calls and DRM, the independent review, Proton Pass, the UX DoD | #79, #80, #118, #149, #157, #158, #220, #221, #222, #224, #225, #226 |
+| 4a Features, small | | #116, #160, #161, #167, #170 |
+| 4b Features, medium | | #81, #119, #151, #152, #154, #155, #156, #159, #162, #163, #164, #165, #166, #171, #218 |
+| 4c Features, large | Tor and network routes, web apps, low power, two spikes; the parent issues #172 and #219 close with their sub-issues | #95, #153, #168, #169, #172, #216, #217, #219 |
+| 5 Brand and launch | Decided early (#175), built during the release candidate so the site and the material show what ships | #173, #175, #176, #199, #202 |
+
+### Stable release plan
+
+1. **Feature freeze** when waves 1–4 are closed: from then on, fixes only.
+2. **Release candidate**: an alpha release (`<Firefox>-0.N`) on the Firefox release current at the time, used for at least two weeks: upgrade from the previous alpha, the 50-site run (#202), fingerprinting (#79), performance (#80), the install journey on RPM, APT and Flatpak (#120), and the independent review's findings fixed or recorded (#224).
+3. **Go or no-go**: the 1.0 milestone is empty; every item of the [scope of 1.0](release-criteria.md#scope-of-10-decided-2026-11-04) is verified; CI is green on the exact commit; at least one month of alpha releases went out inside the [update policy](../architecture/update-policy.md)'s times.
+4. **Release** `<Firefox>-1.0` (the version scheme in [CHANGELOG.md](../../CHANGELOG.md)) through `release.yml`, signed after the maintainer's approval: dnf and APT repositories, the Flatpak bundle and the Companion's APK.
+5. **Launch** in the same week: the site (#173), link previews (#199), release notes (#198), the launch material (#176), and the Flathub submission (#89) when #90 allows it.
+6. **After 1.0**: fixes as `<Firefox>-1.N`; the 24-hour public commitment for urgent Firefox releases decided; #207 from 2027-01-27, then #90 and #91.
+
 ## Phase 0 — Discovery, feasibility, engine ADR · **complete (2026-10-24)**
 
 - [x] Environment inventory (Fedora 44 KDE 6.7.5 Wayland, Firefox 158.0.1, Qt 6.11.2, 16 threads, 30 GiB, 325 GB free)
@@ -140,7 +166,7 @@ External agents (Codex CLI and Desktop, Claude Code and Desktop, other MCP clien
 
 ## Next task (recommended)
 
-S1–S25 and UX0–UX7 are done except where marked above. What is left before the public alpha and 1.0 is listed in the [release criteria](release-criteria.md) and the [execution plan](execution-plan.md): most of it is the maintainer's (release key and repository host, Safe Browsing quota, a test security report, brand filings, Proton Pass on the build); the agents' part is keeping the engine current (Firefox 160) and the fixes from the 2026-11-09 review.
+S1–S25 and UX0–UX7 are done except where marked above, and the public alpha is out. What is left before 1.0 is in [Road to 1.0](#road-to-10) above.
 
 ## Phase 7 — UX redesign (from 2026-10-27) ([programme](execution-plan.md#ux-redesign-programme-from-2026-10-27))
 

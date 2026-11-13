@@ -70,3 +70,5 @@ What is in place for it (2026-11-04): `publish_release.sh` signs only what a reh
 ## Scope of 1.0 (decided 2026-11-04)
 
 1.0 is the public alpha's scope made stable: every phase's DoD except FIDO2 unlock (S10), which the UI and the site show as not available yet (phone unlock, U6/U7 and S11, came back in on 2026-11-10 after its device test on a real phone, with the Companion on F-Droid); an independent review of the Vault and of the release chain with its findings fixed or recorded; at least one month of alpha releases inside the update SLA; the remaining Proton Pass checklist (unlock after restart, autosave, passkeys); and the UX DoD (both themes, every preset, WCAG 2.2 AA checks).
+
+Tracked since 2026-11-13 by the [1.0 milestone](https://github.com/nulavio/nulavio/milestone/1); the parts that had no issue are #224 (independent review), #225 (Proton Pass), #226 (UX DoD), #227 (phone unlock on the real phone, with the APK of #205, since F-Droid's inclusion waits until 2027: #207) and #228 (Ubuntu host, R46). The waves and the release plan are in the [roadmap](roadmap.md#road-to-10).
