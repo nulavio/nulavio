@@ -4,11 +4,18 @@ Nulavio ships a few policies of its own (its content blocker, no telemetry, no s
 line on every pane to everyone, and it would also be the only sign of a policy added by someone else. The settings
 page drops it only while the policies in effect were read and are exactly the build's own, and "Sobre" then says
 how many those are. Another policy, a read that failed or a state not read yet leave the engine's line in place.
+
+Which policies are Nulavio's own is kept inside the Shell as digests (shared/own-policies.json), not read from the
+application's distribution/policies.json: that file is where an administrator adds a policy.
 """
 
 from __future__ import annotations
 
+import dataclasses
 import json
+import shutil
+import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -95,12 +102,17 @@ class SettingsPoliciesTest(unittest.TestCase):
         self.assertEqual(self.notice(True), {"shown": True, "link": "about:policies", "own": False})
 
     def test_03_what_counts_as_the_same_policies(self):
-        same = f"return {MODULE}.samePolicies(arguments[0], arguments[1]);"
         ours = self.shipped
+        # The digests the Shell carries are those of the policies this build ships, taken the way the engine takes them.
+        own = json.loads((harness.ROOT / "browser" / "shell" / "shared" / "own-policies.json").read_text(encoding="utf-8"))
+        digests = self.m.chrome(f"return {MODULE}.policyDigests(arguments[0]);", [ours])
+        self.assertEqual(digests, own["policies"])
+        same = f"return {MODULE}.ownPolicies(arguments[0], arguments[1]);"
         reordered = dict(reversed(list(ours.items())))
-        self.assertTrue(self.m.chrome(same, [ours, reordered]))
+        self.assertTrue(self.m.chrome(same, [ours, digests]))
+        self.assertTrue(self.m.chrome(same, [reordered, digests]))
         # The engine fills some policies with empty values from the second start on: they set nothing.
-        self.assertTrue(self.m.chrome(same, [ours | {"SitePolicies": [], "Empty": {}, "Nothing": None}, ours]))
+        self.assertTrue(self.m.chrome(same, [ours | {"SitePolicies": [], "Empty": {}, "Nothing": None}, digests]))
         first = next(iter(ours))
         for label, other in (
             ("one added", ours | {"DisableAppUpdate": True}),
@@ -110,11 +122,36 @@ class SettingsPoliciesTest(unittest.TestCase):
             ("no policies at all", {}),
         ):
             with self.subTest(label):
-                self.assertFalse(self.m.chrome(same, [other, ours]))
-        # A shipped file that could not be read equals nothing, and neither does something that is not a set of policies.
-        for label, shipped in (("unreadable", None), ("a list", []), ("a string", "policies")):
+                self.assertFalse(self.m.chrome(same, [other, digests]))
+        # Digests that could not be read equal nothing, and neither does something that is not a set of them.
+        for label, unusable in (("unreadable", None), ("a list", []), ("a string", "policies")):
             with self.subTest(label):
-                self.assertFalse(self.m.chrome(same, [ours, shipped]))
+                self.assertFalse(self.m.chrome(same, [ours, unusable]))
+
+    def test_04_a_policy_added_to_the_applications_own_file_is_not_nulavios(self):
+        """An administrator adds a policy where the engine reads them: the application's distribution/policies.json.
+        That file used to be what the policies in effect were compared with, so the comparison said "only Nulavio's
+        own" of any policy written there, and the engine's line went. In a disposable copy of the application."""
+        install = Path(self.session.engine.path).resolve().parent
+        tmp = Path(tempfile.mkdtemp(prefix="nulavio-own-policies-"))
+        self.addCleanup(shutil.rmtree, tmp, True)
+        copy = tmp / "app"
+        subprocess.run(["cp", "-a", "--reflink=auto", str(install), str(copy)], check=True, timeout=300)
+        policies_file = copy / "distribution" / "policies.json"
+        added = dict(self.shipped) | {"DontCheckDefaultBrowser": True}
+        policies_file.write_text(json.dumps({"policies": added}, indent=2) + "\n", encoding="utf-8")
+        session = harness.GeckoProfileSession(name="Gerenciado")
+        session.engine = dataclasses.replace(self.session.engine, path=copy / Path(self.session.engine.path).name)
+        self.addCleanup(session.cleanup)
+        m = session.start()
+        in_effect = m.chrome("return Object.keys(Services.policies.getActivePolicies());")
+        self.assertIn("DontCheckDefaultBrowser", in_effect)
+        self.assertEqual(m.chrome(f"return {GUARD}.policiesOrigin();"), {"origin": "other", "count": len(added)})
+        settings_page.open_pane(m, "paneAbout")
+        row = settings_page.wait_control(m, ROW, lambda now: now["label"])
+        self.assertEqual(row["label"], f"{len(added)} políticas em vigor")
+        harness.wait_until(lambda: m.chrome(NOTICE)["shown"], 10)
+        self.assertEqual(m.chrome(NOTICE), {"shown": True, "link": "about:policies", "own": False})
 
 
 if __name__ == "__main__":

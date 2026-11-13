@@ -19,7 +19,6 @@
 (() => {
   const here = { global: "current" };
   const SHELL = "shell@nulavio.net";
-  const MODULES = "resource://builtin-addons/nulavio-shell/modules/";
   const IMAGES = "resource://builtin-addons/nulavio-shell/settings/native/";
   const root = document.documentElement;
   if (root.hasAttribute("nulavio-settings")) {
@@ -58,11 +57,43 @@
   }
   const { SettingGroupManager, SettingPaneManager, Preferences, nav } = preflight();
 
-  // The Shell's own modules, from the shared system global (fixed addresses; loaded when first used).
-  const shell = new Proxy(
-    {},
-    { get: (_target, name) => ChromeUtils.importESModule(`${MODULES}${name}.sys.mjs`)[name] }
-  );
+  // The Shell's own modules, from the shared system global, each loaded when first used. Each address is written
+  // out: privileged code never loads a module from an address it put together (the project's own scanner rule).
+  const shell = {
+    get NulavioAI() {
+      return ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioAI.sys.mjs").NulavioAI;
+    },
+    get NulavioGuard() {
+      return ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioGuard.sys.mjs").NulavioGuard;
+    },
+    get NulavioLayout() {
+      return ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioLayout.sys.mjs").NulavioLayout;
+    },
+    get NulavioPasswords() {
+      return ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioPasswords.sys.mjs").NulavioPasswords;
+    },
+    get NulavioPersonalise() {
+      return ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioPersonalise.sys.mjs").NulavioPersonalise;
+    },
+    get NulavioPrivacy() {
+      return ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioPrivacy.sys.mjs").NulavioPrivacy;
+    },
+    get NulavioProfiles() {
+      return ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioProfiles.sys.mjs").NulavioProfiles;
+    },
+    get NulavioRouting() {
+      return ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioRouting.sys.mjs").NulavioRouting;
+    },
+    get NulavioSearch() {
+      return ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioSearch.sys.mjs").NulavioSearch;
+    },
+    get NulavioSettings() {
+      return ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioSettings.sys.mjs").NulavioSettings;
+    },
+    get NulavioVault() {
+      return ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioVault.sys.mjs").NulavioVault;
+    },
+  };
   const top = () => window.browsingContext.topChromeWindow;
   // The tab this page is in: the layout module follows it when the tab moves to another window.
   const tab = () => window.browsingContext.top.embedderElement;

@@ -306,13 +306,13 @@ Nulavio ships a few policies of its own (its content blocker, no telemetry, no s
 
 ![Before and after in Privacidade, and the row in Sobre, pt-BR light and en-US dark](../design/screenshots/experience-2026-11/settings-policies-sheet.png)
 
-- **The line is dropped only on a positive read**: `NulavioGuard.policiesOrigin()` compares the policies in effect with the build's `distribution/policies.json` and answers "own" only when they set exactly the same things. One added, removed or changed, a shipped file that cannot be read, a read that failed, a state not read yet: the engine's line stays as the engine shows it. The comparison ignores policies that set nothing, which the engine fills in from the second start on (the Guard's existing rule).
+- **The line is dropped only on a positive read**: `NulavioGuard.policiesOrigin()` compares the policies in effect with the ones a build ships and answers "own" only when they set exactly the same things. It knows the build's by their digests, kept inside the Shell (`shared/own-policies.json`, written by `scripts/build/make_distribution.py`, which refuses to write the policies when the digests are not theirs). The first version compared with `distribution/policies.json` itself: that is the file an administrator adds a policy to, and compared with itself it always said "own" (found by the automatic review of the pull request that landed this). One added, removed or changed, digests that cannot be read, a read that failed, a state not read yet: the engine's line stays as the engine shows it. The comparison ignores policies that set nothing, which the engine fills in from the second start on (the Guard's existing rule).
 - **"Sobre" says what is in effect**: "O Nulavio aplica 3 políticas próprias", or "N políticas em vigor" with "they are not exactly the ones that come with Nulavio"; the row opens the engine's own list (`about:policies`).
 - The engine's line is never restyled or reworded: it is shown or not.
 
 `tests/integration/test_settings_policies.py` (3 tests): only Nulavio's policies on three panes, the row and its door; another policy, a failed read and back again, and a page loaded while another policy is in effect; what counts as the same set (order, empty values, one added, removed or changed, an unreadable file).
 
-Not verified: a policy added for real by a system file (`/etc/…/policies`), which the test session cannot write: the state is given to the module by the test, and the comparison is tested on its own with such sets. A screen reader was not run.
+Not verified: a policy added by a system file (`/etc/…/policies`), which the test session cannot write. A policy added to the application's own file is tried, in a disposable copy of the application (`test_settings_policies` 04); the page's other states are given to the module by the test, and the comparison is tested on its own with such sets. A screen reader was not run.
 
 ## Step 19 (2026-11-12): Nulavio's groups measured in a narrow page and at 200 % text
 

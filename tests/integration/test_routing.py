@@ -496,9 +496,11 @@ class RoutingTest(unittest.TestCase):
         settings_page.change(self.m, "nulavio-routing-match", "domain")
         settings_page.change(self.m, "nulavio-routing-action", "ask")
         settings_page.click(self.m, "#nulavio-routing-add")
-        has = lambda found: any("example.org" in row["label"] for row in found)  # noqa: E731
+        added = lambda: [r for r in self.call("return (await R.state()).rules;") if r["value"] == "example.org"]  # noqa: E731
+        self.assertTrue(harness.wait_until(added, 15), "the rule was not added")
+        rule = added()[0]
+        has = lambda found: any(row["data"].get("rule") == str(rule["id"]) for row in found)  # noqa: E731
         settings_page.wait_rows(self.m, "nulavio-routing-rules", has, each)
-        rule = next(r for r in self.call("return (await R.state()).rules;") if r["value"] == "example.org")
         self.assertEqual((rule["match"], rule["action"]), ("domain", "ask"))
         settings_page.click_row(self.m, "nulavio-routing-rules", str(rule["id"]), "remove", each)
         settings_page.wait_rows(self.m, "nulavio-routing-rules", lambda found: not has(found), each)

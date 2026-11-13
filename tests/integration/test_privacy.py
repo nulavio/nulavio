@@ -21,6 +21,7 @@ import sys
 import time
 import unittest
 from pathlib import Path
+from urllib.parse import urlsplit
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
 import harness
@@ -131,7 +132,8 @@ class PrivacyTest(unittest.TestCase):
         self.assertEqual(mine[0]["data"]["type"], "trackingprotection")
         self.assertIn("Proteção contra rastreamento desligada", mine[0]["description"])
         # The engine's own defaults are listed as such (addons.mozilla.org may offer add-ons).
-        self.assertTrue(any(row["data"]["type"] == "install" and "addons.mozilla.org" in row["label"] for row in built_in), rows)
+        amo = lambda row: urlsplit(row["data"].get("origin", "")).hostname == "addons.mozilla.org"  # noqa: E731
+        self.assertTrue(any(row["data"]["type"] == "install" and amo(row) for row in built_in), rows)
         # uBlock Origin's state, as the add-on manager and its own storage report it.
         self.assertTrue(settings_page.wait_control(self.m, "nulavio-filter-lists")["label"])
         settings_page.shoot(self.m, self.shots, "exceptions")
