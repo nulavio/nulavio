@@ -231,21 +231,32 @@ class WorkflowTest(unittest.TestCase):
     def test_the_reviewer_starts_with_its_isolation_on_and_the_tool_it_needs(self):
         # Claude Code 2.1.318 refuses to start with the scrubbing on and no bwrap; the first run with a
         # model credential (2026-11-13) failed that way. Turning the scrubbing off is not the fix.
-        review = job("review")
-        self.assertIn('CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: "1"', review)
-        self.assertNotIn('CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: "0"', WORKFLOW)
-        names = [step.splitlines()[0] for step in steps(review)]
-        (install,) = [i for i, name in enumerate(names) if "bubblewrap" in name]
-        (reviewing,) = [i for i, step in enumerate(steps(review)) if "anthropics/claude-code-action@" in step]
+        review_steps = steps(job("review"))
+        (install,) = [i for i, step in enumerate(review_steps) if "bubblewrap" in step.splitlines()[0]]
+        (reviewing,) = [i for i, step in enumerate(review_steps) if "anthropics/claude-code-action@" in step]
         self.assertLess(install, reviewing)
-        script = steps(review)[install]
-        self.assertIn("scripts/ci/apt_install.sh bubblewrap", script, "from the base checkout, like the other jobs' packages")
-        self.assertRegex(script, r"probe\(\) \{ bwrap --unshare-user ", "it is tried before the review depends on it")
-        self.assertTrue(script.rstrip().endswith("fi"), script[-80:])
-        self.assertRegex(
-            script,
-            r"if ! probe 2>/dev/null; then\n\s+sudo sysctl [^\n]+\n\s+probe\n\s+fi",
-            "and tried again: a failure stops the job",
+        # On, on the step that runs Claude Code, and set nowhere else (not in the settings either).
+        self.assertEqual(re.findall(r'SUBPROCESS_ENV_SCRUB\\?"?\s*[:=]\s*\\?[\'"]?(\w+)', WORKFLOW), ["1"])
+        self.assertIn('        env:\n          CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: "1"\n', review_steps[reviewing])
+        self.assertNotIn("continue-on-error", WORKFLOW)
+        # The step is exactly this: main's script, a try, the AppArmor switch only where it is on, and
+        # a second try whose failure stops the job. Nothing that swallows an error fits in between.
+        head, found, body = review_steps[install].partition("        run: |\n")
+        self.assertTrue(found)
+        self.assertEqual(head.splitlines()[1:], ["        if: steps.input.outputs.status == 'ready'"])
+        commands = [line.strip() for line in body.splitlines() if line.strip() and not line.strip().startswith("#")]
+        self.assertEqual(
+            commands,
+            [
+                "scripts/ci/apt_install.sh bubblewrap",
+                "probe() { bwrap --unshare-user --unshare-pid --ro-bind / / --dev /dev --proc /proc true; }",
+                "if ! probe 2>/dev/null; then",
+                'if [ "$(cat /proc/sys/kernel/apparmor_restrict_unprivileged_userns 2>/dev/null)" = 1 ]; then',
+                "sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0",
+                "fi",
+                "probe",
+                "fi",
+            ],
         )
 
     def test_comment_header_names_the_model_and_action_that_ran(self):
