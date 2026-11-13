@@ -53,11 +53,19 @@ apt_install() {
     rm -f "$sources"
 }
 
+# rpm prints the distribution after the release (160.0-0.4.fc44); a .deb's version is exact.
+matches() {
+    case $1 in
+        dnf*) [[ $2 == "$expected" || $2 == "$expected".fc* ]] ;;
+        *) [[ $2 == "$expected" ]] ;;
+    esac
+}
+
 check() {
     local name=$1 install=$2 got
     for attempt in 1 2 3 4 5 6 7 8 9 10; do
         got=$($install)
-        if [[ $got == "$expected" || $got == "$expected".* ]]; then
+        if matches "$name" "$got"; then
             echo "check_published: $name installed nulavio $got with the signature checks on"
             return 0
         fi

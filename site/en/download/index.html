@@ -103,8 +103,16 @@ sha256sum --check --ignore-missing SHA256SUMS</code></pre></div>
 
 <section id="remove" aria-labelledby="remove-h">
 <h2 id="remove-h">Remove</h2>
+<!--apt:on-->
+<p class="prose">On Fedora:</p>
+<!--/apt:on-->
 <div class="pre-scroll" role="region" aria-label="Removal commands" tabindex="0"><pre translate="no"><code>sudo dnf remove nulavio
 sudo rm /etc/yum.repos.d/nulavio.repo</code></pre></div>
+<!--apt:on-->
+<p class="prose">On Ubuntu:</p>
+<div class="pre-scroll" role="region" aria-label="Removal commands for Ubuntu" tabindex="0"><pre translate="no"><code>sudo apt remove nulavio
+sudo rm /etc/apt/sources.list.d/nulavio.sources</code></pre></div>
+<!--/apt:on-->
 <p class="prose">Your profiles live in your home folder and are not deleted when you remove the program.</p>
 </section>
 

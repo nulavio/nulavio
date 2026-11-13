@@ -44,6 +44,8 @@ packages=$(realpath "${1:?usage: sign_apt_repo.sh <packages-dir> <repo-out> <fin
 out=$(mkdir -p "${2:?repo-out}" && realpath "$2")
 key=${3:?fingerprint}
 image=${NULAVIO_APT_IMAGE:-$("$release/base_image.sh" ubuntu-itest)}
+pinned='^[a-z0-9-]+(\.[a-z0-9-]+)+(:[0-9]+)?(/[a-z0-9._-]+)+:[A-Za-z0-9._-]+@sha256:[0-9a-f]{64}$'  # as base_image.sh
+[[ $image =~ $pinned ]] || { echo "sign_apt_repo: the image must be registry/name:tag@sha256:digest, not $image" >&2; exit 2; }
 suite=stable
 
 [[ ${key^^} =~ ^[0-9A-F]{40}$ ]] || { echo "sign_apt_repo: give the full 40-character fingerprint" >&2; exit 2; }

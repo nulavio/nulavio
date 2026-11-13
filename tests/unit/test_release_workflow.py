@@ -179,6 +179,21 @@ class ReleaseWorkflowTest(unittest.TestCase):
         self.assertIn('cmp -s "$sources" "$repo/site/apt/nulavio.sources"', check)
         self.assertIn('-v "$sources:/nulavio.sources:ro"', check)
         self.assertNotIn('curl -fsSL --retry 3 "$SOURCES_FILE"', check)
+
+    def test_the_published_version_must_be_the_released_one(self):
+        # rpm adds the distribution after the release; a .deb's version has nothing after it.
+        check = (RELEASE / "check_published.sh").read_text(encoding="utf-8")
+        start = check.index("matches() {")
+        matches = check[start : check.index("\n}\n", start) + 3]
+        cases = {
+            ("dnf (x)", "160.0-0.4.fc44"): True, ("dnf (x)", "160.0-0.4"): True, ("dnf (x)", "160.0-0.4.1"): False,
+            ("dnf (x)", "160.0-0.41.fc44"): False, ("APT (x)", "160.0-0.4"): True, ("APT (x)", "160.0-0.4.1"): False,
+            ("APT (x)", "160.0-0.4.fc44"): False, ("APT (x)", "apt install failed"): False,
+        }  # fmt: skip
+        for (name, got), expected in cases.items():
+            script = matches + '\nexpected=160.0-0.4\nmatches "$1" "$2"'
+            run = subprocess.run(["bash", "-c", script, "-", name, got], capture_output=True, text=True)
+            self.assertEqual(run.returncode == 0, expected, (name, got))
         self.assertIn("gh release create", self.publish)
         self.assertIn("--draft", self.publish)
         self.assertIn("NULAVIO_BUILD_PROFILE: runner", self.build)

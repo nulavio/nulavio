@@ -86,6 +86,13 @@ def check_base(commit: str, repo: Path, ref: str) -> None:
     result = subprocess.run(["git", "-C", str(repo), "merge-base", "--is-ancestor", commit, ref], capture_output=True)
     if result.returncode != 0:
         raise ManifestError(f"base commit {commit[:12]} is not on {ref}: publish only from reviewed history")
+    # The release notes give the SHA-256 of the APT source file at the base commit, and the site
+    # serves it from the reviewed branch: a release whose base and branch disagree on it waits for
+    # a new build, rather than telling Ubuntu users to reject the file they are served.
+    sources = "site/apt/nulavio.sources"
+    at = [subprocess.run(["git", "-C", str(repo), "show", f"{rev}:{sources}"], capture_output=True) for rev in (commit, ref)]
+    if at[0].returncode == 0 and (at[1].returncode != 0 or at[0].stdout != at[1].stdout):
+        raise ManifestError(f"{sources} changed on {ref} since the base commit {commit[:12]}: build the release again")
 
 
 def tag(manifest: dict) -> tuple[str, list[str]]:

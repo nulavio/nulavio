@@ -847,6 +847,8 @@ class DownloadPagesTest(unittest.TestCase):
                 self.assertLess(on_page.index("sha256sum nulavio.sources"), on_page.index("sudo install -m 0644 nulavio.sources"))
                 self.assertLess(on_page.index("sudo install -m 0644 nulavio.sources"), on_page.index("sudo apt update"))
                 self.assertIn("sudo apt install nulavio", on_page)
+                self.assertIn("sudo apt remove nulavio\nsudo rm /etc/apt/sources.list.d/nulavio.sources", on_page)
+                self.assertNotIn("apt remove", pages["off"][page])
                 self.assertIn("Ubuntu 24.04", on_page)
                 self.assertNotIn("APT repository</dd>", on_page)
                 self.assertNotIn("repositório APT</dd>", on_page)
