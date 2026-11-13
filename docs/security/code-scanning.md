@@ -102,6 +102,31 @@ When it fails with a report: download the `asan-reports` artifact, find the firs
 
 The `scorecard` workflow (`.github/workflows/scorecard.yml`) runs [OpenSSF Scorecard](https://scorecard.dev) on every push to `main`, weekly and when branch protection changes. It rates how the repository is maintained (branch protection, pinned dependencies, token permissions, signed releases, code review, fuzzing and others), publishes the score to scorecard.dev for the README badge, and uploads its findings to the Security tab under the category `scorecard`. It needs no secret; without an admin token the Branch-Protection check sees only what a public token can read, so that check may score lower than the protection actually configured. A low check is a prompt to look, not a defect by itself: read the finding, then fix it or record why it does not apply.
 
+## Alerts in the Security tab (CodeQL and Scorecard)
+
+CodeQL (GitHub's default setup) and Scorecard report in the repository's Security tab, which only people with write access see. Neither is a required check. An alert is settled in one of three ways, and never left open without a reason written here:
+
+- **Fixed** by a pull request; the alert closes by itself when the fix is on `main`. If the alert describes a vulnerability someone could use, the fix is private first ([SECURITY.md](../../SECURITY.md)).
+- **Dismissed** in the tab, with the reason typed into the dismissal: "false positive" when the code does not do what the rule assumes, "used in tests" for test code that does it on purpose, "won't fix" for something the project decided to keep, with where that decision is written.
+- **Left open** when it states a gap that is real and not closed yet.
+
+How the alerts open on 2026-11-13 were settled (20, on `main` at `bbe8046`):
+
+| Alert | Where | Settled |
+|---|---|---|
+| CodeQL `py/redos` | `scripts/release/upstream_issue.py`, the marker pattern | Fixed: the pattern could be matched in many ways, and a long marker without its end took time that doubled with each pair. Only issues the workflow's own bot opened are read, so nobody outside could feed it one |
+| CodeQL `py/insecure-protocol` | `tests/lib/doh_server.py` | Fixed: the test server asks for TLS 1.2 or later |
+| CodeQL `js/client-side-unvalidated-url-redirection` | `browser/shell/passwords/lookalike.js` | False positive: the page is not web-accessible, its address is written by privileged code (`NulavioLookalikeParent`), and the host it goes to is checked against a host pattern |
+| CodeQL `py/clear-text-logging-sensitive-data` | `launcher/nulavio_launcher/vault/phone_session.py` | False positive: not a log. The helper answers its parent on a pipe, with the pairing invitation the screen then shows as a QR code |
+| CodeQL `py/overly-large-range` (3) | `scripts/ci/post_ai_review.py` | False positive: the ranges are the ones meant (control characters other than tab and line feed, tag characters, variation selectors), and `test_post_ai_review` checks them |
+| CodeQL `py/bad-tag-filter`, `py/clear-text-storage-sensitive-data` (4), `py/bind-socket-all-network-interfaces`, `py/http-response-splitting` | `tests/` | Used in tests: a pattern that reads a page the test built, stand-in secrets in a temporary directory, a listener a real announcement can reach for a few seconds, a fixture's redirect |
+| Scorecard Dangerous-Workflow | `.github/workflows/ai-review.yml` | False positive for this workflow: the pull request's head is checked out into its own path only so git can make the diff, and nothing from it runs ([how it is locked down](../process/pull-requests.md#how-it-is-locked-down), `test_pull_request_head_is_checked_out_only_into_its_own_path`) |
+| Scorecard Binary-Artifacts | `android/gradle/wrapper/gradle-wrapper.jar` | Won't fix: Gradle's own wrapper. `test_security_tooling` checks it is the file Gradle published, and the distribution it downloads is pinned by SHA-256 |
+| Scorecard Code-Review | no file | Won't fix: one maintainer, whose account the agents also use, so GitHub records no approval. The review is a recorded comment ([R62](residual-risks.md)) |
+| Scorecard Vulnerabilities | no file | Won't fix for now: the nine advisories are tooling of the Android Gradle plugin, none in the APK, each with a reason and an expiry in [`vulnerability-exceptions.json`](vulnerability-exceptions.json) ([R53](residual-risks.md)) |
+| Scorecard Fuzzing | no file | Left open: nothing is fuzzed yet |
+| Scorecard Maintained | no file | Left open: it says the repository is younger than 90 days, and stops saying so on 2027-01-23 |
+
 ## Decisions
 
 - **CodeQL by GitHub's default setup** since 2026-11-10, when the repository became public (before that, code scanning needed Advanced Security). It is configured in the repository settings, not in a workflow, and runs alongside the Opengrep rules and ruff.

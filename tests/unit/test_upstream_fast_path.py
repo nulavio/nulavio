@@ -17,6 +17,7 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import time
 import unittest
 import urllib.error
 import urllib.request
@@ -696,6 +697,19 @@ class IssueTest(TempDirTest):
         self.assertNotIn("<b>", body)
         self.assertIn("#\u200b12", body)
         self.assertEqual(upstream_issue.parse_marker(body)["firefox"], "159.0")
+
+    def test_a_marker_that_never_ends_is_refused_at_once(self):
+        # CodeQL py/redos: with the looser pattern this body took time that doubled per pair.
+        values = upstream_issue.fields(self.published()["targets"][0])
+        marker = upstream_issue.marker("159.0", values)
+        self.assertEqual(upstream_issue.parse_marker(marker)["phase"], values["phase"])
+        endless = "<!-- nulavio-upstream " + "a=a" * 5000 + " " + "b=b=" * 5000
+        started = time.monotonic()
+        self.assertIsNone(upstream_issue.parse_marker(endless))
+        self.assertIsNone(upstream_issue.parse_marker(endless + " -->"))
+        self.assertLess(time.monotonic() - started, 2.0)
+        for odd in ("<!-- nulavio-upstream firefox=159.0  fp=x -->", "<!-- nulavio-upstream firefox=159.0 fp=a=b -->"):
+            self.assertIsNone(upstream_issue.parse_marker(odd), odd)
 
     def test_only_the_bots_issues_count(self):
         report = self.published()
