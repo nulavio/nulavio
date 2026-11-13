@@ -80,7 +80,11 @@ gh api -X POST repos/nulavio/nulavio/issues/<parent-number>/sub_issues -F sub_is
 - **Status**: `Todo`, `In Progress`, `Done`.
 - **Area**: `Browser & Shell`, `Launcher & profiles`, `Passwords & vault`, `Release & CI`, `Site`, `Android companion`, `Process & org`.
 - **Wave**: the order of the work towards 1.0 (`0 Unblock` … `5 Brand and launch`, and `External` for what waits on someone outside the project), described in the [roadmap](../product/roadmap.md#road-to-10). Set by the maintainer.
-- **Model**: the model and effort the maintainer recommends for the work (`Fable 5.1 max`, `Opus 5.5 xhigh`, `Opus 5.5 high`, `Sonnet 5.5 medium`), or `Maintainer` when only the maintainer can do it. A recommendation, not a rule: the maintainer's choice for a task overrides it.
+- **Model**: the model and effort the maintainer recommends for the work, or `Maintainer` when only the maintainer can do it. A recommendation, not a rule: the maintainer's choice for a task overrides it. The values follow Anthropic's published guidance ([models](https://platform.claude.com/docs/en/models/overview), [effort](https://platform.claude.com/docs/en/build-with-claude/effort)), read on 2026-11-13:
+  - `Fable 5.2 high`: a new visual direction (the site, the brand, launch material), and critical long-horizon work where a mistake is costly (the Vault's keys, the Guard, fingerprinting, Tor and network routes).
+  - `Opus 5.5 high`: hard engineering, measurement and diagnosis, and new screens built inside the existing design system.
+  - `Sonnet 5.5 medium`: well-specified, bounded work.
+  - Start at the level given. Move up (to `xhigh`, or from Opus to Fable) only when the work falls short after a real attempt: tests that keep failing, review findings, a visual result that is not good enough. `max` is not a default for anything: the guidance keeps it for measuring a model's ceiling, at much higher cost for small gains.
 
 Agents add each issue they open to the board, with its Area and the `Todo` status:
 
