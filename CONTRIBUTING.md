@@ -48,6 +48,24 @@ git config core.hooksPath scripts/git-hooks   # optional: refuse a commit that a
 
 Tests never use your real profile: integration tests set `NULAVIO_HOME` to a temporary directory and use disposable engine profiles. Never put real credentials in tests.
 
+## Modern Web Guidance (development only)
+
+For HTML, CSS and client-side JavaScript work, consult the project's
+[Modern Web Guidance skill](.agents/skills/modern-web-guidance/SKILL.md):
+
+```sh
+DISABLE_TELEMETRY=1 npm ci --ignore-scripts --prefix ci/modern-web-guidance
+scripts/dev/modern_web_guidance.sh search "accessible modal dialog"
+scripts/dev/modern_web_guidance.sh retrieve dialog
+```
+
+This needs Node.js >= 22 and npm. The lockfile pins `modern-web-guidance@1.0.0`
+and its integrity; installation disables lifecycle scripts. The wrapper runs the
+installed CLI locally with telemetry disabled. It is not
+shipped with Nulavio or the site. `.mwgrc` keeps experimental guidance opt-ins off.
+Check each suggestion against the actual Gecko target and the site's static
+HTML/CSS policy. The skill describes the query and version-update workflow.
+
 ## Track B (building Nulavio from source)
 
 ```sh
