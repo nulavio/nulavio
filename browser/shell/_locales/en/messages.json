@@ -339,7 +339,7 @@
   "err_busy": {"message": "Files of that profile are still in use. Try again in a moment."},
   "err_rollback": {"message": "The profile's key file is older than the profile (restored from a backup?). Nothing was opened."},
   "err_changed": {"message": "The profile's key file changed while this was being done. Nothing was changed. Try again."},
-  "err_not_recorded": {"message": "The change was saved, but could not be recorded inside the profile. Unlock the profile once to record it."},
+  "err_not_recorded": {"message": "The change was saved, but could not be recorded inside the profile. Lock the profile if it is open, then unlock it once to record it."},
   "err_metadata_tampered": {"message": "The profile's key file was changed outside Nulavio. Nothing was opened."},
   "err_mountpoint_not_empty": {"message": "Unexpected files appeared in the locked profile folder. Nothing was opened."},
   "err_keyring_unavailable": {"message": "The system keyring is not available."},
