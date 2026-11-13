@@ -31,6 +31,7 @@ class ReleaseMetadataTest(unittest.TestCase):
         self.git("commit", "-qm", "base")
         self.sha = self.git("rev-parse", "HEAD").strip()
         self.git("tag", "v160.0-0.2")
+        self.manifest = {"firefox": "160.0", "packages": [{"file": "packages/x86_64/nulavio-160.0-0.2.fc44.x86_64.rpm"}]}
         self.release = {
             "tag_name": "v160.0-0.2",
             "draft": False,
@@ -46,6 +47,8 @@ class ReleaseMetadataTest(unittest.TestCase):
     def run_metadata(self):
         event = self.repo / "event.json"
         event.write_text(json.dumps({"release": self.release}))
+        manifest = self.repo / "manifest.json"
+        manifest.write_text(json.dumps({**self.manifest, "nulavio_base_commit": self.sha}))
         return subprocess.run(
             [
                 sys.executable,
@@ -57,8 +60,8 @@ class ReleaseMetadataTest(unittest.TestCase):
                 str(event),
                 "--repository",
                 "nulavio/nulavio",
-                "--commit",
-                self.sha,
+                "--manifest",
+                str(manifest),
             ],
             capture_output=True,
             text=True,
@@ -116,11 +119,13 @@ class ReleaseMetadataTest(unittest.TestCase):
         self.sha = self.git("rev-parse", "HEAD").strip()
         self.git("tag", "v160.0-0.3")
         self.git("switch", "-q", "main")
+        self.manifest["packages"] = [{"file": "packages/x86_64/nulavio-160.0-0.3.fc44.x86_64.rpm"}]
         self.release["tag_name"] = "v160.0-0.3"
         self.release["html_url"] = "https://github.com/nulavio/nulavio/releases/tag/v160.0-0.3"
         self.assertNotEqual(self.run_metadata().returncode, 0)
         self.git("tag", "v161.0-0.1")
         self.sha = self.git("rev-parse", "HEAD").strip()
+        self.manifest = {"firefox": "161.0", "packages": [{"file": "packages/x86_64/nulavio-161.0-0.1.fc44.x86_64.rpm"}]}
         self.release["tag_name"] = "v161.0-0.1"
         self.release["html_url"] = "https://github.com/nulavio/nulavio/releases/tag/v161.0-0.1"
         result = self.run_metadata()

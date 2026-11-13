@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import fnmatch
 import json
 import os
 import shutil
@@ -62,6 +63,7 @@ class MetadataWorkflowTest(unittest.TestCase):
         script = self.repo / "scripts/release/release_metadata.py"
         script.parent.mkdir(parents=True)
         shutil.copyfile(ROOT / "scripts/release/release_metadata.py", script)
+        shutil.copyfile(ROOT / "scripts/release/release_manifest.py", script.with_name("release_manifest.py"))
         self.git("add", ".")
         self.git("commit", "-qm", "base")
         self.sha = self.git("rev-parse", "HEAD").strip()
@@ -89,7 +91,15 @@ class MetadataWorkflowTest(unittest.TestCase):
             )
         )
         manifest = self.base / "manifest.json"
-        manifest.write_text(json.dumps({"nulavio_base_commit": self.sha}))
+        manifest.write_text(
+            json.dumps(
+                {
+                    "nulavio_base_commit": self.sha,
+                    "firefox": "160.0",
+                    "packages": [{"file": "packages/x86_64/nulavio-160.0-0.2.fc44.x86_64.rpm"}],
+                }
+            )
+        )
         self.env = {
             **os.environ,
             "PATH": f"{binary}:{os.environ['PATH']}",
@@ -157,6 +167,38 @@ class MetadataWorkflowTest(unittest.TestCase):
         result = self.step("Fetch the published release and verify its build provenance")
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual(Path(self.env["GH_CALLS"]).read_text(), calls)
+
+    def test_metadata_merge_triggers_the_site_workflow(self):
+        text = (ROOT / ".github/workflows/site.yml").read_text()
+        paths = text.split("    paths:\n", 1)[1].split("  workflow_dispatch:", 1)[0]
+        patterns = [
+            line.strip().split(" #", 1)[0].removeprefix("- ").strip('"')
+            for line in paths.splitlines()
+            if line.strip().startswith("- ")
+        ]
+        self.assertTrue(
+            any(fnmatch.fnmatchcase("packaging/release.json", pattern) for pattern in patterns),
+            "merging the generated metadata PR must deploy the download pages",
+        )
+
+    def test_attested_manifest_for_another_revision_at_the_same_commit_is_refused(self):
+        fixture = Path(self.env["MANIFEST_FIXTURE"])
+        fixture.write_text(
+            json.dumps(
+                {
+                    "nulavio_base_commit": self.sha,
+                    "firefox": "160.0",
+                    "packages": [{"file": "packages/x86_64/nulavio-160.0-0.1.fc44.x86_64.rpm"}],
+                }
+            )
+        )
+        result = self.step("Fetch the published release and verify its build provenance")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        before = self.git("diff")
+        result = self.step("Generate changelog, download metadata and recovery patch")
+        self.assertNotEqual(result.returncode, 0, "a valid attestation cannot establish a different package revision")
+        self.assertIn("revision", result.stderr)
+        self.assertEqual(self.git("diff"), before)
 
 
 if __name__ == "__main__":

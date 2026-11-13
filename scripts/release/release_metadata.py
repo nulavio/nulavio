@@ -11,6 +11,9 @@ import subprocess
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import release_manifest
+
 ROOT = Path(__file__).resolve().parents[2]
 TAG = re.compile(r"v([0-9]+(?:\.[0-9]+)+)-([0-9]+(?:\.[0-9]+)*)")
 
@@ -26,13 +29,17 @@ def git(repo: Path, *args: str) -> str:
     return subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True, check=True).stdout.strip()
 
 
-def update(repo: Path, release: dict, repository: str, commit: str) -> bool:
+def update(repo: Path, release: dict, repository: str, manifest: dict) -> bool:
     if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository):
         raise ValueError("invalid GitHub repository")
     tag = release["tag_name"]
+    commit = manifest["nulavio_base_commit"]
     match = TAG.fullmatch(tag)
     if not match or not re.fullmatch(r"[0-9a-f]{40}", commit):
         raise ValueError("invalid release tag or verified commit")
+    manifest_tag, _rpms = release_manifest.tag(manifest)
+    if manifest_tag != tag:
+        raise ValueError("published release revision differs from the attested manifest packages")
     if release["draft"] is not False or not release.get("published_at"):
         raise ValueError("release is not published")
     published = dt.datetime.fromisoformat(release["published_at"].replace("Z", "+00:00"))
@@ -85,12 +92,14 @@ def main() -> int:
     parser.add_argument("--repo", type=Path, default=ROOT)
     parser.add_argument("--event", type=Path, required=True, help="JSON with a release object")
     parser.add_argument("--repository", required=True)
-    parser.add_argument("--commit", required=True, help="build commit read from the verified attested manifest")
+    parser.add_argument("--manifest", type=Path, required=True, help="manifest whose build-provenance attestation was verified")
     args = parser.parse_args()
     try:
-        changed = update(args.repo, json.loads(args.event.read_text())["release"], args.repository, args.commit)
+        changed = update(
+            args.repo, json.loads(args.event.read_text())["release"], args.repository, json.loads(args.manifest.read_text())
+        )
         print("Published metadata updated." if changed else "No metadata changes.")
-    except (ValueError, OSError, KeyError, TypeError, subprocess.CalledProcessError) as error:
+    except (ValueError, OSError, KeyError, TypeError, release_manifest.ManifestError, subprocess.CalledProcessError) as error:
         print(f"release_metadata: {error}", file=sys.stderr)
         return 1
     return 0
