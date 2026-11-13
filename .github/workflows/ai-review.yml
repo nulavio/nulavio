@@ -1,7 +1,7 @@
 name: ai-review
 
 # Advisory AI security review of pull requests (docs/process/pull-requests.md).
-# Advisory only: never a required check, never an approval; a human decides.
+# Advisory only: never a required check, never an approval; whoever merges decides.
 #
 # Design (trust boundary TB16 in docs/architecture/trust-boundaries.md):
 # - pull_request_target, so this file, the review instructions and the tool list

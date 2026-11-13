@@ -21,9 +21,11 @@ import sys
 import time
 import unittest
 from pathlib import Path
+from urllib.parse import urlsplit
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
 import harness
+import settings_page
 
 PRIVACY = 'ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioPrivacy.sys.mjs").NulavioPrivacy'
 ALLOW_LIST = 'ChromeUtils.importESModule("resource://gre/modules/ContentBlockingAllowList.sys.mjs").ContentBlockingAllowList'
@@ -119,43 +121,24 @@ class PrivacyTest(unittest.TestCase):
         site = [e for e in exceptions if e["type"] == "trackingprotection"]
         self.assertEqual([e["site"] for e in site], ["127.0.0.1"])
 
-        base = self.m.chrome("return WebExtensionPolicy.getByID('shell@nulavio.net').getURL('');")
-        handle = self.m.send("WebDriver:NewWindow", {"type": "tab"})["handle"]
-        first = self.m.window_handles()[0]
-        self.m.switch_to(handle)
-        self.m.navigate(base + "settings/settings.html#exceptions")
-        self.assertTrue(
-            harness.wait_until(lambda: self.m.execute("return document.documentElement.dataset.ready === 'true';"), 15)
-        )
-        rows = self.m.execute(
-            "return [...document.querySelectorAll('#exception-list > li')]"
-            ".map(li => [li.dataset.type, li.textContent, li.hasAttribute('data-built-in')]);"
-        )
-        mine = [r for r in rows if not r[2]]
+        # The settings page lists it (ADR 0011: "Sites com exceções", in Privacidade e segurança).
+        settings_page.open_pane(self.m, "privacy")
+        each = "moz-box-item.nulavio-exception"
+        of_type = lambda kind: lambda found: any(row["data"].get("type") == kind for row in found)  # noqa: E731
+        rows = settings_page.wait_rows(self.m, "nulavio-exceptions", of_type("trackingprotection"), each)
+        built_in = [row for row in rows if "Padrão do navegador" in row["description"]]  # said in words
+        mine = [row for row in rows if row not in built_in]
         self.assertEqual(len(mine), 1, rows)
-        self.assertEqual(mine[0][0], "trackingprotection")
-        self.assertIn("Proteção contra rastreamento desligada", mine[0][1])
+        self.assertEqual(mine[0]["data"]["type"], "trackingprotection")
+        self.assertIn("Proteção contra rastreamento desligada", mine[0]["description"])
         # The engine's own defaults are listed as such (addons.mozilla.org may offer add-ons).
-        self.assertTrue(any(r[0] == "install" and "addons.mozilla.org" in r[1] and r[2] for r in rows), rows)
-        self.assertTrue(all("Padrão do navegador" in r[1] for r in rows if r[2]), rows)  # said in words, as a badge
-        filter_text = self.m.execute("return document.getElementById('filter-text').textContent;")
-        self.assertTrue(filter_text)  # uBlock Origin's state as the add-on manager reports it
-        self.m.execute("document.querySelector('#exceptions').scrollIntoView();")
-        for scheme in ("light", "dark"):
-            self.m.execute(
-                "document.documentElement.dataset.theme = arguments[0]; document.body.style.display = 'none';"
-                "document.body.offsetHeight; document.body.style.display = '';"
-                "for (const s of document.querySelectorAll('section.section')) { s.hidden = s.id !== 'exceptions'; }",
-                [scheme],
-            )
-            time.sleep(0.3)
-            (self.shots / f"exceptions-{scheme}.png").write_bytes(self.m.screenshot_png(full=True))
-        self.m.execute("delete document.documentElement.dataset.theme;")
-        self.m.execute("document.querySelector('#exception-list > li[data-type=trackingprotection] button').click();")
-        gone = "return !document.querySelector('#exception-list > li[data-type=trackingprotection]');"
-        self.assertTrue(harness.wait_until(lambda: self.m.execute(gone), 10))
-        self.m.send("WebDriver:CloseWindow")
-        self.m.switch_to(first)
+        amo = lambda row: urlsplit(row["data"].get("origin", "")).hostname == "addons.mozilla.org"  # noqa: E731
+        self.assertTrue(any(row["data"]["type"] == "install" and amo(row) for row in built_in), rows)
+        # uBlock Origin's state, as the add-on manager and its own storage report it.
+        self.assertTrue(settings_page.wait_control(self.m, "nulavio-filter-lists")["label"])
+        settings_page.shoot(self.m, self.shots, "exceptions")
+        settings_page.click_row(self.m, "nulavio-exceptions", "trackingprotection", "remove", each)
+        settings_page.wait_rows(self.m, "nulavio-exceptions", lambda found: not of_type("trackingprotection")(found), each)
         self.assertEqual(self.load_fixture(), "no tracker")  # the protection applies again
 
     def measure(self) -> dict:

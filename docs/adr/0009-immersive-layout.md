@@ -1,0 +1,121 @@
+# ADR 0009 — Immersive layout: the chrome hides, the band keeps the origin on screen
+
+- **Status:** Accepted (2026-11-12): the maintainer follows the recommendation under "Decided" below, and the guarantees are in the [UX principles](../design/ux-principles.md). Built as a prototype and a controller on the engine (below).
+- **Related:** [references](../design/references/2026-11/README.md), [UX principles](../design/ux-principles.md), [design system: UX3A band](../design/design-system.md), [ADR 0008](0008-one-settings-page.md).
+
+## Context
+
+In the default layout (Lateral) Nulavio gives the page 80 % of a 1440×900 window: a 44 px row on top and a 224 px column of tabs. Measured on the same day, Zen gives 85 % by default and 97 % in compact mode; Helium about 99 % in frameless mode. The maintainer asks for a mode that hides what is not needed and shows it when needed.
+
+Both references hide everything, the address included. A page that owns every pixel can draw an address bar, a padlock and a permission prompt of its own. Fullscreen has the same problem, which is why browsers announce it. Nulavio's rule so far: "the address-bar trust, tracking and permission indicators stay exactly as upstream; a layout, density, theme or fullscreen never hides them".
+
+Nulavio already has something the references lack: the band, a row only the browser can draw, which names the profile and its protection and is never hidden.
+
+## Options
+
+| Option | Page area at 1440×900 | Origin while hidden | Notes |
+|---|---|---|---|
+| A. Hide everything until an edge is hovered (Helium, Zen) | 97–99 % | none | Spoofable; breaks the rule above |
+| B. **Hide the toolbar and the tabs; the band stays and carries the origin** | 97 % (876 of 900 px high, full width) | host, connection state and profile, always | One 24 px row. The band already exists |
+| C. Hide the tabs only (today's Foco) | 84 % | the whole address bar | Already shipped; not what was asked |
+| D. Hide all, show a 3 px state line (as in fullscreen) | 99.7 % | state only, no host | The host is the anti-spoofing fact; a colour line is not enough |
+
+## Decision
+
+1. **B, as "Imersivo".** It is a switch on top of the chosen tab layout (Lateral, Abas no topo or Foco), per profile, off by default, with a key and an entry in the layout card. It is never applied by itself and never the default of a new profile.
+2. **What never hides.** The band's row: profile and protection on the left, **the origin in the middle**, the state seals (private, temporary, agent, raw automation, Guard) on the right. The origin is the committed document's host with its registrable part emphasised, a connection glyph and, when the connection is not secure, the words. It comes from the engine's own state for the selected tab (`currentURI`, `securityUI.state`), never from the page. For Nulavio's own pages the band's trusted name ("Nulavio · Desbloqueio") is the origin.
+3. **What hides.** The navigation toolbar, the tab list (side or top) and the bookmarks bar. They are taken out of the layout and drawn over the page when revealed, so the page never moves.
+4. **What reveals them.**
+   - the pointer on the band or at the top edge brings the toolbar down; at the side edge, the tab list in;
+   - the keyboard: anything that focuses the toolbar (Ctrl+L, Ctrl+T, F6, Alt) or the tab list;
+   - the browser itself, while something anchored there is open: the address results, a permission or download panel, a menu, an extension popup, the identity panel;
+   - an event the person did not cause: a permission request, a download warning, a blocked pop-up, a tab opened in the background. The toolbar shows for as long as the engine shows its panel or its notification bar. Showing it briefly for a tab opened in the background is not built.
+   They leave 600 ms after the pointer and the focus are gone. Reveal takes 150 ms, leave 200 ms; with reduced motion both are instant.
+5. **What it never does.** No protection pref is written (`shared/options.json` and its test apply). The engine's indicators are not removed or restyled: the toolbar is the engine's own, moved out of view. It is never described as spoof-proof: a page can still draw a fake bar under the band; what it cannot do is draw in the band.
+6. **Where it is off: full chrome whenever something must be seen in full or the band cannot vouch for the page.**
+   - Fullscreen keeps its own rules (the engine's warning and the 3 px line). Immersive's guarantee about the origin is for windowed browsing only, and Immersive resumes after fullscreen only once the band has the selected document's identity again.
+   - Customize mode, an AI Workspace, a window under raw automation.
+   - A pop-up or any window without the full toolbar, and picture-in-picture: never Immersive.
+   - While the camera, the microphone or the screen is being shared from the window: the engine's own indicators are the cue, so the toolbar stays.
+   - Any document the band has no defined label for. Defined today: `http`, `https`, `file`, Nulavio's own named pages and the engine's `about:` pages. Not defined yet, so full chrome: `about:blank` with an inherited principal, `data:`, `blob:`, `view-source:`. A page the engine's identity box calls unknown because the connection is broken (mixed content, a weak cipher) is not among them as built: the mode stays, and the band says "not secure"; error and blocked pages keep the full window by the rule below about the document.
+   - When the registrable domain, a non-default port and the seals do not fit the row: the registrable domain is never cut; the row grows to two lines, and if that is not enough the toolbar stays. **Not built**: the site is on one line and nothing checks that it fits, so in a narrow window a very long name can overlap its neighbours ([R64](../security/residual-risks.md), issue #118).
+   - At startup and after session restore, until the band, its listeners and the selected tab's committed identity are ready. A restored preference alone hides nothing.
+7. **Mechanism.** No engine patch. CSS draws the two states (in the band's sheet: the toolbar and the tab list leave the flow and return over the page; times from the motion tokens, `hold` 600 ms; no transition under reduced motion). A **per-window controller** in `NulavioWindow` decides them, because CSS alone cannot: it computes eligibility (decision 6) and keeps a set of *holds* that keep the chrome shown: pointer, keyboard focus, a pin toggled from the band (the way in for touch and for anyone who cannot hover), the address results, every open panel and its anchor, permission, authentication and before-unload prompts, download warnings, a drag over the edge, an extension popup. The chrome is shown **before** the engine positions a prompt on it and stays for the prompt's whole life. It leaves only when no hold remains. The band's origin comes from one snapshot of the selected tab (committed URI, principal, the engine's identity verdict), taken on location, security and tab-switch events; a stale answer is dropped, and while there is none the chrome is shown.
+
+## Decided (maintainer, 2026-11-12)
+
+Immersive hides the engine's tracking-protection and permission icons while the toolbar is out of view. The origin, the connection state, the profile and active camera/microphone/screen use stay on screen in the band; everything else is one pointer move or one key away, and the browser shows the toolbar itself for every prompt.
+
+This contradicts the letter of two current principles ("a layout never hides them", "there is no toolbar autohide"). **Recommendation: accept it for an opt-in mode, with the guarantees written into the principle** ("in Immersive the band carries the origin and the connection state; the toolbar is back by itself for every prompt, while a device is shared and whenever the band cannot name the page"). The alternative is option C, which Nulavio already ships, and the request stays unanswered.
+
+**Decided on 2026-11-12: accepted as recommended.** The two principle rows carry the exception and its guarantees. The security-visibility matrix is repeated with the mode on (`test_immersive` 09): with the toolbar away no cue of the address bar is restyled and the band says the profile, its protection, the site and, for a connection the engine calls not secure, that it is not; with the toolbar back every cue is drawn as with the mode off, in the same place and size. What the controller does not do yet (a pin for touch, tabs on top and on the right) is still to build (issue #118), and the mode stays off by default.
+
+## Independent review (2026-11-11)
+
+Reviewed from the source by a second model (Codex, read-only) before the prototype was committed; verdict "accept the opt-in direction with changes". Checked point by point:
+
+| Point | Checked | Result |
+|---|---|---|
+| The band had no web origin and no security-change listener | Stale: the prototype has both (`#origin`, `onSecurityChange`, the engine's `#identity-box` classes) | None |
+| Special schemes, pop-ups, picture-in-picture, session restore, long hosts, ports, bidi | True: the prototype labels only `http`, `https`, `file` and `about:` and cuts nothing but has no rule for overflow | Decision 6 |
+| "Never hides" was untrue in fullscreen | True | Title and decision 6 |
+| `:has([open])` is not a lifetime contract for prompts; the toolbar must be in place before a prompt is anchored | True: seen in the prototype with the tab list's context menu, which closes the list | Decision 7 (controller and holds) |
+| A device-use seal was promised and not built | True | Replaced by a simpler rule: full chrome while capturing (decision 6) |
+| Hover-only reveal excludes touch | True | The pin in the band (decision 7) |
+| It contradicts "no toolbar autohide" and "a layout never hides them" in the UX principles | True | The maintainer's decision below; the principles change in the same pull request as the feature, not before |
+
+The prototype implements decisions 1 to 5 and the CSS of 7. The controller, the pin and the eligibility rules of 6 are the slice's work, and the security-visibility matrix repeats with Immersive on before it ships.
+
+## Consequences
+
+- The page gets 97 % of the window with an honest origin always on screen, which neither reference has.
+- The band becomes the product's signature: the one row that is always there and always true.
+- The band's centre holds the origin in Immersive and the trusted page name on Nulavio's own pages; it must update on every committed navigation and security change, synchronously, and show nothing rather than something stale while a load is committing.
+- More states to test: every cue of the security-visibility matrix repeats with Immersive on.
+- Extensions and password managers keep their toolbar buttons; their popups reveal the toolbar while open.
+
+## Prototype (2026-11-11)
+
+On the alpha's engine (160.0-0.2 build, `dev_sync`), branch `agent/claude/feat-immersive-layout`, at 1440×900:
+
+- Page area 1440×876 (97.3 %); today's Lateral gives 1216×856 (80 %).
+- The band shows `en.`**`wikipedia.org`**; an expired certificate shows "Não seguro" before the host; `localhost` is neutral, as in the address bar.
+- The pointer on the band brings the toolbar down over the page; the left edge brings the tab list; Ctrl+L shows the toolbar with the address field focused.
+- Known gaps: everything the review table sends to the slice; the tab list closes under its own context menu; tabs on top and a tab list on the right are not done.
+
+## Controller slice (2026-11-11)
+
+Branch `agent/claude/feat-immersive-controller`, same engine. What decision 7 called the per-window controller now exists in `NulavioWindow`, and the mode can be reached by a person:
+
+| Built | How it is decided | Test (`test_immersive`, on the engine) |
+|---|---|---|
+| The switch | One profile pref, `nulavio.layout.immersive`, written only by `NulavioLayout.setImmersive`: the switch "Imersivo" in Settings → Layout and the key Ctrl+Alt+I (remappable, no clash with the browser's keys). Off by default; a locked pref is refused and the reason is said | `test_07`, `test_08`; `test_shortcuts` `test_02b` |
+| Where it is off | The window marks why (`nulavio-immersive-off`): `agent` (an AI Workspace, raw automation included), `popup` (a window without the full toolbar), `sharing` (a camera, a microphone or a screen shared from any tab of the window, paused or not), `prompt` (an authentication request or any other prompt on the selected tab), `page` (a document with no defined name: `about:blank` in any spelling, `data:`, `blob:`, `view-source:`) | `test_03`, `test_05`, `test_06`, `test_06b`; `agent` is in the controller and no test puts the mode in an AI Workspace |
+| Holds | A panel or a menu anchored on the toolbar or on the tab list keeps that part shown from `popupshowing`, before the engine positions it, until `popuphidden`: a permission request, the site's identity, downloads, the application menu, an extension's popup. A download that needs attention holds the toolbar while its button is marked. A menu opened on the page holds nothing | `test_04`, `test_06c` |
+| The origin | A port that is not the scheme's own is shown with the site | `test_02` |
+
+![Off, on, held by a permission request, the switch in Settings: light, pt-BR](../design/screenshots/experience-2026-11/immersive-sheet-pt-light.png)
+![The same, dark, en-US](../design/screenshots/experience-2026-11/immersive-sheet-en-dark.png)
+
+Measured at 1440×900: the page gets 1215×855 with the mode off and 1439×875 with it on; while a permission request is open the toolbar is back by itself, over the page.
+
+### Independent review of the controller (2026-11-11)
+
+A second model (Codex, read-only, closed brief) read the controller against the engine's sources. Each point was checked in the engine's code before use:
+
+| Point | Checked | Result |
+|---|---|---|
+| HIGH. A cross-site HTTP authentication request: the engine rewrites the address bar and the tab's label to the site that asks (`currentAuthPromptURI`) and shows a tab dialog, not a panel. The toolbar stayed hidden and the band kept the previous site | True (`PromptParent`) | Fixed: a prompt on the selected tab (the engine's tab dialogs, or that state alone) is a reason for the full window, `prompt`. `test_immersive` `test_06b` |
+| `about:blank#x` and `about:blank?x` were named and taken as pages the band can vouch for | True | Fixed: they are `about:blank`. `test_03` |
+| A download that needs attention only marks its toolbar button; nothing opened, so nothing showed | True (`downloads/indicator.js`) | Fixed: the toolbar is held while the button's mark is "warning" or "severe". `test_06c` |
+| A paused capture drops the tab's mark; the state was read from the tab, the engine keeps it on the browser | True | Fixed: read from the browser's sharing state. `test_06` |
+| A popup whose opening is cancelled sends no "popuphidden" and could leave a hold until the next change | Plausible, not reproduced | The holds are looked at again right after the event |
+| A blocked pop-up with the engine's message bar turned off shows only an icon in the address bar | True, with a pref that is not the default. With the default, the message bar is what is seen: it sits in a toolbar of its own, with every other notification bar (a page opened past a Safe Browsing warning, the Guard's), and that toolbar went out of view with the others until the review of 2026-11-12 found it. A notification bar in the window or on the selected tab now keeps the toolbar shown (`test_immersive` 12) | Open for the pref; fixed for the bars |
+| The site's identity while a load is committing | Measured on 2026-11-12 (every change of the mode and of the band's site recorded across navigations, back and forward): at each change of address the band already names the document that was committed, in the same task as the engine's own notice. One case differed, a tab being restored (below) | Fixed: the mode waits for the document; `test_immersive` 10 and 11 |
+| IPv6 with a port; a real capture device | Not determined by reading | Open: they need cases on the engine |
+
+Not built yet, in this order: the pin for touch (today a tap on the band's site puts the keyboard in the address field, which shows the toolbar); a drag towards the edge; the two-line row for a very long site, and the toolbar staying when even that does not fit; the toolbar shown briefly for a tab opened in the background; tabs on top and a tab list on the right.
+
+**The mode waits for the document (2026-11-12, decision 6).** The band names the address the engine shows, as the address bar does. A tab that session restore left unloaded shows its address as soon as it is selected and its document only when the site answers: until then the page is `about:blank`, the band named a site that was not there and the toolbar went out of view (35 ms on this machine, and for as long as a slow site takes). An error page keeps the address of what failed while the document is the engine's own page about it. In both the toolbar now stays (`#documentIsThere`, reason `page`): the mode applies only while the document in the tab is the one its address names. `test_immersive` 10 holds the restored tab's request and looks at the window before and after; 11 is the error page; both fail without the change.
+
+Not verified: a real camera, microphone or screen capture. The engine's test mode for capture (fake devices, no prompt) bypasses its own sharing indicators, so the test sets the tab's sharing state where the engine sets it for a real capture.

@@ -25,7 +25,7 @@ Should Nulavio Filter move from uBlock Origin (an extension, GPL-3.0) to a filte
 ## Setup shared by every measurement
 
 - The same Nulavio build, machine and power profile, with the network warm. Each figure is the median of at least five runs, with p95 and the spread.
-- The same lists on both sides: what a new profile gets today (EasyList, EasyPrivacy, uBlock filters, uBlock filters – Privacy, Peter Lowe's list, plus the cookie-notice lists if #83 has merged). All lists are pinned by hash for the duration of the spike.
+- The same lists on both sides: what a new profile gets today, which is uBlock Origin's own default lists, the list for the person's language, and the cookie-notice lists of [`content-filter.json`](../../browser/distribution/content-filter.json). All lists are pinned by hash for the duration of the spike.
 - Corpus: the 50 public pages of [`tests/regression/sites.json`](../../tests/regression/sites.json). Every request they make is recorded once (URL, type, initiator), so both engines are fed the same input.
 - Results go to `docs/research/evidence/spike-native-filter-<phase>-<date>.json` together with the commit, the engine build and the versions of the lists.
 
@@ -47,7 +47,7 @@ Measure:
 - time to load and compile the lists, and the memory the result takes;
 - size of the serialized adblock-rust engine.
 
-**Go when** adblock-rust blocks at least 98% of what uBlock Origin blocks on the corpus, and its few extra blocks fall on pages that `run_sites.py` does not flag. **No-go** under 90%, or when the differences come from list syntax that adblock-rust does not support and upstream has no plan for.
+**Go when** adblock-rust blocks at least 98% of what uBlock Origin blocks on the corpus, and its few extra blocks break no page of the corpus (`run_sites.py`, with the flagged pages triaged as in the [October run](site-regression-2026-10.md)). **No-go** under 90%, or when the differences come from list syntax that adblock-rust does not support and upstream has no plan for.
 
 ### Phase 2: network blocking inside the engine (about 4 days)
 
@@ -86,7 +86,7 @@ All of them must hold. Each one names the evidence that proves it.
 |---|---|---|---|
 | A1 | Network blocking | ≥ 98% of uBlock Origin's blocks on the corpus | phase 1 and 2 JSON |
 | A2 | Element hiding | ≥ 95% of the ad slots uBlock Origin hides are hidden | phase 3 screenshots |
-| A3 | Breakage | no more flagged pages than uBlock Origin on `sites.json` (0 in the last run) | `run_sites.py` |
+| A3 | Breakage | no more breakages caused by the filter than with uBlock Origin on `sites.json`, counted after the triage of the [October run](site-regression-2026-10.md) (6 pages flagged then, 0 breakages). A flagged page is a lead: an ad slot removed or a site variant is not a breakage | `run_sites.py` and its triage table |
 | A4 | Start-up | zero requests to listed domains before the filter is ready | phase 2 network log |
 | A5 | A real gain | at least one: page load median ≥ 5% faster on the corpus; ≥ 30 MB less memory overall; Settings shows and changes the real per-site state (closes R39) | phase 2 and 3 |
 | A6 | No loss elsewhere | no metric worse by more than its run-to-run noise, browser benchmarks included | phase 2 |

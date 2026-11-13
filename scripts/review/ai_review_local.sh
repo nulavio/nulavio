@@ -77,7 +77,7 @@ status=$(sed -n 's/^status=//p' "$work/input.txt")
 schema=$(sed -n 's/^schema=//p' "$work/input.txt")
 binary_files=$(sed -n 's/^binary_files=//p' "$work/input.txt")
 if [ "$status" != ready ]; then
-  echo "$0: the diff is too large for an AI review; it needs a human-only review" >&2
+  echo "$0: the diff is too large for this AI review; it has to be reviewed another way" >&2
   exit 1
 fi
 

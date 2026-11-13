@@ -6,7 +6,7 @@
 
 import { localize, t } from "../lib/i18n.js";
 import { qrSvg } from "../lib/qr.js";
-import { announce, chip, errorText, h } from "../lib/ui.js";
+import { acceptField, announce, chip, errorText, h, refuseField } from "../lib/ui.js";
 
 const vault = browser.nulavioVault;
 const profileId = Number(new URLSearchParams(location.search).get("p"));
@@ -38,6 +38,16 @@ const FAILURES = {
 
 function failure(code) {
   return FAILURES[code] ? t(FAILURES[code]) : errorText(new Error(code));
+}
+
+/* The secret was refused or is missing: the field is marked and the status line, which says why, is
+   its description. Both go when the person types again (accessibility.md, as on the unlock page). */
+function refuseCurrent() {
+  refuseField(byId("current"), byId("status"), null, () => {
+    if (["error", "idle"].includes(document.body.dataset.state)) {
+      setState("idle"); // the message was about what was typed before
+    }
+  });
 }
 
 function stopPairing() {
@@ -78,6 +88,7 @@ async function poll() {
 }
 
 async function start(current) {
+  acceptField(byId("current"));
   setState("waiting", t("phoneStarting"), "progress");
   try {
     const started = await vault.phoneStart(profileId, "pair", { current });
@@ -91,8 +102,13 @@ async function start(current) {
     setState("waiting", t("phoneScanStatus"), "progress");
     timer = setInterval(() => poll().catch(e => setState("error", errorText(e), "error")), 1000);
   } catch (e) {
-    setState("error", failure(String(e?.message ?? e)), "error");
-    byId("current").focus();
+    const code = String(e?.message ?? e);
+    setState("error", failure(code), "error");
+    if (code === "wrong-secret") {
+      refuseCurrent();
+    } else {
+      byId("current").focus();
+    }
   }
 }
 
@@ -100,9 +116,10 @@ function phoneRow(method) {
   const remove = h("button", { class: "button button--quiet", type: "button", text: t("phoneRemove") });
   remove.addEventListener("click", async () => {
     const current = byId("current").value;
+    acceptField(byId("current"));
     if (!current) {
       setState("idle", t("phoneRemoveNeedsSecret"), "error");
-      byId("current").focus();
+      refuseCurrent();
       return;
     }
     try {
@@ -111,7 +128,11 @@ function phoneRow(method) {
       setState("idle", t("phoneRemoved", [method.label]), "ok");
       await render();
     } catch (e) {
-      setState("error", failure(String(e?.message ?? e)), "error");
+      const code = String(e?.message ?? e);
+      setState("error", failure(code), "error");
+      if (code === "wrong-secret") {
+        refuseCurrent();
+      }
     }
   });
   return h("li", { class: "row" }, h("div", { class: "row__main" }, h("span", { class: "row__title", text: method.label })),

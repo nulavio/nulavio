@@ -299,6 +299,11 @@ if (browser.commands) {
       if (target) {
         browser.nulavioLayout.toggleFocus(target.id).catch(() => {}); // announced in the window
       }
+    } else if (command === "toggle-immersive" && browser.nulavioLayout?.setImmersive) {
+      // Ctrl+Alt+I: Immersive on or off (ADR 0009). The window decides where it applies; the toolbar is
+      // always back for a prompt, and stays wherever the band cannot name the page.
+      const target = tab ?? (await browser.tabs.query({ active: true, currentWindow: true }))[0];
+      browser.nulavioLayout.setImmersive(null, target?.id ?? null).catch(() => {}); // announced in the window
     } else if (command === "lock-profile") {
       lockAsked = Date.now();
       browser.action.openPopup(tab ? { windowId: tab.windowId } : {}).catch(console.error);

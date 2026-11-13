@@ -53,17 +53,6 @@
         ]
       },
       {
-        "name": "lock",
-        "type": "function",
-        "async": true,
-        "parameters": [
-          {
-            "name": "profileId",
-            "type": "integer"
-          }
-        ]
-      },
-      {
         "name": "lockCurrent",
         "type": "function",
         "async": true,
@@ -236,17 +225,6 @@
             "type": "string",
             "optional": true,
             "maxLength": 8192
-          }
-        ]
-      },
-      {
-        "name": "openPhonePage",
-        "type": "function",
-        "async": true,
-        "parameters": [
-          {
-            "name": "profileId",
-            "type": "integer"
           }
         ]
       }

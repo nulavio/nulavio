@@ -31,6 +31,7 @@ return {
     text: who.textContent,
   },
   summary: {level: summary.dataset.level, text: summary.textContent},
+  mark: getComputedStyle(summary, '::before').content,
   warn: facts.filter(d => d.dataset.level === 'warn').map(d => d.previousElementSibling.textContent),
   detailsOpen: document.getElementById('here-details').open,
   helpOpen: document.getElementById('help').open,
@@ -106,6 +107,16 @@ class NewTabHereTest(unittest.TestCase):
         else:
             self.assertEqual(state["summary"], {"level": "ok", "text": self.message("protectionsOn")})
             self.assertFalse(state["detailsOpen"])
+            # "Proteções ativas" is a state, not a seal: no check mark before it (audit 2026-11 S-02).
+            self.assertEqual(state["mark"], "none")
+        # What needs attention, or could not be read, keeps its mark before the words.
+        marks = self.m.execute(
+            "const s = document.getElementById('here-summary'), was = s.dataset.level, out = {};"
+            "for (const level of ['warn', 'unknown']) {"
+            "  s.dataset.level = level; out[level] = getComputedStyle(s, '::before').content; }"
+            "s.dataset.level = was; return out;"
+        )
+        self.assertEqual(marks, {"warn": '""', "unknown": '""'})
         self.assertFalse(state["helpOpen"])
         self.assertEqual(state["live"], [], "a live region at load would read the whole status aloud")
         self.shoot("here")
@@ -164,6 +175,7 @@ class NewTabHereTest(unittest.TestCase):
                 ("lock-profile", "Ctrl+Alt+B"),
                 ("open-assistant", "Alt+Shift+A"),
                 ("toggle-focus", "Ctrl+Alt+F"),
+                ("toggle-immersive", "Ctrl+Alt+I"),
             ],
         )
         self.shoot("help")
@@ -190,7 +202,8 @@ class NewTabHereTest(unittest.TestCase):
 
     FIRSTRUN = """
 const shown = id => { const e = document.getElementById(id); return e && !e.hidden && !e.hasAttribute('data-gated'); };
-const ids = ['firstrun-welcome', 'layout-choice', 'dns-choice', 'firstrun-passwords', 'firstrun-default', 'firstrun-done'];
+const ids = ['firstrun-welcome', 'layout-choice', 'dns-choice', 'firstrun-passwords', 'firstrun-default', 'firstrun-profile',
+  'firstrun-done'];
 return {
   cards: ids.filter(shown),
   progress: document.getElementById('firstrun-progress').hidden ? null : document.getElementById('firstrun-progress').textContent,
@@ -250,10 +263,14 @@ return {
         # A tab opened now resumes at the first step not answered, with the same numbers.
         resumed = self.open() and self.wait_card("firstrun-passwords")
         self.assertEqual(resumed["progress"], self.message("firstrunProgress", "3", str(total)))
-        self.click("firstrun-passwords-later")
-        if total == 4:  # this computer could make Nulavio the default browser (xdg-settings answered)
-            self.wait_card("firstrun-default")
-            self.click("firstrun-default-later")
+        self.click("firstrun-passwords-next")
+        # Asked only where they apply: the default browser (xdg-settings answered) and a protected profile
+        # (this profile has no password and the Vault can make one).
+        for _ in range(total - 3):
+            card = harness.wait_until(lambda: next((c for c in self.cards()["cards"] if c != "firstrun-passwords"), None), 15)
+            self.assertIn(card, ("firstrun-default", "firstrun-profile"), self.cards())
+            self.click(f"{card}-later")
+            self.assertTrue(harness.wait_until(lambda card=card: self.cards()["cards"] != [card], 15), self.cards())
         self.wait_card("firstrun-done")
         summary = self.m.execute("return [...document.querySelectorAll('#firstrun-summary dt')].map(dt => dt.textContent);")
         self.assertIn(self.message("firstrunSummaryTabs"), summary)

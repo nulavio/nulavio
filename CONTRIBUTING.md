@@ -98,7 +98,7 @@ When a comparison row or a claim of the landing changes, change both languages (
 |---|---|
 | Add or modify a default pref | Edit `browser/config/prefs/baseline.js` with `@mode`, `@category`, `@why`, `@tradeoff`. Run the unit tests (they reject weakening prefs) and the integration tests (they reject prefs unknown to the engine). Update `docs/security/hardening.md` if relevant |
 | Guard rule | `browser/config/guard-rules.json` + a unit test in `tests/unit/test_prefs_and_guard.py` |
-| Extension update | `python3 -I scripts/upstream/refresh_extensions_lock.py`, review hash **and permission** changes, then `--write` and run all tests |
+| Extension update | `python3 -I scripts/upstream/refresh_extensions_lock.py`, review hash **and permission** changes, then `--write` (it re-copies uBlock Origin's list registry and says when a default list of `browser/distribution/content-filter.json` is gone) and run all tests |
 | Design tokens | Edit `docs/brand/tokens.json`, run `scripts/brand/build_tokens.py` and `scripts/brand/contrast.py` |
 | Logo/icons | Edit `scripts/brand/build_logo.py` (never hand-edit generated SVGs), then run `build_logo.py` and `build_icons.py` |
 | Mockups | Edit `docs/brand/mockups/`, then run `scripts/brand/render_mockups.py` |
@@ -117,9 +117,9 @@ When a comparison row or a claim of the landing changes, change both languages (
 
 - Conventional commits (`feat:`, `fix:`, `docs:`, `security:`, `test:`, `chore:`), small and verifiable.
 - Sign off your commits (`git commit -s`, Developer Certificate of Origin).
-- Branch names, how to open a pull request, and what coding agents may do: [docs/process/pull-requests.md](docs/process/pull-requests.md). Agents push only their own branch and open a pull request; they never push to `main`, merge or approve.
+- Branch names, how to open a pull request, and what coding agents may do: [docs/process/pull-requests.md](docs/process/pull-requests.md). Agents push only their own branch and open a pull request; they never push to `main`. They review and merge their own pull requests as that page says.
 - A PR description states: what changed, how it was verified (commands + results), and what remains unverified ([template](.github/pull_request_template.md)).
-- Security-relevant PRs need a second reviewer. The AI review comment is advisory: a person decides, and an empty AI review proves nothing.
+- Security-relevant PRs need a second, independent review, which may be another AI reviewer. The automatic AI review comment is advisory: whoever merges decides, and an empty AI review proves nothing.
 
 ## Reporting vulnerabilities
 

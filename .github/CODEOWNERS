@@ -1,4 +1,5 @@
-# Security-sensitive paths and who must review changes to them.
+# Security-sensitive paths: a change to one of them gets a second, independent review before it is
+# merged (docs/process/pull-requests.md, "Review and merging"), and these are the people to ask.
 #
 # Documentation only: main's branch protection does not ask for code-owner
 # review (one maintainer, whose account the agents also use). It becomes a

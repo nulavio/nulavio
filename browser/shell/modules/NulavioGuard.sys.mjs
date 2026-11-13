@@ -22,6 +22,7 @@ ChromeUtils.defineESModuleGetters(lazy, {
   AddonManager: "resource://gre/modules/AddonManager.sys.mjs",
   AddonManagerPrivate: "resource://gre/modules/AddonManager.sys.mjs",
   AsyncShutdown: "resource://gre/modules/AsyncShutdown.sys.mjs",
+  NetUtil: "resource://gre/modules/NetUtil.sys.mjs",
   NulavioAI: "resource://builtin-addons/nulavio-shell/modules/NulavioAI.sys.mjs",
 });
 
@@ -121,6 +122,9 @@ function prefValue(name) {
   }
 }
 
+/* The digests of the policies Nulavio ships, written by scripts/build/make_distribution.py beside the Shell's code. */
+const OWN_POLICIES_URL = "resource://builtin-addons/nulavio-shell/shared/own-policies.json";
+
 /* Bookkeeping the engine itself writes under a watched branch (update times of the Safe Browsing lists). */
 const ENGINE_BOOKKEEPING = /\.(lastupdatetime|nextupdatetime)$/;
 
@@ -134,6 +138,31 @@ function watchedNames() {
     }
   }
   return [...names].sort();
+}
+
+// From the second start on, the engine fills some policies with empty defaults (SitePolicies: []):
+// only policies that set something count.
+function settingPolicies(policies) {
+  const empty = v => v === null || v === undefined || (typeof v === "object" && !Object.keys(v).length);
+  return Object.fromEntries(Object.entries(policies ?? {}).filter(([, v]) => !empty(v)));
+}
+
+/** What each policy of a set sets, as a digest: { name: SHA-256 of its value written one way }. Policies that
+    set nothing are left out. */
+export function policyDigests(policies) {
+  const out = {};
+  for (const [name, value] of Object.entries(settingPolicies(policies))) {
+    out[name] = sha256(new TextEncoder().encode(sortedJSON(value)));
+  }
+  return out;
+}
+
+/** Whether the policies in effect are exactly Nulavio's own, given the digests of those (`shared/own-policies.json`,
+    written when the build's policies are: scripts/build/make_distribution.py). Something that is not a set of
+    policies, or digests that could not be read, equal nothing. */
+export function ownPolicies(active, digests) {
+  const usable = v => !!v && typeof v === "object" && !Array.isArray(v);
+  return usable(active) && usable(digests) && sortedJSON(policyDigests(active)) === sortedJSON(digests);
 }
 
 function sortedJSON(value) {
@@ -154,11 +183,16 @@ class Guard {
   #state = null; // { snapshot, pending }
   #listening = false;
   #observer = null;
+  #diskObserver = null;
   #barObserver = null;
-  #bar = null; // { textFor(count), button }
+  #bar = null; // { textFor(count, theOnlyFinding), button }
   #own = []; // prefs (names or "branch." prefixes) Nulavio itself changed at this start
   #timer = null;
   #checked = null;
+  #wanted = false; // a look at the record was asked for while the start-up check was still at work
+  #looks = Promise.resolve(); // one look at a time
+  #touched = new Set(); // extensions the browser itself installed, removed, turned on or off since the last look
+  #scanning = 0; // our own readings of the extensions folders under way
 
   get #profileDir() {
     return Services.dirsvc.get("ProfD", Ci.nsIFile).path;
@@ -173,7 +207,12 @@ class Guard {
   async #extensions() {
     // The engine registers extensions placed in the profile folder only when it scans for them
     // (after start-up, for its "added by another program" prompt); scan now, with its own function.
-    await lazy.AddonManagerPrivate.getNewSideloads().catch(() => []);
+    this.#scanning++;
+    try {
+      await lazy.AddonManagerPrivate.getNewSideloads().catch(() => []);
+    } finally {
+      this.#scanning--;
+    }
     const out = {};
     for (const addon of await lazy.AddonManager.getAddonsByTypes(["extension"])) {
       if (addon.isBuiltin || addon.isSystem || addon.hidden) {
@@ -245,11 +284,41 @@ class Guard {
     if (Services.policies.status !== Ci.nsIEnterprisePolicies.ACTIVE) {
       return null;
     }
-    // From the second start on, the engine fills some policies with empty defaults (SitePolicies: []):
-    // only policies that set something count.
-    const empty = v => v === null || v === undefined || (typeof v === "object" && !Object.keys(v).length);
-    const active = Object.fromEntries(Object.entries(Services.policies.getActivePolicies() ?? {}).filter(([, v]) => !empty(v)));
+    const active = settingPolicies(Services.policies.getActivePolicies());
     return { names: Object.keys(active).sort(), digest: sha256(new TextEncoder().encode(sortedJSON(active))) };
+  }
+
+  /**
+   * Whose the managed policies in effect are: "none" (no policy is active), "own" (exactly the ones Nulavio
+   * ships, by their digests) or "other" (anything else: one added, removed or changed, in a system file or
+   * in the application's own distribution/policies.json, or digests that could not be read). `count` is how
+   * many are in effect. Never "own" on a doubt: the settings page drops the engine's "managed" line only for "own".
+   */
+  async policiesOrigin() {
+    if (Services.policies.status !== Ci.nsIEnterprisePolicies.ACTIVE) {
+      return { origin: "none", count: 0 };
+    }
+    const active = settingPolicies(Services.policies.getActivePolicies());
+    // What Nulavio's own policies are comes from inside the Shell, not from distribution/policies.json: that
+    // file is where the engine reads its policies, and where an administrator adds one. Compared with itself
+    // it would always say "own".
+    let own = null;
+    try {
+      // A file of the Shell itself, read as the options file is (NulavioPersonalise): nothing leaves the browser.
+      const text = await new Promise((resolve, reject) => {
+        lazy.NetUtil.asyncFetch({ uri: OWN_POLICIES_URL, loadUsingSystemPrincipal: true }, (stream, status) => {
+          if (!Components.isSuccessCode(status)) {
+            reject(new Error("own-policies.json is missing"));
+            return;
+          }
+          resolve(lazy.NetUtil.readInputStreamToString(stream, stream.available(), { charset: "UTF-8" }));
+        });
+      });
+      own = JSON.parse(text).policies;
+    } catch (e) {
+      console.error("Nulavio Guard: the list of Nulavio's own policies could not be read", e);
+    }
+    return { origin: ownPolicies(active, own) ? "own" : "other", count: Object.keys(active).length };
   }
 
   async #hosts() {
@@ -347,7 +416,7 @@ class Guard {
           add("extension-added", id, { after: now });
         }
       } else if (then.version !== now.version || (!then.active && now.active)) {
-        // A new version, or a disabled extension turned on, while the browser was not running.
+        // A new version, or a disabled extension turned on, without the browser doing it.
         add("extension-changed", id, { before: then, after: now });
       }
     }
@@ -399,23 +468,71 @@ class Guard {
     return findings;
   }
 
+  /**
+   * Updates the engine itself holds for the next start, from its list of installs: { id: version }.
+   * An extension can ask the engine to wait before it is replaced (uBlock Origin does); the engine
+   * then keeps the verified file and installs it when the browser starts again.
+   */
+  static heldUpdates(installs) {
+    const out = {};
+    for (const install of installs ?? []) {
+      const id = install?.existingAddon?.id;
+      if (install?.state === lazy.AddonManager.STATE_POSTPONED && id && install.version) {
+        out[id] = String(install.version);
+      }
+    }
+    return out;
+  }
+
+  /**
+   * Findings without the engine's own held updates: an extension that only went to the version the record
+   * expected, and whose file is the very one the engine held (`installed`: { id: digest of the file there
+   * now }). Anything else about it is still reported: another version, another file with that version, a
+   * file whose digest could not be taken on either side, turned on while closed.
+   */
+  /**
+   * Whether a difference in the extensions, found while the browser runs, was made outside it. An extension that
+   * appeared: when another program placed it (the engine marks those). Any other difference (another version,
+   * turned on, gone): unless the browser itself installed, updated, removed, turned on or off that extension
+   * since the last look (`touched`: the engine announces each of those). What the browser did is followed, not
+   * reported; what it did not announce was done to its files.
+   */
+  static madeOutside(finding, touched = new Set()) {
+    if (finding.kind === "extension-added") {
+      return Boolean(finding.after?.foreign);
+    }
+    return !touched.has(finding.key);
+  }
+
+  static withoutHeldUpdates(findings, expected, installed = {}) {
+    const held = f => {
+      const kept = f.kind === "extension-changed" && Object.hasOwn(expected ?? {}, f.key) ? expected[f.key] : null;
+      return Boolean(
+        kept && typeof kept === "object" && kept.version === f.after.version &&
+        kept.digest && kept.digest === installed?.[f.key] && f.before.active === f.after.active
+      );
+    };
+    return findings.filter(f => !held(f));
+  }
+
   // -- the record ----------------------------------------------------------------
 
   async #load() {
     try {
       const data = await IOUtils.readJSON(this.#recordPath);
       if (data?.schema === SCHEMA && data.snapshot && typeof data.snapshot === "object") {
-        return { snapshot: data.snapshot, pending: Array.isArray(data.pending) ? data.pending : [] };
+        const expected = data.expected && typeof data.expected === "object" && !Array.isArray(data.expected) ? data.expected : {};
+        return { snapshot: data.snapshot, pending: Array.isArray(data.pending) ? data.pending : [], expected };
       }
     } catch {}
     return null;
   }
 
   async #save() {
-    const { snapshot, pending } = this.#state;
+    const { snapshot, pending, expected = {} } = this.#state;
     await IOUtils.writeJSON(
       this.#recordPath,
-      { schema: SCHEMA, updated: new Date().toISOString(), snapshot, pending },
+      { schema: SCHEMA, updated: new Date().toISOString(), snapshot, pending, expected },
       { tmpPath: `${this.#recordPath}.tmp` }
     );
     await IOUtils.setPermissions(this.#recordPath, 0o600).catch(() => {});
@@ -454,19 +571,59 @@ class Guard {
     this.#listen(); // changes made while the snapshot is taken are recorded right after it
     const now = await this.snapshot();
     const saved = await this.#load();
+    const expected = await this.#heldUpdates(); // what the engine holds now, for the start after this one
     if (!saved) {
-      this.#state = { snapshot: now, pending: [] };
+      this.#state = { snapshot: now, pending: [], expected };
       await this.#save();
+      this.#lookAgainIfAsked();
       return { state: "first", findings: [] };
     }
     const own = name => this.#own.some(entry => (entry.endsWith(".") ? name.startsWith(entry) : name === entry));
-    const fresh = Guard.compare(saved.snapshot, now).filter(f => f.kind !== "pref-changed" || !own(f.key));
+    // An update the engine downloaded during the last session and installed as this one started is the
+    // browser's own doing, like an update made while it runs: not a change made outside it.
+    const installed = {};
+    for (const id of Object.keys(saved.expected)) {
+      installed[id] = await this.#installedDigest(id);
+    }
+    const fresh = Guard.withoutHeldUpdates(Guard.compare(saved.snapshot, now), saved.expected, installed).filter(
+      f => f.kind !== "pref-changed" || !own(f.key)
+    );
     const seen = new Set(fresh.map(f => f.id));
     const at = new Date().toISOString();
     const pending = [...saved.pending.filter(f => !seen.has(f.id)), ...fresh.map(f => ({ ...f, at }))];
-    this.#state = { snapshot: now, pending };
+    this.#state = { snapshot: now, pending, expected };
     await this.#save();
+    this.#lookAgainIfAsked();
     return { state: pending.length ? "changed" : "clean", findings: this.findings() };
+  }
+
+  /** The engine's notice, or a change in the browser, came while the start-up check was at work: look now. */
+  #lookAgainIfAsked() {
+    if (this.#wanted) {
+      this.#wanted = false;
+      this.#scheduleRefresh();
+    }
+  }
+
+  /** What the engine holds for the next start: { id: { version, digest } }, the digest being that of the file it
+      keeps in the profile's staging folder. The version alone would also fit another file. */
+  async #heldUpdates() {
+    const out = {};
+    for (const [id, version] of Object.entries(Guard.heldUpdates(await lazy.AddonManager.getAllInstalls().catch(() => [])))) {
+      out[id] = { version, digest: await fileDigest(PathUtils.join(this.#profileDir, "extensions", "staged", `${id}.xpi`)) };
+    }
+    return out;
+  }
+
+  /** The digest of an installed extension's file as it is now, or null when it has none to read. */
+  async #installedDigest(id) {
+    try {
+      const uri = (await lazy.AddonManager.getAddonByID(id))?.getResourceURI();
+      const file = uri instanceof Ci.nsIJARURI ? uri.JARFile.QueryInterface(Ci.nsIFileURL).file : null;
+      return file ? await fileDigest(file.path) : null;
+    } catch {
+      return null;
+    }
   }
 
   /** Settings Nulavio itself changes at this start (its own defaults): not changes made outside the browser. */
@@ -493,11 +650,33 @@ class Guard {
     }
     this.#listening = true;
     const refresh = () => this.#scheduleRefresh();
+    // What the browser itself does to an extension is followed. The engine announces each of these as it begins
+    // and as it ends; a difference in an extension that it did not announce is not the browser's doing.
+    const touched = addon => {
+      if (addon?.id) {
+        this.#touched.add(addon.id);
+      }
+      this.#scheduleRefresh();
+    };
     lazy.AddonManager.addAddonListener({
-      onInstalled: refresh,
-      onUninstalled: refresh,
-      onEnabled: refresh,
-      onDisabled: refresh,
+      // As each begins, too: the engine can find the file of an install under way before it says "installed".
+      onInstalling: touched,
+      onInstalled: touched,
+      onUninstalling: touched,
+      onUninstalled: touched,
+      onEnabling: touched,
+      onEnabled: touched,
+      onDisabling: touched,
+      onDisabled: touched,
+      onOperationCancelled: touched, // "Undo" after "Remove": on again, and nothing else is said
+    });
+    const installing = install => touched(install?.existingAddon ?? install?.addon);
+    lazy.AddonManager.addInstallListener({
+      onInstallStarted: installing,
+      onInstallEnded: installing,
+      // The engine downloaded an update and keeps it for the next start: the record notes the version to expect.
+      onInstallPostponed: refresh,
+      onInstallCancelled: refresh,
     });
     // Held for the whole session (the observers below are weak).
     this.#observer = { observe: refresh, QueryInterface: ChromeUtils.generateQI(["nsIObserver", "nsISupportsWeakReference"]) };
@@ -505,6 +684,21 @@ class Guard {
       Services.prefs.addObserver(entry, this.#observer, true);
     }
     Services.obs.addObserver(this.#observer, "browser-search-engine-modified", true);
+    // The engine reads the profile's extensions folder a little after start-up, and its reading can end after
+    // the start-up check took its snapshot (its scan and ours can overlap, and the one that came second does not
+    // wait for the first). This is the engine saying it has taken in what it found on disk: an extension placed
+    // there, a file replaced by another version. Look again. Our own reading can cause the notice too, and the
+    // look under way reads the list after it: asking again then would have the Guard answer itself once a second
+    // for as long as the engine finds something.
+    this.#diskObserver = {
+      observe: () => {
+        if (!this.#scanning) {
+          this.#scheduleRefresh();
+        }
+      },
+      QueryInterface: ChromeUtils.generateQI(["nsIObserver", "nsISupportsWeakReference"]),
+    };
+    Services.obs.addObserver(this.#diskObserver, "xpi-provider:database-updated", true);
     lazy.AsyncShutdown.appShutdownConfirmed.addBlocker("Nulavio Guard: record", () => this.#refresh());
   }
 
@@ -516,26 +710,45 @@ class Guard {
     this.#timer.initWithCallback(() => this.#refresh().catch(e => console.error("Nulavio Guard", e)), 1000, Ci.nsITimer.TYPE_ONE_SHOT);
   }
 
-  async #refresh() {
+  /** Bring the record up to date with what the browser did, and report what it did not do. One at a time. */
+  #refresh() {
+    const look = this.#looks.then(() => this.#look());
+    this.#looks = look.catch(() => {});
+    return look;
+  }
+
+  async #look() {
     this.#timer?.cancel();
     this.#timer = null;
     if (!this.#state) {
+      this.#wanted = true; // the start-up check is still at work: it looks again when it ends
       return;
     }
-    const [extensions, search] = await Promise.all([this.#extensions(), this.#search()]);
-    // An extension another program placed in the profile is never taken into the record unseen,
-    // even when the engine registers it during the session.
+    const earlier = this.#touched;
+    this.#touched = new Set(); // what the browser does from here on is for the next look as well
+    let extensions, search, expected;
+    try {
+      [extensions, search, expected] = await Promise.all([this.#extensions(), this.#search(), this.#heldUpdates()]);
+    } catch (e) {
+      earlier.forEach(id => this.#touched.add(id)); // nothing was read: what the browser did still counts
+      throw e;
+    }
+    const touched = new Set([...earlier, ...this.#touched]);
+    // What the engine shows of an extension that the browser did not do is reported, not taken into the record,
+    // also when the engine only finds it during the session: an extension placed in the profile, another
+    // version, a file gone. (What the engine does not show is not seen here: docs/security/hardening.md.)
     const before = { extensions: this.#state.snapshot.extensions };
     const pendingIds = new Set(this.#state.pending.map(f => f.id));
     const at = new Date().toISOString();
     let grew = false;
     for (const finding of Guard.compare(before, { extensions })) {
-      if (finding.kind === "extension-added" && finding.after.foreign && !pendingIds.has(finding.id)) {
+      if (Guard.madeOutside(finding, touched) && !pendingIds.has(finding.id)) {
         this.#state.pending.push({ ...finding, at });
         grew = true;
       }
     }
     this.#state.snapshot = { ...this.#state.snapshot, extensions, prefs: this.#prefs(), search };
+    this.#state.expected = expected;
     await this.#save();
     if (grew) {
       this.showBar();
@@ -563,6 +776,14 @@ class Guard {
       throw new GuardError("bad-action");
     }
     this.#state.pending = this.#state.pending.filter(f => f.id !== id);
+    if (this.#barObserver) {
+      // A bar still shown says what waits now: one change fewer, or nothing (and then it goes).
+      if (this.#state.pending.length) {
+        this.showBar();
+      } else {
+        this.hideBar();
+      }
+    }
     if (action === "undo") {
       const snapshot = this.#state.snapshot;
       if (finding.kind === "root-added" || finding.kind === "module-added") {
@@ -680,12 +901,15 @@ class Guard {
     if (!pending || !url || !this.#bar) {
       return;
     }
-    const text = String(this.#bar.textFor(pending));
     const mark = win => {
       const box = win.gNotificationBox;
-      if (!box) {
+      const waiting = this.#state?.pending.length ?? 0;
+      if (!box || !waiting || !this.#bar) {
         return;
       }
+      // One change is named in the bar; more than one are counted, and the review names each. The words are
+      // worked out as each window is marked: a window opened later says what waits then, not what waited before.
+      const text = String(this.#bar.textFor(waiting, waiting === 1 ? this.findings()[0] : null));
       const existing = box.getNotificationWithValue("nulavio-guard");
       if (existing?.messageText?.textContent === text) {
         return;

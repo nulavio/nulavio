@@ -12,6 +12,13 @@
       {
         "name": "toggleFocus", "type": "function", "async": true,
         "parameters": [{ "name": "tabId", "type": "integer", "minimum": 0 }]
+      },
+      {
+        "name": "setImmersive", "type": "function", "async": true,
+        "parameters": [
+          { "name": "on", "type": "boolean", "optional": true },
+          { "name": "tabId", "type": "integer", "minimum": 0, "optional": true }
+        ]
       }
     ],
     "events": [{ "name": "onChanged", "type": "function", "parameters": [] }]

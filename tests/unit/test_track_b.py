@@ -2,13 +2,20 @@
 
 from __future__ import annotations
 
+import contextlib
+import hashlib
+import io
 import json
 import re
 import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
+import urllib.parse
+import zipfile
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts" / "build"))
@@ -17,6 +24,7 @@ sys.path.insert(0, str(ROOT / "scripts" / "upstream"))
 import apply_patches  # noqa: E402
 import fetch_firefox_l10n  # noqa: E402
 import make_distribution  # noqa: E402
+import refresh_extensions_lock  # noqa: E402
 
 MOZCONFIG = ROOT / "browser" / "build" / "mozconfig"
 BRANDING = ROOT / "browser" / "branding" / "nulavio"
@@ -307,6 +315,223 @@ class DistributionTest(unittest.TestCase):
         self.assertTrue(ublock["private_browsing"])
         self.assertNotIn("*", settings, "do not block user-installed extensions by default")
 
+    UBLOCK = "uBlock0@raymondhill.net"
+    # What Helium switches on, of uBlock Origin's own lists: cookie, newsletter and notification notices, uBlock's
+    # annoyances, AdGuard's ads list and tracking parameters in addresses.
+    DEFAULT_ON = frozenset(
+        {
+            "adguard-generic",
+            "adguard-spyware-url",
+            "adguard-cookies",
+            "fanboy-cookiemonster",
+            "ublock-cookies-easylist",
+            "easylist-newsletters",
+            "easylist-notifications",
+            "ublock-annoyances",
+        }
+    )
+
+    def bootstrap_address(self) -> str:
+        managed = make_distribution.policies()["policies"]["3rdparty"]["Extensions"]
+        self.assertEqual(list(managed), [self.UBLOCK])
+        # `toOverwrite`, `userSettings` and the rest are applied by uBlock Origin at every start: they would
+        # undo what the person chose in its dashboard. Only the registry of a new profile is Nulavio's.
+        self.assertEqual(list(managed[self.UBLOCK]), ["adminSettings"])
+        admin = json.loads(managed[self.UBLOCK]["adminSettings"])
+        self.assertEqual(list(admin), ["assetsBootstrapLocation"])
+        return admin["assetsBootstrapLocation"]
+
+    def test_a_new_profile_starts_with_cookie_notice_lists_on_and_nothing_else_changed(self):
+        address = self.bootstrap_address()
+        prefix = "data://application/json,"
+        # What uBlock Origin 1.75 needs to load it without the network: `scheme://`, and a closing `#` that
+        # swallows the cache token it appends. ASCII, because the engine reads the unknown type as US-ASCII.
+        self.assertTrue(address.startswith(prefix) and address.endswith("#"), address[:40])
+        self.assertTrue(address.isascii())
+        self.assertEqual(address.count("#"), 1)
+        self.assertNotRegex(address, r"[?\s\"\\]")
+        registry = json.loads(urllib.parse.unquote(address[len(prefix) : -1]))
+        stock = json.loads((make_distribution.REGISTRY_DIR / "assets.json").read_text(encoding="utf-8"))
+        self.assertEqual(list(registry), list(stock))
+        self.assertEqual({key for key in stock if registry[key] != stock[key]}, self.DEFAULT_ON)
+        for key in self.DEFAULT_ON:
+            self.assertIs(stock[key]["off"], True)
+            # `false`, not absent: a list without `off` is part of the stock default set, and uBlock Origin
+            # drops it from the selection when a registry update no longer has it there.
+            self.assertEqual(registry[key], {**stock[key], "off": False})
+
+    def test_the_registry_is_the_pinned_packages(self):
+        config = json.loads(make_distribution.CONTENT_FILTER.read_text(encoding="utf-8"))
+        ublock = make_distribution.extensions.load_lock()[config["extension"]]
+        raw = (make_distribution.REGISTRY_DIR / "assets.json").read_bytes()
+        self.assertEqual(config["registry"], {"version": ublock.version, "sha256": hashlib.sha256(raw).hexdigest()})
+        self.assertEqual(set(config["default_on"]), self.DEFAULT_ON)
+        licence = (make_distribution.REGISTRY_DIR / "LICENSE.txt").read_text(encoding="utf-8")
+        self.assertIn("GNU GENERAL PUBLIC LICENSE", licence[:200])
+        self.assertIn("Version 3", licence[:200])
+        package = make_distribution.extensions.cached_path(ublock)
+        if not package.is_file() or make_distribution.extensions.sha256_file(package) != ublock.sha256:
+            self.skipTest("the pinned uBlock Origin package is not in the local cache: the copy is compared by hash only")
+        with zipfile.ZipFile(package) as archive:
+            self.assertEqual(archive.read("assets/assets.json"), raw)
+            self.assertEqual(archive.read("LICENSE.txt").decode("utf-8"), licence)
+            # The pinned package still has what the default lists rest on (dependency-updates.md).
+            self.assertEqual(refresh_extensions_lock.bootstrap_report(archive), [])
+
+    def test_a_package_that_changed_what_the_default_rests_on_is_reported(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "changed.xpi"
+            with zipfile.ZipFile(path, "w") as archive:
+                for name, markers in refresh_extensions_lock.BOOTSTRAP_MARKERS.items():
+                    if name != "js/assets.js":  # one file gone, one marker gone
+                        archive.writestr(name, "\n".join(markers[1:] if name == "js/storage.js" else markers))
+            with zipfile.ZipFile(path) as archive:
+                report = refresh_extensions_lock.bootstrap_report(archive)
+        self.assertEqual(
+            report,
+            ["js/storage.js: µb.assetsBootstrapLocation = data.assetsBootstrapLocation;", "js/assets.js: the file is gone"],
+        )
+
+    def test_a_copy_that_is_not_the_packages_is_refused_whatever_its_checksum_says(self):
+        """The gate of CI and of the release rehearsal (`--check-registry`), on a stand-in for the pinned package."""
+        raw = (make_distribution.REGISTRY_DIR / "assets.json").read_bytes()
+        licence = (make_distribution.REGISTRY_DIR / "LICENSE.txt").read_bytes()
+        with tempfile.TemporaryDirectory() as tmp:
+            package, copy, changed = Path(tmp) / "pinned.xpi", Path(tmp) / "ublock-origin", Path(tmp) / "content-filter.json"
+            with zipfile.ZipFile(package, "w") as archive:
+                archive.writestr("assets/assets.json", raw)
+                archive.writestr("LICENSE.txt", licence)
+                for name, markers in refresh_extensions_lock.BOOTSTRAP_MARKERS.items():
+                    archive.writestr(name, "\n".join(markers))
+            copy.mkdir()
+            (copy / "assets.json").write_bytes(raw)
+            (copy / "LICENSE.txt").write_bytes(licence)
+
+            def gate(**fetch) -> int:
+                said = io.StringIO()
+                with (
+                    mock.patch.object(refresh_extensions_lock.extensions, "fetch", **fetch),
+                    mock.patch.object(refresh_extensions_lock, "REGISTRY_DIR", copy),
+                    contextlib.redirect_stdout(said),
+                    contextlib.redirect_stderr(said),
+                ):
+                    return refresh_extensions_lock.check_registry()
+
+            self.assertEqual(gate(return_value=package), 0)
+            # One of uBlock Origin's own default lists taken out of the copy, and the checksum in content-filter.json
+            # brought along: the copy and the checksum agree, so the build's own check has nothing to say.
+            edited = json.loads(raw)
+            del edited["easyprivacy"]
+            edited_raw = json.dumps(edited, indent="\t").encode("utf-8")
+            (copy / "assets.json").write_bytes(edited_raw)
+            config = json.loads(make_distribution.CONTENT_FILTER.read_text(encoding="utf-8"))
+            config["registry"]["sha256"] = hashlib.sha256(edited_raw).hexdigest()
+            changed.write_text(json.dumps(config), encoding="utf-8")
+            with (
+                mock.patch.object(make_distribution, "CONTENT_FILTER", changed),
+                mock.patch.object(make_distribution, "REGISTRY_DIR", copy),
+            ):
+                self.assertNotIn("easyprivacy", make_distribution.filter_registry())
+            # The comparison with the package says which list, and the gate refuses.
+            with zipfile.ZipFile(package) as archive:
+                report = refresh_extensions_lock.registry_report(archive, copy)
+            self.assertEqual(
+                report, ["assets.json: not the package's assets/assets.json", "    easyprivacy: only in the package"]
+            )
+            self.assertEqual(gate(return_value=package), 1)
+            # No package to compare with (no network and nothing cached, or a download that is not the pinned file):
+            # not compared is not passed.
+            (copy / "assets.json").write_bytes(raw)
+            for error in (OSError("no network"), refresh_extensions_lock.extensions.IntegrityError("integrity mismatch")):
+                self.assertEqual(gate(side_effect=error), 2)
+            # A package that lost what the default rests on is refused as well, with the copy byte for byte its own.
+            with zipfile.ZipFile(package, "w") as archive:
+                archive.writestr("assets/assets.json", raw)
+                archive.writestr("LICENSE.txt", licence)
+            self.assertEqual(gate(return_value=package), 1)
+
+    def test_the_gate_runs_in_ci_and_before_the_release_writes_the_policies(self):
+        ci = (ROOT / ".github" / "workflows" / "ci.yml").read_text()
+        self.assertEqual(ci.count("run: python3 -I scripts/upstream/refresh_extensions_lock.py --check-registry\n"), 1)
+        rehearsal = (ROOT / "scripts" / "release" / "rehearse_release.sh").read_text()
+        gate = rehearsal.find('python3 -I "$repo/scripts/upstream/refresh_extensions_lock.py" --check-registry\n')
+        self.assertTrue(0 < gate < rehearsal.find('python3 -I "$repo/scripts/build/make_distribution.py"'), "no gate")
+        # The release's integration run does not skip the test of the lists for want of the network.
+        runner = (ROOT / "scripts" / "release" / "run_integration.sh").read_text()
+        self.assertIn("export NULAVIO_REQUIRE_NETWORK=${NULAVIO_REQUIRE_NETWORK:-1}", runner)
+        self.assertIn('-e "NULAVIO_REQUIRE_NETWORK=$NULAVIO_REQUIRE_NETWORK"', runner)
+        module = (ROOT / "tests" / "integration" / "test_content_filter.py").read_text()
+        self.assertIn('os.environ.get("NULAVIO_REQUIRE_NETWORK") == "1"', module)
+
+    def test_a_stale_default_stops_the_build(self):
+        config = json.loads(make_distribution.CONTENT_FILTER.read_text(encoding="utf-8"))
+        stale = (
+            {**config, "registry": {**config["registry"], "version": "0.0.1"}},  # the pin moved, the copy did not
+            {**config, "registry": {**config["registry"], "sha256": "0" * 64}},  # the copy was edited
+            {**config, "default_on": ["nulavio-no-such-list"]},
+            {**config, "default_on": ["easylist"]},  # already on upstream: nothing for Nulavio to switch on
+            {**config, "default_on": ["assets.json"]},  # not a list
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            changed = Path(tmp) / "content-filter.json"
+            for case in stale:
+                changed.write_text(json.dumps(case), encoding="utf-8")
+                with mock.patch.object(make_distribution, "CONTENT_FILTER", changed), self.assertRaises(SystemExit, msg=case):
+                    make_distribution.policies()
+            # No default list: no managed setting at all, and no registry in the package.
+            changed.write_text(json.dumps({**config, "default_on": []}), encoding="utf-8")
+            with mock.patch.object(make_distribution, "CONTENT_FILTER", changed):
+                self.assertNotIn("3rdparty", make_distribution.policies()["policies"])
+
+    def test_the_shell_carries_the_digests_of_the_policies_a_build_ships(self):
+        """The settings page hides "managed by your organization" while only Nulavio's own policies are in effect,
+        and learns which those are from digests inside the Shell, not from the file an administrator edits."""
+        current = make_distribution.own_policies()
+        self.assertEqual(set(current["policies"]), set(make_distribution.policies()["policies"]))
+        self.assertEqual(
+            make_distribution.OWN_POLICIES.read_text(encoding="utf-8"),
+            make_distribution.own_policies_text(),
+            "browser/shell/shared/own-policies.json is not current: run scripts/build/make_distribution.py --own-policies",
+        )
+        for digest in current["policies"].values():
+            self.assertRegex(digest, r"^[0-9a-f]{64}$")
+        # A policy that changes changes its digest, and one that sets nothing has none.
+        changed = {"policies": {**make_distribution.policies()["policies"], "DisableTelemetry": False, "Empty": {}}}
+        with mock.patch.object(make_distribution, "policies", return_value=changed):
+            other = make_distribution.own_policies()["policies"]
+        self.assertNotEqual(other["DisableTelemetry"], current["policies"]["DisableTelemetry"])
+        self.assertNotIn("Empty", other)
+        self.assertEqual({k: v for k, v in other.items() if k != "DisableTelemetry"},
+                         {k: v for k, v in current["policies"].items() if k != "DisableTelemetry"})  # fmt: skip
+        # A value Python and the engine would write differently never becomes a digest: the build stops.
+        for label, value in (("a fraction", 1.0), ("a huge number", 2**60), ("a key outside ASCII", {"é": True})):
+            unlike = {"policies": {**make_distribution.policies()["policies"], "Odd": {"inside": [value]}}}
+            patched = mock.patch.object(make_distribution, "policies", return_value=unlike)
+            with self.subTest(label), patched, self.assertRaises(SystemExit):
+                make_distribution.own_policies()
+        guard = (ROOT / "browser" / "shell" / "modules" / "NulavioGuard.sys.mjs").read_text(encoding="utf-8")
+        self.assertIn('"resource://builtin-addons/nulavio-shell/shared/own-policies.json"', guard)
+        self.assertNotIn('"XREAppDist"', guard, "the Guard reads the application's own policies file again")
+
+    def test_the_licence_goes_out_with_the_registry(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            script = ROOT / "scripts" / "build" / "make_distribution.py"
+            subprocess.run([sys.executable, "-I", str(script), "--out", tmp], check=True, capture_output=True)
+            names = sorted(path.name for path in Path(tmp).iterdir())
+            self.assertEqual(
+                names, ["distribution.ini", "policies.json", "uBlock-Origin-LICENSE.txt", "uBlock-Origin-NOTICE.txt"]
+            )
+            licence = (make_distribution.REGISTRY_DIR / "LICENSE.txt").read_bytes()
+            self.assertEqual((Path(tmp) / "uBlock-Origin-LICENSE.txt").read_bytes(), licence)
+            # The copy in policies.json is a modified one: the notice says so, by whom, when, and what was changed.
+            config = json.loads(make_distribution.CONTENT_FILTER.read_text(encoding="utf-8"))
+            notice = (Path(tmp) / "uBlock-Origin-NOTICE.txt").read_text(encoding="utf-8")
+            self.assertRegex(config["changed_on"], r"^20\d\d-\d\d-\d\d$")
+            for said in ("modified copy", f"uBlock Origin {config['registry']['version']}", "GNU General Public License",
+                         f"on {config['changed_on']}", "uBlock-Origin-LICENSE.txt", *config["default_on"]):  # fmt: skip
+                self.assertIn(said, notice)
+            self.assertEqual(json.loads((Path(tmp) / "policies.json").read_text()), make_distribution.policies())
+
 
 if __name__ == "__main__":
     unittest.main()
@@ -355,6 +580,27 @@ class PackagingTest(unittest.TestCase):
         self.assertIn('"$pkg/etc/apparmor.d/nulavio"', make_deb)
         self.assertIn("printf '/etc/apparmor.d/nulavio\\n' > \"$pkg/DEBIAN/conffiles\"", make_deb)
         self.assertIn("apparmor_parser -Q -K /etc/apparmor.d/nulavio", (ROOT / "scripts/release/check_deb.sh").read_text())
+
+    def test_every_package_names_both_licences(self):
+        """A build carries one GPL-3.0 data file, uBlock Origin's list registry inside distribution/policies.json
+        (issue #137): each package's own licence field says so, and the .deb's copyright file says where the text is."""
+        config = json.loads(make_distribution.CONTENT_FILTER.read_text(encoding="utf-8"))
+        self.assertTrue(config["default_on"], "no registry is shipped any more: the licence fields can go back to MPL-2.0")
+        spec = (ROOT / "packaging" / "rpm" / "nulavio.spec").read_text(encoding="utf-8")
+        self.assertEqual(re.findall(r"(?m)^License:\s+(.+)$", spec), ["MPL-2.0 AND GPL-3.0-only"])
+        self.assertIn("%license nulavio/LICENSE*", spec)  # LICENSE and LICENSES.md, which make_rpm.sh puts in the tree
+        metainfo = (ROOT / "packaging" / "flatpak" / "net.nulavio.Nulavio.metainfo.xml").read_text(encoding="utf-8")
+        self.assertEqual(re.findall(r"<project_license>([^<]+)</project_license>", metainfo), ["MPL-2.0 AND GPL-3.0-only"])
+        deb = (ROOT / "scripts" / "release" / "make_deb.sh").read_text(encoding="utf-8")
+        note = deb.split("<<'NOTE'\n", 1)[1].split("\nNOTE\n", 1)[0]
+        for said in ("Mozilla Public License, version 2.0", "GNU General Public License, version 3 only", "all rights reserved",
+                     f"/usr/lib/nulavio/distribution/{make_distribution.LICENCE_NAME}", make_distribution.NOTICE_NAME,
+                     "/usr/share/doc/nulavio/LICENSES.md"):  # fmt: skip
+            self.assertIn(said, note)
+        self.assertIn('cat "$repo/LICENSE"\n} > "$pkg/usr/share/doc/nulavio/copyright"', deb)
+        self.assertIn('cp "$repo/LICENSES.md" "$pkg/usr/share/doc/nulavio/LICENSES.md"', deb)
+        for packager in ("make_rpm.sh", "make_archive.sh"):
+            self.assertIn('"$repo/LICENSES.md"', (ROOT / "scripts" / "release" / packager).read_text(encoding="utf-8"))
 
     def test_packages_install_under_system_directories_only(self):
         spec = (ROOT / "packaging" / "rpm" / "nulavio.spec").read_text(encoding="utf-8")

@@ -1,12 +1,13 @@
-# Pull requests, branches and the advisory AI review
+# Pull requests, branches, review and merging
 
-Status: convention adopted 2026-10-27. `main` has branch protection (settings read from GitHub on 2026-11-10). The repository moved to the `nulavio` organization and became public on 2026-11-10; branch protection was restored with the same values the same day (read back through the API). The table under [What is enforced](#what-is-enforced-and-what-is-advisory) says which parts GitHub enforces and which stay advisory.
+Status: convention adopted 2026-10-27; review and merging by coding agents adopted 2026-11-12 ([below](#review-and-merging)), in place of the maintainer reading every pull request. `main` has branch protection (settings read from GitHub on 2026-11-10). The repository moved to the `nulavio` organization and became public on 2026-11-10; branch protection was restored with the same values the same day (read back through the API). The table under [What is enforced](#what-is-enforced-and-what-is-advisory) says which parts GitHub enforces and which stay advisory.
 
 In short:
 
-- Every change reaches `main` through a pull request that a person merges.
-- Coding agents push their own branch and open a pull request. They never push to `main`, merge or approve.
-- CI runs on the pull request. An advisory AI review may add one comment. The maintainer reads both, decides and squash-merges.
+- Every change reaches `main` through a pull request.
+- Coding agents push their own branch and open a pull request. They never push to `main`.
+- CI runs on the pull request. The agent that did the work reviews it, records that review in the pull request and squash-merges it when the required checks pass. The automatic AI review in CI may add one comment: it is one more reading, not the review.
+- What an agent does not settle by itself: a change that weakens a protection or shows a false state is not merged, and a decision the project leaves to the maintainer needs his recorded word first. A release is still signed and published only with the maintainer's approval.
 
 ## Branch names
 
@@ -36,10 +37,30 @@ The same steps for agents and people:
 3. Run the local checks: `ruff check .`, `ruff format --check .`, `python3 -I tests/run.py unit`, and the integration tests when the change touches the engine, profiles or the Shell.
 4. Push only your own branch: `git push -u origin HEAD`. Never push to `main`. Never force-push, except `--force-with-lease` on your own branch before review starts.
 5. Open the pull request with `gh pr create --base main --title "<conventional title>" --body-file <file>`, filling in [the template](../../.github/pull_request_template.md): what changed and why, how it was verified (commands and results), what was not verified, implemented / prototype / planned, and which security invariants it touches. Name the issue it moves forward (`Closes #N` or `Refs #N`, see [issues](issues.md)). Draft pull requests may not be available for private repositories on this plan (unconfirmed); where they are, use them while work is in progress.
-6. Agents stop there: report the pull request's address and do not merge (`gh pr merge`), approve or close it. Agents change `.github/workflows/` or `.github/ai-review/` only when the task asks for it, and then say so at the top of the description so the maintainer reviews it closely.
-7. The maintainer reads the CI result, the AI comment if there is one, and the diff, then squash-merges. The pull request title becomes the commit on `main`. Security-relevant pull requests need a second human reviewer once there is one.
+6. Agents change `.github/workflows/` or `.github/ai-review/` only when the task asks for it, and then say so at the top of the description: such a change always gets the second review below.
+7. Review and merge as [Review and merging](#review-and-merging) says. The pull request title becomes the commit on `main`.
 
 Pushes to branches cost no Actions minutes: CI runs on pushes to `main` and on pull requests, not on other branches.
+
+## Review and merging
+
+Adopted 2026-11-12. Until then every merge waited for the maintainer to read the pull request; with one maintainer and agents doing most of the work, pull requests waited for weeks and were stacked dozens deep on each other. Now the agent that did the work reviews it and merges it. The review has to be a real one, and this is what makes it one:
+
+1. **Read the change, not the memory of writing it.** The diff as GitHub shows it (`gh pr diff`), at the head commit, after the last push. The description's "Verified" and "Not verified" must be true of that commit.
+2. **Check it against the rules that are not up for decision**: the [non-negotiables](../../CONTRIBUTING.md#non-negotiables-reviewers-will-block-on-these) and the security invariants in [`.github/ai-review/instructions.md`](../../.github/ai-review/instructions.md). Tests come with the change; a bug fix has a test that fails without it.
+3. **A second review by an independent reviewer** when the change touches a path in [`.github/CODEOWNERS`](../../.github/CODEOWNERS), a workflow, the review's own files or scripts, release or signing, or anything the description marks as touching a security invariant. Independent means another model, or a new session, given the diff and the description and not the author's reasoning. The automatic AI review in CI counts only when it finished with a result for the head commit and read the whole change: a run that failed, was skipped, had no credential, found the diff too large or could not read some files is not a review, and another independent one is needed. Its findings are leads, not verdicts: each is checked and answered in the pull request, fixed or with the reason it is not a defect.
+4. **Record the review** in one comment on the pull request: the commit reviewed, what was read and run, each finding and what became of it, which tool and model reviewed, and the verdict. That comment is the approval: agents work with the maintainer's account, and GitHub does not let an account approve its own pull request.
+5. **Merge** with a squash merge when every required check has passed on the head commit and every review conversation is resolved. Never with a required check failing or still running, never by changing branch protection or a repository setting, never by pushing to `main`.
+6. **Afterwards** read CI on `main` for that commit. If it fails, fix it or revert it with a pull request at once.
+
+What an agent does not settle by itself:
+
+- A change that weakens a protection or shows a false state is not merged. That is a non-negotiable, not a judgement call.
+- A decision the project leaves to the maintainer ([GOVERNANCE.md](../../GOVERNANCE.md): an ADR's status, accepting a security risk, a dependency with a large footprint, what gets built next) needs his recorded word first, in the ADR, the issue or the pull request. The pull request says where.
+- A release. Merging is not releasing: signing and publishing wait for the maintainer's approval in the `release` environment ([R60](../security/residual-risks.md)), and an agent never gives that approval. GitHub does not enforce the difference: the environment's reviewer is the account the agents also use, it may approve its own runs and administrators may bypass it (read on 2026-11-12). It is a rule agents keep, and it becomes a barrier only when agents have an account of their own.
+- A pull request from someone outside the project is reviewed the same way; the agent merges it for the maintainer, who is named as the one who decided when it is declined.
+
+What this gives up, said plainly: the person who could tell that an agent had been misled no longer reads every change. An agent steered by text it read can now write a change, review it and merge it. What stands in the way is the required checks, the second review for the sensitive paths, the hooks and the `main`-only-through-pull-requests check; after that, only the rule that the maintainer himself approves a release, which the shared account does not enforce ([R62](../security/residual-risks.md), [threat model S19](../security/threat-model.md)).
 
 ## What is enforced and what is advisory
 
@@ -47,24 +68,24 @@ Pushes to branches cost no Actions minutes: CI runs on pushes to `main` and on p
 |---|---|---|
 | Changes reach `main` only through a pull request | **Enforced by GitHub** | Branch protection on `main`: a pull request is required, administrators included; no force pushes or deletion; linear history (squash merges only, head branches deleted after merging) |
 | A commit that reached `main` without a merged pull request is reported | **On** | Workflow `main-via-pr.yml` ("main changed only through merged pull requests"); the repository variable `REQUIRE_PR_FOR_MAIN` is `true` |
-| CI must pass before merging | **Enforced for four checks** | Required status checks, branch up to date with `main`: "lint, unit tests, generated files, SBOM", "security scanners (…)", "Companion app (lint, release build)" and "does this change need the engine integration run". The engine integration result itself is not required yet: the maintainer reads it (see [Upgrading the plan](#if-the-plan-changes)) |
-| A person approves | **Advisory** | Branch protection asks for no approval (one maintainer, whose account the agents also use). Only the maintainer merges, by this convention. Open review conversations must be resolved before merging. `GITHUB_TOKEN` cannot approve pull requests (repository setting) |
+| CI must pass before merging | **Enforced for four checks** | Required status checks, branch up to date with `main`: "lint, unit tests, generated files, SBOM", "security scanners (…)", "Companion app (lint, release build)" and "does this change need the engine integration run". The engine integration result itself is not required yet: whoever merges reads it (see [Upgrading the plan](#if-the-plan-changes)) |
+| A review before merging | **Convention** | [Review and merging](#review-and-merging): the agent's recorded review, and a second independent one for the sensitive paths. Branch protection asks for no approval (one maintainer, whose account the agents also use, and GitHub does not let an account approve its own pull request). Open review conversations must be resolved before merging. `GITHUB_TOKEN` cannot approve pull requests (repository setting) |
 | Code owners review their paths | **Documentation** | [`.github/CODEOWNERS`](../../.github/CODEOWNERS): code-owner review is not a merge requirement |
-| AI review | **Advisory, never required** | [`ai-review.yml`](../../.github/workflows/ai-review.yml); it can miss problems and can be misled |
+| The automatic AI review in CI | **Advisory, never required** | [`ai-review.yml`](../../.github/workflows/ai-review.yml); it can miss problems and can be misled |
 | Agents cannot change workflows | **Proposed** | A fine-grained token without the Workflows permission ([proposal](agent-guardrails.md)); GitHub enforces it once agents use it |
 | Actions pinned by commit SHA, least-privilege permissions | **Enforced in the repository** | `tests/unit/test_repo_hygiene.py` in CI; the matching GitHub setting is a maintainer item ([proposal](agent-guardrails.md#5-repository-settings)) |
 | Pull requests from forks get no secrets and no write token | **Enforced by GitHub** | Repository settings (fork workflows are off) |
 
-## The advisory AI review
+## The automatic AI review in CI
 
-[`.github/workflows/ai-review.yml`](../../.github/workflows/ai-review.yml) asks Claude (model `claude-opus-5-5`, through `anthropics/claude-code-action` pinned by commit) to check a pull request against the project's security invariants in [`.github/ai-review/instructions.md`](../../.github/ai-review/instructions.md). It is a second pair of eyes, not a gate: findings are leads to check, an empty result proves nothing, and a person decides.
+[`.github/workflows/ai-review.yml`](../../.github/workflows/ai-review.yml) asks Claude (model `claude-opus-5-5`, through `anthropics/claude-code-action` pinned by commit) to check a pull request against the project's security invariants in [`.github/ai-review/instructions.md`](../../.github/ai-review/instructions.md). It is a second pair of eyes, not a gate: findings are leads to check, an empty result proves nothing, and whoever merges decides.
 
 ### When it runs
 
 - When a pull request is opened or marked ready for review, and when someone adds the label `ai-review` (remove and add it again to review new pushes). Not on every push, to save Actions minutes.
 - For any pull request that touches something other than `docs/brand/`, `docs/design/`, `docs/research/`, `LICENSE`, `LICENSES.md` and `.editorconfig`. New directories, agent instruction files (`CLAUDE.md`, `AGENTS.md`, `.claude/`) and scanner settings are covered without changing the workflow. A pull request that touches only the excluded files is never reviewed, not even with the label.
 - Skipped, before any runner starts: drafts; branches from forks; pull requests opened by bots (unless a person adds the label); the label `no-ai-review`; more than 80 changed files or more than 4,000 added or 4,000 deleted lines; the repository variable `AI_REVIEW` set to `off`.
-- A diff over 1.5 MB gets a comment saying it needs a human-only review.
+- A diff over 1.5 MB gets a comment saying it is too large for this review and has to be reviewed another way.
 - A newer review of the same pull request cancels the running one. Adding `no-ai-review` cancels it too.
 - The comment names the commit it reviewed and says later commits are not covered. When a later run is skipped (draft, size limits), the earlier comment stays as it was: check its commit against the pull request's head.
 
@@ -127,8 +148,8 @@ When Mozilla publishes a security release, the [update policy](../architecture/u
 
 1. Work on `release/firefox-<version>` and open the pull request as soon as the build passes locally.
 2. The AI review never blocks; add `no-ai-review` if it would only cost time.
-3. Wait for at least the "lint, unit tests, generated files, SBOM" job. If the deadline requires it, merge while the slower jobs still run and watch them on `main`.
-4. Only if GitHub's pull request path itself is unavailable: the maintainer pushes with `NULAVIO_ALLOW_MAIN_PUSH=1 git push origin HEAD:main`. The "main changed only through merged pull requests" check, if on, will fail for that commit; record the reason in a pull request or in the [security changelog](../security/changelog.md) afterwards.
+3. Wait for the four required checks: GitHub does not merge without them, and nobody merges around them. The engine integration jobs are not required: if the deadline requires it, merge while they still run and watch them on `main`.
+4. If GitHub's pull request path itself is unavailable, nothing reaches `main`: branch protection refuses a direct push, administrators included (`NULAVIO_ALLOW_MAIN_PUSH=1` only silences the local hook). Lifting the protection is the maintainer's act alone; he records the reason in a pull request or in the [security changelog](../security/changelog.md) afterwards.
 5. Never weaken a protection to ship faster.
 
 ## If the plan changes
@@ -136,7 +157,7 @@ When Mozilla publishes a security release, the [update policy](../architecture/u
 ### GitHub Pro (repository stays private)
 
 - Protection on `main` (in place as branch protection, read 2026-11-10): a pull request, the status checks "lint, unit tests, generated files, SBOM", "Companion app (lint, release build)", "security scanners (…)" and "does this change need the engine integration run", never "AI review (advisory)"; linear history; no force pushes or deletion; administrators included, so an urgent engine update also goes through a pull request. **Still open:** the engine integration result. A matrix job skipped by the Markdown-only gate reports no per-image check name, so first add a small job that needs `changes` and `integration` and fails unless `changes` succeeded and `integration` succeeded or was skipped, then require that job.
-- Require one approval and code-owner review only after agents use a separate machine account. Otherwise the maintainer could not approve pull requests that agents opened under his own account.
+- Require one approval and code-owner review only when the author and the reviewer are different accounts: one account for the agent that writes and another for the one that reviews (with code-owner rights), or the maintainer approving what an agent account wrote. A different model or session under the same account is still the same account to GitHub, so under one account nobody could approve.
 - An environment `release`, with the maintainer as required reviewer and limited to `main`, for signing and publishing jobs once the release key exists. An environment `ai-review` holding `ANTHROPIC_API_KEY` (if not using federation), limited to `main`.
 - 3,000 Actions minutes a month are included.
 

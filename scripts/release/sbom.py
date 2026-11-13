@@ -323,6 +323,7 @@ def main() -> int:
     if args.gradle_dependencies or args.apk:
         parser.error("--gradle-dependencies and --apk need --companion")
     lock = json.loads(LOCK.read_text())
+    content_filter = json.loads((LOCK.parent / "content-filter.json").read_text(encoding="utf-8"))
     components = [
         {
             "type": "application",
@@ -361,6 +362,10 @@ def main() -> int:
         if entry["id"] in EXTENSION_CPE and (extension_cpe := cpe(EXTENSION_CPE[entry["id"]], entry["version"])):
             component["cpe"] = extension_cpe
         component["licenses"] = [{"license": {"id": license_id}}] if license_id else [{"license": {"name": entry["license"]}}]
+        if entry["key"] == content_filter["extension"] and content_filter["default_on"]:
+            # The one part of an extension a build carries: its list registry, inside distribution/policies.json.
+            carried = f"assets/assets.json (sha256 {content_filter['registry']['sha256']}) in distribution/policies.json"
+            component["properties"].append({"name": "nulavio:redistributed", "value": carried})
         components.append(component)
     if args.package:
         components[0] = engine_built(args.engine_version)
@@ -383,12 +388,15 @@ def main() -> int:
         "dependencies": [{"ref": "nulavio-preview", "dependsOn": [c["bom-ref"] for c in components]}],
     }
     if args.package:
+        # What the package's own licence field says: with uBlock Origin's list registry inside it, both licences.
+        both = [{"expression": "MPL-2.0 AND GPL-3.0-only"}]
+        package_licences = both if content_filter["default_on"] else [{"license": {"id": "MPL-2.0"}}]
         bom["metadata"]["component"] = {
             "type": "application",
             "bom-ref": "nulavio-preview",
             "name": "nulavio",
             "version": args.engine_version,
-            "licenses": [{"license": {"id": "MPL-2.0"}}],
+            "licenses": package_licences,
             "hashes": [{"alg": "SHA-256", "content": sha256(args.package)}],
             "properties": [
                 {"name": "nulavio:package-file", "value": args.package.name},

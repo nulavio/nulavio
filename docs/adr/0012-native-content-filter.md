@@ -9,7 +9,7 @@ Nulavio Filter is uBlock Origin, pinned from AMO and installed by the build's po
 
 What it leaves open:
 
-- **Integration.** Settings cannot read or change uBlock Origin's per-site switch or trusted sites (R39). The Privacy pages can only point at uBlock Origin's own dashboard.
+- **Integration.** Settings cannot read or change uBlock Origin's per-site switch or trusted sites (R39). It reads one thing, which filter lists are selected ([ADR 0011](0011-nulavio-ui-native-not-an-extension.md), step 7); for everything else it can only open uBlock Origin's own pages.
 - **Cost per request.** Every request crosses from the network code to the extension process and back before it can go out. Not measured on Nulavio.
 - **Dependency.** The filter that defines a large part of Nulavio's privacy is a third-party extension with essentially one maintainer, updated through AMO.
 

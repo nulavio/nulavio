@@ -368,8 +368,18 @@ async function openShellPage(path) {
   await browser.tabs.create({ url: browser.runtime.getURL(path) });
   window.close();
 }
-document.getElementById("manage").addEventListener("click", () => openShellPage("settings/settings.html#profiles"));
-document.getElementById("settings").addEventListener("click", () => openShellPage("settings/settings.html"));
+// One settings page (ADR 0008): "Configurações" is the browser's page, opened in this window; "Gerenciar perfis"
+// is its pane with the profiles (ADR 0011).
+async function openSettingsAt(where) {
+  if (browser.nulavioPersonalise?.openSettings) {
+    await browser.nulavioPersonalise.openSettings(where);
+    window.close();
+  } else {
+    await openShellPage(`settings/settings.html${where ? `#${where}` : ""}`);
+  }
+}
+document.getElementById("manage").addEventListener("click", () => openSettingsAt("profiles"));
+document.getElementById("settings").addEventListener("click", () => openSettingsAt(""));
 document.getElementById("new-profile").addEventListener("click", openSheet);
 document.getElementById("new-temporary").addEventListener("click", () =>
   act(() => profiles.openTemporary(), t("profilesTemporaryOpening"))

@@ -31,6 +31,7 @@ function expired() {
     button.hidden = true;
   }
   byId("expires").hidden = true;
+  byId("only-if").hidden = true; // advice for a decision that is no longer asked
   setState("expired", t("aiRequestExpired"), "warn");
 }
 
@@ -126,6 +127,15 @@ render()
       byId("headline").textContent = t("aiRequestTitle");
       expired();
     } else {
+      // No request was read: the page names itself and leaves no answer to press, since none
+      // would do anything (audit 2026-11 S-01).
+      byId("headline").textContent = t("aiRequestTitle");
+      for (const button of document.querySelectorAll("#actions button")) {
+        button.hidden = true;
+      }
+      for (const name of ["who", "where", "only-if"]) {
+        byId(name).hidden = true;
+      }
       setState("error", errorText(e), "error");
     }
   })

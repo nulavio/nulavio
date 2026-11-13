@@ -3,7 +3,9 @@
 
 import { localize, t } from "../lib/i18n.js";
 import { keyElements, nulavioKeys } from "../lib/keys.js";
-import { chip, errorText, h, settleRadioChanges, stateBadge } from "../lib/ui.js";
+import { providerName, providerStatus } from "../lib/providers.js";
+import { wireSettingsLinks } from "../lib/settings.js";
+import { chip, confirmDialog, errorText, h, settleRadioChanges, stateBadge } from "../lib/ui.js";
 
 const UBLOCK_ID = "uBlock0@raymondhill.net";
 // Official extensions of the supported credential providers (browser/config/providers.json).
@@ -365,13 +367,34 @@ async function showLayoutChoice() {
     error.textContent = "";
     if (await listen()) await refreshLayout();
   });
+  // The first run's "Voltar": the card comes back in this tab with the arrangement in use, to change or to keep.
+  reopenLayoutChoice = async () => {
+    dismissedInThisTab = false;
+    editingInThisTab = true;
+    if (await listen()) await refreshLayout();
+  };
+  // …and when the first run ends with the card shown again but not answered again, it is put away as answered.
+  settleLayoutChoice = () => {
+    if (editingInThisTab && !busy) {
+      editingInThisTab = false;
+      dismissedInThisTab = true;
+      card.hidden = true;
+    }
+  };
 
   if (await listen()) {
     await refreshLayout();
   }
 }
 
+// The first run's "Voltar" shows these two cards again after they were answered (set where each card is built).
+let reopenLayoutChoice = null;
+let settleLayoutChoice = null;
+let dnsShownAgain = false;
+
 // DNS (Nulavio build): how site names are looked up, and the one-time choice.
+const DNS_SERVICES = { cloudflare: "dnsCloudflare", quad9: "dnsQuad9", mullvad: "dnsMullvad" };
+
 async function showDns() {
   const privacy = browser.nulavioPrivacy;
   if (!privacy) {
@@ -386,49 +409,103 @@ async function showDns() {
     show("dns", t(state.choice === "strict" ? "dnsStatusStrict" : "dnsStatusFallback"), "ok");
   }
   const card = document.getElementById("dns-choice");
-  card.hidden = state.chosen;
-  document.getElementById("dns-choice-body").textContent = t(state.encryptedNow ? "dnsChoiceBodyEncrypted" : "dnsChoiceBody");
-  // The buttons follow what the resolver does now: "keep" always keeps it.
+  // Asked once; "Voltar" in the first run shows it again, with the resolver in use as the option checked.
+  const asked = !state.chosen || dnsShownAgain;
+  card.hidden = !asked;
+  // The options follow what the resolver does now: the one in use is the one checked.
   card.dataset.encrypted = String(state.encryptedNow);
-  document.getElementById("dns-actions-system").hidden = state.encryptedNow;
-  document.getElementById("dns-actions-encrypted").hidden = !state.encryptedNow;
-  if (state.chosen) {
+  if (!asked) {
     return;
   }
+  const services = state.providers.map(provider => provider.id);
+  const serviceName = id => t(DNS_SERVICES[id]);
+  // The resolver answering now: one of the known services by name, any other by its address's host.
+  const resolverNow = () => {
+    if (DNS_SERVICES[state.resolver]) {
+      return serviceName(state.resolver);
+    }
+    try {
+      return new URL(state.resolverUri).host;
+    } catch {
+      return t("dnsCustom");
+    }
+  };
+  const service = h("select", { class: "select", id: "dns-service" },
+    ...services.map(id => h("option", { value: id, text: serviceName(id) })));
+  const option = (value, title, note, { current = false, extra = null } = {}) => h("div", { class: "option", dataset: { value } },
+    h("label", { class: "option__pick" },
+      h("input", { type: "radio", name: "dns-option", value, ...(current ? { checked: "" } : {}) }),
+      h("span", { class: "option__text" },
+        h("span", { class: "option__title" }, h("span", { text: title }), current ? h("span", { class: "badge badge--quiet", text: t("dnsOptionNow") }) : null),
+        h("span", { class: "hint", text: note }))),
+    extra);
+  const network = current => option("system", t(current ? "dnsOptionNetwork" : "dnsOptionNetworkPlain"), t("dnsOptionNetworkNote"), { current });
+  const other = option("fallback", t(state.encryptedNow ? "dnsOptionOther" : "dnsOptionService"), t("dnsOptionServiceNote"), {
+    extra: h("label", { class: "field option__extra" }, h("span", { class: "field__label", text: t("dnsOptionServiceLabel") }), service),
+  });
+  const options = document.getElementById("dns-options");
+  options.replaceChildren(
+    options.querySelector("legend"),
+    ...(state.encryptedNow
+      ? [option("keep", t("dnsOptionKeep"), t("dnsOptionKeepNote", [resolverNow()]), { current: true }), other, network(false)]
+      : [network(true), other])
+  );
+  const error = document.getElementById("dns-choice-error");
   const done = async action => {
-    await action();
+    error.textContent = "";
+    try {
+      await action();
+    } catch (e) {
+      error.textContent = errorText(e);
+      return;
+    }
+    dnsShownAgain = false;
     card.hidden = true;
     await showDns();
   };
-  const toSystem = () => done(() => privacy.setDns({ choice: "system" }));
-  document.getElementById("dns-keep-system").onclick = toSystem;
+  // Nothing changes before the main action. Keeping the engine's encrypted default changes nothing either:
+  // it only records that the person decided. The computer's resolver is set as "off by choice".
+  document.getElementById("dns-apply").onclick = () => done(() => {
+    const chosen = options.querySelector('input[name="dns-option"]:checked')?.value;
+    if (chosen === "system") {
+      return privacy.setDns({ choice: "system" });
+    }
+    return chosen === "fallback" ? privacy.setDns({ choice: "fallback", provider: service.value }) : privacy.dismissDnsChoice();
+  });
   document.getElementById("dns-later").onclick = () => done(() => privacy.dismissDnsChoice());
-  // Keeping the engine's encrypted default changes nothing; it only records that the person decided.
-  document.getElementById("dns-keep-encrypted").onclick = () => done(() => privacy.dismissDnsChoice());
-  document.getElementById("dns-use-system").onclick = toSystem;
 }
 
 // -- First run (audit 2026-11 FR-01) -------------------------------------------------------------
-// In a genuinely new profile, one card at a time below the search: welcome, the layout and DNS
-// cards (steps 1 and 2), passwords, the default browser, then "all set". Each answer applies at
-// once and is never asked again; a tab closed midway resumes at the first step not yet answered.
-// Private windows, temporary profiles and AI Workspaces never see it (NulavioPrivacy.firstRun).
-const QUESTIONS = ["layout", "dns", "passwords", "default-browser"];
+// In a genuinely new profile, one card at a time, alone on the page (the stage, ADR 0010): welcome,
+// the layout and DNS cards, passwords, the default browser, a protected profile, then "all set".
+// Each answer applies at once and is never asked again; a tab closed midway resumes at the first
+// step not yet answered. Private windows, temporary profiles and AI Workspaces never see it
+// (NulavioPrivacy.firstRun).
+const QUESTIONS = ["layout", "dns", "passwords", "default-browser", "profile"];
 const STEP_CARDS = {
   welcome: "firstrun-welcome",
   layout: "layout-choice",
   dns: "dns-choice",
   passwords: "firstrun-passwords",
   "default-browser": "firstrun-default",
+  profile: "firstrun-profile",
   finished: "firstrun-done",
 };
 const FIRST_CONTROL = {
   welcome: "firstrun-start",
   layout: "layout-choice-done",
   dns: "dns-choice-heading",
-  passwords: "firstrun-passwords-choose",
+  passwords: "firstrun-passwords-heading",
   "default-browser": "firstrun-default-make",
+  profile: "firstrun-profile-heading",
   finished: "firstrun-finish",
+};
+// What each manager is, in one line (its real state comes under it, as in Settings).
+const PROVIDER_LINES = {
+  builtin: "firstrunProviderBuiltin",
+  "proton-pass": "firstrunProviderProton",
+  keepassxc: "firstrunProviderKeepass",
+  bitwarden: "firstrunProviderBitwarden",
 };
 
 async function firstRun() {
@@ -442,12 +519,17 @@ async function firstRun() {
   }
   const layoutApi = browser.nulavioLayout;
   const connect = browser.nulavioConnect;
+  const passwords = browser.nulavioPasswords;
   const done = new Set(start.done);
-  const [layout, dns, defaultBrowser] = await Promise.all([
+  const [layout, dns, defaultBrowser, here, vault, profileList] = await Promise.all([
     layoutApi?.state().catch(() => null),
     privacy.dns().catch(() => null),
     connect?.defaultBrowserState?.().catch(() => null),
+    browser.nulavioProfiles?.here?.().catch(() => null),
+    browser.nulavioVault?.capabilities().catch(() => null),
+    browser.nulavioProfiles?.list?.().catch(() => null),
   ]);
+  const profileCount = profileList?.profiles?.length ?? 1;
   // The steps that apply here: asked now, or answered earlier in this same sequence (so "Etapa N de M"
   // keeps its numbers in a tab opened later).
   const applies = {
@@ -455,12 +537,17 @@ async function firstRun() {
     dns: done.has("dns") || dns?.chosen === false,
     passwords: true,
     "default-browser": done.has("default-browser") || defaultBrowser?.state === "available",
+    // Only where a protected profile can really be made, and only while this one has no password.
+    profile: done.has("profile") || Boolean(vault?.storage && vault?.sodium && here?.protection === "plain" && !here.temporary),
   };
   const questions = QUESTIONS.filter(step => applies[step]);
   const order = ["welcome", ...questions, "finished"];
   const progress = document.getElementById("firstrun-progress");
+  const backButton = document.getElementById("firstrun-back");
   const searchButton = document.querySelector("#search .button");
   let current = null;
+  // After "Voltar", going on walks the steps in order again, up to the first one not answered yet.
+  let walking = false;
 
   const pending = async step => {
     if (done.has(step)) {
@@ -480,6 +567,8 @@ async function firstRun() {
   };
   const show = step => {
     current = step;
+    // The first run is a stage (ADR 0010): one centred card and nothing else; the new tab comes back when it ends.
+    document.documentElement.toggleAttribute("data-stage", Boolean(step));
     for (const [name, id] of Object.entries(STEP_CARDS)) {
       const card = document.getElementById(id);
       card.toggleAttribute("data-gated", name !== step);
@@ -490,11 +579,21 @@ async function firstRun() {
     const n = questions.indexOf(step);
     progress.hidden = n < 0;
     progress.textContent = n < 0 ? "" : t("firstrunProgress", [String(n + 1), String(questions.length)]);
+    backButton.hidden = order.indexOf(step) <= 0; // nothing before the welcome
+    // In the sequence the DNS card's main action goes on; alone on the new tab it saves.
+    document.getElementById("dns-apply").textContent = t(step ? "firstrunContinue" : "dnsSave");
     // While a first-run card is the page's question, the search is not its main action.
     searchButton.classList.toggle("button--primary", !step);
     searchButton.classList.toggle("button--secondary", Boolean(step));
   };
   const leave = () => {
+    // A card shown again by "Voltar" and left as it was is not a question any more.
+    walking = false;
+    settleLayoutChoice?.();
+    if (dnsShownAgain) {
+      dnsShownAgain = false;
+      document.getElementById("dns-choice").hidden = true;
+    }
     show(null);
     for (const id of Object.values(STEP_CARDS)) {
       document.getElementById(id).removeAttribute("data-gated");
@@ -502,43 +601,150 @@ async function firstRun() {
   };
   // Go to the first step not answered yet. Focus follows only when the person was in a first-run card
   // (on load the keyboard stays where the browser put it).
+  const focusStep = () => {
+    const control = document.getElementById(FIRST_CONTROL[current]);
+    if (control?.matches("h2")) {
+      control.tabIndex = -1; // a heading takes focus only from here, as a reading position
+    }
+    control?.focus();
+  };
+  // A step already answered, shown again with what was answered. Each answer applied at once and stays applied:
+  // this is where it can be changed, with the same controls and the same rules as the first time.
+  const showAgain = async step => {
+    if (step === "finished") {
+      await fillSummary();
+    } else if (step === "layout") {
+      await reopenLayoutChoice?.();
+    } else if (step === "dns") {
+      dnsShownAgain = true;
+      await showDns();
+    }
+    show(step);
+  };
   const advance = async (answered, { focus = false } = {}) => {
     const wasInside = focus || Object.values(STEP_CARDS).some(id => document.getElementById(id).contains(document.activeElement));
+    const from = order.indexOf(current); // the step being left, when there is one
     if (answered) {
       await record(answered);
     }
+    let next = "finished";
     for (const step of order) {
-      if (step === "finished") {
-        await fillSummary();
-        show(step);
-        break;
-      }
-      if (await pending(step)) {
-        show(step);
+      if (step === "finished" || (await pending(step))) {
+        next = step;
         break;
       }
       if ((step === "layout" || step === "dns") && !done.has(step)) {
         await record(step); // answered in its card (or in Settings): never asked again
       }
     }
-    if (wasInside) {
-      const control = document.getElementById(FIRST_CONTROL[current]);
-      if (control?.matches("h2")) {
-        control.tabIndex = -1; // a heading takes focus only from here, as a reading position
+    if (walking && from >= 0 && from + 1 < order.indexOf(next)) {
+      await showAgain(order[from + 1]);
+    } else {
+      walking = false;
+      if (next === "finished") {
+        await fillSummary();
       }
-      control?.focus();
+      show(next);
+    }
+    if (wasInside) {
+      focusStep();
     }
   };
+  backButton.addEventListener("click", async () => {
+    const at = order.indexOf(current);
+    if (at <= 0) {
+      return;
+    }
+    walking = true;
+    await showAgain(order[at - 1]);
+    focusStep();
+  });
 
+  // The band's own words for a profile's protection: protected only when it is known to be.
+  const protectionWords = profile =>
+    profile.protection === "unlocked" ? "bandProtectedShort" : profile.protection === "plain" ? "bandUnprotected" : "bandProtectionUnknown";
   const fact = key => document.querySelector(`#status [data-status="${key}"]`);
   const factLine = key => `${fact(key).previousElementSibling.textContent}: ${fact(key).textContent}`;
   document.getElementById("firstrun-facts").replaceChildren(
-    ...["tracking", "https", "filter"].map(key => h("li", { "data-level": fact(key).dataset.level, text: factLine(key) })),
+    // Tracking protection and HTTPS-Only are settings, read at once: listed as they are, also when one is off.
+    // The content filter is installed in the first seconds of a new profile: listed here only once it is there,
+    // and reported where it is checked again ("Tudo pronto" and the new tab) while it is not.
+    ...["tracking", "https", "filter"].filter(key => key !== "filter" || fact(key).dataset.level === "ok")
+      .map(key => h("li", { "data-level": fact(key).dataset.level, text: factLine(key) })),
     h("li", { "data-level": "ok", text: t("firstrunNothingSent") })
   );
-  document.getElementById("firstrun-passwords-now").textContent = t("firstrunPasswordsNow", [fact("passwords").textContent]);
+  // The band as it is in this window, drawn small: this profile, and its state in the band's own words.
+  const band = (profile, state) => [chip(profile, "sm"), h("strong", { class: "miniwin__name", text: profile.name }), h("span", { class: "miniwin__state", text: state })];
+  if (here) {
+    const state = t(protectionWords(here));
+    document.getElementById("firstrun-band").replaceChildren(...band(here, state));
+    document.getElementById("firstrun-band-now").replaceChildren(...band(here, state));
+    document.getElementById("firstrun-band-then").replaceChildren(
+      ...band({ name: t("firstrunProfileExample"), color: here.color, avatar: "briefcase" }, t("bandProtectedShort")));
+    document.getElementById("firstrun-profile-lead").textContent = t("firstrunProfileLead", [here.name]);
+    // Not the first profile of this browser: the welcome is about this profile, whose choices are its own.
+    if (profileCount > 1) {
+      document.getElementById("firstrun-welcome-heading").textContent = t("firstrunWelcomeTitleProfile", [here.name]);
+      document.querySelector("#firstrun-welcome .firstrun__lead").textContent = t("firstrunWelcomeLeadProfile");
+    }
+  } else {
+    // Where the profile is not known to the page (a window started for one profile directory), nothing is drawn for it.
+    document.querySelector("#firstrun-welcome .miniwin").hidden = true;
+    document.querySelector("#firstrun-welcome .firstrun__caption").hidden = true;
+  }
+
+  // Passwords: one row per manager. "Usar" applies at once (an extension not yet installed asks first, with
+  // the same words as Settings); "Continuar" goes on with whatever is in use.
+  const providersList = document.getElementById("firstrun-providers");
+  const passwordsError = document.getElementById("firstrun-passwords-error");
+  const passwordsNow = document.getElementById("firstrun-passwords-now");
+  async function showProviders() {
+    await refresh().then(summarise).catch(() => {});
+    passwordsNow.textContent = t("firstrunPasswordsNow", [fact("passwords").textContent]);
+    const state = await passwords?.state().catch(() => null);
+    providersList.setAttribute("aria-busy", "false"); // also when the read failed: nothing is loading any more
+    if (!state) {
+      return;
+    }
+    providersList.replaceChildren(...state.providers.map(item => {
+      // Every manager that is active says so: choosing one does not turn another off, so two can be in use.
+      const inUse = state.current === item.key || Boolean(item.extension?.enabled);
+      const use = inUse ? null : h("button", { class: "button button--secondary", type: "button", text: t("passwordsUse"), "aria-label": t("firstrunProviderUse", [providerName(item)]) });
+      use?.addEventListener("click", async () => {
+        passwordsError.textContent = "";
+        if (item.extension && !item.extension.installed) {
+          const ok = await confirmDialog({
+            title: t("passwordsConfirmTitle", [providerName(item)]),
+            body: t("passwordsConfirmBody", [providerName(item), item.extension.pinned]),
+            confirm: t("passwordsConfirmButton"),
+          });
+          if (!ok) {
+            return;
+          }
+          passwordsNow.textContent = t("passwordsInstalling", [providerName(item)]);
+        }
+        providersList.setAttribute("aria-busy", "true");
+        try {
+          await passwords.choose(item.key);
+        } catch (e) {
+          passwordsError.textContent = errorText(e);
+        }
+        await showProviders();
+        providersList.querySelector(`[data-provider="${item.key}"] .button`)?.focus();
+      });
+      return h("li", { class: "option option--row", dataset: { provider: item.key, inUse: String(inUse) } },
+        h("div", { class: "option__text" },
+          h("p", { class: "option__title" }, h("span", { text: providerName(item) }), inUse ? h("span", { class: "badge", text: t("passwordsInUse") }) : null),
+          h("p", { class: "hint", text: t(PROVIDER_LINES[item.key] ?? "passwordsProvider", [providerName(item)]) }),
+          // Its real state, once there is one to tell; what installing means is said by the confirmation.
+          item.extension?.installed ? h("p", { class: "hint option__state", text: providerStatus(item) }) : null),
+        use);
+    }));
+  }
+  await showProviders();
 
   async function fillSummary() {
+    await refresh().then(summarise).catch(() => {}); // read again: the filter may have arrived since the first frame
     const [layoutNow, dnsNow, defaultNow] = await Promise.all([
       layoutApi?.state().catch(() => null),
       privacy.dns().catch(() => null),
@@ -546,10 +752,13 @@ async function firstRun() {
     ]);
     const presetKey = { lateral: "layoutLateral", top: "layoutTop", focus: "layoutFocus" }[layoutNow?.preset];
     const dnsKey = dnsNow ? { system: "dnsStatusSystem", default: "dnsStatusDefault", strict: "dnsStatusStrict" }[dnsNow.choice] ?? "dnsStatusFallback" : null;
+    const hereNow = await browser.nulavioProfiles?.here?.().catch(() => null);
     const rows = [
+      hereNow ? [t("firstrunSummaryProfile"), `${hereNow.name} · ${t(protectionWords(hereNow))}`] : null,
       presetKey ? [t("firstrunSummaryTabs"), t(presetKey)] : null,
       dnsKey ? [t("dnsHeading"), t(dnsKey)] : null,
       [t("statusPasswords"), fact("passwords").textContent],
+      [t("statusFilter"), fact("filter").textContent],
       defaultNow ? [t("firstrunSummaryDefault"), t(defaultNow.state === "enabled" ? "firstrunDefaultIsNulavio" : "firstrunDefaultIsOther")] : null,
     ].filter(Boolean);
     document.getElementById("firstrun-summary").replaceChildren(
@@ -572,12 +781,7 @@ async function firstRun() {
     document.getElementById("dns-choice").hidden = true;
     document.getElementById("search-input").focus();
   });
-  document.getElementById("firstrun-passwords-choose").addEventListener("click", async event => {
-    event.preventDefault();
-    await record("passwords");
-    location.href = event.currentTarget.href;
-  });
-  document.getElementById("firstrun-passwords-later").addEventListener("click", () => advance("passwords"));
+  document.getElementById("firstrun-passwords-next").addEventListener("click", () => advance("passwords"));
   const make = document.getElementById("firstrun-default-make");
   make.addEventListener("click", async () => {
     const error = document.getElementById("firstrun-default-error");
@@ -593,6 +797,13 @@ async function firstRun() {
     }
   });
   document.getElementById("firstrun-default-later").addEventListener("click", () => advance("default-browser"));
+  // A protected profile is made in the Vault's own steps (password, recovery code), in its own tab:
+  // this one goes on to "Tudo pronto" and is here when the person comes back.
+  document.getElementById("firstrun-profile-create").addEventListener("click", async () => {
+    await advance("profile");
+    await browser.tabs.create({ url: browser.runtime.getURL("vault/create.html") });
+  });
+  document.getElementById("firstrun-profile-later").addEventListener("click", () => advance("profile"));
   document.getElementById("firstrun-finish").addEventListener("click", async () => {
     await record("finished");
     leave();
@@ -616,6 +827,8 @@ async function firstRun() {
 // Search settings and Nulavio settings exist only where the Shell is built in (privileged API).
 document.getElementById("search-settings").hidden = !browser.nulavioSearch;
 document.getElementById("open-settings").hidden = !browser.nulavioSearch;
+// One settings page (ADR 0008): these links open about:preferences at the pane they name.
+wireSettingsLinks();
 
 // UX6: Nulavio's keys in "Atalhos e ajuda", as the engine has them now.
 async function showNulavioKeys() {

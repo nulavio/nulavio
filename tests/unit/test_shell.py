@@ -182,7 +182,11 @@ class PrivilegedApiTest(unittest.TestCase):
         api = self.manifest["experiment_apis"]["nulavioLayout"]
         self.assertEqual(api["parent"]["events"], ["startup"])
         schema = json.loads((SHELL / api["schema"]).read_text())[0]
-        self.assertEqual({f["name"] for f in schema["functions"]}, {"state", "apply", "dismissChoice", "toggleFocus"})
+        names = {f["name"] for f in schema["functions"]}
+        self.assertEqual(names, {"state", "apply", "dismissChoice", "toggleFocus", "setImmersive"})
+        # ADR 0009: Immersive is one boolean; the tab only says in which window the outcome is announced.
+        switch = next(f for f in schema["functions"] if f["name"] == "setImmersive")
+        self.assertEqual([(a["name"], a["type"]) for a in switch["parameters"]], [("on", "boolean"), ("tabId", "integer")])
         toggle = next(f for f in schema["functions"] if f["name"] == "toggleFocus")
         self.assertEqual(toggle["parameters"], [{"name": "tabId", "type": "integer", "minimum": 0}])
         for name in ("state", "dismissChoice"):
@@ -190,6 +194,26 @@ class PrivilegedApiTest(unittest.TestCase):
             self.assertEqual(fn["parameters"], [])
         apply = next(f for f in schema["functions"] if f["name"] == "apply")
         self.assertEqual(apply["parameters"], [{"name": "preset", "type": "string", "enum": ["lateral", "top", "focus"]}])
+
+    def test_the_api_offers_pages_nothing_they_do_not_call(self):
+        # Least privilege (ADR 0011): the settings live in the browser's own page, which calls the modules
+        # directly. What a Shell page can ask of privileged code is only what some Shell page asks: a function
+        # stays in a schema while a page that uses its namespace names it.
+        pages = [
+            p.read_text(encoding="utf-8")
+            for p in SHELL.rglob("*.js")
+            if not {"experiments", "modules"} & set(p.relative_to(SHELL).parts)
+        ]
+        for name, api in self.manifest["experiment_apis"].items():
+            schema = json.loads((SHELL / api["schema"]).read_text())[0]
+            users = [text for text in pages if re.search(rf"\b{name}\b", text)]
+            self.assertTrue(users, f"{name}: no Shell page uses it")
+            for fn in schema.get("functions", []):
+                with self.subTest(api=name, function=fn["name"]):
+                    self.assertTrue(
+                        any(re.search(rf"\.{fn['name']}\b", text) for text in users),
+                        "no Shell page calls it: remove it from the schema and the parent script",
+                    )
 
     def test_profile_selector_is_on_the_toolbar_with_a_shortcut(self):
         self.assertEqual(self.manifest["action"]["default_area"], "navbar")
@@ -561,6 +585,7 @@ class LayoutModuleTest(unittest.TestCase):
                 "PREF_ADOPTION_VERSION",
                 "PREF_BEFORE_FOCUS",
                 "PREF_CHOICE_PENDING",
+                "PREF_IMMERSIVE",  # ADR 0009: the Immersive switch, a layout pref and no protection
                 "PREF_SHELL_START",
             },
         )
@@ -569,8 +594,8 @@ class LayoutModuleTest(unittest.TestCase):
         privacy = module_text("NulavioPrivacy.sys.mjs")
         self.assertLess(privacy.index("lazy.NulavioLayout.adoptInitialLayout()"), privacy.index("setIntPref(PREF_SEEDED"))
 
-    def test_layout_pictures_match_between_settings_and_the_first_run(self):
-        """UX6 S1: the two copies of each preset's picture (Settings and the first-run card) stay equal."""
+    def test_layout_pictures_exist_in_settings_and_in_the_first_run(self):
+        """UX6 S1: each preset has its picture on both surfaces (the first-run card and the settings page's picker)."""
 
         def pictures(page: str) -> dict[str, str]:
             html = (SHELL / page).read_text(encoding="utf-8")
@@ -581,31 +606,28 @@ class LayoutModuleTest(unittest.TestCase):
                 found[value] = re.sub(r"\s+", " ", svg).strip()
             return found
 
-        settings, newtab = pictures("settings/settings.html"), pictures("newtab/newtab.html")
-        self.assertEqual(set(settings), {"lateral", "top", "focus"})
-        self.assertEqual(settings, newtab)
+        # The first-run card draws each arrangement inline; the settings page's picker shows a picture file per
+        # arrangement (settings/native). Both exist for the same three.
+        self.assertEqual(set(pictures("newtab/newtab.html")), {"lateral", "top", "focus"})
+        for value in ("lateral", "top", "focus"):
+            self.assertTrue((SHELL / "settings" / "native" / f"layout-{value}.svg").is_file(), value)
 
     def test_layout_names_bridge_to_the_engine_settings(self):
-        # QA B-9: about:preferences > Browser layout says "Vertical/Horizontal tabs" and has no Focus;
-        # the presets name that native term, and the card's link says which Settings it opens.
-        for name, vertical, horizontal, nulavio in (
-            ("pt_BR", "Abas na vertical", "Abas na horizontal", "Nulavio"),
-            ("en", "Vertical tabs", "Horizontal tabs", "Nulavio"),
-        ):
+        # ADR 0008: there is one Settings, and the engine's own two-way "Vertical/Horizontal tabs" control is
+        # replaced there by Nulavio's picker (QA B-9's bridge to the engine's words went with the second
+        # control). The first-run card's link names the pane the choice lives in.
+        for name, pane in (("pt_BR", "Aparência"), ("en", "Appearance")):
             with self.subTest(locale=name):
                 msg = {k: v["message"] for k, v in locale(name).items()}
-                self.assertIn(vertical.lower(), msg["layoutLateralHint"].lower())
-                self.assertIn(vertical.lower(), msg["layoutFocusHint"].lower())
-                self.assertIn(horizontal.lower(), msg["layoutTopHint"].lower())
-                self.assertIn(vertical, msg["layoutScope"])
-                self.assertIn(horizontal, msg["layoutScope"])
-                self.assertIn(nulavio, msg["layoutChoiceSettings"])
+                self.assertIn(pane, msg["layoutChoiceSettings"])
 
     def test_layout_surfaces_guard_listener_registration(self):
-        for rel in ("settings/layout.js", "newtab/newtab.js"):
-            with self.subTest(script=rel):
-                source = (SHELL / rel).read_text(encoding="utf-8")
-                self.assertRegex(source, r"try\s*\{\s*api\.onChanged\.addListener\(")
+        # The new tab's card listens through the extension API; the settings page's picker subscribes in the module,
+        # inside its own try (settings/native/panes.mjs).
+        source = (SHELL / "newtab/newtab.js").read_text(encoding="utf-8")
+        self.assertRegex(source, r"try\s*\{\s*api\.onChanged\.addListener\(")
+        panes = (SHELL / "settings/native/panes.mjs").read_text(encoding="utf-8")
+        self.assertRegex(panes, r"try\s*\{\s*stops\.push\(shell\.NulavioLayout\.subscribe\(")
 
 
 if __name__ == "__main__":

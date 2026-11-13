@@ -21,8 +21,8 @@ from urllib.parse import urlsplit
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
 import harness
+import settings_page
 
-from marionette import MarionetteError
 
 MODULE = 'ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioSearch.sys.mjs").NulavioSearch'
 NET_START = """
@@ -282,6 +282,49 @@ class SearchPrivacyTest(unittest.TestCase):
             self.search("await S.setDefault(args[0]);", previous)
             self.search("await S.remove(args[0]);", fixture)
 
+    def test_05c_a_hand_added_plain_http_engine_sends_nothing_in_the_clear(self):
+        """Issue #112: the engine's own "add search engine" dialog takes a plain-http address (it calls the search
+        service's addUserEngine, as here), and Nulavio's old form, which refused one, is gone. What stands in the way
+        is HTTPS-Only, on by default: the suggestion request is upgraded and the search stops at the engine's warning,
+        so nothing typed reaches the http server. With HTTPS-Only switched off by the person it does: the control."""
+        self.require_nulavio()
+        host = "nulavio-plain.test"  # not this computer by name: HTTPS-Only leaves loopback addresses alone
+        self.m.chrome("Services.prefs.setStringPref('network.dns.localDomains', arguments[0]);", [host])
+        self.addCleanup(self.m.chrome, "Services.prefs.clearUserPref('network.dns.localDomains');")
+        base = f"http://{host}:{self.server.port}"
+        added = self.search(
+            'const { SearchService } = ChromeUtils.importESModule("moz-src:///toolkit/components/search/SearchService.sys.mjs");'
+            'const engine = await SearchService.addUserEngine({ name: "Plain", url: args[0], suggestUrl: args[1] });'
+            'return { id: engine.id, search: engine.getSubmission("nvplainsearch").uri.spec };',
+            f"{base}/search?q={{searchTerms}}",
+            f"{base}/suggest?q={{searchTerms}}",
+        )
+        self.assertEqual(added["search"], f"{base}/search?q=nvplainsearch", "the engine keeps the address as given")
+        previous = self.search("return (await S.list()).find(e => e.isDefault).id;")
+        self.search("await S.setDefault(args[0]);", added["id"])
+        self.search("await S.setSuggestOptIn(args[0], true);", added["id"])
+        try:
+            self.assertTrue(self.pref("dom.security.https_only_mode"))
+            seen = self.type_in_urlbar("nvplainsuggest")
+            self.assertIn(f"https://{host}:{self.server.port}/suggest?q=nvplainsuggest", seen, "the request was not upgraded")
+            self.m.chrome("openTrustedLinkIn(arguments[0], 'current');", [added["search"]])
+            shown = "return gBrowser.selectedBrowser.documentURI?.spec.startsWith('about:httpsonlyerror') ?? false;"
+            self.assertTrue(harness.wait_until(lambda: self.m.chrome(shown), 20), "the search did not stop at the warning")
+            self.assertEqual([hit for hit in self.server.hits if "nvplain" in hit], [], "typed text reached the http server")
+            # The control: the same engine with HTTPS-Only switched off sends what is typed, in the clear.
+            self.m.chrome("Services.prefs.setBoolPref('dom.security.https_only_mode', false);")
+            try:
+                self.type_in_urlbar("nvplaincontrol")
+                in_the_clear = lambda: any("nvplaincontrol" in hit for hit in self.server.requests_to("/suggest"))  # noqa: E731
+                self.assertTrue(harness.wait_until(in_the_clear, 10))
+            finally:
+                self.m.chrome("Services.prefs.clearUserPref('dom.security.https_only_mode');")
+        finally:
+            self.m.navigate("about:blank")
+            self.search("await S.setSuggestOptIn(args[0], false);", added["id"])
+            self.search("await S.setDefault(args[0]);", previous)
+            self.search("await S.remove(args[0]);", added["id"])
+
     def test_06_alias_search_goes_straight_to_its_engine(self):
         self.require_nulavio()
         fixture = self.search(
@@ -393,87 +436,46 @@ class SearchPrivacyTest(unittest.TestCase):
             self.search("await S.setSuggestOptIn(args[0], false);", ddg)
         self.assertIs(self.pref("browser.search.suggest.enabled"), False)
 
-    def test_12_settings_page_adds_and_removes_through_the_ui(self):
+    def test_12_settings_page_adds_through_the_ui(self):
         self.require_nulavio()
-        url = self.m.chrome("return WebExtensionPolicy.getByID('shell@nulavio.net').getURL('settings/settings.html#search');")
-        self.m.navigate(url)
-        harness.wait_until(lambda: self.root_ready(), timeout=15)
-        rows = self.m.execute("return document.querySelectorAll('#engines li').length;")
-        self.assertGreaterEqual(rows, 7)
-        self.assertEqual(
-            self.m.execute("return document.getElementById('default-engine').selectedOptions[0].textContent;"), "DuckDuckGo"
-        )
+        # ADR 0011: the engines Nulavio knows how to add are a list in the settings page's own Search pane.
+        settings_page.open_pane(self.m, "search")
+        each = "moz-box-item.nulavio-search-provider"
+        offered = settings_page.wait_rows(self.m, "nulavio-search-providers", len, each)
+        self.assertIn("kagi", [row["data"]["provider"] for row in offered])
+        self.assertEqual(self.search("return (await S.list()).find(e => e.isDefault).name;"), "DuckDuckGo")
+        self.assertGreaterEqual(len(self.search("return S.list();")), 7)
 
-        self.m.send("WebDriver:ElementClick", {"id": self.m.find_element('[data-focus-key="provider-kagi"]')})
-        harness.wait_until(
-            lambda: self.m.execute(
-                "return [...document.querySelectorAll('#engines .row__title')].some(e => e.textContent.startsWith('Kagi'));"
-            ),
-            timeout=10,
-        )
-        kagi = self.m.execute(
-            "return [...document.querySelectorAll('#engines li')]"
-            ".find(li => li.querySelector('.row__title').textContent.startsWith('Kagi')).dataset.engineId;"
-        )
-        self.m.send("WebDriver:ElementClick", {"id": self.m.find_element(f'[data-focus-key="remove-{kagi}"]')})
-        self.m.send("WebDriver:ElementClick", {"id": self.m.find_element('dialog button[value="confirm"]')})
-        harness.wait_until(
-            lambda: not self.m.execute("return Boolean(document.querySelector(`[data-engine-id='${arguments[0]}']`));", [kagi]),
-            timeout=10,
-        )
+        settings_page.click_row(self.m, "nulavio-search-providers", "kagi", None, each)
+        kagi = lambda: [e["id"] for e in self.search("return S.list();") if e["name"].startswith("Kagi")]  # noqa: E731
+        self.assertTrue(harness.wait_until(kagi, timeout=10), "Kagi was not added")
+        try:
+            # It joined the engine's own list, so it is no longer offered here.
+            settings_page.wait_rows(
+                self.m, "nulavio-search-providers", lambda rows: "kagi" not in [row["data"]["provider"] for row in rows], each
+            )
+            # The settings page itself must not reach the network.
+            loaded = settings_page.DOC + "return w.performance.getEntriesByType('resource').map(e => e.name);"
+            external = [name for name in self.m.chrome(loaded) if name.startswith(("http:", "https:", "ws:", "wss:"))]
+            self.assertEqual(external, [])
+        finally:
+            # Removing an engine is the engine's own list in this pane; the service does what its button does.
+            for engine in kagi():
+                self.search("await S.remove(args[0]);", engine)
         self.assertNotIn("Kagi", [e["name"] for e in self.search("return S.list();")])
 
-        # The settings page itself must not reach the network.
-        external = self.m.execute(
-            "return performance.getEntriesByType('resource').map(e => e.name)"
-            ".filter(n => !n.startsWith('moz-extension:') && !n.startsWith('data:'));"
-        )
-        self.assertEqual(external, [])
-
-    def test_13_a_saved_alias_shows_as_stored(self):
-        """Review UX7: after Salvar the field shows the alias as stored ("@pato"), not the text typed."""
+    def test_13_an_alias_is_stored_in_one_form(self):
+        """Review UX7: an alias is kept as "@pato" however it was typed, and that is what every list shows."""
         self.require_nulavio()
-        url = self.m.chrome("return WebExtensionPolicy.getByID('shell@nulavio.net').getURL('settings/settings.html#search');")
-        self.m.navigate(url)
-        harness.wait_until(lambda: self.root_ready(), timeout=15)
-        ddg = self.m.execute(
-            "return [...document.querySelectorAll('#engines li')]"
-            ".find(li => li.querySelector('.row__title').textContent.startsWith('DuckDuckGo')).dataset.engineId;"
-        )
-        field = f'[data-focus-key="alias-{ddg}"]'
-        value = lambda: self.m.execute("return document.querySelector(arguments[0]).value;", [field])  # noqa: E731
-        before = value()
+        ddg = self.search("return (await S.list()).find(e => e.name.startsWith('DuckDuckGo')).id;")
+        alias = lambda: self.search("return (await S.list()).find(e => e.id === args[0]).alias;", ddg)  # noqa: E731
+        before = alias()
         try:
-            self.m.execute("document.querySelector(arguments[0]).closest('details').open = true;", [field])
-            for typed, stored in (("Pato", "@pato"), (before, before)):
-                self.m.execute("const f = document.querySelector(arguments[0]); f.value = arguments[1];", [field, typed])
-                self.m.send("WebDriver:ElementClick", {"id": self.m.find_element(f'[data-focus-key="alias-save-{ddg}"]')})
-                self.assertTrue(harness.wait_until(lambda want=stored: value() == want, timeout=10), value())
-                time.sleep(0.5)  # a later redraw must not bring the typed text back
-                self.assertEqual(value(), stored)
-            # Typed but not saved: an unrelated change redraws the list and keeps it (review UX7-2).
-            bing = self.m.execute(
-                "return [...document.querySelectorAll('#engines li')]"
-                ".find(li => li.querySelector('.row__title').textContent.startsWith('Bing')).dataset.engineId;"
-            )
-            other = self.search("return (await S.list()).find(e => e.id === args[0]).alias;", bing)
-            self.m.execute("const f = document.querySelector(arguments[0]); f.value = '@rascunho';", [field])
-            try:
-                self.search("await S.setAlias(args[0], '@bingo'); return true;", bing)
-                redrawn = "return document.querySelector(arguments[0])?.defaultValue === '@bingo';"
-                bing_field = f'[data-focus-key="alias-{bing}"]'
-                self.assertTrue(harness.wait_until(lambda: self.m.execute(redrawn, [bing_field]), timeout=10))
-                self.assertEqual(value(), "@rascunho")
-            finally:
-                self.search("await S.setAlias(args[0], args[1]); return true;", bing, other or "")
+            for typed, stored in (("Pato", "@pato"), ("  @PATO ", "@pato"), (before, before)):
+                self.search("await S.setAlias(args[0], args[1]); return true;", ddg, typed or "")
+                self.assertEqual(alias() or "", stored or "")
         finally:
-            self.search("await S.setAlias(args[0], args[1]); return true;", ddg, before)
-
-    def root_ready(self):
-        try:
-            return self.m.execute("return document.documentElement && document.documentElement.dataset.ready === 'true';")
-        except MarionetteError:
-            return False
+            self.search("await S.setAlias(args[0], args[1]); return true;", ddg, before or "")
 
 
 if __name__ == "__main__":
