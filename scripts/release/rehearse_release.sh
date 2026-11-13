@@ -83,6 +83,7 @@ step deb "$repo/scripts/release/make_deb.sh" "$out/packages"
 step check-deb bash -c '"$0" "$1"/nulavio_*.deb' "$repo/scripts/release/check_deb.sh" "$out/packages"
 step signed-repository "$repo/scripts/release/test_signed_repo.sh" "$out/packages"
 step kms-signing "$repo/scripts/release/test_kms_signing.sh"
+step apt-repository "$repo/scripts/release/test_apt_repo.sh"
 step archive "$repo/scripts/release/make_archive.sh" "$install" "$out/packages/nulavio-$version-$NULAVIO_RELEASE.linux-x86_64.tar.xz"
 step sbom sbom
 

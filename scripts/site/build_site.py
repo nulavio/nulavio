@@ -29,7 +29,11 @@ The download pages (baixar/, en/download/) describe a published release:
 {{release_version}}, {{key_fpr}}, {{repo_file}} and {{key_url}} come from
 packaging/release.json. Until it names a version and a key fingerprint and
 site/keys/nulavio-packages.asc holds that key, the pages are left out of the
-site, so nothing offers a download that does not exist.
+site, so nothing offers a download that does not exist. The same holds for
+Ubuntu: what sits between <!--apt:on--> and <!--/apt:on--> is kept, with
+{{sources_file}}, only once release.json names the APT source file (the first
+release published with the APT repository sets it); until then the
+<!--apt:off--> blocks are kept instead.
 
 By default the site is built from the working tree (unit tests run on a
 shared, possibly dirty tree). ``--release`` is how the published site is
@@ -44,6 +48,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import functools
+import hashlib
 import html
 import json
 import re
@@ -81,6 +86,8 @@ STYLESHEETS = ("site.css", "landing.css")  # served from /assets/
 DOWNLOAD_PAGES = {"baixar/index.html": "pt-BR", "en/download/index.html": "en-US"}
 PUBLIC_KEY = Path("site/keys/nulavio-packages.asc")
 REPO_FILE = Path("site/rpm/nulavio.repo")
+SOURCES_FILE = Path("site/apt/nulavio.sources")
+APT_BLOCK = re.compile(r"<!--apt:(on|off)-->(.*?)<!--/apt:\1-->\n?", re.S)
 E1_CATEGORIES = ("tracking", "https")
 SCALE = 2  # captures are taken at devPixelsPerPx=2; width/height attributes are CSS px
 # Notes appended to a commit outside --release, so a development build never passes for a release.
@@ -187,12 +194,48 @@ def release_values(src: Path) -> dict[str, str] | None:
     repo_lines = (src / REPO_FILE).read_text(encoding="utf-8").splitlines() if (src / REPO_FILE).is_file() else []
     if not {"gpgcheck=1", "repo_gpgcheck=1", f"gpgkey={release['key_url']}"} <= set(repo_lines):
         raise BuildError(f"{REPO_FILE} must have gpgcheck=1, repo_gpgcheck=1 and gpgkey={release['key_url']}")
-    return {
+    values = {
         "release_version": version,
         "key_fpr": " ".join(fpr[i : i + 4] for i in range(0, len(fpr), 4)),
         "repo_file": release["repo_file"],
         "key_url": release["key_url"],
+        "apt": "off",
     }
+    if "apt_sources" in release:
+        # Like the .repo file: the source file decides whether apt checks signatures, so it is
+        # the site's own, and the key in it is the one the pages show.
+        if release["apt_sources"] != f"https://nulavio.net/{SOURCES_FILE.relative_to('site')}":
+            raise BuildError(f"packaging/release.json: apt_sources must be the site's own {SOURCES_FILE}")
+        if sources_key(src / SOURCES_FILE) != key.read_text(encoding="ascii").strip("\n").split("\n"):
+            raise BuildError(f"{SOURCES_FILE} must carry {PUBLIC_KEY} as its Signed-By key")
+        digest = hashlib.sha256((src / SOURCES_FILE).read_bytes()).hexdigest()
+        values.update(apt="on", sources_file=release["apt_sources"], sources_sha256=digest)
+    return values
+
+
+def sources_key(path: Path) -> list[str]:
+    """The armored key in a deb822 source file's Signed-By field (continuation lines, "." for blank)."""
+    lines = path.read_text(encoding="ascii").splitlines() if path.is_file() else []
+    if "Signed-By:" not in lines:
+        return []
+    key = []
+    for line in lines[lines.index("Signed-By:") + 1 :]:
+        if not line.startswith(" "):
+            break
+        key.append("" if line == " ." else line[1:])
+    return key
+
+
+def choose_apt_blocks(text: str, apt: str) -> str:
+    """Keep the <!--apt:on--> or the <!--apt:off--> blocks of a download page, as release.json says."""
+
+    def keep(match: re.Match) -> str:
+        if match.group(1) != apt:
+            return ""
+        body = match.group(2)
+        return body[1:] if body.startswith("\n") else body  # a block on lines of its own leaves no blank line
+
+    return APT_BLOCK.sub(keep, text)
 
 
 def commit_date(src_commit: str) -> dt.date:
@@ -422,7 +465,12 @@ def build(out: Path, *, release: bool = False, commit: str = "HEAD", evidence: s
         for page, locale in pages.items():
             path = out / page
             page_values = {**values, **released} if page in DOWNLOAD_PAGES else values
-            text = stamp_page(path.read_text(encoding="utf-8"), page_values, manifest, locale, page)
+            text = path.read_text(encoding="utf-8")
+            if page in DOWNLOAD_PAGES:
+                text = choose_apt_blocks(text, released["apt"])
+            elif "<!--apt:" in text:
+                raise BuildError(f"{page}: apt blocks belong on the download pages only")
+            text = stamp_page(text, page_values, manifest, locale, page)
             if "{{" in text:
                 left = sorted(set(re.findall(r"\{\{[^}]*\}\}", text)))
                 raise BuildError(f"{page}: placeholders left: {left}")

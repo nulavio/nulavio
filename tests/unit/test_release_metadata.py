@@ -81,6 +81,28 @@ class ReleaseMetadataTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual((self.metadata.read_bytes(), (self.repo / "CHANGELOG.md").read_text()), before)
 
+    def test_the_first_release_with_its_deb_shows_ubuntu_on_the_download_pages(self):
+        self.manifest["packages"].append({"file": "packages/nulavio_160.0-0.2_amd64.deb"})
+        # Every rehearsal lists its .deb, also those of releases published before the APT repository
+        # existed: without the .deb among the release's assets, nothing says the repository has it.
+        self.release["assets"] = [{"name": "nulavio-160.0-0.2.fc44.x86_64.rpm"}, {"name": "SHA256SUMS"}]
+        result = self.run_metadata()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotIn("apt_sources", json.loads(self.metadata.read_text()))
+        self.metadata.write_text(json.dumps({"version": "160.0-0.1", "channel": "alpha", "key_fingerprint": "KEEP"}))
+        self.release["assets"].append({"name": "nulavio_160.0-0.2_amd64.deb"})
+        result = self.run_metadata()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        metadata = json.loads(self.metadata.read_text())
+        self.assertEqual(metadata["apt_sources"], "https://nulavio.net/apt/nulavio.sources")
+        self.assertEqual(metadata["version"], "160.0-0.2")
+        # A .deb of another version is not this release's: nothing changes.
+        self.metadata.write_text(json.dumps({"version": "160.0-0.1", "channel": "alpha", "key_fingerprint": "KEEP"}))
+        self.manifest["packages"][-1] = {"file": "packages/nulavio_160.0-0.9_amd64.deb"}
+        result = self.run_metadata()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertNotIn("apt_sources", json.loads(self.metadata.read_text()))
+
     def test_drafts_invalid_versions_wrong_urls_and_empty_notes_leave_files_untouched(self):
         for field, value in (
             ("draft", True),
