@@ -6,7 +6,7 @@
 
 import { localize, t } from "../lib/i18n.js";
 import { clearCode, guardLeaving, printCode, showCode } from "../lib/recovery.js";
-import { announce, chip, confirmDialog, errorText, h, profileStates, stateBadge } from "../lib/ui.js";
+import { acceptField, announce, chip, confirmDialog, errorText, h, profileStates, refuseField, stateBadge } from "../lib/ui.js";
 
 const vault = browser.nulavioVault;
 const profileId = Number(new URLSearchParams(location.search).get("p"));
@@ -106,14 +106,25 @@ function methodRow(method, count, confirmers) {
   );
 }
 
+/* Nothing can be changed here (not a protected profile, a profile that no longer exists, a failed
+   read): the page says why and shows no method, no action and no field for a secret
+   (audit 2026-11 S-01). */
+function unavailable(text) {
+  byId("explain").textContent = text;
+  byId("explain").hidden = !text;
+  for (const id of ["few", "methods", "add-actions", "not-yet", "current-error", "password-form", "code-step"]) {
+    byId(id).hidden = true;
+  }
+  byId("current").closest(".field").hidden = true;
+  document.querySelector("details.why").hidden = true;
+  document.body.dataset.secret = "none"; // no field left: pages.css takes the "look at the band first" line away
+  setState("unavailable");
+}
+
 async function render() {
   profile = await vault.status(profileId);
   if (!profile.encrypted) {
-    byId("explain").textContent = t("methodsNotProtected", [profile.name]);
-    for (const id of ["few", "methods", "add-actions"]) {
-      byId(id).hidden = true;
-    }
-    setState("unavailable");
+    unavailable(t("methodsNotProtected", [profile.name]));
     return;
   }
   byId("who").replaceChildren(chip(profile, "lg"), h("span", { class: "popup__name", text: profile.name }), ...profileStates(profile).map(stateBadge));
@@ -155,9 +166,9 @@ function showNewCode(code) {
 byId("code-step").addEventListener("submit", event => {
   event.preventDefault();
   const normalise = v => v.trim().toUpperCase().replaceAll("O", "0").replace(/[IL]/g, "1");
-  if (!["group-a", "group-b"].every(id => normalise(byId(id).value) === byId(id).dataset.expected)) {
-    byId("code-error").textContent = t("vaultGroupsDiffer");
-    byId("group-a").focus();
+  const wrong = ["group-a", "group-b"].find(id => normalise(byId(id).value) !== byId(id).dataset.expected);
+  if (wrong) {
+    refuseField(byId(wrong), byId("code-error"), t("vaultGroupsDiffer")); // the group that differs
     return;
   }
   clearCode(byId("code"));
@@ -209,14 +220,15 @@ byId("password-form").addEventListener("submit", async event => {
   const error = byId("password-error");
   const password = byId("new-password").value;
   error.textContent = "";
+  for (const id of ["new-password", "new-password2"]) {
+    acceptField(byId(id));
+  }
   if (password.length < 8) {
-    error.textContent = t("err_password_too_short");
-    byId("new-password").focus();
+    refuseField(byId("new-password"), error, t("err_password_too_short"));
     return;
   }
   if (password !== byId("new-password2").value) {
-    error.textContent = t("vaultPasswordsDiffer");
-    byId("new-password2").focus();
+    refuseField(byId("new-password2"), error, t("vaultPasswordsDiffer"));
     return;
   }
   const done = await change("add-password", { password });
@@ -243,8 +255,10 @@ vault
   })
   .then(render)
   .catch(e => {
-    setState("unavailable");
-    announce(errorText(e), "error");
+    const gone = String(e?.message) === "not-found";
+    byId("headline").textContent = t(gone ? "vaultGoneHeadline" : "vaultUnreadHeadline");
+    unavailable("");
+    announce(gone ? t("vaultGone") : errorText(e), "error");
   })
   .finally(() => {
     document.documentElement.dataset.ready = "true";

@@ -1,4 +1,4 @@
-"""DNS choice on the Nulavio build (S15): the new tab asks once, Settings applies it, the engine obeys.
+"""DNS choice on the Nulavio build (S15): the new tab asks once, the settings page applies it, the engine obeys.
 
 A local DNS-over-HTTPS resolver (tests/lib/doh_server.py) answers a name that
 exists nowhere else, so a successful lookup proves the browser asked it.
@@ -16,6 +16,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
 import harness
+import settings_page
 from doh_server import DohServer
 
 PRIVACY = 'ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioPrivacy.sys.mjs").NulavioPrivacy'
@@ -76,9 +77,8 @@ class DnsChoiceTest(unittest.TestCase):
             harness.wait_until(lambda: self.m.execute("return document.documentElement.dataset.ready === 'true';"), 15)
         )
 
-    def shoot(self, name: str, keep: str | None = None) -> None:
+    def shoot(self, name: str) -> None:
         for scheme in ("light", "dark"):
-            # Settings shows one section per address (UX4): `keep` needs no hiding by hand.
             self.m.execute("document.documentElement.dataset.theme = arguments[0];", [scheme])
             time.sleep(0.3)
             (self.shots / f"{name}-{scheme}.png").write_bytes(self.m.screenshot_png(full=True))
@@ -96,7 +96,9 @@ class DnsChoiceTest(unittest.TestCase):
         self.open("newtab/newtab.html")
         self.assertFalse(self.m.execute("return document.getElementById('dns-choice').hidden;"))
         self.shoot("newtab-choice")
-        self.m.execute("document.getElementById('dns-keep-system').click();")
+        # The option in use is the one checked: the main action keeps it, as the choice it now is.
+        self.assertEqual(self.card()["options"], [["system", True, True], ["fallback", False, False]])
+        self.m.execute("document.getElementById('dns-apply').click();")
         self.assertTrue(harness.wait_until(lambda: self.m.execute("return document.getElementById('dns-choice').hidden;"), 10))
         self.assertEqual(
             self.m.execute("return document.querySelector('[data-status=dns]').textContent;"), "Resolvedor do computador"
@@ -108,25 +110,33 @@ class DnsChoiceTest(unittest.TestCase):
         self.assertTrue(self.m.execute("return document.getElementById('dns-choice').hidden;"))  # asked once
 
     def test_02_encrypted_only_uses_the_chosen_resolver_and_fails_closed(self):
-        self.open("settings/settings.html#dns")
-        self.m.execute(
-            "const f = document.getElementById('dns-form'); f.elements.choice.value = 'strict';"
-            "f.elements.provider.value = 'custom'; f.dispatchEvent(new Event('change'));"
-            "f.elements.uri.value = arguments[0]; f.requestSubmit();",
-            [self.doh.uri],
-        )
+        # The settings page's DNS group (ADR 0011): the choice, the service, its address, then "Salvar escolha".
+        settings_page.open_pane(self.m, "privacy")
+        settings_page.wait_control(self.m, "nulavio-dns-choice")
+        settings_page.choose(self.m, "nulavio-dns-choice", "strict")
+        settings_page.wait_control(self.m, "nulavio-dns-provider")
+        settings_page.change(self.m, "nulavio-dns-provider", "custom")
+        settings_page.wait_control(self.m, "nulavio-dns-uri")
+        settings_page.change(self.m, "nulavio-dns-uri", self.doh.uri)
+        settings_page.wait_control(self.m, "nulavio-dns-save", lambda save: save["shown"] and not save["disabled"])
+        settings_page.click(self.m, "#nulavio-dns-save")
         self.assertTrue(harness.wait_until(lambda: self.state()["choice"] == "strict", 10))
         self.assertEqual(self.state()["uri"], self.doh.uri)
-        self.assertIn(self.doh.uri, self.m.execute("return document.getElementById('dns-current').textContent;"))
-        self.shoot("settings", keep="dns")
+        named = lambda choice: self.doh.uri in (choice["description"] or "")  # noqa: E731
+        now = settings_page.wait_control(self.m, "nulavio-dns-choice", named)
+        self.assertIn("somente DNS criptografado", now["description"])  # what is in effect, in words
+        settings_page.shoot(self.m, self.shots, "settings")
         before = len(self.doh.queries)
         self.assertEqual(resolve(self.m, NAME), ["127.0.0.1"])  # only this resolver knows the name
         self.assertIn(NAME, self.doh.queries[before:])
         self.assertEqual(resolve(self.m, "localhost.nulavio-unknown.example"), "NS_ERROR_UNKNOWN_HOST")
 
     def test_03_back_to_the_system_resolver_sends_nothing_to_it(self):
-        self.open("settings/settings.html#dns")
-        self.m.execute("const f = document.getElementById('dns-form'); f.elements.choice.value = 'system'; f.requestSubmit();")
+        settings_page.open_pane(self.m, "privacy")
+        settings_page.wait_control(self.m, "nulavio-dns-choice")
+        settings_page.choose(self.m, "nulavio-dns-choice", "system")
+        settings_page.wait_control(self.m, "nulavio-dns-save", lambda save: save["shown"] and not save["disabled"])
+        settings_page.click(self.m, "#nulavio-dns-save")
         self.assertTrue(harness.wait_until(lambda: self.state()["choice"] == "system", 10))
         before = len(self.doh.queries)
         self.assertNotEqual(resolve(self.m, NAME), ["127.0.0.1"])
@@ -154,6 +164,10 @@ class DnsChoiceTest(unittest.TestCase):
             "const card = document.getElementById('dns-choice');"
             "const shown = [...card.querySelectorAll('button, a.button')].filter(b => !b.closest('[hidden]'));"
             "return {hidden: card.hidden, encrypted: card.dataset.encrypted,"
+            " options: [...card.querySelectorAll('.option')].map(o => [o.dataset.value,"
+            "   o.querySelector('input').checked, Boolean(o.querySelector('.badge'))]),"
+            " titles: Object.fromEntries([...card.querySelectorAll('.option')].map(o => [o.dataset.value,"
+            "   o.querySelector('.option__title > span').textContent])),"
             " buttons: shown.map(b => [b.id, b.textContent.trim(), b.classList.contains('button--primary')])};"
         )
 
@@ -166,21 +180,21 @@ class DnsChoiceTest(unittest.TestCase):
         try:
             self.assertTrue(harness.wait_until(lambda: self.state()["encryptedNow"], 10), self.state())
             self.assertEqual((self.state()["choice"], self.state()["chosen"]), ("default", False))
+            # Which resolver answers is the engine's word for the one in use, not the address in the settings.
+            in_use = self.m.chrome("return Services.dns.currentTrrURI;")
+            self.assertTrue(in_use.startswith("https://"), in_use)
+            self.assertEqual(self.state()["resolverUri"], in_use)
             self.open("newtab/newtab.html")
             card = self.card()
             self.assertEqual((card["hidden"], card["encrypted"]), (False, "true"))
-            ids = [b[0] for b in card["buttons"]]
-            self.assertEqual(ids, ["dns-keep-encrypted", "dns-choose-other", "dns-use-system"])
-            labels = dict((b[0], b[1]) for b in card["buttons"])
-            self.assertEqual(labels["dns-keep-encrypted"], "Manter criptografado (padrão atual)")
-            self.assertEqual(labels["dns-choose-other"], "Escolher outro resolvedor…")
-            self.assertEqual(labels["dns-use-system"], "Usar o resolvedor do computador (sem criptografia)")
-            self.assertEqual([b[0] for b in card["buttons"] if b[2]], ["dns-keep-encrypted"], "keeping is the primary action")
-            for button_id, label in labels.items():
-                if button_id != "dns-keep-encrypted":
-                    self.assertNotIn("manter", label.lower(), "a change is never labelled as keeping")
+            # What is in use (encrypted) is the option checked and marked; the others are changes, and the
+            # one that gives the encryption up says so in its name.
+            self.assertEqual(card["options"], [["keep", True, True], ["fallback", False, False], ["system", False, False]])
+            self.assertEqual(card["titles"]["keep"], "Com criptografia, pelo padrão do navegador")
+            self.assertEqual(card["titles"]["system"], "A sua rede responde, sem criptografia")
+            self.assertEqual([b[0] for b in card["buttons"] if b[2]], ["dns-apply"], "one main action")
             self.shoot("newtab-choice-encrypted")
-            self.m.execute("document.getElementById('dns-keep-encrypted').click();")
+            self.m.execute("document.getElementById('dns-apply').click();")
             self.assertTrue(
                 harness.wait_until(lambda: self.m.execute("return document.getElementById('dns-choice').hidden;"), 10)
             )
@@ -190,7 +204,9 @@ class DnsChoiceTest(unittest.TestCase):
             # The downgrade, when the person picks it, is the computer's resolver, off by choice.
             self.m.chrome("Services.prefs.clearUserPref('nulavio.dns.chosen');")
             self.open("newtab/newtab.html")
-            self.m.execute("document.getElementById('dns-use-system').click();")
+            self.m.execute("document.querySelector('#dns-options [data-value=system] input').click();")
+            self.assertEqual(self.state()["choice"], "default", "picking an option changed the resolver")
+            self.m.execute("document.getElementById('dns-apply').click();")
             self.assertTrue(harness.wait_until(lambda: self.state()["choice"] == "system", 10))
             self.assertEqual(self.m.chrome("return Services.prefs.getIntPref('network.trr.mode');"), 5)
         finally:

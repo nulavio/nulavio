@@ -13,6 +13,7 @@ import unittest
 from pathlib import Path
 
 import harness
+import settings_page
 from contrast import ratio
 from test_horizon import rgb
 from test_horizon_groups import KEY
@@ -22,7 +23,9 @@ from test_window_band import BAND_PROBE, assert_band, assert_layout_matrix
 LAYOUT_MODULE = "resource://builtin-addons/nulavio-shell/modules/NulavioLayout.sys.mjs"
 LAYOUT = f'ChromeUtils.importESModule("{LAYOUT_MODULE}").NulavioLayout'
 # Choice group -> its live status line (new tab card, Settings section).
-SURFACE_STATUS = {"layout-choice-options": "#layout-choice-current", "layout-choices": "#layout-current"}
+# The new tab's card; the settings page's picker (ADR 0011) is read through tests/lib/settings_page.py.
+SURFACE_STATUS = {"layout-choice-options": "#layout-choice-current"}
+PICKER = "nulavio-layout"
 # A build of the previous release (5a98bd7) for the real upgrade check, from NULAVIO_REFERENCE_ENGINE.
 
 
@@ -60,25 +63,28 @@ class LayoutPresetsTest(unittest.TestCase):
         return base + rel
 
     def settings(self):
-        self.m.navigate(self.shell_url("settings/settings.html#layout"))
-        self.assertTrue(harness.wait_until(lambda: self.m.execute("return document.documentElement.dataset.ready==='true';"), 15))
+        """The settings page at Aparência, where the arrangement picker is (ADR 0008, ADR 0011)."""
+        settings_page.open_pane(self.m, "appearance")
+        settings_page.wait_control(self.m, PICKER)
 
     def newtab(self):
         self.m.navigate(self.shell_url("newtab/newtab.html"))
         self.assertTrue(harness.wait_until(lambda: self.m.execute("return document.documentElement.dataset.ready==='true';"), 15))
 
     def selected(self):
-        return self.m.execute("return document.querySelector('#layout input:checked')?.value || 'custom';")
+        return settings_page.control(self.m, PICKER)["value"] or "custom"
 
     def ui_ready(self, preset):
-        return self.m.execute(
-            """
-          return document.getElementById('layout-choices').getAttribute('aria-busy') !== 'true'
-            && !document.querySelector('#layout input').disabled
-            && (document.querySelector('#layout input:checked')?.value || 'custom') === arguments[0];
-        """,
-            [preset],
-        )
+        now = settings_page.control(self.m, PICKER)
+        return bool(now) and now["shown"] and not now["disabled"] and (now["value"] or "custom") == preset
+
+    def pick(self, preset):
+        """Choose an arrangement in the settings page's picker, as a click on its picture does."""
+        settings_page.choose(self.m, PICKER, preset)
+
+    def picker_note(self, kind):
+        now = settings_page.control(self.m, f"nulavio-layout-{kind}")
+        return now["message"] if now and now["shown"] else None
 
     def newtab_ui_ready(self, preset):
         return self.m.execute(
@@ -209,16 +215,8 @@ class LayoutPresetsTest(unittest.TestCase):
                     self.assertFalse(st["choicePending"])
                     self.m.navigate("about:blank")
                     self.settings()
-                    self.assertTrue(
-                        harness.wait_until(
-                            lambda: self.m.execute(
-                                "return document.getElementById('layout-choices').getAttribute('aria-busy') !== 'true'"
-                                " && [...document.querySelectorAll('#layout input')].every(e => e.disabled)"
-                                " && Boolean(document.getElementById('layout-current').textContent.trim());"
-                            ),
-                            10,
-                        )
-                    )
+                    settings_page.wait_control(self.m, PICKER, lambda now: now["shown"] and now["disabled"])
+                    self.assertTrue(harness.wait_until(lambda: self.picker_note("why"), 10), "a locked picker gave no reason")
                 finally:
                     self.m.chrome("Services.prefs.unlockPref(arguments[0]);", [pref])
                 self.m.navigate("about:blank")
@@ -303,6 +301,8 @@ class LayoutPresetsTest(unittest.TestCase):
         )
 
     def surface_settled(self, group, preset):
+        if group == PICKER:
+            return self.ui_ready(preset)
         return self.m.execute(
             """
           const [group, current, inputs, want] = arguments;
@@ -315,6 +315,12 @@ class LayoutPresetsTest(unittest.TestCase):
             [f"#{group}", SURFACE_STATUS[group], f"#{group} input", preset],
         )
 
+    def surface_error(self, group):
+        if group == PICKER:
+            return self.picker_note("error") or ""
+        error = SURFACE_STATUS[group].replace("-current", "-error")
+        return self.m.execute("return document.querySelector(arguments[0]).textContent.trim();", [error])
+
     def test_closing_a_window_mid_apply_never_wedges_settings_newtab_or_the_queue(self):
         # QA A-1: closing another window up to ~200 ms after a choice left Settings on
         # "Applying layout…" (aria-busy, radios disabled) and every later choice queued behind it.
@@ -322,7 +328,7 @@ class LayoutPresetsTest(unittest.TestCase):
         first = self.m.send("WebDriver:GetWindowHandle")["value"]
         rounds = [("top", 0), ("focus", 50), ("lateral", 200)]
         measured = []
-        for surface, group in (("newtab", "layout-choice-options"), ("settings", "layout-choices")):
+        for surface, group in (("newtab", "layout-choice-options"), ("settings", PICKER)):
             self.m.switch_to(first)
             if surface == "newtab":
                 self.newtab()
@@ -335,15 +341,13 @@ class LayoutPresetsTest(unittest.TestCase):
                     self.m.switch_to(first)
                     self.close_window_after_layout_write(ctx, delay)
                     start = time.monotonic()
-                    radio = self.m.find_element(f"#{group} input[value={preset}]")
-                    self.m.send("WebDriver:ElementClick", {"id": radio})
+                    if surface == "settings":
+                        self.pick(preset)
+                    else:
+                        radio = self.m.find_element(f"#{group} input[value={preset}]")
+                        self.m.send("WebDriver:ElementClick", {"id": radio})
                     self.assertTrue(
-                        harness.wait_until(lambda g=group, p=preset: self.surface_settled(g, p), 10),
-                        self.m.execute(
-                            "return [document.querySelector(arguments[0]).getAttribute('aria-busy'),"
-                            " document.querySelector(arguments[1]).textContent];",
-                            [f"#{group}", SURFACE_STATUS[group]],
-                        ),
+                        harness.wait_until(lambda g=group, p=preset: self.surface_settled(g, p), 10), (surface, preset)
                     )
                     measured.append(
                         {"surface": surface, "preset": preset, "delay_ms": delay, "settled_s": round(time.monotonic() - start, 2)}
@@ -353,13 +357,10 @@ class LayoutPresetsTest(unittest.TestCase):
                     # choice can settle before that, so wait for the close it scheduled.
                     open_windows = "return [...Services.wm.getEnumerator('navigator:browser')].filter(w=>!w.closed).length;"
                     self.assertTrue(harness.wait_until(lambda js=open_windows: self.m.chrome(js) == 1, 5))
-                    error = SURFACE_STATUS[group].replace("-current", "-error")
-                    self.assertEqual(
-                        self.m.execute("return document.querySelector(arguments[0]).textContent.trim();", [error]), ""
-                    )
+                    self.assertEqual(self.surface_error(group), "")
         # A later choice with no window closing still applies through the same queue.
-        self.m.send("WebDriver:ElementClick", {"id": self.m.find_element("#layout-choices input[value=top]")})
-        self.assertTrue(harness.wait_until(lambda: self.surface_settled("layout-choices", "top"), 10))
+        self.pick("top")
+        self.assertTrue(harness.wait_until(lambda: self.surface_settled(PICKER, "top"), 10))
         self.assertEqual(self.apply("focus")["preset"], "focus")
         (self.artifacts / "close-race.json").write_text(json.dumps(measured, indent=2) + "\n")
 
@@ -511,33 +512,17 @@ class LayoutPresetsTest(unittest.TestCase):
         self.assertEqual(self.state()["preset"], "focus")
         self.assertFalse(self.state()["choicePending"])
 
-    def test_settings_keyboard_native_focus_and_error_recovery(self):
+    def test_settings_picker_native_focus_and_error_recovery(self):
         self.settings()
         # D-UX2: a brand-new profile begins in Lateral with first-run choice pending.
         self.assertEqual(self.selected(), "lateral")
         self.assertTrue(self.state()["choicePending"])
-        self.assertTrue(self.m.execute("return !!document.querySelector('#layout-choices legend').textContent;"))
-        for preset in ("top", "focus", "lateral", "top"):
-            radio = self.m.find_element(f'#layout input[value="{preset}"]')
-            self.m.send("WebDriver:ElementClick", {"id": radio})
+        for preset in ("top", "focus", "lateral", "top", "focus"):
+            self.pick(preset)
             self.assertTrue(harness.wait_until(lambda want=preset: self.ui_ready(want), 10))
             st = self.state()
             self.assertEqual(st["preset"], preset)
             self.assertFalse(st["choicePending"])
-        # A trusted native arrow event changes a radio and the actual tab layout.
-        self.m.execute("document.querySelector('#layout input[value=top]').focus();")
-        self.m.chrome(KEY, ["ArrowDown", "ArrowDown", 40])
-        self.assertTrue(harness.wait_until(lambda: self.state()["preset"] == "focus", 10))
-        self.assertTrue(harness.wait_until(lambda: self.ui_ready("focus"), 10))
-        self.assertTrue(self.m.execute("return document.activeElement.matches('#layout input[value=focus]');"))
-        focus = self.m.execute("""
-          const e=document.activeElement,s=getComputedStyle(e);
-          return {style:s.outlineStyle,width:s.outlineWidth,color:s.outlineColor,
-            bg:getComputedStyle(e.closest('.card')).backgroundColor};
-        """)
-        self.assertEqual(focus["style"], "solid", focus)
-        self.assertGreaterEqual(float(focus["width"].removesuffix("px")), 2)
-        self.assertGreaterEqual(ratio(rgb(focus["color"]), rgb(focus["bg"])), 3)
         # Foco retains the native keyboard route to the expanded tab list.
         self.m.chrome("ToolbarKeyboardNavigator._focusButton(SidebarController.toolbarButton);")
         self.assertTrue(self.m.chrome("return document.activeElement===SidebarController.toolbarButton;"))
@@ -552,10 +537,6 @@ class LayoutPresetsTest(unittest.TestCase):
         time.sleep(0.5)
         self.assertEqual(self.state()["preset"], "focus")
         self.assertEqual(self.selected(), "focus")
-        self.assertIn(
-            self.m.execute("return document.getElementById('layout-current').textContent;"),
-            ("Janela atual: Foco.", "Current window: Focus."),
-        )
         self.m.chrome(KEY, ["Enter", "Enter", 13])
         self.assertTrue(harness.wait_until(lambda: self.m.chrome(native) == [False, True], 10))
         self.assertEqual(self.state()["preset"], "focus")
@@ -566,28 +547,26 @@ class LayoutPresetsTest(unittest.TestCase):
         # state and never claim no change or a successful preset.
         self.m.chrome(f"window.nvLayoutApply={LAYOUT}.apply; {LAYOUT}.apply=()=>{{throw new Error('fixture');}};")
         try:
-            self.m.send("WebDriver:ElementClick", {"id": self.m.find_element("#layout input[value=top]")})
-            self.assertTrue(
-                harness.wait_until(
-                    lambda: bool(self.m.execute("return document.getElementById('layout-error').textContent;")), 10
-                )
-            )
+            self.pick("top")
+            self.assertTrue(harness.wait_until(lambda: self.picker_note("error"), 10), "a failed change was not said")
             self.assertEqual(self.state()["preset"], "focus")
             self.assertTrue(harness.wait_until(lambda: self.ui_ready("focus"), 10))
         finally:
             self.m.chrome(f"{LAYOUT}.apply=window.nvLayoutApply; delete window.nvLayoutApply;")
-        self.m.send("WebDriver:ElementClick", {"id": self.m.find_element("#layout input[value=top]")})
+        self.pick("top")
         self.assertTrue(harness.wait_until(lambda: self.selected() == "top", 10))
+        self.assertIsNone(self.picker_note("error"))
+        # A read that fails: the group says so and offers no choice; read again, it is back.
         self.m.chrome(f"window.nvLayoutState={LAYOUT}.state; {LAYOUT}.state=()=>{{throw new Error('read fixture');}};")
         try:
             self.m.navigate("about:blank")
-            self.settings()
-            self.assertFalse(self.m.execute("return document.getElementById('layout-retry').hidden;"))
-            self.assertTrue(self.m.execute("return [...document.querySelectorAll('#layout input')].every(e=>e.disabled);"))
+            settings_page.open_pane(self.m, "appearance")
+            settings_page.wait_control(self.m, "nulavio-layout-failed")
+            self.assertFalse(self.ui_ready("top"))
         finally:
             self.m.chrome(f"{LAYOUT}.state=window.nvLayoutState;delete window.nvLayoutState;")
-        self.m.send("WebDriver:ElementClick", {"id": self.m.find_element("#layout-retry")})
-        self.assertTrue(harness.wait_until(lambda: self.ui_ready("top"), 10))
+        self.m.send("WebDriver:Refresh")  # what the note asks for: "Recarregue a página para tentar de novo."
+        self.assertTrue(harness.wait_until(lambda: self.ui_ready("top"), 15))
         self.m.navigate("about:blank")
         self.apply("lateral")
         self.m.send("WebDriver:Back")
@@ -682,55 +661,7 @@ class LayoutPresetsTest(unittest.TestCase):
         self.settings()
         self.assertEqual(self.selected(), "custom")
 
-    def test_settings_reflow_200_percent_themes_and_accessibility_preferences(self):
-        self.settings()
-        self.m.chrome("document.documentElement.style.minWidth='0px';")
-        measured = []
-        for preset in ("lateral", "top", "focus"):
-            self.apply(preset)
-            for dark in (0, 1):
-                self.m.chrome("Services.prefs.setIntPref('ui.systemUsesDarkTheme',arguments[0]);", [dark])
-                for width, font in ((1366, "100%"), (390, "100%"), (320, "200%")):
-                    # Target the Settings viewport. A 320px *outer window*
-                    # with expanded vertical tabs leaves only ~79px for content.
-                    sidebar_width = self.m.chrome("return innerWidth-gBrowser.selectedBrowser.getBoundingClientRect().width;")
-                    outer = width if width == 1366 else round(width + sidebar_width)
-                    self.m.send("WebDriver:SetWindowRect", {"width": outer, "height": 900})
-                    # Native sidebar max-widths can change after the resize.
-                    # Converge on the requested content width, then assert it.
-                    if width != 1366:
-                        for _ in range(3):
-                            time.sleep(0.2)
-                            actual = self.m.execute("return innerWidth;")
-                            if actual == width:
-                                break
-                            outer += width - actual
-                            self.m.send("WebDriver:SetWindowRect", {"width": outer, "height": 900})
-                    self.m.execute(
-                        "document.documentElement.style.fontSize=arguments[0];document.getElementById('layout').scrollIntoView();",
-                        [font],
-                    )
-                    time.sleep(0.2)
-                    probe = self.m.execute("""
-                      const section=document.getElementById('layout'),r=section.getBoundingClientRect();
-                      return {viewport:innerWidth,w:r.width,scroll:section.scrollWidth,
-                        rootScroll:document.documentElement.scrollWidth,
-                        font:getComputedStyle(document.documentElement).fontSize,
-                        labels:[...section.querySelectorAll('label')].map(e=>({w:e.clientWidth,scroll:e.scrollWidth,h:e.clientHeight}))};
-                    """)
-                    if width != 1366:
-                        self.assertEqual(probe["viewport"], width, probe)
-                    self.assertLessEqual(probe["scroll"], probe["w"] + 1, probe)
-                    for label in probe["labels"]:
-                        self.assertLessEqual(label["scroll"], label["w"] + 1, probe)
-                        self.assertGreaterEqual(label["h"], 24, probe)
-                    measured.append({"preset": preset, "dark": dark, "requestedWidth": width, "font": font, **probe})
-                    self.capture(f"settings-{preset}-{'dark' if dark else 'light'}-{width}-{font.removesuffix('%')}")
-                    if font == "200%":
-                        name = f"section-{preset}-{'dark' if dark else 'light'}-{width}-{font.removesuffix('%')}.png"
-                        (self.artifacts / name).write_bytes(self.m.screenshot_png(element=self.m.find_element("#layout")))
-        self.m.send("WebDriver:SetWindowRect", {"width": 1366, "height": 900})
-        self.m.execute("document.documentElement.style.fontSize='100%';")
+    def test_accessibility_preferences_reach_the_window_and_the_settings_page(self):
         for pref in ("ui.prefersReducedMotion", "ui.prefersReducedTransparency", "ui.useAccessibilityTheme"):
             self.m.chrome("Services.prefs.setIntPref(arguments[0],1);", [pref])
         self.m = self.session.restart()
@@ -745,7 +676,6 @@ class LayoutPresetsTest(unittest.TestCase):
         self.assertTrue(all(native_media.values()), native_media)
         self.capture("settings-accessibility-preferences")
         (self.artifacts / "accessibility-media.json").write_text(json.dumps(native_media, indent=2) + "\n")
-        (self.artifacts / "reflow.json").write_text(json.dumps(measured, indent=2) + "\n")
 
     def test_private_and_fullscreen_security_matrix(self):
         # Brand-new profile still has choicePending=true in normal windows; a private
@@ -816,7 +746,6 @@ class LayoutPresetsTest(unittest.TestCase):
         # P3-1: if api.onChanged.addListener throws on Settings or Newtab, the UI
         # must render unavailable + Retry instead of hanging on loading text.
         for page, card_sel, current_id, error_id, retry_id, radio_sel in (
-            ("settings/settings.html#layout", "#layout", "layout-current", "layout-error", "layout-retry", "#layout input"),
             (
                 "newtab/newtab.html",
                 "#layout-choice",
@@ -944,7 +873,8 @@ class LayoutPresetsTest(unittest.TestCase):
           const w1 = [...Services.wm.getEnumerator('navigator:browser')].find(w => w !== w2);
           // Give w1 a spare blank tab so adopting both Shell tabs does not auto-close w1 yet.
           w1.gBrowser.addTrustedTab('about:blank');
-          const toMove = w1.gBrowser.tabs.filter(t => t.linkedBrowser.currentURI.spec.startsWith(args[0]));
+          const ours = spec => spec.startsWith(args[0]) || spec.startsWith("about:preferences");
+          const toMove = w1.gBrowser.tabs.filter(t => ours(t.linkedBrowser.currentURI.spec));
           for (const tab of toMove) {
             w2.gBrowser.adoptTab(tab, { selectTab: true });
           }
@@ -966,11 +896,12 @@ class LayoutPresetsTest(unittest.TestCase):
                     return h
             return None
 
-        moved_settings = harness.wait_until(lambda: handle_for("settings/settings.html#layout"), 10)
+        moved_settings = harness.wait_until(lambda: handle_for("about:preferences#appearance"), 10)
         moved_newtab = harness.wait_until(lambda: handle_for("newtab/newtab.html"), 10)
         self.assertTrue(moved_settings and moved_newtab)
 
         self.m.switch_to(moved_settings)
+        self.m.chrome(settings_page.FRONT)  # the helper reads the tab in front
         self.assertTrue(harness.wait_until(lambda: self.selected() == "custom", 10))
         self.m.switch_to(moved_newtab)
         self.assertTrue(harness.wait_until(lambda: self.newtab_ui_ready("custom"), 10))
@@ -991,13 +922,15 @@ class LayoutPresetsTest(unittest.TestCase):
         # Toggling Window 2's sidebar back open emits onChanged on Window 2 to both moved tabs.
         self.m.chrome("SidebarController.handleToolbarButtonClick();")
         self.m.switch_to(moved_settings)
+        self.m.chrome(settings_page.FRONT)  # the helper reads the tab in front
         self.assertTrue(harness.wait_until(lambda: self.selected() == "lateral", 10))
         self.m.switch_to(moved_newtab)
         self.assertTrue(harness.wait_until(lambda: self.newtab_ui_ready("lateral"), 10))
 
         # Applying Foco from the moved Settings tab acts on Window 2 and updates Newtab.
         self.m.switch_to(moved_settings)
-        self.m.send("WebDriver:ElementClick", {"id": self.m.find_element("#layout input[value=focus]")})
+        self.m.chrome(settings_page.FRONT)  # the helper reads the tab in front
+        self.pick("focus")
         self.assertTrue(harness.wait_until(lambda: self.ui_ready("focus"), 10))
         self.assertEqual(self.state()["preset"], "focus")
 
@@ -1167,25 +1100,10 @@ class LayoutPresetsTest(unittest.TestCase):
         self.settings()
         self.assertTrue(harness.wait_until(lambda: self.ui_ready("lateral"), 10))
         locale = self.m.chrome("return Services.locale.appLocaleAsBCP47;")
-        keep = self.m.execute("""
-          const k=document.getElementById('layout-keep'), p=document.getElementById('layout-pending');
-          return {hidden:k.hidden, text:k.textContent.trim(), hint:!p.hidden && !!p.textContent.trim(),
-            describedBy:k.getAttribute('aria-describedby')};
-        """)
-        self.assertEqual(
-            keep,
-            {
-                "hidden": False,
-                "text": "Keep Lateral" if locale.startswith("en") else "Manter Lateral",
-                "hint": True,
-                "describedBy": "layout-pending",
-            },
-        )
-        self.m.execute("document.getElementById('layout-keep').focus();")
-        self.m.send("WebDriver:ElementClick", {"id": self.m.find_element("#layout-keep")})
-        self.assertTrue(harness.wait_until(lambda: self.m.execute("return document.getElementById('layout-keep').hidden;"), 10))
-        self.assertTrue(self.m.execute("return document.getElementById('layout-pending').hidden;"))
-        self.assertTrue(self.m.execute("return document.activeElement.matches('#layout input[value=lateral]');"))
+        keep = settings_page.wait_control(self.m, "nulavio-layout-keep")
+        self.assertEqual(keep["label"], "Keep Lateral" if locale.startswith("en") else "Manter Lateral")
+        settings_page.click(self.m, "#nulavio-layout-keep")
+        settings_page.wait_control(self.m, "nulavio-layout-keep", lambda now: not now["shown"])
         self.assertEqual(self.state(), {"preset": "lateral", "available": True, "locked": False, "choicePending": False})
         self.newtab()
         self.assertTrue(self.m.execute("return document.getElementById('layout-choice').hidden;"))
@@ -1245,7 +1163,7 @@ class LayoutPresetsTest(unittest.TestCase):
             self.assertTrue(self.m.execute("return document.getElementById('layout-choice').hidden;"))
             self.settings()
             self.assertTrue(harness.wait_until(lambda: self.ui_ready("lateral"), 10))
-            self.assertTrue(self.m.execute("return document.getElementById('layout-keep').hidden;"))
+            self.assertFalse(settings_page.control(self.m, "nulavio-layout-keep")["shown"])
             # The presets themselves still work; only the marker is pinned.
             self.assertEqual(self.apply("top")["preset"], "top")
         finally:

@@ -126,7 +126,7 @@ class ContentFilterDefaultsTest(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        cls.session.stop()
+        cls.session.cleanup()  # stops the engine and removes the temporary home (about 180 MB in /tmp, a tmpfs)
         cls.server.__exit__(None, None, None)
 
     @classmethod

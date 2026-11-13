@@ -19,6 +19,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
 import harness
+import settings_page
 
 from marionette import MarionetteError
 
@@ -481,30 +482,29 @@ class RoutingTest(unittest.TestCase):
         self.assertFalse(any("/page/cold-start" in u for u in self.tabs(work)), "the cold-started profile loaded it")
 
     def test_10_rules_editor(self):
-        url = self.m.chrome("return WebExtensionPolicy.getByID('shell@nulavio.net').getURL('settings/settings.html#routing');")
-        self.m.navigate(url)
-        harness.wait_until(lambda: self.m.execute("return document.documentElement.dataset.ready === 'true';"), timeout=15)
-
-        def rows():
-            return self.m.execute("return [...document.querySelectorAll('#rules > li[data-rule-id]')].map(li => li.textContent);")
-
-        self.assertTrue(harness.wait_until(lambda: len(rows()) == 2, timeout=10), rows())
-        # In the error style (octagon and words), not a glyph in the text (design-system, Calmaria).
-        missing = self.m.execute(
-            "return [...document.querySelectorAll('#rules > li[data-rule-id] .form-error')].map(e => e.textContent);"
+        # ADR 0011: the rules are a list of the settings page ("Perfis e proteção"), each row one rule.
+        settings_page.open_pane(self.m, "nulavioProfiles")
+        each = "moz-box-item[data-rule]"
+        listed = lambda want: lambda rows: want(rows)  # noqa: E731
+        rows = settings_page.wait_rows(self.m, "nulavio-routing-rules", listed(lambda found: len(found) == 2), each)
+        # A rule whose profile is gone says so in words, where the others say where they open.
+        self.assertEqual(
+            [row["description"] for row in rows if "não existe mais" in row["description"]],
+            ["O perfil desta regra não existe mais"],
         )
-        gone = self.m.execute("return browser.i18n.getMessage('routingTargetMissing');")
-        self.assertEqual(missing, [gone], "a rule whose profile is gone must say so")
-        self.m.execute(
-            "const f = document.getElementById('add-rule'); f.elements.site.value = 'https://Wiki.Example.org/x';"
-            "f.elements.match.value = 'domain'; f.elements.action.value = 'ask';"
-        )
-        self.m.send("WebDriver:ElementClick", {"id": self.m.find_element("#add-rule button[type=submit]")})
-        self.assertTrue(harness.wait_until(lambda: any("example.org" in r for r in rows()), timeout=10), rows())
-        rule = next(r for r in self.call("return (await R.state()).rules;") if r["value"] == "example.org")
+        settings_page.change(self.m, "nulavio-routing-site", "https://Wiki.Example.org/x")
+        settings_page.change(self.m, "nulavio-routing-match", "domain")
+        settings_page.change(self.m, "nulavio-routing-action", "ask")
+        settings_page.click(self.m, "#nulavio-routing-add")
+        added = lambda: [r for r in self.call("return (await R.state()).rules;") if r["value"] == "example.org"]  # noqa: E731
+        self.assertTrue(harness.wait_until(added, 15), "the rule was not added")
+        rule = added()[0]
+        has = lambda found: any(row["data"].get("rule") == str(rule["id"]) for row in found)  # noqa: E731
+        settings_page.wait_rows(self.m, "nulavio-routing-rules", has, each)
         self.assertEqual((rule["match"], rule["action"]), ("domain", "ask"))
-        self.m.send("WebDriver:ElementClick", {"id": self.m.find_element(f'[data-focus-key="rule-remove-{rule["id"]}"]')})
-        self.assertTrue(harness.wait_until(lambda: not any("example.org" in r for r in rows()), timeout=10))
+        settings_page.click_row(self.m, "nulavio-routing-rules", str(rule["id"]), "remove", each)
+        settings_page.wait_rows(self.m, "nulavio-routing-rules", lambda found: not has(found), each)
+        self.assertNotIn("example.org", [r["value"] for r in self.call("return (await R.state()).rules;")])
 
     # -- M4b: addresses typed in the address bar, and the link menu -----------
 
@@ -793,15 +793,11 @@ class RoutingTest(unittest.TestCase):
             self.call("await R.setRuleAction(args[0], 'open-in');", self.m5_rule)
 
     def test_22_settings_switch(self):
-        url = self.m.chrome("return WebExtensionPolicy.getByID('shell@nulavio.net').getURL('settings/settings.html#routing');")
-        self.m.navigate(url)
-        harness.wait_until(lambda: self.m.execute("return document.documentElement.dataset.ready === 'true';"), timeout=15)
-        checked = "return document.getElementById('routing-in-page').checked;"
-        self.assertTrue(harness.wait_until(lambda: self.m.execute(checked), timeout=10))
-        self.m.send("WebDriver:ElementClick", {"id": self.m.find_element("#routing-in-page")})
+        settings_page.open_pane(self.m, "nulavioProfiles")
+        switch = settings_page.wait_control(self.m, "nulavio-routing-in-page", lambda now: now["shown"] and now["pressed"])
+        self.assertIn("pop-up", switch["description"].lower())
+        settings_page.click(self.m, "#nulavio-routing-in-page")
         self.assertTrue(harness.wait_until(lambda: not self.call("return (await R.state()).inPage;"), timeout=10))
-        hint = self.m.execute("return document.getElementById('routing-in-page-hint').textContent;")
-        self.assertIn("pop-up", hint.lower())
         # With it off, the request observer is gone: a clicked link loads here again.
         self.open_m5()
         self.m.execute("document.getElementById('link').href += '-off';")
@@ -955,23 +951,17 @@ class RoutingTest(unittest.TestCase):
             work.chrome("Services.prefs.clearUserPref('nulavio.routing.fallbackProfile');")
 
     def test_27_settings_choose_the_default_destination(self):
-        url = self.m.chrome("return WebExtensionPolicy.getByID('shell@nulavio.net').getURL('settings/settings.html#routing');")
-        self.m.navigate(url)
-        harness.wait_until(lambda: self.m.execute("return document.documentElement.dataset.ready === 'true';"), timeout=15)
-        options = self.m.execute(
-            "return [...document.querySelectorAll('#routing-fallback option')].map(o => [o.value, o.textContent]);"
-        )
-        self.assertEqual(options[0], ["0", "Último perfil usado (padrão)"])
-        self.assertIn([str(self.ids["Destino"]), "Sempre em Destino"], options)
-        pick = (
-            "const s = document.getElementById('routing-fallback'); s.value = arguments[0]; s.dispatchEvent(new Event('change'));"
-        )
+        settings_page.open_pane(self.m, "nulavioProfiles")
+        settings_page.wait_control(self.m, "nulavio-routing-fallback")
+        choices = [choice[:2] for choice in settings_page.options(self.m, "nulavio-routing-fallback")]
+        self.assertEqual(choices[0], ["0", "Último perfil usado (padrão)"])
+        self.assertIn([str(self.ids["Destino"]), "Sempre em Destino"], choices)
         chosen = lambda: self.call("return (await R.state()).fallback.profileId;")  # noqa: E731
         for value in (str(self.ids["Destino"]), "0"):  # each a change from what is saved
             before = chosen()
-            self.m.execute(pick, [value])
+            settings_page.change(self.m, "nulavio-routing-fallback", value)
             self.assertTrue(harness.wait_until(lambda want=int(value): chosen() == want, timeout=10), (before, value))
-        self.assertFalse(self.m.execute("return document.getElementById('routing-fallback').disabled;"))
+        self.assertFalse(settings_page.wait_control(self.m, "nulavio-routing-fallback")["disabled"])
 
     def test_28_a_link_sent_on_purpose_to_another_profile_is_not_moved(self):
         """Review: the engine makes every instance the default in memory; only profiles.ini says which
@@ -1030,26 +1020,18 @@ class RoutingTest(unittest.TestCase):
         self.assertEqual(self.hits("/page/to-the-heir"), 0)
         # Settings (review UX7-3): the deleted destination keeps its own entry, the heir is not shown as
         # chosen, and the entry for the deleted profile cannot make the heir the destination.
-        url = self.m.chrome("return WebExtensionPolicy.getByID('shell@nulavio.net').getURL('settings/settings.html#routing');")
-        self.m.navigate(url)
-        harness.wait_until(lambda: self.m.execute("return document.documentElement.dataset.ready === 'true';"), timeout=15)
-        select = self.m.execute(
-            "const s = document.getElementById('routing-fallback');"
-            "return {value: s.value, chosen: s.selectedOptions[0].textContent,"
-            " heir: [...s.options].find(o => o.textContent === 'Sempre em Herdeiro')?.selected,"
-            " goneDisabled: s.querySelector('option[value=\"missing\"]')?.disabled};"
-        )
+        settings_page.open_pane(self.m, "nulavioProfiles")
+        gone_shown = lambda now: now["shown"] and now["value"] == "missing"  # noqa: E731
+        select = settings_page.wait_control(self.m, "nulavio-routing-fallback", gone_shown)
+        choices = {choice[1]: choice for choice in settings_page.options(self.m, "nulavio-routing-fallback")}
         self.assertEqual(select["value"], "missing", select)
-        self.assertEqual(select["chosen"], "Um perfil que não existe mais", select)
-        self.assertIs(select["heir"], False, select)
-        self.assertIs(select["goneDisabled"], True, select)
-        pick = (
-            "const s = document.getElementById('routing-fallback'); s.value = arguments[0]; s.dispatchEvent(new Event('change'));"
-        )
-        self.m.execute(pick, ["missing"])
+        self.assertEqual(choices["Um perfil que não existe mais"][0], "missing", choices)
+        self.assertNotEqual(choices["Sempre em Herdeiro"][0], select["value"], choices)
+        self.assertIs(choices["Um perfil que não existe mais"][2], True, choices)  # it cannot be chosen
+        settings_page.change(self.m, "nulavio-routing-fallback", "missing")
         time.sleep(1)
         self.assertTrue(self.call("return (await R.state()).fallback.missing;"), "the deleted entry chose the heir")
-        self.m.execute(pick, [str(reused)])
+        settings_page.change(self.m, "nulavio-routing-fallback", str(reused))
         state = lambda: self.call("return (await R.state()).fallback;")  # noqa: E731
         self.assertTrue(harness.wait_until(lambda: state()["missing"] is False and state()["profileId"] == reused, timeout=10))
         self.call("await R.setFallback(0);")

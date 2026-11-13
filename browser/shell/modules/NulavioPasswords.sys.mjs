@@ -208,7 +208,9 @@ class Passwords {
     if (!current) {
       current = list.find(i => i.extension?.enabled)?.key ?? "none";
     }
-    return { current, providers: list, engineLogins: (await Services.logins.getAllLogins()).length }; // a count only
+    // A count only, and counted without reading the logins: reading them decrypts them, which asks for the primary
+    // password of a profile that has one, every time a page shows this state.
+    return { current, providers: list, engineLogins: await Services.logins.countLoginsAsync("", "", "") };
   }
 
   /**

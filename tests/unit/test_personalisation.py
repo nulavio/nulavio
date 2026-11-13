@@ -84,6 +84,7 @@ PREF_WRITERS = {
     "NulavioLayout.sys.mjs": {
         'setBoolPref("sidebar.verticalTabs")': 2,
         "setBoolPref(PREF_CHOICE_PENDING)": 4,
+        "setBoolPref(PREF_IMMERSIVE)": 1,
         "setBoolPref(PREF_SHELL_START)": 1,
         "setIntPref(PREF_ADOPTION_VERSION)": 1,
         'setStringPref("sidebar.visibility")': 2,
@@ -192,7 +193,14 @@ class _Ids(HTMLParser):
 
 def page_ids(relative: str) -> _Ids:
     parser = _Ids()
-    parser.feed((SHELL / relative).read_text(encoding="utf-8"))
+    source = (SHELL / relative).read_text(encoding="utf-8")
+    if relative.endswith(".mjs"):
+        # The settings page's own controls (ADR 0011): an item of a group, { id: "…", …, controlAttrs: { "data-option": "…" } }.
+        for element, option in re.findall(r'\{\s*id: "([\w-]+)"[^{}]*controlAttrs: \{[^{}]*"data-option": "(\w+)"', source):
+            parser.by_id[element] = option
+        parser.marked = re.findall(r'"data-option": "(\w+)"', source)
+    else:
+        parser.feed(source)
     return parser
 
 
@@ -290,7 +298,7 @@ class OptionListTest(unittest.TestCase):
                 with self.subTest(location=location):
                     self.assertIn(element, parsed.by_id)
                     self.assertEqual(parsed.by_id[element], option["id"])
-        for page in ("settings/settings.html", "newtab/newtab.html", "profiles/popup.html"):
+        for page in ("settings/settings.html", "settings/native/panes.mjs", "newtab/newtab.html", "profiles/popup.html"):
             parsed = pages.setdefault(page, page_ids(page))
             for marked in parsed.marked:
                 self.assertIn(marked, declared, f"{page}: data-option={marked} is not in options.json")
@@ -317,28 +325,21 @@ class AppearanceApiTest(unittest.TestCase):
         self.assertEqual(set(re.findall(r"root\.dataset\.(\w+) =", painter)), {"accent", "contrast", "ambience", "transparency"})
         self.assertNotIn("innerHTML", painter)
 
-    def test_the_api_takes_only_declared_values(self):
+    def test_the_api_reads_and_opens_settings_and_sets_nothing(self):
+        # The options are set by the browser's settings page, which calls the module (it refuses a value
+        # that is not declared). A Shell page can read the look and ask for the settings page: no setter
+        # crosses to it.
         schema = json.loads((SHELL / "experiments" / "personalise" / "schema.json").read_text(encoding="utf-8"))[0]
-        declared = {o["id"]: o for o in options()}
         functions = {f["name"]: f for f in schema["functions"]}
+        self.assertEqual(set(functions), {"state", "openSettings"})
+        # ADR 0008: a page names a pane or a section; the host maps it to a fixed list. No address crosses.
         self.assertEqual(
-            set(functions),
-            {
-                "state",
-                "setDensity",
-                "setAccent",
-                "setMoreContrast",
-                "setNewtabAmbience",
-                "setReduceTransparency",
-                "openKeyboardShortcuts",
-            },
+            [(p["name"], p["type"], p.get("optional")) for p in functions["openSettings"]["parameters"]],
+            [("where", "string", True), ("replace", "boolean", True)],
         )
-        self.assertEqual(functions["openKeyboardShortcuts"]["parameters"], [])
-        for name in ("setNewtabAmbience", "setReduceTransparency"):
-            self.assertEqual(functions[name]["parameters"][0]["type"], "boolean")
-        self.assertEqual(functions["setDensity"]["parameters"][0]["enum"], declared["density"]["values"])
-        self.assertEqual(functions["setAccent"]["parameters"][0]["enum"], declared["accent"]["values"])
-        self.assertEqual(functions["setMoreContrast"]["parameters"][0]["type"], "boolean")
+        module = (SHELL / "modules" / "NulavioPersonalise.sys.mjs").read_text(encoding="utf-8")
+        self.assertIn('throw new PersonaliseError("invalid-value")', module)
+        declared = {o["id"]: o for o in options()}
         self.assertEqual(declared["moreContrast"]["values"], [False, True])
 
     def test_the_options_match_the_token_variants(self):
@@ -368,6 +369,7 @@ class CommandsTest(unittest.TestCase):
                 "_execute_action": "Alt+Shift+P",
                 "open-assistant": "Alt+Shift+A",
                 "toggle-focus": "Ctrl+Alt+F",
+                "toggle-immersive": "Ctrl+Alt+I",
                 "lock-profile": "Ctrl+Alt+B",
             },
         )
@@ -436,7 +438,7 @@ class PrefWriterInventoryTest(unittest.TestCase):
 
     def test_the_appearance_module_writes_only_inside_set(self):
         source = (SHELL / "modules" / "NulavioPersonalise.sys.mjs").read_text(encoding="utf-8")
-        body = source[source.index("  async set(id, value) {") : source.index("  /** Settings > Atalhos")]
+        body = source[source.index("  async set(id, value) {") : source.index("  /** Calls `listener` when")]
         self.assertEqual(len(WRITER.findall(body)), 4)
         self.assertEqual(len(WRITER.findall(source)), 4)
         self.assertEqual(re.findall(r"\bconst \[?pref\]? =", source), ["const [pref] =", "const [pref] ="])

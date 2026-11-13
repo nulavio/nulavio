@@ -293,6 +293,31 @@ class ShellTest(unittest.TestCase):
         self.assertTrue(deleted, "Delete did not report success")
         self.assertFalse(target.exists(), "Delete left the file on disk")
 
+    def test_03b_a_failed_delete_keeps_the_way_to_the_folder(self):
+        """Audit 2026-11 S-01: "Excluir" that fails leaves the file where it was, so the page keeps
+        "Mostrar na pasta" and another try instead of ending with the error alone."""
+        target = self.session.downloads / "nulavio-setup.AppImage"
+        self.m.navigate(self.server.url("/page/download-exe-start"))
+        before = set(self.m.window_handles())
+        self.m.execute("location.href = arguments[0];", [self.server.url("/download-exe")])
+        created = harness.wait_until(lambda: self.new_handles(before), timeout=20)
+        self.assertTrue(created, "no warning page after an executable download")
+        self.m.switch_to(created[0])
+        self.assertEqual(harness.wait_until(lambda: self.root_data("state"), timeout=15), "ready")
+        # The stand-in for a file the browser cannot remove: the downloads API refuses.
+        self.m.execute("browser.downloads.removeFile = () => Promise.reject(new Error('refused by the test'));")
+        self.m.execute("document.getElementById('delete').click();")
+        self.assertTrue(harness.wait_until(lambda: self.root_data("state") == "error"), "the failure was not reported")
+        shown = self.m.execute(
+            "return {buttons: [...document.querySelectorAll('#actions button')].filter(b => b.checkVisibility()).map(b => b.id),"
+            " level: document.getElementById('result').dataset.level, text: document.getElementById('result').textContent};"
+        )
+        self.assertEqual(shown["buttons"], ["show", "delete"], shown)
+        self.assertEqual(shown["level"], "error", shown)
+        self.assertEqual(shown["text"], self.m.execute("return browser.i18n.getMessage('warnDeleteFailed');"))
+        self.assertTrue(target.exists(), "the test's refusal must leave the file")
+        target.unlink()
+
     def test_04_regular_download_does_not_warn(self):
         target = self.session.downloads / "nulavio-fixture.bin"
         self.m.navigate(self.server.url("/page/download-start"))

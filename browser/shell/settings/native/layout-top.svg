@@ -1,0 +1,20 @@
+<!-- This Source Code Form is subject to the terms of the Mozilla Public
+   - License, v. 2.0. If a copy of the MPL was not distributed with this
+   - file, You can obtain one at http://mozilla.org/MPL/2.0/. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 72" width="120" height="72">
+  <style>
+    .f { fill: #E2EBEE; stroke: #9CB4BD; }
+    .p { fill: #FFFFFF; stroke: #BFD0D6; }
+    .i { fill: #9CB4BD; }
+    .on { fill: #FFFFFF; stroke: #5F8696; stroke-width: .75; }
+    .m { fill: #0F7A68; }
+    @media (prefers-color-scheme: dark) {
+      .f { fill: #070F18; stroke: #3A6273; }
+      .p { fill: #15293A; stroke: #23495A; }
+      .i { fill: #3A6273; }
+      .on { fill: #183746; stroke: #8FAAB5; }
+      .m { fill: #6FE0C5; }
+    }
+  </style>
+  <rect class="f" x="1" y="1" width="118" height="70" rx="7"/><rect class="on" x="7" y="6" width="30" height="9" rx="2.5"/><rect class="m" x="10" y="12.5" width="8" height="1.6" rx=".8"/><rect class="i" x="40" y="6" width="30" height="9" rx="2.5"/><rect class="i" x="73" y="6" width="24" height="9" rx="2.5"/><rect class="p" x="7" y="19" width="106" height="46" rx="4"/>
+</svg>

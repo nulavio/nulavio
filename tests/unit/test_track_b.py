@@ -483,6 +483,36 @@ class DistributionTest(unittest.TestCase):
             with mock.patch.object(make_distribution, "CONTENT_FILTER", changed):
                 self.assertNotIn("3rdparty", make_distribution.policies()["policies"])
 
+    def test_the_shell_carries_the_digests_of_the_policies_a_build_ships(self):
+        """The settings page hides "managed by your organization" while only Nulavio's own policies are in effect,
+        and learns which those are from digests inside the Shell, not from the file an administrator edits."""
+        current = make_distribution.own_policies()
+        self.assertEqual(set(current["policies"]), set(make_distribution.policies()["policies"]))
+        self.assertEqual(
+            make_distribution.OWN_POLICIES.read_text(encoding="utf-8"),
+            make_distribution.own_policies_text(),
+            "browser/shell/shared/own-policies.json is not current: run scripts/build/make_distribution.py --own-policies",
+        )
+        for digest in current["policies"].values():
+            self.assertRegex(digest, r"^[0-9a-f]{64}$")
+        # A policy that changes changes its digest, and one that sets nothing has none.
+        changed = {"policies": {**make_distribution.policies()["policies"], "DisableTelemetry": False, "Empty": {}}}
+        with mock.patch.object(make_distribution, "policies", return_value=changed):
+            other = make_distribution.own_policies()["policies"]
+        self.assertNotEqual(other["DisableTelemetry"], current["policies"]["DisableTelemetry"])
+        self.assertNotIn("Empty", other)
+        self.assertEqual({k: v for k, v in other.items() if k != "DisableTelemetry"},
+                         {k: v for k, v in current["policies"].items() if k != "DisableTelemetry"})  # fmt: skip
+        # A value Python and the engine would write differently never becomes a digest: the build stops.
+        for label, value in (("a fraction", 1.0), ("a huge number", 2**60), ("a key outside ASCII", {"é": True})):
+            unlike = {"policies": {**make_distribution.policies()["policies"], "Odd": {"inside": [value]}}}
+            patched = mock.patch.object(make_distribution, "policies", return_value=unlike)
+            with self.subTest(label), patched, self.assertRaises(SystemExit):
+                make_distribution.own_policies()
+        guard = (ROOT / "browser" / "shell" / "modules" / "NulavioGuard.sys.mjs").read_text(encoding="utf-8")
+        self.assertIn('"resource://builtin-addons/nulavio-shell/shared/own-policies.json"', guard)
+        self.assertNotIn('"XREAppDist"', guard, "the Guard reads the application's own policies file again")
+
     def test_the_licence_goes_out_with_the_registry(self):
         with tempfile.TemporaryDirectory() as tmp:
             script = ROOT / "scripts" / "build" / "make_distribution.py"
@@ -550,6 +580,27 @@ class PackagingTest(unittest.TestCase):
         self.assertIn('"$pkg/etc/apparmor.d/nulavio"', make_deb)
         self.assertIn("printf '/etc/apparmor.d/nulavio\\n' > \"$pkg/DEBIAN/conffiles\"", make_deb)
         self.assertIn("apparmor_parser -Q -K /etc/apparmor.d/nulavio", (ROOT / "scripts/release/check_deb.sh").read_text())
+
+    def test_every_package_names_both_licences(self):
+        """A build carries one GPL-3.0 data file, uBlock Origin's list registry inside distribution/policies.json
+        (issue #137): each package's own licence field says so, and the .deb's copyright file says where the text is."""
+        config = json.loads(make_distribution.CONTENT_FILTER.read_text(encoding="utf-8"))
+        self.assertTrue(config["default_on"], "no registry is shipped any more: the licence fields can go back to MPL-2.0")
+        spec = (ROOT / "packaging" / "rpm" / "nulavio.spec").read_text(encoding="utf-8")
+        self.assertEqual(re.findall(r"(?m)^License:\s+(.+)$", spec), ["MPL-2.0 AND GPL-3.0-only"])
+        self.assertIn("%license nulavio/LICENSE*", spec)  # LICENSE and LICENSES.md, which make_rpm.sh puts in the tree
+        metainfo = (ROOT / "packaging" / "flatpak" / "net.nulavio.Nulavio.metainfo.xml").read_text(encoding="utf-8")
+        self.assertEqual(re.findall(r"<project_license>([^<]+)</project_license>", metainfo), ["MPL-2.0 AND GPL-3.0-only"])
+        deb = (ROOT / "scripts" / "release" / "make_deb.sh").read_text(encoding="utf-8")
+        note = deb.split("<<'NOTE'\n", 1)[1].split("\nNOTE\n", 1)[0]
+        for said in ("Mozilla Public License, version 2.0", "GNU General Public License, version 3 only", "all rights reserved",
+                     f"/usr/lib/nulavio/distribution/{make_distribution.LICENCE_NAME}", make_distribution.NOTICE_NAME,
+                     "/usr/share/doc/nulavio/LICENSES.md"):  # fmt: skip
+            self.assertIn(said, note)
+        self.assertIn('cat "$repo/LICENSE"\n} > "$pkg/usr/share/doc/nulavio/copyright"', deb)
+        self.assertIn('cp "$repo/LICENSES.md" "$pkg/usr/share/doc/nulavio/LICENSES.md"', deb)
+        for packager in ("make_rpm.sh", "make_archive.sh"):
+            self.assertIn('"$repo/LICENSES.md"', (ROOT / "scripts" / "release" / packager).read_text(encoding="utf-8"))
 
     def test_packages_install_under_system_directories_only(self):
         spec = (ROOT / "packaging" / "rpm" / "nulavio.spec").read_text(encoding="utf-8")

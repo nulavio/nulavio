@@ -15,6 +15,7 @@ ChromeUtils.defineESModuleGetters(lazy, {
   NulavioAI: "resource://builtin-addons/nulavio-shell/modules/NulavioAI.sys.mjs",
   NulavioGuard: "resource://builtin-addons/nulavio-shell/modules/NulavioGuard.sys.mjs",
   NulavioLayout: "resource://builtin-addons/nulavio-shell/modules/NulavioLayout.sys.mjs",
+  NulavioPrivacy: "resource://builtin-addons/nulavio-shell/modules/NulavioPrivacy.sys.mjs",
   AVATAR_GLYPHS: "resource://builtin-addons/nulavio-shell/modules/NulavioAvatars.sys.mjs",
   SPECIAL_GLYPHS: "resource://builtin-addons/nulavio-shell/modules/NulavioAvatars.sys.mjs",
   profileInitial: "resource://builtin-addons/nulavio-shell/modules/NulavioAvatars.sys.mjs",
@@ -64,6 +65,10 @@ const SURFACES = Object.freeze({
 // (window-band.css) the band does not repeat it. Every other surface asks for trust
 // and keeps its name in a full band row ([nv-named]).
 const PLAIN_SURFACES = Object.freeze(new Set(["newtabTitle", "settingsTitle", "profilesButton"]));
+// ADR 0009: the toolbar and the tab list hide; the band stays and carries the origin.
+const PREF_IMMERSIVE = "nulavio.layout.immersive";
+// The first run owns the window (ADR 0010): the same pref the new tab's sequence writes.
+const PREF_FIRSTRUN = "nulavio.firstrun.done";
 
 function policy() {
   return WebExtensionPolicy.getByID(SHELL);
@@ -137,6 +142,7 @@ class WindowUI {
   #profileUnavailable = false;
   #temporary = false;
   #protection = "unknown";
+  #protectionUnavailable = false; // the last read failed (not "not read yet": the first frame stays neutral)
   #refreshing = null;
   #generation = 0;
   #timer = null;
@@ -181,6 +187,8 @@ class WindowUI {
     for (const topic of TOPICS) {
       Services.obs.addObserver(this, topic);
     }
+    Services.prefs.addObserver(PREF_IMMERSIVE, this);
+    Services.prefs.addObserver(PREF_FIRSTRUN, this);
     this.#unsubscribe = lazy.NulavioProfiles.subscribe(() => this.refresh());
     for (const win of Services.wm.getEnumerator("navigator:browser")) {
       if (win.gBrowserInit?.delayedStartupFinished) {
@@ -194,6 +202,13 @@ class WindowUI {
   }
 
   observe(win, topic) {
+    if (topic === "nsPref:changed") {
+      for (const window of this.#windows.keys()) {
+        this.#header(window);
+        this.#paint(window);
+      }
+      return;
+    }
     if (topic === "browser-delayed-startup-finished") {
       this.#attach(win);
     } else if (topic === "nulavio-ai-activity-changed") {
@@ -230,6 +245,15 @@ class WindowUI {
     }
   }
 
+  /** The settings page at the pane that holds `section` ("profiles", "routing"), in this window (ADR 0011). */
+  #settings(win, section) {
+    try {
+      ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioSettings.sys.mjs").NulavioSettings.openFor(win, section);
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
   #profiles(win) {
     const action = lazy.ExtensionParent.apiManager.global.browserActionFor?.(policy()?.extension);
     const placement = lazy.CustomizableUI.getPlacementOfWidget("shell_nulavio_net-browser-action");
@@ -252,12 +276,17 @@ class WindowUI {
     }
     const identity = button(doc, "nv-band-identity", () => this.#profiles(win));
     identity.append(element(doc, "span", "nv-band-flag"), element(doc, "span", "nv-band-name"));
-    const protection = button(doc, "nv-band-protection", () => this.#open(win, "settings/settings.html#profiles"));
+    const protection = button(doc, "nv-band-protection", () => this.#settings(win, "profiles"));
     // D-UX19: next to the profile, while this tab shows a site one of the group's rules sent here.
-    const route = button(doc, "nv-band-route", () => this.#open(win, "settings/settings.html#routing"));
+    const route = button(doc, "nv-band-route", () => this.#settings(win, "routing"));
     route.hidden = true;
     const header = element(doc, "span", "nv-band-header");
-    row.append(identity, protection, route, header);
+    // ADR 0009: the site of this tab, from the engine's own state, shown while the address bar is
+    // out of view (Immersive). Pressing it brings the address bar back with the keyboard in it.
+    const origin = button(doc, "nv-band-origin", () => win.document.getElementById("Browser:OpenLocation")?.doCommand());
+    origin.append(element(doc, "span", "nv-band-origin-state"), element(doc, "span", "nv-band-origin-sub"), element(doc, "span", "nv-band-origin-host"));
+    origin.hidden = true;
+    row.append(identity, protection, route, header, origin);
     const seals = element(doc, "div", "nv-band-seals");
     for (const kind of ["temporary", "private", "agent", "raw", "status", "activity"]) {
       const seal = element(doc, "span", `nv-band-seal nv-band-${kind}`);
@@ -322,6 +351,58 @@ class WindowUI {
         } else {
           delete editor.nextUnusedColor;
         }
+      }
+    };
+  }
+
+  // ADR 0011: the Shell's pages are the browser's own interface (unlock, the Guard's review, the new tab), so
+  // the address bar names them as it names the engine's internal pages ("Nulavio") instead of "Extensão
+  // (Nulavio Shell)". Only the identity label, its icon and what its panel calls the page change: the pages
+  // stay unprivileged, the address stays, and every other extension keeps the engine's label. The Shell is
+  // known by its id and by being shipped with the application, never by a name a page or an add-on can give.
+  // Done here and not as an engine patch: it is what a built-in add-on can do (browser/patches/series).
+  #ownPagesIdentity(win) {
+    const handler = win.gIdentityHandler;
+    const refresh = handler?._refreshIdentityIcons;
+    const connection = handler?.getConnectionSecurityInformation;
+    if (typeof refresh !== "function" || typeof connection !== "function") {
+      return () => {}; // the engine changed shape: its own label stays
+    }
+    const own = () => {
+      const policy = handler._pageExtensionPolicy;
+      return policy?.id === SHELL && !!policy.extension?.isAppProvided;
+    };
+    const named = function () {
+      refresh.call(this);
+      if (!own()) {
+        return;
+      }
+      const box = win.document.getElementById("identity-box");
+      const label = win.document.getElementById("identity-icon-label");
+      const brand = win.document.getElementById("bundle_brand")?.getString("brandShorterName");
+      if (!box || !label || !brand) {
+        return;
+      }
+      box.className = "chromeUI";
+      label.setAttribute("value", brand);
+      label.collapsed = false;
+      win.document.getElementById("identity-icon")?.setAttribute("tooltiptext", "");
+    };
+    const said = function () {
+      return own() ? "chrome" : connection.call(this);
+    };
+    handler._refreshIdentityIcons = named;
+    handler.getConnectionSecurityInformation = said;
+    handler.refreshIdentityBlock?.();
+    return () => {
+      if (handler._refreshIdentityIcons === named) {
+        handler._refreshIdentityIcons = refresh;
+      }
+      if (handler.getConnectionSecurityInformation === said) {
+        handler.getConnectionSecurityInformation = connection;
+      }
+      if (!win.closed) {
+        handler.refreshIdentityBlock?.();
       }
     };
   }
@@ -397,9 +478,13 @@ class WindowUI {
     }
     fullscreen.append(line, compact);
     doc.getElementById("browser").before(fullscreen);
-    const header = () => this.#header(win);
+    const header = () => {
+      this.#noticeHold(win); // another tab, another page: its own notification bar, or none
+      this.#header(win);
+    };
     const progress = {
       onLocationChange: header,
+      onSecurityChange: header,
       onStateChange: (_progress, _request, flags) => {
         if (flags & Ci.nsIWebProgressListener.STATE_START) {
           // Clear synchronously before a new principal commits. The current principal
@@ -415,8 +500,44 @@ class WindowUI {
       },
       QueryInterface: ChromeUtils.generateQI(["nsIWebProgressListener", "nsISupportsWeakReference"]),
     };
+    // ADR 0009: where the pointer brings the tab list back in Immersive (window-band.css).
+    const edge = element(doc, "div");
+    edge.id = "nulavio-immersive-edge";
+    edge.setAttribute("aria-hidden", "true");
+    doc.getElementById("browser").prepend(edge);
     win.gBrowser.addProgressListener(progress);
     win.gBrowser.tabContainer.addEventListener("TabSelect", header);
+    // ADR 0009: a panel or a menu anchored on the toolbar or on the tab list keeps it shown for its whole life.
+    const popup = event => this.#popupHold(win, event);
+    for (const type of ["popupshowing", "popupshown", "popuphidden"]) {
+      win.addEventListener(type, popup, true);
+    }
+    // ...and a device that starts or stops being shared in any tab is decided at once.
+    const sharing = event => event.detail?.changed?.includes("sharing") && this.#applyImmersive(win);
+    win.gBrowser.tabContainer.addEventListener("TabAttrModified", sharing);
+    // ...as is a prompt that opens or closes on a tab (the engine's tab dialogs), once more after the event
+    // because the dialog is still listed while "dialogclose" is dispatched.
+    const dialog = () => {
+      this.#applyImmersive(win);
+      win.setTimeout(() => this.#windows.has(win) && this.#applyImmersive(win), 0);
+    };
+    for (const type of ["dialogopen", "dialogclose"]) {
+      win.addEventListener(type, dialog, true);
+    }
+    // ...and a download that needs attention, which only marks its button.
+    const downloads = new win.MutationObserver(() => this.#downloadHold(win));
+    const downloadsButton = doc.getElementById("downloads-button");
+    if (downloadsButton) {
+      downloads.observe(downloadsButton, { attributes: true, attributeFilter: ["attention"] });
+    }
+    // ...and a notification bar: the engine's (a blocked pop-up, a page opened past a Safe Browsing warning, a
+    // sign-in network) and Nulavio's own (the Guard's). They live in a toolbar of their own, which would go out
+    // of view with the others.
+    const notices = new win.MutationObserver(() => this.#noticeHold(win));
+    const noticesBar = doc.getElementById("notifications-toolbar");
+    if (noticesBar) {
+      notices.observe(noticesBar, { childList: true, subtree: true });
+    }
     const unload = () => this.#detach(win);
     win.addEventListener("unload", unload, { once: true });
     const reveal = () => this.#showNotice(win);
@@ -430,8 +551,17 @@ class WindowUI {
     win.addEventListener("mousemove", pointer, true);
     const screenObserver = new win.MutationObserver(reveal);
     screenObserver.observe(doc.documentElement, { attributes: true, attributeFilter: ["inFullscreen", "inDOMFullscreen"] });
-    this.#windows.set(win, { bar, compact, fullscreen, line, sheet, progress, header, unload, pointer, screenObserver,
-      noticeTimer: null, safety: null, restoreGroupPalette: this.#groupPalette(win) });
+    // ADR 0009: the band's origin follows the engine's identity verdict as soon as it changes.
+    const identityObserver = new win.MutationObserver(header);
+    const identityBox = doc.getElementById("identity-box");
+    if (identityBox) {
+      identityObserver.observe(identityBox, { attributes: true, attributeFilter: ["class"] });
+    }
+    this.#windows.set(win, { bar, compact, fullscreen, line, sheet, progress, header, unload, pointer, screenObserver, identityObserver, edge,
+      popup, sharing, dialog, downloads, notices, holds: new Map(), named: false, noticeTimer: null, safety: null, restoreGroupPalette: this.#groupPalette(win),
+      restoreIdentity: this.#ownPagesIdentity(win) });
+    this.#downloadHold(win);
+    this.#noticeHold(win);
     this.#paint(win);
     this.#unifyStartPage(win);
   }
@@ -515,6 +645,7 @@ class WindowUI {
   #header(win) {
     let text = "";
     let trust = false;
+    let stage = false;
     try {
       const browser = win.gBrowser.selectedBrowser;
       const global = browser.browsingContext.currentWindowGlobal;
@@ -526,6 +657,12 @@ class WindowUI {
             && browser.currentURI.spec === global.documentURI.spec) {
           text = t("bandSystemPage", [t(key)]);
           trust = !PLAIN_SURFACES.has(key);
+          // The first run's welcome is the Shell's own new tab in a genuinely new profile: while it is the
+          // selected tab the window shows the band and that page only (the band still names it).
+          stage = key === "newtabTitle" && !lazy.PrivateBrowsingUtils.isWindowPrivate(win) && lazy.NulavioPrivacy.firstRun().active;
+          if (stage) {
+            text = t("bandSystemPage", [t("bandSurfaceWelcome")]);
+          }
         }
       }
     } catch {
@@ -534,16 +671,274 @@ class WindowUI {
     for (const row of this.#rows(win)) {
       named(row.querySelector(".nv-band-header"), text);
     }
-    this.#windows.get(win)?.bar.toggleAttribute("nv-named", trust);
+    const state = this.#windows.get(win);
+    state?.bar.toggleAttribute("nv-named", trust);
+    const staged = Boolean(state && state.stage !== stage);
+    if (staged) {
+      state.stage = stage;
+      win.document.documentElement.toggleAttribute("nulavio-stage", stage);
+    }
+    this.#origin(win, Boolean(text));
+    if (staged) {
+      state.bar.toggleAttribute("nv-neutral", this.#neutral(win));
+      if (stage && !state.stageFocused) {
+        // The stage's question is in the page: the keyboard starts there, not in an address field that is out of
+        // view. Once per window: a tab the person opens later (Ctrl+T) keeps the keyboard in the address field,
+        // which shows the toolbar, so what they type goes where they meant it.
+        state.stageFocused = true;
+        win.gBrowser.selectedBrowser.focus();
+      }
+    }
     this.#markOwnPagePending(win);
     this.#routeNotice(win);
   }
 
+  /** Immersive (ADR 0009): the mode is on for this window (the person's switch, or the first run's stage). */
+  #immersiveWanted(win) {
+    return Services.prefs.getBoolPref(PREF_IMMERSIVE, false) || Boolean(this.#windows.get(win)?.stage);
+  }
+
+  /**
+   * Why a window that wants Immersive shows its full chrome anyway (ADR 0009, decision 6): the first
+   * reason that applies, or "". Whenever something must be seen in full, or the band cannot vouch
+   * for the page, the toolbar stays.
+   */
+  #immersiveBlock(win) {
+    if (this.#agent) {
+      return "agent"; // an AI Workspace, raw automation included
+    }
+    if (!win.toolbar.visible) {
+      return "popup"; // a pop-up or any window without the full toolbar
+    }
+    // A camera, a microphone or a screen shared from any tab of this window, paused or not: the engine's own
+    // indicators are the cue, so the toolbar stays. Read from what those indicators are drawn from (the
+    // browser's sharing state; the tab's attribute goes away while a capture is paused).
+    if ([...win.gBrowser.tabs].some(tab => tab.linkedBrowser?._sharingState?.webRTC?.sharing || tab.hasAttribute("sharing"))) {
+      return "sharing";
+    }
+    // A prompt on the selected tab (HTTP authentication, alert, confirm, before-unload). For a cross-site
+    // authentication request the engine rewrites the address bar and the tab's label to the site that asks
+    // (currentAuthPromptURI): that must be seen, and the band's site would be the wrong one.
+    try {
+      const browser = win.gBrowser.selectedBrowser;
+      const box = browser.tabDialogBox;
+      if (browser.currentAuthPromptURI || box?._tabDialogManager?.hasDialogs || box?._contentDialogManager?.hasDialogs) {
+        return "prompt";
+      }
+    } catch (e) {
+      console.error("Nulavio band: prompt state", e);
+      return "prompt"; // not known: as if one were open
+    }
+    if (!this.#windows.get(win)?.named) {
+      return "page"; // a document the band has no defined name for (about:blank, data:, blob:, view-source:)
+    }
+    if (!this.#documentIsThere(win)) {
+      return "page"; // the address is shown before its document: a tab being restored, an error page
+    }
+    return "";
+  }
+
+  /**
+   * Whether the document in the selected tab is the one its address names. The band names the address the
+   * engine shows, as the address bar does, and a tab being restored shows its address before its document is
+   * there (the page is still about:blank, for as long as the site takes to answer). An error page keeps the
+   * address of what failed. Until the document is that site's, the toolbar stays (ADR 0009, decision 6).
+   */
+  #documentIsThere(win) {
+    try {
+      const browser = win.gBrowser.selectedBrowser;
+      const shown = browser.currentURI;
+      const there = browser.browsingContext?.currentWindowGlobal?.documentURI;
+      if (!shown || !there) {
+        return false;
+      }
+      if (shown.schemeIs("http") || shown.schemeIs("https")) {
+        return there.scheme === shown.scheme && there.hostPort === shown.hostPort;
+      }
+      return there.spec.split(/[?#]/)[0] === shown.spec.split(/[?#]/)[0];
+    } catch {
+      return false; // not known: as if it were not there
+    }
+  }
+
+  #immersive(win) {
+    return this.#immersiveWanted(win) && !this.#immersiveBlock(win);
+  }
+
+  /** Draw the decision on the window: the mode, why it is held back, and what keeps the chrome shown. */
+  #applyImmersive(win) {
+    const state = this.#windows.get(win);
+    if (!state) {
+      return;
+    }
+    const root = win.document.documentElement;
+    const wanted = this.#immersiveWanted(win);
+    const block = wanted ? this.#immersiveBlock(win) : "";
+    root.toggleAttribute("nulavio-immersive", wanted && !block);
+    const mark = (name, value) => (value ? setAttr(root, name, value) : root.removeAttribute(name));
+    mark("nulavio-immersive-off", block);
+    for (const [node] of state.holds) {
+      if (!node.isConnected || node.state === "closed") {
+        state.holds.delete(node); // a popup that never opened, or went away without its event
+      }
+    }
+    mark("nulavio-immersive-hold", [...new Set(state.holds.values())].sort().join(" "));
+    const neutral = this.#neutral(win);
+    if (state.bar.hasAttribute("nv-neutral") !== neutral) {
+      state.bar.toggleAttribute("nv-neutral", neutral);
+    }
+  }
+
+  /** A panel or menu anchored on the toolbar or on the tab list: that part stays shown from before the
+      engine positions it until it is gone. A menu on the page (no anchor in the chrome) holds nothing. */
+  #popupHold(win, event) {
+    const state = this.#windows.get(win);
+    const node = event.target;
+    if (!state || event.currentTarget !== win || !["panel", "menupopup"].includes(node?.localName)) {
+      return;
+    }
+    if (event.type === "popuphidden") {
+      if (state.holds.delete(node)) {
+        this.#applyImmersive(win);
+      }
+      return;
+    }
+    const anchor = node.anchorNode ?? node.triggerNode ?? node.parentNode;
+    const doc = win.document;
+    const part = doc.getElementById("navigator-toolbox")?.contains(anchor) ? "toolbar"
+      : doc.getElementById("sidebar-container")?.contains(anchor) ? "tabs" : "";
+    if (part && state.holds.get(node) !== part) {
+      state.holds.set(node, part);
+      this.#applyImmersive(win);
+      // A popup whose opening was cancelled sends no "popuphidden": look again once this event is over.
+      win.setTimeout(() => this.#windows.has(win) && this.#applyImmersive(win), 0);
+    }
+  }
+
+  /** A notification bar in this window or on the selected tab: the toolbar stays shown, and the bar with it,
+      until it is closed. A bar on a tab in the background holds nothing until that tab is selected. */
+  #noticeHold(win) {
+    const state = this.#windows.get(win);
+    const bar = win.document.getElementById("notifications-toolbar");
+    if (!state || !bar) {
+      return;
+    }
+    let shown;
+    try {
+      const boxes = [win.gNotificationBox, win.gBrowser.readNotificationBox(win.gBrowser.selectedBrowser)];
+      shown = boxes.some(box => box?.allNotifications.length);
+    } catch (e) {
+      console.error("Nulavio band: notification bars", e);
+      shown = true; // not known: as if one were shown
+    }
+    if (shown !== state.holds.has(bar)) {
+      if (shown) {
+        state.holds.set(bar, "toolbar");
+      } else {
+        state.holds.delete(bar);
+      }
+      this.#applyImmersive(win);
+    }
+  }
+
+  /** A download that needs the person's attention (blocked, or flagged as dangerous) marks its toolbar button
+      and opens nothing: the toolbar stays shown until the mark is gone (the person opened the downloads). */
+  #downloadHold(win) {
+    const state = this.#windows.get(win);
+    const button = win.document.getElementById("downloads-button");
+    if (!state || !button) {
+      return;
+    }
+    const needs = ["warning", "severe"].includes(button.getAttribute("attention"));
+    if (needs !== state.holds.has(button)) {
+      if (needs) {
+        state.holds.set(button, "toolbar");
+      } else {
+        state.holds.delete(button);
+      }
+      this.#applyImmersive(win);
+    }
+  }
+
+  /** The selected tab's site for the band: the committed document's host as the engine displays it
+      (IDN rules included), its registrable part apart, and the connection state in words when it
+      is not secure. Never from the page; nothing while a load is committing; Nulavio's own pages
+      have the band's trusted name instead. */
+  #origin(win, ownPage) {
+    let sub = "";
+    let host = "";
+    let state = "";
+    try {
+      const browser = win.gBrowser.selectedBrowser;
+      const uri = browser.currentURI;
+      if (!ownPage && uri) {
+        if (uri.schemeIs("http") || uri.schemeIs("https")) {
+          host = uri.displayHost;
+          try {
+            const base = Services.eTLD.getBaseDomainFromHost(host);
+            if (host.endsWith(base) && host.length > base.length) {
+              sub = host.slice(0, host.length - base.length);
+              host = base;
+            }
+          } catch {
+            // An IP address or a single label: the whole host is the site.
+          }
+          // An IPv6 address is shown between brackets, as in an address: without them its last group and a
+          // port could not be told apart.
+          if (host.includes(":")) {
+            host = `[${host}]`;
+          }
+          // A port that is not the scheme's own is part of what the site is: never left out.
+          if (uri.port !== -1) {
+            host += `:${uri.port}`;
+          }
+          // The verdict is the engine's own: the classes its identity handler puts on the address
+          // bar's identity box (verified, local, or anything else), never a second opinion. A certificate the
+          // person accepted with an exception is "verified" there with a second class, a warning on its padlock
+          // and "connection not secure" in its panel: not fine here either.
+          const identity = win.document.getElementById("identity-box")?.classList;
+          const fine = (identity?.contains("verifiedDomain") && !identity.contains("certUserOverridden"))
+            || identity?.contains("localResource");
+          state = fine ? "" : t("bandOriginNotSecure");
+        } else if (uri.schemeIs("file")) {
+          host = t("bandOriginFile");
+        } else if (uri.schemeIs("about") && uri.spec.split(/[?#]/)[0] !== "about:blank") {
+          // "about:blank#x" and "about:blank?x" are about:blank too (a document that inherits its opener).
+          host = uri.spec.split(/[?#]/)[0];
+        }
+        // Anything else (about:blank, data:, blob:, view-source:) has no defined name: full chrome.
+      }
+    } catch {
+      sub = host = state = ""; // an uncommitted or destroyed tab names no site
+    }
+    for (const row of this.#rows(win)) {
+      const node = row.querySelector(".nv-band-origin");
+      setText(node.querySelector(".nv-band-origin-state"), state);
+      setText(node.querySelector(".nv-band-origin-sub"), sub);
+      setText(node.querySelector(".nv-band-origin-host"), host);
+      const label = host ? t(state ? "bandOriginNamedNotSecure" : "bandOriginNamed", [sub + host]) : "";
+      setAttr(node, "aria-label", label);
+      setAttr(node, "title", label);
+      setAttr(node, "data-secure", state ? "false" : "true");
+      if (node.hidden !== !host) {
+        node.hidden = !host;
+      }
+    }
+    const window = this.#windows.get(win);
+    if (window) {
+      window.named = ownPage || Boolean(host);
+      this.#applyImmersive(win);
+    }
+  }
+
   /** A window with no alert may carry the band inside the navigation row (UX3G A1). A routing notice
-      also gives it back its own row, so the notice never squeezes the profile out (review F16). */
+      also gives it back its own row, so the notice never squeezes the profile out (review F16). So does
+      a failed read of the profile or of its protection: "Identidade do perfil indisponível" and
+      "Proteção desconhecida" are shown whole, not cut to the column (audit 2026-11 W-02). */
   #neutral(win) {
-    return !this.#temporary && !lazy.PrivateBrowsingUtils.isWindowPrivate(win) && !this.#agent
+    return !this.#immersive(win) && !this.#temporary && !lazy.PrivateBrowsingUtils.isWindowPrivate(win) && !this.#agent
       && this.#guardCount === 0 && !this.#actionError && !this.#windows.get(win)?.routed
+      && !this.#profileUnavailable && !this.#protectionUnavailable
       && !lazy.NulavioAI.activityState(win) && !this.#connected.some(c => c.agent !== this.#agent?.id);
   }
 
@@ -608,6 +1003,7 @@ class WindowUI {
     const root = win.document.documentElement;
     root.toggleAttribute("nulavio-window-agent", Boolean(agent));
     root.toggleAttribute("nulavio-window-raw", Boolean(agent?.raw));
+    this.#applyImmersive(win);
     const state = this.#windows.get(win);
     const activity = lazy.NulavioAI.activityState(win);
     const kinds = { normal: true, temporary: this.#temporary, private: privateWindow,
@@ -730,6 +1126,7 @@ class WindowUI {
         this.#temporary = temporary.value.temporary;
       }
       this.#protection = protection.status === "fulfilled" ? protection.value : "unknown";
+      this.#protectionUnavailable = protection.status === "rejected";
       // An idle snapshot taken before markWorkspace/raw cannot erase its newer warning.
       if (agentRevision === this.#agentRevision) {
         this.#agentUnavailable = agent.status === "rejected" || Boolean(agent.value?.unavailable);
@@ -778,14 +1175,29 @@ class WindowUI {
     }
     this.#windows.delete(win);
     state.restoreGroupPalette();
+    state.restoreIdentity();
     win.gBrowser.removeProgressListener(state.progress);
     win.gBrowser.tabContainer.removeEventListener("TabSelect", state.header);
     win.removeEventListener("unload", state.unload);
     win.removeEventListener("mousemove", state.pointer, true);
+    for (const type of ["popupshowing", "popupshown", "popuphidden"]) {
+      win.removeEventListener(type, state.popup, true);
+    }
+    win.gBrowser.tabContainer.removeEventListener("TabAttrModified", state.sharing);
+    for (const type of ["dialogopen", "dialogclose"]) {
+      win.removeEventListener(type, state.dialog, true);
+    }
+    state.downloads.disconnect();
+    state.notices.disconnect();
     win.clearTimeout(state.noticeTimer);
     state.screenObserver.disconnect();
+    state.identityObserver.disconnect();
     state.bar.remove();
     state.fullscreen.remove();
+    state.edge.remove();
+    for (const name of ["nulavio-immersive", "nulavio-immersive-off", "nulavio-immersive-hold", "nulavio-stage"]) {
+      win.document.documentElement.removeAttribute(name);
+    }
     if (state.sheet) {
       state.sheet.remove();
     } else {
@@ -832,9 +1244,9 @@ class WindowUI {
         isUnsupported: workspace, // an agent's window has no Nulavio settings to open
         onPick: (_queryContext, controller) => {
           const win = controller?.browserWindow ?? top();
-          const url = WebExtensionPolicy.getByID(SHELL)?.getURL("settings/settings.html");
-          if (win && url) {
-            win.openTrustedLinkIn(url, "tab");
+          if (win) {
+            // One settings page (ADR 0008): the browser's own, with Nulavio's options in it.
+            ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioSettings.sys.mjs").NulavioSettings.open(win, "");
           }
           return null;
         },
@@ -873,6 +1285,8 @@ class WindowUI {
     for (const topic of TOPICS) {
       Services.obs.removeObserver(this, topic);
     }
+    Services.prefs.removeObserver(PREF_IMMERSIVE, this);
+    Services.prefs.removeObserver(PREF_FIRSTRUN, this);
     lazy.CustomizableUI.removeListener(this);
     for (const action of QUICK_ACTIONS) {
       try {

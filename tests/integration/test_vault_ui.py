@@ -20,6 +20,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
 import harness
+import settings_page
 from fake_avahi import FAKE_BUSCTL
 from phone_link_ref import LinkedPhone
 from phone_reference import ReferencePhone
@@ -276,13 +277,33 @@ class VaultUiTest(unittest.TestCase):
         hint = self.m.execute("return document.querySelector('[data-i18n=vaultChoosePasswordHint]').textContent;")
         self.assertIn("bloqueado", hint)
         self.assertIn("aberto", hint)
+        # A refused field is marked (the 2 px critical edge) and described by its message, and both go when
+        # the person types in it again (accessibility.md; audit 2026-11 S-04).
+        refused = (
+            "const f = document.getElementById(arguments[0]);"
+            "return [f.getAttribute('aria-invalid'), f.getAttribute('aria-describedby'), document.activeElement.id,"
+            " document.getElementById(arguments[1]).textContent.length > 0];"
+        )
+        self.type_into("password", "short")
+        self.type_into("password2", "short")
+        self.click("#step-protection button[type=submit]")
+        self.assertEqual(
+            self.m.execute(refused, ["password", "protection-error"]), ["true", "protection-error", "password", True]
+        )
         self.type_into("password", PASSWORD)
+        self.assertEqual(self.m.execute(refused, ["password", "protection-error"]), [None, None, "password", False])
         self.type_into("password2", PASSWORD + "x")
         self.click("#step-protection button[type=submit]")
-        self.assertTrue(self.m.execute("return document.getElementById('protection-error').textContent.length > 0;"))
+        self.assertEqual(
+            self.m.execute(refused, ["password2", "protection-error"]), ["true", "protection-error", "password2", True]
+        )
+        self.assertIsNone(self.m.execute(refused, ["password", "protection-error"])[0], "only the field that was refused")
         self.type_into("password2", PASSWORD)
+        self.assertEqual(self.m.execute(refused, ["password2", "protection-error"]), [None, None, "password2", False])
         self.shoot("create-2-protection")
-        self.click("#step-protection button[type=submit]")
+        # The refusals above moved focus (and the page) back up to the fields; the capture's re-render
+        # leaves the headless page unscrollable for a pointer click, so this one is a script click.
+        self.m.execute("document.querySelector('#step-protection button[type=submit]').click();")
         self.wait_state("recovery", "step", timeout=90)
         code = self.m.execute("return document.getElementById('code').dataset.code;")
         # UX4 (SB-08): 7 numbered groups, and the heading (not a field below the code) has the keyboard.
@@ -296,6 +317,9 @@ class VaultUiTest(unittest.TestCase):
         self.type_into("group-b", groups[index("group-b-label")])
         self.click("#step-recovery button[type=submit]")
         self.assertEqual(self.state("step"), "recovery")  # a wrong group is caught
+        # ...and it is the group that differs that is marked, not the other one.
+        self.assertEqual(self.m.execute(refused, ["group-a", "recovery-error"]), ["true", "recovery-error", "group-a", True])
+        self.assertIsNone(self.m.execute(refused, ["group-b", "recovery-error"])[0])
         self.type_into("group-a", groups[index("group-a-label")].lower())
         self.click("#step-recovery button[type=submit]")
         self.wait_state("done", "step")
@@ -308,6 +332,21 @@ class VaultUiTest(unittest.TestCase):
         self.assertEqual(list(path.iterdir()), [])
         self.assertTrue((path.parent / f"{path.name}.vault" / "vault.json").exists())
         type(self).created_id = profile["id"]
+        # "Abrir <perfil>" on the last screen: the profile was created locked, so it opens through its unlock
+        # page (it used to answer "Esse perfil está bloqueado" and stop there).
+        self.click("#done-actions .button--primary")
+        unlock = f"/vault/unlock.html?p={profile['id']}"
+        tabs = "return gBrowser.tabs.map(tab => tab.linkedBrowser.currentURI.pathQueryRef);"
+        self.m.set_context("chrome")
+        try:
+            opened = harness.wait_until(lambda: any(t.startswith(unlock) for t in self.m.execute(tabs)), 10)
+            self.assertTrue(opened, self.m.execute(tabs))
+            self.m.execute(
+                "gBrowser.removeTab(gBrowser.tabs.find(tab => tab.linkedBrowser.currentURI.filePath === '/vault/unlock.html'));"
+            )
+        finally:
+            self.m.set_context("content")
+        self.assertEqual(self.m.execute("return document.getElementById('status').textContent;"), "")
 
     def test_02_unlock_page_wrong_then_right_password_opens_the_profile_and_relocks(self):
         profile_id = self.created_id
@@ -364,15 +403,11 @@ class VaultUiTest(unittest.TestCase):
         self.assertTrue(harness.wait_until(lambda: self.server.requests_to("/page/vault-opened"), timeout=60))
         # While it is open, Settings says when it locks again, next to "Lock now" (SB-14).
         self.m.switch_to(self.m.window_handles()[0])
-        self.m.navigate(self.base + "settings/settings.html#profiles")
-        note = harness.wait_until(
-            lambda: self.m.execute(
-                "return document.querySelector(`[data-profile-id='${arguments[0]}'] [data-relock]`)?.textContent ?? null;",
-                [profile_id],
-            ),
-            timeout=20,
+        settings_page.open_pane(self.m, "nulavioProfiles")
+        relocks = lambda found: any(  # noqa: E731
+            row["data"].get("profile") == str(profile_id) and "última janela" in (row["description"] or "") for row in found
         )
-        self.assertIn("última janela", note or "")
+        settings_page.wait_rows(self.m, "nulavio-profile-list", relocks, "moz-box-item.nulavio-profile", timeout=20)
         self.stop_instance(path)
         box = storage.Container(path)
         self.assertTrue(harness.wait_until(lambda: not box.mounted(), timeout=30), "not locked after the window closed")
@@ -462,28 +497,17 @@ class VaultUiTest(unittest.TestCase):
         self.assertTrue(shutil.which("gocryptfs"))  # sanity: the environment still has the tools
         # Settings: the locked profile offers "Unlock…" instead of "Open".
         self.m.switch_to(self.m.window_handles()[0])
-        self.m.navigate(self.base + "settings/settings.html#profiles")
-        self.assertTrue(
-            harness.wait_until(
-                lambda: self.m.execute(
-                    "return !!document.querySelector(`[data-focus-key='open-${arguments[0]}']`);", [locked["id"]]
-                ),
-                timeout=20,
-            )
-        )
-        label = self.m.execute(
-            "return document.querySelector(`[data-focus-key='open-${arguments[0]}']`).textContent;", [locked["id"]]
-        )
-        expected = self.m.execute("return browser.i18n?.getMessage?.('vaultUnlockButton') ?? null;")
-        self.assertTrue(label.endswith("…"), label)
-        if expected:
-            self.assertEqual(label, expected)
+        each = "moz-box-item.nulavio-profile"
+        mine = lambda found: [row for row in found if row["data"].get("profile") == str(locked["id"])]  # noqa: E731
+        drawn = lambda found: mine(found) and mine(found)[0]["description"]  # noqa: E731
+        settings_page.open_pane(self.m, "nulavioProfiles")
+        row = mine(settings_page.wait_rows(self.m, "nulavio-profile-list", drawn, each, 20))[0]
+        self.assertIn("bloqueado", row["description"])
+        unlock = row["buttons"][0]
+        self.assertEqual((unlock["action"], unlock["label"]), ("unlock", "Desbloquear…"))
         # The accessible name says the state and the action shown, not "Abrir" (SPA-10, SB-17).
-        name = self.m.execute(
-            "return document.querySelector(`[data-focus-key='open-${arguments[0]}']`).getAttribute('aria-label');", [locked["id"]]
-        )
-        self.assertEqual(name, "Cofre UI, bloqueado, desbloquear…")
-        self.assertIn(label.lower(), name.lower(), "WCAG 2.5.3: the visible label is in the name")
+        self.assertEqual(unlock["named"], "Cofre UI, bloqueado, desbloquear…")
+        self.assertIn(unlock["label"].lower(), unlock["named"].lower(), "WCAG 2.5.3: the visible label is in the name")
         # The same in the toolbar's profile selector, whose rows are buttons named by aria-label.
         self.m.navigate(self.base + "profiles/popup.html")
         popup = harness.wait_until(
@@ -497,16 +521,9 @@ class VaultUiTest(unittest.TestCase):
         self.assertTrue(popup, "locked profile missing from the selector")
         self.assertEqual(popup[0], "Cofre UI, bloqueado, desbloquear…")
         self.assertIn("Bloqueado", popup[1])  # the visible badge, now also in the name
-        self.m.navigate(self.base + "settings/settings.html#profiles")
-        self.assertTrue(
-            harness.wait_until(
-                lambda: self.m.execute(
-                    "return !!document.querySelector(`[data-focus-key='open-${arguments[0]}']`);", [locked["id"]]
-                ),
-                timeout=20,
-            )
-        )
-        self.shoot("settings-locked-profile", "#profiles-card")
+        settings_page.open_pane(self.m, "nulavioProfiles")
+        settings_page.wait_rows(self.m, "nulavio-profile-list", drawn, each, 20)
+        settings_page.shoot(self.m, self.shots, "settings-locked-profile")
         # Deleting a locked protected profile drops its keys, then the profile.
         path = self.profile_path(locked["id"])
         self.call("await P.remove(args[0]);", locked["id"])
@@ -541,7 +558,14 @@ class VaultUiTest(unittest.TestCase):
         self.click("#start-form button[type=submit]")
         self.wait_state("error")
         self.assert_status("error")
+        # The refused secret is marked and the status line is its description, until the next keystroke (S-04).
+        marked = (
+            "const f = document.getElementById('current');"
+            "return [f.getAttribute('aria-invalid'), f.getAttribute('aria-describedby'), document.activeElement.id];"
+        )
+        self.assertEqual(self.m.execute(marked), ["true", "status", "current"])
         self.type_into("current", PASSWORD)
+        self.assertEqual((self.m.execute(marked)[:2], self.state(), self.status_text()), ([None, None], "idle", ""))
         self.click("#start-form button[type=submit]")
         self.wait_state("waiting")
         code = self.qr_code("#qr")
@@ -615,6 +639,14 @@ class VaultUiTest(unittest.TestCase):
         self.click("#password-form button[type=submit]")
         self.assertTrue(self.m.execute("return document.getElementById('current-error').textContent.length > 0;"))
         self.assertEqual(self.m.execute("return document.activeElement.id;"), "current")
+        # A new password that is too short: its own field is marked, with its message (S-04).
+        self.type_into("new-password", "short")
+        self.click("#password-form button[type=submit]")
+        short = self.m.execute(
+            "const f = document.getElementById('new-password');"
+            "return [f.getAttribute('aria-invalid'), f.getAttribute('aria-describedby'), document.activeElement.id];"
+        )
+        self.assertEqual(short, ["true", "password-error", "new-password"])
         # With the wrong secret: refused, the field is cleared and marked.
         self.type_into("new-password", "second pass 22")
         self.type_into("new-password2", "second pass 22")
@@ -883,6 +915,31 @@ class VaultUiTest(unittest.TestCase):
         # With the other one gone there is no stand-in: nothing is made the start-up profile, and it stays this one.
         self.assertIsNone(self.call(asked, protected))
         self.assertEqual(self.start_entry()[0], here)
+
+    def test_16_a_profile_that_no_longer_exists_is_not_called_locked(self):
+        """Audit 2026-11 S-01: the unlock and methods pages of a profile that is gone say so, and leave
+        no field to type a password or recovery code into and no action that could not work."""
+        gone = 987654
+        seen = (
+            "const seen = s => [...document.querySelectorAll(s)].filter(e => e.checkVisibility());"
+            "return {fields: seen('input').map(e => e.id), buttons: seen('button').map(b => b.id || b.textContent.trim()),"
+            " headline: document.getElementById('headline').textContent, status: document.getElementById('status').textContent,"
+            " level: document.getElementById('status').dataset.level, band: seen('.moment__check').length};"
+        )
+        msg = lambda key: self.m.execute("return browser.i18n.getMessage(arguments[0]);", [key])  # noqa: E731
+        self.open_page(f"vault/unlock.html?p={gone}")
+        self.wait_state("error")
+        unlock = self.m.execute(seen)
+        self.assertEqual((unlock["fields"], unlock["buttons"]), ([], []), unlock)
+        self.assertEqual(unlock["headline"], msg("vaultGoneHeadline"))
+        self.assertEqual((unlock["status"], unlock["level"]), (msg("vaultGone"), "error"))
+        self.assertEqual(unlock["band"], 0, "nothing to type: no reminder to look at the band first")
+        self.open_page(f"vault/methods.html?p={gone}")
+        self.wait_state("unavailable")
+        methods = self.m.execute(seen)
+        self.assertEqual((methods["fields"], methods["buttons"]), ([], []), methods)
+        self.assertEqual(methods["headline"], msg("vaultGoneHeadline"))
+        self.assertEqual((methods["status"], methods["level"]), (msg("vaultGone"), "error"))
 
 
 if __name__ == "__main__":

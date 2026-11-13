@@ -12,6 +12,7 @@ from __future__ import annotations
 import sys
 import time
 import unittest
+import urllib.parse
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
@@ -240,6 +241,111 @@ class MozillaFeaturesTest(unittest.TestCase):
                 "live": [],
                 "control": ["update.googleapis.com"],
             },
+        )
+
+    def test_03d_the_update_checks_name_neither_the_system_nor_the_distribution(self):
+        """The media plugin check and the built-in add-on check ask Mozilla's update server without the kernel, GTK and
+        libpulse versions and without Nulavio's name (issue #126). Because these are update channels: the two
+        addresses are the engine's own with only those three fields replaced (read from the engine's own files, so
+        an engine that changes them fails here); both answers come back; OpenH264 is in Mozilla's list itself, not in
+        the engine's built-in fallback; and Mozilla answers the full form and this one alike, for the system this runs
+        on (a rule aimed at another kernel, GTK or libpulse version is not seen from here). In a profile of its own:
+        the built-in add-on check may install what it is given."""
+        session = harness.GeckoProfileSession(name="Checagens")
+        self.addCleanup(session.cleanup)
+        m = session.start()
+        script = (
+            "const done = arguments[arguments.length - 1];"
+            'const { GMPInstallManager } = ChromeUtils.importESModule("resource://gre/modules/GMPInstallManager.sys.mjs");'
+            'const { XPIInstall } = ChromeUtils.importESModule("resource://gre/modules/addons/XPIInstall.sys.mjs");'
+            'const { UpdateUtils } = ChromeUtils.importESModule("resource://gre/modules/UpdateUtils.sys.mjs");'
+            "const asked = {}, answered = {};"
+            "const watch = { observe(subject, topic) { const c = subject.QueryInterface(Ci.nsIHttpChannel);"
+            ' if (c.URI.host !== "aus5.mozilla.org" || c.loadInfo.triggeringPrincipal.isSystemPrincipal === false) return;'
+            ' const product = c.URI.spec.split("/update/3/")[1]?.split("/")[0] ?? c.URI.spec;'
+            ' if (topic === "http-on-opening-request") { asked[product] ??= c.URI.spec; }'
+            " else { answered[product] ??= c.responseStatus; } } };"
+            'const topics = ["http-on-opening-request", "http-on-examine-response"];'
+            "topics.forEach(t => Services.obs.addObserver(watch, t));"
+            # The engine's own value of a pref, from the file the build carries it in.
+            "const own = async (file, name) => { const text = await (await fetch(file)).text();"
+            ' const at = text.indexOf(`pref("${name}"`); if (at < 0) return null;'
+            ' return text.slice(at, text.indexOf("\\n", at)).split(\'"\')[3] ?? null; };'
+            # `force=1`: the server's answer without the draw of a staged rollout, which is made per request and would
+            # make two requests differ with nothing wrong.
+            "const body = async address => {"
+            " const r = await fetch(address + '?force=1', { credentials: 'omit', cache: 'no-store' });"
+            " return r.ok ? r.text() : `status ${r.status}`; };"
+            "const unwatch = () => topics.splice(0).forEach(t => Services.obs.removeObserver(watch, t));"
+            "(async () => { const out = {};"
+            ' const names = { GMP: "media.gmp-manager.url", SystemAddons: "extensions.systemAddon.update.url" };'
+            " const defaults = Services.prefs.getDefaultBranch('');"
+            " out.ours = Object.fromEntries(Object.entries(names).map(([k, n]) => [k, defaults.getCharPref(n)]));"
+            ' out.engine = { GMP: await own("resource://gre/greprefs.js", names.GMP),'
+            '  SystemAddons: await own("resource:///defaults/preferences/firefox.js", names.SystemAddons) };'
+            ' out.wouldSend = await UpdateUtils.formatUpdateURL("%OS_VERSION%/%DISTRIBUTION%/%DISTRIBUTION_VERSION%");'
+            ' out.kernel = Services.sysinfo.getProperty("version");'
+            " out.distribution = Services.prefs.getDefaultBranch('').getCharPref('distribution.id', '');"
+            " const { addons } = await new GMPInstallManager().checkForAddons();"
+            ' const openh264 = addons.find(a => a.id === "gmp-gmpopenh264");'
+            " out.openh264 = openh264 ? { fallback: Boolean(openh264.usedFallback), address: Boolean(openh264.URL),"
+            "  hash: Boolean(openh264.hashValue) } : null;"
+            " await XPIInstall.updateSystemAddons();"
+            # What the engine's two checks asked and were answered, before this test asks anything itself.
+            " unwatch(); out.asked = { ...asked }; out.answered = { ...answered };"
+            # Mozilla's answer to the engine's full form and to this one, for each check.
+            " out.same = {};"
+            " for (const [product, template] of Object.entries(out.engine)) {"
+            "  try { const full = await body(await UpdateUtils.formatUpdateURL(template));"
+            "   const short = await body(await UpdateUtils.formatUpdateURL(out.ours[product]));"
+            "   const alike = full === short && !full.startsWith('status ');"
+            "   out.same[product] = alike ? true : [full.slice(0, 300), short.slice(0, 300)]; }"
+            "  catch (e) { out.same[product] = `could not ask: ${e}`; } }"
+            " return out; })()"
+            ".finally(unwatch)"
+            ".then(done, e => done({ error: String(e) }));"
+        )
+        m.set_context("chrome")
+        try:
+            state = m.execute_async(script, [])
+        finally:
+            m.set_context("content")
+        self.assertNotIn("error", state, state)
+        # What the engine would put there is really something to leave out: this build is a distribution on a real kernel.
+        self.assertEqual(state["distribution"], "nulavio")
+        self.assertIn("nulavio", state["wouldSend"])
+        self.assertIn(state["kernel"], urllib.parse.unquote(urllib.parse.unquote(state["wouldSend"])))
+        # The two values are the engine's own with only the three fields replaced.
+        fields = {"%OS_VERSION%": "Linux", "%DISTRIBUTION%": "default", "%DISTRIBUTION_VERSION%": "default"}
+        for product, template in state["engine"].items():
+            with self.subTest(product=product):
+                self.assertTrue(
+                    template and all(field in template for field in fields), f"the engine's address changed: {template}"
+                )
+                expected = template
+                for field, fixed in fields.items():
+                    expected = expected.replace(field, fixed)
+                self.assertEqual(state["ours"][product], expected, "the engine's address changed: update the two prefs")
+        # What was really asked carries none of it.
+        self.assertEqual(sorted(state["asked"]), ["GMP", "SystemAddons"], state["asked"])
+        for address in state["asked"].values():
+            with self.subTest(address=address):
+                self.assertTrue(address.endswith("/Linux/default/default/update.xml"), address)
+                plain = urllib.parse.unquote(urllib.parse.unquote(address))
+                for detail in (state["kernel"], "GTK", "libpulse", "nulavio"):
+                    self.assertNotIn(detail, plain)
+        # The update channels still work. These need Mozilla's server: without it the test says it could not measure.
+        needs = "could not measure (is the network reachable?): "
+        self.assertEqual(state["answered"], {"GMP": 200, "SystemAddons": 200}, needs + "an update check got no answer")
+        self.assertEqual(
+            state["openh264"],
+            {"fallback": False, "address": True, "hash": True},
+            needs + "OpenH264 did not come from Mozilla's list",
+        )
+        self.assertEqual(
+            state["same"],
+            {"GMP": True, "SystemAddons": True},
+            "Mozilla answers the full form and this one differently on this system (or could not be asked): decide #126 again",
         )
 
     def test_04_no_account_button_or_sync_promo(self):

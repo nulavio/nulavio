@@ -82,8 +82,18 @@ async function act(action, finding) {
       await guard.reveal(finding.id);
       return;
     }
+    // The list is redrawn without this finding: the keyboard goes to the one that takes its place (the
+    // next, or the previous after the last), not back to the top of the page (audit 2026-11 S-05). To its
+    // title, never to one of its buttons: a second Enter would undo or keep a change nobody had read yet.
+    const place = [...document.querySelectorAll("#findings > li")].findIndex(li => li.dataset.findingId === finding.id);
     const left = await guard.resolve(finding.id, action);
     render(left);
+    const cards = document.querySelectorAll("#findings > li");
+    const title = cards[Math.min(Math.max(place, 0), cards.length - 1)]?.querySelector("h2");
+    if (title) {
+      title.tabIndex = -1; // reachable by this move only, not a stop in the Tab order
+      title.focus();
+    }
     const said = t(action === "undo" ? "guardUndone" : "guardKept");
     announce(left.length ? said : `${said} ${t("guardAllReviewed")}`); // the last one: the review is over
   } catch (e) {

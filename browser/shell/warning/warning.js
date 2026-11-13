@@ -34,7 +34,9 @@ function finish(message, level) {
   result.textContent = message;
   result.dataset.level = level;
   result.hidden = false;
-  document.getElementById("actions").hidden = true;
+  // A failed delete leaves the file where it was: "Mostrar na pasta" and another try stay
+  // (audit 2026-11 S-01). Only a file that is gone has nothing left to act on.
+  document.getElementById("actions").hidden = level === "ok";
   document.documentElement.dataset.state = level === "ok" ? "deleted" : "error";
 }
 
@@ -108,11 +110,14 @@ async function render() {
   document.getElementById("delete").addEventListener("click", async () => {
     try {
       await browser.downloads.removeFile(item.id);
-      await browser.downloads.erase({ id: item.id });
-      finish(t("warnDeleted"), "ok");
     } catch {
       finish(t("warnDeleteFailed"), "error");
+      return;
     }
+    // The file is gone. Its entry in the downloads list is only a record: when that cannot be dropped, the file
+    // is deleted all the same, and saying "could not delete" with the file's actions back would be untrue.
+    await browser.downloads.erase({ id: item.id }).catch(() => {});
+    finish(t("warnDeleted"), "ok");
   });
   document.documentElement.dataset.state = "ready";
 }

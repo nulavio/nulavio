@@ -53,8 +53,10 @@
 .here__label, .here__plain, .here__routes { color: var(--nv-color-text-secondary); }
 .here__who .badge { margin-inline-start: 0; }
 .here__summary { display: inline-flex; align-items: baseline; gap: var(--nv-space-2); font-weight: var(--nv-font-weight-medium); }
-/* A state is not a "safe" seal: the line carries no mark when all is on; attention keeps its own. */
-.here__summary[data-level="ok"]::before { content: none; }
+/* A state is not a "safe" seal: the line carries no mark when all is on; attention keeps its own.
+   The selector names the line too, so it outweighs the shared mark rule above (its :is() list counts
+   as its most specific entry); without that the check was drawn (audit 2026-11 S-02). */
+.here__line > .here__summary[data-level="ok"]::before { content: none; }
 .here__summary[data-level="warn"] { color: var(--nv-color-status-warning); }
 .here__summary[data-level="unknown"] { color: var(--nv-color-text-secondary); }
 .here__settings { margin-inline-start: auto; font-size: var(--nv-type-label-size); }
@@ -80,6 +82,28 @@
   padding: var(--nv-space-8) var(--nv-space-4) var(--nv-space-6);
   border-inline-end: 1px solid var(--nv-color-border-subtle);
 }
+/* ADR 0008: the way back to the one settings page, above everything else in the rail.
+   The chevron is drawn, so it flips with the writing direction. */
+.settings-back {
+  display: flex;
+  align-items: center;
+  gap: var(--nv-space-2);
+  padding: var(--nv-space-2) var(--nv-space-4);
+  border-radius: var(--nv-radius-md);
+  color: var(--nv-color-text-primary);
+  font-weight: var(--nv-font-weight-semibold);
+  text-decoration: none;
+}
+.settings-back::before {
+  content: "";
+  inline-size: 0.5em;
+  block-size: 0.5em;
+  border: solid currentColor;
+  border-width: 0 0 2px 2px;
+  rotate: 45deg;
+}
+.settings-back:dir(rtl)::before { rotate: -135deg; }
+.settings-back:hover { background: color-mix(in srgb, currentColor 8%, transparent); }
 .settings-search__input { inline-size: 100%; }
 .settings-nav { display: grid; gap: var(--nv-space-2); }
 .settings-nav ul { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--nv-space-1); }
@@ -292,7 +316,6 @@ html[data-page="newtab"]:not([data-painted]) .page {
   .hero picture { display: none; }
   .hero__headline { font-size: var(--nv-font-size-2xl); }
 }
-.layout-choice { display: grid; gap: var(--nv-space-4); }
 /* UX3G A4/B-11: on short viewports (1280x800 at 150 % is ~490px tall) the
    card gives up the headline and the option hints (both kept for assistive
    technology), shortens the previews and puts the three options on one row,
@@ -326,21 +349,91 @@ html[data-page="newtab"]:not([data-painted]) .page {
 
 /* First run (audit 2026-11 FR-01): one card at a time; the others wait, gated by newtab.js. */
 [data-gated] { display: none !important; }
+/* Every first-run card has the same three parts, in reading order: what is asked, the choice itself, the
+   actions. Stacked here; two panes on the stage (below). */
+:is(.firstrun, .layout-choice, .dns-choice) { display: grid; gap: var(--nv-space-4); }
+.firstrun__say, .firstrun__show, .firstrun__do { display: grid; align-content: start; gap: var(--nv-space-4); min-width: 0; }
+.firstrun__do { gap: var(--nv-space-3); }
+.firstrun__do > .form-error:empty { display: none; }
 .firstrun__progress { margin: 0; font-size: var(--nv-type-label-size); font-weight: var(--nv-font-weight-medium); color: var(--nv-color-text-secondary); }
-.firstrun__head { display: flex; align-items: center; gap: var(--nv-space-3); }
-.firstrun__symbol { inline-size: 2rem; block-size: 2rem; flex: none; }
+.firstrun__symbol { inline-size: 3rem; block-size: 3rem; flex: none; }
 .firstrun__lead { margin: 0; max-inline-size: 62ch; }
+.firstrun__caption { margin: 0; font-size: var(--nv-type-caption-size); color: var(--nv-color-text-secondary); }
+.firstrun__picture { inline-size: 100%; max-inline-size: 26rem; block-size: auto; justify-self: center; }
 .firstrun__facts { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--nv-space-2); }
 .firstrun__facts li { display: flex; gap: var(--nv-space-2); align-items: baseline; }
 /* "Seguro" is neutral (no green); what needs attention says so with its own mark. */
 .firstrun__facts li::before { color: var(--nv-color-text-secondary); }
 .firstrun__facts li[data-level="warn"]::before { background-color: var(--nv-color-status-warning); }
-.firstrun__summary { gap: var(--nv-space-2); }
-.firstrun__summary div { grid-template-columns: minmax(7rem, 12rem) minmax(0, 1fr); align-items: baseline; gap: var(--nv-space-4); }
+.firstrun__summary { gap: var(--nv-space-3); }
+.firstrun__summary div { grid-template-columns: minmax(6rem, 9rem) minmax(0, 1fr); align-items: baseline; gap: var(--nv-space-4); }
 .firstrun__summary dt { font-size: var(--nv-type-label-size); color: var(--nv-color-text-secondary); }
 
+/* A choice among a few things, each said in a line or two: a radio card (DNS) or a row with its own
+   action (password managers). The one in use wears the accent, a ring and a word, never colour alone. */
+.options { display: grid; gap: var(--nv-space-3); margin: 0; padding: 0; border: 0; min-width: 0; list-style: none; }
+.option {
+  display: grid;
+  gap: var(--nv-space-3);
+  padding: var(--nv-space-4);
+  border: 1px solid var(--nv-color-border-subtle);
+  border-radius: var(--nv-radius-md);
+  background: var(--nv-color-bg-surface);
+}
+.option p { margin: 0; }
+.option:has(> .option__pick):hover { border-color: var(--nv-color-border-control); }
+.option:has(input[type="radio"]:checked), .option[data-in-use="true"] {
+  border-color: var(--nv-color-accent-default);
+  box-shadow: inset 0 0 0 1px var(--nv-color-accent-default);
+  background: var(--nv-color-accent-tint);
+}
+.option__pick { display: flex; gap: var(--nv-space-3); align-items: flex-start; cursor: pointer; }
+.option__pick input { margin: 0.2em 0 0; width: 1.125rem; height: 1.125rem; flex: none; accent-color: var(--nv-color-accent-default); }
+.option__text { display: grid; gap: var(--nv-space-1); min-width: 0; }
+.option__title { display: flex; flex-wrap: wrap; align-items: center; gap: var(--nv-space-2) var(--nv-space-3); font-weight: var(--nv-font-weight-semibold); }
+.option__extra { padding-inline-start: calc(1.125rem + var(--nv-space-3)); }
+.option:not(:has(input[type="radio"]:checked)) > .option__extra { display: none; }
+.option--row { grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: var(--nv-space-5); }
+@media (forced-colors: active) {
+  .option:has(input[type="radio"]:checked), .option[data-in-use="true"] { border: 2px solid Highlight; }
+}
+
+/* This window, drawn small, with its real band (the profile and its state are read, not drawn). */
+.miniwin {
+  border: 1px solid var(--nv-color-border-control);
+  border-radius: var(--nv-radius-md);
+  background: var(--nv-color-chrome-toolbox);
+  box-shadow: var(--nv-elevation-2);
+  overflow: hidden;
+}
+.miniwin__band {
+  display: flex;
+  align-items: center;
+  gap: var(--nv-space-3);
+  min-block-size: 2.25rem;
+  box-sizing: border-box;
+  padding: var(--nv-space-2) var(--nv-space-4);
+  font-size: var(--nv-type-label-size);
+  /* the part the sentence beside it is about */
+  box-shadow: inset 0 0 0 2px var(--nv-color-accent-default);
+  border-radius: var(--nv-radius-md) var(--nv-radius-md) 0 0;
+}
+.miniwin__name { font-weight: var(--nv-font-weight-semibold); }
+.miniwin__state { color: var(--nv-color-text-secondary); }
+.miniwin__body { display: grid; grid-template-columns: 5.5rem minmax(0, 1fr); gap: var(--nv-space-3); block-size: 6.5rem; padding: var(--nv-space-3); }
+.miniwin__tabs { display: grid; align-content: start; gap: var(--nv-space-2); }
+.miniwin__tab { block-size: 0.875rem; border-radius: var(--nv-radius-xs); background: var(--nv-color-border-subtle); }
+.miniwin__tab--on { background: var(--nv-color-chrome-tabSelected); box-shadow: inset 0 0 0 1px var(--nv-color-border-control); }
+.miniwin__page { border: 1px solid var(--nv-color-border-subtle); border-radius: var(--nv-radius-sm); background: var(--nv-color-bg-surface); }
+.bandpair { display: grid; gap: var(--nv-space-3); }
+.bandpair > .miniwin + .firstrun__caption { margin-block-start: var(--nv-space-4); }
+.bandpair .miniwin__body { block-size: 3.5rem; }
+@media (forced-colors: active) {
+  .miniwin, .miniwin__band, .miniwin__page { border: 1px solid CanvasText; box-shadow: none; }
+  .miniwin__tab { background: CanvasText; }
+}
+
 /* UX3G N6: one card style on the new tab; the DNS choice reads like the layout one. */
-.dns-choice.stack { gap: var(--nv-space-4); }
 .layout-choice__title {
   margin: 0;
   font-size: var(--nv-type-section-size);
@@ -413,6 +506,9 @@ html[data-page="newtab"]:not([data-painted]) .page {
 }
 .lp-item--on { fill: var(--nv-color-chrome-tabSelected); stroke: var(--nv-color-border-control); stroke-width: 0.75; }
 .lp-mark { fill: var(--nv-color-accent-default); }
+.lp-band { fill: var(--nv-color-accent-tint); stroke: var(--nv-color-accent-default); }
+.lp-line, .lp-flow { fill: none; stroke: var(--nv-color-border-control); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.lp-flow { stroke: var(--nv-color-accent-default); }
 @media (prefers-reduced-motion: no-preference) {
   .layout-option { transition: border-color var(--nv-motion-duration-fast) var(--nv-motion-easing-standard), background-color var(--nv-motion-duration-fast) var(--nv-motion-easing-standard); }
 }
@@ -420,6 +516,8 @@ html[data-page="newtab"]:not([data-painted]) .page {
   .layout-option:has(input:checked) { border: 2px solid Highlight; }
   .lp-frame, .lp-content { fill: Canvas; stroke: CanvasText; }
   .lp-item, .lp-item--on, .lp-mark { fill: CanvasText; }
+  .lp-band { fill: Canvas; stroke: CanvasText; }
+  .lp-line, .lp-flow { stroke: CanvasText; }
 }
 
 /* Assistant side panel: narrow, plain-text answers */
@@ -480,6 +578,8 @@ html[data-page="newtab"][data-ambience="on"][data-transparency="reduced"] .card 
   font-size: var(--nv-type-label-size);
   color: var(--nv-color-text-secondary);
 }
+/* A page that ended with no field for a secret (a profile that is gone) has nothing to check first. */
+body[data-secret="none"] .moment__check { display: none; }
 /* The level, in the same place on every page: glyph and word, from the page's own callout */
 .moment__severity {
   display: inline-flex;
@@ -535,4 +635,68 @@ body[data-state="loading"] .moment__context::after {
 .hero__link { margin-left: var(--nv-space-4); color: var(--nv-color-accent-default); }
 .hero__link[hidden] { display: none; }
 
+/* The first run is a stage (ADR 0010): one card of a fixed size in the middle and nothing else on the page.
+   The card has two panes, as the references' setup cards do: on the left what is asked and, at the bottom,
+   the actions; on the right the choice itself. It keeps its place and size between steps, and its actions
+   keep theirs. In a short or narrow window the panes stack and the page scrolls. */
+html[data-page="newtab"][data-stage] .page {
+  min-block-size: 100vh;
+  box-sizing: border-box;
+  padding: var(--nv-space-6);
+  gap: var(--nv-space-4);
+  justify-content: center;
+  max-width: 64rem;
+}
+html[data-page="newtab"][data-stage] .page > :not(.firstrun, .firstrun__progress, .firstrun__back, .layout-choice, .dns-choice) { display: none; }
+/* `clip`, not `hidden`: the corners are kept and the actions can still stick to the window's bottom edge (below). */
+html[data-page="newtab"][data-stage] .page > :is(.firstrun, .layout-choice, .dns-choice) { max-width: none; padding: 0; overflow: clip; }
+html[data-page="newtab"][data-stage] .page > :is(.firstrun, .layout-choice, .dns-choice)[hidden] { display: none; }
+html[data-page="newtab"][data-stage] :is(.firstrun__say, .firstrun__do, .firstrun__show) { padding: var(--nv-space-6); }
+html[data-page="newtab"][data-stage] .firstrun__say { padding-block-end: 0; }
+html[data-page="newtab"][data-stage] .firstrun__show { background: var(--nv-color-bg-sunken); border-block: 1px solid var(--nv-color-border-subtle); }
+/* Stacked (a short or narrow window): the actions stay on screen while the choice scrolls under them, so the
+   main action is never below the fold. */
+html[data-page="newtab"][data-stage] .firstrun__do {
+  position: sticky;
+  inset-block-end: 0;
+  background: var(--nv-color-bg-surface);
+  border-block-start: 1px solid var(--nv-color-border-subtle);
+  padding-block: var(--nv-space-4);
+}
+html[data-page="newtab"][data-stage] .firstrun__progress { order: 1; max-width: none; min-block-size: 1lh; text-align: center; }
+html[data-page="newtab"][data-stage] .firstrun__progress[hidden] { display: block !important; visibility: hidden; }
+/* "Voltar" sits under the card, after the progress line, and keeps its room while there is no step before
+   (the card must not move between steps). */
+html[data-page="newtab"][data-stage] .firstrun__back { order: 2; align-self: center; }
+html[data-page="newtab"][data-stage] .firstrun__back[hidden] { display: inline-flex !important; visibility: hidden; }
+html:not([data-stage]) .firstrun__back { display: none; }
+html[data-page="newtab"][data-stage] .layout-choice__title { font-size: var(--nv-font-size-2xl); text-wrap: balance; }
+html[data-page="newtab"][data-stage] .firstrun__say > :is(.firstrun__lead, .hint) { text-wrap: pretty; }
+html[data-page="newtab"][data-stage] .layout-options { grid-template-columns: minmax(0, 1fr); gap: var(--nv-space-3); }
+/* Leaving for Settings in the middle of the sequence is not offered; the text says where the choice lives. */
+html[data-page="newtab"][data-stage] #layout-choice-settings { display: none; }
+@media (min-width: 52rem) and (min-height: 40rem) {
+  html[data-page="newtab"][data-stage] .page > :is(.firstrun, .layout-choice, .dns-choice) {
+    grid-template: "say show" minmax(0, 1fr) "do show" auto / minmax(0, 5fr) minmax(0, 6fr);
+    gap: 0;
+    block-size: 34rem;
+  }
+  html[data-page="newtab"][data-stage] .firstrun__say { grid-area: say; padding: var(--nv-space-8) var(--nv-space-8) 0; overflow: auto; }
+  html[data-page="newtab"][data-stage] .firstrun__do {
+    grid-area: do;
+    position: static;
+    border-block-start: 0;
+    padding: var(--nv-space-6) var(--nv-space-8) var(--nv-space-8);
+  }
+  html[data-page="newtab"][data-stage] .firstrun__show {
+    grid-area: show;
+    align-content: center;
+    padding: var(--nv-space-7);
+    border-block: 0;
+    border-inline-start: 1px solid var(--nv-color-border-subtle);
+    overflow: auto;
+  }
+  html[data-page="newtab"][data-stage] .firstrun__do .actions { flex-direction: column; align-items: stretch; }
+  html[data-page="newtab"][data-stage] .firstrun__do .actions .button { justify-content: center; margin-inline-start: 0; }
+}
 }

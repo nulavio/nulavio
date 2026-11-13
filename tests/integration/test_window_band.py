@@ -180,6 +180,50 @@ class WindowBandTest(unittest.TestCase):
         self.assertTrue(r["aboveTabs"] and r["aboveNav"] and r["nativeUnchanged"], r)
         assert_layout_matrix(self, self.m, "ordinary")
 
+    def test_01b_a_failed_identity_or_protection_read_gets_the_whole_row(self):
+        """Audit 2026-11 W-02: with no alert the band shares the navigation row and the name gives way to the
+        protection state. A failed read is not that case: "Identidade do perfil indisponível" and "Proteção
+        desconhecida" get the band's own row, whole."""
+        probe = """
+          const band = document.getElementById('nulavio-band'), row = band.querySelector('.nv-band-row');
+          const name = row.querySelector('.nv-band-name');
+          return {neutral: band.hasAttribute('nv-neutral'), name: name.textContent,
+            clipped: name.scrollWidth > name.clientWidth, protection: row.querySelector('.nv-band-protection').textContent};
+        """
+        self.assertTrue(self.m.chrome(probe)["neutral"], "the test needs a window with no alert")
+        failed = chrome_async(
+            self.m,
+            f"""
+          const P = ChromeUtils.importESModule('resource://builtin-addons/nulavio-shell/modules/NulavioProfiles.sys.mjs')
+            .NulavioProfiles;
+          const W = {WINDOW};
+          const out = {{}};
+          P.currentForBand = () => Promise.reject(new Error('refused by the test'));
+          try {{
+            await W.refresh(); await W.refresh();
+            out.identity = (() => {{ {probe} }})();
+          }} finally {{ delete P.currentForBand; }}
+          // The protection is read from the profile's files: make that read fail, for the Vault's file only.
+          const io = Cu.getGlobalForObject(W).IOUtils, exists = io.exists;
+          io.exists = path => String(path).endsWith('vault.json')
+            ? Promise.reject(new Error('refused by the test')) : exists.call(io, path);
+          try {{
+            await W.refresh(); await W.refresh();
+            out.protection = (() => {{ {probe} }})();
+          }} finally {{ io.exists = exists; }}
+          await W.refresh(); await W.refresh();
+          out.after = (() => {{ {probe} }})();
+          return out;
+        """,
+        )
+        self.assertNotIn("error", failed, failed)
+        identity, protection, after = (failed["ok"][key] for key in ("identity", "protection", "after"))
+        self.assertTrue(identity["name"].startswith("? ") or identity["name"] == self.message("bandProfileUnavailable"), identity)
+        self.assertEqual((identity["neutral"], identity["clipped"]), (False, False), identity)
+        self.assertEqual(protection["protection"], self.message("bandProtectionUnknown"), protection)
+        self.assertEqual((protection["neutral"], protection["clipped"]), (False, False), protection)
+        self.assertTrue(after["neutral"], "the next good read gives the row back")
+
     def test_02_only_a_selected_top_level_shell_principal_names_the_header(self):
         base = self.m.chrome("return WebExtensionPolicy.getByID('shell@nulavio.net').getURL('');")
 
@@ -230,19 +274,90 @@ class WindowBandTest(unittest.TestCase):
             self.m.navigate(base + "vault/unlock.html?p=0")
             self.assertTrue(harness.wait_until(lambda: self.message("bandSurfaceUnlock") in header(), 10))
             self.m.chrome("openTrustedLinkIn(arguments[0], 'current');", [server.url("/page/race")])
-            self.assertEqual(
-                self.m.chrome("""
+            named = """
               const e = document.querySelector('#nulavio-band .nv-band-header');
               return [e.textContent,e.getAttribute('aria-label'),e.title];
-            """),
-                ["", "", ""],
-            )
+            """
+            # The name goes when the engine says the load began, a moment after the call returns (the page is in
+            # another process), and well before the site answers: the server holds its answer for 0.4 s.
+            gone = harness.wait_until(lambda: self.m.chrome(named) == ["", "", ""], 0.3, interval=0.02)
+            self.assertTrue(gone, self.m.chrome(named))
             self.assertNotIn("error", chrome_async(self.m, f"await {WINDOW}.refresh();"))
             self.assertEqual(header(), "")  # refresh cannot restore the old Shell header during navigation
         self.m.chrome("gBrowser.selectedTab = window.nvTestTab;")
         self.assertTrue(harness.wait_until(lambda: self.message("bandSurfaceGuard") in header(), 10), header())
         self.m.chrome("gBrowser.selectedTab = gBrowser.tabs[0]; gBrowser.removeTab(window.nvTestTab); delete window.nvTestTab;")
         self.assertEqual(header(), "")
+
+    def test_02b_the_address_bar_names_shell_pages_as_the_browsers_own(self):
+        """ADR 0011: on a page of the built-in Shell the identity label is the brand, as on the engine's internal
+        pages, never "Extensão (Nulavio Shell)". The page stays unprivileged; an add-on with the Shell's name keeps
+        the engine's label; a site is untouched; without the window module the engine's own label is back."""
+        identity = """
+          const box = document.getElementById('identity-box'), label = document.getElementById('identity-icon-label');
+          const principal = gBrowser.selectedBrowser.contentPrincipal;
+          return { kind: box.className, label: label.collapsed ? '' : label.getAttribute('value'),
+                   tooltip: document.getElementById('identity-icon').getAttribute('tooltiptext') ?? '',
+                   says: gIdentityHandler.getConnectionSecurityInformation(),
+                   system: principal.isSystemPrincipal, addon: principal.addonId ?? '',
+                   scheme: gBrowser.selectedBrowser.currentURI.scheme };
+        """
+        brand = self.m.chrome("return document.getElementById('bundle_brand').getString('brandShorterName');")
+        base = self.m.chrome("return WebExtensionPolicy.getByID('shell@nulavio.net').getURL('');")
+        own = {"kind": "chromeUI", "label": brand, "tooltip": "", "says": "chrome"}
+        own |= {"system": False, "addon": "shell@nulavio.net", "scheme": "moz-extension"}
+
+        def seen(wanted=None) -> dict:
+            harness.wait_until(lambda: wanted is None or self.m.chrome(identity)["kind"] == wanted, 10)
+            return self.m.chrome(identity)
+
+        self.m.navigate(base + "vault/unlock.html?p=0")
+        self.assertEqual(seen("chromeUI"), own)
+        # The engine's own internal page reads the same way: that is the point.
+        self.m.navigate("about:preferences")
+        engine = seen("chromeUI")
+        self.assertEqual((engine["kind"], engine["label"], engine["says"]), ("chromeUI", brand, "chrome"))
+        # Another add-on, even one that calls itself the Shell, keeps the engine's label.
+        with tempfile.TemporaryDirectory(prefix="nulavio-named-") as directory:
+            addon = Path(directory)
+            (addon / "manifest.json").write_text(
+                json.dumps(
+                    {
+                        "manifest_version": 3,
+                        "name": "Nulavio Shell",
+                        "version": "1.0",
+                        "browser_specific_settings": {"gecko": {"id": "shell-lookalike@example.invalid"}},
+                    }
+                )
+            )
+            (addon / "page.html").write_text("<!doctype html><title>Nulavio</title>")
+            self.m.install_addon(str(addon), temporary=True)
+            self.m.navigate(
+                self.m.chrome("return WebExtensionPolicy.getByID('shell-lookalike@example.invalid').getURL('page.html');")
+            )
+            other = seen("extensionPage")
+            self.assertEqual((other["kind"], other["says"]), ("extensionPage", "extension"))
+            self.assertIn("Nulavio Shell", other["label"])
+            self.assertNotEqual(other["label"], brand)
+            self.assertIn("Nulavio Shell", other["tooltip"])
+        # Without the window module (the Shell stopped) the engine's own label is back; started again, the name is.
+        self.m.navigate(base + "vault/unlock.html?p=0")
+        self.assertEqual(seen("chromeUI"), own)
+        self.m.chrome(f"{WINDOW}.stop();")
+        try:
+            stopped = seen("extensionPage")
+            self.assertEqual((stopped["kind"], stopped["says"]), ("extensionPage", "extension"))
+            self.assertIn("Nulavio Shell", stopped["label"])
+        finally:
+            self.assertNotIn("error", chrome_async(self.m, f"const ui = {WINDOW}; ui.start(); await ui.refresh();"))
+        self.assertEqual(seen("chromeUI"), own)
+        # A site is untouched (and the next test starts from one, as after test_02).
+        with harness.FixtureServer() as server:
+            self.m.navigate(server.url("/page/identity"))
+            site = seen()
+            self.assertNotEqual(site["kind"], "chromeUI")
+            self.assertNotEqual(site["label"], brand)
+            self.assertNotEqual(site["says"], "chrome")
 
     def test_03_teardown_restart_and_new_windows(self):
         result = chrome_async(
@@ -351,7 +466,8 @@ class WindowBandTest(unittest.TestCase):
                     if fused:
                         self.assertEqual(state["bg"], "rgba(0, 0, 0, 0)")
                     else:
-                        self.assertEqual(state["bg"], "rgb(6, 12, 20)" if dark else "rgb(226, 235, 238)")
+                        # ADR 0010: the frame is one tone, the toolbar's (band.bg follows chrome.toolbar).
+                        self.assertEqual(state["bg"], "rgb(15, 28, 42)" if dark else "rgb(241, 247, 245)")
                     rows.append({"dark": dark, "vertical": vertical, "width": width, "scale": scale, **state})
                     self.m.set_context("chrome")
                     try:
@@ -657,6 +773,12 @@ class WindowBandTest(unittest.TestCase):
         assert_band(self, state)
         self.assertTrue(any("nv-band-agent" in c["kind"] for c in state["cues"]))
         self.assertTrue(any("nv-band-guard" in c["kind"] for c in state["cues"]))
+        # Audit 2026-11 W-01: the agent's row is ruled with lines. Its text controls (the protection state,
+        # "Pausar agente", "Parar todos") sit on the band's own fill, so no line runs through their words.
+        on_lines = [c for c in state["cues"] if any(k in c["kind"] for k in ("protection", "nv-band-pause", "nv-band-stop"))]
+        self.assertEqual(len(on_lines), 3, state)
+        for cue in on_lines:
+            self.assertEqual(cue["bg"], state["bg"], cue)
         self.assertNotIn(
             "error",
             chrome_async(

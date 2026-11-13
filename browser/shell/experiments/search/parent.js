@@ -20,6 +20,12 @@ this.nulavioSearch = class extends ExtensionAPI {
     // This always-on Shell lifecycle also installs the scoped native-window sheet;
     // it exposes no additional API to extension pages or web content.
     ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioWindow.sys.mjs").NulavioWindow.start();
+    // One settings page (ADR 0008): Nulavio's panes inside the engine's about:preferences.
+    try {
+      ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioSettings.sys.mjs").NulavioSettings.start();
+    } catch (e) {
+      console.error("Nulavio settings start-up failed", e);
+    }
     // After first paint, like the engine's own search add-ons, so start-up is not slowed.
     const { ExtensionParent } = ChromeUtils.importESModule("resource://gre/modules/ExtensionParent.sys.mjs");
     ExtensionParent.browserPaintedPromise
@@ -30,6 +36,7 @@ this.nulavioSearch = class extends ExtensionAPI {
   onShutdown(isAppShutdown) {
     if (!isAppShutdown) {
       ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioWindow.sys.mjs").NulavioWindow.stop();
+      ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioSettings.sys.mjs").NulavioSettings.stop();
     }
   }
 
@@ -49,15 +56,6 @@ this.nulavioSearch = class extends ExtensionAPI {
     return {
       nulavioSearch: {
         state: call(() => search.state()),
-        addProvider: call(key => search.addProvider(key)),
-        addSearxng: call(details => search.addSearxng(details)),
-        addCustom: call(details => search.addCustom(details)),
-        addOpenSearch: call(details => search.addOpenSearch(details)),
-        remove: call(id => search.remove(id)),
-        setDefault: call((id, options) => search.setDefault(id, options ?? {})),
-        setAlias: call((id, alias) => search.setAlias(id, alias)),
-        setSuggestOptIn: call((id, enabled) => search.setSuggestOptIn(id, enabled)),
-        setSuggestPrivate: call(enabled => search.setSuggestPrivate(enabled)),
         onChanged: new ExtensionCommon.EventManager({
           context,
           name: "nulavioSearch.onChanged",
