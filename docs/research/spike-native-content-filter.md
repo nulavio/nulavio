@@ -10,7 +10,7 @@ Should Nulavio Filter move from uBlock Origin (an extension, GPL-3.0) to a filte
 
 ## What we already know
 
-- On Gecko, uBlock Origin keeps its full feature set because Firefox keeps the blocking `webRequest` API ([ADR 0001](../adr/0001-engine-selection.md)). Brave built adblock-rust because Chromium removed that API, a constraint Nulavio does not have.
+- On Gecko, uBlock Origin keeps its full feature set because Firefox keeps the blocking `webRequest` API ([ADR 0001](../adr/0001-engine-selection.md)). Nothing forces Nulavio to change. Brave filters inside the browser's network code, not through that API, and wrote adblock-rust in 2019 to replace its earlier C++ engine for speed ([announcement](https://brave.com/blog/improved-ad-blocker-performance/)): it is a matching library made to be embedded.
 - adblock-rust matches requests and resolves which cosmetic filters and scriptlets apply. Everything else is the browser's job: intercepting requests, hiding elements, injecting scriptlets before the page's own scripts, downloading and checking the lists, and the per-site switch.
 - Today Settings cannot see uBlock Origin's per-site switch or its trusted sites ([residual risk R39](../security/residual-risks.md)). A filter Nulavio owns would fix that.
 - uBlock Origin runs in the extension process. A native filter would run its matching in the parent process, the most privileged one, so a bug there costs more.
@@ -47,7 +47,9 @@ Measure:
 - time to load and compile the lists, and the memory the result takes;
 - size of the serialized adblock-rust engine.
 
-**Go when** adblock-rust blocks at least 98% of what uBlock Origin blocks on the corpus, and its few extra blocks break no page of the corpus (`run_sites.py`, with the flagged pages triaged as in the [October run](site-regression-2026-10.md)). **No-go** under 90%, or when the differences come from list syntax that adblock-rust does not support and upstream has no plan for.
+**Go when** adblock-rust blocks at least 98% of what uBlock Origin blocks on the corpus, no request it misses is one that a privacy or malware list blocks (criterion A1), and every request it blocks and uBlock Origin does not is listed with the rule that matched. **No-go** under 90%, or when the differences come from list syntax that adblock-rust does not support and upstream has no plan for.
+
+Whether those extra blocks break a page cannot be answered here: nothing in this phase puts adblock-rust's decisions into a browser, and `run_sites.py` compares Nulavio with uBlock Origin against a stock engine, not one filter against another. Phase 2 gives it a mode that runs the corpus with the candidate filtering in place of uBlock Origin; breakage is judged from there on (criterion A3).
 
 ### Phase 2: network blocking inside the engine (about 4 days)
 
@@ -56,12 +58,13 @@ A prototype that blocks requests only, with no cosmetic filtering yet:
 - adblock-rust vendored in the engine's Rust tree, behind a build flag;
 - candidate integration points, to choose between: a URL classifier feature (where Enhanced Tracking Protection already blocks) and a request observer. The phase picks one and records why;
 - lists downloaded and checked exactly as `extensions.lock.json` checks an extension (pinned source, hash). They are compiled outside the parent process, which only loads the serialized result;
-- the per-site switch read and written by Settings.
+- the per-site switch read and written by Settings;
+- a mode of `tests/regression/run_sites.py` that runs the corpus with the prototype filtering and uBlock Origin off, so that the two filters can be compared page by page.
 
 Measure against uBlock Origin on the same build:
 
 - page load on the corpus (load event, Largest Contentful Paint), cold and warm;
-- start-up: time until the first page can load, and **whether any request to a listed domain leaves before the filter is ready**;
+- start-up: time until the first page can load, and **whether any request the filter would block leaves before the filter is ready** (criterion A4);
 - memory of the parent process and of the extension process with the lists loaded (`about:memory`);
 - Speedometer 3, JetStream and MotionMark as regression guards (shared with #80);
 - patch size outside `third_party/`, and build time and binary size added.
@@ -84,10 +87,10 @@ All of them must hold. Each one names the evidence that proves it.
 
 | # | Criterion | Threshold | Evidence |
 |---|---|---|---|
-| A1 | Network blocking | ≥ 98% of uBlock Origin's blocks on the corpus | phase 1 and 2 JSON |
+| A1 | Network blocking | ≥ 98% of uBlock Origin's blocks on the corpus, **and** every block it misses is listed with the list and rule that made uBlock Origin block it. None of them may come from a privacy or malware list (the registry's groups `privacy` and `malware`, and uBlock filters – Privacy and – Badware risks): a tracker or a malware address that gets through fails the criterion, whatever the percentage. A miss from a list that mixes ads and tracking (Peter Lowe's) is classified by hand and fails the same way when it is a tracking server. The 2% is room for ad requests only | phase 1 and 2 JSON, with the table of misses |
 | A2 | Element hiding | ≥ 95% of the ad slots uBlock Origin hides are hidden | phase 3 screenshots |
-| A3 | Breakage | no more breakages caused by the filter than with uBlock Origin on `sites.json`, counted after the triage of the [October run](site-regression-2026-10.md) (6 pages flagged then, 0 breakages). A flagged page is a lead: an ad slot removed or a site variant is not a breakage | `run_sites.py` and its triage table |
-| A4 | Start-up | zero requests to listed domains before the filter is ready | phase 2 network log |
+| A3 | Breakage | no more breakages caused by the filter than with uBlock Origin on `sites.json`, counted after the triage of the [October run](site-regression-2026-10.md) (6 pages flagged then, 0 breakages). A flagged page is a lead: an ad slot removed or a site variant is not a breakage | `run_sites.py` in the mode phase 2 adds (candidate in place of uBlock Origin), and its triage table |
+| A4 | Start-up | zero requests that the ready filter blocks leave before it is ready. That covers rules by address and by type on a site that is otherwise allowed (such as `/adbanners/*$image`, which `test_engine_slice.py` checks for uBlock Origin today), not only listed domains. Probed on purpose: requests of each kind made by the first page of a cold start and of a restored session | phase 2 network log and the probe's result |
 | A5 | A real gain | at least one: page load median ≥ 5% faster on the corpus; ≥ 30 MB less memory overall; Settings shows and changes the real per-site state (closes R39) | phase 2 and 3 |
 | A6 | No loss elsewhere | no metric worse by more than its run-to-run noise, browser benchmarks included | phase 2 |
 | A7 | Security | untrusted lists are never parsed in the parent process; 24 CPU-hours of fuzzing per target without a crash; a panic cannot leave requests unfiltered; threat model and residual risks updated | phase 3 |

@@ -26,7 +26,7 @@ Not in a public issue: security vulnerabilities, which go through a [private adv
 
 ### Priority
 
-Every open issue has exactly one priority label. The order of work is P0 first, then P1, and so on; inside one level, the issue that unblocks others goes first.
+Every open issue has exactly one priority label. Among the work the maintainer has asked for, the order is P0 first, then P1, and so on; inside one level, the issue that unblocks others goes first.
 
 | Label | Meaning | Examples |
 |---|---|---|
@@ -35,7 +35,7 @@ Every open issue has exactly one priority label. The order of work is P0 first, 
 | `P2` | Soon: after the P1s | measurement and CI that prevent future regressions |
 | `P3` | Later, or waiting on a condition the issue states | long-term spikes; steps that wait on time or on another issue |
 
-An agent that opens an issue gives it a priority and one sentence of reason in the body. The maintainer changes it when they disagree, and only the maintainer moves an issue to P0, except for the issues `upstream_issue.py` opens.
+An agent that opens an issue gives it a priority and one sentence of reason in the body. That label is the agent's proposal, there so the issue can be sorted; it is not a decision to build it. What gets built next is the maintainer's to decide ([GOVERNANCE.md](../../GOVERNANCE.md)): an agent starts an issue because the maintainer asked for that work, not because the issue, its own or anyone's, says P1. The maintainer changes a priority when they disagree, and only the maintainer moves an issue to P0, except for the issues `upstream_issue.py` opens.
 
 New labels are added here first, in the same pull request that starts using them.
 

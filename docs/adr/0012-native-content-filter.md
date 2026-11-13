@@ -22,12 +22,12 @@ Brave's [adblock-rust](https://github.com/brave/adblock-rust) (MPL-2.0, the engi
 | A. **Keep uBlock Origin** + ETP Strict (today) | Full features (dynamic filtering, logger, element picker); maintained by its community against anti-adblock every week; runs outside the parent process; no engine patch | R39 stays; per-request round trip to the extension process; third-party dependency |
 | B. adblock-rust compiled to WebAssembly inside Nulavio's built-in add-on | No engine patch; Nulavio owns the per-site state (closes R39); stays in the extension process | Same round trip as A; we maintain cosmetic filtering, scriptlets and list updates; fewer features than A |
 | C. adblock-rust **native in the engine**: network blocking in the engine, cosmetic filters and scriptlets through the built-in add-on or engine actors | No round trip; blocks from the first request; Nulavio owns the state (R39) | Larger patch stack and rebase cost on every engine update; matching in the parent process; we maintain cosmetic filtering, scriptlets and list updates |
-| D. Fork uBlock Origin, or rewrite it (in Rust or otherwise) | Full control | Loses the weekly upstream fixes the day after the fork; stays GPL-3.0 as derived work; rewriting a mature blocker is out of scope for a small team |
+| D. Fork uBlock Origin, or rewrite it (in Rust or otherwise) | Full control | Upstream's weekly fixes no longer arrive by themselves: every one has to be merged by us, and the further the fork diverges the harder each merge gets; stays GPL-3.0 as derived work; rewriting a mature blocker is out of scope for a small team |
 | E. Fork adblock-rust | Full control of the engine | Not needed: it is a library with a compatible licence; we contribute upstream and fork only if Brave's direction becomes incompatible |
 
 ## Decision (proposed)
 
-1. **No fork of either project (D and E rejected).** The value of a content blocker is in its continuous upstream maintenance.
+1. **No fork of either project (D and E rejected).** The value of a content blocker is in its continuous upstream maintenance, and a fork turns that into work of ours.
 2. **A stays until the spike concludes.** Nothing ships from the spike before this ADR is accepted.
 3. **The spike measures C first and B as the fallback** for the case where C's performance gain is small but integration (R39) still justifies the change. Approval criteria A1–A10 in the [spike plan](../research/spike-native-content-filter.md#approval-criteria-for-adr-0012-to-be-accepted) decide.
 4. If C or B is accepted, uBlock Origin is no longer installed by default, and a user can still install it from AMO. The two must not filter at the same time without the user knowing. The rollout is a separate, issue-tracked plan.
