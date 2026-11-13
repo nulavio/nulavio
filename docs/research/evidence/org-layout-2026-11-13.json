@@ -1,0 +1,289 @@
+{
+  "commit": "bbe80464e7e03755e0e0d711e2eae5c620031299",
+  "commit_date": "2026-11-13T03:49:01-03:00",
+  "coupling": {
+    "android_with_product": [
+      "01f332d0f fix(vault): bind each phone envelope to the desktop that made it (audit V3) (#48)",
+      "f1638e5a1 fix(companion): first run on a real phone: scanner crash, hidden request, desktop cancel (#40)",
+      "1f473aead feat(security): integrate the security pipeline and move the engine to Firefox 159.0",
+      "1f3bda73c feat(companion): S11 part 3, Android app and browser pages for phone unlock"
+    ],
+    "commits_first_parent": 162,
+    "commits_not_dependabot": 152,
+    "direct_commits": {
+      "commits": 89,
+      "more_than_one": 29
+    },
+    "per_component": {
+      "android": {
+        "also_changes": {
+          "browser": 3,
+          "launcher": 3,
+          "process": 5,
+          "release": 3,
+          "site": 1
+        },
+        "commits": 8,
+        "policy_text_apart": {
+          "commits": 8,
+          "without_another_code_component": 1
+        },
+        "without_another_code_component": 1
+      },
+      "browser": {
+        "also_changes": {
+          "android": 3,
+          "process": 13,
+          "release": 15,
+          "site": 4
+        },
+        "commits": 79,
+        "policy_text_apart": {
+          "commits": 79,
+          "without_another_code_component": 56
+        },
+        "without_another_code_component": 54
+      },
+      "launcher": {
+        "also_changes": {
+          "android": 3,
+          "process": 4,
+          "release": 5,
+          "site": 2
+        },
+        "commits": 23,
+        "policy_text_apart": {
+          "commits": 23,
+          "without_another_code_component": 13
+        },
+        "without_another_code_component": 13
+      },
+      "process": {
+        "also_changes": {
+          "android": 5,
+          "browser": 13,
+          "launcher": 4,
+          "release": 16,
+          "site": 5
+        },
+        "commits": 41,
+        "policy_text_apart": {
+          "commits": 29,
+          "without_another_code_component": 9
+        },
+        "without_another_code_component": 15
+      },
+      "release": {
+        "also_changes": {
+          "android": 3,
+          "browser": 15,
+          "launcher": 5,
+          "process": 16,
+          "site": 8
+        },
+        "commits": 37,
+        "policy_text_apart": {
+          "commits": 37,
+          "without_another_code_component": 8
+        },
+        "without_another_code_component": 8
+      },
+      "site": {
+        "also_changes": {
+          "android": 1,
+          "browser": 4,
+          "launcher": 2,
+          "process": 5,
+          "release": 8
+        },
+        "commits": 15,
+        "policy_text_apart": {
+          "commits": 15,
+          "without_another_code_component": 4
+        },
+        "without_another_code_component": 1
+      }
+    },
+    "pull_request_commits": {
+      "commits": 63,
+      "more_than_one": 24
+    },
+    "sensitivity": {
+      "as_defined": 53,
+      "policy_text_not_process": 48,
+      "policy_text_not_process_and_browser_launcher_as_one": 39,
+      "without_process": 40
+    },
+    "site_with_product": [
+      "308031180 feat(vault): offer to connect a phone (D10 revised) (#42)",
+      "fa8fa3048 Security release 160.0-0.2: fixes for GHSA-5mmp-gx3p-m7j8 (#44)",
+      "24e25136c feat(privacy): stronger fingerprinting protection, measured and tested (#18)",
+      "6e1b34904 feat(ux): UX3E to UX7, from the Lateral layout to motion (#3)"
+    ],
+    "touching_launcher_and_android": 3,
+    "touching_more_than_one_code_component": 53,
+    "touching_product_and_android": 4,
+    "touching_product_and_site": 4
+  },
+  "history_blob_bytes_packed_and_raw": {
+    "all:media": [
+      75766536,
+      81006548
+    ],
+    "all:text": [
+      4808756,
+      36390186
+    ],
+    "android:media": [
+      43839,
+      48749
+    ],
+    "android:text": [
+      129971,
+      587467
+    ],
+    "browser:text": [
+      1207813,
+      10870965
+    ],
+    "design-media:media": [
+      71514323,
+      76579549
+    ],
+    "design-media:text": [
+      665100,
+      4866711
+    ],
+    "docs:media": [
+      6395,
+      11318
+    ],
+    "docs:text": [
+      881168,
+      6781361
+    ],
+    "launcher:text": [
+      217388,
+      1459019
+    ],
+    "process:text": [
+      257312,
+      1565092
+    ],
+    "release:text": [
+      353932,
+      1742341
+    ],
+    "screenshots:all": [
+      67744964,
+      74140557
+    ],
+    "shared:text": [
+      5666,
+      22662
+    ],
+    "site:media": [
+      1680219,
+      1717172
+    ],
+    "site:text": [
+      268184,
+      2026112
+    ],
+    "tests:media": [
+      2521760,
+      2649760
+    ],
+    "tests:text": [
+      822222,
+      6468456
+    ]
+  },
+  "tree": {
+    "android": {
+      "files": 45,
+      "media_bytes": 48749,
+      "media_files": 1,
+      "text_bytes": 254297,
+      "text_files": 44,
+      "text_lines": 5303,
+      "text_tokens_estimate": 63574
+    },
+    "browser": {
+      "files": 211,
+      "text_bytes": 1817140,
+      "text_files": 211,
+      "text_lines": 38268,
+      "text_tokens_estimate": 454285
+    },
+    "design-media": {
+      "files": 880,
+      "media_bytes": 75954131,
+      "media_files": 659,
+      "text_bytes": 3254098,
+      "text_files": 221,
+      "text_lines": 69656,
+      "text_tokens_estimate": 813524
+    },
+    "docs": {
+      "files": 67,
+      "media_bytes": 11318,
+      "media_files": 1,
+      "text_bytes": 887054,
+      "text_files": 66,
+      "text_lines": 9525,
+      "text_tokens_estimate": 221763
+    },
+    "launcher": {
+      "files": 41,
+      "text_bytes": 437874,
+      "text_files": 41,
+      "text_lines": 10455,
+      "text_tokens_estimate": 109468
+    },
+    "process": {
+      "files": 47,
+      "text_bytes": 293344,
+      "text_files": 47,
+      "text_lines": 5557,
+      "text_tokens_estimate": 73336
+    },
+    "release": {
+      "files": 62,
+      "text_bytes": 487637,
+      "text_files": 62,
+      "text_lines": 10111,
+      "text_tokens_estimate": 121909
+    },
+    "shared": {
+      "files": 7,
+      "text_bytes": 8424,
+      "text_files": 7,
+      "text_lines": 161,
+      "text_tokens_estimate": 2106
+    },
+    "site": {
+      "files": 87,
+      "media_bytes": 1755436,
+      "media_files": 60,
+      "text_bytes": 595992,
+      "text_files": 27,
+      "text_lines": 11787,
+      "text_tokens_estimate": 148998
+    },
+    "tests": {
+      "files": 140,
+      "media_bytes": 1620917,
+      "media_files": 8,
+      "text_bytes": 1759469,
+      "text_files": 132,
+      "text_lines": 32977,
+      "text_tokens_estimate": 439867
+    }
+  },
+  "tree_total": {
+    "files": 1587,
+    "media_bytes": 79390551,
+    "text_bytes": 9795329
+  }
+}
