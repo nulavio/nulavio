@@ -100,16 +100,29 @@ class DialogWatcher(threading.Thread):
             time.sleep(0.4)
 
 
-def popup_state(m, url: str, label: str, artifacts: Path) -> dict:
+POPUP_STATE = (
+    "return {text: (document.body.innerText || '').trim().slice(0, 400),"
+    " buttons: [...document.querySelectorAll('button')].filter(b => b.offsetParent !== null)"
+    ".map(b => ({id: b.id, text: b.innerText.trim()}))};"
+)
+
+
+def popup_state(m, url: str, label: str, artifacts: Path, settle: float = 30.0) -> dict:
+    """The extension's popup once it has an answer from KeePassXC.
+
+    The popup opens on "Checking status..." with neither a Connect nor a Reload button, and says what it found
+    a moment later. How long that takes depends on the machine, so the answer is waited for, not slept for;
+    a popup still checking after `settle` seconds is returned as it is, and the report shows it.
+    """
     handle = m.new_tab()
     m.switch_to(handle)
     m.navigate(url)
-    time.sleep(3)
-    state = m.execute(
-        "return {text: (document.body.innerText || '').trim().slice(0, 400),"
-        " buttons: [...document.querySelectorAll('button')].filter(b => b.offsetParent !== null)"
-        ".map(b => ({id: b.id, text: b.innerText.trim()}))};"
-    )
+
+    def answered():
+        state = m.execute(POPUP_STATE)
+        return state if state["text"] and "Checking status" not in state["text"] else None
+
+    state = harness.wait_until(answered, timeout=settle, interval=0.5) or m.execute(POPUP_STATE)
     (artifacts / f"keepassxc-popup-{label}.png").write_bytes(m.screenshot_png())
     return {"handle": handle, **state}
 
@@ -267,25 +280,47 @@ def main() -> int:
             report["diagnostics_before_association"] = diagnostics(runtime, work)
             if connect:
                 m.execute("document.getElementById(arguments[0]).click();", [connect["id"]])
-                time.sleep(6)
+                # KeePassXC asks for the key's name in a dialog of its own (the watcher answers it).
+                # The popup stays open until then, as it would in front of a person.
+                harness.wait_until(lambda: watcher.actions, timeout=30, interval=0.5)
             m.send("WebDriver:CloseWindow")
             m.switch_to(m.window_handles()[0])
-            after = popup_state(m, info["popup"], "after", args.artifacts)
+            # The association is finished when a newly opened popup says so; a login page loaded
+            # before that is not filled.
+            deadline = time.monotonic() + 60
+            while True:
+                after = popup_state(m, info["popup"], "after", args.artifacts)
+                m.send("WebDriver:CloseWindow")
+                m.switch_to(m.window_handles()[0])
+                if "is connected" in after["text"] or time.monotonic() > deadline:
+                    break
+                time.sleep(2)
             report["steps"]["popup_after_association"] = {k: after[k] for k in ("text", "buttons")}
-            m.send("WebDriver:CloseWindow")
-            m.switch_to(m.window_handles()[0])
 
             # 6. autofill on the fixture page (enable "auto-fill single entry" in the extension's own options)
             if info.get("options"):
-                m.navigate(info["options"])
-                time.sleep(2)
-                toggled = m.execute(
+                option = (
                     "const el = [...document.querySelectorAll('input[type=checkbox]')]"
                     ".find(i => /autoFillSingleEntry|autoFillSingle/i.test(i.id + ' ' + (i.name || '')));"
-                    "if (!el) return null; if (!el.checked) el.click(); return el.id;"
                 )
-                report["steps"]["autofill_single_entry_option"] = toggled
-                time.sleep(1)
+
+                def ticked():
+                    """True once the options page, opened again, shows the option ticked: it reads it from storage.
+
+                    A click made before the page has set itself up ticks the box and saves nothing, so the box
+                    is clicked only after the page had five seconds to show the stored value, and the next
+                    opening of the page is what tells whether that click was saved.
+                    """
+                    m.navigate(info["options"])
+                    if harness.wait_until(lambda: m.execute(option + "return el ? el.checked : null;"), timeout=5):
+                        return True
+                    report["steps"]["autofill_single_entry_option"] = m.execute(
+                        option + "if (!el) return null; if (!el.checked) el.click(); return el.id;"
+                    )
+                    return False
+
+                # A login page loaded before the option is saved is not filled.
+                report["steps"]["autofill_option_saved"] = bool(harness.wait_until(ticked, timeout=60, interval=1.0))
             m.navigate(login_url)
             filled = harness.wait_until(
                 lambda: (lambda v: v if v and v.get("user") else None)(
