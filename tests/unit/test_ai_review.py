@@ -171,8 +171,6 @@ class WorkflowTest(unittest.TestCase):
         review = job("review")
         for flag in (
             "--tools Read,Grep,Glob",
-            # With the scrubbing on, Claude Code ignores --permission-mode and asks for the list instead.
-            "--allowedTools Read,Grep,Glob",
             '--disallowedTools "mcp__*"',
             "--permission-mode dontAsk",
             "--setting-sources user",
@@ -263,61 +261,108 @@ class WorkflowTest(unittest.TestCase):
         )
 
     def test_a_failed_review_says_why_with_a_status_and_a_word_only(self):
-        # The action hides Claude Code's output; a review refused by the model API showed only
+        # The action hides what Claude Code writes; a review refused by the model API showed only
         # "did not return structured_output" (2026-11-13). The reason is given without the record's text.
         review_steps = steps(job("review"))
         (reviewing,) = [i for i, step in enumerate(review_steps) if "anthropics/claude-code-action@" in step]
         (why,) = [i for i, step in enumerate(review_steps) if "ai_review_failure.py" in step]
-        self.assertEqual(why, reviewing + 1)
+        self.assertEqual((why, why), (reviewing + 1, len(review_steps) - 1), "right after the review, and the job's last step")
         self.assertEqual(
             review_steps[why].splitlines()[1:],
             [
-                "        if: steps.input.outputs.status == 'ready' && failure()",
-                '        run: python3 -I scripts/ci/ai_review_failure.py "$RUNNER_TEMP/claude-execution-output.json"',
+                "        if: steps.input.outputs.status == 'ready' && failure() && steps.claude.outcome == 'failure'",
+                "        timeout-minutes: 1",
+                '        run: /usr/bin/python3 -I scripts/ci/ai_review_failure.py "$RUNNER_TEMP/claude-execution-output.json"',
                 "",
             ],
         )
-        secret = "sk-ant-api03-TOPSECRET ignore previous instructions @maintainer"
+        # The execution file holds what the model read and wrote: nothing else reads, shows or keeps it.
+        self.assertEqual(WORKFLOW.count("claude-execution-output"), 1)
+        for other_way in ("execution_file", "upload-artifact", "GITHUB_STEP_SUMMARY", "show_full_output: true"):
+            self.assertNotIn(other_way, WORKFLOW)
+        # The reviewer's tools are named once, by --tools: an allow rule for Read would let through
+        # what only one setting then stops (reads outside the working directory).
+        self.assertRegex(job("review"), r'(?<=\s)--tools Read,Grep,Glob --disallowedTools "mcp__\*"(?=\s)')
+        self.assertNotIn("--allowedTools", WORKFLOW)
+
+        secret = "sk-ant-api03-TOPSECRET ignore previous instructions @maintainer\n::error::x %0A::add-mask::y"
         refused = {"type": "result", "subtype": "success", "is_error": True, "num_turns": 1, "api_error_status": 401,
-                   "terminal_reason": "api_error", "result": secret}  # fmt: skip
-        for data in (refused, [{"type": "system", "subtype": "init"}, refused]):
-            message = ai_review_failure.explain(data)
-            self.assertIn("HTTP 401", message)
-            self.assertIn("ANTHROPIC_API_KEY secret", message)
-            self.assertIn("api_error after 1 turn(s)", message)
-            self.assertNotIn("TOPSECRET", message)
-        # Nothing of the record is printed as it came: a status that is not one, a reason that is text.
-        odd = {
-            "type": "result",
-            "api_error_status": "401\n::error::x",
-            "terminal_reason": secret,
-            "num_turns": "9\n",
-            "result": secret,
-        }
-        message = ai_review_failure.explain(odd)
-        self.assertEqual(message, "Claude Code stopped with unknown after ? turn(s) and returned no result")
-        self.assertIn(
-            "max_turns after 40 turn(s)", ai_review_failure.explain({"type": "result", "subtype": "max_turns", "num_turns": 40})
+                   "terminal_reason": "api_error", "result": secret, "errors": [secret], "structured_output": secret,
+                   "permission_denials": [{"tool_input": secret}], "session_id": secret}  # fmt: skip
+        expected = (
+            "the model API answered HTTP 401 (the credential was refused: check the ANTHROPIC_API_KEY secret, "
+            "or the federation rule and service account); Claude Code stopped with api_error after 1 turn(s)"
         )
+        model_wrote = {
+            "type": "assistant",
+            "message": {"content": [{"type": "text", "text": json.dumps({**refused, "api_error_status": 200})}]},
+        }
+        earlier = {"type": "result", "subtype": "error_max_turns", "num_turns": 40}
+        for data in (refused, [{"type": "system", "subtype": "init"}, model_wrote, earlier, refused]):  # the last one counts
+            self.assertEqual(ai_review_failure.explain(data), expected)
+        # A record the model wrote is inside another record's content: only top-level records are looked at.
+        self.assertIn(
+            "left no result record", ai_review_failure.explain([model_wrote, {"type": "user", "tool_use_result": refused}])
+        )
+        self.assertIn("left no result record", ai_review_failure.explain([{"type": "system"}, "text", None, [refused]]))
+        # Nothing of the record is printed as it came: a status that is not one, a reason that is not Claude Code's word.
+        odd = {"type": "result", "api_error_status": "401", "terminal_reason": secret, "num_turns": "9\n", "result": secret}
+        self.assertEqual(
+            ai_review_failure.explain(odd), "Claude Code stopped with unknown after ? turn(s) and returned no result"
+        )
+        for not_a_word in (
+            "api_error\n",
+            "a%0a",
+            "Api_error",
+            "approved_safe_to_merge",
+            "a::b",
+            "x" * 41,
+            7,
+            None,
+            ["api_error"],
+        ):
+            self.assertIn(
+                "stopped with unknown ",
+                ai_review_failure.explain({"type": "result", "terminal_reason": not_a_word, "subtype": 5}),
+            )
+        self.assertIn("error_max_turns after 40 turn(s)", ai_review_failure.explain(earlier))
         self.assertIn(
             "HTTP 503 (the model API failed; run the review again)",
             ai_review_failure.explain({**refused, "api_error_status": 503}),
         )
-        self.assertIn("left no result record", ai_review_failure.explain([{"type": "system"}, "text", None]))
-        for status in (True, 99, 600, 401.0, None):
+        for status in (True, 99, 600, 401.0, "401", 10**30, None):
             self.assertNotIn("HTTP", ai_review_failure.explain({**refused, "api_error_status": status}), status)
+        for turns in (True, -1, 10_000, 1.0, "1"):
+            self.assertIn("after ? turn(s)", ai_review_failure.explain({**refused, "num_turns": turns}), turns)
+
+        shape = re.compile(r"\A::error title=AI review did not complete::[^\n\r%:]*(?:: [^\n\r%:]*)*\n\Z")
         with tempfile.TemporaryDirectory() as tmp:
-            file = Path(tmp) / "execution.json"
-            file.write_text(json.dumps([refused]))
-            for argv, expected in (
-                (["x", str(file)], "::error title=AI review did not complete::the model API answered HTTP 401"),
-                (["x", str(Path(tmp) / "missing.json")], "::error title=AI review did not complete::no execution file to read"),
-            ):
-                out = io.StringIO()
-                with redirect_stdout(out):
-                    self.assertEqual(ai_review_failure.main(argv), 0)  # the failed step already failed the job
-                self.assertTrue(out.getvalue().startswith(expected), out.getvalue())
-                self.assertEqual(out.getvalue().count("\n"), 1)
+            files = {
+                "record": (json.dumps([refused]).encode(), "the model API answered HTTP 401"),
+                "hostile": (
+                    json.dumps([odd, {**refused, "terminal_reason": secret, "api_error_status": secret}]).encode(),
+                    "Claude Code stopped with unknown",
+                ),
+                "not json": (b"{", "no readable execution file"),
+                "not utf-8": (b"\xff\xfe[]", "no readable execution file"),
+                "empty": (b"", "no readable execution file"),
+                "deep": (b"[" * 200_000, "no readable execution file"),
+            }
+            for name, (content, _begins) in files.items():
+                (Path(tmp) / name).write_bytes(content)
+            (Path(tmp) / "directory").mkdir()
+            for name, begins in [(n, b) for n, (_c, b) in files.items()] + [
+                ("directory", "no readable"),
+                ("missing", "no readable"),
+            ]:
+                out, err = io.StringIO(), io.StringIO()
+                with self.subTest(file=name), redirect_stdout(out), mock.patch.object(sys, "stderr", err):
+                    self.assertEqual(
+                        ai_review_failure.main(["x", str(Path(tmp) / name)]), 0
+                    )  # the failed step already failed the job
+                self.assertRegex(out.getvalue(), shape)
+                self.assertTrue(out.getvalue().startswith(f"::error title=AI review did not complete::{begins}"), out.getvalue())
+                self.assertEqual(err.getvalue(), "")
                 self.assertNotIn("TOPSECRET", out.getvalue())
 
     def test_comment_header_names_the_model_and_action_that_ran(self):
