@@ -1,12 +1,15 @@
 <!doctype html>
-<html lang="pt-BR">
+<html lang="pt-BR" itemscope itemtype="https://schema.org/WebSite" itemid="https://nulavio.net/#website">
 <!-- nulavio.net landing: what Nulavio is at launch, the comparison and the waitlist. Values in double braces are stamped by scripts/site/build_site.py. -->
 <head>
 <meta charset="utf-8">
+<meta itemprop="name" content="Nulavio">
+<meta itemprop="url" content="https://nulavio.net/">
+<meta itemprop="inLanguage" content="pt-BR">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
-<title>Nulavio: o navegador para Linux que já vem protegido</title>
-<meta name="description" content="O Nulavio bloqueia anúncios e rastreadores na primeira abertura, cifra seus perfis no disco e não envia nada a servidores próprios: sem telemetria e sem conta. Entre na lista de espera.">
+<title>Nulavio: navegador para Linux com privacidade · Alpha</title>
+<meta name="description" content="Navegador para Linux com bloqueio de anúncios e rastreadores, perfis cifrados e sem telemetria. Conheça o Nulavio e a versão alpha para Fedora.">
 <link rel="canonical" href="https://nulavio.net/">
 <link rel="alternate" hreflang="pt-BR" href="https://nulavio.net/">
 <link rel="alternate" hreflang="en" href="https://nulavio.net/en/">
@@ -16,11 +19,17 @@
 <meta property="og:locale" content="pt_BR">
 <meta property="og:url" content="https://nulavio.net/">
 <meta property="og:title" content="Nulavio: a web é sua. Seus dados também.">
-<meta property="og:description" content="O navegador para Linux que já vem protegido: bloqueio de fábrica, perfis cifrados e nenhuma telemetria. Entre na lista de espera.">
+<meta property="og:description" content="Navegador para Linux com bloqueio de anúncios e rastreadores, perfis cifrados e sem telemetria. Conheça o Nulavio e a versão alpha para Fedora.">
 <meta property="og:image" content="https://nulavio.net/assets/og-pt.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Nulavio: a web é sua. Seus dados também.">
+<meta property="og:locale:alternate" content="en_US">
 <meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Nulavio: navegador para Linux com privacidade · Alpha">
+<meta name="twitter:description" content="Navegador para Linux com bloqueio de anúncios e rastreadores, perfis cifrados e sem telemetria. Conheça o Nulavio e a versão alpha para Fedora.">
+<meta name="twitter:image" content="https://nulavio.net/assets/og-pt.png">
+<meta name="twitter:image:alt" content="Nulavio: a web é sua. Seus dados também.">
 <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="/assets/tokens.css">
 <link rel="stylesheet" href="/assets/landing.css">
@@ -81,10 +90,15 @@
 <main id="main">
 <section class="hero" aria-labelledby="hero-h">
 <div class="wrap hero-grid">
-<div class="hero-text">
+<div class="hero-text" itemscope itemtype="https://schema.org/SoftwareApplication" itemid="https://nulavio.net/#software">
+<meta itemprop="name" content="Nulavio">
+<meta itemprop="applicationCategory" content="BrowserApplication">
+<meta itemprop="operatingSystem" content="Linux">
+<meta itemprop="inLanguage" content="pt-BR">
+<link itemprop="url" href="https://nulavio.net/">
 <p class="kicker"><span class="trail" aria-hidden="true"><i></i><i></i><i></i></span>Alpha para o Fedora · <a href="/baixar/">Baixar</a></p>
 <h1 id="hero-h"><span>A web é sua.</span> <span class="mine">Seus dados também.</span></h1>
-<p class="lead">O Nulavio é o navegador para Linux que <strong>já vem protegido</strong>: bloqueia anúncios e rastreadores na primeira abertura, cifra seus perfis no disco e não manda nada para nós. Sem telemetria, sem conta, sem servidor.</p>
+<p class="lead" itemprop="description">O Nulavio é o navegador para Linux que <strong>já vem protegido</strong>: bloqueia anúncios e rastreadores na primeira abertura, cifra seus perfis no disco e não manda nada para nós. Sem telemetria, sem conta, sem servidor.</p>
 <form class="join" action="/api/waitlist" method="post">
 <input type="hidden" name="lang" value="pt-BR">
 <p class="trap" aria-hidden="true"><label>Deixe este campo vazio <input type="text" name="hp" tabindex="-1" autocomplete="off"></label></p>
@@ -368,37 +382,37 @@
 </div>
 </div>
 </section>
-<section class="faq" id="faq" aria-labelledby="faq-h">
+<section class="faq" id="faq" aria-labelledby="faq-h" itemscope itemtype="https://schema.org/FAQPage">
 <div class="wrap faq-grid">
 <h2 id="faq-h">Perguntas frequentes</h2>
 <div class="faq-list">
-<details>
-<summary>Quando vou poder usar o Nulavio?<svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg></summary>
-<div><p>No Fedora, já: a primeira alpha saiu pelo repositório dnf assinado (<a href="/baixar/">baixar</a>). O Ubuntu vem em seguida. Entre na lista e você recebe um e-mail quando chegar a vez do seu sistema.</p></div>
+<details id="faq-availability" itemprop="mainEntity" itemscope itemtype="https://schema.org/Question">
+<summary itemprop="name">Quando vou poder usar o Nulavio?<svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg></summary>
+<div itemprop="acceptedAnswer" itemscope itemtype="https://schema.org/Answer"><p itemprop="text">No Fedora, já: a primeira alpha saiu pelo repositório dnf assinado (<a href="/baixar/">baixar</a>). O Ubuntu vem em seguida. Entre na lista e você recebe um e-mail quando chegar a vez do seu sistema.</p></div>
 </details>
-<details>
-<summary>Quanto custa?<svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg></summary>
-<div><p>Nada. O Nulavio é gratuito e de código aberto, sob a licença MPL-2.0. Não tem anúncios, não tem conta e não vende dados, porque não coleta nenhum.</p></div>
+<details id="faq-price" itemprop="mainEntity" itemscope itemtype="https://schema.org/Question">
+<summary itemprop="name">Quanto custa?<svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg></summary>
+<div itemprop="acceptedAnswer" itemscope itemtype="https://schema.org/Answer"><p itemprop="text">Nada. O Nulavio é gratuito e de código aberto, sob a licença MPL-2.0. Não tem anúncios, não tem conta e não vende dados, porque não coleta nenhum.</p></div>
 </details>
-<details>
-<summary>É um Firefox modificado?<svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg></summary>
-<div><p>O Nulavio usa o Gecko, o motor da Mozilla, compilado do código-fonte oficial do Firefox {{firefox}} com {{patches}} patches pequenos e documentados. O isolamento entre sites, a verificação de certificados e as correções de segurança são as do motor. A janela, os perfis, o Guard e o restante são do Nulavio. O Nulavio não é afiliado à Mozilla.</p></div>
+<details id="faq-engine" itemprop="mainEntity" itemscope itemtype="https://schema.org/Question">
+<summary itemprop="name">É um Firefox modificado?<svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg></summary>
+<div itemprop="acceptedAnswer" itemscope itemtype="https://schema.org/Answer"><p itemprop="text">O Nulavio usa o Gecko, o motor da Mozilla, compilado do código-fonte oficial do Firefox {{firefox}} com {{patches}} patches pequenos e documentados. O isolamento entre sites, a verificação de certificados e as correções de segurança são as do motor. A janela, os perfis, o Guard e o restante são do Nulavio. O Nulavio não é afiliado à Mozilla.</p></div>
 </details>
-<details>
-<summary>Minhas extensões funcionam?<svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg></summary>
-<div><p>Sim. As extensões de addons.mozilla.org instalam como em qualquer navegador Gecko, e o uBlock Origin já vem instalado.</p></div>
+<details id="faq-extensions" itemprop="mainEntity" itemscope itemtype="https://schema.org/Question">
+<summary itemprop="name">Minhas extensões funcionam?<svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg></summary>
+<div itemprop="acceptedAnswer" itemscope itemtype="https://schema.org/Answer"><p itemprop="text">Sim. As extensões de addons.mozilla.org instalam como em qualquer navegador Gecko, e o uBlock Origin já vem instalado.</p></div>
 </details>
-<details>
-<summary>E no Windows, no macOS ou no celular?<svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg></summary>
-<div><p>Linux primeiro. Ao entrar na lista você pode dizer qual sistema usa, e é com essas respostas que decidimos a ordem. No Android, o Nulavio Companion serve para desbloquear seus perfis; ele não é um navegador.</p></div>
+<details id="faq-platforms" itemprop="mainEntity" itemscope itemtype="https://schema.org/Question">
+<summary itemprop="name">E no Windows, no macOS ou no celular?<svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg></summary>
+<div itemprop="acceptedAnswer" itemscope itemtype="https://schema.org/Answer"><p itemprop="text">Linux primeiro. Ao entrar na lista você pode dizer qual sistema usa, e é com essas respostas que decidimos a ordem. No Android, o Nulavio Companion serve para desbloquear seus perfis; ele não é um navegador.</p></div>
 </details>
-<details>
-<summary>O Nulavio me deixa anônimo?<svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg></summary>
-<div><p>Não. Ele reduz o rastreamento, mas os sites e o seu provedor continuam vendo seu endereço IP. Se você precisa de anonimato, use o Tor Browser.</p></div>
+<details id="faq-anonymity" itemprop="mainEntity" itemscope itemtype="https://schema.org/Question">
+<summary itemprop="name">O Nulavio me deixa anônimo?<svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg></summary>
+<div itemprop="acceptedAnswer" itemscope itemtype="https://schema.org/Answer"><p itemprop="text">Não. Ele reduz o rastreamento, mas os sites e o seu provedor continuam vendo seu endereço IP. Se você precisa de anonimato, use o Tor Browser.</p></div>
 </details>
-<details>
-<summary>O que vocês fazem com o meu e-mail?<svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg></summary>
-<div><p>Guardamos o e-mail, o idioma, o sistema que você marcar, a data e uma impressão digital do seu link privado. Usamos o e-mail para um único aviso: o de que o Nulavio está disponível para você. Sem newsletter e sem repasse a ninguém. Para sair, use o link privado que você recebe ao se inscrever (<a href="/lista/#leave">como sair</a>).</p></div>
+<details id="faq-email" itemprop="mainEntity" itemscope itemtype="https://schema.org/Question">
+<summary itemprop="name">O que vocês fazem com o meu e-mail?<svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg></summary>
+<div itemprop="acceptedAnswer" itemscope itemtype="https://schema.org/Answer"><p itemprop="text">Guardamos o e-mail, o idioma, o sistema que você marcar, a data e uma impressão digital do seu link privado. Usamos o e-mail para um único aviso: o de que o Nulavio está disponível para você. Sem newsletter e sem repasse a ninguém. Para sair, use o link privado que você recebe ao se inscrever (<a href="/lista/#leave">como sair</a>).</p></div>
 </details>
 </div>
 </div>
