@@ -123,7 +123,7 @@ When a comparison row or a claim of the landing changes, change both languages (
 
 ## Release automation
 
-Releases use `<Firefox version>-<Nulavio revision>`, not SemVer: `feat:` does not select the engine version or publish a package. `release_manifest.py next-release` reserves revisions from both `packaging/release.json` and existing tags. Squash PR titles must be Conventional Commits; the required CI checks validate them, including after title edits.
+Releases use `<Firefox version>-<Nulavio revision>`, not SemVer: `feat:` does not select the engine version or publish a package. `release_manifest.py next-release` reserves revisions from both `packaging/release.json` and existing tags. Squash PR titles must be Conventional Commits. The existing required CI checks validate them when code is checked; the separate `pr-title` workflow also validates title edits without restarting builds when a bot edits the description. The maintainer must add its `Conventional Commit title` check to main's required checks (#195) to enforce edits at merge time.
 
 The manual `release` workflow builds and tests on `main`, refusing to overlap an existing unpublished draft. Its summary and rehearsal artifact include notes from the exact build's public first-parent history, grouped by commit type, with breaking changes marked by `!`, commit links and a comparison with the preceding release. Nonconventional historical subjects remain under Other changes. Commit bodies are not copied. Installation, signing fingerprint and provenance instructions are added to the draft. The maintainer still approves signing in the `release` environment and reviews and publishes the GitHub draft.
 
