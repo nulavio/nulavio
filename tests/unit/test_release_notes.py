@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import subprocess
@@ -38,9 +39,9 @@ class ReleaseNotesTest(unittest.TestCase):
             args += ["-m", body]
         self.git(*args)
 
-    def notes(self, tag="v160.0-0.2", commit=None):
+    def notes(self, tag="v160.0-0.2", commit=None, debs=()):
         info = self.repo / "release.json"
-        info.write_text(json.dumps({"tag": tag, "firefox": "160.0", "commit": commit or self.target}))
+        info.write_text(json.dumps({"tag": tag, "firefox": "160.0", "commit": commit or self.target, "debs": list(debs)}))
         return subprocess.run(
             [
                 sys.executable,
@@ -78,6 +79,20 @@ class ReleaseNotesTest(unittest.TestCase):
             self.assertIn(text, result.stdout)
         for text in ("old feature", "future change", "PRIVATE BODY"):
             self.assertNotIn(text, result.stdout)
+
+    def test_ubuntu_is_named_when_the_release_has_its_deb(self):
+        self.assertIn("Install or upgrade on Fedora: https://nulavio.net/en/download/", self.notes().stdout)
+        (self.repo / "site" / "apt").mkdir(parents=True)
+        (self.repo / "site" / "apt" / "nulavio.sources").write_text("Types: deb\n")
+        self.git("add", "site")
+        self.commit("feat: the APT source file")
+        commit = self.git("rev-parse", "HEAD").strip()
+        with_deb = self.notes(commit=commit, debs=["packages/nulavio_160.0-0.2_amd64.deb"])
+        self.assertEqual(with_deb.returncode, 0, with_deb.stderr)
+        self.assertIn("Install or upgrade on Fedora or Ubuntu: https://nulavio.net/en/download/", with_deb.stdout)
+        # The hash the download page shows, in a second place outside the site.
+        digest = hashlib.sha256(b"Types: deb\n").hexdigest()
+        self.assertIn(f"`nulavio.sources` from the download page has the SHA-256 `{digest}`", with_deb.stdout)
 
     def test_initial_release_and_nonconventional_history_remain_visible(self):
         self.git("tag", "-d", "v160.0-0.1")

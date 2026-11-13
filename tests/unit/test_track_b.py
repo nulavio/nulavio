@@ -659,6 +659,23 @@ class PackagingTest(unittest.TestCase):
         self.assertIn("tampered", test)
         self.assertIn("test_kms_signing.sh", (ROOT / "scripts" / "release" / "rehearse_release.sh").read_text(encoding="utf-8"))
 
+    def test_the_apt_repository_is_signed_through_the_same_kms_signer_and_checked_by_apt(self):
+        sign = (ROOT / "scripts" / "release" / "sign_apt_repo.sh").read_text(encoding="utf-8")
+        # Signing happens on the host, through openpgp_sign.py and the published key; nothing secret
+        # enters the container that builds the indexes.
+        self.assertIn(
+            'python3 -I "$release/openpgp_sign.py" --public-key "$tmp/key.asc" --kms-key-id "$NULAVIO_KMS_KEY_ID"', sign
+        )
+        container = sign[sign.index("podman run") : sign.index("dists=$out/dists/$suite")]
+        self.assertNotIn("AWS_", container)
+        self.assertNotIn("GNUPGHOME", container)
+        self.assertNotIn("-e ", container)
+        test = (ROOT / "scripts" / "release" / "test_apt_repo.sh").read_text(encoding="utf-8")
+        for refused in ("a changed $name was accepted", "signed by another key was accepted"):
+            self.assertIn(refused, test)
+        self.assertIn("for name in index package inrelease; do", test)
+        self.assertIn("test_apt_repo.sh", (ROOT / "scripts" / "release" / "rehearse_release.sh").read_text(encoding="utf-8"))
+
 
 class UpstreamWatchTest(unittest.TestCase):
     """Update SLA: the watcher's verdicts from Mozilla's release history."""

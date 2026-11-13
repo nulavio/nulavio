@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import html
 import json
 import re
@@ -92,7 +93,16 @@ def notes(info: dict, repo: Path, repository: str, fingerprint: str, run_url: st
     if not re.fullmatch(rf"https://github\.com/{re.escape(repository)}/actions/runs/[0-9]+", run_url):
         raise ValueError("invalid provenance run URL")
     body = changes(repo, info["commit"], info["tag"], repository)
-    install = "Install or upgrade on Fedora: https://nulavio.net/en/download/"
+    systems = "Fedora or Ubuntu" if info.get("debs") else "Fedora"
+    install = f"Install or upgrade on {systems}: https://nulavio.net/en/download/"
+    if info.get("debs"):
+        # The download page asks Ubuntu users to compare the source file with this hash: a second place
+        # to read it, outside the site.
+        # The file as of the release's commit, which is what the site served when it was published.
+        shown = subprocess.run(["git", "-C", str(repo), "show", f"{info['commit']}:site/apt/nulavio.sources"],
+                               capture_output=True, check=True).stdout  # fmt: skip
+        sources = hashlib.sha256(shown).hexdigest()
+        install += f"\n\nOn Ubuntu, `nulavio.sources` from the download page has the SHA-256 `{sources}`."
     if flatpak:
         if flatpak != f"nulavio-{info['tag'][1:]}.x86_64.flatpak":
             raise ValueError("unexpected Flatpak bundle name")

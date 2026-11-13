@@ -10,6 +10,10 @@ already have.
 
     openpgp_sign.py --public-key nulavio-packages.asc --kms-key-id <arn> [--armor] -o FILE.sig FILE
 
+A cleartext-signed copy of a text file, like `gpg --clearsign` (an APT repository's InRelease):
+
+    openpgp_sign.py --public-key nulavio-packages.asc --kms-key-id <arn> --clearsign -o InRelease Release
+
 As rpmsign's signer (it calls the command with the output and input files):
 
     rpmsign --define "_openpgp_sign kms" --define "_openpgp_sign_id <fingerprint>" \\
@@ -24,7 +28,8 @@ Before signing, the RSA modulus that KMS reports is compared with the one in
 verify. The `aws` command (AWS CLI v2) must be on PATH with credentials for KMS
 Sign and GetPublicKey on that key; nothing else outside the standard library is used.
 
-Format: RFC 9580 (and RFC 4880) version 4 signatures; RSA PKCS#1 v1.5 with SHA-256.
+Format: RFC 9580 (and RFC 4880) version 4 signatures; RSA PKCS#1 v1.5 with SHA-256; the
+cleartext signature framework of RFC 9580, section 7, for --clearsign.
 """
 
 from __future__ import annotations
@@ -48,6 +53,7 @@ SIGNATURE_TAG = 2
 RSA = 1
 SHA256 = 8
 BINARY_DOCUMENT = 0x00
+CANONICAL_TEXT = 0x01
 SUBPACKET_CREATION_TIME = 2
 SUBPACKET_ISSUER_KEY_ID = 16
 SUBPACKET_ISSUER_FINGERPRINT = 33
@@ -216,13 +222,18 @@ def primary_key(data: bytes) -> PublicKey:
 # --- signatures --------------------------------------------------------------
 
 
-def signature_packet(data: bytes, key: PublicKey, signer: Signer, created: int | None = None) -> bytes:
-    """A detached version 4 signature packet over `data` (binary document, SHA-256)."""
+def signature_packet(
+    data: bytes, key: PublicKey, signer: Signer, created: int | None = None, kind: int = BINARY_DOCUMENT
+) -> bytes:
+    """A detached version 4 signature packet over `data` (SHA-256): a binary document, or with
+    kind=CANONICAL_TEXT over text already in canonical form (see cleartext_signed)."""
+    if kind not in (BINARY_DOCUMENT, CANONICAL_TEXT):
+        raise SignError(f"unsupported signature type {kind}")
     created = int(time.time()) if created is None else created
     hashed_subpackets = subpacket(SUBPACKET_CREATION_TIME, created.to_bytes(4, "big")) + subpacket(
         SUBPACKET_ISSUER_FINGERPRINT, b"\x04" + key.fingerprint
     )
-    hashed_part = bytes([4, BINARY_DOCUMENT, RSA, SHA256]) + len(hashed_subpackets).to_bytes(2, "big") + hashed_subpackets
+    hashed_part = bytes([4, kind, RSA, SHA256]) + len(hashed_subpackets).to_bytes(2, "big") + hashed_subpackets
     trailer = b"\x04\xff" + len(hashed_part).to_bytes(4, "big")
     digest = hashlib.sha256(data + hashed_part + trailer).digest()
     raw = signer(digest)
@@ -235,6 +246,30 @@ def signature_packet(data: bytes, key: PublicKey, signer: Signer, created: int |
     unhashed = subpacket(SUBPACKET_ISSUER_KEY_ID, key.key_id)
     body = hashed_part + len(unhashed).to_bytes(2, "big") + unhashed + digest[:2] + mpi(value)
     return new_packet(SIGNATURE_TAG, body)
+
+
+def cleartext_signed(text: bytes, key: PublicKey, signer: Signer, created: int | None = None) -> bytes:
+    """`text` in the cleartext signature framework (RFC 9580, 7), as `gpg --clearsign` writes it.
+
+    The signature covers the lines joined with CR LF, without the line ending that precedes the
+    signature block (so the file's last newline is not signed). Lines are dash-escaped where they
+    start with "-". A line with trailing spaces or tabs, a CR or text that is not UTF-8 is refused
+    rather than normalised: the framework would sign it without them, and what a reader then sees
+    would not be exactly what was signed."""
+    try:
+        decoded = text.decode("utf-8")
+    except UnicodeDecodeError:
+        raise SignError("the text to clearsign is not UTF-8") from None
+    if not decoded or "\r" in decoded:
+        raise SignError("the text to clearsign is empty or has CR characters")
+    lines = decoded.split("\n")
+    if decoded.endswith("\n"):
+        lines.pop()  # the newline before the signature block belongs to the framework
+    if any(line != line.rstrip(" \t") for line in lines):
+        raise SignError("a line of the text to clearsign ends in a space or a tab")
+    packet = signature_packet("\r\n".join(lines).encode("utf-8"), key, signer, created, kind=CANONICAL_TEXT)
+    escaped = "".join(("- " + line if line.startswith("-") else line) + "\n" for line in lines)
+    return ("-----BEGIN PGP SIGNED MESSAGE-----\nHash: SHA256\n\n" + escaped).encode("utf-8") + armor(packet)
 
 
 SHA256_DIGEST_INFO = bytes.fromhex("3031300d060960864801650304020105000420")
@@ -314,14 +349,18 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--public-key", required=True, type=Path, help="the release key's certificate (armored or binary)")
     parser.add_argument("--kms-key-id", required=True, help="KMS key ID, ARN or alias holding the same key")
     parser.add_argument("--armor", "-a", action="store_true", help="ASCII-armored output, like gpg --armor")
+    parser.add_argument("--clearsign", action="store_true", help="the text with its signature, like gpg --clearsign")
     parser.add_argument("--output", "-o", required=True, help="signature file, or - for standard output")
     parser.add_argument("input", help="file to sign, or - for standard input (rpm 6 passes the header this way)")
     args = parser.parse_args(argv)
     try:
         key = primary_key(args.public_key.read_bytes())
         data = sys.stdin.buffer.read() if args.input == "-" else Path(args.input).read_bytes()
-        packet = signature_packet(data, key, kms_signer(args.kms_key_id, key))
-        out = armor(packet) if args.armor else packet
+        if args.clearsign:
+            out = cleartext_signed(data, key, kms_signer(args.kms_key_id, key))
+        else:
+            packet = signature_packet(data, key, kms_signer(args.kms_key_id, key))
+            out = armor(packet) if args.armor else packet
         if args.output == "-":
             sys.stdout.buffer.write(out)
             sys.stdout.buffer.flush()

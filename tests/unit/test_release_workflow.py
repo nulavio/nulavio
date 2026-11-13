@@ -81,6 +81,58 @@ class UploadRepoTest(unittest.TestCase):
         self.assertFalse(self.log.exists())
 
 
+@unittest.skipUnless(shutil.which("bash"), "bash not available")
+class UploadAptRepoTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.tmp)
+        self.repo = self.tmp / "apt"
+        for name in ("dists/stable/Release", "dists/stable/Release.gpg", "dists/stable/InRelease",
+                     "dists/stable/main/binary-amd64/Packages", "dists/stable/main/binary-amd64/by-hash/SHA256/abc",
+                     "pool/main/n/nulavio/nulavio_160.0-0.4_amd64.deb"):  # fmt: skip
+            (self.repo / name).parent.mkdir(parents=True, exist_ok=True)
+            (self.repo / name).write_text("x")
+        bin_dir = self.tmp / "bin"
+        bin_dir.mkdir()
+        (bin_dir / "aws").write_text(FAKE_AWS)
+        (bin_dir / "aws").chmod(stat.S_IRWXU)
+        self.log = self.tmp / "aws.log"
+        self.env = {"PATH": f"{bin_dir}:{os.environ['PATH']}", "FAKE_AWS_LOG": str(self.log),
+                    "R2_ACCESS_KEY_ID": "r2-key", "R2_SECRET_ACCESS_KEY": "r2-secret", "R2_ACCOUNT": "acct"}  # fmt: skip
+
+    def run_upload(self, path=None):
+        return subprocess.run(["bash", str(RELEASE / "upload_repo.sh"), str(path or self.repo)], env=self.env,
+                              capture_output=True, text=True)  # fmt: skip
+
+    def test_pool_and_indexes_first_then_release_then_inrelease(self):
+        out = self.run_upload()
+        self.assertEqual(out.returncode, 0, out.stderr)
+        calls = self.log.read_text().splitlines()
+        self.assertEqual(len(calls), 4)
+        self.assertIn("sync", calls[0])
+        self.assertIn("s3://nulavio-packages/apt/", calls[0])
+        self.assertIn(
+            "--exclude dists/stable/Release --exclude dists/stable/Release.gpg --exclude dists/stable/InRelease", calls[0]
+        )
+        self.assertIn("dists/stable/Release s3://nulavio-packages/apt/dists/stable/Release ", calls[1])
+        self.assertIn("s3://nulavio-packages/apt/dists/stable/Release.gpg", calls[2])
+        self.assertIn("s3://nulavio-packages/apt/dists/stable/InRelease", calls[3])  # apt reads it first: last up
+        for call in calls:
+            self.assertNotIn("--delete", call)
+
+    def test_refuses_an_unsigned_repository_or_another_directory(self):
+        (self.repo / "dists" / "stable" / "InRelease").unlink()
+        out = self.run_upload()
+        self.assertEqual(out.returncode, 2)
+        self.assertIn("not a signed repository", out.stderr)
+        other = self.tmp / "debs"
+        other.mkdir()
+        out = self.run_upload(other)
+        self.assertEqual(out.returncode, 2)
+        self.assertIn("neither a staged rpm/ nor apt/", out.stderr)
+        self.assertFalse(self.log.exists())
+
+
 class ReleaseWorkflowTest(unittest.TestCase):
     def setUp(self):
         self.text = WORKFLOW.read_text(encoding="utf-8")
@@ -119,6 +171,29 @@ class ReleaseWorkflowTest(unittest.TestCase):
         self.assertLess(verify, self.publish.index('scripts/release/publish_release.sh "'))
         self.assertIn("--source-ref refs/heads/main", self.publish)
         self.assertLess(self.publish.index("upload_repo.sh"), self.publish.index("check_published.sh"))
+        self.assertIn('scripts/release/upload_repo.sh "$RUNNER_TEMP/publish/apt"', self.publish)
+        check = (RELEASE / "check_published.sh").read_text(encoding="utf-8")
+        self.assertIn('check "APT ($sources_file)" apt_install', check)
+        self.assertIn("APT::Update::Error-Mode=any", check)
+        # The published source file is the reviewed one, whole, and that copy is what apt uses.
+        self.assertIn('cmp -s "$sources" "$repo/site/apt/nulavio.sources"', check)
+        self.assertIn('-v "$sources:/nulavio.sources:ro"', check)
+        self.assertNotIn('curl -fsSL --retry 3 "$SOURCES_FILE"', check)
+
+    def test_the_published_version_must_be_the_released_one(self):
+        # rpm adds the distribution after the release; a .deb's version has nothing after it.
+        check = (RELEASE / "check_published.sh").read_text(encoding="utf-8")
+        start = check.index("matches() {")
+        matches = check[start : check.index("\n}\n", start) + 3]
+        cases = {
+            ("dnf (x)", "160.0-0.4.fc44"): True, ("dnf (x)", "160.0-0.4"): True, ("dnf (x)", "160.0-0.4.1"): False,
+            ("dnf (x)", "160.0-0.41.fc44"): False, ("APT (x)", "160.0-0.4"): True, ("APT (x)", "160.0-0.4.1"): False,
+            ("APT (x)", "160.0-0.4.fc44"): False, ("APT (x)", "apt install failed"): False,
+        }  # fmt: skip
+        for (name, got), expected in cases.items():
+            script = matches + '\nexpected=160.0-0.4\nmatches "$1" "$2"'
+            run = subprocess.run(["bash", "-c", script, "-", name, got], capture_output=True, text=True)
+            self.assertEqual(run.returncode == 0, expected, (name, got))
         self.assertIn("gh release create", self.publish)
         self.assertIn("--draft", self.publish)
         self.assertIn("NULAVIO_BUILD_PROFILE: runner", self.build)
