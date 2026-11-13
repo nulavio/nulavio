@@ -19,6 +19,7 @@ Not in a public issue: security vulnerabilities, which go through a private advi
 |---|---|
 | `bug`, `enhancement`, `documentation`, `accessibility` | Kind of work |
 | `spike` | A time-boxed study with approval criteria; it ends with a decision, usually an ADR |
+| `content` | An idea for a post, a video or a talk with nothing to hide ([private work](private-work.md) says what is kept out of public) |
 | `needs-decision` | Blocked on a choice by the maintainer |
 | `upstream-firefox`, `target-24h` | Engine updates under the [update policy](../architecture/update-policy.md), opened by `scripts/release/upstream_issue.py` |
 | `good first issue`, `help wanted` | Open to outside contributors |
@@ -91,4 +92,4 @@ An agent moves an issue to `In Progress` when it starts the work and leaves `Don
 ## Not set up yet (maintainer items)
 
 - Milestones per release, and the organization's issue types (Bug, Feature, Task) in place of the kind labels.
-- How the organization's repositories are laid out for the long term: proposed in [ADR 0013](../adr/0013-repository-layout.md) (one repository, organized by area), waiting for the maintainer's decision in #97.
+- From [ADR 0013](../adr/0013-repository-layout.md) (one repository, organized by area; accepted on 2026-11-13): the site's deploy token in an environment limited to `main` (#182), which needs a change in the repository's settings.
