@@ -26,32 +26,58 @@
 <main id="main">
 <section id="summary" aria-labelledby="summary-h">
 <div class="summary-text">
+<!--apt:off-->
 <p class="pill"><strong>Alpha</strong> · version <span class="mono">{{release_version}}</span> · Fedora, x86_64</p>
+<!--/apt:off-->
+<!--apt:on-->
+<p class="pill"><strong>Alpha</strong> · version <span class="mono">{{release_version}}</span> · Fedora and Ubuntu, x86_64</p>
+<!--/apt:on-->
 <h1 id="summary-h">Download Nulavio</h1>
 <p class="lead">This is the first public version. It passes the project's automated tests, but it can still have defects: keep another browser installed.</p>
 </div>
 <dl class="facts" aria-label="Release facts">
 <div><dt>Version</dt><dd class="mono">{{release_version}}</dd></div>
+<!--apt:off-->
 <div><dt>System</dt><dd>Fedora 44 or later, x86_64</dd></div>
 <div><dt>Ubuntu</dt><dd>Not yet: there is no APT repository</dd></div>
 <div><dt>Updates</dt><dd>Through dnf, like the rest of the system</dd></div>
+<!--/apt:off-->
+<!--apt:on-->
+<div><dt>System</dt><dd>Fedora 44 or later, Ubuntu 24.04 or later; x86_64</dd></div>
+<div><dt>Updates</dt><dd>Through dnf or apt, like the rest of the system</dd></div>
+<!--/apt:on-->
 </dl>
 </section>
 
 <section id="install" aria-labelledby="install-h">
 <h2 id="install-h">Install</h2>
+<!--apt:on-->
+<h3 id="install-fedora-h">Fedora</h3>
+<!--/apt:on-->
 <p class="prose">Add the Nulavio repository and install the package:</p>
 <div class="pre-scroll" role="region" aria-label="Install commands" tabindex="0"><pre translate="no"><code>sudo dnf config-manager addrepo --from-repofile={{repo_file}}
 sudo dnf install nulavio</code></pre></div>
 <p class="prose">On the first install, dnf shows the repository key and asks whether to import it. Accept only if the fingerprint is this one:</p>
 <p class="prose"><code class="mono" translate="no">{{key_fpr}}</code></p>
 <p class="prose">The same public key is at <code translate="no">{{key_url}}</code>. The repository has signature checks on for both the packages and the metadata.</p>
-<p class="limit"><strong>Limit:</strong> The fingerprint only protects you if you check it through a different path from the download, for example this page opened on another device.</p>
+<!--apt:on-->
+<h3 id="install-ubuntu-h">Ubuntu</h3>
+<p class="prose">Download the Nulavio repository file, check it, install it and install the package:</p>
+<div class="pre-scroll" role="region" aria-label="Install commands for Ubuntu" tabindex="0"><pre translate="no"><code>curl -fsSLO --proto '=https' {{sources_file}}
+sha256sum nulavio.sources
+sudo install -m 0644 nulavio.sources /etc/apt/sources.list.d/
+sudo apt update
+sudo apt install nulavio</code></pre></div>
+<p class="prose">The second command shows the file's SHA-256: go on only if it is this one, and delete the file if it is not:</p>
+<p class="prose"><code class="mono" translate="no">{{sources_sha256}}</code></p>
+<p class="prose">The file carries the public key above, and apt accepts only what that key signed. The package brings an AppArmor profile that lets the browser isolate its tabs, as Ubuntu does for Firefox.</p>
+<!--/apt:on-->
+<p class="limit"><strong>Limit:</strong> The fingerprint<!--apt:on--> and the SHA-256<!--/apt:on--> only protect<!--apt:off-->s<!--/apt:off--> you if you check <!--apt:off-->it<!--/apt:off--><!--apt:on-->them<!--/apt:on--> through a different path from the download, for example this page opened on another device<!--apt:on--> or the release notes on GitHub, which carry both<!--/apt:on-->.</p>
 </section>
 
 <section id="updates" aria-labelledby="updates-h">
 <h2 id="updates-h">Updates</h2>
-<p class="prose">New versions arrive through <code translate="no">sudo dnf upgrade</code> or the system's software centre. When Mozilla publishes a Firefox security fix, the project's goal is to publish the matching Nulavio within 72 hours.</p>
+<p class="prose">New versions arrive through <code translate="no">sudo dnf upgrade</code><!--apt:on-->, <code translate="no">sudo apt upgrade</code><!--/apt:on--> or the system's software centre. When Mozilla publishes a Firefox security fix, the project's goal is to publish the matching Nulavio within 72 hours.</p>
 <p class="limit"><strong>Limit:</strong> In that window, the installed Nulavio does not have the fix yet.</p>
 </section>
 
@@ -69,14 +95,24 @@ sha256sum --check --ignore-missing SHA256SUMS</code></pre></div>
 <ul class="limits-list">
 <li class="limit"><strong>Limit:</strong> It does not check download reputation with Google: Google keeps that check for partners. Instead, downloaded installers and scripts open a warning, are never run directly, and are saved without execute permission.</li>
 <li class="limit"><strong>Limit:</strong> Unlocking profiles with your phone or a FIDO2 security key is not available yet. Protected profiles open with a password, a recovery code or the system keyring.</li>
+<!--apt:off-->
 <li class="limit"><strong>Limit:</strong> Fedora only for now.</li>
+<!--/apt:off-->
 </ul>
 </section>
 
 <section id="remove" aria-labelledby="remove-h">
 <h2 id="remove-h">Remove</h2>
+<!--apt:on-->
+<p class="prose">On Fedora:</p>
+<!--/apt:on-->
 <div class="pre-scroll" role="region" aria-label="Removal commands" tabindex="0"><pre translate="no"><code>sudo dnf remove nulavio
 sudo rm /etc/yum.repos.d/nulavio.repo</code></pre></div>
+<!--apt:on-->
+<p class="prose">On Ubuntu:</p>
+<div class="pre-scroll" role="region" aria-label="Removal commands for Ubuntu" tabindex="0"><pre translate="no"><code>sudo apt remove nulavio
+sudo rm /etc/apt/sources.list.d/nulavio.sources</code></pre></div>
+<!--/apt:on-->
 <p class="prose">Your profiles live in your home folder and are not deleted when you remove the program.</p>
 </section>
 

@@ -27,6 +27,9 @@ CHECKED = {
     "en/": "en/index.html",
     "lista/": "lista/index.html",  # a page next to /api/* and /lista/link/: static files must not go through site/_worker.js
     ".well-known/security.txt": ".well-known/security.txt",
+    # The files that turn the package managers' signature checks on: served as reviewed, byte for byte.
+    "rpm/nulavio.repo": "rpm/nulavio.repo",
+    "apt/nulavio.sources": "apt/nulavio.sources",
 }
 USER_AGENT = "nulavio-site-verify (+https://nulavio.net/)"
 

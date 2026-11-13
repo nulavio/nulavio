@@ -8,12 +8,14 @@
 ``verify`` refuses a rehearsal that is not fit to publish: not finished, built
 from a tree with uncommitted or untracked changes, an engine pin that differs
 from the source it built, a listed file missing or with another SHA-256, a base
-commit that is not on ``--on`` (default origin/main). On success it prints JSON:
-the release tag (``v<version>-<release>`` from the RPM), the RPMs, the SBOMs.
+commit that is not on ``--on`` (default origin/main), a .deb whose version is not
+the RPM's. On success it prints JSON: the release tag (``v<version>-<release>`` from
+the RPM), the RPMs, the .debs, the portable archives, the SBOMs.
 
 ``packages`` refuses a packages directory holding any Nulavio RPM or .deb that
-the manifest does not list with the same SHA-256. sign_repo.sh runs it when
-NULAVIO_RELEASE_MANIFEST is set, so only what the rehearsal checked is signed.
+the manifest does not list with the same SHA-256. sign_repo.sh and sign_apt_repo.sh
+run it when NULAVIO_RELEASE_MANIFEST is set, so only what the rehearsal checked is
+signed.
 """
 
 from __future__ import annotations
@@ -31,6 +33,7 @@ EMPTY_DIFF = hashlib.sha256(b"").hexdigest()
 # The portable archive of the same tree (GitHub release asset; the Flatpak is built from it).
 ARCHIVE_SUFFIX = ".linux-x86_64.tar.xz"
 RPM = re.compile(r"^nulavio-(?P<version>\d+(?:\.\d+)+)-(?P<release>[0-9.]+)\.[a-z0-9_]+\.x86_64\.rpm$")
+DEB = re.compile(r"^nulavio_(?P<version>\d+(?:\.\d+)+)-(?P<release>[0-9.]+)_amd64\.deb$")
 RELEASE_TAG = re.compile(r"v([0-9]+(?:\.[0-9]+)+)-([0-9]+(?:\.[0-9]+)*)")
 
 
@@ -83,6 +86,13 @@ def check_base(commit: str, repo: Path, ref: str) -> None:
     result = subprocess.run(["git", "-C", str(repo), "merge-base", "--is-ancestor", commit, ref], capture_output=True)
     if result.returncode != 0:
         raise ManifestError(f"base commit {commit[:12]} is not on {ref}: publish only from reviewed history")
+    # The release notes give the SHA-256 of the APT source file at the base commit, and the site
+    # serves it from the reviewed branch: a release whose base and branch disagree on it waits for
+    # a new build, rather than telling Ubuntu users to reject the file they are served.
+    sources = "site/apt/nulavio.sources"
+    at = [subprocess.run(["git", "-C", str(repo), "show", f"{rev}:{sources}"], capture_output=True) for rev in (commit, ref)]
+    if at[0].returncode == 0 and (at[1].returncode != 0 or at[0].stdout != at[1].stdout):
+        raise ManifestError(f"{sources} changed on {ref} since the base commit {commit[:12]}: build the release again")
 
 
 def tag(manifest: dict) -> tuple[str, list[str]]:
@@ -160,18 +170,32 @@ def next_release(firefox: str, repo: Path) -> str:
     return ".".join(map(str, parts))
 
 
+def debs(manifest: dict, release_tag: str) -> list[str]:
+    """The .deb packages, which carry the RPM's version and release (one engine build, two formats)."""
+    found = [e["file"] for e in manifest["packages"] if e["file"].endswith(".deb")]
+    for name in found:
+        match = DEB.match(Path(name).name)
+        if not match:
+            raise ManifestError(f"{name}: not a Nulavio .deb file name")
+        if f"v{match['version']}-{match['release']}" != release_tag:
+            raise ManifestError(f"{name}: not the version of the RPM ({release_tag})")
+    return found
+
+
 def verify(out: Path, repo: Path, ref: str) -> dict:
     manifest = load(out / "manifest.json")
     check_tree(manifest)
     check_files(manifest, out)
     check_base(manifest["nulavio_base_commit"], repo, ref)
     release_tag, rpms = tag(manifest)
+    deb_files = debs(manifest, release_tag)
     check_newer(release_tag, repo)
     return {
         "tag": release_tag,
         "firefox": manifest["firefox"],
         "commit": manifest["nulavio_base_commit"],
         "rpms": rpms,
+        "debs": deb_files,
         "archives": [e["file"] for e in manifest["packages"] if e["file"].endswith(ARCHIVE_SUFFIX)],
         "sboms": [e["file"] for e in manifest["sboms"]],
     }

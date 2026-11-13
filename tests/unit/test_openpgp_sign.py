@@ -162,6 +162,49 @@ class OpenPgpSignTest(unittest.TestCase):
         self.assertEqual(ops.dearmor(ops.armor(packet)), packet)
         self.assertEqual(ops.dearmor(packet), packet)
 
+    def test_cleartext_signature_verifies_with_gpg_and_gpgv(self):
+        # An APT repository's InRelease: what apt checks before it trusts any index.
+        text = b"Origin: Nulavio\nSuite: stable\n-Dash: escaped\nSHA256:\n abc 12 main/binary-amd64/Packages\n"
+        signed = ops.cleartext_signed(text, self.key, self.local_signer)
+        self.assertTrue(signed.startswith(b"-----BEGIN PGP SIGNED MESSAGE-----\nHash: SHA256\n\nOrigin: Nulavio\n"))
+        # A canonical-text signature (0x01): gpgv also accepts a binary one here, apt's sqv refuses it.
+        packet = ops.dearmor(signed[signed.index(b"-----BEGIN PGP SIGNATURE-----") :])
+        ((tag, body),) = list(ops.packets(packet))
+        self.assertEqual((tag, body[0], body[1]), (ops.SIGNATURE_TAG, 4, ops.CANONICAL_TEXT))
+        self.assertIn(b"\n- -Dash: escaped\n", signed)
+        path = self.tmp / "InRelease"
+        path.write_bytes(signed)
+        result = self.gpg(
+            "--status-fd", "1", "--output", str(self.tmp / "InRelease.out"), "--yes", "--verify", str(path), check=False
+        )
+        self.assertEqual(result.returncode, 0, result.stderr.decode())
+        self.assertIn(f"VALIDSIG {self.key.hex}", result.stdout.decode())
+        # What gpg hands back is the text as given, last newline included.
+        self.gpg("--output", str(self.tmp / "InRelease.txt"), "--yes", "--decrypt", str(path))
+        self.assertEqual((self.tmp / "InRelease.txt").read_bytes(), text)
+        if shutil.which("gpgv"):  # what apt calls (or sqv, which reads the same format)
+            keyring = self.tmp / "keyring.gpg"
+            keyring.write_bytes(ops.dearmor(self.cert))
+            gpgv = subprocess.run(["gpgv", "--keyring", str(keyring), str(path)], capture_output=True, check=False)
+            self.assertEqual(gpgv.returncode, 0, gpgv.stderr.decode())
+
+    def test_cleartext_signature_covers_every_line(self):
+        signed = ops.cleartext_signed(b"Suite: stable\nCodename: stable\n", self.key, self.local_signer)
+        for tampered in (
+            signed.replace(b"Suite: stable", b"Suite: stablX"),
+            signed.replace(b"Codename: stable\n", b"Codename: stable\nValid-Until: never\n"),
+            signed.replace(b"Codename: stable\n", b""),
+        ):
+            path = self.tmp / "tampered"
+            path.write_bytes(tampered)
+            result = self.gpg("--status-fd", "1", "--verify", str(path), check=False)
+            self.assertNotEqual(result.returncode, 0)
+
+    def test_cleartext_refuses_text_it_would_have_to_change(self):
+        for text in (b"", b"a \n", b"a\t\nb\n", b"a\r\nb\n", b"\xff\xfe\n"):
+            with self.subTest(text=text), self.assertRaises(ops.SignError):
+                ops.cleartext_signed(text, self.key, self.local_signer)
+
     def run_cli(self, kms_key: dict, *args: str) -> subprocess.CompletedProcess:
         bin_dir = self.tmp / "bin"
         bin_dir.mkdir(exist_ok=True)
@@ -196,6 +239,21 @@ class OpenPgpSignTest(unittest.TestCase):
         sign = calls[1]
         self.assertEqual(sign[sign.index("--message-type") + 1], "DIGEST")
         self.assertEqual(sign[sign.index("--signing-algorithm") + 1], "RSASSA_PKCS1_V1_5_SHA_256")
+
+    def test_command_line_clearsigns_through_kms(self):
+        doc = self.tmp / "Release"
+        doc.write_bytes(b"Origin: Nulavio\nSuite: stable\n")
+        out = self.tmp / "InRelease.kms"
+        kms_key = {"n": self.n, "d": self.d, "spki": base64.b64encode(spki(self.n, self.e)).decode()}
+        proc = self.run_cli(kms_key, "--clearsign", "-o", str(out), str(doc))
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        result = self.gpg("--status-fd", "1", "--verify", str(out), check=False)
+        self.assertEqual(result.returncode, 0, result.stderr.decode())
+        doc.write_bytes(b"Origin: Nulavio \n")
+        refused = self.run_cli(kms_key, "--clearsign", "-o", str(self.tmp / "InRelease.refused"), str(doc))
+        self.assertEqual(refused.returncode, 1)
+        self.assertIn("ends in a space", refused.stderr)
+        self.assertFalse((self.tmp / "InRelease.refused").exists())
 
     def test_command_line_refuses_a_kms_key_that_is_not_the_release_key(self):
         doc = self.tmp / "repomd.xml"

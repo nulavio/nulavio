@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -163,6 +164,73 @@ class ReleaseManifestTest(unittest.TestCase):
         self.refused("changed since the rehearsal")
         publish = (ROOT / "scripts" / "release" / "publish_release.sh").read_text(encoding="utf-8")
         self.assertIn("field archives", publish)
+
+    def test_the_deb_is_listed_with_the_rpms_version(self):
+        self.assertEqual(self.verify()["debs"], [DEB])
+        other = "packages/nulavio_159.0.1-0.2_amd64.deb"
+        (self.out / other).write_bytes(b"deb2")
+        self.manifest["packages"] = [e for e in self.manifest["packages"] if e["file"] != DEB]
+        self.manifest["packages"].append({"file": other, "sha256": digest(self.out / other)})
+        self.write()
+        self.refused("not the version of the RPM")
+        self.manifest["packages"][-1] = {"file": "packages/nulavio-159.0.1.deb", "sha256": digest(self.out / other)}
+        (self.out / "packages/nulavio-159.0.1.deb").write_bytes(b"deb2")
+        self.write()
+        self.refused("not a Nulavio .deb file name")
+
+    def test_the_apt_source_file_must_be_the_same_at_the_base_commit_and_on_the_branch(self):
+        # The release notes give its SHA-256 at the base commit; the site serves the branch's.
+        git = ["git", "-C", str(self.repo), "-c", "user.name=t", "-c", "user.email=t@example.invalid"]
+        sources = self.repo / "site" / "apt" / "nulavio.sources"
+        subprocess.run([*git, "checkout", "-q", "main"], check=True)
+        sources.parent.mkdir(parents=True)
+        sources.write_text("Types: deb\n")
+        subprocess.run([*git, "add", "site"], check=True)
+        subprocess.run([*git, "commit", "-q", "-m", "sources"], check=True)
+        base = subprocess.run([*git, "rev-parse", "HEAD"], capture_output=True, text=True, check=True).stdout.strip()
+        self.manifest["nulavio_base_commit"] = base
+        self.write()
+        subprocess.run([*git, "commit", "-q", "--allow-empty", "-m", "later, unrelated"], check=True)
+        self.assertEqual(self.verify()["tag"], "v159.0.1-0.1")
+        sources.write_text("Types: deb\nURIs: https://elsewhere.example\n")
+        subprocess.run([*git, "commit", "-q", "-am", "the file changed"], check=True)
+        self.refused("changed on main since the base commit")
+
+    def test_sign_apt_repo_runs_the_check_before_signing_and_checks_what_it_signed(self):
+        script = (ROOT / "scripts" / "release" / "sign_apt_repo.sh").read_text(encoding="utf-8")
+        check = script.index("release_manifest.py")
+        index, sign = script.index("apt-ftparchive packages"), script.index("--clearsign")
+        self.assertLess(check, index)
+        self.assertLess(index, sign)
+        # apt fetches the indexes by hash, and the metadata carries no MD5 or SHA-1.
+        for option in ("APT::FTPArchive::DoByHash=true", "APT::FTPArchive::MD5=false", "APT::FTPArchive::SHA1=false"):
+            self.assertIn(option, script)
+        code = script.split("set -euo pipefail", 1)[1]
+        self.assertNotIn("Valid-Until", code, "an expiry would stop apt update while a release waits")
+        # Both signatures are checked with the public key alone, before anything is uploaded.
+        self.assertIn('gpgv --keyring "$tmp/keyring.gpg" "$dists/InRelease"', script)
+        self.assertIn('gpgv --keyring "$tmp/keyring.gpg" "$dists/Release.gpg" "$dists/Release"', script)
+        # The file that turns apt's checks on is never written where the packages are uploaded.
+        # (it builds one in its own temporary directory, pointed at the repository, to have apt check it)
+        for line in code.splitlines():
+            if ".sources" in line and "$out" in line:
+                self.assertIn('-v "$out:/repo:ro"', line, "the repository is mounted read-only for that check")
+                self.assertNotRegex(line, r'>>?\s*"?\$out')
+        self.assertIn("apt-get -qq download nulavio", code)
+        self.assertNotIn("trusted=yes", script)
+        # An image given in its place is pinned like the default, or nothing runs.
+        pkgs = self.tmp / "image-check" / "pkgs"
+        pkgs.mkdir(parents=True)
+        (pkgs / "nulavio_1.0-0.1_amd64.deb").write_bytes(b"x")
+        run = subprocess.run(
+            ["bash", str(ROOT / "scripts/release/sign_apt_repo.sh"), str(pkgs), str(self.tmp / "image-check/out"), "A" * 40],
+            env={**os.environ, "NULAVIO_APT_IMAGE": "docker.io/library/ubuntu:26.10"}, capture_output=True, text=True,
+        )  # fmt: skip
+        self.assertEqual(run.returncode, 2, run.stderr)
+        self.assertIn("must be registry/name:tag@sha256:digest", run.stderr)
+        publish = (ROOT / "scripts" / "release" / "publish_release.sh").read_text(encoding="utf-8")
+        self.assertIn('sign_apt_repo.sh" "$out/packages" "$stage/apt" "$key"', publish)
+        self.assertIn("field debs", publish)
 
     def test_sign_repo_runs_the_check_before_signing(self):
         script = (ROOT / "scripts" / "release" / "sign_repo.sh").read_text(encoding="utf-8")
