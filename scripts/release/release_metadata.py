@@ -79,9 +79,13 @@ def update(repo: Path, release: dict, repository: str, manifest: dict) -> bool:
         entry = f"{marker}\n## [{version}]({url}) — {published.date()}\n\n{notes}\n"
         changelog = changelog.replace(anchor, f"{anchor}\n\n{entry}", 1)
     metadata["version"] = version
-    # The download pages show Ubuntu from the first release published with the APT repository on:
-    # publish_release.sh refuses a release without its .deb, so every one after that has one too.
-    if release_manifest.debs(manifest, manifest_tag):
+    # The download pages show Ubuntu from the first release published with the APT repository on.
+    # Every rehearsal lists a .deb, also those of releases published before the APT repository
+    # existed: what tells them apart is the .deb among the release's assets, which only the
+    # publish_release.sh that signs the APT repository uploads. It refuses a release without its
+    # .deb, so every release after that one has both.
+    assets = {a.get("name") for a in release.get("assets") or [] if isinstance(a, dict)}
+    if f"nulavio_{version}_amd64.deb" in assets and release_manifest.debs(manifest, manifest_tag):
         metadata["apt_sources"] = "https://nulavio.net/apt/nulavio.sources"
     serialized = json.dumps(metadata, indent=2, ensure_ascii=False) + "\n"
     changed = serialized != metadata_path.read_text(encoding="utf-8") or changelog != changelog_path.read_text(encoding="utf-8")

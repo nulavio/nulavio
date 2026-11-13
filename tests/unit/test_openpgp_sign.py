@@ -167,6 +167,10 @@ class OpenPgpSignTest(unittest.TestCase):
         text = b"Origin: Nulavio\nSuite: stable\n-Dash: escaped\nSHA256:\n abc 12 main/binary-amd64/Packages\n"
         signed = ops.cleartext_signed(text, self.key, self.local_signer)
         self.assertTrue(signed.startswith(b"-----BEGIN PGP SIGNED MESSAGE-----\nHash: SHA256\n\nOrigin: Nulavio\n"))
+        # A canonical-text signature (0x01): gpgv also accepts a binary one here, apt's sqv refuses it.
+        packet = ops.dearmor(signed[signed.index(b"-----BEGIN PGP SIGNATURE-----") :])
+        ((tag, body),) = list(ops.packets(packet))
+        self.assertEqual((tag, body[0], body[1]), (ops.SIGNATURE_TAG, 4, ops.CANONICAL_TEXT))
         self.assertIn(b"\n- -Dash: escaped\n", signed)
         path = self.tmp / "InRelease"
         path.write_bytes(signed)

@@ -192,7 +192,12 @@ class ReleaseManifestTest(unittest.TestCase):
         self.assertIn('gpgv --keyring "$tmp/keyring.gpg" "$dists/InRelease"', script)
         self.assertIn('gpgv --keyring "$tmp/keyring.gpg" "$dists/Release.gpg" "$dists/Release"', script)
         # The file that turns apt's checks on is never written where the packages are uploaded.
-        self.assertNotIn(".sources", code)
+        # (it builds one in its own temporary directory, pointed at the repository, to have apt check it)
+        for line in code.splitlines():
+            if ".sources" in line and "$out" in line:
+                self.assertIn('-v "$out:/repo:ro"', line, "the repository is mounted read-only for that check")
+                self.assertNotRegex(line, r'>>?\s*"?\$out')
+        self.assertIn("apt-get -qq download nulavio", code)
         self.assertNotIn("trusted=yes", script)
         publish = (ROOT / "scripts" / "release" / "publish_release.sh").read_text(encoding="utf-8")
         self.assertIn('sign_apt_repo.sh" "$out/packages" "$stage/apt" "$key"', publish)

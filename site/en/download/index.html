@@ -62,12 +62,15 @@ sudo dnf install nulavio</code></pre></div>
 <p class="prose">The same public key is at <code translate="no">{{key_url}}</code>. The repository has signature checks on for both the packages and the metadata.</p>
 <!--apt:on-->
 <h3 id="install-ubuntu-h">Ubuntu</h3>
-<p class="prose">Add the Nulavio repository, check the key that comes with it, and install the package:</p>
-<div class="pre-scroll" role="region" aria-label="Install commands for Ubuntu" tabindex="0"><pre translate="no"><code>sudo curl -fsSLo /etc/apt/sources.list.d/nulavio.sources {{sources_file}}
-sed -n '/^Signed-By:/,$ { s/^ \.$/ /; s/^ //p }' /etc/apt/sources.list.d/nulavio.sources | gpg --show-keys
+<p class="prose">Download the Nulavio repository file, check it, install it and install the package:</p>
+<div class="pre-scroll" role="region" aria-label="Install commands for Ubuntu" tabindex="0"><pre translate="no"><code>curl -fsSLO --proto '=https' {{sources_file}}
+sha256sum nulavio.sources
+sudo install -m 0644 nulavio.sources /etc/apt/sources.list.d/
 sudo apt update
 sudo apt install nulavio</code></pre></div>
-<p class="prose">The repository file carries the public key, and apt accepts only what that key signed. The second command shows the key's fingerprint: go on only if it is the one above. The package brings an AppArmor profile that lets the browser isolate its tabs, as Ubuntu does for Firefox.</p>
+<p class="prose">The second command shows the file's SHA-256: go on only if it is this one, and delete the file if it is not:</p>
+<p class="prose"><code class="mono" translate="no">{{sources_sha256}}</code></p>
+<p class="prose">The file carries the public key above, and apt accepts only what that key signed. The package brings an AppArmor profile that lets the browser isolate its tabs, as Ubuntu does for Firefox.</p>
 <!--/apt:on-->
 <p class="limit"><strong>Limit:</strong> The fingerprint only protects you if you check it through a different path from the download, for example this page opened on another device.</p>
 </section>

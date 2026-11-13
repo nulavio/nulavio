@@ -62,12 +62,15 @@ sudo dnf install nulavio</code></pre></div>
 <p class="prose">A mesma chave pública fica em <code translate="no">{{key_url}}</code>. O repositório vem com a verificação de assinatura dos pacotes e dos metadados ligada.</p>
 <!--apt:on-->
 <h3 id="install-ubuntu-h">Ubuntu</h3>
-<p class="prose">Adicione o repositório do Nulavio, confira a chave que vem nele e instale o pacote:</p>
-<div class="pre-scroll" role="region" aria-label="Comandos de instalação no Ubuntu" tabindex="0"><pre translate="no"><code>sudo curl -fsSLo /etc/apt/sources.list.d/nulavio.sources {{sources_file}}
-sed -n '/^Signed-By:/,$ { s/^ \.$/ /; s/^ //p }' /etc/apt/sources.list.d/nulavio.sources | gpg --show-keys
+<p class="prose">Baixe o arquivo do repositório do Nulavio, confira-o, instale-o e instale o pacote:</p>
+<div class="pre-scroll" role="region" aria-label="Comandos de instalação no Ubuntu" tabindex="0"><pre translate="no"><code>curl -fsSLO --proto '=https' {{sources_file}}
+sha256sum nulavio.sources
+sudo install -m 0644 nulavio.sources /etc/apt/sources.list.d/
 sudo apt update
 sudo apt install nulavio</code></pre></div>
-<p class="prose">O arquivo do repositório traz a chave pública, e o apt só aceita o que ela assinou. O segundo comando mostra a impressão digital dessa chave: só continue se for a mesma de cima. O pacote traz um perfil do AppArmor que deixa o navegador isolar as abas, como o Ubuntu faz com o Firefox.</p>
+<p class="prose">O segundo comando mostra o SHA-256 do arquivo: só continue se for este, e apague o arquivo se não for:</p>
+<p class="prose"><code class="mono" translate="no">{{sources_sha256}}</code></p>
+<p class="prose">O arquivo traz a chave pública de cima, e o apt só aceita o que ela assinou. O pacote traz um perfil do AppArmor que deixa o navegador isolar as abas, como o Ubuntu faz com o Firefox.</p>
 <!--/apt:on-->
 <p class="limit"><strong>Limite:</strong> A impressão digital só protege se você a conferir por um caminho diferente do download, por exemplo nesta página aberta em outro aparelho.</p>
 </section>

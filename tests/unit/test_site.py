@@ -797,24 +797,17 @@ class DownloadPagesTest(unittest.TestCase):
         ])  # fmt: skip
         key = (ROOT / build_site.PUBLIC_KEY).read_text(encoding="ascii").strip("\n").split("\n")
         self.assertEqual(build_site.sources_key(ROOT / build_site.SOURCES_FILE), key)
-        # The command the download pages give to read it back prints the release key.
-        page = (ROOT / "site" / "en" / "download" / "index.html").read_text(encoding="utf-8")
-        command = re.search(r"\n(sed -n .*\| gpg --show-keys)\n", page).group(1)
-        home = self.tmp / "gnupg-sources"
-        home.mkdir(mode=0o700, exist_ok=True)
-        sed_script = re.search(r"sed -n '([^']*)'", command).group(1)
-        sed = subprocess.run(["sed", "-n", sed_script, str(ROOT / build_site.SOURCES_FILE)], capture_output=True, check=True)
-        listing = subprocess.run(["gpg", "--homedir", str(home), "--batch", "--with-colons", "--show-keys"],
-                                 input=sed.stdout.decode("ascii"), capture_output=True, text=True, check=True).stdout  # fmt: skip
-        fpr = next(line.split(":")[9] for line in listing.splitlines() if line.startswith("fpr:"))
-        release = json.loads((ROOT / "packaging" / "release.json").read_text(encoding="utf-8"))
-        self.assertEqual(fpr, release["key_fingerprint"].replace(" ", ""))
+        # One stanza: nothing beside it can name another repository or another key.
+        self.assertEqual(sum(1 for line in lines if line.startswith("Types:")), 1)
+        self.assertNotIn("", lines)
 
     def test_ubuntu_appears_only_once_the_apt_repository_is_published(self):
         off = build_site.release_values(self.source("apt-off", "159.0.1-0.1", self.fpr, self.armored))
         on = build_site.release_values(self.source("apt-on", "159.0.1-0.1", self.fpr, self.armored, apt=True))
         self.assertEqual((off["apt"], on["apt"]), ("off", "on"))
         self.assertEqual(on["sources_file"], "https://nulavio.net/apt/nulavio.sources")
+        sources = (self.tmp / "apt-on" / build_site.SOURCES_FILE).read_bytes()
+        self.assertEqual(on["sources_sha256"], hashlib.sha256(sources).hexdigest(), "the whole file, as the site serves it")
         # A source file that is not the site's, or whose key is not the release key, is refused.
         src = self.source("apt-bucket", "159.0.1-0.1", self.fpr, self.armored, apt=True)
         release = json.loads((src / "packaging" / "release.json").read_text(encoding="utf-8"))
@@ -847,10 +840,12 @@ class DownloadPagesTest(unittest.TestCase):
                 self.assertNotIn("nulavio.sources", pages["off"][page])
                 self.assertIn("APT", pages["off"][page])  # "not yet: there is no APT repository"
                 on_page = pages["on"][page]
-                self.assertIn(
-                    "sudo curl -fsSLo /etc/apt/sources.list.d/nulavio.sources https://nulavio.net/apt/nulavio.sources", on_page
-                )
-                self.assertLess(on_page.index("gpg --show-keys"), on_page.index("sudo apt update"))
+                # Downloaded as the user, checked as a whole, and only then put where apt reads it.
+                self.assertIn("curl -fsSLO --proto '=https' https://nulavio.net/apt/nulavio.sources", on_page)
+                self.assertNotIn("sudo curl", on_page)
+                self.assertIn(on["sources_sha256"], on_page)
+                self.assertLess(on_page.index("sha256sum nulavio.sources"), on_page.index("sudo install -m 0644 nulavio.sources"))
+                self.assertLess(on_page.index("sudo install -m 0644 nulavio.sources"), on_page.index("sudo apt update"))
                 self.assertIn("sudo apt install nulavio", on_page)
                 self.assertIn("Ubuntu 24.04", on_page)
                 self.assertNotIn("APT repository</dd>", on_page)

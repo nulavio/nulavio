@@ -175,6 +175,10 @@ class ReleaseWorkflowTest(unittest.TestCase):
         check = (RELEASE / "check_published.sh").read_text(encoding="utf-8")
         self.assertIn('check "APT ($sources_file)" apt_install', check)
         self.assertIn("APT::Update::Error-Mode=any", check)
+        # The published source file is the reviewed one, whole, and that copy is what apt uses.
+        self.assertIn('cmp -s "$sources" "$repo/site/apt/nulavio.sources"', check)
+        self.assertIn('-v "$sources:/nulavio.sources:ro"', check)
+        self.assertNotIn('curl -fsSL --retry 3 "$SOURCES_FILE"', check)
         self.assertIn("gh release create", self.publish)
         self.assertIn("--draft", self.publish)
         self.assertIn("NULAVIO_BUILD_PROFILE: runner", self.build)

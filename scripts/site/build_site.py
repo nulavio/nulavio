@@ -48,6 +48,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import functools
+import hashlib
 import html
 import json
 import re
@@ -207,7 +208,8 @@ def release_values(src: Path) -> dict[str, str] | None:
             raise BuildError(f"packaging/release.json: apt_sources must be the site's own {SOURCES_FILE}")
         if sources_key(src / SOURCES_FILE) != key.read_text(encoding="ascii").strip("\n").split("\n"):
             raise BuildError(f"{SOURCES_FILE} must carry {PUBLIC_KEY} as its Signed-By key")
-        values.update(apt="on", sources_file=release["apt_sources"])
+        digest = hashlib.sha256((src / SOURCES_FILE).read_bytes()).hexdigest()
+        values.update(apt="on", sources_file=release["apt_sources"], sources_sha256=digest)
     return values
 
 

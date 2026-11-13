@@ -88,9 +88,30 @@ podman run --rm --security-opt label=disable -v "$out:/repo" "$image" bash -euc 
 '
 
 dists=$out/dists/$suite
+# What the container wrote, checked here before anything is signed: the .deb files are the ones
+# given (and so, with a manifest, the ones the rehearsal checked), and the index lists exactly
+# those, each once, with their SHA-256.
+python3 -I - "$packages" "$out" "$suite" <<'PY' || { echo "sign_apt_repo: the repository does not hold exactly the packages given" >&2; exit 1; }
+import hashlib, pathlib, sys
+packages, out, suite = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2]), sys.argv[3]
+given = {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in packages.glob("nulavio_*.deb")}
+pool = {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in (out / "pool").rglob("*") if p.is_file()}
+assert pool == given, (pool, given)
+entries = (out / "dists" / suite / "main" / "binary-amd64" / "Packages").read_text(encoding="utf-8").strip().split("\n\n")
+listed = {}
+for entry in entries:
+    fields = dict(line.split(": ", 1) for line in entry.splitlines() if not line.startswith(" ") and ": " in line)
+    name = fields["Filename"].rsplit("/", 1)[-1]
+    assert fields["Package"] == "nulavio" and name not in listed, entry[:200]
+    assert name == f"nulavio_{fields['Version']}_{fields['Architecture']}.deb", name
+    listed[name] = fields["SHA256"]
+assert listed == given, (listed, given)
+PY
 if [[ -n ${NULAVIO_KMS_KEY_ID:-} ]]; then
-    [[ -z ${NULAVIO_TEST_AWS_DIR:-} ]] || PATH=$(realpath "$NULAVIO_TEST_AWS_DIR")/bin:$PATH
-    sign=(python3 -I "$release/openpgp_sign.py" --public-key "$tmp/key.asc" --kms-key-id "$NULAVIO_KMS_KEY_ID")
+    # The tests' stand-in `aws` is put first on PATH for the signer alone, never for the checks below.
+    signer_path=$PATH
+    [[ -z ${NULAVIO_TEST_AWS_DIR:-} ]] || signer_path=$(realpath "$NULAVIO_TEST_AWS_DIR")/bin:$PATH
+    sign=(env PATH="$signer_path" python3 -I "$release/openpgp_sign.py" --public-key "$tmp/key.asc" --kms-key-id "$NULAVIO_KMS_KEY_ID")
     "${sign[@]}" --clearsign -o "$dists/InRelease" "$dists/Release"
     "${sign[@]}" --armor -o "$dists/Release.gpg" "$dists/Release"
     signer="AWS KMS"
@@ -108,4 +129,17 @@ gpgv --keyring "$tmp/keyring.gpg" "$dists/Release.gpg" "$dists/Release" 2>/dev/n
     { echo "sign_apt_repo: Release.gpg does not verify with $key" >&2; exit 1; }
 gpgv --keyring "$tmp/keyring.gpg" --output "$tmp/signed" "$dists/InRelease" 2>/dev/null
 cmp -s "$tmp/signed" "$dists/Release" || { echo "sign_apt_repo: InRelease does not carry Release as it is" >&2; exit 1; }
+# And the way apt does on Ubuntu (sqv since 25.10, stricter than gpgv): an update from this
+# repository alone, with the site's source file pointed at it, and each package fetched and checked
+# against the index (downloaded only: its dependencies come from Ubuntu's archive, not this one).
+sed -e 's|^URIs: .*|URIs: file:///repo|' -e '/^Signed-By:/,$d' "$repo/site/apt/nulavio.sources" >"$tmp/nulavio.sources"
+printf 'Signed-By:\n' >>"$tmp/nulavio.sources"
+sed -e 's/^$/./' -e 's/^/ /' "$tmp/key.asc" >>"$tmp/nulavio.sources"
+podman run --rm --security-opt label=disable -v "$out:/repo:ro" -v "$tmp/nulavio.sources:/nulavio.sources:ro" "$image" bash -euc '
+    export DEBIAN_FRONTEND=noninteractive
+    rm -f /etc/apt/sources.list.d/* /etc/apt/sources.list
+    cp /nulavio.sources /etc/apt/sources.list.d/nulavio.sources
+    apt-get -q -o APT::Update::Error-Mode=any update >/tmp/update.log 2>&1 || { tail -3 /tmp/update.log >&2; exit 1; }
+    cd /tmp && apt-get -qq download nulavio >/tmp/fetch.log 2>&1 || { tail -3 /tmp/fetch.log >&2; exit 1; }
+' || { echo "sign_apt_repo: apt refuses the signed repository" >&2; exit 1; }
 echo "signed APT repository in $out ($signer)"
