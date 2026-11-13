@@ -535,6 +535,69 @@ class HelperApiTest(StorageCase):
         profiles.unlock(prof, recovery_code=code).lock()
         profiles.lock(prof)
 
+    def test_two_changes_from_the_same_key_file_do_not_both_go_through(self):
+        # Each read generation N. The first removes a method and saves N+1; the second, still holding
+        # what it read, would save its own N+1 with that method back in it.
+        prof, code = self.encrypted_profile()
+        box = profiles.container(prof)
+        stale = box.load_vault()
+        stale.unlock_password(PASSWORD)
+        self.addCleanup(stale.lock)
+        vault_cli.api_request({"op": "new-recovery-code", "path": str(prof.path), "current": PASSWORD})
+        after = box.vault_path.read_bytes()
+        with self.assertRaises(storage.StorageError) as ctx, box.recording(stale) as record:
+            stale.add_password("a second password", FAST)
+            stale.save()
+            record()
+        self.assertEqual(ctx.exception.code, "changed")
+        self.assertEqual(box.vault_path.read_bytes(), after)
+        with self.assertRaises(VaultError):  # the code the first change replaced stays replaced
+            profiles.unlock(prof, recovery_code=code)
+        self.assertEqual([p.name for p in box.root.glob("maintenance-*")], [])
+
+    def test_the_record_goes_into_the_volume_or_nowhere(self):
+        # The volume is mounted for the change alone. If it went away meanwhile, writing the record
+        # would put it in the clear beside the key file, and the volume would keep the old one.
+        prof, _code = self.encrypted_profile()
+        box = profiles.container(prof)
+        vault = box.load_vault()
+        vault.unlock_password(PASSWORD)
+        self.addCleanup(vault.lock)
+        with self.assertRaises(storage.StorageError) as ctx, box.recording(vault) as record:
+            (mount,) = box.root.glob("maintenance-*")
+            self.assertIn(str(mount), storage.mounted_paths())
+            self.assertEqual(os.stat(mount).st_mode & 0o077, 0)
+            self.assertFalse(box.mounted())  # never at the profile's own path
+            with self.assertRaises(subprocess.CalledProcessError):  # held open: an ordinary unmount is refused
+                subprocess.run(["fusermount3", "-u", str(mount)], check=True, capture_output=True)
+            subprocess.run(["fusermount3", "-u", "-z", str(mount)], check=True, capture_output=True)
+            vault.add_password("a second password", FAST)
+            vault.save()
+            record()
+        self.assertEqual(ctx.exception.code, "not-recorded")
+        self.assertEqual([p.name for p in box.root.glob("maintenance-*")], [])  # and no record left in the clear
+        profiles.unlock(prof, password="a second password").lock()  # unlocking once records it
+        self.assertEqual(
+            json.loads(box.state_path.read_text())["generation"], json.loads(box.vault_path.read_text())["generation"]
+        )
+        profiles.lock(prof)
+
+    def test_every_question_is_asked_before_the_volume_is_mounted(self):
+        prof, _code = self.encrypted_profile()
+        box = profiles.container(prof)
+        asked = []
+
+        def read_secret(prompt, **_kwargs):
+            asked.append((prompt.split()[0], [p.name for p in box.root.glob("maintenance-*")]))
+            return PASSWORD if prompt.startswith("Current") else "a second password"
+
+        args = mock.Mock(vault_cmd="add-password", password_stdin=False, path=str(prof.path))
+        with mock.patch.object(vault_cli, "read_secret", read_secret), mock.patch("builtins.print"):
+            self.assertEqual(vault_cli._change(args), 0)
+        self.assertEqual(asked, [("Current", []), ("New", [])])
+        profiles.unlock(prof, password="a second password").lock()
+        profiles.lock(prof)
+
     def test_a_method_changed_while_unlocked_is_recorded_through_the_profiles_own_mount(self):
         prof, _code = self.encrypted_profile()
         box = profiles.container(prof)

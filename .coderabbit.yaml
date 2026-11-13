@@ -182,7 +182,8 @@ reviews:
         wiped, Argon2id parameters bounded when read from disk, the data key never in clear
         on disk or in a log, a locked mount point stays 0500, format and protocol changes are
         versioned. A change to the unlock methods is recorded inside the volume, locked or
-        not (Container.recording), so that a key file put back from before is refused.
+        not, under the profile's state lock (Container.recording), so that a key file put
+        back from before is refused and two changes cannot overwrite each other.
     - path: "launcher/nulavio_launcher/ai/**"
       instructions: |
         AI Bridge (I7). Grants come only from the user's registry, re-read on every call; no
@@ -192,8 +193,8 @@ reviews:
         local_resources), and what a tab's current address needs is checked again before a
         tool reads or acts there; the source viewer and Reader View go by the address they
         show; a session that is stopped, revoked, paused or whose key was replaced gets no
-        tool but session_state, whatever the tool; a form needs submit_forms however the
-        page sends it; locked profiles are refused; the audit keeps metadata only.
+        tool but session_state, whatever the tool; a form needs submit_forms however and
+        whenever the page sends it; locked profiles are refused; the audit keeps metadata only.
     - path: "tests/**"
       instructions: |
         Tests (I12). Flag new skips, relaxed assertions, wider allow-lists, sleeps in place of

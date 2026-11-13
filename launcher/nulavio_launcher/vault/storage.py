@@ -157,79 +157,141 @@ class Container:
             os.chmod(self.mountpoint, LOCKED_MODE)
             raise
         try:
-            self._check_state(vault)
+            with self._state_lock():
+                self._check_state(vault)
         except StorageError:
             self.unmount()
             raise
+
+    @contextlib.contextmanager
+    def _state_lock(self):
+        """One process at a time checks and writes the generation, or changes the unlock methods:
+        two that each started from the same key file would otherwise both save "the next"
+        generation, and the second would bring back what the first removed."""
+        fd = os.open(self.root / "state.lock", os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX)
+            yield
+        finally:
+            os.close(fd)  # releases the lock, also when the process dies
 
     def _check_state(self, vault: Vault, state_path: Path | None = None) -> None:
         state_path = state_path or self.state_path
         state_dir = state_path.parent
         generation = int(vault.meta.get("generation", 0))
-        if state_path.exists():
-            state = json.loads(state_path.read_text())
+        flags = os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0)
+        try:
+            fd = os.open(state_path, os.O_RDONLY | flags)
+        except FileNotFoundError:
+            state = None
+        else:
+            with os.fdopen(fd, encoding="utf-8") as handle:
+                state = json.load(handle)
+        if state is not None:
             if state.get("profile_id") != vault.profile_id:
                 raise StorageError("wrong-container")
             if int(state.get("generation", 0)) > generation:
                 raise StorageError("rollback", "vault.json is older than the profile it protects")
         state_dir.mkdir(mode=0o700, exist_ok=True)
-        # Its own name: the profile's mount and a maintenance mount may both write the mirror.
+        # Its own name: the profile's mount and a maintenance mount are different views of one directory.
         tmp = state_path.with_name(f"state.{os.getpid()}.tmp")
-        tmp.write_text(json.dumps({"profile_id": vault.profile_id, "generation": generation}))
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | flags, 0o600)
+        try:
+            os.write(fd, json.dumps({"profile_id": vault.profile_id, "generation": generation}).encode())
+            os.fsync(fd)
+        finally:
+            os.close(fd)
         os.replace(tmp, state_path)
+        dir_fd = os.open(state_dir, os.O_RDONLY)
+        try:
+            os.fsync(dir_fd)
+        finally:
+            os.close(dir_fd)
 
     def record_generation(self, vault: Vault) -> None:
         """After saving the vault while mounted: keep the mirror in step."""
         if self.mounted():
-            self._check_state(vault)
+            with self._state_lock():
+                self._check_state(vault)
+
+    def _same_as_on_disk(self, vault: Vault) -> bool:
+        path = vault.path.with_suffix(vault.path.suffix + ".bak") if vault.from_backup else vault.path
+        try:
+            return json.loads(path.read_text(encoding="utf-8")) == vault.meta
+        except (OSError, ValueError):
+            return False
 
     @contextlib.contextmanager
     def recording(self, vault: Vault):
         """Around a change to the unlock methods: yields what records the saved vault's generation
         inside the volume, whether or not the profile is unlocked.
 
-        Entered before anything changes, with the vault unlocked. A locked profile is mounted
-        for this alone, at a private directory under P.vault/ (never at P: the browser and the
-        launcher read "mounted at P" as "unlocked"). Without it, a method removed or replaced
-        while the profile was locked left the mirror behind, and the earlier vault.json, put
-        back, still opened the profile through the launcher (threat model U-T21). If the volume
-        cannot be mounted the change does not happen. A rolled-back vault.json is refused here
-        as it is at unlock.
+        Entered with the vault unlocked, after every question has been asked and before anything
+        changes. It holds the profile's state lock to the end, and refuses a vault that is no longer
+        what is on disk: another change got there first, and saving this one would undo it. A
+        locked profile is mounted for this alone, at a private directory under P.vault/ (never at
+        P: the browser and the launcher read "mounted at P" as "unlocked"), and kept there by an
+        open handle. Without the record, a method removed or replaced while the profile was
+        locked left the mirror behind, and the earlier vault.json, put back, still opened the
+        profile through the launcher (threat model U-T21). If the volume cannot be mounted the
+        change does not happen. A rolled-back vault.json is refused here as it is at unlock.
+
+        What it does not make atomic: the key file is saved first and the record written next. A
+        process killed between the two leaves the change without its record until the profile is
+        next unlocked (which writes it).
         """
-        if self.mounted():
-            self._check_state(vault)
-            yield lambda: self._check_state(vault)
-            return
-        if not self.exists():
-            raise StorageError("not-encrypted")
-        for stale in self.root.glob("maintenance-*"):  # left by a process that died; empty once gocryptfs let go
-            with contextlib.suppress(OSError):
-                stale.rmdir()
-        mount = Path(tempfile.mkdtemp(prefix="maintenance-", dir=self.root))
-        state_path = mount / STATE_DIR / "state.json"
-        try:
-            # -idle: should this process die here, gocryptfs unmounts by itself a minute later.
-            self._gocryptfs(["-q", "-nosyslog", "-idle", "1m", str(self.cipher), str(mount)], storage_password(vault))
-            try:
+        with self._state_lock():
+            if not self._same_as_on_disk(vault):
+                raise StorageError("changed", "the profile's key file changed since it was read; try again")
+            if self.mounted():
+                self._check_state(vault)
+                yield lambda: self._check_state(vault)
+                return
+            if not self.exists():
+                raise StorageError("not-encrypted")
+            for stale in self.root.glob("maintenance-*"):  # left by a process that died; empty once gocryptfs let go
+                with contextlib.suppress(OSError):
+                    stale.rmdir()
+            mount = Path(tempfile.mkdtemp(prefix="maintenance-", dir=self.root))
+            state_path = mount / STATE_DIR / "state.json"
+
+            def record() -> None:
+                # The volume, not the directory it was mounted on: had it gone, the record would be
+                # written in the clear beside the key file and the volume would keep the old one.
+                if not self._is_mounted(mount):
+                    raise StorageError("not-recorded", "the volume went away before the change was recorded")
                 self._check_state(vault, state_path)
-                yield lambda: self._check_state(vault, state_path)
+
+            try:
+                # -idle: should this process die here, gocryptfs unmounts by itself a minute later.
+                self._gocryptfs(["-q", "-nosyslog", "-idle", "1m", str(self.cipher), str(mount)], storage_password(vault))
+                pin = os.open(mount, os.O_RDONLY | os.O_DIRECTORY)  # in use: the idle timer leaves it alone
+                try:
+                    record()
+                    yield record
+                finally:
+                    os.close(pin)
+                    self._unmount_path(mount)
             finally:
-                self._unmount_path(mount)
-        finally:
-            with contextlib.suppress(OSError):
-                mount.rmdir()
+                with contextlib.suppress(OSError):
+                    mount.rmdir()
 
     @staticmethod
-    def _unmount_path(path: Path, wait: float = 15.0) -> None:
+    def _is_mounted(path: Path) -> bool:
+        return str(path.resolve()) in mounted_paths()
+
+    def _unmount_path(self, path: Path, wait: float = 15.0) -> None:
         tool = shutil.which("fusermount3") or shutil.which("fusermount") or "fusermount3"
         deadline = time.monotonic() + wait
-        while str(path.resolve()) in mounted_paths():
+        while self._is_mounted(path):
             result = subprocess.run([tool, "-u", str(path)], capture_output=True, timeout=30, check=False)
             if result.returncode == 0:
                 break
             if time.monotonic() > deadline:
                 # Nothing but this process opened a file there: detach it rather than leave it.
                 subprocess.run([tool, "-u", "-z", str(path)], capture_output=True, timeout=30, check=False)
+                if self._is_mounted(path):
+                    raise StorageError("busy", "the profile could not be locked again after the change")
                 break
             time.sleep(0.3)
 

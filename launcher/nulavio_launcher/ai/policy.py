@@ -178,15 +178,17 @@ def wrapped(url: str) -> str | None:
 
     Such a tab is at an address with no host of its own, but what it shows is another site's
     page, so the site list, the routes and the local-network check go by the inner address."""
-    scheme, _, rest = url.partition(":")
+    # As the engine reads an address: without the control characters and spaces around it.
+    scheme, _, rest = url.strip("".join(map(chr, range(0x21)))).partition(":")
     scheme = scheme.lower()
     if scheme == "view-source":
         return rest
     if scheme == "about":
         name, _, query = rest.partition("?")
         if name.lower() == "reader":
-            inner = urllib.parse.parse_qs(query.partition("#")[0]).get("url")
-            return inner[0] if inner else None
+            # Reader View takes the first `url`, empty or not (URL.searchParams.get).
+            pairs = urllib.parse.parse_qsl(query.partition("#")[0], keep_blank_values=True)
+            return next((value for key, value in pairs if key == "url"), None)
     return None
 
 
@@ -269,8 +271,9 @@ def _whatwg_ipv4(host: str) -> str | None:
 
 def classify_url(url: str, resolve: bool = True) -> Target:
     """Which capabilities a navigation needs. Refuses what no capability can allow."""
-    if len(url) > 8192 or any(ch in url for ch in "\r\n\t\x00"):
-        raise UrlRefused("the address is too long or contains control characters")
+    if len(url) > 8192 or any(ch < " " or ch == "\x7f" for ch in url) or url != url.strip():
+        # The engine drops some of these and trims others: what is checked must be what is opened.
+        raise UrlRefused("the address is too long, or has control characters or spaces around it")
     try:
         parsed = urllib.parse.urlsplit(url)
     except ValueError:  # an unclosed "[" in the host, for one

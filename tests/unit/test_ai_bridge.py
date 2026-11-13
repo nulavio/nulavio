@@ -261,6 +261,18 @@ class AddressTest(unittest.TestCase):
                     self.assertEqual(policy.host_of(url), "bank.example")
                     self.assertEqual(policy.origin(url), "https://bank.example")
             self.assertEqual(policy.classify_url("view-source:http://192.168.1.1/").host, "192.168.1.1")
+            # Reader View reads the first `url`, as the engine does (an empty one shows nothing).
+            self.assertEqual(policy.host_of("about:reader?url=https://a.example/&url=https://b.example/"), "a.example")
+            self.assertIsNone(policy.host_of("about:reader?url=&url=https://b.example/"))
+            # The engine trims an address; a wrapper is one however it is padded, and is not opened padded.
+            for padded in (
+                " view-source:https://bank.example/",
+                "\x01view-source:https://bank.example/",
+                "view-source:https://bank.example/ ",
+            ):
+                self.assertEqual(policy.host_of(padded), "bank.example", padded)
+                with self.assertRaises(policy.UrlRefused):
+                    policy.classify_url(padded)
             self.assertEqual(policy.classify_url("view-source:file:///etc/hostname").host, None)
             for url in ("view-source:view-source:https://x.example/", "view-source:about:reader?url=https://x.example/",
                         "about:reader?url=view-source:https://x.example/", "view-source:javascript:alert(1)",
@@ -788,130 +800,200 @@ class AuditTest(Home):
             listed = {entry["tab"]: entry for entry in bridge.call("tabs_list", {})["structuredContent"]["tabs"]}
             self.assertEqual(listed["t2"]["url"], "http://192.168.1.1/admin/wifi")
 
-    def watched(self, level, approver, *, stopped, info=None):
-        """A Bridge whose page tools are stand-ins: `stopped` is what the submit guard reports."""
+    def acting(self, level, approver, *, held, info=None):
+        """A Bridge whose page is a stand-in. `held`: what the page's documents report as held forms,
+        one answer for each time they are asked. Returns the bridge and what happened, in order."""
         agent, _ = registry.add(f"forms-{level}-{len(registry.load()['agents'])}", "other", level)
         bridge = tools.Bridge(agent["id"], "s-1", approver=approver)
         bridge.elements["t1"] = {"e1": "shared-1"}
+        steps, answers = [], list(held)
         engine = mock.Mock()
         engine.mark.return_value = 0
-        engine.command.return_value = {}
+        engine.command.side_effect = lambda method, *_a, **_k: steps.append(method) or {}
+        names = {tools.FORMS_GUARD_FN: "guard", tools.FORMS_HELD_FN: "held?", tools.FORMS_DROP_FN: "drop",
+                 tools.FORMS_SEND_FN: "send", tools.FORMS_OPEN_FN: "open"}  # fmt: skip
+
+        def in_frames(_self, _tab, fn, _cancel, *, must):
+            steps.append(names[fn])
+            return [answers.pop(0)] if fn == tools.FORMS_HELD_FN else [True]
+
+        def call_fn(_self, _tab, fn, _args, _cancel):
+            steps.append({tools.INSPECT_FN: "inspect", tools.SCROLL_FN: "scroll", tools.FOCUS_FN: "focus"}[fn])
+            return info or {"connected": True, "editable": True, "multiline": True}
+
         stack = contextlib.ExitStack()
         self.addCleanup(stack.close)
-        patch = lambda name, **how: stack.enter_context(mock.patch.object(tools.Bridge, name, **how))  # noqa: E731
-        patch("_url_of", return_value="https://example.org/cart")
-        patch("_call_fn", return_value=info or {"connected": True, "editable": True, "multiline": True})
-        patch("bidi", return_value=engine)
-        patch("_settle", return_value=False)
-        patch("_open_dialog", return_value=None)
-        guard_on = patch("_guard_on", return_value=["t1"])
-        patch("_guard_off", side_effect=list(stopped))
-        inputs = lambda: [c for c in engine.command.call_args_list if c.args[0] == "input.performActions"]  # noqa: E731
-        return agent, bridge, guard_on, inputs
+        for name, how in (
+            ("_url_of", {"return_value": "https://example.org/cart"}),
+            ("bidi", {"return_value": engine}),
+            ("_settle", {"return_value": False}),
+            ("_open_dialog", {"return_value": None}),
+            ("_in_frames", {"new": in_frames}),
+            ("_call_fn", {"new": call_fn}),
+        ):
+            stack.enter_context(mock.patch.object(tools.Bridge, name, **how))
+        return bridge, steps
+
+    CLICK = ("click", {"tab": "t1", "element": "e1"})
+    INPUT = "input.performActions"
 
     def test_a_form_sent_by_a_click_handler_needs_submit_forms(self):
         # LESIS 3dea86ea: a role=button whose handler calls requestSubmit() is not a submit button
         # to INSPECT_FN, so the click went ahead on `interact` alone and the form was sent.
-        click = ("click", {"tab": "t1", "element": "e1"})
-        _, bridge, guard_on, inputs = self.watched("assisted", registry.Approver(), stopped=[1])
-        result = bridge.call(*click)
+        bridge, steps = self.acting("assisted", registry.Approver(), held=[0, 1])
+        result = bridge.call(*self.CLICK)
         self.assertTrue(result["isError"], result)
         self.assertIn("'Submit forms'", result["content"][0]["text"])
-        self.assertIn("The click was done; the form the page then tried to send was stopped.", result["content"][0]["text"])
-        self.assertEqual(len(inputs()), 1)  # no second click
+        self.assertIn("The click was done; the form the page then tried to send was not sent.", result["content"][0]["text"])
+        self.assertEqual((steps.count(self.INPUT), steps[-1], "send" in steps), (1, "drop", False))
+        self.assertLess(steps.index("guard"), steps.index("scroll"))  # held before anything the page can observe
         entry = json.loads(audit.audit_path().read_text().splitlines()[-1])
         self.assertEqual((entry["decision"], entry["capability"]), ("deny", "interact,submit_forms"))
 
-        # The user says yes: the same click again, this time with nothing in its way.
+        # The user says yes: the form that was held goes as it was. No second click.
         approver = Approve("once")
-        _, bridge, guard_on, inputs = self.watched("assisted", approver, stopped=[1])
-        result = bridge.call(*click)
+        bridge, steps = self.acting("assisted", approver, held=[0, 1])
+        result = bridge.call(*self.CLICK)
         self.assertFalse(result["isError"], result)
+        self.assertTrue(result["structuredContent"]["navigated"])
         self.assertEqual(approver.asked, [("submit_forms", "https://example.org")])
-        self.assertEqual((len(inputs()), guard_on.call_count), (2, 1))
+        self.assertEqual((steps.count(self.INPUT), steps.count("send"), "drop" in steps), (1, 1, False))
 
         # A click that sends nothing is only a click.
         approver = Approve("once")
-        _, bridge, guard_on, inputs = self.watched("assisted", approver, stopped=[0])
-        self.assertFalse(bridge.call(*click)["isError"])
-        self.assertEqual((approver.asked, len(inputs()), guard_on.call_count), ([], 1, 1))
+        bridge, steps = self.acting("assisted", approver, held=[0, 0])
+        self.assertFalse(bridge.call(*self.CLICK)["isError"])
+        self.assertEqual((approver.asked, "send" in steps, "drop" in steps), ([], False, False))
 
-        # Allowed to submit without asking: nothing is watched.
-        _, bridge, guard_on, inputs = self.watched("autonomous", registry.Approver(), stopped=[])
-        self.assertFalse(bridge.call(*click)["isError"])
-        self.assertEqual((len(inputs()), guard_on.call_count), (1, 0))
+        # Allowed to submit without asking: nothing is held and nothing is asked of the page.
+        bridge, steps = self.acting("autonomous", registry.Approver(), held=[])
+        self.assertFalse(bridge.call(*self.CLICK)["isError"])
+        self.assertEqual([s for s in steps if s in ("guard", "held?", "send", "drop", "open")], [])
 
-        # A real submit button asks before the click, as before, and is then not watched.
+        # A real submit button asks before the click, as before; its form is held like any other
+        # and then sent without a second question.
         approver = Approve("once")
         submit = {"connected": True, "submits": True}
-        _, bridge, guard_on, inputs = self.watched("assisted", approver, stopped=[], info=submit)
-        self.assertFalse(bridge.call(*click)["isError"])
-        self.assertEqual((approver.asked, len(inputs()), guard_on.call_count), ([("submit_forms", "https://example.org")], 1, 0))
+        bridge, steps = self.acting("assisted", approver, held=[0, 1], info=submit)
+        self.assertFalse(bridge.call(*self.CLICK)["isError"])
+        self.assertEqual(approver.asked, [("submit_forms", "https://example.org")])
+        self.assertLess(steps.index("inspect"), steps.index(self.INPUT))
+        self.assertEqual(steps.count("send"), 1)
+
+    def test_a_form_the_page_sent_later_is_settled_before_the_next_action(self):
+        # A timer, or the answer to a dialog, sent it after the call returned: it is still held.
+        bridge, steps = self.acting("assisted", registry.Approver(), held=[2])
+        result = bridge.call(*self.CLICK)
+        self.assertTrue(result["isError"], result)
+        self.assertIn(
+            "An earlier action was done; the form the page then tried to send was not sent.", result["content"][0]["text"]
+        )
+        self.assertEqual((self.INPUT in steps, "inspect" in steps, steps[-1]), (False, False, "drop"))
+        bridge, steps = self.acting("assisted", Approve("once"), held=[2])
+        result = bridge.call(*self.CLICK)
+        self.assertFalse(result["isError"], result)
+        self.assertTrue(result["structuredContent"]["form_sent"])
+        self.assertIn("Nothing else was done", result["content"][0]["text"])
+        self.assertEqual((self.INPUT in steps, steps.count("send")), (False, 1))
 
     def test_a_form_sent_while_typing_or_after_a_dialog_needs_submit_forms(self):
-        typing = ("type", {"tab": "t1", "element": "e1", "text": "123456"})
-        _, bridge, guard_on, _ = self.watched("assisted", registry.Approver(), stopped=[1])
+        typing = ("type", {"tab": "t1", "element": "e1", "text": "123456", "clear": True})
+        bridge, steps = self.acting("assisted", registry.Approver(), held=[0, 1])
         result = bridge.call(*typing)
         self.assertTrue(result["isError"], result)
-        self.assertIn("The typing was done; the form the page then tried to send was stopped.", result["content"][0]["text"])
-        _, bridge, guard_on, _ = self.watched("assisted", Approve("once"), stopped=[1])
+        self.assertIn("The typing was done; the form the page then tried to send was not sent.", result["content"][0]["text"])
+        # The focus and the clearing run the page's handlers: the forms are held before them.
+        self.assertLess(steps.index("guard"), min(steps.index("scroll"), steps.index("focus")))
+        bridge, steps = self.acting("assisted", Approve("once"), held=[0, 1])
         result = bridge.call(*typing)
         self.assertFalse(result["isError"], result)
-        self.assertTrue(result["structuredContent"]["form_stopped"])
-        self.assertIn("use submit=true", result["content"][0]["text"])
-        _, bridge, guard_on, _ = self.watched("assisted", registry.Approver(), stopped=[0])
-        self.assertNotIn("form_stopped", bridge.call(*typing)["structuredContent"])
-        self.assertEqual(guard_on.call_count, 1)
+        self.assertEqual((result["structuredContent"]["navigated"], steps.count("send")), (True, 1))
+        # submit=true was allowed for this call: what Enter sends is held and then let go, unasked.
+        approver = Approve("once")
+        bridge, steps = self.acting("assisted", approver, held=[0, 1])
+        self.assertFalse(bridge.call("type", {"tab": "t1", "element": "e1", "text": "q", "submit": True})["isError"])
+        self.assertEqual((len(approver.asked), steps.count("send")), (1, 1))
 
-        # A click that opened a dialog leaves the guard on; the answer lets the page go on.
+        # The page goes on after a dialog is answered, however the dialog came to be open.
         answer = ("dialog", {"tab": "t1", "accept": True})
-        _, bridge, _, _ = self.watched("assisted", registry.Approver(), stopped=[1])
-        bridge._guarded["t1"] = ["t1"]
+        bridge, steps = self.acting("assisted", registry.Approver(), held=[1])
         with mock.patch.object(tools.Bridge, "_open_dialog", side_effect=[{"type": "confirm", "message": "Send?"}, None]):
             result = bridge.call(*answer)
         self.assertTrue(result["isError"], result)
-        self.assertIn("The answer was done; the form the page then tried to send was stopped.", result["content"][0]["text"])
+        self.assertIn("The answer was done; the form the page then tried to send was not sent.", result["content"][0]["text"])
+        self.assertEqual(steps[-1], "drop")
 
-    def test_the_guard_keeps_its_frames_and_refuses_what_it_cannot_watch(self):
+    def test_documents_hold_their_forms_from_the_moment_they_are_created(self):
         agent, _ = registry.add("frames", "other", "assisted")
+        bridge = tools.Bridge(agent["id"], "s-1", approver=registry.Approver())
+        engine = mock.Mock()
+        commands = []
+
+        def command(method, params=None, **_k):
+            commands.append((method, params))
+            return {"script": "preload-1"} if method == "script.addPreloadScript" else {}
+
+        engine.command.side_effect = command
+        bridge.workspace = mock.Mock(bidi=engine)
+        bridge._sync_forms()
+        bridge._sync_forms()  # once for the engine, not once a call
+        added = [params for method, params in commands if method == "script.addPreloadScript"]
+        self.assertEqual(added, [{"functionDeclaration": tools.FORMS_GUARD_FN, "sandbox": tools.SANDBOX}])
+        self.assertFalse(bridge._forms_held_before)
+        registry.grant(agent["id"], "submit_forms", "allow")  # the user allows it: new documents stop holding
+        bridge._sync_forms()
+        self.assertEqual(commands[-1], ("script.removePreloadScript", {"script": "preload-1"}))
+        self.assertTrue(bridge._forms_held_before)  # and the ones already open are opened when next acted on
+        ran = []
+        with mock.patch.object(tools.Bridge, "_in_frames", lambda _s, _t, fn, _c, *, must: ran.append((fn, must)) or [3]):
+            bridge._forms_prepare("t1", None)
+            self.assertFalse(bridge._forms_settle("t1", "https://example.org/", "The click", [], None))
+        self.assertEqual(ran, [(tools.FORMS_OPEN_FN, True)])
+        registry.grant(agent["id"], "submit_forms", "ask")
+        bridge._sync_forms()
+        self.assertEqual(len([m for m, _ in commands if m == "script.addPreloadScript"]), 2)
+        with (
+            mock.patch.object(tools.Bridge, "_in_frames", return_value=[True, False]),  # a frame where submit() is out of reach
+            self.assertRaises(tools.ToolError),
+        ):
+            bridge._forms_prepare("t1", None)
+        bridge.close()
+        self.assertEqual((bridge._forms_scripts, bridge._forms_engines), ({}, set()))
+
+    def test_a_page_that_cannot_be_watched_is_not_acted_on(self):
+        agent, _ = registry.add("watch", "other", "assisted")
         bridge = tools.Bridge(agent["id"], "s-1", approver=registry.Approver())
         tree = {
             "contexts": [{"context": "t1", "children": [{"context": "f1", "children": [{"context": "f2"}]}, {"context": "f3"}]}]
         }
         engine = mock.Mock()
         engine.command.return_value = tree
-        ran = []
+        gone = {"f3"}
 
         def in_sandbox(_self, tab, frame, fn, cancel, timeout=5.0):
-            ran.append((frame, fn))
-            if frame == "f3":
-                raise tools.BidiError("no such frame")  # it went away meanwhile
-            if fn == tools.GUARD_ON_FN:
-                return True
-            return 2 if frame == "f1" else 0  # what each frame's guard stopped
+            if frame in gone:
+                raise tools.BidiError("no such frame")
+            return 2 if frame == "f1" else 0
 
         with (
             mock.patch.object(tools.Bridge, "bidi", return_value=engine),
             mock.patch.object(tools.Bridge, "_in_sandbox", in_sandbox),
         ):
-            guarded = bridge._guard_on("t1", None)
-            self.assertEqual(guarded, ["t1", "f1", "f2"])
-            self.assertEqual([frame for frame, fn in ran if fn == tools.GUARD_ON_FN], ["t1", "f1", "f3", "f2"])
-            self.assertEqual(bridge._guard_off("t1", None, guarded), 2)
-            many = {"contexts": [{"context": "t1", "children": [{"context": f"f{i}"} for i in range(tools.GUARD_FRAMES)]}]}
-            engine.command.return_value = many
+            self.assertEqual(bridge._frames("t1", None), ["t1", "f1", "f3", "f2"])
+            # f3 answers with an error and is still in the tree: not a frame that went away.
             with self.assertRaises(tools.ToolError):
-                bridge._guard_on("t1", None)
-        with (
-            mock.patch.object(tools.Bridge, "bidi", return_value=engine),
-            mock.patch.object(tools.Bridge, "_in_sandbox", side_effect=tools.BidiError("no such frame")),
-            self.assertRaises(tools.ToolError),
-        ):
-            engine.command.return_value = {"contexts": [{"context": "t1"}]}
-            bridge._guard_on("t1", None)  # the document itself cannot be watched: nothing is done
-        for needle in ("addEventListener('submit', stop, true)", "preventDefault", "stopImmediatePropagation",
-                       "HTMLFormElement.prototype", "proto.submit = original"):  # fmt: skip
-            self.assertIn(needle, tools.GUARD_ON_FN)
+                bridge._in_frames("t1", tools.FORMS_GUARD_FN, None, must=True)
+            self.assertEqual(bridge._in_frames("t1", tools.FORMS_HELD_FN, None, must=False), [0, 2, 0])
+            engine.command.return_value = {"contexts": [{"context": "t1", "children": [{"context": "f1"}]}]}
+            gone.add("t1")
+            with self.assertRaises(tools.ToolError):  # the document itself
+                bridge._in_frames("t1", tools.FORMS_GUARD_FN, None, must=True)
+            many = {"contexts": [{"context": "t1", "children": [{"context": f"f{i}"} for i in range(200)]}]}
+            engine.command.return_value = many
+            self.assertEqual(len(bridge._frames("t1", None)), tools.FORMS_FRAMES)
+        for needle in ("addEventListener('submit'", "preventDefault", "stopImmediatePropagation", "HTMLFormElement.prototype",
+                       "requestSubmit", "native.call(this)"):  # fmt: skip
+            self.assertIn(needle, tools.FORMS_GUARD_FN)
 
     def test_denied_call_is_audited_without_arguments(self):
         agent, _ = registry.add("d", "other", "assisted")

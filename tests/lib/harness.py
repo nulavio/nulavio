@@ -289,26 +289,44 @@ class FixtureServer:
             q = "".join(c for c in query.get("q", "") if c.isalnum() or c in "+-_")[:64]
             return f"<!doctype html><title>agent-result</title><p id=result>Result: {q}</p>".encode(), html, {}
         if path == "/agent-scripted-form":
-            # AI Bridge fixture: controls that are not submit buttons and send a form from their
-            # own handlers (requestSubmit, submit, a frame's form, after a confirm, while typing).
+            # AI Bridge fixture: controls that are not submit buttons and send a form from their own
+            # handlers: at once (requestSubmit, submit, a frame's form), after a timer, from a frame
+            # made on the spot, after a confirm (asked at once or later), on focus, while typing.
+            form = "document.getElementById('f')"
             page = (
                 "<!doctype html><title>agent-scripted-form</title>"
                 '<form id=f action="/agent-result" method="get"><input type=hidden name=q value="sent"></form>'
                 "<div id=plain role=button tabindex=0 onclick=\"document.getElementById('state').textContent='on'\">"
                 "Plain</div>"
-                "<div id=request role=button tabindex=0 onclick=\"document.getElementById('f').requestSubmit()\">"
-                "Request</div>"
-                "<div id=direct role=button tabindex=0 onclick=\"document.getElementById('f').submit()\">Direct</div>"
+                f'<div id=request role=button tabindex=0 onclick="{form}.requestSubmit()">Request</div>'
+                f'<div id=direct role=button tabindex=0 onclick="{form}.submit()">Direct</div>'
                 '<div id=frame role=button tabindex=0 onclick="frames[0].document.forms[0].submit()">Frame</div>'
-                "<div id=confirm role=button tabindex=0 "
-                "onclick=\"if (confirm('Send?')) document.getElementById('f').submit()\">Confirm</div>"
-                '<input id=auto aria-label="Auto" '
-                "oninput=\"if (this.value.length >= 3) document.getElementById('f').requestSubmit()\">"
+                f'<div id=later role=button tabindex=0 onclick="setTimeout(() => {form}.requestSubmit(), 1200)">Later</div>'
+                "<div id=newframe role=button tabindex=0 onclick=\"const i = document.createElement('iframe');"
+                " i.src = '/agent-frame-form?auto=1'; document.body.append(i)\">New frame</div>"
+                f"<div id=confirm role=button tabindex=0 onclick=\"if (confirm('Send?')) {form}.submit()\">Confirm</div>"
+                "<div id=timed role=button tabindex=0 "
+                f"onclick=\"setTimeout(() => {{ if (confirm('Later?')) {form}.submit(); }}, 100)\">Timed</div>"
+                f'<input id=auto aria-label="Auto" oninput="if (this.value.length >= 3) {form}.requestSubmit()">'
+                f'<input id=focus aria-label="Focus" onfocus="{form}.requestSubmit()">'
+                f'<input id=clear aria-label="Clear" value="old" oninput="{form}.requestSubmit()">'
                 '<p id=state>off</p><iframe src="/agent-frame-form" width=40 height=20></iframe>'
             )
             return page.encode(), html, {}
         if path == "/agent-frame-form":
-            page = '<!doctype html><form action="/agent-result" method="get"><input type=hidden name=q value="frame"></form>'
+            # With auto=1 the document sends its form as soon as it has loaded.
+            auto = ' onload="document.forms[0].submit()"' if query.get("auto") else ""
+            value = "newframe" if query.get("auto") else "frame"
+            page = (
+                f"<!doctype html><body{auto}>"
+                f'<form action="/agent-result" method="get"><input type=hidden name=q value="{value}"></form>'
+            )
+            return page.encode(), html, {}
+        if path == "/agent-autosubmit":
+            page = (
+                '<!doctype html><title>agent-autosubmit</title><body onload="document.forms[0].submit()">'
+                '<form action="/agent-result" method="get"><input type=hidden name=q value="onload"></form><p>waiting</p>'
+            )
             return page.encode(), html, {}
         if path == "/agent-dialog":
             page = (

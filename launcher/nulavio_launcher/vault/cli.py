@@ -32,6 +32,8 @@ MESSAGES = {
     "metadata-tampered": "the profile's key file was changed outside Nulavio; nothing was opened",
     "rollback": "the profile's key file is older than the profile (restored from a backup?); nothing was opened",
     "busy": "files in the profile are still in use",
+    "changed": "the profile's key file changed while this was being done (another change?); nothing was changed, try again",
+    "not-recorded": "the change was saved, but could not be recorded inside the profile; unlock the profile once to record it",
     "mountpoint-not-empty": "unexpected files appeared in the locked profile directory; nothing was opened",
     "recovery-code-malformed": "a recovery code has 28 letters and digits (7 groups of 4)",
     "password-too-short": "use at least 8 characters",
@@ -255,18 +257,21 @@ def _change(args) -> int:
         _err("no way to ask for the current password; use --password-stdin")
         return 1
     _reauth(vault, current)
+    code = None
     try:
+        # Every question first: nothing waits for an answer while the volume is mounted.
+        new = (
+            read_secret("New password", from_stdin=args.password_stdin, confirm=True)
+            if args.vault_cmd == "add-password"
+            else None
+        )
         # Before anything changes: the volume must be there to record the change in (a locked
         # profile is mounted for that alone), or the old key file would open it again.
         with box.recording(vault) as record:
             if args.vault_cmd == "add-password":
-                new = read_secret("New password", from_stdin=args.password_stdin, confirm=True)
                 vault.add_password(new or "")
             elif args.vault_cmd == "new-recovery-code":
                 code = vault.replace_recovery_code()
-                print("New recovery code (the old one no longer opens this profile through Nulavio; a copy of the")
-                print("profile's files made before now can still be opened with it):")
-                print(f"\n    {code}\n")
             elif args.vault_cmd == "add-keyring":
                 add_os_keyring(vault, keyring(), label="computer login")
             elif args.vault_cmd == "remove-method":
@@ -282,6 +287,10 @@ def _change(args) -> int:
             record()
     finally:
         vault.lock()
+    if code:  # shown once the change is saved and recorded, not before
+        print("New recovery code (the old one no longer opens this profile through Nulavio; a copy of the")
+        print("profile's files made before now can still be opened with it):")
+        print(f"\n    {code}\n")
     print(f"Profile '{prof.name}': {args.vault_cmd.replace('-', ' ')} done.")
     return 0
 

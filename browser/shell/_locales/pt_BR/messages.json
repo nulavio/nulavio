@@ -338,6 +338,8 @@
   "err_no_method": {"message": "Escolha pelo menos um jeito de desbloquear o perfil."},
   "err_busy": {"message": "Arquivos desse perfil ainda estão em uso. Tente de novo em instantes."},
   "err_rollback": {"message": "O arquivo de chaves do perfil é mais antigo que o perfil (restaurado de um backup?). Nada foi aberto."},
+  "err_changed": {"message": "O arquivo de chaves do perfil mudou enquanto isso era feito. Nada foi alterado. Tente de novo."},
+  "err_not_recorded": {"message": "A alteração foi salva, mas não pôde ser registrada dentro do perfil. Desbloqueie o perfil uma vez para registrá-la."},
   "err_metadata_tampered": {"message": "O arquivo de chaves do perfil foi alterado fora do Nulavio. Nada foi aberto."},
   "err_mountpoint_not_empty": {"message": "Apareceram arquivos inesperados na pasta do perfil bloqueado. Nada foi aberto."},
   "err_keyring_unavailable": {"message": "O chaveiro do sistema não está disponível."},
