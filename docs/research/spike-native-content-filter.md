@@ -25,7 +25,7 @@ Should Nulavio Filter move from uBlock Origin (an extension, GPL-3.0) to a filte
 ## Setup shared by every measurement
 
 - The same Nulavio build, machine and power profile, with the network warm. Each figure is the median of at least five runs, with p95 and the spread.
-- The same lists on both sides: what a new profile gets today, which is uBlock Origin's own default lists, the list for the person's language, and the cookie-notice lists of [`content-filter.json`](../../browser/distribution/content-filter.json). All lists are pinned by hash for the duration of the spike.
+- The same lists on both sides: what a new profile gets today, which is uBlock Origin's own default lists, the list for the person's language, and the eight lists [`content-filter.json`](../../browser/distribution/content-filter.json) switches on (cookie notices and other annoyances, AdGuard's ads list, and URL tracking protection, which removes tracking parameters from addresses and blocks nothing). All lists are pinned by hash for the duration of the spike.
 - Corpus: the 50 public pages of [`tests/regression/sites.json`](../../tests/regression/sites.json). Every request they make is recorded once (URL, type, initiator), so both engines are fed the same input.
 - Results go to `docs/research/evidence/spike-native-filter-<phase>-<date>.json` together with the commit, the engine build and the versions of the lists.
 
@@ -42,12 +42,12 @@ Compare the two matching engines outside the browser, on the recorded corpus:
 
 Measure:
 
-- agreement: which requests one blocks and the other does not, by list and by request type;
+- agreement: which requests one blocks and the other does not, by list and by request type; and which requests uBlock Origin changes without blocking (a tracking parameter removed, a redirect to a neutral resource, a response header) that adblock-rust leaves as they are;
 - matching cost per request (median, p95);
 - time to load and compile the lists, and the memory the result takes;
 - size of the serialized adblock-rust engine.
 
-**Go when** adblock-rust blocks at least 98% of what uBlock Origin blocks on the corpus, no request it misses is one that a privacy or malware list blocks (criterion A1), and every request it blocks and uBlock Origin does not is listed with the rule that matched. **No-go** under 90%, or when the differences come from list syntax that adblock-rust does not support and upstream has no plan for.
+**Go when** adblock-rust blocks at least 98% of what uBlock Origin blocks on the corpus, what it misses or leaves unchanged passes the test of criterion A1, and every request it blocks and uBlock Origin does not is listed with the rule that matched. **No-go** under 90%, or when the differences come from list syntax that adblock-rust does not support and upstream has no plan for.
 
 Whether those extra blocks break a page cannot be answered here: nothing in this phase puts adblock-rust's decisions into a browser, and `run_sites.py` compares Nulavio with uBlock Origin against a stock engine, not one filter against another. Phase 2 gives it a mode that runs the corpus with the candidate filtering in place of uBlock Origin; breakage is judged from there on (criterion A3).
 
@@ -59,10 +59,13 @@ A prototype that blocks requests only, with no cosmetic filtering yet:
 - candidate integration points, to choose between: a URL classifier feature (where Enhanced Tracking Protection already blocks) and a request observer. The phase picks one and records why;
 - lists downloaded and checked exactly as `extensions.lock.json` checks an extension (pinned source, hash). They are compiled outside the parent process, which only loads the serialized result;
 - the per-site switch read and written by Settings;
-- a mode of `tests/regression/run_sites.py` that runs the corpus with the prototype filtering and uBlock Origin off, so that the two filters can be compared page by page.
+- a mode of `tests/regression/run_sites.py` that runs the corpus with the prototype filtering and uBlock Origin off, so that the two filters can be compared page by page;
+- a log of every request the prototype blocks or changes, with the rule, to set beside uBlock Origin's logger;
+- the start-up probe of criterion A4.
 
 Measure against uBlock Origin on the same build:
 
+- agreement again, this time in the browser: what each filter blocks and changes on the corpus, request by request (criterion A1);
 - page load on the corpus (load event, Largest Contentful Paint), cold and warm;
 - start-up: time until the first page can load, and **whether any request the filter would block leaves before the filter is ready** (criterion A4);
 - memory of the parent process and of the extension process with the lists loaded (`about:memory`);
@@ -87,8 +90,8 @@ All of them must hold. Each one names the evidence that proves it.
 
 | # | Criterion | Threshold | Evidence |
 |---|---|---|---|
-| A1 | Network blocking | ≥ 98% of uBlock Origin's blocks on the corpus, **and** every block it misses is listed with the list and rule that made uBlock Origin block it. None of them may come from a privacy or malware list (the registry's groups `privacy` and `malware`, and uBlock filters – Privacy and – Badware risks): a tracker or a malware address that gets through fails the criterion, whatever the percentage. A miss from a list that mixes ads and tracking (Peter Lowe's) is classified by hand and fails the same way when it is a tracking server. The 2% is room for ad requests only | phase 1 and 2 JSON, with the table of misses |
-| A2 | Element hiding | ≥ 95% of the ad slots uBlock Origin hides are hidden | phase 3 screenshots |
+| A1 | Network filtering | ≥ 98% of uBlock Origin's blocks on the corpus, **and** every request it misses is listed and classified by hand, whichever list uBlock Origin names for it. A miss fails the criterion, whatever the percentage, when a privacy or malware list matches the request (the registry's groups `privacy` and `malware`, and uBlock filters – Privacy and – Badware risks, each tried against it) or when it is a tracking server by any other list. The 2% is room for ad requests only. The same for what uBlock Origin changes without blocking: every tracking parameter it removes from an address is removed (the URL tracking protection list blocks nothing, so it would not show as a miss), and a redirect or header change that is left out is listed as a loss | phase 1 and 2 JSON, with the table of misses and of changes |
+| A2 | Element hiding and scriptlets | ≥ 95% of the ad slots uBlock Origin hides are hidden; every scriptlet uBlock Origin injects on the corpus from a privacy list is injected, or the report says what gets through without it | phase 3 screenshots and the list of scriptlets |
 | A3 | Breakage | no more breakages caused by the filter than with uBlock Origin on `sites.json`, counted after the triage of the [October run](site-regression-2026-10.md) (6 pages flagged then, 0 breakages). A flagged page is a lead: an ad slot removed or a site variant is not a breakage | `run_sites.py` in the mode phase 2 adds (candidate in place of uBlock Origin), and its triage table |
 | A4 | Start-up | zero requests that the ready filter blocks leave before it is ready. That covers rules by address and by type on a site that is otherwise allowed (such as `/adbanners/*$image`, which `test_engine_slice.py` checks for uBlock Origin today), not only listed domains. Probed on purpose: requests of each kind made by the first page of a cold start and of a restored session | phase 2 network log and the probe's result |
 | A5 | A real gain | at least one: page load median ≥ 5% faster on the corpus; ≥ 30 MB less memory overall; Settings shows and changes the real per-site state (closes R39) | phase 2 and 3 |
