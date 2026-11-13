@@ -34,7 +34,8 @@ MESSAGES = {
     "busy": "files in the profile are still in use",
     "changed": "the profile's key file changed while this was being done (another change?); nothing was done, try again",
     "storage-failed": "the profile's encrypted storage could not be opened or checked; nothing was changed",
-    "not-recorded": "the change was saved, but could not be recorded inside the profile; unlock the profile once to record it",
+    "not-recorded": "the change was saved, but could not be recorded inside the profile; "
+    "lock the profile if it is open, then unlock it once to record it",
     "mountpoint-not-empty": "unexpected files appeared in the locked profile directory; nothing was opened",
     "recovery-code-malformed": "a recovery code has 28 letters and digits (7 groups of 4)",
     "password-too-short": "use at least 8 characters",
