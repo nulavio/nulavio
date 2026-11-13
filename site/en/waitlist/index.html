@@ -33,13 +33,13 @@
 </header>
 <main id="main" class="wrap">
 <div class="sheet">
-<div class="notice" id="ok" role="status"><b>You are on the list.</b>We will write once, when Nulavio is ready for your system. Until then, silence.</div>
-<div class="notice" id="left" role="status"><b>Done.</b>If that address was on the list, it has been deleted.</div>
+<div class="notice" id="left" role="status"><b>Done.</b>If that link belonged to a sign-up, its address has been deleted.</div>
 <div class="notice notice-warn" id="invalid" role="status"><b>That email does not look valid.</b>Check the address and try again. Nothing was kept.</div>
-<div class="notice notice-warn" id="unavailable" role="status"><b>The list is unavailable right now.</b>Nothing was kept. Try again in a little while.</div>
+<div class="notice notice-warn" id="unavailable" role="status"><b>The list is unavailable right now.</b>Nothing was kept or deleted. Try again in a little while.</div>
+<div class="notice notice-warn" id="nolink" role="status"><b>That link is incomplete.</b>Open the whole address you kept when you signed up. If it is lost, see <a href="#leave">how to leave the list</a>.</div>
 <h1 id="list-h">Waitlist</h1>
 <p class="lead">Leave your email and we will tell you when Nulavio reaches your system. Fedora first, Ubuntu next.</p>
-<form class="join signup" action="/api/waitlist" method="post">
+<form class="join" action="/api/waitlist" method="post">
 <input type="hidden" name="lang" value="en">
 <p class="trap" aria-hidden="true"><label>Leave this field empty <input type="text" name="hp" tabindex="-1" autocomplete="off"></label></p>
 <div class="join-row">
@@ -67,23 +67,14 @@
 <li>the email address you typed;</li>
 <li>the language of the page you signed up on;</li>
 <li>the system, if you pick one;</li>
-<li>the date and time you signed up, to keep the order of arrival.</li>
+<li>the date and time you signed up, to keep the order of arrival;</li>
+<li>a fingerprint (SHA-256) of your private link, to recognise it when you leave. The link itself is not kept.</li>
 </ul>
 <p class="muted">We do not keep your IP address or anything about your browser with the sign-up. The list lives in a database at Cloudflare, the company that hosts this site and that receives every request as any web server does. Your address is used for one message: the one saying Nulavio is available for you. No newsletter, and it is never passed on.</p>
 <h2 id="leave">Leave the list</h2>
-<p class="muted">Type the address you signed up with. It is deleted on the spot, no questions asked.</p>
-<form class="join" action="/api/waitlist" method="post">
-<input type="hidden" name="lang" value="en">
-<input type="hidden" name="action" value="leave">
-<p class="trap" aria-hidden="true"><label>Leave this field empty <input type="text" name="hp" tabindex="-1" autocomplete="off"></label></p>
-<div class="join-row">
-<div>
-<label class="join-label" for="leave-email">The address you signed up with</label>
-<input class="field" id="leave-email" type="email" name="email" required maxlength="254" autocomplete="email" autocapitalize="off" spellcheck="false">
-</div>
-<button class="btn btn-quiet" type="submit">Delete my email</button>
-</div>
-</form>
+<p class="muted">When you sign up you get a private link: the address of the page that comes right after the form. Open that link and use the “Delete my email” button. The address is deleted on the spot, no questions asked.</p>
+<p class="muted">We ask for the link because knowing an address does not prove the sign-up is yours: without it, anyone could take you off the list. Signing up the same address again changes nothing about the first sign-up and gives no new link that works.</p>
+<p class="muted">Lost the link, signed up before it existed, or someone else signed up your address? Write to <a href="mailto:security@nulavio.net">security@nulavio.net</a> from the address on the list and we will delete it.</p>
 </div>
 </main>
 <footer class="foot">

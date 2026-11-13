@@ -23,12 +23,14 @@ import build_site  # noqa: E402
 import verify_live  # noqa: E402
 from contrast import ratio  # noqa: E402
 
-# The landing (what Nulavio is at launch, the comparison, the waitlist form), the waitlist pages and the
-# engineering document ("Recibo": what is ready today, with captures and excerpts from the tree).
+# The landing (what Nulavio is at launch, the comparison, the waitlist form), the waitlist pages, the
+# link page a sign-up is answered with (site/_worker.js serves it with the key in its address) and
+# the engineering document ("Recibo": what is ready today, with captures and excerpts from the tree).
 LANDING = {"index.html": "pt-BR", "en/index.html": "en-US"}
 WAITLIST = {"lista/index.html": "pt-BR", "en/waitlist/index.html": "en-US"}
+LINK = {"lista/link/index.html": "pt-BR", "en/waitlist/link/index.html": "en-US"}
 DOCUMENT = {"engenharia/index.html": "pt-BR", "en/engineering/index.html": "en-US"}
-PAGES = [*LANDING, *WAITLIST, *DOCUMENT, "404.html"]
+PAGES = [*LANDING, *WAITLIST, *LINK, *DOCUMENT, "404.html"]
 FORM_LANG = {"pt-BR": "pt-BR", "en-US": "en"}  # the page's locale -> the form's "lang" field
 WORKER = ROOT / "site" / "_worker.js"
 SAME_SITE = "https://nulavio.net/"
@@ -210,7 +212,7 @@ class SiteTest(unittest.TestCase):
             self.assertNotIn("{{", self.read(page), page)
 
     def test_both_languages_have_the_same_ids(self):
-        for pages in (LANDING, WAITLIST, DOCUMENT):
+        for pages in (LANDING, WAITLIST, LINK, DOCUMENT):
             ids = {page: [n.attrs["id"] for n in self.tree(page).all() if "id" in n.attrs] for page in pages}
             pt, en = ids.values()
             with self.subTest(pages=list(pages)):
@@ -242,7 +244,7 @@ class SiteTest(unittest.TestCase):
                         self.assertTrue(img.attrs["alt"].strip())
 
     def test_figures_tables_and_scroll_regions_are_labelled(self):
-        for page in (*LANDING, *WAITLIST, *DOCUMENT):
+        for page in (*LANDING, *WAITLIST, *LINK, *DOCUMENT):
             tree = self.tree(page)
             with self.subTest(page=page):
                 figures = tree.all("figure")
@@ -364,11 +366,12 @@ class SiteTest(unittest.TestCase):
             tree = self.tree(page)
             forms = tree.all("form")
             with self.subTest(page=page):
-                self.assertEqual(len(forms), 2)
+                self.assertEqual(len(forms), 2 if page in LANDING else 1)  # the landing asks twice; nothing leaves by address
                 labelled = {n.attrs.get("for") for n in tree.all("label")}
                 for form in forms:
                     self.assertEqual((form.attrs.get("action"), form.attrs.get("method")), ("/api/waitlist", "post"))
                     fields = {n.attrs.get("name"): n for n in form.walk() if n.tag in ("input", "select")}
+                    self.assertNotIn("action", fields, "no form asks to leave by address")
                     self.assertEqual(fields["lang"].attrs.get("value"), FORM_LANG[locale])
                     self.assertEqual(fields["email"].attrs.get("type"), "email")
                     self.assertIn("required", fields["email"].attrs)
@@ -382,32 +385,56 @@ class SiteTest(unittest.TestCase):
 
     def test_waitlist_pages_answer_every_state_of_the_worker(self):
         worker = WORKER.read_text(encoding="utf-8")
-        states = set(re.findall(r'redirect\(lang, (?:leaving \? )?"(\w+)"(?: : "(\w+)")?\)', worker))
-        states = {s for pair in states for s in pair if s}
-        self.assertEqual(states, {"ok", "left", "invalid", "unavailable"})
+        states = set(re.findall(r'redirect\(lang, "(\w+)"\)', worker))
+        self.assertEqual(states, {"left", "invalid", "unavailable", "nolink", "leave"})
         targets = dict(re.findall(r'"?([\w-]+)"?: "(/[\w/]+/)"', re.search(r"const PAGES = \{(.*?)\}", worker).group(1)))
         self.assertEqual(targets, {"pt-BR": "/lista/", "en": "/en/waitlist/"})
-        for (page, locale), target in zip(WAITLIST.items(), (targets["pt-BR"], targets["en"]), strict=True):
+        for (page, _locale), target in zip(WAITLIST.items(), (targets["pt-BR"], targets["en"]), strict=True):
             tree = self.tree(page)
             with self.subTest(page=page):
                 self.assertEqual(target.strip("/") + "/index.html", page)
                 notices = {n.attrs.get("id") for n in tree.all() if "notice" in n.classes()}
-                self.assertEqual(notices, states, "one message for each answer of site/_worker.js")
+                self.assertEqual(notices, states - {"leave"}, "one message for each answer of site/_worker.js")
                 ids = {n.attrs.get("id") for n in tree.all()}
                 self.assertLessEqual({"data", "leave"}, ids, "what is kept and how to leave, linked from the landing")
-                fields = [
-                    {n.attrs.get("name"): n.attrs.get("value") for n in f.walk() if n.tag == "input"} for f in tree.all("form")
-                ]
-                leave = [f for f in fields if f.get("action") == "leave"]
-                self.assertEqual(len(leave), 1)
-                self.assertEqual(leave[0]["lang"], FORM_LANG[locale])
+                self.assertIn("SHA-256", self.read(page), "what is kept names the fingerprint of the link")
         css = (ROOT / "site" / "landing.css").read_text(encoding="utf-8")
         self.assertRegex(css, r"\.notice \{[^}]*display: none", "a message shows only when its fragment is the target")
         self.assertIn(".notice:target", css)
 
-    def test_only_the_api_reaches_the_worker(self):
+    def test_the_link_page_is_one_form_that_posts_to_its_own_address(self):
+        """What a sign-up is answered with: the worker serves it with the key in the address (?k=…), and
+        the key is nowhere in the page. A form with no action posts to the address it is on."""
+        worker = WORKER.read_text(encoding="utf-8")
+        targets = dict(re.findall(r'"?([\w-]+)"?: "(/[\w/]+/)"', re.search(r"const LINKS = \{(.*?)\}", worker).group(1)))
+        self.assertEqual([path.strip("/") + "/index.html" for path in targets.values()], list(LINK))
+        for page in LINK:
+            tree, html = self.tree(page), self.read(page)
+            with self.subTest(page=page):
+                (form,) = tree.all("form")
+                self.assertEqual(form.attrs.get("method"), "post")
+                self.assertNotIn("action", form.attrs)
+                fields = {n.attrs.get("name"): n for n in form.walk() if n.tag in ("input", "select")}
+                self.assertEqual(set(fields), {"hp"}, "nothing is typed here: the address is the proof")
+                self.assertEqual(fields["hp"].attrs.get("tabindex"), "-1")
+                self.assertTrue(any(n.tag == "button" and n.attrs.get("type") == "submit" for n in form.walk()))
+                self.assertIn('<meta name="robots" content="noindex">', html)
+                self.assertNotIn('rel="canonical"', html)
+                self.assertEqual(
+                    re.findall(r'(?:href|src|action)="[^"]*[?&]k=', html), [], "no link out of the page carries a key"
+                )
+                # The other language's page would need the key, and no page has a script to carry it.
+                self.assertEqual([n for n in tree.all("a") if n.attrs.get("hreflang")], [])
+                shown = [n for n in tree.all() if "notice" in n.classes()]
+                self.assertEqual(
+                    [n.classes() >= {"notice-on"} for n in shown], [True], "its message does not wait for a fragment"
+                )
+                self.assertIn("mailto:security@nulavio.net", html, "what to do when the link is lost")
+        self.assertRegex((ROOT / "site" / "landing.css").read_text(encoding="utf-8"), r"\.notice-on \{ display: block; \}")
+
+    def test_only_the_api_and_the_link_pages_reach_the_worker(self):
         routes = json.loads((self.out / "_routes.json").read_text(encoding="utf-8"))
-        self.assertEqual(routes, {"version": 1, "include": ["/api/*"], "exclude": []})
+        self.assertEqual(routes, {"version": 1, "include": ["/api/*", "/lista/link/", "/en/waitlist/link/"], "exclude": []})
         self.assertIn("_worker.js", self.files)
         for page in PAGES:
             loads = re.findall(r'(?:src|href)="[^"]*_worker[^"]*"', self.read(page))
@@ -432,49 +459,135 @@ class SiteTest(unittest.TestCase):
 class WaitlistWorkerTest(unittest.TestCase):
     """site/_worker.js: what it answers (tests/lib/waitlist_worker_driver.mjs) and what its SQL does in SQLite."""
 
+    LINK_RE = r"^/(lista|en/waitlist)/link/\?k=([A-Za-z0-9_-]{43})$"
+
     @classmethod
     def setUpClass(cls):
         driver = ROOT / "tests" / "lib" / "waitlist_worker_driver.mjs"
         done = subprocess.run(["node", str(driver), str(WORKER)], capture_output=True, text=True, timeout=60, check=True)
         cls.cases = json.loads(done.stdout)
 
-    def rows(self, *names: str) -> list[tuple]:
-        """The table after the statements of these cases ran, in order, in SQLite (what D1 runs)."""
+    def database(self, *names: str, before: tuple[str, ...] = ()) -> sqlite3.Connection:
+        """SQLite (what D1 runs) after `before` and then the statements of these cases, in order."""
         db = sqlite3.connect(":memory:")
         self.addCleanup(db.close)
+        for sql in before:
+            db.execute(sql)
         for name in names:
-            for statement in self.cases[name]["statements"]:
-                db.execute(statement["sql"], statement["args"])
+            self.replay(db, name)
+        return db
+
+    def replay(self, db: sqlite3.Connection, name: str) -> None:
+        for statement in self.cases[name]["statements"]:
+            db.execute(statement["sql"], statement["args"])
+
+    @staticmethod
+    def entries(db: sqlite3.Connection) -> list[tuple]:
         return db.execute("SELECT email, lang, platform, joined FROM waitlist ORDER BY joined, email").fetchall()
 
+    @staticmethod
+    def links(db: sqlite3.Connection) -> dict[str, str]:
+        return dict(db.execute("SELECT email, link FROM waitlist_links").fetchall())
+
+    def key(self, name: str) -> str:
+        """The key in the link a sign-up was answered with."""
+        return re.match(self.LINK_RE, self.cases[name]["location"]).group(2)
+
+    @staticmethod
+    def kept(key: str) -> str:
+        return hashlib.sha256(key.encode()).hexdigest()
+
     def test_join_keeps_the_address_the_language_the_platform_and_the_time(self):
-        self.assertEqual((self.cases["join"]["status"], self.cases["join"]["location"]), (303, "/lista/#ok"))
-        ((email, lang, platform, joined),) = self.rows("join")
+        join = self.cases["join"]
+        self.assertEqual(join["status"], 303)
+        self.assertRegex(join["location"], r"^/lista/link/\?k=[A-Za-z0-9_-]{43}$")
+        db = self.database("join")
+        ((email, lang, platform, joined),) = self.entries(db)
         self.assertEqual((email, lang, platform), ("Ana@Example.org", "pt-BR", "fedora"))
         self.assertRegex(joined, r"^20\d\d-\d\d-\d\dT\d\d:\d\d:\d\dZ$")
-        self.assertEqual(len(self.cases["join"]["statements"][-1]["args"]), 4, "nothing else is stored: no IP, no user agent")
+        self.assertEqual(len(join["statements"][-1]["args"]), 4, "nothing else is stored: no IP, no user agent")
+        # Of the link, only the SHA-256 of its key; the key itself is in the answer and nowhere else.
+        self.assertEqual(self.links(db), {"Ana@Example.org": self.kept(self.key("join"))})
+        self.assertNotIn(self.key("join"), json.dumps(join["statements"]))
 
-    def test_joining_twice_is_one_sign_up_that_keeps_its_place(self):
-        first = self.rows("join")
-        again = self.rows("join", "join_again_other_case")
-        self.assertEqual(len(again), 1, "the same address in another letter case is the same sign-up")
-        self.assertEqual(again[0][3], first[0][3], "the first date stays: it is the place in line")
-        self.assertEqual(again[0][1:3], ("en", "fedora"), "the language follows the last form; a platform given is not erased")
-        self.assertEqual(self.cases["join_again_other_case"]["location"], "/en/waitlist/#ok", "same answer as a new sign-up")
+    def test_joining_twice_changes_nothing_and_gives_a_link_that_opens_nothing(self):
+        first, again = self.database("join"), self.database("join", "join_again_other_case")
+        self.assertEqual(self.entries(again), self.entries(first), "not the date, the language or the platform")
+        self.assertEqual(self.links(again), self.links(first), "the first link stays the one that works")
+        # The answer has the same shape, with a key of its own: the form does not tell who is on the list.
+        self.assertRegex(self.cases["join_again_other_case"]["location"], r"^/en/waitlist/link/\?k=[A-Za-z0-9_-]{43}$")
+        self.assertNotEqual(self.key("join_again_other_case"), self.key("join"))
+        self.assertEqual(
+            [s["sql"] for s in self.cases["join_again_other_case"]["statements"]],
+            [s["sql"] for s in self.cases["join"]["statements"]],
+        )
+        after = self.database("join", "join_again_other_case", "leave_with_the_second_link")
+        self.assertEqual((self.entries(after), self.links(after)), (self.entries(first), self.links(first)))
 
-    def test_leaving_deletes_and_answers_the_same_for_an_unknown_address(self):
-        self.assertEqual(self.rows("join", "leave"), [])
-        self.assertEqual(len(self.rows("join", "leave_absent")), 1)
-        self.assertEqual(self.cases["leave"]["location"], "/en/waitlist/#left")
-        self.assertEqual(self.cases["leave_absent"]["location"], "/lista/#left")
+    def test_leaving_takes_the_link_and_answers_the_same_for_any_key(self):
+        # LESIS 3c38916e: POST action=leave with an address deleted its entry, with no proof asked.
+        by_address = self.cases["leave_by_address"]
+        self.assertEqual(
+            (by_address["status"], by_address["location"], by_address["statements"]), (303, "/en/waitlist/#leave", [])
+        )
+        db = self.database("join", "join_unknown_platform", "leave_unknown_link")
+        self.assertEqual(len(self.entries(db)), 2)
+        self.replay(db, "leave")
+        self.assertEqual([email for email, *_ in self.entries(db)], ["bruno@example.org"])
+        self.assertEqual(list(self.links(db)), ["bruno@example.org"], "the fingerprint goes with the entry")
+        self.assertEqual(self.cases["leave"]["location"], "/lista/#left")
+        self.assertEqual(self.cases["leave_unknown_link"]["location"], "/en/waitlist/#left")
+        self.assertEqual(self.cases["leave_with_the_second_link"]["location"], "/en/waitlist/#left")
+        for name in ("leave", "leave_unknown_link"):
+            args = [arg for statement in self.cases[name]["statements"] for arg in statement["args"]]
+            self.assertTrue(args and all(re.fullmatch(r"[0-9a-f]{64}", arg) for arg in args), "the database sees the hash only")
+
+    def test_an_entry_from_before_links_gets_none_from_a_second_sign_up(self):
+        # Otherwise anyone who knows an address on the old list would sign it up again and leave with the new link.
+        join = next(
+            s["sql"] for s in self.cases["join"]["statements"] if s["sql"].startswith("CREATE TABLE IF NOT EXISTS waitlist (")
+        )
+        old = "INSERT INTO waitlist VALUES ('ana@example.org', 'pt-BR', '', '2026-11-09T12:00:00Z')"
+        db = self.database("join_again_other_case", "leave_with_the_second_link", before=(join, old))
+        self.assertEqual(self.entries(db), [("ana@example.org", "pt-BR", "", "2026-11-09T12:00:00Z")])
+        self.assertEqual(self.links(db), {})
+
+    def test_an_entry_removed_by_hand_can_sign_up_again(self):
+        db = self.database("join")
+        db.execute("DELETE FROM waitlist")  # the maintainer, for someone who lost the link; the fingerprint was left behind
+        self.replay(db, "join_again_other_case")
+        self.assertEqual(self.links(db), {"ana@example.org": self.kept(self.key("join_again_other_case"))})
+        self.replay(db, "leave_with_the_second_link")
+        self.assertEqual((self.entries(db), self.links(db)), ([], {}))
+
+    def test_the_link_page_is_the_static_page_whatever_the_key(self):
+        for name, body in (("link_page", "the link page, pt-BR"), ("link_page_en", "the link page, en")):
+            case = self.cases[name]
+            with self.subTest(case=name):
+                self.assertEqual((case["status"], case["body"], case["statements"]), (200, body, []), "the list is not looked at")
+                self.assertRegex(
+                    case["files"][0], r"^GET https://nulavio\.net/(lista|en/waitlist)/link/$", "asked for without the key"
+                )
+        self.assertEqual((self.cases["link_page_head"]["status"], self.cases["link_page_head"]["body"]), (200, ""))
+        for name, location in (("link_page_short_key", "/lista/#nolink"), ("link_page_no_key", "/en/waitlist/#nolink")):
+            self.assertEqual((self.cases[name]["status"], self.cases[name]["location"]), (303, location))
+        self.assertEqual(self.cases["link_page_no_files"]["status"], 503)
+        # A page of the site: the headers of site/_headers, and never stored or indexed (its address is a key).
+        headers = self.cases["link_page"]["headers"]
+        for name, value in verify_live.expected_headers(ROOT / "site").items():
+            self.assertEqual(headers.get(name), value, name)
+        self.assertEqual((headers["cache-control"], headers["x-robots-tag"]), ("no-store", "noindex"))
+        self.assertTrue(headers["content-type"].startswith("text/html"))
 
     def test_values_are_bound_and_unknown_ones_fall_back(self):
-        rows = self.rows("join", "join_unknown_platform", "unknown_lang")
-        kept = {(email, lang, platform) for email, lang, platform, _ in rows}
+        db = self.database("join", "join_unknown_platform", "unknown_lang")
+        kept = {(email, lang, platform) for email, lang, platform, _ in self.entries(db)}
         self.assertEqual(
             kept, {("Ana@Example.org", "pt-BR", "fedora"), ("bruno@example.org", "en", ""), ("carla@example.org", "pt-BR", "")}
         )
-        self.assertEqual(self.cases["unknown_lang"]["location"], "/lista/#ok", "the redirect never follows the form's own text")
+        self.assertRegex(
+            self.cases["unknown_lang"]["location"], r"^/lista/link/\?k=", "the redirect never follows the form's own text"
+        )
         for case in self.cases.values():
             for statement in case["statements"]:
                 self.assertNotIn("example.org", statement["sql"], "addresses travel as bound parameters")
@@ -484,24 +597,35 @@ class WaitlistWorkerTest(unittest.TestCase):
             "invalid_email": (303, "/en/waitlist/#invalid"),
             "no_dot_in_domain": (303, "/lista/#invalid"),
             "too_long_email": (303, "/lista/#invalid"),
-            "honeypot": (303, "/en/waitlist/#ok"),  # a bot is told it worked
             "cross_site": (403, None),
             "wrong_content_type": (415, None),
             "too_large": (413, None),
             "get": (405, None),
             "no_database": (303, "/en/waitlist/#unavailable"),
             "database_down": (303, "/lista/#unavailable"),
+            "leave_short_key": (303, "/lista/#nolink"),
+            "leave_honeypot": (303, "/en/waitlist/#left"),  # a bot is told it worked
+            "leave_cross_site": (403, None),
+            "leave_wrong_content_type": (415, None),
+            "leave_too_large": (413, None),
+            "leave_put": (405, None),
+            "leave_no_database": (303, "/en/waitlist/#unavailable"),
+            "leave_database_down": (303, "/en/waitlist/#unavailable"),
         }
         for name, (status, location) in expected.items():
             case = self.cases[name]
             with self.subTest(case=name):
                 self.assertEqual((case["status"], case["location"]), (status, location))
                 self.assertEqual(case["statements"], [])
+        # A bot that fills the honeypot is told it worked, with a link like any other; nothing is kept.
+        self.assertRegex(self.cases["honeypot"]["location"], r"^/en/waitlist/link/\?k=[A-Za-z0-9_-]{43}$")
+        self.assertEqual(self.cases["honeypot"]["statements"], [])
         self.assertEqual(self.cases["get"]["headers"].get("allow"), "POST")
-        self.assertEqual(self.cases["no_fetch_metadata"]["location"], "/en/waitlist/#ok", "an older browser still gets in")
+        self.assertEqual(self.cases["leave_put"]["headers"].get("allow"), "GET, HEAD, POST")
+        self.assertRegex(self.cases["no_fetch_metadata"]["location"], self.LINK_RE, "an older browser still gets in")
 
     def test_answers_carry_their_own_headers(self):
-        for name in ("join", "invalid_email", "cross_site", "get"):
+        for name in ("join", "leave", "invalid_email", "cross_site", "get", "link_page_short_key"):
             headers = self.cases[name]["headers"]
             with self.subTest(case=name):
                 self.assertEqual(headers["cache-control"], "no-store")
