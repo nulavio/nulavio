@@ -351,6 +351,22 @@ class InstructionsTest(unittest.TestCase):
         ):
             self.assertIn(phrase, INSTRUCTIONS)
 
+    def test_instructions_name_the_files_the_review_tool_leaves_in_the_tree(self):
+        # With CLAUDE_CODE_SUBPROCESS_ENV_SCRUB on, Claude Code 2.1.318 creates these, empty, in the
+        # working tree before the model reads anything (seen on 2026-11-13): to a reviewer told to
+        # look for secrets files and submodules they look like findings.
+        for name in (".env", ".npmrc", ".yarnrc", "bunfig.toml", "package.json", "package-lock.json", "pnpm-lock.yaml",
+                     "yarn.lock", ".gitmodules", ".claude/", "node_modules/"):  # fmt: skip
+            self.assertIn(f"`{name}`", INSTRUCTIONS)
+        self.assertIn("never report them", INSTRUCTIONS)
+        self.assertIn("only when the diff adds or changes it", INSTRUCTIONS)
+        tracked = subprocess.run(
+            ["git", "-C", str(ROOT), "ls-files"], capture_output=True, text=True, check=True
+        ).stdout.splitlines()
+        for name in (".env", ".npmrc", ".yarnrc", ".yarnrc.yml", "bunfig.toml", "package.json", "package-lock.json",
+                     "pnpm-lock.yaml", "yarn.lock", ".gitmodules"):  # fmt: skip
+            self.assertNotIn(name, tracked, "the repository has such a file at its root now: the instruction would hide it")
+
     def test_schema_fits_in_claude_args(self):
         compact = ai_review_input.compact_schema()
         self.assertNotIn("'", compact)
