@@ -1,6 +1,6 @@
 # ADR 0013 — Repository layout: one repository, organized by area
 
-- **Status:** Proposed (2026-11-13). Nothing moves until the maintainer decides ([issue #97](https://github.com/nulavio/nulavio/issues/97)). [Private work](../process/private-work.md), the page that comes with it, is proposed too; what [SECURITY.md](../../SECURITY.md) already requires (no vulnerability in a public issue, the fix in an advisory's private fork) does not wait for this decision.
+- **Status:** Accepted (2026-11-13). Proposed that day in #146; the maintainer, asked to decide it together with [private work](../process/private-work.md), answered "prossiga" (go ahead) the same day, and "manter" (keep) for the installed Apps of point 4. The page is adopted with it. Tracked in [issue #97](https://github.com/nulavio/nulavio/issues/97) and its sub-issues.
 - **Related:** [evidence](../research/evidence/org-layout-2026-11-13.md), [issues](../process/issues.md), [pull requests](../process/pull-requests.md), [agent guardrails](../process/agent-guardrails.md), [residual risks](../security/residual-risks.md) R62 and R67.
 
 ## Context
@@ -34,14 +34,14 @@ What option A costs, so it is not chosen blind: about 80 MB of media stays in ev
 
 Not chosen inside A: rewriting history to drop the screenshots. It would change every commit id, break the four tags (three releases and the one F-Droid builds from) and every reference in the changelog, the documents and the pull requests, to save 76 MB that a sparse checkout already avoids.
 
-## Decision (proposed)
+## Decision
 
-**Option A.** One repository, with five changes that make it cheaper to work in. Each becomes a sub-issue of #97 once this ADR is accepted.
+**Option A.** One repository, with five changes that make it cheaper to work in. The first four are sub-issues of #97 (#179, #180, #181, #182); the fifth is done by adopting the page.
 
 1. **Instructions per area.** A short `AGENTS.md` in `browser/`, `launcher/`, `android/`, `site/`, `tests/` and `scripts/release/`: what the area is, which documents and invariants apply, which checks to run, what belongs to another area. The root file stays the entry point and the only place for rules that apply everywhere. `.coderabbit.yaml`'s per-area instructions point to these files instead of repeating them. To be checked with each client before relying on it: whether it loads a nested `AGENTS.md` by itself (Claude Code reads `CLAUDE.md`; the root one imports `AGENTS.md`, and a nested one may need the same).
 2. **Worktrees without the screenshots.** A documented sparse checkout for agents' worktrees (everything but `docs/design/screenshots/`, about 15.6 MB), used by default by whoever does not work on design. CI keeps the full checkout: the documents' link test needs the files, and so does any test that reads the tree.
 3. **A budget for media, with a trigger.** The script of the evidence is run at each release. When media in the history passes 250 MB (three times today), new capture sets go to a repository of their own, public, with no CI, no secrets and no Dependabot, and the documents link to them by commit. Until then captures stay where the documents that cite them are. No history is rewritten in either case.
-4. **Least privilege inside one repository.** The site's `CLOUDFLARE_API_TOKEN` moves into an environment limited to `main`, like the release and build secrets (a change to a workflow and to the repository's settings: the maintainer's to apply). The Apps are limited to the repositories they need, or removed (the maintainer's decision, R67). The fine-grained agent token of the [guardrails](../process/agent-guardrails.md) stays proposed.
+4. **Least privilege inside one repository.** The site's `CLOUDFLARE_API_TOKEN` moves into an environment limited to `main`, like the release and build secrets (a change to a workflow and to the repository's settings: the maintainer's to apply). The Apps stay as installed: the maintainer's decision of 2026-11-13, with what that leaves open written in R67. The fine-grained agent token of the [guardrails](../process/agent-guardrails.md) stays proposed.
 5. **A written home for private work** ([private work](../process/private-work.md)): a vulnerability lives in a draft security advisory and its private fork until the fix ships; a plan that cannot be announced yet lives as a draft item in the organization's private project; everything else is a public issue. The project is the one view over all three. No private repository for now.
 
 Not changed: build scripts stay under `scripts/` (moving them would rewrite paths in the workflows, CODEOWNERS and the documents for no measured gain; the per-area files name them). `nulavio/.github` stays as it is. Flathub's manifest repository will exist under the `flathub` organization whatever is decided here.
@@ -56,6 +56,6 @@ Not changed: build scripts stay under `scripts/` (moving them would rewrite path
 
 ## Consequences
 
-- **If accepted:** five sub-issues, none of which moves code. Agents read less and know what an area needs. The cost of the screenshots stops growing unseen. Private work has one rule.
+- **Accepted:** four sub-issues and one adopted page, none of which moves code. Agents read less and know what an area needs. The cost of the screenshots stops growing unseen. Private work has one rule.
 - **If B or C is chosen instead:** the migration plan has to redo F-Droid's submission, re-bind the signing role and the attestations, publish the nv1 protocol's vectors and the brand tokens as something two repositories consume, and repeat every repository setting; the evidence lists each consumer.
 - **Either way:** the evidence and its script stay, so the question is reopened with new numbers, not with new opinions.
