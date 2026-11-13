@@ -20,7 +20,7 @@ Lowercase letters, digits and `._/-`, at most 60 characters. `<type>` is one of 
 | An engine update under the [update policy](../architecture/update-policy.md) | `release/firefox-<version>` | `release/firefox-159.0` |
 | A vulnerability fix | `sec/<slug>` | `sec/launcher-symlink` |
 
-Once the repository is public, develop fixes for undisclosed vulnerabilities in a GitHub private security advisory fork, not in a public `sec/` branch.
+The repository is public: develop the fix for an undisclosed vulnerability in the private fork of a draft security advisory, and bring its `sec/` branch here only when the release is about to be built ([private work](private-work.md#a-vulnerability-step-by-step)).
 
 The pre-push hook checks names and refuses pushes to `main`; the pre-commit hook next to it refuses a commit that adds a secret ([code scanning](../security/code-scanning.md)). Turn both on once per clone (worktrees share it):
 

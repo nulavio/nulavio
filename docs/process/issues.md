@@ -11,7 +11,7 @@ GitHub issues are where Nulavio's open work lives. A chat, a session summary or 
 - Spikes: time-boxed studies that end in a go/no-go decision (form "Spike", label `spike`). Example: the [native content filter spike](../research/spike-native-content-filter.md) (#95).
 - Decisions only the maintainer can make (label `needs-decision`). The issue states the options and a recommendation.
 
-Not in a public issue: security vulnerabilities, which go through a [private advisory](../../SECURITY.md); secrets, tokens, personal data, and logs that contain them.
+Not in a public issue: security vulnerabilities, which go through a private advisory ([SECURITY.md](../../SECURITY.md); the steps, for agents too, are in [private work](private-work.md)); secrets, tokens, personal data, and logs that contain them.
 
 ## Labels
 
@@ -91,4 +91,4 @@ An agent moves an issue to `In Progress` when it starts the work and leaves `Don
 ## Not set up yet (maintainer items)
 
 - Milestones per release, and the organization's issue types (Bug, Feature, Task) in place of the kind labels.
-- How the organization's repositories are laid out for the long term is open in #97.
+- How the organization's repositories are laid out for the long term: proposed in [ADR 0013](../adr/0013-repository-layout.md) (one repository, organized by area), waiting for the maintainer's decision in #97.
