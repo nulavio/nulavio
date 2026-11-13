@@ -42,7 +42,7 @@ Compare the two matching engines outside the browser, on the recorded corpus:
 
 Measure:
 
-- agreement: which requests one blocks and the other does not, by list and by request type; and which requests uBlock Origin changes without blocking (a tracking parameter removed, a redirect to a neutral resource, a response header) that adblock-rust leaves as they are;
+- agreement: which requests one blocks and the other does not, by list and by request type; and which requests uBlock Origin changes without blocking (a tracking parameter removed, a redirect to a neutral resource, a response header) that adblock-rust leaves as they are, on the corpus and on the probe addresses of criterion A1;
 - matching cost per request (median, p95);
 - time to load and compile the lists, and the memory the result takes;
 - size of the serialized adblock-rust engine.
@@ -53,7 +53,7 @@ Whether those extra blocks break a page cannot be answered here: nothing in this
 
 ### Phase 2: network blocking inside the engine (about 4 days)
 
-A prototype that blocks requests only, with no cosmetic filtering yet:
+A prototype of network filtering only (blocking, and the changes to requests that criterion A1 counts), with no cosmetic filtering yet:
 
 - adblock-rust vendored in the engine's Rust tree, behind a build flag;
 - candidate integration points, to choose between: a URL classifier feature (where Enhanced Tracking Protection already blocks) and a request observer. The phase picks one and records why;
@@ -76,6 +76,7 @@ Measure against uBlock Origin on the same build:
 
 - Element hiding: one stylesheet per document for the specific filters, generic class and id filters as the page changes, and procedural filters in the content process.
 - Scriptlets: injected before the page's own scripts, in the page's world, in every frame. The phase tries the built-in add-on's `scripting` API first, then an engine actor.
+- Which scriptlets uBlock Origin injects on the corpus, each with the list it comes from (the list criterion A2 is checked against).
 - Scriptlet sources: the licence of every scriptlet we would ship. Brave's `adblock-resources` is MPL-2.0 at the repository level, but scriptlets that come from uBlock Origin are GPL-3.0. Record the exact source of each one.
 - Visible ads on the corpus compared with screenshots (`run_sites.py`, `pngdiff`), and breakage triaged as in the [October run](site-regression-2026-10.md).
 - Fuzzing (`cargo-fuzz`): the list parser and the loader of the serialized engine.
@@ -90,8 +91,8 @@ All of them must hold. Each one names the evidence that proves it.
 
 | # | Criterion | Threshold | Evidence |
 |---|---|---|---|
-| A1 | Network filtering | ≥ 98% of uBlock Origin's blocks on the corpus, **and** every request it misses is listed and classified by hand, whichever list uBlock Origin names for it. A miss fails the criterion, whatever the percentage, when a privacy or malware list matches the request (the registry's groups `privacy` and `malware`, and uBlock filters – Privacy and – Badware risks, each tried against it) or when it is a tracking server by any other list. The 2% is room for ad requests only. The same for what uBlock Origin changes without blocking: every tracking parameter it removes from an address is removed (the URL tracking protection list blocks nothing, so it would not show as a miss), and a redirect or header change that is left out is listed as a loss | phase 1 and 2 JSON, with the table of misses and of changes |
-| A2 | Element hiding and scriptlets | ≥ 95% of the ad slots uBlock Origin hides are hidden; every scriptlet uBlock Origin injects on the corpus from a privacy list is injected, or the report says what gets through without it | phase 3 screenshots and the list of scriptlets |
+| A1 | Network filtering | ≥ 98% of uBlock Origin's blocks on the corpus, **and** every request it misses is listed and classified by hand, whichever list uBlock Origin names for it. A miss fails the criterion, whatever the percentage, when a privacy or malware list matches the request (the registry's groups `privacy` and `malware`, and uBlock filters – Privacy and – Badware risks, each tried against it) or when it is a tracking server or a malware address by any other list. The 2% is room for ad requests only. The same for what uBlock Origin changes without blocking: every tracking parameter it removes from an address is removed (the URL tracking protection list blocks nothing, so it would not show as a miss), and a redirect or header change that is left out fails the criterion when its rule is from a privacy or malware list, and is listed as a loss otherwise. Probed on purpose, because the corpus's addresses carry no such parameters: addresses with parameters the list covers (`utm_source`, `fbclid`, `gclid` and others), as a navigation and as a request made by a page. An empty table of changes is not a pass | phase 1 and 2 JSON, with the table of misses, the table of changes and the probe's result |
+| A2 | Element hiding and scriptlets | ≥ 95% of the ad slots uBlock Origin hides are hidden; every scriptlet uBlock Origin injects on the corpus from a privacy list is injected. One that is left out is a loss the maintainer has to accept under A10, with what gets through without it | phase 3 screenshots and the list of scriptlets |
 | A3 | Breakage | no more breakages caused by the filter than with uBlock Origin on `sites.json`, counted after the triage of the [October run](site-regression-2026-10.md) (6 pages flagged then, 0 breakages). A flagged page is a lead: an ad slot removed or a site variant is not a breakage | `run_sites.py` in the mode phase 2 adds (candidate in place of uBlock Origin), and its triage table |
 | A4 | Start-up | zero requests that the ready filter blocks leave before it is ready. That covers rules by address and by type on a site that is otherwise allowed (such as `/adbanners/*$image`, which `test_engine_slice.py` checks for uBlock Origin today), not only listed domains. Probed on purpose: requests of each kind made by the first page of a cold start and of a restored session | phase 2 network log and the probe's result |
 | A5 | A real gain | at least one: page load median ≥ 5% faster on the corpus; ≥ 30 MB less memory overall; Settings shows and changes the real per-site state (closes R39) | phase 2 and 3 |
