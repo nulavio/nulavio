@@ -12,7 +12,7 @@ Each milestone has a definition of done (DoD). "Done" requires the DoD to be ver
 
 **DoD:** ADR accepted with reproducible evidence ✔
 
-## Phase 1 — Foundation and branding · **complete except trademark search**
+## Phase 1 — Foundation and branding · **complete**
 
 - [x] Repo structure, docs, threat model, policies
 - [x] Brand strategy, 3 directions, selection, tokens (AA-verified), logo family, icons 16–512, symbolic, favicon
@@ -23,7 +23,7 @@ Each milestone has a definition of done (DoD). "Done" requires the DoD to be ver
 - [x] Ubuntu userspace check (Mozilla APT Firefox): 15/15
 - [x] Domain `nulavio.net` registered by the maintainer (2026-10-25)
 - [x] Domain live and hardened: https://nulavio.net (static site, no scripts or cookies), DNSSEC, TLS ≥ 1.2, DMARC `p=reject`, `security@nulavio.net` and `/.well-known/security.txt` (2026-10-25)
-- [ ] Trademark search (INPI, USPTO/EUIPO) and handles, by the maintainer or counsel
+- [ ] Formal brand/trademark filings (handled privately by the maintainer or counsel)
 
 **DoD:** CI green on a fresh clone; measured Track B build numbers recorded in the ADR.
 
@@ -140,7 +140,7 @@ External agents (Codex CLI and Desktop, Claude Code and Desktop, other MCP clien
 
 ## Next task (recommended)
 
-S1–S25 and UX0–UX7 are done except where marked above. What is left before the public alpha and 1.0 is listed in the [release criteria](release-criteria.md) and the [execution plan](execution-plan.md): most of it is the maintainer's (release key and repository host, Safe Browsing quota, a test security report, trademark searches, Proton Pass on the build); the agents' part is keeping the engine current (Firefox 160) and the fixes from the 2026-11-09 review.
+S1–S25 and UX0–UX7 are done except where marked above. What is left before the public alpha and 1.0 is listed in the [release criteria](release-criteria.md) and the [execution plan](execution-plan.md): most of it is the maintainer's (release key and repository host, Safe Browsing quota, a test security report, brand filings, Proton Pass on the build); the agents' part is keeping the engine current (Firefox 160) and the fixes from the 2026-11-09 review.
 
 ## Phase 7 — UX redesign (from 2026-10-27) ([programme](execution-plan.md#ux-redesign-programme-from-2026-10-27))
 

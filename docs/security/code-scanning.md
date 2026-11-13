@@ -85,12 +85,7 @@ Change the version, URL and SHA-256 in `scripts/security/fetch_tools.sh` togethe
 
 ## LESIS (external, supporter)
 
-[LESIS](https://lesis.lat) supports Nulavio with free use of its vulnerability platform, which scans code automatically with AI help and also takes manual findings and produces reports. It runs outside CI and is not a required check: its results reach the maintainer and are handled like any other report ([SECURITY.md](../../SECURITY.md)), privately until a fix ships.
-
-| Date | Scan | Result |
-|---|---|---|
-| 2026-11-11 | Leaked secrets | Nothing found |
-| 2026-11-11 | Code (vulnerabilities) | Running |
+[LESIS](https://lesis.lat) supports Nulavio with free use of its vulnerability platform, which scans code and secrets automatically and also takes manual findings and produces reports. It runs outside CI and is not a required check: its results reach the maintainer and are handled like any other report ([SECURITY.md](../../SECURITY.md)), privately until a fix ships.
 
 ## Dynamic analysis: AddressSanitizer
 

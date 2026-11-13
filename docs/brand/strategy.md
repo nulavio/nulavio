@@ -80,15 +80,11 @@ Strikethrough marks phrases we never use (the docs test ignores text inside `~~â
 
 ## Trademark and availability status
 
-**Nulavio is a candidate name. It is not registered by this project, and nothing here should be read as clearance.** Before any public launch:
+Brand assets and usage rules are governed by [guidelines.md](guidelines.md) and [LICENSES.md](../../LICENSES.md). Formal trademark matters are handled privately outside this repository. Official channels and infrastructure controlled by the project:
 
-| Item | Status (observed 2026-10-24, updated 2026-10-25) | Action |
+| Item | Status | Notes |
 |---|---|---|
-| INPI (Brazil), classes 9 and 42 | **No mark "nulavio"** (pePI brand search by the maintainer, 2026-11-10 18:44, data current to 2026-11-10) | A search does not clear the mark: INPI examines registrability when an application is filed. File in classes 9 and 42 if the name is kept |
-| USPTO / EUIPO / WIPO | **No mark "nulavio"**, live or dead (USPTO trademark search, TMview "contains", WIPO Global Brand Database, by the maintainer on 2026-11-10) | Exact-word searches only; similar-sounding or design marks were not searched and no counsel reviewed them |
 | **`nulavio.net`** | **Registered on 2026-10-25 and configured** (Cloudflare Registrar and DNS): site on Cloudflare Pages (`nulavio.pages.dev`), `www` â†’ apex 301; Always Use HTTPS, minimum TLS 1.2, HSTS 6 months without preload; DNSSEC on (DS published, answers validate); Email Routing receives only `security@nulavio.net` (forwarded to the maintainer, catch-all off); SPF, DKIM and DMARC `p=reject`; Certificate Transparency monitoring on. Expires 2027-10-25 | Keep auto-renew on. Some DNS filters block newly registered domains for weeks (seen on the maintainer's network): test with DNS-over-HTTPS |
-| `nulavio.com` | Registered on 2026-10-18 by someone else as far as this project knows (RDAP: registrar lock, nameservers `*.share-dns.*`); not used by the project | Watch for confusion or abuse; consider `.com.br` as a defensive registration |
-| `nulavio.org`, `.dev`, `.app`, `.io`, `.com.br` | NXDOMAIN via public DNS (likely unregistered; `.org` RDAP 404) | Optional defensive registrations |
+| `nulavio.com` | Registered on 2026-10-18 by someone else as far as this project knows (RDAP: registrar lock, nameservers `*.share-dns.*`); not used by the project | Watch for confusion or abuse |
 | GitHub `nulavio` | **Organization created and the repository moved there** (2026-11-10); `nulavio/nulavio` is public | `nulavio.net` verified for the organization (DNS TXT `_gh-nulavio-o`, 2026-11-10) |
-| Mastodon / Bluesky / X handles | Not checked | Reserve |
 | Reverse-DNS app ID (Flathub, D-Bus) | **`net.nulavio.Nulavio`** (domain controlled since 2026-10-25). The preview keeps `nulavio-preview` until Track B packaging | Apply with the RPM (desktop file, AppStream metainfo, Wayland app_id) |

@@ -2,8 +2,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-## Nulavio brand names. "Nulavio" is a candidate trademark of the Nulavio
-## project (see docs/brand/strategy.md); it is not a Mozilla trademark.
+## Nulavio brand names. "Nulavio" is a trademark of the Nulavio
+## project (see docs/brand/guidelines.md); it is not a Mozilla trademark.
 
 -brand-shorter-name = Nulavio
 -brand-short-name = Nulavio

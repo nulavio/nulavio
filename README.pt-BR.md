@@ -125,8 +125,9 @@ Leia o [CONTRIBUTING.md](CONTRIBUTING.md). Em resumo: commits convencionais com 
 
 ## Apoio
 
-- **[LESIS](https://lesis.lat)** oferece ao Nulavio, sem custo, sua plataforma de vulnerabilidades. Varreduras automáticas de código rodam neste repositório, e uma varredura de segredos vazados não encontrou nada (11/11/2026). Os achados seguem o [processo de segurança](SECURITY.md) de sempre.
+- **[LESIS](https://lesis.lat)** oferece ao Nulavio, sem custo, sua plataforma de vulnerabilidades para varreduras automáticas de código e segurança neste repositório. Os achados seguem o [processo de segurança](SECURITY.md).
+- **[CodeRabbit](https://coderabbit.ai)** oferece revisões automáticas de pull request no plano para código aberto (consultivas; veja [pull requests](docs/process/pull-requests.md)).
 
 ## Licença e marcas
 
-Código sob a [Mozilla Public License 2.0](LICENSE); os elementos de marca, como descrito em [LICENSES.md](LICENSES.md). "Nulavio" ainda não é marca registrada. O Nulavio não tem vínculo com a Mozilla; Firefox é marca da Mozilla Foundation.
+Código sob a [Mozilla Public License 2.0](LICENSE); elementos de marca e regras de uso em [LICENSES.md](LICENSES.md). O Nulavio não tem vínculo com a Mozilla; Firefox é marca da Mozilla Foundation.

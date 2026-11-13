@@ -134,7 +134,7 @@ Reopen this ADR if **any** of these holds:
 5. **Manual login/autofill certification** for Proton Pass, KeePassXC and Bitwarden with real accounts (maintainer).
 6. **Ubuntu:** the default Firefox is a Snap that cannot read hidden directories, so the preview requires Mozilla's APT package. To verify on Ubuntu KDE.
 7. ~~Google Safe Browsing key for Track B~~ **Resolved (E19).** Remaining: Google quota review before a public release, and download protection (residual risk R15).
-8. Brand pendencies (INPI, domains, handles) are tracked in [brand strategy](../brand/strategy.md#trademark-and-availability-status).
+8. Brand and domain status are tracked in [brand strategy](../brand/strategy.md#trademark-and-availability-status); trademark matters are handled privately by the maintainer.
 
 ## References
 

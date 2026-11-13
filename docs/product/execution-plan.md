@@ -16,7 +16,7 @@ Nulavio is complete when all of the following are verified (tests or recorded ev
 
 | Needs the maintainer or a third party | When |
 |---|---|
-| Trademark searches (INPI, USPTO, EUIPO) | Before a public 1.0 |
+| Trademark filings (handled privately by the maintainer) | Before a public 1.0 |
 | Google Safe Browsing quota review; download-protection access (R15) | Alpha gate |
 | Signing keys for packages and the repository; F-Droid and Play Store accounts | Packaging (phase 6), S11 |
 | Android SDK installation (approved: when S11 starts) and the test phone | S11 |

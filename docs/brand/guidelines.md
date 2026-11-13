@@ -54,7 +54,7 @@ Mint means **Nulavio / your route / active**. It **never means "safe"**: the sec
 6. Combining the mark with shields, padlocks, eyes, globes, crypto coins or VPN-style imagery.
 7. Placing Mozilla, Firefox or any third-party logo next to the Nulavio mark as if endorsed.
 8. Placing the bare symbol on busy photos. Use the tile.
-9. Using "Nulavio" in a product name of a fork without permission once the mark is registered.
+9. Using "Nulavio" in the product name of a fork without permission.
 
 ## 5. Typography
 
