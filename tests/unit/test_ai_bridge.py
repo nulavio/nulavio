@@ -245,6 +245,34 @@ class AddressTest(unittest.TestCase):
                     "view-source:https://example.org/"):  # fmt: skip
             self.assertEqual(policy.classify_url(url).needs, ("local_resources", "debugging"), url)
 
+    def test_an_address_wrapped_by_an_internal_page_goes_by_what_it_shows(self):
+        # LESIS afa509d1: view-source:https://… has no host of its own, so the site list let it through.
+        with mock.patch.object(policy, "_resolves_locally", return_value=False):
+            wrapped = (
+                "view-source:https://bank.example/acct?id=4",
+                "VIEW-SOURCE:https://bank.example/",
+                "about:reader?url=https%3A%2F%2Fbank.example%2Fnews",
+                "about:READER?url=https://bank.example/",
+            )
+            for url in wrapped:
+                with self.subTest(url=url):
+                    target = policy.classify_url(url)
+                    self.assertEqual((target.host, target.needs), ("bank.example", ("local_resources", "debugging")))
+                    self.assertEqual(policy.host_of(url), "bank.example")
+                    self.assertEqual(policy.origin(url), "https://bank.example")
+            self.assertEqual(policy.classify_url("view-source:http://192.168.1.1/").host, "192.168.1.1")
+            self.assertEqual(policy.classify_url("view-source:file:///etc/hostname").host, None)
+            for url in ("view-source:view-source:https://x.example/", "view-source:about:reader?url=https://x.example/",
+                        "about:reader?url=view-source:https://x.example/", "view-source:javascript:alert(1)",
+                        "view-source:https://user@x.example/", "view-source:", "view-source:http://[::1"):  # fmt: skip
+                with self.subTest(url=url), self.assertRaises(policy.UrlRefused):
+                    policy.classify_url(url)
+        for url in ("about:config", "about:reader", "about:blank", "file:///etc/hostname", None, ""):
+            self.assertIsNone(policy.host_of(url), url)
+        self.assertEqual(policy.host_of("https://docs.example.org/a"), "docs.example.org")
+        with self.assertRaises(policy.UrlRefused):
+            policy.classify_url("http://[::1")  # the parser refuses it: an answer, not an exception
+
     def test_origin_drops_path_and_query(self):
         self.assertEqual(policy.origin("https://bank.example:8443/acct?id=123#x"), "https://bank.example:8443")
         self.assertEqual(policy.origin("file:///home/me/secret.txt"), "file:")
@@ -639,6 +667,251 @@ class AuditTest(Home):
             result = bridge.call("page_read", {"tab": "t1"})
         self.assertTrue(result["isError"])
         self.assertIn("replaced this agent's key", result["content"][0]["text"])
+
+    def test_a_held_session_gets_no_tool_but_its_state(self):
+        # LESIS 987a7ec1: profiles_list has no capability, so nothing checked it. A session connected
+        # before a revoke, a pause or the stop still read the agent's profiles and routes.
+        def held_by(change, undo=None):
+            agent, _ = registry.add("lists", "other", "autonomous")
+            registry.set_profiles(agent["id"], [{"label": "Trabalho", "path": "/home/u/.nulavio/p1"}])
+            registry.set_routes(agent["id"], [{"site": "intranet.example.org", "profile": "Trabalho"}])
+            bridge = tools.Bridge(agent["id"], "s-1", approver=registry.Approver(), key_sha256=agent["token_sha256"])
+            self.assertIn("intranet.example.org", json.dumps(bridge.call("profiles_list", {})))
+            change(agent["id"])
+            result = bridge.call("profiles_list", {})
+            names = {tool["name"] for tool in bridge.list_tools()}
+            state = bridge.call("session_state", {})
+            if undo:
+                undo(agent["id"])
+            return result, names, state
+
+        cases = {
+            "revoked": (registry.revoke, None),
+            "paused": (lambda agent_id: registry.pause(agent_id, True), None),
+            "stopped": (lambda _id: registry.set_stopped(True), lambda _id: registry.set_stopped(False)),
+            "key-replaced": (registry.rotate_token, None),
+        }
+        for reason, (change, undo) in cases.items():
+            with self.subTest(reason=reason):
+                result, names, state = held_by(change, undo)
+                self.assertTrue(result["isError"], result)
+                self.assertNotIn("Trabalho", json.dumps(result))
+                self.assertNotIn("intranet.example.org", json.dumps(result))
+                entry = json.loads(audit.audit_path().read_text().splitlines()[-2])  # then session_state
+                self.assertEqual((entry["tool"], entry["decision"], entry["reason"]), ("profiles_list", "deny", reason))
+                self.assertEqual(names, {"session_state"})
+                self.assertFalse(state["isError"], state)  # the one tool left: it says why
+                told = state["structuredContent"]
+                self.assertEqual(told["key_replaced"], reason == "key-replaced")
+                if reason in ("revoked", "key-replaced"):  # no longer this session's to read
+                    self.assertFalse({"sites", "capabilities", "autonomy", "workspace"} & set(told), told)
+
+    def test_a_key_replaced_while_a_request_is_open_denies_it(self):
+        # A request can wait for minutes; "allow once" then went to a session whose key was gone.
+        agent, _ = registry.add("waits", "other", "assisted")
+        approver = Approve("once", meanwhile=lambda: registry.rotate_token(agent["id"]))
+        bridge = tools.Bridge(agent["id"], "s-1", approver=approver, key_sha256=agent["token_sha256"])
+        with self.assertRaises(tools.Denied) as denied:
+            bridge.require("submit_forms", "https://example.org/", checked=[])
+        self.assertEqual(denied.exception.decision.reason, "key-replaced")
+        self.assertEqual(approver.asked, [("submit_forms", "https://example.org")])
+
+    def test_a_new_key_ends_raw_automation(self):
+        # The watcher of a handed-over endpoint looked at stop, pause and revoke, not at the key.
+        agent, _ = registry.add("raw", "other", "full_control", accept_full_control=True)
+        bridge = tools.Bridge(agent["id"], "s-1", approver=registry.Approver(), key_sha256=agent["token_sha256"])
+        workspace = mock.Mock()
+        bridge.workspace, bridge.raw = workspace, True
+        registry.rotate_token(agent["id"])
+        with mock.patch.object(tools.time, "sleep", side_effect=AssertionError("kept watching")):
+            bridge._raw_watch(workspace)
+        workspace.stop.assert_called_once_with()
+        self.assertFalse(bridge.raw)
+        ended = json.loads(audit.audit_path().read_text().splitlines()[-1])
+        self.assertEqual((ended["event"], ended["reason"]), ("raw-ended", "key-replaced"))
+
+    def test_the_site_list_covers_what_the_source_viewer_shows(self):
+        # LESIS afa509d1: with raw automation on, view-source: took an agent outside its sites.
+        agent, _ = registry.add("scoped", "other", "full_control", accept_full_control=True, domains=["example.org"])
+        registry.set_raw_automation(agent["id"], True, accept=True)
+        bridge = tools.Bridge(agent["id"], "s-1", approver=registry.Approver())
+        outside, inside = "view-source:https://bank.example/acct", "view-source:https://docs.example.org/a"
+        with (
+            mock.patch.object(tools.Bridge, "_url_of", return_value="about:blank"),
+            mock.patch.object(tools.Bridge, "bidi", side_effect=AssertionError("navigated")),
+        ):
+            result = bridge.call("navigate", {"tab": "t1", "url": outside})
+        self.assertIn("outside the sites this agent may use", result["content"][0]["text"])
+        entry = json.loads(audit.audit_path().read_text().splitlines()[-1])
+        self.assertEqual((entry["reason"], entry["target"]), ("out-of-scope", "https://bank.example"))
+        page = {"text": "<html>", "url": inside, "title": ""}
+        for url, refused in ((outside, True), (inside, False)):
+            with (
+                self.subTest(url=url),
+                mock.patch.object(tools.Bridge, "_url_of", return_value=url),
+                mock.patch.object(tools.Bridge, "_eval", return_value=page),
+                mock.patch.object(tools.Bridge, "_open_dialog", return_value=None),
+            ):
+                self.assertEqual(bridge.call("page_read", {"tab": "t1"})["isError"], refused)
+        tabs = [{"context": "t1", "profile": "AI Workspace", "url": outside}]
+        with mock.patch.object(tools.Bridge, "_tabs", return_value=tabs), mock.patch.object(tools.Bridge, "_title") as title:
+            listed = bridge.call("tabs_list", {})["structuredContent"]["tabs"]
+        self.assertEqual((listed[0]["url"], listed[0]["outside_sites"]), (None, True))
+        title.assert_not_called()
+
+    def test_a_tab_that_needs_more_than_reading_is_not_described(self):
+        # LESIS 83a648d8, c6bc7acd: a redirect leaves the tab on the local network; page_read then
+        # asks for local_resources (audit A1), but tabs_list still gave its address and title.
+        agent, _ = registry.add("near", "other", "restricted")
+        bridge = tools.Bridge(agent["id"], "s-1", approver=registry.Approver())
+        tabs = [
+            {"context": "t1", "profile": "AI Workspace", "url": "https://example.org/a"},
+            {"context": "t2", "profile": "AI Workspace", "url": "http://192.168.1.1/admin/wifi"},
+            {"context": "t3", "profile": "AI Workspace", "url": "about:config"},
+            {"context": "t4", "profile": "AI Workspace", "url": "blob:https://example.org/3f6c"},
+            {"context": "t5", "profile": "AI Workspace", "url": "about:blank"},
+        ]
+        with (
+            mock.patch.object(tools.Bridge, "_tabs", return_value=tabs),
+            mock.patch.object(tools.Bridge, "_title", side_effect=lambda tab, _c: f"title of {tab}") as title,
+        ):
+            listed = {entry["tab"]: entry for entry in bridge.call("tabs_list", {})["structuredContent"]["tabs"]}
+            self.assertEqual({call.args[0] for call in title.call_args_list}, {"t1", "t5"})
+            self.assertEqual(listed["t1"]["url"], "https://example.org/a")
+            self.assertEqual(listed["t5"]["url"], "about:blank")
+            self.assertEqual((listed["t2"]["url"], listed["t2"]["title"]), (None, None))
+            self.assertEqual(listed["t2"]["needs_permission"], ["local_resources"])
+            self.assertEqual(listed["t3"]["needs_permission"], ["local_resources", "debugging"])
+            self.assertEqual(listed["t4"]["needs_permission"], ["local_resources"])
+            self.assertNotIn("192.168.1.1", json.dumps(listed))
+            registry.grant(agent["id"], "local_resources", "allow")
+            listed = {entry["tab"]: entry for entry in bridge.call("tabs_list", {})["structuredContent"]["tabs"]}
+            self.assertEqual(listed["t2"]["url"], "http://192.168.1.1/admin/wifi")
+
+    def watched(self, level, approver, *, stopped, info=None):
+        """A Bridge whose page tools are stand-ins: `stopped` is what the submit guard reports."""
+        agent, _ = registry.add(f"forms-{level}-{len(registry.load()['agents'])}", "other", level)
+        bridge = tools.Bridge(agent["id"], "s-1", approver=approver)
+        bridge.elements["t1"] = {"e1": "shared-1"}
+        engine = mock.Mock()
+        engine.mark.return_value = 0
+        engine.command.return_value = {}
+        stack = contextlib.ExitStack()
+        self.addCleanup(stack.close)
+        patch = lambda name, **how: stack.enter_context(mock.patch.object(tools.Bridge, name, **how))  # noqa: E731
+        patch("_url_of", return_value="https://example.org/cart")
+        patch("_call_fn", return_value=info or {"connected": True, "editable": True, "multiline": True})
+        patch("bidi", return_value=engine)
+        patch("_settle", return_value=False)
+        patch("_open_dialog", return_value=None)
+        guard_on = patch("_guard_on", return_value=["t1"])
+        patch("_guard_off", side_effect=list(stopped))
+        inputs = lambda: [c for c in engine.command.call_args_list if c.args[0] == "input.performActions"]  # noqa: E731
+        return agent, bridge, guard_on, inputs
+
+    def test_a_form_sent_by_a_click_handler_needs_submit_forms(self):
+        # LESIS 3dea86ea: a role=button whose handler calls requestSubmit() is not a submit button
+        # to INSPECT_FN, so the click went ahead on `interact` alone and the form was sent.
+        click = ("click", {"tab": "t1", "element": "e1"})
+        _, bridge, guard_on, inputs = self.watched("assisted", registry.Approver(), stopped=[1])
+        result = bridge.call(*click)
+        self.assertTrue(result["isError"], result)
+        self.assertIn("'Submit forms'", result["content"][0]["text"])
+        self.assertIn("The click was done; the form the page then tried to send was stopped.", result["content"][0]["text"])
+        self.assertEqual(len(inputs()), 1)  # no second click
+        entry = json.loads(audit.audit_path().read_text().splitlines()[-1])
+        self.assertEqual((entry["decision"], entry["capability"]), ("deny", "interact,submit_forms"))
+
+        # The user says yes: the same click again, this time with nothing in its way.
+        approver = Approve("once")
+        _, bridge, guard_on, inputs = self.watched("assisted", approver, stopped=[1])
+        result = bridge.call(*click)
+        self.assertFalse(result["isError"], result)
+        self.assertEqual(approver.asked, [("submit_forms", "https://example.org")])
+        self.assertEqual((len(inputs()), guard_on.call_count), (2, 1))
+
+        # A click that sends nothing is only a click.
+        approver = Approve("once")
+        _, bridge, guard_on, inputs = self.watched("assisted", approver, stopped=[0])
+        self.assertFalse(bridge.call(*click)["isError"])
+        self.assertEqual((approver.asked, len(inputs()), guard_on.call_count), ([], 1, 1))
+
+        # Allowed to submit without asking: nothing is watched.
+        _, bridge, guard_on, inputs = self.watched("autonomous", registry.Approver(), stopped=[])
+        self.assertFalse(bridge.call(*click)["isError"])
+        self.assertEqual((len(inputs()), guard_on.call_count), (1, 0))
+
+        # A real submit button asks before the click, as before, and is then not watched.
+        approver = Approve("once")
+        submit = {"connected": True, "submits": True}
+        _, bridge, guard_on, inputs = self.watched("assisted", approver, stopped=[], info=submit)
+        self.assertFalse(bridge.call(*click)["isError"])
+        self.assertEqual((approver.asked, len(inputs()), guard_on.call_count), ([("submit_forms", "https://example.org")], 1, 0))
+
+    def test_a_form_sent_while_typing_or_after_a_dialog_needs_submit_forms(self):
+        typing = ("type", {"tab": "t1", "element": "e1", "text": "123456"})
+        _, bridge, guard_on, _ = self.watched("assisted", registry.Approver(), stopped=[1])
+        result = bridge.call(*typing)
+        self.assertTrue(result["isError"], result)
+        self.assertIn("The typing was done; the form the page then tried to send was stopped.", result["content"][0]["text"])
+        _, bridge, guard_on, _ = self.watched("assisted", Approve("once"), stopped=[1])
+        result = bridge.call(*typing)
+        self.assertFalse(result["isError"], result)
+        self.assertTrue(result["structuredContent"]["form_stopped"])
+        self.assertIn("use submit=true", result["content"][0]["text"])
+        _, bridge, guard_on, _ = self.watched("assisted", registry.Approver(), stopped=[0])
+        self.assertNotIn("form_stopped", bridge.call(*typing)["structuredContent"])
+        self.assertEqual(guard_on.call_count, 1)
+
+        # A click that opened a dialog leaves the guard on; the answer lets the page go on.
+        answer = ("dialog", {"tab": "t1", "accept": True})
+        _, bridge, _, _ = self.watched("assisted", registry.Approver(), stopped=[1])
+        bridge._guarded["t1"] = ["t1"]
+        with mock.patch.object(tools.Bridge, "_open_dialog", side_effect=[{"type": "confirm", "message": "Send?"}, None]):
+            result = bridge.call(*answer)
+        self.assertTrue(result["isError"], result)
+        self.assertIn("The answer was done; the form the page then tried to send was stopped.", result["content"][0]["text"])
+
+    def test_the_guard_keeps_its_frames_and_refuses_what_it_cannot_watch(self):
+        agent, _ = registry.add("frames", "other", "assisted")
+        bridge = tools.Bridge(agent["id"], "s-1", approver=registry.Approver())
+        tree = {
+            "contexts": [{"context": "t1", "children": [{"context": "f1", "children": [{"context": "f2"}]}, {"context": "f3"}]}]
+        }
+        engine = mock.Mock()
+        engine.command.return_value = tree
+        ran = []
+
+        def in_sandbox(_self, tab, frame, fn, cancel, timeout=5.0):
+            ran.append((frame, fn))
+            if frame == "f3":
+                raise tools.BidiError("no such frame")  # it went away meanwhile
+            if fn == tools.GUARD_ON_FN:
+                return True
+            return 2 if frame == "f1" else 0  # what each frame's guard stopped
+
+        with (
+            mock.patch.object(tools.Bridge, "bidi", return_value=engine),
+            mock.patch.object(tools.Bridge, "_in_sandbox", in_sandbox),
+        ):
+            guarded = bridge._guard_on("t1", None)
+            self.assertEqual(guarded, ["t1", "f1", "f2"])
+            self.assertEqual([frame for frame, fn in ran if fn == tools.GUARD_ON_FN], ["t1", "f1", "f3", "f2"])
+            self.assertEqual(bridge._guard_off("t1", None, guarded), 2)
+            many = {"contexts": [{"context": "t1", "children": [{"context": f"f{i}"} for i in range(tools.GUARD_FRAMES)]}]}
+            engine.command.return_value = many
+            with self.assertRaises(tools.ToolError):
+                bridge._guard_on("t1", None)
+        with (
+            mock.patch.object(tools.Bridge, "bidi", return_value=engine),
+            mock.patch.object(tools.Bridge, "_in_sandbox", side_effect=tools.BidiError("no such frame")),
+            self.assertRaises(tools.ToolError),
+        ):
+            engine.command.return_value = {"contexts": [{"context": "t1"}]}
+            bridge._guard_on("t1", None)  # the document itself cannot be watched: nothing is done
+        for needle in ("addEventListener('submit', stop, true)", "preventDefault", "stopImmediatePropagation",
+                       "HTMLFormElement.prototype", "proto.submit = original"):  # fmt: skip
+            self.assertIn(needle, tools.GUARD_ON_FN)
 
     def test_denied_call_is_audited_without_arguments(self):
         agent, _ = registry.add("d", "other", "assisted")

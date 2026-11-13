@@ -288,6 +288,28 @@ class FixtureServer:
         if path == "/agent-result":
             q = "".join(c for c in query.get("q", "") if c.isalnum() or c in "+-_")[:64]
             return f"<!doctype html><title>agent-result</title><p id=result>Result: {q}</p>".encode(), html, {}
+        if path == "/agent-scripted-form":
+            # AI Bridge fixture: controls that are not submit buttons and send a form from their
+            # own handlers (requestSubmit, submit, a frame's form, after a confirm, while typing).
+            page = (
+                "<!doctype html><title>agent-scripted-form</title>"
+                '<form id=f action="/agent-result" method="get"><input type=hidden name=q value="sent"></form>'
+                "<div id=plain role=button tabindex=0 onclick=\"document.getElementById('state').textContent='on'\">"
+                "Plain</div>"
+                "<div id=request role=button tabindex=0 onclick=\"document.getElementById('f').requestSubmit()\">"
+                "Request</div>"
+                "<div id=direct role=button tabindex=0 onclick=\"document.getElementById('f').submit()\">Direct</div>"
+                '<div id=frame role=button tabindex=0 onclick="frames[0].document.forms[0].submit()">Frame</div>'
+                "<div id=confirm role=button tabindex=0 "
+                "onclick=\"if (confirm('Send?')) document.getElementById('f').submit()\">Confirm</div>"
+                '<input id=auto aria-label="Auto" '
+                "oninput=\"if (this.value.length >= 3) document.getElementById('f').requestSubmit()\">"
+                '<p id=state>off</p><iframe src="/agent-frame-form" width=40 height=20></iframe>'
+            )
+            return page.encode(), html, {}
+        if path == "/agent-frame-form":
+            page = '<!doctype html><form action="/agent-result" method="get"><input type=hidden name=q value="frame"></form>'
+            return page.encode(), html, {}
         if path == "/agent-dialog":
             page = (
                 "<!doctype html><title>agent-dialog</title>"
