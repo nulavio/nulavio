@@ -1,0 +1,253 @@
+"""CodeRabbit stays an advisory reviewer: .coderabbit.yaml never lets it approve or block, and
+turns off every change to the code it would offer by itself.
+
+The official schema (https://coderabbit.ai/integrations/schema.v2.json) is checked by hand when the
+file changes (docs/process/pull-requests.md, "CodeRabbit"); these tests keep the settings the
+project relies on, with no YAML library: the file is written in the small subset read below.
+"""
+
+from __future__ import annotations
+
+import re
+import subprocess
+import unittest
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[2]
+CONFIG = ROOT / ".coderabbit.yaml"
+# Files CodeRabbit does not read: media and capture logs only. A new entry needs a reason here.
+PATH_FILTERS = {
+    "!**/*.png": "image",
+    "!**/*.jpg": "image",
+    "!**/*.webp": "image",
+    "!**/*.gif": "image",
+    "!**/*.ico": "image",
+    "!**/*.webm": "video",
+    "!**/*.mp4": "video",
+    "!docs/design/**/*.log": "capture logs next to the design screenshots",
+}
+# Tools switched off: prose and style checkers, and the linters CI already blocks on.
+TOOLS_OFF = {"languagetool", "markdownlint", "ruff", "flake8", "pylint", "shellcheck", "actionlint"}
+
+
+def scalar(text: str):
+    text = text.strip()
+    if text == "[]":
+        return []
+    if text in ("true", "false"):
+        return text == "true"
+    if text.startswith('"'):
+        if not re.fullmatch(r'"[^"\\]*"', text):
+            raise ValueError(f"unsupported quoted scalar: {text}")
+        return text[1:-1]
+    if re.fullmatch(r"-?\d+", text):
+        return int(text)
+    # A word. Nothing that starts a tag (!), an alias (*), an anchor (&) or another YAML form.
+    if not re.fullmatch(r"[A-Za-z][\w.-]*", text):
+        raise ValueError(f"unsupported plain scalar: {text}")
+    return text
+
+
+def parse(text: str):
+    """The YAML subset of .coderabbit.yaml: block mappings and lists, two-space indentation,
+    plain or double-quoted one-line scalars, `[]`, `|` blocks, whole-line comments.
+
+    Printable ASCII and line feeds only, and no space at the end of a line: other white space,
+    control characters and the line breaks YAML knows beyond LF are where this reader and a
+    YAML parser would read different things, also inside a comment or a block."""
+    if re.search(r"[^\x20-\x7e\n]", text):
+        raise ValueError("only printable ASCII and line feeds")
+    if re.search(r" $", text, re.M):
+        raise ValueError("a line ends in a space")
+    lines = text.split("\n")
+
+    def is_content(line: str) -> bool:
+        return bool(line.strip()) and not line.lstrip().startswith("#")
+
+    def block(start: int, indent: int):
+        """Parses the node whose lines start at `start` with `indent` spaces; returns (value, next line)."""
+        i = start
+        while i < len(lines) and not is_content(lines[i]):
+            i += 1
+        is_list = lines[i].startswith(" " * indent + "- ")
+        result: list | dict = [] if is_list else {}
+        while i < len(lines):
+            line = lines[i]
+            if not is_content(line):
+                i += 1
+                continue
+            depth = len(line) - len(line.lstrip(" "))
+            if depth < indent:
+                break
+            if depth != indent or "\t" in line:
+                raise ValueError(f"line {i + 1}: unexpected indentation")
+            body = line[indent:]
+            if is_list:
+                if not body.startswith("- "):
+                    raise ValueError(f"line {i + 1}: expected a list item")
+                if re.match(r"- [\w.-]+:( |$)", body):
+                    # A mapping that starts on the dash line: read it as a mapping two columns in.
+                    lines[i] = " " * (indent + 2) + body[2:]
+                    value, i = block(i, indent + 2)
+                else:
+                    value, i = scalar(body[2:]), i + 1
+                result.append(value)
+                continue
+            match = re.fullmatch(r"([\w.-]+):(?: (.*))?", body)
+            if not match:
+                raise ValueError(f"line {i + 1}: expected `key: value`")
+            key, rest = match.group(1), (match.group(2) or "").strip()
+            if key in result:
+                raise ValueError(f"line {i + 1}: duplicate key {key}")
+            if rest == "|":
+                i += 1
+                chunk = []
+                while i < len(lines) and (not lines[i].strip() or lines[i].startswith(" " * (indent + 2))):
+                    chunk.append(lines[i][indent + 2 :])
+                    i += 1
+                first = next((line for line in chunk if line.strip()), "")
+                if not first or first.startswith(" "):
+                    # YAML takes the block's indentation from its first line: a deeper one would
+                    # make the lines after it a syntax error there, and text here.
+                    raise ValueError(f"line {i}: a block starts two columns in from its key")
+                result[key] = "\n".join(chunk).rstrip("\n") + "\n"
+            elif rest:
+                result[key], i = scalar(rest), i + 1
+            else:
+                nxt = i + 1
+                while nxt < len(lines) and not is_content(lines[nxt]):
+                    nxt += 1
+                child = len(lines[nxt]) - len(lines[nxt].lstrip(" "))
+                # A list may sit at its key's own indentation or two columns in.
+                if child not in (indent + 2, indent) or (child == indent and not lines[nxt].lstrip().startswith("- ")):
+                    raise ValueError(f"line {i + 1}: {key} has no value")
+                result[key], i = block(nxt, child)
+        return result, i
+
+    value, _ = block(0, 0)
+    return value
+
+
+def tracked_files() -> list[str]:
+    out = subprocess.run(
+        ["git", "-C", str(ROOT), "ls-files", "-z", "--cached", "--others", "--exclude-standard"],
+        capture_output=True,
+        check=True,
+    )
+    return [name for name in out.stdout.decode().split("\0") if name]
+
+
+def glob_matches(pattern: str, path: str) -> bool:
+    """`**` crosses directories and `*` does not, as in CodeRabbit's (minimatch) globs."""
+    regex = ""
+    for part in re.split(r"(\*\*/|\*\*|\*)", pattern):
+        if part == "**/":
+            regex += "(?:.*/)?"
+        elif part == "**":
+            regex += ".*"
+        elif part == "*":
+            regex += "[^/]*"
+        else:
+            regex += re.escape(part)
+    return re.fullmatch(regex, path) is not None
+
+
+class CodeRabbitConfigTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.config = parse(CONFIG.read_text())
+        cls.reviews = cls.config["reviews"]
+
+    def test_the_reader_reads_the_shapes_the_file_uses(self):
+        sample = (
+            'a:\n  # note\n  b: true\n  c:\n    - "!x/**"\n    - y\n  d: []\n'
+            'list:\n  - path: "p"\n    text: |\n      one\n\n      two\nn: 3\n'
+        )
+        self.assertEqual(
+            parse(sample),
+            {"a": {"b": True, "c": ["!x/**", "y"], "d": []}, "list": [{"path": "p", "text": "one\n\ntwo\n"}], "n": 3},
+        )
+        refused = (
+            "a: {b: 1}\n", "a: 'x'\n", "a:\n   b: 1\n", "a: 1\na: 2\n", "a: yes please\n",
+            "a: !bogus\n", "a: *alias\n", "a: &anchor x\n", "a:\n  - !x\n", "a: |\n    deeper\n  shallower\n", "a: |\nb: 1\n",
+            "a: false\u00a0\n", "a: false\u2003\n", "a: false\x0b\n", "a: false\x0c\n", "a: false\x1c\n", "a: false\t\n",
+            "a: false \n", "a: |\n          \n  text\n", "# c\u0085b: true\n", "# c\u2028b: true\n", "# c\u2029b: true\n",
+            "a: false\r\n", "a: caf\u00e9\n",
+        )  # fmt: skip
+        for bad in refused:
+            with self.assertRaises(ValueError, msg=bad):
+                parse(bad)
+
+    def test_it_never_approves_requests_changes_or_blocks(self):
+        approvals = self.reviews["auto_approvals"]
+        self.assertIs(approvals["enabled"], False)
+        self.assertIs(approvals["allow_author_approval"], False)
+        self.assertIs(self.reviews["fail_commit_status"], False)
+        # Legacy aliases that turn the same things on.
+        self.assertNotIn("request_changes_workflow", self.reviews)
+        self.assertNotIn("allow_author_approval", self.reviews)
+        checks = self.reviews["pre_merge_checks"]
+        self.assertNotIn("custom_checks", checks)
+        for name in ("title", "description", "issue_assessment"):
+            self.assertIn(checks[name]["mode"], ("off", "warning"), name)
+
+    def test_it_offers_no_change_to_the_code_or_the_description(self):
+        touches = self.reviews["finishing_touches"]
+        for name in ("unit_tests", "simplify", "autofix", "fix_ci", "resolve_merge_conflict"):
+            self.assertIs(touches[name]["enabled"], False, name)
+        self.assertNotIn("custom", touches)
+        self.assertNotIn("post_merge_actions", self.reviews)
+        self.assertIs(self.reviews["high_level_summary_in_walkthrough"], True)
+        self.assertIs(self.reviews["auto_apply_labels"], False)
+        self.assertIs(self.reviews["auto_assign_reviewers"], False)
+        self.assertNotIn("code_generation", self.config)
+
+    def test_triggers(self):
+        auto = self.reviews["auto_review"]
+        self.assertIs(auto["enabled"], True)
+        self.assertIs(auto["drafts"], False)
+        self.assertIs(auto["auto_incremental_review"], False)  # one review an hour: not spent on every push
+        self.assertEqual(auto["base_branches"], [])
+        self.assertEqual(auto["labels"], ["!no-ai-review"])  # a positive label would leave every other one out
+        for skips in ("ignore_usernames", "ignore_title_keywords", "description_keyword"):
+            self.assertNotIn(skips, auto)
+        self.assertIs(self.config["chat"]["allow_non_org_members"], False)
+        planning = self.config["issue_enrichment"]
+        self.assertIs(planning["auto_enrich"]["enabled"], False)
+        self.assertIs(planning["planning"]["enabled"], False)
+
+    def test_only_media_and_capture_logs_are_left_out(self):
+        self.assertEqual(sorted(self.reviews["path_filters"]), sorted(PATH_FILTERS))
+        code = re.compile(r"\.(py|js|mjs|sh|java|kts|json|yml|yaml|toml|xml|html|css|md|patch|spec|ftl|txt|properties|lockfile)$")
+        files = [*tracked_files(), "sbom/helper.py", "docs/design/notes.py", "site/assets/x.js"]  # and what could be added
+        left_out = [path for path in files if code.search(path) and any(glob_matches(f[1:], path) for f in PATH_FILTERS)]
+        self.assertEqual(left_out, [])
+
+    def test_the_tools_switched_off_are_the_ones_listed(self):
+        off = {name for name, value in self.reviews["tools"].items() if value.get("enabled") is False}
+        self.assertEqual(off, TOOLS_OFF)
+        self.assertEqual(set(self.reviews["tools"]), TOOLS_OFF)
+
+    def test_every_path_instruction_matches_files_and_stays_within_the_limit(self):
+        files = tracked_files()
+        seen = set()
+        for entry in self.reviews["path_instructions"]:
+            self.assertEqual(set(entry), {"path", "instructions"})
+            pattern = entry["path"]
+            self.assertNotIn(pattern, seen)
+            seen.add(pattern)
+            self.assertTrue(any(glob_matches(pattern, name) for name in files), f"{pattern} matches no tracked file")
+            self.assertLessEqual(len(entry["instructions"]), 20000)
+        for area in ("browser/shell/**", "launcher/**", "tests/**", ".github/**", "scripts/**", "site/**", "android/**"):
+            self.assertIn(area, seen)
+        self.assertLessEqual(len(self.config["tone_instructions"]), 250)
+
+    def test_the_guideline_documents_exist(self):
+        patterns = self.config["knowledge_base"]["code_guidelines"]["filePatterns"]
+        self.assertTrue(patterns)
+        for pattern in patterns:
+            self.assertTrue((ROOT / pattern).is_file(), pattern)
+
+
+if __name__ == "__main__":
+    unittest.main()
