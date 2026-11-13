@@ -248,7 +248,7 @@ class PublishTest(unittest.TestCase):
             "PR_NUMBER": "7",
             "HEAD_SHA": HEAD,
             "BASE_SHA": BASE,
-            "AI_REVIEW_SOURCE": "claude-opus-5-5 through claude-code-action v1.0.267",
+            "AI_REVIEW_SOURCE": "claude-opus-5-5 through claude-code-action v1.0.268",
             "INPUT_STATUS": "ready",
             "REVIEW_RESULT": "success",
             "RESULT": json.dumps(result()),
