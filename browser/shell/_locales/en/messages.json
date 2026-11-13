@@ -1199,6 +1199,7 @@
   "dnsNowDefaultPlain": {"message": "Now: the browser's default, unencrypted (the computer's resolver)."},
   "dnsNowDefaultEncrypted": {"message": "Now: the browser's default, with DNS encrypted by Cloudflare (Mozilla's resolver programme)."},
   "dnsNowDefaultEncryptedBy": {"message": "Now: the browser's default, with DNS encrypted by $NAME$.", "placeholders": {"name": {"content": "$1"}}},
+  "dnsNowDefaultEncryptedUnnamed": {"message": "Now: the browser's default, with DNS encrypted. Which service answers could not be read."},
   "exceptionBuiltInBadge": {"message": "Browser default"},
   "exceptionRemoveBuiltInTitle": {"message": "Remove a browser default?"},
   "exceptionRemoveBuiltInBody": {"message": "The browser keeps this exception for $SITE$ ($WHAT$). Without it, the protection applies to that site again, and something there may stop working.", "placeholders": {"site": {"content": "$1"}, "what": {"content": "$2"}}},

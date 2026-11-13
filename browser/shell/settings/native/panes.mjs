@@ -1721,6 +1721,9 @@
         if (!now.encryptedNow) {
           return msg("dnsNowDefaultPlain");
         }
+        if (!now.resolver) {
+          return msg("dnsNowDefaultEncryptedUnnamed"); // encrypted, and the engine did not say by which resolver
+        }
         return now.resolver === "cloudflare"
           ? msg("dnsNowDefaultEncrypted")
           : msg("dnsNowDefaultEncryptedBy", now.resolver === "custom" ? hostOf(now.resolverUri) : dnsProviderName(now.resolver));

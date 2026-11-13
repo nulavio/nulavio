@@ -1199,6 +1199,7 @@
   "dnsNowDefaultPlain": {"message": "Agora: o padrão do navegador, sem criptografia (o resolvedor do computador)."},
   "dnsNowDefaultEncrypted": {"message": "Agora: o padrão do navegador, com DNS criptografado pela Cloudflare (programa de resolvedores da Mozilla)."},
   "dnsNowDefaultEncryptedBy": {"message": "Agora: o padrão do navegador, com DNS criptografado por $NAME$.", "placeholders": {"name": {"content": "$1"}}},
+  "dnsNowDefaultEncryptedUnnamed": {"message": "Agora: o padrão do navegador, com DNS criptografado. Não foi possível ler qual serviço responde."},
   "exceptionBuiltInBadge": {"message": "Padrão do navegador"},
   "exceptionRemoveBuiltInTitle": {"message": "Remover um padrão do navegador?"},
   "exceptionRemoveBuiltInBody": {"message": "O navegador mantém esta exceção para $SITE$ ($WHAT$). Sem ela, a proteção volta a valer nesse site, e algo nele pode deixar de funcionar.", "placeholders": {"site": {"content": "$1"}, "what": {"content": "$2"}}},

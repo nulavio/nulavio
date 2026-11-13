@@ -503,6 +503,12 @@ class DistributionTest(unittest.TestCase):
         self.assertNotIn("Empty", other)
         self.assertEqual({k: v for k, v in other.items() if k != "DisableTelemetry"},
                          {k: v for k, v in current["policies"].items() if k != "DisableTelemetry"})  # fmt: skip
+        # A value Python and the engine would write differently never becomes a digest: the build stops.
+        for label, value in (("a fraction", 1.0), ("a huge number", 2**60), ("a key outside ASCII", {"é": True})):
+            unlike = {"policies": {**make_distribution.policies()["policies"], "Odd": {"inside": [value]}}}
+            patched = mock.patch.object(make_distribution, "policies", return_value=unlike)
+            with self.subTest(label), patched, self.assertRaises(SystemExit):
+                make_distribution.own_policies()
         guard = (ROOT / "browser" / "shell" / "modules" / "NulavioGuard.sys.mjs").read_text(encoding="utf-8")
         self.assertIn('"resource://builtin-addons/nulavio-shell/shared/own-policies.json"', guard)
         self.assertNotIn('"XREAppDist"', guard, "the Guard reads the application's own policies file again")

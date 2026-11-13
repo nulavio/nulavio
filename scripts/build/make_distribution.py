@@ -165,9 +165,33 @@ def own_policies() -> dict:
     def sets_nothing(value) -> bool:
         return value is None or (isinstance(value, (dict, list)) and not value)
 
+    def same_in_both(value, where: str) -> None:
+        """Python and the engine's JavaScript write these values alike. They do not for a fraction (1.0 and 1), a
+        number beyond 2**53, or keys outside ASCII (sorted another way): such a policy would never be "own"."""
+        if isinstance(value, bool) or value is None or isinstance(value, str):
+            return
+        if isinstance(value, int):
+            if abs(value) > 2**53:
+                raise SystemExit(f"policies: {where} is a number the Shell cannot compare ({value})")
+            return
+        if isinstance(value, list):
+            for at, item in enumerate(value):
+                same_in_both(item, f"{where}[{at}]")
+            return
+        if isinstance(value, dict):
+            for key, item in value.items():
+                if not key.isascii():
+                    raise SystemExit(f"policies: {where} has a key outside ASCII ({key!r})")
+                same_in_both(item, f"{where}.{key}")
+            return
+        raise SystemExit(f"policies: {where} holds a {type(value).__name__}, which the Shell cannot compare")
+
     def digest(value) -> str:
         text = json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
         return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+    for name, value in policies()["policies"].items():
+        same_in_both(value, name)
 
     shipped = {name: digest(value) for name, value in policies()["policies"].items() if not sets_nothing(value)}
     return {

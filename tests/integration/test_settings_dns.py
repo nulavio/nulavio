@@ -188,6 +188,36 @@ class SettingsDnsTest(unittest.TestCase):
         self.assertEqual((self.prefs()["mode"], self.prefs()["uri"], self.prefs()["chosen"]), (2, QUAD9, False))
         self.assertIsNone(self.m.chrome(PAGE)["said"])
 
+    def test_04_the_default_encrypted_by_a_resolver_the_engine_does_not_name(self):
+        """Under the browser's default the engine can have DNS encrypted and say nothing of which resolver it uses
+        (its address can be empty while the mode stays). The group says it is encrypted and that the service could
+        not be read: it neither names one it did not read nor fails to draw."""
+        self.open()
+        privacy = (
+            'ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioPrivacy.sys.mjs").NulavioPrivacy'
+        )
+        self.addCleanup(self.m.chrome, f"if (window.nvDns) {{ {privacy}.dns = window.nvDns; delete window.nvDns; }}")
+        answer = (
+            f"window.nvDns ??= {privacy}.dns.bind({privacy});"
+            f" {privacy}.dns = () => ({{ ...window.nvDns(), choice: 'default', encryptedNow: true, ...arguments[0] }});"
+            + DOC
+            + 'd.dispatchEvent(new w.Event("visibilitychange"));'
+        )
+        for resolver, says in (
+            (
+                {"resolver": None, "resolverUri": ""},
+                "Agora: o padrão do navegador, com DNS criptografado. Não foi possível ler qual serviço responde.",
+            ),
+            ({"resolver": "quad9", "resolverUri": QUAD9}, "Agora: o padrão do navegador, com DNS criptografado por Quad9."),
+            (
+                {"resolver": "custom", "resolverUri": "https://dns.example/dns-query"},
+                "Agora: o padrão do navegador, com DNS criptografado por dns.example.",
+            ),
+        ):
+            with self.subTest(resolver=resolver["resolver"]):
+                self.m.chrome(answer, [resolver])
+                self.assertEqual(self.seen(lambda now, says=says: now["says"] == says, 10)["says"], says)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -215,43 +215,81 @@ class AppearanceTest(unittest.TestCase):
         free = settings_page.wait_control(self.m, "nulavio-more-contrast", lambda now: not now["disabled"] and not now["pressed"])
         self.assertIn("Textos e bordas mais fortes", free["description"])
 
+    def changed_by(self, apply) -> tuple[set[str], dict]:
+        """Every setting that differs between a reading taken right before `apply` and one right after, and the
+        first reading."""
+        before = self.snapshot()
+        apply()
+        after = self.snapshot()
+        self.assertEqual(after["permissions"], before["permissions"])
+        names = set(before["prefs"]) | set(after["prefs"])
+        return {k for k in names if before["prefs"].get(k) != after["prefs"].get(k)}, before
+
+    def beyond_its_own(self, apply, back) -> set[str]:
+        """Of every setting of the profile, what applying an option changes besides the appearance options' own.
+
+        The engine writes its own records at any moment (when it last looked at a list, a plugin, a timer), and a
+        list of their names never ends. So a setting that changed is put back as it was, the option is taken back
+        and applied once more: what the option does, it does again; what the engine happened to write, it does not."""
+        changed, before = self.changed_by(apply)
+        changed -= OPTION_PREFS
+        if changed:
+            back()
+            # After the option was taken back, which may write the same things: as they were before the first time.
+            self.m.chrome(
+                """
+                for (const [name, value] of Object.entries(arguments[0])) {
+                  if (value === null) Services.prefs.clearUserPref(name);
+                  else if (typeof value === "boolean") Services.prefs.setBoolPref(name, value);
+                  else if (typeof value === "number") Services.prefs.setIntPref(name, value);
+                  else Services.prefs.setStringPref(name, value);
+                }
+                """,
+                [{name: before["prefs"].get(name) for name in changed}],
+            )
+            again, _ = self.changed_by(apply)
+            changed &= again
+        return changed
+
     def test_05_walking_every_option_changes_only_its_own_prefs(self):
         """UX6 done criterion: no option can turn a protection off. Every value of every appearance option,
-        through the settings page: at each step, of the settings that are a protection, another option's or
-        Nulavio's own (`matters`), only the appearance options' own differ from the start, and at the end none
-        does. Settings outside that set are the engine's to write, and it does, in the background."""
+        through the settings page: each step changes, of every setting of the profile, only the appearance
+        options' own (`beyond_its_own` says how the engine's own background writes are told apart), and no
+        permission. At the end the options' own are back to nothing, and no setting that is a protection, another
+        option's or Nulavio's own differs from the start."""
         self.open()
         before = self.snapshot()
         matters = self.matters()
         self.assertTrue(all(matters(pref) for pref in OPTION_PREFS), "the options' own settings are not in the set looked at")
         for protection in ("dom.security.https_only_mode", "browser.safebrowsing.malware.enabled", "network.trr.mode"):
             self.assertTrue(matters(protection), protection)
-        walk = [("density", v) for v in APPEARANCE["density"]["values"]] + [("accent", v) for v in APPEARANCE["accent"]["values"]]
-        for option, value in walk:
+
+        def choose(option: str, value: str) -> None:
             if option == "density":
                 settings_page.choose(self.m, "uiDensity", DENSITY[value])
             else:
                 settings_page.choose(self.m, "nulavio-accent", value)
-            pref = APPEARANCE[option]["prefs"][0]
-            expected = APPEARANCE[option]["prefValues"][APPEARANCE[option]["values"].index(value)]
-            self.wait_pref(pref, expected)
-            now = self.snapshot()
-            changed = {k for k in set(now["prefs"]) | set(before["prefs"]) if now["prefs"].get(k) != before["prefs"].get(k)}
-            changed = {k for k in changed if matters(k)}
-            self.assertLessEqual(changed, OPTION_PREFS, (option, value))
-            self.assertEqual(now["permissions"], before["permissions"])
+            stored = APPEARANCE[option]["prefValues"][APPEARANCE[option]["values"].index(value)]
+            self.wait_pref(APPEARANCE[option]["prefs"][0], stored)
+
+        for option in ("density", "accent"):
+            values = APPEARANCE[option]["values"]
+            for at, value in enumerate(values):
+                earlier = values[at - 1]  # the value before this one in the walk (the last one, for the first)
+                extra = self.beyond_its_own(lambda o=option, v=value: choose(o, v), lambda o=option, v=earlier: choose(o, v))
+                self.assertEqual(extra, set(), (option, value))
         # The ambience first: "Reduzir transparência" only applies while something is transparent.
         for switch, pref in (
             ("nulavio-newtab-ambience", "nulavio.appearance.newtabAmbience"),
             ("nulavio-reduce-transparency", "nulavio.appearance.reduceTransparency"),
             ("nulavio-more-contrast", "nulavio.appearance.moreContrast"),
         ):
-            self.switch(switch)
-            self.wait_pref(pref, True)
-            now = self.snapshot()
-            changed = {k for k in set(now["prefs"]) | set(before["prefs"]) if now["prefs"].get(k) != before["prefs"].get(k)}
-            changed = {k for k in changed if matters(k)}
-            self.assertLessEqual(changed, OPTION_PREFS, switch)
+
+            def turn(on: bool, switch=switch, pref=pref) -> None:
+                self.switch(switch)
+                self.wait_pref(pref, True if on else None)
+
+            self.assertEqual(self.beyond_its_own(lambda: turn(True), lambda: turn(False)), set(), switch)
         for switch in ("nulavio-more-contrast", "nulavio-reduce-transparency", "nulavio-newtab-ambience"):
             self.switch(switch)
             time.sleep(0.3)
