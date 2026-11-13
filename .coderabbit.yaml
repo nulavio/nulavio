@@ -1,7 +1,8 @@
 # yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
 #
-# CodeRabbit: one more advisory reading of a pull request. It never approves, never changes
-# code and is never a required check (docs/process/pull-requests.md, "CodeRabbit").
+# CodeRabbit: one more advisory reading of a pull request. It never approves, is never a
+# required check, and offers no change to the code by itself (docs/process/pull-requests.md,
+# "CodeRabbit"). What a member asks of it in a comment is not something this file can forbid.
 #
 # CodeRabbit reads this file from the pull request's own branch, so a pull request can change
 # how it is reviewed. That is why a CodeRabbit review never counts as the second, independent
@@ -54,8 +55,8 @@ reviews:
     # The label that turns the AI review workflow off turns this one off too.
     labels:
       - "!no-ai-review"
-  # invariant: no code changes by CodeRabbit (no fixes, tests, CI repairs or conflict
-  # resolutions committed to a branch).
+  # invariant: CodeRabbit offers no code change by itself (no fixes, tests, CI repairs or
+  # conflict resolutions to commit to a branch).
   finishing_touches:
     unit_tests:
       enabled: false
@@ -76,7 +77,7 @@ reviews:
       mode: warning
     issue_assessment:
       mode: warning
-  # invariant: only media and generated files are left out, never a directory of code.
+  # invariant: only media and capture logs are left out, never a directory of code.
   path_filters:
     - "!**/*.png"
     - "!**/*.jpg"
@@ -86,7 +87,6 @@ reviews:
     - "!**/*.webm"
     - "!**/*.mp4"
     - "!docs/design/**/*.log"
-    - "!sbom/**"
   tools:
     # Prose and style checkers: wording and formatting are not what this review is for.
     languagetool:
@@ -95,6 +95,7 @@ reviews:
       enabled: false
     # CI already blocks on these, with pinned versions and the repository's own settings
     # (ruff in the checks job; ShellCheck and actionlint in scripts/security/scan.sh).
+    # flake8 and pylint are not used here: ruff does their job.
     ruff:
       enabled: false
     flake8:
