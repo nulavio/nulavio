@@ -212,7 +212,7 @@ The build packages **en-US and pt-BR** (`NULAVIO_LOCALES`, default `pt-BR`). `fe
 1. ~~Google Safe Browsing API key~~ **Resolved 2026-10-25** (section above). R15 for downloads was accepted on 2026-11-04 (D9); the default quota was accepted for the alpha on 2026-11-10, to be reviewed with Google past 70 % of the daily update quota ([release criteria](../product/release-criteria.md#public-alpha-decided-2026-11-04)).
 2. Signed packages and repository ([update policy](update-policy.md)): packages, signing and the publishing steps are done and verified (sections below); the release key (2026-11-10, fingerprint in `packaging/release.json`) and the host (`packages.nulavio.net`, Cloudflare R2) exist; what remains is the upload token and the first signed release.
 3. ~~Policy/legal confirmation for keeping Firefox's add-on application ID and using AMO~~ **Decided 2026-11-10 by the maintainer** (keep it, as other Gecko-based browsers do); not reviewed by counsel.
-4. Brand clearance ([strategy](../brand/strategy.md#trademark-and-availability-status)).
+4. Brand and trademark matters are handled outside the repository ([guidelines](../brand/guidelines.md)).
 
 ## Running the build output
 

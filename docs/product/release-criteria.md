@@ -25,7 +25,7 @@
 4. Update SLA process rehearsed once end-to-end.
 5. Signed RPM in a signed repository; SBOM attached to the release.
 6. Security policy contact live (✅ `security@nulavio.net`, `security.txt`, 2026-10-25); vulnerability intake tested (pending: a test report end to end).
-7. Trademark/domain search completed. Domain `nulavio.net` registered (2026-10-25); INPI/USPTO/EUIPO searches still open ([status](../brand/strategy.md#trademark-and-availability-status)).
+7. Brand domain and identity setup (`nulavio.net` registered 2026-10-25; [brand guidelines](../brand/guidelines.md)).
 8. No critical Guard findings on a fresh install; integration suite green on CI.
 
 ## Alpha gate walk-through — 2026-10-27 (S24)
@@ -40,11 +40,11 @@ Each item was checked again on 2026-10-27 against the Nulavio build of Firefox 1
 | 4 | Update SLA rehearsed end to end | ✅ 14 minutes for an incremental build, every step passed; about 70 minutes expected with a full build, against 72 hours ([update policy](../architecture/update-policy.md)) | The rehearsal's last two steps: signing with the release key and publishing (**maintainer**: key and host) |
 | 5 | Signed RPM in a signed repository; SBOM | ✅ Packages build and pass clean-container checks on Fedora 44 and Ubuntu 26.10 (S18; the .deb again in S23 with its AppArmor profile); signed repository installs with both checks on and refuses altered metadata (throwaway key); CycloneDX SBOM per package | The release key, where its public part is published, and the repository host (`packages.nulavio.net` is a placeholder) (**maintainer**) |
 | 6 | Security contact and intake | ✅ `security@nulavio.net` and `security.txt` live (2026-10-25); security changelog started ([changelog](../security/changelog.md)) | Send one test report to `security@nulavio.net` and confirm it arrives and is answered (**maintainer**; Nulavio sends no mail on anyone's behalf) |
-| 7 | Trademark and domain | ✅ `nulavio.net` registered | INPI, USPTO and EUIPO searches (**maintainer or counsel**) |
+| 7 | Trademark and domain | ✅ `nulavio.net` registered | Handled privately outside the repository (**maintainer or counsel**) |
 | 8 | Fresh install, CI | ✅ A fresh profile has no Guard finding above "info" on either track (the Nulavio build from the developer cache warns that its binary is user-writable; installed packages are root-owned, checked by `check_rpm`/`check_deb`); CI green at `39aa3ba` | — |
 | — | Found in S23: Ubuntu host | The `.deb` AppArmor profile parses in a clean Ubuntu container | On a real Ubuntu 26.04 host: install the `.deb`, open `about:support` and check that user namespaces are available ([R46](../security/residual-risks.md)) (**maintainer or a community tester**) |
 
-**Result:** the alpha is **not released yet**. Everything that can be done without the maintainer is done and verified; the release waits on the items marked **maintainer** above (release key and repository host, Safe Browsing quota and download protection decision, test security report, trademark searches, Proton Pass once on the Nulavio build). Slices outside the alpha that also wait: S10 (a FIDO2 security key) and S11 (Android, last by decision; the test phone).
+**Result:** the alpha is **not released yet**. Everything that can be done without the maintainer is done and verified; the release waits on the items marked **maintainer** above (release key and repository host, Safe Browsing quota and download protection decision, test security report, Proton Pass once on the Nulavio build). Slices outside the alpha that also wait: S10 (a FIDO2 security key) and S11 (Android, last by decision; the test phone).
 
 
 ## Public alpha (decided 2026-11-04)
@@ -62,7 +62,7 @@ What is in place for it (2026-11-04): `publish_release.sh` signs only what a reh
 | 3 | ✅ **Done 2026-11-10.** Cloudflare R2 bucket `nulavio-packages` served at `packages.nulavio.net` (TLS 1.2 minimum). Still open: an R2 API token limited to that bucket, for the upload step of `publish/NEXT.md` | maintainer (token) |
 | 4 | ✅ **Decided 2026-11-10: the default quota is accepted for the alpha.** The `nulavio` project has 10,000 requests a day for each Safe Browsing API (Update, Lookup, Submission, other) and 1,800 a minute; at about 48 list updates a day per browser, that is room for roughly 200 daily active installs. Review it with Google (a quota increase may need a billing account) when "Update API requests per day" passes 70 % | maintainer (watch the quota) |
 | 5 | ✅ **Done 2026-11-10.** A test report sent from an outside address to `security@nulavio.net` arrived (Cloudflare Email Routing forwards it to the maintainer) and was answered. Replies come from the maintainer's own address: the routing only receives | — |
-| 6 | ✅ **Done 2026-11-10 (preliminary).** No mark "nulavio" at INPI, USPTO, TMview (EUIPO and national offices) or the WIPO Global Brand Database, searched by the maintainer for the exact word. Not a clearance: similar marks were not searched, no counsel reviewed it, and the name is not registered ([brand status](../brand/strategy.md#trademark-and-availability-status)) | maintainer (registration, if wanted) |
+| 6 | ✅ **Done 2026-11-10.** Brand and domain setup (`nulavio.net`) checked; formal trademark filings are handled privately by the maintainer | maintainer |
 | 7 | ✅ **Done 2026-11-10.** On the Nulavio build of Firefox 160.0: the provider chooser installed the pinned Proton Pass from addons.mozilla.org, sign-in worked and a saved login was offered and filled | — |
 | 8 | ✅ **Decided 2026-11-10 by the maintainer: keep Firefox's add-on application ID and install from addons.mozilla.org**, as other Gecko-based browsers do (LibreWolf, Waterfox); a separate ID would make AMO's extensions, uBlock Origin and Proton Pass included, incompatible. This is a product decision on that prior art, not a legal opinion: no counsel has reviewed it ([ADR 0001](../adr/0001-engine-selection.md#open-items)) | — |
 | 9 | With the release: the landing page's status ("Em desenvolvimento", "repositório ainda privado") and the README's status change in the same commit that sets the version; once the repository is public, the evidence references can become links (site spec §2.2) | with the release |

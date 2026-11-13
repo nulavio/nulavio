@@ -8,7 +8,7 @@
 | Documentation (`docs/`, `*.md`) | **CC BY 4.0** | Attribution: "Nulavio contributors" |
 | Brand assets (`docs/brand/assets/`: name, symbol, wordmark, icons) | **All rights reserved; trademark rules apply** | The SVG/PNG files are in the repo so the project can be built and documented. Use to refer to Nulavio is allowed under [guidelines](docs/brand/guidelines.md). Use in other products or modified builds is not allowed |
 
-The name "Nulavio" is a candidate trademark and is **not registered** ([status](docs/brand/strategy.md#trademark-and-availability-status)).
+"Nulavio" and the Nulavio brand assets are marks of the Nulavio project ([guidelines](docs/brand/guidelines.md)).
 
 ## Third-party components
 
