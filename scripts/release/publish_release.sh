@@ -124,6 +124,10 @@ $ref; signed with $key by $signer. Not done by the script: everything below.
 
        scripts/release/check_published.sh ${tag#v}
 
+   The APT check needs https://nulavio.net/apt/nulavio.sources to be byte for byte
+   this commit's site/apt/nulavio.sources: a change to that file is deployed by the
+   site workflow before a release runs.
+
 2. Tag and create the GitHub release as a draft, review it, then publish it:
 
        git -C "$repo" tag -a "$tag" -m "Nulavio $tag (Firefox $firefox)" $commit

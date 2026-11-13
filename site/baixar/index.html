@@ -72,7 +72,7 @@ sudo apt install nulavio</code></pre></div>
 <p class="prose"><code class="mono" translate="no">{{sources_sha256}}</code></p>
 <p class="prose">O arquivo traz a chave pública de cima, e o apt só aceita o que ela assinou. O pacote traz um perfil do AppArmor que deixa o navegador isolar as abas, como o Ubuntu faz com o Firefox.</p>
 <!--/apt:on-->
-<p class="limit"><strong>Limite:</strong> A impressão digital só protege se você a conferir por um caminho diferente do download, por exemplo nesta página aberta em outro aparelho.</p>
+<p class="limit"><strong>Limite:</strong> A impressão digital<!--apt:on--> e o SHA-256<!--/apt:on--> só protege<!--apt:on-->m<!--/apt:on--> se você conferir por um caminho diferente do download, por exemplo nesta página aberta em outro aparelho<!--apt:on--> ou nas notas da versão no GitHub, que trazem os dois<!--/apt:on-->.</p>
 </section>
 
 <section id="updates" aria-labelledby="updates-h">

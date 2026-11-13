@@ -72,7 +72,7 @@ sudo apt install nulavio</code></pre></div>
 <p class="prose"><code class="mono" translate="no">{{sources_sha256}}</code></p>
 <p class="prose">The file carries the public key above, and apt accepts only what that key signed. The package brings an AppArmor profile that lets the browser isolate its tabs, as Ubuntu does for Firefox.</p>
 <!--/apt:on-->
-<p class="limit"><strong>Limit:</strong> The fingerprint only protects you if you check it through a different path from the download, for example this page opened on another device.</p>
+<p class="limit"><strong>Limit:</strong> The fingerprint<!--apt:on--> and the SHA-256<!--/apt:on--> only protect<!--apt:off-->s<!--/apt:off--> you if you check <!--apt:off-->it<!--/apt:off--><!--apt:on-->them<!--/apt:on--> through a different path from the download, for example this page opened on another device<!--apt:on--> or the release notes on GitHub, which carry both<!--/apt:on-->.</p>
 </section>
 
 <section id="updates" aria-labelledby="updates-h">
