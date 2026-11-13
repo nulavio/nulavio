@@ -199,6 +199,7 @@ FORMS_DROP_FN = "() => (globalThis.nulavioForms ? globalThis.nulavioForms.drop()
 FORMS_SEND_FN = "() => (globalThis.nulavioForms ? globalThis.nulavioForms.send() : 0)"
 # The agent may submit now: what was held goes, and the document stops holding.
 FORMS_OPEN_FN = "() => (globalThis.nulavioForms ? globalThis.nulavioForms.open() : 0)"
+DIALOG = "dialog"  # in place of a count: sending the form opened a dialog (a submit handler that asks), which holds it
 FORMS_FRAMES = 60  # documents of one tab asked directly; the others still carry the guard from their creation
 
 
@@ -442,7 +443,8 @@ class Bridge:
         person approved. A page that navigated meanwhile would otherwise get the action."""
         now = self._url_of(tab, cancel)
         if policy.origin(now) != policy.origin(url):
-            raise ToolError(f"the tab moved to {policy.origin(now)} while waiting for approval; nothing was done")
+            where = "another site" if self._hidden(now) else policy.origin(now)
+            raise ToolError(f"the tab moved to {where} while waiting for approval; nothing was done")
 
     def list_tools(self) -> list[dict]:
         agent = self._agent()
@@ -495,7 +497,8 @@ class Bridge:
                              target=policy.origin(self._target), ms=int((time.monotonic() - started) * 1000),
                              outcome="cancelled" if not isinstance(exc, Exception) else "error:failed")  # fmt: skip
             raise
-        target_url = self._form_at or target_url or self._target
+        # A held form that went out says where; a refusal or an error says what it was about.
+        target_url = (self._form_at if outcome == "ok" else None) or target_url or self._target
         checked = list(dict.fromkeys(checked))  # a capability asked for two places is one in the activity
         agent = self._agent() or {}
         typed = arguments.get("text") if name == "type" else arguments.get("expression") if name == "evaluate" else None
@@ -700,13 +703,16 @@ class Bridge:
             queue += context.get("children") or []
         return out
 
-    def _in_sandbox(self, tab: str, target: dict, fn: str, cancel, timeout: float = 5.0) -> tuple[object, str]:
+    def _in_sandbox(self, tab: str, target: dict, fn: str, cancel, timeout: float = 5.0, until=None) -> tuple[object, str]:
         """Run `fn` in a sandbox, named by its document ({"context", "sandbox"}) or by itself
-        ({"realm"}). Returns what it answered and the realm it ran in."""
+        ({"realm"}). Returns what it answered and the realm it ran in; (DIALOG, "") when `until`
+        (as in Bidi.command) came first: the function is waiting for a dialog it opened."""
         result = self.bidi(tab).command("script.callFunction", {
             "functionDeclaration": fn, "target": target, "arguments": [],
             "awaitPromise": False, "resultOwnership": "none",
-        }, timeout=timeout, cancel=cancel)  # fmt: skip
+        }, timeout=timeout, cancel=cancel, until=until)  # fmt: skip
+        if result is None:
+            return DIALOG, ""
         return script_result(result), str(result.get("realm") or "")
 
     def _in_frames(self, tab: str, fn: str, cancel, *, must: bool) -> list:
@@ -724,25 +730,23 @@ class Bridge:
                 # A frame that went away took its forms with it.
         return results
 
-    def _in_realms(self, tab: str, realms: list[str], fn: str, cancel, *, must: bool) -> list:
+    def _in_realms(self, tab: str, realms: list[str], fn: str, cancel, until=None) -> tuple[list, str]:
         """Run `fn` in these sandboxes and no other. A document that went away took its sandbox
-        along: the one that replaced it has another, which this does not reach. `must`: a document
-        the engine does not answer for (anything but "it is gone", asked twice) is an error."""
+        along: the one that replaced it has another, which this does not reach. Returns the answers
+        and, when the engine did not answer for a document that is not gone, its error: nothing is
+        asked twice, since what `fn` did by then is not known. Stops at a dialog (`until`)."""
         results = []
         for realm in realms:
-            for last in (False, True):
-                try:
-                    results.append(self._in_sandbox(tab, {"realm": realm}, fn, cancel)[0])
-                    break
-                except Cancelled:
-                    raise
-                except BidiError as exc:
-                    if exc.error == "no such frame":
-                        break
-                    if last and must:
-                        raise ToolError("the form the page tried to send is still held: the browser did not answer for its "
-                                        f"document ({exc.error}); nothing was sent") from None  # fmt: skip
-        return results
+            try:
+                results.append(self._in_sandbox(tab, {"realm": realm}, fn, cancel, until=until)[0])
+            except Cancelled:
+                raise
+            except BidiError as exc:
+                if exc.error != "no such frame":
+                    return results, exc.error
+            if results[-1:] == [DIALOG]:
+                break  # the page waits for an answer; what other documents hold stays held
+        return results, ""
 
     def _forms_prepare(self, tab: str, cancel) -> None:
         """Before anything the page can observe (a scroll, a focus, a click): its documents hold the
@@ -818,15 +822,25 @@ class Bridge:
             try:
                 self.require("submit_forms", here, checked=checked)
             except Denied as denied:
-                self._in_realms(tab, realms, FORMS_DROP_FN, cancel, must=False)
+                self._in_realms(tab, realms, FORMS_DROP_FN, cancel)  # one that cannot be dropped stays held
                 denied.detail = f"{what} was done; the form the page then tried to send was not sent."
                 raise
             allowed = self._may_submit()  # "for this session": these documents stop holding, too
         if "submit_forms" not in checked:
             checked.append("submit_forms")  # a form went out under the permission: the activity says so
         mark = self.bidi(tab).mark()
-        send = FORMS_OPEN_FN if allowed else FORMS_SEND_FN
-        sent = sum(int(n or 0) for n in self._in_realms(tab, realms, send, cancel, must=True))
+        # Sending runs the page's own submit handlers now, and one of them may ask ("Send?").
+        answers, failed = self._in_realms(tab, realms, FORMS_OPEN_FN if allowed else FORMS_SEND_FN, cancel,
+                                          until=("browsingContext.userPromptOpened", tab, mark))  # fmt: skip
+        asks = DIALOG in answers
+        sent = sum(int(n or 0) for n in answers if n != DIALOG)
+        if sent or asks:
+            self._form_at = here
+        if failed:
+            raise ToolError(f"{what} was done; the browser did not answer for the document of the form the page had tried "
+                            f"to send ({failed}), which may or may not have been sent. Call page_snapshot again.")  # fmt: skip
+        if asks:
+            return True  # the dialog is the page's; its answer decides whether the form goes
         if not sent:
             if waited:
                 # Nothing else is done to a page that is no longer the one the answer was for: with
@@ -834,7 +848,6 @@ class Bridge:
                 raise ToolError(f"{what} was done; while the question about its form was open the page moved on or took "
                                 "the form back, and nothing was sent. Call page_snapshot again.")  # fmt: skip
             return False  # the page took its form away meanwhile
-        self._form_at = here
         self._settle(tab, mark, expected=True, cancel=cancel)
         return True
 
@@ -1025,6 +1038,8 @@ class Bridge:
         except Denied as denied:
             denied.detail = f"{denied.detail} The tab is {tab}.".strip()
             raise
+        except ToolError as refused:
+            raise ToolError(f"{refused} The tab is {tab}.") from None
 
     def _t_page_read(self, args, cancel, checked):
         tab = args["tab"]
@@ -1070,17 +1085,25 @@ class Bridge:
         data = {"tab": tab, "url": url, "bytes": len(png) * 3 // 4}
         return self._ok(data, f"Screenshot of {url}", [{"type": "image", "data": png, "mimeType": "image/png"}]), url
 
-    def _where(self, tab: str, cancel) -> dict:
-        """What a result says about where an action left the tab: its address, unless the page took
-        it outside the agent's sites or somewhere that needs a permission it does not have. Like
-        tabs_list, the result then says that much and not the address (reading there asks)."""
-        url = self._url_of(tab, cancel)
+    def _hidden(self, url: str) -> dict | None:
+        """Why a result does not say where a tab is: outside the agent's sites, or somewhere that
+        needs a permission it does not have without asking. Like tabs_list (reading there asks)."""
         agent = self._agent() or {}
         if not policy.in_scope(agent, policy.host_of(url)):
-            return {"url": None, "outside_sites": True}
+            return {"outside_sites": True}
         if missing := self._needs_not_allowed(agent, url):
-            return {"url": None, "needs_permission": missing}
-        return {"url": url}
+            return {"needs_permission": missing}
+        return None
+
+    def _where(self, tab: str, began: str, cancel) -> dict:
+        """What a result says about where an action left the tab: its address and the dialog open
+        in it. On the site the call began on, which it was allowed for, that is all of it; where
+        the page took the tab meanwhile is not described when `_hidden`, nor is its dialog's text."""
+        url, dialog = self._url_of(tab, cancel), self._open_dialog(tab)
+        hidden = None if policy.origin(url) == policy.origin(began) else self._hidden(url)
+        if not hidden:
+            return {"url": url, "dialog": dialog}
+        return {"url": None, **hidden, "dialog": dialog and {"type": dialog["type"], "message": None}}
 
     def _earlier_forms(self, tab: str, url: str, checked: list[str], cancel) -> dict | None:
         """Forms the page tried to send since the last call (a timer, an answer to a dialog) are
@@ -1088,11 +1111,18 @@ class Bridge:
         so this call does nothing else), dropped and denied without it."""
         if not self._forms_settle(tab, url, "An earlier action", checked, cancel):
             return None
-        note = (
-            "The page had tried to send a form after an earlier action; it was held and has now been sent. "
-            "Nothing else was done; call page_snapshot again."
-        )
-        data = {"tab": tab, **self._where(tab, cancel), "navigated": True, "form_sent": True}
+        data = {"tab": tab, **self._where(tab, url, cancel), "navigated": True, "form_sent": True}
+        if data["dialog"]:
+            data["navigated"] = False
+            note = (
+                "The page had tried to send a form after an earlier action; it was held and has now been let go, "
+                "and the page opened a dialog about it. Nothing else was done; answer the dialog."
+            )
+        else:
+            note = (
+                "The page had tried to send a form after an earlier action; it was held and has now been sent. "
+                "Nothing else was done; call page_snapshot again."
+            )
         return self._ok(data, note + "\n\n" + json.dumps(data, ensure_ascii=False))
 
     def _t_click(self, args, cancel, checked):
@@ -1126,8 +1156,8 @@ class Bridge:
         # What the element is does not say what its click does: a form the page sent from its own
         # handler is held, and needs the same permission as a submit button (asked for now).
         navigated = self._forms_settle(tab, url, "The click", checked, cancel) or navigated
-        dialog = self._open_dialog(tab)
-        data = {"tab": tab, **self._where(tab, cancel), "navigated": navigated, "dialog": dialog}
+        data = {"tab": tab, **self._where(tab, url, cancel), "navigated": navigated}
+        data["navigated"] = navigated and not data["dialog"]  # a form waiting for the page's own dialog has not gone
         return self._ok(data), url
 
     def _t_type(self, args, cancel, checked):
@@ -1171,8 +1201,9 @@ class Bridge:
         # Typing runs the page's handlers too (a field that sends its form when it is complete), and
         # so did the focus and the clearing: a form any of them sent is held.
         navigated = self._forms_settle(tab, url, "The typing", checked, cancel) or navigated
+        where = self._where(tab, url, cancel)
         return self._ok({"tab": tab, "typed": len(args["text"]), "submitted": bool(args.get("submit")),
-                         "navigated": navigated, **self._where(tab, cancel)}), url  # fmt: skip
+                         "navigated": navigated and not where["dialog"], **where}), url  # fmt: skip
 
     def _t_dialog(self, args, cancel, checked):
         tab = args["tab"]
@@ -1191,6 +1222,8 @@ class Bridge:
         self._settle(tab, mark, expected=False, cancel=cancel)
         if self._open_dialog(tab) is None and self._forms_settle(tab, url, "The answer", checked, cancel):
             data["form_sent"] = True
+        if again := self._where(tab, url, cancel)["dialog"]:  # the page asked again (a submit handler of the form let go)
+            data["dialog"] = again
         return self._ok(data), url
 
     def _t_downloads_list(self, args, cancel, checked):
@@ -1227,7 +1260,8 @@ class Bridge:
         self.bidi(tab).command("input.setFiles", {"context": tab, "element": element, "files": [str(path)]}, cancel=cancel)
         navigated = self._settle(tab, mark, expected=False, cancel=cancel)
         navigated = self._forms_settle(tab, url, "The upload", checked, cancel) or navigated
-        return self._ok({"tab": tab, "file": path.name, "navigated": navigated}), url
+        dialog = self._where(tab, url, cancel)["dialog"]
+        return self._ok({"tab": tab, "file": path.name, "navigated": navigated and not dialog, "dialog": dialog}), url
 
     def _t_evaluate(self, args, cancel, checked):
         tab = args["tab"]

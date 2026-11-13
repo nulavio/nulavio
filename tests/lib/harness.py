@@ -309,6 +309,11 @@ class FixtureServer:
                 f"'globalThis.nulavioForms.open()')() }} catch (e) {{}} {form}.submit()\">Reach</div>"
                 '<div id=frame role=button tabindex=0 onclick="frames[0].document.forms[0].submit()">Frame</div>'
                 f'<div id=later role=button tabindex=0 onclick="setTimeout(() => {form}.requestSubmit(), 1200)">Later</div>'
+                # A form whose own submit handler asks before it goes.
+                '<form id=asks action="/agent-result" method="get" onsubmit="return confirm(\'Sure?\')">'
+                "<input type=hidden name=q value=asked></form>"
+                '<div id=askslater role=button tabindex=0 onclick="setTimeout(() => '
+                "document.getElementById('asks').requestSubmit(), 1200)\">Asks later</div>"
                 "<div id=newframe role=button tabindex=0 onclick=\"const i = document.createElement('iframe');"
                 " i.src = '/agent-frame-form?auto=1'; document.body.append(i)\">New frame</div>"
                 f"<div id=confirm role=button tabindex=0 onclick=\"if (confirm('Send?')) {form}.submit()\">Confirm</div>"
