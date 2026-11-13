@@ -33,13 +33,13 @@
 </header>
 <main id="main" class="wrap">
 <div class="sheet">
-<div class="notice" id="ok" role="status"><b>Você está na lista.</b>Vamos escrever uma única vez, quando o Nulavio estiver pronto para o seu sistema. Até lá, silêncio.</div>
-<div class="notice" id="left" role="status"><b>Pronto.</b>Se esse e-mail estava na lista, ele foi apagado.</div>
+<div class="notice" id="left" role="status"><b>Pronto.</b>Se esse link era de uma inscrição, o e-mail dela foi apagado. Inscreveu o mesmo e-mail mais de uma vez? Só o primeiro link apaga: veja <a href="#leave">como sair da lista</a>.</div>
 <div class="notice notice-warn" id="invalid" role="status"><b>Esse e-mail não parece válido.</b>Confira o endereço e tente de novo. Nada foi guardado.</div>
-<div class="notice notice-warn" id="unavailable" role="status"><b>A lista está fora do ar agora.</b>Nada foi guardado. Tente de novo daqui a pouco.</div>
+<div class="notice notice-warn" id="unavailable" role="status"><b>A lista está fora do ar agora.</b>Nada foi guardado nem apagado. Tente de novo daqui a pouco; se você estava saindo da lista, volte ao seu link e use o botão outra vez.</div>
+<div class="notice notice-warn" id="nolink" role="status"><b>Esse link está incompleto.</b>Abra o endereço inteiro que você guardou ao se inscrever. Se ele se perdeu, veja <a href="#leave">como sair da lista</a>.</div>
 <h1 id="list-h">Lista de espera</h1>
 <p class="lead">Deixe seu e-mail e avisamos quando o Nulavio chegar ao seu sistema. Fedora primeiro, Ubuntu em seguida.</p>
-<form class="join signup" action="/api/waitlist" method="post">
+<form class="join" action="/api/waitlist" method="post">
 <input type="hidden" name="lang" value="pt-BR">
 <p class="trap" aria-hidden="true"><label>Deixe este campo vazio <input type="text" name="hp" tabindex="-1" autocomplete="off"></label></p>
 <div class="join-row">
@@ -67,23 +67,14 @@
 <li>o e-mail que você digitou;</li>
 <li>o idioma da página em que você se inscreveu;</li>
 <li>o sistema, se você escolher um;</li>
-<li>a data e a hora da inscrição, para respeitar a ordem de chegada.</li>
+<li>a data e a hora da inscrição, para respeitar a ordem de chegada;</li>
+<li>uma impressão digital (SHA-256) do seu link privado, para reconhecê-lo quando você sair. O link em si não fica guardado.</li>
 </ul>
 <p class="muted">Não guardamos seu endereço IP nem dados do seu navegador junto com a inscrição. A lista fica num banco de dados na Cloudflare, a empresa que hospeda este site e que recebe cada pedido como qualquer servidor web. Seu e-mail serve para um único aviso: o de que o Nulavio está disponível para você. Sem newsletter e sem repasse a ninguém.</p>
 <h2 id="leave">Sair da lista</h2>
-<p class="muted">Digite o e-mail que você inscreveu. Ele é apagado na hora, sem perguntas.</p>
-<form class="join" action="/api/waitlist" method="post">
-<input type="hidden" name="lang" value="pt-BR">
-<input type="hidden" name="action" value="leave">
-<p class="trap" aria-hidden="true"><label>Deixe este campo vazio <input type="text" name="hp" tabindex="-1" autocomplete="off"></label></p>
-<div class="join-row">
-<div>
-<label class="join-label" for="leave-email">E-mail inscrito</label>
-<input class="field" id="leave-email" type="email" name="email" required maxlength="254" autocomplete="email" autocapitalize="off" spellcheck="false">
-</div>
-<button class="btn btn-quiet" type="submit">Apagar meu e-mail</button>
-</div>
-</form>
+<p class="muted">Ao se inscrever você recebe um link privado: o endereço da página que aparece logo depois do formulário. Abra esse link e use o botão “Apagar meu e-mail”. O e-mail é apagado na hora, sem perguntas.</p>
+<p class="muted">Pedimos o link porque saber um e-mail não prova que a inscrição é sua: sem ele, qualquer pessoa poderia tirar você da lista. Uma segunda inscrição com o mesmo e-mail não muda nada na primeira e não dá um link novo que funcione. Por isso, se outra pessoa inscreveu o seu e-mail antes de você, o link que funciona é o dela: escreva para nós.</p>
+<p class="muted">Perdeu o link, se inscreveu antes de ele existir ou alguém inscreveu o seu e-mail? Escreva para <a href="mailto:security@nulavio.net">security@nulavio.net</a> a partir do e-mail inscrito. Respondemos para esse endereço e apagamos quando você confirmar.</p>
 </div>
 </main>
 <footer class="foot">

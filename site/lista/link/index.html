@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="pt-BR">
+<!-- nulavio.net waitlist link page: what a sign-up is answered with. Served by site/_worker.js at this path with the key in the address (?k=…); the form has no action, so it posts to that same address. -->
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Seu link da lista · Nulavio</title>
+<meta name="description" content="O link privado da sua inscrição na lista de espera do Nulavio.">
+<meta name="robots" content="noindex">
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/assets/tokens.css">
+<link rel="stylesheet" href="/assets/landing.css">
+</head>
+<body>
+<svg class="sprite" aria-hidden="true" focusable="false">
+<symbol id="i-arrow" viewBox="0 0 20 20"><path d="M4 10h12M11.5 5.5L16 10l-4.5 4.5"/></symbol>
+</svg>
+<a class="skip" href="#main">Pular para o conteúdo</a>
+<header class="top">
+<div class="wrap top-inner">
+<a class="brand" href="/"><picture>
+<source media="(prefers-color-scheme: dark)" srcset="/assets/nulavio-lockup-horizontal-on-dark.svg" width="132" height="27">
+<img src="/assets/nulavio-lockup-horizontal.svg" alt="Nulavio" width="132" height="27">
+</picture></a>
+<div class="top-actions">
+<a class="btn btn-quiet btn-sm" href="/">O navegador</a>
+</div>
+</div>
+</header>
+<main id="main" class="wrap">
+<div class="sheet">
+<h1 id="link-h">Seu link da lista de espera</h1>
+<p class="lead">Este é o link privado de uma inscrição na lista de espera do Nulavio.</p>
+<div class="notice notice-on" id="keep" role="status"><b>Guarde o endereço desta página.</b>Ele é o seu link privado. Salve nos favoritos ou copie da barra de endereços agora: não mostramos de novo e não mandamos por e-mail.</div>
+<h2 id="what">Para que serve</h2>
+<p class="muted">Se você acabou de se inscrever: recebemos a inscrição, e vamos escrever uma única vez, quando o Nulavio estiver pronto para o seu sistema.</p>
+<p class="muted">Quem tem este link pode tirar a sua inscrição da lista, e nada mais: ele não mostra o seu e-mail. É a prova de que a inscrição é sua, porque saber um e-mail não é.</p>
+<p class="muted">Se este e-mail já estava na lista, a inscrição continua como estava e este link novo não abre nada. Continua valendo o que você recebeu na primeira vez.</p>
+<h2 id="leave">Sair da lista</h2>
+<p class="muted">O botão apaga o e-mail desta inscrição na hora, sem perguntas.</p>
+<form class="join" method="post">
+<input type="hidden" name="leave" value="1">
+<button class="btn btn-quiet" type="submit">Apagar meu e-mail</button>
+</form>
+<h2 id="lost">Se o link se perder</h2>
+<p class="muted">Escreva para <a href="mailto:security@nulavio.net">security@nulavio.net</a> a partir do e-mail inscrito. Respondemos para esse endereço e apagamos quando você confirmar. Veja também <a href="/lista/#data">o que guardamos</a>.</p>
+</div>
+</main>
+<footer class="foot">
+<div class="wrap">
+<div class="foot-grid">
+<div>
+<a class="brand" href="/"><picture>
+<source media="(prefers-color-scheme: dark)" srcset="/assets/nulavio-lockup-horizontal-on-dark.svg" width="132" height="27">
+<img src="/assets/nulavio-lockup-horizontal.svg" alt="Nulavio" width="132" height="27">
+</picture></a>
+<p>Proteção serena para a web aberta.</p>
+</div>
+<ul class="foot-links">
+<li><a href="/">Início</a></li>
+<li><a href="/engenharia/">Documento de engenharia</a></li>
+<li><a href="/.well-known/security.txt">Segurança</a></li>
+</ul>
+</div>
+<div class="foot-legal">
+<p>O Nulavio não é afiliado à Mozilla. Firefox é marca registrada da Mozilla Foundation.</p>
+<p>Este site não usa scripts, cookies nem análise de visitas. O formulário da lista de espera envia só o que você digita nele.</p>
+</div>
+</div>
+</footer>
+</body>
+</html>

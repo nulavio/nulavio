@@ -7,9 +7,10 @@
 The output is plain files for Cloudflare Pages (direct upload): no build
 tool, no JavaScript in the pages, no third-party resources. The pages are the
 landing (index.html, en/index.html; landing.css), the waitlist pages (lista/,
-en/waitlist/) and the engineering document (engenharia/, en/engineering/;
-site.css). site/_worker.js is not a page script: Cloudflare runs it for
-/api/* only (site/_routes.json), to store waitlist sign-ups.
+en/waitlist/, and the link page under each) and the engineering document
+(engenharia/, en/engineering/; site.css). site/_worker.js is not a page script:
+Cloudflare runs it for /api/* and the two link pages only (site/_routes.json),
+to store waitlist sign-ups and to remove one for whoever holds its link.
 
 The pages carry placeholders that this script stamps (landing spec §2.3, §9):
 {{commit}}, {{date_pt}}, {{date_en}}, {{firefox}} (browser/build/engine.json),
@@ -68,6 +69,8 @@ PAGES = {
     "en/index.html": "en-US",
     "lista/index.html": "pt-BR",
     "en/waitlist/index.html": "en-US",
+    "lista/link/index.html": "pt-BR",
+    "en/waitlist/link/index.html": "en-US",
     "engenharia/index.html": "pt-BR",
     "en/engineering/index.html": "en-US",
     "404.html": None,
