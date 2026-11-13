@@ -92,7 +92,8 @@ def notes(info: dict, repo: Path, repository: str, fingerprint: str, run_url: st
     if not re.fullmatch(rf"https://github\.com/{re.escape(repository)}/actions/runs/[0-9]+", run_url):
         raise ValueError("invalid provenance run URL")
     body = changes(repo, info["commit"], info["tag"], repository)
-    install = "Install or upgrade on Fedora: https://nulavio.net/en/download/"
+    systems = "Fedora or Ubuntu" if info.get("debs") else "Fedora"
+    install = f"Install or upgrade on {systems}: https://nulavio.net/en/download/"
     if flatpak:
         if flatpak != f"nulavio-{info['tag'][1:]}.x86_64.flatpak":
             raise ValueError("unexpected Flatpak bundle name")

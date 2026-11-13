@@ -767,18 +767,96 @@ class DownloadPagesTest(unittest.TestCase):
     def tearDownClass(cls):
         shutil.rmtree(cls.tmp, ignore_errors=True)
 
-    def source(self, name: str, version: str, fpr: str, key: str | None) -> Path:
+    def source(self, name: str, version: str, fpr: str, key: str | None, apt: bool = False) -> Path:
         src = self.tmp / name
         (src / "packaging").mkdir(parents=True)
         release = json.loads((ROOT / "packaging" / "release.json").read_text(encoding="utf-8"))
         release.update(version=version, key_fingerprint=fpr)
+        release.pop("apt_sources", None)
+        if apt:
+            release["apt_sources"] = "https://nulavio.net/apt/nulavio.sources"
         (src / "packaging" / "release.json").write_text(json.dumps(release), encoding="utf-8")
         if key is not None:
             (src / build_site.PUBLIC_KEY).parent.mkdir(parents=True)
             (src / build_site.PUBLIC_KEY).write_text(key, encoding="utf-8")
         (src / build_site.REPO_FILE).parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(ROOT / build_site.REPO_FILE, src / build_site.REPO_FILE)
+        if apt and key is not None:
+            (src / build_site.SOURCES_FILE).parent.mkdir(parents=True, exist_ok=True)
+            sources = (ROOT / build_site.SOURCES_FILE).read_text(encoding="ascii").split("Signed-By:\n")[0]
+            block = "".join(" " + (line or ".") + "\n" for line in key.strip("\n").split("\n"))
+            (src / build_site.SOURCES_FILE).write_text(sources + "Signed-By:\n" + block, encoding="ascii")
         return src
+
+    def test_the_apt_source_file_names_the_release_key_and_turns_nothing_off(self):
+        lines = (ROOT / build_site.SOURCES_FILE).read_text(encoding="ascii").splitlines()
+        fields = [line for line in lines if not line.startswith(" ")]
+        self.assertEqual(fields, [
+            "Types: deb", "URIs: https://packages.nulavio.net/apt", "Suites: stable", "Components: main",
+            "Architectures: amd64", "Signed-By:",
+        ])  # fmt: skip
+        key = (ROOT / build_site.PUBLIC_KEY).read_text(encoding="ascii").strip("\n").split("\n")
+        self.assertEqual(build_site.sources_key(ROOT / build_site.SOURCES_FILE), key)
+        # The command the download pages give to read it back prints the release key.
+        page = (ROOT / "site" / "en" / "download" / "index.html").read_text(encoding="utf-8")
+        command = re.search(r"\n(sed -n .*\| gpg --show-keys)\n", page).group(1)
+        home = self.tmp / "gnupg-sources"
+        home.mkdir(mode=0o700, exist_ok=True)
+        sed_script = re.search(r"sed -n '([^']*)'", command).group(1)
+        sed = subprocess.run(["sed", "-n", sed_script, str(ROOT / build_site.SOURCES_FILE)], capture_output=True, check=True)
+        listing = subprocess.run(["gpg", "--homedir", str(home), "--batch", "--with-colons", "--show-keys"],
+                                 input=sed.stdout.decode("ascii"), capture_output=True, text=True, check=True).stdout  # fmt: skip
+        fpr = next(line.split(":")[9] for line in listing.splitlines() if line.startswith("fpr:"))
+        release = json.loads((ROOT / "packaging" / "release.json").read_text(encoding="utf-8"))
+        self.assertEqual(fpr, release["key_fingerprint"].replace(" ", ""))
+
+    def test_ubuntu_appears_only_once_the_apt_repository_is_published(self):
+        off = build_site.release_values(self.source("apt-off", "159.0.1-0.1", self.fpr, self.armored))
+        on = build_site.release_values(self.source("apt-on", "159.0.1-0.1", self.fpr, self.armored, apt=True))
+        self.assertEqual((off["apt"], on["apt"]), ("off", "on"))
+        self.assertEqual(on["sources_file"], "https://nulavio.net/apt/nulavio.sources")
+        # A source file that is not the site's, or whose key is not the release key, is refused.
+        src = self.source("apt-bucket", "159.0.1-0.1", self.fpr, self.armored, apt=True)
+        release = json.loads((src / "packaging" / "release.json").read_text(encoding="utf-8"))
+        release["apt_sources"] = "https://packages.nulavio.net/apt/nulavio.sources"
+        (src / "packaging" / "release.json").write_text(json.dumps(release), encoding="utf-8")
+        with self.assertRaises(build_site.BuildError):
+            build_site.release_values(src)
+        src = self.source("apt-other-key", "159.0.1-0.1", self.fpr, self.armored, apt=True)
+        sources = src / build_site.SOURCES_FILE
+        sources.write_text(re.sub(r"(?m)^ =\S+$", " =AAAA", sources.read_text(encoding="ascii")), encoding="ascii")
+        with self.assertRaises(build_site.BuildError):
+            build_site.release_values(src)
+        pages = {}
+        for name, values in (("off", off), ("on", on)):
+            out = self.tmp / f"apt-site-{name}"
+            real = build_site.release_values
+            build_site.release_values = lambda src, values=values: values
+            try:
+                build_site.build(out)
+            finally:
+                build_site.release_values = real
+            pages[name] = {page: (out / page).read_text(encoding="utf-8") for page in build_site.DOWNLOAD_PAGES}
+        for page in build_site.DOWNLOAD_PAGES:
+            with self.subTest(page=page):
+                for html in (pages["off"][page], pages["on"][page]):
+                    self.assertNotIn("<!--apt:", html)
+                    self.assertNotIn("<!--/apt:", html)
+                    self.assertNotIn("\n\n<h3", html)
+                self.assertNotIn("apt update", pages["off"][page])
+                self.assertNotIn("nulavio.sources", pages["off"][page])
+                self.assertIn("APT", pages["off"][page])  # "not yet: there is no APT repository"
+                on_page = pages["on"][page]
+                self.assertIn(
+                    "sudo curl -fsSLo /etc/apt/sources.list.d/nulavio.sources https://nulavio.net/apt/nulavio.sources", on_page
+                )
+                self.assertLess(on_page.index("gpg --show-keys"), on_page.index("sudo apt update"))
+                self.assertIn("sudo apt install nulavio", on_page)
+                self.assertIn("Ubuntu 24.04", on_page)
+                self.assertNotIn("APT repository</dd>", on_page)
+                self.assertNotIn("repositório APT</dd>", on_page)
+        ids = [[m for m in re.findall(r'id="([^"]+)"', pages["on"][page])] for page in build_site.DOWNLOAD_PAGES]
+        self.assertEqual(ids[0], ids[1], "both languages have the same sections")
 
     def test_a_repo_file_without_the_checks_or_off_the_site_is_refused(self):
         src = self.source("checks-off", "159.0.1-0.1", self.fpr, self.armored)

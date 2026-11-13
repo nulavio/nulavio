@@ -164,6 +164,40 @@ class ReleaseManifestTest(unittest.TestCase):
         publish = (ROOT / "scripts" / "release" / "publish_release.sh").read_text(encoding="utf-8")
         self.assertIn("field archives", publish)
 
+    def test_the_deb_is_listed_with_the_rpms_version(self):
+        self.assertEqual(self.verify()["debs"], [DEB])
+        other = "packages/nulavio_159.0.1-0.2_amd64.deb"
+        (self.out / other).write_bytes(b"deb2")
+        self.manifest["packages"] = [e for e in self.manifest["packages"] if e["file"] != DEB]
+        self.manifest["packages"].append({"file": other, "sha256": digest(self.out / other)})
+        self.write()
+        self.refused("not the version of the RPM")
+        self.manifest["packages"][-1] = {"file": "packages/nulavio-159.0.1.deb", "sha256": digest(self.out / other)}
+        (self.out / "packages/nulavio-159.0.1.deb").write_bytes(b"deb2")
+        self.write()
+        self.refused("not a Nulavio .deb file name")
+
+    def test_sign_apt_repo_runs_the_check_before_signing_and_checks_what_it_signed(self):
+        script = (ROOT / "scripts" / "release" / "sign_apt_repo.sh").read_text(encoding="utf-8")
+        check = script.index("release_manifest.py")
+        index, sign = script.index("apt-ftparchive packages"), script.index("--clearsign")
+        self.assertLess(check, index)
+        self.assertLess(index, sign)
+        # apt fetches the indexes by hash, and the metadata carries no MD5 or SHA-1.
+        for option in ("APT::FTPArchive::DoByHash=true", "APT::FTPArchive::MD5=false", "APT::FTPArchive::SHA1=false"):
+            self.assertIn(option, script)
+        code = script.split("set -euo pipefail", 1)[1]
+        self.assertNotIn("Valid-Until", code, "an expiry would stop apt update while a release waits")
+        # Both signatures are checked with the public key alone, before anything is uploaded.
+        self.assertIn('gpgv --keyring "$tmp/keyring.gpg" "$dists/InRelease"', script)
+        self.assertIn('gpgv --keyring "$tmp/keyring.gpg" "$dists/Release.gpg" "$dists/Release"', script)
+        # The file that turns apt's checks on is never written where the packages are uploaded.
+        self.assertNotIn(".sources", code)
+        self.assertNotIn("trusted=yes", script)
+        publish = (ROOT / "scripts" / "release" / "publish_release.sh").read_text(encoding="utf-8")
+        self.assertIn('sign_apt_repo.sh" "$out/packages" "$stage/apt" "$key"', publish)
+        self.assertIn("field debs", publish)
+
     def test_sign_repo_runs_the_check_before_signing(self):
         script = (ROOT / "scripts" / "release" / "sign_repo.sh").read_text(encoding="utf-8")
         check, sign = script.index("release_manifest.py"), script.index("rpmsign")

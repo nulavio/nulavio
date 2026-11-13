@@ -26,32 +26,55 @@
 <main id="main">
 <section id="summary" aria-labelledby="summary-h">
 <div class="summary-text">
+<!--apt:off-->
 <p class="pill"><strong>Alpha</strong> · versão <span class="mono">{{release_version}}</span> · Fedora, x86_64</p>
+<!--/apt:off-->
+<!--apt:on-->
+<p class="pill"><strong>Alpha</strong> · versão <span class="mono">{{release_version}}</span> · Fedora e Ubuntu, x86_64</p>
+<!--/apt:on-->
 <h1 id="summary-h">Baixar o Nulavio</h1>
 <p class="lead">Esta é a primeira versão pública. Ela passa nos testes automatizados do projeto, mas ainda pode ter defeitos: mantenha outro navegador instalado.</p>
 </div>
 <dl class="facts" aria-label="Ficha da versão">
 <div><dt>Versão</dt><dd class="mono">{{release_version}}</dd></div>
+<!--apt:off-->
 <div><dt>Sistema</dt><dd>Fedora 44 ou mais novo, x86_64</dd></div>
 <div><dt>Ubuntu</dt><dd>Ainda não: falta o repositório APT</dd></div>
 <div><dt>Atualizações</dt><dd>Pelo dnf, como os outros programas do sistema</dd></div>
+<!--/apt:off-->
+<!--apt:on-->
+<div><dt>Sistema</dt><dd>Fedora 44 ou mais novo, Ubuntu 24.04 ou mais novo; x86_64</dd></div>
+<div><dt>Atualizações</dt><dd>Pelo dnf ou pelo apt, como os outros programas do sistema</dd></div>
+<!--/apt:on-->
 </dl>
 </section>
 
 <section id="install" aria-labelledby="install-h">
 <h2 id="install-h">Instalar</h2>
+<!--apt:on-->
+<h3 id="install-fedora-h">Fedora</h3>
+<!--/apt:on-->
 <p class="prose">Adicione o repositório do Nulavio e instale o pacote:</p>
 <div class="pre-scroll" role="region" aria-label="Comandos de instalação" tabindex="0"><pre translate="no"><code>sudo dnf config-manager addrepo --from-repofile={{repo_file}}
 sudo dnf install nulavio</code></pre></div>
 <p class="prose">Na primeira instalação, o dnf mostra a chave do repositório e pergunta se pode importá-la. Só aceite se a impressão digital for esta:</p>
 <p class="prose"><code class="mono" translate="no">{{key_fpr}}</code></p>
 <p class="prose">A mesma chave pública fica em <code translate="no">{{key_url}}</code>. O repositório vem com a verificação de assinatura dos pacotes e dos metadados ligada.</p>
+<!--apt:on-->
+<h3 id="install-ubuntu-h">Ubuntu</h3>
+<p class="prose">Adicione o repositório do Nulavio, confira a chave que vem nele e instale o pacote:</p>
+<div class="pre-scroll" role="region" aria-label="Comandos de instalação no Ubuntu" tabindex="0"><pre translate="no"><code>sudo curl -fsSLo /etc/apt/sources.list.d/nulavio.sources {{sources_file}}
+sed -n '/^Signed-By:/,$ { s/^ \.$/ /; s/^ //p }' /etc/apt/sources.list.d/nulavio.sources | gpg --show-keys
+sudo apt update
+sudo apt install nulavio</code></pre></div>
+<p class="prose">O arquivo do repositório traz a chave pública, e o apt só aceita o que ela assinou. O segundo comando mostra a impressão digital dessa chave: só continue se for a mesma de cima. O pacote traz um perfil do AppArmor que deixa o navegador isolar as abas, como o Ubuntu faz com o Firefox.</p>
+<!--/apt:on-->
 <p class="limit"><strong>Limite:</strong> A impressão digital só protege se você a conferir por um caminho diferente do download, por exemplo nesta página aberta em outro aparelho.</p>
 </section>
 
 <section id="updates" aria-labelledby="updates-h">
 <h2 id="updates-h">Atualizações</h2>
-<p class="prose">As versões novas chegam pelo <code translate="no">sudo dnf upgrade</code> ou pela loja de programas do sistema. Quando a Mozilla publica uma correção de segurança do Firefox, a meta do projeto é publicar o Nulavio correspondente em até 72 horas.</p>
+<p class="prose">As versões novas chegam pelo <code translate="no">sudo dnf upgrade</code><!--apt:on-->, pelo <code translate="no">sudo apt upgrade</code><!--/apt:on--> ou pela loja de programas do sistema. Quando a Mozilla publica uma correção de segurança do Firefox, a meta do projeto é publicar o Nulavio correspondente em até 72 horas.</p>
 <p class="limit"><strong>Limite:</strong> Nesse intervalo, o Nulavio instalado ainda não tem a correção.</p>
 </section>
 
@@ -69,7 +92,9 @@ sha256sum --check --ignore-missing SHA256SUMS</code></pre></div>
 <ul class="limits-list">
 <li class="limit"><strong>Limite:</strong> Não consulta a reputação de downloads no Google: o Google reserva essa verificação a parceiros. No lugar dela, instaladores e scripts baixados abrem um aviso, nunca são executados direto e são salvos sem permissão de execução.</li>
 <li class="limit"><strong>Limite:</strong> O desbloqueio de perfis pelo celular ou por chave de segurança FIDO2 ainda não está disponível. Perfis protegidos abrem com senha, código de recuperação ou o chaveiro do sistema.</li>
+<!--apt:off-->
 <li class="limit"><strong>Limite:</strong> Só Fedora por enquanto.</li>
+<!--/apt:off-->
 </ul>
 </section>
 

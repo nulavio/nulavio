@@ -13,9 +13,11 @@
 #    origin/main, and every package and SBOM still has the SHA-256 it recorded.
 # 2. sign_repo.sh with NULAVIO_RELEASE_MANIFEST: signs only those RPMs and builds
 #    the dnf repository (stage/rpm/, uploaded to https://packages.nulavio.net/rpm/).
-# 3. stage/github/: the signed RPM, its SBOM, the portable archive (Flatpak source), the Flatpak
-#    bundle when given, manifest.json, the public key, SHA256SUMS and its detached signature
-#    (assets of the GitHub release).
+#    sign_apt_repo.sh, the same way: the APT repository of the .deb (stage/apt/,
+#    uploaded to https://packages.nulavio.net/apt/).
+# 3. stage/github/: the signed RPM, the .deb, their SBOMs, the portable archive (Flatpak
+#    source), the Flatpak bundle when given, manifest.json, the public key, SHA256SUMS and
+#    its detached signature (assets of the GitHub release).
 # 4. stage/NEXT.md: the upload, tag and release commands for this version.
 #
 # NULAVIO_FLATPAK_BUNDLE: nulavio-<version>.x86_64.flatpak, built by the release workflow's
@@ -25,8 +27,8 @@
 # (default origin/main). A security release is prepared in a private GitHub
 # advisory fork and merged into main when it is published: name that branch.
 #
-# The alpha ships for Fedora only (RPM). The .deb stays unsigned and unpublished
-# until there is an APT repository (decision of 2026-11-04).
+# Fedora (RPM, dnf) and Ubuntu (.deb, APT): a release without its .deb is refused, so
+# that Ubuntu users never miss an update the Fedora repository has.
 set -euo pipefail
 
 repo=$(cd "$(dirname "$0")/../.." && pwd)
@@ -65,6 +67,7 @@ info=$(python3 -I "$repo/scripts/release/release_manifest.py" verify "$out" --re
 python3 -I "$repo/scripts/release/release_manifest.py" packages "$out/manifest.json" "$out/packages" >/dev/null
 field() { python3 -I -c 'import json, sys; v = json.loads(sys.argv[1])[sys.argv[2]]; print(*v, sep="\n") if isinstance(v, list) else print(v)' "$info" "$1"; }
 tag=$(field tag)
+[[ -n $(field debs) ]] || { echo "publish_release: the rehearsal has no .deb: the APT repository would miss $tag" >&2; exit 2; }
 commit=$(field commit)
 firefox=$(field firefox)
 bundle=${NULAVIO_FLATPAK_BUNDLE:-}
@@ -78,11 +81,16 @@ NULAVIO_RELEASE_MANIFEST="$out/manifest.json" GNUPGHOME=$gnupg NULAVIO_PUBLIC_KE
     "$repo/scripts/release/sign_repo.sh" "$out/packages" "$stage/rpm" "$key"
 exported=$(fingerprint "$stage/rpm/nulavio-packages.asc")
 [[ $exported == "$key" ]] || { echo "publish_release: the repository was signed with $exported" >&2; exit 1; }
+NULAVIO_RELEASE_MANIFEST="$out/manifest.json" GNUPGHOME=$gnupg NULAVIO_PUBLIC_KEY=$published \
+    "$repo/scripts/release/sign_apt_repo.sh" "$out/packages" "$stage/apt" "$key"
 
 while IFS= read -r rpm; do
     cp "$stage/rpm/x86_64/$(basename "$rpm")" "$stage/github/"
     cp "$out/$rpm.cdx.json" "$stage/github/"
 done < <(field rpms)
+while IFS= read -r deb; do
+    cp "$out/$deb" "$out/$deb.cdx.json" "$stage/github/"
+done < <(field debs)
 while IFS= read -r archive; do
     [[ -n $archive ]] && cp "$out/$archive" "$stage/github/"
 done < <(field archives)
@@ -107,14 +115,14 @@ cat >"$stage/NEXT.md" <<EOF
 Checked: the rehearsal manifest, the packages' SHA-256, the base commit on
 $ref; signed with $key by $signer. Not done by the script: everything below.
 
-1. Upload the dnf repository (the host decides the command; with Cloudflare R2):
+1. Upload the dnf and APT repositories (packages first, signed metadata last):
 
-       rclone sync --checksum "$stage/rpm" r2:nulavio-packages/rpm
+       scripts/release/upload_repo.sh "$stage/rpm"
+       scripts/release/upload_repo.sh "$stage/apt"
 
-   Then, in a clean Fedora container, install from it with both checks on:
+   Then install from each, in a clean container, with the signature checks on:
 
-       podman run --rm -it $("$repo/scripts/release/base_image.sh" fedora-build) bash -c \\
-         'dnf -y config-manager addrepo --from-repofile=https://nulavio.net/rpm/nulavio.repo && dnf -y install nulavio && rpm -q nulavio'
+       scripts/release/check_published.sh ${tag#v}
 
 2. Tag and create the GitHub release as a draft, review it, then publish it:
 

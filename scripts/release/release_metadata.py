@@ -79,6 +79,10 @@ def update(repo: Path, release: dict, repository: str, manifest: dict) -> bool:
         entry = f"{marker}\n## [{version}]({url}) — {published.date()}\n\n{notes}\n"
         changelog = changelog.replace(anchor, f"{anchor}\n\n{entry}", 1)
     metadata["version"] = version
+    # The download pages show Ubuntu from the first release published with the APT repository on:
+    # publish_release.sh refuses a release without its .deb, so every one after that has one too.
+    if release_manifest.debs(manifest, manifest_tag):
+        metadata["apt_sources"] = "https://nulavio.net/apt/nulavio.sources"
     serialized = json.dumps(metadata, indent=2, ensure_ascii=False) + "\n"
     changed = serialized != metadata_path.read_text(encoding="utf-8") or changelog != changelog_path.read_text(encoding="utf-8")
     if changed:
