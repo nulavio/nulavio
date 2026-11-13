@@ -45,9 +45,9 @@ reviews:
     enabled: true
     # invariant: drafts are not reviewed (work in progress; mark the pull request ready).
     drafts: false
-    # Public repositories get one included review an hour for the whole organization, and
-    # every push that is reviewed uses one. Only the first review is automatic; after new
-    # commits, ask for one with a comment: "@coderabbitai review".
+    # invariant: public repositories get one included review an hour for the whole
+    # organization, and every push that is reviewed uses one. Only the first review is
+    # automatic; after new commits, ask for one with a comment: "@coderabbitai review".
     auto_incremental_review: false
     # Only pull requests into main. A stacked pull request (its base is another branch) is
     # reviewed on request, or once its base becomes main.

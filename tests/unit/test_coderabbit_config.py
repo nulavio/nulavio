@@ -50,7 +50,15 @@ def scalar(text: str):
 
 def parse(text: str):
     """The YAML subset of .coderabbit.yaml: block mappings and lists, two-space indentation,
-    plain or double-quoted one-line scalars, `[]`, `|` blocks, whole-line comments."""
+    plain or double-quoted one-line scalars, `[]`, `|` blocks, whole-line comments.
+
+    Printable ASCII and line feeds only, and no space at the end of a line: other white space,
+    control characters and the line breaks YAML knows beyond LF are where this reader and a
+    YAML parser would read different things, also inside a comment or a block."""
+    if re.search(r"[^\x20-\x7e\n]", text):
+        raise ValueError("only printable ASCII and line feeds")
+    if re.search(r" $", text, re.M):
+        raise ValueError("a line ends in a space")
     lines = text.split("\n")
 
     def is_content(line: str) -> bool:
@@ -162,6 +170,9 @@ class CodeRabbitConfigTest(unittest.TestCase):
         refused = (
             "a: {b: 1}\n", "a: 'x'\n", "a:\n   b: 1\n", "a: 1\na: 2\n", "a: yes please\n",
             "a: !bogus\n", "a: *alias\n", "a: &anchor x\n", "a:\n  - !x\n", "a: |\n    deeper\n  shallower\n", "a: |\nb: 1\n",
+            "a: false\u00a0\n", "a: false\u2003\n", "a: false\x0b\n", "a: false\x0c\n", "a: false\x1c\n", "a: false\t\n",
+            "a: false \n", "a: |\n          \n  text\n", "# c\u0085b: true\n", "# c\u2028b: true\n", "# c\u2029b: true\n",
+            "a: false\r\n", "a: caf\u00e9\n",
         )  # fmt: skip
         for bad in refused:
             with self.assertRaises(ValueError, msg=bad):

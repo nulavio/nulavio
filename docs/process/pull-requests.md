@@ -147,7 +147,7 @@ Known gaps: the action installs its own dependencies with `bun install --product
 
 Status: configured 2026-11-13 (#141). [CodeRabbit](https://coderabbit.ai) is a hosted review service. The maintainer installed its GitHub App on the `nulavio` organization on 2026-11-12, for all repositories. It reads a pull request and comments on it: one more advisory reading next to the AI review above, with the same standing. Findings are leads to check, an empty review proves nothing, and whoever merges decides.
 
-[`.coderabbit.yaml`](../../.coderabbit.yaml) configures it, and `tests/unit/test_coderabbit_config.py` keeps the settings this page relies on:
+[`.coderabbit.yaml`](../../.coderabbit.yaml) configures it. `tests/unit/test_coderabbit_config.py` fails when one of the settings marked "invariant" in that file changes (approvals, blocking, offered code changes, triggers, who may give commands, what is left out); the language and the wording of the instructions are not held by a test:
 
 - It never approves, never requests changes and is never a required check. A review that stops on an error ends neutral.
 - It offers no change by itself: the fixes, generated tests, CI repairs and conflict resolutions it would put under a review as checkboxes ("finishing touches") are off, and its summary goes in its own comment, not in the pull request description.
