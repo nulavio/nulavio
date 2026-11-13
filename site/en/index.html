@@ -150,7 +150,7 @@
 <dl>
 <div><dt>Nulavio servers receiving data from your browser</dt><dd>0</dd></div>
 <div><dt>defaults changed, each with its reason and its cost in writing</dt><dd>{{defaults}}</dd></div>
-<div><dt>popular sites tested with the protections on; none broke because of them</dt><dd>50</dd></div>
+<div><dt>popular sites tested with the protections on, in October 2026; none broke because of them</dt><dd>50</dd></div>
 <div><dt>is the target for shipping urgent engine fixes</dt><dd>24 h</dd></div>
 </dl>
 </div>
@@ -207,7 +207,7 @@
 <section class="feature" aria-labelledby="vault-h">
 <div class="feature-text">
 <h2 id="vault-h">Profiles encrypted on disk. You hold the key.</h2>
-<p>A protected profile stays encrypted while it is locked: whoever copies the files, or takes the laptop, reads nothing. To open it, use the profile's password, your system login, a FIDO2 security key or your phone's biometrics, with Nulavio Companion.</p>
+<p>A protected profile stays encrypted while it is locked: whoever copies the files, or takes the laptop, reads nothing. To open it, use the profile's password or your system login. Coming soon: your phone's biometrics, with Nulavio Companion, and a FIDO2 security key.</p>
 <ul class="points">
 <li><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg>The method you choose really releases the key: an approval alone opens nothing</li>
 <li><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg>Locks again when you close the profile's last window</li>
@@ -216,13 +216,13 @@
 <p class="fine"><strong>No fine print:</strong> there is no Nulavio master key. Lose every method and the recovery code, and the profile is gone.</p>
 </div>
 <div class="stage">
-<div class="panel" role="img" aria-label="Unlock screen of the Banking profile, which is locked. Methods: phone, approved with biometrics; a FIDO2 security key; the system login; or the profile's password. There is also the recovery code.">
+<div class="panel" role="img" aria-label="Unlock screen of the Banking profile, which is locked. Methods: the system login or the profile's password; coming soon, the phone, approved with biometrics, and a FIDO2 security key. There is also the recovery code.">
 <div class="lock"><svg class="ico"><use href="#i-lock"/></svg><b>This profile is locked</b><span class="chip"><span class="tile tile-sand">B</span>Banking</span></div>
 <ul class="unlock">
-<li><svg class="ico"><use href="#i-phone"/></svg><span>Phone<small>Approve with biometrics</small></span></li>
-<li><svg class="ico"><use href="#i-usb"/></svg><span>Security key<small>FIDO2</small></span></li>
 <li><svg class="ico"><use href="#i-user"/></svg><span>System login<small>This computer's keyring</small></span></li>
 <li><svg class="ico"><use href="#i-dots"/></svg><span>Profile password<small>Only you know it</small></span></li>
+<li><svg class="ico"><use href="#i-phone"/></svg><span>Phone<small>Coming soon: approve with biometrics</small></span></li>
+<li><svg class="ico"><use href="#i-usb"/></svg><span>Security key<small>Coming soon: FIDO2</small></span></li>
 </ul>
 <div class="panel-foot"><span class="grow"><small>Lost everything? Use the recovery code.</small></span></div>
 </div>
@@ -286,7 +286,7 @@
 <li><h3><svg class="ico" aria-hidden="true"><use href="#i-type"/></svg>What you type goes nowhere without asking</h3><p>Search suggestions stay off until you allow them, one search engine at a time. DuckDuckGo by default; Brave Search, Mojeek, Kagi or your own SearXNG instance whenever you like.</p></li>
 <li><h3><svg class="ico" aria-hidden="true"><use href="#i-globe"/></svg>You choose the DNS</h3><p>Your computer's resolver or encrypted DNS with Cloudflare, Quad9, Mullvad or your own. The question comes up once, on the first tab.</p></li>
 <li><h3><svg class="ico" aria-hidden="true"><use href="#i-download"/></svg>Downloads without surprises</h3><p>A downloaded program never opens straight from the browser. You get the warning and the folder, not a running executable.</p></li>
-<li><h3><svg class="ico" aria-hidden="true"><use href="#i-desktop"/></svg>Made for Linux</h3><p>Wayland, KDE and GNOME, system portals, KDE Connect and KRunner. Signed packages for Fedora and Ubuntu, updated by your package manager.</p></li>
+<li><h3><svg class="ico" aria-hidden="true"><use href="#i-desktop"/></svg>Made for Linux</h3><p>Wayland, KDE and GNOME, system portals, KDE Connect and KRunner. Signed packages for Fedora, updated by your package manager; Ubuntu next.</p></li>
 <li><h3><svg class="ico" aria-hidden="true"><use href="#i-code"/></svg>Open and verifiable</h3><p>Code under MPL-2.0. The engine is built from the source Mozilla signs, with {{patches}} documented patches, and every package ships with its list of components (SBOM).</p></li>
 </ul>
 </div>
@@ -326,7 +326,7 @@
 <td><span class="cell"><svg class="ico mark-no" aria-hidden="true"><use href="#i-no"/></svg><span>Off</span></span></td>
 <td><span class="cell"><svg class="ico mark-no" aria-hidden="true"><use href="#i-no"/></svg><span>Off</span></span></td></tr>
 <tr><th scope="row">Profiles encrypted on disk</th>
-<td class="us"><span class="cell"><svg class="ico mark-yes" aria-hidden="true"><use href="#i-check"/></svg><span>Yes: password, system login, FIDO2 key or phone</span></span></td>
+<td class="us"><span class="cell"><svg class="ico mark-yes" aria-hidden="true"><use href="#i-check"/></svg><span>Yes: password or system login; phone and FIDO2 key coming soon</span></span></td>
 <td><span class="cell"><svg class="ico mark-no" aria-hidden="true"><use href="#i-no"/></svg><span>No</span></span></td>
 <td><span class="cell"><svg class="ico mark-no" aria-hidden="true"><use href="#i-no"/></svg><span>No</span></span></td>
 <td><span class="cell"><svg class="ico mark-part" aria-hidden="true"><use href="#i-part"/></svg><span>Keeps nothing: clears everything on close</span></span></td>

@@ -150,7 +150,7 @@
 <dl>
 <div><dt>servidores do Nulavio recebendo dados do seu navegador</dt><dd>0</dd></div>
 <div><dt>padrões de fábrica alterados, cada um com o motivo e o custo por escrito</dt><dd>{{defaults}}</dd></div>
-<div><dt>sites populares testados com as proteções ligadas; nenhum quebrou por causa delas</dt><dd>50</dd></div>
+<div><dt>sites populares testados com as proteções ligadas, em outubro de 2026; nenhum quebrou por causa delas</dt><dd>50</dd></div>
 <div><dt>é a meta para entregar correções urgentes do motor</dt><dd>24 h</dd></div>
 </dl>
 </div>
@@ -207,7 +207,7 @@
 <section class="feature" aria-labelledby="vault-h">
 <div class="feature-text">
 <h2 id="vault-h">Perfis cifrados no disco. A chave fica com você.</h2>
-<p>Um perfil protegido fica cifrado enquanto está bloqueado: quem copiar os arquivos, ou levar o notebook, não lê nada. Para abrir, use a senha do perfil, o login do sistema, uma chave de segurança FIDO2 ou a biometria do celular, com o Nulavio Companion.</p>
+<p>Um perfil protegido fica cifrado enquanto está bloqueado: quem copiar os arquivos, ou levar o notebook, não lê nada. Para abrir, use a senha do perfil ou o login do sistema. Em breve, também a biometria do celular, com o Nulavio Companion, e uma chave de segurança FIDO2.</p>
 <ul class="points">
 <li><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg>O método escolhido libera a chave de verdade: uma aprovação sozinha não abre nada</li>
 <li><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg>Volta a bloquear quando você fecha a última janela do perfil</li>
@@ -216,13 +216,13 @@
 <p class="fine"><strong>Sem letra miúda:</strong> não existe chave mestra do Nulavio. Quem perde todos os métodos e o código de recuperação perde o perfil.</p>
 </div>
 <div class="stage">
-<div class="panel" role="img" aria-label="Tela de desbloqueio do perfil Banco, que está bloqueado. Métodos: celular, com aprovação pela biometria; chave de segurança FIDO2; login do sistema; ou senha do perfil. Há também o código de recuperação.">
+<div class="panel" role="img" aria-label="Tela de desbloqueio do perfil Banco, que está bloqueado. Métodos: login do sistema ou senha do perfil; em breve, o celular, com aprovação pela biometria, e uma chave de segurança FIDO2. Há também o código de recuperação.">
 <div class="lock"><svg class="ico"><use href="#i-lock"/></svg><b>Este perfil está bloqueado</b><span class="chip"><span class="tile tile-sand">B</span>Banco</span></div>
 <ul class="unlock">
-<li><svg class="ico"><use href="#i-phone"/></svg><span>Celular<small>Aprove com a biometria</small></span></li>
-<li><svg class="ico"><use href="#i-usb"/></svg><span>Chave de segurança<small>FIDO2</small></span></li>
 <li><svg class="ico"><use href="#i-user"/></svg><span>Login do sistema<small>Chaveiro deste computador</small></span></li>
 <li><svg class="ico"><use href="#i-dots"/></svg><span>Senha do perfil<small>Só você sabe</small></span></li>
+<li><svg class="ico"><use href="#i-phone"/></svg><span>Celular<small>Em breve: aprove com a biometria</small></span></li>
+<li><svg class="ico"><use href="#i-usb"/></svg><span>Chave de segurança<small>Em breve: FIDO2</small></span></li>
 </ul>
 <div class="panel-foot"><span class="grow"><small>Perdeu tudo? Use o código de recuperação.</small></span></div>
 </div>
@@ -286,7 +286,7 @@
 <li><h3><svg class="ico" aria-hidden="true"><use href="#i-type"/></svg>O que você digita não sai sem pedir</h3><p>As sugestões de busca ficam desligadas até você autorizar, buscador por buscador. DuckDuckGo de fábrica; Brave Search, Mojeek, Kagi ou a sua instância SearXNG quando quiser.</p></li>
 <li><h3><svg class="ico" aria-hidden="true"><use href="#i-globe"/></svg>Você escolhe o DNS</h3><p>O resolvedor do computador ou DNS criptografado com Cloudflare, Quad9, Mullvad ou o seu. A pergunta aparece uma vez, na primeira aba.</p></li>
 <li><h3><svg class="ico" aria-hidden="true"><use href="#i-download"/></svg>Downloads sem susto</h3><p>Um programa baixado nunca abre direto do navegador. Você recebe o aviso e a pasta, não o executável rodando.</p></li>
-<li><h3><svg class="ico" aria-hidden="true"><use href="#i-desktop"/></svg>Feito para Linux</h3><p>Wayland, KDE e GNOME, portais do sistema, KDE Connect e KRunner. Pacotes assinados para Fedora e Ubuntu, atualizados pelo gerenciador de pacotes.</p></li>
+<li><h3><svg class="ico" aria-hidden="true"><use href="#i-desktop"/></svg>Feito para Linux</h3><p>Wayland, KDE e GNOME, portais do sistema, KDE Connect e KRunner. Pacotes assinados para Fedora, atualizados pelo gerenciador de pacotes; Ubuntu em seguida.</p></li>
 <li><h3><svg class="ico" aria-hidden="true"><use href="#i-code"/></svg>Aberto e verificável</h3><p>Código sob MPL-2.0. O motor é compilado do código-fonte que a Mozilla assina, com {{patches}} patches documentados, e cada pacote sai com a lista de componentes (SBOM).</p></li>
 </ul>
 </div>
@@ -326,7 +326,7 @@
 <td><span class="cell"><svg class="ico mark-no" aria-hidden="true"><use href="#i-no"/></svg><span>Desligada</span></span></td>
 <td><span class="cell"><svg class="ico mark-no" aria-hidden="true"><use href="#i-no"/></svg><span>Desligada</span></span></td></tr>
 <tr><th scope="row">Perfis cifrados no disco</th>
-<td class="us"><span class="cell"><svg class="ico mark-yes" aria-hidden="true"><use href="#i-check"/></svg><span>Sim: senha, sistema, chave FIDO2 ou celular</span></span></td>
+<td class="us"><span class="cell"><svg class="ico mark-yes" aria-hidden="true"><use href="#i-check"/></svg><span>Sim: senha ou login do sistema; celular e chave FIDO2 em breve</span></span></td>
 <td><span class="cell"><svg class="ico mark-no" aria-hidden="true"><use href="#i-no"/></svg><span>Não</span></span></td>
 <td><span class="cell"><svg class="ico mark-no" aria-hidden="true"><use href="#i-no"/></svg><span>Não</span></span></td>
 <td><span class="cell"><svg class="ico mark-part" aria-hidden="true"><use href="#i-part"/></svg><span>Não guarda: apaga tudo ao fechar</span></span></td>
