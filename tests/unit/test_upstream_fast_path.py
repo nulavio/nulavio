@@ -697,6 +697,34 @@ class IssueTest(TempDirTest):
         self.assertIn("#\u200b12", body)
         self.assertEqual(upstream_issue.parse_marker(body)["firefox"], "159.0")
 
+    def test_a_marker_that_never_ends_is_refused_at_once(self):
+        # CodeQL py/redos: with the looser pattern these bodies took time that doubled per pair.
+        values = upstream_issue.fields(self.published()["targets"][0])
+        marker = upstream_issue.marker("159.0", values)
+        self.assertEqual(upstream_issue.parse_marker(marker)["phase"], values["phase"])
+        for odd in ("<!-- nulavio-upstream firefox=159.0  fp=x -->", "<!-- nulavio-upstream firefox=159.0 fp=a=b -->"):
+            self.assertIsNone(upstream_issue.parse_marker(odd), odd)
+        # In a child process with a time limit: a pattern that backtracks would never return, and a
+        # test that hangs is not a failure anyone reads.
+        probe = (
+            "import sys; sys.path.insert(0, sys.argv[1]); import upstream_issue as u\n"
+            "start = '<!-- nulavio-upstream '\n"
+            "bodies = [start + 'a=a' * 5000 + ' ' + 'b=b=' * 5000, start + ' '.join(['k=v'] * 20000),\n"
+            "          start + ' '.join(['k=v'] * 20000) + '  -->', start * 2000 + 'firefox=159.0']\n"
+            "print(all(u.parse_marker(body) is None for body in bodies))\n"
+        )
+        try:
+            ran = subprocess.run(
+                [sys.executable, "-I", "-c", probe, str(ROOT / "scripts" / "release")],
+                capture_output=True,
+                text=True,
+                timeout=60,
+                check=False,
+            )
+        except subprocess.TimeoutExpired:
+            self.fail("the marker pattern did not finish on a marker without its end: it backtracks")
+        self.assertEqual((ran.returncode, ran.stdout.strip()), (0, "True"), ran.stderr)
+
     def test_only_the_bots_issues_count(self):
         report = self.published()
         forged = {
