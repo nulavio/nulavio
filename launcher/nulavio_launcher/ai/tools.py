@@ -20,7 +20,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from . import audit, policy, registry
-from .bidi import Bidi, BidiError, script_result
+from .bidi import Bidi, BidiError, Cancelled, script_result
 from .workspace import ProfileTarget, TargetError, Workspace
 
 TAB = {"type": "string", "pattern": "^[A-Za-z0-9-]{1,64}$", "description": "Tab id from tabs_list or tab_new"}
@@ -340,6 +340,8 @@ class Bridge:
         self.elements: dict[str, dict[str, str]] = {}  # tab -> element id -> BiDi sharedId
         self._lock = threading.Lock()
         self._target: str | None = None  # the address the current call acts on (for the audit)
+        self._forms_ok: set[str] = set()  # the origins submit_forms was allowed for in the current call
+        self._form_at: str | None = None  # where the current call sent a form the page had held (for the audit)
         self._downloads_mode: dict[str, bool] = {}
         self._args: dict = {}  # the current call's arguments (where it acts, for permission requests)
         self._cancel: threading.Event | None = None  # the current call's cancel: a pending request is denied
@@ -406,6 +408,8 @@ class Bridge:
         # A request can stay open for minutes. decide() looks again at the stop, the pause, the
         # revocation and the site list after the answer; the key is this session's to check.
         self._refuse_if_held(capability)
+        if capability == "submit_forms" and url:
+            self._forms_ok.add(policy.origin(url))
 
     def require_url(self, url: str, *, checked: list[str]) -> policy.Target:
         try:
@@ -460,6 +464,7 @@ class Bridge:
         target_url: str | None = None
         cancel = cancel or threading.Event()
         self._target = None
+        self._forms_ok, self._form_at = set(), None
         try:
             validate(tool.schema, arguments)
             with self._lock:
@@ -490,7 +495,8 @@ class Bridge:
                              target=policy.origin(self._target), ms=int((time.monotonic() - started) * 1000),
                              outcome="cancelled" if not isinstance(exc, Exception) else "error:failed")  # fmt: skip
             raise
-        target_url = target_url or self._target
+        target_url = self._form_at or target_url or self._target
+        checked = list(dict.fromkeys(checked))  # a capability asked for two places is one in the activity
         agent = self._agent() or {}
         typed = arguments.get("text") if name == "type" else arguments.get("expression") if name == "evaluate" else None
         # What the call was, without its output (the assistant's step events, UX5-C1): the audit's own fields.
@@ -710,19 +716,32 @@ class Bridge:
         for frame in self._frames(tab, cancel):
             try:
                 results.append(self._in_sandbox(tab, {"context": frame, "sandbox": SANDBOX}, fn, cancel)[0])
+            except Cancelled:
+                raise
             except BidiError:
                 if must and (frame == tab or frame in self._frames(tab, cancel)):
                     raise ToolError("this page's forms could not be watched; nothing was done") from None
                 # A frame that went away took its forms with it.
         return results
 
-    def _in_realms(self, tab: str, realms: list[str], fn: str, cancel) -> list:
+    def _in_realms(self, tab: str, realms: list[str], fn: str, cancel, *, must: bool) -> list:
         """Run `fn` in these sandboxes and no other. A document that went away took its sandbox
-        along: the one that replaced it has another, which this does not reach."""
+        along: the one that replaced it has another, which this does not reach. `must`: a document
+        the engine does not answer for (anything but "it is gone", asked twice) is an error."""
         results = []
         for realm in realms:
-            with contextlib.suppress(BidiError):
-                results.append(self._in_sandbox(tab, {"realm": realm}, fn, cancel)[0])
+            for last in (False, True):
+                try:
+                    results.append(self._in_sandbox(tab, {"realm": realm}, fn, cancel)[0])
+                    break
+                except Cancelled:
+                    raise
+                except BidiError as exc:
+                    if exc.error == "no such frame":
+                        break
+                    if last and must:
+                        raise ToolError("the form the page tried to send is still held: the browser did not answer for its "
+                                        f"document ({exc.error}); nothing was sent") from None  # fmt: skip
         return results
 
     def _forms_prepare(self, tab: str, cancel) -> None:
@@ -752,6 +771,8 @@ class Bridge:
         for frame in self._frames(tab, cancel):
             try:
                 held, realm = self._in_sandbox(tab, {"context": frame, "sandbox": SANDBOX}, FORMS_HELD_FN, cancel)
+            except Cancelled:
+                raise
             except BidiError:
                 continue  # a frame that went away took its forms with it
             if int(held or 0):
@@ -768,19 +789,18 @@ class Bridge:
         The count comes first, not the permission: an answer "for this session" turns the
         permission on in the middle of the call, and the form it was given for is still held.
 
-        The permission is for the page the form is on. `url` is where the call began; the forms are
+        The permission is for the site the tab shows. `url` is where the call began; the forms are
         judged by where the tab is once they are counted, which an action can have changed (a click
         that leads to a page that sends a form as it loads): that address is checked as if it had
-        been asked for, and what was allowed for the page before it does not count. And the answer
-        can take minutes, in which the page can move on: only the documents counted are sent."""
+        been asked for, and submit_forms counts for it only if it was allowed for it in this call.
+        And the answer can take minutes, in which the page can move on: only the documents counted
+        are sent, and when they are gone by then the call stops there."""
         realms = self._forms_where(tab, cancel)
         if not realms:
             return False
         # Read after the count: these documents' address, or a later one's (their realms are then gone).
         here = self._url_of(tab, cancel)
-        asked = "submit_forms" in checked  # already allowed for this call (a submit button, submit=true)
         if policy.origin(here) != policy.origin(url):
-            asked = False
             elsewhere = f"{what} was done and took the tab elsewhere; the form that page then tried to send was not sent"
             try:
                 self._in_scope_now(here)
@@ -791,20 +811,30 @@ class Bridge:
             except ToolError as refused:
                 raise ToolError(f"{elsewhere} ({refused})") from None
         allowed = self._may_submit()
-        if not allowed and not asked:
+        waited = False
+        # Not already allowed for this site in this call (a submit button, submit=true, an earlier form).
+        if not allowed and policy.origin(here) not in self._forms_ok:
+            waited = True
             try:
                 self.require("submit_forms", here, checked=checked)
             except Denied as denied:
-                self._in_realms(tab, realms, FORMS_DROP_FN, cancel)
+                self._in_realms(tab, realms, FORMS_DROP_FN, cancel, must=False)
                 denied.detail = f"{what} was done; the form the page then tried to send was not sent."
                 raise
-            allowed = self._may_submit()  # "for this session": the documents stop holding, too
+            allowed = self._may_submit()  # "for this session": these documents stop holding, too
         if "submit_forms" not in checked:
             checked.append("submit_forms")  # a form went out under the permission: the activity says so
         mark = self.bidi(tab).mark()
-        sent = sum(int(n or 0) for n in self._in_realms(tab, realms, FORMS_OPEN_FN if allowed else FORMS_SEND_FN, cancel))
-        if not sent:  # the page took its form away meanwhile, or moved on
-            return False
+        send = FORMS_OPEN_FN if allowed else FORMS_SEND_FN
+        sent = sum(int(n or 0) for n in self._in_realms(tab, realms, send, cancel, must=True))
+        if not sent:
+            if waited:
+                # Nothing else is done to a page that is no longer the one the answer was for: with
+                # the permission now on for the session, acting on would let its own forms go unsaid.
+                raise ToolError(f"{what} was done; while the question about its form was open the page moved on or took "
+                                "the form back, and nothing was sent. Call page_snapshot again.")  # fmt: skip
+            return False  # the page took its form away meanwhile
+        self._form_at = here
         self._settle(tab, mark, expected=True, cancel=cancel)
         return True
 
@@ -981,13 +1011,16 @@ class Bridge:
     def _arrived(self, tab: str, checked: list[str], cancel) -> None:
         """After a navigation: where a redirect took the tab is checked as if it had been asked for,
         and a form the new page sent by itself as it loaded is settled like any other. Where that
-        form lands is checked the same way, a few times over (a chain of posted forms)."""
+        form lands is checked the same way, a few times over (a chain of posted forms: four are
+        sent, and where the fourth lands is checked like the others)."""
         try:
-            for _ in range(4):
+            for more in (True, True, True, True, False):
                 final = self._url_of(tab, cancel)
                 self._in_scope_now(final)
                 self.require_needs(final, checked=checked)
-                if self._open_dialog(tab) is not None or not self._forms_settle(tab, final, "The navigation", checked, cancel):
+                if not more or self._open_dialog(tab) is not None:
+                    return
+                if not self._forms_settle(tab, final, "The navigation", checked, cancel):
                     return
         except Denied as denied:
             denied.detail = f"{denied.detail} The tab is {tab}.".strip()
@@ -1037,6 +1070,18 @@ class Bridge:
         data = {"tab": tab, "url": url, "bytes": len(png) * 3 // 4}
         return self._ok(data, f"Screenshot of {url}", [{"type": "image", "data": png, "mimeType": "image/png"}]), url
 
+    def _where(self, tab: str, cancel) -> dict:
+        """What a result says about where an action left the tab: its address, unless the page took
+        it outside the agent's sites or somewhere that needs a permission it does not have. Like
+        tabs_list, the result then says that much and not the address (reading there asks)."""
+        url = self._url_of(tab, cancel)
+        agent = self._agent() or {}
+        if not policy.in_scope(agent, policy.host_of(url)):
+            return {"url": None, "outside_sites": True}
+        if missing := self._needs_not_allowed(agent, url):
+            return {"url": None, "needs_permission": missing}
+        return {"url": url}
+
     def _earlier_forms(self, tab: str, url: str, checked: list[str], cancel) -> dict | None:
         """Forms the page tried to send since the last call (a timer, an answer to a dialog) are
         still held in it. They are settled first: sent with the permission (the page then moved on,
@@ -1047,7 +1092,7 @@ class Bridge:
             "The page had tried to send a form after an earlier action; it was held and has now been sent. "
             "Nothing else was done; call page_snapshot again."
         )
-        data = {"tab": tab, "url": self._url_of(tab, cancel), "navigated": True, "form_sent": True}
+        data = {"tab": tab, **self._where(tab, cancel), "navigated": True, "form_sent": True}
         return self._ok(data, note + "\n\n" + json.dumps(data, ensure_ascii=False))
 
     def _t_click(self, args, cancel, checked):
@@ -1082,7 +1127,7 @@ class Bridge:
         # handler is held, and needs the same permission as a submit button (asked for now).
         navigated = self._forms_settle(tab, url, "The click", checked, cancel) or navigated
         dialog = self._open_dialog(tab)
-        data = {"tab": tab, "url": self._url_of(tab, cancel), "navigated": navigated, "dialog": dialog}
+        data = {"tab": tab, **self._where(tab, cancel), "navigated": navigated, "dialog": dialog}
         return self._ok(data), url
 
     def _t_type(self, args, cancel, checked):
@@ -1127,7 +1172,7 @@ class Bridge:
         # so did the focus and the clearing: a form any of them sent is held.
         navigated = self._forms_settle(tab, url, "The typing", checked, cancel) or navigated
         return self._ok({"tab": tab, "typed": len(args["text"]), "submitted": bool(args.get("submit")),
-                         "navigated": navigated, "url": self._url_of(tab, cancel)}), url  # fmt: skip
+                         "navigated": navigated, **self._where(tab, cancel)}), url  # fmt: skip
 
     def _t_dialog(self, args, cancel, checked):
         tab = args["tab"]
