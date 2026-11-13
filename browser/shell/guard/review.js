@@ -82,8 +82,13 @@ async function act(action, finding) {
       await guard.reveal(finding.id);
       return;
     }
+    // The list is redrawn without this finding: the keyboard goes to the one that takes its place (the
+    // next, or the previous after the last), not back to the top of the page (audit 2026-11 S-05).
+    const place = [...document.querySelectorAll("#findings > li")].findIndex(li => li.dataset.findingId === finding.id);
     const left = await guard.resolve(finding.id, action);
     render(left);
+    const cards = document.querySelectorAll("#findings > li");
+    cards[Math.min(Math.max(place, 0), cards.length - 1)]?.querySelector("button")?.focus();
     const said = t(action === "undo" ? "guardUndone" : "guardKept");
     announce(left.length ? said : `${said} ${t("guardAllReviewed")}`); // the last one: the review is over
   } catch (e) {

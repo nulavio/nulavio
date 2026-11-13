@@ -113,14 +113,28 @@ class GuardTest(unittest.TestCase):
 
     def click(self, finding_id: str, action: str) -> None:
         before = int(self.m.execute("return Number(document.body.dataset.count);"))
-        self.m.execute(
-            'document.querySelector(`#findings > li[data-finding-id="${CSS.escape(arguments[0])}"]'
-            ' button[data-action="${arguments[1]}"]`).click();',
+        place = self.m.execute(
+            'const card = document.querySelector(`#findings > li[data-finding-id="${CSS.escape(arguments[0])}"]`);'
+            'const button = card.querySelector(`button[data-action="${arguments[1]}"]`);'
+            "button.focus(); button.click();"  # as from the keyboard: the button has the focus when it is pressed
+            "return [...document.querySelectorAll('#findings > li')].indexOf(card);",
             [finding_id, action],
         )
         self.assertTrue(
             harness.wait_until(lambda: int(self.m.execute("return Number(document.body.dataset.count);")) < before, 30)
         )
+        # Audit 2026-11 S-05: the keyboard stays in the review. It goes to the first action of the finding that
+        # took this one's place (the previous one after the last), and to "Fechar" when none is left.
+        focus = self.m.execute(
+            "const a = document.activeElement, cards = [...document.querySelectorAll('#findings > li')];"
+            "const card = a.closest('#findings > li');"
+            "return {left: cards.length, place: cards.indexOf(card), first: Boolean(card) && a === card.querySelector('button'),"
+            " id: a.id, tag: a.localName};"
+        )
+        if focus["left"]:
+            self.assertEqual((focus["place"], focus["first"]), (min(place, focus["left"] - 1), True), focus)
+        else:
+            self.assertEqual(focus["id"], "close", focus)
 
     def shoot(self, name: str) -> None:
         for scheme in ("light", "dark"):
