@@ -25,7 +25,7 @@ from pathlib import Path
 CHECKED = {
     "": "index.html",
     "en/": "en/index.html",
-    "lista/": "lista/index.html",  # a page next to /api/*: static files must not go through site/_worker.js
+    "lista/": "lista/index.html",  # a page next to /api/* and /lista/link/: static files must not go through site/_worker.js
     ".well-known/security.txt": ".well-known/security.txt",
 }
 USER_AGENT = "nulavio-site-verify (+https://nulavio.net/)"

@@ -231,8 +231,11 @@ reviews:
       instructions: |
         nulavio.net (I2, I11). Pages are static: no JavaScript in them, no third-party
         resource, no cookie, security headers in site/_headers. The waitlist worker
-        (site/_worker.js) answers /api/* only and stores the address, the language, the
-        platform and the time, nothing else. A claim or comparison row changes in both
+        (site/_worker.js) answers /api/* and the two link pages only and stores the address,
+        the language, the platform, the time and the hash of the link's key, nothing else.
+        An entry changes or goes only through its link, never on an address alone, and an
+        answer (status, headers, body, and whether the database was written) does not tell
+        whether an address or a key is on the list. A claim or comparison row changes in both
         languages, and what is ready today is not confused with what is planned.
     - path: "android/**"
       instructions: |
