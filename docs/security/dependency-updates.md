@@ -43,7 +43,7 @@ When it fails: update the dependency (any day, without waiting for Dependabot's 
 
 `docs/security/vulnerability-exceptions.json` lists accepted findings. Each entry names one advisory (`id`, or one of its aliases), one package and one exact version, with a reason and an expiry date (`until`, at most a year ahead; the unit test checks this). A version change is therefore looked at again. An expired entry fails the watch again; an entry that matches nothing is reported so it gets removed. Accepting a risk is the maintainer's decision.
 
-The first entries (2026-10-27, until 2026-12-31) are ten advisories in tooling of the Android Gradle plugin 9.4.1, the latest stable release: Bouncy Castle 1.80.2, Guava, jdom2, jose4j, HttpClient, Commons Lang and the Kotlin Gradle plugin. None is in the APK (it ships Bouncy Castle 1.86, which is fixed). The build reads only this repository and artifacts pinned by SHA-256, and uses no shared build cache. Re-check them at the next plugin update.
+The first entries (2026-10-27, until 2026-12-31) are advisories in tooling of the Android Gradle plugin 9.4.1 (ten then, nine since one went with a tooling update), the latest stable release: Bouncy Castle 1.80.2, Guava, jdom2, jose4j, HttpClient, Commons Lang and the Kotlin Gradle plugin. None is in the APK (it ships Bouncy Castle 1.86, which is fixed). The build reads only this repository and artifacts pinned by SHA-256, and uses no shared build cache. Re-check them at the next plugin update.
 
 ## Dependabot pull requests
 

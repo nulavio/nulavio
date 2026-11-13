@@ -45,7 +45,10 @@ API = "https://api.github.com"
 BOT = "github-actions[bot]"
 REPO_RE = re.compile(r"^[A-Za-z0-9-]{1,39}/[A-Za-z0-9._-]{1,100}$")
 LOGIN_RE = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$")
-MARKER_RE = re.compile(r"<!-- nulavio-upstream ((?:[a-z_]+=[^\s<>]* ?)+) -->")
+# One way to read each marker: pairs separated by one space, no "=" in a value. A looser form
+# (an optional space, any value) can be split in many ways, and a long run of pairs without
+# the closing "-->" then takes time that doubles with each pair.
+MARKER_RE = re.compile(r"<!-- nulavio-upstream ([a-z_]+=[^\s<>=]*(?: [a-z_]+=[^\s<>=]*)*) -->")
 LABELS = {
     "upstream-firefox": ("1d76db", "A newer Firefox release Nulavio has to ship (scripts/release/upstream_issue.py)"),
     "target-24h": ("b60205", "Urgent Firefox release: 24-hour target (72-hour deadline)"),
