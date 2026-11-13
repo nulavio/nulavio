@@ -209,7 +209,8 @@ class HorizonTest(unittest.TestCase):
         s = self.state()
         self.assertFalse(s["dark"])
         self.assertEqual(rgb(s["navbar"]), "#F1F7F5")
-        self.assertEqual(rgb(s["toolbox"]), "#E2EBEE")
+        # ADR 0010: one tone for the whole frame. The tab strip takes the toolbar's.
+        self.assertEqual(rgb(s["toolbox"]), "#F1F7F5")
         self.assertEqual(rgb(s["selectedBg"]), "#FFFFFF")
         self.assert_contrast(s["selectedText"], s["selectedBg"], 4.5, "selected tab label")
         self.assert_contrast(s["otherText"], s["toolbox"], 4.5, "background tab label")

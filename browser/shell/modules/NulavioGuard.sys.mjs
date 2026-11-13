@@ -22,6 +22,7 @@ ChromeUtils.defineESModuleGetters(lazy, {
   AddonManager: "resource://gre/modules/AddonManager.sys.mjs",
   AddonManagerPrivate: "resource://gre/modules/AddonManager.sys.mjs",
   AsyncShutdown: "resource://gre/modules/AsyncShutdown.sys.mjs",
+  NetUtil: "resource://gre/modules/NetUtil.sys.mjs",
   NulavioAI: "resource://builtin-addons/nulavio-shell/modules/NulavioAI.sys.mjs",
 });
 
@@ -121,6 +122,9 @@ function prefValue(name) {
   }
 }
 
+/* The digests of the policies Nulavio ships, written by scripts/build/make_distribution.py beside the Shell's code. */
+const OWN_POLICIES_URL = "resource://builtin-addons/nulavio-shell/shared/own-policies.json";
+
 /* Bookkeeping the engine itself writes under a watched branch (update times of the Safe Browsing lists). */
 const ENGINE_BOOKKEEPING = /\.(lastupdatetime|nextupdatetime)$/;
 
@@ -134,6 +138,31 @@ function watchedNames() {
     }
   }
   return [...names].sort();
+}
+
+// From the second start on, the engine fills some policies with empty defaults (SitePolicies: []):
+// only policies that set something count.
+function settingPolicies(policies) {
+  const empty = v => v === null || v === undefined || (typeof v === "object" && !Object.keys(v).length);
+  return Object.fromEntries(Object.entries(policies ?? {}).filter(([, v]) => !empty(v)));
+}
+
+/** What each policy of a set sets, as a digest: { name: SHA-256 of its value written one way }. Policies that
+    set nothing are left out. */
+export function policyDigests(policies) {
+  const out = {};
+  for (const [name, value] of Object.entries(settingPolicies(policies))) {
+    out[name] = sha256(new TextEncoder().encode(sortedJSON(value)));
+  }
+  return out;
+}
+
+/** Whether the policies in effect are exactly Nulavio's own, given the digests of those (`shared/own-policies.json`,
+    written when the build's policies are: scripts/build/make_distribution.py). Something that is not a set of
+    policies, or digests that could not be read, equal nothing. */
+export function ownPolicies(active, digests) {
+  const usable = v => !!v && typeof v === "object" && !Array.isArray(v);
+  return usable(active) && usable(digests) && sortedJSON(policyDigests(active)) === sortedJSON(digests);
 }
 
 function sortedJSON(value) {
@@ -255,11 +284,41 @@ class Guard {
     if (Services.policies.status !== Ci.nsIEnterprisePolicies.ACTIVE) {
       return null;
     }
-    // From the second start on, the engine fills some policies with empty defaults (SitePolicies: []):
-    // only policies that set something count.
-    const empty = v => v === null || v === undefined || (typeof v === "object" && !Object.keys(v).length);
-    const active = Object.fromEntries(Object.entries(Services.policies.getActivePolicies() ?? {}).filter(([, v]) => !empty(v)));
+    const active = settingPolicies(Services.policies.getActivePolicies());
     return { names: Object.keys(active).sort(), digest: sha256(new TextEncoder().encode(sortedJSON(active))) };
+  }
+
+  /**
+   * Whose the managed policies in effect are: "none" (no policy is active), "own" (exactly the ones Nulavio
+   * ships, by their digests) or "other" (anything else: one added, removed or changed, in a system file or
+   * in the application's own distribution/policies.json, or digests that could not be read). `count` is how
+   * many are in effect. Never "own" on a doubt: the settings page drops the engine's "managed" line only for "own".
+   */
+  async policiesOrigin() {
+    if (Services.policies.status !== Ci.nsIEnterprisePolicies.ACTIVE) {
+      return { origin: "none", count: 0 };
+    }
+    const active = settingPolicies(Services.policies.getActivePolicies());
+    // What Nulavio's own policies are comes from inside the Shell, not from distribution/policies.json: that
+    // file is where the engine reads its policies, and where an administrator adds one. Compared with itself
+    // it would always say "own".
+    let own = null;
+    try {
+      // A file of the Shell itself, read as the options file is (NulavioPersonalise): nothing leaves the browser.
+      const text = await new Promise((resolve, reject) => {
+        lazy.NetUtil.asyncFetch({ uri: OWN_POLICIES_URL, loadUsingSystemPrincipal: true }, (stream, status) => {
+          if (!Components.isSuccessCode(status)) {
+            reject(new Error("own-policies.json is missing"));
+            return;
+          }
+          resolve(lazy.NetUtil.readInputStreamToString(stream, stream.available(), { charset: "UTF-8" }));
+        });
+      });
+      own = JSON.parse(text).policies;
+    } catch (e) {
+      console.error("Nulavio Guard: the list of Nulavio's own policies could not be read", e);
+    }
+    return { origin: ownPolicies(active, own) ? "own" : "other", count: Object.keys(active).length };
   }
 
   async #hosts() {

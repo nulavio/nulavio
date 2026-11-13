@@ -483,6 +483,36 @@ class DistributionTest(unittest.TestCase):
             with mock.patch.object(make_distribution, "CONTENT_FILTER", changed):
                 self.assertNotIn("3rdparty", make_distribution.policies()["policies"])
 
+    def test_the_shell_carries_the_digests_of_the_policies_a_build_ships(self):
+        """The settings page hides "managed by your organization" while only Nulavio's own policies are in effect,
+        and learns which those are from digests inside the Shell, not from the file an administrator edits."""
+        current = make_distribution.own_policies()
+        self.assertEqual(set(current["policies"]), set(make_distribution.policies()["policies"]))
+        self.assertEqual(
+            make_distribution.OWN_POLICIES.read_text(encoding="utf-8"),
+            make_distribution.own_policies_text(),
+            "browser/shell/shared/own-policies.json is not current: run scripts/build/make_distribution.py --own-policies",
+        )
+        for digest in current["policies"].values():
+            self.assertRegex(digest, r"^[0-9a-f]{64}$")
+        # A policy that changes changes its digest, and one that sets nothing has none.
+        changed = {"policies": {**make_distribution.policies()["policies"], "DisableTelemetry": False, "Empty": {}}}
+        with mock.patch.object(make_distribution, "policies", return_value=changed):
+            other = make_distribution.own_policies()["policies"]
+        self.assertNotEqual(other["DisableTelemetry"], current["policies"]["DisableTelemetry"])
+        self.assertNotIn("Empty", other)
+        self.assertEqual({k: v for k, v in other.items() if k != "DisableTelemetry"},
+                         {k: v for k, v in current["policies"].items() if k != "DisableTelemetry"})  # fmt: skip
+        # A value Python and the engine would write differently never becomes a digest: the build stops.
+        for label, value in (("a fraction", 1.0), ("a huge number", 2**60), ("a key outside ASCII", {"é": True})):
+            unlike = {"policies": {**make_distribution.policies()["policies"], "Odd": {"inside": [value]}}}
+            patched = mock.patch.object(make_distribution, "policies", return_value=unlike)
+            with self.subTest(label), patched, self.assertRaises(SystemExit):
+                make_distribution.own_policies()
+        guard = (ROOT / "browser" / "shell" / "modules" / "NulavioGuard.sys.mjs").read_text(encoding="utf-8")
+        self.assertIn('"resource://builtin-addons/nulavio-shell/shared/own-policies.json"', guard)
+        self.assertNotIn('"XREAppDist"', guard, "the Guard reads the application's own policies file again")
+
     def test_the_licence_goes_out_with_the_registry(self):
         with tempfile.TemporaryDirectory() as tmp:
             script = ROOT / "scripts" / "build" / "make_distribution.py"

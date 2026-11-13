@@ -27,6 +27,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
 import harness
+import settings_page
 from test_window_band import BAND_PROBE, assert_band, assert_layout_matrix
 
 from nulavio_launcher import temporary
@@ -239,11 +240,9 @@ class TemporaryFromTheBrowserTest(unittest.TestCase):
             self.assertFalse(page["temporary"])
             self.shoot(m, "popup-temporary")
 
-            m.navigate(self.shell_url_of(m) + "settings/settings.html#profiles")
-            self.assertTrue(harness.wait_until(lambda: self.ready(m), timeout=15))
-            notice = m.execute("return document.getElementById('profiles-unavailable').textContent;")
-            self.assertIn("Perfil temporário", notice)
-            self.assertTrue(m.execute("return !document.getElementById('profiles-temporary').hidden;"))
+            # The settings page says why there is no list of profiles here.
+            settings_page.open_pane(m, "nulavioProfiles")
+            self.assertIn("Perfil temporário", settings_page.wait_control(m, "nulavio-profiles-unavailable")["message"])
         finally:
             m.quit()
             engine.wait(timeout=60)
@@ -254,15 +253,10 @@ class TemporaryFromTheBrowserTest(unittest.TestCase):
         return m.chrome("return WebExtensionPolicy.getByID('shell@nulavio.net').getURL('');")
 
     def test_03_settings_offers_a_temporary_window(self):
-        self.m.navigate(self.shell_url + "settings/settings.html#profiles")
-        self.assertTrue(harness.wait_until(lambda: self.ready(self.m), timeout=15))
-        card = self.m.execute(
-            "const c = document.getElementById('profiles-temporary');"
-            "return {hidden: c.hidden, text: c.textContent, button: document.getElementById('open-temporary').textContent};"
-        )
-        self.assertFalse(card["hidden"])
-        self.assertIn("apagado quando você fecha a última janela", card["text"])
-        self.assertEqual(card["button"], "Nova janela temporária")
+        settings_page.open_pane(self.m, "nulavioProfiles")
+        door = settings_page.wait_control(self.m, "nulavio-profile-temporary")
+        self.assertEqual(door["label"], "Nova janela temporária")
+        self.assertIn("apagado ao fechar", door["description"])
 
 
 @unittest.skipUnless(harness.engine_available(), "needs a Gecko engine")

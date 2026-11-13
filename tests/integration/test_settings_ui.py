@@ -15,17 +15,25 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
 import harness
+import settings_page
 
+# ADR 0011: what the settings page draws itself is gone from this page; its old address opens that page at this pane.
+MOVED = {
+    "#layout": "appearance",
+    "#layout-immersive": "appearance",
+    "#appearance": "appearance",
+    "#appearance-accent": "appearance",
+    "#shortcuts": "tabsBrowsing",
+    "#dns": "privacy",
+    "#exceptions": "privacy",
+    "#passwords": "passwordsAutofill",
+    "#search": "search",
+    "#profiles": "nulavioProfiles",
+    "#profiles-new": "nulavioProfiles",
+    "#routing": "nulavioProfiles",
+    "#routing-fallback-field": "nulavioProfiles",
+}
 SCOPES = {
-    "layout": "scopeProfile",
-    "appearance": "scopeProfile",
-    "shortcuts": "scopeProfile",
-    "search": "scopeProfile",
-    "passwords": "scopeProfile",
-    "exceptions": "scopeProfile",
-    "dns": "scopeProfile",
-    "profiles": "scopeAllProfiles",
-    "routing": "scopeAllProfiles",
     "ai": "scopeAllProfiles",
     "integrations": "scopeComputer",
 }
@@ -83,24 +91,51 @@ class SettingsPanesTest(unittest.TestCase):
         self.assertEqual(state["view"], "section")
         self.assertEqual(len(state["shown"]), 1, state)
         self.assertEqual(state["current"], state["shown"])  # the rail marks the section on screen
-        for address, section in (("#dns", "dns"), ("#routing", "routing"), ("#ai-assistant", "ai"), ("#profiles", "profiles")):
+        for address, section in (("#ai-activity-card", "ai"), ("#integrations", "integrations")):
             self.open(address)
             self.assertTrue(
                 harness.wait_until(lambda section=section: self.view()["shown"] == [section], 10), (address, self.view())
             )
             self.assertEqual(self.view()["current"], [section])
         # A card's own address (the assistant panel links there) scrolls it into view.
-        self.open("#ai-assistant")
+        self.open("#ai-activity-card")
         harness.wait_until(lambda: self.view()["shown"] == ["ai"], 10)
-        top = self.m.execute("return document.getElementById('ai-assistant').getBoundingClientRect().top;")
+        top = self.m.execute("return document.getElementById('ai-activity-card').getBoundingClientRect().top;")
         self.assertLess(top, self.m.execute("return innerHeight;"))
 
+    def test_01b_an_address_of_a_moved_section_opens_the_settings_page(self):
+        where = lambda: self.m.chrome("return gBrowser.selectedBrowser.currentURI.spec;")  # noqa: E731
+        # The assistant's form moved out of a section that stays: its own address goes to the assistant's pane.
+        moved = {**MOVED, "#ai-assistant": settings_page.assistant_pane(self.m)}
+        for address, pane in moved.items():
+            with self.subTest(address=address):
+                self.m.navigate("about:blank")
+                self.m.navigate(self.base + "settings/settings.html" + address)
+                self.assertTrue(harness.wait_until(lambda pane=pane: where() == f"about:preferences#{pane}", 15), where())
+                self.assertEqual(self.m.chrome("return gBrowser.tabs.length;"), 1, "it opened a second tab")
+        # Going back does not bounce: it lands on what this page still holds, and stays there.
+        self.m.chrome("gBrowser.selectedBrowser.goBack();")
+        self.assertTrue(harness.wait_until(lambda: where().startswith(self.base + "settings/settings.html"), 10), where())
+        time.sleep(1)
+        self.assertEqual(where(), self.base + "settings/settings.html")
+
+    def test_01c_the_band_opens_the_settings_page_at_its_pane(self):
+        """The band's protection state and its route mark led to the old sections; they open the settings page now."""
+        where = lambda: self.m.chrome("return gBrowser.selectedBrowser.currentURI.spec;")  # noqa: E731
+        for button in (".nv-band-protection", ".nv-band-route"):
+            with self.subTest(button=button):
+                self.m.navigate("about:blank")
+                press = "const b = document.querySelector(arguments[0]); b?.click(); return !!b;"
+                self.assertTrue(self.m.chrome(press, [button]))
+                self.assertTrue(harness.wait_until(lambda: where() == "about:preferences#nulavioProfiles", 15), where())
+                self.m.chrome("gBrowser.removeTab(gBrowser.selectedTab);")
+
     def test_02_rail_link_moves_the_keyboard_to_the_section(self):
-        self.open("#search")
-        self.m.send("WebDriver:ElementClick", {"id": self.m.find_element('.settings-nav a[data-section="dns"]')})
-        self.assertTrue(harness.wait_until(lambda: self.view()["shown"] == ["dns"], 10))
-        self.assertEqual(self.view()["focused"], "dns-heading")
-        self.assertEqual(self.m.execute("return location.hash;"), "#dns")
+        self.open("#ai")
+        self.m.send("WebDriver:ElementClick", {"id": self.m.find_element('.settings-nav a[data-section="integrations"]')})
+        self.assertTrue(harness.wait_until(lambda: self.view()["shown"] == ["integrations"], 10))
+        self.assertEqual(self.view()["focused"], "integrations-heading")
+        self.assertEqual(self.m.execute("return location.hash;"), "#integrations")
 
     def test_03_every_section_says_how_far_it_reaches(self):
         self.open()
@@ -111,31 +146,34 @@ class SettingsPanesTest(unittest.TestCase):
         for section, key in SCOPES.items():
             self.assertEqual(found.get(section), self.message(key), section)
         groups = self.m.execute("return [...document.querySelectorAll('.settings-nav__group')].map(g => g.textContent);")
-        self.assertEqual(groups, [self.message(k) for k in ("scopeProfile", "scopeAllProfiles", "scopeComputer")])
+        # ("This profile" has no entry left: all of it is drawn by the settings page itself.)
+        self.assertEqual(groups, [self.message(k) for k in ("scopeAllProfiles", "scopeComputer")])
         # Every entry of the rail points to a section that exists, in the order of its group.
         entries = self.m.execute("return [...document.querySelectorAll('.settings-nav a')].map(a => a.dataset.section);")
         self.assertEqual(entries, list(SCOPES))
         self.assertNotIn(self.message("settingsIntro"), ["", "settingsIntro"])
 
     def test_04_search_filters_the_cards_of_every_section(self):
-        self.open("#layout")
-        word = max(self.message("dnsSystem").split(), key=len)  # "resolvedor": typed without accents, in lower case
+        self.open("#ai")
+        # A word of the integrations' introduction ("verificação"), typed without accents, in lower case.
+        words = [w.strip(".,;:") for w in self.message("connectIntro").split()]
+        word = max(words, key=len)
         query = self.m.execute("return arguments[0].normalize('NFD').replace(/\\p{M}/gu, '').toLowerCase();", [word])
         self.type_search(query)
         self.assertTrue(harness.wait_until(lambda: self.view()["view"] == "search", 5))
         state = self.view()
-        self.assertIn("dns", state["shown"])
-        self.assertNotIn("layout", state["shown"])
+        self.assertIn("integrations", state["shown"])
+        self.assertNotIn("ai", state["shown"])
         self.assertEqual(state["current"], [])  # results span sections: the rail marks none
         self.assertTrue(state["results"])
         self.shoot("search-results")
         # Several words: each must be found, in any order.
         two = self.m.execute(
-            "return browser.i18n.getMessage('dnsStrict').normalize('NFD').replace(/\\p{M}/gu, '').toLowerCase()"
-            ".split(' ').filter(w => w.length > 3).reverse().join(' ');"
+            "return browser.i18n.getMessage('connectIntro').normalize('NFD').replace(/\\p{M}/gu, '').toLowerCase()"
+            ".replace(/[.,;:]/g, '').split(' ').filter(w => w.length > 5).slice(0, 2).reverse().join(' ');"
         )
         self.type_search(two)
-        self.assertTrue(harness.wait_until(lambda: "dns" in self.view()["shown"], 5), two)
+        self.assertTrue(harness.wait_until(lambda: "integrations" in self.view()["shown"], 5), two)
         self.type_search(f"{two} zzzz")
         self.assertTrue(harness.wait_until(lambda: self.view()["shown"] == [], 5))
         self.type_search("zzzz-nada")
@@ -144,7 +182,7 @@ class SettingsPanesTest(unittest.TestCase):
         self.assertEqual(self.view()["shown"], [])
         # Escape leaves the search and returns to the section of the address.
         self.m.send("WebDriver:ElementSendKeys", {"id": self.m.find_element("#settings-search"), "text": ""})
-        self.assertTrue(harness.wait_until(lambda: self.view()["shown"] == ["layout"], 5))
+        self.assertTrue(harness.wait_until(lambda: self.view()["shown"] == ["ai"], 5))
         self.assertIsNone(self.view()["results"])
 
     def test_05_header_names_the_profile_being_configured(self):
@@ -160,37 +198,38 @@ class SettingsPanesTest(unittest.TestCase):
         self.assertEqual(where, {"label": self.message("whereLabel"), "name": "Pessoal", "chip": True})
 
     def test_06_a_result_is_shown_next_to_its_control(self):
-        self.open("#routing")
-        self.assertTrue(harness.wait_until(lambda: self.view()["shown"] == ["routing"], 10))
-        switch = self.m.find_element("#routing-enabled")
-        before = self.m.execute("return document.getElementById('routing-enabled').checked;")
+        self.open("#ai")
+        self.assertTrue(harness.wait_until(lambda: self.view()["shown"] == ["ai"], 10))
+        switch = self.m.find_element("#ai-stop")
+        before = self.m.execute("return document.getElementById('ai-stop').checked;")
         self.m.send("WebDriver:ElementClick", {"id": switch})
         try:
             mark = harness.wait_until(
                 lambda: self.m.execute(
-                    "const m = document.querySelector('#routing-enabled').closest('.check').querySelector('.inline-status');"
+                    "const m = document.querySelector('#ai-stop').closest('.check').querySelector('.inline-status');"
                     "return m && {text: m.textContent, level: m.dataset.level, hidden: m.getAttribute('aria-hidden')};"
                 ),
                 10,
             )
-            self.assertEqual(mark, {"text": self.message("doneSaved"), "level": "ok", "hidden": "true"})
+            said = self.message("aiResumedNow" if before else "aiStoppedNow")
+            self.assertEqual(mark, {"text": said, "level": "ok", "hidden": "true"})
             status = self.m.execute(
                 "const s = document.getElementById('status');"
                 "return {text: s.textContent, inline: s.hasAttribute('data-inline'), clip: getComputedStyle(s).clipPath};"
             )
-            name = self.message("routingEnabledLabel")
-            self.assertEqual(status["text"], self.message("statusNamed", name, self.message("doneSaved")))
+            name = self.message("aiStopLabel")
+            self.assertEqual(status["text"], self.message("statusNamed", name, said))
             self.assertTrue(status["inline"])  # spoken, not shown twice
             self.assertNotEqual(status["clip"], "none")
             # The switch keeps its own name: the mark is not part of it.
             label = self.m.execute(
-                "return document.getElementById('routing-enabled').labels[0].querySelector('span').textContent;"
+                "return document.getElementById('ai-stop').labels[0].querySelector('span > span').textContent;"
             )
             self.assertEqual(label, name)
             self.shoot("inline-saved", full=False)
         finally:
-            if self.m.execute("return document.getElementById('routing-enabled').checked;") != before:
-                self.m.send("WebDriver:ElementClick", {"id": self.m.find_element("#routing-enabled")})
+            if self.m.execute("return document.getElementById('ai-stop').checked;") != before:
+                self.m.send("WebDriver:ElementClick", {"id": self.m.find_element("#ai-stop")})
                 time.sleep(0.5)
 
     def test_07_captures_every_section_in_both_themes(self):
@@ -198,7 +237,7 @@ class SettingsPanesTest(unittest.TestCase):
         sections = self.m.execute(
             "return [...document.querySelectorAll('.settings-nav li:not([hidden]) a')].map(a => a.dataset.section);"
         )
-        self.assertGreaterEqual(len(sections), 7)
+        self.assertGreaterEqual(len(sections), 2)  # what is left in this page's rail (ADR 0008, ADR 0011)
         for section in sections:
             self.open(f"#{section}")
             self.assertTrue(harness.wait_until(lambda section=section: self.view()["shown"] == [section], 10))
@@ -207,16 +246,16 @@ class SettingsPanesTest(unittest.TestCase):
         rect = self.m.send("WebDriver:GetWindowRect")
         self.m.send("WebDriver:SetWindowRect", {"width": 760, "height": 900})
         try:
-            self.open("#dns")
-            self.assertTrue(harness.wait_until(lambda: self.view()["shown"] == ["dns"], 10))
+            self.open("#ai")
+            self.assertTrue(harness.wait_until(lambda: self.view()["shown"] == ["ai"], 10))
             self.assertEqual(
                 self.m.execute(
                     "return getComputedStyle(document.querySelector('.settings')).gridTemplateColumns.split(' ').length;"
                 ),
                 1,
             )
-            self.assertEqual(self.view()["current"], ["dns"])
-            self.shoot("narrow-dns")
+            self.assertEqual(self.view()["current"], ["ai"])
+            self.shoot("narrow-ai")
             # QA R2-1: a section near the end keeps its entry in the visible part of the row.
             self.open("#integrations")
             self.assertTrue(harness.wait_until(lambda: self.view()["shown"] == ["integrations"], 10))
@@ -233,24 +272,6 @@ class SettingsPanesTest(unittest.TestCase):
             self.shoot("narrow-integrations")
         finally:
             self.m.send("WebDriver:SetWindowRect", {"width": rect["width"], "height": rect["height"]})
-
-    def test_08_a_template_only_fills_the_new_profile_form(self):
-        """Audit SPA-09: the copy says a template fills name, icon and colour; nothing is created before "Criar"."""
-        self.open("#profiles")
-        self.assertTrue(
-            harness.wait_until(lambda: self.m.execute("return document.querySelectorAll('#templates button').length;"), 10)
-        )
-        count = self.m.execute("return document.querySelectorAll('#profile-list > li').length;")
-        self.m.send("WebDriver:ElementClick", {"id": self.m.find_element('#templates button[data-template="work"]')})
-        state = self.m.execute(
-            "const f = document.getElementById('create-profile');"
-            "return {name: f.elements.name.value, template: f.dataset.template,"
-            " focused: document.activeElement === f.elements.name,"
-            " pressed: [...document.querySelectorAll('#templates button[aria-pressed=true]')].map(b => b.dataset.template)};"
-        )
-        self.assertEqual(state, {"name": self.message("templateWork"), "template": "work", "focused": True, "pressed": ["work"]})
-        time.sleep(0.5)
-        self.assertEqual(self.m.execute("return document.querySelectorAll('#profile-list > li').length;"), count)
 
     def test_09_slow_lists_show_placeholder_rows_and_never_stay_busy(self):
         """Audit SPA-26: a list still being read shows still placeholder rows after 400 ms, not before;

@@ -3,54 +3,7 @@
     "namespace": "nulavioSearch",
     "description": "Nulavio search settings over the engine's Search Service (docs/adr/0002-nulavio-search.md). Built-in Shell only.",
     "functions": [
-      { "name": "state", "type": "function", "async": true, "parameters": [] },
-      {
-        "name": "addProvider", "type": "function", "async": true,
-        "parameters": [{ "name": "key", "type": "string", "enum": ["duckduckgo", "brave", "mojeek", "kagi"] }]
-      },
-      {
-        "name": "addSearxng", "type": "function", "async": true,
-        "parameters": [{
-          "name": "details", "type": "object",
-          "properties": { "url": { "type": "string", "maxLength": 2048 }, "alias": { "type": "string", "optional": true, "maxLength": 21 } }
-        }]
-      },
-      {
-        "name": "addCustom", "type": "function", "async": true,
-        "parameters": [{
-          "name": "details", "type": "object",
-          "properties": {
-            "name": { "type": "string", "maxLength": 60 },
-            "url": { "type": "string", "maxLength": 2048 },
-            "alias": { "type": "string", "optional": true, "maxLength": 21 },
-            "suggestUrl": { "type": "string", "optional": true, "maxLength": 2048 }
-          }
-        }]
-      },
-      {
-        "name": "addOpenSearch", "type": "function", "async": true,
-        "parameters": [{ "name": "details", "type": "object", "properties": { "url": { "type": "string", "maxLength": 2048 } } }]
-      },
-      { "name": "remove", "type": "function", "async": true, "parameters": [{ "name": "id", "type": "string" }] },
-      {
-        "name": "setDefault", "type": "function", "async": true,
-        "parameters": [
-          { "name": "id", "type": "string" },
-          { "name": "options", "type": "object", "optional": true, "properties": { "private": { "type": "boolean", "optional": true } } }
-        ]
-      },
-      {
-        "name": "setAlias", "type": "function", "async": true,
-        "parameters": [{ "name": "id", "type": "string" }, { "name": "alias", "type": "string", "maxLength": 21 }]
-      },
-      {
-        "name": "setSuggestOptIn", "type": "function", "async": true,
-        "parameters": [{ "name": "id", "type": "string" }, { "name": "enabled", "type": "boolean" }]
-      },
-      {
-        "name": "setSuggestPrivate", "type": "function", "async": true,
-        "parameters": [{ "name": "enabled", "type": "boolean" }]
-      }
+      { "name": "state", "type": "function", "async": true, "parameters": [] }
     ],
     "events": [
       { "name": "onChanged", "type": "function", "parameters": [] }

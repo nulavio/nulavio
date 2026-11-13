@@ -24,14 +24,13 @@ this.nulavioPersonalise = class extends ExtensionAPI {
     return {
       nulavioPersonalise: {
         state: call(() => NulavioPersonalise.state()),
-        setDensity: call(value => NulavioPersonalise.set("density", value)),
-        setAccent: call(value => NulavioPersonalise.set("accent", value)),
-        setMoreContrast: call(value => NulavioPersonalise.set("moreContrast", value)),
-        setNewtabAmbience: call(value => NulavioPersonalise.set("newtabAmbience", value)),
-        setReduceTransparency: call(value => NulavioPersonalise.set("reduceTransparency", value)),
-        // The calling page's own window, never "most recent window".
-        openKeyboardShortcuts: call(() =>
-          NulavioPersonalise.openKeyboardShortcuts(context.xulBrowser?.browsingContext?.topChromeWindow)
+        // One settings page (ADR 0008). The caller names where; the host knows which pane that is.
+        openSettings: call((where, replace) =>
+          ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioSettings.sys.mjs").NulavioSettings.openFor(
+            context.xulBrowser?.browsingContext?.topChromeWindow,
+            where ?? "",
+            replace ? context.xulBrowser : null
+          )
         ),
         onChanged: new ExtensionCommon.EventManager({
           context,

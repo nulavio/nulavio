@@ -4,6 +4,7 @@
    it anywhere is an explicit choice. */
 
 import { localize, t } from "../lib/i18n.js";
+import { wireSettingsLinks } from "../lib/settings.js";
 import { announce, chip, errorText, h, profileStates, stateBadge } from "../lib/ui.js";
 
 const routing = browser.nulavioRouting;
@@ -165,6 +166,7 @@ async function render() {
 }
 
 localize();
+wireSettingsLinks(); // "Editar regras" is in the settings page (ADR 0011)
 render()
   .catch(e => announce(errorText(e), "error"))
   .finally(() => {

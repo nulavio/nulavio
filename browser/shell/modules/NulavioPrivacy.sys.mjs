@@ -10,7 +10,10 @@
    What the engine scatters over several dialogs is listed here: every site
    where a protection is off or relaxed, read from the engine's permission
    store, each removable. uBlock Origin keeps its own list of trusted sites;
-   Nulavio opens uBlock Origin's own page for it and never edits its data. */
+   Nulavio opens uBlock Origin's own page for it and never edits its data. Of
+   that data it reads one thing, which of its lists are switched on, to say
+   in Settings whether cookie notices are hidden (the maintainer's decision
+   of 2026-11-12: reading, never writing). */
 
 /* Permission types listed, in the order shown. Each relaxes a protection for one site. */
 export const TYPES = Object.freeze([
@@ -23,12 +26,15 @@ export const TYPES = Object.freeze([
 ]);
 
 const UBLOCK = "uBlock0@raymondhill.net";
+/* uBlock Origin's own lists that hide cookie notices (its registry's group "cookies"); any one of them does. */
+export const COOKIE_NOTICE_LISTS = Object.freeze(["fanboy-cookiemonster", "ublock-cookies-easylist", "adguard-cookies", "ublock-cookies-adguard"]);
 
 /** Set once a profile has received Nulavio's privacy defaults that only work as user values. */
 export const PREF_SEEDED = "nulavio.privacy.seeded";
 
 const lazy = {};
 ChromeUtils.defineESModuleGetters(lazy, {
+  ExtensionStorageIDB: "resource://gre/modules/ExtensionStorageIDB.sys.mjs",
   NetUtil: "resource://gre/modules/NetUtil.sys.mjs",
   NulavioGuard: "resource://builtin-addons/nulavio-shell/modules/NulavioGuard.sys.mjs",
   NulavioLayout: "resource://builtin-addons/nulavio-shell/modules/NulavioLayout.sys.mjs",
@@ -108,10 +114,12 @@ export const DNS_PROVIDERS = Object.freeze([
 export const PREF_DNS_CHOSEN = "nulavio.dns.chosen";
 /* The new tab's first run (audit 2026-11 FR-01): the steps answered or skipped, comma-separated. */
 export const PREF_FIRSTRUN = "nulavio.firstrun.done";
-export const FIRSTRUN_STEPS = Object.freeze(["welcome", "layout", "dns", "passwords", "default-browser", "finished"]);
+export const FIRSTRUN_STEPS = Object.freeze(["welcome", "layout", "dns", "passwords", "default-browser", "profile", "finished"]);
 // NulavioLayout.PREF_SHELL_START: set once, for a genuinely new profile (the layout adoption's rule).
 const PREF_NEW_PROFILE = "nulavio.startpage.shellFirstTab";
 const MODE = { system: Ci.nsIDNSService.MODE_TRROFF, fallback: Ci.nsIDNSService.MODE_TRRFIRST, strict: Ci.nsIDNSService.MODE_TRRONLY };
+// The two settings a DNS choice writes; a policy that locks one of them leaves nothing to choose here.
+const DNS_PREFS = ["network.trr.mode", "network.trr.uri"];
 
 /** An https:// resolver address without credentials; returns it normalised or throws. */
 export function checkResolverUri(raw) {
@@ -142,7 +150,17 @@ class Privacy {
     // What the resolver does right now (the engine's regional roll-out can turn DoH on under "default").
     const effective = Services.dns.currentTrrMode;
     const encryptedNow = effective === MODE.fallback || effective === MODE.strict;
-    return { choice, provider, uri, encryptedNow, chosen: Services.prefs.getBoolPref(PREF_DNS_CHOSEN, false), providers: DNS_PROVIDERS };
+    // ...and which resolver that is: the engine's word for the one it is using, which under "default" can be
+    // another than the address in the settings.
+    let resolverUri = "";
+    try {
+      resolverUri = encryptedNow ? Services.dns.currentTrrURI : "";
+    } catch (e) {
+      console.error("Nulavio privacy: the resolver in use", e);
+    }
+    const resolver = resolverUri ? (DNS_PROVIDERS.find(p => p.uri === resolverUri)?.id ?? "custom") : null;
+    const locked = DNS_PREFS.some(name => Services.prefs.prefIsLocked(name));
+    return { choice, provider, uri, encryptedNow, resolver, resolverUri, locked, chosen: Services.prefs.getBoolPref(PREF_DNS_CHOSEN, false), providers: DNS_PROVIDERS };
   }
 
   /**
@@ -153,6 +171,11 @@ class Privacy {
   setDns({ choice, provider, uri } = {}) {
     if (!Object.hasOwn(MODE, choice)) {
       throw new PrivacyError("invalid-choice");
+    }
+    // A policy that locks the resolver decides. The engine takes a write to a locked setting without an error
+    // and without effect: "saved" would then be said of a choice that changed nothing.
+    if (DNS_PREFS.some(name => Services.prefs.prefIsLocked(name))) {
+      throw new PrivacyError("pref-locked");
     }
     if (choice !== "system") {
       const known = DNS_PROVIDERS.find(p => p.id === provider);
@@ -255,10 +278,37 @@ class Privacy {
     }
   }
 
-  /** uBlock Origin's own state, as the add-on manager reports it (never its data). */
+  /** uBlock Origin's own state, as the add-on manager reports it. */
   filter() {
     const policy = WebExtensionPolicy.getByID(UBLOCK);
     return { installed: Boolean(policy), active: Boolean(policy?.active) };
+  }
+
+  /**
+   * Whether uBlock Origin has a list that hides cookie notices switched on: `{ cookieNotices }`, or null
+   * when that cannot be read (it is off, still starting, or keeps its settings somewhere else). Its
+   * selection is read from its own settings and nothing is ever written there: its page is where a list
+   * is switched on or off.
+   */
+  async filterLists() {
+    const policy = WebExtensionPolicy.getByID(UBLOCK);
+    if (!policy?.active || !policy.extension) {
+      return null;
+    }
+    let store = null;
+    try {
+      store = await lazy.ExtensionStorageIDB.open(lazy.ExtensionStorageIDB.getStoragePrincipal(policy.extension));
+      const { selectedFilterLists } = await store.get("selectedFilterLists");
+      if (!Array.isArray(selectedFilterLists)) {
+        return null; // it has not chosen its lists yet (its first start is not over)
+      }
+      return { cookieNotices: COOKIE_NOTICE_LISTS.some(key => selectedFilterLists.includes(key)) };
+    } catch (e) {
+      console.error("Nulavio Privacy: uBlock Origin's lists could not be read", e);
+      return null;
+    } finally {
+      store?.close?.();
+    }
   }
 
   /** Open uBlock Origin's own list of trusted sites (its dashboard), in a tab. */
@@ -272,6 +322,19 @@ class Privacy {
       throw new PrivacyError("no-window");
     }
     win.openTrustedLinkIn(policy.getURL("dashboard.html#whitelist.html"), "tab");
+  }
+
+  /** Open uBlock Origin's own "Filter lists" (what it blocks: ads, trackers, cookie notices), in a tab. */
+  openFilterLists() {
+    const policy = WebExtensionPolicy.getByID(UBLOCK);
+    if (!policy?.active) {
+      throw new PrivacyError("filter-missing");
+    }
+    const win = Services.wm.getMostRecentBrowserWindow();
+    if (!win) {
+      throw new PrivacyError("no-window");
+    }
+    win.openTrustedLinkIn(policy.getURL("dashboard.html#3p-filters.html"), "tab");
   }
 
   // -- change notifications -------------------------------------------------
