@@ -100,10 +100,10 @@ READ_EXPR = "({title: document.title, url: location.href, text: document.body ? 
 # normally reach. `submit` events (a submit button, Enter) are stopped before the page's
 # handlers see them, in the document and in each shadow root (the event does not leave one);
 # form.submit() raises no event and requestSubmit() may be called on a form in a shadow root
-# no click passed through, so both are replaced. A held form stays in the page, with what it
-# would have sent, until the user allows it (it is then sent as it was) or refuses it (it is
-# dropped). It is not a wall against a page that sets out to defeat it (docs/security/
-# threat-model-ai.md, AI-T39).
+# no click passed through, so both are replaced. A held form stays in the page until the user
+# allows it (it is then sent) or refuses it (it is dropped). It is not a wall against a page
+# that sets out to defeat it: an error raised in here is an object of this sandbox, and leads
+# back to it (docs/security/threat-model-ai.md, AI-T39).
 SANDBOX = "nulavio"
 FORMS_GUARD_FN = r"""() => {
   "use strict";
@@ -120,17 +120,20 @@ FORMS_GUARD_FN = r"""() => {
   };
   window.addEventListener('submit', onSubmit, true);
   const roots = new WeakSet();
+  const listen = EventTarget.prototype.addEventListener;  // this sandbox's own: the page may have replaced its copy
   const watch = (root) => {
     const key = root && (root.wrappedJSObject || root);
     if (!key || roots.has(key)) return;
     roots.add(key);
-    root.addEventListener('submit', onSubmit, true);
+    listen.call(root, 'submit', onSubmit, true);
   };
   const along = (event) => { for (const node of event.composedPath()) if (node instanceof ShadowRoot) watch(node); };
   window.addEventListener('click', along, true);
   window.addEventListener('keydown', along, true);
-  const scan = () => { for (const el of document.querySelectorAll('*')) if (el.shadowRoot) watch(el.shadowRoot); };
-  window.addEventListener('DOMContentLoaded', scan, true);
+  const scan = (from) => {
+    for (const el of (from || document).querySelectorAll('*')) if (el.shadowRoot) { watch(el.shadowRoot); scan(el.shadowRoot); }
+  };
+  window.addEventListener('DOMContentLoaded', () => scan(), true);
   try {
     // Each replacement is a Proxy made in the page around the engine's own method: what the page
     // holds is its own object (its `.constructor` is the page's Function, where a plain function
@@ -144,12 +147,14 @@ FORMS_GUARD_FN = r"""() => {
     const forms = page.HTMLFormElement.prototype, elements = page.Element.prototype;
     const submit = forms.submit, request = forms.requestSubmit, attach = elements.attachShadow;
     forms.submit = wrap(submit, (target, form) => {
-      if (!holding || passing) return submit.call(form);
+      if (!holding || passing || !(form instanceof HTMLFormElement)) return submit.call(form);
       held.push({form, submitter: null, direct: true});
     });
+    // requestSubmit() validates first and may send nothing: the engine decides, and the submit
+    // event it then raises is what gets held. Only the form's root has to be listening.
     forms.requestSubmit = wrap(request, (target, form, args) => {
-      if (!holding || passing) return request.call(form, args[0]);
-      held.push({form, submitter: args[0] || null, direct: false});
+      try { const root = form.getRootNode(); if (root instanceof ShadowRoot) watch(root); } catch (e) {}
+      return request.call(form, args[0]);
     });
     elements.attachShadow = wrap(attach, (target, host, args) => {
       const root = attach.call(host, args[0]);
@@ -166,8 +171,8 @@ FORMS_GUARD_FN = r"""() => {
     passing = true;
     try {
       for (const h of forms) {
-        if (!h.form.isConnected) continue;
         try {
+          if (!h.form.isConnected) continue;
           if (h.direct) nativeSubmit.call(h.form);
           else if (!nativeRequest) h.form.requestSubmit(h.submitter || undefined);
           else {
@@ -717,6 +722,7 @@ class Bridge:
             if self._forms_ever:
                 self._in_frames(tab, FORMS_OPEN_FN, cancel, must=True)
             return
+        self._forms_ever = True
         if not all(self._in_frames(tab, FORMS_GUARD_FN, cancel, must=True)):
             raise ToolError("this page's forms could not be watched (form.submit is out of reach); nothing was done")
 
@@ -744,6 +750,8 @@ class Bridge:
                 denied.detail = f"{what} was done; the form the page then tried to send was not sent."
                 raise
             allowed = self._may_submit()  # "for this session": the documents stop holding, too
+        if "submit_forms" not in checked:
+            checked.append("submit_forms")  # a form went out under the permission: the activity says so
         mark = self.bidi(tab).mark()
         sent = sum(int(n or 0) for n in self._in_frames(tab, FORMS_OPEN_FN if allowed else FORMS_SEND_FN, cancel, must=False))
         if not sent:  # the page took its form away meanwhile
@@ -756,7 +764,8 @@ class Bridge:
         the call says so and describes nothing of it (the tab stays; reading it is refused too)."""
         if not policy.in_scope(self._agent() or {}, policy.host_of(url)):
             self._target = url
-            raise Denied(policy.Decision(False, "block", "navigate", "out-of-scope"))
+            detail = "The navigation was done; where it ended is outside this agent's sites and is not described."
+            raise Denied(policy.Decision(False, "block", "navigate", "out-of-scope"), detail)
 
     # -- tools -----------------------------------------------------------------------
 
@@ -785,7 +794,7 @@ class Bridge:
             try:
                 why = self._held()
             except Exception:  # the registry could not be read: the endpoint does not stay out on that
-                why = "stopped"
+                why = "unreadable"
             if why:
                 self.raw = False
                 self.workspace = None
@@ -922,11 +931,18 @@ class Bridge:
 
     def _arrived(self, tab: str, checked: list[str], cancel) -> None:
         """After a navigation: where a redirect took the tab is checked as if it had been asked for,
-        and a form the new page sent by itself as it loaded is settled like any other."""
-        final = self._url_of(tab, cancel)
-        self._in_scope_now(final)
-        self.require_needs(final, checked=checked)
-        self._forms_settle(tab, final, "The navigation", checked, cancel)
+        and a form the new page sent by itself as it loaded is settled like any other. Where that
+        form lands is checked the same way, a few times over (a chain of posted forms)."""
+        try:
+            for _ in range(4):
+                final = self._url_of(tab, cancel)
+                self._in_scope_now(final)
+                self.require_needs(final, checked=checked)
+                if self._open_dialog(tab) is not None or not self._forms_settle(tab, final, "The navigation", checked, cancel):
+                    return
+        except Denied as denied:
+            denied.detail = f"{denied.detail} The tab is {tab}.".strip()
+            raise
 
     def _t_page_read(self, args, cancel, checked):
         tab = args["tab"]
@@ -991,9 +1007,9 @@ class Bridge:
         element = self._element(tab, args["element"])
         self.require_here("interact", url, checked=checked)
         self.still_at(tab, url, cancel)
-        self._forms_prepare(tab, cancel)  # before anything the page can observe
-        if earlier := self._earlier_forms(tab, url, checked, cancel):
+        if earlier := self._earlier_forms(tab, url, checked, cancel):  # before the documents are opened or held anew
             return earlier, url
+        self._forms_prepare(tab, cancel)  # before anything the page can observe
         info = self._call_fn(tab, INSPECT_FN, [element], cancel)
         if not info.get("connected"):
             raise ToolError("the element is gone; call page_snapshot again")
@@ -1040,10 +1056,10 @@ class Bridge:
             # Enter in a single-line field sends its form: the same capability as submit=true.
             self.require("submit_forms", url, checked=checked)
         self.still_at(tab, url, cancel)
-        # Before the scroll, the focus and the clearing: each runs the page's handlers.
-        self._forms_prepare(tab, cancel)
         if earlier := self._earlier_forms(tab, url, checked, cancel):
             return earlier, url
+        # Before the scroll, the focus and the clearing: each runs the page's handlers.
+        self._forms_prepare(tab, cancel)
         self._call_fn(tab, SCROLL_FN, [element], cancel)
         if not self._call_fn(tab, FOCUS_FN, [element, {"type": "boolean", "value": bool(args.get("clear"))}], cancel):
             raise ToolError("could not focus the element")
@@ -1110,14 +1126,14 @@ class Bridge:
         path = (folder / args["file"]).resolve()
         if path.parent != folder or not path.is_file():
             raise ToolError(f"no file named {args['file']!r} in this agent's uploads folder ({folder})")
-        self._forms_prepare(tab, cancel)  # choosing a file runs the page's change handlers
         if earlier := self._earlier_forms(tab, url, checked, cancel):
             return earlier, url
+        self._forms_prepare(tab, cancel)  # choosing a file runs the page's change handlers
         mark = self.bidi(tab).mark()
         self.bidi(tab).command("input.setFiles", {"context": tab, "element": element, "files": [str(path)]}, cancel=cancel)
-        self._settle(tab, mark, expected=False, cancel=cancel)
-        sent = self._forms_settle(tab, url, "The upload", checked, cancel)
-        return self._ok({"tab": tab, "file": path.name, "navigated": sent}), url
+        navigated = self._settle(tab, mark, expected=False, cancel=cancel)
+        navigated = self._forms_settle(tab, url, "The upload", checked, cancel) or navigated
+        return self._ok({"tab": tab, "file": path.name, "navigated": navigated}), url
 
     def _t_evaluate(self, args, cancel, checked):
         tab = args["tab"]

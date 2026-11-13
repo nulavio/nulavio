@@ -32,6 +32,9 @@ from . import sodium
 from .core import Vault, VaultError, kdf
 
 LOCKED_MODE = 0o500
+# What reading or writing the record inside the volume can raise besides a StorageError: the
+# volume gone, or a record that is not what this program wrote.
+RECORD_ERRORS = (OSError, ValueError, TypeError, AttributeError)
 STATE_DIR = ".nulavio-vault"
 TIMEOUT = 60
 
@@ -169,6 +172,10 @@ class Container:
             raise StorageError("mountpoint-not-empty", "plaintext files appeared in a locked profile")
         # The state lock before the volume is mounted: if it cannot be had, nothing is opened.
         with self._state_lock():
+            if not self._same_as_on_disk(vault):
+                # A change to the unlock methods finished while this waited for the lock: what was
+                # read is no longer the key file (checking it would look like a rollback).
+                raise StorageError("changed", "the profile's key file changed since it was read; try again")
             os.chmod(self.mountpoint, 0o700)  # fusermount needs write access to the mount point
             args = ["-q", "-nosyslog"]
             if idle_minutes:
@@ -182,9 +189,11 @@ class Container:
                 self._check_state(vault)
             except BaseException as exc:
                 # Whatever went wrong with the check (a rollback, a damaged record, an I/O error):
-                # a volume whose generation was not checked does not stay open.
-                self.unmount()
-                if isinstance(exc, OSError | ValueError):
+                # a volume whose generation was not checked does not stay open, also when a file
+                # in it is held open (it is then detached), and the reason given is the check's.
+                with contextlib.suppress(StorageError, subprocess.SubprocessError, OSError):
+                    self.unmount(wait=2.0, lazy_after=True)
+                if isinstance(exc, RECORD_ERRORS):
                     raise StorageError("storage-failed", type(exc).__name__) from None
                 raise
 
@@ -207,6 +216,8 @@ class Container:
                     if time.monotonic() >= deadline:
                         raise StorageError("busy", "another change to this profile is in progress") from None
                     time.sleep(0.2)
+                except OSError as exc:  # a file system that does not lock
+                    raise StorageError("storage-failed", f"state lock: {type(exc).__name__}") from None
             yield
         finally:
             os.close(fd)  # releases the lock, also when the process dies
@@ -307,14 +318,20 @@ class Container:
                 except OSError as exc:
                     raise StorageError("storage-failed", type(exc).__name__) from None
                 try:
+                    # The handle is on the volume, not on the directory it was mounted on a moment ago.
+                    if os.fstat(volume).st_dev == os.stat(where.parent).st_dev:
+                        raise StorageError("storage-failed", "the volume is not mounted")
 
                     def record() -> None:
                         try:
                             self._check_state(vault, volume)
-                        except OSError as exc:  # the volume went away under the handle
+                        except RECORD_ERRORS as exc:  # the volume went away under the handle, or its record is damaged
                             raise StorageError("not-recorded", type(exc).__name__) from None
 
-                    record()
+                    try:
+                        self._check_state(vault, volume)  # before anything changes: a failure here changed nothing
+                    except RECORD_ERRORS as exc:
+                        raise StorageError("storage-failed", type(exc).__name__) from None
                     yield record
                 finally:
                     os.close(volume)

@@ -985,6 +985,18 @@ class AuditTest(Home):
         self.assertTrue(bridge.call(*self.CLICK)["structuredContent"]["navigated"])
         self.assertEqual((len(approver.asked), steps[-1]), (1, "open"))
 
+    def test_a_form_held_when_the_permission_came_is_sent_and_said_not_slipped_out(self):
+        # The user allowed submitting (another tab's question, or in Settings) while this page held a
+        # form: the next click sent it without a word, then failed on the page that had moved.
+        bridge, steps = self.acting("assisted", registry.Approver(), held=[1])
+        registry.grant(bridge.agent_id, "submit_forms", "allow")
+        result = bridge.call(*self.CLICK)
+        self.assertFalse(result["isError"], result)
+        self.assertTrue(result["structuredContent"]["form_sent"])
+        self.assertEqual((steps[:2], self.INPUT in steps), (["held?", "open"], False))
+        entry = json.loads(audit.audit_path().read_text().splitlines()[-1])
+        self.assertEqual(entry["capability"], "interact,submit_forms")
+
     def test_a_page_that_sends_a_form_as_it_loads_is_settled_by_the_navigation(self):
         # Nothing reported a form held by a load, an upload or a timer; it stayed held for good.
         bridge, steps = self.acting("assisted", registry.Approver(), held=[1])
@@ -992,10 +1004,33 @@ class AuditTest(Home):
         self.assertTrue(result["isError"], result)
         self.assertIn("The navigation was done; the form the page then tried to send was not sent.", result["content"][0]["text"])
         self.assertEqual(steps[-1], "drop")
-        bridge, steps = self.acting("assisted", Approve("once"), held=[1])
+        bridge, steps = self.acting("assisted", Approve("once"), held=[1, 0])
         with mock.patch.object(tools.Bridge, "_title", return_value="t"):
             self.assertFalse(bridge.call("navigate", {"tab": "t1", "url": "https://example.org/cart"})["isError"])
-        self.assertEqual(steps[-1], "send")
+        self.assertEqual(steps[-2:], ["send", "held?"])  # and where the form landed is looked at again
+        entry = json.loads(audit.audit_path().read_text().splitlines()[-1])
+        self.assertEqual(entry["capability"], "navigate,submit_forms")  # the activity shows that a form went out
+        # Where the sent form lands is checked like any place a redirect ends: outside the agent's
+        # sites, it is not described.
+        agent, _ = registry.add("lands", "other", "autonomous", domains=["example.org"])
+        registry.grant(agent["id"], "submit_forms", "ask")
+        scoped = tools.Bridge(agent["id"], "s-1", approver=Approve("once"))
+        scoped._forms_ever = True
+        engine = mock.Mock()
+        engine.command.return_value = {}
+        engine.mark.return_value = 0
+        places = ["about:blank", "https://example.org/pay", "https://bank.example/acct?id=4"]
+        with (
+            mock.patch.object(tools.Bridge, "bidi", return_value=engine),
+            mock.patch.object(tools.Bridge, "_url_of", side_effect=places),
+            mock.patch.object(tools.Bridge, "_in_frames", return_value=[1]),
+            mock.patch.object(tools.Bridge, "_settle", return_value=True),
+            mock.patch.object(tools.Bridge, "_open_dialog", return_value=None),
+            mock.patch.object(tools.Bridge, "_title", side_effect=AssertionError("described")),
+        ):
+            result = scoped.call("navigate", {"tab": "t1", "url": "https://example.org/pay"})
+        self.assertIn("is not described. The tab is t1.", result["content"][0]["text"])
+        self.assertNotIn("bank.example", json.dumps(result))
         # Reading says that the page holds a form; it asks nothing.
         approver = Approve("once")
         bridge, steps = self.acting("assisted", approver, held=[2])
@@ -1003,6 +1038,38 @@ class AuditTest(Home):
         with mock.patch.object(tools.Bridge, "_eval", return_value=page):
             read = bridge.call("page_read", {"tab": "t1"})["structuredContent"]
         self.assertEqual((read["forms_held"], approver.asked, "send" in steps), (2, [], False))
+        bridge, steps = self.acting("assisted", approver, held=[3])
+        with (
+            mock.patch.object(tools.Bridge, "_call_fn", return_value=[]),
+            mock.patch.object(tools.Bridge, "_title", return_value="t"),
+        ):
+            listed = bridge.call("page_snapshot", {"tab": "t1"})["structuredContent"]
+        self.assertEqual((listed["forms_held"], approver.asked), (3, []))
+
+    def test_choosing_a_file_runs_the_pages_handlers_too(self):
+        # onchange="this.form.submit()" on a file field: nothing looked at what the page then sent.
+        def uploading(approver, held):
+            bridge, steps = self.acting("assisted", approver, held=held)
+            registry.grant(bridge.agent_id, "files", "allow")
+            folder = self.home / "uploads"
+            folder.mkdir(exist_ok=True)
+            (folder / "report.txt").write_text("artificial")
+            bridge.workspace = mock.Mock(uploads=True, bidi=None)  # no engine of its own: the page is the stand-in
+            stack = contextlib.ExitStack()
+            self.addCleanup(stack.close)
+            stack.enter_context(mock.patch.object(tools, "_uploads", return_value=folder))
+            stack.enter_context(mock.patch.object(tools.Bridge, "_owner", return_value=""))
+            return bridge.call("upload", {"tab": "t1", "element": "e1", "file": "report.txt"}), steps
+
+        result, steps = uploading(registry.Approver(), [0, 1])
+        self.assertTrue(result["isError"], result)
+        self.assertIn("The upload was done; the form the page then tried to send was not sent.", result["content"][0]["text"])
+        self.assertLess(steps.index("guard"), steps.index("input.setFiles"))
+        result, steps = uploading(Approve("once"), [0, 1])
+        self.assertEqual((result["isError"], result["structuredContent"]["navigated"], steps.count("send")), (False, True, 1))
+        result, steps = uploading(registry.Approver(), [2])  # one held from before: settled first, the file is not chosen
+        self.assertIn("An earlier action was done", result["content"][0]["text"])
+        self.assertNotIn("input.setFiles", steps)
 
     def test_where_a_redirect_ends_is_one_of_the_agents_sites_or_is_not_described(self):
         agent, _ = registry.add("redirected", "other", "autonomous", domains=["example.org"])

@@ -629,6 +629,39 @@ class HelperApiTest(StorageCase):
         )
         profiles.lock(prof)
 
+    def test_a_failure_before_the_change_is_not_called_saved(self):
+        # "Saved, but not recorded" was also the answer when the check before the change failed
+        # (a full disk): nothing had been saved, and the old code still opened the profile.
+        prof, old_code = self.encrypted_profile()
+        box = profiles.container(prof)
+        before = box.vault_path.read_bytes()
+        full = OSError(28, "No space left on device")
+        with (
+            mock.patch.object(storage.Container, "_check_state", side_effect=full),
+            self.assertRaises(storage.StorageError) as ctx,
+        ):
+            vault_cli.api_request({"op": "new-recovery-code", "path": str(prof.path), "current": PASSWORD})
+        self.assertEqual(ctx.exception.code, "storage-failed")
+        self.assertEqual(box.vault_path.read_bytes(), before)
+        profiles.unlock(prof, recovery_code=old_code).lock()
+        profiles.lock(prof)
+
+    def test_an_unlock_that_waited_for_a_change_is_told_the_key_file_changed(self):
+        # Checked against what it had read before the change, it was refused as a rollback
+        # ("restored from a backup?").
+        prof, _code = self.encrypted_profile()
+        box = profiles.container(prof)
+        waiting = box.load_vault()
+        waiting.unlock_password(PASSWORD)
+        self.addCleanup(waiting.lock)
+        vault_cli.api_request({"op": "new-recovery-code", "path": str(prof.path), "current": PASSWORD})
+        with self.assertRaises(storage.StorageError) as ctx:
+            box.mount(waiting)
+        self.assertEqual(ctx.exception.code, "changed")
+        self.assertFalse(box.mounted())
+        profiles.unlock(prof, password=PASSWORD).lock()  # read again, it opens
+        profiles.lock(prof)
+
     def test_a_profile_whose_generation_cannot_be_checked_does_not_stay_open(self):
         # The lock file is beside the key file, where whoever puts an old key file back can write.
         prof, old_code = self.encrypted_profile()

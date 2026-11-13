@@ -299,6 +299,10 @@ class FixtureServer:
                 "<div id=plain role=button tabindex=0 onclick=\"document.getElementById('state').textContent='on'\">"
                 "Plain</div>"
                 f'<div id=request role=button tabindex=0 onclick="{form}.requestSubmit()">Request</div>'
+                # A form the engine itself would not send: its required field is empty.
+                '<form id=invalid action="/agent-result" method="get"><input name=q required aria-label="Required"></form>'
+                "<div id=tryinvalid role=button tabindex=0 "
+                "onclick=\"document.getElementById('invalid').requestSubmit()\">Invalid</div>"
                 f'<div id=direct role=button tabindex=0 onclick="{form}.submit()">Direct</div>'
                 # Through the replaced method's constructor, a page once reached the guard itself.
                 '<div id=reach role=button tabindex=0 onclick="try { HTMLFormElement.prototype.submit.constructor('

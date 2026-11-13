@@ -457,6 +457,8 @@ class AiBridgeTest(unittest.TestCase):
 
         self.assertFalse(click("Plain")["isError"])
         self.assertIn("on", c.call("page_read", tab=tab)["structuredContent"]["text"])  # a click that sends nothing works
+        invalid = click("Invalid")  # requestSubmit() on a form the engine will not send: nothing to ask about
+        self.assertEqual((invalid["isError"], invalid["structuredContent"]["navigated"]), (False, False), invalid)
         for name in ("Request", "Direct", "Reach", "Frame", "Shadow", "Shadow request"):  # the last two: inside shadow roots
             with self.subTest(control=name):
                 refused(click(name), "The click")
