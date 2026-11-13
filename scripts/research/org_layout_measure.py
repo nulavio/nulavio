@@ -76,6 +76,7 @@ COMPONENTS = (
             "tests/unit/test_security_tooling.py",
             "tests/unit/test_ci_changes.py",
             "tests/unit/test_modern_web_guidance.py",
+            "tests/unit/test_agent_skills.py",
             "AGENTS.md",
             "CLAUDE.md",
             "CONTRIBUTING.md",
