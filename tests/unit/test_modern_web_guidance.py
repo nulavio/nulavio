@@ -72,3 +72,14 @@ class ModernWebGuidanceTests(unittest.TestCase):
         self.assertEqual(result.returncode, 2)
         self.assertEqual(result.stdout, "")
         self.assertIn("npm ci --ignore-scripts", result.stderr)
+
+    @unittest.skipUnless(shutil.which("git") and (ROOT / ".git").exists(), "needs the git checkout")
+    def test_npm_output_is_never_tracked(self):
+        # test_repo_hygiene skips this directory because npm ci fills it; nothing in it may be committed.
+        tracked = subprocess.run(
+            ["git", "-C", str(ROOT), "ls-files", "ci/modern-web-guidance/node_modules"],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout
+        self.assertEqual(tracked, "")
