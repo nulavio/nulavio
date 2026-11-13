@@ -498,12 +498,23 @@ class AiBridgeTest(unittest.TestCase):
         self.assertEqual(len(denied), 14, denied)  # one for each form the pages tried to send
         self.assertTrue(all("submit_forms" in e["capability"] for e in denied), denied)
 
-        # With the permission, the same click sends the form, and so does the page that sends one as it loads.
+        # The permission comes while a form is held: the next action sends it, from the document that
+        # holds it (by its sandbox, so a page that had moved on would keep its own), and says so.
+        self.assertFalse(click("Later")["isError"])
+        time.sleep(1.8)
+        self.assertEqual(sent(), [])
         registry.grant(agent["id"], "submit_forms", "allow")
+        held = click("Plain")
+        self.assertFalse(held["isError"], held)
+        self.assertTrue(held["structuredContent"].get("form_sent"), held)
+        self.assertEqual(sent(), ["/agent-result?q=sent"])
+        # With the permission, the same click sends the form, and so does the page that sends one as it loads.
+        self.assertFalse(c.call("navigate", tab=tab, url=self.fx.url("/agent-scripted-form"))["isError"])
+        snap = c.call("page_snapshot", tab=tab)
         gone = click("Direct")
         self.assertFalse(gone["isError"], gone)
         self.assertTrue(gone["structuredContent"]["navigated"], gone)
-        self.assertEqual(sent(), ["/agent-result?q=sent"])
+        self.assertEqual(sent(), ["/agent-result?q=sent"] * 2)
         again = c.call("navigate", tab=other, url=self.fx.url("/agent-autosubmit"))
         self.assertFalse(again["isError"], again)
         self.assertTrue(harness.wait_until(lambda: "/agent-result?q=onload" in sent(), timeout=10), sent())

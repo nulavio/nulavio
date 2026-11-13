@@ -694,12 +694,14 @@ class Bridge:
             queue += context.get("children") or []
         return out
 
-    def _in_sandbox(self, tab: str, frame: str, fn: str, cancel, timeout: float = 5.0) -> object:
+    def _in_sandbox(self, tab: str, target: dict, fn: str, cancel, timeout: float = 5.0) -> tuple[object, str]:
+        """Run `fn` in a sandbox, named by its document ({"context", "sandbox"}) or by itself
+        ({"realm"}). Returns what it answered and the realm it ran in."""
         result = self.bidi(tab).command("script.callFunction", {
-            "functionDeclaration": fn, "target": {"context": frame, "sandbox": SANDBOX}, "arguments": [],
+            "functionDeclaration": fn, "target": target, "arguments": [],
             "awaitPromise": False, "resultOwnership": "none",
         }, timeout=timeout, cancel=cancel)  # fmt: skip
-        return script_result(result)
+        return script_result(result), str(result.get("realm") or "")
 
     def _in_frames(self, tab: str, fn: str, cancel, *, must: bool) -> list:
         """Run `fn` in the sandbox of each document of the tab. `must`: a document that is still
@@ -707,11 +709,20 @@ class Bridge:
         results = []
         for frame in self._frames(tab, cancel):
             try:
-                results.append(self._in_sandbox(tab, frame, fn, cancel))
+                results.append(self._in_sandbox(tab, {"context": frame, "sandbox": SANDBOX}, fn, cancel)[0])
             except BidiError:
                 if must and (frame == tab or frame in self._frames(tab, cancel)):
                     raise ToolError("this page's forms could not be watched; nothing was done") from None
                 # A frame that went away took its forms with it.
+        return results
+
+    def _in_realms(self, tab: str, realms: list[str], fn: str, cancel) -> list:
+        """Run `fn` in these sandboxes and no other. A document that went away took its sandbox
+        along: the one that replaced it has another, which this does not reach."""
+        results = []
+        for realm in realms:
+            with contextlib.suppress(BidiError):
+                results.append(self._in_sandbox(tab, {"realm": realm}, fn, cancel)[0])
         return results
 
     def _forms_prepare(self, tab: str, cancel) -> None:
@@ -732,29 +743,67 @@ class Bridge:
             return 0
         return sum(int(n or 0) for n in self._in_frames(tab, FORMS_HELD_FN, cancel, must=False))
 
+    def _forms_where(self, tab: str, cancel) -> list[str]:
+        """The documents of the tab that hold a form, each by the realm of its sandbox. What is
+        sent or dropped afterwards is what was counted here, in the document it was counted in."""
+        if not self._forms_ever:
+            return []
+        realms = []
+        for frame in self._frames(tab, cancel):
+            try:
+                held, realm = self._in_sandbox(tab, {"context": frame, "sandbox": SANDBOX}, FORMS_HELD_FN, cancel)
+            except BidiError:
+                continue  # a frame that went away took its forms with it
+            if int(held or 0):
+                if not realm:
+                    raise ToolError("this page's forms could not be watched; the form it tried to send was not sent")
+                realms.append(realm)
+        return realms
+
     def _forms_settle(self, tab: str, url: str, what: str, checked: list[str], cancel) -> bool:
         """After an action, and before the next one: forms the page tried to send are held in it,
         whenever it tried. Sending them needs submit_forms: with it they go as they were (True);
         without it they are dropped and the call is denied.
 
         The count comes first, not the permission: an answer "for this session" turns the
-        permission on in the middle of the call, and the form it was given for is still held."""
-        if not self._forms_held(tab, cancel):
+        permission on in the middle of the call, and the form it was given for is still held.
+
+        The permission is for the page the form is on. `url` is where the call began; the forms are
+        judged by where the tab is once they are counted, which an action can have changed (a click
+        that leads to a page that sends a form as it loads): that address is checked as if it had
+        been asked for, and what was allowed for the page before it does not count. And the answer
+        can take minutes, in which the page can move on: only the documents counted are sent."""
+        realms = self._forms_where(tab, cancel)
+        if not realms:
             return False
-        allowed = self._may_submit()
-        if not allowed and "submit_forms" not in checked:  # not already allowed for this call (a submit button, submit=true)
+        # Read after the count: these documents' address, or a later one's (their realms are then gone).
+        here = self._url_of(tab, cancel)
+        asked = "submit_forms" in checked  # already allowed for this call (a submit button, submit=true)
+        if policy.origin(here) != policy.origin(url):
+            asked = False
+            elsewhere = f"{what} was done and took the tab elsewhere; the form that page then tried to send was not sent"
             try:
-                self.require("submit_forms", url, checked=checked)
+                self._in_scope_now(here)
+                self.require_needs(here, checked=checked)
             except Denied as denied:
-                self._in_frames(tab, FORMS_DROP_FN, cancel, must=False)
+                denied.detail = elsewhere + "."
+                raise
+            except ToolError as refused:
+                raise ToolError(f"{elsewhere} ({refused})") from None
+        allowed = self._may_submit()
+        if not allowed and not asked:
+            try:
+                self.require("submit_forms", here, checked=checked)
+            except Denied as denied:
+                self._in_realms(tab, realms, FORMS_DROP_FN, cancel)
                 denied.detail = f"{what} was done; the form the page then tried to send was not sent."
                 raise
             allowed = self._may_submit()  # "for this session": the documents stop holding, too
         if "submit_forms" not in checked:
             checked.append("submit_forms")  # a form went out under the permission: the activity says so
         mark = self.bidi(tab).mark()
-        sent = sum(int(n or 0) for n in self._in_frames(tab, FORMS_OPEN_FN if allowed else FORMS_SEND_FN, cancel, must=False))
-        if not sent:  # the page took its form away meanwhile
+        sent = sum(int(n or 0) for n in self._in_realms(tab, realms, FORMS_OPEN_FN if allowed else FORMS_SEND_FN, cancel))
+        if not sent:  # the page took its form away meanwhile, or moved on
             return False
         self._settle(tab, mark, expected=True, cancel=cancel)
         return True
