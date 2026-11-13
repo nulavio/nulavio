@@ -51,6 +51,8 @@ import shutil
 import subprocess
 import tarfile
 import tempfile
+import xml.etree.ElementTree as ET
+from html.parser import HTMLParser
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -322,6 +324,55 @@ def keep_addresses(text: str, page: str) -> str:
 # -- build --------------------------------------------------------------------------------
 
 
+class Discovery(HTMLParser):
+    """Read discovery directives from the rendered head, including future noindex pages."""
+
+    def __init__(self, text: str):
+        super().__init__()
+        self.canonicals: list[str] = []
+        self.alternates: list[dict[str, str]] = []
+        self.noindex = False
+        self.feed(text.partition("</head>")[0])
+
+    def handle_starttag(self, tag, attrs):
+        attrs = dict(attrs)
+        if tag == "meta" and attrs.get("name", "").lower() == "robots":
+            self.noindex |= bool({"noindex", "none"} & set(re.split(r"[\s,]+", attrs.get("content", "").lower())))
+        if tag == "link" and attrs.get("rel") == "canonical":
+            self.canonicals.append(attrs["href"])
+        if tag == "link" and attrs.get("rel") == "alternate" and "hreflang" in attrs:
+            self.alternates.append(attrs)
+
+
+def write_sitemap(out: Path, pages: dict) -> None:
+    """Only indexable, self-canonical HTML that this build actually publishes."""
+    namespace = "http://www.sitemaps.org/schemas/sitemap/0.9"
+    xhtml = "http://www.w3.org/1999/xhtml"
+    ET.register_namespace("", namespace)
+    ET.register_namespace("xhtml", xhtml)
+    root = ET.Element(f"{{{namespace}}}urlset")
+    entries = []
+    for page in pages:
+        discovery = Discovery((out / page).read_text(encoding="utf-8"))
+        if discovery.noindex or not discovery.canonicals:
+            continue
+        url = "https://nulavio.net/" + page.removesuffix("index.html")
+        if discovery.canonicals != [url]:
+            raise BuildError(f"{page}: sitemap requires exactly one self-canonical URL ({url})")
+        entries.append((url, discovery))
+    published = {url for url, _ in entries}
+    for url, discovery in sorted(entries, key=lambda entry: entry[0]):
+        node = ET.SubElement(root, f"{{{namespace}}}url")
+        ET.SubElement(node, f"{{{namespace}}}loc").text = url
+        for alternate in discovery.alternates:
+            if alternate["href"] not in published:
+                raise BuildError(f"{url}: alternate is not an indexable published page: {alternate['href']}")
+            ET.SubElement(node, f"{{{xhtml}}}link", alternate)
+    # No fabricated lastmod: a build date is not the date each page's content changed.
+    ET.indent(root)
+    ET.ElementTree(root).write(out / "sitemap.xml", encoding="utf-8", xml_declaration=True)
+
+
 def release_tree(commit: str, into: Path) -> Path:
     if git("status", "--porcelain", "--untracked-files=normal"):
         raise BuildError("--release refuses a dirty tree: commit or set aside the changes first")
@@ -376,6 +427,7 @@ def build(out: Path, *, release: bool = False, commit: str = "HEAD", evidence: s
                 left = sorted(set(re.findall(r"\{\{[^}]*\}\}", text)))
                 raise BuildError(f"{page}: placeholders left: {left}")
             path.write_text(text, encoding="utf-8")
+        write_sitemap(out, pages)
     return sorted(str(p.relative_to(out)) for p in out.rglob("*") if p.is_file())
 
 

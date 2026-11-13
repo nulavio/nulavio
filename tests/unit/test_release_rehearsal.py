@@ -18,6 +18,8 @@ class RehearsalInstallTest(unittest.TestCase):
         """A repository with the rehearsal script and stubs for what it calls, a built tree to install, and a clean
         environment. No real build, packager, network or default cache is used."""
         repo, work, out = tmp / "repo", tmp / "private-cache", tmp / "out"
+        repo.mkdir()
+        subprocess.run(["git", "-C", str(repo), "init", "-q", "-b", "main"], check=True)
         release = repo / "scripts" / "release"
         release.mkdir(parents=True)
         script = release / "rehearse_release.sh"

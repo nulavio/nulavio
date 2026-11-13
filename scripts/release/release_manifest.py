@@ -31,6 +31,7 @@ EMPTY_DIFF = hashlib.sha256(b"").hexdigest()
 # The portable archive of the same tree (GitHub release asset; the Flatpak is built from it).
 ARCHIVE_SUFFIX = ".linux-x86_64.tar.xz"
 RPM = re.compile(r"^nulavio-(?P<version>\d+(?:\.\d+)+)-(?P<release>[0-9.]+)\.[a-z0-9_]+\.x86_64\.rpm$")
+RELEASE_TAG = re.compile(r"v([0-9]+(?:\.[0-9]+)+)-([0-9]+(?:\.[0-9]+)*)")
 
 
 class ManifestError(RuntimeError):
@@ -123,24 +124,38 @@ def published(repo: Path) -> tuple[str, str] | None:
 
 
 def check_newer(release_tag: str, repo: Path) -> None:
+    exists = subprocess.run(["git", "-C", str(repo), "rev-parse", "-q", "--verify", f"refs/tags/{release_tag}"],
+                            capture_output=True)  # fmt: skip
+    if exists.returncode == 0:
+        raise ManifestError(f"the tag {release_tag} already exists")
     version, _, release = release_tag[1:].partition("-")
-    current = published(repo)
+    known = release_versions(repo)
+    current = max(known, key=lambda v: (_numbers(v[0]), _numbers(v[1]))) if known else None
     if current and (_numbers(version), _numbers(release)) <= (_numbers(current[0]), _numbers(current[1])):
         raise ManifestError(
             f"{release_tag} is not newer than the published {current[0]}-{current[1]}: dnf would not upgrade "
             "to it; rebuild with a higher NULAVIO_RELEASE"
         )
-    exists = subprocess.run(["git", "-C", str(repo), "rev-parse", "-q", "--verify", f"refs/tags/{release_tag}"],
-                            capture_output=True)  # fmt: skip
-    if exists.returncode == 0:
-        raise ManifestError(f"the tag {release_tag} already exists")
+
+
+def release_versions(repo: Path) -> list[tuple[str, str]]:
+    """Reserve existing tags as well as the published site version (which can lag)."""
+    tags = subprocess.run(["git", "-C", str(repo), "tag", "--list", "v*"],
+                          capture_output=True, text=True, check=True).stdout.splitlines()  # fmt: skip
+    versions = [(m[1], m[2]) for tag in tags if (m := RELEASE_TAG.fullmatch(tag))]
+    current = published(repo)
+    if current:
+        versions.append(current)
+    return versions
 
 
 def next_release(firefox: str, repo: Path) -> str:
-    current = published(repo)
-    if not current or current[0] != firefox:
+    if not re.fullmatch(r"[0-9]+(?:\.[0-9]+)+", firefox):
+        raise ManifestError("invalid Firefox version")
+    revisions = [release for version, release in release_versions(repo) if version == firefox]
+    if not revisions:
         return "0.1"
-    parts = list(_numbers(current[1]))
+    parts = list(_numbers(max(revisions, key=_numbers)))
     parts[-1] += 1
     return ".".join(map(str, parts))
 

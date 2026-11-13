@@ -1,0 +1,97 @@
+name: release-metadata
+
+# Runs trusted main code after the maintainer publishes a release (including alpha).
+# No signing, publishing, auto-approval or direct main push. Always saves a recovery patch.
+# RELEASE_METADATA_TOKEN is optional: a dedicated token, Contents + Pull requests write,
+# scoped to this repository, allows a PR and normal CI without changing GITHUB_TOKEN policy.
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Published release tag to synchronize (recovery/backfill)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  attestations: read # verify the published manifest with the repository job token
+
+concurrency:
+  group: release-metadata
+  cancel-in-progress: false
+
+jobs:
+  metadata:
+    if: github.repository == 'nulavio/nulavio' && (github.event_name == 'release' || github.ref == 'refs/heads/main')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Fetch the published release and verify its build provenance
+        env:
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 -I -c 'import os, re; assert re.fullmatch(r"v[0-9]+(?:\.[0-9]+)+-[0-9]+(?:\.[0-9]+)*", os.environ["TAG"]), "invalid release tag"'
+          gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" > "$RUNNER_TEMP/published-release.json"
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern manifest.json --dir "$RUNNER_TEMP/release-manifest"
+          gh attestation verify "$RUNNER_TEMP/release-manifest/manifest.json" --repo "$GITHUB_REPOSITORY" \
+            --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release.yml" --source-ref refs/heads/main
+      - name: Generate changelog, download metadata and recovery patch
+        id: changes
+        run: |
+          python3 -I -c 'import json, sys; json.dump({"release": json.load(open(sys.argv[1]))}, open(sys.argv[2], "w"))' \
+            "$RUNNER_TEMP/published-release.json" "$RUNNER_TEMP/release-event.json"
+          python3 -I scripts/release/release_metadata.py --event "$RUNNER_TEMP/release-event.json" \
+            --repository "$GITHUB_REPOSITORY" --manifest "$RUNNER_TEMP/release-manifest/manifest.json"
+          git diff --binary -- CHANGELOG.md packaging/release.json > "$RUNNER_TEMP/release-metadata.patch"
+          if [ -s "$RUNNER_TEMP/release-metadata.patch" ]; then
+            echo 'changed=true' >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-metadata
+          path: |
+            ${{ runner.temp }}/release-metadata.patch
+            ${{ runner.temp }}/published-release.json
+          retention-days: 90
+          if-no-files-found: error
+      - name: Open the metadata pull request, or report recovery instructions
+        if: steps.changes.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_METADATA_TOKEN }}
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo '::warning::RELEASE_METADATA_TOKEN is not configured; the release-metadata artifact contains the recovery patch.'
+            printf '## Metadata PR needs activation\n\nConfigure RELEASE_METADATA_TOKEN (repository-scoped Contents + Pull requests write). The patch is saved in the release-metadata artifact; apply it on a branch with git apply release-metadata.patch and open a PR.\n' >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          branch="agent/release/chore-metadata-$TAG"
+          existing=$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$branch" --state open --json url --jq '.[0].url // empty')
+          if [ -n "$existing" ]; then
+            printf 'Existing metadata PR: %s\n' "$existing" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          git switch -c "$branch"
+          git config user.name 'nulavio-release-bot'
+          git config user.email 'nulavio-release-bot@users.noreply.github.com'
+          git add -- CHANGELOG.md packaging/release.json
+          git commit -s -m "chore(release): record $TAG"
+          gh auth setup-git
+          # A retry after a failed PR creation reuses only an identical remote tree; never force-push.
+          if git ls-remote --exit-code --heads origin "$branch" > "$RUNNER_TEMP/remote-head"; then
+            git fetch origin "$branch"
+            git diff --exit-code HEAD FETCH_HEAD
+          else
+            git push origin "HEAD:refs/heads/$branch"
+          fi
+          printf 'Record published release %s in CHANGELOG.md and the download metadata.\n\nGenerated from the published notes and verified build provenance. The site deploys after merge. Security impact and SLA reporting remain an editorial review in docs/security/changelog.md.\n\nRefs #192\n' "$TAG" > "$RUNNER_TEMP/pr-body.md"
+          gh pr create --repo "$GITHUB_REPOSITORY" --base main --head "$branch" \
+            --title "chore(release): record $TAG" --body-file "$RUNNER_TEMP/pr-body.md" >> "$GITHUB_STEP_SUMMARY"
