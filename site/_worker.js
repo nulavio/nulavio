@@ -9,8 +9,9 @@
 // (/lista/link/?k=…, /en/waitlist/link/?k=…). The key is the proof that a sign-up is yours:
 // knowing an address is not. Only its SHA-256 is kept, and only for an address that was not
 // on the list: signing up an address again changes nothing about its entry and hands out a
-// key that opens nothing, with the same answer, so the form does not tell anyone who is on
-// the list and nobody gets a key to someone else's entry.
+// key that opens nothing, so nobody gets a key to an entry that exists. The answer is the
+// same either way (status, headers, body, and one write to the database whatever was found),
+// so the form does not tell anyone who is on the list.
 //
 // GET /lista/link/?k=…  the static page of that path, the same for every key (the list is
 //                       not looked at: the page says nothing about an entry).
@@ -18,7 +19,8 @@
 //                       the entry that key belongs to, if any, and answers the same either way.
 //
 // It keeps the address, the language, the platform and the time in the D1 database bound as
-// WAITLIST, plus the hash of the key, and nothing else: no IP address, no user agent. Every
+// WAITLIST, plus the hash of the key, and nothing else about anyone: no IP address, no user
+// agent (waitlist_pulse holds one random number, see PULSE). Every
 // other answer is a redirect to the waitlist page, whose fragment chooses the message
 // (#left, #invalid, #unavailable, #nolink) or the section (#leave).
 
@@ -43,6 +45,11 @@ const LINK =
 const JOIN = "INSERT INTO waitlist (email, lang, platform, joined) VALUES (?1, ?2, ?3, ?4) ON CONFLICT (email) DO NOTHING";
 const LEAVE = "DELETE FROM waitlist WHERE email IN (SELECT email FROM waitlist_links WHERE link = ?1)";
 const UNLINK = "DELETE FROM waitlist_links WHERE link = ?1";
+// One row that every sign-up and every leaving rewrites with a new random number, whatever
+// else they found to do. Without it a request that changes nothing answers measurably sooner
+// than one that does, which tells an address on the list from one that is not.
+const SCHEMA_PULSE = "CREATE TABLE IF NOT EXISTS waitlist_pulse (id INTEGER PRIMARY KEY CHECK (id = 1), n TEXT NOT NULL)";
+const PULSE = "INSERT OR REPLACE INTO waitlist_pulse (id, n) VALUES (1, ?1)";
 
 // _headers does not apply to what a function answers, so the answers carry their own.
 const HEADERS = {
@@ -146,8 +153,10 @@ async function waitlist(request, env) {
     await db.batch([
       db.prepare(SCHEMA),
       db.prepare(SCHEMA_LINKS),
+      db.prepare(SCHEMA_PULSE),
       db.prepare(LINK).bind(email, await digest(key)),
       db.prepare(JOIN).bind(email, lang, platform, joined),
+      db.prepare(PULSE).bind(newKey()),
     ]);
     return linked(lang, key);
   } catch {
@@ -160,21 +169,32 @@ async function link(request, env, url, lang) {
   if (request.method === "GET" || request.method === "HEAD") {
     if (!KEY.test(key)) return redirect(lang, "nolink");
     // The static page of this path, asked for without the key: it is the same for everyone.
-    const page = env.ASSETS ? await env.ASSETS.fetch(new Request(new URL(url.pathname, url), { method: request.method })) : null;
+    let page = null;
+    try {
+      page = await env.ASSETS.fetch(new Request(new URL(url.pathname, url), { method: request.method }));
+    } catch {
+      // no static files, or they failed: answered below
+    }
     if (!page?.ok) return refuse(503, "This page could not be loaded. Its address is still your link: try again later.\n");
     return new Response(page.body, { status: 200, headers: PAGE_HEADERS });
   }
   if (request.method !== "POST") return refuse(405, "GET or POST\n", { Allow: "GET, HEAD, POST" });
   const form = await posted(request);
   if (form instanceof Response) return form;
-  if (form.get("hp")) return redirect(lang, "left");
   if (!KEY.test(key)) return redirect(lang, "nolink");
 
   const db = env.WAITLIST;
   if (!db) return redirect(lang, "unavailable");
   try {
     const hash = await digest(key);
-    await db.batch([db.prepare(SCHEMA), db.prepare(SCHEMA_LINKS), db.prepare(LEAVE).bind(hash), db.prepare(UNLINK).bind(hash)]);
+    await db.batch([
+      db.prepare(SCHEMA),
+      db.prepare(SCHEMA_LINKS),
+      db.prepare(SCHEMA_PULSE),
+      db.prepare(LEAVE).bind(hash),
+      db.prepare(UNLINK).bind(hash),
+      db.prepare(PULSE).bind(newKey()),
+    ]);
     return redirect(lang, "left");
   } catch {
     return redirect(lang, "unavailable");
@@ -187,6 +207,12 @@ export default {
     if (url.pathname === "/api/waitlist") return waitlist(request, env);
     for (const [lang, path] of Object.entries(LINKS)) {
       if (url.pathname === path) return link(request, env, url, lang);
+      // The same path without its last slash (a rule of _routes.json matches both): sent to the
+      // page's own address here, so that a key never goes to the static files.
+      if (`${url.pathname}/` === path) {
+        const key = url.searchParams.get("k") ?? "";
+        return new Response(null, { status: 308, headers: { ...HEADERS, Location: KEY.test(key) ? `${path}?k=${key}` : path } });
+      }
     }
     // _routes.json sends only /api/* and the link pages here. Should that ever stop holding, the pages are still served.
     return env.ASSETS ? env.ASSETS.fetch(request) : refuse(404, "Not found\n");

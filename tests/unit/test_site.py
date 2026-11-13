@@ -415,8 +415,9 @@ class SiteTest(unittest.TestCase):
                 self.assertEqual(form.attrs.get("method"), "post")
                 self.assertNotIn("action", form.attrs)
                 fields = {n.attrs.get("name"): n for n in form.walk() if n.tag in ("input", "select")}
-                self.assertEqual(set(fields), {"hp"}, "nothing is typed here: the address is the proof")
-                self.assertEqual(fields["hp"].attrs.get("tabindex"), "-1")
+                # Nothing is typed here: the address is the proof. One hidden field, so that the form
+                # has a body; no honeypot, which would tell a person "done" and delete nothing.
+                self.assertEqual({name: n.attrs.get("type") for name, n in fields.items()}, {"leave": "hidden"})
                 self.assertTrue(any(n.tag == "button" and n.attrs.get("type") == "submit" for n in form.walk()))
                 self.assertIn('<meta name="robots" content="noindex">', html)
                 self.assertNotIn('rel="canonical"', html)
@@ -505,7 +506,8 @@ class WaitlistWorkerTest(unittest.TestCase):
         ((email, lang, platform, joined),) = self.entries(db)
         self.assertEqual((email, lang, platform), ("Ana@Example.org", "pt-BR", "fedora"))
         self.assertRegex(joined, r"^20\d\d-\d\d-\d\dT\d\d:\d\d:\d\dZ$")
-        self.assertEqual(len(join["statements"][-1]["args"]), 4, "nothing else is stored: no IP, no user agent")
+        (insert,) = [s for s in join["statements"] if s["sql"].startswith("INSERT INTO waitlist ")]
+        self.assertEqual(len(insert["args"]), 4, "nothing else is stored: no IP, no user agent")
         # Of the link, only the SHA-256 of its key; the key itself is in the answer and nowhere else.
         self.assertEqual(self.links(db), {"Ana@Example.org": self.kept(self.key("join"))})
         self.assertNotIn(self.key("join"), json.dumps(join["statements"]))
@@ -524,6 +526,31 @@ class WaitlistWorkerTest(unittest.TestCase):
         after = self.database("join", "join_again_other_case", "leave_with_the_second_link")
         self.assertEqual((self.entries(after), self.links(after)), (self.entries(first), self.links(first)))
 
+    def test_a_request_is_one_transaction_that_always_writes(self):
+        # One batch: the fingerprint is recorded only for an address that is not on the list, which
+        # holds for two sign-ups at once because the check and the sign-up cannot be told apart.
+        for name in ("join", "join_again_other_case", "leave", "leave_unknown_link"):
+            case = self.cases[name]
+            kinds = [s["sql"].split("(")[0].strip() for s in case["statements"]]
+            with self.subTest(case=name):
+                self.assertEqual(case["batches"], 1)
+                self.assertTrue(all(kind.startswith("CREATE TABLE IF NOT EXISTS") for kind in kinds[:3]), kinds)
+                # The last statement rewrites one row with a new random number whatever was found, so
+                # that a request that changes nothing does not answer sooner than one that does.
+                pulse = case["statements"][-1]
+                self.assertEqual(pulse["sql"], "INSERT OR REPLACE INTO waitlist_pulse (id, n) VALUES (1, ?1)")
+                self.assertRegex(pulse["args"][0], r"^[A-Za-z0-9_-]{43}$")
+        order = [s["sql"] for s in self.cases["join"]["statements"]]
+        link, join = (
+            next(i for i, sql in enumerate(order) if sql.startswith(start))
+            for start in ("INSERT OR REPLACE INTO waitlist_links", "INSERT INTO waitlist ")
+        )
+        self.assertLess(link, join, "the fingerprint is decided before the sign-up exists")
+        pulses = {self.cases[name]["statements"][-1]["args"][0] for name in ("join", "join_again_other_case", "leave")}
+        self.assertEqual(len(pulses), 3, "a new number each time: rewriting the same bytes is no write")
+        db = self.database("join", "join_again_other_case", "leave")
+        self.assertEqual(db.execute("SELECT count(*) FROM waitlist_pulse").fetchone(), (1,), "one row, about nobody")
+
     def test_leaving_takes_the_link_and_answers_the_same_for_any_key(self):
         # LESIS 3c38916e: POST action=leave with an address deleted its entry, with no proof asked.
         by_address = self.cases["leave_by_address"]
@@ -539,8 +566,11 @@ class WaitlistWorkerTest(unittest.TestCase):
         self.assertEqual(self.cases["leave_unknown_link"]["location"], "/en/waitlist/#left")
         self.assertEqual(self.cases["leave_with_the_second_link"]["location"], "/en/waitlist/#left")
         for name in ("leave", "leave_unknown_link"):
-            args = [arg for statement in self.cases[name]["statements"] for arg in statement["args"]]
+            statements = [s for s in self.cases[name]["statements"] if s["sql"].startswith("DELETE")]
+            args = [arg for statement in statements for arg in statement["args"]]
+            self.assertEqual(len(statements), 2)
             self.assertTrue(args and all(re.fullmatch(r"[0-9a-f]{64}", arg) for arg in args), "the database sees the hash only")
+            self.assertNotIn(self.cases[name]["location"], json.dumps(self.cases[name]["statements"]))
 
     def test_an_entry_from_before_links_gets_none_from_a_second_sign_up(self):
         # Otherwise anyone who knows an address on the old list would sign it up again and leave with the new link.
@@ -571,7 +601,16 @@ class WaitlistWorkerTest(unittest.TestCase):
         self.assertEqual((self.cases["link_page_head"]["status"], self.cases["link_page_head"]["body"]), (200, ""))
         for name, location in (("link_page_short_key", "/lista/#nolink"), ("link_page_no_key", "/en/waitlist/#nolink")):
             self.assertEqual((self.cases[name]["status"], self.cases[name]["location"]), (303, location))
-        self.assertEqual(self.cases["link_page_no_files"]["status"], 503)
+        for name in ("link_page_no_files", "link_page_files_fail", "link_page_files_miss"):
+            self.assertEqual(
+                (self.cases[name]["status"], self.cases[name]["body"][:31]), (503, "This page could not be loaded. "), name
+            )
+        # The same path without its last slash also reaches the worker: it sends the browser to the
+        # page's own address, and the static files never see a key.
+        bare = self.cases["link_no_slash"]
+        self.assertEqual((bare["status"], bare["location"], bare["files"]), (308, self.cases["join"]["location"], []))
+        bare = self.cases["link_no_slash_no_key"]
+        self.assertEqual((bare["status"], bare["location"], bare["files"]), (308, "/en/waitlist/link/", []))
         # A page of the site: the headers of site/_headers, and never stored or indexed (its address is a key).
         headers = self.cases["link_page"]["headers"]
         for name, value in verify_live.expected_headers(ROOT / "site").items():
@@ -604,7 +643,6 @@ class WaitlistWorkerTest(unittest.TestCase):
             "no_database": (303, "/en/waitlist/#unavailable"),
             "database_down": (303, "/lista/#unavailable"),
             "leave_short_key": (303, "/lista/#nolink"),
-            "leave_honeypot": (303, "/en/waitlist/#left"),  # a bot is told it worked
             "leave_cross_site": (403, None),
             "leave_wrong_content_type": (415, None),
             "leave_too_large": (413, None),

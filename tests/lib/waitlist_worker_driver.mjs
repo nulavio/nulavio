@@ -14,9 +14,11 @@ function recorder({ failing = false } = {}) {
   const prepare = (sql) => ({ sql, args: [], bind: (...args) => ({ sql, args }) });
   return {
     statements,
+    batches: 0, // a batch is one transaction: what a request does to the list has to be in one
     prepare,
     async batch(batch) {
       if (failing) throw new Error("D1 is down");
+      this.batches += 1;
       for (const { sql, args } of batch) statements.push({ sql, args });
       return batch.map(() => ({ success: true }));
     },
@@ -55,12 +57,15 @@ const cases = {
   link_page_short_key: [get("/lista/link/?k=abc")],
   link_page_no_key: [get("/en/waitlist/link/")],
   link_page_no_files: (r) => [get(r.join.location), { WAITLIST: recorder() }],
+  link_page_files_fail: (r) => [get(r.join.location), { WAITLIST: recorder(), ASSETS: { fetch: async () => Promise.reject(new Error("down")) } }],
+  link_page_files_miss: (r) => [get(r.join.location), { WAITLIST: recorder(), ASSETS: { fetch: async () => new Response("the 404 page", { status: 404 }) } }],
+  link_no_slash: (r) => [get(r.join.location.replace("/link/?", "/link?"))],
+  link_no_slash_no_key: [get("/en/waitlist/link?k=abc&next=//evil.example")],
   leave_by_address: [send({ email: "ANA@example.org", lang: "en", action: "leave" })],
-  leave_with_the_second_link: (r) => [send({ hp: "" }, { path: r.join_again_other_case.location })],
-  leave_unknown_link: [send({ hp: "" }, { path: unknown })],
-  leave: (r) => [send({ hp: "" }, { path: r.join.location })],
+  leave_with_the_second_link: (r) => [send({ leave: "1" }, { path: r.join_again_other_case.location })],
+  leave_unknown_link: [send({ leave: "1" }, { path: unknown })],
+  leave: (r) => [send({ leave: "1" }, { path: r.join.location })],
   leave_short_key: [send({}, { path: "/lista/link/?k=abc" })],
-  leave_honeypot: (r) => [send({ hp: "x" }, { path: r.join_unknown_platform.location })],
   leave_cross_site: (r) => [send({}, { path: r.join_unknown_platform.location, headers: { "Sec-Fetch-Site": "cross-site" } })],
   leave_wrong_content_type: (r) => [send({}, { path: r.join_unknown_platform.location, headers: { "Content-Type": "text/plain" }, body: "x" })],
   leave_too_large: (r) => [send({}, { path: r.join_unknown_platform.location, body: `pad=${"x".repeat(4096)}` })],
@@ -86,7 +91,7 @@ const database = recorder();
 const results = {};
 for (const [name, made] of Object.entries(cases)) {
   const [request, env] = typeof made === "function" ? made(results) : made;
-  const before = [database.statements.length, asked.length];
+  const before = [database.statements.length, asked.length, database.batches];
   // An empty header value means "this client does not send it".
   if (request.headers.get("Sec-Fetch-Site") === "") request.headers.delete("Sec-Fetch-Site");
   const response = await worker.fetch(request, env ?? { WAITLIST: database, ASSETS: assets });
@@ -96,6 +101,7 @@ for (const [name, made] of Object.entries(cases)) {
     headers: Object.fromEntries(response.headers),
     body: await response.text(),
     statements: env ? [] : database.statements.slice(before[0]),
+    batches: env ? 0 : database.batches - before[2],
     files: asked.slice(before[1]),
   };
 }
