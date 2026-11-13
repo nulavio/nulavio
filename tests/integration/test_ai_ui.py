@@ -138,9 +138,22 @@ class AiUiTest(unittest.TestCase):
         self.click("#ai-connect-form button[type=submit]")
         shown = lambda i: not self.js(f"return document.getElementById('{i}').hidden;")  # noqa: E731
         self.assertTrue(harness.wait_until(lambda: shown("ai-wizard") or shown("ai-connect-result"), timeout=60))
+        # Audit 2026-11 S-03: the command and the configuration hold long paths. They scroll inside their own
+        # block; the page never scrolls sideways.
+        sideways = "const d = document.documentElement; return [d.scrollWidth, d.clientWidth];"
         if shown("ai-wizard"):  # Claude Code is installed: choose to copy the configuration instead
+            page, viewport = self.js(sideways)
+            self.assertLessEqual(page, viewport, "the wizard's command widened the page")
             self.click("#ai-wizard-manual")
         self.assertTrue(harness.wait_until(lambda: shown("ai-connect-result"), timeout=30))
+        page, viewport = self.js(sideways)
+        self.assertLessEqual(page, viewport, "the agent's configuration widened the page")
+        block = self.js(
+            "const p = document.getElementById('ai-config'), r = p.getBoundingClientRect();"
+            "return {inside: r.right <= p.closest('.card').getBoundingClientRect().right,"
+            " overflow: getComputedStyle(p).overflowX};"
+        )
+        self.assertEqual(block, {"inside": True, "overflow": "auto"})
         config = json.loads(self.js("return document.getElementById('ai-config').textContent;"))
         server = config["mcpServers"]["nulavio"]
         self.assertEqual(server["args"], ["ai", "serve"])
