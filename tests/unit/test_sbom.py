@@ -85,7 +85,10 @@ class IdentifiersTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             package = Path(tmp) / "nulavio-158.0.1-1.x86_64.rpm"
             package.write_bytes(b"package")
-            engine = run("--package", str(package), "--engine-version", "158.0.1")["components"][0]
+            packaged = run("--package", str(package), "--engine-version", "158.0.1")
+            # The package itself is described with the licences its own field names (issue #137).
+            self.assertEqual(packaged["metadata"]["component"]["licenses"], [{"expression": "MPL-2.0 AND GPL-3.0-only"}])
+            engine = packaged["components"][0]
         self.assertEqual(engine["cpe"], "cpe:2.3:a:mozilla:firefox:158.0.1:*:*:*:*:*:*:*")
         self.assertEqual(engine["purl"], "pkg:generic/mozilla/firefox@158.0.1")
 
