@@ -100,7 +100,7 @@
     border-radius: 5px;
     background: var(--profile-tile, var(--nv-color-identityTile-slate));
     color: var(--profile-glyph, var(--nv-color-identityGlyph-slate));
-    font-size: 10px;
+    font-size: 11px;
     font-weight: var(--nv-font-weight-semibold);
     line-height: 1;
   }

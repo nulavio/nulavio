@@ -217,7 +217,9 @@ The audit ran on the build of `v160.0-0.1`. `main` has since moved to `v160.0-0.
 
 ## Decisions for the maintainer
 
-- **N-01.** Keep the launch tense on the landing now that the alpha is downloadable, or mark what the alpha does not have yet (phone and security-key unlock, Ubuntu packages).
-- **N-02.** Turn off Network Error Logging for the nulavio.net zone (dashboard only).
-- **W-03.** 10 px or 11 px for the band's initial.
-- **N-04.** Date the compatibility figure or rerun it on 160.
+Decided on 2026-11-13, each as recommended:
+
+- **N-01: mark what the alpha does not have yet.** The landing keeps selling the launch, but the unlock text, its mock-up and the comparison table say "em breve" / "coming soon" for the phone and the security key. "Feito para Linux" names Fedora and says Ubuntu comes next. The phone's code is in `v160.0-0.3`, but the Companion it needs cannot be installed until F-Droid publishes it. `tests/unit/test_site.py` (`test_copy_is_honest`) fails if either method is sold as available again.
+- **N-02: turn off Network Error Logging.** Only the zone's settings can do it, and the agents' Cloudflare login has `zone:read` only. It is the maintainer's step in #201, together with the `verify_live.py` check that follows.
+- **W-03: 11 px**, the size `accessibility.md` already records. `window-band.css` now uses it.
+- **N-04: dated now, rerun later.** The figure says "em outubro de 2026" / "October 2026", and the same test checks the date. The rerun on 160 is #202.
