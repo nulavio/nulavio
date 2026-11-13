@@ -228,6 +228,26 @@ class WorkflowTest(unittest.TestCase):
         self.assertIn("path_to_claude_code_executable: ${{ runner.temp }}/ai-review-tools/claude", job("review"))
         self.assertIn("path_to_bun_executable: ${{ runner.temp }}/ai-review-tools/bun", job("review"))
 
+    def test_the_reviewer_starts_with_its_isolation_on_and_the_tool_it_needs(self):
+        # Claude Code 2.1.318 refuses to start with the scrubbing on and no bwrap; the first run with a
+        # model credential (2026-11-13) failed that way. Turning the scrubbing off is not the fix.
+        review = job("review")
+        self.assertIn('CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: "1"', review)
+        self.assertNotIn('CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: "0"', WORKFLOW)
+        names = [step.splitlines()[0] for step in steps(review)]
+        (install,) = [i for i, name in enumerate(names) if "bubblewrap" in name]
+        (reviewing,) = [i for i, step in enumerate(steps(review)) if "anthropics/claude-code-action@" in step]
+        self.assertLess(install, reviewing)
+        script = steps(review)[install]
+        self.assertIn("scripts/ci/apt_install.sh bubblewrap", script, "from the base checkout, like the other jobs' packages")
+        self.assertRegex(script, r"probe\(\) \{ bwrap --unshare-user ", "it is tried before the review depends on it")
+        self.assertTrue(script.rstrip().endswith("fi"), script[-80:])
+        self.assertRegex(
+            script,
+            r"if ! probe 2>/dev/null; then\n\s+sudo sysctl [^\n]+\n\s+probe\n\s+fi",
+            "and tried again: a failure stops the job",
+        )
+
     def test_comment_header_names_the_model_and_action_that_ran(self):
         model = re.search(r"--model (\S+)", job("review")).group(1)
         source = env_value("AI_REVIEW_SOURCE")

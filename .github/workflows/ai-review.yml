@@ -137,6 +137,21 @@ jobs:
           unzip -q -j "$tools/bun.zip" bun-linux-x64/bun -d "$tools"
           rm "$tools/bun.zip"
 
+      - name: Install bubblewrap (Claude Code isolates the processes it starts)
+        if: steps.input.outputs.status == 'ready'
+        run: |
+          # CLAUDE_CODE_SUBPROCESS_ENV_SCRUB (next step) needs bwrap, and Claude Code does not start
+          # without it; the runner image has none. From Ubuntu's archive, like the other jobs' packages.
+          scripts/ci/apt_install.sh bubblewrap
+          # bwrap works through an unprivileged user namespace, which Ubuntu 24.04 gives only to
+          # programs with an AppArmor profile. Where that stops it, the restriction is lifted on
+          # this one-job machine. The review does not start with a bwrap that cannot run.
+          probe() { bwrap --unshare-user --unshare-pid --ro-bind / / --dev /dev --proc /proc true; }
+          if ! probe 2>/dev/null; then
+            sudo sysctl -q -w kernel.apparmor_restrict_unprivileged_userns=0
+            probe
+          fi
+
       - name: Review (read-only tools, structured output)
         id: claude
         if: steps.input.outputs.status == 'ready'
