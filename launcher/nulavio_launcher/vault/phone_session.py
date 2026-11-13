@@ -224,9 +224,10 @@ def pair(session: Session, request: dict, emit, resolver: link.Resolver = link.a
         if session.cancelled.is_set():
             raise link.LinkError("cancelled")
         phone = pairing.complete({k: v for k, v in answer.items() if k != "t"}, bool(session.decision))
-        add_phone(vault, phone)
-        vault.save()
-        box.record_generation(vault)
+        with box.recording(vault) as record:  # the volume first, locked or not (cli._change)
+            add_phone(vault, phone)
+            vault.save()
+            record()
         _send_quietly(channel, {"t": "paired"})
         session.set("paired", phone_name=phone.name)
         log_event("vault.phone.paired", profile=prof.name)

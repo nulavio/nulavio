@@ -256,26 +256,30 @@ def _change(args) -> int:
         return 1
     _reauth(vault, current)
     try:
-        if args.vault_cmd == "add-password":
-            new = read_secret("New password", from_stdin=args.password_stdin, confirm=True)
-            vault.add_password(new or "")
-        elif args.vault_cmd == "new-recovery-code":
-            code = vault.replace_recovery_code()
-            print("New recovery code (the old one no longer opens this profile; a copy of it made before now still would):")
-            print(f"\n    {code}\n")
-        elif args.vault_cmd == "add-keyring":
-            add_os_keyring(vault, keyring(), label="computer login")
-        elif args.vault_cmd == "remove-method":
-            env = next((e for e in vault.envelopes() if e.id == args.envelope), None)
-            if env is None:
-                _err("no such method; see `nulavio vault status`")
-                return 1
-            if env.method == "os-keyring":
-                remove_os_keyring(vault, keyring(), env.id)
-            else:
-                vault.remove(env.id)
-        vault.save()
-        box.record_generation(vault)
+        # Before anything changes: the volume must be there to record the change in (a locked
+        # profile is mounted for that alone), or the old key file would open it again.
+        with box.recording(vault) as record:
+            if args.vault_cmd == "add-password":
+                new = read_secret("New password", from_stdin=args.password_stdin, confirm=True)
+                vault.add_password(new or "")
+            elif args.vault_cmd == "new-recovery-code":
+                code = vault.replace_recovery_code()
+                print("New recovery code (the old one no longer opens this profile through Nulavio; a copy of the")
+                print("profile's files made before now can still be opened with it):")
+                print(f"\n    {code}\n")
+            elif args.vault_cmd == "add-keyring":
+                add_os_keyring(vault, keyring(), label="computer login")
+            elif args.vault_cmd == "remove-method":
+                env = next((e for e in vault.envelopes() if e.id == args.envelope), None)
+                if env is None:
+                    _err("no such method; see `nulavio vault status`")
+                    return 1
+                if env.method == "os-keyring":
+                    remove_os_keyring(vault, keyring(), env.id)
+                else:
+                    vault.remove(env.id)
+            vault.save()
+            record()
     finally:
         vault.lock()
     print(f"Profile '{prof.name}': {args.vault_cmd.replace('-', ' ')} done.")
@@ -447,22 +451,23 @@ def api_request(request: dict) -> dict:
         _reauth(vault, str(request.get("current") or ""))
         try:
             result: dict = {"done": True}
-            if op == "new-recovery-code":
-                result["recovery_code"] = vault.replace_recovery_code()
-            elif op == "add-password":
-                vault.add_password(str(request.get("password") or ""))
-            elif op == "add-keyring":
-                add_os_keyring(vault, keyring(), label="computer login")
-            else:
-                env = next((e for e in vault.envelopes() if e.id == request.get("envelope")), None)
-                if env is None:
-                    raise VaultError("not-found")
-                if env.method == "os-keyring":
-                    remove_os_keyring(vault, keyring(), env.id)
+            with box.recording(vault) as record:  # as in _change: the volume first, locked or not
+                if op == "new-recovery-code":
+                    result["recovery_code"] = vault.replace_recovery_code()
+                elif op == "add-password":
+                    vault.add_password(str(request.get("password") or ""))
+                elif op == "add-keyring":
+                    add_os_keyring(vault, keyring(), label="computer login")
                 else:
-                    vault.remove(env.id)
-            vault.save()
-            box.record_generation(vault)
+                    env = next((e for e in vault.envelopes() if e.id == request.get("envelope")), None)
+                    if env is None:
+                        raise VaultError("not-found")
+                    if env.method == "os-keyring":
+                        remove_os_keyring(vault, keyring(), env.id)
+                    else:
+                        vault.remove(env.id)
+                vault.save()
+                record()
         finally:
             vault.lock()
         return result
