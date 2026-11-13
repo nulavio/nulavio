@@ -1,12 +1,15 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" itemscope itemtype="https://schema.org/WebSite" itemid="https://nulavio.net/#website">
 <!-- nulavio.net landing: what Nulavio is at launch, the comparison and the waitlist. Values in double braces are stamped by scripts/site/build_site.py. -->
 <head>
 <meta charset="utf-8">
+<meta itemprop="name" content="Nulavio">
+<meta itemprop="url" content="https://nulavio.net/">
+<meta itemprop="inLanguage" content="en">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
-<title>Nulavio: the Linux browser that is protected from the start</title>
-<meta name="description" content="Nulavio blocks ads and trackers from the first launch, encrypts your profiles on disk and sends nothing to servers of its own: no telemetry and no account. Join the waitlist.">
+<title>Nulavio: privacy-focused Linux browser · Alpha</title>
+<meta name="description" content="A Linux browser with ad and tracker blocking, encrypted profiles and no telemetry. Discover Nulavio and the alpha release for Fedora.">
 <link rel="canonical" href="https://nulavio.net/en/">
 <link rel="alternate" hreflang="pt-BR" href="https://nulavio.net/">
 <link rel="alternate" hreflang="en" href="https://nulavio.net/en/">
@@ -16,11 +19,17 @@
 <meta property="og:locale" content="en_US">
 <meta property="og:url" content="https://nulavio.net/en/">
 <meta property="og:title" content="Nulavio: your web, your rules.">
-<meta property="og:description" content="The Linux browser that is protected from the start: blocking out of the box, encrypted profiles and no telemetry. Join the waitlist.">
+<meta property="og:description" content="A Linux browser with ad and tracker blocking, encrypted profiles and no telemetry. Discover Nulavio and the alpha release for Fedora.">
 <meta property="og:image" content="https://nulavio.net/assets/og-en.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Nulavio: your web, your rules.">
+<meta property="og:locale:alternate" content="pt_BR">
 <meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Nulavio: privacy-focused Linux browser · Alpha">
+<meta name="twitter:description" content="A Linux browser with ad and tracker blocking, encrypted profiles and no telemetry. Discover Nulavio and the alpha release for Fedora.">
+<meta name="twitter:image" content="https://nulavio.net/assets/og-en.png">
+<meta name="twitter:image:alt" content="Nulavio: your web, your rules.">
 <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="/assets/tokens.css">
 <link rel="stylesheet" href="/assets/landing.css">
@@ -81,10 +90,15 @@
 <main id="main">
 <section class="hero" aria-labelledby="hero-h">
 <div class="wrap hero-grid">
-<div class="hero-text">
+<div class="hero-text" itemscope itemtype="https://schema.org/SoftwareApplication" itemid="https://nulavio.net/#software">
+<meta itemprop="name" content="Nulavio">
+<meta itemprop="applicationCategory" content="BrowserApplication">
+<meta itemprop="operatingSystem" content="Linux">
+<meta itemprop="inLanguage" content="en">
+<link itemprop="url" href="https://nulavio.net/">
 <p class="kicker"><span class="trail" aria-hidden="true"><i></i><i></i><i></i></span>Alpha out for Fedora · <a href="/en/download/">Download</a></p>
 <h1 id="hero-h"><span>Your web.</span> <span class="mine">Your rules.</span></h1>
-<p class="lead">Nulavio is the Linux browser that is <strong>protected from the start</strong>: it blocks ads and trackers on the first launch, encrypts your profiles on disk and sends nothing to us. No telemetry, no account, no server.</p>
+<p class="lead" itemprop="description">Nulavio is the Linux browser that is <strong>protected from the start</strong>: it blocks ads and trackers on the first launch, encrypts your profiles on disk and sends nothing to us. No telemetry, no account, no server.</p>
 <form class="join" action="/api/waitlist" method="post">
 <input type="hidden" name="lang" value="en">
 <p class="trap" aria-hidden="true"><label>Leave this field empty <input type="text" name="hp" tabindex="-1" autocomplete="off"></label></p>
@@ -368,37 +382,37 @@
 </div>
 </div>
 </section>
-<section class="faq" id="faq" aria-labelledby="faq-h">
+<section class="faq" id="faq" aria-labelledby="faq-h" itemscope itemtype="https://schema.org/FAQPage">
 <div class="wrap faq-grid">
 <h2 id="faq-h">Frequently asked questions</h2>
 <div class="faq-list">
-<details>
-<summary>When will I be able to use Nulavio?<svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg></summary>
-<div><p>On Fedora, now: the first alpha is out through the signed dnf repository (<a href="/en/download/">download</a>). Ubuntu comes next. Join the waitlist and you get an email when it is your system's turn.</p></div>
+<details id="faq-availability" itemprop="mainEntity" itemscope itemtype="https://schema.org/Question">
+<summary itemprop="name">When will I be able to use Nulavio?<svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg></summary>
+<div itemprop="acceptedAnswer" itemscope itemtype="https://schema.org/Answer"><p itemprop="text">On Fedora, now: the first alpha is out through the signed dnf repository (<a href="/en/download/">download</a>). Ubuntu comes next. Join the waitlist and you get an email when it is your system's turn.</p></div>
 </details>
-<details>
-<summary>How much does it cost?<svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg></summary>
-<div><p>Nothing. Nulavio is free and open source, under the MPL-2.0 licence. It has no ads and no account, and it sells no data, because it collects none.</p></div>
+<details id="faq-price" itemprop="mainEntity" itemscope itemtype="https://schema.org/Question">
+<summary itemprop="name">How much does it cost?<svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg></summary>
+<div itemprop="acceptedAnswer" itemscope itemtype="https://schema.org/Answer"><p itemprop="text">Nothing. Nulavio is free and open source, under the MPL-2.0 licence. It has no ads and no account, and it sells no data, because it collects none.</p></div>
 </details>
-<details>
-<summary>Is it a modified Firefox?<svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg></summary>
-<div><p>Nulavio uses Gecko, Mozilla's engine, built from the official Firefox {{firefox}} source with {{patches}} small, documented patches. Site isolation, certificate checks and security fixes are the engine's own. The window, the profiles, Guard and the rest are Nulavio's. Nulavio is not affiliated with Mozilla.</p></div>
+<details id="faq-engine" itemprop="mainEntity" itemscope itemtype="https://schema.org/Question">
+<summary itemprop="name">Is it a modified Firefox?<svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg></summary>
+<div itemprop="acceptedAnswer" itemscope itemtype="https://schema.org/Answer"><p itemprop="text">Nulavio uses Gecko, Mozilla's engine, built from the official Firefox {{firefox}} source with {{patches}} small, documented patches. Site isolation, certificate checks and security fixes are the engine's own. The window, the profiles, Guard and the rest are Nulavio's. Nulavio is not affiliated with Mozilla.</p></div>
 </details>
-<details>
-<summary>Do my extensions work?<svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg></summary>
-<div><p>Yes. Extensions from addons.mozilla.org install as in any Gecko browser, and uBlock Origin comes installed.</p></div>
+<details id="faq-extensions" itemprop="mainEntity" itemscope itemtype="https://schema.org/Question">
+<summary itemprop="name">Do my extensions work?<svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg></summary>
+<div itemprop="acceptedAnswer" itemscope itemtype="https://schema.org/Answer"><p itemprop="text">Yes. Extensions from addons.mozilla.org install as in any Gecko browser, and uBlock Origin comes installed.</p></div>
 </details>
-<details>
-<summary>What about Windows, macOS or my phone?<svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg></summary>
-<div><p>Linux first. When you join the waitlist you can say which system you use, and those answers decide the order. On Android, Nulavio Companion unlocks your profiles; it is not a browser.</p></div>
+<details id="faq-platforms" itemprop="mainEntity" itemscope itemtype="https://schema.org/Question">
+<summary itemprop="name">What about Windows, macOS or my phone?<svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg></summary>
+<div itemprop="acceptedAnswer" itemscope itemtype="https://schema.org/Answer"><p itemprop="text">Linux first. When you join the waitlist you can say which system you use, and those answers decide the order. On Android, Nulavio Companion unlocks your profiles; it is not a browser.</p></div>
 </details>
-<details>
-<summary>Does Nulavio make me anonymous?<svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg></summary>
-<div><p>No. It reduces tracking, but sites and your internet provider still see your IP address. If you need anonymity, use Tor Browser.</p></div>
+<details id="faq-anonymity" itemprop="mainEntity" itemscope itemtype="https://schema.org/Question">
+<summary itemprop="name">Does Nulavio make me anonymous?<svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg></summary>
+<div itemprop="acceptedAnswer" itemscope itemtype="https://schema.org/Answer"><p itemprop="text">No. It reduces tracking, but sites and your internet provider still see your IP address. If you need anonymity, use Tor Browser.</p></div>
 </details>
-<details>
-<summary>What do you do with my email?<svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg></summary>
-<div><p>We keep the address, the language, the system you pick, the date and a fingerprint of your private link. We use the address for one message: the one saying Nulavio is available for you. No newsletter, and it is never passed on. To leave, use the private link you get when you sign up (<a href="/en/waitlist/#leave">how to leave</a>).</p></div>
+<details id="faq-email" itemprop="mainEntity" itemscope itemtype="https://schema.org/Question">
+<summary itemprop="name">What do you do with my email?<svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg></summary>
+<div itemprop="acceptedAnswer" itemscope itemtype="https://schema.org/Answer"><p itemprop="text">We keep the address, the language, the system you pick, the date and a fingerprint of your private link. We use the address for one message: the one saying Nulavio is available for you. No newsletter, and it is never passed on. To leave, use the private link you get when you sign up (<a href="/en/waitlist/#leave">how to leave</a>).</p></div>
 </details>
 </div>
 </div>
