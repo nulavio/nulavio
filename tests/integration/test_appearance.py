@@ -18,16 +18,29 @@ import harness
 import settings_page
 from test_window_band import BAND_PROBE, assert_band
 
-# Times the engine records for its own background updates (the Safe Browsing lists, Remote Settings), written at any moment.
+# What the engine records for its own background updates, written at any moment: the Safe Browsing lists, Remote
+# Settings, and the media plugin check about 20 s after a start (with OpenH264's install the first time). Only the
+# first family sits under a branch that is a protection; the others are named for the record of what failed a run.
 BACKGROUND_CLOCK = re.compile(
     r"browser\.safebrowsing\.provider\.[a-z0-9]+\.(lastupdatetime|nextupdatetime|backofftime)"
     r"|services\.settings\.(last_update_seconds|clock_skew_seconds|last_etag)"
+    # When each Remote Settings collection was last looked at, in any of its buckets (main, blocklists, security-state).
+    r"|services\.settings\.[a-z0-9-]+\.[a-z0-9-]+\.last_check"
+    r"|media\.gmp-manager\.(lastCheck|lastEmptyCheck|buildID)"
+    r"|media\.gmp-gmpopenh264\.(lastInstallStart|lastDownload|lastUpdate|version|abi|hashValue)"
 )
 
 ROOT = Path(__file__).resolve().parents[2]
 OPTIONS = json.loads((ROOT / "browser" / "shell" / "shared" / "options.json").read_text(encoding="utf-8"))["options"]
 APPEARANCE = {o["id"]: o for o in OPTIONS if o["writer"] == "NulavioPersonalise"}
 OPTION_PREFS = {pref for o in APPEARANCE.values() for pref in o["prefs"]}
+# The settings that matter to "no option can turn a protection off": every Nulavio option's own, the baseline's,
+# the ones the launcher's Guard rules name, and (read on the engine) the ones the Guard watches at run time.
+EVERY_OPTION_PREF = {pref for o in OPTIONS for pref in o["prefs"]}
+GUARD_RULES = {rule["pref"] for rule in json.loads((ROOT / "browser" / "config" / "guard-rules.json").read_text())["rules"]}
+WATCHED = (
+    'return ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioGuard.sys.mjs").WATCHED_PREFS;'
+)
 # The engine's own density group names "Normal" its own way.
 DENSITY = {"auto": "auto", "normal": "standard", "compact": "compact", "touch": "touch"}
 PERSONALISE = (
@@ -112,6 +125,19 @@ class AppearanceTest(unittest.TestCase):
     def snapshot(self) -> dict:
         return self.m.chrome(USER_PREFS)
 
+    def matters(self):
+        """Whether a setting is a protection, another option's or Nulavio's own: a change to one of those is never
+        the engine's bookkeeping. The engine writes dozens of its own records in the background while a test runs
+        (when it last checked a list, a plugin, a timer); a list of those names never ends, so the test looks at
+        what must not change instead of at everything that may."""
+        from nulavio_launcher import profile as launcher_profile
+
+        watched = self.m.chrome(WATCHED)
+        named = {name for name in watched if not name.endswith(".")} | GUARD_RULES | EVERY_OPTION_PREF
+        named |= {pref.name for pref in launcher_profile.baseline_prefs()}
+        branches = (*(name for name in watched if name.endswith(".")), "nulavio.")
+        return lambda name: (name in named or name.startswith(branches)) and not BACKGROUND_CLOCK.fullmatch(name)
+
     # -- tests -------------------------------------------------------------------------------------
 
     def test_01_density_writes_only_uidensity_and_automatic_clears_it(self):
@@ -191,11 +217,15 @@ class AppearanceTest(unittest.TestCase):
 
     def test_05_walking_every_option_changes_only_its_own_prefs(self):
         """UX6 done criterion: no option can turn a protection off. Every value of every appearance option,
-        through the settings page: at each step only the options' own prefs differ from the start, and at the end
-        nothing does. The one exception is the engine's own record of when it last fetched the Safe
-        Browsing lists and Remote Settings, which a background update can write at any moment (each failed a run that way)."""
+        through the settings page: at each step, of the settings that are a protection, another option's or
+        Nulavio's own (`matters`), only the appearance options' own differ from the start, and at the end none
+        does. Settings outside that set are the engine's to write, and it does, in the background."""
         self.open()
         before = self.snapshot()
+        matters = self.matters()
+        self.assertTrue(all(matters(pref) for pref in OPTION_PREFS), "the options' own settings are not in the set looked at")
+        for protection in ("dom.security.https_only_mode", "browser.safebrowsing.malware.enabled", "network.trr.mode"):
+            self.assertTrue(matters(protection), protection)
         walk = [("density", v) for v in APPEARANCE["density"]["values"]] + [("accent", v) for v in APPEARANCE["accent"]["values"]]
         for option, value in walk:
             if option == "density":
@@ -207,7 +237,7 @@ class AppearanceTest(unittest.TestCase):
             self.wait_pref(pref, expected)
             now = self.snapshot()
             changed = {k for k in set(now["prefs"]) | set(before["prefs"]) if now["prefs"].get(k) != before["prefs"].get(k)}
-            changed = {k for k in changed if not BACKGROUND_CLOCK.fullmatch(k)}
+            changed = {k for k in changed if matters(k)}
             self.assertLessEqual(changed, OPTION_PREFS, (option, value))
             self.assertEqual(now["permissions"], before["permissions"])
         # The ambience first: "Reduzir transparência" only applies while something is transparent.
@@ -220,7 +250,7 @@ class AppearanceTest(unittest.TestCase):
             self.wait_pref(pref, True)
             now = self.snapshot()
             changed = {k for k in set(now["prefs"]) | set(before["prefs"]) if now["prefs"].get(k) != before["prefs"].get(k)}
-            changed = {k for k in changed if not BACKGROUND_CLOCK.fullmatch(k)}
+            changed = {k for k in changed if matters(k)}
             self.assertLessEqual(changed, OPTION_PREFS, switch)
         for switch in ("nulavio-more-contrast", "nulavio-reduce-transparency", "nulavio-newtab-ambience"):
             self.switch(switch)
@@ -230,7 +260,7 @@ class AppearanceTest(unittest.TestCase):
         for pref in OPTION_PREFS:
             self.wait_pref(pref, None)
         after = self.snapshot()
-        steady = lambda prefs: {k: v for k, v in prefs.items() if not BACKGROUND_CLOCK.fullmatch(k)}  # noqa: E731
+        steady = lambda prefs: {k: v for k, v in prefs.items() if matters(k)}  # noqa: E731
         self.assertEqual(steady(after["prefs"]), steady(before["prefs"]))
 
     def test_06_security_indicators_stay_whole_in_every_variant(self):
