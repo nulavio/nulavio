@@ -123,16 +123,23 @@ class GuardTest(unittest.TestCase):
         self.assertTrue(
             harness.wait_until(lambda: int(self.m.execute("return Number(document.body.dataset.count);")) < before, 30)
         )
-        # Audit 2026-11 S-05: the keyboard stays in the review. It goes to the first action of the finding that
-        # took this one's place (the previous one after the last), and to "Fechar" when none is left.
+        # Audit 2026-11 S-05: the keyboard stays in the review. It goes to the title of the finding that took this
+        # one's place (the previous one after the last), and to "Fechar" when none is left. To the title, not to a
+        # button: Enter pressed once more must not undo or keep the next change, which nobody has read yet.
         focus = self.m.execute(
             "const a = document.activeElement, cards = [...document.querySelectorAll('#findings > li')];"
             "const card = a.closest('#findings > li');"
-            "return {left: cards.length, place: cards.indexOf(card), first: Boolean(card) && a === card.querySelector('button'),"
+            "return {left: cards.length, place: cards.indexOf(card), title: Boolean(card) && a === card.querySelector('h2'),"
             " id: a.id, tag: a.localName};"
         )
         if focus["left"]:
-            self.assertEqual((focus["place"], focus["first"]), (min(place, focus["left"] - 1), True), focus)
+            self.assertEqual((focus["place"], focus["title"], focus["tag"]), (min(place, focus["left"] - 1), True, "h2"), focus)
+            enter = [{"type": "keyDown", "value": "\ue007"}, {"type": "keyUp", "value": "\ue007"}]
+            self.m.send("WebDriver:PerformActions", {"actions": [{"type": "key", "id": "keys", "actions": enter}]})
+            self.m.send("WebDriver:ReleaseActions")
+            time.sleep(0.5)
+            count = int(self.m.execute("return Number(document.body.dataset.count);"))
+            self.assertEqual(count, focus["left"], "Enter pressed again settled a finding nobody had looked at")
         else:
             self.assertEqual(focus["id"], "close", focus)
 

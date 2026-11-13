@@ -119,8 +119,8 @@ The configuration (`#ai-config`) and the wizard's command (`#ai-wizard-command`)
 "Desfazer" or "Manter" resolves a finding and the list is rebuilt; the button that had focus is gone and focus falls to the document. Only the last decision moves focus (to "Fechar"). A keyboard or screen-reader user reviewing eight changes starts from the top of the page eight times, on the page where each button changes a security setting.
 
 - **Evidence.** `guard/review.js:85-88` (`render(left)` then `announce`), `:126-152` (focus only when the list is empty).
-- **Fix.** After a decision, focus goes to the first action of the finding that took its place (the next one, or the previous when the last of the list was resolved).
-- **Test.** Integration (the Guard fixture of `test_guard`): after resolving the first of several findings, `document.activeElement` is a button inside the list.
+- **Fix.** After a decision, focus goes to the title of the finding that took its place (the next one, or the previous when the last of the list was resolved). The audit first asked for that finding's first action, and that is how it was built; the review before landing showed that a second Enter would then undo or keep a change nobody had read, so the title has the focus and the actions are one Tab away.
+- **Test.** Integration (the Guard fixture of `test_guard`): after resolving the first of several findings, `document.activeElement` is the title of a finding inside the list, and Enter pressed again settles nothing.
 
 #### S-06 · MEDIUM (was LOW) — The phone page takes the profile's secret without pointing at the band
 
