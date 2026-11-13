@@ -16,6 +16,7 @@ on:
 
 permissions:
   contents: read
+  attestations: read # verify the published manifest with the repository job token
 
 concurrency:
   group: release-metadata
