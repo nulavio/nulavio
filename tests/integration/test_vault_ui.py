@@ -277,13 +277,33 @@ class VaultUiTest(unittest.TestCase):
         hint = self.m.execute("return document.querySelector('[data-i18n=vaultChoosePasswordHint]').textContent;")
         self.assertIn("bloqueado", hint)
         self.assertIn("aberto", hint)
+        # A refused field is marked (the 2 px critical edge) and described by its message, and both go when
+        # the person types in it again (accessibility.md; audit 2026-11 S-04).
+        refused = (
+            "const f = document.getElementById(arguments[0]);"
+            "return [f.getAttribute('aria-invalid'), f.getAttribute('aria-describedby'), document.activeElement.id,"
+            " document.getElementById(arguments[1]).textContent.length > 0];"
+        )
+        self.type_into("password", "short")
+        self.type_into("password2", "short")
+        self.click("#step-protection button[type=submit]")
+        self.assertEqual(
+            self.m.execute(refused, ["password", "protection-error"]), ["true", "protection-error", "password", True]
+        )
         self.type_into("password", PASSWORD)
+        self.assertEqual(self.m.execute(refused, ["password", "protection-error"]), [None, None, "password", False])
         self.type_into("password2", PASSWORD + "x")
         self.click("#step-protection button[type=submit]")
-        self.assertTrue(self.m.execute("return document.getElementById('protection-error').textContent.length > 0;"))
+        self.assertEqual(
+            self.m.execute(refused, ["password2", "protection-error"]), ["true", "protection-error", "password2", True]
+        )
+        self.assertIsNone(self.m.execute(refused, ["password", "protection-error"])[0], "only the field that was refused")
         self.type_into("password2", PASSWORD)
+        self.assertEqual(self.m.execute(refused, ["password2", "protection-error"]), [None, None, "password2", False])
         self.shoot("create-2-protection")
-        self.click("#step-protection button[type=submit]")
+        # The refusals above moved focus (and the page) back up to the fields; the capture's re-render
+        # leaves the headless page unscrollable for a pointer click, so this one is a script click.
+        self.m.execute("document.querySelector('#step-protection button[type=submit]').click();")
         self.wait_state("recovery", "step", timeout=90)
         code = self.m.execute("return document.getElementById('code').dataset.code;")
         # UX4 (SB-08): 7 numbered groups, and the heading (not a field below the code) has the keyboard.
@@ -297,6 +317,9 @@ class VaultUiTest(unittest.TestCase):
         self.type_into("group-b", groups[index("group-b-label")])
         self.click("#step-recovery button[type=submit]")
         self.assertEqual(self.state("step"), "recovery")  # a wrong group is caught
+        # ...and it is the group that differs that is marked, not the other one.
+        self.assertEqual(self.m.execute(refused, ["group-a", "recovery-error"]), ["true", "recovery-error", "group-a", True])
+        self.assertIsNone(self.m.execute(refused, ["group-b", "recovery-error"])[0])
         self.type_into("group-a", groups[index("group-a-label")].lower())
         self.click("#step-recovery button[type=submit]")
         self.wait_state("done", "step")
@@ -535,7 +558,14 @@ class VaultUiTest(unittest.TestCase):
         self.click("#start-form button[type=submit]")
         self.wait_state("error")
         self.assert_status("error")
+        # The refused secret is marked and the status line is its description, until the next keystroke (S-04).
+        marked = (
+            "const f = document.getElementById('current');"
+            "return [f.getAttribute('aria-invalid'), f.getAttribute('aria-describedby'), document.activeElement.id];"
+        )
+        self.assertEqual(self.m.execute(marked), ["true", "status", "current"])
         self.type_into("current", PASSWORD)
+        self.assertEqual((self.m.execute(marked)[:2], self.state(), self.status_text()), ([None, None], "idle", ""))
         self.click("#start-form button[type=submit]")
         self.wait_state("waiting")
         code = self.qr_code("#qr")
@@ -609,6 +639,14 @@ class VaultUiTest(unittest.TestCase):
         self.click("#password-form button[type=submit]")
         self.assertTrue(self.m.execute("return document.getElementById('current-error').textContent.length > 0;"))
         self.assertEqual(self.m.execute("return document.activeElement.id;"), "current")
+        # A new password that is too short: its own field is marked, with its message (S-04).
+        self.type_into("new-password", "short")
+        self.click("#password-form button[type=submit]")
+        short = self.m.execute(
+            "const f = document.getElementById('new-password');"
+            "return [f.getAttribute('aria-invalid'), f.getAttribute('aria-describedby'), document.activeElement.id];"
+        )
+        self.assertEqual(short, ["true", "password-error", "new-password"])
         # With the wrong secret: refused, the field is cleared and marked.
         self.type_into("new-password", "second pass 22")
         self.type_into("new-password2", "second pass 22")
