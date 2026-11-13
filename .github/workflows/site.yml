@@ -25,6 +25,7 @@ on:
       - "browser/startpage/tokens.css"
       - "docs/brand/assets/**"
       - "browser/build/engine.json"
+      - "packaging/release.json" # published version and download links
       - "browser/patches/series"
       - "browser/distribution/extensions.lock.json"
       - "launcher/**" # the prefs explain excerpt on the page

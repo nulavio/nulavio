@@ -139,6 +139,16 @@ class ReleaseManifestTest(unittest.TestCase):
             release_manifest.check_packages(self.out / "manifest.json", packages)
         self.assertIn("0.2", str(caught.exception))
 
+    def test_next_revision_reserves_tags_even_when_site_metadata_lags(self):
+        self.published("159.0.1-0.1")
+        for tag in ("v159.0.1-0.9", "v159.0.1-0.10", "unrelated", "v160.0-0.3"):
+            subprocess.run(["git", "-C", str(self.repo), "tag", tag, self.base], check=True)
+        self.assertEqual(release_manifest.next_release("159.0.1", self.repo), "0.11")
+
+    def test_existing_newer_tag_prevents_a_downgrade_with_stale_site_metadata(self):
+        subprocess.run(["git", "-C", str(self.repo), "tag", "v160.0-0.1", self.base], check=True)
+        self.refused("not newer")
+
     def test_the_portable_archive_is_listed_checked_and_published(self):
         archive = "packages/nulavio-159.0.1-0.1.linux-x86_64.tar.xz"
         (self.out / archive).write_bytes(b"tree")

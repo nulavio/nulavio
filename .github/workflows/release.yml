@@ -15,7 +15,7 @@ name: release
 #    first, signed metadata last), installs from https://nulavio.net/rpm/nulavio.repo
 #    in a clean Fedora container with both signature checks on, attests the signed
 #    files and drafts the GitHub release. The maintainer reviews and publishes the
-#    draft, then does the steps in the job summary (release.json, site, changelog).
+#    draft. Publishing it triggers release-metadata.yml (changelog and download metadata).
 #
 # 3. flatpak (GitHub-hosted, no secrets): builds net.nulavio.Nulavio from the portable
 #    archive with Flathub's builder, lints it, starts it in the sandbox and bundles it
@@ -58,6 +58,15 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 0 # the next package release is counted from the tags
+      - name: Refuse to overlap an unpublished draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          drafts=$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases" --jq '.[] | select(.draft) | .tag_name')
+          if [ -n "$drafts" ]; then
+            printf '::error::Review and publish or retire the existing release draft before starting another release.\n'
+            exit 1
+          fi
       - name: Pinned Firefox release
         id: pin
         run: python3 -I -c 'import json; print("firefox=" + json.load(open("browser/build/engine.json"))["firefox"])' >> "$GITHUB_OUTPUT"
@@ -77,6 +86,16 @@ jobs:
           NULAVIO_BUILD_PROFILE: runner
           NULAVIO_INTEGRATION_IMAGE: fedora-release-itest # the gallery baselines' fonts (run_integration.sh)
         run: scripts/release/rehearse_release.sh "$FIREFOX" "$RUNNER_TEMP/rehearsal"
+      - name: Preview release notes for the exact build
+        env:
+          GH_REPOSITORY: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          python3 -I scripts/release/release_manifest.py verify "$RUNNER_TEMP/rehearsal" --repo . > "$RUNNER_TEMP/release.json"
+          python3 -I scripts/release/release_notes.py notes --release "$RUNNER_TEMP/release.json" \
+            --repository "$GH_REPOSITORY" --fingerprint 298A9093BAABB26F79BB29F4BF47E5FA9EDB8DB1 \
+            --run-url "$RUN_URL" > "$RUNNER_TEMP/rehearsal/release-notes.md"
+          cat "$RUNNER_TEMP/rehearsal/release-notes.md" >> "$GITHUB_STEP_SUMMARY"
       - name: Remove the Safe Browsing key
         if: always()
         run: rm -f "$HOME/.config/nulavio-build/google-safebrowsing.key"
@@ -108,6 +127,7 @@ jobs:
           path: |
             ${{ runner.temp }}/rehearsal/manifest.json
             ${{ runner.temp }}/rehearsal/rehearsal.md
+            ${{ runner.temp }}/rehearsal/release-notes.md
             ${{ runner.temp }}/rehearsal/packages/
           if-no-files-found: error
           retention-days: 30
@@ -196,6 +216,18 @@ jobs:
               --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release.yml" --source-ref refs/heads/main >/dev/null
             echo "provenance ok: ${file#"$OUT"/}"
           done
+      - name: Prepare notes and validate the release before signing or uploading
+        env:
+          GH_REPOSITORY: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          python3 -I scripts/release/release_manifest.py verify "$RUNNER_TEMP/rehearsal" --repo . > "$RUNNER_TEMP/release.json"
+          bundle=$(find "$RUNNER_TEMP/flatpak-bundle" -maxdepth 1 -name '*.flatpak' 2>/dev/null || true)
+          options=()
+          [ -z "$bundle" ] || options=(--flatpak "$(basename "$bundle")")
+          python3 -I scripts/release/release_notes.py notes --release "$RUNNER_TEMP/release.json" \
+            --repository "$GH_REPOSITORY" --fingerprint "$FINGERPRINT" --run-url "$RUN_URL" \
+            "${options[@]}" > "$RUNNER_TEMP/notes.md"
       - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
         with:
           role-to-assume: ${{ vars.NULAVIO_SIGNING_ROLE_ARN }}
@@ -230,24 +262,14 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          read -r tag firefox commit < <(python3 -I -c 'import json, sys; r = json.load(open(sys.argv[1])); print(r["tag"], r["firefox"], r["commit"])' "$RUNNER_TEMP/release.json")
-          {
-            printf 'Nulavio %s, built from Firefox %s (commit %s).\n\n' "${tag#v}" "$firefox" "${commit:0:12}"
-            printf 'Install or upgrade on Fedora: https://nulavio.net/en/download/\n\n'
-            if bundle=$(cd "$RUNNER_TEMP/publish/github" && ls -- *.flatpak 2>/dev/null); then
-              printf 'Other distributions, with Flatpak (to update, install the next release the same way):\n\n    flatpak install --user %s\n\n' "$bundle"
-            fi
-            printf 'Every file here is signed (SHA256SUMS.asc, key %s) and has a GitHub build-provenance attestation:\n\n' "$FINGERPRINT"
-            printf '    gh attestation verify <file> --repo %s\n\n' "$GITHUB_REPOSITORY"
-            printf 'Built and tested by run %s/%s/actions/runs/%s.\n' "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID"
-          } > "$RUNNER_TEMP/notes.md"
+          read -r tag commit < <(python3 -I -c 'import json, sys; r = json.load(open(sys.argv[1])); print(r["tag"], r["commit"])' "$RUNNER_TEMP/release.json")
           gh release create "$tag" --draft --prerelease --target "$commit" \
             --title "Nulavio ${tag#v} (alpha)" --notes-file "$RUNNER_TEMP/notes.md" "$RUNNER_TEMP"/publish/github/*
           {
             printf '## %s is live in the dnf repository; the GitHub release is a draft\n\n' "$tag"
             printf '1. Review and publish the draft release %s (creates the tag).\n' "$tag"
-            printf '2. Set "version" in packaging/release.json to %s (pull request); the site workflow rebuilds the download pages.\n' "${tag#v}"
-            printf '3. Add the entry to docs/security/changelog.md (hours to "published").\n'
+            printf '2. Publishing triggers release-metadata: review its metadata/changelog PR, or apply its recovery patch.\n'
+            printf '3. Review docs/security/changelog.md: security impact and SLA claims require evidence.\n'
             printf '4. Flathub: copy the flathub/ folder of the "published" artifact into the net.nulavio.Nulavio repository (pull request).\n'
           } >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -257,5 +279,6 @@ jobs:
           path: |
             ${{ runner.temp }}/publish/
             ${{ runner.temp }}/flathub/
+            ${{ runner.temp }}/notes.md
           if-no-files-found: ignore
           retention-days: 90
