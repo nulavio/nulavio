@@ -345,7 +345,9 @@ def _addons_key(engine: str) -> str:
     """The letter of the add-ons shortcut (Ctrl+Shift+…) in this engine: Firefox 159 moved it from A
     to F (Ctrl+Shift+A searches tabs there). The page is static, so the launcher picks the letter;
     an engine label with no version gets the letter of the oldest supported engine."""
-    version = re.search(r"(\d+)(?:\.\d+)*\s*$", engine)
+    # The version is the label's last word and may not end in digits ("160.0a1", "159.0esr", "160.0-0.3"): its
+    # leading number.
+    version = re.search(r"(?:^|\s)(\d+)[\w.+~-]*\s*$", engine)
     return "F" if version and int(version.group(1)) >= 159 else "A"
 
 

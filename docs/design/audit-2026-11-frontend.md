@@ -2,7 +2,7 @@
 
 Every Nulavio surface a person sees, audited on the real engine after `v160.0-0.1`: the window (band, Horizon, cues), the Shell pages, the launcher's start page and nulavio.net. One finding per item, with severity, evidence, cause and the proposed fix. Corrections follow in separate pull requests, MEDIUM first (no HIGH finding was confirmed).
 
-**Result: 0 HIGH, 10 MEDIUM, 14 LOW**, plus one product decision for the maintainer (N-01). S-06 was LOW on the audited build and became MEDIUM on 2026-11-11, when connecting a phone was turned on (#42). The one HIGH carried in from the browser review of 2026-11-09 (V1, the unlock page offered the profile's password to the engine's password manager) is fixed on `main` (#15) and was verified again here.
+**Result: 0 HIGH, 9 MEDIUM, 13 LOW**, plus one product decision for the maintainer (N-01). S-06 was LOW on the audited build and became MEDIUM on 2026-11-11, when connecting a phone was turned on (#42). The one HIGH carried in from the browser review of 2026-11-09 (V1, the unlock page offered the profile's password to the engine's password manager) is fixed on `main` (#15) and was verified again here.
 
 ## How it was done
 

@@ -208,7 +208,10 @@ class ProfileTest(TempHome):
         unmodified = ("sem modificações", "unmodified")
         development = ("build de desenvolvimento", "development build")
         for engine, patched, key in (("Nulavio 160.0", True, "F"), ("Mozilla Firefox 152.0.1", False, "A"),
-                                     ("Mozilla Firefox 159.0", False, "F"), ("unknown engine", False, "A")):  # fmt: skip
+                                     ("Mozilla Firefox 159.0", False, "F"), ("unknown engine", False, "A"),
+                                     # A version that does not end in a digit: a nightly, an ESR, a package release.
+                                     ("Nulavio 160.0a1", True, "F"), ("Mozilla Firefox 159.0esr", False, "F"),
+                                     ("Mozilla Firefox 140.5.0esr", False, "A"), ("Nulavio 160.0-0.3", True, "F")):  # fmt: skip
             with self.subTest(engine=engine):
                 profile.prepare_for_launch(prof, {"engine": engine})
                 page = (prof.startpage_dir / "index.html").read_text()

@@ -110,11 +110,14 @@ async function render() {
   document.getElementById("delete").addEventListener("click", async () => {
     try {
       await browser.downloads.removeFile(item.id);
-      await browser.downloads.erase({ id: item.id });
-      finish(t("warnDeleted"), "ok");
     } catch {
       finish(t("warnDeleteFailed"), "error");
+      return;
     }
+    // The file is gone. Its entry in the downloads list is only a record: when that cannot be dropped, the file
+    // is deleted all the same, and saying "could not delete" with the file's actions back would be untrue.
+    await browser.downloads.erase({ id: item.id }).catch(() => {});
+    finish(t("warnDeleted"), "ok");
   });
   document.documentElement.dataset.state = "ready";
 }
