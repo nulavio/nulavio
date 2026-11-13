@@ -4,6 +4,6 @@
   "description": "Cloudflare's wrangler, only to upload dist/site to Cloudflare Pages (.github/workflows/site.yml)",
   "license": "MPL-2.0",
   "dependencies": {
-    "wrangler": "4.157.0"
+    "wrangler": "4.158.0"
   }
 }
