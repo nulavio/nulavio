@@ -14,13 +14,13 @@ import re
 import contextlib
 import threading
 import time
-import urllib.parse
+import weakref
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
 from . import audit, policy, registry
-from .bidi import Bidi, BidiError, script_result
+from .bidi import Bidi, BidiError, Cancelled, script_result
 from .workspace import ProfileTarget, TargetError, Workspace
 
 TAB = {"type": "string", "pattern": "^[A-Za-z0-9-]{1,64}$", "description": "Tab id from tabs_list or tab_new"}
@@ -91,6 +91,116 @@ FOCUS_FN = r"""(el, clear) => {
   return document.activeElement === el;
 }"""
 READ_EXPR = "({title: document.title, url: location.href, text: document.body ? document.body.innerText.slice(0, %d) : ''})"
+# Forms a page sends are held while its agent may not submit without asking.
+#
+# What an element looks like does not say what its click does: a page's own handler can send a
+# form from anything, at once or after a timer, in this document or in a frame it creates. So
+# every document of such an agent's engines carries a guard from the moment it is created (a
+# BiDi preload script), in a sandbox of the page (SANDBOX), where the page's scripts do not
+# normally reach. `submit` events (a submit button, Enter) are stopped before the page's
+# handlers see them, in the document and in each shadow root (the event does not leave one);
+# form.submit() raises no event and requestSubmit() may be called on a form in a shadow root
+# no click passed through, so both are replaced. A held form stays in the page until the user
+# allows it (it is then sent) or refuses it (it is dropped). It is not a wall against a page
+# that sets out to defeat it: an error raised in here is an object of this sandbox, and leads
+# back to it (docs/security/threat-model-ai.md, AI-T39).
+SANDBOX = "nulavio"
+FORMS_GUARD_FN = r"""() => {
+  "use strict";
+  if (globalThis.nulavioForms) return globalThis.nulavioForms.hold();
+  const held = [];
+  let holding = true, passing = false, complete = false;
+  let nativeSubmit = null, nativeRequest = null;
+  const page = window.wrappedJSObject || window;
+  const onSubmit = (event) => {
+    if (!holding || passing) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    held.push({form: event.target, submitter: event.submitter || null, direct: false});
+  };
+  window.addEventListener('submit', onSubmit, true);
+  const roots = new WeakSet();
+  const listen = EventTarget.prototype.addEventListener;  // this sandbox's own: the page may have replaced its copy
+  const watch = (root) => {
+    const key = root && (root.wrappedJSObject || root);
+    if (!key || roots.has(key)) return;
+    roots.add(key);
+    listen.call(root, 'submit', onSubmit, true);
+  };
+  const along = (event) => { for (const node of event.composedPath()) if (node instanceof ShadowRoot) watch(node); };
+  window.addEventListener('click', along, true);
+  window.addEventListener('keydown', along, true);
+  const scan = (from) => {
+    for (const el of (from || document).querySelectorAll('*')) if (el.shadowRoot) { watch(el.shadowRoot); scan(el.shadowRoot); }
+  };
+  window.addEventListener('DOMContentLoaded', () => scan(), true);
+  try {
+    // Each replacement is a Proxy made in the page around the engine's own method: what the page
+    // holds is its own object (its `.constructor` is the page's Function, where a plain function
+    // from here would lead back to this sandbox), and the trap cannot be taken out of it. The
+    // handler object is the page's too: one from here is opaque to the page's Proxy.
+    const wrap = (method, apply) => {
+      const handler = new page.Object();
+      handler.apply = apply;
+      return new page.Proxy(method, handler);
+    };
+    const forms = page.HTMLFormElement.prototype, elements = page.Element.prototype;
+    const submit = forms.submit, request = forms.requestSubmit, attach = elements.attachShadow;
+    forms.submit = wrap(submit, (target, form) => {
+      if (!holding || passing || !(form instanceof HTMLFormElement)) return submit.call(form);
+      held.push({form, submitter: null, direct: true});
+    });
+    // requestSubmit() validates first and may send nothing: the engine decides, and the submit
+    // event it then raises is what gets held. Only the form's root has to be listening.
+    forms.requestSubmit = wrap(request, (target, form, args) => {
+      try { const root = form.getRootNode(); if (root instanceof ShadowRoot) watch(root); } catch (e) {}
+      return request.call(form, args[0]);
+    });
+    elements.attachShadow = wrap(attach, (target, host, args) => {
+      const root = attach.call(host, args[0]);
+      try { watch(root); } catch (e) {}
+      return root;
+    });
+    nativeSubmit = submit;
+    nativeRequest = request;
+    complete = true;
+  } catch (e) {}
+  const send = () => {
+    const forms = held.splice(0);
+    let sent = 0;
+    passing = true;
+    try {
+      for (const h of forms) {
+        try {
+          if (!h.form.isConnected) continue;
+          if (h.direct) nativeSubmit.call(h.form);
+          else if (!nativeRequest) h.form.requestSubmit(h.submitter || undefined);
+          else {
+            try { nativeRequest.call(h.form, h.submitter || undefined); } catch (e) { nativeRequest.call(h.form); }
+          }
+          sent += 1;
+        } catch (e) {}
+      }
+    } finally { passing = false; }
+    return sent;
+  };
+  globalThis.nulavioForms = {
+    hold: () => { holding = true; scan(); return complete; },
+    held: () => held.length,
+    drop: () => held.splice(0).length,
+    send,
+    open: () => { holding = false; return send(); },
+  };
+  scan();
+  return complete;
+}"""
+FORMS_HELD_FN = "() => (globalThis.nulavioForms ? globalThis.nulavioForms.held() : 0)"
+FORMS_DROP_FN = "() => (globalThis.nulavioForms ? globalThis.nulavioForms.drop() : 0)"
+FORMS_SEND_FN = "() => (globalThis.nulavioForms ? globalThis.nulavioForms.send() : 0)"
+# The agent may submit now: what was held goes, and the document stops holding.
+FORMS_OPEN_FN = "() => (globalThis.nulavioForms ? globalThis.nulavioForms.open() : 0)"
+DIALOG = "dialog"  # in place of a count: sending the form opened a dialog (a submit handler that asks), which holds it
+FORMS_FRAMES = 60  # documents of one tab asked directly; the others still carry the guard from their creation
 
 
 class Denied(Exception):
@@ -231,11 +341,17 @@ class Bridge:
         self.elements: dict[str, dict[str, str]] = {}  # tab -> element id -> BiDi sharedId
         self._lock = threading.Lock()
         self._target: str | None = None  # the address the current call acts on (for the audit)
+        self._forms_ok: set[str] = set()  # the origins submit_forms was allowed for in the current call
+        self._form_at: str | None = None  # where the current call sent a form the page had held (for the audit)
         self._downloads_mode: dict[str, bool] = {}
         self._args: dict = {}  # the current call's arguments (where it acts, for permission requests)
         self._cancel: threading.Event | None = None  # the current call's cancel: a pending request is denied
         self.raw = False  # the AI Workspace's endpoint was handed over (raw_automation)
         self.last_call: dict | None = None
+        # By connection, not by label: an engine that ended (raw automation, a pause) and its successor are two.
+        self._forms_scripts: weakref.WeakKeyDictionary[Bidi, str] = weakref.WeakKeyDictionary()  # -> preload script id
+        self._forms_engines: weakref.WeakSet[Bidi] = weakref.WeakSet()  # connections whose guard was set up once
+        self._forms_ever = False  # some document of this session may carry the guard
 
     # -- policy ----------------------------------------------------------------------
 
@@ -250,19 +366,39 @@ class Bridge:
         label = self._args.get("profile")
         url = self._args.get("url")
         if label is None and isinstance(url, str):
-            label = registry.route_for(self._agent() or {}, urllib.parse.urlsplit(url).hostname)
+            label = registry.route_for(self._agent() or {}, policy.host_of(url))
         return "" if label in (None, "", "AI Workspace") else str(label)
+
+    def _held(self) -> str | None:
+        """Why this session may do nothing now, whatever the tool: the emergency stop, a revocation,
+        a key replaced since it connected, a pause. Tools without a capability (profiles_list) are
+        refused by this alone; the list of tools hiding them is not a check."""
+        if registry.stopped():
+            return "stopped"
+        agent = self._agent()
+        if agent is None or agent.get("revoked"):
+            return "revoked"
+        if self.key_sha256 and agent.get("token_sha256") != self.key_sha256:
+            return "key-replaced"  # the key this session started with; a new key ends it (audit A11)
+        if agent.get("paused"):
+            return "paused"
+        return None
+
+    def _refuse_if_held(self, capability: str, checked: list[str] | None = None) -> None:
+        held = self._held()
+        if held is None:
+            return
+        if checked is not None:
+            checked.append(capability)
+        if held != "paused":
+            self.close()
+        raise Denied(policy.Decision(False, "block", capability, held))
 
     def require(self, capability: str, url: str | None = None, *, checked: list[str]) -> None:
         if url:
             self._target = url
-        agent = self._agent()
-        if self.key_sha256 and agent is not None and agent.get("token_sha256") != self.key_sha256:
-            checked.append(capability)
-            self.close()
-            raise Denied(policy.Decision(False, "block", capability, "key-replaced"))
-        host = urllib.parse.urlsplit(url).hostname if url else None
-        decision = registry.decide(self.agent_id, capability, host=host, target=policy.origin(url),
+        self._refuse_if_held(capability, checked)
+        decision = registry.decide(self.agent_id, capability, host=policy.host_of(url), target=policy.origin(url),
                                    session_id=self.session_id, approver=self.approver, place=self._place(),
                                    cancel=self._cancel)  # fmt: skip
         checked.append(capability)
@@ -270,6 +406,11 @@ class Bridge:
             if decision.reason in ("revoked", "stopped"):
                 self.close()
             raise Denied(decision)
+        # A request can stay open for minutes. decide() looks again at the stop, the pause, the
+        # revocation and the site list after the answer; the key is this session's to check.
+        self._refuse_if_held(capability)
+        if capability == "submit_forms" and url:
+            self._forms_ok.add(policy.origin(url))
 
     def require_url(self, url: str, *, checked: list[str]) -> policy.Target:
         try:
@@ -302,11 +443,12 @@ class Bridge:
         person approved. A page that navigated meanwhile would otherwise get the action."""
         now = self._url_of(tab, cancel)
         if policy.origin(now) != policy.origin(url):
-            raise ToolError(f"the tab moved to {policy.origin(now)} while waiting for approval; nothing was done")
+            where = "another site" if self._hidden(now) else policy.origin(now)
+            raise ToolError(f"the tab moved to {where} while waiting for approval; nothing was done")
 
     def list_tools(self) -> list[dict]:
         agent = self._agent()
-        if agent is None or agent.get("revoked") or agent.get("paused") or registry.stopped():
+        if self._held():
             return [descriptor(BY_NAME["session_state"])]
         visible = []
         for tool in TOOLS:
@@ -324,18 +466,23 @@ class Bridge:
         target_url: str | None = None
         cancel = cancel or threading.Event()
         self._target = None
+        self._forms_ok, self._form_at = set(), None
         try:
             validate(tool.schema, arguments)
             with self._lock:
                 self._args = arguments
                 self._cancel = cancel
+                if name != "session_state":  # the one tool a held session keeps: it says why
+                    self._refuse_if_held(tool.capability or name, checked)
                 self._sync_downloads()
+                self._sync_forms()
                 result, target_url = getattr(self, "_t_" + name)(arguments, cancel, checked)
             outcome, decision, reason = "ok", "allow", None
         except Denied as denied:
             d = denied.decision
             result = self._error(f"Denied by Nulavio: '{policy.CAPABILITIES.get(d.capability, d.capability)}' is "
-                                 f"{_why(d)}. Only the user can change this, in Nulavio (not through this tool).")  # fmt: skip
+                                 f"{_why(d)}. Only the user can change this, in Nulavio (not through this tool)."
+                                 + (f" {denied.detail}" if denied.detail else ""))  # fmt: skip
             outcome, decision, reason = "denied", "deny", d.reason
         except ToolError as exc:
             result, outcome, decision, reason = self._error(str(exc)), "error:tool", "allow", None
@@ -350,7 +497,9 @@ class Bridge:
                              target=policy.origin(self._target), ms=int((time.monotonic() - started) * 1000),
                              outcome="cancelled" if not isinstance(exc, Exception) else "error:failed")  # fmt: skip
             raise
-        target_url = target_url or self._target
+        # A held form that went out says where; a refusal or an error says what it was about.
+        target_url = (self._form_at if outcome == "ok" else None) or target_url or self._target
+        checked = list(dict.fromkeys(checked))  # a capability asked for two places is one in the activity
         agent = self._agent() or {}
         typed = arguments.get("text") if name == "type" else arguments.get("expression") if name == "evaluate" else None
         # What the call was, without its output (the assistant's step events, UX5-C1): the audit's own fields.
@@ -394,10 +543,11 @@ class Bridge:
 
     def bidi(self, tab: str | None = None) -> Bidi:
         """The AI Workspace's engine, or the engine that holds `tab`."""
-        if tab is None:
-            return self._workspace().start()
-        owner = self._owner(tab)
-        return self.profiles[owner].bidi if owner else self._workspace().start()
+        owner = "" if tab is None else self._owner(tab)
+        engine = self.profiles[owner].bidi if owner else self._workspace().start()
+        if engine not in self._forms_engines:  # just started: before its first navigation
+            self._sync_forms()
+        return engine
 
     def _owner(self, tab: str) -> str:
         known = self.owner.get(tab)
@@ -517,6 +667,201 @@ class Bridge:
         except BidiError:
             return ""
 
+    # -- forms a page sends by itself ---------------------------------------------------
+
+    def _may_submit(self) -> bool:
+        """submit_forms is allowed without asking: nothing is held."""
+        agent = self._agent()
+        return bool(agent) and policy.effective_mode(agent, "submit_forms", self.session_id)[0] == "allow"
+
+    def _sync_forms(self) -> None:
+        """In each engine, new documents hold the forms they send (FORMS_GUARD_FN) unless this agent
+        may submit without asking. Like downloads, it follows the permission as the user changes it."""
+        engines = self._engines()
+        if not engines:
+            return
+        hold = not self._may_submit()
+        for _label, target in engines:
+            engine = target.bidi
+            self._forms_engines.add(engine)
+            script = self._forms_scripts.get(engine)
+            if hold and script is None:
+                guard = {"functionDeclaration": FORMS_GUARD_FN, "sandbox": SANDBOX}
+                self._forms_scripts[engine] = engine.command("script.addPreloadScript", guard)["script"]
+                self._forms_ever = True
+            elif not hold and script is not None:
+                engine.command("script.removePreloadScript", {"script": script})
+                del self._forms_scripts[engine]  # documents already open still hold: opened when next acted on
+
+    def _frames(self, tab: str, cancel) -> list[str]:
+        """The tab's document and the frames in it, the document first."""
+        tree = self.bidi(tab).command("browsingContext.getTree", {"root": tab}, cancel=cancel)
+        out, queue = [], list(tree.get("contexts", []))
+        while queue and len(out) < FORMS_FRAMES:
+            context = queue.pop(0)
+            out.append(context["context"])
+            queue += context.get("children") or []
+        return out
+
+    def _in_sandbox(self, tab: str, target: dict, fn: str, cancel, timeout: float = 5.0, until=None) -> tuple[object, str]:
+        """Run `fn` in a sandbox, named by its document ({"context", "sandbox"}) or by itself
+        ({"realm"}). Returns what it answered and the realm it ran in; (DIALOG, "") when `until`
+        (as in Bidi.command) came first: the function is waiting for a dialog it opened."""
+        result = self.bidi(tab).command("script.callFunction", {
+            "functionDeclaration": fn, "target": target, "arguments": [],
+            "awaitPromise": False, "resultOwnership": "none",
+        }, timeout=timeout, cancel=cancel, until=until)  # fmt: skip
+        if result is None:
+            return DIALOG, ""
+        return script_result(result), str(result.get("realm") or "")
+
+    def _in_frames(self, tab: str, fn: str, cancel, *, must: bool) -> list:
+        """Run `fn` in the sandbox of each document of the tab. `must`: a document that is still
+        there and cannot run it is an error (nothing is done on a page that cannot be watched)."""
+        results = []
+        for frame in self._frames(tab, cancel):
+            try:
+                results.append(self._in_sandbox(tab, {"context": frame, "sandbox": SANDBOX}, fn, cancel)[0])
+            except Cancelled:
+                raise
+            except BidiError:
+                if must and (frame == tab or frame in self._frames(tab, cancel)):
+                    raise ToolError("this page's forms could not be watched; nothing was done") from None
+                # A frame that went away took its forms with it.
+        return results
+
+    def _in_realms(self, tab: str, realms: list[str], fn: str, cancel, until=None) -> tuple[list, str]:
+        """Run `fn` in these sandboxes and no other. A document that went away took its sandbox
+        along: the one that replaced it has another, which this does not reach. Returns the answers
+        and, when the engine did not answer for a document that is not gone, its error: nothing is
+        asked twice, since what `fn` did by then is not known. Stops at a dialog (`until`)."""
+        results = []
+        for realm in realms:
+            try:
+                results.append(self._in_sandbox(tab, {"realm": realm}, fn, cancel, until=until)[0])
+            except Cancelled:
+                raise
+            except BidiError as exc:
+                if exc.error != "no such frame":
+                    return results, exc.error
+            if results[-1:] == [DIALOG]:
+                break  # the page waits for an answer; what other documents hold stays held
+        return results, ""
+
+    def _forms_prepare(self, tab: str, cancel) -> None:
+        """Before anything the page can observe (a scroll, a focus, a click): its documents hold the
+        forms they send, or stop holding once this agent may submit. Documents get the guard when
+        they are created; this covers the ones that were open before."""
+        if self._may_submit():
+            if self._forms_ever:
+                self._in_frames(tab, FORMS_OPEN_FN, cancel, must=True)
+            return
+        self._forms_ever = True
+        if not all(self._in_frames(tab, FORMS_GUARD_FN, cancel, must=True)):
+            raise ToolError("this page's forms could not be watched (form.submit is out of reach); nothing was done")
+
+    def _forms_held(self, tab: str, cancel) -> int:
+        """How many forms the tab's documents hold."""
+        if not self._forms_ever:
+            return 0
+        return sum(int(n or 0) for n in self._in_frames(tab, FORMS_HELD_FN, cancel, must=False))
+
+    def _forms_where(self, tab: str, cancel) -> list[str]:
+        """The documents of the tab that hold a form, each by the realm of its sandbox. What is
+        sent or dropped afterwards is what was counted here, in the document it was counted in."""
+        if not self._forms_ever:
+            return []
+        realms = []
+        for frame in self._frames(tab, cancel):
+            try:
+                held, realm = self._in_sandbox(tab, {"context": frame, "sandbox": SANDBOX}, FORMS_HELD_FN, cancel)
+            except Cancelled:
+                raise
+            except BidiError:
+                continue  # a frame that went away took its forms with it
+            if int(held or 0):
+                if not realm:
+                    raise ToolError("this page's forms could not be watched; the form it tried to send was not sent")
+                realms.append(realm)
+        return realms
+
+    def _forms_settle(self, tab: str, url: str, what: str, checked: list[str], cancel) -> bool:
+        """After an action, and before the next one: forms the page tried to send are held in it,
+        whenever it tried. Sending them needs submit_forms: with it they go as they were (True);
+        without it they are dropped and the call is denied.
+
+        The count comes first, not the permission: an answer "for this session" turns the
+        permission on in the middle of the call, and the form it was given for is still held.
+
+        The permission is for the site the tab shows. `url` is where the call began; the forms are
+        judged by where the tab is once they are counted, which an action can have changed (a click
+        that leads to a page that sends a form as it loads): that address is checked as if it had
+        been asked for, and submit_forms counts for it only if it was allowed for it in this call.
+        And the answer can take minutes, in which the page can move on: only the documents counted
+        are sent, and when they are gone by then the call stops there."""
+        realms = self._forms_where(tab, cancel)
+        if not realms:
+            return False
+        # Read after the count: these documents' address, or a later one's (their realms are then gone).
+        here = self._url_of(tab, cancel)
+        if policy.origin(here) != policy.origin(url):
+            elsewhere = f"{what} was done and took the tab elsewhere; the form that page then tried to send was not sent"
+            try:
+                self._in_scope_now(here)
+                self.require_needs(here, checked=checked)
+            except Denied as denied:
+                denied.detail = elsewhere + "."
+                raise
+            except ToolError as refused:
+                raise ToolError(f"{elsewhere} ({refused})") from None
+        allowed = self._may_submit()
+        waited = False
+        # Not already allowed for this site in this call (a submit button, submit=true, an earlier form).
+        if not allowed and policy.origin(here) not in self._forms_ok:
+            waited = True
+            try:
+                self.require("submit_forms", here, checked=checked)
+            except Denied as denied:
+                # A session ended meanwhile (a stop, a revocation, a new key) has no engine any more,
+                # and asking for one would start it again: nothing is asked of the page then.
+                if not self._held():
+                    self._in_realms(tab, realms, FORMS_DROP_FN, cancel)  # one that cannot be dropped stays held
+                denied.detail = f"{what} was done; the form the page then tried to send was not sent."
+                raise
+            allowed = self._may_submit()  # "for this session": these documents stop holding, too
+        if "submit_forms" not in checked:
+            checked.append("submit_forms")  # a form went out under the permission: the activity says so
+        mark = self.bidi(tab).mark()
+        # Sending runs the page's own submit handlers now, and one of them may ask ("Send?").
+        answers, failed = self._in_realms(tab, realms, FORMS_OPEN_FN if allowed else FORMS_SEND_FN, cancel,
+                                          until=("browsingContext.userPromptOpened", tab, mark))  # fmt: skip
+        asks = DIALOG in answers
+        sent = sum(int(n or 0) for n in answers if n != DIALOG)
+        if sent or asks:
+            self._form_at = here
+        if failed:
+            raise ToolError(f"{what} was done; the browser did not answer for the document of the form the page had tried "
+                            f"to send ({failed}), which may or may not have been sent. Call page_snapshot again.")  # fmt: skip
+        if asks:
+            return True  # the dialog is the page's; its answer decides whether the form goes
+        if not sent:
+            if waited:
+                # Nothing else is done to a page that is no longer the one the answer was for: with
+                # the permission now on for the session, acting on would let its own forms go unsaid.
+                raise ToolError(f"{what} was done; while the question about its form was open the page moved on or took "
+                                "the form back, and nothing was sent. Call page_snapshot again.")  # fmt: skip
+            return False  # the page took its form away meanwhile
+        self._settle(tab, mark, expected=True, cancel=cancel)
+        return True
+
+    def _in_scope_now(self, url: str) -> None:
+        """Where a redirect or the page itself took the tab is still one of the agent's sites, or
+        the call says so and describes nothing of it (the tab stays; reading it is refused too)."""
+        if not policy.in_scope(self._agent() or {}, policy.host_of(url)):
+            self._target = url
+            detail = "The navigation was done; where it ended is outside this agent's sites and is not described."
+            raise Denied(policy.Decision(False, "block", "navigate", "out-of-scope"), detail)
+
     # -- tools -----------------------------------------------------------------------
 
     def _t_raw_automation(self, args, cancel, checked):
@@ -527,6 +872,7 @@ class Bridge:
             bidi.command("session.end", {}, timeout=5)
         bidi.ws.close()
         workspace.bidi = None
+        self._downloads_mode.pop("", None)  # the next connection to this engine starts over
         self.raw = True
         workspace.mark_raw()  # the window now says "Automação bruta" (WCS-01), until it closes
         self.elements.clear()
@@ -538,13 +884,16 @@ class Bridge:
         return self._ok({"endpoint": endpoint, "protocol": "webdriver-bidi", "policyApplies": False}, text), None
 
     def _raw_watch(self, workspace: Workspace) -> None:
-        """While the endpoint is out, the user's stop, pause and revoke still end the AI Workspace."""
+        """While the endpoint is out, the user's stop, pause, revoke and a new key still end the AI Workspace."""
         while self.raw and self.workspace is workspace:
-            agent = self._agent()
-            if agent is None or agent.get("revoked") or agent.get("paused") or registry.stopped():
-                why = "revoked" if agent is None or agent.get("revoked") else "paused" if agent.get("paused") else "stopped"
+            try:
+                why = self._held()
+            except Exception:  # the registry could not be read: the endpoint does not stay out on that
+                why = "unreadable"
+            if why:
                 self.raw = False
                 self.workspace = None
+                self._downloads_mode.pop("", None)
                 workspace.stop()
                 audit.record(agent=self.agent_id, session=self.session_id, tool="raw_automation", event="raw-ended", reason=why)
                 return
@@ -554,11 +903,14 @@ class Bridge:
         agent = self._agent()
         if agent is None:
             raise ToolError("this agent is no longer registered in Nulavio")
-        modes = {c: policy.effective_mode(agent, c, self.session_id)[0] for c in policy.CAPABILITIES}
-        data = {"agent": agent["name"], "agent_id": agent["id"], "autonomy": agent["autonomy"],
-                "revoked": bool(agent.get("revoked")), "paused": bool(agent.get("paused")), "stopped": registry.stopped(),
-                "sites": agent.get("domains", []),
-                "workspace": agent.get("workspace"), "capabilities": modes}  # fmt: skip
+        replaced = bool(self.key_sha256) and agent.get("token_sha256") != self.key_sha256
+        data = {"agent": agent["name"], "agent_id": agent["id"], "revoked": bool(agent.get("revoked")),
+                "key_replaced": replaced, "paused": bool(agent.get("paused")), "stopped": registry.stopped()}  # fmt: skip
+        if not (data["revoked"] or replaced):
+            # What the user set for this agent is for a session that still has its access.
+            modes = {c: policy.effective_mode(agent, c, self.session_id)[0] for c in policy.CAPABILITIES}
+            data.update(autonomy=agent["autonomy"], sites=agent.get("domains", []), workspace=agent.get("workspace"),
+                        capabilities=modes)  # fmt: skip
         return self._ok(data), None
 
     def _t_tabs_list(self, args, cancel, checked):
@@ -567,14 +919,28 @@ class Bridge:
         tabs = []
         for c in self._tabs(cancel)[:50]:
             url = c.get("url", "")
-            if policy.in_scope(agent, urllib.parse.urlsplit(url).hostname if url else None):
-                tabs.append(
-                    {"tab": c["context"], "profile": c["profile"], "url": url, "title": self._title(c["context"], cancel)}
-                )
-            else:
+            entry = {"tab": c["context"], "profile": c["profile"], "url": None, "title": None}
+            if not policy.in_scope(agent, policy.host_of(url)):
                 # Outside the agent's sites: the tab exists, but not where it is or what it shows (audit A8).
-                tabs.append({"tab": c["context"], "profile": c["profile"], "url": None, "title": None, "outside_sites": True})
+                entry["outside_sites"] = True
+            elif missing := self._needs_not_allowed(agent, url):
+                # A redirect or the page itself took the tab somewhere reading needs more than
+                # read_pages (the local network, an internal page): page_read asks; a list does not tell.
+                entry["needs_permission"] = missing
+            else:
+                entry.update(url=url, title=self._title(c["context"], cancel))
+            tabs.append(entry)
         return self._ok({"tabs": tabs}), None
+
+    def _needs_not_allowed(self, agent: dict, url: str) -> list[str]:
+        """The capabilities the address needs that this agent does not have without asking."""
+        if not url:
+            return []
+        try:
+            needs = policy.classify_url(url).needs
+        except policy.UrlRefused:
+            return ["local_resources"]  # blob:, data: and the like: no tool acts there either
+        return [c for c in needs if not agent or policy.effective_mode(agent, c, self.session_id)[0] != "allow"]
 
     def _t_tab_new(self, args, cancel, checked):
         url = args.get("url")
@@ -585,7 +951,7 @@ class Bridge:
         agent = self._agent() or {}
         label = args.get("profile")
         if label is None and url:
-            label = registry.route_for(agent, urllib.parse.urlsplit(url).hostname)
+            label = registry.route_for(agent, policy.host_of(url))
         if label in (None, "", "AI Workspace"):
             if any(name for name, _ in self._engines()):
                 self.require("multiple_profiles", url, checked=checked)  # a profile of the user's is open too
@@ -596,7 +962,7 @@ class Bridge:
         self.owner[tab] = owner
         if url:
             bidi.command("browsingContext.navigate", {"context": tab, "url": url, "wait": "complete"}, timeout=60, cancel=cancel)
-            self.require_needs(self._url_of(tab, cancel), checked=checked)  # where a redirect took it
+            self._arrived(tab, checked, cancel)
         data = {
             "tab": tab,
             "profile": owner or "AI Workspace",
@@ -630,6 +996,7 @@ class Bridge:
             }
             raise ToolError(messages.get(exc.code, f"the profile {label} could not be opened")) from None
         self._sync_downloads()
+        self._sync_forms()  # before its first navigation
         return bidi
 
     def _t_profiles_list(self, args, cancel, checked):
@@ -654,9 +1021,28 @@ class Bridge:
         self.elements.pop(tab, None)
         self.bidi(tab).command("browsingContext.navigate", {"context": tab, "url": url, "wait": "complete"},
                             timeout=60, cancel=cancel)  # fmt: skip
-        final = self._url_of(tab, cancel)
-        self.require_needs(final, checked=checked)  # where a redirect took it
-        return self._ok({"tab": tab, "url": final, "title": self._title(tab, cancel)}), url
+        self._arrived(tab, checked, cancel)
+        return self._ok({"tab": tab, "url": self._url_of(tab, cancel), "title": self._title(tab, cancel)}), url
+
+    def _arrived(self, tab: str, checked: list[str], cancel) -> None:
+        """After a navigation: where a redirect took the tab is checked as if it had been asked for,
+        and a form the new page sent by itself as it loaded is settled like any other. Where that
+        form lands is checked the same way, a few times over (a chain of posted forms: four are
+        sent, and where the fourth lands is checked like the others)."""
+        try:
+            for more in (True, True, True, True, False):
+                final = self._url_of(tab, cancel)
+                self._in_scope_now(final)
+                self.require_needs(final, checked=checked)
+                if not more or self._open_dialog(tab) is not None:
+                    return
+                if not self._forms_settle(tab, final, "The navigation", checked, cancel):
+                    return
+        except Denied as denied:
+            denied.detail = f"{denied.detail} The tab is {tab}.".strip()
+            raise
+        except ToolError as refused:
+            raise ToolError(f"{refused} The tab is {tab}.") from None
 
     def _t_page_read(self, args, cancel, checked):
         tab = args["tab"]
@@ -668,7 +1054,14 @@ class Bridge:
         text = page.get("text") or ""
         data = {"tab": tab, "url": page.get("url"), "title": page.get("title"), "text": text[:limit],
                 "truncated": len(text) > limit, "untrusted": True, "dialog": self._open_dialog(tab)}  # fmt: skip
+        self._say_forms_held(tab, data, cancel)
         return self._ok(data, f"{UNTRUSTED}\n\nTitle: {data['title']}\nURL: {data['url']}\n\n{data['text']}"), url
+
+    def _say_forms_held(self, tab: str, data: dict, cancel) -> None:
+        """A page that tried to send a form (by itself, from a timer, in a new tab) holds it until
+        the next click or typing there settles it. Reading the page says so; it does not ask."""
+        if self._open_dialog(tab) is None and (held := self._forms_held(tab, cancel)):
+            data["forms_held"] = held
 
     def _t_page_snapshot(self, args, cancel, checked):
         tab = args["tab"]
@@ -683,6 +1076,7 @@ class Bridge:
             elements.append({"element": uid, **info})
         self.elements[tab] = mapping
         data = {"tab": tab, "url": url, "title": self._title(tab, cancel), "elements": elements, "untrusted": True}
+        self._say_forms_held(tab, data, cancel)
         return self._ok(data, UNTRUSTED + "\n\n" + json.dumps(data, ensure_ascii=False)), url
 
     def _t_screenshot(self, args, cancel, checked):
@@ -694,12 +1088,55 @@ class Bridge:
         data = {"tab": tab, "url": url, "bytes": len(png) * 3 // 4}
         return self._ok(data, f"Screenshot of {url}", [{"type": "image", "data": png, "mimeType": "image/png"}]), url
 
+    def _hidden(self, url: str) -> dict | None:
+        """Why a result does not say where a tab is: outside the agent's sites, or somewhere that
+        needs a permission it does not have without asking. Like tabs_list (reading there asks)."""
+        agent = self._agent() or {}
+        if not policy.in_scope(agent, policy.host_of(url)):
+            return {"outside_sites": True}
+        if missing := self._needs_not_allowed(agent, url):
+            return {"needs_permission": missing}
+        return None
+
+    def _where(self, tab: str, began: str, cancel) -> dict:
+        """What a result says about where an action left the tab: its address and the dialog open
+        in it. On the site the call began on, which it was allowed for, that is all of it; where
+        the page took the tab meanwhile is not described when `_hidden`, nor is its dialog's text."""
+        url, dialog = self._url_of(tab, cancel), self._open_dialog(tab)
+        hidden = None if policy.origin(url) == policy.origin(began) else self._hidden(url)
+        if not hidden:
+            return {"url": url, "dialog": dialog}
+        return {"url": None, **hidden, "dialog": dialog and {"type": dialog["type"], "message": None}}
+
+    def _earlier_forms(self, tab: str, url: str, checked: list[str], cancel) -> dict | None:
+        """Forms the page tried to send since the last call (a timer, an answer to a dialog) are
+        still held in it. They are settled first: sent with the permission (the page then moved on,
+        so this call does nothing else), dropped and denied without it."""
+        if not self._forms_settle(tab, url, "An earlier action", checked, cancel):
+            return None
+        data = {"tab": tab, **self._where(tab, url, cancel), "navigated": True, "form_sent": True}
+        if data["dialog"]:
+            data["navigated"] = False
+            note = (
+                "The page had tried to send a form after an earlier action; it was held and has now been let go, "
+                "and the page opened a dialog about it. Nothing else was done; answer the dialog."
+            )
+        else:
+            note = (
+                "The page had tried to send a form after an earlier action; it was held and has now been sent. "
+                "Nothing else was done; call page_snapshot again."
+            )
+        return self._ok(data, note + "\n\n" + json.dumps(data, ensure_ascii=False))
+
     def _t_click(self, args, cancel, checked):
         tab = args["tab"]
         url = self._url_of(tab, cancel)
         element = self._element(tab, args["element"])
         self.require_here("interact", url, checked=checked)
         self.still_at(tab, url, cancel)
+        if earlier := self._earlier_forms(tab, url, checked, cancel):  # before the documents are opened or held anew
+            return earlier, url
+        self._forms_prepare(tab, cancel)  # before anything the page can observe
         info = self._call_fn(tab, INSPECT_FN, [element], cancel)
         if not info.get("connected"):
             raise ToolError("the element is gone; call page_snapshot again")
@@ -719,8 +1156,11 @@ class Bridge:
             return self._ok({"tab": tab, "url": url, "navigated": False, "dialog": self._open_dialog(tab)}), url
         self.bidi(tab).command("input.releaseActions", {"context": tab}, cancel=cancel)
         navigated = self._settle(tab, mark, expected=bool(info.get("submits") or info.get("href")), cancel=cancel)
-        dialog = self._open_dialog(tab)
-        data = {"tab": tab, "url": self._url_of(tab, cancel), "navigated": navigated, "dialog": dialog}
+        # What the element is does not say what its click does: a form the page sent from its own
+        # handler is held, and needs the same permission as a submit button (asked for now).
+        navigated = self._forms_settle(tab, url, "The click", checked, cancel) or navigated
+        data = {"tab": tab, **self._where(tab, url, cancel), "navigated": navigated}
+        data["navigated"] = navigated and not data["dialog"]  # a form waiting for the page's own dialog has not gone
         return self._ok(data), url
 
     def _t_type(self, args, cancel, checked):
@@ -743,6 +1183,10 @@ class Bridge:
             # Enter in a single-line field sends its form: the same capability as submit=true.
             self.require("submit_forms", url, checked=checked)
         self.still_at(tab, url, cancel)
+        if earlier := self._earlier_forms(tab, url, checked, cancel):
+            return earlier, url
+        # Before the scroll, the focus and the clearing: each runs the page's handlers.
+        self._forms_prepare(tab, cancel)
         self._call_fn(tab, SCROLL_FN, [element], cancel)
         if not self._call_fn(tab, FOCUS_FN, [element, {"type": "boolean", "value": bool(args.get("clear"))}], cancel):
             raise ToolError("could not focus the element")
@@ -757,8 +1201,12 @@ class Bridge:
                 {"type": "key", "id": "nulavio-keyboard", "actions": keys}]}, timeout=60, cancel=cancel)  # fmt: skip
             self.bidi(tab).command("input.releaseActions", {"context": tab}, cancel=cancel)
         navigated = self._settle(tab, mark, expected=bool(args.get("submit")), cancel=cancel)
+        # Typing runs the page's handlers too (a field that sends its form when it is complete), and
+        # so did the focus and the clearing: a form any of them sent is held.
+        navigated = self._forms_settle(tab, url, "The typing", checked, cancel) or navigated
+        where = self._where(tab, url, cancel)
         return self._ok({"tab": tab, "typed": len(args["text"]), "submitted": bool(args.get("submit")),
-                         "navigated": navigated, "url": self._url_of(tab, cancel)}), url  # fmt: skip
+                         "navigated": navigated and not where["dialog"], **where}), url  # fmt: skip
 
     def _t_dialog(self, args, cancel, checked):
         tab = args["tab"]
@@ -770,8 +1218,16 @@ class Bridge:
         params = {"context": tab, "accept": bool(args["accept"])}
         if args.get("text") is not None:
             params["userText"] = args["text"]
+        mark = self.bidi(tab).mark()
         self.bidi(tab).command("browsingContext.handleUserPrompt", params, cancel=cancel)
-        return self._ok({"tab": tab, "accepted": bool(args["accept"])}), url
+        data = {"tab": tab, "accepted": bool(args["accept"])}
+        # The page goes on from where the dialog stopped it ("if (confirm(…)) form.submit()").
+        self._settle(tab, mark, expected=False, cancel=cancel)
+        if self._open_dialog(tab) is None and self._forms_settle(tab, url, "The answer", checked, cancel):
+            data["form_sent"] = True
+        if again := self._where(tab, url, cancel)["dialog"]:  # the page asked again (a submit handler of the form let go)
+            data["dialog"] = again
+        return self._ok(data), url
 
     def _t_downloads_list(self, args, cancel, checked):
         self.require("files", checked=checked)
@@ -800,8 +1256,15 @@ class Bridge:
         path = (folder / args["file"]).resolve()
         if path.parent != folder or not path.is_file():
             raise ToolError(f"no file named {args['file']!r} in this agent's uploads folder ({folder})")
+        if earlier := self._earlier_forms(tab, url, checked, cancel):
+            return earlier, url
+        self._forms_prepare(tab, cancel)  # choosing a file runs the page's change handlers
+        mark = self.bidi(tab).mark()
         self.bidi(tab).command("input.setFiles", {"context": tab, "element": element, "files": [str(path)]}, cancel=cancel)
-        return self._ok({"tab": tab, "file": path.name}), url
+        navigated = self._settle(tab, mark, expected=False, cancel=cancel)
+        navigated = self._forms_settle(tab, url, "The upload", checked, cancel) or navigated
+        dialog = self._where(tab, url, cancel)["dialog"]
+        return self._ok({"tab": tab, "file": path.name, "navigated": navigated and not dialog, "dialog": dialog}), url
 
     def _t_evaluate(self, args, cancel, checked):
         tab = args["tab"]

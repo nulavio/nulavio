@@ -172,6 +172,49 @@ LOCAL_SUFFIXES = (".localhost", ".local", ".internal", ".lan", ".home.arpa", ".i
 INTERNAL_SCHEMES = {"about", "file", "chrome", "resource", "moz-extension", "view-source"}
 
 
+def wrapped(url: str) -> str | None:
+    """The address an internal page shows the content of: what follows `view-source:`, or the
+    `url` of Reader View (`about:reader?url=…`). None for every other address.
+
+    Such a tab is at an address with no host of its own, but what it shows is another site's
+    page, so the site list, the routes and the local-network check go by the inner address."""
+    # As the engine reads an address: without the control characters and spaces around it.
+    scheme, _, rest = url.strip("".join(map(chr, range(0x21)))).partition(":")
+    scheme = scheme.lower()
+    if scheme == "view-source":
+        return rest
+    if scheme == "about":
+        name, _, query = rest.partition("?")
+        if name.lower() == "reader":
+            # Reader View takes the first `url`, empty or not (URL.searchParams.get).
+            pairs = urllib.parse.parse_qsl(query.partition("#")[0], keep_blank_values=True)
+            return next((value for key, value in pairs if key == "url"), None)
+    return None
+
+
+def subject(url: str | None) -> str | None:
+    """The address whose site a tab at `url` is about: `url` itself, or the one it wraps."""
+    if not url:
+        return url
+    for _ in range(2):  # a wrapper around a wrapper is refused by classify_url; this only has to end
+        inner = wrapped(url)
+        if inner is None:
+            return url
+        url = inner
+    return url
+
+
+def host_of(url: str | None) -> str | None:
+    """The host the site list and the routes are checked against, for any address a tab can be at."""
+    url = subject(url)
+    if not url:
+        return None
+    try:
+        return urllib.parse.urlsplit(url).hostname
+    except ValueError:
+        return None
+
+
 def _local_address(text: str) -> bool:
     try:
         address = ipaddress.ip_address(text.strip("[]"))
@@ -228,9 +271,13 @@ def _whatwg_ipv4(host: str) -> str | None:
 
 def classify_url(url: str, resolve: bool = True) -> Target:
     """Which capabilities a navigation needs. Refuses what no capability can allow."""
-    if len(url) > 8192 or any(ch in url for ch in "\r\n\t\x00"):
-        raise UrlRefused("the address is too long or contains control characters")
-    parsed = urllib.parse.urlsplit(url)
+    if len(url) > 8192 or any(ch < " " or ch == "\x7f" for ch in url) or url != url.strip():
+        # The engine drops some of these and trims others: what is checked must be what is opened.
+        raise UrlRefused("the address is too long, or has control characters or spaces around it")
+    try:
+        parsed = urllib.parse.urlsplit(url)
+    except ValueError:  # an unclosed "[" in the host, for one
+        raise UrlRefused("the address is not one the browser would open as written") from None
     scheme = parsed.scheme.lower()
     if url == "about:blank":
         return Target(url, None, ())
@@ -259,8 +306,18 @@ def classify_url(url: str, resolve: bool = True) -> Target:
             local = _resolves_locally(host)
         return Target(url, host, ("local_resources",) if local else ())
     if scheme in INTERNAL_SCHEMES:
-        # moz-extension: is the Shell's own pages (Settings, Vault, profiles); view-source:
-        # can wrap any of these. Both need the raw-automation opt-in, like about:config.
+        inner = wrapped(url)
+        if inner is not None:
+            # The source viewer and Reader View show another address's content: the page is an
+            # internal one (raw-automation opt-in, like about:config), and the address inside is
+            # checked as if it were opened itself, so it has a host for the site list.
+            if wrapped(inner) is not None:
+                raise UrlRefused("an address wrapped more than once is not opened")
+            target = classify_url(inner, resolve)
+            needs = ("local_resources", "debugging", *(n for n in target.needs if n not in ("local_resources", "debugging")))
+            return Target(url, target.host, needs)
+        # moz-extension: is the Shell's own pages (Settings, Vault, profiles). They need the
+        # raw-automation opt-in, like about:config.
         privileged = scheme in ("chrome", "resource", "moz-extension", "view-source") or (
             scheme == "about" and url not in ("about:blank",)
         )
@@ -274,8 +331,11 @@ def origin(url: str | None) -> str | None:
     """scheme://host[:port] for logs: never the path or query."""
     if not url:
         return None
-    parsed = urllib.parse.urlsplit(url)
-    if parsed.scheme in ("http", "https") and parsed.hostname:
+    try:
+        parsed = urllib.parse.urlsplit(subject(url))
         port = f":{parsed.port}" if parsed.port else ""
+    except ValueError:
+        return None
+    if parsed.scheme in ("http", "https") and parsed.hostname:
         return f"{parsed.scheme}://{parsed.hostname}{port}"
     return f"{parsed.scheme}:" if parsed.scheme else None

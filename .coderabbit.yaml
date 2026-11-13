@@ -181,14 +181,21 @@ reviews:
         Fresh nonces, associated data covering the header, constant-time comparison, secrets
         wiped, Argon2id parameters bounded when read from disk, the data key never in clear
         on disk or in a log, a locked mount point stays 0500, format and protocol changes are
-        versioned.
+        versioned. A change to the unlock methods is recorded inside the volume, locked or
+        not, under the profile's state lock (Container.recording), so that a key file put
+        back from before is refused and two changes cannot overwrite each other.
     - path: "launcher/nulavio_launcher/ai/**"
       instructions: |
         AI Bridge (I7). Grants come only from the user's registry, re-read on every call; no
         tool reads or edits policy; page content is untrusted and never reaches the policy
         decision; tokens are stored only as SHA-256 and never logged; every address is
         classified before navigation (loopback, private, link-local and .local need
-        local_resources); locked profiles are refused; the audit keeps metadata only.
+        local_resources), and what a tab's current address needs is checked again before a
+        tool reads or acts there; the source viewer and Reader View go by the address they
+        show; a session that is stopped, revoked, paused or whose key was replaced gets no
+        tool but session_state, whatever the tool; the forms a page sends by itself are held
+        until submit_forms allows them (threat-model-ai.md, AI-T39, says what the hold does
+        not reach); locked profiles are refused; the audit keeps metadata only.
     - path: "tests/**"
       instructions: |
         Tests (I12). Flag new skips, relaxed assertions, wider allow-lists, sleeps in place of
