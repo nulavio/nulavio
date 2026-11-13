@@ -145,6 +145,26 @@ class PasswordsTest(unittest.TestCase):
         self.assertTrue(harness.wait_until(lambda: self.m.current_url().startswith(self.fake), 10))
         self.assertTrue(self.focus_password(self.fake).startswith(self.fake))  # not asked again for this pair
 
+    def test_02b_the_warning_page_without_a_site_offers_only_the_way_out(self):
+        """Audit 2026-11 S-01: opened without a site to compare, the page says so. No warning, no empty
+        address, no button without a name and none that would do nothing."""
+        self.m.navigate(self.base + "passwords/lookalike.html")
+        self.assertTrue(harness.wait_until(lambda: self.m.execute("return document.body.dataset.state === 'invalid';"), 10))
+        shown = self.m.execute(
+            "const seen = s => [...document.querySelectorAll(s)].filter(e => e.checkVisibility());"
+            "return {buttons: seen('button').map(b => b.textContent.trim()),"
+            " callouts: seen('.callout--warning, .callout svg').length,"
+            " address: seen('#address').length, headline: document.getElementById('headline').textContent,"
+            " said: seen('.callout--info[role=status]').map(e => e.textContent.trim()), focus: document.activeElement.id};"
+        )
+        msg = lambda key: self.m.execute("return browser.i18n.getMessage(arguments[0]);", [key])  # noqa: E731
+        self.assertEqual(shown["buttons"], [msg("warnCloseTab")], shown)
+        self.assertEqual((shown["callouts"], shown["address"]), (0, 0), shown)
+        self.assertEqual(shown["headline"], msg("lookalikeInvalidHeadline"))
+        self.assertEqual(shown["said"], [msg("lookalikeInvalid")])
+        self.assertEqual(shown["focus"], "go-real")
+        self.assertIsNone(self.m.execute("return document.querySelector('.moment__severity');"), "no warning: no level")
+
     def test_03_the_real_site_is_never_warned(self):
         self.assertTrue(self.focus_password(self.real).startswith(self.real))
 

@@ -878,6 +878,31 @@ class VaultUiTest(unittest.TestCase):
         self.assertIsNone(self.call(asked, protected))
         self.assertEqual(self.start_entry()[0], here)
 
+    def test_16_a_profile_that_no_longer_exists_is_not_called_locked(self):
+        """Audit 2026-11 S-01: the unlock and methods pages of a profile that is gone say so, and leave
+        no field to type a password or recovery code into and no action that could not work."""
+        gone = 987654
+        seen = (
+            "const seen = s => [...document.querySelectorAll(s)].filter(e => e.checkVisibility());"
+            "return {fields: seen('input').map(e => e.id), buttons: seen('button').map(b => b.id || b.textContent.trim()),"
+            " headline: document.getElementById('headline').textContent, status: document.getElementById('status').textContent,"
+            " level: document.getElementById('status').dataset.level, band: seen('.moment__check').length};"
+        )
+        msg = lambda key: self.m.execute("return browser.i18n.getMessage(arguments[0]);", [key])  # noqa: E731
+        self.open_page(f"vault/unlock.html?p={gone}")
+        self.wait_state("error")
+        unlock = self.m.execute(seen)
+        self.assertEqual((unlock["fields"], unlock["buttons"]), ([], []), unlock)
+        self.assertEqual(unlock["headline"], msg("vaultGoneHeadline"))
+        self.assertEqual((unlock["status"], unlock["level"]), (msg("vaultGone"), "error"))
+        self.assertEqual(unlock["band"], 0, "nothing to type: no reminder to look at the band first")
+        self.open_page(f"vault/methods.html?p={gone}")
+        self.wait_state("unavailable")
+        methods = self.m.execute(seen)
+        self.assertEqual((methods["fields"], methods["buttons"]), ([], []), methods)
+        self.assertEqual(methods["headline"], msg("vaultGoneHeadline"))
+        self.assertEqual((methods["status"], methods["level"]), (msg("vaultGone"), "error"))
+
 
 if __name__ == "__main__":
     unittest.main()

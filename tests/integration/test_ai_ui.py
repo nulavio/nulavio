@@ -589,6 +589,23 @@ class AiUiTest(unittest.TestCase):
             audit.record(agent=agent["id"], client="other", session="s-live", event="disconnected")
             registry.end_session(agent["id"], "s-live")
 
+    def test_13_a_request_that_no_longer_exists_offers_no_answer(self):
+        """Audit 2026-11 S-01: the page of a request the bridge does not know (a restored tab, an old
+        address) names itself and shows no "Negar" or "Permitir": none of them would do anything."""
+        self.open_page("ai/request.html?id=not-a-request")
+        self.assertTrue(harness.wait_until(lambda: self.js("return document.body.dataset.state;") in ("error", "expired"), 10))
+        shown = self.js(
+            "const seen = s => [...document.querySelectorAll(s)].filter(e => e.checkVisibility());"
+            "return {answers: seen('#actions button').map(b => b.id), headline: document.getElementById('headline').textContent,"
+            " advice: seen('#only-if').length, level: document.getElementById('status').dataset.level,"
+            " status: document.getElementById('status').textContent};"
+        )
+        self.assertEqual(shown["answers"], [], shown)
+        self.assertEqual(shown["headline"], self.msg("aiRequestTitle"))
+        self.assertEqual(shown["advice"], 0, "advice about a decision nobody is asked to make")
+        self.assertIn(shown["level"], ("error", "warn"), shown)
+        self.assertTrue(shown["status"], shown)
+
 
 if __name__ == "__main__":
     unittest.main()

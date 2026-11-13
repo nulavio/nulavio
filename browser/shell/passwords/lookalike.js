@@ -45,6 +45,26 @@ if (url && HOST.test(similar) && site) {
   document.body.dataset.state = "ready";
   real.focus();
 } else {
+  // Opened without a site to compare (a hand-made or damaged address): say so, and leave only a way
+  // out. No warning, no empty address and no button that would do nothing (audit 2026-11 S-01).
+  document.title = t("lookalikeInvalidHeadline");
+  document.getElementById("headline").textContent = t("lookalikeInvalidHeadline");
+  const callout = document.querySelector(".callout");
+  callout.classList.replace("callout--warning", "callout--info");
+  callout.setAttribute("role", "status");
+  callout.querySelector("svg").setAttribute("hidden", ""); // <svg> has no .hidden property
+  document.getElementById("explain").textContent = t("lookalikeInvalid");
+  for (const selector of ["#address", "#continue", "#continue-note", "details.why"]) {
+    document.querySelector(selector).hidden = true;
+  }
+  const close = document.getElementById("go-real");
+  close.textContent = t("warnCloseTab");
+  close.addEventListener("click", async () => {
+    const tab = await browser.tabs.getCurrent();
+    const siblings = await browser.tabs.query({ windowId: tab.windowId });
+    return siblings.length > 1 ? browser.tabs.remove(tab.id) : browser.tabs.update(tab.id, { url: "about:newtab" });
+  });
   document.body.dataset.state = "invalid";
+  close.focus();
 }
 document.documentElement.dataset.ready = "true";
