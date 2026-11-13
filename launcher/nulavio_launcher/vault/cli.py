@@ -284,15 +284,28 @@ def _change(args) -> int:
                 else:
                     vault.remove(env.id)
             vault.save()
-            record()
+            unrecorded = _record(record)
     finally:
         vault.lock()
-    if code:  # shown once the change is saved and recorded, not before
+    if code:  # shown once the change is saved (it is the only copy), whether or not it was recorded
         print("New recovery code (the old one no longer opens this profile through Nulavio; a copy of the")
         print("profile's files made before now can still be opened with it):")
         print(f"\n    {code}\n")
+    if unrecorded:
+        _err(MESSAGES["not-recorded"])
     print(f"Profile '{prof.name}': {args.vault_cmd.replace('-', ' ')} done.")
     return 0
+
+
+def _record(record) -> bool:
+    """Record a saved change inside the volume. The change is already made: a failure here is
+    reported next to its result (a new recovery code must still reach the person), not instead."""
+    try:
+        record()
+    except VaultError as exc:
+        log_event("vault.change-not-recorded", code=exc.code)
+        return True
+    return False
 
 
 # -- helper API for the browser (Shell) ------------------------------------------------------
@@ -476,7 +489,8 @@ def api_request(request: dict) -> dict:
                     else:
                         vault.remove(env.id)
                 vault.save()
-                record()
+                if _record(record):
+                    result["warning"] = "not-recorded"
         finally:
             vault.lock()
         return result

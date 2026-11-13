@@ -711,6 +711,7 @@ class AuditTest(Home):
                 self.assertNotIn("intranet.example.org", json.dumps(result))
                 entry = json.loads(audit.audit_path().read_text().splitlines()[-2])  # then session_state
                 self.assertEqual((entry["tool"], entry["decision"], entry["reason"]), ("profiles_list", "deny", reason))
+                self.assertEqual(entry["capability"], "profiles_list")  # what was refused, also when it needs no capability
                 self.assertEqual(names, {"session_state"})
                 self.assertFalse(state["isError"], state)  # the one tool left: it says why
                 told = state["structuredContent"]
@@ -806,6 +807,7 @@ class AuditTest(Home):
         agent, _ = registry.add(f"forms-{level}-{len(registry.load()['agents'])}", "other", level)
         bridge = tools.Bridge(agent["id"], "s-1", approver=approver)
         bridge.elements["t1"] = {"e1": "shared-1"}
+        bridge._forms_ever = level != "autonomous"  # its documents got the guard when the engine started
         steps, answers = [], list(held)
         engine = mock.Mock()
         engine.mark.return_value = 0
@@ -815,7 +817,7 @@ class AuditTest(Home):
 
         def in_frames(_self, _tab, fn, _cancel, *, must):
             steps.append(names[fn])
-            return [answers.pop(0)] if fn == tools.FORMS_HELD_FN else [True]
+            return [answers.pop(0)] if fn == tools.FORMS_HELD_FN else [1]
 
         def call_fn(_self, _tab, fn, _args, _cancel):
             steps.append({tools.INSPECT_FN: "inspect", tools.SCROLL_FN: "scroll", tools.FOCUS_FN: "focus"}[fn])
@@ -926,28 +928,31 @@ class AuditTest(Home):
     def test_documents_hold_their_forms_from_the_moment_they_are_created(self):
         agent, _ = registry.add("frames", "other", "assisted")
         bridge = tools.Bridge(agent["id"], "s-1", approver=registry.Approver())
-        engine = mock.Mock()
-        commands = []
 
-        def command(method, params=None, **_k):
-            commands.append((method, params))
-            return {"script": "preload-1"} if method == "script.addPreloadScript" else {}
+        def engine():
+            connection, commands = mock.Mock(), []
 
-        engine.command.side_effect = command
-        bridge.workspace = mock.Mock(bidi=engine)
+            def command(method, params=None, **_k):
+                commands.append((method, params))
+                return {"script": f"preload-{id(connection)}"} if method == "script.addPreloadScript" else {}
+
+            connection.command.side_effect = command
+            return connection, commands
+
+        first, commands = engine()
+        bridge.workspace = mock.Mock(bidi=first)
+        self.assertFalse(bridge._forms_ever)
         bridge._sync_forms()
         bridge._sync_forms()  # once for the engine, not once a call
         added = [params for method, params in commands if method == "script.addPreloadScript"]
         self.assertEqual(added, [{"functionDeclaration": tools.FORMS_GUARD_FN, "sandbox": tools.SANDBOX}])
-        self.assertFalse(bridge._forms_held_before)
+        self.assertTrue(bridge._forms_ever)
         registry.grant(agent["id"], "submit_forms", "allow")  # the user allows it: new documents stop holding
         bridge._sync_forms()
-        self.assertEqual(commands[-1], ("script.removePreloadScript", {"script": "preload-1"}))
-        self.assertTrue(bridge._forms_held_before)  # and the ones already open are opened when next acted on
+        self.assertEqual(commands[-1], ("script.removePreloadScript", {"script": f"preload-{id(first)}"}))
         ran = []
-        with mock.patch.object(tools.Bridge, "_in_frames", lambda _s, _t, fn, _c, *, must: ran.append((fn, must)) or [3]):
-            bridge._forms_prepare("t1", None)
-            self.assertFalse(bridge._forms_settle("t1", "https://example.org/", "The click", [], None))
+        with mock.patch.object(tools.Bridge, "_in_frames", lambda _s, _t, fn, _c, *, must: ran.append((fn, must)) or [0]):
+            bridge._forms_prepare("t1", None)  # and the ones already open are opened when next acted on
         self.assertEqual(ran, [(tools.FORMS_OPEN_FN, True)])
         registry.grant(agent["id"], "submit_forms", "ask")
         bridge._sync_forms()
@@ -957,8 +962,76 @@ class AuditTest(Home):
             self.assertRaises(tools.ToolError),
         ):
             bridge._forms_prepare("t1", None)
-        bridge.close()
-        self.assertEqual((bridge._forms_scripts, bridge._forms_engines), ({}, set()))
+        # The engine ended behind the Bridge's back (raw automation ended by a pause) and a new one
+        # started: it is another connection, and gets its own guard before its first navigation.
+        second, commands = engine()
+        bridge.workspace = mock.Mock(bidi=second)
+        bridge.workspace.start.return_value = second
+        self.assertIs(bridge.bidi(), second)
+        self.assertEqual([m for m, _ in commands], ["script.addPreloadScript"])
+
+    def test_an_answer_for_the_session_sends_the_form_it_was_given_for(self):
+        # "Allow until the agent disconnects" turns the permission on in the middle of the call: the
+        # form is still held, and went nowhere (and later, at an unrelated click).
+        approver = Approve("session")
+        bridge, steps = self.acting("assisted", approver, held=[0, 1], info={"connected": True, "submits": True})
+        result = bridge.call(*self.CLICK)
+        self.assertFalse(result["isError"], result)
+        self.assertEqual(approver.asked, [("submit_forms", "https://example.org")])
+        self.assertEqual((result["structuredContent"]["navigated"], steps[-1]), (True, "open"))
+        # Asked after the click (a handler sent it): the same.
+        approver = Approve("session")
+        bridge, steps = self.acting("assisted", approver, held=[0, 1])
+        self.assertTrue(bridge.call(*self.CLICK)["structuredContent"]["navigated"])
+        self.assertEqual((len(approver.asked), steps[-1]), (1, "open"))
+
+    def test_a_page_that_sends_a_form_as_it_loads_is_settled_by_the_navigation(self):
+        # Nothing reported a form held by a load, an upload or a timer; it stayed held for good.
+        bridge, steps = self.acting("assisted", registry.Approver(), held=[1])
+        result = bridge.call("navigate", {"tab": "t1", "url": "https://example.org/cart"})
+        self.assertTrue(result["isError"], result)
+        self.assertIn("The navigation was done; the form the page then tried to send was not sent.", result["content"][0]["text"])
+        self.assertEqual(steps[-1], "drop")
+        bridge, steps = self.acting("assisted", Approve("once"), held=[1])
+        with mock.patch.object(tools.Bridge, "_title", return_value="t"):
+            self.assertFalse(bridge.call("navigate", {"tab": "t1", "url": "https://example.org/cart"})["isError"])
+        self.assertEqual(steps[-1], "send")
+        # Reading says that the page holds a form; it asks nothing.
+        approver = Approve("once")
+        bridge, steps = self.acting("assisted", approver, held=[2])
+        page = {"text": "ok", "url": "https://example.org/cart", "title": "t"}
+        with mock.patch.object(tools.Bridge, "_eval", return_value=page):
+            read = bridge.call("page_read", {"tab": "t1"})["structuredContent"]
+        self.assertEqual((read["forms_held"], approver.asked, "send" in steps), (2, [], False))
+
+    def test_where_a_redirect_ends_is_one_of_the_agents_sites_or_is_not_described(self):
+        agent, _ = registry.add("redirected", "other", "autonomous", domains=["example.org"])
+        bridge = tools.Bridge(agent["id"], "s-1", approver=registry.Approver())
+        engine = mock.Mock()
+        engine.command.return_value = {}
+        with (
+            mock.patch.object(tools.Bridge, "bidi", return_value=engine),
+            mock.patch.object(tools.Bridge, "_url_of", side_effect=["about:blank", "https://bank.example/acct?id=4"]),
+            mock.patch.object(tools.Bridge, "_title", side_effect=AssertionError("described")),
+        ):
+            result = bridge.call("navigate", {"tab": "t1", "url": "https://example.org/go"})
+        self.assertIn("outside the sites this agent may use", result["content"][0]["text"])
+        self.assertNotIn("bank.example", json.dumps(result))
+
+    def test_routes_go_by_the_address_a_wrapper_shows(self):
+        agent, _ = registry.add("routed", "other", "autonomous")
+        registry.set_profiles(agent["id"], [{"label": "Trabalho", "path": "/home/u/.nulavio/p1"}])
+        registry.set_routes(agent["id"], [{"site": "example.org", "profile": "Trabalho"}])
+        bridge = tools.Bridge(agent["id"], "s-1", approver=registry.Approver())
+        cases = {
+            "https://docs.example.org/a": "Trabalho",
+            "view-source:https://docs.example.org/a": "Trabalho",
+            "about:reader?url=https%3A%2F%2Fexample.org%2F": "Trabalho",
+            "view-source:https://other.example/": "",
+        }
+        for url, place in cases.items():
+            bridge._args = {"url": url}
+            self.assertEqual(bridge._place(), place, url)
 
     def test_a_page_that_cannot_be_watched_is_not_acted_on(self):
         agent, _ = registry.add("watch", "other", "assisted")
@@ -991,9 +1064,6 @@ class AuditTest(Home):
             many = {"contexts": [{"context": "t1", "children": [{"context": f"f{i}"} for i in range(200)]}]}
             engine.command.return_value = many
             self.assertEqual(len(bridge._frames("t1", None)), tools.FORMS_FRAMES)
-        for needle in ("addEventListener('submit'", "preventDefault", "stopImmediatePropagation", "HTMLFormElement.prototype",
-                       "requestSubmit", "native.call(this)"):  # fmt: skip
-            self.assertIn(needle, tools.FORMS_GUARD_FN)
 
     def test_denied_call_is_audited_without_arguments(self):
         agent, _ = registry.add("d", "other", "assisted")

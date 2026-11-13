@@ -193,8 +193,9 @@ reviews:
         local_resources), and what a tab's current address needs is checked again before a
         tool reads or acts there; the source viewer and Reader View go by the address they
         show; a session that is stopped, revoked, paused or whose key was replaced gets no
-        tool but session_state, whatever the tool; a form needs submit_forms however and
-        whenever the page sends it; locked profiles are refused; the audit keeps metadata only.
+        tool but session_state, whatever the tool; the forms a page sends by itself are held
+        until submit_forms allows them (threat-model-ai.md, AI-T39, says what the hold does
+        not reach); locked profiles are refused; the audit keeps metadata only.
     - path: "tests/**"
       instructions: |
         Tests (I12). Flag new skips, relaxed assertions, wider allow-lists, sleeps in place of

@@ -556,31 +556,121 @@ class HelperApiTest(StorageCase):
         self.assertEqual([p.name for p in box.root.glob("maintenance-*")], [])
 
     def test_the_record_goes_into_the_volume_or_nowhere(self):
-        # The volume is mounted for the change alone. If it went away meanwhile, writing the record
-        # would put it in the clear beside the key file, and the volume would keep the old one.
+        # The volume is mounted for the change alone. Written by path, the record of a volume that
+        # had gone away meanwhile landed in the clear beside the key file, and the volume kept the
+        # old one. It is written through a handle on the volume instead.
         prof, _code = self.encrypted_profile()
         box = profiles.container(prof)
+        before = box.vault_path.read_bytes()
         vault = box.load_vault()
         vault.unlock_password(PASSWORD)
         self.addCleanup(vault.lock)
-        with self.assertRaises(storage.StorageError) as ctx, box.recording(vault) as record:
+        with box.recording(vault) as record:
             (mount,) = box.root.glob("maintenance-*")
             self.assertIn(str(mount), storage.mounted_paths())
             self.assertEqual(os.stat(mount).st_mode & 0o077, 0)
             self.assertFalse(box.mounted())  # never at the profile's own path
             with self.assertRaises(subprocess.CalledProcessError):  # held open: an ordinary unmount is refused
                 subprocess.run(["fusermount3", "-u", str(mount)], check=True, capture_output=True)
-            subprocess.run(["fusermount3", "-u", "-z", str(mount)], check=True, capture_output=True)
+            subprocess.run(["fusermount3", "-u", "-z", str(mount)], check=True, capture_output=True)  # it goes away
             vault.add_password("a second password", FAST)
             vault.save()
             record()
-        self.assertEqual(ctx.exception.code, "not-recorded")
-        self.assertEqual([p.name for p in box.root.glob("maintenance-*")], [])  # and no record left in the clear
-        profiles.unlock(prof, password="a second password").lock()  # unlocking once records it
+            self.assertEqual(list(mount.iterdir()), [])  # nothing in the clear on the bare directory
+        self.assertEqual([p.name for p in box.root.glob("maintenance-*")], [])
+        box.vault_path.write_bytes(before)  # the record did reach the volume: the key file from before is refused
+        with self.assertRaises(storage.StorageError) as ctx:
+            profiles.unlock(prof, password=PASSWORD)
+        self.assertEqual(ctx.exception.code, "rollback")
+
+    def test_an_unlocked_profile_that_locks_during_a_change_gets_no_record_in_the_clear(self):
+        # The same for a profile that is open: its volume can go (the idle timer, "lock now")
+        # between the save and the record.
+        prof, _code = self.encrypted_profile()
+        box = profiles.container(prof)
+        profiles.unlock(prof, password=PASSWORD).lock()
+        vault = box.load_vault()
+        vault.unlock_password(PASSWORD)
+        self.addCleanup(vault.lock)
+        with box.recording(vault) as record:
+            subprocess.run(["fusermount3", "-u", "-z", str(prof.path)], check=True, capture_output=True)
+            vault.add_password("a second password", FAST)
+            vault.save()
+            record()
+            self.assertEqual(list(prof.path.iterdir()), [])  # the bare mount point stays empty
+        box.secure_if_locked()
+        profiles.unlock(prof, password="a second password").lock()  # and the profile still opens
         self.assertEqual(
             json.loads(box.state_path.read_text())["generation"], json.loads(box.vault_path.read_text())["generation"]
         )
         profiles.lock(prof)
+
+    def test_a_change_that_was_saved_is_reported_even_when_its_record_failed(self):
+        # The new recovery code exists only in the answer: it must arrive once the key file is saved.
+        prof, old_code = self.encrypted_profile()
+        box = profiles.container(prof)
+        real, calls = storage.Container._check_state, []
+
+        def check_state(self, vault, volume_fd=None):
+            calls.append(volume_fd)
+            if len(calls) == 2:  # the record after the save: the volume has gone
+                raise OSError(107, "Transport endpoint is not connected")
+            return real(self, vault, volume_fd)
+
+        with mock.patch.object(storage.Container, "_check_state", check_state):
+            result = vault_cli.api_request({"op": "new-recovery-code", "path": str(prof.path), "current": PASSWORD})
+        self.assertEqual(result["warning"], "not-recorded")
+        self.assertEqual([p.name for p in box.root.glob("maintenance-*")], [])
+        with self.assertRaises(VaultError):
+            profiles.unlock(prof, recovery_code=old_code)
+        profiles.unlock(prof, recovery_code=result["recovery_code"]).lock()  # unlocking once records it
+        self.assertEqual(
+            json.loads(box.state_path.read_text())["generation"], json.loads(box.vault_path.read_text())["generation"]
+        )
+        profiles.lock(prof)
+
+    def test_a_profile_whose_generation_cannot_be_checked_does_not_stay_open(self):
+        # The lock file is beside the key file, where whoever puts an old key file back can write.
+        prof, old_code = self.encrypted_profile()
+        box = profiles.container(prof)
+        before = box.vault_path.read_bytes()
+        vault_cli.api_request({"op": "new-recovery-code", "path": str(prof.path), "current": PASSWORD})
+        for path in (box.vault_path, box.vault_path.with_suffix(".json.bak")):
+            path.write_bytes(before)
+        (box.root / "state.lock").unlink()
+        (box.root / "state.lock").mkdir()
+        with self.assertRaises(storage.StorageError) as ctx:
+            profiles.unlock(prof, recovery_code=old_code)
+        self.assertEqual(ctx.exception.code, "storage-failed")
+        self.assertFalse(box.mounted())
+        self.assertEqual(os.stat(prof.path).st_mode & 0o777, 0o500)
+        (box.root / "state.lock").rmdir()
+        # A record that cannot be read is no reason to stay open either.
+        damaged = mock.patch.object(storage.Container, "_check_state", side_effect=ValueError("damaged"))
+        with damaged, self.assertRaises(storage.StorageError) as ctx:
+            profiles.unlock(prof, recovery_code=old_code)
+        self.assertEqual(ctx.exception.code, "storage-failed")
+        self.assertFalse(box.mounted())
+
+    def test_one_change_at_a_time_and_nothing_left_mounted_by_a_killed_one(self):
+        prof, _code = self.encrypted_profile()
+        box = profiles.container(prof)
+        with box._state_lock():
+            with self.assertRaises(storage.StorageError) as ctx, box._state_lock(wait=0.3):
+                self.fail("two holders")
+            self.assertEqual(ctx.exception.code, "busy")
+            # What a killed change left behind: the volume mounted at a maintenance directory.
+            left = box.root / "maintenance-left"
+            left.mkdir(mode=0o700)
+            vault = box.load_vault()
+            vault.unlock_password(PASSWORD)
+            self.addCleanup(vault.lock)
+            box._gocryptfs(["-q", "-nosyslog", str(box.cipher), str(left)], storage.storage_password(vault))
+            profiles.container(prof)  # a change is running (the lock is held): it is left alone
+            self.assertIn(str(left), storage.mounted_paths())
+        profiles.container(prof)  # every use of the profile comes here: now it is cleared
+        self.assertNotIn(str(left), storage.mounted_paths())
+        self.assertFalse(left.exists())
 
     def test_every_question_is_asked_before_the_volume_is_mounted(self):
         prof, _code = self.encrypted_profile()

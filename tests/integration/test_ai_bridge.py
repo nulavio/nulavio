@@ -457,7 +457,7 @@ class AiBridgeTest(unittest.TestCase):
 
         self.assertFalse(click("Plain")["isError"])
         self.assertIn("on", c.call("page_read", tab=tab)["structuredContent"]["text"])  # a click that sends nothing works
-        for name in ("Request", "Direct", "Frame"):
+        for name in ("Request", "Direct", "Reach", "Frame", "Shadow", "Shadow request"):  # the last two: inside shadow roots
             with self.subTest(control=name):
                 refused(click(name), "The click")
         refused(c.call("type", tab=tab, element=self.element(snap, name="Auto"), text="abc"), "The typing")
@@ -484,26 +484,27 @@ class AiBridgeTest(unittest.TestCase):
         refused(made if made["isError"] else click("Plain"), "The click" if made["isError"] else "An earlier action")
         self.assertFalse(click("Plain")["isError"])  # dropped: the page goes on without them
 
-        # A page that sends a form by itself when it loads.
-        other = c.call("tab_new", url=self.fx.url("/agent-autosubmit"))["structuredContent"]
-        time.sleep(1.5)
+        # A page that sends a form by itself when it loads: the navigation says so, and the form waits.
+        refused(c.call("tab_new", url=self.fx.url("/agent-autosubmit")), "The navigation")
+        time.sleep(1.0)
         self.assertEqual(sent(), [])
-        self.assertIn("waiting", c.call("page_read", tab=other["tab"])["structuredContent"]["text"])
-        listed = {entry["tab"]: entry for entry in c.call("tabs_list")["structuredContent"]["tabs"]}
-        self.assertTrue(listed[tab]["url"].endswith("/agent-scripted-form"), listed)  # neither tab left its page
-        self.assertTrue(listed[other["tab"]]["url"].endswith("/agent-autosubmit"), listed)
+        tabs = {entry["tab"]: entry for entry in c.call("tabs_list")["structuredContent"]["tabs"]}
+        self.assertTrue(tabs[tab]["url"].endswith("/agent-scripted-form"), tabs)  # the first tab never left its page
+        (other,) = [entry["tab"] for entry in tabs.values() if (entry["url"] or "").endswith("/agent-autosubmit")]
+        self.assertIn("waiting", c.call("page_read", tab=other)["structuredContent"]["text"])
         denied = [e for e in audit.read(limit=200, agent=agent["id"]) if e.get("decision") == "deny"]
-        self.assertEqual(len(denied), 10, denied)  # one for each form the pages tried to send
+        self.assertEqual(len(denied), 14, denied)  # one for each form the pages tried to send
         self.assertTrue(all("submit_forms" in e["capability"] for e in denied), denied)
 
-        # With the permission, the same click sends the form, and what a page held goes as it was.
+        # With the permission, the same click sends the form, and so does the page that sends one as it loads.
         registry.grant(agent["id"], "submit_forms", "allow")
         gone = click("Direct")
         self.assertFalse(gone["isError"], gone)
         self.assertTrue(gone["structuredContent"]["navigated"], gone)
         self.assertEqual(sent(), ["/agent-result?q=sent"])
-        waiting = c.call("page_snapshot", tab=other["tab"])
-        self.assertFalse(waiting["isError"], waiting)
+        again = c.call("navigate", tab=other, url=self.fx.url("/agent-autosubmit"))
+        self.assertFalse(again["isError"], again)
+        self.assertTrue(harness.wait_until(lambda: "/agent-result?q=onload" in sent(), timeout=10), sent())
 
     @staticmethod
     def chrome(bidi: Bidi, expression: str):

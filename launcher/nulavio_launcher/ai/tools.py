@@ -14,6 +14,7 @@ import re
 import contextlib
 import threading
 import time
+import weakref
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -95,55 +96,98 @@ READ_EXPR = "({title: document.title, url: location.href, text: document.body ? 
 # What an element looks like does not say what its click does: a page's own handler can send a
 # form from anything, at once or after a timer, in this document or in a frame it creates. So
 # every document of such an agent's engines carries a guard from the moment it is created (a
-# BiDi preload script), in a sandbox of the page (SANDBOX): the page's scripts cannot see, call
-# or remove it. `submit` events (a submit button, Enter, requestSubmit()) are stopped before the
-# page's handlers see them; form.submit() raises no event, so it is replaced. A held form stays
-# in the page, with what it would have sent, until the user allows it (it is then sent as it
-# was) or refuses it (it is dropped).
+# BiDi preload script), in a sandbox of the page (SANDBOX), where the page's scripts do not
+# normally reach. `submit` events (a submit button, Enter) are stopped before the page's
+# handlers see them, in the document and in each shadow root (the event does not leave one);
+# form.submit() raises no event and requestSubmit() may be called on a form in a shadow root
+# no click passed through, so both are replaced. A held form stays in the page, with what it
+# would have sent, until the user allows it (it is then sent as it was) or refuses it (it is
+# dropped). It is not a wall against a page that sets out to defeat it (docs/security/
+# threat-model-ai.md, AI-T39).
 SANDBOX = "nulavio"
 FORMS_GUARD_FN = r"""() => {
+  "use strict";
   if (globalThis.nulavioForms) return globalThis.nulavioForms.hold();
   const held = [];
-  let holding = true, passing = false;
-  window.addEventListener('submit', (event) => {
+  let holding = true, passing = false, complete = false;
+  let nativeSubmit = null, nativeRequest = null;
+  const page = window.wrappedJSObject || window;
+  const onSubmit = (event) => {
     if (!holding || passing) return;
     event.preventDefault();
     event.stopImmediatePropagation();
     held.push({form: event.target, submitter: event.submitter || null, direct: false});
-  }, true);
-  let original = null;
+  };
+  window.addEventListener('submit', onSubmit, true);
+  const roots = new WeakSet();
+  const watch = (root) => {
+    const key = root && (root.wrappedJSObject || root);
+    if (!key || roots.has(key)) return;
+    roots.add(key);
+    root.addEventListener('submit', onSubmit, true);
+  };
+  const along = (event) => { for (const node of event.composedPath()) if (node instanceof ShadowRoot) watch(node); };
+  window.addEventListener('click', along, true);
+  window.addEventListener('keydown', along, true);
+  const scan = () => { for (const el of document.querySelectorAll('*')) if (el.shadowRoot) watch(el.shadowRoot); };
+  window.addEventListener('DOMContentLoaded', scan, true);
   try {
-    const proto = (window.wrappedJSObject || window).HTMLFormElement.prototype;
-    const native = proto.submit;
-    proto.submit = function () {
-      if (!holding || passing) return native.call(this);
-      held.push({form: this, submitter: null, direct: true});
+    // Each replacement is a Proxy made in the page around the engine's own method: what the page
+    // holds is its own object (its `.constructor` is the page's Function, where a plain function
+    // from here would lead back to this sandbox), and the trap cannot be taken out of it. The
+    // handler object is the page's too: one from here is opaque to the page's Proxy.
+    const wrap = (method, apply) => {
+      const handler = new page.Object();
+      handler.apply = apply;
+      return new page.Proxy(method, handler);
     };
-    original = native;
+    const forms = page.HTMLFormElement.prototype, elements = page.Element.prototype;
+    const submit = forms.submit, request = forms.requestSubmit, attach = elements.attachShadow;
+    forms.submit = wrap(submit, (target, form) => {
+      if (!holding || passing) return submit.call(form);
+      held.push({form, submitter: null, direct: true});
+    });
+    forms.requestSubmit = wrap(request, (target, form, args) => {
+      if (!holding || passing) return request.call(form, args[0]);
+      held.push({form, submitter: args[0] || null, direct: false});
+    });
+    elements.attachShadow = wrap(attach, (target, host, args) => {
+      const root = attach.call(host, args[0]);
+      try { watch(root); } catch (e) {}
+      return root;
+    });
+    nativeSubmit = submit;
+    nativeRequest = request;
+    complete = true;
   } catch (e) {}
   const send = () => {
     const forms = held.splice(0);
+    let sent = 0;
     passing = true;
     try {
       for (const h of forms) {
+        if (!h.form.isConnected) continue;
         try {
-          if (h.direct) original.call(h.form);
+          if (h.direct) nativeSubmit.call(h.form);
+          else if (!nativeRequest) h.form.requestSubmit(h.submitter || undefined);
           else {
-            try { h.form.requestSubmit(h.submitter || undefined); } catch (e) { h.form.requestSubmit(); }
+            try { nativeRequest.call(h.form, h.submitter || undefined); } catch (e) { nativeRequest.call(h.form); }
           }
+          sent += 1;
         } catch (e) {}
       }
     } finally { passing = false; }
-    return forms.length;
+    return sent;
   };
   globalThis.nulavioForms = {
-    hold: () => { holding = true; return original !== null; },
+    hold: () => { holding = true; scan(); return complete; },
     held: () => held.length,
     drop: () => held.splice(0).length,
     send,
     open: () => { holding = false; return send(); },
   };
-  return original !== null;
+  scan();
+  return complete;
 }"""
 FORMS_HELD_FN = "() => (globalThis.nulavioForms ? globalThis.nulavioForms.held() : 0)"
 FORMS_DROP_FN = "() => (globalThis.nulavioForms ? globalThis.nulavioForms.drop() : 0)"
@@ -296,9 +340,10 @@ class Bridge:
         self._cancel: threading.Event | None = None  # the current call's cancel: a pending request is denied
         self.raw = False  # the AI Workspace's endpoint was handed over (raw_automation)
         self.last_call: dict | None = None
-        self._forms_scripts: dict[str, str] = {}  # engine ("" or a profile label) -> its forms-guard preload script
-        self._forms_engines: set[str] = set()  # engines whose guard was set up at least once
-        self._forms_held_before = False  # some document may still hold forms from before the agent could submit
+        # By connection, not by label: an engine that ended (raw automation, a pause) and its successor are two.
+        self._forms_scripts: weakref.WeakKeyDictionary[Bidi, str] = weakref.WeakKeyDictionary()  # -> preload script id
+        self._forms_engines: weakref.WeakSet[Bidi] = weakref.WeakSet()  # connections whose guard was set up once
+        self._forms_ever = False  # some document of this session may carry the guard
 
     # -- policy ----------------------------------------------------------------------
 
@@ -416,7 +461,7 @@ class Bridge:
                 self._args = arguments
                 self._cancel = cancel
                 if name != "session_state":  # the one tool a held session keeps: it says why
-                    self._refuse_if_held(tool.capability or name)
+                    self._refuse_if_held(tool.capability or name, checked)
                 self._sync_downloads()
                 self._sync_forms()
                 result, target_url = getattr(self, "_t_" + name)(arguments, cancel, checked)
@@ -486,7 +531,7 @@ class Bridge:
         """The AI Workspace's engine, or the engine that holds `tab`."""
         owner = "" if tab is None else self._owner(tab)
         engine = self.profiles[owner].bidi if owner else self._workspace().start()
-        if owner not in self._forms_engines:  # just started: before its first navigation
+        if engine not in self._forms_engines:  # just started: before its first navigation
             self._sync_forms()
         return engine
 
@@ -516,8 +561,6 @@ class Bridge:
             self.workspace = None
         self.elements.clear()
         self.owner.clear()
-        self._forms_scripts.clear()
-        self._forms_engines.clear()
         self._downloads_mode = {}
 
     def _sync_downloads(self) -> None:
@@ -624,16 +667,17 @@ class Bridge:
         if not engines:
             return
         hold = not self._may_submit()
-        for label, target in engines:
-            self._forms_engines.add(label)
-            script = self._forms_scripts.get(label)
+        for _label, target in engines:
+            engine = target.bidi
+            self._forms_engines.add(engine)
+            script = self._forms_scripts.get(engine)
             if hold and script is None:
                 guard = {"functionDeclaration": FORMS_GUARD_FN, "sandbox": SANDBOX}
-                self._forms_scripts[label] = target.bidi.command("script.addPreloadScript", guard)["script"]
+                self._forms_scripts[engine] = engine.command("script.addPreloadScript", guard)["script"]
+                self._forms_ever = True
             elif not hold and script is not None:
-                target.bidi.command("script.removePreloadScript", {"script": script})
-                del self._forms_scripts[label]
-                self._forms_held_before = True  # documents already open still hold: lifted when next acted on
+                engine.command("script.removePreloadScript", {"script": script})
+                del self._forms_scripts[engine]  # documents already open still hold: opened when next acted on
 
     def _frames(self, tab: str, cancel) -> list[str]:
         """The tab's document and the frames in it, the document first."""
@@ -670,32 +714,49 @@ class Bridge:
         forms they send, or stop holding once this agent may submit. Documents get the guard when
         they are created; this covers the ones that were open before."""
         if self._may_submit():
-            if self._forms_held_before:
+            if self._forms_ever:
                 self._in_frames(tab, FORMS_OPEN_FN, cancel, must=True)
             return
         if not all(self._in_frames(tab, FORMS_GUARD_FN, cancel, must=True)):
             raise ToolError("this page's forms could not be watched (form.submit is out of reach); nothing was done")
 
+    def _forms_held(self, tab: str, cancel) -> int:
+        """How many forms the tab's documents hold."""
+        if not self._forms_ever:
+            return 0
+        return sum(int(n or 0) for n in self._in_frames(tab, FORMS_HELD_FN, cancel, must=False))
+
     def _forms_settle(self, tab: str, url: str, what: str, checked: list[str], cancel) -> bool:
         """After an action, and before the next one: forms the page tried to send are held in it,
         whenever it tried. Sending them needs submit_forms: with it they go as they were (True);
-        without it they are dropped and the call is denied."""
-        if self._may_submit():
+        without it they are dropped and the call is denied.
+
+        The count comes first, not the permission: an answer "for this session" turns the
+        permission on in the middle of the call, and the form it was given for is still held."""
+        if not self._forms_held(tab, cancel):
             return False
-        held = sum(int(n or 0) for n in self._in_frames(tab, FORMS_HELD_FN, cancel, must=False))
-        if not held:
-            return False
-        if "submit_forms" not in checked:  # not already allowed for this call (a submit button, submit=true)
+        allowed = self._may_submit()
+        if not allowed and "submit_forms" not in checked:  # not already allowed for this call (a submit button, submit=true)
             try:
                 self.require("submit_forms", url, checked=checked)
             except Denied as denied:
                 self._in_frames(tab, FORMS_DROP_FN, cancel, must=False)
                 denied.detail = f"{what} was done; the form the page then tried to send was not sent."
                 raise
+            allowed = self._may_submit()  # "for this session": the documents stop holding, too
         mark = self.bidi(tab).mark()
-        self._in_frames(tab, FORMS_SEND_FN, cancel, must=False)
+        sent = sum(int(n or 0) for n in self._in_frames(tab, FORMS_OPEN_FN if allowed else FORMS_SEND_FN, cancel, must=False))
+        if not sent:  # the page took its form away meanwhile
+            return False
         self._settle(tab, mark, expected=True, cancel=cancel)
         return True
+
+    def _in_scope_now(self, url: str) -> None:
+        """Where a redirect or the page itself took the tab is still one of the agent's sites, or
+        the call says so and describes nothing of it (the tab stays; reading it is refused too)."""
+        if not policy.in_scope(self._agent() or {}, policy.host_of(url)):
+            self._target = url
+            raise Denied(policy.Decision(False, "block", "navigate", "out-of-scope"))
 
     # -- tools -----------------------------------------------------------------------
 
@@ -707,6 +768,7 @@ class Bridge:
             bidi.command("session.end", {}, timeout=5)
         bidi.ws.close()
         workspace.bidi = None
+        self._downloads_mode.pop("", None)  # the next connection to this engine starts over
         self.raw = True
         workspace.mark_raw()  # the window now says "Automação bruta" (WCS-01), until it closes
         self.elements.clear()
@@ -720,10 +782,14 @@ class Bridge:
     def _raw_watch(self, workspace: Workspace) -> None:
         """While the endpoint is out, the user's stop, pause, revoke and a new key still end the AI Workspace."""
         while self.raw and self.workspace is workspace:
-            why = self._held()
+            try:
+                why = self._held()
+            except Exception:  # the registry could not be read: the endpoint does not stay out on that
+                why = "stopped"
             if why:
                 self.raw = False
                 self.workspace = None
+                self._downloads_mode.pop("", None)
                 workspace.stop()
                 audit.record(agent=self.agent_id, session=self.session_id, tool="raw_automation", event="raw-ended", reason=why)
                 return
@@ -792,7 +858,7 @@ class Bridge:
         self.owner[tab] = owner
         if url:
             bidi.command("browsingContext.navigate", {"context": tab, "url": url, "wait": "complete"}, timeout=60, cancel=cancel)
-            self.require_needs(self._url_of(tab, cancel), checked=checked)  # where a redirect took it
+            self._arrived(tab, checked, cancel)
         data = {
             "tab": tab,
             "profile": owner or "AI Workspace",
@@ -851,9 +917,16 @@ class Bridge:
         self.elements.pop(tab, None)
         self.bidi(tab).command("browsingContext.navigate", {"context": tab, "url": url, "wait": "complete"},
                             timeout=60, cancel=cancel)  # fmt: skip
+        self._arrived(tab, checked, cancel)
+        return self._ok({"tab": tab, "url": self._url_of(tab, cancel), "title": self._title(tab, cancel)}), url
+
+    def _arrived(self, tab: str, checked: list[str], cancel) -> None:
+        """After a navigation: where a redirect took the tab is checked as if it had been asked for,
+        and a form the new page sent by itself as it loaded is settled like any other."""
         final = self._url_of(tab, cancel)
-        self.require_needs(final, checked=checked)  # where a redirect took it
-        return self._ok({"tab": tab, "url": final, "title": self._title(tab, cancel)}), url
+        self._in_scope_now(final)
+        self.require_needs(final, checked=checked)
+        self._forms_settle(tab, final, "The navigation", checked, cancel)
 
     def _t_page_read(self, args, cancel, checked):
         tab = args["tab"]
@@ -865,7 +938,14 @@ class Bridge:
         text = page.get("text") or ""
         data = {"tab": tab, "url": page.get("url"), "title": page.get("title"), "text": text[:limit],
                 "truncated": len(text) > limit, "untrusted": True, "dialog": self._open_dialog(tab)}  # fmt: skip
+        self._say_forms_held(tab, data, cancel)
         return self._ok(data, f"{UNTRUSTED}\n\nTitle: {data['title']}\nURL: {data['url']}\n\n{data['text']}"), url
+
+    def _say_forms_held(self, tab: str, data: dict, cancel) -> None:
+        """A page that tried to send a form (by itself, from a timer, in a new tab) holds it until
+        the next click or typing there settles it. Reading the page says so; it does not ask."""
+        if self._open_dialog(tab) is None and (held := self._forms_held(tab, cancel)):
+            data["forms_held"] = held
 
     def _t_page_snapshot(self, args, cancel, checked):
         tab = args["tab"]
@@ -880,6 +960,7 @@ class Bridge:
             elements.append({"element": uid, **info})
         self.elements[tab] = mapping
         data = {"tab": tab, "url": url, "title": self._title(tab, cancel), "elements": elements, "untrusted": True}
+        self._say_forms_held(tab, data, cancel)
         return self._ok(data, UNTRUSTED + "\n\n" + json.dumps(data, ensure_ascii=False)), url
 
     def _t_screenshot(self, args, cancel, checked):
@@ -1029,8 +1110,14 @@ class Bridge:
         path = (folder / args["file"]).resolve()
         if path.parent != folder or not path.is_file():
             raise ToolError(f"no file named {args['file']!r} in this agent's uploads folder ({folder})")
+        self._forms_prepare(tab, cancel)  # choosing a file runs the page's change handlers
+        if earlier := self._earlier_forms(tab, url, checked, cancel):
+            return earlier, url
+        mark = self.bidi(tab).mark()
         self.bidi(tab).command("input.setFiles", {"context": tab, "element": element, "files": [str(path)]}, cancel=cancel)
-        return self._ok({"tab": tab, "file": path.name}), url
+        self._settle(tab, mark, expected=False, cancel=cancel)
+        sent = self._forms_settle(tab, url, "The upload", checked, cancel)
+        return self._ok({"tab": tab, "file": path.name, "navigated": sent}), url
 
     def _t_evaluate(self, args, cancel, checked):
         tab = args["tab"]

@@ -300,6 +300,9 @@ class FixtureServer:
                 "Plain</div>"
                 f'<div id=request role=button tabindex=0 onclick="{form}.requestSubmit()">Request</div>'
                 f'<div id=direct role=button tabindex=0 onclick="{form}.submit()">Direct</div>'
+                # Through the replaced method's constructor, a page once reached the guard itself.
+                '<div id=reach role=button tabindex=0 onclick="try { HTMLFormElement.prototype.submit.constructor('
+                f"'globalThis.nulavioForms.open()')() }} catch (e) {{}} {form}.submit()\">Reach</div>"
                 '<div id=frame role=button tabindex=0 onclick="frames[0].document.forms[0].submit()">Frame</div>'
                 f'<div id=later role=button tabindex=0 onclick="setTimeout(() => {form}.requestSubmit(), 1200)">Later</div>'
                 "<div id=newframe role=button tabindex=0 onclick=\"const i = document.createElement('iframe');"
@@ -311,6 +314,14 @@ class FixtureServer:
                 f'<input id=focus aria-label="Focus" onfocus="{form}.requestSubmit()">'
                 f'<input id=clear aria-label="Clear" value="old" oninput="{form}.requestSubmit()">'
                 '<p id=state>off</p><iframe src="/agent-frame-form" width=40 height=20></iframe>'
+                # Forms inside shadow roots: a real submit button, and one sent by the host's handler.
+                '<div id=shadow role=button tabindex=0 aria-label="Shadow" style="display: inline-block"></div>'
+                '<div id=shadowreq role=button tabindex=0 aria-label="Shadow request">request</div>'
+                "<script>for (const [id, scripted] of [['shadow', false], ['shadowreq', true]]) {"
+                " const host = document.getElementById(id), root = host.attachShadow({mode: 'open'});"
+                ' root.innerHTML = \'<form action="/agent-result" method="get"><input type=hidden name=q value="\' + id +'
+                " '\">' + (scripted ? '<slot></slot>' : '<button type=submit>Go</button>') + '</form>';"
+                " if (scripted) host.addEventListener('click', () => root.querySelector('form').requestSubmit()); }</script>"
             )
             return page.encode(), html, {}
         if path == "/agent-frame-form":
