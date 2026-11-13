@@ -6,6 +6,7 @@ import importlib.util
 import subprocess
 import unittest
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[2]
 SPEC = importlib.util.spec_from_file_location("org_layout_measure", ROOT / "scripts" / "research" / "org_layout_measure.py")
@@ -55,6 +56,14 @@ class OrgLayoutMeasureTest(unittest.TestCase):
         expected = [".coderabbit.yaml", ".editorconfig", ".gitignore", ".gitleaks.toml", ".gitleaksignore", ".semgrepignore",
                     "pyproject.toml", "requirements/dev.txt"]  # fmt: skip
         self.assertEqual(shared, expected, "a new top-level path belongs to a component, or to this list")
+
+    def test_paths_come_from_git_as_they_are(self):
+        # With git's default, "site/café.html" arrives quoted and escaped and matches no component.
+        with mock.patch.object(measure.subprocess, "run") as run:
+            run.return_value.stdout = ""
+            measure.git("log", "--name-only")
+        self.assertEqual(run.call_args.args[0][:3], ["git", "-c", "core.quotePath=false"])
+        self.assertEqual(measure.component("site/café.html"), "site")
 
     def test_a_renamed_directory_is_noticed(self):
         self.assertEqual(measure.component("site-src/index.html"), "shared")  # not "site": the test above would then fail

@@ -95,7 +95,9 @@ SCREENSHOTS = "docs/design/screenshots/"
 
 
 def git(*args: str) -> str:
-    return subprocess.run(["git", *args], capture_output=True, check=True, text=True).stdout
+    # quotePath off: a path with a non-ASCII character comes as it is, not quoted and escaped,
+    # so it is counted with its component.
+    return subprocess.run(["git", "-c", "core.quotePath=false", *args], capture_output=True, check=True, text=True).stdout
 
 
 def component(path: str) -> str:
