@@ -192,6 +192,12 @@ jobs:
             --append-system-prompt-file .github/ai-review/instructions.md
             --json-schema '${{ steps.input.outputs.schema }}'
 
+      # The last step, and the only one that touches the file: it holds what the model read and wrote.
+      - name: Say why the review ended, when it failed (a status and a reason, never its text)
+        if: steps.input.outputs.status == 'ready' && failure() && steps.claude.outcome == 'failure'
+        timeout-minutes: 1
+        run: /usr/bin/python3 -I scripts/ci/ai_review_failure.py "$RUNNER_TEMP/claude-execution-output.json"
+
   publish:
     name: AI review comment
     needs: review

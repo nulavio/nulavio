@@ -329,6 +329,21 @@ Each scenario lists: assets · adversary · preconditions · trust boundary · i
 | Tests | `test_ai_review`, `test_post_ai_review`, `test_repo_hygiene`, `test_coderabbit_config` |
 | Residual | **Medium** |
 
+### S20 — Release metadata advertises an unverified or older build
+
+| Field | |
+|---|---|
+| Assets | A6; integrity of download links and public release history |
+| Adversary | T-SUPPLY; forged event data, tampered tag or manifest, stolen metadata token |
+| Preconditions | Release metadata automation is deployed; PR creation additionally requires its optional dedicated token |
+| Boundary | TB21, TB8 |
+| Impact | Misleading download version or release notes; a repository write with a compromised token |
+| Preventive | Implemented: trusted main checkout; published release fetched from GitHub; manifest build-provenance verification; tag/commit/engine-pin agreement; numeric versions compared before changing the site; public notes treated as text; only CHANGELOG.md and packaging/release.json staged; PR instead of main push; no signing or publication authority in this workflow |
+| Detective | Unit tests execute workflow shell blocks with a fake GitHub CLI and disposable remote; CI and review on the generated PR; recovery artifact and explicit warning when the token is absent |
+| Limitations | Provenance identifies a build workflow, not an honest build machine (TB19). Notes still need editorial review; no security or SLA verdict is inferred. A repository write token can propose other changes if stolen; its repository scope and lack of Workflows permission must be set by the maintainer. Activation and live post-publication execution remain unverified until configured |
+| Tests | `test_release_metadata`, `test_release_metadata_workflow`, `test_release_notes` |
+| Residual | Existing supply-chain and shared-account limits (S13, S19); this automation does not accept or reduce those risks by itself |
+
 ---
 
 See the [threat matrix](threat-matrix.md) for the at-a-glance view and [residual risks](residual-risks.md) for what users must know.

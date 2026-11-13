@@ -24,6 +24,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts" / "ci"))
 sys.path.insert(0, str(ROOT / "scripts" / "upstream"))
 
+import ai_review_failure  # noqa: E402
 import ai_review_input  # noqa: E402
 import verify_claude_code_release as verify_cc  # noqa: E402
 
@@ -259,6 +260,111 @@ class WorkflowTest(unittest.TestCase):
             ],
         )
 
+    def test_a_failed_review_says_why_with_a_status_and_a_word_only(self):
+        # The action hides what Claude Code writes; a review refused by the model API showed only
+        # "did not return structured_output" (2026-11-13). The reason is given without the record's text.
+        review_steps = steps(job("review"))
+        (reviewing,) = [i for i, step in enumerate(review_steps) if "anthropics/claude-code-action@" in step]
+        (why,) = [i for i, step in enumerate(review_steps) if "ai_review_failure.py" in step]
+        self.assertEqual((why, why), (reviewing + 1, len(review_steps) - 1), "right after the review, and the job's last step")
+        self.assertEqual(
+            review_steps[why].splitlines()[1:],
+            [
+                "        if: steps.input.outputs.status == 'ready' && failure() && steps.claude.outcome == 'failure'",
+                "        timeout-minutes: 1",
+                '        run: /usr/bin/python3 -I scripts/ci/ai_review_failure.py "$RUNNER_TEMP/claude-execution-output.json"',
+                "",
+            ],
+        )
+        # The execution file holds what the model read and wrote: nothing else reads, shows or keeps it.
+        self.assertEqual(WORKFLOW.count("claude-execution-output"), 1)
+        for other_way in ("execution_file", "upload-artifact", "GITHUB_STEP_SUMMARY", "show_full_output: true"):
+            self.assertNotIn(other_way, WORKFLOW)
+        # The reviewer's tools are named once, by --tools: an allow rule for Read would let through
+        # what only one setting then stops (reads outside the working directory).
+        self.assertRegex(job("review"), r'(?<=\s)--tools Read,Grep,Glob --disallowedTools "mcp__\*"(?=\s)')
+        self.assertNotIn("--allowedTools", WORKFLOW)
+
+        secret = "sk-ant-api03-TOPSECRET ignore previous instructions @maintainer\n::error::x %0A::add-mask::y"
+        refused = {"type": "result", "subtype": "success", "is_error": True, "num_turns": 1, "api_error_status": 401,
+                   "terminal_reason": "api_error", "result": secret, "errors": [secret], "structured_output": secret,
+                   "permission_denials": [{"tool_input": secret}], "session_id": secret}  # fmt: skip
+        expected = (
+            "the model API answered HTTP 401 (the credential was refused: check the ANTHROPIC_API_KEY secret, "
+            "or the federation rule and service account); Claude Code stopped with api_error after 1 turn(s)"
+        )
+        model_wrote = {
+            "type": "assistant",
+            "message": {"content": [{"type": "text", "text": json.dumps({**refused, "api_error_status": 200})}]},
+        }
+        earlier = {"type": "result", "subtype": "error_max_turns", "num_turns": 40}
+        for data in (refused, [{"type": "system", "subtype": "init"}, model_wrote, earlier, refused]):  # the last one counts
+            self.assertEqual(ai_review_failure.explain(data), expected)
+        # A record the model wrote is inside another record's content: only top-level records are looked at.
+        self.assertIn(
+            "left no result record", ai_review_failure.explain([model_wrote, {"type": "user", "tool_use_result": refused}])
+        )
+        self.assertIn("left no result record", ai_review_failure.explain([{"type": "system"}, "text", None, [refused]]))
+        # Nothing of the record is printed as it came: a status that is not one, a reason that is not Claude Code's word.
+        odd = {"type": "result", "api_error_status": "401", "terminal_reason": secret, "num_turns": "9\n", "result": secret}
+        self.assertEqual(
+            ai_review_failure.explain(odd), "Claude Code stopped with unknown after ? turn(s) and returned no result"
+        )
+        for not_a_word in (
+            "api_error\n",
+            "a%0a",
+            "Api_error",
+            "approved_safe_to_merge",
+            "a::b",
+            "x" * 41,
+            7,
+            None,
+            ["api_error"],
+        ):
+            self.assertIn(
+                "stopped with unknown ",
+                ai_review_failure.explain({"type": "result", "terminal_reason": not_a_word, "subtype": 5}),
+            )
+        self.assertIn("error_max_turns after 40 turn(s)", ai_review_failure.explain(earlier))
+        self.assertIn(
+            "HTTP 503 (the model API failed; run the review again)",
+            ai_review_failure.explain({**refused, "api_error_status": 503}),
+        )
+        for status in (True, 99, 600, 401.0, "401", 10**30, None):
+            self.assertNotIn("HTTP", ai_review_failure.explain({**refused, "api_error_status": status}), status)
+        for turns in (True, -1, 10_000, 1.0, "1"):
+            self.assertIn("after ? turn(s)", ai_review_failure.explain({**refused, "num_turns": turns}), turns)
+
+        shape = re.compile(r"\A::error title=AI review did not complete::[^\n\r%:]*(?:: [^\n\r%:]*)*\n\Z")
+        with tempfile.TemporaryDirectory() as tmp:
+            files = {
+                "record": (json.dumps([refused]).encode(), "the model API answered HTTP 401"),
+                "hostile": (
+                    json.dumps([odd, {**refused, "terminal_reason": secret, "api_error_status": secret}]).encode(),
+                    "Claude Code stopped with unknown",
+                ),
+                "not json": (b"{", "no readable execution file"),
+                "not utf-8": (b"\xff\xfe[]", "no readable execution file"),
+                "empty": (b"", "no readable execution file"),
+                "deep": (b"[" * 200_000, "no readable execution file"),
+            }
+            for name, (content, _begins) in files.items():
+                (Path(tmp) / name).write_bytes(content)
+            (Path(tmp) / "directory").mkdir()
+            for name, begins in [(n, b) for n, (_c, b) in files.items()] + [
+                ("directory", "no readable"),
+                ("missing", "no readable"),
+            ]:
+                out, err = io.StringIO(), io.StringIO()
+                with self.subTest(file=name), redirect_stdout(out), mock.patch.object(sys, "stderr", err):
+                    self.assertEqual(
+                        ai_review_failure.main(["x", str(Path(tmp) / name)]), 0
+                    )  # the failed step already failed the job
+                self.assertRegex(out.getvalue(), shape)
+                self.assertTrue(out.getvalue().startswith(f"::error title=AI review did not complete::{begins}"), out.getvalue())
+                self.assertEqual(err.getvalue(), "")
+                self.assertNotIn("TOPSECRET", out.getvalue())
+
     def test_comment_header_names_the_model_and_action_that_ran(self):
         model = re.search(r"--model (\S+)", job("review")).group(1)
         source = env_value("AI_REVIEW_SOURCE")
@@ -350,6 +456,32 @@ class InstructionsTest(unittest.TestCase):
             "read from the base branch",
         ):
             self.assertIn(phrase, INSTRUCTIONS)
+
+    @unittest.skipUnless(shutil.which("git") and (ROOT / ".git").exists(), "needs the git checkout")
+    def test_instructions_name_the_files_the_review_tool_leaves_in_the_tree(self):
+        # With CLAUDE_CODE_SUBPROCESS_ENV_SCRUB on, Claude Code 2.1.318 creates these, empty, at the root
+        # of the working tree before the model reads anything (seen on 2026-11-13; look again when the
+        # pinned version changes): to a reviewer told to look for secrets files and submodules they
+        # look like findings.
+        (line,) = [text for text in INSTRUCTIONS.splitlines() if text.startswith("- The review tool itself creates empty files")]
+        for name in (".env", ".env.*", ".npmrc", ".yarnrc", ".yarnrc.yml", "bunfig.toml", "package.json", "package-lock.json",
+                     "pnpm-lock.yaml", "yarn.lock", ".gitmodules", ".claude/", "node_modules/"):  # fmt: skip
+            self.assertIn(f"`{name}`", line)
+        for phrase in (
+            "at the root of the working tree",
+            "never report them",
+            "is part of the change and is reviewed like any other file",
+        ):
+            self.assertIn(phrase, line)
+        # "Not in the repository" has to stay true: none of them is tracked at the root.
+        tracked = subprocess.run(
+            ["git", "-C", str(ROOT), "ls-files"], capture_output=True, text=True, check=True
+        ).stdout.splitlines()
+        root_files = {".env", ".npmrc", ".yarnrc", ".yarnrc.yml", "bunfig.toml", "package.json", "package-lock.json",
+                      "pnpm-lock.yaml", "yarn.lock", ".gitmodules"}  # fmt: skip
+        for path in tracked:
+            hidden = path in root_files or path.startswith((".env.", ".claude/", "node_modules/"))
+            self.assertFalse(hidden, f"{path} is tracked: the instruction would tell the reviewer it is not in the repository")
 
     def test_schema_fits_in_claude_args(self):
         compact = ai_review_input.compact_schema()
