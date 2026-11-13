@@ -245,6 +245,46 @@ class AddressTest(unittest.TestCase):
                     "view-source:https://example.org/"):  # fmt: skip
             self.assertEqual(policy.classify_url(url).needs, ("local_resources", "debugging"), url)
 
+    def test_an_address_wrapped_by_an_internal_page_goes_by_what_it_shows(self):
+        # LESIS afa509d1: view-source:https://… has no host of its own, so the site list let it through.
+        with mock.patch.object(policy, "_resolves_locally", return_value=False):
+            wrapped = (
+                "view-source:https://bank.example/acct?id=4",
+                "VIEW-SOURCE:https://bank.example/",
+                "about:reader?url=https%3A%2F%2Fbank.example%2Fnews",
+                "about:READER?url=https://bank.example/",
+            )
+            for url in wrapped:
+                with self.subTest(url=url):
+                    target = policy.classify_url(url)
+                    self.assertEqual((target.host, target.needs), ("bank.example", ("local_resources", "debugging")))
+                    self.assertEqual(policy.host_of(url), "bank.example")
+                    self.assertEqual(policy.origin(url), "https://bank.example")
+            self.assertEqual(policy.classify_url("view-source:http://192.168.1.1/").host, "192.168.1.1")
+            # Reader View reads the first `url`, as the engine does (an empty one shows nothing).
+            self.assertEqual(policy.host_of("about:reader?url=https://a.example/&url=https://b.example/"), "a.example")
+            self.assertIsNone(policy.host_of("about:reader?url=&url=https://b.example/"))
+            # The engine trims an address; a wrapper is one however it is padded, and is not opened padded.
+            for padded in (
+                " view-source:https://bank.example/",
+                "\x01view-source:https://bank.example/",
+                "view-source:https://bank.example/ ",
+            ):
+                self.assertEqual(policy.host_of(padded), "bank.example", padded)
+                with self.assertRaises(policy.UrlRefused):
+                    policy.classify_url(padded)
+            self.assertEqual(policy.classify_url("view-source:file:///etc/hostname").host, None)
+            for url in ("view-source:view-source:https://x.example/", "view-source:about:reader?url=https://x.example/",
+                        "about:reader?url=view-source:https://x.example/", "view-source:javascript:alert(1)",
+                        "view-source:https://user@x.example/", "view-source:", "view-source:http://[::1"):  # fmt: skip
+                with self.subTest(url=url), self.assertRaises(policy.UrlRefused):
+                    policy.classify_url(url)
+        for url in ("about:config", "about:reader", "about:blank", "file:///etc/hostname", None, ""):
+            self.assertIsNone(policy.host_of(url), url)
+        self.assertEqual(policy.host_of("https://docs.example.org/a"), "docs.example.org")
+        with self.assertRaises(policy.UrlRefused):
+            policy.classify_url("http://[::1")  # the parser refuses it: an answer, not an exception
+
     def test_origin_drops_path_and_query(self):
         self.assertEqual(policy.origin("https://bank.example:8443/acct?id=123#x"), "https://bank.example:8443")
         self.assertEqual(policy.origin("file:///home/me/secret.txt"), "file:")
@@ -639,6 +679,819 @@ class AuditTest(Home):
             result = bridge.call("page_read", {"tab": "t1"})
         self.assertTrue(result["isError"])
         self.assertIn("replaced this agent's key", result["content"][0]["text"])
+
+    def test_a_held_session_gets_no_tool_but_its_state(self):
+        # LESIS 987a7ec1: profiles_list has no capability, so nothing checked it. A session connected
+        # before a revoke, a pause or the stop still read the agent's profiles and routes.
+        def held_by(change, undo=None):
+            agent, _ = registry.add("lists", "other", "autonomous")
+            registry.set_profiles(agent["id"], [{"label": "Trabalho", "path": "/home/u/.nulavio/p1"}])
+            registry.set_routes(agent["id"], [{"site": "intranet.example.org", "profile": "Trabalho"}])
+            bridge = tools.Bridge(agent["id"], "s-1", approver=registry.Approver(), key_sha256=agent["token_sha256"])
+            self.assertIn("intranet.example.org", json.dumps(bridge.call("profiles_list", {})))
+            change(agent["id"])
+            result = bridge.call("profiles_list", {})
+            names = {tool["name"] for tool in bridge.list_tools()}
+            state = bridge.call("session_state", {})
+            if undo:
+                undo(agent["id"])
+            return result, names, state
+
+        cases = {
+            "revoked": (registry.revoke, None),
+            "paused": (lambda agent_id: registry.pause(agent_id, True), None),
+            "stopped": (lambda _id: registry.set_stopped(True), lambda _id: registry.set_stopped(False)),
+            "key-replaced": (registry.rotate_token, None),
+        }
+        for reason, (change, undo) in cases.items():
+            with self.subTest(reason=reason):
+                result, names, state = held_by(change, undo)
+                self.assertTrue(result["isError"], result)
+                self.assertNotIn("Trabalho", json.dumps(result))
+                self.assertNotIn("intranet.example.org", json.dumps(result))
+                entry = json.loads(audit.audit_path().read_text().splitlines()[-2])  # then session_state
+                self.assertEqual((entry["tool"], entry["decision"], entry["reason"]), ("profiles_list", "deny", reason))
+                self.assertEqual(entry["capability"], "profiles_list")  # what was refused, also when it needs no capability
+                self.assertEqual(names, {"session_state"})
+                self.assertFalse(state["isError"], state)  # the one tool left: it says why
+                told = state["structuredContent"]
+                self.assertEqual(told["key_replaced"], reason == "key-replaced")
+                if reason in ("revoked", "key-replaced"):  # no longer this session's to read
+                    self.assertFalse({"sites", "capabilities", "autonomy", "workspace"} & set(told), told)
+
+    def test_a_key_replaced_while_a_request_is_open_denies_it(self):
+        # A request can wait for minutes; "allow once" then went to a session whose key was gone.
+        agent, _ = registry.add("waits", "other", "assisted")
+        approver = Approve("once", meanwhile=lambda: registry.rotate_token(agent["id"]))
+        bridge = tools.Bridge(agent["id"], "s-1", approver=approver, key_sha256=agent["token_sha256"])
+        with self.assertRaises(tools.Denied) as denied:
+            bridge.require("submit_forms", "https://example.org/", checked=[])
+        self.assertEqual(denied.exception.decision.reason, "key-replaced")
+        self.assertEqual(approver.asked, [("submit_forms", "https://example.org")])
+
+    def test_a_new_key_ends_raw_automation(self):
+        # The watcher of a handed-over endpoint looked at stop, pause and revoke, not at the key.
+        agent, _ = registry.add("raw", "other", "full_control", accept_full_control=True)
+        bridge = tools.Bridge(agent["id"], "s-1", approver=registry.Approver(), key_sha256=agent["token_sha256"])
+        workspace = mock.Mock()
+        bridge.workspace, bridge.raw = workspace, True
+        registry.rotate_token(agent["id"])
+        with mock.patch.object(tools.time, "sleep", side_effect=AssertionError("kept watching")):
+            bridge._raw_watch(workspace)
+        workspace.stop.assert_called_once_with()
+        self.assertFalse(bridge.raw)
+        ended = json.loads(audit.audit_path().read_text().splitlines()[-1])
+        self.assertEqual((ended["event"], ended["reason"]), ("raw-ended", "key-replaced"))
+
+    def test_the_site_list_covers_what_the_source_viewer_shows(self):
+        # LESIS afa509d1: with raw automation on, view-source: took an agent outside its sites.
+        agent, _ = registry.add("scoped", "other", "full_control", accept_full_control=True, domains=["example.org"])
+        registry.set_raw_automation(agent["id"], True, accept=True)
+        bridge = tools.Bridge(agent["id"], "s-1", approver=registry.Approver())
+        outside, inside = "view-source:https://bank.example/acct", "view-source:https://docs.example.org/a"
+        with (
+            mock.patch.object(tools.Bridge, "_url_of", return_value="about:blank"),
+            mock.patch.object(tools.Bridge, "bidi", side_effect=AssertionError("navigated")),
+        ):
+            result = bridge.call("navigate", {"tab": "t1", "url": outside})
+        self.assertIn("outside the sites this agent may use", result["content"][0]["text"])
+        entry = json.loads(audit.audit_path().read_text().splitlines()[-1])
+        self.assertEqual((entry["reason"], entry["target"]), ("out-of-scope", "https://bank.example"))
+        page = {"text": "<html>", "url": inside, "title": ""}
+        for url, refused in ((outside, True), (inside, False)):
+            with (
+                self.subTest(url=url),
+                mock.patch.object(tools.Bridge, "_url_of", return_value=url),
+                mock.patch.object(tools.Bridge, "_eval", return_value=page),
+                mock.patch.object(tools.Bridge, "_open_dialog", return_value=None),
+            ):
+                self.assertEqual(bridge.call("page_read", {"tab": "t1"})["isError"], refused)
+        tabs = [{"context": "t1", "profile": "AI Workspace", "url": outside}]
+        with mock.patch.object(tools.Bridge, "_tabs", return_value=tabs), mock.patch.object(tools.Bridge, "_title") as title:
+            listed = bridge.call("tabs_list", {})["structuredContent"]["tabs"]
+        self.assertEqual((listed[0]["url"], listed[0]["outside_sites"]), (None, True))
+        title.assert_not_called()
+
+    def test_a_tab_that_needs_more_than_reading_is_not_described(self):
+        # LESIS 83a648d8, c6bc7acd: a redirect leaves the tab on the local network; page_read then
+        # asks for local_resources (audit A1), but tabs_list still gave its address and title.
+        agent, _ = registry.add("near", "other", "restricted")
+        bridge = tools.Bridge(agent["id"], "s-1", approver=registry.Approver())
+        tabs = [
+            {"context": "t1", "profile": "AI Workspace", "url": "https://example.org/a"},
+            {"context": "t2", "profile": "AI Workspace", "url": "http://192.168.1.1/admin/wifi"},
+            {"context": "t3", "profile": "AI Workspace", "url": "about:config"},
+            {"context": "t4", "profile": "AI Workspace", "url": "blob:https://example.org/3f6c"},
+            {"context": "t5", "profile": "AI Workspace", "url": "about:blank"},
+        ]
+        with (
+            mock.patch.object(tools.Bridge, "_tabs", return_value=tabs),
+            mock.patch.object(tools.Bridge, "_title", side_effect=lambda tab, _c: f"title of {tab}") as title,
+        ):
+            listed = {entry["tab"]: entry for entry in bridge.call("tabs_list", {})["structuredContent"]["tabs"]}
+            self.assertEqual({call.args[0] for call in title.call_args_list}, {"t1", "t5"})
+            self.assertEqual(listed["t1"]["url"], "https://example.org/a")
+            self.assertEqual(listed["t5"]["url"], "about:blank")
+            self.assertEqual((listed["t2"]["url"], listed["t2"]["title"]), (None, None))
+            self.assertEqual(listed["t2"]["needs_permission"], ["local_resources"])
+            self.assertEqual(listed["t3"]["needs_permission"], ["local_resources", "debugging"])
+            self.assertEqual(listed["t4"]["needs_permission"], ["local_resources"])
+            self.assertNotIn("192.168.1.1", json.dumps(listed))
+            registry.grant(agent["id"], "local_resources", "allow")
+            listed = {entry["tab"]: entry for entry in bridge.call("tabs_list", {})["structuredContent"]["tabs"]}
+            self.assertEqual(listed["t2"]["url"], "http://192.168.1.1/admin/wifi")
+
+    def acting(self, level, approver, *, held, info=None):
+        """A Bridge whose page is a stand-in. `held`: what the page's documents report as held forms,
+        one answer for each time they are asked. Returns the bridge and what happened, in order."""
+        agent, _ = registry.add(f"forms-{level}-{len(registry.load()['agents'])}", "other", level)
+        bridge = tools.Bridge(agent["id"], "s-1", approver=approver)
+        bridge.elements["t1"] = {"e1": "shared-1"}
+        bridge._forms_ever = level != "autonomous"  # its documents got the guard when the engine started
+        steps, answers = [], list(held)
+        engine = mock.Mock()
+        engine.mark.return_value = 0
+        engine.command.side_effect = lambda method, *_a, **_k: steps.append(method) or {}
+        names = {tools.FORMS_GUARD_FN: "guard", tools.FORMS_HELD_FN: "held?", tools.FORMS_DROP_FN: "drop",
+                 tools.FORMS_SEND_FN: "send", tools.FORMS_OPEN_FN: "open"}  # fmt: skip
+
+        def in_frames(_self, _tab, fn, _cancel, *, must):
+            steps.append(names[fn])
+            return [answers.pop(0)] if fn == tools.FORMS_HELD_FN else [1]
+
+        def forms_where(_self, _tab, _cancel):  # the documents that hold a form, by the realm of their sandbox
+            if not _self._forms_ever:
+                return []
+            steps.append("held?")
+            return ["realm-1"] if answers.pop(0) else []
+
+        def in_realms(_self, _tab, realms, fn, _cancel, until=None):
+            assert realms == ["realm-1"], realms
+            steps.append(names[fn])
+            return [1], ""
+
+        def call_fn(_self, _tab, fn, _args, _cancel):
+            steps.append({tools.INSPECT_FN: "inspect", tools.SCROLL_FN: "scroll", tools.FOCUS_FN: "focus"}[fn])
+            return info or {"connected": True, "editable": True, "multiline": True}
+
+        stack = contextlib.ExitStack()
+        self.addCleanup(stack.close)
+        for name, how in (
+            ("_url_of", {"return_value": "https://example.org/cart"}),
+            ("bidi", {"return_value": engine}),
+            ("_settle", {"return_value": False}),
+            ("_open_dialog", {"return_value": None}),
+            ("_in_frames", {"new": in_frames}),
+            ("_forms_where", {"new": forms_where}),
+            ("_in_realms", {"new": in_realms}),
+            ("_call_fn", {"new": call_fn}),
+        ):
+            stack.enter_context(mock.patch.object(tools.Bridge, name, **how))
+        return bridge, steps
+
+    CLICK = ("click", {"tab": "t1", "element": "e1"})
+    INPUT = "input.performActions"
+
+    def test_a_form_sent_by_a_click_handler_needs_submit_forms(self):
+        # LESIS 3dea86ea: a role=button whose handler calls requestSubmit() is not a submit button
+        # to INSPECT_FN, so the click went ahead on `interact` alone and the form was sent.
+        bridge, steps = self.acting("assisted", registry.Approver(), held=[0, 1])
+        result = bridge.call(*self.CLICK)
+        self.assertTrue(result["isError"], result)
+        self.assertIn("'Submit forms'", result["content"][0]["text"])
+        self.assertIn("The click was done; the form the page then tried to send was not sent.", result["content"][0]["text"])
+        self.assertEqual((steps.count(self.INPUT), steps[-1], "send" in steps), (1, "drop", False))
+        self.assertLess(steps.index("guard"), steps.index("scroll"))  # held before anything the page can observe
+        entry = json.loads(audit.audit_path().read_text().splitlines()[-1])
+        self.assertEqual((entry["decision"], entry["capability"]), ("deny", "interact,submit_forms"))
+
+        # The user says yes: the form that was held goes as it was. No second click.
+        approver = Approve("once")
+        bridge, steps = self.acting("assisted", approver, held=[0, 1])
+        result = bridge.call(*self.CLICK)
+        self.assertFalse(result["isError"], result)
+        self.assertTrue(result["structuredContent"]["navigated"])
+        self.assertEqual(approver.asked, [("submit_forms", "https://example.org")])
+        self.assertEqual((steps.count(self.INPUT), steps.count("send"), "drop" in steps), (1, 1, False))
+
+        # A click that sends nothing is only a click.
+        approver = Approve("once")
+        bridge, steps = self.acting("assisted", approver, held=[0, 0])
+        self.assertFalse(bridge.call(*self.CLICK)["isError"])
+        self.assertEqual((approver.asked, "send" in steps, "drop" in steps), ([], False, False))
+
+        # Allowed to submit without asking: nothing is held and nothing is asked of the page.
+        bridge, steps = self.acting("autonomous", registry.Approver(), held=[])
+        self.assertFalse(bridge.call(*self.CLICK)["isError"])
+        self.assertEqual([s for s in steps if s in ("guard", "held?", "send", "drop", "open")], [])
+
+        # A real submit button asks before the click, as before; its form is held like any other
+        # and then sent without a second question.
+        approver = Approve("once")
+        submit = {"connected": True, "submits": True}
+        bridge, steps = self.acting("assisted", approver, held=[0, 1], info=submit)
+        self.assertFalse(bridge.call(*self.CLICK)["isError"])
+        self.assertEqual(approver.asked, [("submit_forms", "https://example.org")])
+        self.assertLess(steps.index("inspect"), steps.index(self.INPUT))
+        self.assertEqual(steps.count("send"), 1)
+
+    def test_a_form_the_page_sent_later_is_settled_before_the_next_action(self):
+        # A timer, or the answer to a dialog, sent it after the call returned: it is still held.
+        bridge, steps = self.acting("assisted", registry.Approver(), held=[2])
+        result = bridge.call(*self.CLICK)
+        self.assertTrue(result["isError"], result)
+        self.assertIn(
+            "An earlier action was done; the form the page then tried to send was not sent.", result["content"][0]["text"]
+        )
+        self.assertEqual((self.INPUT in steps, "inspect" in steps, steps[-1]), (False, False, "drop"))
+        bridge, steps = self.acting("assisted", Approve("once"), held=[2])
+        result = bridge.call(*self.CLICK)
+        self.assertFalse(result["isError"], result)
+        self.assertTrue(result["structuredContent"]["form_sent"])
+        self.assertIn("Nothing else was done", result["content"][0]["text"])
+        self.assertEqual((self.INPUT in steps, steps.count("send")), (False, 1))
+
+    def test_a_form_sent_while_typing_or_after_a_dialog_needs_submit_forms(self):
+        typing = ("type", {"tab": "t1", "element": "e1", "text": "123456", "clear": True})
+        bridge, steps = self.acting("assisted", registry.Approver(), held=[0, 1])
+        result = bridge.call(*typing)
+        self.assertTrue(result["isError"], result)
+        self.assertIn("The typing was done; the form the page then tried to send was not sent.", result["content"][0]["text"])
+        # The focus and the clearing run the page's handlers: the forms are held before them.
+        self.assertLess(steps.index("guard"), min(steps.index("scroll"), steps.index("focus")))
+        bridge, steps = self.acting("assisted", Approve("once"), held=[0, 1])
+        result = bridge.call(*typing)
+        self.assertFalse(result["isError"], result)
+        self.assertEqual((result["structuredContent"]["navigated"], steps.count("send")), (True, 1))
+        # submit=true was allowed for this call: what Enter sends is held and then let go, unasked.
+        approver = Approve("once")
+        bridge, steps = self.acting("assisted", approver, held=[0, 1])
+        self.assertFalse(bridge.call("type", {"tab": "t1", "element": "e1", "text": "q", "submit": True})["isError"])
+        self.assertEqual((len(approver.asked), steps.count("send")), (1, 1))
+
+        # The page goes on after a dialog is answered, however the dialog came to be open.
+        answer = ("dialog", {"tab": "t1", "accept": True})
+        bridge, steps = self.acting("assisted", registry.Approver(), held=[1])
+        with mock.patch.object(tools.Bridge, "_open_dialog", side_effect=[{"type": "confirm", "message": "Send?"}, None]):
+            result = bridge.call(*answer)
+        self.assertTrue(result["isError"], result)
+        self.assertIn("The answer was done; the form the page then tried to send was not sent.", result["content"][0]["text"])
+        self.assertEqual(steps[-1], "drop")
+
+    def test_documents_hold_their_forms_from_the_moment_they_are_created(self):
+        agent, _ = registry.add("frames", "other", "assisted")
+        bridge = tools.Bridge(agent["id"], "s-1", approver=registry.Approver())
+
+        def engine():
+            connection, commands = mock.Mock(), []
+
+            def command(method, params=None, **_k):
+                commands.append((method, params))
+                return {"script": f"preload-{id(connection)}"} if method == "script.addPreloadScript" else {}
+
+            connection.command.side_effect = command
+            return connection, commands
+
+        first, commands = engine()
+        bridge.workspace = mock.Mock(bidi=first)
+        self.assertFalse(bridge._forms_ever)
+        bridge._sync_forms()
+        bridge._sync_forms()  # once for the engine, not once a call
+        added = [params for method, params in commands if method == "script.addPreloadScript"]
+        self.assertEqual(added, [{"functionDeclaration": tools.FORMS_GUARD_FN, "sandbox": tools.SANDBOX}])
+        self.assertTrue(bridge._forms_ever)
+        registry.grant(agent["id"], "submit_forms", "allow")  # the user allows it: new documents stop holding
+        bridge._sync_forms()
+        self.assertEqual(commands[-1], ("script.removePreloadScript", {"script": f"preload-{id(first)}"}))
+        ran = []
+        with mock.patch.object(tools.Bridge, "_in_frames", lambda _s, _t, fn, _c, *, must: ran.append((fn, must)) or [0]):
+            bridge._forms_prepare("t1", None)  # and the ones already open are opened when next acted on
+        self.assertEqual(ran, [(tools.FORMS_OPEN_FN, True)])
+        registry.grant(agent["id"], "submit_forms", "ask")
+        bridge._sync_forms()
+        self.assertEqual(len([m for m, _ in commands if m == "script.addPreloadScript"]), 2)
+        with (
+            mock.patch.object(tools.Bridge, "_in_frames", return_value=[True, False]),  # a frame where submit() is out of reach
+            self.assertRaises(tools.ToolError),
+        ):
+            bridge._forms_prepare("t1", None)
+        # The engine ended behind the Bridge's back (raw automation ended by a pause) and a new one
+        # started: it is another connection, and gets its own guard before its first navigation.
+        second, commands = engine()
+        bridge.workspace = mock.Mock(bidi=second)
+        bridge.workspace.start.return_value = second
+        self.assertIs(bridge.bidi(), second)
+        self.assertEqual([m for m, _ in commands], ["script.addPreloadScript"])
+
+    def test_an_answer_for_the_session_sends_the_form_it_was_given_for(self):
+        # "Allow until the agent disconnects" turns the permission on in the middle of the call: the
+        # form is still held, and went nowhere (and later, at an unrelated click).
+        approver = Approve("session")
+        bridge, steps = self.acting("assisted", approver, held=[0, 1], info={"connected": True, "submits": True})
+        result = bridge.call(*self.CLICK)
+        self.assertFalse(result["isError"], result)
+        self.assertEqual(approver.asked, [("submit_forms", "https://example.org")])
+        self.assertEqual((result["structuredContent"]["navigated"], steps[-1]), (True, "open"))
+        # Asked after the click (a handler sent it): the same.
+        approver = Approve("session")
+        bridge, steps = self.acting("assisted", approver, held=[0, 1])
+        self.assertTrue(bridge.call(*self.CLICK)["structuredContent"]["navigated"])
+        self.assertEqual((len(approver.asked), steps[-1]), (1, "open"))
+
+    def test_a_form_held_when_the_permission_came_is_sent_and_said_not_slipped_out(self):
+        # The user allowed submitting (another tab's question, or in Settings) while this page held a
+        # form: the next click sent it without a word, then failed on the page that had moved.
+        bridge, steps = self.acting("assisted", registry.Approver(), held=[1])
+        registry.grant(bridge.agent_id, "submit_forms", "allow")
+        result = bridge.call(*self.CLICK)
+        self.assertFalse(result["isError"], result)
+        self.assertTrue(result["structuredContent"]["form_sent"])
+        self.assertEqual((steps[:2], self.INPUT in steps), (["held?", "open"], False))
+        entry = json.loads(audit.audit_path().read_text().splitlines()[-1])
+        self.assertEqual(entry["capability"], "interact,submit_forms")
+
+    def page(self, approver, *, domains=None, info=None):
+        """A Bridge on a page that is real down to the engine's commands: one document, the sandbox
+        it has (a new document has another), the forms it holds. Returns the bridge and the page.
+        `page.click` is what the page does when it is clicked, `page.landed` what happens once a
+        form of it was sent, `page.fails` the error the engine answers a call by realm with."""
+        agent, _ = registry.add(f"page-{len(registry.load()['agents'])}", "other", "assisted", domains=domains)
+        bridge = tools.Bridge(agent["id"], "s-1", approver=approver)
+        bridge.elements["t1"] = {"e1": "shared-1"}
+        bridge._forms_ever = True
+        page = mock.Mock(url="https://example.org/cart", realm="realm-1", held=0, sent=[], dropped=[], fails=None)
+        page.click = page.landed = lambda: None
+        page.asks = page.dialog = None  # the dialog its submit handler opens; the one it has open
+
+        def goes(url: str, held: int) -> None:
+            page.url, page.realm, page.held = url, f"realm-{int(page.realm[6:]) + 1}", held
+
+        page.goes = goes
+
+        def command(method, params=None, **_k):
+            if method == "browsingContext.getTree":
+                return {"contexts": [{"context": "t1", "url": page.url, "children": []}]}
+            if method == "input.performActions":
+                page.click()
+            if method == "browsingContext.navigate":
+                page.goes(params["url"], held=1)  # a page that sends a form as it loads
+            if method != "script.callFunction":
+                return {}
+            target, fn = params["target"], params["functionDeclaration"]
+            if "realm" in target and page.fails:
+                raise page.fails
+            if page.asks and fn in (tools.FORMS_SEND_FN, tools.FORMS_OPEN_FN) and page.held and _k.get("until"):
+                page.dialog, page.held = page.asks, 0  # the handler waits for the answer; the call does not return
+                return None
+            if target.get("realm", page.realm) != page.realm:
+                raise tools.BidiError("no such frame", "the document is gone")
+            self.assertEqual(target.get("sandbox", tools.SANDBOX), tools.SANDBOX)
+            value, realm = (page.held if fn == tools.FORMS_HELD_FN else 1), page.realm
+            if fn in (tools.FORMS_SEND_FN, tools.FORMS_OPEN_FN, tools.FORMS_DROP_FN):
+                value, page.held = page.held, 0
+                (page.dropped if fn == tools.FORMS_DROP_FN else page.sent).append((page.realm, page.url))
+                if fn != tools.FORMS_DROP_FN:
+                    page.landed()
+            return {"type": "success", "realm": realm, "result": {"type": "number", "value": value}}
+
+        engine = mock.Mock()
+        engine.mark.return_value = 0
+        engine.command.side_effect = command
+        page.engine = engine
+        stack = contextlib.ExitStack()
+        self.addCleanup(stack.close)
+        for name, how in (
+            ("bidi", {"return_value": engine}),
+            ("_settle", {"return_value": False}),
+            ("_open_dialog", {"side_effect": lambda _tab: page.dialog}),
+            ("_title", {"return_value": "t"}),
+            ("_call_fn", {"return_value": info or {"connected": True, "editable": True, "multiline": True}}),
+        ):
+            stack.enter_context(mock.patch.object(tools.Bridge, name, **how))
+        return bridge, page
+
+    def moving(self, answer, to, **how):
+        """A page that moves to `to`, where a form is sent as it loads, while the first question is
+        open (and not at the later ones). Returns the bridge, the page and the approver."""
+        pending = [lambda: page.goes(to, held=1)]
+        approver = Approve(answer, meanwhile=lambda: pending.pop()() if pending else None)
+        bridge, page = self.page(approver, **how)
+        return bridge, page, approver
+
+    def test_an_answer_does_not_send_the_form_of_the_page_the_tab_moved_to_meanwhile(self):
+        # The question can stay open for minutes. The page moved on meanwhile, and the next one sent
+        # a form by itself: the answer was given for the first page, and sent the second one's form.
+        bridge, page, approver = self.moving("once", "https://other.example/x")
+        page.click = lambda: setattr(page, "held", 1)  # a handler sends the form
+        result = bridge.call(*self.CLICK)
+        self.assertTrue(result["isError"], result)
+        self.assertIn("while the question about its form was open the page moved on", result["content"][0]["text"])
+        self.assertEqual(approver.asked, [("submit_forms", "https://example.org")])
+        self.assertEqual((page.sent, page.dropped, page.held), ([], [], 1), "the new page's form is still held")
+        # The form held there is judged at the next call, by that page's address, and asked about by name.
+        page.click = lambda: self.fail("clicked: the earlier form comes first")
+        result = bridge.call(*self.CLICK)
+        self.assertTrue(result["structuredContent"]["form_sent"], result)
+        self.assertEqual(approver.asked[1:], [("submit_forms", "https://other.example")])
+        self.assertEqual(page.sent, [("realm-2", "https://other.example/x")])
+
+        # Refused: what is dropped is the form that was asked about, not the next page's.
+        bridge, page, approver = self.moving("deny", "https://example.org/other")
+        page.click = lambda: setattr(page, "held", 1)
+        self.assertTrue(bridge.call(*self.CLICK)["isError"])
+        self.assertEqual((page.sent, page.dropped, page.held), ([], [], 1))
+
+    def test_an_answer_for_the_session_does_not_open_the_page_the_tab_moved_to_meanwhile(self):
+        # "Allow until the agent disconnects" turns the permission on. The call then went on to the
+        # page the tab had moved to, outside the agent's sites, and let that page's forms go.
+        for began_held in (0, 1):  # asked after the click, or about a form held since an earlier action
+            with self.subTest(began_held=began_held):
+                bridge, page, _approver = self.moving("session", "http://192.168.1.1/apply", domains=["example.org"])
+                page.held = began_held
+                page.click = lambda page=page: setattr(page, "held", 1)
+                result = bridge.call(*self.CLICK)
+                self.assertTrue(result["isError"], result)
+                self.assertIn("nothing was sent", result["content"][0]["text"])
+                self.assertEqual((page.sent, page.held, page.realm), ([], 1, "realm-2"))
+                self.assertNotIn("192.168.1.1", json.dumps(result))
+                # And the next call there is refused by the site list before anything is asked of the page.
+                asked_of_the_page = page.engine.command.call_count
+                self.assertTrue(bridge.call(*self.CLICK)["isError"])
+                self.assertEqual((page.sent, page.held), ([], 1))
+                self.assertEqual(page.engine.command.call_count, asked_of_the_page + 1)  # where the tab is
+
+    def test_a_session_ended_while_a_form_was_asked_about_asks_nothing_more_of_the_engine(self):
+        # A revocation or the stop closes the workspace. Dropping the held form then went looking
+        # for the tab's engine, which started the workspace again.
+        def ended_by(end):
+            seen = []
+
+            def meanwhile():
+                end(bridge)
+                seen.append(page.engine.command.call_count)
+
+            bridge, page = self.page(Approve("once", meanwhile=meanwhile))
+            page.click = lambda: setattr(page, "held", 1)
+            with mock.patch.object(tools.Bridge, "close") as closed:
+                result = bridge.call(*self.CLICK)
+            self.assertTrue(result["isError"], result)
+            self.assertEqual([page.engine.command.call_count], seen, "nothing after the session ended")
+            self.assertEqual((page.sent, page.dropped), ([], []))
+            return json.loads(audit.audit_path().read_text().splitlines()[-1])["reason"], closed.called
+
+        self.assertEqual(ended_by(lambda bridge: registry.revoke(bridge.agent_id)), ("revoked", True))
+        self.assertEqual(ended_by(lambda bridge: registry.pause(bridge.agent_id, True)), ("paused", False))
+        self.addCleanup(registry.set_stopped, False)
+        self.assertEqual(ended_by(lambda _bridge: registry.set_stopped(True)), ("stopped", True))
+
+    def test_a_form_of_the_page_an_action_led_to_is_judged_by_that_page(self):
+        # A submit button, allowed for its page, leads to another site whose page sends a form as it
+        # loads: "submit_forms" had been checked for this call, and the second form went with it.
+        submit = {"connected": True, "submits": True}
+        approver = Approve("once")
+        bridge, page = self.page(approver, info=submit)
+        page.click = lambda: page.goes("https://pay.example/confirm", held=1)
+        result = bridge.call(*self.CLICK)
+        self.assertFalse(result["isError"], result)
+        self.assertEqual(approver.asked, [("submit_forms", "https://example.org"), ("submit_forms", "https://pay.example")])
+        self.assertEqual(page.sent, [("realm-2", "https://pay.example/confirm")])
+        entry = json.loads(audit.audit_path().read_text().splitlines()[-1])  # the activity says where the form went out
+        self.assertEqual((entry["capability"], entry["target"]), ("interact,submit_forms", "https://pay.example"))
+
+        class FormsOnly(Approve):  # yes to submitting, no to the local network
+            def ask(self, agent, capability, target, place="", cancel=None):
+                super().ask(agent, capability, target, place, cancel)
+                return "once" if capability == "submit_forms" else "deny"
+
+        # Outside the agent's sites, or on the local network: not asked about, and not sent.
+        for where, domains in (("https://pay.example/confirm", ["example.org"]), ("http://192.168.1.1/apply", None)):
+            with self.subTest(where=where):
+                approver = FormsOnly("once")
+                bridge, page = self.page(approver, domains=domains, info=submit)
+                page.click = lambda page=page, where=where: page.goes(where, held=1)
+                result = bridge.call(*self.CLICK)
+                self.assertTrue(result["isError"], result)
+                self.assertIn("The click was done and took the tab elsewhere", result["content"][0]["text"])
+                self.assertNotIn(("submit_forms", policy.origin(where)), approver.asked)
+                self.assertEqual((page.sent, page.held), ([], 1))
+        # The same site, in another document: the permission of this call stands.
+        approver = Approve("once")
+        bridge, page = self.page(approver, info=submit)
+        page.click = lambda: page.goes("https://example.org/thanks", held=1)
+        self.assertFalse(bridge.call(*self.CLICK)["isError"])
+        self.assertEqual((len(approver.asked), page.sent), (1, [("realm-2", "https://example.org/thanks")]))
+
+    def test_each_site_a_chain_of_forms_goes_through_is_asked_about(self):
+        # A page that sends a form as it loads, to a page of another site that does the same: one
+        # answer, given for the first site, sent them all.
+        hops = ["https://bank.example/confirm", "https://bank.example/done"]
+        hops_taken = list(hops)
+        approver = Approve("once")
+        bridge, page = self.page(approver)
+        page.landed = lambda: page.goes(hops.pop(0), held=1) if hops else None
+        result = bridge.call("navigate", {"tab": "t1", "url": "https://example.org/pay"})
+        self.assertFalse(result["isError"], result)
+        self.assertEqual(approver.asked, [("submit_forms", "https://example.org"), ("submit_forms", "https://bank.example")])
+        # The third form is the second site's again: the answer given for that site in this call stands.
+        self.assertEqual([url for _realm, url in page.sent], ["https://example.org/pay", *hops_taken])
+        # Four forms are sent; where the fourth lands is checked like the others.
+        agent_hops = [f"https://example.org/{n}" for n in (2, 3, 4)] + ["https://bank.example/acct?id=4"]
+        bridge, page = self.page(registry.Approver(), domains=["example.org"])
+        registry.grant(bridge.agent_id, "submit_forms", "allow")
+        page.landed = lambda: page.goes(agent_hops.pop(0), held=1)
+        result = bridge.call("navigate", {"tab": "t1", "url": "https://example.org/1"})
+        self.assertEqual(len(page.sent), 4)
+        self.assertTrue(result["isError"], result)
+        self.assertIn("is not described. The tab is t1.", result["content"][0]["text"])
+        self.assertNotIn("bank.example", json.dumps(result))
+        # A fifth form stays held (for the next action there), on a page the agent may see.
+        bridge, page = self.page(Approve("session"))
+        page.landed = lambda: page.goes(f"https://example.org/{len(page.sent) + 1}", held=1)
+        result = bridge.call("navigate", {"tab": "t1", "url": "https://example.org/1"})
+        self.assertFalse(result["isError"], result)
+        self.assertEqual((len(page.sent), page.held, result["structuredContent"]["url"]), (4, 1, "https://example.org/5"))
+        # An error on the way names the tab too (tab_new made it; the agent has no other way to it).
+        bridge, page, _approver = self.moving("once", "https://other.example/x")
+        result = bridge.call("navigate", {"tab": "t1", "url": "https://example.org/pay"})
+        self.assertIn("nothing was sent. Call page_snapshot again. The tab is t1.", result["content"][0]["text"])
+
+    def test_a_form_the_engine_does_not_answer_for_is_not_said_to_be_sent_or_held(self):
+        # "The document is gone" is one answer; a timeout is not that one, and is not asked twice:
+        # what the page did by then is not known.
+        bridge, page = self.page(Approve("once"))
+        page.click = lambda: setattr(page, "held", 1)
+        page.fails = tools.BidiError("timeout", "script.callFunction took longer than 5 s")
+        result = bridge.call(*self.CLICK)
+        self.assertTrue(result["isError"], result)
+        self.assertIn("may or may not have been sent", result["content"][0]["text"])
+        sends = [c for c in page.engine.command.call_args_list if c.args[1:] and "realm" in c.args[1].get("target", {})]
+        self.assertEqual((len(sends), page.sent, page.held), (1, [], 1))
+        calls = {
+            "_in_realms": lambda: bridge._in_realms("t1", ["realm-1"], tools.FORMS_SEND_FN, None),
+            "_in_frames": lambda: bridge._in_frames("t1", tools.FORMS_HELD_FN, None, must=False),
+            "_forms_where": lambda: bridge._forms_where("t1", None),
+        }
+        for name, cancelled in calls.items():  # a cancel is not "the frame went away"
+            with (
+                self.subTest(cancelled=name),
+                mock.patch.object(tools.Bridge, "_in_sandbox", side_effect=tools.Cancelled()),
+                self.assertRaises(tools.Cancelled),
+            ):
+                cancelled()
+        # A count with no realm cannot be tied to its document: nothing is sent on it.
+        page.fails = None
+        with mock.patch.object(tools.Bridge, "_in_sandbox", return_value=(1, "")), self.assertRaises(tools.ToolError):
+            bridge._forms_where("t1", None)
+        # An agent whose documents never held anything is not asked about forms at all.
+        bridge._forms_ever = False
+        before = page.engine.command.call_count
+        self.assertEqual(bridge._forms_where("t1", None), [])
+        self.assertEqual(page.engine.command.call_count, before)
+
+    def test_a_dialog_the_forms_own_handler_opens_is_reported_not_an_error(self):
+        # onsubmit="return confirm('Send?')": the handler runs when the held form is let go, and the
+        # engine does not answer until the dialog is. That was a timeout, then "nothing was sent".
+        asks = {"type": "confirm", "message": "Send?"}
+        bridge, page = self.page(Approve("once"))
+        page.asks = asks
+        page.click = lambda: setattr(page, "held", 1)
+        result = bridge.call(*self.CLICK)
+        self.assertFalse(result["isError"], result)
+        self.assertEqual((result["structuredContent"]["dialog"], result["structuredContent"]["navigated"]), (asks, False))
+        # A form held since an earlier action: the same, and the call does not go on to click under the dialog.
+        bridge, page = self.page(Approve("once"))
+        page.asks, page.held = asks, 1
+        page.click = lambda: self.fail("clicked under a dialog")
+        result = bridge.call(*self.CLICK)
+        self.assertEqual((result["isError"], result["structuredContent"]["dialog"]), (False, asks))
+        self.assertIn("answer the dialog", result["content"][0]["text"])
+        # After the dialog is answered, the page's next dialog is in the answer too.
+        bridge, page = self.page(Approve("once"))
+        page.dialog = {"type": "confirm", "message": "Proceed?"}
+        real = page.engine.command.side_effect
+
+        def answered(method, *args, **kwargs):
+            if method == "browsingContext.handleUserPrompt":
+                page.dialog, page.held, page.asks = None, 1, asks  # "if (confirm(…)) form.requestSubmit()"
+            return real(method, *args, **kwargs)
+
+        page.engine.command.side_effect = answered
+        result = bridge.call("dialog", {"tab": "t1", "accept": True})
+        self.assertEqual((result["isError"], result["structuredContent"].get("dialog")), (False, asks))
+
+    def test_the_activity_names_the_site_that_was_refused(self):
+        class Answers(Approve):  # one answer for each question, in order
+            def ask(self, agent, capability, target, place="", cancel=None):
+                super().ask(agent, capability, target, place, cancel)
+                return self.answer.pop(0)
+
+        bridge, page = self.page(Answers(["once", "deny"]))
+        hops = ["https://bank.example/confirm"]
+        page.landed = lambda: page.goes(hops.pop(0), held=1)
+        result = bridge.call("navigate", {"tab": "t1", "url": "https://example.org/pay"})
+        self.assertTrue(result["isError"], result)
+        entry = json.loads(audit.audit_path().read_text().splitlines()[-1])
+        self.assertEqual((entry["decision"], entry["target"]), ("deny", "https://bank.example"))
+        self.assertEqual(bridge.last_call["origin"], "https://bank.example")
+        # An answer counts within its call: the same site is asked about again a call later, and the
+        # site a form went out for is not the next call's target.
+        bridge, page = self.page(Approve("once"), info={"connected": True, "submits": True})
+        page.click = lambda: page.goes("https://pay.example/confirm", held=1)
+        self.assertFalse(bridge.call(*self.CLICK)["isError"])
+        asked = len(bridge.approver.asked)
+        page.click = lambda: setattr(page, "held", 1)
+        self.assertFalse(bridge.call(*self.CLICK)["isError"])
+        self.assertEqual(bridge.approver.asked[asked:], [("submit_forms", "https://pay.example")])
+        page.url = "https://example.org/back"
+        with mock.patch.object(tools.Bridge, "_eval", return_value={"text": "ok", "url": page.url, "title": "t"}):
+            self.assertFalse(bridge.call("page_read", {"tab": "t1"})["isError"])
+        entry = json.loads(audit.audit_path().read_text().splitlines()[-1])
+        self.assertEqual((entry["tool"], entry["target"]), ("page_read", "https://example.org"))
+
+    def test_where_an_action_left_the_tab_is_not_described_outside_the_agents_sites(self):
+        # tabs_list does not say where such a tab is; the click that took it there did.
+        typing = ("type", {"tab": "t1", "element": "e1", "text": "abc"})
+        for where, domains, says in (
+            ("https://bank.example/acct?id=4", ["example.org"], {"outside_sites": True}),
+            ("http://192.168.1.1/admin/wifi", None, {"needs_permission": ["local_resources"]}),
+        ):
+            for action in (self.CLICK, typing):
+                with self.subTest(where=where, action=action[0]):
+                    bridge, page = self.page(registry.Approver(), domains=domains)
+
+                    def leaves(page=page, where=where):
+                        page.goes(where, held=0)
+                        page.dialog = {"type": "alert", "message": "Balance: 1 234,00"}
+
+                    page.click = leaves
+                    result = bridge.call(*action)
+                    self.assertFalse(result["isError"], result)
+                    self.assertEqual({k: result["structuredContent"].get(k) for k in ("url", *says)}, {"url": None, **says})
+                    self.assertEqual(result["structuredContent"]["dialog"], {"type": "alert", "message": None})
+                    self.assertNotIn(policy.host_of(where), json.dumps(result))
+                    self.assertNotIn("Balance", json.dumps(result))
+        # An earlier form that was sent, and where it landed.
+        bridge, page = self.page(registry.Approver(), domains=["example.org"])
+        registry.grant(bridge.agent_id, "submit_forms", "allow")
+        page.held, page.landed = 1, lambda: page.goes("https://bank.example/acct?id=4", held=0)
+        result = bridge.call(*self.CLICK)
+        self.assertEqual((result["structuredContent"]["form_sent"], result["structuredContent"]["url"]), (True, None))
+        self.assertNotIn("bank.example", json.dumps(result))
+        # Inside the sites, the address is given; and so is the one the call was allowed for by an answer.
+        bridge, page = self.page(registry.Approver(), domains=["example.org"])
+        page.click = lambda: page.goes("https://docs.example.org/a", held=0)
+        self.assertEqual(bridge.call(*self.CLICK)["structuredContent"]["url"], "https://docs.example.org/a")
+        bridge, page = self.page(Approve("once"))
+        registry.grant(bridge.agent_id, "local_resources", "ask")
+        page.url = "http://192.168.1.10:3000/app"
+        result = bridge.call(*self.CLICK)
+        self.assertEqual(bridge.approver.asked, [("local_resources", "http://192.168.1.10:3000")])
+        self.assertEqual(result["structuredContent"]["url"], "http://192.168.1.10:3000/app")
+        # A tab that moved while a question was open: the refusal does not say where to, either.
+        bridge, page, approver = self.moving("once", "http://192.168.1.1/apply", info={"connected": True, "submits": True})
+        result = bridge.call(*self.CLICK)
+        self.assertEqual(approver.asked, [("submit_forms", "https://example.org")])
+        self.assertIn("the tab moved to another site while waiting for approval", result["content"][0]["text"])
+        self.assertNotIn("192.168.1.1", json.dumps(result))
+
+    def test_a_page_that_sends_a_form_as_it_loads_is_settled_by_the_navigation(self):
+        # Nothing reported a form held by a load, an upload or a timer; it stayed held for good.
+        bridge, steps = self.acting("assisted", registry.Approver(), held=[1])
+        result = bridge.call("navigate", {"tab": "t1", "url": "https://example.org/cart"})
+        self.assertTrue(result["isError"], result)
+        self.assertIn("The navigation was done; the form the page then tried to send was not sent.", result["content"][0]["text"])
+        self.assertEqual(steps[-1], "drop")
+        bridge, steps = self.acting("assisted", Approve("once"), held=[1, 0])
+        with mock.patch.object(tools.Bridge, "_title", return_value="t"):
+            self.assertFalse(bridge.call("navigate", {"tab": "t1", "url": "https://example.org/cart"})["isError"])
+        self.assertEqual(steps[-2:], ["send", "held?"])  # and where the form landed is looked at again
+        entry = json.loads(audit.audit_path().read_text().splitlines()[-1])
+        self.assertEqual(entry["capability"], "navigate,submit_forms")  # the activity shows that a form went out
+        # Where the sent form lands is checked like any place a redirect ends: outside the agent's
+        # sites, it is not described.
+        agent, _ = registry.add("lands", "other", "autonomous", domains=["example.org"])
+        registry.grant(agent["id"], "submit_forms", "ask")
+        scoped = tools.Bridge(agent["id"], "s-1", approver=Approve("once"))
+        scoped._forms_ever = True
+        engine = mock.Mock()
+        engine.command.return_value = {}
+        engine.mark.return_value = 0
+        places = ["about:blank", "https://example.org/pay", "https://example.org/pay", "https://bank.example/acct?id=4"]
+        with (
+            mock.patch.object(tools.Bridge, "bidi", return_value=engine),
+            mock.patch.object(tools.Bridge, "_url_of", side_effect=places),
+            mock.patch.object(tools.Bridge, "_forms_where", return_value=["realm-1"]),
+            mock.patch.object(tools.Bridge, "_in_realms", return_value=([1], "")),
+            mock.patch.object(tools.Bridge, "_settle", return_value=True),
+            mock.patch.object(tools.Bridge, "_open_dialog", return_value=None),
+            mock.patch.object(tools.Bridge, "_title", side_effect=AssertionError("described")),
+        ):
+            result = scoped.call("navigate", {"tab": "t1", "url": "https://example.org/pay"})
+        self.assertIn("is not described. The tab is t1.", result["content"][0]["text"])
+        self.assertNotIn("bank.example", json.dumps(result))
+        # Reading says that the page holds a form; it asks nothing.
+        approver = Approve("once")
+        bridge, steps = self.acting("assisted", approver, held=[2])
+        page = {"text": "ok", "url": "https://example.org/cart", "title": "t"}
+        with mock.patch.object(tools.Bridge, "_eval", return_value=page):
+            read = bridge.call("page_read", {"tab": "t1"})["structuredContent"]
+        self.assertEqual((read["forms_held"], approver.asked, "send" in steps), (2, [], False))
+        bridge, steps = self.acting("assisted", approver, held=[3])
+        with (
+            mock.patch.object(tools.Bridge, "_call_fn", return_value=[]),
+            mock.patch.object(tools.Bridge, "_title", return_value="t"),
+        ):
+            listed = bridge.call("page_snapshot", {"tab": "t1"})["structuredContent"]
+        self.assertEqual((listed["forms_held"], approver.asked), (3, []))
+
+    def test_choosing_a_file_runs_the_pages_handlers_too(self):
+        # onchange="this.form.submit()" on a file field: nothing looked at what the page then sent.
+        def uploading(approver, held):
+            bridge, steps = self.acting("assisted", approver, held=held)
+            registry.grant(bridge.agent_id, "files", "allow")
+            folder = self.home / "uploads"
+            folder.mkdir(exist_ok=True)
+            (folder / "report.txt").write_text("artificial")
+            bridge.workspace = mock.Mock(uploads=True, bidi=None)  # no engine of its own: the page is the stand-in
+            stack = contextlib.ExitStack()
+            self.addCleanup(stack.close)
+            stack.enter_context(mock.patch.object(tools, "_uploads", return_value=folder))
+            stack.enter_context(mock.patch.object(tools.Bridge, "_owner", return_value=""))
+            return bridge.call("upload", {"tab": "t1", "element": "e1", "file": "report.txt"}), steps
+
+        result, steps = uploading(registry.Approver(), [0, 1])
+        self.assertTrue(result["isError"], result)
+        self.assertIn("The upload was done; the form the page then tried to send was not sent.", result["content"][0]["text"])
+        self.assertLess(steps.index("guard"), steps.index("input.setFiles"))
+        result, steps = uploading(Approve("once"), [0, 1])
+        self.assertEqual((result["isError"], result["structuredContent"]["navigated"], steps.count("send")), (False, True, 1))
+        result, steps = uploading(registry.Approver(), [2])  # one held from before: settled first, the file is not chosen
+        self.assertIn("An earlier action was done", result["content"][0]["text"])
+        self.assertNotIn("input.setFiles", steps)
+
+    def test_where_a_redirect_ends_is_one_of_the_agents_sites_or_is_not_described(self):
+        agent, _ = registry.add("redirected", "other", "autonomous", domains=["example.org"])
+        bridge = tools.Bridge(agent["id"], "s-1", approver=registry.Approver())
+        engine = mock.Mock()
+        engine.command.return_value = {}
+        with (
+            mock.patch.object(tools.Bridge, "bidi", return_value=engine),
+            mock.patch.object(tools.Bridge, "_url_of", side_effect=["about:blank", "https://bank.example/acct?id=4"]),
+            mock.patch.object(tools.Bridge, "_title", side_effect=AssertionError("described")),
+        ):
+            result = bridge.call("navigate", {"tab": "t1", "url": "https://example.org/go"})
+        self.assertIn("outside the sites this agent may use", result["content"][0]["text"])
+        self.assertNotIn("bank.example", json.dumps(result))
+
+    def test_routes_go_by_the_address_a_wrapper_shows(self):
+        agent, _ = registry.add("routed", "other", "autonomous")
+        registry.set_profiles(agent["id"], [{"label": "Trabalho", "path": "/home/u/.nulavio/p1"}])
+        registry.set_routes(agent["id"], [{"site": "example.org", "profile": "Trabalho"}])
+        bridge = tools.Bridge(agent["id"], "s-1", approver=registry.Approver())
+        cases = {
+            "https://docs.example.org/a": "Trabalho",
+            "view-source:https://docs.example.org/a": "Trabalho",
+            "about:reader?url=https%3A%2F%2Fexample.org%2F": "Trabalho",
+            "view-source:https://other.example/": "",
+        }
+        for url, place in cases.items():
+            bridge._args = {"url": url}
+            self.assertEqual(bridge._place(), place, url)
+
+    def test_a_page_that_cannot_be_watched_is_not_acted_on(self):
+        agent, _ = registry.add("watch", "other", "assisted")
+        bridge = tools.Bridge(agent["id"], "s-1", approver=registry.Approver())
+        tree = {
+            "contexts": [{"context": "t1", "children": [{"context": "f1", "children": [{"context": "f2"}]}, {"context": "f3"}]}]
+        }
+        engine = mock.Mock()
+        engine.command.return_value = tree
+        gone = {"f3"}
+
+        def in_sandbox(_self, tab, target, fn, cancel, timeout=5.0):
+            frame = target["context"]
+            if frame in gone:
+                raise tools.BidiError("no such frame")
+            return (2 if frame == "f1" else 0), f"realm-{frame}"
+
+        with (
+            mock.patch.object(tools.Bridge, "bidi", return_value=engine),
+            mock.patch.object(tools.Bridge, "_in_sandbox", in_sandbox),
+        ):
+            self.assertEqual(bridge._frames("t1", None), ["t1", "f1", "f3", "f2"])
+            # f3 answers with an error and is still in the tree: not a frame that went away.
+            with self.assertRaises(tools.ToolError):
+                bridge._in_frames("t1", tools.FORMS_GUARD_FN, None, must=True)
+            self.assertEqual(bridge._in_frames("t1", tools.FORMS_HELD_FN, None, must=False), [0, 2, 0])
+            bridge._forms_ever = True
+            self.assertEqual(bridge._forms_where("t1", None), ["realm-f1"])  # the documents that hold one, by their sandbox
+            engine.command.return_value = {"contexts": [{"context": "t1", "children": [{"context": "f1"}]}]}
+            gone.add("t1")
+            with self.assertRaises(tools.ToolError):  # the document itself
+                bridge._in_frames("t1", tools.FORMS_GUARD_FN, None, must=True)
+            many = {"contexts": [{"context": "t1", "children": [{"context": f"f{i}"} for i in range(200)]}]}
+            engine.command.return_value = many
+            self.assertEqual(len(bridge._frames("t1", None)), tools.FORMS_FRAMES)
 
     def test_denied_call_is_audited_without_arguments(self):
         agent, _ = registry.add("d", "other", "assisted")

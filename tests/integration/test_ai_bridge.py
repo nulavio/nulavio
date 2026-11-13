@@ -435,6 +435,104 @@ class AiBridgeTest(unittest.TestCase):
         patcher.start()
         self.addCleanup(patcher.stop)
 
+    def test_24_a_form_the_page_sends_by_itself_needs_submit_forms(self):
+        # Not submit buttons: the page's own handlers send the form, at once or later, here or in a
+        # frame. "Assisted" clicks and types but asks before submitting, and nobody can be asked
+        # here, so each form is held in the page and never reaches the server.
+        agent, env = self.agent("assisted")
+        c = self.client(env)
+        tab = c.call("tab_new", url=self.fx.url("/agent-scripted-form"))["structuredContent"]["tab"]
+        snap = c.call("page_snapshot", tab=tab)
+
+        def sent() -> list[str]:
+            return [hit for hit in self.fx.hits if hit.startswith("/agent-result")]
+
+        def click(name: str) -> dict:
+            return c.call("click", tab=tab, element=self.element(snap, name=name))
+
+        def refused(result: dict, what: str) -> None:
+            self.assertTrue(result["isError"], result)
+            self.assertIn("'Submit forms'", result["content"][0]["text"])
+            self.assertIn(f"{what} was done; the form the page then tried to send was not sent.", result["content"][0]["text"])
+
+        self.assertFalse(click("Plain")["isError"])
+        self.assertIn("on", c.call("page_read", tab=tab)["structuredContent"]["text"])  # a click that sends nothing works
+        invalid = click("Invalid")  # requestSubmit() on a form the engine will not send: nothing to ask about
+        self.assertEqual((invalid["isError"], invalid["structuredContent"]["navigated"]), (False, False), invalid)
+        for name in ("Request", "Direct", "Reach", "Frame", "Shadow", "Shadow request"):  # the last two: inside shadow roots
+            with self.subTest(control=name):
+                refused(click(name), "The click")
+        refused(c.call("type", tab=tab, element=self.element(snap, name="Auto"), text="abc"), "The typing")
+        refused(c.call("type", tab=tab, element=self.element(snap, name="Focus"), text="a"), "The typing")  # sent on focus
+        refused(c.call("type", tab=tab, element=self.element(snap, name="Clear"), text="", clear=True), "The typing")
+
+        # After a confirm, asked at once or from a timer.
+        self.assertEqual(click("Confirm")["structuredContent"]["dialog"]["message"], "Send?")
+        refused(c.call("dialog", tab=tab, accept=True), "The answer")
+        time.sleep(4)  # the engine opens no second dialog within a few seconds of the first one (successive dialogs)
+        timed = click("Timed")
+        self.assertFalse(timed["isError"], timed)
+        self.assertEqual((timed["structuredContent"]["dialog"] or {}).get("message"), "Later?", timed)
+        refused(c.call("dialog", tab=tab, accept=True), "The answer")
+
+        # Sent after the call returned: held all the same, and settled by the next action.
+        self.assertFalse(click("Later")["isError"])
+        time.sleep(1.8)  # the timer fired
+        self.assertEqual(sent(), [])
+        refused(click("Plain"), "An earlier action")
+        made = click("New frame")  # its frame may send its form before or after this call returns
+        time.sleep(1.5)
+        self.assertEqual(sent(), [])
+        refused(made if made["isError"] else click("Plain"), "The click" if made["isError"] else "An earlier action")
+        self.assertFalse(click("Plain")["isError"])  # dropped: the page goes on without them
+
+        # A page that sends a form by itself when it loads: the navigation says so, and the form waits.
+        refused(c.call("tab_new", url=self.fx.url("/agent-autosubmit")), "The navigation")
+        time.sleep(1.0)
+        self.assertEqual(sent(), [])
+        tabs = {entry["tab"]: entry for entry in c.call("tabs_list")["structuredContent"]["tabs"]}
+        self.assertTrue(tabs[tab]["url"].endswith("/agent-scripted-form"), tabs)  # the first tab never left its page
+        (other,) = [entry["tab"] for entry in tabs.values() if (entry["url"] or "").endswith("/agent-autosubmit")]
+        self.assertIn("waiting", c.call("page_read", tab=other)["structuredContent"]["text"])
+        denied = [e for e in audit.read(limit=200, agent=agent["id"]) if e.get("decision") == "deny"]
+        self.assertEqual(len(denied), 14, denied)  # one for each form the pages tried to send
+        self.assertTrue(all("submit_forms" in e["capability"] for e in denied), denied)
+
+        # The permission comes while a form is held: the next action sends it, from the document that
+        # holds it (by its sandbox, so a page that had moved on would keep its own), and says so.
+        self.assertFalse(click("Later")["isError"])
+        time.sleep(1.8)
+        self.assertEqual(sent(), [])
+        registry.grant(agent["id"], "submit_forms", "allow")
+        held = click("Plain")
+        self.assertFalse(held["isError"], held)
+        self.assertTrue(held["structuredContent"].get("form_sent"), held)
+        self.assertEqual(sent(), ["/agent-result?q=sent"])
+        # A form whose own submit handler asks ("Sure?"): the handler runs when the held form is let
+        # go, and the page's dialog is reported like one a click opens. Its answer sends the form.
+        registry.grant(agent["id"], "submit_forms", "ask")
+        self.assertFalse(c.call("navigate", tab=tab, url=self.fx.url("/agent-scripted-form"))["isError"])
+        snap = c.call("page_snapshot", tab=tab)
+        self.assertFalse(click("Asks later")["isError"])
+        time.sleep(1.8)
+        registry.grant(agent["id"], "submit_forms", "allow")
+        asked = click("Plain")
+        self.assertFalse(asked["isError"], asked)
+        self.assertEqual((asked["structuredContent"]["dialog"] or {}).get("message"), "Sure?", asked)
+        self.assertEqual(sent(), ["/agent-result?q=sent"])
+        self.assertFalse(c.call("dialog", tab=tab, accept=True)["isError"])
+        self.assertTrue(harness.wait_until(lambda: "/agent-result?q=asked" in sent(), timeout=10), sent())
+        # With the permission, the same click sends the form, and so does the page that sends one as it loads.
+        self.assertFalse(c.call("navigate", tab=tab, url=self.fx.url("/agent-scripted-form"))["isError"])
+        snap = c.call("page_snapshot", tab=tab)
+        gone = click("Direct")
+        self.assertFalse(gone["isError"], gone)
+        self.assertTrue(gone["structuredContent"]["navigated"], gone)
+        self.assertEqual(sent(), ["/agent-result?q=sent", "/agent-result?q=asked", "/agent-result?q=sent"])
+        again = c.call("navigate", tab=other, url=self.fx.url("/agent-autosubmit"))
+        self.assertFalse(again["isError"], again)
+        self.assertTrue(harness.wait_until(lambda: "/agent-result?q=onload" in sent(), timeout=10), sent())
+
     @staticmethod
     def chrome(bidi: Bidi, expression: str):
         contexts = bidi.command("browsingContext.getTree", {"moz:scope": "chrome", "maxDepth": 0})["contexts"]

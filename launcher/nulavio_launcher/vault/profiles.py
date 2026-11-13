@@ -15,7 +15,7 @@ import time
 from .. import log, profile
 from .core import RECOVERY_KDF, Vault, VaultError
 from .providers import Keyring, add_os_keyring, unlock_os_keyring
-from .storage import Container, StorageError, recover_interrupted
+from .storage import Container, recover_interrupted
 
 
 def container(prof: profile.Profile) -> Container:
@@ -85,7 +85,7 @@ def unlock(prof: profile.Profile, *, password: str | None = None, recovery_code:
         raise VaultError("metadata-tampered", "the profile's key file was changed outside Nulavio")
     try:
         box.mount(vault, idle_minutes)
-    except StorageError:
+    except BaseException:  # whatever stopped it: the key does not stay in memory
         vault.lock()
         raise
     log.event("vault.unlock", profile=prof.name, method="password" if password is not None else
