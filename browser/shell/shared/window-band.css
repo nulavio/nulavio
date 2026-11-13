@@ -229,6 +229,13 @@
   .nv-band-row[data-agent="true"] .nv-band-header {
     background-color: var(--nv-color-band-bg);
   }
+  /* The row's text controls too (audit 2026-11 W-01): "Pausar agente", "Parar todos" and the
+     protection state sit on the band's fill, so no line runs through their words. A private
+     row gives them its own fill below. */
+  .nv-band-row[data-agent="true"] :is(.nv-band-protection, .nv-band-route, .nv-band-pause, .nv-band-stop,
+      .nv-band-task-stop, .nv-band-assistant-pause) {
+    background-color: var(--nv-color-band-bg);
+  }
   .nv-band-row .nv-band-agent {
     background: var(--nv-color-security-agent-ink);
     color: var(--nv-color-security-agent-on);
@@ -417,8 +424,10 @@
 /* UX3G: no "Not Secure" over the transient empty document that precedes the
    Shell's own new tab (NulavioWindow #markOwnPagePending). Web pages never
    carry this attribute; their indicator is untouched. */
-:root[nulavio-own-page-pending] #identity-box.notSecure {
-  visibility: hidden;
+@-moz-document url("chrome://browser/content/browser.xhtml") {
+  :root[nulavio-own-page-pending] #identity-box.notSecure {
+    visibility: hidden;
+  }
 }
 
 /* ADR 0009, Immersive: the toolbar and the tab list leave the layout and come back over the page;
