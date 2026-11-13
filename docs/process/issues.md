@@ -79,6 +79,8 @@ gh api -X POST repos/nulavio/nulavio/issues/<parent-number>/sub_issues -F sub_is
 
 - **Status**: `Todo`, `In Progress`, `Done`.
 - **Area**: `Browser & Shell`, `Launcher & profiles`, `Passwords & vault`, `Release & CI`, `Site`, `Android companion`, `Process & org`.
+- **Wave**: the order of the work towards 1.0 (`0 Unblock` … `5 Brand and launch`, and `External` for what waits on someone outside the project), described in the [roadmap](../product/roadmap.md#road-to-10). Set by the maintainer.
+- **Model**: the model and effort the maintainer recommends for the work (`Fable 5.1 max`, `Opus 5.5 xhigh`, `Opus 5.5 high`, `Sonnet 5.5 medium`), or `Maintainer` when only the maintainer can do it. A recommendation, not a rule: the maintainer's choice for a task overrides it.
 
 Agents add each issue they open to the board, with its Area and the `Todo` status:
 
@@ -89,7 +91,11 @@ gh project item-add 1 --owner nulavio --url <issue-url>
 
 An agent moves an issue to `In Progress` when it starts the work and leaves `Done` to GitHub (on merge) or to the maintainer. New fields or Area values are added here first.
 
+## Milestones
+
+Set up on 2026-11-13: [1.0](https://github.com/nulavio/nulavio/milestone/1), the stable release, and [After 1.0](https://github.com/nulavio/nulavio/milestone/2). The maintainer decides which milestone an issue goes in; the rule for issues opened after that date is in the [roadmap](../product/roadmap.md#road-to-10).
+
 ## Not set up yet (maintainer items)
 
-- Milestones per release, and the organization's issue types (Bug, Feature, Task) in place of the kind labels.
+- The organization's issue types (Bug, Feature, Task) in place of the kind labels.
 - From [ADR 0013](../adr/0013-repository-layout.md) (one repository, organized by area; accepted on 2026-11-13): the site's deploy token in an environment limited to `main` (#182), which needs a change in the repository's settings.
