@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Measurements for the repository layout decision (issue #97, ADR 0013).
 
-    python3 -I scripts/research/org_layout_measure.py [--ref origin/main] > evidence.json
+    python3 -I scripts/research/org_layout_measure.py --ref <commit> > evidence.json
 
 Reads only git: the tree and the history of one ref. Sizes, how much of the pack is media,
 what an agent has to read per area, and how often a change to one component also changes
@@ -88,6 +88,10 @@ COMPONENTS = (
 )
 # The product: components that ship in one package and are tested by the same suites.
 PRODUCT = {"browser", "launcher", "tests"}
+# Policy text that "process" holds besides CI and review tooling. Counting an edit to CONTRIBUTING.md
+# as a change to a code component is a choice; the coupling is also reported without it.
+POLICY_TEXT = ("AGENTS.md", "CLAUDE.md", "CONTRIBUTING.md", "GOVERNANCE.md", "SECURITY.md", "CODE_OF_CONDUCT.md", "docs/process/")
+SCREENSHOTS = "docs/design/screenshots/"
 
 
 def git(*args: str) -> str:
@@ -147,10 +151,27 @@ def history_blobs(ref: str) -> dict[str, list[int]]:
             continue
         path = rest[0]
         bucket = "media" if PurePosixPath(path).suffix.lower() in MEDIA else "text"
-        for key in (f"{component(path)}:{bucket}", f"all:{bucket}"):
+        keys = [f"{component(path)}:{bucket}", f"all:{bucket}"]
+        if path.startswith(SCREENSHOTS):
+            keys.append("screenshots:all")
+        for key in keys:
             totals[key][0] += int(disk)
             totals[key][1] += int(size)
     return dict(totals)
+
+
+CODE = {"site", "android", "release", "process", "launcher", "browser"}
+
+
+def _reading(paths: list[str], *, policy_is_docs: bool) -> set[str]:
+    """The code components a commit changes, with or without policy text counted as "process"."""
+    out = set()
+    for path in paths:
+        name = component(path)
+        if policy_is_docs and name == "process" and any(path == p or path.startswith(p) for p in POLICY_TEXT):
+            name = "docs"
+        out.add(name)
+    return out & CODE
 
 
 def coupling(ref: str) -> dict:
@@ -160,36 +181,71 @@ def coupling(ref: str) -> dict:
     for chunk in log.split("\0")[1:]:
         head, *paths = chunk.strip("\n").split("\n")
         sha, author, subject = head.split("\t", 2)
-        touched = Counter(component(p) for p in paths if p)
-        commits.append({"sha": sha[:9], "author": author, "subject": subject, "components": touched})
+        paths = [p for p in paths if p]
+        commits.append({
+            "sha": sha[:9], "author": author, "subject": subject, "components": Counter(component(p) for p in paths),
+            "strict": _reading(paths, policy_is_docs=True), "pull_request": subject.rstrip().endswith(")") and "(#" in subject,
+        })  # fmt: skip
     human = [c for c in commits if "dependabot" not in c["author"]]
-    code = {"site", "android", "release", "process", "launcher", "browser"}
     per_component = {}
-    for name in sorted(code):
+    for name in sorted(CODE):
         touching = [c for c in human if name in c["components"]]
         others = Counter()
         alone = 0
         for c in touching:
-            rest = (set(c["components"]) & code) - {name}
+            rest = (set(c["components"]) & CODE) - {name}
             if name in PRODUCT:
                 rest -= PRODUCT
             if not rest:
                 alone += 1
             others.update(rest)
+        strict = [c for c in human if name in c["strict"]]
         per_component[name] = {
             "commits": len(touching),
             "without_another_code_component": alone,
             "also_changes": dict(others.most_common()),
+            # The same with policy text (CONTRIBUTING.md and the like) not counted as "process".
+            "policy_text_apart": {
+                "commits": len(strict),
+                "without_another_code_component": sum(
+                    1 for c in strict if not (c["strict"] - {name} - (PRODUCT if name in PRODUCT else set()))
+                ),
+            },
         }
     product_code = {"browser", "launcher"}
+
+    def more_than_one(
+        group: list[dict], key: str = "components", *, merge_product: bool = False, drop: frozenset = frozenset()
+    ) -> int:
+        count = 0
+        for c in group:
+            names = (set(c[key]) & CODE) - drop
+            if merge_product and names & product_code:
+                names = (names - product_code) | {"product"}
+            count += len(names) > 1
+        return count
+
+    pull_requests = [c for c in human if c["pull_request"]]
+    direct = [c for c in human if not c["pull_request"]]
     return {
         "commits_first_parent": len(commits),
         "commits_not_dependabot": len(human),
-        "touching_more_than_one_code_component": sum(1 for c in human if len(set(c["components"]) & code) > 1),
+        "touching_more_than_one_code_component": more_than_one(human),
+        # How much that count depends on what is called a component.
+        "sensitivity": {
+            "as_defined": more_than_one(human),
+            "policy_text_not_process": more_than_one(human, "strict"),
+            "policy_text_not_process_and_browser_launcher_as_one": more_than_one(human, "strict", merge_product=True),
+            "without_process": more_than_one(human, drop=frozenset({"process"})),
+        },
+        # Two kinds of commit on main: squash-merged pull requests ("(#N)" in the subject) and what was pushed before them.
+        "pull_request_commits": {"commits": len(pull_requests), "more_than_one": more_than_one(pull_requests)},
+        "direct_commits": {"commits": len(direct), "more_than_one": more_than_one(direct)},
         "touching_product_and_site": sum(1 for c in human if "site" in c["components"] and set(c["components"]) & product_code),
         "touching_product_and_android": sum(
             1 for c in human if "android" in c["components"] and set(c["components"]) & product_code
         ),
+        "touching_launcher_and_android": sum(1 for c in human if {"android", "launcher"} <= set(c["components"])),
         "per_component": per_component,
         "site_with_product": [
             f"{c['sha']} {c['subject']}" for c in human if "site" in c["components"] and set(c["components"]) & product_code
@@ -224,7 +280,6 @@ def main() -> int:
         area["text_tokens_estimate"] = area["text_bytes"] // 4
 
     result = {
-        "ref": args.ref,
         "commit": git("rev-parse", args.ref).strip(),
         "commit_date": git("log", "-1", "--format=%cI", args.ref).strip(),
         "tree": {name: dict(area) for name, area in sorted(areas.items())},

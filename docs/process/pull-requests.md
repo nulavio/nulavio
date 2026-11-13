@@ -18,7 +18,7 @@ Lowercase letters, digits and `._/-`, at most 60 characters. `<type>` is one of 
 | A coding agent | `agent/<tool>/<type>-<slug>` | `agent/claude/feat-s25-ai-review`, `agent/codex/fix-vault-nonce` |
 | A person | `<name>/<type>-<slug>` | `caio/docs-readme` |
 | An engine update under the [update policy](../architecture/update-policy.md) | `release/firefox-<version>` | `release/firefox-159.0` |
-| A vulnerability fix | `sec/<slug>` | `sec/launcher-symlink` |
+| A vulnerability fix | `sec/<slug>`, a slug that says nothing about the flaw | `sec/2026-11-a` |
 
 The repository is public: develop the fix for an undisclosed vulnerability in the private fork of a draft security advisory, and bring its `sec/` branch here only when the release is about to be built ([private work](private-work.md#a-vulnerability-step-by-step)).
 

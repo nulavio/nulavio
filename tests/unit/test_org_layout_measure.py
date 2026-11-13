@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import subprocess
 import unittest
 from pathlib import Path
 
@@ -38,12 +39,26 @@ class OrgLayoutMeasureTest(unittest.TestCase):
         for path, expected in cases.items():
             self.assertEqual(measure.component(path), expected, path)
 
-    def test_every_prefix_still_names_something_in_the_tree(self):
+    def test_every_prefix_still_names_tracked_files_and_little_is_left_unattributed(self):
         # A path that was renamed would silently fall into "shared" or "tests" and bend the numbers.
+        # Read from git, as the script does, with the script's own matching.
+        listed = subprocess.run(["git", "-C", str(ROOT), "ls-files", "-z"], capture_output=True, check=True).stdout.decode()
+        files = [name for name in listed.split("\0") if name]
         for name, prefixes in measure.COMPONENTS:
             for prefix in prefixes:
-                matches = list(ROOT.glob(prefix.rstrip("/") + "*"))
-                self.assertTrue(matches, f"{name}: nothing matches {prefix}")
+                self.assertTrue(
+                    any(f == prefix or f.startswith(prefix) for f in files), f"{name}: no tracked file under {prefix}"
+                )
+        for prefix in (*measure.POLICY_TEXT, measure.SCREENSHOTS):
+            self.assertTrue(any(f == prefix or f.startswith(prefix) for f in files), prefix)
+        shared = sorted(f for f in files if measure.component(f) == "shared")
+        expected = [".coderabbit.yaml", ".editorconfig", ".gitignore", ".gitleaks.toml", ".gitleaksignore", ".semgrepignore",
+                    "pyproject.toml", "requirements/dev.txt"]  # fmt: skip
+        self.assertEqual(shared, expected, "a new top-level path belongs to a component, or to this list")
+
+    def test_a_renamed_directory_is_noticed(self):
+        self.assertEqual(measure.component("site-src/index.html"), "shared")  # not "site": the test above would then fail
+        self.assertEqual(measure.component("scripts/rel/x.py"), "shared")
 
 
 if __name__ == "__main__":

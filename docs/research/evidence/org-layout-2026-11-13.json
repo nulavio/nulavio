@@ -10,6 +10,10 @@
     ],
     "commits_first_parent": 162,
     "commits_not_dependabot": 152,
+    "direct_commits": {
+      "commits": 89,
+      "more_than_one": 29
+    },
     "per_component": {
       "android": {
         "also_changes": {
@@ -20,6 +24,10 @@
           "site": 1
         },
         "commits": 8,
+        "policy_text_apart": {
+          "commits": 8,
+          "without_another_code_component": 1
+        },
         "without_another_code_component": 1
       },
       "browser": {
@@ -30,6 +38,10 @@
           "site": 4
         },
         "commits": 79,
+        "policy_text_apart": {
+          "commits": 79,
+          "without_another_code_component": 56
+        },
         "without_another_code_component": 54
       },
       "launcher": {
@@ -40,6 +52,10 @@
           "site": 2
         },
         "commits": 23,
+        "policy_text_apart": {
+          "commits": 23,
+          "without_another_code_component": 13
+        },
         "without_another_code_component": 13
       },
       "process": {
@@ -51,6 +67,10 @@
           "site": 5
         },
         "commits": 41,
+        "policy_text_apart": {
+          "commits": 29,
+          "without_another_code_component": 9
+        },
         "without_another_code_component": 15
       },
       "release": {
@@ -62,6 +82,10 @@
           "site": 8
         },
         "commits": 37,
+        "policy_text_apart": {
+          "commits": 37,
+          "without_another_code_component": 8
+        },
         "without_another_code_component": 8
       },
       "site": {
@@ -73,8 +97,22 @@
           "release": 8
         },
         "commits": 15,
+        "policy_text_apart": {
+          "commits": 15,
+          "without_another_code_component": 4
+        },
         "without_another_code_component": 1
       }
+    },
+    "pull_request_commits": {
+      "commits": 63,
+      "more_than_one": 24
+    },
+    "sensitivity": {
+      "as_defined": 53,
+      "policy_text_not_process": 48,
+      "policy_text_not_process_and_browser_launcher_as_one": 39,
+      "without_process": 40
     },
     "site_with_product": [
       "308031180 feat(vault): offer to connect a phone (D10 revised) (#42)",
@@ -82,6 +120,7 @@
       "24e25136c feat(privacy): stronger fingerprinting protection, measured and tested (#18)",
       "6e1b34904 feat(ux): UX3E to UX7, from the Lateral layout to motion (#3)"
     ],
+    "touching_launcher_and_android": 3,
     "touching_more_than_one_code_component": 53,
     "touching_product_and_android": 4,
     "touching_product_and_site": 4
@@ -135,6 +174,10 @@
       353932,
       1742341
     ],
+    "screenshots:all": [
+      67744964,
+      74140557
+    ],
     "shared:text": [
       5666,
       22662
@@ -156,7 +199,6 @@
       6468456
     ]
   },
-  "ref": "origin/main",
   "tree": {
     "android": {
       "files": 45,
