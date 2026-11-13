@@ -457,21 +457,31 @@ class InstructionsTest(unittest.TestCase):
         ):
             self.assertIn(phrase, INSTRUCTIONS)
 
+    @unittest.skipUnless(shutil.which("git") and (ROOT / ".git").exists(), "needs the git checkout")
     def test_instructions_name_the_files_the_review_tool_leaves_in_the_tree(self):
-        # With CLAUDE_CODE_SUBPROCESS_ENV_SCRUB on, Claude Code 2.1.318 creates these, empty, in the
-        # working tree before the model reads anything (seen on 2026-11-13): to a reviewer told to
-        # look for secrets files and submodules they look like findings.
-        for name in (".env", ".npmrc", ".yarnrc", "bunfig.toml", "package.json", "package-lock.json", "pnpm-lock.yaml",
-                     "yarn.lock", ".gitmodules", ".claude/", "node_modules/"):  # fmt: skip
-            self.assertIn(f"`{name}`", INSTRUCTIONS)
-        self.assertIn("never report them", INSTRUCTIONS)
-        self.assertIn("only when the diff adds or changes it", INSTRUCTIONS)
+        # With CLAUDE_CODE_SUBPROCESS_ENV_SCRUB on, Claude Code 2.1.318 creates these, empty, at the root
+        # of the working tree before the model reads anything (seen on 2026-11-13; look again when the
+        # pinned version changes): to a reviewer told to look for secrets files and submodules they
+        # look like findings.
+        (line,) = [text for text in INSTRUCTIONS.splitlines() if text.startswith("- The review tool itself creates empty files")]
+        for name in (".env", ".env.*", ".npmrc", ".yarnrc", ".yarnrc.yml", "bunfig.toml", "package.json", "package-lock.json",
+                     "pnpm-lock.yaml", "yarn.lock", ".gitmodules", ".claude/", "node_modules/"):  # fmt: skip
+            self.assertIn(f"`{name}`", line)
+        for phrase in (
+            "at the root of the working tree",
+            "never report them",
+            "is part of the change and is reviewed like any other file",
+        ):
+            self.assertIn(phrase, line)
+        # "Not in the repository" has to stay true: none of them is tracked at the root.
         tracked = subprocess.run(
             ["git", "-C", str(ROOT), "ls-files"], capture_output=True, text=True, check=True
         ).stdout.splitlines()
-        for name in (".env", ".npmrc", ".yarnrc", ".yarnrc.yml", "bunfig.toml", "package.json", "package-lock.json",
-                     "pnpm-lock.yaml", "yarn.lock", ".gitmodules"):  # fmt: skip
-            self.assertNotIn(name, tracked, "the repository has such a file at its root now: the instruction would hide it")
+        root_files = {".env", ".npmrc", ".yarnrc", ".yarnrc.yml", "bunfig.toml", "package.json", "package-lock.json",
+                      "pnpm-lock.yaml", "yarn.lock", ".gitmodules"}  # fmt: skip
+        for path in tracked:
+            hidden = path in root_files or path.startswith((".env.", ".claude/", "node_modules/"))
+            self.assertFalse(hidden, f"{path} is tracked: the instruction would tell the reviewer it is not in the repository")
 
     def test_schema_fits_in_claude_args(self):
         compact = ai_review_input.compact_schema()
