@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 import unittest
 
 import harness
@@ -472,7 +473,17 @@ class NativeSettingsTest(unittest.TestCase):
           return selectedFilterLists ?? null;
         """
         selected = "return (async () => {" + selection + "})();"
-        before = self.m.chrome(selected) if real["active"] else None
+        before = None
+        if real["active"]:
+            # uBlock Origin is still choosing and ordering its lists in the first seconds of a new profile: wait
+            # until two readings a moment apart agree, so that a difference afterwards is this module's doing.
+            def settled():
+                first = self.m.chrome(selected)
+                time.sleep(0.7)
+                return first is not None and first == self.m.chrome(selected)
+
+            self.assertTrue(harness.wait_until(settled, 30, interval=0.1), "uBlock Origin's selection keeps changing")
+            before = self.m.chrome(selected)
         answer = self.m.chrome(privacy + "return N.filterLists();")
         if before is None:
             self.assertIsNone(answer, "a selection was reported that uBlock Origin does not have")
@@ -480,7 +491,8 @@ class NativeSettingsTest(unittest.TestCase):
             cookies = {"fanboy-cookiemonster", "ublock-cookies-easylist", "adguard-cookies", "ublock-cookies-adguard"}
             self.assertEqual(answer, {"cookieNotices": bool(cookies & set(before))})
             after = self.m.chrome(selected)
-            self.assertEqual(after, before, "reading uBlock Origin's lists changed them")
+            # The same lists; their order is uBlock Origin's own, and it still reorders them now and then.
+            self.assertEqual(sorted(after), sorted(before), "reading uBlock Origin's lists changed them")
 
         # The row says what was read and opens uBlock Origin's own page.
         state = (

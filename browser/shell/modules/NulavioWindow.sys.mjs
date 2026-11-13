@@ -142,6 +142,7 @@ class WindowUI {
   #profileUnavailable = false;
   #temporary = false;
   #protection = "unknown";
+  #protectionUnavailable = false; // the last read failed (not "not read yet": the first frame stays neutral)
   #refreshing = null;
   #generation = 0;
   #timer = null;
@@ -931,10 +932,13 @@ class WindowUI {
   }
 
   /** A window with no alert may carry the band inside the navigation row (UX3G A1). A routing notice
-      also gives it back its own row, so the notice never squeezes the profile out (review F16). */
+      also gives it back its own row, so the notice never squeezes the profile out (review F16). So does
+      a failed read of the profile or of its protection: "Identidade do perfil indisponível" and
+      "Proteção desconhecida" are shown whole, not cut to the column (audit 2026-11 W-02). */
   #neutral(win) {
     return !this.#immersive(win) && !this.#temporary && !lazy.PrivateBrowsingUtils.isWindowPrivate(win) && !this.#agent
       && this.#guardCount === 0 && !this.#actionError && !this.#windows.get(win)?.routed
+      && !this.#profileUnavailable && !this.#protectionUnavailable
       && !lazy.NulavioAI.activityState(win) && !this.#connected.some(c => c.agent !== this.#agent?.id);
   }
 
@@ -1122,6 +1126,7 @@ class WindowUI {
         this.#temporary = temporary.value.temporary;
       }
       this.#protection = protection.status === "fulfilled" ? protection.value : "unknown";
+      this.#protectionUnavailable = protection.status === "rejected";
       // An idle snapshot taken before markWorkspace/raw cannot erase its newer warning.
       if (agentRevision === this.#agentRevision) {
         this.#agentUnavailable = agent.status === "rejected" || Boolean(agent.value?.unavailable);

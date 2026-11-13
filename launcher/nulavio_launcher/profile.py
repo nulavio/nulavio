@@ -341,6 +341,16 @@ def _filter_text(context: dict[str, str], strings: dict[str, str]) -> str:
     return f"{label} — {suffix}" if suffix else label
 
 
+def _addons_key(engine: str) -> str:
+    """The letter of the add-ons shortcut (Ctrl+Shift+…) in this engine: Firefox 159 moved it from A
+    to F (Ctrl+Shift+A searches tabs there). The page is static, so the launcher picks the letter;
+    an engine label with no version gets the letter of the oldest supported engine."""
+    # The version is the label's last word and may not end in digits ("160.0a1", "159.0esr", "160.0-0.3"): its
+    # leading number.
+    version = re.search(r"(?:^|\s)(\d+)[\w.+~-]*\s*$", engine)
+    return "F" if version and int(version.group(1)) >= 159 else "A"
+
+
 def render_startpage(profile: Profile, settings: dict[str, Any], context: dict[str, str]) -> Path:
     """Generate the per-profile local start page from browser/startpage/.
 
@@ -354,12 +364,17 @@ def render_startpage(profile: Profile, settings: dict[str, Any], context: dict[s
     strings = json.loads((template_dir / "strings.json").read_text(encoding="utf-8"))
     language = settings.get("locale") or ui_language()
     values = dict(strings.get(language, strings["en"]))
-    if context.get("engine", "").startswith("Nulavio"):
+    engine = context.get("engine", "")
+    if engine.startswith("Nulavio"):
+        # The Nulavio build carries its patch series: neither the note nor the footer may call it
+        # the unmodified engine (audit 2026-11 P-01).
         values["T_ENGINE_NOTE"] = values["T_ENGINE_NOTE_NULAVIO"]
+        values["T_FOOTER"] = values["T_FOOTER_NULAVIO"]
     values.update(
         {
             "PROFILE": profile.name,
             "ENGINE": context.get("engine", "unknown engine"),
+            "KEY_ADDONS": _addons_key(engine),
             "FILTER": _filter_text(context, values),
             "PROVIDER": values.get(
                 "T_PROVIDER_" + provider.upper().replace("-", "_"),

@@ -8,7 +8,7 @@ import { localize, t } from "../lib/i18n.js";
 import { TEMPLATE_NAMES, templateHintKey } from "../lib/names.js";
 import { clearCode, guardLeaving, printCode, showCode } from "../lib/recovery.js";
 import { wireSettingsLinks } from "../lib/settings.js";
-import { announce, chip, errorText, h } from "../lib/ui.js";
+import { acceptField, announce, chip, errorText, h, refuseField } from "../lib/ui.js";
 import "../lib/moment.js";
 
 const vault = browser.nulavioVault;
@@ -129,6 +129,9 @@ async function create(event) {
   event.preventDefault();
   const error = byId("protection-error");
   error.textContent = "";
+  for (const id of ["password", "password2"]) {
+    acceptField(byId(id));
+  }
   const details = {
     name: state.name,
     ...(state.templateId ? { templateId: state.templateId } : {}),
@@ -138,13 +141,11 @@ async function create(event) {
   if (method() === "password") {
     const password = byId("password").value;
     if (password.length < 8) {
-      error.textContent = t("err_password_too_short");
-      byId("password").focus();
+      refuseField(byId("password"), error, t("err_password_too_short"));
       return;
     }
     if (password !== byId("password2").value) {
-      error.textContent = t("vaultPasswordsDiffer");
-      byId("password2").focus();
+      refuseField(byId("password2"), error, t("vaultPasswordsDiffer"));
       return;
     }
     details.password = password;
@@ -189,10 +190,9 @@ function showRecovery() {
 function finish(event) {
   event.preventDefault();
   const normalise = v => v.trim().toUpperCase().replaceAll("O", "0").replace(/[IL]/g, "1");
-  const ok = ["group-a", "group-b"].every(id => normalise(byId(id).value) === byId(id).dataset.expected);
-  if (!ok) {
-    byId("recovery-error").textContent = t("vaultGroupsDiffer");
-    byId("group-a").focus();
+  const wrong = ["group-a", "group-b"].find(id => normalise(byId(id).value) !== byId(id).dataset.expected);
+  if (wrong) {
+    refuseField(byId(wrong), byId("recovery-error"), t("vaultGroupsDiffer")); // the group that differs
     return;
   }
   state.code = "";

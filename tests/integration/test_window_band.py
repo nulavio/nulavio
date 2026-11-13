@@ -180,6 +180,50 @@ class WindowBandTest(unittest.TestCase):
         self.assertTrue(r["aboveTabs"] and r["aboveNav"] and r["nativeUnchanged"], r)
         assert_layout_matrix(self, self.m, "ordinary")
 
+    def test_01b_a_failed_identity_or_protection_read_gets_the_whole_row(self):
+        """Audit 2026-11 W-02: with no alert the band shares the navigation row and the name gives way to the
+        protection state. A failed read is not that case: "Identidade do perfil indisponível" and "Proteção
+        desconhecida" get the band's own row, whole."""
+        probe = """
+          const band = document.getElementById('nulavio-band'), row = band.querySelector('.nv-band-row');
+          const name = row.querySelector('.nv-band-name');
+          return {neutral: band.hasAttribute('nv-neutral'), name: name.textContent,
+            clipped: name.scrollWidth > name.clientWidth, protection: row.querySelector('.nv-band-protection').textContent};
+        """
+        self.assertTrue(self.m.chrome(probe)["neutral"], "the test needs a window with no alert")
+        failed = chrome_async(
+            self.m,
+            f"""
+          const P = ChromeUtils.importESModule('resource://builtin-addons/nulavio-shell/modules/NulavioProfiles.sys.mjs')
+            .NulavioProfiles;
+          const W = {WINDOW};
+          const out = {{}};
+          P.currentForBand = () => Promise.reject(new Error('refused by the test'));
+          try {{
+            await W.refresh(); await W.refresh();
+            out.identity = (() => {{ {probe} }})();
+          }} finally {{ delete P.currentForBand; }}
+          // The protection is read from the profile's files: make that read fail, for the Vault's file only.
+          const io = Cu.getGlobalForObject(W).IOUtils, exists = io.exists;
+          io.exists = path => String(path).endsWith('vault.json')
+            ? Promise.reject(new Error('refused by the test')) : exists.call(io, path);
+          try {{
+            await W.refresh(); await W.refresh();
+            out.protection = (() => {{ {probe} }})();
+          }} finally {{ io.exists = exists; }}
+          await W.refresh(); await W.refresh();
+          out.after = (() => {{ {probe} }})();
+          return out;
+        """,
+        )
+        self.assertNotIn("error", failed, failed)
+        identity, protection, after = (failed["ok"][key] for key in ("identity", "protection", "after"))
+        self.assertTrue(identity["name"].startswith("? ") or identity["name"] == self.message("bandProfileUnavailable"), identity)
+        self.assertEqual((identity["neutral"], identity["clipped"]), (False, False), identity)
+        self.assertEqual(protection["protection"], self.message("bandProtectionUnknown"), protection)
+        self.assertEqual((protection["neutral"], protection["clipped"]), (False, False), protection)
+        self.assertTrue(after["neutral"], "the next good read gives the row back")
+
     def test_02_only_a_selected_top_level_shell_principal_names_the_header(self):
         base = self.m.chrome("return WebExtensionPolicy.getByID('shell@nulavio.net').getURL('');")
 
@@ -729,6 +773,12 @@ class WindowBandTest(unittest.TestCase):
         assert_band(self, state)
         self.assertTrue(any("nv-band-agent" in c["kind"] for c in state["cues"]))
         self.assertTrue(any("nv-band-guard" in c["kind"] for c in state["cues"]))
+        # Audit 2026-11 W-01: the agent's row is ruled with lines. Its text controls (the protection state,
+        # "Pausar agente", "Parar todos") sit on the band's own fill, so no line runs through their words.
+        on_lines = [c for c in state["cues"] if any(k in c["kind"] for k in ("protection", "nv-band-pause", "nv-band-stop"))]
+        self.assertEqual(len(on_lines), 3, state)
+        for cue in on_lines:
+            self.assertEqual(cue["bg"], state["bg"], cue)
         self.assertNotIn(
             "error",
             chrome_async(

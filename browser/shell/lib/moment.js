@@ -27,8 +27,9 @@ const KINDS = {
   create: "vaultCreateTitle",
 };
 
-// Pages where a password is typed: they say where to look before typing it.
-const SECRET_KINDS = new Set(["unlock", "create", "methods"]);
+// Pages where a password is typed: they say where to look before typing it. The phone page takes the
+// profile's password or recovery code to connect or remove a phone (audit 2026-11 S-06).
+const SECRET_KINDS = new Set(["unlock", "create", "methods", "phone"]);
 
 async function here() {
   const summary = await browser.nulavioProfiles?.here?.().catch(() => null);

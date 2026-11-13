@@ -138,9 +138,22 @@ class AiUiTest(unittest.TestCase):
         self.click("#ai-connect-form button[type=submit]")
         shown = lambda i: not self.js(f"return document.getElementById('{i}').hidden;")  # noqa: E731
         self.assertTrue(harness.wait_until(lambda: shown("ai-wizard") or shown("ai-connect-result"), timeout=60))
+        # Audit 2026-11 S-03: the command and the configuration hold long paths. They scroll inside their own
+        # block; the page never scrolls sideways.
+        sideways = "const d = document.documentElement; return [d.scrollWidth, d.clientWidth];"
         if shown("ai-wizard"):  # Claude Code is installed: choose to copy the configuration instead
+            page, viewport = self.js(sideways)
+            self.assertLessEqual(page, viewport, "the wizard's command widened the page")
             self.click("#ai-wizard-manual")
         self.assertTrue(harness.wait_until(lambda: shown("ai-connect-result"), timeout=30))
+        page, viewport = self.js(sideways)
+        self.assertLessEqual(page, viewport, "the agent's configuration widened the page")
+        block = self.js(
+            "const p = document.getElementById('ai-config'), r = p.getBoundingClientRect();"
+            "return {inside: r.right <= p.closest('.card').getBoundingClientRect().right,"
+            " overflow: getComputedStyle(p).overflowX};"
+        )
+        self.assertEqual(block, {"inside": True, "overflow": "auto"})
         config = json.loads(self.js("return document.getElementById('ai-config').textContent;"))
         server = config["mcpServers"]["nulavio"]
         self.assertEqual(server["args"], ["ai", "serve"])
@@ -575,6 +588,23 @@ class AiUiTest(unittest.TestCase):
         finally:
             audit.record(agent=agent["id"], client="other", session="s-live", event="disconnected")
             registry.end_session(agent["id"], "s-live")
+
+    def test_13_a_request_that_no_longer_exists_offers_no_answer(self):
+        """Audit 2026-11 S-01: the page of a request the bridge does not know (a restored tab, an old
+        address) names itself and shows no "Negar" or "Permitir": none of them would do anything."""
+        self.open_page("ai/request.html?id=not-a-request")
+        self.assertTrue(harness.wait_until(lambda: self.js("return document.body.dataset.state;") in ("error", "expired"), 10))
+        shown = self.js(
+            "const seen = s => [...document.querySelectorAll(s)].filter(e => e.checkVisibility());"
+            "return {answers: seen('#actions button').map(b => b.id), headline: document.getElementById('headline').textContent,"
+            " advice: seen('#only-if').length, level: document.getElementById('status').dataset.level,"
+            " status: document.getElementById('status').textContent};"
+        )
+        self.assertEqual(shown["answers"], [], shown)
+        self.assertEqual(shown["headline"], self.msg("aiRequestTitle"))
+        self.assertEqual(shown["advice"], 0, "advice about a decision nobody is asked to make")
+        self.assertIn(shown["level"], ("error", "warn"), shown)
+        self.assertTrue(shown["status"], shown)
 
 
 if __name__ == "__main__":
