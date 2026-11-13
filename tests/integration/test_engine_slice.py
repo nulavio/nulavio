@@ -310,7 +310,10 @@ class EngineSliceTest(unittest.TestCase):
         for root, dirs, files in os.walk(self.session.profile_dir):
             for name in dirs + files:
                 path = Path(root) / name
-                st = path.lstat()
+                try:
+                    st = path.lstat()
+                except FileNotFoundError:
+                    continue  # removed by the running engine (a SQLite journal) after the walk listed it
                 if stat.S_ISLNK(st.st_mode):
                     continue  # the engine's lock symlink
                 if stat.S_IMODE(st.st_mode) & 0o077:
