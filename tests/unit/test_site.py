@@ -195,6 +195,26 @@ class SiteTest(unittest.TestCase):
                 fine = [n for n in feature.walk() if "fine" in n.classes()]
                 self.assertEqual(len(fine), 1, feature.attrs)
                 self.assertIn(label, fine[0].text())
+        # Selling the launch stops where the download starts: what the published alpha does not
+        # have yet is marked as coming, and the compatibility figure says when it was measured
+        # (frontend audit N-01, N-04).
+        for page, soon, when, packages in (
+            ("index.html", "Em breve", "outubro de 2026", "Pacotes assinados para Fedora e Ubuntu"),
+            ("en/index.html", "Coming soon", "October 2026", "Signed packages for Fedora and Ubuntu"),
+        ):
+            with self.subTest(page=page):
+                tree = self.tree(page)
+                unlock = next(n for n in tree.all("ul") if "unlock" in n.classes())
+                methods = [n.text() for n in unlock.walk() if n.tag == "li"]
+                coming = [m for m in methods if "FIDO2" in m or "biometr" in m]
+                self.assertEqual(len(coming), 2, methods)
+                self.assertTrue(all(soon in m for m in coming), coming)
+                for node in tree.all():
+                    if node.tag in ("p", "td") and "FIDO2" in node.text():
+                        self.assertRegex(node.text(), f"(?i){soon}", node.text())
+                figure = next(n.text() for n in tree.all("dt") if "50" in n.parent.text() and "sites" in n.text())
+                self.assertIn(when, figure)
+                self.assertNotIn(packages, self.read(page))
         absolute = re.compile(r"(?i)\b(100\s?%|unhackable|imune|immune|totalmente seguro|completely secure|garantid|guarantee)")
         for page in PAGES:
             self.assertIsNone(absolute.search((self.out / page).read_text(encoding="utf-8")), page)
