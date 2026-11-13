@@ -130,11 +130,14 @@ class ImmersiveTest(unittest.TestCase):
                     " {triggeringPrincipal: Services.scriptSecurityManager.getSystemPrincipal()});",
                     [address],
                 )
+                # The tab shows this address (the reason is "page" from the address before as well, and the next
+                # load would overtake one that had not begun).
+                shown = lambda address=address: self.m.chrome(DOCUMENT)["shown"] == address  # noqa: E731
+                self.assertTrue(harness.wait_until(shown, 10), (address, self.m.chrome(DOCUMENT)))
                 self.assertTrue(harness.wait_until(lambda: self.window()["off"] == "page", 10), self.window())
                 state = self.settled(True)
                 self.assertEqual((state["on"], state["toolbar"]), (False, True), state)
-        # Back to a site, loaded as the addresses above were: the remote's own "navigate" now and then leaves the
-        # tab on the page's source (same address, another kind of document), and the mode is then rightly off.
+        # Back to a site, loaded as the addresses above were.
         self.m.chrome(
             "gBrowser.selectedBrowser.fixupAndLoadURIString(arguments[0],"
             " {triggeringPrincipal: Services.scriptSecurityManager.getSystemPrincipal()});",

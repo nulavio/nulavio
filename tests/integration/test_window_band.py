@@ -230,13 +230,14 @@ class WindowBandTest(unittest.TestCase):
             self.m.navigate(base + "vault/unlock.html?p=0")
             self.assertTrue(harness.wait_until(lambda: self.message("bandSurfaceUnlock") in header(), 10))
             self.m.chrome("openTrustedLinkIn(arguments[0], 'current');", [server.url("/page/race")])
-            self.assertEqual(
-                self.m.chrome("""
+            named = """
               const e = document.querySelector('#nulavio-band .nv-band-header');
               return [e.textContent,e.getAttribute('aria-label'),e.title];
-            """),
-                ["", "", ""],
-            )
+            """
+            # The name goes when the engine says the load began, a moment after the call returns (the page is in
+            # another process), and well before the site answers: the server holds its answer for 0.4 s.
+            gone = harness.wait_until(lambda: self.m.chrome(named) == ["", "", ""], 0.3, interval=0.02)
+            self.assertTrue(gone, self.m.chrome(named))
             self.assertNotIn("error", chrome_async(self.m, f"await {WINDOW}.refresh();"))
             self.assertEqual(header(), "")  # refresh cannot restore the old Shell header during navigation
         self.m.chrome("gBrowser.selectedTab = window.nvTestTab;")
