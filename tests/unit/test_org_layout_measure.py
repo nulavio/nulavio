@@ -34,6 +34,7 @@ class OrgLayoutMeasureTest(unittest.TestCase):
             "ci/modern-web-guidance/package-lock.json": "process",
             "scripts/dev/modern_web_guidance.sh": "process",
             "tests/unit/test_modern_web_guidance.py": "process",
+            "tests/unit/test_agent_skills.py": "process",
             "docs/design/screenshots/ux2/a.png": "design-media",
             "docs/adr/0001-engine-selection.md": "docs",
             "launcher/nulavio_launcher/cli.py": "launcher",
