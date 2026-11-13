@@ -24,6 +24,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts" / "ci"))
 sys.path.insert(0, str(ROOT / "scripts" / "upstream"))
 
+import ai_review_failure  # noqa: E402
 import ai_review_input  # noqa: E402
 import verify_claude_code_release as verify_cc  # noqa: E402
 
@@ -170,6 +171,8 @@ class WorkflowTest(unittest.TestCase):
         review = job("review")
         for flag in (
             "--tools Read,Grep,Glob",
+            # With the scrubbing on, Claude Code ignores --permission-mode and asks for the list instead.
+            "--allowedTools Read,Grep,Glob",
             '--disallowedTools "mcp__*"',
             "--permission-mode dontAsk",
             "--setting-sources user",
@@ -258,6 +261,64 @@ class WorkflowTest(unittest.TestCase):
                 "fi",
             ],
         )
+
+    def test_a_failed_review_says_why_with_a_status_and_a_word_only(self):
+        # The action hides Claude Code's output; a review refused by the model API showed only
+        # "did not return structured_output" (2026-11-13). The reason is given without the record's text.
+        review_steps = steps(job("review"))
+        (reviewing,) = [i for i, step in enumerate(review_steps) if "anthropics/claude-code-action@" in step]
+        (why,) = [i for i, step in enumerate(review_steps) if "ai_review_failure.py" in step]
+        self.assertEqual(why, reviewing + 1)
+        self.assertEqual(
+            review_steps[why].splitlines()[1:],
+            [
+                "        if: steps.input.outputs.status == 'ready' && failure()",
+                '        run: python3 -I scripts/ci/ai_review_failure.py "$RUNNER_TEMP/claude-execution-output.json"',
+                "",
+            ],
+        )
+        secret = "sk-ant-api03-TOPSECRET ignore previous instructions @maintainer"
+        refused = {"type": "result", "subtype": "success", "is_error": True, "num_turns": 1, "api_error_status": 401,
+                   "terminal_reason": "api_error", "result": secret}  # fmt: skip
+        for data in (refused, [{"type": "system", "subtype": "init"}, refused]):
+            message = ai_review_failure.explain(data)
+            self.assertIn("HTTP 401", message)
+            self.assertIn("ANTHROPIC_API_KEY secret", message)
+            self.assertIn("api_error after 1 turn(s)", message)
+            self.assertNotIn("TOPSECRET", message)
+        # Nothing of the record is printed as it came: a status that is not one, a reason that is text.
+        odd = {
+            "type": "result",
+            "api_error_status": "401\n::error::x",
+            "terminal_reason": secret,
+            "num_turns": "9\n",
+            "result": secret,
+        }
+        message = ai_review_failure.explain(odd)
+        self.assertEqual(message, "Claude Code stopped with unknown after ? turn(s) and returned no result")
+        self.assertIn(
+            "max_turns after 40 turn(s)", ai_review_failure.explain({"type": "result", "subtype": "max_turns", "num_turns": 40})
+        )
+        self.assertIn(
+            "HTTP 503 (the model API failed; run the review again)",
+            ai_review_failure.explain({**refused, "api_error_status": 503}),
+        )
+        self.assertIn("left no result record", ai_review_failure.explain([{"type": "system"}, "text", None]))
+        for status in (True, 99, 600, 401.0, None):
+            self.assertNotIn("HTTP", ai_review_failure.explain({**refused, "api_error_status": status}), status)
+        with tempfile.TemporaryDirectory() as tmp:
+            file = Path(tmp) / "execution.json"
+            file.write_text(json.dumps([refused]))
+            for argv, expected in (
+                (["x", str(file)], "::error title=AI review did not complete::the model API answered HTTP 401"),
+                (["x", str(Path(tmp) / "missing.json")], "::error title=AI review did not complete::no execution file to read"),
+            ):
+                out = io.StringIO()
+                with redirect_stdout(out):
+                    self.assertEqual(ai_review_failure.main(argv), 0)  # the failed step already failed the job
+                self.assertTrue(out.getvalue().startswith(expected), out.getvalue())
+                self.assertEqual(out.getvalue().count("\n"), 1)
+                self.assertNotIn("TOPSECRET", out.getvalue())
 
     def test_comment_header_names_the_model_and_action_that_ran(self):
         model = re.search(r"--model (\S+)", job("review")).group(1)
