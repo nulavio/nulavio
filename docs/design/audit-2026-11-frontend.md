@@ -211,7 +211,7 @@ One slice per pull request, each with a test that fails before it, run on the pa
 | The agent's configuration block in Settings | S-03 | [#52](https://github.com/nulavio/nulavio/pull/52) |
 | The start page with the Nulavio engine | P-01 | [#53](https://github.com/nulavio/nulavio/pull/53) |
 
-LOW findings were fixed where a slice already touched the same lines (S-06 with S-04, W-04 with W-01). The others (W-03, W-05, S-07 to S-12, P-02, N-02 to N-04) wait for a polish round or for a decision below.
+One LOW finding was fixed where a slice already touched the same lines (W-04 with W-01); S-06, LOW when the slices were cut and MEDIUM since, went with S-04. W-05 was fixed afterwards by the experience stack (#132: the address bar names the Shell's pages as the browser's own). The other LOW findings (W-03, S-07 to S-12, P-02, N-02 to N-04) wait for a polish round or for a decision below.
 
 The audit ran on the build of `v160.0-0.1`. `main` has since moved to `v160.0-0.2` (the security release, #44); the corrections were rebased on it and verified on that release's build with `dev_sync`.
 
