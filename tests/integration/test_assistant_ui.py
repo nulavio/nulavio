@@ -36,6 +36,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
 import harness
+import settings_page
 from fake_llm import FakeProvider, Reply
 from fake_keyring import FAKE_SECRET_TOOL
 
@@ -310,26 +311,30 @@ class AssistantUiTest(unittest.TestCase):
     # -- settings and the module ------------------------------------------------------------
 
     def test_01_settings_store_the_key_in_the_keyring_only(self):
-        self.open("settings/settings.html#ai")
-        self.m.execute(
-            "const f = document.getElementById('ai-assistant'); f.elements.kind.value = 'openai';"
-            "f.elements.baseUrl.value = arguments[0]; f.elements.model.value = 'test-model'; f.elements.key.value = arguments[1];"
-            "f.elements.allowed.checked = true; f.requestSubmit();",
-            [self.provider.base, KEY],
-        )
-        configured = "return document.getElementById('ai-assistant').dataset.configured === 'true';"
-        self.assertTrue(harness.wait_until(lambda: self.m.execute(configured), 20))
-        status = self.m.execute("return document.getElementById('ai-assistant-state').textContent;")
-        self.assertIn("test-model", status)
+        # ADR 0011, step 10: the assistant's service is set in the settings page.
+        settings_page.open_pane(self.m, settings_page.assistant_pane(self.m))
+        settings_page.wait_control(self.m, "nulavio-assistant-kind")
+        settings_page.change(self.m, "nulavio-assistant-kind", "openai")
+        settings_page.change(self.m, "nulavio-assistant-url", self.provider.base)
+        settings_page.change(self.m, "nulavio-assistant-model", "test-model")
+        settings_page.change(self.m, "nulavio-assistant-key", KEY)
+        settings_page.click(self.m, "#nulavio-assistant-save")
+        saved = lambda now: "test-model" in (now["description"] or "")  # noqa: E731
+        status = settings_page.wait_control(self.m, "nulavio-assistant-now", saved, timeout=20)["description"]
         self.assertIn("127.0.0.1", status)
         self.assertIn("chaveiro", status)
-        self.assertEqual(self.m.execute("return document.querySelector('#ai-assistant [name=key]').value;"), "")
+        self.assertEqual(settings_page.control(self.m, "nulavio-assistant-key")["value"], "")
+        # Whether this profile may send anything to it is its own switch, saved when it changes.
+        settings_page.wait_control(self.m, "nulavio-assistant-allowed", lambda now: now["shown"] and not now["disabled"])
+        settings_page.click(self.m, "#nulavio-assistant-allowed")
+        allowed = lambda: chrome_async(self.m, f"return (await {AI}.assistantState(window)).profileAllowed;")["ok"]  # noqa: E731
+        self.assertTrue(harness.wait_until(allowed, 10), "the profile was not allowed to use the assistant")
         stored = json.loads(self.keyring.read_text())
         self.assertEqual([base64.b64decode(i["secret"]).decode() for i in stored], [KEY])  # in the (stand-in) keyring
         for path in self.session.profile_dir.rglob("*"):
             if path.is_file() and path.stat().st_size < 20_000_000:
                 self.assertNotIn(KEY.encode(), path.read_bytes(), f"key found in {path}")
-        self.shoot("settings", keep="ai")
+        settings_page.shoot(self.m, self.shots, "settings")
 
     def test_02_page_text_goes_only_for_the_included_tab(self):
         url = self.server.url("/agent-task?word=OBSIDIAN")
@@ -1768,6 +1773,42 @@ class AssistantUiTest(unittest.TestCase):
             self.assertTrue(harness.wait_until(lambda: self.tools_process() is None, 60))
             self.show_sidebar(reload=True)
             self.close_other_tabs()
+
+    def test_39_the_panels_doors_open_the_settings_page_and_the_agents_page(self):
+        """The panel holds no settings: where this profile is not allowed, "Abrir configurações" opens the
+        browser's settings page on the assistant; while the agents are stopped, the door opens the agents' page."""
+        self.close_other_tabs()
+        urls = "return gBrowser.browsers.map(b => b.currentURI.spec);"
+
+        def opened(prefix: str) -> list[str]:
+            return harness.wait_until(lambda: [u for u in self.m.chrome(urls) if u.startswith(prefix)], 15) or []
+
+        self.addCleanup(self.close_other_tabs)
+        self.addCleanup(chrome_async, self.m, f"return await {AI}.assistantAllow(true);")
+        chrome_async(self.m, f"return await {AI}.assistantAllow(false);")
+        self.show_sidebar(reload=True)
+        self.wait_view(lambda v: v["state"] == "not-allowed")
+        door = "const b = document.getElementById('%s'); return { shown: !b.closest('[hidden]'), text: b.textContent };"
+        self.assertEqual(
+            self.panel(door % "open-settings"), {"shown": True, "text": MESSAGES["assistantOpenSettings"]["message"]}
+        )
+        self.panel("document.getElementById('open-settings').click();")
+        self.assertEqual(opened("about:preferences"), [f"about:preferences#{settings_page.assistant_pane(self.m)}"])
+        chrome_async(self.m, f"return await {AI}.assistantAllow(true);")
+
+        self.close_other_tabs()
+        self.addCleanup(chrome_async, self.m, f"return await {AI}.setStopped(false);")
+        chrome_async(self.m, f"return await {AI}.setStopped(true);")
+        self.show_sidebar(reload=True)
+        self.wait_view(lambda v: v["state"] == "blocked")
+        self.assertTrue(self.panel(door % "resume-settings")["shown"])
+        self.panel("document.getElementById('resume-settings').click();")
+        agents = opened("moz-extension://")
+        self.assertEqual(len(agents), 1, agents)
+        self.assertTrue(agents[0].endswith("/settings/settings.html#ai-agents-card"), agents)
+        chrome_async(self.m, f"return await {AI}.setStopped(false);")
+        self.show_sidebar(reload=True)
+        self.wait_view(lambda v: v["state"] == "ready")
 
 
 if __name__ == "__main__":

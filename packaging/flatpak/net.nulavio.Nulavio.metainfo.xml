@@ -4,7 +4,9 @@
 <component type="desktop-application">
   <id>net.nulavio.Nulavio</id>
   <metadata_license>CC0-1.0</metadata_license>
-  <project_license>MPL-2.0</project_license>
+  <!-- The browser is MPL-2.0; distribution/policies.json carries a modified copy of uBlock Origin's filter list
+       registry, GPL-3.0-only, with its licence text and a notice of the change beside it. -->
+  <project_license>MPL-2.0 AND GPL-3.0-only</project_license>
   <name>Nulavio</name>
   <summary>The Linux browser that is protected from the start</summary>
   <summary xml:lang="pt-BR">O navegador para Linux que já vem protegido</summary>

@@ -9,6 +9,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
 import harness
+import settings_page
 
 from test_profiles import MODULE, SERVICE, chrome_async
 
@@ -113,31 +114,17 @@ class ProfileColorsTest(unittest.TestCase):
         self.assertEqual(by_id[old["current"]]["colorMigration"], "mint-to-lima")
         self.assertEqual(json.loads(self.profiles("return SPS.getDBPref(args[0]);", COLORS_PREF))["future"], "kept")
 
-    def test_settings_explains_the_change_and_focuses_the_real_colour_picker(self):
+    def test_settings_explains_the_change_and_edits_the_real_colour(self):
         old = self.seed_legacy()
         self.profiles("await P.list();")
-        shell_url = self.m.chrome("return WebExtensionPolicy.getByID('shell@nulavio.net').getURL('');")
-        self.m.navigate(shell_url + "settings/settings.html#profiles")
-        self.assertTrue(harness.wait_until(lambda: self.m.execute("return document.documentElement.dataset.ready === 'true';")))
-        row = f'#profile-list > li[data-profile-id="{old["current"]}"]'
-        action = row + " [data-color-migration] button"
-        self.assertTrue(
-            harness.wait_until(lambda: self.m.execute("return Boolean(document.querySelector(arguments[0]));", [action]))
-        )
-        for theme, dark in (("light", 0), ("dark", 1)):
-            self.m.chrome("Services.prefs.setIntPref('ui.systemUsesDarkTheme', arguments[0]);", [dark])
-            self.m.execute("document.documentElement.dataset.theme = arguments[0];", [theme])
-            # Capture the real row with its note and actual production styles, before opening the editor.
-            (harness.artifacts_dir() / f"profile-colour-migration-{theme}.png").write_bytes(
-                self.m.screenshot_png(element=self.m.find_element(row))
-            )
-            self.m.send("WebDriver:ElementClick", {"id": self.m.find_element(action)})
-            focus = self.m.execute(
-                "return {name:document.activeElement.name, value:document.activeElement.value,"
-                " open:Boolean(document.activeElement.closest('details[open]'))};"
-            )
-            self.assertEqual(focus, {"name": "color", "value": "lima", "open": True})
-            self.m.execute("document.querySelector(arguments[0] + ' details').open = false;", [row])
+        # ADR 0011: the settings page says it next to the list of profiles, once per profile it happened to.
+        settings_page.open_pane(self.m, "nulavioProfiles")
+        said = settings_page.wait_control(self.m, "nulavio-profiles-migrated")
+        self.assertIn("passou de menta para lima", said["message"])
+        settings_page.shoot(self.m, harness.artifacts_dir(), "profile-colour-migration")
+        # That profile's editor opens on the colour it really has now, where it can be changed.
+        settings_page.click_row(self.m, "nulavio-profile-list", str(old["current"]), "edit", "moz-box-item.nulavio-profile")
+        self.assertEqual(settings_page.wait_control(self.m, "nulavio-profile-color")["value"], "lima")
 
 
 if __name__ == "__main__":

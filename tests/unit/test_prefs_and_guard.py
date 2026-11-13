@@ -109,6 +109,14 @@ NO_REGION_LOOKUP = {  # no request to Mozilla's location service on a new profil
     "browser.region.network.url": "",
     "browser.region.update.enabled": False,
 }
+NO_DRM_UPDATE_PROBE = {  # no request to Google about a DRM module that is off (issue #103)
+    "media.gmp-widevinecdm.allow-chromium-update": False,
+}
+# The two daily checks at Mozilla's update server say nothing about the system or the distribution (issue #126).
+UPDATE_CHECKS = {
+    "media.gmp-manager.url": "GMP",
+    "extensions.systemAddon.update.url": "SystemAddons",
+}
 FINGERPRINTING = "privacy.fingerprintingProtection.overrides"  # docs/research/fingerprinting.md
 # Changing these breaks sites or accessibility; they belong to an opt-in mode, never to the default.
 NEVER_BY_DEFAULT = {
@@ -157,6 +165,35 @@ class MozillaAiAndAccountTest(unittest.TestCase):
                 self.assertEqual(baseline[name].value, value, "Track A (baseline.js)")
                 self.assertEqual(baseline[name].mode, "seed")
                 self.assertEqual(branding.get(name), value, "Track B default (firefox-branding.js)")
+
+    def test_no_drm_update_probe_in_either_track(self):
+        baseline = {p.name: p for p in profile.baseline_prefs()}
+        branding = branding_prefs()
+        for name, value in NO_DRM_UPDATE_PROBE.items():
+            with self.subTest(pref=name):
+                self.assertEqual(baseline[name].value, value, "Track A (baseline.js)")
+                self.assertEqual(baseline[name].mode, "seed")
+                self.assertEqual(branding.get(name), value, "Track B default (firefox-branding.js)")
+        for names in (set(baseline), set(branding)):
+            self.assertFalse(
+                {"media.eme.enabled", "media.gmp-widevinecdm.enabled", "media.gmp-provider.enabled"} & names,
+                "DRM itself stays the engine's and the person's switch",
+            )
+
+    def test_the_update_checks_name_neither_the_system_nor_the_distribution(self):
+        """The values as written. That they are still the engine's own addresses with only those three fields
+        replaced is checked against the engine's files, on the engine (test_mozilla_features 03d)."""
+        baseline = {p.name for p in profile.baseline_prefs()}
+        branding = branding_prefs()
+        for name, product in UPDATE_CHECKS.items():
+            with self.subTest(pref=name):
+                self.assertEqual(
+                    branding.get(name),
+                    f"https://aus5.mozilla.org/update/3/{product}/%VERSION%/%BUILD_ID%/%BUILD_TARGET%/%LOCALE%/%CHANNEL%"
+                    "/Linux/default/default/update.xml",
+                )
+                # Track A runs the distribution's engine: a seed would freeze an address that engine may change.
+                self.assertNotIn(name, baseline)
 
     def test_fingerprinting_additions_are_the_same_in_both_tracks_and_watched(self):
         baseline = {p.name: p for p in profile.baseline_prefs()}

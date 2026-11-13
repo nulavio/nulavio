@@ -229,6 +229,19 @@ byId("phone-cancel").addEventListener("click", () => {
 
 const UNAVAILABLE = new Set(["tools-missing", "storage-unavailable", "helper-failed"]);
 
+/* The profile could not be read (it was deleted, or the read failed): the page says that, not
+   "locked", and leaves no field to type a secret into (audit 2026-11 S-01). */
+function unreadable(e) {
+  const gone = String(e?.message) === "not-found";
+  byId("headline").textContent = t(gone ? "vaultGoneHeadline" : "vaultUnreadHeadline");
+  for (const id of ["explain", "url", "password-form", "recovery-form", "phone-panel", "alternatives"]) {
+    byId(id).hidden = true;
+  }
+  document.querySelector("details.why").hidden = true;
+  document.body.dataset.secret = "none"; // no field left: pages.css takes the "look at the band first" line away
+  setState("error", gone ? t("vaultGone") : errorText(e), "error");
+}
+
 localize();
 render()
   .catch(e => {
@@ -236,7 +249,7 @@ render()
       byId("headline").textContent = t("vaultUnavailableHeadline");
       setState("storage-unavailable", t("vaultStorageMissing"), "error");
     } else {
-      setState("error", errorText(e), "error");
+      unreadable(e);
     }
   })
   .finally(() => {

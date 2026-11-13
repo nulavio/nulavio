@@ -105,10 +105,18 @@ class ComponentGalleryTest(unittest.TestCase):
         finally:
             self.m.set_context("content")
 
+    def page_width(self, width: int) -> None:
+        """Size the window so that the page is `width` wide. The theme draws the page as a card inside the window's
+        frame (ADR 0010), so the window is wider than the page by the frame's margins."""
+        self.m.send("WebDriver:SetWindowRect", {"width": width, "height": 1000})
+        around = width - self.m.execute("return innerWidth;")
+        if around:
+            self.m.send("WebDriver:SetWindowRect", {"width": width + around, "height": 1000})
+
     def test_gallery_matrix_and_baselines(self):
         measurements = []
         for width in (1280, 390):
-            self.m.send("WebDriver:SetWindowRect", {"width": width, "height": 1000})
+            self.page_width(width)
             for theme in ("light", "dark"):
                 with self.subTest(width=width, theme=theme):
                     self.open_gallery()
@@ -209,17 +217,17 @@ class ComponentGalleryTest(unittest.TestCase):
         (self.artifacts / "measurements.json").write_text(json.dumps(measurements, indent=2) + "\n")
 
     def test_narrow_font_scaling_and_contrast_modes(self):
-        self.m.send("WebDriver:SetWindowRect", {"width": 390, "height": 1000})
+        self.page_width(390)
         self.open_gallery()
         self.m.execute("document.documentElement.style.fontSize = '200%';")
         for width in (320, 390):
-            self.m.send("WebDriver:SetWindowRect", {"width": width, "height": 1000})
+            self.page_width(width)
             self.assertEqual(self.m.execute("return innerWidth;"), width)
             self.assertFalse(self.m.execute("return document.documentElement.scrollWidth > innerWidth;"))
         self.m.chrome("Services.prefs.setIntPref('ui.useAccessibilityTheme', 1);")
         self.m = type(self).m = self.session.restart()
         self._exclude_sidebar_launcher(self.m, assert_initial_lateral=False)
-        self.m.send("WebDriver:SetWindowRect", {"width": 390, "height": 1000})
+        self.page_width(390)
         self.open_gallery()
         self.m.execute("document.documentElement.style.fontSize = '200%';")
         self.assertTrue(self.m.execute("return matchMedia('(prefers-contrast: more)').matches;"))

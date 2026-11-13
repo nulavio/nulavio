@@ -32,7 +32,8 @@
     "T_FILTER_NONE": "none installed — tracking protection (Strict) still applies",
     "T_FILTER_STATE_APPROVAL": "waiting for your approval: open the ☰ menu",
     "T_FILTER_STATE_DISABLED": "turned off in Add-ons",
-    "T_ENGINE_NOTE_NULAVIO": "built by Nulavio from verified Firefox source (development build)"
+    "T_ENGINE_NOTE_NULAVIO": "built by Nulavio from verified Firefox source, with its documented patches",
+    "T_FOOTER_NULAVIO": "Nulavio is built on Mozilla's Gecko engine. Nulavio is not affiliated with Mozilla. Firefox is a trademark of the Mozilla Foundation."
   },
   "pt-BR": {
     "T_LANG": "pt-BR",
@@ -67,6 +68,7 @@
     "T_FILTER_NONE": "nenhum instalado — a proteção contra rastreamento (Estrita) continua ativa",
     "T_FILTER_STATE_APPROVAL": "aguardando sua aprovação: abra o menu ☰",
     "T_FILTER_STATE_DISABLED": "desligado em Extensões",
-    "T_ENGINE_NOTE_NULAVIO": "compilado pelo Nulavio a partir do código-fonte verificado do Firefox (build de desenvolvimento)"
+    "T_ENGINE_NOTE_NULAVIO": "compilado pelo Nulavio a partir do código-fonte verificado do Firefox, com os patches documentados",
+    "T_FOOTER_NULAVIO": "O Nulavio é baseado no motor Gecko da Mozilla. O Nulavio não é afiliado à Mozilla. Firefox é marca registrada da Mozilla Foundation."
   }
 }

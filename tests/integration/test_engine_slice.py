@@ -111,6 +111,18 @@ class EngineSliceTest(unittest.TestCase):
         text = self.m.execute("return document.body.innerText;")
         self.assertIn(self.session.profile_name, text)
         self.assertIn("uBlock Origin", text)
+        # Audit 2026-11 P-01: what the page says of the engine is true of the engine in use. The add-ons
+        # shortcut is the engine's own key, and the Nulavio build (patched) is never called unmodified.
+        shown = self.m.execute("return [...document.querySelectorAll('.keys li:last-child kbd')].map(k => k.textContent);")
+        own = self.m.chrome(
+            "const k = document.getElementById('key_openAddons'); return [k.getAttribute('modifiers'), k.getAttribute('key')];"
+        )
+        self.assertEqual(own[0].replace(" ", ""), "accel,shift")
+        self.assertEqual(shown, ["Ctrl", "Shift", own[1].upper()])
+        if harness.nulavio_engine():
+            self.assertFalse(
+                any(word in text for word in ("sem modificações", "unmodified", "desenvolvimento", "development")), text
+            )
         # The stylesheet (and tokens) loaded under the page CSP.
         radius = self.m.execute("return getComputedStyle(document.querySelector('.card')).borderTopLeftRadius;")
         self.assertEqual(radius, "14px")

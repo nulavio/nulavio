@@ -31,63 +31,144 @@
         <button class="button button--primary" type="submit" data-i18n="searchButton">Search</button>
       </form>
       <p class="hero__hint"><span data-i18n="searchHint">or use the address bar</span> <kbd>Ctrl</kbd> <kbd>L</kbd>
-        <a class="hero__link" id="search-settings" href="../settings/settings.html#search" hidden data-i18n="searchSettingsLink">Search settings</a></p>
+        <a class="hero__link" id="search-settings" href="../settings/settings.html#search" data-settings="search" hidden data-i18n="searchSettingsLink">Search settings</a></p>
     </header>
 
-    <!-- First run (audit 2026-11 FR-01): one card at a time, in this place, in a genuinely new profile.
-         The layout and DNS cards below are steps 1 and 2; newtab.js shows only the current one. -->
+    <!-- First run (audit 2026-11 FR-01; ADR 0010): one card at a time, in a genuinely new profile. Every card has
+         the same three parts, in reading order: what is asked (.firstrun__say), the choice itself
+         (.firstrun__show) and the actions (.firstrun__do). On the stage they are two panes; elsewhere they stack. -->
     <p class="firstrun__progress" id="firstrun-progress" aria-live="polite" hidden></p>
 
-    <section class="card stack firstrun" id="firstrun-welcome" aria-labelledby="firstrun-welcome-heading" hidden>
-      <div class="firstrun__head">
-        <img class="firstrun__symbol" src="../shared/nulavio-symbol-adaptive.svg" alt="" width="32" height="32">
+    <section class="card firstrun" id="firstrun-welcome" aria-labelledby="firstrun-welcome-heading" hidden>
+      <div class="firstrun__say">
+        <img class="firstrun__symbol" src="../shared/nulavio-symbol-adaptive.svg" alt="" width="48" height="48">
         <h2 class="layout-choice__title" id="firstrun-welcome-heading" data-i18n="firstrunWelcomeTitle"></h2>
+        <p class="firstrun__lead" data-i18n="firstrunWelcomeLead"></p>
       </div>
-      <p class="firstrun__lead" data-i18n="firstrunWelcomeLead"></p>
-      <ul class="firstrun__facts" id="firstrun-facts"></ul>
-      <div class="callout callout--info">
-        <svg class="callout__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 11v6M12 7.5v.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-        <p data-i18n="footerLimits"></p>
+      <div class="firstrun__show">
+        <!-- A picture of this window with its real band: the profile and its state are read, not drawn. -->
+        <div class="miniwin" aria-hidden="true">
+          <div class="miniwin__band" id="firstrun-band"></div>
+          <div class="miniwin__body">
+            <div class="miniwin__tabs"><span class="miniwin__tab miniwin__tab--on"></span><span class="miniwin__tab"></span><span class="miniwin__tab"></span></div>
+            <div class="miniwin__page"></div>
+          </div>
+        </div>
+        <p class="firstrun__caption" data-i18n="firstrunBandCaption"></p>
+        <ul class="firstrun__facts" id="firstrun-facts"></ul>
+        <p class="hint" data-i18n="footerLimits"></p>
       </div>
-      <div class="actions">
-        <button class="button button--primary" type="button" id="firstrun-start" data-i18n="firstrunStart"></button>
-        <button class="button button--quiet" type="button" id="firstrun-skip" data-i18n="firstrunSkipAll"></button>
-      </div>
-    </section>
-
-    <section class="card stack firstrun" id="firstrun-passwords" aria-labelledby="firstrun-passwords-heading" hidden>
-      <h2 class="layout-choice__title" id="firstrun-passwords-heading" data-i18n="firstrunPasswordsTitle"></h2>
-      <p class="firstrun__lead" data-i18n="firstrunPasswordsLead"></p>
-      <p class="hint" id="firstrun-passwords-now"></p>
-      <div class="actions">
-        <a class="button button--primary" id="firstrun-passwords-choose" href="../settings/settings.html#passwords" data-i18n="firstrunPasswordsChoose"></a>
-        <button class="button button--quiet" type="button" id="firstrun-passwords-later" data-i18n="firstrunNotNow"></button>
-      </div>
-    </section>
-
-    <section class="card stack firstrun" id="firstrun-default" aria-labelledby="firstrun-default-heading" hidden>
-      <h2 class="layout-choice__title" id="firstrun-default-heading" data-i18n="firstrunDefaultTitle"></h2>
-      <p class="firstrun__lead" data-i18n="firstrunDefaultLead"></p>
-      <p class="form-error" id="firstrun-default-error" role="alert"></p>
-      <div class="actions">
-        <button class="button button--primary" type="button" id="firstrun-default-make" data-i18n="connectMakeDefault"></button>
-        <button class="button button--quiet" type="button" id="firstrun-default-later" data-i18n="firstrunNotNow"></button>
+      <div class="firstrun__do">
+        <div class="actions">
+          <button class="button button--primary" type="button" id="firstrun-start" data-i18n="firstrunStart"></button>
+          <button class="button button--secondary" type="button" id="firstrun-skip" data-i18n="firstrunSkipAll" aria-describedby="firstrun-defaults"></button>
+        </div>
+        <p class="hint" id="firstrun-defaults" data-i18n="firstrunDefaultsNote"></p>
       </div>
     </section>
 
-    <section class="card stack firstrun" id="firstrun-done" aria-labelledby="firstrun-done-heading" hidden>
-      <h2 class="layout-choice__title" id="firstrun-done-heading" data-i18n="firstrunDoneTitle"></h2>
-      <dl class="facts firstrun__summary" id="firstrun-summary"></dl>
-      <p class="hint"><span data-i18n="firstrunDoneLater"></span> <a href="../settings/settings.html" data-i18n="settingsTitle"></a></p>
-      <div class="actions">
-        <button class="button button--primary" type="button" id="firstrun-finish" data-i18n="firstrunFinish"></button>
+    <section class="card firstrun" id="firstrun-passwords" aria-labelledby="firstrun-passwords-heading" hidden>
+      <div class="firstrun__say">
+        <h2 class="layout-choice__title" id="firstrun-passwords-heading" data-i18n="firstrunPasswordsTitle"></h2>
+        <p class="firstrun__lead" data-i18n="firstrunPasswordsLead"></p>
+        <p class="hint" id="firstrun-passwords-now" role="status"></p>
+      </div>
+      <div class="firstrun__show">
+        <!-- One row per manager, each with what it is in one line and its real state (as in Settings). -->
+        <ul class="options" id="firstrun-providers" aria-busy="true" aria-labelledby="firstrun-passwords-heading"></ul>
+      </div>
+      <div class="firstrun__do">
+        <p class="form-error" id="firstrun-passwords-error" role="alert"></p>
+        <div class="actions">
+          <button class="button button--primary" type="button" id="firstrun-passwords-next" data-i18n="firstrunContinue"></button>
+        </div>
+      </div>
+    </section>
+
+    <section class="card firstrun" id="firstrun-default" aria-labelledby="firstrun-default-heading" hidden>
+      <div class="firstrun__say">
+        <h2 class="layout-choice__title" id="firstrun-default-heading" data-i18n="firstrunDefaultTitle"></h2>
+        <p class="firstrun__lead" data-i18n="firstrunDefaultLead"></p>
+      </div>
+      <div class="firstrun__show">
+        <svg class="firstrun__picture" viewBox="0 0 320 150" aria-hidden="true" focusable="false">
+          <!-- a message, a chat and a document on the left; this window on the right -->
+          <rect class="lp-content" x="10.5" y="14.5" width="76" height="30" rx="6"/>
+          <path class="lp-line" d="M11 20l38 16 38-16"/>
+          <rect class="lp-content" x="10.5" y="60.5" width="76" height="30" rx="14"/>
+          <rect class="lp-item" x="24" y="72" width="34" height="6" rx="3"/>
+          <rect class="lp-content" x="10.5" y="106.5" width="76" height="30" rx="6"/>
+          <rect class="lp-item" x="22" y="115" width="40" height="5" rx="2.5"/><rect class="lp-item" x="22" y="124" width="28" height="5" rx="2.5"/>
+          <path class="lp-flow" d="M96 29.5h40q10 0 10 10v25M96 75.5h64M96 121.5h40q10 0 10-10v-25"/>
+          <path class="lp-flow lp-flow--head" d="M154 69l8 6.5-8 6.5"/>
+          <rect class="lp-frame" x="170.5" y="20.5" width="139" height="110" rx="8"/>
+          <rect class="lp-band" x="171" y="21" width="138" height="14" rx="7"/>
+          <rect class="lp-mark" x="178" y="26" width="18" height="4" rx="2"/>
+          <rect class="lp-item" x="178" y="44" width="30" height="8" rx="3"/><rect class="lp-item" x="178" y="57" width="30" height="8" rx="3"/>
+          <rect class="lp-content" x="216.5" y="42.5" width="86" height="80" rx="5"/>
+        </svg>
+        <p class="firstrun__caption" data-i18n="firstrunDefaultCaption"></p>
+      </div>
+      <div class="firstrun__do">
+        <p class="form-error" id="firstrun-default-error" role="alert"></p>
+        <div class="actions">
+          <button class="button button--primary" type="button" id="firstrun-default-make" data-i18n="connectMakeDefault"></button>
+          <button class="button button--quiet" type="button" id="firstrun-default-later" data-i18n="firstrunNotNow"></button>
+        </div>
+      </div>
+    </section>
+
+    <!-- The last question: this profile has no password; a protected one is a new profile (the Vault's own steps). -->
+    <section class="card firstrun" id="firstrun-profile" aria-labelledby="firstrun-profile-heading" hidden>
+      <div class="firstrun__say">
+        <h2 class="layout-choice__title" id="firstrun-profile-heading" data-i18n="firstrunProfileTitle"></h2>
+        <p class="firstrun__lead" id="firstrun-profile-lead"></p>
+        <p class="hint" data-i18n="firstrunProfileNote"></p>
+      </div>
+      <div class="firstrun__show">
+        <div class="bandpair" aria-hidden="true">
+          <p class="firstrun__caption" data-i18n="firstrunProfileNow"></p>
+          <div class="miniwin">
+            <div class="miniwin__band" id="firstrun-band-now"></div>
+            <div class="miniwin__body"><div class="miniwin__tabs"><span class="miniwin__tab miniwin__tab--on"></span><span class="miniwin__tab"></span></div><div class="miniwin__page"></div></div>
+          </div>
+          <p class="firstrun__caption" data-i18n="firstrunProfileThen"></p>
+          <div class="miniwin">
+            <div class="miniwin__band" id="firstrun-band-then"></div>
+            <div class="miniwin__body"><div class="miniwin__tabs"><span class="miniwin__tab miniwin__tab--on"></span><span class="miniwin__tab"></span></div><div class="miniwin__page"></div></div>
+          </div>
+        </div>
+      </div>
+      <div class="firstrun__do">
+        <div class="actions">
+          <button class="button button--primary" type="button" id="firstrun-profile-create" data-i18n="vaultCreate"></button>
+          <button class="button button--quiet" type="button" id="firstrun-profile-later" data-i18n="firstrunNotNow"></button>
+        </div>
+      </div>
+    </section>
+
+    <section class="card firstrun" id="firstrun-done" aria-labelledby="firstrun-done-heading" hidden>
+      <div class="firstrun__say">
+        <h2 class="layout-choice__title" id="firstrun-done-heading" data-i18n="firstrunDoneTitle"></h2>
+        <p class="firstrun__lead"><span data-i18n="firstrunDoneLater"></span> <a href="../settings/settings.html" data-settings="" data-i18n="settingsOpen"></a>.</p>
+      </div>
+      <div class="firstrun__show">
+        <dl class="facts firstrun__summary" id="firstrun-summary"></dl>
+      </div>
+      <div class="firstrun__do">
+        <div class="actions">
+          <button class="button button--primary" type="button" id="firstrun-finish" data-i18n="firstrunFinish"></button>
+        </div>
       </div>
     </section>
 
     <section class="card layout-choice" id="layout-choice" aria-labelledby="layout-choice-heading" hidden>
-      <h2 class="layout-choice__title" id="layout-choice-heading" data-i18n="layoutChoiceHeading"></h2>
-      <p class="hint" id="layout-choice-body" data-i18n="layoutChoiceBody"></p>
+      <div class="firstrun__say">
+        <h2 class="layout-choice__title" id="layout-choice-heading" data-i18n="layoutChoiceHeading"></h2>
+        <p class="hint" id="layout-choice-body" data-i18n="layoutChoiceBody"></p>
+      </div>
       <!-- UX3F A4: three visual options. The native radios keep keyboard and screen-reader behaviour. -->
+      <div class="firstrun__show">
       <fieldset class="layout-options" id="layout-choice-options" aria-describedby="layout-choice-body" data-option="layout">
         <legend class="visually-hidden" data-i18n="layoutChoose"></legend>
         <label class="layout-option">
@@ -128,32 +209,42 @@
           <span class="hint layout-option__hint" id="newtab-layout-focus-hint" data-i18n="layoutChoiceFocusHint"></span>
         </label>
       </fieldset>
-      <p class="visually-hidden" id="layout-choice-current" role="status" aria-live="polite" data-i18n="layoutLoading"></p>
-      <p class="form-error" id="layout-choice-error" role="alert"></p>
-      <div class="actions">
-        <button class="button button--primary" type="button" id="layout-choice-done" data-i18n="layoutChoiceDone"></button>
-        <button class="button button--secondary" type="button" id="layout-choice-retry" hidden data-i18n="layoutRetry"></button>
-        <a class="button button--quiet" id="layout-choice-settings" href="../settings/settings.html#layout" data-i18n="layoutChoiceSettings"></a>
+      </div>
+      <div class="firstrun__do">
+        <p class="visually-hidden" id="layout-choice-current" role="status" aria-live="polite" data-i18n="layoutLoading"></p>
+        <p class="form-error" id="layout-choice-error" role="alert"></p>
+        <div class="actions">
+          <button class="button button--primary" type="button" id="layout-choice-done" data-i18n="layoutChoiceDone"></button>
+          <button class="button button--secondary" type="button" id="layout-choice-retry" hidden data-i18n="layoutRetry"></button>
+          <a class="button button--quiet" id="layout-choice-settings" href="../settings/settings.html#layout" data-settings="layout" data-i18n="layoutChoiceSettings"></a>
+        </div>
       </div>
     </section>
 
-    <section class="card stack dns-choice" id="dns-choice" aria-labelledby="dns-choice-heading" hidden>
-      <h2 class="layout-choice__title" id="dns-choice-heading" data-i18n="dnsChoiceHeading"></h2>
-      <p class="hint" id="dns-choice-body"></p>
-      <!-- Lookups go unencrypted now: keeping that is a real "keep" -->
-      <div class="actions" id="dns-actions-system">
-        <button class="button button--secondary" type="button" id="dns-keep-system" data-i18n="dnsKeepSystem"></button>
-        <a class="button button--secondary" id="dns-open-settings" href="../settings/settings.html#dns" data-i18n="dnsChooseEncrypted"></a>
-        <button class="button button--quiet" type="button" id="dns-later" data-i18n="dnsLater"></button>
+    <section class="card dns-choice" id="dns-choice" aria-labelledby="dns-choice-heading" hidden>
+      <div class="firstrun__say">
+        <h2 class="layout-choice__title" id="dns-choice-heading" data-i18n="dnsChoiceHeading"></h2>
+        <p class="firstrun__lead" id="dns-choice-body" data-i18n="dnsChoiceBody"></p>
       </div>
-      <!-- Already encrypted by the engine's default: keeping it is the primary action; going back to the
-           computer's resolver is worded as the change it is, never as "keep" (SPA-03) -->
-      <div class="actions" id="dns-actions-encrypted" hidden>
-        <button class="button button--primary" type="button" id="dns-keep-encrypted" data-i18n="dnsKeepEncrypted"></button>
-        <a class="button button--secondary" id="dns-choose-other" href="../settings/settings.html#dns" data-i18n="dnsChooseOther"></a>
-        <button class="button button--quiet" type="button" id="dns-use-system" data-i18n="dnsUseSystemUnencrypted"></button>
+      <!-- The options follow what the resolver does now (SPA-03): the one in use says so and is the one checked;
+           nothing changes before the main action. -->
+      <div class="firstrun__show">
+        <fieldset class="options" id="dns-options" aria-describedby="dns-choice-body">
+          <legend class="visually-hidden" data-i18n="dnsChoiceLegend"></legend>
+        </fieldset>
+        <p class="hint" id="dns-choice-advice" data-i18n="dnsChoiceAdvice"></p>
+      </div>
+      <div class="firstrun__do">
+        <p class="form-error" id="dns-choice-error" role="alert"></p>
+        <div class="actions">
+          <button class="button button--primary" type="button" id="dns-apply" data-i18n="dnsSave"></button>
+          <button class="button button--quiet" type="button" id="dns-later" data-i18n="dnsLater"></button>
+        </div>
       </div>
     </section>
+    <!-- Back to the step before, shown again with what was answered there (each answer applied at once). After every
+         card of the sequence in the page's order, as it is on screen: the keyboard reaches it after the card's own actions. -->
+    <button class="button button--quiet firstrun__back" type="button" id="firstrun-back" hidden data-i18n="firstrunBack"></button>
 
     <!-- UX4: "Você está em …" with the facts in one line; "Detalhes" opens the rest. The line
          is filled before the page paints and is not a live region (SPA-23). -->
@@ -163,7 +254,7 @@
         <span class="here__who" id="here-who" hidden></span>
         <span class="here__summary" id="here-summary" data-level="unknown">…</span>
         <span class="here__routes" id="here-routes" hidden></span>
-        <a class="here__settings" id="open-settings" href="../settings/settings.html" hidden data-i18n="settingsTitle"></a>
+        <a class="here__settings" id="open-settings" href="../settings/settings.html" data-settings="" hidden data-i18n="settingsOpen"></a>
       </p>
       <details class="more here__details" id="here-details">
         <summary data-i18n="newtabDetails">Details</summary>
@@ -201,6 +292,7 @@
           <ul class="keys" id="nulavio-keys">
             <li data-command="_execute_action" hidden><span data-i18n="keyProfiles">Profile menu</span><span class="keys__keys"></span></li>
             <li data-command="toggle-focus" hidden><span data-i18n="keyFocus">Focus layout</span><span class="keys__keys"></span></li>
+            <li data-command="toggle-immersive" hidden><span data-i18n="keyImmersive">Immersive</span><span class="keys__keys"></span></li>
             <li data-command="lock-profile" hidden><span data-i18n="keyLockProfile">Lock profile</span><span class="keys__keys"></span></li>
             <li data-command="open-assistant" hidden><span data-i18n="keyAssistant">Assistant</span><span class="keys__keys"></span></li>
           </ul>

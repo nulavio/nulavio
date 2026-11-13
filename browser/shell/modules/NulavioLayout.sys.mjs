@@ -13,6 +13,9 @@ export const PREF_CHOICE_PENDING = "nulavio.layout.choicePending";
 export const PREF_SHELL_START = "nulavio.startpage.shellFirstTab";
 // UX6 (D-UX23): the preset the Foco key returns to.
 export const PREF_BEFORE_FOCUS = "nulavio.layout.beforeFocus";
+// ADR 0009: Immersive is a switch on top of the tab layout, per profile, off unless the person turns it on.
+// NulavioWindow decides, window by window, whether it applies (never while the band cannot vouch for the page).
+export const PREF_IMMERSIVE = "nulavio.layout.immersive";
 
 // UX3F (QA A5): Lateral's launcher width on adoption, in CSS pixels (engine default ~246).
 export const ADOPTED_LAUNCHER_WIDTH = 224;
@@ -621,6 +624,22 @@ export const NulavioLayout = {
       && !Services.prefs.prefIsLocked(PREF_CHOICE_PENDING)
       && Services.prefs.getBoolPref(PREF_CHOICE_PENDING, false);
     return { preset, available, locked, choicePending };
+  },
+
+  /** Immersive (ADR 0009): whether the person turned it on in this profile, and whether it can be changed. */
+  immersive() {
+    return { on: Services.prefs.getBoolPref(PREF_IMMERSIVE, false), locked: Services.prefs.prefIsLocked(PREF_IMMERSIVE) };
+  },
+
+  /** Turn Immersive on or off for this profile. `say(key)` announces the outcome in the window. */
+  setImmersive(on, say = () => {}) {
+    if (Services.prefs.prefIsLocked(PREF_IMMERSIVE)) {
+      say("layoutLocked");
+      fail("layout-locked");
+    }
+    Services.prefs.setBoolPref(PREF_IMMERSIVE, Boolean(on));
+    say(on ? "layoutImmersiveOn" : "layoutImmersiveOff");
+    return this.immersive();
   },
 
   /**

@@ -1,5 +1,5 @@
 """UX6 shortcuts (D-UX23) on the real build: Ctrl+Alt+F toggles Foco, Ctrl+Alt+B opens the profile menu,
-Settings > Atalhos lists Nulavio's keys and changes them in the engine's own view, and every place that
+the settings page lists Nulavio's keys and changes them in the engine's own view, and every place that
 names a key shows the key the engine has now. Headless, throwaway profile.
 """
 
@@ -8,6 +8,7 @@ from __future__ import annotations
 import unittest
 
 import harness
+import settings_page
 from test_profiles import chrome_async
 
 LAYOUT = 'ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioLayout.sys.mjs").NulavioLayout'
@@ -44,14 +45,26 @@ class ShortcutsTest(unittest.TestCase):
     def apply(self, preset: str) -> None:
         chrome_async(self.m, f"await {LAYOUT}.apply(window, args[0]); return true;", [preset])
 
-    def open_settings(self, address: str = "#shortcuts") -> None:
-        self.m.navigate(self.base + "settings/settings.html" + address)
-        ready = "return document.documentElement.dataset.ready === 'true';"
-        self.assertTrue(harness.wait_until(lambda: self.m.execute(ready), 20))
+    def open_settings(self) -> None:
+        """The settings page's own list of Nulavio's keys (ADR 0008: in Abas e navegação)."""
+        settings_page.open_pane(self.m, "tabsBrowsing")
+        settings_page.wait_control(self.m, "nulavio-key-toggle-focus", lambda now: now["shown"] and now["description"])
+
+    def shell_page(self) -> None:
+        """A page of the Shell, where the extension's own commands API can be called."""
+        self.m.navigate(self.base + "profiles/popup.html")
+        self.assertTrue(harness.wait_until(lambda: self.m.execute("return typeof browser?.commands?.update === 'function';"), 20))
+
+    def key(self, command: str) -> str:
+        return settings_page.control(self.m, f"nulavio-key-{command}")["description"]
+
+    def read_again(self) -> None:
+        # What the page does when the person comes back to its tab (from the engine's shortcuts view).
+        self.m.chrome(settings_page.DOC + 'd.dispatchEvent(new w.Event("visibilitychange"));')
 
     def test_01_the_keys_are_in_the_shell_keyset_without_clashing_with_the_browser(self):
         ours = self.m.chrome(f"{NORM} return {KEYSET}.map(combo);")
-        self.assertEqual(sorted(ours), ["alt,control+B", "alt,control+F", "alt,shift+A", "alt,shift+P"])
+        self.assertEqual(sorted(ours), ["alt,control+B", "alt,control+F", "alt,control+I", "alt,shift+A", "alt,shift+P"])
         clashes = self.m.chrome(
             f"{NORM} const ours = {KEYSET}.map(combo);"
             "return [...document.querySelectorAll('key')].filter(k => !k.closest('#ext-keyset-id-shell_nulavio_net'))"
@@ -75,6 +88,20 @@ class ShortcutsTest(unittest.TestCase):
                 self.assertTrue(harness.wait_until(lambda want=start: self.preset() == want, 15), self.preset())
                 self.assertTrue(harness.wait_until(lambda: self.announced() == "Layout Foco desligado.", 5), self.announced())
         self.apply("lateral")
+
+    def test_02b_the_immersive_key_turns_the_mode_on_and_off_and_says_so(self):
+        """ADR 0009: one key, one layout pref; where the mode applies is the window's decision (test_immersive)."""
+        key = key_of("alt,control+I")
+        pref = "return Services.prefs.getBoolPref('nulavio.layout.immersive', false);"
+        self.addCleanup(self.m.chrome, "Services.prefs.clearUserPref('nulavio.layout.immersive');")
+        self.assertFalse(self.m.chrome(pref))
+        self.m.chrome(f"{key}.doCommand();")
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome(pref), 10))
+        said = "Imersivo ligado. A barra de endereço volta com Ctrl+L."
+        self.assertTrue(harness.wait_until(lambda: self.announced() == said, 5), self.announced())
+        self.m.chrome(f"{key}.doCommand();")
+        self.assertTrue(harness.wait_until(lambda: not self.m.chrome(pref), 10))
+        self.assertTrue(harness.wait_until(lambda: self.announced() == "Imersivo desligado.", 5), self.announced())
 
     def test_02b_foco_chosen_elsewhere_still_returns_to_the_preset_it_came_from(self):
         """Review: Foco chosen in Settings (or the first run) from Lateral; the key goes back to Lateral.
@@ -139,25 +166,38 @@ class ShortcutsTest(unittest.TestCase):
 
     def test_05_settings_lists_the_commands_and_restore_brings_the_default_back(self):
         self.open_settings()
-        rows = lambda: self.m.execute(  # noqa: E731
-            "return [...document.querySelectorAll('#shortcut-list > li')].map(li => [li.dataset.command,"
-            " [...li.querySelectorAll('kbd')].map(k => k.textContent).join('+'), Boolean(li.querySelector('.button--quiet'))]);"
-        )
-        self.assertEqual(
-            sorted(map(tuple, rows())),
-            sorted([("_execute_action", "Alt+Shift+P", False), ("open-assistant", "Alt+Shift+A", False),
-                    ("toggle-focus", "Ctrl+Alt+F", False), ("lock-profile", "Ctrl+Alt+B", False)]),
-        )  # fmt: skip
+        defaults = {
+            "_execute_action": "Alt+Shift+P",
+            "open-assistant": "Alt+Shift+A",
+            "toggle-focus": "Ctrl+Alt+F",
+            "toggle-immersive": "Ctrl+Alt+I",
+            "lock-profile": "Ctrl+Alt+B",
+        }
+        self.assertEqual({command: self.key(command) for command in defaults}, defaults)
+        self.assertFalse(settings_page.control(self.m, "nulavio-keys-reset")["shown"], "nothing was changed yet")
+        self.shell_page()
         self.m.execute("return browser.commands.update({name: 'toggle-focus', shortcut: 'Ctrl+Alt+G'});")
-        self.m.execute("window.dispatchEvent(new Event('focus'));")
-        self.assertTrue(harness.wait_until(lambda: ["toggle-focus", "Ctrl+Alt+G", True] in rows(), 10), rows())
-        self.m.send(
-            "WebDriver:ElementClick", {"id": self.m.find_element('#shortcut-list li[data-command="toggle-focus"] .button--quiet')}
-        )
-        self.assertTrue(harness.wait_until(lambda: ["toggle-focus", "Ctrl+Alt+F", False] in rows(), 10), rows())
+        self.open_settings()
+        self.assertEqual(self.key("toggle-focus"), "Ctrl+Alt+G")
+        settings_page.wait_control(self.m, "nulavio-keys-reset")
+        settings_page.click(self.m, "#nulavio-keys-reset")
+        self.assertTrue(harness.wait_until(lambda: self.key("toggle-focus") == "Ctrl+Alt+F", 10), self.key("toggle-focus"))
+        settings_page.wait_control(self.m, "nulavio-keys-reset", lambda now: not now["shown"])
+        # A command left without a key keeps its name in its row, which says there is none; and gets it back.
+        name = settings_page.control(self.m, "nulavio-key-toggle-focus")["label"]
+        self.assertEqual(name, "Ligar ou desligar o layout Foco")
+        self.shell_page()
+        self.m.execute("return browser.commands.update({name: 'toggle-focus', shortcut: ''});")
+        self.open_settings()
+        row = settings_page.control(self.m, "nulavio-key-toggle-focus")
+        self.assertEqual((row["label"], row["description"]), (name, "Sem tecla"), row)
+        settings_page.wait_control(self.m, "nulavio-keys-reset")
+        settings_page.click(self.m, "#nulavio-keys-reset")
+        self.assertTrue(harness.wait_until(lambda: self.key("toggle-focus") == "Ctrl+Alt+F", 10), self.key("toggle-focus"))
+        self.assertEqual(settings_page.control(self.m, "nulavio-key-toggle-focus")["label"], name)
 
     def test_06_hints_follow_a_changed_key(self):
-        self.open_settings()
+        self.shell_page()
         self.m.execute("return browser.commands.update({name: '_execute_action', shortcut: 'Alt+Shift+O'});")
         try:
             self.m.navigate(self.base + "profiles/popup.html")
@@ -169,36 +209,37 @@ class ShortcutsTest(unittest.TestCase):
                 "  .map(k => k.textContent).join('+');"
             )
             self.assertTrue(harness.wait_until(lambda: self.m.execute(row) == "Alt+Shift+O", 10), self.m.execute(row))
-        finally:
+            # The settings page was open meanwhile: coming back to it reads the keys again.
             self.open_settings()
+            self.read_again()
+            self.assertTrue(harness.wait_until(lambda: self.key("_execute_action") == "Alt+Shift+O", 10))
+        finally:
+            self.shell_page()
             self.m.execute("return browser.commands.reset('_execute_action');")
 
     def test_06b_restore_also_renames_the_profile_button(self):
-        """Review: Firefox 159's commands.reset() fires no commands.onChanged, so Settings tells the
+        """Review: Firefox 159's commands.reset() fires no commands.onChanged, so the settings page tells the
         background; the toolbar button's name (its title) names the key that works again."""
-        self.open_settings()
-        title = lambda: self.m.execute("return browser.action.getTitle({});")  # noqa: E731
+        self.shell_page()
+        title = lambda: self.m.chrome(  # noqa: E731
+            "return document.getElementById('shell_nulavio_net-BAP')?.getAttribute('tooltiptext') ?? '';"
+        )
         self.m.execute("return browser.commands.update({name: '_execute_action', shortcut: 'Alt+Shift+O'});")
         try:
             self.assertTrue(harness.wait_until(lambda: "Alt+Shift+O" in title(), 10), title())
-            self.m.execute("window.dispatchEvent(new Event('focus'));")
-            restore = '#shortcut-list li[data-command="_execute_action"] .button--quiet'
-            self.assertTrue(
-                harness.wait_until(lambda: self.m.execute("return Boolean(document.querySelector(arguments[0]));", [restore]), 10)
-            )
-            self.m.send("WebDriver:ElementClick", {"id": self.m.find_element(restore)})
+            self.open_settings()
+            settings_page.wait_control(self.m, "nulavio-keys-reset")
+            settings_page.click(self.m, "#nulavio-keys-reset")
             self.assertTrue(harness.wait_until(lambda: "Alt+Shift+P" in title(), 10), title())
         finally:
+            self.shell_page()
             self.m.execute("return browser.commands.reset('_execute_action');")
 
     def test_07_change_opens_the_engine_shortcuts_view_with_the_shell_card(self):
         """K1: the hidden built-in Shell has its card in about:addons > Manage Extension Shortcuts."""
         self.open_settings()
         handles = set(self.m.window_handles())
-        self.m.send(
-            "WebDriver:ElementClick",
-            {"id": self.m.find_element('#shortcut-list li[data-command="toggle-focus"] .button--secondary')},
-        )
+        settings_page.click(self.m, "#nulavio-keys-change")
         self.assertTrue(harness.wait_until(lambda: set(self.m.window_handles()) - handles, 10))
         self.m.switch_to((set(self.m.window_handles()) - handles).pop())
         try:
@@ -216,17 +257,16 @@ class ShortcutsTest(unittest.TestCase):
             self.m.send("WebDriver:CloseWindow")
             self.m.switch_to(next(iter(handles)))
 
-    def test_08_the_browser_shortcuts_link_opens_about_keyboard(self):
+    def test_08_every_browser_shortcut_is_one_row_below(self):
+        """The link to every shortcut of the browser is the engine's own group now, next to Nulavio's keys."""
         self.open_settings()
-        handles = set(self.m.window_handles())
-        self.m.send("WebDriver:ElementClick", {"id": self.m.find_element("#shortcuts-browser")})
-        self.assertTrue(harness.wait_until(lambda: set(self.m.window_handles()) - handles, 10))
-        self.m.switch_to((set(self.m.window_handles()) - handles).pop())
-        try:
-            self.assertTrue(harness.wait_until(lambda: self.m.current_url() == "about:keyboard", 10), self.m.current_url())
-        finally:
-            self.m.send("WebDriver:CloseWindow")
-            self.m.switch_to(next(iter(handles)))
+        both = settings_page.DOC + (
+            'const ids = [...d.querySelectorAll("setting-group")].map(g => g.getAttribute("groupid"));'
+            'return [ids.indexOf("nulavioShortcuts"), ids.indexOf("keyboardShortcuts")];'
+        )
+        ours, engine = self.m.chrome(both)
+        self.assertGreaterEqual(ours, 0)
+        self.assertGreaterEqual(engine, 0, "the engine's own shortcuts group is gone")
 
     def test_09_quick_actions_open_settings_and_toggle_focus(self):
         """UX6 (D8): after ">", Nulavio's settings and the Foco toggle; matched by their words."""
@@ -255,9 +295,8 @@ class ShortcutsTest(unittest.TestCase):
         self.assertTrue(harness.wait_until(lambda: self.preset() == "lateral", 15), self.preset())
         before = self.m.chrome("return gBrowser.tabs.length;")
         self.m.chrome(actions + "Q.getAction('nulavio-settings').onPick(null, {browserWindow: window});")
-        opened = (
-            "return gBrowser.tabs.map(t => t.linkedBrowser.currentURI.spec).some(u => u.endsWith('/settings/settings.html'));"
-        )
+        # ADR 0008: one settings page, the browser's own, in this window.
+        opened = "return gBrowser.tabs.map(t => t.linkedBrowser.currentURI.spec).some(u => u === 'about:preferences');"
         self.assertTrue(harness.wait_until(lambda: self.m.chrome(opened), 10))
         self.m.chrome("while (gBrowser.tabs.length > arguments[0]) gBrowser.removeTab(gBrowser.tabs.at(-1));", [before])
 

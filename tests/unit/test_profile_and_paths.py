@@ -202,6 +202,33 @@ class ProfileTest(TempHome):
         os.utime(lock, (made, made), follow_symlinks=False)
         self.assertEqual(prof.running_pid(), engine.pid)
 
+    def test_start_page_says_what_is_true_of_the_engine_in_use(self):
+        """Audit 2026-11 P-01: the page is static, so the launcher fills in what depends on the engine."""
+        prof = self.make()
+        unmodified = ("sem modificações", "unmodified")
+        development = ("build de desenvolvimento", "development build")
+        for engine, patched, key in (("Nulavio 160.0", True, "F"), ("Mozilla Firefox 152.0.1", False, "A"),
+                                     ("Mozilla Firefox 159.0", False, "F"), ("unknown engine", False, "A"),
+                                     # A version that does not end in a digit: a nightly, an ESR, a package release.
+                                     ("Nulavio 160.0a1", True, "F"), ("Mozilla Firefox 159.0esr", False, "F"),
+                                     ("Mozilla Firefox 140.5.0esr", False, "A"), ("Nulavio 160.0-0.3", True, "F")):  # fmt: skip
+            with self.subTest(engine=engine):
+                profile.prepare_for_launch(prof, {"engine": engine})
+                page = (prof.startpage_dir / "index.html").read_text()
+                # The Nulavio build carries patches: nothing on its page calls the engine unmodified, and a
+                # release is not called a development build. Distribution Firefox is unmodified, and says so.
+                self.assertEqual(any(word in page for word in unmodified), not patched, page)
+                self.assertFalse(any(word in page for word in development), page)
+                self.assertIn("Mozilla", page)  # the engine's origin and the "not affiliated" line stay
+                # The add-ons shortcut is the engine's own (159 moved it from Ctrl+Shift+A to Ctrl+Shift+F).
+                self.assertIn(f"<kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>{key}</kbd></span></li>\n        </ul>", page)
+                self.assertNotIn("{{", page)
+        strings = json.loads((profile.paths.repo_root() / "browser" / "startpage" / "strings.json").read_text())
+        for language, values in strings.items():
+            with self.subTest(language=language):
+                self.assertFalse(any(word in values["T_ENGINE_NOTE_NULAVIO"] for word in development))
+                self.assertFalse(any(word in values["T_FOOTER_NULAVIO"] for word in unmodified))
+
     def test_running_profile_is_protected(self):
         prof = self.make()
         os.symlink(f"127.0.0.1:+{os.getpid()}", prof.path / "lock")

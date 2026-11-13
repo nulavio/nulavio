@@ -39,10 +39,6 @@ this.nulavioPrivacy = class extends ExtensionAPI {
     };
     return {
       nulavioPrivacy: {
-        exceptions: call(() => NulavioPrivacy.exceptions()),
-        remove: call((type, origin) => NulavioPrivacy.remove(type, origin)),
-        filter: call(() => NulavioPrivacy.filter()),
-        openFilterList: call(() => NulavioPrivacy.openFilterList()),
         dns: call(() => NulavioPrivacy.dns()),
         setDns: call(details => NulavioPrivacy.setDns(details)),
         dismissDnsChoice: call(() => NulavioPrivacy.dismissDnsChoice()),

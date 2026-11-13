@@ -5,17 +5,15 @@
     "functions": [
       { "name": "state", "type": "function", "async": true, "parameters": [] },
       {
-        "name": "setDensity", "type": "function", "async": true,
-        "parameters": [{ "name": "density", "type": "string", "enum": ["auto", "normal", "compact", "touch"] }]
-      },
-      {
-        "name": "setAccent", "type": "function", "async": true,
-        "parameters": [{ "name": "accent", "type": "string", "enum": ["mint", "blue"] }]
-      },
-      { "name": "setMoreContrast", "type": "function", "async": true, "parameters": [{ "name": "on", "type": "boolean" }] },
-      { "name": "setNewtabAmbience", "type": "function", "async": true, "parameters": [{ "name": "on", "type": "boolean" }] },
-      { "name": "setReduceTransparency", "type": "function", "async": true, "parameters": [{ "name": "on", "type": "boolean" }] },
-      { "name": "openKeyboardShortcuts", "type": "function", "async": true, "parameters": [] }
+        "name": "openSettings",
+        "type": "function",
+        "async": true,
+        "description": "Open the one settings page (about:preferences, ADR 0008) at a pane, or at the pane that holds one of the old page's sections. With replace, in the calling tab.",
+        "parameters": [
+          { "name": "where", "type": "string", "optional": true, "maxLength": 40 },
+          { "name": "replace", "type": "boolean", "optional": true }
+        ]
+      }
     ],
     "events": [{ "name": "onChanged", "type": "function", "parameters": [] }]
   }

@@ -48,9 +48,6 @@ this.nulavioRouting = class extends ExtensionAPI {
     return {
       nulavioRouting: {
         state: call(() => routing.state()),
-        setEnabled: call(enabled => routing.setEnabled(enabled)),
-        setInPage: call(enabled => routing.setInPage(enabled)),
-        setFallback: call(profileId => routing.setFallback(profileId)),
         addRule: call(rule => routing.addRule(rule)),
         removeRule: call(id => routing.removeRule(id)),
         setRuleAction: call((id, action) => routing.setRuleAction(id, action)),

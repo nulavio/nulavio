@@ -16,7 +16,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
 import harness
 
-# The band's name for each kind (NulavioWindow SURFACES), and the kinds where a password is typed.
+# The band's name for each kind (NulavioWindow SURFACES). Where a password is typed is read from each page.
 SURFACES = {
     "unlock": "bandSurfaceUnlock",
     "phone": "bandSurfacePhone",
@@ -26,7 +26,6 @@ SURFACES = {
     "lookalike": "bandSurfacePassword",
     "routing": "bandSurfaceRouting",
 }
-SECRET_KINDS = {"unlock", "methods"}
 
 PAGES = {
     "vault/unlock.html": "unlock",
@@ -48,6 +47,7 @@ return {
   text: line?.querySelector('.moment__kind')?.textContent ?? null,
   line: line?.textContent ?? '',
   check: document.querySelector('.moment__check')?.textContent ?? null,
+  secret: Boolean(document.querySelector('input[type=password]')),
   why: why?.querySelector('summary')?.textContent ?? null,
   body: why ? [...why.querySelectorAll('p, li')].map(e => e.textContent).join(' ').length : 0,
 };
@@ -77,7 +77,9 @@ class SecurityMomentsTest(unittest.TestCase):
             self.assertFalse(state["mark"], page)
             self.assertEqual(state["text"], surface, page)
             self.assertNotIn("Nulavio", state["line"], page)
-            if kind in SECRET_KINDS:
+            # A page that takes a password says where to look before typing it; no other page does.
+            self.assertEqual(state["secret"], kind in {"unlock", "methods", "phone"}, page)
+            if state["secret"]:
                 self.assertIn(f"“Nulavio · {surface}”", state["check"] or "", page)
             else:
                 self.assertIsNone(state["check"], page)

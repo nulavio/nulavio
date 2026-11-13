@@ -22,6 +22,7 @@ from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
 import harness
+import settings_page
 
 from nulavio_launcher.ai import audit, policy, registry
 
@@ -137,9 +138,22 @@ class AiUiTest(unittest.TestCase):
         self.click("#ai-connect-form button[type=submit]")
         shown = lambda i: not self.js(f"return document.getElementById('{i}').hidden;")  # noqa: E731
         self.assertTrue(harness.wait_until(lambda: shown("ai-wizard") or shown("ai-connect-result"), timeout=60))
+        # Audit 2026-11 S-03: the command and the configuration hold long paths. They scroll inside their own
+        # block; the page never scrolls sideways.
+        sideways = "const d = document.documentElement; return [d.scrollWidth, d.clientWidth];"
         if shown("ai-wizard"):  # Claude Code is installed: choose to copy the configuration instead
+            page, viewport = self.js(sideways)
+            self.assertLessEqual(page, viewport, "the wizard's command widened the page")
             self.click("#ai-wizard-manual")
         self.assertTrue(harness.wait_until(lambda: shown("ai-connect-result"), timeout=30))
+        page, viewport = self.js(sideways)
+        self.assertLessEqual(page, viewport, "the agent's configuration widened the page")
+        block = self.js(
+            "const p = document.getElementById('ai-config'), r = p.getBoundingClientRect();"
+            "return {inside: r.right <= p.closest('.card').getBoundingClientRect().right,"
+            " overflow: getComputedStyle(p).overflowX};"
+        )
+        self.assertEqual(block, {"inside": True, "overflow": "auto"})
         config = json.loads(self.js("return document.getElementById('ai-config').textContent;"))
         server = config["mcpServers"]["nulavio"]
         self.assertEqual(server["args"], ["ai", "serve"])
@@ -488,14 +502,17 @@ class AiUiTest(unittest.TestCase):
 
     def test_10_the_assistant_appears_as_an_agent_at_once(self):
         """AI-11: its client has a name, and the list refreshes after it is configured."""
+        # Configured where its service is set, in the settings page (ADR 0011, step 10)…
+        settings_page.open_pane(self.m, settings_page.assistant_pane(self.m))
+        settings_page.wait_control(self.m, "nulavio-assistant-kind")
+        settings_page.change(self.m, "nulavio-assistant-kind", "openai")
+        settings_page.change(self.m, "nulavio-assistant-model", "modelo-local")
+        settings_page.change(self.m, "nulavio-assistant-url", "http://127.0.0.1:9/v1")
+        settings_page.click(self.m, "#nulavio-assistant-save")
+        saved = lambda now: "modelo-local" in (now["description"] or "")  # noqa: E731
+        settings_page.wait_control(self.m, "nulavio-assistant-now", saved, timeout=30)
+        # …and listed with the other agents on their page.
         self.open_page("settings/settings.html#ai")
-        self.assertTrue(harness.wait_until(lambda: self.js("return !!document.querySelector('#ai-agents li');"), timeout=20))
-        form = "#ai-assistant"
-        self.js(
-            f"const f = document.querySelector('{form}'); f.elements.kind.value = 'openai';"
-            "f.elements.model.value = 'modelo-local'; f.elements.baseUrl.value = 'http://127.0.0.1:9/v1';"
-        )
-        self.click(f"{form} button[type=submit]")
         name = self.msg("aiClient_nulavio_assistant")
         self.assertTrue(
             harness.wait_until(lambda: name in self.js("return document.getElementById('ai-agents').textContent;"), timeout=30),
@@ -571,6 +588,23 @@ class AiUiTest(unittest.TestCase):
         finally:
             audit.record(agent=agent["id"], client="other", session="s-live", event="disconnected")
             registry.end_session(agent["id"], "s-live")
+
+    def test_13_a_request_that_no_longer_exists_offers_no_answer(self):
+        """Audit 2026-11 S-01: the page of a request the bridge does not know (a restored tab, an old
+        address) names itself and shows no "Negar" or "Permitir": none of them would do anything."""
+        self.open_page("ai/request.html?id=not-a-request")
+        self.assertTrue(harness.wait_until(lambda: self.js("return document.body.dataset.state;") in ("error", "expired"), 10))
+        shown = self.js(
+            "const seen = s => [...document.querySelectorAll(s)].filter(e => e.checkVisibility());"
+            "return {answers: seen('#actions button').map(b => b.id), headline: document.getElementById('headline').textContent,"
+            " advice: seen('#only-if').length, level: document.getElementById('status').dataset.level,"
+            " status: document.getElementById('status').textContent};"
+        )
+        self.assertEqual(shown["answers"], [], shown)
+        self.assertEqual(shown["headline"], self.msg("aiRequestTitle"))
+        self.assertEqual(shown["advice"], 0, "advice about a decision nobody is asked to make")
+        self.assertIn(shown["level"], ("error", "warn"), shown)
+        self.assertTrue(shown["status"], shown)
 
 
 if __name__ == "__main__":

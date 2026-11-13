@@ -19,6 +19,62 @@
   ul:has(> li[data-l10n-id^="login-intro-instructions-fxa"]) {
     display: none !important;
   }
+  :is(moz-box-item, moz-visual-picker-item).nulavio-profile-coral {
+    --box-icon-fill: light-dark(#FBBDCE, #4F2937) !important;
+    --box-icon-stroke: light-dark(#721E3F, #F4A8BD) !important;
+  }
+  :is(moz-box-item, moz-visual-picker-item).nulavio-profile-lima {
+    --box-icon-fill: light-dark(#C4DC92, #2F3D00) !important;
+    --box-icon-stroke: light-dark(#334C00, #C5E384) !important;
+  }
+  :is(moz-box-item, moz-visual-picker-item).nulavio-profile-sand {
+    --box-icon-fill: light-dark(#E7CF94, #463F2C) !important;
+    --box-icon-stroke: light-dark(#593C00, #FDCF8B) !important;
+  }
+  :is(moz-box-item, moz-visual-picker-item).nulavio-profile-sky {
+    --box-icon-fill: light-dark(#A6D8FA, #133B52) !important;
+    --box-icon-stroke: light-dark(#00476C, #8CCBF5) !important;
+  }
+  :is(moz-box-item, moz-visual-picker-item).nulavio-profile-slate {
+    --box-icon-fill: light-dark(#C9D3D6, #32383A) !important;
+    --box-icon-stroke: light-dark(#37454A, #BFD0D6) !important;
+  }
+  :is(moz-box-item, moz-visual-picker-item).nulavio-profile-violet {
+    --box-icon-fill: light-dark(#D4C8FF, #3A2E59) !important;
+    --box-icon-stroke: light-dark(#492E7F, #C2B0F7) !important;
+  }
+  moz-visual-picker-item.nulavio-chip {
+    flex: 0 0 auto !important;
+    inline-size: calc(var(--button-min-height) + var(--space-large)) !important;
+  }
+  img[part="image"][src^="chrome://browser/content/profiles/assets/"] {
+    -moz-context-properties: fill, stroke !important;
+    fill: var(--box-icon-fill) !important;
+    stroke: var(--box-icon-stroke) !important;
+    box-sizing: border-box !important;
+    padding: var(--space-small) !important;
+  }
+  moz-visual-picker-item[id^="nulavio-layout-"] {
+    min-inline-size: min(10em, 100%) !important;
+  }
+  moz-box-item[class*="nulavio-"] > moz-button {
+    white-space: nowrap !important;
+  }
+  moz-box-item.nulavio-row-actions > moz-button {
+    margin-block: var(--space-xxsmall) !important;
+    margin-inline-end: var(--space-small) !important;
+    white-space: normal !important;
+  }
+  moz-box-item:is(.nulavio-profile-editor, .nulavio-profile-new) > setting-control:not(:first-child) {
+    display: block !important;
+    margin-block-start: var(--space-medium) !important;
+  }
+  @media (forced-colors) {
+    :is(moz-box-item.nulavio-profile, moz-visual-picker-item.nulavio-chip) {
+      --box-icon-fill: Canvas !important;
+      --box-icon-stroke: CanvasText !important;
+    }
+  }
   @media -moz-pref("nulavio.horizon.enabled") {
     @media -moz-pref("extensions.activeThemeID", "default-theme@mozilla.org") or
       -moz-pref("extensions.activeThemeID", "firefox-compact-light@mozilla.org") or

@@ -172,6 +172,34 @@ pref("signon.firefoxRelay.feature", "");
 pref("browser.region.network.url", "");
 pref("browser.region.update.enabled", false);
 
+// No question to Google about a DRM module nobody switched on. DRM video is
+// off in a new profile (the engine's own default on Linux: a page that needs
+// it shows "Ativar DRM" first), and the Widevine module is not installed. The
+// media plugin check still ran its extra step for it: one request to Google's
+// component update service (update.googleapis.com, redirected to dl.google.com
+// or www.google.com) about ten seconds after every first start and on each
+// later check. Without that step the check uses only the list Mozilla serves,
+// which already carries the module's version, address, size and hash; once a
+// person switches DRM on, the module is downloaded from the address in that
+// list and verified against that hash.
+pref("media.gmp-widevinecdm.allow-chromium-update", false);
+
+// The media plugin check and the built-in add-on check ask Mozilla's update
+// server once a day, and the engine writes into the address the kernel, GTK
+// and libpulse versions (%OS_VERSION%) and "nulavio" with Nulavio's version
+// (%DISTRIBUTION%, %DISTRIBUTION_VERSION%). Every other request the browser
+// makes by itself shows Firefox's own User-Agent and nothing about the system
+// (docs/security/new-profile-connections.md). These are the engine's two
+// addresses with a fixed "Linux" and "default/default" in those places, which
+// is what a Firefox with no distribution sends for the last two. Mozilla's
+// server can choose an answer by those fields; its answers were the same for
+// both forms on 2026-11-12, and an integration test asks both forms and
+// compares these two values with the engine's own. Track B only: a seed in
+// Track A would freeze an address that the distribution's own engine may
+// change.
+pref("media.gmp-manager.url", "https://aus5.mozilla.org/update/3/GMP/%VERSION%/%BUILD_ID%/%BUILD_TARGET%/%LOCALE%/%CHANNEL%/Linux/default/default/update.xml");
+pref("extensions.systemAddon.update.url", "https://aus5.mozilla.org/update/3/SystemAddons/%VERSION%/%BUILD_ID%/%BUILD_TARGET%/%LOCALE%/%CHANNEL%/Linux/default/default/update.xml");
+
 // Performance and privacy: about:home (still the start page of profiles that
 // came from earlier builds) does not fetch the weather or stories in the
 // background. Defaults only: a person who turns them on keeps that choice.

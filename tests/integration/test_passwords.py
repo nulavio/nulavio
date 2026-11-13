@@ -16,6 +16,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
 import harness
+import settings_page
 
 PASSWORDS = 'ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioPasswords.sys.mjs")'
 REAL, FAKE = "paypal.example", "paypa1.example"
@@ -144,6 +145,26 @@ class PasswordsTest(unittest.TestCase):
         self.assertTrue(harness.wait_until(lambda: self.m.current_url().startswith(self.fake), 10))
         self.assertTrue(self.focus_password(self.fake).startswith(self.fake))  # not asked again for this pair
 
+    def test_02b_the_warning_page_without_a_site_offers_only_the_way_out(self):
+        """Audit 2026-11 S-01: opened without a site to compare, the page says so. No warning, no empty
+        address, no button without a name and none that would do nothing."""
+        self.m.navigate(self.base + "passwords/lookalike.html")
+        self.assertTrue(harness.wait_until(lambda: self.m.execute("return document.body.dataset.state === 'invalid';"), 10))
+        shown = self.m.execute(
+            "const seen = s => [...document.querySelectorAll(s)].filter(e => e.checkVisibility());"
+            "return {buttons: seen('button').map(b => b.textContent.trim()),"
+            " callouts: seen('.callout--warning, .callout svg').length,"
+            " address: seen('#address').length, headline: document.getElementById('headline').textContent,"
+            " said: seen('.callout--info[role=status]').map(e => e.textContent.trim()), focus: document.activeElement.id};"
+        )
+        msg = lambda key: self.m.execute("return browser.i18n.getMessage(arguments[0]);", [key])  # noqa: E731
+        self.assertEqual(shown["buttons"], [msg("warnCloseTab")], shown)
+        self.assertEqual((shown["callouts"], shown["address"]), (0, 0), shown)
+        self.assertEqual(shown["headline"], msg("lookalikeInvalidHeadline"))
+        self.assertEqual(shown["said"], [msg("lookalikeInvalid")])
+        self.assertEqual(shown["focus"], "go-real")
+        self.assertIsNone(self.m.execute("return document.querySelector('.moment__severity');"), "no warning: no level")
+
     def test_03_the_real_site_is_never_warned(self):
         self.assertTrue(self.focus_password(self.real).startswith(self.real))
 
@@ -153,38 +174,31 @@ class PasswordsTest(unittest.TestCase):
         self.assertEqual(state["engineLogins"], 1)
         keepass = next(p for p in state["providers"] if p["key"] == "keepassxc")
         self.assertEqual(keepass["native"], {"required": True, "found": False})  # no KeePassXC in this HOME
-        self.m.navigate(self.base + "settings/settings.html#passwords")
-        self.assertTrue(
-            harness.wait_until(lambda: self.m.execute("return document.documentElement.dataset.ready === 'true';"), 15)
+        # The settings page shows the same (ADR 0011: "Quem guarda as senhas", in Senhas e preenchimento).
+        settings_page.open_pane(self.m, "passwordsAutofill")
+        rows = settings_page.wait_rows(self.m, "nulavio-passwords-providers", len, "moz-box-item.nulavio-provider")
+        self.assertEqual(
+            [[row["data"]["provider"], row["data"]["inUse"]] for row in rows],
+            [["builtin", "true"], ["proton-pass", "false"], ["keepassxc", "false"], ["bitwarden", "false"]],
         )
-        rows = self.m.execute(
-            "return [...document.querySelectorAll('#provider-list > li')].map(li => [li.dataset.provider, li.dataset.inUse]);"
-        )
-        self.assertEqual(rows, [["builtin", "true"], ["proton-pass", "false"], ["keepassxc", "false"], ["bitwarden", "false"]])
-        self.assertIn("1 login", self.m.execute("return document.getElementById('engine-logins').textContent;"))
-        self.shoot("settings", keep="passwords")
+        self.assertIn("1 login", settings_page.wait_control(self.m, "nulavio-passwords-logins")["label"])
+        settings_page.shoot(self.m, self.shots, "settings")
 
     def test_06_confirmed_sites_are_listed_in_settings_and_removing_one_brings_the_warning_back(self):
-        self.m.navigate(self.base + "settings/settings.html#passwords")
-        self.assertTrue(
-            harness.wait_until(lambda: self.m.execute("return document.documentElement.dataset.ready === 'true';"), 15)
+        settings_page.open_pane(self.m, "passwordsAutofill")
+        pairs, none = "moz-box-item.nulavio-confirmed", "moz-box-item.nulavio-confirmed-none"
+        rows = settings_page.wait_rows(self.m, "nulavio-confirmed-sites", len, pairs)
+        self.assertEqual(
+            [[row["data"]["site"], row["data"]["similar"], row["buttons"][0]["named"]] for row in rows],
+            [[FAKE, REAL, f"Remover {FAKE}"]],
         )
-        rows = self.m.execute(
-            "return [...document.querySelectorAll('#confirmed-list > li')].map(li => [li.dataset.site, li.dataset.similar,"
-            " li.querySelector('button').getAttribute('aria-label')]);"
-        )
-        self.assertEqual(rows, [[FAKE, REAL, f"Remover {FAKE}"]])
-        self.assertTrue(self.m.execute("return document.getElementById('confirmed-empty').hidden;"))
-        self.shoot("settings-confirmed", keep="passwords")
-        self.m.execute("document.querySelector('#confirmed-list button').click();")
-        emptied = harness.wait_until(lambda: self.m.execute("return !document.getElementById('confirmed-empty').hidden;"), 10)
-        self.assertTrue(emptied, "the pair is still listed")
-        after = self.m.execute(
-            "return {rows: document.querySelectorAll('#confirmed-list > li').length, focused: document.activeElement.id,"
-            " status: document.getElementById('status').textContent, level: document.getElementById('status').dataset.level};"
-        )
-        self.assertEqual((after["rows"], after["focused"], after["level"]), (0, "confirmed-heading", "ok"))
-        self.assertIn(FAKE, after["status"])
+        self.assertEqual(settings_page.rows(self.m, "nulavio-confirmed-sites", none), [])
+        settings_page.shoot(self.m, self.shots, "settings-confirmed")
+        settings_page.click_row(self.m, "nulavio-confirmed-sites", FAKE, "remove", pairs)
+        emptied = settings_page.wait_rows(self.m, "nulavio-confirmed-sites", len, none)  # the pair is no longer listed
+        self.assertEqual(emptied[0]["label"], "Nenhum site confirmado.")
+        self.assertEqual(settings_page.rows(self.m, "nulavio-confirmed-sites", pairs), [])
+        self.assertIn(FAKE, settings_page.wait_control(self.m, "nulavio-confirmed-said")["message"])
         self.assertEqual(chrome_async(self.m, f"return {PASSWORDS}.NulavioPasswords.listConfirmed();"), [])
         url = self.focus_password(self.fake)
         self.assertTrue(url.startswith(self.base + "passwords/lookalike.html"), f"the warning did not come back: {url}")

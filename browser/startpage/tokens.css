@@ -40,6 +40,7 @@
   --nv-motion-duration-slow: 280ms;
   --nv-motion-duration-expand: 220ms;
   --nv-motion-duration-collapse: 160ms;
+  --nv-motion-duration-hold: 600ms;
   --nv-motion-duration-fade: 80ms;
   --nv-motion-duration-spin: 900ms;
   --nv-motion-easing-standard: cubic-bezier(0.2, 0, 0, 1);
@@ -159,7 +160,7 @@
   --nv-color-identity-edge-coral: #070F18;
   --nv-color-identity-edge-sand: #070F18;
   --nv-color-identity-edge-slate: #070F18;
-  --nv-color-band-bg: #E2EBEE;
+  --nv-color-band-bg: #F1F7F5;
   --nv-color-band-text: #0B1623;
   --nv-color-band-meta: #23495A;
   --nv-color-band-rule: #23495A;
@@ -282,7 +283,7 @@
     --nv-color-identity-edge-coral: #F4A8BD;
     --nv-color-identity-edge-sand: #FDCF8B;
     --nv-color-identity-edge-slate: #BFD0D6;
-    --nv-color-band-bg: #060C14;
+    --nv-color-band-bg: #0F1C2A;
     --nv-color-band-text: #F1F7F5;
     --nv-color-band-meta: #8FAAB5;
     --nv-color-band-rule: #6E93A2;
@@ -406,7 +407,7 @@
   --nv-color-identity-edge-coral: #F4A8BD;
   --nv-color-identity-edge-sand: #FDCF8B;
   --nv-color-identity-edge-slate: #BFD0D6;
-  --nv-color-band-bg: #060C14;
+  --nv-color-band-bg: #0F1C2A;
   --nv-color-band-text: #F1F7F5;
   --nv-color-band-meta: #8FAAB5;
   --nv-color-band-rule: #6E93A2;
@@ -529,7 +530,7 @@
   --nv-color-identity-edge-coral: #070F18;
   --nv-color-identity-edge-sand: #070F18;
   --nv-color-identity-edge-slate: #070F18;
-  --nv-color-band-bg: #E2EBEE;
+  --nv-color-band-bg: #F1F7F5;
   --nv-color-band-text: #0B1623;
   --nv-color-band-meta: #23495A;
   --nv-color-band-rule: #23495A;

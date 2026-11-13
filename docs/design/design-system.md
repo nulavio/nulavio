@@ -1023,3 +1023,113 @@ come from the X server's pixels, because WebDriver's own window screenshot drops
 disclosure chevrons and the narrow Settings rail). The [manifest](screenshots/ux7/manifest.json) holds
 each file's sha256 and size, the build and the commit whose Shell was synced onto it.
 `scripts/research/ux7_captures.py` takes them again.
+
+## Experience 2026-11: one surface, the stage, hidden chrome, sounds, and the rules
+
+From the experience review of 2026-11 ([references](references/2026-11/README.md), [journeys](journey-2026-11.md), [ADR 0008](../adr/0008-one-settings-page.md), [ADR 0009](../adr/0009-immersive-layout.md), [ADR 0010](../adr/0010-experience-direction.md)). Tokens, type, spacing and components above stay as they are; this section adds what the review decided and how each rule is checked. What is not built is said where it applies.
+
+### The frame
+
+| Part | Rule | Tokens |
+|---|---|---|
+| Frame: band, tab strip, toolbar, tab column, the margin around the page | One tone. No rule line between them. The neutral band is part of it; a band that states something keeps its own fill and its line | `color.chrome.toolbar` for all (`color.band.bg` points to it) |
+| Page | A card inside the frame: a margin on the sides that have no chrome (the tab box's), a radius, one hairline, no shadow (the content container's, where the engine rounds and clips the page). The tab box is never clipped: a tab's dialog is drawn over the toolbar on purpose. In every theme; never in full screen, nor in a window 600 px tall or less (the page keeps every pixel of height there) | `space.3` (8 px), `radius.md` (10 px), `color.border.subtle` |
+| A panel beside the tabs | A second card of the same shape; the splitter between it and the page is their gap and still resizes it | as the page |
+| Where it lives | The theme sheet (`horizon.css`), so the theme's pref turns it off with the rest of the look. Colours only for the default theme at normal contrast, never with `!important`; the band is styled only by its own sheet | `test_horizon_theme`, `test_horizon`, `test_window_frame` |
+| Under a theme, or the system's contrast setting | The shape stays. The edge follows the theme's text colour, or takes the system's text colour | `test_window_frame` |
+| Selected tab | The only raised surface in the frame, with the route mark | as UX3F |
+| Accent | One primary action per group of actions, and at most one accent-filled control in the frame. Mint is for the selected state and the primary action, never for a whole surface | `test_experience_rules` (one main action per group) |
+
+### The band is the constant
+
+In every layout, mode and page the band is the one row only the browser draws. What it carries, left to right: the profile and its protection; in the middle, the trusted name of a Nulavio page **or**, when the address bar is out of view, the site (host as the engine displays it, the registrable part emphasised, the connection state in words when it is not secure); the state seals on the right. No mode hides it, shrinks it to nothing or makes it translucent (`test_experience_rules` reads the sheets for a rule on the band that sets `display: none`, `visibility: hidden`, `opacity: 0` or no height; translucency in between is not checked). The registrable domain is meant never to be cut, the row growing first and the toolbar staying if that is not enough: that is not built, the site is on one line ([ADR 0009](../adr/0009-immersive-layout.md), [R64](../security/residual-risks.md)).
+
+### The stage (first run)
+
+A stage is a page that owns the window for a sequence the person must finish or dismiss. Today there is one: the first run.
+
+| Rule | Value |
+|---|---|
+| Window | The band and the page. The toolbar and the tabs are out of view and return to the pointer and the keyboard, as in Imersivo. The band names the stage ("Nulavio · Boas-vindas") |
+| Card | One, centred, the same size and place on every step: 64 rem wide at most, 34 rem high. Two panes, 5 to 6: on the left what is asked and, at the bottom, the actions; on the right, on the sunken tone, the choice itself. Below 52 rem of width or 40 rem of height the panes stack (asked, choice, actions), the page scrolls, and the actions stay at the bottom of the window so the main one is never below the fold |
+| Parts | Every card has the same three, in reading and keyboard order: `.firstrun__say` (title, at most two sentences), `.firstrun__show` (the choice or the picture), `.firstrun__do` (errors, then the actions). No part cuts its content: `test_firstrun_stage` checks it on every step and in a short window |
+| Content | One decision per step. A choice is drawn as the thing itself when it can be: the layouts as miniatures, the band as this window drawn small with the real profile and state, read and never invented. An example (a protected profile's band) is labelled as one and is not read to assistive technology |
+| Options | A choice among a few things, each said in a line or two: `.options` of `.option`. A radio card when one is picked and applied by the main action (DNS); a row with its own secondary button when choosing acts at once (password managers). The one in use wears the accent, a ring and a word ("Como está agora", "em uso"), never colour alone. An option that gives a protection up says so in its name |
+| Actions | In one place on every step: the bottom of the left pane, the main one first, full width. One primary. "Agora não" and "Decidir depois" are quiet buttons, never links in the text. Nothing changes before the main action, except where the step says the choice applies at once (the layout, a manager's "Usar este") |
+| First screen | What the product is in one sentence that points at the band; two exits, "set up" and "use the defaults", and the defaults said in one line under them. A profile that is not the browser's first says "Perfil novo: …" instead of welcoming again |
+| Facts | Only what was read and is true now. A fact still arriving is not shown as a warning and not shown as done: it is read again where the sequence ends |
+| Progress | "Etapa N de M" centred under the card; its line keeps its height on the steps that have no number |
+| Focus | When a step comes after an answer, the keyboard goes to it: to the main action where going on is the likely answer (welcome, layout, default browser, summary), to the title as a reading position (an underline, not a ring) where the step asks to read first (DNS, passwords, the protected profile) |
+| Motion | None between steps. The card does not slide, fade or resize |
+| Who is never staged | Private windows, temporary profiles, AI Workspaces, any tab other than the first run's (the last is tested, `test_firstrun_stage` 04; the first three are in the code without a test). A page the first run opens (the Vault's steps) is an ordinary tab with the address bar |
+
+### Immersive: who decides (ADR 0009)
+
+CSS draws two states; the window decides them. Three attributes on the window's root say what was decided, and nothing else may hide the toolbar:
+
+| Attribute | Meaning |
+|---|---|
+| `nulavio-immersive` | The mode is drawn: the person turned it on (or the first run's stage asked for it) and nothing below holds it back |
+| `nulavio-immersive-off="agent \| popup \| sharing \| prompt \| page"` | The mode is wanted and the full window is shown anyway, with the first reason that applies |
+| `nulavio-immersive-hold="toolbar"`, `"tabs"` or both | A panel or a menu anchored there is open: that part stays shown for its whole life |
+
+A new way to hide chrome goes through the same decision: it adds a reason or a hold, never a selector of its own.
+
+### Motion: chrome that hides (ADR 0009)
+
+Added to the UX7 table. The times come from the motion tokens; `motion.duration.hold` (600 ms) is new.
+
+| Element | What moves | Tokens | Never moves | Reduced motion |
+|---|---|---|---|---|
+| Toolbar in Imersivo and on the stage | `translate` and `opacity`, over the page; the page never reflows | reveal: `fast`, `enter`; leave: `base`, `exit`, after `hold` | The band, the origin in it, the seals | No transition: shown and hidden at once |
+| Tab list in Imersivo | `translate`, over the page | the same | — | The same |
+| A prompt, a warning, a device being shared | The chrome is in place **before** the engine anchors anything to it, and stays for as long as it is open | — | — | — |
+
+`tests/unit/test_motion_sheet.py` already enforces the first two columns for every sheet (movement only under `prefers-reduced-motion: no-preference`, times and curves only from tokens); the Immersive prototype failed it until it was brought to these rules.
+
+### Settings: one page, drawn by the engine's widgets (ADR 0008)
+
+| Part | Rule |
+|---|---|
+| Where an option goes | In the pane where the person would look for it, next to the engine's group on the same subject. A pane is new only when the engine has none for it |
+| What draws it | The engine's own widgets, through its registry: `moz-visual-picker` for a choice with a picture, `moz-toggle` for on or off, `moz-radio-group` for a few named choices, `moz-box-item` for a fact, `moz-box-button` for a row that opens a detail screen. No hand-made form control in that page |
+| A fact that is read | Not drawn until it was read. A read that failed leaves its controls out and a `moz-message-bar` in their group says so. Never a default shown as the person's choice |
+| A detail screen | Opens in the same tab; its first entry goes back to the pane it came from. It is not a second settings page: it has no entry for anything the settings page draws |
+| The engine's part | Its protection panes keep every group, in their order. An engine group gives way only when it asks a question Nulavio's group already asks, and never a protection |
+| When it breaks | The page is the engine's stock page: the registry's shape is checked first, and a failure halfway undoes Nulavio's whole part |
+| A list of the person's things (profiles; later rules, agents) | One registry setting whose rows come from what was read, as the engine's containers list: a `moz-box-item` per thing with its icon, its state in words and its actions as `moz-button`s at the end (a word for the main one, the engine's edit and delete icons for the rest, each named with whose it is). The editor opens under its row; "new" is the last row of the list ([ADR 0011](../adr/0011-nulavio-ui-native-not-an-extension.md)) |
+| A profile's icon | The engine's profile icon in the profile's tile and glyph (`identityTile`, `identityGlyph`), the same pair the band and the menu use. Choosing an icon or a colour is the engine's `moz-visual-picker` with that icon in every choice; each choice has a name |
+| Words of an action | The Shell's own messages: a button, a confirmation and an error say the same thing in the band, the menu, a Shell page and the settings page (`test_experience_rules`) |
+| A destructive confirmation | The engine's own prompt, with the Shell's words and Cancel as the default button |
+
+### Sounds
+
+Nulavio plays no sound today, and none of the browsers studied did. The rules for the first one:
+
+1. **Off unless the system says yes.** A sound is played only through the engine's system event sounds (`nsISound.playEventSound`), which follow the desktop's sound theme and its "event sounds" switch. Nulavio ships no audio file and never opens an audio device itself.
+2. **One switch, easy to find**: "Sons do Nulavio" in Acessibilidade of the one settings page, and it is off in a new profile until the maintainer decides otherwise.
+3. **Only for something that happened while the person was not looking**, and at most once per event: a download that needs a decision, an agent waiting for consent, a profile that locked itself. Never for a click, a navigation, a success, a tab or a hover.
+4. **Never the only cue.** Every sound has its visible state, in words, in the band or the page.
+5. **Never for security theatre.** No sound for "secure", none that imitates the system's own alerts for something that is not one.
+6. **One module.** `NulavioSound.sys.mjs` is the only file that may play anything (`test_experience_rules`: no sound outside the sound module).
+
+Not verified: nothing here could be heard on the private display. The first sound ships only after it has been heard on a real desktop.
+
+### Rules for whoever changes the interface, person or model
+
+Each rule has a check. A change that breaks a check is not finished; a rule with no check yet says so.
+
+| # | Rule | Check |
+|---|---|---|
+| 1 | Work from something seen: a capture of the engine before and after, at the same size, in both themes and both languages. Never describe a state that was not captured | Captures in the pull request; reference PNGs updated on purpose |
+| 2 | Never weaken a protection and never show a state that was not read. An unknown is said as unknown | `shared/options.json` test (no option writes a protection pref); Shell unit tests; `test_security_moments` |
+| 3 | The band is never hidden, and nothing else does its job | `test_experience_rules`, `test_window_band` |
+| 4 | Colours, sizes, radii, times and curves come from `docs/brand/tokens.json`. No literal | Token tests in `test_brand_and_docs`; `test_motion_sheet` |
+| 5 | Movement only under "no preference"; security cues never move | `test_motion_sheet`, `test_motion` |
+| 6 | One primary action per group; the safe action is the primary one in a warning | `test_experience_rules`; component gallery |
+| 7 | pt-BR and en-US change together, in the same commit | Locale parity tests; `test_experience_rules` for Fluent |
+| 8 | One settings page. A new option is a group in the pane where the person would look for it, never a new page; a link to "the settings" opens that page, and one question is asked in one place | `test_settings_native` (ADR 0008); `test_experience_rules` (settings links go to the one page) |
+| 9 | One decision per screen in a sequence; the card and its actions keep their place | `test_firstrun_stage` (the card's rectangle is the same on every step; it caught a 14 px jump in the prototype) |
+| 10 | No sound outside `NulavioSound.sys.mjs`, and none by default | `test_experience_rules` |
+| 11 | Ideas from other browsers are re-derived, never copied: no file, asset, name or wording. GPL code is never read into the product | Review; `LICENSES.md` when a file is ever taken |
+| 12 | A second opinion (a reviewer model, a critique from captures) is a hypothesis: check it on the engine or the source before changing anything, and record what was checked | The "independent review" tables in the ADRs |

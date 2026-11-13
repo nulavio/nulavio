@@ -40,7 +40,7 @@ Nulavio is an open-source desktop browser for Linux, built from Mozilla's signat
 
 ## Highlights
 
-- **Protected before the first click.** uBlock Origin, Enhanced Tracking Protection in Strict mode, HTTPS-Only, Global Privacy Control and Google Safe Browsing are on in a new profile. Canvas and WebGL readings differ from site to site, and pages cannot see your extra fonts or your graphics card ([what a page can read](docs/research/fingerprinting.md)).
+- **Protected before the first click.** uBlock Origin with cookie, newsletter and notification notices hidden, Enhanced Tracking Protection in Strict mode, HTTPS-Only, Global Privacy Control and Google Safe Browsing are on in a new profile. Canvas and WebGL readings differ from site to site, and pages cannot see your extra fonts or your graphics card ([what a page can read](docs/research/fingerprinting.md)).
 - **One profile for each part of your life.** Personal, work, banking and research profiles, each in its own browser instance with its own cookies, logins and extensions. Links from other apps and addresses you type open in the profile your rules say.
 - **Profiles encrypted on disk, and you hold the key.** A protected profile opens with its password, a recovery code or your desktop login. There is no master key, not even for Nulavio ([ADR 0006](docs/adr/0006-nulavio-vault.md)).
 - **You hear about changes made from outside.** Nulavio Guard compares each start with the last one: extensions, certificate authorities, security modules, protective settings, `user.js`. You undo or keep each change.
@@ -107,7 +107,7 @@ The integration suite drives the real browser through Marionette: 363 tests on t
 | Decisions | [ADRs](docs/adr/): engine, search, profiles and routing, Connect, phone unlock, Vault, AI Bridge |
 | Product | [vision](docs/product/vision.md) · [requirements](docs/product/requirements.md) · [roadmap](docs/product/roadmap.md) · [release criteria](docs/product/release-criteria.md) |
 | Architecture | [overview](docs/architecture/overview.md) · [build](docs/architecture/build.md) · [update policy](docs/architecture/update-policy.md) · [trust boundaries](docs/architecture/trust-boundaries.md) |
-| Security | [threat model](docs/security/threat-model.md) · [hardening](docs/security/hardening.md) · [residual risks](docs/security/residual-risks.md) · [assurance case](docs/security/assurance-case.md) · [changelog](docs/security/changelog.md) |
+| Security | [threat model](docs/security/threat-model.md) · [hardening](docs/security/hardening.md) · [what a new profile contacts](docs/security/new-profile-connections.md) · [residual risks](docs/security/residual-risks.md) · [assurance case](docs/security/assurance-case.md) · [changelog](docs/security/changelog.md) |
 | Design | [design system](docs/design/design-system.md) · [UX principles](docs/design/ux-principles.md) · [accessibility](docs/design/accessibility.md) |
 | Process | [contributing](CONTRIBUTING.md) · [pull requests](docs/process/pull-requests.md) · [governance](GOVERNANCE.md) · [code of conduct](CODE_OF_CONDUCT.md) · [release notes](CHANGELOG.md) |
 
