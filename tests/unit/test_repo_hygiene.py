@@ -83,6 +83,9 @@ def run_scripts(text: str) -> list[str]:
 def repo_files():
     for root, dirs, files in os.walk(ROOT):
         dirs[:] = [d for d in dirs if d not in SKIP_DIRS]
+        if Path(root) == ROOT / "ci/modern-web-guidance":
+            # npm ci's ignored output; the package and integrity lock remain checked.
+            dirs[:] = [d for d in dirs if d != "node_modules"]
         if Path(root).is_relative_to(ROOT / "android"):
             dirs[:] = [d for d in dirs if d not in {"build", ".gradle", ".kotlin"}]  # Gradle outputs (ignored by git)
         for name in files:
