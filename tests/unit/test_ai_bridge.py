@@ -1120,6 +1120,30 @@ class AuditTest(Home):
                 self.assertEqual((page.sent, page.held), ([], 1))
                 self.assertEqual(page.engine.command.call_count, asked_of_the_page + 1)  # where the tab is
 
+    def test_a_session_ended_while_a_form_was_asked_about_asks_nothing_more_of_the_engine(self):
+        # A revocation or the stop closes the workspace. Dropping the held form then went looking
+        # for the tab's engine, which started the workspace again.
+        def ended_by(end):
+            seen = []
+
+            def meanwhile():
+                end(bridge)
+                seen.append(page.engine.command.call_count)
+
+            bridge, page = self.page(Approve("once", meanwhile=meanwhile))
+            page.click = lambda: setattr(page, "held", 1)
+            with mock.patch.object(tools.Bridge, "close") as closed:
+                result = bridge.call(*self.CLICK)
+            self.assertTrue(result["isError"], result)
+            self.assertEqual([page.engine.command.call_count], seen, "nothing after the session ended")
+            self.assertEqual((page.sent, page.dropped), ([], []))
+            return json.loads(audit.audit_path().read_text().splitlines()[-1])["reason"], closed.called
+
+        self.assertEqual(ended_by(lambda bridge: registry.revoke(bridge.agent_id)), ("revoked", True))
+        self.assertEqual(ended_by(lambda bridge: registry.pause(bridge.agent_id, True)), ("paused", False))
+        self.addCleanup(registry.set_stopped, False)
+        self.assertEqual(ended_by(lambda _bridge: registry.set_stopped(True)), ("stopped", True))
+
     def test_a_form_of_the_page_an_action_led_to_is_judged_by_that_page(self):
         # A submit button, allowed for its page, leads to another site whose page sends a form as it
         # loads: "submit_forms" had been checked for this call, and the second form went with it.

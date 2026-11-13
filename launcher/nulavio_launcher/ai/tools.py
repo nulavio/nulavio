@@ -822,7 +822,10 @@ class Bridge:
             try:
                 self.require("submit_forms", here, checked=checked)
             except Denied as denied:
-                self._in_realms(tab, realms, FORMS_DROP_FN, cancel)  # one that cannot be dropped stays held
+                # A session ended meanwhile (a stop, a revocation, a new key) has no engine any more,
+                # and asking for one would start it again: nothing is asked of the page then.
+                if not self._held():
+                    self._in_realms(tab, realms, FORMS_DROP_FN, cancel)  # one that cannot be dropped stays held
                 denied.detail = f"{what} was done; the form the page then tried to send was not sent."
                 raise
             allowed = self._may_submit()  # "for this session": these documents stop holding, too
