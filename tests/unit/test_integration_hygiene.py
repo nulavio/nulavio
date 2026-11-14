@@ -16,7 +16,8 @@ CLEANUP = re.compile(r"\.cleanup\(\)|add(?:Class)?Cleanup\([^)]*\.cleanup\b")
 
 # Invariant I1 (.github/ai-review/instructions.md): the prefs of a protection. A test may read one; a line that
 # names one in any other way (a setter, a prefs file, a dictionary of prefs, an argument handed to a script) is
-# looked at as a write, since the name is all that such a line needs to carry.
+# looked at as a write, since the name is all that such a line needs to carry. Clearing one is a write too: it
+# drops a value the profile had of its own, and what is left is whatever the default is.
 PROTECTION = (
     r"(?:security\.sandbox\.|security\.(?:tls|ssl|cert_pinning|OCSP|pki|mixed_content)\.|security\.enterprise_roots"
     r"|xpinstall\.signatures\.|extensions\.blocklist\.|extensions\.update\.|browser\.safebrowsing\.|services\.settings\."
@@ -24,7 +25,7 @@ PROTECTION = (
 )
 NAMES_PROTECTION = re.compile(PROTECTION)
 READS_PROTECTION = re.compile(
-    r"(?:get(?:Bool|Int|Char|String)Pref|prefHasUserValue|prefIsLocked|clearUserPref|self\.pref)\(\s*\\?['\"]"
+    r"(?:get(?:Bool|Int|Char|String)Pref|prefHasUserValue|prefIsLocked|self\.pref)\(\s*\\?['\"]"
     + PROTECTION
     + r"[\w.\-]*\\?['\"]"
 )
@@ -75,7 +76,9 @@ class IntegrationHygieneTest(unittest.TestCase):
         # One that is switched off at run time is put back by the same test.
         stage = (ROOT / "tests" / "integration" / "test_firstrun_stage.py").read_text(encoding="utf-8")
         body = stage[stage.index("def test_01b_the_welcome_says_so_when_a_protection_is_off") :].split("\n    def ", 1)[0]
-        self.assertIn("addCleanup(self.m.chrome, \"Services.prefs.clearUserPref('dom.security.https_only_mode');\")", body)
+        self.assertIn("prefHasUserValue(arguments[0]) ? Services.prefs.getBoolPref(arguments[0]) : null", body)
+        self.assertIn("self.addCleanup(self.m.chrome, put_back, [name, had])", body)
+        self.assertEqual(body.count("dom.security.https_only_mode"), 1, "written by another name than the one put back")
         # The ways a test here writes a pref are all seen: a setter, a prefs file, the harness's dictionary of
         # prefs, a name handed to a script as an argument, a pref put on the default branch.
         for line in (
@@ -87,13 +90,15 @@ class IntegrationHygieneTest(unittest.TestCase):
             'self.m.chrome("Services.prefs.setBoolPref(arguments[0], false);", ["dom.security.https_only_mode"])',
             "defaults.setBoolPref('app.update.auto', false); Services.prefs.lockPref('app.update.auto');",
             'PREFS = {"services.settings.server": "http://127.0.0.1:1/"}',
+            # Clearing drops a value the profile had of its own (the launcher's baseline in user.js, say).
+            "Services.prefs.clearUserPref('dom.security.https_only_mode');",
+            "for (const n of ['network.dns.localDomains', 'dom.security.https_only_mode']) Services.prefs.clearUserPref(n);",
             # A read and a write on one line: the read does not hide the write.
             "if (Services.prefs.getBoolPref('fission.autostart')) Services.prefs.setBoolPref('fission.autostart', false);",
         ):
             self.assertTrue(names_a_protection_other_than_to_read_it(line), line)
         for line in (
             "self.assertTrue(self.pref('dom.security.https_only_mode'))",
-            "Services.prefs.clearUserPref('dom.security.https_only_mode');",
             " sbLists: d.getStringPref('browser.safebrowsing.provider.google5.lists'),",
             'const v5 = Services.prefs.getBoolPref("browser.safebrowsing.provider.google5.enabled", false);',
             "Services.prefs.setBoolPref('nulavio.immersive.enabled', true);",

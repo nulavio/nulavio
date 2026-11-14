@@ -115,8 +115,18 @@ class FirstRunStageTest(unittest.TestCase):
     def test_01b_the_welcome_says_so_when_a_protection_is_off(self):
         """A profile whose HTTPS-Only was switched off (a managed setting, a `user.js`): the welcome lists it with
         its warning, not only what is fine."""
-        self.m.chrome("Services.prefs.setBoolPref('dom.security.https_only_mode', false);")
-        self.addCleanup(self.m.chrome, "Services.prefs.clearUserPref('dom.security.https_only_mode');")
+        # (One of the two tests that may write a protection's pref: unit/test_integration_hygiene.py, SHOWN_OFF.)
+        name = "dom.security.https_only_mode"
+        had = self.m.chrome(
+            "return Services.prefs.prefHasUserValue(arguments[0]) ? Services.prefs.getBoolPref(arguments[0]) : null;", [name]
+        )
+        self.m.chrome("Services.prefs.setBoolPref(arguments[0], false);", [name])
+        # Put back as it was: the value the profile had of its own, or none (clearing alone would drop such a value).
+        put_back = (
+            "if (arguments[1] === null) Services.prefs.clearUserPref(arguments[0]);"
+            " else Services.prefs.setBoolPref(arguments[0], arguments[1]);"
+        )
+        self.addCleanup(self.m.chrome, put_back, [name, had])
         self.m.navigate(self.newtab)
         self.assertTrue(harness.wait_until(lambda: self.page()["card"] == "firstrun-welcome", 15), self.page())
         self.assertTrue(harness.wait_until(lambda: "warn" in self.page()["levels"], 10), self.page()["levels"])

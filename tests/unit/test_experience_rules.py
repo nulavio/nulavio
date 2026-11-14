@@ -176,8 +176,9 @@ class ExperienceRulesTest(unittest.TestCase):
                 self.assertIn(words[language], description.group(1), f"{language}: {group} does not say how far it reaches")
 
     def test_the_cookie_notice_lists_are_ublock_origins_own(self):
-        """The Shell reads one thing of uBlock Origin's data: which lists are on. "Hidden" needs one of the
-        registry's cookie-notice lists; "shown" needs every list that is on to be one the registry names."""
+        """The Shell reads one thing of uBlock Origin's data: which lists are on. "A list that hides them is on"
+        needs one of the registry's cookie-notice lists; "none is on" needs every list that is on to be one the
+        registry names."""
         privacy = (SHELL / "modules/NulavioPrivacy.sys.mjs").read_text(encoding="utf-8")
         # Read with the storage's own reader and closed; nothing in the module writes to another extension's storage.
         self.assertEqual(privacy.count("ExtensionStorageIDB.open("), 1)

@@ -534,7 +534,11 @@ class NativeSettingsTest(unittest.TestCase):
         self.groups("panePrivacy")
         row = self.control("#nulavio-filter-lists", lambda s: s.get("shown") and s.get("label"))
         self.assertEqual(row["label"], "O que o uBlock Origin bloqueia", row)
-        self.assertIn("Avisos de cookies: escondidos", row["description"])
+        # (The words are about the lists, which is what was read: not that a notice is hidden on a given page, which
+        # also depends on the sites the person told uBlock Origin to trust.)
+        one_on = "Avisos de cookies: uma lista que os esconde está ligada no uBlock Origin."
+        self.assertIn(one_on, row["description"])
+        self.assertNotIn("escondidos", row["description"])
         # No cookie-notice list on: said as it is, with the way to switch one on.
         self.m.chrome(state, [True, {"cookieNotices": False}])
         self.m.chrome(DOC + 'd.dispatchEvent(new w.Event("visibilitychange"));')
@@ -549,12 +553,11 @@ class NativeSettingsTest(unittest.TestCase):
         for unread in ({"cookieNotices": None}, None):
             self.m.chrome(state, [True, {"cookieNotices": True}])
             self.m.chrome(DOC + 'd.dispatchEvent(new w.Event("visibilitychange"));')
-            self.control("#nulavio-filter-lists", lambda s: "escondidos" in (s.get("description") or ""))
+            self.control("#nulavio-filter-lists", lambda s: one_on in (s.get("description") or ""))
             self.m.chrome(state, [True, unread])
             self.m.chrome(DOC + 'd.dispatchEvent(new w.Event("visibilitychange"));')
             unknown = self.control("#nulavio-filter-lists", lambda s: "depende das listas" in (s.get("description") or ""))
-            self.assertNotIn("escondidos", unknown["description"])
-            self.assertNotIn("nenhuma lista", unknown["description"])
+            self.assertNotIn("lista que os esconde", unknown["description"])
         self.m.chrome(DOC + 'd.querySelector("#nulavio-filter-lists").click();')
         self.assertTrue(harness.wait_until(lambda: self.m.chrome("return window.__lists;") == 1, 10))
         # Turned off: the row says so, and leads to where it is turned on.
@@ -566,7 +569,7 @@ class NativeSettingsTest(unittest.TestCase):
         self.m.chrome(state, [True, {"cookieNotices": True}])
         self.m.chrome(DOC + 'd.dispatchEvent(new w.Event("visibilitychange"));')
         again = self.control("#nulavio-filter-lists", lambda s: s.get("label") == "O que o uBlock Origin bloqueia")
-        self.assertIn("Avisos de cookies: escondidos", again["description"])
+        self.assertIn(one_on, again["description"])
         self.m.chrome(state, [False, None])
         self.m.chrome(DOC + 'd.dispatchEvent(new w.Event("visibilitychange"));')
         self.control("#nulavio-filter-lists", lambda s: s.get("label") == off)
