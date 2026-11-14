@@ -57,8 +57,8 @@
 <p class="prose">Adicione o repositório do Nulavio e instale o pacote:</p>
 <div class="pre-scroll" role="region" aria-label="Comandos de instalação" tabindex="0"><pre translate="no"><code>sudo dnf config-manager addrepo --from-repofile={{repo_file}}
 sudo dnf install nulavio</code></pre></div>
-<p class="prose">Na primeira instalação, o dnf mostra a chave do repositório e pergunta se pode importá-la. Só aceite se a impressão digital for esta:</p>
-<p class="prose"><code class="mono" translate="no">{{key_fpr}}</code></p>
+<p class="prose">Na primeira instalação, o dnf pode antes mostrar, em vermelho, <code translate="no">Signing key not found</code>: a chave ainda não foi importada, e isso é esperado. Depois ele mostra a chave do repositório e pergunta se pode importá-la, e pergunta de novo pela mesma chave antes de instalar o pacote. Só aceite se a impressão digital for esta (o dnf a mostra sem espaços):</p>
+<p class="prose"><code class="mono" translate="no">{{key_fpr}}</code><br><code class="mono" translate="no">{{key_fpr_plain}}</code></p>
 <p class="prose">A mesma chave pública fica em <code translate="no">{{key_url}}</code>. O repositório vem com a verificação de assinatura dos pacotes e dos metadados ligada.</p>
 <!--apt:on-->
 <h3 id="install-ubuntu-h">Ubuntu</h3>
