@@ -22,7 +22,7 @@ An update of the alpha with the same engine (Firefox 160.0): protected profiles 
 
 #### What is new
 
-- Each version's notes come with the browser: they are in the Help menu and in Settings, and a small bar says so once after an update. Settings, About, turns the bar off.
+- Each version's notes come with the browser: they are in Settings, About, and reading them sends nothing anywhere. The Help menu entry and the bar after an update come in the next version (corrected after release: #306).
 - The engine's profile chooser unlocks a protected profile before it opens it, with the password, this computer's login or the recovery code.
 - Replacing the recovery code takes two steps: the old code keeps working until you type the new one back.
 - The Nulavio Companion app for Android comes with each release, signed with the project's key: download it from nulavio.net's download page, which shows the certificate's fingerprint to check.
