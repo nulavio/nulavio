@@ -95,6 +95,8 @@ function sha256(bytes) {
   return hex(Uint8Array.from(hash.finish(false), c => c.charCodeAt(0)));
 }
 
+/* SHA-256 of a file, or of its size and time when it is larger than `maxBytes` (a program a native-messaging
+   manifest starts can be any size). An extension's package is always read whole (packageFileDigest). */
 async function fileDigest(path, maxBytes = 64 * 1024 * 1024) {
   try {
     const info = await IOUtils.stat(path);
@@ -108,6 +110,9 @@ async function fileDigest(path, maxBytes = 64 * 1024 * 1024) {
     return null;
   }
 }
+
+/** The SHA-256 of an extension's package, whatever its size: its size and time would let another file pass. */
+const packageFileDigest = path => fileDigest(path, Infinity);
 
 function prefValue(name) {
   switch (Services.prefs.getPrefType(name)) {
@@ -213,11 +218,13 @@ class Guard {
     } finally {
       this.#scanning--;
     }
+    // The engine's own and Nulavio's built-in Shell are left out.
+    const addons = (await lazy.AddonManager.getAddonsByTypes(["extension"])).filter(a => !(a.isBuiltin || a.isSystem || a.hidden));
+    // The file itself, not the engine's word for it (#136): the engine keeps reading a replaced file through
+    // the archive it had open, and says the old version for as long as it runs, and after.
+    const digests = await Promise.all(addons.map(addon => Guard.packageDigest(addon)));
     const out = {};
-    for (const addon of await lazy.AddonManager.getAddonsByTypes(["extension"])) {
-      if (addon.isBuiltin || addon.isSystem || addon.hidden) {
-        continue; // the engine's own and Nulavio's built-in Shell
-      }
+    addons.forEach((addon, i) => {
       out[addon.id] = {
         name: String(addon.name ?? addon.id),
         version: String(addon.version ?? ""),
@@ -226,9 +233,21 @@ class Guard {
         // Installed by a managed policy (Nulavio's own policies.json installs uBlock Origin): a change
         // of policies is reported as such, so the extension it brings is not reported again.
         policy: addon.installTelemetryInfo?.source === "enterprise-policy",
+        digest: digests[i],
       };
-    }
+    });
     return out;
+  }
+
+  /** The SHA-256 of an extension's package as it is on disk now, or null when it has no one file to read. */
+  static async packageDigest(addon) {
+    try {
+      const uri = addon?.getResourceURI();
+      const file = uri instanceof Ci.nsIJARURI ? uri.JARFile.QueryInterface(Ci.nsIFileURL).file : null;
+      return file ? await packageFileDigest(file.path) : null;
+    } catch {
+      return null;
+    }
   }
 
   #prefs() {
@@ -415,8 +434,9 @@ class Guard {
         if (!now.policy) {
           add("extension-added", id, { after: now });
         }
-      } else if (then.version !== now.version || (!then.active && now.active)) {
-        // A new version, or a disabled extension turned on, without the browser doing it.
+      } else if (then.version !== now.version || (!then.active && now.active) || Guard.otherFile(then, now)) {
+        // A new version, another file (whatever version the engine says), or a disabled extension turned on,
+        // without the browser doing it.
         add("extension-changed", id, { before: then, after: now });
       }
     }
@@ -469,6 +489,15 @@ class Guard {
   }
 
   /**
+   * Whether an extension's package is another file than the record's: its digest differs, or it had one and can
+   * no longer be read. A record written before digests were kept has none: nothing to compare, and the digest
+   * is taken into the record at that look.
+   */
+  static otherFile(then, now) {
+    return typeof then?.digest === "string" && then.digest !== (now?.digest ?? null);
+  }
+
+  /**
    * Updates the engine itself holds for the next start, from its list of installs: { id: version }.
    * An extension can ask the engine to wait before it is replaced (uBlock Origin does); the engine
    * then keeps the verified file and installs it when the browser starts again.
@@ -502,6 +531,18 @@ class Guard {
       return Boolean(finding.after?.foreign);
     }
     return !touched.has(finding.key);
+  }
+
+  /**
+   * Findings of the start-up check without what the browser itself did to an extension while the check was at
+   * work (`touched`): an install or an update that began before the snapshot was taken and ended after it is
+   * the browser's doing, as it is at any later look. The look that follows takes its result into the record.
+   */
+  static withoutOwnDoings(findings, touched = new Set()) {
+    // An extension another program placed stays reported whatever the browser did to it since (as in
+    // madeOutside): the look that follows would find it already in the record and say nothing.
+    const placed = f => f.kind === "extension-added" && Boolean(f.after?.foreign);
+    return findings.filter(f => !f.kind.startsWith("extension-") || !touched.has(f.key) || placed(f));
   }
 
   static withoutHeldUpdates(findings, expected, installed = {}) {
@@ -585,9 +626,12 @@ class Guard {
     for (const id of Object.keys(saved.expected)) {
       installed[id] = await this.#installedDigest(id);
     }
-    const fresh = Guard.withoutHeldUpdates(Guard.compare(saved.snapshot, now), saved.expected, installed).filter(
-      f => f.kind !== "pref-changed" || !own(f.key)
-    );
+    // What the engine announced for an extension since this check began listening is not consumed here: the
+    // look that follows (asked for by the same announcement) still counts it, and follows the result.
+    const fresh = Guard.withoutOwnDoings(
+      Guard.withoutHeldUpdates(Guard.compare(saved.snapshot, now), saved.expected, installed),
+      this.#touched
+    ).filter(f => f.kind !== "pref-changed" || !own(f.key));
     const seen = new Set(fresh.map(f => f.id));
     const at = new Date().toISOString();
     const pending = [...saved.pending.filter(f => !seen.has(f.id)), ...fresh.map(f => ({ ...f, at }))];
@@ -610,20 +654,14 @@ class Guard {
   async #heldUpdates() {
     const out = {};
     for (const [id, version] of Object.entries(Guard.heldUpdates(await lazy.AddonManager.getAllInstalls().catch(() => [])))) {
-      out[id] = { version, digest: await fileDigest(PathUtils.join(this.#profileDir, "extensions", "staged", `${id}.xpi`)) };
+      out[id] = { version, digest: await packageFileDigest(PathUtils.join(this.#profileDir, "extensions", "staged", `${id}.xpi`)) };
     }
     return out;
   }
 
   /** The digest of an installed extension's file as it is now, or null when it has none to read. */
   async #installedDigest(id) {
-    try {
-      const uri = (await lazy.AddonManager.getAddonByID(id))?.getResourceURI();
-      const file = uri instanceof Ci.nsIJARURI ? uri.JARFile.QueryInterface(Ci.nsIFileURL).file : null;
-      return file ? await fileDigest(file.path) : null;
-    } catch {
-      return null;
-    }
+    return Guard.packageDigest(await lazy.AddonManager.getAddonByID(id).catch(() => null));
   }
 
   /** Settings Nulavio itself changes at this start (its own defaults): not changes made outside the browser. */
@@ -734,9 +772,9 @@ class Guard {
       throw e;
     }
     const touched = new Set([...earlier, ...this.#touched]);
-    // What the engine shows of an extension that the browser did not do is reported, not taken into the record,
-    // also when the engine only finds it during the session: an extension placed in the profile, another
-    // version, a file gone. (What the engine does not show is not seen here: docs/security/hardening.md.)
+    // What the browser did not do to an extension is reported, not taken into the record, also when it is only
+    // found during the session: an extension placed in the profile, another version, another file under the
+    // same version (the engine goes on saying the old one for a file replaced while it runs), a file gone.
     const before = { extensions: this.#state.snapshot.extensions };
     const pendingIds = new Set(this.#state.pending.map(f => f.id));
     const at = new Date().toISOString();
