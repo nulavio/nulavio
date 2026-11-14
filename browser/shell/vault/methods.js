@@ -192,8 +192,11 @@ byId("code-step").addEventListener("submit", async event => {
   byId("code-error").textContent = "";
   byId("code-step").hidden = true;
   making = false;
-  setState("idle");
-  await render().catch(e => announce(errorText(e), "error"));
+  // The list first (render() sets the state once it is drawn), then the announcement.
+  await render().catch(e => {
+    setState("idle");
+    announce(errorText(e), "error");
+  });
   announce(t("methodsCodeReplaced"), "ok");
   byId("new-code").focus();
 });
