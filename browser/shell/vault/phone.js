@@ -135,6 +135,7 @@ function phoneRow(method) {
       const result = await vault.change(profileId, "remove-method", { current, envelope: method.id });
       byId("current").value = "";
       await render();
+      // After the list, on purpose: the result (and its warning) is the last word, and the page is idle again.
       settle("idle", t("phoneRemoved", [method.label]), result);
     } catch (e) {
       const code = String(e?.message ?? e);

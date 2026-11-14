@@ -995,7 +995,8 @@ class VaultUiTest(unittest.TestCase):
         real = tool.with_name("nulavio.real-by-test")
         os.rename(tool, real)
         # The real helper, whose answer to a change gets the warning it gives when its record failed.
-        tool.write_text(NOT_RECORDED_HELPER.format(python=sys.executable, real=real))
+        helper = lambda word: tool.write_text(NOT_RECORDED_HELPER.format(python=sys.executable, real=real, word=word))  # noqa: E731
+        helper("not-recorded")
         tool.chmod(0o755)
         warning = self.m.execute("return browser.i18n.getMessage('err_not_recorded');")
         try:
@@ -1024,6 +1025,46 @@ class VaultUiTest(unittest.TestCase):
             self.assertEqual(self.m.execute("return document.querySelectorAll('#code > li').length;"), 7)  # still shown
             self.assertTrue(harness.wait_until(lambda: warning in self.status_text(), 10), self.status_text())
             self.assertEqual(self.status_line()["level"], "warn")
+            # Typed back: the confirmation says it, with the warning.
+            new_code = self.m.execute("return document.getElementById('code').dataset.code;")
+            groups = new_code.split("-")
+            group = "return Number(document.getElementById(arguments[0]).textContent.match(/\\d+/)[0]) - 1;"
+            index = lambda label: self.m.execute(group, [label])  # noqa: E731
+            self.type_into("group-a", groups[index("group-a-label")])
+            self.type_into("group-b", groups[index("group-b-label")])
+            self.click("#code-step button[type=submit]")
+            self.wait_state("idle")
+            replaced = self.m.execute("return browser.i18n.getMessage('methodsCodeReplaced');")
+            said = lambda: self.status_text()  # noqa: E731
+            self.assertTrue(harness.wait_until(lambda: replaced in said() and warning in said(), 10), said())
+            self.assertEqual(self.status_line()["level"], "warn")
+            # A method removed: the same.
+            self.type_into("current", new_code)
+            first = self.m.execute("return document.querySelector('#methods > li[data-method=password]').dataset.envelope;")
+            self.click(f"#methods > li[data-envelope='{first}'] button")
+            self.click("dialog[open] button[value=confirm]")
+            self.assertTrue(
+                harness.wait_until(
+                    lambda: (
+                        self.m.execute("return document.querySelectorAll('#methods > li[data-method=password]').length;") == 1
+                    ),
+                    60,
+                )
+            )
+            self.assertTrue(harness.wait_until(lambda: warning in self.status_text(), 10), self.status_text())
+            self.assertEqual(self.status_line()["level"], "warn")
+            # Any other word the helper might write is not passed on: an ordinary result, no warning.
+            helper("rm -rf <b>not a word</b>")
+            self.click("#add-password")
+            self.type_into("new-password", "third pass 44")
+            self.type_into("new-password2", "third pass 44")
+            self.type_into("current", new_code)
+            self.click("#password-form button[type=submit]")
+            added = self.m.execute("return browser.i18n.getMessage('methodsPasswordAdded');")
+            self.assertTrue(harness.wait_until(lambda: added in self.status_text(), 60), self.status_text())
+            self.assertNotIn(warning, self.status_text())
+            self.assertNotIn("not a word", self.status_text())
+            self.assertEqual(self.status_line()["level"], "ok")
         finally:
             tool.unlink()
             os.rename(real, tool)
@@ -1038,7 +1079,7 @@ if sys.argv[1:3] == ["vault", "api"]:
     op, parsed = json.loads(request or "{{}}").get("op"), json.loads(answer or "{{}}")
     changes = ("new-recovery-code", "confirm-recovery-code", "add-password", "add-keyring", "remove-method")
     if op in changes and "error" not in parsed:
-        answer = json.dumps({{**parsed, "warning": "not-recorded"}}) + "\\n"
+        answer = json.dumps({{**parsed, "warning": "{word}"}}) + "\\n"
 sys.stdout.write(answer)
 sys.stderr.write(done.stderr)
 sys.exit(done.returncode)

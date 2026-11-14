@@ -94,7 +94,7 @@ function methodRow(method, count, confirmers) {
     });
     const result = ok ? await change("remove-method", { envelope: method.id }) : null;
     if (result) {
-      await render();
+      await render().catch(console.error); // the change was made: what it did is said even if the list is not redrawn
       announceDone(t("methodRemoved", [name]), result);
       byId("methods").querySelector("button:not(:disabled)")?.focus() ?? byId("headline").focus();
     }
@@ -226,9 +226,11 @@ byId("new-code").addEventListener("click", async () => {
   const result = await change("new-recovery-code");
   if (result?.recoveryCode) {
     showNewCode(result.recoveryCode); // shown whether or not the change was recorded: it is the only copy
-    render()
-      .then(() => result.warning && announce(t("err_not_recorded"), "warn"))
-      .catch(e => announce(errorText(e), "error"));
+    render().then(
+      () => result.warning && announce(t("err_not_recorded"), "warn"),
+      // The list could not be read again: said, and the warning with it, never instead of it.
+      e => announce([errorText(e), result.warning ? t("err_not_recorded") : ""].filter(Boolean).join(" "), "error")
+    );
   } else {
     making = false;
   }
@@ -265,7 +267,7 @@ byId("password-form").addEventListener("submit", async event => {
   byId("password-form").reset();
   if (result) {
     byId("password-form").hidden = true;
-    await render();
+    await render().catch(console.error);
     announceDone(t("methodsPasswordAdded"), result);
     byId("add-password").focus();
   }
@@ -273,7 +275,7 @@ byId("password-form").addEventListener("submit", async event => {
 byId("add-keyring").addEventListener("click", async () => {
   const result = await change("add-keyring");
   if (result) {
-    await render();
+    await render().catch(console.error);
     announceDone(t("methodsKeyringAdded"), result);
   }
 });
