@@ -397,6 +397,17 @@ class WorkflowTest(unittest.TestCase):
         # Words split by spaces, case or a line break still count; text far past the start is not searched.
         self.assertIn("a spending limit", ai_review_failure.explain(record(400, "Reached the USAGE\n  LIMIT")))
         self.assertIn(generic, ai_review_failure.explain(record(400, "x" * 5000 + "usage limit")))
+        # Each cause, printed by main(), keeps the one-line shape the step's annotation needs.
+        shape = re.compile(r"\A::error title=AI review did not complete::[^\n\r%:]*(?:: [^\n\r%:]*)*\n\Z")
+        for phrase, meaning in ai_review_failure.REFUSALS:
+            with self.subTest(phrase=phrase), tempfile.TemporaryDirectory() as tmp:
+                path = Path(tmp) / "execution.json"
+                path.write_text(json.dumps([record(400, api(phrase))]))
+                out = io.StringIO()
+                with redirect_stdout(out):
+                    ai_review_failure.main(["x", str(path)])
+                self.assertRegex(out.getvalue(), shape)
+                self.assertIn(meaning, out.getvalue())
 
     def test_comment_header_names_the_model_and_action_that_ran(self):
         model = re.search(r"--model (\S+)", job("review")).group(1)
