@@ -538,6 +538,17 @@ class WindowUI {
     if (noticesBar) {
       notices.observe(noticesBar, { childList: true, subtree: true });
     }
+    // ADR 0009, #238: how tall the toolbars that hang below the band are, so the tab list starts under them while
+    // they are shown instead of under the band, where they covered its top (window-band.css).
+    const toolbarSize = () => {
+      const bars = doc.querySelectorAll("#navigator-toolbox > toolbar:not(#nulavio-band)");
+      const height = [...bars].reduce((sum, each) => sum + each.getBoundingClientRect().height, 0);
+      doc.documentElement.style.setProperty("--nv-immersive-toolbar-size", `${Math.ceil(height)}px`);
+    };
+    const sizes = new win.ResizeObserver(toolbarSize);
+    for (const each of doc.querySelectorAll("#navigator-toolbox > toolbar:not(#nulavio-band)")) {
+      sizes.observe(each);
+    }
     const unload = () => this.#detach(win);
     win.addEventListener("unload", unload, { once: true });
     const reveal = () => this.#showNotice(win);
@@ -558,7 +569,7 @@ class WindowUI {
       identityObserver.observe(identityBox, { attributes: true, attributeFilter: ["class"] });
     }
     this.#windows.set(win, { bar, compact, fullscreen, line, sheet, progress, header, unload, pointer, screenObserver, identityObserver, edge,
-      popup, sharing, dialog, downloads, notices, holds: new Map(), named: false, noticeTimer: null, safety: null, restoreGroupPalette: this.#groupPalette(win),
+      popup, sharing, dialog, downloads, notices, sizes, holds: new Map(), named: false, noticeTimer: null, safety: null, restoreGroupPalette: this.#groupPalette(win),
       restoreIdentity: this.#ownPagesIdentity(win) });
     this.#downloadHold(win);
     this.#noticeHold(win);
@@ -1192,6 +1203,8 @@ class WindowUI {
     win.clearTimeout(state.noticeTimer);
     state.screenObserver.disconnect();
     state.identityObserver.disconnect();
+    state.sizes.disconnect();
+    win.document.documentElement.style.removeProperty("--nv-immersive-toolbar-size");
     state.bar.remove();
     state.fullscreen.remove();
     state.edge.remove();

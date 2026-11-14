@@ -5,6 +5,7 @@ pop-up, never while a device is shared; and a panel anchored on the toolbar keep
 
 from __future__ import annotations
 
+import time
 import unittest
 
 import harness
@@ -73,6 +74,19 @@ DOCUMENT = """
 const browser = gBrowser.selectedBrowser;
 return { shown: browser.currentURI.spec, there: browser.browsingContext.currentWindowGlobal?.documentURI?.spec ?? null };
 """
+
+
+# #238: the toolbar and the side tab list as drawn: where each box is, and whether it is in view (shown, not slid out).
+PARTS = """
+const box = id => {
+  const e = document.getElementById(id), b = e.getBoundingClientRect(), s = getComputedStyle(e);
+  return { left: b.left, top: b.top, right: b.right, bottom: b.bottom,
+           shown: b.width > 0 && b.right > 0 && b.left < innerWidth && s.opacity !== "0" && s.visibility !== "hidden" };
+};
+return { toolbar: box("nav-bar"), tabs: box("sidebar-container"), band: box("nulavio-band") };
+"""
+EDGE = "window.windowUtils.sendMouseEvent('mousemove', 2, Math.round(innerHeight / 2), 0, 0, 0);"
+AWAY = "window.windowUtils.sendMouseEvent('mousemove', Math.round(innerWidth / 2), Math.round(innerHeight / 2), 0, 0, 0);"
 
 
 @unittest.skipUnless(harness.nulavio_engine(), "Immersive needs the built-in Shell on the engine")
@@ -473,6 +487,61 @@ class ImmersiveTest(unittest.TestCase):
                 self.m.chrome(close, [where])
                 self.m.chrome("gBrowser.selectedBrowser.focus();")
                 self.assertFalse(self.settled(False)["toolbar"], "the bar is gone and the toolbar stayed")
+
+    def test_13_the_toolbar_and_the_side_tab_list_never_draw_over_each_other(self):
+        """#238: with the tabs at the side (Lateral, Foco), the toolbar and the tab list do not overlap while either
+        is shown, hidden or coming back, in both themes. With the toolbar shown the list starts under it."""
+        layout = f"const d = arguments[arguments.length - 1]; {LAYOUT}.apply(window, arguments[0]).then(d, e => d(String(e)));"
+        self.addCleanup(self.m.chrome, "Services.prefs.clearUserPref('ui.systemUsesDarkTheme');")
+        self.addCleanup(self.m.chrome, AWAY)
+
+        def overlap(a, b):
+            return (
+                a["shown"]
+                and b["shown"]
+                and a["left"] < b["right"]
+                and b["left"] < a["right"]
+                and a["top"] < b["bottom"]
+                and b["top"] < a["bottom"]
+            )
+
+        def parts(want_toolbar, want_tabs):
+            wanted = lambda p: p["toolbar"]["shown"] is want_toolbar and p["tabs"]["shown"] is want_tabs  # noqa: E731
+            self.assertTrue(harness.wait_until(lambda: wanted(self.m.chrome(PARTS)), 6), self.m.chrome(PARTS))
+            time.sleep(0.4)  # past the transitions
+            return self.m.chrome(PARTS)
+
+        def apply(preset):
+            self.m.set_context("chrome")
+            try:
+                return self.m.execute_async(layout, [preset])
+            finally:
+                self.m.set_context("content")
+
+        before = self.m.chrome(f"return {LAYOUT}.state(window).then(state => state.preset);")
+        self.addCleanup(apply, before)
+        for preset in ("lateral", "focus"):
+            apply(preset)
+            for dark in (0, 1):
+                with self.subTest(preset=preset, dark=bool(dark)):
+                    self.m.chrome("Services.prefs.setIntPref('ui.systemUsesDarkTheme', arguments[0]);", [dark])
+                    self.m.chrome(AWAY + "gBrowser.selectedBrowser.focus();")
+                    parts(False, False)
+                    # The tab list alone, by the pointer at the edge: right under the band.
+                    self.m.chrome(EDGE)
+                    alone = parts(False, True)
+                    self.assertLessEqual(alone["band"]["bottom"], alone["tabs"]["top"] + 1, alone)
+                    # The toolbar too, by the keyboard: the list moves under it, and neither covers the other.
+                    self.m.chrome("document.getElementById('Browser:OpenLocation').doCommand();")
+                    both = parts(True, True)
+                    self.assertFalse(overlap(both["toolbar"], both["tabs"]), both)
+                    self.assertLessEqual(both["toolbar"]["bottom"], both["tabs"]["top"] + 1, both)
+                    # The toolbar alone: the list goes; back on the page, the toolbar goes too.
+                    self.m.chrome(AWAY)
+                    toolbar = parts(True, False)
+                    self.assertFalse(overlap(toolbar["toolbar"], toolbar["tabs"]), toolbar)
+                    self.m.chrome("gBrowser.selectedBrowser.focus();")
+                    parts(False, False)
 
 
 if __name__ == "__main__":
