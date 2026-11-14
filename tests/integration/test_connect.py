@@ -62,9 +62,10 @@ class ConnectTest(unittest.TestCase):
         (fake_bin / "kdeconnect-cli").chmod(0o700)
         cls.session.env["PATH"] = f"{fake_bin}:{cls.session.env['PATH']}"
         # A stand-in for the system's application directories (test 03b puts the package's menu entry there).
+        # Only it: where the engine under test is the installed package, the real /usr/share has that entry.
         cls.system_data = cls.session.tmp / "system-data"
         (cls.system_data / "applications").mkdir(parents=True)
-        cls.session.env["XDG_DATA_DIRS"] = f"{cls.system_data}:/usr/local/share:/usr/share"
+        cls.session.env["XDG_DATA_DIRS"] = str(cls.system_data)
         cls.fake_bin = fake_bin
         cls.m = cls.session.start()
         cls.fakes: list[subprocess.Popen] = []
@@ -186,6 +187,7 @@ class ConnectTest(unittest.TestCase):
         apps = Path(self.session.env["XDG_DATA_HOME"]) / "applications"
         entry = apps / "net.nulavio.Nulavio.desktop"
         packaged = self.system_data / "applications" / "nulavio.desktop"
+        override = apps / "nulavio.desktop"
         wrapper = self.fake_bin / "nulavio"
         install_dir = Path(self.session.engine.path).resolve().parent
         visible = lambda: "NoDisplay=true" not in entry.read_text().splitlines()  # noqa: E731
@@ -219,9 +221,21 @@ class ConnectTest(unittest.TestCase):
             make_default()
             self.assertFalse(visible())
             self.call("return C.restoreDefaultBrowser();")
+            # The person's own copy of the package's entry overrides the system's in the menu: when that one is
+            # for another installation, or is itself kept out of the menus, this installation's entry stays.
+            override.write_text("[Desktop Entry]\nType=Application\nName=Nulavio\nExec=/opt/another/nulavio/nulavio %u\n")
+            make_default()
+            self.assertTrue(visible())
+            override.write_text(
+                f"[Desktop Entry]\nType=Application\nName=Nulavio\nNoDisplay=true\nExec={install_dir}/nulavio %u\n"
+            )
+            make_default()
+            self.assertTrue(visible())
+            self.call("return C.restoreDefaultBrowser();")
         finally:
             wrapper.unlink(missing_ok=True)
             packaged.unlink(missing_ok=True)
+            override.unlink(missing_ok=True)
 
     def test_04_settings_page_shows_real_states(self):
         url = self.m.chrome(

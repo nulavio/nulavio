@@ -383,20 +383,26 @@ class NulavioConnectClass {
   }
 
   /**
-   * Whether the package's own menu entry, in a system directory, starts this very installation: its Exec is
+   * Whether the package's own menu entry, as the menu sees it, starts this very installation: its Exec is
    * this installation's launcher, a link to it, or the small wrapper script the packages put in /usr/bin,
    * which names this installation's directory. A portable or development build next to an installed
-   * package is not that entry's program.
+   * package is not that entry's program. The entry the menu uses is the first one found, the user's own
+   * directory first (a copy there overrides the system's), and one that is itself kept out of the menus
+   * is no second entry.
    */
   async #packagedEntryIsOurs(installDir) {
-    for (const base of dataDirs().slice(1)) {
+    for (const base of dataDirs()) {
       let text;
       try {
         text = await IOUtils.readUTF8(PathUtils.join(base, "applications", PACKAGED_ID));
       } catch {
         continue; // not in this directory
       }
-      const word = (text.split("\n").find(line => line.startsWith("Exec=")) ?? "").slice(5).trim().split(/\s+/)[0];
+      const lines = text.split("\n").map(line => line.trim());
+      if (lines.includes("Hidden=true") || lines.includes("NoDisplay=true")) {
+        return false; // not shown: the entry written here is then the one in the menu
+      }
+      const word = (lines.find(line => line.startsWith("Exec=")) ?? "").slice(5).trim().split(/\s+/)[0];
       if (!word) {
         return false;
       }
@@ -420,7 +426,7 @@ class NulavioConnectClass {
           return false;
         }
       }
-      return false; // the first system directory that has the entry is the one the desktop uses
+      return false; // the first directory that has the entry is the one the desktop uses
     }
     return false;
   }
