@@ -1228,5 +1228,70 @@ class NoSecretsInLogsTest(VaultTestCase):
             self.assertNotIn(secret, text)
 
 
+# ADR 0015 (#204): the key file says how old its key is, and a new key carries what it can.
+class KeyAgeTest(VaultTestCase):
+    def test_the_key_file_says_when_its_key_was_made_and_when_a_method_last_went(self):
+        vault, _, _ = self.new_vault(recovery=True)
+        made = vault.key_info()
+        self.assertEqual((made["tracked"], made["last_removal"]), (True, None))
+        self.assertTrue(made["created"])
+        extra = vault.add_password("another password 7", FAST)
+        self.assertIsNone(vault.key_info()["last_removal"])  # adding a method takes nothing away
+        vault.remove(extra.id)
+        self.assertTrue(vault.key_info()["last_removal"])
+        vault = self.reopen(vault)
+        self.assertTrue(vault.key_info()["last_removal"], "not kept in the key file")
+        # Every way an envelope goes counts: a replaced recovery code, when the old one goes.
+        fresh, _, _ = self.new_vault("other.json", recovery=True)
+        code = fresh.replace_recovery_code(FAST)
+        self.assertIsNone(fresh.key_info()["last_removal"])  # the old code still opens it
+        fresh = self.reopen(fresh)
+        fresh.unlock_recovery_code(code)
+        fresh.confirm_recovery_code()
+        self.assertTrue(fresh.key_info()["last_removal"])
+
+    def test_a_key_file_from_before_says_what_is_not_known(self):
+        vault, _, _ = self.new_vault(recovery=True)
+        del vault.meta["key"]  # as every key file written before this
+        vault = self.reopen(vault)
+        vault.unlock_password(PASSWORD)
+        self.assertFalse(vault.tampered)
+        self.assertEqual(vault.key_info(), {"created": vault.meta["created"], "last_removal": None, "tracked": False})
+        vault.remove(vault.envelopes("recovery-code")[0].id)  # what happens from now on is known
+        info = vault.key_info()
+        self.assertEqual((info["tracked"], info["created"]), (True, vault.meta["created"]))
+        self.assertTrue(info["last_removal"])
+
+    def test_a_new_key_carries_a_phone_without_the_phone(self):
+        from nulavio_launcher.vault import profiles
+
+        phone = self.pair_phone()
+        old, _, _ = self.new_vault(recovery=True)
+        add_phone(old, self.paired)
+        old.add_password("another password 7", FAST, label="second")
+        old = self.reopen(old)
+        old.unlock_password(PASSWORD)
+        new = Vault.create(self.dir / "new.json", old.profile_id)
+        carried, dropped, _undo, _after = profiles._carry(old, new, "password", PASSWORD, None)
+        self.assertEqual([m["method"] for m in carried], ["password", "phone"])
+        self.assertEqual(sorted((m["method"], m["label"]) for m in dropped), [("password", "second"), ("recovery-code", "")])
+        self.assertNotEqual(bytes(new.dek), bytes(old.dek))
+        dek = bytes(new.dek)
+        env = new.envelopes("phone")[0]
+        self.assertNotIn(env.id, [e.id for e in old.envelopes()])
+        new = self.reopen(new)
+        # The phone answers for the new envelope as it is: no pairing again, nothing asked of it meanwhile.
+        c = self.coordinator(new)
+        request = c.start_phone(env.id, "Work")
+        c.phone_acknowledged()
+        self.assertEqual(c.receive(phone.handle(request)), State.UNLOCKED)
+        self.assertEqual(bytes(new.dek), dek)
+        new.lock()
+        new.unlock_password(PASSWORD)  # and the password that was typed
+        self.assertEqual(bytes(new.dek), dek)
+        with self.assertRaises(VaultError):
+            new.unlock_password("another password 7")
+
+
 if __name__ == "__main__":
     unittest.main()

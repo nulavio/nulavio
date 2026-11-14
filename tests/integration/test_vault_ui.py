@@ -1074,6 +1074,92 @@ class VaultUiTest(unittest.TestCase):
             tool.unlink()
             os.rename(real, tool)
 
+    def test_19_a_new_key_ends_what_a_removed_method_could_still_open(self):
+        """#204 (ADR 0015): the methods page says how old the profile's key is and whether a method went since;
+        "Criar nova chave" copies the profile into a new volume under a new key, says what stopped working, and
+        makes the new recovery code right after. The key file from before then opens nothing (the unit tests
+        try it with gocryptfs alone)."""
+        profile_id, code = self.create_via_api("Chave", password=PASSWORD, keyring=False)
+        path = self.profile_path(profile_id)
+        add = "return V.change(args[0], 'add-password', {current: args[1], password: 'leaked pass 77'});"
+        self.call(add, profile_id, PASSWORD)
+        self.open_page(f"vault/methods.html?p={profile_id}")
+        self.wait_state("idle")
+        word = lambda key, *args: self.m.execute("return browser.i18n.getMessage(arguments[0], arguments[1]);", [key, list(args)])  # noqa: E731
+        key_state = lambda: self.m.execute("return document.getElementById('key-state').textContent;")  # noqa: E731
+        fresh = word("methodsKeyFresh", "DATE").split("DATE")[0]
+        self.assertTrue(key_state().startswith(fresh), key_state())
+        self.assertFalse(self.m.execute("return document.getElementById('rekey').disabled;"))
+        self.assertTrue(self.m.execute("return document.getElementById('rekey-note').hidden;"))
+        self.shoot("19-key-fresh", "#key")
+        # A password removed: the result says what a removal leaves, and so does the key's own line from then on.
+        leaked = self.m.execute("return document.querySelectorAll('#methods > li[data-method=password]')[1].dataset.envelope;")
+        self.type_into("current", PASSWORD)
+        self.click(f"#methods > li[data-envelope='{leaked}'] button")
+        asked = self.m.execute("return document.querySelector('dialog[open]').textContent;")
+        self.assertIn(word("methodRemoveBody", "X").split("X")[1].strip(), asked)
+        self.click("dialog[open] button[value=confirm]")
+        keeps = word("methodRemovedKeeps")
+        self.assertTrue(harness.wait_until(lambda: keeps in self.status_text(), 60), self.status_text())
+        stale = word("methodsKeyStale", "DATE").split("DATE")[1]
+        self.assertTrue(key_state().endswith(stale), key_state())
+        self.shoot("19-key-stale", "#key")
+        # Without the current secret nothing starts; the dialog says what stays and what goes.
+        self.click("#rekey")
+        self.assertTrue(harness.wait_until(lambda: self.m.execute("return Boolean(document.querySelector('dialog[open]'));"), 20))
+        body = self.m.execute("return document.querySelector('dialog[open] #dialog-body').textContent;")
+        self.assertRegex(body, r"\(\d+([.,]\d)?\s?MB\)")
+        self.shoot("19-rekey-dialog")
+        self.click("dialog[open] button[value=confirm]")
+        self.assertTrue(self.m.execute("return document.getElementById('current-error').textContent.length > 0;"))
+        self.assertEqual(self.m.execute("return document.activeElement.id;"), "current")
+        # With it: the new key, what stopped working, and the new recovery code to type back.
+        self.type_into("current", PASSWORD)
+        self.click("#rekey")
+        self.assertTrue(harness.wait_until(lambda: self.m.execute("return Boolean(document.querySelector('dialog[open]'));"), 20))
+        self.click("dialog[open] button[value=confirm]")
+        self.wait_state("code", timeout=180)
+        said = self.status_text()
+        self.assertIn(word("methodsRekeyDone", "Chave"), said)
+        self.assertIn(word("methodsRekeyDropped", word("methodRecovery")), said)
+        self.assertIn(word("methodsRekeyNewCode"), said)
+        self.assertEqual(self.status_line()["level"], "ok")
+        self.assertEqual(self.m.execute("return document.getElementById('current').value;"), "")
+        new_code = self.m.execute("return document.getElementById('code').dataset.code;")
+        self.assertNotEqual(new_code, code)
+        # No code from before opens the profile now, so the page does not say that one still does.
+        self.assertEqual(
+            self.m.execute("return document.getElementById('code-intro').textContent;"), word("methodsCodeIntroFirst")
+        )
+        self.shoot("19-rekey-done")
+        groups = new_code.split("-")
+        index = lambda label: int(self.m.execute(f"return document.getElementById('{label}').textContent.match(/\\d+/)[0];")) - 1  # noqa: E731
+        self.type_into("group-a", groups[index("group-a-label")])
+        self.type_into("group-b", groups[index("group-b-label")])
+        self.click("#code-step button[type=submit]")
+        self.wait_state("idle")
+        rows = self.m.execute("return [...document.querySelectorAll('#methods > li')].map(li => li.dataset.method);")
+        self.assertEqual(sorted(rows), ["password", "recovery-code"])
+        self.assertTrue(key_state().startswith(fresh), key_state())
+        # The profile: closed all along, opened by the password that was typed and by the new code, not by the old one.
+        self.assertFalse(storage.Container(path).mounted())
+        status = self.call("return V.status(args[0]);", profile_id)
+        self.assertEqual((status["key"]["tracked"], status["key"]["lastRemoval"]), (True, None))
+        with_code = "return V.unlock(args[0], 'recovery-code', args[1]).then(r => r.opened, e => e.code);"
+        refused = self.call(with_code, profile_id, code)
+        self.assertEqual(refused, "wrong-secret")
+        self.assertFalse(storage.Container(path).mounted())
+        self.assertEqual(self.call(with_code, profile_id, new_code), "launched")
+        self.assertTrue(harness.wait_until(lambda: self.instances(path), timeout=60), "the profile did not start")
+        # Until the engine holds the profile's lock, the watcher that locks it again has not seen it start
+        # (stopped before that, the volume stays open for the watcher's two minutes of grace).
+        self.assertTrue(
+            harness.wait_until(lambda: (path / "lock").is_symlink(), timeout=60), "the engine did not take the profile"
+        )
+        time.sleep(2)  # the watcher looks twice a second: stopped sooner, it never sees the engine and waits out its grace
+        self.stop_instance(path)
+        self.assertTrue(harness.wait_until(lambda: not storage.Container(path).mounted(), timeout=90), "it did not lock again")
+
 
 NOT_RECORDED_HELPER = """#!{python} -I
 import json, subprocess, sys
