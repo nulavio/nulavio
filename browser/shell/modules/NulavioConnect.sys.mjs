@@ -26,6 +26,8 @@ ChromeUtils.defineESModuleGetters(lazy, {
 
 const DEFINITIONS_URL = "resource://builtin-addons/nulavio-shell/shared/integrations.json";
 const DESKTOP_ID = "net.nulavio.Nulavio.desktop";
+// The menu entry the RPM and the .deb install for everyone (packaging/linux/nulavio.desktop).
+const PACKAGED_ID = "nulavio.desktop";
 const PREF_PREVIOUS = "nulavio.connect.previousBrowser";
 const PICKER_PREF = "widget.use-xdg-desktop-portal.file-picker";
 const TIMEOUT_MS = 5000;
@@ -380,7 +382,61 @@ class NulavioConnectClass {
     Services.prefs.clearUserPref(PREF_PREVIOUS);
   }
 
-  /** A user-level desktop entry for this installation (needed by the default-application settings). */
+  /**
+   * Whether the package's own menu entry, as the menu sees it, starts this very installation: its Exec is
+   * this installation's launcher, a link to it, or the small wrapper script the packages put in /usr/bin,
+   * which names this installation's directory. A portable or development build next to an installed
+   * package is not that entry's program. The entry the menu uses is the first one found, the user's own
+   * directory first (a copy there overrides the system's), and one that is itself kept out of the menus
+   * is no second entry.
+   */
+  async #packagedEntryIsOurs(installDir) {
+    for (const base of dataDirs()) {
+      let text;
+      try {
+        text = await IOUtils.readUTF8(PathUtils.join(base, "applications", PACKAGED_ID));
+      } catch {
+        continue; // not in this directory
+      }
+      const lines = text.split("\n").map(line => line.trim());
+      if (lines.includes("Hidden=true") || lines.includes("NoDisplay=true")) {
+        return false; // not shown: the entry written here is then the one in the menu
+      }
+      const word = (lines.find(line => line.startsWith("Exec=")) ?? "").slice(5).trim().split(/\s+/)[0];
+      if (!word) {
+        return false;
+      }
+      const candidates = word.startsWith("/")
+        ? [word]
+        : (Services.env.get("PATH") || "").split(":").filter(dir => dir.startsWith("/")).map(dir => PathUtils.join(dir, word));
+      for (const candidate of candidates) {
+        const file = Cc["@mozilla.org/file/local;1"].createInstance(Ci.nsIFile);
+        try {
+          file.initWithPath(candidate);
+          if (!file.exists() || !file.isFile()) {
+            continue;
+          }
+          file.normalize(); // follows a link
+          if (file.path.startsWith(`${installDir}/`)) {
+            return true;
+          }
+          // The wrapper is a few lines of shell; anything larger is some other program.
+          return file.fileSize <= 4096 && (await IOUtils.readUTF8(file.path)).includes(`${installDir}/`);
+        } catch {
+          return false;
+        }
+      }
+      return false; // the first directory that has the entry is the one the desktop uses
+    }
+    return false;
+  }
+
+  /**
+   * A user-level desktop entry for this installation (needed by the default-application settings: they want
+   * an entry that also declares about: and unknown schemes). Where the package's own menu entry already
+   * starts this installation, this one is kept out of the menus (NoDisplay), so the menu shows one Nulavio
+   * (#273); it is still the entry the default points at.
+   */
   async #writeDesktopEntry() {
     const binary = Services.dirsvc.get("XREExeF", Ci.nsIFile);
     const launcher = binary.parent.clone();
@@ -391,6 +447,7 @@ class NulavioConnectClass {
     }
     const iconFile = PathUtils.join(binary.parent.path, "browser", "chrome", "icons", "default", "default128.png");
     const icon = (await IOUtils.exists(iconFile)) && SAFE_PATH.test(iconFile) ? iconFile : "web-browser";
+    const hidden = await this.#packagedEntryIsOurs(binary.parent.path);
     const entry = [
       "[Desktop Entry]",
       "Type=Application",
@@ -404,6 +461,7 @@ class NulavioConnectClass {
       "StartupNotify=true",
       "StartupWMClass=nulavio",
       "Categories=Network;WebBrowser;",
+      ...(hidden ? ["NoDisplay=true"] : []),
       // xdg-settings expects a default browser to declare about: and unknown schemes too.
       "MimeType=text/html;application/xhtml+xml;x-scheme-handler/http;x-scheme-handler/https;x-scheme-handler/about;x-scheme-handler/unknown;",
       "",

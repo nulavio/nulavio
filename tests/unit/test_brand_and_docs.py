@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+import subprocess
 import struct
 import sys
 import tempfile
@@ -192,13 +193,23 @@ class DocsTest(unittest.TestCase):
         self.assertEqual(missing, [])
 
     def test_relative_links_resolve(self):
+        # In a sparse checkout (agents' worktrees leave out docs/design/screenshots/: see
+        # docs/process/pull-requests.md), a file git tracks but did not write to disk still resolves.
+        # CI checks out everything, so there every target must exist on disk.
+        listed = subprocess.run(["git", "-C", str(ROOT), "ls-files", "-t", "-z"], capture_output=True, check=False)
+        left_out = {name[2:] for name in listed.stdout.decode().split("\0") if name.startswith("S ")}
         broken = []
         for md in list(ROOT.glob("*.md")) + list((ROOT / "docs").rglob("*.md")):
             for target in re.findall(r"\]\(([^)#\s]+)(?:#[^)]*)?\)", md.read_text()):
                 if re.match(r"^[a-z]+:", target):
                     continue
-                if not (md.parent / target).resolve().exists():
-                    broken.append(f"{md.relative_to(ROOT)} -> {target}")
+                path = (md.parent / target).resolve()
+                if path.exists():
+                    continue
+                relative = path.relative_to(ROOT).as_posix() if path.is_relative_to(ROOT) else None
+                if relative and any(name == relative or name.startswith(relative + "/") for name in left_out):
+                    continue
+                broken.append(f"{md.relative_to(ROOT)} -> {target}")
         self.assertEqual(broken, [])
 
     def test_adr_has_required_sections(self):

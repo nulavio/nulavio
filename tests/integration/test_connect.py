@@ -61,6 +61,12 @@ class ConnectTest(unittest.TestCase):
         )
         (fake_bin / "kdeconnect-cli").chmod(0o700)
         cls.session.env["PATH"] = f"{fake_bin}:{cls.session.env['PATH']}"
+        # A stand-in for the system's application directories (test 03b puts the package's menu entry there).
+        # Only it: where the engine under test is the installed package, the real /usr/share has that entry.
+        cls.system_data = cls.session.tmp / "system-data"
+        (cls.system_data / "applications").mkdir(parents=True)
+        cls.session.env["XDG_DATA_DIRS"] = str(cls.system_data)
+        cls.fake_bin = fake_bin
         cls.m = cls.session.start()
         cls.fakes: list[subprocess.Popen] = []
 
@@ -172,6 +178,64 @@ class ConnectTest(unittest.TestCase):
         self.assertEqual(self.xdg("xdg-settings", "get", "default-web-browser"), "test-browser.desktop")
         self.assertEqual(self.found()["default-browser"]["state"], "available")
         self.assertEqual(chrome_async(self.m, "return C.restoreDefaultBrowser();").get("error"), "no-previous")
+
+    def test_03b_one_menu_entry_when_the_package_installed_its_own(self):
+        """#273: on an RPM or .deb install the package's menu entry (nulavio.desktop, in a system directory) and
+        the user-level one this writes were both in the menu. Where the package's entry starts this very
+        installation, the user-level one is kept out of the menus and is still what the default points at.
+        A portable or development build next to an installed package keeps its visible entry."""
+        apps = Path(self.session.env["XDG_DATA_HOME"]) / "applications"
+        entry = apps / "net.nulavio.Nulavio.desktop"
+        packaged = self.system_data / "applications" / "nulavio.desktop"
+        override = apps / "nulavio.desktop"
+        wrapper = self.fake_bin / "nulavio"
+        install_dir = Path(self.session.engine.path).resolve().parent
+        visible = lambda: "NoDisplay=true" not in entry.read_text().splitlines()  # noqa: E731
+
+        def make_default() -> None:
+            self.xdg("xdg-settings", "set", "default-web-browser", "test-browser.desktop")
+            self.call("return C.setDefaultBrowser();")
+            self.assertEqual(self.xdg("xdg-settings", "get", "default-web-browser"), "net.nulavio.Nulavio.desktop")
+            self.assertEqual(self.found()["default-browser"]["state"], "enabled")
+
+        try:
+            # No system entry (a portable archive, a development build): a visible entry, as before.
+            make_default()
+            self.assertTrue(visible())
+            # The package's entry, whose program is some other installation: still visible.
+            packaged.write_text("[Desktop Entry]\nType=Application\nName=Nulavio\nExec=nulavio %u\n")
+            wrapper.write_text('#!/bin/sh\nexec /opt/another/nulavio/nulavio "$@"\n')
+            wrapper.chmod(0o755)
+            make_default()
+            self.assertTrue(visible())
+            # The package's entry starting this installation through the wrapper the packages install: one in the
+            # menu. The default is still set, still reported, and can still be given back.
+            wrapper.write_text(f'#!/bin/sh\nexec {install_dir}/nulavio "$@"\n')
+            make_default()
+            self.assertFalse(visible())
+            self.call("return C.restoreDefaultBrowser();")
+            self.assertEqual(self.xdg("xdg-settings", "get", "default-web-browser"), "test-browser.desktop")
+            # And through a link instead of a wrapper.
+            wrapper.unlink()
+            wrapper.symlink_to(install_dir / "nulavio")
+            make_default()
+            self.assertFalse(visible())
+            self.call("return C.restoreDefaultBrowser();")
+            # The person's own copy of the package's entry overrides the system's in the menu: when that one is
+            # for another installation, or is itself kept out of the menus, this installation's entry stays.
+            override.write_text("[Desktop Entry]\nType=Application\nName=Nulavio\nExec=/opt/another/nulavio/nulavio %u\n")
+            make_default()
+            self.assertTrue(visible())
+            override.write_text(
+                f"[Desktop Entry]\nType=Application\nName=Nulavio\nNoDisplay=true\nExec={install_dir}/nulavio %u\n"
+            )
+            make_default()
+            self.assertTrue(visible())
+            self.call("return C.restoreDefaultBrowser();")
+        finally:
+            wrapper.unlink(missing_ok=True)
+            packaged.unlink(missing_ok=True)
+            override.unlink(missing_ok=True)
 
     def test_04_settings_page_shows_real_states(self):
         url = self.m.chrome(
