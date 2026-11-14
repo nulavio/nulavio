@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import copy
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -133,6 +134,37 @@ class WhatsNewTest(unittest.TestCase):
         self.assertIn("A &amp; B&#x27;s", page)
         index = pages["en/whats-new/index.html"]
         self.assertIn("Tom&#x27;s &quot;quote&quot;", index)
+
+
+class PackedNotesTest(unittest.TestCase):
+    """The browser's copy (phase 2): make_distribution.py packs the record of the version it packages."""
+
+    def run_make(self, out: Path, release: str | None) -> subprocess.CompletedProcess:
+        env = {k: v for k, v in os.environ.items() if k != "NULAVIO_RELEASE"}
+        if release is not None:
+            env["NULAVIO_RELEASE"] = release
+        return subprocess.run([sys.executable, "-I", str(ROOT / "scripts/build/make_distribution.py"), "--out", str(out)],
+                              capture_output=True, text=True, env=env)  # fmt: skip
+
+    def test_a_release_packs_its_record_and_a_development_build_none(self):
+        firefox = json.loads((ROOT / "browser/build/engine.json").read_text(encoding="utf-8"))["firefox"]
+        published = next(r for r in whats_new.records() if r["firefox"] == firefox)
+        release = published["version"].split("-", 1)[1]
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp)
+            run = self.run_make(out, release)
+            self.assertEqual(run.returncode, 0, run.stderr)
+            packed = json.loads((out / "whats-new.json").read_text(encoding="utf-8"))
+            self.assertEqual(packed, published, "the reviewed record, unchanged")
+            # A development build (no NULAVIO_RELEASE) has none, and a stale copy goes.
+            run = self.run_make(out, None)
+            self.assertEqual(run.returncode, 0, run.stderr)
+            self.assertFalse((out / "whats-new.json").exists())
+            # A release whose record is missing stops: it would otherwise ship without notes.
+            run = self.run_make(out, "999")
+            self.assertNotEqual(run.returncode, 0)
+            self.assertIn(f"{firefox}-999", run.stderr)
+            self.assertFalse((out / "whats-new.json").exists())
 
 
 if __name__ == "__main__":

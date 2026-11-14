@@ -227,6 +227,17 @@ nulavio-integrations-group =
 nulavio-open-integrations =
     .label = See the integrations
 
+## About: what's new in this version (#198)
+
+nulavio-whatsnew-group =
+    .label = What's new
+    .description = The notes of this version come with the browser: reading them sends nothing anywhere.
+nulavio-whatsnew-open =
+    .label = What's new in this version
+nulavio-whatsnew-notice =
+    .label = Show what's new after updating
+    .description = A small bar in one window, once per version. The notes stay here and in the Help menu either way.
+
 ## About: the policies in effect (in place of the "managed by your organization" line when they are only Nulavio's)
 
 nulavio-policies-group =

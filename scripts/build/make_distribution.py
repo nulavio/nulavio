@@ -21,6 +21,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import shutil
 import sys
 import urllib.parse
@@ -30,6 +31,29 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "launcher"))
 
 from nulavio_launcher import __version__, extensions, prefs, profile  # noqa: E402
+
+sys.path.insert(0, str(ROOT / "scripts" / "release"))
+import whats_new  # noqa: E402
+
+WHATS_NEW_NAME = "whats-new.json"
+
+
+def installed_whats_new() -> dict | None:
+    """What's new in the version being packaged (#198), for the browser's reader; None in a development build.
+
+    A release build knows its version: rehearse_release.sh exports NULAVIO_RELEASE, and the Firefox
+    release is the pinned one. The record is the reviewed file in the commit being built (the release
+    workflow requires it before building), so a release without it stops here rather than ship none."""
+    release = os.environ.get("NULAVIO_RELEASE", "")
+    if not release:
+        return None
+    firefox = json.loads((ROOT / "browser" / "build" / "engine.json").read_text(encoding="utf-8"))["firefox"]
+    version = f"{firefox}-{release}"
+    path = ROOT / whats_new.DIRECTORY / f"{version}.json"
+    try:
+        return whats_new.validate(json.loads(path.read_text(encoding="utf-8")), path.name)
+    except (OSError, ValueError) as error:
+        raise SystemExit(f"what's new in {version}: {error} (packaging/whats-new/{version}.json)") from None
 
 
 # Prefs the engine honours only as user values: as a default, the tracking-protection category is
@@ -237,7 +261,12 @@ def main() -> int:
     else:
         (args.out / LICENCE_NAME).unlink(missing_ok=True)
         (args.out / NOTICE_NAME).unlink(missing_ok=True)
-    print(f"wrote {args.out}/distribution.ini and policies.json")
+    record = installed_whats_new()
+    if record is None:
+        (args.out / WHATS_NEW_NAME).unlink(missing_ok=True)  # a development build: the reader says it has no notes
+    else:
+        (args.out / WHATS_NEW_NAME).write_text(json.dumps(record, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    print(f"wrote {args.out}/distribution.ini and policies.json" + (f", and what's new in {record['version']}" if record else ""))
     return 0
 
 
