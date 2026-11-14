@@ -49,6 +49,9 @@
 <div><dt>Sistema</dt><dd>Fedora 44 ou mais novo, Ubuntu 24.04 ou mais novo; x86_64</dd></div>
 <div><dt>Atualizações</dt><dd>Pelo dnf ou pelo apt, como os outros programas do sistema</dd></div>
 <!--/apt:on-->
+<!--flatpak:on-->
+<div><dt>Outras distribuições</dt><dd>Pacote Flatpak, sem atualização automática</dd></div>
+<!--/flatpak:on-->
 </dl>
 </section>
 
@@ -75,12 +78,40 @@ sudo apt install nulavio</code></pre></div>
 <p class="prose"><code class="mono" translate="no">{{sources_sha256}}</code></p>
 <p class="prose">O arquivo traz a chave pública de cima, e o apt só aceita o que ela assinou. O pacote traz um perfil do AppArmor que deixa o navegador isolar as abas, como o Ubuntu faz com o Firefox.</p>
 <!--/apt:on-->
+<!--flatpak:on-->
+<h3 id="install-flatpak-h">Outras distribuições (Flatpak)</h3>
+<p class="prose">Em outra distribuição x86_64 com o Flatpak instalado, use o pacote Flatpak que vem na página da versão no GitHub. Baixe-o com a lista de SHA-256 assinada, confira os dois e instale só para o seu usuário:</p>
+<div class="pre-scroll" role="region" aria-label="Comandos de instalação do Flatpak" tabindex="0"><pre translate="no"><code>curl -fsSLO --proto '=https' {{flatpak_url}}
+curl -fsSLO --proto '=https' {{release_files}}/SHA256SUMS
+curl -fsSLO --proto '=https' {{release_files}}/SHA256SUMS.asc
+curl -fsSLO --proto '=https' {{key_url}}
+gpg --show-keys --with-fingerprint nulavio-packages.asc
+gpg --import nulavio-packages.asc
+gpg --verify SHA256SUMS.asc SHA256SUMS
+grep -F " {{flatpak_bundle}}" SHA256SUMS | sha256sum --check
+flatpak install --user {{flatpak_bundle}}</code></pre></div>
+<p class="prose">Só instale se a impressão digital for a de cima, se o gpg disser <code translate="no">Good signature</code> e se o sha256sum disser <code translate="no">OK</code> para o arquivo <code translate="no">.flatpak</code> (ele falha se o arquivo faltar ou não estiver na lista).</p>
+<p class="prose">Antes de instalar, o Flatpak pergunta se pode adicionar o remoto <code translate="no">flathub</code> (<code translate="no">https://dl.flathub.org/repo/</code>): o Nulavio roda sobre o runtime <code translate="no">org.freedesktop.Platform</code> 26.08, que vem de lá. Na primeira vez são até cerca de 1 GB de download e cerca de 2,4 GB em disco; um sistema que já tem esse runtime baixa bem menos.</p>
+<p class="prose">Depois ele mostra as permissões do Nulavio, que são estas:</p>
+<ul class="prose">
+<li><code translate="no">network</code>, <code translate="no">ipc</code>, <code translate="no">wayland</code>, <code translate="no">fallback-x11</code> e <code translate="no">pulseaudio</code>: navegar, mostrar janelas e tocar som.</li>
+<li><code translate="no">devices</code> (todos os dispositivos) e <code translate="no">pcsc</code>: para câmeras, chaves de segurança FIDO2 e cartões inteligentes, como no Flatpak do Firefox da Mozilla.</li>
+<li><code translate="no">xdg-download</code>: a pasta Downloads, e nada mais da pasta pessoal. Os perfis ficam em <code translate="no">~/.var/app/net.nulavio.Nulavio</code>.</li>
+<li>D-Bus: <code translate="no">FileManager1</code> para mostrar um download na pasta, <code translate="no">NativeMessagingProxy</code> para gerenciadores de senha como o KeePassXC, <code translate="no">a11y.Bus</code> para a acessibilidade, <code translate="no">org.mozilla.nulavio.*</code> para abrir uma janela no navegador que já está aberto e <code translate="no">NetworkManager</code> para saber se o computador está on-line.</li>
+</ul>
+<p class="prose">Abra o Nulavio pelo menu de aplicativos. Para torná-lo o navegador padrão, escolha Nulavio em Aplicativos padrão, nas configurações do sistema, ou rode:</p>
+<div class="pre-scroll" role="region" aria-label="Comando para tornar o Flatpak o navegador padrão" tabindex="0"><pre translate="no"><code>xdg-settings set default-web-browser net.nulavio.Nulavio.desktop</code></pre></div>
+<ul class="limits-list">
+<li class="limit"><strong>Limite:</strong> O pacote Flatpak não se atualiza sozinho. A cada versão nova, baixe e confira o pacote dela do mesmo jeito e instale-o por cima, com <code translate="no">flatpak install --user --reinstall</code> e o nome do arquivo novo. Os perfis ficam. Enquanto você não instala, o Nulavio fica sem as correções de segurança da versão nova.</li>
+<li class="limit"><strong>Limite:</strong> No Flatpak não há os perfis cifrados no disco nem o modo <code translate="no">nulavio run --confined</code>, porque precisam de programas fora do sandbox, nem as integrações com o KRunner, o KDE Connect e as atividades.</li>
+</ul>
+<!--/flatpak:on-->
 <p class="limit"><strong>Limite:</strong> A impressão digital<!--apt:on--> e o SHA-256<!--/apt:on--> só protege<!--apt:on-->m<!--/apt:on--> se você conferir por um caminho diferente do download, por exemplo nesta página aberta em outro aparelho<!--apt:on--> ou nas notas da versão no GitHub, que trazem os dois<!--/apt:on-->.</p>
 </section>
 
 <section id="updates" aria-labelledby="updates-h">
 <h2 id="updates-h">Atualizações</h2>
-<p class="prose">As versões novas chegam pelo <code translate="no">sudo dnf upgrade</code><!--apt:on-->, pelo <code translate="no">sudo apt upgrade</code><!--/apt:on--> ou pela loja de programas do sistema. Quando a Mozilla publica uma correção de segurança do Firefox, a meta do projeto é publicar o Nulavio correspondente em até 72 horas.</p>
+<p class="prose">As versões novas chegam pelo <code translate="no">sudo dnf upgrade</code><!--apt:on-->, pelo <code translate="no">sudo apt upgrade</code><!--/apt:on--> ou pela loja de programas do sistema<!--flatpak:on-->; o pacote Flatpak, só instalando o da versão nova<!--/flatpak:on-->. Quando a Mozilla publica uma correção de segurança do Firefox, a meta do projeto é publicar o Nulavio correspondente em até 72 horas.</p>
 <p class="limit"><strong>Limite:</strong> Nesse intervalo, o Nulavio instalado ainda não tem a correção.</p>
 </section>
 
@@ -126,7 +157,11 @@ sudo rm /etc/yum.repos.d/nulavio.repo</code></pre></div>
 <div class="pre-scroll" role="region" aria-label="Comandos de remoção no Ubuntu" tabindex="0"><pre translate="no"><code>sudo apt remove nulavio
 sudo rm /etc/apt/sources.list.d/nulavio.sources</code></pre></div>
 <!--/apt:on-->
-<p class="prose">Seus perfis ficam na sua pasta pessoal e não são apagados ao remover o programa.</p>
+<!--flatpak:on-->
+<p class="prose">O Flatpak:</p>
+<div class="pre-scroll" role="region" aria-label="Comando de remoção do Flatpak" tabindex="0"><pre translate="no"><code>flatpak uninstall --user net.nulavio.Nulavio</code></pre></div>
+<!--/flatpak:on-->
+<p class="prose">Seus perfis ficam na sua pasta pessoal<!--flatpak:on--> (os do Flatpak, em <code translate="no">~/.var/app/net.nulavio.Nulavio</code>)<!--/flatpak:on--> e não são apagados ao remover o programa.</p>
 </section>
 
 <section id="report" aria-labelledby="report-h">
