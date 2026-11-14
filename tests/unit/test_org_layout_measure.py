@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib.util
 import subprocess
+import sys
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -99,6 +100,20 @@ class OrgLayoutMeasureTest(unittest.TestCase):
         self.assertLess(publish.index("Draft the GitHub release"), step)
         self.assertIn("${{ runner.temp }}/media-budget.json", publish[step:])
         self.assertNotIn("publish/media-budget.json", publish)  # publish_release.sh wants its stage empty
+        step_text = publish[publish.rindex("- name: Media in the history", 0, step) : step]
+        self.assertIn("continue-on-error: true", step_text)  # a measurement never fails a release
+        self.assertIn("timeout-minutes:", step_text)
+
+    def test_a_failure_to_measure_or_to_write_the_summary_is_a_warning_not_a_failure(self):
+        script = ROOT / "scripts" / "research" / "org_layout_measure.py"
+        unwritable = ["--summary", "/nonexistent-directory/summary.md"]
+        cases = {"summary": ["--ref", "HEAD", *unwritable], "ref": ["--ref", "no-such-ref-at-all"]}
+        for name, extra in cases.items():
+            with self.subTest(name):
+                run = subprocess.run([sys.executable, "-I", str(script), "--budget", *extra], cwd=ROOT,
+                                     capture_output=True, text=True, check=False)  # fmt: skip
+                self.assertEqual(run.returncode, 0, run.stderr)
+                self.assertIn("::warning title=Media budget::", run.stderr)
 
 
 if __name__ == "__main__":

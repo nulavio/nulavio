@@ -306,12 +306,20 @@ def main() -> int:
     parser.add_argument("--summary", help="with --budget: append a Markdown line to this file ($GITHUB_STEP_SUMMARY)")
     args = parser.parse_args()
     if args.budget:
-        result = media_budget(args.ref)
+        # Run after a release is drafted: a failure to measure or to write is reported, never fatal.
+        try:
+            result = media_budget(args.ref)
+        except (OSError, subprocess.CalledProcessError) as error:
+            print(f"::warning title=Media budget::not measured: {type(error).__name__}", file=sys.stderr)
+            return 0
         json.dump(result, sys.stdout, indent=2, sort_keys=True)
         sys.stdout.write("\n")
         if args.summary:
-            with open(args.summary, "a", encoding="utf-8") as summary:
-                summary.write(budget_summary(result))
+            try:
+                with open(args.summary, "a", encoding="utf-8") as summary:
+                    summary.write(budget_summary(result))
+            except OSError as error:
+                print(f"::warning title=Media budget::summary not written: {type(error).__name__}", file=sys.stderr)
         if result["over_budget"]:
             print("::warning title=Media budget::the history holds more media than ADR 0013 allows (see the summary)",
                   file=sys.stderr)  # fmt: skip
