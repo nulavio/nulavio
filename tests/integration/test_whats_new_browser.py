@@ -108,6 +108,12 @@ class WhatsNewBrowserTest(unittest.TestCase):
             " return n ? n.messageText.textContent : ''; });"
         )
 
+    def test_00_start_up_adds_the_help_entry_by_itself(self):
+        # Before any case calls start(): the experiment's onStartup must have run (in 160.0-0.5 it failed
+        # quietly on a module address, so no entry and no bar; every later case called start() itself).
+        entry = "return !!document.getElementById('nulavio-whatsnew-menu');"
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome(entry), 20), "the Help menu entry is there at start-up")
+
     def test_01_the_build_packs_its_own_version_or_nothing(self):
         state = self.w("W.useRecordForTest(undefined); return await W.read();")
         if state["state"] == "ok":  # a release build: the record of this very engine
