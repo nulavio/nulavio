@@ -138,17 +138,23 @@ def codeowners_patterns(path: Path = CODEOWNERS) -> list[str]:
 
 
 def sensitive(paths: list[str], patterns: list[str]) -> list[str]:
-    """The changed paths a CODEOWNERS pattern covers: "/dir/" (a directory from the root), "/file"
-    (one file at the root) and "NAME" (that file name in any directory). Any other pattern covers every path."""
+    """The changed paths a CODEOWNERS pattern covers. Understood: "/dir/" (a directory from the root),
+    "/file" (one file at the root, no slash or glob in it) and "NAME" (a file or directory of that name
+    anywhere). Anything else, or no pattern at all, covers every path: the review is never narrowed by
+    a form this does not read."""
+    if not patterns:
+        return list(paths)
 
     def covers(pattern: str, path: str) -> bool:
-        if pattern.startswith("/") and pattern.endswith("/") and "*" not in pattern:
+        if any(ch in pattern for ch in "*?[\\"):
+            return True
+        if pattern.startswith("/") and pattern.endswith("/"):
             return path.startswith(pattern[1:])
-        if pattern.startswith("/") and "*" not in pattern:
-            return path == pattern[1:]
-        if "/" not in pattern and "*" not in pattern:
-            return path.rsplit("/", 1)[-1] == pattern
-        return True  # not understood: review rather than skip
+        if pattern.startswith("/") and "/" not in pattern[1:]:
+            return path == pattern[1:] or path.startswith(pattern[1:] + "/")  # "/name": a root file or directory
+        if "/" not in pattern:
+            return pattern in path.split("/")
+        return True
 
     return [path for path in paths if any(covers(pattern, path) for pattern in patterns)]
 

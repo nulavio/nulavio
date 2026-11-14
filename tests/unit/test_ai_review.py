@@ -605,6 +605,8 @@ class ReviewInputTest(unittest.TestCase):
     def test_in_ci_only_a_change_to_a_codeowners_path_or_a_labelled_one_is_sent(self):
         patterns = ai_review_input.codeowners_patterns()
         self.assertIn("/scripts/release/", patterns)
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(ai_review_input.codeowners_patterns(Path(tmp) / "missing"), [])
         covered = ai_review_input.sensitive
         self.assertEqual(covered(["scripts/release/x.py", "site/index.html"], patterns), ["scripts/release/x.py"])
         self.assertEqual(
@@ -612,6 +614,12 @@ class ReviewInputTest(unittest.TestCase):
         )
         self.assertEqual(covered(["docs/product/roadmap.md", "browser/shell/x.js", "x/.coderabbit.yaml"], patterns), [])
         self.assertEqual(covered(["anything"], ["*.sh"]), ["anything"], "a pattern not understood reviews everything")
+        for odd in ("a?b", "[ab]", "x\\y", "dir/x"):
+            self.assertEqual(covered(["anything"], [odd]), ["anything"], odd)
+        self.assertEqual(covered(["a", "b/c"], []), ["a", "b/c"], "no CODEOWNERS (missing or empty) reviews everything")
+        self.assertEqual(
+            covered([".github/x.yml", "docs/a/docs/b.md", "src/x"], ["/.github", "docs"]), [".github/x.yml", "docs/a/docs/b.md"]
+        )
         with tempfile.TemporaryDirectory() as tmp:
             repo, base, head = self.make_repo(Path(tmp))  # changes notes.txt only: no CODEOWNERS path
             for event, expected in (
