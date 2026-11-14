@@ -360,8 +360,10 @@ export async function beforeLaunch(document, profile) {
     try {
       state = await profileLockState(profile.path); // now, not as it was when the window opened
     } catch (e) {
+      // Whether it is protected could not be read: not started, since it may be a locked one.
       console.error("Nulavio chooser: lock state", e);
-      return true; // not known to be protected: the engine's own launch, as without Nulavio
+      await loadWords();
+      return noticeDialog(document, t("unread-headline"), t("unexpected"));
     }
     if (state !== LOCKED) {
       return true; // no password, or already unlocked: nothing to ask, and nothing needed from the Vault's tools

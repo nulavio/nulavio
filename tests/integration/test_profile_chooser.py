@@ -108,6 +108,22 @@ class ProfileChooserTest(unittest.TestCase):
             if Path(f"/proc/{pid}/cmdline").read_bytes().split(b"\0")[0].decode() == engine
         ]
 
+    def assert_locks_again(self, path: Path, timeout: float = 90) -> None:
+        """After its engine is gone, the profile's watcher locks it; a failure says what the watcher would see."""
+        if harness.wait_until(lambda: not storage.Container(path).mounted(), timeout=timeout):
+            return
+        lock = path / "lock"
+        target = os.readlink(lock) if lock.is_symlink() else None
+        pid = profile.Profile(name=path.name, path=path).running_pid()
+        state = Path(f"/proc/{pid}/stat").read_text().split()[2] if pid and Path(f"/proc/{pid}/stat").exists() else None
+        watchers = [
+            entry.name
+            for entry in Path("/proc").iterdir()
+            if entry.name.isdigit() and (entry / "cmdline").exists() and b"autolock" in (entry / "cmdline").read_bytes()
+            and str(path).encode() in (entry / "cmdline").read_bytes()
+        ]  # fmt: skip
+        self.fail(f"it did not lock again: lock -> {target}, running_pid {pid} (state {state}), watchers {watchers}")
+
     def stop_instance(self, path: Path) -> None:
         for pid in self.instances(path):
             os.kill(pid, 15)
@@ -159,7 +175,7 @@ class ProfileChooserTest(unittest.TestCase):
             " level: status.dataset.level ?? null,"
             " password: shown('#nulavio-unlock-password'), recovery: shown('#nulavio-unlock-recovery'),"
             " keyring: shown('#nulavio-unlock-keyring'), invalid: d.querySelector('[aria-invalid=true]')?.id ?? null,"
-            " focused: D().activeElement?.id ?? null, submit: d.querySelector('#nulavio-unlock-submit').textContent};"
+            " focused: D().activeElement?.id ?? null, submit: d.querySelector('#nulavio-unlock-submit')?.textContent ?? null};"
         )
 
     def type_secret(self, field: str, secret: str) -> None:
@@ -231,7 +247,7 @@ class ProfileChooserTest(unittest.TestCase):
             harness.wait_until(lambda: (path / "lock").is_symlink(), timeout=60), "the engine did not take the profile"
         )
         self.stop_instance(path)
-        self.assertTrue(harness.wait_until(lambda: not storage.Container(path).mounted(), timeout=60), "it did not lock again")
+        self.assert_locks_again(path)
 
     def test_02_going_back_starts_nothing_and_the_recovery_code_is_offered(self):
         profile_id = self.create_protected("Trabalho")
@@ -310,6 +326,25 @@ class ProfileChooserTest(unittest.TestCase):
             os.rename(hidden, tools)
         self.assertEqual(self.instances(path), [])
         self.assertFalse(storage.Container(path).mounted())
+        # A profile that got a password while the chooser stayed open: what the window read when it opened is not
+        # what decides. Its card, drawn without a lock, now leads to the unlock step.
+        plain_id = self.call("return P.create({name: 'Depois'});")
+        plain = self.profile_path(plain_id)
+        self.close_chooser()
+        self.open_chooser()
+        self.assertIsNone(self.cards()[str(plain_id)]["lock"])
+        self.call(
+            "const { helper } = ChromeUtils.importESModule(args[0] + '/NulavioVault.sys.mjs');"
+            "await helper({op: 'encrypt', path: args[1], password: args[2]}); return true;",
+            SHELL,
+            str(plain),
+            PASSWORD,
+        )
+        self.call("card(args[0]).click(); return true;", plain_id)
+        self.assertTrue(harness.wait_until(lambda: (self.dialog() or {}).get("open"), timeout=20), "started without its password")
+        self.assertEqual(self.dialog()["headline"], self.word("headline"))
+        self.call("D().getElementById('nulavio-unlock-cancel').click(); return true;")
+        self.assertEqual(self.instances(plain), [])
         self.close_chooser()
 
     def test_02c_a_profile_that_locked_again_while_a_note_was_read_is_unlocked_again(self):
@@ -355,7 +390,7 @@ class ProfileChooserTest(unittest.TestCase):
             harness.wait_until(lambda: (path / "lock").is_symlink(), timeout=60), "the engine did not take the profile"
         )
         self.stop_instance(path)
-        self.assertTrue(harness.wait_until(lambda: not storage.Container(path).mounted(), timeout=90), "it did not lock again")
+        self.assert_locks_again(path)
 
     def test_03_at_start_up_the_unlocked_profile_is_the_one_handed_to_the_engine(self):
         """The start-up chooser is the same page with the engine's parameter block (window.arguments): on launch it
