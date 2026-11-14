@@ -6,7 +6,8 @@ wrote is untrusted), so a review that fails at its first call to the model API s
 only "did not return structured_output". This reads the result record Claude Code left
 in the action's execution file and prints, as one annotation, the HTTP status of the
 API error and Claude Code's own reason for stopping: a number from 100 to 599 and a
-word from the lists below. It never prints anything else of the file, which holds what
+word from the lists below, and for a refusal (4xx) which of a few known causes the
+API's message names, as a line of our own from REFUSALS. It never prints anything else of the file, which holds what
 the model read and wrote.
 
     python3 -I scripts/ci/ai_review_failure.py "$RUNNER_TEMP/claude-execution-output.json"
@@ -31,6 +32,19 @@ STATUS = {
     429: "rate limited, or the account's spending limit was reached",
     529: "the model API is overloaded; run the review again",
 }
+# What the API's error message says, for the refusals an HTTP status alone does not tell apart (a
+# 400 is a refused parameter as well as an empty account). Only the record's top-level "result" is
+# searched, only after an API error, for these fixed phrases from the API's documented error messages;
+# what is printed is the text on the right, never the message. A phrase found in text the model wrote
+# can at worst pick a wrong line from this list.
+CHECK_FLAGS = "check the model and the flags in claude_args against the pinned Claude Code"
+REFUSALS = (
+    ("credit balance is too low", "the organization's credit balance is too low: add credit (Claude Console, Plans & Billing)"),
+    ("usage limit", "a spending limit was reached: raise the workspace's or organization's limit, or wait for its reset"),
+    ("extra inputs are not permitted", f"a parameter was refused: {CHECK_FLAGS}"),
+    ("does not support", f"the model does not take a parameter the review sends: {CHECK_FLAGS}"),
+    ("not supported", f"the model does not take a parameter the review sends: {CHECK_FLAGS}"),
+)
 # Claude Code's own words for how a run ended (terminal_reason, then subtype), as documented for
 # the pinned version. A word that is not here is printed as "unknown": update the list with the pin.
 REASONS = frozenset(
@@ -59,6 +73,14 @@ def word(value: object) -> str:
     return value if isinstance(value, str) and value in REASONS else "unknown"
 
 
+def refusal(record: dict) -> str | None:
+    message = record.get("result")
+    if not isinstance(message, str):
+        return None
+    message = " ".join(message[:4000].lower().split())
+    return next((meaning for phrase, meaning in REFUSALS if phrase in message), None)
+
+
 def explain(data: object) -> str:
     record = result_record(data)
     if record is None:
@@ -68,7 +90,7 @@ def explain(data: object) -> str:
     turns = record.get("num_turns")
     turns = turns if isinstance(turns, int) and not isinstance(turns, bool) and 0 <= turns < 10_000 else "?"
     if isinstance(status, int) and not isinstance(status, bool) and 100 <= status <= 599:
-        meaning = STATUS.get(
+        meaning = (refusal(record) if 400 <= status < 500 else None) or STATUS.get(
             status, "the model API failed; run the review again" if status >= 500 else "the model API refused the request"
         )
         return f"the model API answered HTTP {status} ({meaning}); Claude Code stopped with {reason} after {turns} turn(s)"

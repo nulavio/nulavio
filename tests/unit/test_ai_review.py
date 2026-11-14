@@ -365,6 +365,39 @@ class WorkflowTest(unittest.TestCase):
                 self.assertEqual(err.getvalue(), "")
                 self.assertNotIn("TOPSECRET", out.getvalue())
 
+    def test_a_refusal_says_which_known_cause_the_apis_message_names_in_words_of_our_own(self):
+        # #193: from 2026-11-14 11:18 every review got HTTP 400 at its first call, and a 400 is a refused
+        # parameter as well as an account that cannot pay. The API's message tells them apart.
+        def record(status: int, message: object) -> dict:
+            return {"type": "result", "is_error": True, "num_turns": 1, "api_error_status": status,
+                    "terminal_reason": "api_error", "result": message}  # fmt: skip
+
+        def api(message: str) -> str:
+            body = {"type": "error", "error": {"type": "invalid_request_error", "message": message}}
+            return f"API Error: 400 {json.dumps(body)} TOPSECRET"
+
+        cases = {
+            "Your credit balance is too low to access the Anthropic API.": "the organization's credit balance is too low",
+            "You have reached your specified API usage limits. You will regain access on 2026-12-01.": "a spending limit",
+            "effort: Extra inputs are not permitted": "a parameter was refused",
+            "This model does not support the effort parameter": "the model does not take a parameter",
+        }
+        for message, cause in cases.items():
+            with self.subTest(message=message):
+                said = ai_review_failure.explain(record(400, api(message)))
+                self.assertIn(f"HTTP 400 ({cause}", said)
+                self.assertNotIn("TOPSECRET", said)
+                self.assertNotIn("invalid_request_error", said)
+                self.assertNotIn("2026-12-01", said)
+        generic = "HTTP 400 (the request was refused: a parameter or a model"
+        for message in ("something else", "", None, 400, ["credit balance is too low"], {"message": "usage limit"}):
+            self.assertIn(generic, ai_review_failure.explain(record(400, message)), message)
+        # Only refusals: a server error stays one, whatever its text says.
+        self.assertIn("HTTP 503 (the model API failed", ai_review_failure.explain(record(503, api("usage limit"))))
+        # Words split by spaces, case or a line break still count; text far past the start is not searched.
+        self.assertIn("a spending limit", ai_review_failure.explain(record(400, "Reached the USAGE\n  LIMIT")))
+        self.assertIn(generic, ai_review_failure.explain(record(400, "x" * 5000 + "usage limit")))
+
     def test_comment_header_names_the_model_and_action_that_ran(self):
         model = re.search(r"--model (\S+)", job("review")).group(1)
         source = env_value("AI_REVIEW_SOURCE")
