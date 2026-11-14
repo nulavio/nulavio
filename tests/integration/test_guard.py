@@ -495,6 +495,106 @@ class GuardTest(unittest.TestCase):
         self.guard("await G.resolve(args[0], 'keep');", removed)
         self.assertTrue(harness.wait_until(lambda: self.bar() == "", timeout=10), "the bar stayed with nothing waiting")
 
+    def test_05_another_file_is_reported_whatever_version_the_engine_says(self):
+        """#136: a replaced package was noticed by the version the engine reports. One renamed into place while the
+        browser runs kept its old version there for good, and another file with the same version was never seen.
+        The record keeps the package's SHA-256, and a difference in it is reported like a difference in version."""
+        rules = self.guard(
+            """
+            const ext = (digest, version = "1.0") => ({ name: "X", version, active: true, foreign: false, policy: false,
+                                                        ...(digest === undefined ? {} : { digest }) });
+            const kinds = (before, after) =>
+              G.constructor.compare({ extensions: { "x@x": before } }, { extensions: { "x@x": after } }).map(f => f.kind);
+            return {
+              same: kinds(ext("aa"), ext("aa")),
+              other: kinds(ext("aa"), ext("bb")),                 // another file, the same version
+              unreadable: kinds(ext("aa"), ext(null)),            // it had a file, and it can no longer be read
+              version: kinds(ext("aa"), ext("bb", "2.0")),
+              oldRecord: kinds(ext(undefined), ext("bb")),        // a record from before digests were kept
+              noFile: kinds(ext(null), ext(null)),                // never one file to read (unpacked)
+            };
+            """
+        )
+        reported = {name for name, kinds in rules.items() if kinds == ["extension-changed"]}
+        self.assertEqual(reported, {"other", "unreadable", "version"}, rules)
+        self.assertEqual([rules[name] for name in ("same", "oldRecord", "noFile")], [[], [], []], rules)
+        entry, xpi = cached_extension()
+        if not xpi:  # only where the network is not required (NULAVIO_REQUIRE_NETWORK=1 downloads it)
+            self.skipTest("no pinned extension in the local cache: a replaced package over real restarts was not tried")
+        record = self.profile / "nulavio-guard.json"
+        placed = self.profile / "extensions" / entry.xpi_name
+        changed = f"extension-changed:{entry.id}"
+        in_record = lambda: json.loads(record.read_text())["snapshot"]["extensions"].get(entry.id) or {}  # noqa: E731
+        waiting = lambda: {f["id"]: f for f in self.guard("return G.findings();")}  # noqa: E731
+        on_disk = lambda: hashlib.sha256(placed.read_bytes()).hexdigest()  # noqa: E731
+        install = """
+            const file = Cc["@mozilla.org/file/local;1"].createInstance(Ci.nsIFile);
+            file.initWithPath(args[0]);
+            await (await AddonManager.getInstallForFile(file)).install();
+            """
+        engine_version = lambda: self.guard("return (await AddonManager.getAddonByID(args[0]))?.version ?? null;", entry.id)  # noqa: E731
+
+        def look() -> None:
+            """A setting changed in the browser brings about the Guard's next look."""
+            flip = "const p = 'signon.rememberSignons'; Services.prefs.setBoolPref(p, !Services.prefs.getBoolPref(p, false));"
+            self.m.chrome(flip)
+
+        def replace_with_one_more_byte() -> str:
+            """As a program replaces a file: written next to it, then renamed into place. The package still opens."""
+            other = placed.with_name(placed.name + ".new")
+            other.write_bytes(placed.read_bytes() + b"\0")
+            os.replace(other, placed)
+            return on_disk()
+
+        # Installed in the browser: followed, with the digest of the file the engine put in the profile.
+        self.guard(install, str(xpi))
+        self.assertTrue(harness.wait_until(lambda: in_record().get("digest") == on_disk(), timeout=20), in_record())
+        version, original = in_record()["version"], in_record()["digest"]
+        self.assertEqual(waiting(), {})
+
+        # Replaced while the browser runs: the engine goes on saying the same version, and the Guard's next look
+        # reports the file. Before #136: never reported, in this session or after it.
+        replaced = replace_with_one_more_byte()
+        self.assertNotEqual(replaced, original)
+        look()
+        self.assertTrue(harness.wait_until(lambda: changed in waiting(), timeout=20), f"not reported: {in_record()}")
+        finding = waiting()[changed]
+        self.assertEqual((finding["before"]["version"], finding["after"]["version"]), (version, version))
+        self.assertEqual((finding["before"]["digest"], finding["after"]["digest"]), (original, replaced))
+        self.assertEqual(engine_version(), version, "the engine noticed the file itself: this no longer tests #136")
+        name = finding["after"]["name"]
+        self.assertTrue(harness.wait_until(lambda: f"Extensão alterada: {name}" in self.bar(), timeout=10), self.bar())
+        self.open_review()
+        card = self.cards()[changed]
+        self.assertIn("arquivo substituído", card["detail"])
+        self.assertNotIn("→", card["detail"], "two equal versions with an arrow read as nothing changed")
+        self.shoot("05-file-replaced")
+        self.click(finding["id"], "keep")
+        self.assertEqual(in_record()["digest"], replaced)
+
+        # The next start finds what the record has: nothing more to report.
+        self.session.stop()
+        self.m = type(self).m = self.session.restart()
+        self.assertEqual(self.guard("return (await G.check()).findings;"), [])
+        # Changed in one byte while closed: reported at the next start, whatever version the engine reports.
+        self.session.stop()
+        closed = replace_with_one_more_byte()
+        self.m = type(self).m = self.session.restart()
+        findings = {f["id"]: f for f in self.guard("return (await G.check()).findings;")}
+        self.assertIn(changed, findings, findings)
+        self.assertEqual((findings[changed]["before"]["digest"], findings[changed]["after"]["digest"]), (replaced, closed))
+        self.guard("await G.resolve(args[0], 'keep');", changed)
+
+        # What the browser itself does is still followed: the same version installed again in the browser is
+        # another file than the one in the record, and nothing is reported.
+        self.guard(install, str(xpi))
+        self.assertTrue(harness.wait_until(lambda: in_record().get("digest") == original, timeout=20), in_record())
+        self.assertEqual(waiting(), {})
+        self.assertEqual(self.bar(), "")
+        self.guard("await (await AddonManager.getAddonByID(args[0])).uninstall();", entry.id)
+        self.assertTrue(harness.wait_until(lambda: not in_record(), timeout=20), in_record())
+        self.assertEqual(waiting(), {})
+
 
 def tearDownModule():
     shutil.rmtree(FETCHED, ignore_errors=True)

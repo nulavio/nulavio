@@ -213,11 +213,13 @@ class Guard {
     } finally {
       this.#scanning--;
     }
+    // The engine's own and Nulavio's built-in Shell are left out.
+    const addons = (await lazy.AddonManager.getAddonsByTypes(["extension"])).filter(a => !(a.isBuiltin || a.isSystem || a.hidden));
+    // The file itself, not the engine's word for it (#136): the engine keeps reading a replaced file through
+    // the archive it had open, and says the old version for as long as it runs, and after.
+    const digests = await Promise.all(addons.map(addon => Guard.packageDigest(addon)));
     const out = {};
-    for (const addon of await lazy.AddonManager.getAddonsByTypes(["extension"])) {
-      if (addon.isBuiltin || addon.isSystem || addon.hidden) {
-        continue; // the engine's own and Nulavio's built-in Shell
-      }
+    addons.forEach((addon, i) => {
       out[addon.id] = {
         name: String(addon.name ?? addon.id),
         version: String(addon.version ?? ""),
@@ -226,9 +228,21 @@ class Guard {
         // Installed by a managed policy (Nulavio's own policies.json installs uBlock Origin): a change
         // of policies is reported as such, so the extension it brings is not reported again.
         policy: addon.installTelemetryInfo?.source === "enterprise-policy",
+        digest: digests[i],
       };
-    }
+    });
     return out;
+  }
+
+  /** The SHA-256 of an extension's package as it is on disk now, or null when it has no one file to read. */
+  static async packageDigest(addon) {
+    try {
+      const uri = addon?.getResourceURI();
+      const file = uri instanceof Ci.nsIJARURI ? uri.JARFile.QueryInterface(Ci.nsIFileURL).file : null;
+      return file ? await fileDigest(file.path) : null;
+    } catch {
+      return null;
+    }
   }
 
   #prefs() {
@@ -415,8 +429,9 @@ class Guard {
         if (!now.policy) {
           add("extension-added", id, { after: now });
         }
-      } else if (then.version !== now.version || (!then.active && now.active)) {
-        // A new version, or a disabled extension turned on, without the browser doing it.
+      } else if (then.version !== now.version || (!then.active && now.active) || Guard.otherFile(then, now)) {
+        // A new version, another file (whatever version the engine says), or a disabled extension turned on,
+        // without the browser doing it.
         add("extension-changed", id, { before: then, after: now });
       }
     }
@@ -466,6 +481,15 @@ class Guard {
       add("search-changed", "search", { before: before.search ?? null, after: after.search });
     }
     return findings;
+  }
+
+  /**
+   * Whether an extension's package is another file than the record's: its digest differs, or it had one and can
+   * no longer be read. A record written before digests were kept has none: nothing to compare, and the digest
+   * is taken into the record at that look.
+   */
+  static otherFile(then, now) {
+    return typeof then?.digest === "string" && then.digest !== (now?.digest ?? null);
   }
 
   /**
@@ -617,13 +641,7 @@ class Guard {
 
   /** The digest of an installed extension's file as it is now, or null when it has none to read. */
   async #installedDigest(id) {
-    try {
-      const uri = (await lazy.AddonManager.getAddonByID(id))?.getResourceURI();
-      const file = uri instanceof Ci.nsIJARURI ? uri.JARFile.QueryInterface(Ci.nsIFileURL).file : null;
-      return file ? await fileDigest(file.path) : null;
-    } catch {
-      return null;
-    }
+    return Guard.packageDigest(await lazy.AddonManager.getAddonByID(id).catch(() => null));
   }
 
   /** Settings Nulavio itself changes at this start (its own defaults): not changes made outside the browser. */
@@ -734,9 +752,9 @@ class Guard {
       throw e;
     }
     const touched = new Set([...earlier, ...this.#touched]);
-    // What the engine shows of an extension that the browser did not do is reported, not taken into the record,
-    // also when the engine only finds it during the session: an extension placed in the profile, another
-    // version, a file gone. (What the engine does not show is not seen here: docs/security/hardening.md.)
+    // What the browser did not do to an extension is reported, not taken into the record, also when it is only
+    // found during the session: an extension placed in the profile, another version, another file under the
+    // same version (the engine goes on saying the old one for a file replaced while it runs), a file gone.
     const before = { extensions: this.#state.snapshot.extensions };
     const pendingIds = new Set(this.#state.pending.map(f => f.id));
     const at = new Date().toISOString();
