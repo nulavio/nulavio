@@ -71,7 +71,7 @@ async function status(profile) {
 
 /** id -> { protected, locked, label }, from each profile's files; one that could not be read is left out. */
 export async function lockStates(profiles) {
-  await loadWords();
+  await loadWords().catch(e => console.error("Nulavio chooser: words", e)); // the cards are drawn either way
   const states = new Map();
   await Promise.all(
     profiles.map(async profile => {
@@ -201,6 +201,19 @@ function unlockDialog(document, profile, state, texts) {
       back.textContent = t(show && (kinds.has("password") || kinds.has("os-keyring")) ? "back" : "cancel");
       dialog.querySelector(show ? "#nulavio-unlock-recovery" : "#nulavio-unlock-password")?.focus();
     };
+    // The step as it opens: the password, or this computer's login when there is no password, or the
+    // recovery code when it is all that is left.
+    const firstStep = () => {
+      if (!kinds.has("password") && !kinds.has("os-keyring")) {
+        showRecovery(true);
+        say(t("recovery-required"), "warn");
+        return;
+      }
+      showRecovery(false);
+      if (!kinds.has("password")) {
+        dialog.querySelector("#nulavio-unlock-keyring")?.focus();
+      }
+    };
     // Unlocked: open it, unless the unlock settled a recovery code replacement (#187), which is said first.
     const opened = answer => {
       const note = SETTLED[answer?.recovery_code];
@@ -227,7 +240,7 @@ function unlockDialog(document, profile, state, texts) {
         submit.removeEventListener("click", open);
         submit.type = "submit";
         back.hidden = false;
-        showRecovery(!kinds.has("password") && !kinds.has("os-keyring"));
+        firstStep();
         say(t("locked-again"), "warn");
       };
       submit.addEventListener("click", open);
@@ -307,15 +320,7 @@ function unlockDialog(document, profile, state, texts) {
 
     document.body.append(dialog);
     dialog.showModal();
-    if (!kinds.has("password") && !kinds.has("os-keyring")) {
-      showRecovery(true);
-      say(t("recovery-required"), "warn");
-    } else {
-      showRecovery(false);
-      if (!kinds.has("password")) {
-        dialog.querySelector("#nulavio-unlock-keyring")?.focus();
-      }
-    }
+    firstStep();
   });
 }
 
@@ -363,24 +368,33 @@ export async function beforeLaunch(document, profile) {
       // Whether it is protected could not be read: not started, since it may be a locked one.
       console.error("Nulavio chooser: lock state", e);
       await loadWords();
-      return noticeDialog(document, t("unread-headline"), t("unexpected"));
+      return await noticeDialog(document, t("unread-headline"), t("unexpected"));
     }
     if (state !== LOCKED) {
       return true; // no password, or already unlocked: nothing to ask, and nothing needed from the Vault's tools
     }
     await loadWords();
-    let methods;
+    let answer;
     try {
-      ({ methods } = await status(profile));
+      answer = await status(profile);
     } catch (e) {
       // A protected profile cannot be opened without the tools, or without its key file being read: said,
       // never started on its locked folder.
       const code = e?.code ?? "";
       if (UNAVAILABLE.has(code)) {
-        return noticeDialog(document, t("unavailable-headline"), t("storage-missing"));
+        return await noticeDialog(document, t("unavailable-headline"), t("storage-missing"));
       }
-      return noticeDialog(document, t(code === "not-found" ? "gone-headline" : "unread-headline"), t(code === "not-found" ? "gone" : "unexpected"));
+      return await noticeDialog(document, t(code === "not-found" ? "gone-headline" : "unread-headline"), t(code === "not-found" ? "gone" : "unexpected"));
     }
+    if (!answer.encrypted || !answer.locked) {
+      // The tools see it otherwise than its files did a moment ago (it was unlocked meanwhile, or asking
+      // them undid an interrupted protection): read again, and start it only if it is not locked now.
+      if ((await profileLockState(profile.path).catch(() => LOCKED)) !== LOCKED) {
+        return true;
+      }
+      return await noticeDialog(document, t("unread-headline"), t("unexpected"));
+    }
+    const { methods } = answer;
     const texts = { explain: await named("explain", profile), open: await named("open", profile) };
     return await unlockDialog(document, profile, { methods }, texts);
   } finally {
