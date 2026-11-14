@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import contextlib
+import io
 import importlib.util
 import subprocess
 import sys
@@ -108,6 +110,13 @@ class OrgLayoutMeasureTest(unittest.TestCase):
         script = ROOT / "scripts" / "research" / "org_layout_measure.py"
         unwritable = ["--summary", "/nonexistent-directory/summary.md"]
         cases = {"summary": ["--ref", "HEAD", *unwritable], "ref": ["--ref", "no-such-ref-at-all"]}
+        # A path that is not UTF-8 somewhere in the history, or any other failure to measure.
+        broken = UnicodeDecodeError("utf-8", b"\xff", 0, 1, "invalid start byte")
+        err = io.StringIO()
+        with mock.patch.object(measure, "history_blobs", side_effect=broken), \
+                mock.patch.object(sys, "argv", ["x", "--budget", "--ref", "HEAD"]), contextlib.redirect_stderr(err):  # fmt: skip
+            self.assertEqual(measure.main(), 0)
+        self.assertIn("::warning title=Media budget::not measured: UnicodeDecodeError", err.getvalue())
         for name, extra in cases.items():
             with self.subTest(name):
                 run = subprocess.run([sys.executable, "-I", str(script), "--budget", *extra], cwd=ROOT,

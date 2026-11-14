@@ -309,11 +309,14 @@ def main() -> int:
         # Run after a release is drafted: a failure to measure or to write is reported, never fatal.
         try:
             result = media_budget(args.ref)
-        except (OSError, subprocess.CalledProcessError) as error:
+        except Exception as error:  # any failure to measure is a warning, never a failed release
             print(f"::warning title=Media budget::not measured: {type(error).__name__}", file=sys.stderr)
             return 0
-        json.dump(result, sys.stdout, indent=2, sort_keys=True)
-        sys.stdout.write("\n")
+        try:
+            json.dump(result, sys.stdout, indent=2, sort_keys=True)
+            sys.stdout.write("\n")
+        except OSError as error:
+            print(f"::warning title=Media budget::result not written: {type(error).__name__}", file=sys.stderr)
         if args.summary:
             try:
                 with open(args.summary, "a", encoding="utf-8") as summary:
