@@ -223,6 +223,13 @@ class ApkSignTest(unittest.TestCase):
             "a record pointing into an entry": (edited(cd_offset + 42, "<I", 1), "does not point at a local header"),
             "a local header without its signature": (edited(first_local, "<I", 0), "does not point at a local header"),
             "a local CRC that is not the record's": (edited(first_local + 14, "<I", 0xDEADBEEF), "another method, CRC or size"),
+            # Each passed the signer once and only apksigner refused the result (third review of #260).
+            "a local compressed size": (edited(first_local + 18, "<I", 1), "another method, CRC or size"),
+            "a local uncompressed size": (edited(first_local + 22, "<I", 1), "another method, CRC or size"),
+            "a data descriptor only the local header announces": (
+                edited(first_local + 6, "<H", struct.unpack_from("<H", apk, first_local + 6)[0] | 0x08),
+                "another method, CRC or size",
+            ),
             "a local name that is not the record's": (
                 edited(first_local + 30 + name_size - 1, "<B", ord("Z")), "does not match its record"),
         }  # fmt: skip
