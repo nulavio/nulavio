@@ -8,6 +8,8 @@
    this module into the chooser's own document (system principal) and asks it before every launch.
 
    - lockStates(profiles): which profiles are protected and locked, for the cards (a lock and the word).
+   - mustChoose(profiles, states): the words for "this window is shown at every start" when every profile
+     has a password, for the chooser to show in place of its checkbox's own.
    - beforeLaunch(document, profile): true when the profile may be launched now; for a locked protected
      profile, after it was unlocked here with one of its methods (password, this computer's login,
      recovery code). false when the person went back, and the chooser stays as it was.
@@ -42,6 +44,7 @@ const IDS = [
   "unlocking", "no-master-key", "wrong-password", "wrong-recovery", "recovery-malformed", "recovery-required",
   "keyring-unavailable", "unavailable-headline", "storage-missing", "gone-headline", "gone", "unread-headline", "unexpected",
   "recovery-finished", "recovery-undone", "recovery-unsettled", "recovery-unknown", "not-recorded", "locked-again",
+  "must-choose",
 ];
 let l10n = null;
 const words = new Map();
@@ -99,6 +102,16 @@ async function lockState(path) {
     return PLAIN;
   }
   return state === UNLOCKED && !(await mounted(path)) ? LOCKED : state;
+}
+
+/**
+ * With every profile behind a password the chooser is the only way in, so "ask at start-up" is not a choice
+ * (NulavioProfiles keeps it on): the words to say instead of the checkbox's own, or null when a profile
+ * without a password exists (or a profile's state is not known).
+ */
+export function mustChoose(profiles, states) {
+  const all = profiles.length && profiles.every(profile => states?.get(profile.id)?.protected === true);
+  return all ? t("must-choose") : null;
 }
 
 // -- the helper -------------------------------------------------------------------------------------

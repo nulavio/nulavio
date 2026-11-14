@@ -364,6 +364,49 @@ class SettingsProfilesTest(unittest.TestCase):
         self.assertTrue(harness.wait_until(lambda: self.m.chrome(where).endswith(wanted), 15), self.m.chrome(where))
         self.assertEqual(self.m.chrome("return gBrowser.tabs.length;"), tabs + 1)
 
+    def test_05c_the_last_profile_without_a_password_goes_only_after_saying_what_follows(self):
+        """#43, slice 2. From a window of a protected profile, deleting the last profile without a password is
+        allowed: the question says that Nulavio then asks which profile to open at every start, and the person's
+        answer goes with the request. Any other profile is asked about and deleted as before."""
+        fake = """
+          const real = Object.getPrototypeOf(P).list.bind(P);
+          P.list = async () => {
+            const list = await real();
+            const [here, ...others] = list.profiles;
+            return { ...list, profiles: [
+              { ...here, encrypted: true, locked: false },
+              { ...others[0], encrypted: false, locked: false },
+              { ...others[1], encrypted: true, locked: true },
+            ] };
+          };
+        """
+        self.m.chrome(P + fake)
+        self.addCleanup(self.m.chrome, P + "delete P.list;")
+        self.stub("P", "remove", "return Promise.resolve();")
+        now = self.open()
+        last, protected = now["rows"][1]["name"], now["rows"][2]["name"]
+        what_follows = "último perfil sem senha"
+        self.m.chrome(CLICK_ROW, [protected, "delete"])
+        body = harness.wait_until(self.alert_text, 10)
+        self.assertNotIn(what_follows, body or "no confirmation was shown")
+        self.m.send("WebDriver:AcceptAlert")
+        self.assertTrue(harness.wait_until(lambda: len(self.calls()) == 1, 10), self.calls())
+        self.assertEqual(self.calls()[0][2], {"lastUnprotected": False})
+        self.seen(lambda n: n["said"] == "Perfil excluído.")
+        self.m.chrome(CLICK_ROW, [last, "delete"])
+        body = harness.wait_until(self.alert_text, 10)
+        self.assertIn("Isto apaga de vez, deste computador", body or "no confirmation was shown")
+        self.assertIn(what_follows, body)
+        self.assertIn("pedir a senha", body)
+        self.m.send("WebDriver:DismissAlert")  # "Cancelar": nothing is asked of the module
+        self.assertEqual(len(self.calls()), 1)
+        self.m.chrome(CLICK_ROW, [last, "delete"])
+        self.assertTrue(harness.wait_until(self.alert_text, 10))
+        self.m.send("WebDriver:AcceptAlert")
+        self.assertTrue(harness.wait_until(lambda: len(self.calls()) == 2, 10), self.calls())
+        self.assertEqual(self.calls()[1][2], {"lastUnprotected": True})
+        self.seen(lambda n: n["said"] == "Perfil excluído. A partir de agora o Nulavio pergunta qual perfil abrir ao iniciar.")
+
     def test_05b_what_changes_elsewhere_and_what_is_still_running(self):
         """Review of 2026-11-11: an editor open while the profile changes elsewhere, a second click while an
         action runs, and words that outlive what they said."""
