@@ -696,10 +696,12 @@ class WaitlistWorkerTest(unittest.TestCase):
 
 
 class SiteWorkflowTest(unittest.TestCase):
-    """.github/workflows/site.yml: only main deploys, in the site environment, and only the deploy step gets the token.
+    """.github/workflows/site.yml: only main deploys, in the site environment, and the workflow hands the token to one step.
 
     The workflow is read by indentation with comments dropped, so a guard counts only as a key of
-    the block it belongs to: moved into a comment or into another job, it no longer does.
+    the block it belongs to: moved into a comment or into another job, it no longer does. This is a
+    narrow reader for this one file, not a YAML parser, and it cannot tell what a step's script does
+    with the token once it has it: that is read in review.
     """
 
     def setUp(self):
@@ -738,7 +740,7 @@ class SiteWorkflowTest(unittest.TestCase):
         self.assertIn("environment: site", keys)  # limited to main, holds CLOUDFLARE_API_TOKEN (#182)
         self.assertEqual(self.keys(self.block(deploy, "permissions:")), ["contents: read"])
 
-    def test_only_the_deploy_step_receives_the_token(self):
+    def test_the_workflow_hands_the_token_only_to_the_deploy_step(self):
         # Counted in the raw file, comments included: a "#" inside a quoted value or a run script is
         # not a comment, and GitHub evaluates the expressions there. Any use of the secrets context
         # counts (secrets.X, secrets['X'], toJSON(secrets)), and so does a "secrets:" key (inherit).
@@ -749,6 +751,8 @@ class SiteWorkflowTest(unittest.TestCase):
         deploy_step = self.block(steps, "- name: Deploy to Cloudflare Pages (production)")
         env = [line.strip() for line in self.block(deploy_step, "env:")]
         self.assertIn("CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}", env)
+        # A step can hand a value on to the later steps through these files; this workflow uses none.
+        self.assertIsNone(re.search(r"GITHUB_(ENV|OUTPUT|STATE)", self.text))
 
 
 class VerifyLiveTest(unittest.TestCase):
