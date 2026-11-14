@@ -846,6 +846,9 @@ class DownloadPagesTest(unittest.TestCase):
         release.pop("flatpak_bundle", None)
         if flatpak:
             release["flatpak_bundle"] = f"nulavio-{version}.x86_64.flatpak"
+        # Off unless a case turns it on (with the certificate it needs): the tree's release.json names an APK
+        # from 160.0-0.5 on, and a case about something else must not depend on it.
+        release.pop("companion_apk", None)
         (src / "packaging" / "release.json").write_text(json.dumps(release), encoding="utf-8")
         if key is not None:
             (src / build_site.PUBLIC_KEY).parent.mkdir(parents=True)
