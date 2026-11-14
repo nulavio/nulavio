@@ -205,6 +205,7 @@ def release_values(src: Path) -> dict[str, str] | None:
     values = {
         "release_version": version,
         "key_fpr": " ".join(fpr[i : i + 4] for i in range(0, len(fpr), 4)),
+        "key_fpr_plain": fpr,  # as dnf prints it when it asks to import the key
         "repo_file": release["repo_file"],
         "key_url": release["key_url"],
         "apt": "off",
