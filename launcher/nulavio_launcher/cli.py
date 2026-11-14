@@ -139,6 +139,10 @@ def _run_encrypted(args: argparse.Namespace, eng, prof) -> int:
         _err(vault_cli.MESSAGES.get(exc.code, str(exc)))
         return 1
     vault.lock()  # the DEK is not needed while the volume is mounted
+    if vault.settled:  # a recovery code replacement left unfinished, settled by this unlock (#187)
+        _err(f"note: {vault_cli.SETTLED[vault.settled]}")
+    if vault.settle_warning:
+        _err(vault_cli.MESSAGES["not-recorded"])
     vault_cli.restore_core_limit(core_limit)  # the engine keeps the system's own setting
     try:
         return _run(args, eng, prof, supervise=True)

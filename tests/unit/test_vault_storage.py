@@ -403,6 +403,20 @@ class SupervisedRunTest(StorageCase):
         self.assertEqual(list(prof.path.iterdir()), [])
         self.assertFalse(contains(box.root, MARKER.encode()))
 
+    def test_a_run_says_what_it_did_with_a_replacement_left_unfinished(self):
+        # Codex review of #252: `nulavio run` settled a replacement left unfinished and said nothing, so a new
+        # code someone had written down stopped working without a word.
+        self.encrypted_profile()
+        prof = profile.get("work")
+        killed = mock.patch.object(vault_cli, "_record", side_effect=SystemExit("killed"))
+        with killed, self.assertRaises(SystemExit):
+            vault_cli.api_request({"op": "new-recovery-code", "path": str(prof.path), "current": PASSWORD})
+        env = self.fake_engine()
+        proc, _prof, _box = self.start(env)
+        self.stop_file.touch()
+        self.assertEqual(proc.wait(30), 0)
+        self.assertIn("was undone", proc.stderr.read())
+
     def test_wrong_password_starts_nothing(self):
         self.encrypted_profile()
         env = self.fake_engine()
