@@ -14,6 +14,7 @@ import re
 import contextlib
 import threading
 import time
+import urllib.parse
 import weakref
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -201,6 +202,7 @@ FORMS_SEND_FN = "() => (globalThis.nulavioForms ? globalThis.nulavioForms.send()
 FORMS_OPEN_FN = "() => (globalThis.nulavioForms ? globalThis.nulavioForms.open() : 0)"
 DIALOG = "dialog"  # in place of a count: sending the form opened a dialog (a submit handler that asks), which holds it
 FORMS_FRAMES = 60  # documents of one tab asked directly; the others still carry the guard from their creation
+LOCAL_HOST_TTL = 60.0  # seconds a name's answer (local or not) is kept for the requests that follow
 
 
 class Denied(Exception):
@@ -352,6 +354,13 @@ class Bridge:
         self._forms_scripts: weakref.WeakKeyDictionary[Bidi, str] = weakref.WeakKeyDictionary()  # -> preload script id
         self._forms_engines: weakref.WeakSet[Bidi] = weakref.WeakSet()  # connections whose guard was set up once
         self._forms_ever = False  # some document of this session may carry the guard
+        # Requests to this computer and the local network (R29), by connection like the forms guard.
+        self._net_intercepts: weakref.WeakKeyDictionary[Bidi, str] = weakref.WeakKeyDictionary()  # -> intercept id
+        self._net_handled: weakref.WeakSet[Bidi] = weakref.WeakSet()  # connections whose handler is set
+        self._net_engines: weakref.WeakSet[Bidi] = weakref.WeakSet()  # connections synced at least once
+        self._local_ok: set[str] = set()  # the origins local_resources was allowed for in the current call
+        self._local_hosts: dict[str, tuple[float, bool]] = {}  # resolved name -> (when, local)
+        self._local_refused: set[str] = set()  # origins whose refused request is in the activity already
 
     # -- policy ----------------------------------------------------------------------
 
@@ -411,6 +420,8 @@ class Bridge:
         self._refuse_if_held(capability)
         if capability == "submit_forms" and url:
             self._forms_ok.add(policy.origin(url))
+        if capability == "local_resources" and url:
+            self._local_ok.add(policy.origin(url))  # its requests are sent on during this call
 
     def require_url(self, url: str, *, checked: list[str]) -> policy.Target:
         try:
@@ -467,6 +478,7 @@ class Bridge:
         cancel = cancel or threading.Event()
         self._target = None
         self._forms_ok, self._form_at = set(), None
+        self._local_ok = set()
         try:
             validate(tool.schema, arguments)
             with self._lock:
@@ -476,6 +488,7 @@ class Bridge:
                     self._refuse_if_held(tool.capability or name, checked)
                 self._sync_downloads()
                 self._sync_forms()
+                self._sync_network()
                 result, target_url = getattr(self, "_t_" + name)(arguments, cancel, checked)
             outcome, decision, reason = "ok", "allow", None
         except Denied as denied:
@@ -547,6 +560,8 @@ class Bridge:
         engine = self.profiles[owner].bidi if owner else self._workspace().start()
         if engine not in self._forms_engines:  # just started: before its first navigation
             self._sync_forms()
+        if engine not in self._net_engines:
+            self._sync_network()
         return engine
 
     def _owner(self, tab: str) -> str:
@@ -666,6 +681,80 @@ class Bridge:
             return str(self._eval(tab, "document.title", cancel, timeout=5) or "")[:300]
         except BidiError:
             return ""
+
+    # -- requests to this computer and the local network (R29) ---------------------------
+
+    def _may_reach_local(self) -> bool:
+        """local_resources is allowed without asking: no request is held."""
+        agent = self._agent()
+        return bool(agent) and policy.effective_mode(agent, "local_resources", self.session_id)[0] == "allow"
+
+    def _sync_network(self) -> None:
+        """In each engine, every request waits for the Bridge before it is sent unless this agent may reach
+        this computer and the local network without asking. One to a local address is failed there, before
+        it leaves: a redirect hop is a request of its own, so a page an agent opened cannot send the
+        browser to a local service. Like forms, it follows the permission as the user changes it."""
+        engines = self._engines()
+        if not engines:
+            return
+        hold = not self._may_reach_local()
+        for _label, target in engines:
+            engine = target.bidi
+            self._net_engines.add(engine)
+            intercept = self._net_intercepts.get(engine)
+            if hold and intercept is None:
+                if engine not in self._net_handled:
+                    engine.on("network.beforeRequestSent", lambda params, engine=engine: self._on_request(engine, params))
+                    engine.command("session.subscribe", {"events": ["network.beforeRequestSent"]})
+                    self._net_handled.add(engine)
+                held = engine.command("network.addIntercept", {"phases": ["beforeRequestSent"]})
+                self._net_intercepts[engine] = held["intercept"]
+            elif not hold and intercept is not None:
+                engine.command("network.removeIntercept", {"intercept": intercept})
+                del self._net_intercepts[engine]
+
+    def _on_request(self, engine: Bidi, params: dict) -> None:
+        """A request the intercept holds: sent on, or failed before it leaves. Runs on the connection's
+        handler thread, beside the call that caused it; anything unexpected fails the request."""
+        if not params.get("isBlocked"):
+            return
+        request = params.get("request") or {}
+        url = str(request.get("url") or "")
+        allowed = False
+        with contextlib.suppress(Exception):
+            allowed = self._request_allowed(url)
+        method = "network.continueRequest" if allowed else "network.failRequest"
+        with contextlib.suppress(BidiError):
+            engine.command(method, {"request": request.get("request")}, timeout=10)
+        target = policy.origin(url)
+        if not allowed and target not in self._local_refused:
+            self._local_refused.add(target)  # once per place: a page that tries again and again is one line
+            with contextlib.suppress(Exception):
+                audit.record(agent=self.agent_id, session=self.session_id, tool="network", capability="local_resources",
+                             decision="deny", reason="local-request", target=target, outcome="denied")  # fmt: skip
+
+    def _request_allowed(self, url: str) -> bool:
+        """A request may leave unless it goes to this computer or the local network, and the current call
+        was not allowed local_resources for that place."""
+        scheme, _, rest = url.partition(":")
+        scheme = scheme.lower()
+        if scheme not in ("http", "https", "ws", "wss"):
+            return scheme != "file"  # data:, blob: and the engine's own pages send nothing to a host
+        web = {"ws": "http", "wss": "https"}.get(scheme, scheme) + ":" + rest
+        host = urllib.parse.urlsplit(web).hostname
+        if not host:
+            return False
+        return not self._is_local(host) or policy.origin(web) in self._local_ok
+
+    def _is_local(self, host: str) -> bool:
+        if policy.local_host(host, resolve=False):
+            return True
+        now = time.monotonic()
+        known = self._local_hosts.get(host)
+        if known is None or now - known[0] > LOCAL_HOST_TTL:
+            known = (now, policy.local_host(host))
+            self._local_hosts[host] = known
+        return known[1]
 
     # -- forms a page sends by itself ---------------------------------------------------
 
@@ -997,6 +1086,7 @@ class Bridge:
             raise ToolError(messages.get(exc.code, f"the profile {label} could not be opened")) from None
         self._sync_downloads()
         self._sync_forms()  # before its first navigation
+        self._sync_network()
         return bidi
 
     def _t_profiles_list(self, args, cancel, checked):

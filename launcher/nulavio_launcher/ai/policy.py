@@ -269,6 +269,22 @@ def _whatwg_ipv4(host: str) -> str | None:
     return str(ipaddress.IPv4Address(value))
 
 
+def local_host(host: str, resolve: bool = True) -> bool:
+    """Whether a host, as the engine sends a request to it, is this computer or the local network.
+
+    The engine's hosts are already canonical (punycode, IPv4 dotted, IPv6 bracketed); one that
+    still ends in a number it could not read is taken as local, like a name that does not resolve."""
+    host = host.lower().rstrip(".")
+    if host.startswith("["):
+        return _local_address(host)
+    if host == "localhost" or host.endswith(LOCAL_SUFFIXES) or _local_address(host):
+        return True
+    if _ends_in_number(host):
+        ipv4 = _whatwg_ipv4(host)
+        return ipv4 is None or _local_address(ipv4)
+    return resolve and _resolves_locally(host)
+
+
 def classify_url(url: str, resolve: bool = True) -> Target:
     """Which capabilities a navigation needs. Refuses what no capability can allow."""
     if len(url) > 8192 or any(ch < " " or ch == "\x7f" for ch in url) or url != url.strip():

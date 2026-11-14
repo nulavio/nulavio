@@ -26,6 +26,7 @@ from pathlib import Path
 from unittest import mock
 
 from nulavio_launcher.ai import audit, mcp, policy, registry, tools
+from nulavio_launcher.ai import bidi as bidi_mod
 from nulavio_launcher.ai import cli as ai_cli
 from nulavio_launcher.ai.websocket import GUID, WebSocket, WebSocketError
 from nulavio_launcher.ai.workspace import RAW_MARKER, WORKSPACE_PREFS, ProfileTarget, Workspace
@@ -947,6 +948,8 @@ class AuditTest(Home):
 
             def command(method, params=None, **_k):
                 commands.append((method, params))
+                if method == "network.addIntercept":
+                    return {"intercept": f"intercept-{id(connection)}"}
                 return {"script": f"preload-{id(connection)}"} if method == "script.addPreloadScript" else {}
 
             connection.command.side_effect = command
@@ -981,7 +984,7 @@ class AuditTest(Home):
         bridge.workspace = mock.Mock(bidi=second)
         bridge.workspace.start.return_value = second
         self.assertIs(bridge.bidi(), second)
-        self.assertEqual([m for m, _ in commands], ["script.addPreloadScript"])
+        self.assertEqual([m for m, _ in commands if m.startswith("script.")], ["script.addPreloadScript"])
 
     def test_an_answer_for_the_session_sends_the_form_it_was_given_for(self):
         # "Allow until the agent disconnects" turns the permission on in the middle of the call: the
@@ -1510,6 +1513,110 @@ class AuditTest(Home):
         self.assertNotIn("msg=42", text)
 
 
+class LocalRequestsTest(Home):
+    """R29 (LESIS 83a648d8): an agent without local_resources has every request of its engines held, and one
+    to this computer or the local network failed before it is sent, a redirect hop included."""
+
+    def engine(self):
+        connection, commands, handlers = mock.Mock(), [], {}
+
+        def command(method, params=None, **_k):
+            commands.append((method, params))
+            return {"intercept": f"intercept-{len(commands)}"} if method == "network.addIntercept" else {}
+
+        connection.command.side_effect = command
+        connection.on.side_effect = handlers.__setitem__
+        return connection, commands, handlers
+
+    def bridge(self, mode: str = "ask"):
+        agent, _ = registry.add("net", "other", "autonomous")
+        registry.grant(agent["id"], "local_resources", mode)
+        return agent, tools.Bridge(agent["id"], "s-1", approver=registry.Approver())
+
+    def test_policy_reads_the_hosts_the_engine_sends_requests_to(self):
+        for host in ("127.0.0.1", "localhost", "app.localhost", "10.0.0.5", "192.168.1.1", "169.254.169.254", "::1",
+                     "[::1]", "fd00::1", "printer.local", "0.0.0.0", "127.1", "0x7f000001"):  # fmt: skip  # noqa: S104 (a host the test reads, not one it binds)
+            self.assertTrue(policy.local_host(host, resolve=False), host)
+        self.assertFalse(policy.local_host("93.184.215.14", resolve=False))
+        self.assertFalse(policy.local_host("2a00:1450:4001::200e", resolve=False))
+        with mock.patch.object(policy.socket, "getaddrinfo", return_value=[(0, 0, 0, "", ("10.1.2.3", 0))]):
+            self.assertTrue(policy.local_host("intranet.example.com"))
+        with mock.patch.object(policy.socket, "getaddrinfo", side_effect=OSError("no answer")):
+            self.assertTrue(policy.local_host("unknown.example"))  # closed when this process cannot tell
+        with mock.patch.object(policy.socket, "getaddrinfo", return_value=[(0, 0, 0, "", ("93.184.215.14", 0))]):
+            self.assertFalse(policy.local_host("example.org"))
+
+    def test_the_intercept_follows_the_permission(self):
+        agent, bridge = self.bridge("ask")
+        connection, commands, handlers = self.engine()
+        bridge.workspace = mock.Mock(bidi=connection)
+        bridge._sync_network()
+        bridge._sync_network()  # once for the engine, not once a call
+        self.assertEqual(
+            [m for m, _ in commands], ["session.subscribe", "network.addIntercept"]
+        )  # fmt: skip
+        self.assertEqual(commands[1][1], {"phases": ["beforeRequestSent"]})
+        self.assertIn("network.beforeRequestSent", handlers)
+        registry.grant(agent["id"], "local_resources", "allow")  # the user allows it: nothing is held
+        bridge._sync_network()
+        self.assertEqual(commands[-1], ("network.removeIntercept", {"intercept": "intercept-2"}))
+        registry.grant(agent["id"], "local_resources", "block")
+        bridge._sync_network()  # held again, with the handler already set
+        self.assertEqual([m for m, _ in commands].count("session.subscribe"), 1)
+        self.assertEqual([m for m, _ in commands].count("network.addIntercept"), 2)
+        # A new connection (the engine ended and another started) gets its own, before its first navigation.
+        second, commands, _ = self.engine()
+        bridge.workspace = mock.Mock(bidi=second)
+        bridge.workspace.start.return_value = second
+        self.assertIs(bridge.bidi(), second)
+        self.assertEqual([m for m, _ in commands if m.startswith(("network.", "session."))],
+                         ["session.subscribe", "network.addIntercept"])  # fmt: skip
+
+    def test_a_local_request_fails_before_it_leaves_and_a_public_one_goes_on(self):
+        _agent, bridge = self.bridge("ask")
+        connection, commands, _ = self.engine()
+        public = [(0, 0, 0, "", ("93.184.215.14", 0))]
+
+        def held(url: str, request: str = "r1") -> tuple:
+            commands.clear()
+            bridge._on_request(connection, {"isBlocked": True, "request": {"request": request, "url": url}})
+            return commands[-1] if commands else None
+
+        with mock.patch.object(policy.socket, "getaddrinfo", return_value=public) as resolve:
+            self.assertEqual(held("https://example.org/a"), ("network.continueRequest", {"request": "r1"}))
+            held("https://example.org/b")
+            self.assertEqual(resolve.call_count, 1)  # a name's answer is kept for the requests that follow
+            for url in ("http://127.0.0.1:8080/hit", "http://192.168.1.1/reboot", "http://[::1]/", "ws://localhost:9/",
+                        "http://printer.local/", "file:///etc/passwd", "http://user@/"):  # fmt: skip
+                self.assertEqual(held(url, "r2"), ("network.failRequest", {"request": "r2"}), url)
+            for url in ("data:text/plain,a", "blob:https://example.org/1", "about:blank"):
+                self.assertEqual(held(url)[0], "network.continueRequest", url)
+            # The place the current call was allowed (asked, and the user said yes) is sent on, only there.
+            bridge._local_ok = {"http://127.0.0.1:8080"}
+            self.assertEqual(held("http://127.0.0.1:8080/next")[0], "network.continueRequest")
+            self.assertEqual(held("ws://127.0.0.1:8080/socket")[0], "network.continueRequest")
+            self.assertEqual(held("http://127.0.0.1:9090/other")[0], "network.failRequest")
+            # Requests the intercept does not hold (another subscriber's events) are left alone.
+            commands.clear()
+            bridge._on_request(connection, {"isBlocked": False, "request": {"request": "r3", "url": "http://10.0.0.1/"}})
+            self.assertEqual(commands, [])
+            # Anything unexpected fails the request: closed, not open.
+            with mock.patch.object(tools.Bridge, "_request_allowed", side_effect=RuntimeError("bug")):
+                self.assertEqual(held("https://example.org/a")[0], "network.failRequest")
+        refused = [json.loads(line) for line in audit.audit_path().read_text().splitlines()]
+        refused = [e["target"] for e in refused if e.get("reason") == "local-request"]
+        self.assertEqual(refused.count("http://192.168.1.1"), 1)  # once per place, not once per request
+        self.assertNotIn("/reboot", audit.audit_path().read_text())  # the place, never the path
+
+    def test_an_answer_lets_the_call_reach_that_place(self):
+        # "Ask": the user is asked for the address the agent opens, and its requests go on during that call.
+        agent, _ = registry.add("ask-net", "other", "autonomous")
+        registry.grant(agent["id"], "local_resources", "ask")
+        bridge = tools.Bridge(agent["id"], "s-1", approver=Approve("once"))
+        bridge.require("local_resources", "http://127.0.0.1:8080/app", checked=[])
+        self.assertEqual(bridge._local_ok, {"http://127.0.0.1:8080"})
+
+
 class WorkspaceTest(Home):
     def test_engine_ends_with_the_bridge(self):
         from nulavio_launcher.ai import workspace
@@ -1628,6 +1735,46 @@ class WorkspaceTest(Home):
         self.assertTrue(ws.dir.exists())
         ws.stop()
         self.assertFalse(ws.dir.exists())
+
+
+class BidiEventsTest(unittest.TestCase):
+    def test_events_with_a_handler_go_to_it_in_order_and_not_to_the_list(self):
+        # The network intercept's events are many: kept in `events`, they would push out the dialog
+        # events a call waits for. A handler that fails does not stop the ones after it.
+        seen, done = [], threading.Event()
+
+        class Socket:
+            def __init__(self, *_a, **_k):
+                self.queue: list[str] = []
+
+            def send_text(self, text):
+                if json.loads(text)["method"] == "session.new":
+                    self.queue.append(json.dumps({"type": "success", "id": json.loads(text)["id"], "result": {}}))
+
+            def recv_text(self):
+                while not self.queue:
+                    time.sleep(0.01)
+                return self.queue.pop(0)
+
+            def close(self):
+                pass
+
+        def handler(params):
+            seen.append(params["n"])
+            if params["n"] == 0:
+                raise RuntimeError("a handler's own bug")
+            if params["n"] == 2:
+                done.set()
+
+        with mock.patch.object(bidi_mod, "WebSocket", Socket):
+            connection = bidi_mod.Bidi(9)
+        connection.on("network.beforeRequestSent", handler)
+        frames = [{"type": "event", "method": "network.beforeRequestSent", "params": {"n": n}} for n in range(3)]
+        frames.insert(1, {"type": "event", "method": "browsingContext.userPromptOpened", "params": {"context": "t1"}})
+        connection.ws.queue.extend(json.dumps(f) for f in frames)
+        self.assertTrue(done.wait(5))
+        self.assertEqual(seen, [0, 1, 2])
+        self.assertEqual([e["method"] for _, e in connection.events], ["browsingContext.userPromptOpened"])
 
 
 class WebSocketTest(unittest.TestCase):

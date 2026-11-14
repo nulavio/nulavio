@@ -9,11 +9,13 @@ is disabled (NULAVIO_AI_APPROVER=none), so "ask" fails closed.
 from __future__ import annotations
 
 import base64
+import http.server
 import json
 import os
 import shutil
 import sys
 import tempfile
+import threading
 import time
 import unittest
 from pathlib import Path
@@ -25,7 +27,7 @@ from mcp_client import McpClient
 from test_window_band import BAND_PROBE, assert_band
 
 from nulavio_launcher import engine as engine_mod
-from nulavio_launcher.ai import audit, registry, tools
+from nulavio_launcher.ai import audit, policy, registry, tools
 from nulavio_launcher.ai.bidi import Bidi, script_result
 from nulavio_launcher.ai.workspace import RAW_MARKER
 from nulavio_launcher.vault import sodium, storage
@@ -742,6 +744,53 @@ class AiBridgeTest(unittest.TestCase):
         self.assertTrue(harness.wait_until(registry.stopped, 20))
         self.assertIn("emergency stop", b.call("tabs_list", {})["content"][0]["text"])
         self.assertTrue(harness.wait_until(lambda: wa.process is None and wb.process is None, 30))
+
+    def test_25_a_redirect_never_reaches_this_computer_without_local_resources(self):
+        # LESIS 83a648d8 (R29): the Bridge checks the address it is asked for, and refused to act on the
+        # local page a redirect led to, but the browser had already sent that request. A server on
+        # 127.0.0.2 stands in for a public site (this test's Bridge takes that one address as global;
+        # the engine opens it over http, as any loopback address) and redirects to a listener on
+        # 127.0.0.1, which must never be asked.
+        listener = self.fx.url("/agent-task?from=redirect")
+        asked: list[str] = []
+
+        class Public(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                asked.append(self.path)
+                self.send_response(302)
+                self.send_header("Location", listener)
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+
+            def log_message(self, *_args):
+                pass
+
+        server = http.server.ThreadingHTTPServer(("127.0.0.2", 0), Public)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        public = f"http://127.0.0.2:{server.server_address[1]}/moved"
+        local_address = policy._local_address
+        stand_in = mock.patch.object(policy, "_local_address", lambda text: text != "127.0.0.2" and local_address(text))
+        stand_in.start()
+        self.addCleanup(stand_in.stop)
+
+        agent, _ = self.agent("autonomous", local=False)
+        bridge = tools.Bridge(agent["id"], "s-redirect", approver=registry.Approver(), headless=True)
+        self.addCleanup(bridge.close)
+        refused = bridge.call("tab_new", {"url": public})
+        self.assertEqual(asked, ["/moved"])  # the public address went out
+        self.assertEqual(self.fx.hits, [])  # the redirect to this computer did not
+        self.assertTrue(refused["isError"], refused)
+        logged = [json.loads(line) for line in audit.audit_path().read_text().splitlines()]
+        refusals = [(e.get("tool"), e.get("reason"), e.get("target")) for e in logged]
+        self.assertIn(("network", "local-request", self.fx.url("")), refusals)
+
+        # Once local_resources is allowed, the next call lets the same redirect through.
+        registry.grant(agent["id"], "local_resources", "allow")
+        followed = bridge.call("tab_new", {"url": public})
+        self.assertFalse(followed["isError"], followed)
+        self.assertIn("/agent-task?from=redirect", self.fx.hits)
 
 
 if __name__ == "__main__":
