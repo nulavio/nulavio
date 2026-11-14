@@ -18,7 +18,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from hypothesis import HealthCheck, given, settings
+from hypothesis import HealthCheck, example, given, settings
 from hypothesis import strategies as st
 
 from nulavio_launcher.vault import sodium
@@ -93,6 +93,7 @@ class Nv1FuzzTest(unittest.TestCase):
 
     @settings(max_examples=EXAMPLES, deadline=None, suppress_health_check=[HealthCheck.too_slow])
     @given(body=JSON | st.fixed_dictionaries({}, optional={"psig": JSON | B64ISH, "pkx": JSON | B64ISH, "name": JSON}))
+    @example(body={"psig": "AAAA", "pkx": "AAAA"})
     def test_a_hello_sealed_with_the_right_secret_but_any_body_is_a_protocol_error(self, body):
         """Only someone who scanned the QR code can seal a hello; what they seal is still not trusted."""
         pairing = Pairing(self.identity, "Fuzz desktop", clock=self.clock)
@@ -105,7 +106,9 @@ class Nv1FuzzTest(unittest.TestCase):
             box = seal_json(k1, body, invite["i"].encode())
         except (TypeError, ValueError):
             return  # not something JSON can carry
-        expected(lambda: pairing.on_hello({"i": invite["i"], "pe": b64e(pe_pk), "box": box}))
+        # Not the phone's two 32-byte keys, so it must be refused, not taken (a 3-byte key once went through).
+        with self.assertRaises(VaultError):
+            pairing.on_hello({"i": invite["i"], "pe": b64e(pe_pk), "box": box})
 
     @settings(max_examples=EXAMPLES, deadline=None, suppress_health_check=[HealthCheck.too_slow])
     @given(path=st.sampled_from([["i"], ["box"], ["box", "n"], ["box", "c"]]), value=JSON | B64ISH | st.just(...))

@@ -131,8 +131,9 @@ def inventory(root: Path = ROOT) -> list[Dep]:
             r"uses:\s*([\w.-]+/[\w.-]+(?:/[\w./-]+)?)@[0-9a-f]{40}\s+#\s*v?(\d[\w.-]*)", workflow.read_text()
         ):
             add("GitHub Actions", match.group(1), match.group(2), f".github/workflows/{workflow.name}")
-    for match in re.finditer(r"^([A-Za-z0-9_.\-]+)==(\S+)", (root / "requirements" / "dev.txt").read_text(), re.M):
-        add("PyPI", match.group(1).lower(), match.group(2), "requirements/dev.txt")
+    for requirements in sorted((root / "requirements").glob("*.txt")):  # dev.txt, and fuzz.txt (#149)
+        for match in re.finditer(r"^([A-Za-z0-9_.\-]+)==(\S+)", requirements.read_text(), re.M):
+            add("PyPI", match.group(1).lower(), match.group(2), f"requirements/{requirements.name}")
     wrapper = (root / "android" / "gradle" / "wrapper" / "gradle-wrapper.properties").read_text()
     if match := re.search(r"distributions/gradle-([0-9.]+)-bin\.zip", wrapper):
         add("Bitnami", "gradle", match.group(1), "android/gradle/wrapper")  # OSV lists Gradle's own advisories there

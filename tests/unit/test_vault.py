@@ -585,7 +585,7 @@ class SubstitutedPairingTest(VaultTestCase):
 
     def test_a_hello_whose_sealed_body_is_not_the_phones_keys_is_a_protocol_error(self):
         """Found by tests/fuzz/test_nv1.py (#149): only a holder of the QR secret can seal it, and still."""
-        for body in ([], {"psig": 7}, {"pkx": "AAAA"}, "text"):
+        for body in ([], {"psig": 7}, {"pkx": "AAAA"}, "text", {"psig": "AAAA", "pkx": "AAAA"}):
             with self.subTest(body=body):
                 pairing = Pairing(self.identity, "Test desktop", clock=self.clock)
                 invite = pairing.invite()

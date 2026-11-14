@@ -255,6 +255,8 @@ class Pairing:
             sodium.memzero(k1)
         try:
             psig_pk, pkx_pk, name = b64d(body["psig"]), b64d(body["pkx"]), str(body.get("name", ""))[:64]
+            if len(psig_pk) != sodium.ED25519_PK_BYTES or len(pkx_pk) != sodium.X25519_BYTES:
+                raise ValueError("not the phone's keys")
         except (KeyError, TypeError, ValueError, AttributeError):
             sodium.memzero(shared)
             self.cancel()
