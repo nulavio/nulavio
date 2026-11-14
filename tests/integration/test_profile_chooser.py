@@ -361,6 +361,7 @@ class ProfileChooserTest(unittest.TestCase):
             self.assertEqual(self.dialog()["headline"], self.word("headline"))
             self.call("D().getElementById('nulavio-unlock-cancel').click(); return true;")
         finally:
+            os.chmod(path, 0o700)  # the tools made the folder read-only again when they were asked about it
             shutil.rmtree(path / storage.STATE_DIR)
             os.chmod(path, storage.LOCKED_MODE)
         moved = box.vault_path.with_name("vault.json.moved-by-test")
