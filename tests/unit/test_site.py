@@ -695,6 +695,66 @@ class WaitlistWorkerTest(unittest.TestCase):
         self.assertEqual((self.cases["other_api_path"]["status"], self.cases["other_api_path"]["body"]), (404, "the 404 page"))
 
 
+class SiteWorkflowTest(unittest.TestCase):
+    """.github/workflows/site.yml: only main deploys, in the site environment, and the workflow hands the token to one step.
+
+    The workflow is read by indentation with comments dropped, so a guard counts only as a key of
+    the block it belongs to: moved into a comment or into another job, it no longer does. This is a
+    narrow reader for this one file, not a YAML parser, and it cannot tell what a step's script does
+    with the token once it has it: that is read in review.
+    """
+
+    def setUp(self):
+        self.text = (ROOT / ".github/workflows/site.yml").read_text(encoding="utf-8")
+        lines = (re.sub(r"\s+#.*$", "", line) for line in self.text.splitlines())  # a comment after a value
+        self.lines = [line for line in lines if line.strip() and not line.lstrip().startswith("#")]
+
+    @staticmethod
+    def indent(line):
+        return len(line) - len(line.lstrip())
+
+    def block(self, lines, key):
+        """The lines nested under `key` (a line of `lines` at their shallowest indentation)."""
+        level = min(self.indent(line) for line in lines)
+        start = next(i for i, line in enumerate(lines) if self.indent(line) == level and line.strip() == key) + 1
+        rest = lines[start:]
+        stop = next((i for i, line in enumerate(rest) if self.indent(line) <= level), len(rest))
+        return rest[:stop]
+
+    def keys(self, lines):
+        level = min(self.indent(line) for line in lines)
+        return [line.strip() for line in lines if self.indent(line) == level]
+
+    def test_only_a_push_to_main_or_a_manual_run_starts_it(self):
+        triggers = self.block(self.lines, "on:")
+        self.assertEqual(self.keys(triggers), ["push:", "workflow_dispatch:"])
+        self.assertEqual(self.keys(self.block(triggers, "push:"))[0], "branches: [main]")
+
+    def test_the_deploy_job_runs_on_main_in_the_site_environment_with_read_access_only(self):
+        self.assertIn("permissions: {}", self.keys(self.lines))
+        jobs = self.block(self.lines, "jobs:")
+        self.assertEqual(self.keys(jobs), ["deploy:"])
+        deploy = self.block(jobs, "deploy:")
+        keys = self.keys(deploy)
+        self.assertIn("if: ${{ github.ref == 'refs/heads/main' }}", keys)
+        self.assertIn("environment: site", keys)  # limited to main, holds CLOUDFLARE_API_TOKEN (#182)
+        self.assertEqual(self.keys(self.block(deploy, "permissions:")), ["contents: read"])
+
+    def test_the_workflow_hands_the_token_only_to_the_deploy_step(self):
+        # Counted in the raw file, comments included: a "#" inside a quoted value or a run script is
+        # not a comment, and GitHub evaluates the expressions there. Any use of the secrets context
+        # counts (secrets.X, secrets['X'], toJSON(secrets)), and so does a "secrets:" key (inherit).
+        uses = [m.group(0) for m in re.finditer(r"\$\{\{.*?\}\}", self.text, re.S) if re.search(r"\bsecrets\b", m.group(0))]
+        self.assertEqual(uses, ["${{ secrets.CLOUDFLARE_API_TOKEN }}"])
+        self.assertIsNone(re.search(r"^\s*-?\s*secrets\s*:", self.text, re.M))
+        steps = self.block(self.block(self.block(self.lines, "jobs:"), "deploy:"), "steps:")
+        deploy_step = self.block(steps, "- name: Deploy to Cloudflare Pages (production)")
+        env = [line.strip() for line in self.block(deploy_step, "env:")]
+        self.assertIn("CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}", env)
+        # A step can hand a value on to the later steps through these files; this workflow uses none.
+        self.assertIsNone(re.search(r"GITHUB_(ENV|OUTPUT|STATE)", self.text))
+
+
 class VerifyLiveTest(unittest.TestCase):
     """scripts/site/verify_live.py, the check after a deploy (.github/workflows/site.yml), against a fake site."""
 
