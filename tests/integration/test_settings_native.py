@@ -538,8 +538,12 @@ class NativeSettingsTest(unittest.TestCase):
         # No cookie-notice list on: said as it is, with the way to switch one on.
         self.m.chrome(state, [True, {"cookieNotices": False}])
         self.m.chrome(DOC + 'd.dispatchEvent(new w.Event("visibilitychange"));')
-        shown = self.control("#nulavio-filter-lists", lambda s: "à mostra" in (s.get("description") or ""))
-        self.assertIn("Avisos de cookies: à mostra. Nenhuma lista de avisos de cookies está ligada", shown["description"])
+        # (What was read is the lists. What a person sees on a page also depends on their own filters, which are
+        # not read: so the row says that no such list is on, and never that the notices are shown.)
+        none_on = "Avisos de cookies: nenhuma lista que os esconde está ligada no uBlock Origin."
+        shown = self.control("#nulavio-filter-lists", lambda s: "nenhuma lista" in (s.get("description") or ""))
+        self.assertIn(none_on, shown["description"])
+        self.assertNotIn("à mostra", shown["description"])
         # Not read (uBlock Origin still starting), or read with a list nobody can tell of: the row claims nothing
         # about cookie notices.
         for unread in ({"cookieNotices": None}, None):
@@ -550,7 +554,7 @@ class NativeSettingsTest(unittest.TestCase):
             self.m.chrome(DOC + 'd.dispatchEvent(new w.Event("visibilitychange"));')
             unknown = self.control("#nulavio-filter-lists", lambda s: "depende das listas" in (s.get("description") or ""))
             self.assertNotIn("escondidos", unknown["description"])
-            self.assertNotIn("à mostra", unknown["description"])
+            self.assertNotIn("nenhuma lista", unknown["description"])
         self.m.chrome(DOC + 'd.querySelector("#nulavio-filter-lists").click();')
         self.assertTrue(harness.wait_until(lambda: self.m.chrome("return window.__lists;") == 1, 10))
         # Turned off: the row says so, and leads to where it is turned on.

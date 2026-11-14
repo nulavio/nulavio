@@ -30,14 +30,16 @@ const UBLOCK = "uBlock0@raymondhill.net";
    (scripts/build/make_distribution.py --filter-lists): `cookies`, the ones that hide cookie notices (its
    registry's group "cookies"), and `others`, every other list it names. */
 const FILTER_LISTS_URL = "resource://builtin-addons/nulavio-shell/shared/filter-lists.json";
-/* uBlock Origin's own entry for the person's filters ("My filters"): always in its selection, and no list. */
+/* uBlock Origin's own entry for the person's filters ("My filters"): in its selection by default, and no list.
+   What the person wrote there is not read, so the answer below is about the lists and Settings words it so. */
 const USER_FILTERS = "user-filters";
 
 /**
- * Whether the lists switched on in uBlock Origin hide cookie notices: true when one of the cookie-notice lists
- * is on; false when none is and every list that is on is one the registry names; null when a list that is on
- * has a name this build does not know (imported by the person, renamed, or newer than this build): such a
- * list may hide them, so nothing is said.
+ * Whether a list that hides cookie notices is switched on in uBlock Origin: true when one of the cookie-notice
+ * lists is on; false when none is and every list that is on is one the registry names; null when a list that
+ * is on has a name this build does not know (imported by the person, renamed, or newer than this build): such
+ * a list may hide them, so nothing is said. Never an answer about what a page shows: the person's own filters
+ * and the sites they trust are not looked at.
  */
 export function cookieNotices(selected, { cookies, others }) {
   const on = selected.filter(key => key !== USER_FILTERS);

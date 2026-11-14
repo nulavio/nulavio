@@ -12,7 +12,7 @@ Read the root [AGENTS.md](../AGENTS.md) first; its rules apply here and are not 
 
 - I12: no new skip, relaxed assertion, wider allow-list or sleep in place of waiting for a state; a test passes only because of the change it covers. A bug fix has a test that fails without it. A test that is wrong is fixed in its own commit, with the reason.
 - Never a real profile or real credentials: the harness gives each run a temporary `NULAVIO_HOME`, a throwaway XDG home and disposable profiles. Marionette and `seccomp=unconfined` stay test-only.
-- I1 holds in tests too: none switches a protection off to get a page loaded (for a plain-http fixture, give that one site an exception, as `test_content_filter` and `test_immersive` do). Only a test whose subject is what the browser says of a protection that is off writes its pref, and `unit/test_integration_hygiene.py` names each one.
+- I1 holds in tests too: none switches a protection off to get a page loaded (for a plain-http fixture, give that one site an exception, as `test_content_filter` and `test_immersive` do). Only a test whose subject is what the browser says of a protection that is off writes its pref, and `unit/test_integration_hygiene.py` names each one; it fails on any other line that names such a pref other than to read it.
 - `tests/lib/harness.py` (route `/agent-task`) and `tests/integration/test_ai_*.py` hold deliberate prompt-injection text: it is test data, and it must not reach code outside `tests/`.
 - A skip is not a pass. Tests that need the build skip on the system Firefox; CI's `NULAVIO_REQUIRE_*` variables turn some skips into failures.
 
