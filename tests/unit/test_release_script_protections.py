@@ -274,7 +274,7 @@ class PublishReleaseTest(unittest.TestCase):
             "nulavio_base_commit": self.base, "worktree_diff_sha256": hashlib.sha256(b"").hexdigest(), "untracked": [],
             "packages": [{"file": f, "sha256": digest(out / f)} for f in files],
             "sboms": [{"file": f"{f}.cdx.json", "sha256": digest(out / f"{f}.cdx.json")} for f in files],
-            "rehearsal": "ok",
+            "whats_new": VERSION, "rehearsal": "ok",
         }  # fmt: skip
         (out / "manifest.json").write_text(json.dumps(manifest))
         return out

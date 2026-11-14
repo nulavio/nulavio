@@ -1319,5 +1319,25 @@
   "settingsBack": {"message": "Settings"},
   "settingsBackHint": {"message": "Back to the browser's settings page, where every option is."},
   "profilesTemplateNone": {"message": "No template"},
-  "guardBarOne": {"message": "Nulavio Guard: one change made outside Nulavio since it last ran. $WHAT$.", "placeholders": {"what": {"content": "$1"}}}
+  "guardBarOne": {"message": "Nulavio Guard: one change made outside Nulavio since it last ran. $WHAT$.", "placeholders": {"what": {"content": "$1"}}},
+
+  "whatsNewBar": {"message": "Nulavio was updated to $VERSION$.", "placeholders": {"version": {"content": "$1"}}},
+  "whatsNewBarFrom": {"message": "Nulavio was updated from $FROM$ to $VERSION$.", "placeholders": {"from": {"content": "$1"}, "version": {"content": "$2"}}},
+  "whatsNewButton": {"message": "What's new"},
+  "whatsNewMenu": {"message": "What's new in this version"},
+  "whatsNewTitle": {"message": "What's new in Nulavio"},
+  "whatsNewHeading": {"message": "What's new in $VERSION$", "placeholders": {"version": {"content": "$1"}}},
+  "whatsNewMeta": {"message": "Published $DATE$ · Firefox $FIREFOX$ · $CHANNEL$", "placeholders": {"date": {"content": "$1"}, "firefox": {"content": "$2"}, "channel": {"content": "$3"}}},
+  "whatsNewNew": {"message": "New"},
+  "whatsNewFixed": {"message": "Fixed"},
+  "whatsNewAction": {"message": "What to do"},
+  "whatsNewBreaking": {"message": "Needs your attention"},
+  "whatsNewSecurity": {"message": "Security advisories fixed"},
+  "whatsNewNone": {"message": "This build carries no notes: they come with each published release, and development builds have none."},
+  "whatsNewUnreadable": {"message": "This version's notes could not be read. The browser works as usual, and every version's notes are also on nulavio.net."},
+  "whatsNewOffline": {"message": "These notes come with the browser: reading them sends nothing anywhere."},
+  "whatsNewHistory": {"message": "Every version's notes, on nulavio.net"},
+  "whatsNewNoticeLabel": {"message": "Show what's new after updating"},
+  "whatsNewNoticeHint": {"message": "A small bar, once per version. The notes stay in the Help menu either way."},
+  "whatsNewOpen": {"message": "What's new in this version"}
 }

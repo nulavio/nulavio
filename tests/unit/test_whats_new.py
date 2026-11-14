@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import copy
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -133,6 +134,45 @@ class WhatsNewTest(unittest.TestCase):
         self.assertIn("A &amp; B&#x27;s", page)
         index = pages["en/whats-new/index.html"]
         self.assertIn("Tom&#x27;s &quot;quote&quot;", index)
+
+
+class PackedNotesTest(unittest.TestCase):
+    """The browser's copy (phase 2): make_distribution.py packs the record of the version it packages."""
+
+    def run_make(self, out: Path, version: str | None) -> subprocess.CompletedProcess:
+        env = {k: v for k, v in os.environ.items() if k not in ("NULAVIO_VERSION", "NULAVIO_RELEASE")}
+        if version is not None:
+            env["NULAVIO_VERSION"] = version
+        return subprocess.run([sys.executable, "-I", str(ROOT / "scripts/build/make_distribution.py"), "--out", str(out)],
+                              capture_output=True, text=True, env=env)  # fmt: skip
+
+    def test_a_release_packs_its_record_and_anything_else_packs_none(self):
+        published = whats_new.records()[0]
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp)
+            packed = out / "whats-new.json"
+            run = self.run_make(out, published["version"])
+            self.assertEqual(run.returncode, 0, run.stderr)
+            self.assertEqual(json.loads(packed.read_text(encoding="utf-8")), published, "the reviewed record, unchanged")
+            # A development build (no version) has none, and a stale copy goes.
+            run = self.run_make(out, None)
+            self.assertEqual(run.returncode, 0, run.stderr)
+            self.assertFalse(packed.exists())
+            # A version whose record is not written yet (the security pre-build) is packed without notes
+            # and says so; release_manifest.py then refuses to publish it. A stale copy goes here too.
+            packed.write_text(json.dumps(published), encoding="utf-8")
+            run = self.run_make(out, "999.0-0.1")
+            self.assertEqual(run.returncode, 0, run.stderr)
+            self.assertIn("packed without notes, not publishable", run.stderr)
+            self.assertFalse(packed.exists())
+            # A record that is there but invalid stops the build: it was written for this version.
+            broken = ROOT / whats_new.DIRECTORY / "999.0-0.2.json"
+            broken.write_text("{}", encoding="utf-8")
+            try:
+                run = self.run_make(out, "999.0-0.2")
+            finally:
+                broken.unlink()
+            self.assertNotEqual(run.returncode, 0)
 
 
 if __name__ == "__main__":

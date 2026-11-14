@@ -1303,7 +1303,8 @@ class ReleaseFilesTest(TempDirTest):
     def test_rehearsal_writes_a_manifest_of_what_it_checked(self):
         script = (ROOT / "scripts" / "release" / "rehearse_release.sh").read_text()
         match = re.search(
-            r"manifest\(\) \{\n    python3 -I - \"\$out\" \"\$version\" \"\$repo\" \"\$work/firefox-\$version\" <<'EOF'\n"
+            r"manifest\(\) \{\n    python3 -I - \"\$out\" \"\$version\" \"\$repo\" \"\$work/firefox-\$version\""
+            r" \"\$install\" <<'EOF'\n"
             r"(.*?)\nEOF\n\}\nstep manifest manifest\n",
             script,
             re.S,
@@ -1335,9 +1336,11 @@ class ReleaseFilesTest(TempDirTest):
         tree = self.tmp / "build" / "firefox-159.0"  # the source tree the build compiled
         tree.mkdir(parents=True)
         (tree / ".nulavio-source-sha256").write_text(D159 + "\n")
+        install = self.tmp / "install"  # what make_distribution.py packed (#198)
+        (install / "distribution").mkdir(parents=True)
 
         def write():
-            command = [sys.executable, "-I", str(writer), str(out), "159.0", str(repo), str(tree)]
+            command = [sys.executable, "-I", str(writer), str(out), "159.0", str(repo), str(tree), str(install)]
             return subprocess.run(command, capture_output=True, text=True, env=env)
 
         run = write()
@@ -1350,6 +1353,10 @@ class ReleaseFilesTest(TempDirTest):
         files = {entry["file"]: entry["sha256"] for entry in manifest["packages"]}
         self.assertEqual(files["packages/x86_64/nulavio-159.0-0.1.fc44.x86_64.rpm"], hashlib.sha256(b"rpm").hexdigest())
         self.assertEqual([entry["file"] for entry in manifest["sboms"]], ["packages/nulavio_159.0-0.1_amd64.deb.cdx.json"])
+        self.assertIsNone(manifest["whats_new"], "no notes packed: the manifest says so, and publishing refuses it")
+        (install / "distribution" / "whats-new.json").write_text(json.dumps({"version": "159.0-0.1"}))
+        self.assertEqual(write().returncode, 0)
+        self.assertEqual(json.loads((out / "manifest.json").read_text())["whats_new"], "159.0-0.1")
         # The tree was extracted from another tarball than the one Mozilla signs now, or nobody knows which.
         for text, error in ((D158 + "\n", "extracted from " + D158), (None, "no verified digest")):
             with self.subTest(marker=text):

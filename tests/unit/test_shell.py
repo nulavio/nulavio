@@ -138,7 +138,7 @@ def module_text(name: str) -> str:
 
 API_NAMES = ("nulavioSearch", "nulavioProfiles", "nulavioRouting", "nulavioConnect", "nulavioVault", "nulavioAI")
 API_NAMES += ("nulavioGuard", "nulavioPrivacy", "nulavioPasswords")
-API_NAMES += ("nulavioLayout", "nulavioPersonalise")
+API_NAMES += ("nulavioLayout", "nulavioPersonalise", "nulavioWhatsNew")
 
 
 class PrivilegedApiTest(unittest.TestCase):
@@ -174,6 +174,7 @@ class PrivilegedApiTest(unittest.TestCase):
         self.assertEqual(apis["nulavioRouting"]["parent"]["events"], ["startup"])  # links clicked in pages (M5)
         self.assertNotIn("events", apis["nulavioConnect"]["parent"])
         self.assertNotIn("events", apis["nulavioPersonalise"]["parent"])  # lazy: nothing to do at startup
+        self.assertEqual(apis["nulavioWhatsNew"]["parent"]["events"], ["startup"])  # the Help entry and the bar (#198)
 
     def test_parent_scripts_only_bridge_to_the_modules(self):
         for script in (SHELL / "experiments").rglob("parent.js"):

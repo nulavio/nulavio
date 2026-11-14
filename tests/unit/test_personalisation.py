@@ -122,6 +122,8 @@ PREF_WRITERS = {
         "setStringPref(RULES_PREF)": 1,
     },
     "NulavioSearch.sys.mjs": {"setBoolPref(pref)": 1, "setIntPref(PREF_MIGRATION)": 1, "setStringPref(PREF_OPTIN)": 1},
+    # What's new (#198): the newest version this profile was told about, and the bar's own switch; no protection.
+    "NulavioWhatsNew.sys.mjs": {"setBoolPref(PREF_NOTICE)": 1, "setStringPref(PREF_SEEN)": 3},
 }
 # Every nsIPrefBranch mutator, and Preferences.sys.mjs.
 WRITER = re.compile(

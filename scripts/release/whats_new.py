@@ -5,7 +5,8 @@ One reviewed file per version, packaging/whats-new/<firefox>-<release>.json, wri
 pull request before the version is built. It is the editorial summary for people; the
 complete technical history stays in the GitHub release and CHANGELOG.md. The site builds
 its pages from it (/novidades/, /en/whats-new/) for the versions packaging/release.json
-says are published, and the release refuses to publish a version that has none, so the
+says are published, the build packs the installed version's copy for the browser's reader
+(make_distribution.py, distribution/whats-new.json), and the release refuses to publish a version that has none, so the
 notes are fixed in the commit that is built and signed.
 
     python3 -I scripts/release/whats_new.py check                    # every record is valid

@@ -79,6 +79,7 @@ PRIVILEGED_DIRS = (
     "guard",
     "passwords",
     "assistant",
+    "whatsnew",
 )
 # Plain-data modules (no browser globals, no imports) that the Shell's own pages import too: they stay
 # in the variant for a distribution Firefox, or every page that imports them fails to load there.

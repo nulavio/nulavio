@@ -59,7 +59,7 @@ install_tree() {
     # copy with a checksum kept beside it; this compares it with the pinned package itself (from the cache or from
     # AMO, checked against the lock), and stops the release when it differs or the package cannot be had.
     python3 -I "$repo/scripts/upstream/refresh_extensions_lock.py" --check-registry
-    python3 -I "$repo/scripts/build/make_distribution.py" --out "$install/distribution"
+    NULAVIO_VERSION="$version-$NULAVIO_RELEASE" python3 -I "$repo/scripts/build/make_distribution.py" --out "$install/distribution"
     python3 -I "$repo/scripts/build/make_tools.py" --out "$install/nulavio-tools"
 }
 
@@ -92,7 +92,7 @@ step sbom sbom
 # source_sha256 is the digest the built source tree was extracted from
 # (fetch_firefox_source.py's marker); it must be the one Mozilla signed above.
 manifest() {
-    python3 -I - "$out" "$version" "$repo" "$work/firefox-$version" <<'EOF'
+    python3 -I - "$out" "$version" "$repo" "$work/firefox-$version" "$install" <<'EOF'
 import datetime
 import hashlib
 import json
@@ -101,7 +101,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-out, version, repo, tree = Path(sys.argv[1]), sys.argv[2], sys.argv[3], Path(sys.argv[4])
+out, version, repo, tree, install = Path(sys.argv[1]), sys.argv[2], sys.argv[3], Path(sys.argv[4]), Path(sys.argv[5])
 log = (out / "logs" / "verify-source.log").read_text(encoding="utf-8")
 subkey = re.search(r"\(subkey ([0-9A-F]{16,40})\)", log)
 digest = re.search(r"^([0-9a-f]{64})  source/firefox-" + re.escape(version) + r"\.source\.tar\.xz$", log, re.M)
@@ -136,6 +136,10 @@ sboms = sorted(out.glob("packages/**/*.cdx.json"))
 if not packages:
     sys.exit("manifest: no packages to list")
 engine = json.loads((Path(repo) / "browser" / "build" / "engine.json").read_text(encoding="utf-8"))
+try:
+    notes = json.loads((install / "distribution" / "whats-new.json").read_text(encoding="utf-8"))
+except (OSError, ValueError):
+    notes = None
 manifest = {
     "firefox": version,
     "source_sha256": built,
@@ -146,6 +150,9 @@ manifest = {
     "untracked": sorted(git("ls-files", "--others", "--exclude-standard").decode().splitlines()),
     "packages": [{"file": str(path.relative_to(out)), "sha256": sha256(path)} for path in packages],
     "sboms": [{"file": str(path.relative_to(out)), "sha256": sha256(path)} for path in sboms],
+    # The version whose notes the packages carry (make_distribution.py, #198), or null: publishing
+    # refuses packages without their own version's notes (release_manifest.py).
+    "whats_new": notes.get("version") if isinstance(notes, dict) else None,
     "rehearsal": "ok",
     "finished_at": datetime.datetime.now(datetime.UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
 }
