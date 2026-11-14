@@ -30,6 +30,13 @@ Within that commitment, urgent releases (critical or high impact, a sandbox esca
 
 How it works: GitHub Actions checks Mozilla's releases and advisories twice a day and alerts the maintainer through an issue with the target and the deadline. An opt-in timer on the maintainer's machine checks every 30 minutes and starts a build as soon as Mozilla stages a release. Builds use only source whose signature verifies against Mozilla's pinned release key. Signing and publishing stay with the maintainer. Each published build gets an entry in the [security changelog](docs/security/changelog.md) with the time it took.
 
+## Signing keys
+
+- **Packages** (the dnf and APT repositories, `SHA256SUMS.asc` on every release): OpenPGP key `298A 9093 BAAB B26F 79BB  29F4 BF47 E5FA 9EDB 8DB1`, published at <https://nulavio.net/keys/nulavio-packages.asc>.
+- **Nulavio Companion** (the Android app's APK attached to releases, [ADR 0014](docs/adr/0014-companion-signing-key.md)): signing certificate SHA-256 `d78d255ac7d83cc3e70d946921a5921c76dd92d9b865fcd12893b36d2ae9d3be` (what `apksigner verify --print-certs` prints), published at <https://nulavio.net/keys/nulavio-companion.der>.
+
+Both keys are held in AWS KMS and sign only from the release workflow after the maintainer's approval; the originals are kept offline.
+
 ## Safe harbour
 
 Good-faith research that respects user privacy, avoids data destruction and does not degrade service is welcome. We will not pursue legal action for such research.

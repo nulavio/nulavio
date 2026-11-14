@@ -1,6 +1,6 @@
 # ADR 0014 — The Companion's signing key: its own key in AWS KMS, signed in the release workflow
 
-- **Status:** Proposed (2026-11-14). The maintainer decided on 2026-11-13 that releases carry the Companion's APK ([#205](https://github.com/nulavio/nulavio/issues/205)); this record proposes where its key lives, how it signs and what F-Droid publishes. Accepting it is the maintainer's ([GOVERNANCE.md](../../GOVERNANCE.md)); creating the key is too (an AWS change).
+- **Status:** Accepted (2026-11-14). Proposed that day in #260; the maintainer chose option A ("sim, siga com A") and accepted the ADR the same day, recorded in [#205](https://github.com/nulavio/nulavio/issues/205). The key exists: `alias/nulavio-companion` in the account's KMS (RSA 4096, imported, no expiry, created and imported 2026-11-14 with `kms_setup.sh` and `kms_import_key.py --pkcs8`); certificate `site/keys/nulavio-companion.der`, SHA-256 `d78d255ac7d83cc3e70d946921a5921c76dd92d9b865fcd12893b36d2ae9d3be`. The maintainer decided on 2026-11-13 that releases carry the Companion's APK.
 - **Related:** [ADR 0005](0005-phone-profile-unlock.md) (phone unlock, its release-order rule), [build](../architecture/build.md#publishing-a-release), [trust boundaries](../architecture/trust-boundaries.md) TB18, [residual risks](../security/residual-risks.md) R58 and R60, [#207](https://github.com/nulavio/nulavio/issues/207) (F-Droid again from 2027-01-27), [#227](https://github.com/nulavio/nulavio/issues/227) (the signed APK on the real phone).
 
 ## Context
@@ -11,7 +11,7 @@ An Android app's signing certificate is its identity for good. Every update must
 
 The package key moved to AWS KMS on 2026-11-11 for the same reason a signing key should: CI signs after the maintainer's approval and never holds the key ([TB18](../architecture/trust-boundaries.md)); the original stays offline for recovery and revocation ([R60](../security/residual-risks.md)).
 
-## Decision (proposed)
+## Decision
 
 1. **A key for the app only.** RSA 4096, not the package key: the two are used by different verifiers (rpm, dnf and apt; Android), are replaced on different schedules (the package key expires in 2028, an app key cannot simply expire) and should not fall together. Its self-signed certificate (subject `CN=Nulavio Companion, O=Nulavio`, no expiry: Android ignores the dates) is made once and committed; its SHA-256 is the fingerprint people and F-Droid check.
 2. **Held like the package key.** Generated on the maintainer's machine in a new directory, backed up offline next to the package key, imported into KMS (`alias/nulavio-companion`, `SIGN_VERIFY`, origin `EXTERNAL`, no expiry), then the working copy deleted. The key policy has the package key's shape: only the release signing role and the account's administrator SSO roles may sign, only with `RSASSA_PKCS1_V1_5_SHA_256`. The role `nulavio-release-signing` gets Sign on this key as well; it is the same `release` environment behind the same approval, so a second role would add no barrier.
