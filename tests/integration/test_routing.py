@@ -336,8 +336,14 @@ class RoutingTest(unittest.TestCase):
         self.assertTrue(harness.wait_until(lambda: set(bank.window_handles()) - before, timeout=20))
         mine = (set(bank.window_handles()) - before).pop()
         bank.switch_to(mine)
-        bank.navigate(self.local("/page/mine"))
-        self.assertTrue(harness.wait_until(lambda: bank.current_url().endswith("/page/mine"), timeout=10))
+
+        def on_mine() -> bool:
+            # The new window's own first page can still be loading and replace this one: go again until it stays.
+            if not bank.current_url().endswith("/page/mine"):
+                bank.navigate(self.local("/page/mine"))
+            return bank.current_url().endswith("/page/mine")
+
+        self.assertTrue(harness.wait_until(on_mine, timeout=20), bank.current_url())
         self.deliver("Trabalho", [self.local("/page/routed-again")])
         self.assertTrue(harness.wait_until(lambda: any(u.endswith("/page/routed-again") for u in self.tabs(bank)), timeout=30))
         select = (

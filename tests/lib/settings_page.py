@@ -17,11 +17,15 @@ from marionette import MarionetteError
 DOC = "const d = gBrowser.selectedBrowser.contentDocument; const w = gBrowser.selectedBrowser.contentWindow;"
 READY = DOC + 'return d?.documentURI.startsWith("about:") && d.readyState === "complete" && !!d.querySelector("setting-pane");'
 # The driver switches tabs without focusing them: the tab it just loaded the page in becomes the selected one.
+# That tab is found by the driver's handle (arguments[0]), not by its address: right after the page moves from
+# another process, the tab can still show the address it had, and another tab can show the settings page.
 FRONT = """
-const tab = gBrowser.selectedBrowser.currentURI.spec.startsWith("about:preferences")
-  ? null : gBrowser.tabs.find(each => each.linkedBrowser.currentURI.spec.startsWith("about:preferences"));
-if (tab) gBrowser.selectedTab = tab;
+const { NavigableManager } = ChromeUtils.importESModule("chrome://remote/content/shared/NavigableManager.sys.mjs");
+const browser = NavigableManager.getBrowserById(arguments[0]);
+const tab = browser && gBrowser.getTabForBrowser(browser);
+if (tab && !tab.selected) gBrowser.selectedTab = tab;
 """
+TABS = "return gBrowser.tabs.map(t => [t.linkedBrowser.currentURI.spec, t.selected]);"
 SHOWN = 'const shown = el => !!el && !el.closest("setting-control")?.hidden && el.getBoundingClientRect().height > 0;'
 CONTROL = (
     DOC
@@ -92,12 +96,23 @@ return true;
 )
 
 
+def handle(m) -> str:
+    """The driver's current tab."""
+    value = m.send("WebDriver:GetWindowHandle")
+    return value["value"] if isinstance(value, dict) else value
+
+
+def front(m) -> None:
+    """Select the driver's current tab in its window, which the helpers here read."""
+    m.chrome(FRONT, [handle(m)])
+
+
 def open_pane(m, pane: str = "", timeout: float = 20) -> None:
     """Open the settings page at `pane` in the session's own tab, bring that tab to the front and wait for the page's panes."""
     m.navigate(f"about:preferences#{pane}" if pane else "about:preferences")
-    m.chrome(FRONT)
-    if not harness.wait_until(lambda: m.chrome(READY), timeout):
-        raise AssertionError(f"the settings page did not load at #{pane}")
+    tab = handle(m)
+    if not harness.wait_until(lambda: m.chrome(FRONT + READY, [tab]), timeout):
+        raise AssertionError(f"the settings page did not load at #{pane} in tab {tab}: {m.chrome(TABS)}")
 
 
 def assistant_pane(m) -> str:
