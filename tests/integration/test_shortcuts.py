@@ -5,6 +5,7 @@ names a key shows the key the engine has now. Headless, throwaway profile.
 
 from __future__ import annotations
 
+import time
 import unittest
 
 import harness
@@ -180,9 +181,20 @@ class ShortcutsTest(unittest.TestCase):
         self.open_settings()
         self.assertEqual(self.key("toggle-focus"), "Ctrl+Alt+G")
         settings_page.wait_control(self.m, "nulavio-keys-reset")
+        # #142: it says which keys go back to what, and does nothing until that is confirmed.
         settings_page.click(self.m, "#nulavio-keys-reset")
+        asked = settings_page.wait_prompt(self.m)
+        self.assertIn("Ligar ou desligar o layout Foco: Ctrl+Alt+G passa a ser Ctrl+Alt+F", asked)
+        settings_page.answer_prompt(self.m, False)
+        time.sleep(0.5)
+        self.assertEqual(self.key("toggle-focus"), "Ctrl+Alt+G", "cancelled, and the key changed anyway")
+        settings_page.click(self.m, "#nulavio-keys-reset")
+        settings_page.wait_prompt(self.m)
+        settings_page.answer_prompt(self.m, True)
         self.assertTrue(harness.wait_until(lambda: self.key("toggle-focus") == "Ctrl+Alt+F", 10), self.key("toggle-focus"))
         settings_page.wait_control(self.m, "nulavio-keys-reset", lambda now: not now["shown"])
+        said = settings_page.wait_control(self.m, "nulavio-keys-said")
+        self.assertEqual(said.get("message"), "Atalhos padrão restaurados (1).", said)
         # A command left without a key keeps its name in its row, which says there is none; and gets it back.
         name = settings_page.control(self.m, "nulavio-key-toggle-focus")["label"]
         self.assertEqual(name, "Ligar ou desligar o layout Foco")
@@ -193,6 +205,8 @@ class ShortcutsTest(unittest.TestCase):
         self.assertEqual((row["label"], row["description"]), (name, "Sem tecla"), row)
         settings_page.wait_control(self.m, "nulavio-keys-reset")
         settings_page.click(self.m, "#nulavio-keys-reset")
+        self.assertIn(f"{name}: Sem tecla passa a ser Ctrl+Alt+F", settings_page.wait_prompt(self.m))
+        settings_page.answer_prompt(self.m, True)
         self.assertTrue(harness.wait_until(lambda: self.key("toggle-focus") == "Ctrl+Alt+F", 10), self.key("toggle-focus"))
         self.assertEqual(settings_page.control(self.m, "nulavio-key-toggle-focus")["label"], name)
 
@@ -230,6 +244,8 @@ class ShortcutsTest(unittest.TestCase):
             self.open_settings()
             settings_page.wait_control(self.m, "nulavio-keys-reset")
             settings_page.click(self.m, "#nulavio-keys-reset")
+            settings_page.wait_prompt(self.m)
+            settings_page.answer_prompt(self.m, True)
             self.assertTrue(harness.wait_until(lambda: "Alt+Shift+P" in title(), 10), title())
         finally:
             self.shell_page()

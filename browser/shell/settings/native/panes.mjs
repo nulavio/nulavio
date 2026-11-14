@@ -2032,6 +2032,7 @@
       });
       return { id, control: "moz-box-item" };
     });
+    const keyBars = []; // what the reset said, under its button
     if (keyRows.length) {
       setting({
         id: "nulavio-keys",
@@ -2046,26 +2047,52 @@
           top().BrowserAddonUI.openAddonsMgr(`addons://shortcuts/${encodeURIComponent(SHELL)}`);
         },
       });
+      // #142: the reset says which keys go back to what before it is done, and what it did after.
+      const keyBench = workbench({}, keys);
       setting({
         id: "nulavio-keys-reset",
         setup: keys.watch,
         visible: () => changedKeys().length > 0,
+        disabled: () => keyBench.state.busy,
         async onUserClick(event) {
           event.preventDefault();
-          for (const name of changedKeys()) {
-            const before = keys.state.value.get(name)?.shortcut ?? "";
-            try {
-              await shortcuts.resetCommand(name);
-            } catch (e) {
-              console.error(e);
-              continue; // nothing changed: nothing is announced, and the list read below shows the key as it is
-            }
-            // The engine's reset announces nothing; the Shell's background listens to this to rename its button.
-            shortcuts.onShortcutChanged?.({ name, newShortcut: shortcuts.manifestCommands.get(name)?.shortcut ?? "", oldShortcut: before });
+          const changed = changedKeys();
+          const line = name => {
+            const command = keys.state.value.get(name);
+            const original = shortcuts.manifestCommands.get(name)?.shortcut || msg("keyNone");
+            return msg("keysResetLine", command?.description || name, command?.shortcut || msg("keyNone"), original);
+          };
+          const body = `${msg("keysResetBody")}\n\n${changed.map(line).join("\n")}`;
+          if (!changed.length || !(await confirmStep(msg("keysResetTitle"), body, msg("keysResetConfirm")))) {
+            return;
           }
-          keys.refresh();
+          let restored = 0;
+          await keyBench.act(
+            async () => {
+              for (const name of changed) {
+                const before = keys.state.value.get(name)?.shortcut ?? "";
+                try {
+                  await shortcuts.resetCommand(name);
+                } catch (e) {
+                  console.error(e);
+                  continue; // nothing changed: not counted, and the list read again shows the key as it is
+                }
+                restored++;
+                // The engine's reset announces nothing; the Shell's background listens to this to rename its button.
+                shortcuts.onShortcutChanged?.({ name, newShortcut: shortcuts.manifestCommands.get(name)?.shortcut ?? "", oldShortcut: before });
+              }
+              if (!restored) {
+                throw Object.assign(new Error("not restored"), { code: "unexpected" });
+              }
+            },
+            () => msg("keysResetDone", String(restored))
+          );
         },
       });
+      keyBars.push(
+        keyBench.bar("nulavio-keys-said", "success", () => keyBench.state.said, () => Boolean(keyBench.state.said)),
+        keyBench.bar("nulavio-keys-error", "error", () => keyBench.state.error, () => Boolean(keyBench.state.error))
+      );
     }
 
     for (const id of ["nulavio-layout-moved", "nulavio-profiles-box", "nulavio-protections-box"]) {
@@ -2236,6 +2263,7 @@
             { id: "nulavio-keys", control: "moz-box-group", items: keyRows, controlAttrs: { "data-option": "shortcuts" } }, // shared/options.json
             { id: "nulavio-keys-change", l10nId: "nulavio-keys-change", control: "moz-box-button" },
             { id: "nulavio-keys-reset", l10nId: "nulavio-keys-reset", control: "moz-button" },
+            ...keyBars,
           ],
         },
       });
