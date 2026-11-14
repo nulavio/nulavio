@@ -19,13 +19,28 @@ let capabilities = { keyring: false };
 
 const kindName = method => t(KINDS[method.method] ?? "methodOther");
 
-/** A change's result; one saved but not recorded inside the profile says so, as a warning (#177). */
-function announceDone(text, result) {
-  if (result?.warning === "not-recorded") {
-    announce(`${text} ${t("err_not_recorded")}`, "warn");
+/** A change's result; one saved but not recorded inside the profile says so, as a warning (#177); and when
+    the profile's state could not be read again afterwards, that too, after them, never instead (#258). */
+function announceDone(text, result, readFailed = null) {
+  const unrecorded = result?.warning === "not-recorded" ? t("err_not_recorded") : "";
+  if (readFailed) {
+    announce([text, unrecorded, errorText(readFailed)].filter(Boolean).join(" "), "error");
+  } else if (unrecorded) {
+    announce(`${text} ${unrecorded}`, "warn");
   } else {
     announce(text, "ok");
   }
+}
+
+/** After a change that went through: the list read again, then the result, with the read's failure if it failed. */
+async function settleChange(text, result) {
+  let readFailed = null;
+  await render().catch(e => {
+    console.error(e);
+    readFailed = e;
+    setState(byId("code-step").hidden ? "idle" : "code");
+  });
+  announceDone(text, result, readFailed);
 }
 
 function setState(state) {
@@ -96,8 +111,7 @@ function methodRow(method, count, confirmers) {
     });
     const result = ok ? await change("remove-method", { envelope: method.id }) : null;
     if (result) {
-      await render().catch(console.error); // the change was made: what it did is said even if the list is not redrawn
-      announceDone(`${t("methodRemoved", [name])} ${t("methodRemovedKeeps")}`, result);
+      await settleChange(`${t("methodRemoved", [name])} ${t("methodRemovedKeeps")}`, result);
       byId("methods").querySelector("button:not(:disabled)")?.focus() ?? byId("headline").focus();
     }
   });
@@ -318,11 +332,7 @@ byId("code-step").addEventListener("submit", async event => {
   byId("code-step").hidden = true;
   making = false;
   // The list first (render() sets the state once it is drawn), then the announcement.
-  await render().catch(e => {
-    setState("idle");
-    announce(errorText(e), "error");
-  });
-  announceDone(t("methodsCodeReplaced"), result);
+  await settleChange(t("methodsCodeReplaced"), result);
   byId("new-code").focus();
 });
 byId("print-code").addEventListener("click", printCode);
@@ -382,16 +392,14 @@ byId("password-form").addEventListener("submit", async event => {
   byId("password-form").reset();
   if (result) {
     byId("password-form").hidden = true;
-    await render().catch(console.error);
-    announceDone(t("methodsPasswordAdded"), result);
+    await settleChange(t("methodsPasswordAdded"), result);
     byId("add-password").focus();
   }
 });
 byId("add-keyring").addEventListener("click", async () => {
   const result = await change("add-keyring");
   if (result) {
-    await render().catch(console.error);
-    announceDone(t("methodsKeyringAdded"), result);
+    await settleChange(t("methodsKeyringAdded"), result);
   }
 });
 

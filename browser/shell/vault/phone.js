@@ -19,10 +19,19 @@ function setState(state, message = "", level = "info") {
   announce(message, level);
 }
 
-/** A result, with the warning when the change was saved but not recorded inside the profile (#177). */
-function settle(state, text, answer) {
-  if (answer?.warning === "not-recorded") {
-    setState(state, `${text} ${t("err_not_recorded")}`, "warn");
+/** A result, with the warning when the change was saved but not recorded inside the profile (#177). The
+    list is read again first; when that read fails, the result and its warning are still said, with the
+    failure after them (#258): the change went through all the same. */
+async function settle(state, text, answer) {
+  let readFailed = null;
+  await render().catch(e => {
+    readFailed = e;
+  });
+  const unrecorded = answer?.warning === "not-recorded" ? t("err_not_recorded") : "";
+  if (readFailed) {
+    setState(state, [text, unrecorded, errorText(readFailed)].filter(Boolean).join(" "), "error");
+  } else if (unrecorded) {
+    setState(state, `${text} ${unrecorded}`, "warn");
   } else {
     setState(state, text, "ok");
   }
@@ -85,8 +94,7 @@ async function poll() {
     }
   } else if (status.state === "paired") {
     stopPairing();
-    await render(); // the list first, then the announcement
-    settle("paired", t("phonePaired", [status.phone ?? ""]), status);
+    await settle("paired", t("phonePaired", [status.phone ?? ""]), status); // the list first, then the announcement
   } else if (status.state === "failed") {
     stopPairing();
     setState("error", failure(status.error), "error");
@@ -134,9 +142,8 @@ function phoneRow(method) {
     try {
       const result = await vault.change(profileId, "remove-method", { current, envelope: method.id });
       byId("current").value = "";
-      await render();
       // After the list, on purpose: the result (and its warning) is the last word, and the page is idle again.
-      settle("idle", t("phoneRemoved", [method.label]), result);
+      await settle("idle", t("phoneRemoved", [method.label]), result);
     } catch (e) {
       const code = String(e?.message ?? e);
       setState("error", failure(code), "error");
