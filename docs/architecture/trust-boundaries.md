@@ -28,7 +28,7 @@ Zero Trust here means: every boundary states **who is on each side, how identity
 
 ## Rules derived from the boundaries
 
-1. Anything crossing TB3 or TB4 is treated as untrusted by Nulavio code. Nulavio never reads vault contents or intercepts provider messages, and does not read extensions' storage, with one exception: which filter lists are selected in uBlock Origin, the content blocker Nulavio itself installs. It is read, never written, to say in Settings whether cookie notices are hidden ([ADR 0011](../adr/0011-nulavio-ui-native-not-an-extension.md), step 7; [R39](../security/residual-risks.md)).
+1. Anything crossing TB3 or TB4 is treated as untrusted by Nulavio code. Nulavio never reads vault contents or intercepts provider messages, and does not read extensions' storage, with one exception: which filter lists are selected in uBlock Origin, the content blocker Nulavio itself installs. It is read, never written, to say in Settings whether a list that hides cookie notices is on ([ADR 0011](../adr/0011-nulavio-ui-native-not-an-extension.md), step 7; [R39](../security/residual-risks.md)).
 2. A boundary without enforcement (TB6) is documented as residual risk, never presented as protected.
 3. Configuration that could weaken TB1, TB2 or TB7 is detected by Guard and blocks the launch at critical severity.
 4. New integrations must add a row here before they merge.

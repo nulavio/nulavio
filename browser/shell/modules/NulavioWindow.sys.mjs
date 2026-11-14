@@ -545,8 +545,14 @@ class WindowUI {
       const height = [...bars].reduce((sum, each) => sum + each.getBoundingClientRect().height, 0);
       doc.documentElement.style.setProperty("--nulavio-immersive-toolbar-size", `${Math.ceil(height)}px`);
     };
-    const sizes = new win.ResizeObserver(toolbarSize);
-    for (const each of doc.querySelectorAll("#navigator-toolbox > toolbar:not(#nulavio-band)")) {
+    const sizes = new win.ResizeObserver(entries => {
+      toolbarSize();
+      // The band's own row changed size: the site may fit now, or no longer (ADR 0009, decision 6).
+      if (entries.some(entry => entry.target.id === "nulavio-band") && this.#windows.has(win)) {
+        this.#applyImmersive(win);
+      }
+    });
+    for (const each of doc.querySelectorAll("#navigator-toolbox > toolbar")) {
       sizes.observe(each);
     }
     // ADR 0009, #239: in Immersive the toolbar stays while the keyboard is in it. The engine leaves the focus in the
@@ -776,7 +782,33 @@ class WindowUI {
     if (!this.#documentIsThere(win)) {
       return "page"; // the address is shown before its document: a tab being restored, an error page
     }
+    if (this.#windows.get(win)?.broken) {
+      return "connection"; // the engine found the connection broken: its own indicators say how
+    }
+    if (this.#windows.get(win)?.unfit) {
+      return "fit"; // the site's name does not fit the band's row: never cut, never over its neighbours
+    }
     return "";
+  }
+
+  /**
+   * Whether the site fits the band's row as Immersive draws it: its registrable part (which never gives way)
+   * and the words about the connection, inside the room the row leaves between the profile and the seals.
+   * Measured with the row laid out as with the mode on; the caller sets that up and puts it back.
+   */
+  #siteFits(win) {
+    const origin = this.#rows(win).map(row => row.querySelector(".nv-band-origin")).find(node => node?.checkVisibility());
+    if (!origin) {
+      return true; // nothing is drawn there to fit
+    }
+    const room = origin.getBoundingClientRect();
+    for (const part of origin.querySelectorAll(".nv-band-origin-host, .nv-band-origin-state")) {
+      const box = part.getBoundingClientRect();
+      if (box.width && (box.left < room.left - 0.5 || box.right > room.right + 0.5)) {
+        return false;
+      }
+    }
+    return true;
   }
 
   /**
@@ -814,6 +846,14 @@ class WindowUI {
     }
     const root = win.document.documentElement;
     const wanted = this.#immersiveWanted(win);
+    state.unfit = false;
+    if (wanted && !this.#immersiveBlock(win)) {
+      // Nothing else holds the mode back: does the site fit the row? The row is laid out as with the mode on
+      // and measured before anything is painted; when it does not fit, the toolbar stays (ADR 0009, decision 6).
+      root.toggleAttribute("nulavio-immersive", true);
+      state.bar.toggleAttribute("nv-neutral", false);
+      state.unfit = !this.#siteFits(win);
+    }
     const block = wanted ? this.#immersiveBlock(win) : "";
     root.toggleAttribute("nulavio-immersive", wanted && !block);
     const mark = (name, value) => (value ? setAttr(root, name, value) : root.removeAttribute(name));
@@ -909,6 +949,7 @@ class WindowUI {
     let sub = "";
     let host = "";
     let state = "";
+    let broken = false;
     try {
       const browser = win.gBrowser.selectedBrowser;
       const uri = browser.currentURI;
@@ -916,10 +957,14 @@ class WindowUI {
         if (uri.schemeIs("http") || uri.schemeIs("https")) {
           host = uri.displayHost;
           try {
-            const base = Services.eTLD.getBaseDomainFromHost(host);
-            if (host.endsWith(base) && host.length > base.length) {
-              sub = host.slice(0, host.length - base.length);
-              host = base;
+            // The registrable part is worked out from the host as the network has it (the service answers in
+            // punycode) and taken from the host as it is displayed, label for label: a name in another script
+            // keeps its emphasis, where comparing the two forms as text found no match (#142).
+            const base = Services.eTLD.getBaseDomainFromHost(uri.asciiHost).split(".").length;
+            const labels = host.split(".");
+            if (labels.length > base && labels.length === uri.asciiHost.split(".").length) {
+              sub = `${labels.slice(0, -base).join(".")}.`;
+              host = labels.slice(-base).join(".");
             }
           } catch {
             // An IP address or a single label: the whole host is the site.
@@ -941,6 +986,13 @@ class WindowUI {
           const fine = (identity?.contains("verifiedDomain") && !identity.contains("certUserOverridden"))
             || identity?.contains("localResource");
           state = fine ? "" : t("bandOriginNotSecure");
+          // Plainly not secure (http) is said in words and the mode stays. Anything else that is not fine is a
+          // connection the engine found broken: an exception the person added to a certificate, mixed content
+          // that was loaded, a weak cipher, or a verdict this code does not know. There the engine's own
+          // indicators are the cue, as ADR 0009 first had it: the toolbar stays.
+          // ("notSecureText" is the engine drawing the words "Not secure" beside the padlock, for the same verdict.)
+          const plain = Boolean(identity?.contains("notSecure")) && [...identity].every(name => name === "notSecure" || name === "notSecureText");
+          broken = !fine && !plain;
         } else if (uri.schemeIs("file")) {
           host = t("bandOriginFile");
         } else if (uri.schemeIs("about") && uri.spec.split(/[?#]/)[0] !== "about:blank") {
@@ -951,6 +1003,7 @@ class WindowUI {
       }
     } catch {
       sub = host = state = ""; // an uncommitted or destroyed tab names no site
+      broken = false;
     }
     for (const row of this.#rows(win)) {
       const node = row.querySelector(".nv-band-origin");
@@ -968,6 +1021,7 @@ class WindowUI {
     const window = this.#windows.get(win);
     if (window) {
       window.named = ownPage || Boolean(host);
+      window.broken = broken;
       this.#applyImmersive(win);
     }
   }

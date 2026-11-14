@@ -12,8 +12,8 @@
    store, each removable. uBlock Origin keeps its own list of trusted sites;
    Nulavio opens uBlock Origin's own page for it and never edits its data. Of
    that data it reads one thing, which of its lists are switched on, to say
-   in Settings whether cookie notices are hidden (the maintainer's decision
-   of 2026-11-12: reading, never writing). */
+   in Settings whether a list that hides cookie notices is among them (the
+   maintainer's decision of 2026-11-12: reading, never writing). */
 
 /* Permission types listed, in the order shown. Each relaxes a protection for one site. */
 export const TYPES = Object.freeze([
@@ -26,8 +26,28 @@ export const TYPES = Object.freeze([
 ]);
 
 const UBLOCK = "uBlock0@raymondhill.net";
-/* uBlock Origin's own lists that hide cookie notices (its registry's group "cookies"); any one of them does. */
-export const COOKIE_NOTICE_LISTS = Object.freeze(["fanboy-cookiemonster", "ublock-cookies-easylist", "adguard-cookies", "ublock-cookies-adguard"]);
+/* The names of uBlock Origin's lists, written at build time from the registry of the pinned version
+   (scripts/build/make_distribution.py --filter-lists): `cookies`, the ones that hide cookie notices (its
+   registry's group "cookies"), and `others`, every other list it names. */
+const FILTER_LISTS_URL = "resource://builtin-addons/nulavio-shell/shared/filter-lists.json";
+/* uBlock Origin's own entry for the person's filters ("My filters"): in its selection by default, and no list.
+   What the person wrote there is not read, so the answer below is about the lists and Settings words it so. */
+const USER_FILTERS = "user-filters";
+
+/**
+ * Whether a list that hides cookie notices is switched on in uBlock Origin: true when one of the cookie-notice
+ * lists is on; false when none is and every list that is on is one the registry names; null when a list that
+ * is on has a name this build does not know (imported by the person, renamed, or newer than this build): such
+ * a list may hide them, so nothing is said. Never an answer about what a page shows: the person's own filters
+ * and the sites they trust are not looked at.
+ */
+export function cookieNotices(selected, { cookies, others }) {
+  const on = selected.filter(key => key !== USER_FILTERS);
+  if (on.some(key => cookies.includes(key))) {
+    return true;
+  }
+  return on.every(key => others.includes(key)) ? false : null;
+}
 
 /** Set once a profile has received Nulavio's privacy defaults that only work as user values. */
 export const PREF_SEEDED = "nulavio.privacy.seeded";
@@ -285,10 +305,10 @@ class Privacy {
   }
 
   /**
-   * Whether uBlock Origin has a list that hides cookie notices switched on: `{ cookieNotices }`, or null
-   * when that cannot be read (it is off, still starting, or keeps its settings somewhere else). Its
-   * selection is read from its own settings and nothing is ever written there: its page is where a list
-   * is switched on or off.
+   * Whether uBlock Origin has a list that hides cookie notices switched on: `{ cookieNotices }` (true, false,
+   * or null when its selection has a list this build cannot tell of, see cookieNotices()), or null when that
+   * cannot be read (it is off, still starting, or keeps its settings somewhere else). Its selection is read
+   * from its own settings and nothing is ever written there: its page is where a list is switched on or off.
    */
   async filterLists() {
     const policy = WebExtensionPolicy.getByID(UBLOCK);
@@ -302,13 +322,36 @@ class Privacy {
       if (!Array.isArray(selectedFilterLists)) {
         return null; // it has not chosen its lists yet (its first start is not over)
       }
-      return { cookieNotices: COOKIE_NOTICE_LISTS.some(key => selectedFilterLists.includes(key)) };
+      return { cookieNotices: cookieNotices(selectedFilterLists.map(String), await this.#filterListNames()) };
     } catch (e) {
       console.error("Nulavio Privacy: uBlock Origin's lists could not be read", e);
       return null;
     } finally {
       store?.close?.();
     }
+  }
+
+  #listNames = null;
+
+  /** The names of uBlock Origin's lists (a file of the Shell itself, read once: nothing leaves the browser). */
+  #filterListNames() {
+    this.#listNames ??= new Promise((resolve, reject) => {
+      lazy.NetUtil.asyncFetch({ uri: FILTER_LISTS_URL, loadUsingSystemPrincipal: true }, (stream, status) => {
+        try {
+          if (!Components.isSuccessCode(status)) {
+            throw new Error("filter-lists.json is missing");
+          }
+          const { cookies, others } = JSON.parse(lazy.NetUtil.readInputStreamToString(stream, stream.available(), { charset: "UTF-8" }));
+          if (!Array.isArray(cookies) || !cookies.length || !Array.isArray(others)) {
+            throw new Error("filter-lists.json names no lists");
+          }
+          resolve({ cookies, others });
+        } catch (e) {
+          reject(e);
+        }
+      });
+    });
+    return this.#listNames;
   }
 
   /** Open uBlock Origin's own list of trusted sites (its dashboard), in a tab. */

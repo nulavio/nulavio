@@ -286,7 +286,8 @@ class SearchPrivacyTest(unittest.TestCase):
         """Issue #112: the engine's own "add search engine" dialog takes a plain-http address (it calls the search
         service's addUserEngine, as here), and Nulavio's old form, which refused one, is gone. What stands in the way
         is HTTPS-Only, on by default: the suggestion request is upgraded and the search stops at the engine's warning,
-        so nothing typed reaches the http server. With HTTPS-Only switched off by the person it does: the control."""
+        so nothing typed reaches the http server. With the exception the person makes on that warning the search
+        goes on in the clear, and what is typed while typing still does not."""
         self.require_nulavio()
         host = "nulavio-plain.test"  # not this computer by name: HTTPS-Only leaves loopback addresses alone
         self.m.chrome("Services.prefs.setStringPref('network.dns.localDomains', arguments[0]);", [host])
@@ -311,14 +312,29 @@ class SearchPrivacyTest(unittest.TestCase):
             shown = "return gBrowser.selectedBrowser.documentURI?.spec.startsWith('about:httpsonlyerror') ?? false;"
             self.assertTrue(harness.wait_until(lambda: self.m.chrome(shown), 20), "the search did not stop at the warning")
             self.assertEqual([hit for hit in self.server.hits if "nvplain" in hit], [], "typed text reached the http server")
-            # The control: the same engine with HTTPS-Only switched off sends what is typed, in the clear.
-            self.m.chrome("Services.prefs.setBoolPref('dom.security.https_only_mode', false);")
+            # After the person goes on from that warning ("continue to HTTP site"), the engine keeps an exception for
+            # that one site. It is for pages: what is typed still goes out upgraded, as the browser's own request,
+            # and nothing reaches the server while typing. The search itself, once sent, goes in the clear, as the
+            # person agreed on the warning; it is also the control that this server records what comes in the clear.
+            # HTTPS-Only itself stays on throughout.
+            exception = (
+                "const p = Services.scriptSecurityManager.createContentPrincipalFromOrigin(arguments[0]);"
+                " const type = 'https-only-load-insecure';"
+                " if (arguments[1]) { Services.perms.addFromPrincipal(p, type, Ci.nsIPermissionManager.ALLOW_ACTION); }"
+                " else { Services.perms.removeFromPrincipal(p, type); }"
+            )
+            self.m.chrome(exception, [base, True])
             try:
-                self.type_in_urlbar("nvplaincontrol")
-                in_the_clear = lambda: any("nvplaincontrol" in hit for hit in self.server.requests_to("/suggest"))  # noqa: E731
-                self.assertTrue(harness.wait_until(in_the_clear, 10))
+                seen = self.type_in_urlbar("nvplainexcepted")
+                self.assertIn(f"https://{host}:{self.server.port}/suggest?q=nvplainexcepted", seen, "no longer upgraded")
+                self.assertEqual([hit for hit in self.server.hits if "nvplain" in hit], [], "typed text reached the http server")
+                self.m.chrome("openTrustedLinkIn(arguments[0], 'current');", [added["search"]])
+                in_the_clear = lambda: any("nvplainsearch" in hit for hit in self.server.requests_to("/search"))  # noqa: E731
+                self.assertTrue(harness.wait_until(in_the_clear, 20), "the search did not go on to the http site")
+                self.assertEqual([hit for hit in self.server.requests_to("/suggest") if "nvplain" in hit], [])
+                self.assertTrue(self.pref("dom.security.https_only_mode"))
             finally:
-                self.m.chrome("Services.prefs.clearUserPref('dom.security.https_only_mode');")
+                self.m.chrome(exception, [base, False])
         finally:
             self.m.navigate("about:blank")
             self.search("await S.setSuggestOptIn(args[0], false);", added["id"])

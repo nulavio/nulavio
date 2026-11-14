@@ -162,6 +162,7 @@ def refresh_registry() -> None:
     config["registry"] = {"version": entry.version, "sha256": hashlib.sha256(raw).hexdigest()}
     CONTENT_FILTER.write_text(json.dumps(config, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     print(f"copied uBlock Origin {entry.version}'s list registry to {REGISTRY_DIR.relative_to(ROOT)}")
+    print("    now run scripts/build/make_distribution.py --filter-lists (the list names Settings tells cookie notices by)")
 
 
 def main() -> int:
