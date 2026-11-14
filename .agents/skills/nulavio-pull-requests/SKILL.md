@@ -14,8 +14,16 @@ disagree, the documents win: fix this file in the same pull request.
 
 1. Name the issue the work moves forward; open one first if there is none
    ([issues](../../../docs/process/issues.md)).
-2. Start from the current `main` in a worktree of your own:
-   `git fetch origin && git worktree add -b agent/<tool>/<type>-<slug> ../nulavio-<slug> origin/main`.
+2. Start from the current `main` in a worktree of your own, after
+   `git fetch origin`. Run one of these, not both:
+   - most work, without the design screenshots (about 18 MB instead of 90):
+     `git worktree add --no-checkout -b agent/<tool>/<type>-<slug> ../nulavio-<slug> origin/main`,
+     then in it `git sparse-checkout set --no-cone '/*' '!/docs/design/screenshots/'`
+     and `git checkout`
+     ([pull requests](../../../docs/process/pull-requests.md#worktrees-without-the-design-screenshots));
+   - design work, the full checkout:
+     `git worktree add -b agent/<tool>/<type>-<slug> ../nulavio-<slug> origin/main`.
+
    A worktree another session uses is not yours: do not commit or build in it.
 3. Conventional, signed-off commits (`git commit -s`). With
    `git config core.hooksPath scripts/git-hooks`, the hooks refuse a commit that
