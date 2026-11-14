@@ -139,6 +139,10 @@ class WorkflowTest(unittest.TestCase):
         ):
             self.assertIn(clause, condition)
 
+    def test_ci_reviews_only_codeowners_changes_and_posts_nothing_for_the_others(self):
+        self.assertIn("scripts/ci/ai_review_input.py --head-dir .ai-review/head --out .ai-review --only-sensitive", WORKFLOW)
+        self.assertIn("needs.review.outputs.status != 'not-sensitive'", WORKFLOW)
+
     def test_concurrency_cancels_older_reviews_of_the_same_pull_request(self):
         self.assertRegex(WORKFLOW, r"(?m)^  group: ai-review-\$\{\{ github\.event\.pull_request\.number \}\}")
         self.assertIn("cancel-in-progress: true", WORKFLOW)
@@ -596,6 +600,49 @@ class ReviewInputTest(unittest.TestCase):
             self.assertIn("+echo hi", diff)
             self.assertEqual(result["binary_files"], "1")
             self.assertEqual((out / "pr.binary.txt").read_text(), "hidden.js\n")
+
+    @unittest.skipUnless(shutil.which("git"), "git not installed")
+    def test_in_ci_only_a_change_to_a_codeowners_path_or_a_labelled_one_is_sent(self):
+        patterns = ai_review_input.codeowners_patterns()
+        self.assertIn("/scripts/release/", patterns)
+        covered = ai_review_input.sensitive
+        self.assertEqual(covered(["scripts/release/x.py", "site/index.html"], patterns), ["scripts/release/x.py"])
+        self.assertEqual(
+            covered(["launcher/AGENTS.md", ".coderabbit.yaml"], patterns), ["launcher/AGENTS.md", ".coderabbit.yaml"]
+        )
+        self.assertEqual(covered(["docs/product/roadmap.md", "browser/shell/x.js", "x/.coderabbit.yaml"], patterns), [])
+        self.assertEqual(covered(["anything"], ["*.sh"]), ["anything"], "a pattern not understood reviews everything")
+        with tempfile.TemporaryDirectory() as tmp:
+            repo, base, head = self.make_repo(Path(tmp))  # changes notes.txt only: no CODEOWNERS path
+            for event, expected in (
+                ({}, "not-sensitive"),
+                ({"pull_request": {"labels": [{"name": "ai-review"}]}}, "ready"),
+                ({"action": "labeled", "label": {"name": "ai-review"}}, "ready"),
+            ):
+                with self.subTest(event=event), redirect_stdout(io.StringIO()) as printed:
+                    out = Path(tmp) / f"out-{expected}-{len(event)}"
+                    result = ai_review_input.prepare(repo, out, base, head, event, delete_repo=False, only_sensitive=True)
+                    self.assertEqual(result["status"], expected)
+                    self.assertEqual((out / "pr.diff.txt").exists(), expected == "ready", "nothing is sent when skipped")
+                    if expected == "not-sensitive":
+                        self.assertIn("no CODEOWNERS path changed", printed.getvalue())
+            # Without the flag (the maintainer's local script) every change is reviewed.
+            result = ai_review_input.prepare(repo, Path(tmp) / "out-local", base, head, {}, delete_repo=False)
+            self.assertEqual(result["status"], "ready")
+            # A file moved out of a CODEOWNERS path counts as a change to it.
+            (repo / "scripts" / "release").mkdir(parents=True)
+            (repo / "scripts" / "release" / "s.sh").write_text("echo\n")
+            self.git(repo, "add", ".")
+            self.git(repo, "commit", "-q", "-m", "add")
+            moved_from = self.git(repo, "rev-parse", "HEAD")
+            self.git(repo, "mv", "scripts/release/s.sh", "s.sh")
+            self.git(repo, "commit", "-q", "-m", "move out")
+            moved = self.git(repo, "rev-parse", "HEAD")
+            with redirect_stdout(io.StringIO()):
+                result = ai_review_input.prepare(
+                    repo, Path(tmp) / "out-move", moved_from, moved, {}, delete_repo=False, only_sensitive=True
+                )
+            self.assertEqual(result["status"], "ready")
 
     def test_binary_paths_reads_numstat_including_renames(self):
         numstat = b"3\t1\ta.py\0-\t-\timg.png\0-\t-\t\0old.bin\0new.bin\0" + b"0\t0\t\0x.py\0y.py\0"
