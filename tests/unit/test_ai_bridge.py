@@ -1614,6 +1614,7 @@ class LocalRequestsTest(Home):
             self.assertEqual(held("https://192.168.1.1/upgraded")[0], "network.continueRequest")
             self.assertEqual(held("http://127.0.0.1:2375/containers")[0], "network.failRequest")
             self.assertEqual(held("http://10.0.0.9/other")[0], "network.failRequest")
+            self.assertIsNone(tools.Bridge._request_place("http://127.0.0.1:99999/"))  # no place: refused, no error
             # Anything unexpected fails the request: closed, not open.
             with mock.patch.object(tools.Bridge, "_request_allowed", side_effect=RuntimeError("bug")):
                 self.assertEqual(held("https://example.org/a")[0], "network.failRequest")
@@ -1697,6 +1698,9 @@ class LocalRequestsTest(Home):
         self.assertEqual(commands[-3:], [("network.failRequest", {"request": "new"}),
                                          ("network.continueRequest", {"request": "known"}),
                                          ("network.continueRequest", {"request": "ip"})])  # fmt: skip
+        entries = [json.loads(line) for line in audit.audit_path().read_text().splitlines()]
+        reasons = [e["reason"] for e in entries if e.get("tool") == "network"]
+        self.assertEqual(reasons, ["local-requests-busy"])  # one line, not a public site taken for a local one
 
     def test_the_activity_lists_a_few_refused_places_then_says_there_were_more(self):
         # Review: a page that tries a whole network (or a port scan of this computer) wrote a line per

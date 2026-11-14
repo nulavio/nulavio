@@ -330,6 +330,10 @@ def descriptor(tool: Tool) -> dict:
     }  # fmt: skip
 
 
+class _Busy(Exception):
+    """A name could not be looked up in time, or too many were out: its request fails, as if it were local."""
+
+
 class _Lookup:
     """A name being looked up for held requests; those that need it while it runs wait for this one."""
 
@@ -375,6 +379,7 @@ class Bridge:
         self._local_hosts: dict[str, tuple[float, bool]] = {}  # resolved name -> (when, local)
         self._local_refused: set[str | None] = set()  # origins whose refused request is in the activity already
         self._local_refused_more = False  # more places were refused than the activity lists
+        self._local_busy_noted = False  # requests were failed because too many names were out
         self._net_state = threading.Lock()  # what the request threads share
         self._lookups: dict[str, _Lookup] = {}  # names being looked up for held requests
         self._net_waiting = 0  # held requests waiting for a name
@@ -753,10 +758,14 @@ class Bridge:
             crowded = self._net_waiting >= NET_WAITING_MAX
             if not crowded:
                 self._net_waiting += 1
-        if crowded:  # a page that holds this many names at once gets its next ones failed
-            self._answer(engine, request, url, False)
-            return
-        threading.Thread(target=self._decide_later, args=(engine, request, url), name="bridge-net", daemon=True).start()
+        if not crowded:
+            try:
+                threading.Thread(target=self._decide_later, args=(engine, request, url), name="bridge-net", daemon=True).start()
+                return
+            except RuntimeError:  # no thread to be had: the request is not left held
+                with self._net_state:
+                    self._net_waiting -= 1
+        self._answer(engine, request, url, False, busy=True)  # a page holding this many names gets its next ones failed
 
     def _decide_later(self, engine: Bidi, request: dict, url: str) -> None:
         try:
@@ -768,29 +777,41 @@ class Bridge:
     def _decide(self, engine: Bidi, request: dict) -> None:
         """Sent on, or failed before it leaves; anything unexpected fails the request."""
         url = str(request.get("url") or "")
-        allowed = False
-        with contextlib.suppress(Exception):
+        allowed, busy = False, False
+        try:
             allowed = bool(self._request_allowed(url))
-        self._answer(engine, request, url, allowed)
+        except _Busy:
+            busy = True
+        except Exception:  # noqa: S110 - anything unexpected fails the request: closed, not open
+            pass
+        self._answer(engine, request, url, allowed, busy=busy)
 
-    def _answer(self, engine: Bidi, request: dict, url: str, allowed: bool) -> None:
+    def _answer(self, engine: Bidi, request: dict, url: str, allowed: bool, busy: bool = False) -> None:
         method = "network.continueRequest" if allowed else "network.failRequest"
         with contextlib.suppress(BidiError):
             engine.command(method, {"request": request.get("request")}, timeout=10)
         if not allowed:
-            self._note_refused(policy.origin(url))
+            self._note_refused(None if busy else policy.origin(url), busy=busy)
 
-    def _note_refused(self, target: str | None) -> None:
+    def _note_refused(self, target: str | None, busy: bool = False) -> None:
         """Once per place, and at most LOCAL_REFUSED_NOTED places a session, then one line that says more were
-        refused: a page that tries a whole network must not push the agent's own actions out of the activity."""
+        refused: a page that tries a whole network must not push the agent's own actions out of the activity.
+        Requests failed because too many names were out (`busy`, local or not) are one line of their own."""
         with self._net_state:
-            if target in self._local_refused or self._local_refused_more:
+            if busy:
+                if self._local_busy_noted:
+                    return
+                self._local_busy_noted, reason = True, "local-requests-busy"
+            elif target in self._local_refused or self._local_refused_more:
                 return
-            if len(self._local_refused) >= LOCAL_REFUSED_NOTED:
+            elif len(self._local_refused) >= LOCAL_REFUSED_NOTED:
                 self._local_refused_more, target, reason = True, None, "local-requests-more"
             else:
                 self._local_refused.add(target)
                 reason = "local-request"
+        self._record_refused(target, reason)
+
+    def _record_refused(self, target: str | None, reason: str) -> None:
         with contextlib.suppress(Exception):
             audit.record(agent=self.agent_id, session=self.session_id, tool="network", capability="local_resources",
                          decision="deny", reason=reason, target=target, outcome="denied")  # fmt: skip
@@ -803,9 +824,13 @@ class Bridge:
         if scheme not in ("http", "https"):
             return None
         parts = urllib.parse.urlsplit(f"{scheme}:{rest}")
+        try:
+            port = parts.port
+        except ValueError:  # out of range: no place a request can go to
+            return None
         if not parts.hostname:
             return None
-        return parts.hostname, parts.port or (443 if scheme == "https" else 80)
+        return parts.hostname, port or (443 if scheme == "https" else 80)
 
     def _request_allowed(self, url: str, wait: bool = True) -> bool | None:
         """A request may leave unless it goes to this computer or the local network, and the current call
@@ -841,10 +866,16 @@ class Bridge:
             lookup = self._lookups.get(host)
             if lookup is None:
                 if len(self._lookups) >= LOOKUPS_AT_ONCE:
-                    return True
+                    raise _Busy()
                 lookup = self._lookups[host] = _Lookup()
-                threading.Thread(target=self._resolve, args=(host, lookup), name="bridge-dns", daemon=True).start()
-        return lookup.local if lookup.done.wait(LOCAL_LOOKUP_TIMEOUT) else True
+                try:
+                    threading.Thread(target=self._resolve, args=(host, lookup), name="bridge-dns", daemon=True).start()
+                except RuntimeError:  # no thread to be had: the slot is given back
+                    del self._lookups[host]
+                    raise _Busy() from None
+        if not lookup.done.wait(LOCAL_LOOKUP_TIMEOUT):
+            raise _Busy()
+        return lookup.local
 
     def _resolve(self, host: str, lookup: _Lookup) -> None:
         local = True
