@@ -301,6 +301,24 @@ class AppearanceTest(unittest.TestCase):
         steady = lambda prefs: {k: v for k, v in prefs.items() if matters(k)}  # noqa: E731
         self.assertEqual(steady(after["prefs"]), steady(before["prefs"]))
 
+    def test_05b_a_value_that_is_not_declared_is_refused_and_changes_nothing(self):
+        """#142: the module refuses any value its option does not declare (the schema no longer lists them),
+        whoever calls it, and no setting of the profile changes."""
+        before = self.snapshot()
+        refused = f"""
+          const P = {PERSONALISE};
+          try {{ await P.set(arguments[0], arguments[1]); return "accepted"; }} catch (e) {{ return e.code ?? String(e); }}
+        """
+        for option in sorted(APPEARANCE):
+            others = [v for o in APPEARANCE.values() if o is not APPEARANCE[option] for v in o["values"]]
+            undeclared = [v for v in ("not-declared", 7, None, "", *others) if v not in APPEARANCE[option]["values"]]
+            for value in undeclared:
+                with self.subTest(option=option, value=value):
+                    self.assertEqual(self.m.chrome(f"return (async () => {{ {refused} }})();", [option, value]), "invalid-value")
+        matters = self.matters()  # the engine's own background writes are not what this is about
+        steady = lambda prefs: {k: v for k, v in prefs.items() if matters(k)}  # noqa: E731
+        self.assertEqual(steady(self.snapshot()["prefs"]), steady(before["prefs"]))
+
     def test_06_security_indicators_stay_whole_in_every_variant(self):
         self.m.send("WebDriver:SetWindowRect", {"width": 1366, "height": 768})
         with harness.FixtureServer() as server:

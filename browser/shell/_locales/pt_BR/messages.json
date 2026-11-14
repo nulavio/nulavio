@@ -71,6 +71,7 @@
   "engineSuggestLabel": {"message": "Sugestões enquanto você digita"},
   "engineSuggestOn": {"message": "Ligado: o que você digita é enviado a $HOST$ enquanto você digita.", "placeholders": {"host": {"content": "$1"}}},
   "engineSuggestOff": {"message": "Desligado: nada é enviado até você pesquisar."},
+  "engineSuggestPaused": {"message": "Permitido, mas as sugestões de pesquisa estão desativadas no navegador, então nada é enviado até você pesquisar."},
   "engineRemove": {"message": "Remover"},
   "confirmCancel": {"message": "Cancelar"},
   "addProviderButton": {"message": "Adicionar $NAME$", "placeholders": {"name": {"content": "$1"}}},

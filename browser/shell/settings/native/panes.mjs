@@ -609,6 +609,9 @@
       if (profile.temporary) {
         return "nulavio-profile-temporary";
       }
+      if (profile.protectionUnknown) {
+        return "nulavio-profile-unknown"; // not "No password": it is not known (#142)
+      }
       return profile.encrypted ? (profile.locked ? "nulavio-profile-locked" : "nulavio-profile-unlocked") : "nulavio-profile-plain";
     };
     // The engine's own profile icons: a disc (context-fill) and a drawing (context-stroke), which the
@@ -1428,7 +1431,12 @@
             controlAttrs: {
               label: engine.name,
               // What happens to what is typed, in words: where it goes when on, that nothing goes when off.
-              description: engine.suggestOptIn ? msg("engineSuggestOn", engine.suggestHost) : msg("engineSuggestOff"),
+              // Allowed here and off in the engine's own "Show search suggestions": nothing goes (#142).
+              description: !engine.suggestOptIn
+                ? msg("engineSuggestOff")
+                : search.state.value?.suggestions
+                  ? msg("engineSuggestOn", engine.suggestHost)
+                  : msg("engineSuggestPaused"),
               class: "nulavio-engine",
               "data-engine": engine.id,
             },
@@ -1553,7 +1561,7 @@
       onUserClick(event) {
         event.preventDefault();
         if (filter.state.value?.active) {
-          shell.NulavioPrivacy.openFilterLists();
+          shell.NulavioPrivacy.openFilterLists(top()); // in this window, not the one used last
         } else {
           top().BrowserAddonUI.openAddonsMgr("addons://list/extension"); // where it is turned on, or seen to be missing
         }

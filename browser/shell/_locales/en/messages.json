@@ -71,6 +71,7 @@
   "engineSuggestLabel": {"message": "Suggestions while you type"},
   "engineSuggestOn": {"message": "On: what you type is sent to $HOST$ while you type.", "placeholders": {"host": {"content": "$1"}}},
   "engineSuggestOff": {"message": "Off: nothing is sent until you search."},
+  "engineSuggestPaused": {"message": "Allowed, but search suggestions are off in the browser, so nothing is sent until you search."},
   "engineRemove": {"message": "Remove"},
   "confirmCancel": {"message": "Cancel"},
   "addProviderButton": {"message": "Add $NAME$", "placeholders": {"name": {"content": "$1"}}},
