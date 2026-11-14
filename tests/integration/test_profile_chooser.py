@@ -517,8 +517,20 @@ class ProfileChooserTest(unittest.TestCase):
         self.assertFalse(storage.Container(path).mounted())
 
 
+class _XImage(ctypes.Structure):
+    """The head of Xlib's XImage: enough to read the pixels of a picture of the display."""
+
+    _fields_ = [
+        ("width", ctypes.c_int), ("height", ctypes.c_int), ("xoffset", ctypes.c_int), ("format", ctypes.c_int),
+        ("data", ctypes.POINTER(ctypes.c_char)), ("byte_order", ctypes.c_int), ("bitmap_unit", ctypes.c_int),
+        ("bitmap_bit_order", ctypes.c_int), ("bitmap_pad", ctypes.c_int), ("depth", ctypes.c_int),
+        ("bytes_per_line", ctypes.c_int), ("bits_per_pixel", ctypes.c_int),
+    ]  # fmt: skip
+
+
 class Keyboard:
-    """Keys typed into a private X display through XTest, as a person's keyboard."""
+    """Keys typed into a private X display through XTest, as a person's keyboard; and what that display shows,
+    which is all there is to wait on where no engine can be asked (the chooser before any profile has started)."""
 
     def __init__(self, display: str):
         self.x = ctypes.cdll.LoadLibrary(ctypes.util.find_library("X11"))
@@ -536,6 +548,19 @@ class Keyboard:
             ctypes.POINTER(ctypes.POINTER(ctypes.c_ulong)), ctypes.POINTER(ctypes.c_uint),
         ]  # fmt: skip
         self.x.XFree.argtypes = [ctypes.c_void_p]
+        self.x.XDisplayWidth.argtypes = self.x.XDisplayHeight.argtypes = [ctypes.c_void_p, ctypes.c_int]
+        self.x.XGetImage.restype = ctypes.POINTER(_XImage)
+        integer, cardinal = ctypes.c_int, ctypes.c_uint
+        self.x.XGetImage.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_ulong,
+            integer,
+            integer,
+            cardinal,
+            cardinal,
+            ctypes.c_ulong,
+            integer,
+        ]
         self.xtst.XTestFakeKeyEvent.argtypes = [ctypes.c_void_p, ctypes.c_uint, ctypes.c_int, ctypes.c_ulong]
         self.display = self.x.XOpenDisplay(display.encode())
         if not self.display:
@@ -549,6 +574,35 @@ class Keyboard:
         if children:
             self.x.XFree(children)
         return count.value
+
+    def picture(self) -> bytes | None:
+        """The display's pixels as they are now, or None when it could not be read."""
+        width, height = self.x.XDisplayWidth(self.display, 0), self.x.XDisplayHeight(self.display, 0)
+        image = self.x.XGetImage(self.display, self.x.XDefaultRootWindow(self.display), 0, 0, width, height, 0xFFFFFFFF, 2)
+        if not image:
+            return None
+        try:
+            return ctypes.string_at(image.contents.data, image.contents.bytes_per_line * image.contents.height)
+        finally:
+            self.x.XFree(image.contents.data)
+            self.x.XFree(image)
+
+    def drawn(self, after: bytes | None = None, apart: float = 0.5, times: int = 3, timeout: float = 90) -> bytes | None:
+        """Wait until the display shows a page and has stopped changing: `times` pictures `apart` seconds from
+        each other are the same, they are not a bare window (a page has text and pictures: many colours), and
+        they are not `after`, the picture from before the step waited on. Answers that picture, or None when
+        the time is up. With a text cursor blinking in the picture, ask for two pictures a fifth of a second apart."""
+        end = time.monotonic() + timeout
+        seen: list[bytes | None] = []
+        while time.monotonic() < end:
+            seen = [*seen[-(times - 1) :], self.picture()] if times > 1 else [self.picture()]
+            now = seen[-1]
+            if now and len(seen) == times and all(each == now for each in seen) and now != after:
+                colours = {now[at : at + 4] for at in range(0, len(now), 4 * 97)}  # one pixel in 97
+                if len(colours) > 32:
+                    return now
+            time.sleep(apart)
+        return None
 
     def key(self, name: str) -> None:
         code = self.x.XKeysymToKeycode(self.display, self.x.XStringToKeysym(name.encode()))
@@ -767,8 +821,9 @@ class StartupChooserTest(unittest.TestCase):
         # first, nothing is started on the locked folder and no profile is made. (Nothing is chosen: closed again.)
         linked = self.plain_start(headful, "http://127.0.0.1:9/a-link-from-another-program")
         self.assertTrue(harness.wait_until(lambda: keyboard.windows() > 0, timeout=60), "no window at a start with a link")
-        time.sleep(6)
+        self.assertIsNotNone(keyboard.drawn(), "the window of a start with a link stayed bare")
         self.capture(display, "startup-every-profile-protected-link")
+        time.sleep(3)  # nothing is asked of it: time for a profile to be started or made, if one were going to be
         self.assertIsNone(protected.running_pid(), "a link started the engine straight on the locked profile")
         self.assertFalse(storage.Container(path).mounted())
         self.assertEqual(sections(), [f"Path={path.name}", "[Profile0]"], "a link made a profile outside the group")
@@ -778,13 +833,18 @@ class StartupChooserTest(unittest.TestCase):
         self.assertTrue(harness.wait_until(lambda: keyboard.windows() == 0, timeout=30), "the window of that start stayed")
         self.plain_start(headful)
         self.assertTrue(harness.wait_until(lambda: keyboard.windows() > 0, timeout=60), "no window at the plain start")
-        time.sleep(6)  # the chooser's cards: there is no engine to ask when they are drawn
+        # No engine can be asked when the chooser's cards are drawn, so the display is: a page, no longer changing.
+        cards = keyboard.drawn()
+        self.assertIsNotNone(cards, "the chooser's window stayed bare")
         self.assertIsNone(protected.running_pid(), "started straight on the locked profile")
         self.assertFalse(storage.Container(path).mounted())
         self.capture(display, "startup-every-profile-protected")
         keyboard.key("Tab")  # the only card
+        focused = keyboard.drawn(after=cards)
+        self.assertIsNotNone(focused, "Tab did not put the keyboard on the card")
         keyboard.key("Return")
-        time.sleep(3)
+        # The unlock step is on the display (its field has a blinking cursor: two pictures close together).
+        self.assertIsNotNone(keyboard.drawn(after=focused, apart=0.2, times=2), "the unlock step did not open")
         self.capture(display, "startup-every-profile-protected-unlock")
         keyboard.type(PASSWORD)
         keyboard.key("Return")
@@ -832,12 +892,17 @@ class StartupChooserTest(unittest.TestCase):
         headful = {k: v for k, v in plain.items() if k != "MOZ_HEADLESS"} | {"DISPLAY": display, "GDK_BACKEND": "x11"}
         self.plain_start(headful)
         self.assertTrue(harness.wait_until(lambda: keyboard.windows() > 0, timeout=60), "no window at the plain start")
-        time.sleep(6)  # the chooser's cards: there is no engine to ask when they are drawn
+        # No engine can be asked when the chooser's cards are drawn, so the display is: a page, no longer changing.
+        cards = keyboard.drawn()
+        self.assertIsNotNone(cards, "the chooser's window stayed bare")
         self.assertIsNone(protected.running_pid())
         self.assertFalse(storage.Container(path).mounted(), "unlocked before anything was typed")
         keyboard.key("Tab")  # the first card: the locked profile
+        focused = keyboard.drawn(after=cards)
+        self.assertIsNotNone(focused, "Tab did not put the keyboard on the card")
         keyboard.key("Return")
-        time.sleep(3)  # the unlock step, the password field focused
+        # The unlock step is on the display, its password field focused (a blinking cursor: two pictures close together).
+        self.assertIsNotNone(keyboard.drawn(after=focused, apart=0.2, times=2), "the unlock step did not open")
         self.assertFalse(storage.Container(path).mounted(), "unlocked before the password")
         keyboard.type(PASSWORD)
         keyboard.key("Return")
