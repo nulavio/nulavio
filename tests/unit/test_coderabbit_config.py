@@ -238,8 +238,20 @@ class CodeRabbitConfigTest(unittest.TestCase):
             seen.add(pattern)
             self.assertTrue(any(glob_matches(pattern, name) for name in files), f"{pattern} matches no tracked file")
             self.assertLessEqual(len(entry["instructions"]), 20000)
-        for area in ("browser/shell/**", "launcher/**", "tests/**", ".github/**", "scripts/**", "site/**", "android/**"):
+        for area in ("browser/**", "launcher/**", "tests/**", ".github/**", "scripts/**", "site/**", "android/**"):
             self.assertIn(area, seen)
+
+    def test_an_area_with_its_own_agents_md_points_to_it_and_reads_it(self):
+        # The rules of an area live in its AGENTS.md (#179); the review's instructions point there
+        # instead of repeating them, and the file is one of its code guidelines.
+        guidelines = self.config["knowledge_base"]["code_guidelines"]["filePatterns"]
+        instructions = {entry["path"]: entry["instructions"] for entry in self.reviews["path_instructions"]}
+        areas = sorted(name.rpartition("/")[0] for name in tracked_files() if name.endswith("/AGENTS.md"))
+        self.assertEqual(areas, sorted(["browser", "launcher", "android", "site", "tests", "scripts/release"]))
+        for area in areas:
+            with self.subTest(area=area):
+                self.assertIn(f"{area}/AGENTS.md", guidelines)
+                self.assertIn(f"{area}/AGENTS.md", " ".join(instructions[f"{area}/**"].split()))
         self.assertLessEqual(len(self.config["tone_instructions"]), 250)
 
     def test_the_guideline_documents_exist(self):
