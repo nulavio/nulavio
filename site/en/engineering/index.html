@@ -441,7 +441,21 @@
 </div>
 <div class="claim" id="s3-6">
 <div class="claim-text">
-<h3><span class="num">3.6</span> What we have not published yet</h3>
+<h3><span class="num">3.6</span> Links to a passage, with or without tracking</h3>
+<p>Select some text and use «Copy Link to Highlight» in the page menu: the link opens the page scrolled to the passage, highlighted, in Nulavio, Firefox, Chrome and Safari (it is the standard text fragment, <code translate="no">#:~:text=</code>). «Copy Clean Link to Highlight» does the same and strips the tracking parameters on the engine's list, such as <code translate="no">utm_</code>, from the link. On the opened page, «Remove highlight» clears the mark. It is the engine's own feature, which Nulavio leaves as it is.</p>
+<p class="limit"><strong>Limit:</strong> It does not work in PDFs, in frames inside the page, in text fields or in the page's source view: the engine does not make the link there.</p>
+</div>
+<div class="receipt">
+<p class="receipt-title">How to check</p>
+<dl>
+<dt>Tests</dt>
+<dd><code class="ref" translate="no">tests/integration/test_text_fragments.py</code></dd>
+</dl>
+</div>
+</div>
+<div class="claim" id="s3-7">
+<div class="claim-text">
+<h3><span class="num">3.7</span> What we have not published yet</h3>
 <p class="claim-state"><svg class="icon" aria-hidden="true" focusable="false"><use href="#i-missing"/></svg><span>Not done</span></p>
 <p>The full list of connections a new profile makes on its own. This section lists the ones we know about and chose to keep: Safe Browsing, Remote Settings, the download and updates of extensions on addons.mozilla.org, uBlock Origin's lists, the DNS resolver you choose (4.4), and Mozilla's captive-portal detection (firefox-portal-detection.com), left as the engine sets it. There is no test yet that records every request of a new profile.</p>
 </div>
