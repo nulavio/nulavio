@@ -79,6 +79,8 @@ elif args[:2] in (["kms", "get-public-key"], ["kms", "sign"]):
         from cryptography.hazmat.primitives.asymmetric import utils
         digest = Path(arg("--message").removeprefix("fileb://")).read_bytes()
         sig = key.sign(digest, padding.PKCS1v15(), utils.Prehashed(hashes.SHA256()))
+        if os.environ.get("FAKE_KMS_BAD_SIGNATURE"):
+            sig = sig[:-1] + bytes([sig[-1] ^ 1])
         print(json.dumps({"Signature": base64.b64encode(sig).decode()}))
 else:
     sys.exit(2)
@@ -230,6 +232,53 @@ class KmsImportKeyTest(unittest.TestCase):
         calls = (state / "calls").read_text().split("\n")
         self.assertEqual(calls.count("kms import-key-material"), 1)
         self.assertIn("kms sign", calls)
+
+    def test_a_pkcs8_key_whose_numbers_disagree_is_refused_before_kms(self):
+        from cryptography.hazmat.primitives import serialization
+        from cryptography.hazmat.primitives.asymmetric import rsa
+
+        key = rsa.generate_private_key(public_exponent=65537, key_size=4096)
+        numbers = kik.pkcs8_numbers(key.private_bytes(
+            serialization.Encoding.DER, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()))  # fmt: skip
+        state, bin_dir, runtime = self.tmp / "kms-bad", self.tmp / "bin-bad", self.tmp / "runtime-bad"
+        for d in (state, bin_dir, runtime):
+            d.mkdir(mode=0o700)
+        (bin_dir / "aws").write_text(FAKE_KMS.replace("#!/usr/bin/env python3", f"#!{sys.executable}"))
+        (bin_dir / "aws").chmod(0o700)
+        bad = self.tmp / "bad.p8"
+        bad.write_bytes(kik.pkcs8({**numbers, "p": numbers["p"] + 2}))
+        bad.chmod(0o600)
+        env = {"PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}", "FAKE_KMS_STATE": str(state), "XDG_RUNTIME_DIR": str(runtime)}
+        stderr = io.StringIO()
+        with mock.patch.dict(os.environ, env), redirect_stderr(stderr):
+            self.assertEqual(kik.main(["--pkcs8", str(bad), "--kms-key-id", "alias/test"]), 1)
+        self.assertIn("do not belong together", stderr.getvalue())
+        self.assertFalse((state / "calls").exists())  # refused before any KMS call
+
+    def test_an_import_whose_kms_signature_does_not_verify_fails(self):
+        from cryptography.hazmat.primitives import serialization
+        from cryptography.hazmat.primitives.asymmetric import rsa
+
+        state, bin_dir, runtime = self.tmp / "kms-sig", self.tmp / "bin-sig", self.tmp / "runtime-sig"
+        for d in (state, bin_dir, runtime):
+            d.mkdir(mode=0o700)
+        (bin_dir / "aws").write_text(FAKE_KMS.replace("#!/usr/bin/env python3", f"#!{sys.executable}"))
+        (bin_dir / "aws").chmod(0o700)
+        p8 = self.tmp / "sig.p8"
+        p8.write_bytes(rsa.generate_private_key(public_exponent=65537, key_size=4096).private_bytes(
+            serialization.Encoding.DER, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()))  # fmt: skip
+        p8.chmod(0o600)
+        env = {
+            "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}",
+            "FAKE_KMS_STATE": str(state),
+            "XDG_RUNTIME_DIR": str(runtime),
+            "FAKE_KMS_BAD_SIGNATURE": "1",
+        }
+        stderr, out = io.StringIO(), io.StringIO()
+        with mock.patch.dict(os.environ, env), redirect_stderr(stderr), redirect_stdout(out):
+            self.assertEqual(kik.main(["--pkcs8", str(p8), "--kms-key-id", "alias/test"]), 1)
+        self.assertNotIn("now signs", out.getvalue())
+        self.assertIn("kms sign", (state / "calls").read_text().split("\n"))
 
 
 if __name__ == "__main__":

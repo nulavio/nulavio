@@ -6,8 +6,9 @@
             --fingerprint 298A9093BAABB26F79BB29F4BF47E5FA9EDB8DB1 --kms-key-id alias/nulavio-release
 
 The Companion's APK signing key (ADR 0014) is a plain RSA key, not an OpenPGP one: give
-its PKCS#8 file instead of a GnuPG home (made with `openssl genpkey -algorithm RSA -pkeyopt
-rsa_keygen_bits:4096 -outform DER`, mode 0600, kept offline afterwards):
+its PKCS#8 file instead of a GnuPG home, mode 0600, kept offline afterwards. `openssl genpkey
+-outform DER` writes PKCS#1, which this refuses; convert in the same pipe:
+`openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:4096 | openssl pkcs8 -topk8 -nocrypt -outform DER`.
 
     AWS_PROFILE=lombello-dev AWS_REGION=us-east-1 \\
         python3 -I scripts/release/kms_import_key.py --pkcs8 <key.p8> --kms-key-id alias/nulavio-companion
