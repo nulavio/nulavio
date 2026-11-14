@@ -4,7 +4,7 @@ The agent gets its own browser profile (the AI Workspace) and only the permissio
 
 ## 1. Register the agent
 
-In the browser: **Settings → AI & Automation → Connect an agent** (agent, autonomy, connect). If Claude Code or Codex is installed, Nulavio shows the exact command of that tool that adds Nulavio to its settings and runs it when you click; otherwise copy the configuration. From a terminal: `nulavio ai add …` then `nulavio ai connect <agent>`, or:
+In the browser: **Settings → Assistant and AI → Agents, permissions and activity → Connect an agent** (agent, autonomy, connect). If Claude Code or Codex is installed, Nulavio shows the exact command of that tool that adds Nulavio to its settings and runs it when you click; otherwise copy the configuration. From a terminal: `nulavio ai add …` then `nulavio ai connect <agent>`, or:
 
 ```sh
 nulavio ai add "Claude Code" --client claude-code --autonomy assisted
@@ -56,7 +56,7 @@ Files: downloads are saved only when the agent may use files, into `~/.local/sha
 
 ## What this does and does not protect
 
-- The agent works in its own profile. Your Personal, Work or Banking profiles are reachable only if you give them to that agent (Settings → AI & Automation → its permissions), only while they are closed in your windows, and never while they are locked.
+- The agent works in its own profile. Your Personal, Work or Banking profiles are reachable only if you give them to that agent (Settings → Assistant and AI → Agents, permissions and activity → its permissions), only while they are closed in your windows, and never while they are locked.
 - Safe Browsing, HTTPS-Only, tracking protection and the pop-up blocker stay on in the AI Workspace.
 - The local network and this computer (`localhost`, router pages, `file:`) are off unless you allow `local_resources`.
 - A CLI agent runs with your user's rights. Outside Nulavio's tools it can do whatever you can do in a terminal, including reading its key file. Use its own sandbox options if you want to limit that.
