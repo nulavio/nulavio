@@ -198,8 +198,9 @@ class Vault {
       const { recovery_code: recoveryCode } = await helper({ op: "encrypt", path, password, keyring: Boolean(keyring) });
       return { id, recoveryCode };
     } catch (e) {
-      // Never leave a profile the user believes is protected but is not.
-      await lazy.NulavioProfiles.remove(id).catch(console.error);
+      // Never leave a profile the user believes is protected but is not. (When every other profile has a
+      // password, this one is for a moment the last without: it goes all the same, it never was one to keep.)
+      await lazy.NulavioProfiles.remove(id, { lastUnprotected: true }).catch(console.error);
       throw e;
     }
   }

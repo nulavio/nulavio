@@ -441,7 +441,21 @@
 </div>
 <div class="claim" id="s3-6">
 <div class="claim-text">
-<h3><span class="num">3.6</span> O que ainda não publicamos</h3>
+<h3><span class="num">3.6</span> Links para um trecho, com ou sem rastreamento</h3>
+<p>Selecione um texto e use «Copiar link para o destaque» no menu da página: o link abre a página já rolada até o trecho, destacado, no Nulavio, no Firefox, no Chrome e no Safari (é o fragmento de texto padrão, <code translate="no">#:~:text=</code>). «Copiar link limpo para o destaque» faz o mesmo e tira do link os parâmetros de rastreamento da lista do motor, como os <code translate="no">utm_</code>. Na página aberta, «Remover destaque» apaga a marcação. É o recurso do próprio motor, que o Nulavio deixa como está.</p>
+<p class="limit"><strong>Limite:</strong> Não funciona em PDFs, em quadros dentro da página, em campos de texto e no código-fonte da página: ali o motor não cria o link.</p>
+</div>
+<div class="receipt">
+<p class="receipt-title">Como conferir</p>
+<dl>
+<dt>Testes</dt>
+<dd><code class="ref" translate="no">tests/integration/test_text_fragments.py</code></dd>
+</dl>
+</div>
+</div>
+<div class="claim" id="s3-7">
+<div class="claim-text">
+<h3><span class="num">3.7</span> O que ainda não publicamos</h3>
 <p class="claim-state"><svg class="icon" aria-hidden="true" focusable="false"><use href="#i-missing"/></svg><span>Falta</span></p>
 <p>A lista completa das conexões que um perfil novo faz sozinho. Esta seção traz as que conhecemos e escolhemos manter: Safe Browsing, Remote Settings, o download e as atualizações de extensões no addons.mozilla.org, as listas do uBlock Origin, o resolvedor de DNS que você escolher (4.4) e a detecção de portal cativo da Mozilla (firefox-portal-detection.com), que fica como o motor a deixa. Ainda não existe um teste que registre cada pedido de um perfil novo.</p>
 </div>

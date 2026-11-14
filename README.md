@@ -45,7 +45,7 @@ Nulavio is an open-source desktop browser for Linux, built from Mozilla's signat
 - **Profiles encrypted on disk, and you hold the key.** A protected profile opens with its password, a recovery code or your desktop login. There is no master key, not even for Nulavio ([ADR 0006](docs/adr/0006-nulavio-vault.md)).
 - **You hear about changes made from outside.** Nulavio Guard compares each start with the last one: extensions, certificate authorities, security modules, protective settings, `user.js`. You undo or keep each change.
 - **AI that goes only as far as you let it.** Connect Claude Code, Codex or any MCP client. Each agent works in a profile of its own, with the permissions you grant, an activity log and an emergency stop ([ADR 0007](docs/adr/0007-ai-bridge.md)).
-- **Also built in:** your password manager (Proton Pass, Bitwarden, KeePassXC or the browser's own), search suggestions only from the engines you allow, your choice of DNS, downloads that never start a program from the browser, KDE Plasma and desktop portal integration, English and Portuguese.
+- **Also built in:** your password manager (Proton Pass, Bitwarden, KeePassXC or the browser's own), search suggestions only from the engines you allow, your choice of DNS, downloads that never start a program from the browser, links that open a page at a highlighted passage (with a clean version that drops tracking parameters; not in PDFs), KDE Plasma and desktop portal integration, English and Portuguese.
 
 ## Status
 

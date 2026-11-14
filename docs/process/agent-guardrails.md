@@ -104,7 +104,7 @@ A workflow, `main-via-pr.yml` ("main changed only through merged pull requests")
 
 Settings only the maintainer can change:
 
-- Actions → General: require actions to be pinned to a full-length commit SHA, and allow only the actions in use (today `actions/checkout`, `actions/upload-artifact`, `anthropics/claude-code-action` and `oven-sh/setup-bun`, which that action contains). Whether this choice exists for a private repository on GitHub Free is unverified.
+- Actions → General: require actions to be pinned to a full-length commit SHA, and allow only the actions in use (today `actions/checkout` and `actions/upload-artifact` among others; the AI review no longer uses `anthropics/claude-code-action`, so it and `oven-sh/setup-bun` can leave the allow-list). Whether this choice exists for a private repository on GitHub Free is unverified.
 - Keep: workflow permissions read-only; "Allow GitHub Actions to create and approve pull requests" off; workflows from fork pull requests off.
 - General → Pull requests: allow squash merging only, and turn on "Automatically delete head branches".
 

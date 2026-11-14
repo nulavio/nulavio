@@ -194,7 +194,7 @@ class ProfileChooserTest(unittest.TestCase):
             data = self.call(
                 "const w = W(); const c = w.document.createElementNS('http://www.w3.org/1999/xhtml', 'canvas');"
                 "c.width = w.innerWidth; c.height = w.innerHeight; const ctx = c.getContext('2d');"
-                "ctx.drawWindow(w, 0, 0, w.innerWidth, w.innerHeight, 'white'); return c.toDataURL('image/png');"
+                "ctx.drawWindow(w, w.scrollX, w.scrollY, w.innerWidth, w.innerHeight, 'white'); return c.toDataURL('image/png');"
             )
             (self.shots / f"{name}-{scheme}.png").write_bytes(base64.b64decode(data.split(",", 1)[1]))
         self.m.chrome("Services.prefs.clearUserPref('ui.systemUsesDarkTheme');")
@@ -378,6 +378,54 @@ class ProfileChooserTest(unittest.TestCase):
         self.assertEqual(self.instances(path), [])
         self.close_chooser()
 
+    def test_02d_with_every_profile_behind_a_password_the_chooser_is_not_a_choice(self):
+        """#43, slice 2: with no profile that opens without a password, the chooser is the only way in. Its
+        "show at start-up" checkbox is then ticked, cannot be changed, and says why."""
+        self.open_chooser()
+        answers = self.call(
+            "const m = S().nulavio; const two = [{id: 1}, {id: 2}]; const is = v => ({protected: v});"
+            "return [m.mustChoose(two, new Map([[1, is(true)], [2, is(true)]])),"
+            " m.mustChoose(two, new Map([[1, is(true)], [2, is(false)]])),"
+            # One whose state is not known, beside a protected one: it is not a profile a plain start could open,
+            # so the chooser stays the only way in (NulavioProfiles goes by the same rule and keeps it on).
+            " m.mustChoose(two, new Map([[1, is(true)]])),"
+            " m.mustChoose(two, new Map()), m.mustChoose(two, null),"  # nothing known: nothing decided
+            " m.mustChoose([], new Map())];"
+        )
+        note = self.word("must-choose")
+        self.assertEqual(answers, [note, None, note, None, None, None])
+        box = (
+            "await S().updateComplete; const c = S().checkbox;"
+            "return {checked: c.checked, disabled: c.disabled, says: c.querySelector('[slot=description]').textContent.trim()};"
+        )
+        self.assertFalse(self.call(box)["disabled"])  # this session's profile has no password
+        self.call("S().nulavioMustChoose = args[0]; return true;", note)
+        self.assertEqual(self.call(box), {"checked": True, "disabled": True, "says": note})
+        # A click that got through changes nothing: the setting is off in this session (Nulavio's default, and this
+        # session's profile has no password), and the box, drawn ticked, would have switched it on.
+        stored = "return SPS.groupToolkitProfile.showProfileSelector;"
+        self.assertFalse(self.call(stored))
+        self.call("S().handleCheckboxToggle(); return true;")
+        self.assertFalse(self.call(stored))
+        # The same click with the box a choice again does switch it on: the guard is what held it.
+        self.call("S().nulavioMustChoose = null; await S().updateComplete; S().checkbox.checked = true; return true;")
+        self.call("S().handleCheckboxToggle(); return true;")
+        self.assertTrue(harness.wait_until(lambda: self.call(stored), timeout=10))
+        self.call("await SPS.setShowProfileSelectorWindow(false); S().nulavioMustChoose = args[0]; return true;", note)
+        self.call("await S().updateComplete; return true;")
+        self.assertFalse(self.call(stored))
+        # The engine greys the label of a control that cannot be changed. The words that say why are its description,
+        # and keep a description's colour: 69% of the page's text colour, where the greyed label keeps 40%.
+        share = lambda: self.call(  # noqa: E731
+            "const note = S().checkbox.querySelector('[slot=description]');"
+            "const parts = note.ownerDocument.defaultView.getComputedStyle(note).color.match(/[\\d.]+/g).map(Number);"
+            "return parts.length > 3 ? parts.at(-1) : 1;"
+        )
+        self.assertTrue(harness.wait_until(lambda: share() >= 0.69, timeout=10), f"the reason is too faint to read: {share()}")
+        self.call("S().checkbox.scrollIntoView({block: 'center'}); return true;")
+        self.shoot("07-must-choose")
+        self.close_chooser()
+
     def test_02c_a_profile_that_locked_again_while_a_note_was_read_is_unlocked_again(self):
         """Review of #267. An unlock that settles a recovery code replacement (#187) says so and waits for
         "Abrir". The profile's watcher locks it again when nothing opens it for two minutes; opened then, the
@@ -469,8 +517,20 @@ class ProfileChooserTest(unittest.TestCase):
         self.assertFalse(storage.Container(path).mounted())
 
 
+class _XImage(ctypes.Structure):
+    """The head of Xlib's XImage: enough to read the pixels of a picture of the display."""
+
+    _fields_ = [
+        ("width", ctypes.c_int), ("height", ctypes.c_int), ("xoffset", ctypes.c_int), ("format", ctypes.c_int),
+        ("data", ctypes.POINTER(ctypes.c_char)), ("byte_order", ctypes.c_int), ("bitmap_unit", ctypes.c_int),
+        ("bitmap_bit_order", ctypes.c_int), ("bitmap_pad", ctypes.c_int), ("depth", ctypes.c_int),
+        ("bytes_per_line", ctypes.c_int), ("bits_per_pixel", ctypes.c_int),
+    ]  # fmt: skip
+
+
 class Keyboard:
-    """Keys typed into a private X display through XTest, as a person's keyboard."""
+    """Keys typed into a private X display through XTest, as a person's keyboard; and what that display shows,
+    which is all there is to wait on where no engine can be asked (the chooser before any profile has started)."""
 
     def __init__(self, display: str):
         self.x = ctypes.cdll.LoadLibrary(ctypes.util.find_library("X11"))
@@ -488,6 +548,19 @@ class Keyboard:
             ctypes.POINTER(ctypes.POINTER(ctypes.c_ulong)), ctypes.POINTER(ctypes.c_uint),
         ]  # fmt: skip
         self.x.XFree.argtypes = [ctypes.c_void_p]
+        self.x.XDisplayWidth.argtypes = self.x.XDisplayHeight.argtypes = [ctypes.c_void_p, ctypes.c_int]
+        self.x.XGetImage.restype = ctypes.POINTER(_XImage)
+        integer, cardinal = ctypes.c_int, ctypes.c_uint
+        self.x.XGetImage.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_ulong,
+            integer,
+            integer,
+            cardinal,
+            cardinal,
+            ctypes.c_ulong,
+            integer,
+        ]
         self.xtst.XTestFakeKeyEvent.argtypes = [ctypes.c_void_p, ctypes.c_uint, ctypes.c_int, ctypes.c_ulong]
         self.display = self.x.XOpenDisplay(display.encode())
         if not self.display:
@@ -501,6 +574,35 @@ class Keyboard:
         if children:
             self.x.XFree(children)
         return count.value
+
+    def picture(self) -> bytes | None:
+        """The display's pixels as they are now, or None when it could not be read."""
+        width, height = self.x.XDisplayWidth(self.display, 0), self.x.XDisplayHeight(self.display, 0)
+        image = self.x.XGetImage(self.display, self.x.XDefaultRootWindow(self.display), 0, 0, width, height, 0xFFFFFFFF, 2)
+        if not image:
+            return None
+        try:
+            return ctypes.string_at(image.contents.data, image.contents.bytes_per_line * image.contents.height)
+        finally:
+            self.x.XFree(image.contents.data)
+            self.x.XFree(image)
+
+    def drawn(self, after: bytes | None = None, apart: float = 0.5, times: int = 3, timeout: float = 90) -> bytes | None:
+        """Wait until the display shows a page and has stopped changing: `times` pictures `apart` seconds from
+        each other are the same, they are not a bare window (a page has text and pictures: many colours), and
+        they are not `after`, the picture from before the step waited on. Answers that picture, or None when
+        the time is up. With a text cursor blinking in the picture, ask for two pictures a fifth of a second apart."""
+        end = time.monotonic() + timeout
+        seen: list[bytes | None] = []
+        while time.monotonic() < end:
+            seen = [*seen[-(times - 1) :], self.picture()] if times > 1 else [self.picture()]
+            now = seen[-1]
+            if now and len(seen) == times and all(each == now for each in seen) and now != after:
+                colours = {now[at : at + 4] for at in range(0, len(now), 4 * 97)}  # one pixel in 97
+                if len(colours) > 32:
+                    return now
+            time.sleep(apart)
+        return None
 
     def key(self, name: str) -> None:
         code = self.x.XKeysymToKeycode(self.display, self.x.XStringToKeysym(name.encode()))
@@ -552,13 +654,210 @@ class StartupChooserTest(unittest.TestCase):
                 self.xvfb.terminate()
                 self.xvfb.wait(10)
 
-    def plain_start(self, env: dict) -> subprocess.Popen:
-        """As the desktop entry starts it: no flags, no profile named."""
+    def plain_start(self, env: dict, *addresses: str) -> subprocess.Popen:
+        """As the desktop entry starts it: no flags, no profile named; with an address, as a link opened by
+        another program starts it."""
         engine = subprocess.Popen(
-            [str(self.session.engine.path)], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True
+            [str(self.session.engine.path), *addresses],
+            env=env,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
         )
         self.engines.append(engine)
         return engine
+
+    def chrome(self, m, body: str, *args):
+        """Run `body` in an instance's chrome, with the Shell's modules at hand; an error comes back as its code."""
+        script = (
+            "const done = arguments[arguments.length - 1]; const args = Array.from(arguments).slice(0, -1);"
+            f"(async () => {{ {PRELUDE} {body} }})()"
+            ".then(v => done({ok: v ?? null}), e => done({error: e?.code ?? String(e)}));"
+        )
+        m.set_context("chrome")
+        try:
+            return m.execute_async(script, list(args))
+        finally:
+            m.set_context("content")
+
+    def private_display(self) -> tuple[str, Keyboard]:
+        read, write = os.pipe()
+        self.xvfb = subprocess.Popen(
+            ["Xvfb", "-displayfd", str(write), "-screen", "0", "1280x900x24", "-nolisten", "tcp"],
+            pass_fds=[write], stderr=subprocess.DEVNULL,
+        )  # fmt: skip
+        os.close(write)
+        display = ":" + os.read(read, 16).decode().strip()
+        os.close(read)
+        return display, Keyboard(display)
+
+    @staticmethod
+    def capture(display: str, name: str) -> None:
+        """The private display as a picture, for design review (where ImageMagick is installed). Nothing is asserted on it."""
+        tool = shutil.which("import")
+        if tool:
+            shots = harness.artifacts_dir() / "profile-chooser"
+            shots.mkdir(parents=True, exist_ok=True)
+            subprocess.run([tool, "-display", display, "-window", "root", str(shots / f"{name}.png")], check=False, timeout=30)
+
+    def test_with_every_profile_behind_a_password_a_plain_start_asks_which_one_and_its_password(self):
+        """#43, slice 2. The last profile without a password is deleted from a window of a protected one, after
+        the person was told what follows. From then on a plain start shows the chooser, the profile chosen is
+        unlocked there and started, and no new, empty profile is made outside the group (what the engine did when
+        it was started straight on a locked folder, #68)."""
+        helper = f"const {{ helper }} = ChromeUtils.importESModule('{SHELL}/NulavioVault.sys.mjs');"
+        m = self.session.start()
+        details = {"name": "Banco", "templateId": "banking", "keyring": False, "password": PASSWORD}
+        made = self.chrome(
+            m,
+            "const made = await V.createProtected(args[0]);"
+            "return {id: made.id, path: (await SPS.getProfile(made.id)).path, here: SPS.currentProfile.id};",
+            details,
+        )["ok"]
+        path = Path(made["path"])
+        protected = profile.Profile(name=path.name, path=path)
+        ini = next(Path(self.session.env["HOME"]).rglob("profiles.ini"))
+        # As on a person's computer, where the first start made this the installation's default (the harness starts
+        # the profile by name, which does not): one plain start, then back to the session.
+        self.session.stop()
+        plain = {name: value for name, value in self.session.env.items() if name != "MOZ_MARIONETTE"}
+        first = self.plain_start(plain)
+        self.assertTrue(harness.wait_until(lambda: "Default=1" in ini.read_text(), timeout=60), ini.read_text())
+        time.sleep(3)
+        os.killpg(first.pid, 15)
+        first.wait(30)
+        m = self.session.restart()
+        # The protected profile's own window, driven too: its test prefs are written while it is unlocked.
+        opened = self.chrome(
+            m,
+            helper + "return helper({op: 'unlock', path: args[0], method: 'password', secret: args[1], autolock: false});",
+            str(path),
+            PASSWORD,
+        )
+        self.assertEqual(opened.get("ok", {}).get("unlocked"), True, opened)
+        harness.GeckoProfileSession.enable_marionette(path)
+        self.assertEqual(
+            self.chrome(m, helper + "return helper({op: 'lock', path: args[0]});", str(path)).get("ok"), {"locked": True}
+        )
+        self.assertEqual(
+            self.chrome(m, "return V.unlock(args[0], 'password', args[1]);", made["id"], PASSWORD).get("ok"),
+            {"opened": "launched"},
+        )
+        self.assertTrue(
+            harness.wait_until(lambda: self.session.processes_for(path), timeout=60), "the protected profile did not start"
+        )
+        banco = harness.GeckoProfileSession.connect(path, timeout=90)
+        # While the profile without a password is still running it cannot be deleted. The chooser, switched on
+        # for the deletion, goes back to what it was: it is not left on for a profile that is still there.
+        self.assertNotIn("ShowSelector=1", ini.read_text())
+        self.assertEqual(
+            self.chrome(banco, "return P.remove(args[0], {lastUnprotected: true});", made["here"]).get("error"), "in-use"
+        )
+        # (What shows the going back is the value the instance holds; the file is read too, once it has settled.)
+        self.assertFalse(self.chrome(banco, "return SPS.groupToolkitProfile.showProfileSelector;").get("ok"))
+        self.assertTrue(harness.wait_until(lambda: "ShowSelector=1" not in ini.read_text(), timeout=20), ini.read_text())
+        self.session.stop()  # the profile without a password is closed: only the protected one runs
+        # Without the person's word it stays; with it, the chooser is switched on and the profile goes.
+        self.assertEqual(self.chrome(banco, "return P.remove(args[0]);", made["here"]).get("error"), "last-unprotected")
+        self.assertNotIn("ShowSelector=1", ini.read_text())
+        # When profiles.ini cannot be written, the chooser cannot be relied on at the next start: nothing is
+        # deleted, and the setting is as it was. (The folder of profiles.ini is made read-only for the call: the
+        # engine writes that file by putting a new one in its place.)
+        names = "return (await P.list()).profiles.map(p => p.name).sort();"
+        listed = self.chrome(banco, names).get("ok")
+        self.assertEqual(len(listed), 2, listed)
+        mode = ini.parent.stat().st_mode
+        ini.parent.chmod(0o500)
+        try:
+            refused = self.chrome(banco, "return P.remove(args[0], {lastUnprotected: true});", made["here"])
+        finally:
+            ini.parent.chmod(mode)
+        self.assertEqual(refused.get("error"), "chooser-not-set", refused)
+        self.assertEqual(self.chrome(banco, names).get("ok"), listed)
+        self.assertTrue(Path(self.session.profile_dir).is_dir(), "the profile's folder went although nothing was written")
+        self.assertFalse(self.chrome(banco, "return SPS.groupToolkitProfile.showProfileSelector;").get("ok"))
+        self.assertNotIn("ShowSelector=1", ini.read_text())
+        self.assertEqual(
+            self.chrome(banco, "return P.remove(args[0], {lastUnprotected: true});", made["here"]).get("ok"),
+            {"lastUnprotected": True},
+        )
+        self.assertIn("ShowSelector=1", ini.read_text())  # in the file by the time the answer is back
+        self.assertEqual(
+            self.chrome(banco, "return (await P.list()).profiles.map(p => [p.name, p.encrypted]);").get("ok"), [["Banco", True]]
+        )
+        # Nothing in this instance switches it off again while every profile is protected.
+        self.chrome(banco, "await SPS.setShowProfileSelectorWindow(false); return true;")
+        self.assertTrue(self.chrome(banco, "return SPS.groupToolkitProfile.showProfileSelector;").get("ok"))
+        # The chooser as this group gets it, read where it can be read (this instance's own): the checkbox is
+        # worked out from the profiles' locks, ticked and fixed, with the reason. And a setting found off (put so
+        # here behind the service's back, as a lost write would leave it) is switched on by the chooser itself.
+        self.chrome(banco, "SPS.groupToolkitProfile.showProfileSelector = false; await P.openManager(); return true;")
+        box = (
+            "const s = S(); if (!s?.initialized) return null; await s.updateComplete; const c = s.checkbox;"
+            "return {must: s.nulavioMustChoose, checked: c.checked, disabled: c.disabled,"
+            " says: c.querySelector('[slot=description]').textContent.trim(),"
+            " stored: SPS.groupToolkitProfile.showProfileSelector};"
+        )
+        self.assertTrue(harness.wait_until(lambda: self.chrome(banco, box).get("ok"), timeout=30), "the chooser did not open")
+        shown = self.chrome(banco, box)["ok"]
+        self.assertTrue(shown["must"], shown)
+        self.assertEqual(shown, {"must": shown["must"], "checked": True, "disabled": True, "says": shown["must"], "stored": True})
+        self.chrome(banco, "W()?.close(); return true;")
+        time.sleep(7)  # the engine's own late write of the start-up entry (five seconds) is over
+        banco.quit()
+        self.assertTrue(harness.wait_until(lambda: not self.session.processes_for(path), timeout=60), "it did not close")
+        self.assertTrue(harness.wait_until(lambda: not storage.Container(path).mounted(), timeout=90), "it did not lock")
+        self.assertIn("ShowSelector=1", ini.read_text())
+        # The start-up entry is the protected profile, not the folder of the one that was deleted.
+        sections = lambda: sorted(line for line in ini.read_text().splitlines() if line.startswith(("[Profile", "Path=")))  # noqa: E731
+        self.assertEqual(sections(), [f"Path={path.name}", "[Profile0]"])
+        gone = Path(self.session.profile_dir)
+        self.assertFalse(gone.exists())
+        folders = sorted(entry.name for entry in path.parent.iterdir())
+
+        display, keyboard = self.private_display()
+        headful = {k: v for k, v in plain.items() if k != "MOZ_HEADLESS"} | {"DISPLAY": display, "GDK_BACKEND": "x11"}
+        # A link opened by another program while Nulavio is closed is a start too: there as well a window asks
+        # first, nothing is started on the locked folder and no profile is made. (Nothing is chosen: closed again.)
+        linked = self.plain_start(headful, "http://127.0.0.1:9/a-link-from-another-program")
+        self.assertTrue(harness.wait_until(lambda: keyboard.windows() > 0, timeout=60), "no window at a start with a link")
+        self.assertIsNotNone(keyboard.drawn(), "the window of a start with a link stayed bare")
+        self.capture(display, "startup-every-profile-protected-link")
+        time.sleep(3)  # nothing is asked of it: time for a profile to be started or made, if one were going to be
+        self.assertIsNone(protected.running_pid(), "a link started the engine straight on the locked profile")
+        self.assertFalse(storage.Container(path).mounted())
+        self.assertEqual(sections(), [f"Path={path.name}", "[Profile0]"], "a link made a profile outside the group")
+        self.assertEqual(sorted(entry.name for entry in path.parent.iterdir()), folders, "a link made a new profile folder")
+        os.killpg(linked.pid, 15)
+        linked.wait(30)
+        self.assertTrue(harness.wait_until(lambda: keyboard.windows() == 0, timeout=30), "the window of that start stayed")
+        self.plain_start(headful)
+        self.assertTrue(harness.wait_until(lambda: keyboard.windows() > 0, timeout=60), "no window at the plain start")
+        # No engine can be asked when the chooser's cards are drawn, so the display is: a page, no longer changing.
+        cards = keyboard.drawn()
+        self.assertIsNotNone(cards, "the chooser's window stayed bare")
+        self.assertIsNone(protected.running_pid(), "started straight on the locked profile")
+        self.assertFalse(storage.Container(path).mounted())
+        self.capture(display, "startup-every-profile-protected")
+        keyboard.key("Tab")  # the only card
+        focused = keyboard.drawn(after=cards)
+        self.assertIsNotNone(focused, "Tab did not put the keyboard on the card")
+        keyboard.key("Return")
+        # The unlock step is on the display (its field has a blinking cursor: two pictures close together).
+        self.assertIsNotNone(keyboard.drawn(after=focused, apart=0.2, times=2), "the unlock step did not open")
+        self.capture(display, "startup-every-profile-protected-unlock")
+        keyboard.type(PASSWORD)
+        keyboard.key("Return")
+        self.assertTrue(
+            harness.wait_until(lambda: storage.Container(path).mounted(), timeout=90), "the password did not unlock it"
+        )
+        self.assertTrue(
+            harness.wait_until(lambda: protected.running_pid(), timeout=90), "the engine did not start in the profile"
+        )
+        time.sleep(3)
+        self.assertEqual(sections(), [f"Path={path.name}", "[Profile0]"], "a profile was made outside the group")
+        self.assertEqual(sorted(entry.name for entry in path.parent.iterdir()), folders, "a new profile folder was made")
+        self.assertFalse(gone.exists(), "the deleted profile's folder was made again")
 
     def test_a_locked_profile_chosen_at_start_up_is_unlocked_and_started(self):
         m = self.session.start()
@@ -589,24 +888,21 @@ class StartupChooserTest(unittest.TestCase):
         first.wait(30)
         self.assertFalse(storage.Container(path).mounted())
 
-        read, write = os.pipe()
-        self.xvfb = subprocess.Popen(
-            ["Xvfb", "-displayfd", str(write), "-screen", "0", "1280x900x24", "-nolisten", "tcp"],
-            pass_fds=[write], stderr=subprocess.DEVNULL,
-        )  # fmt: skip
-        os.close(write)
-        display = ":" + os.read(read, 16).decode().strip()
-        os.close(read)
-        keyboard = Keyboard(display)
+        display, keyboard = self.private_display()
         headful = {k: v for k, v in plain.items() if k != "MOZ_HEADLESS"} | {"DISPLAY": display, "GDK_BACKEND": "x11"}
         self.plain_start(headful)
         self.assertTrue(harness.wait_until(lambda: keyboard.windows() > 0, timeout=60), "no window at the plain start")
-        time.sleep(6)  # the chooser's cards: there is no engine to ask when they are drawn
+        # No engine can be asked when the chooser's cards are drawn, so the display is: a page, no longer changing.
+        cards = keyboard.drawn()
+        self.assertIsNotNone(cards, "the chooser's window stayed bare")
         self.assertIsNone(protected.running_pid())
         self.assertFalse(storage.Container(path).mounted(), "unlocked before anything was typed")
         keyboard.key("Tab")  # the first card: the locked profile
+        focused = keyboard.drawn(after=cards)
+        self.assertIsNotNone(focused, "Tab did not put the keyboard on the card")
         keyboard.key("Return")
-        time.sleep(3)  # the unlock step, the password field focused
+        # The unlock step is on the display, its password field focused (a blinking cursor: two pictures close together).
+        self.assertIsNotNone(keyboard.drawn(after=focused, apart=0.2, times=2), "the unlock step did not open")
         self.assertFalse(storage.Container(path).mounted(), "unlocked before the password")
         keyboard.type(PASSWORD)
         keyboard.key("Return")
