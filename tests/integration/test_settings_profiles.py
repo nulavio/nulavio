@@ -436,6 +436,39 @@ class SettingsProfilesTest(unittest.TestCase):
         )
         self.assertEqual(self.m.chrome(shown), [])
 
+    def test_06b_inside_a_temporary_window_the_page_says_so_and_offers_no_other(self):
+        """#142: the old page's temporary-window card, inside a temporary session, said that nothing there is kept
+        and offered no second temporary window. The Perfis pane says the same."""
+        fake = """
+          P.list = async () => ({ available: false, reason: "temporary", temporary: { temporary: true },
+            profiles: [{ id: null, name: "", avatar: null, color: "slate", isCurrent: true, temporary: true }] });
+          P.here = async () => ({ name: "Temporário", protection: "plain", temporary: true });
+        """
+        self.m.chrome(P + fake)
+        self.addCleanup(self.m.chrome, P + "delete P.list; delete P.here;")
+        self.m.navigate("about:preferences#nulavioProfiles")
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome(READY), 20))
+        bar = (
+            DOC
+            + 'const el = d.getElementById("nulavio-profiles-unavailable");'
+            + 'return el && !el.closest("setting-control").hidden ? el.message : null;'
+        )
+        self.assertEqual(harness.wait_until(lambda: self.m.chrome(bar), 15), "Perfil temporário: nada aqui é guardado.")
+        here = (
+            DOC
+            + 'const el = d.getElementById("nulavio-here");'
+            + 'return el && !el.closest("setting-control").hidden ? el.description : null;'
+        )
+        self.assertEqual(harness.wait_until(lambda: self.m.chrome(here), 15), "Temporário. Apagado ao fechar.")
+        doors = (
+            DOC
+            + """
+          return ["nulavio-profile-temporary", "nulavio-profile-protected", "nulavio-profile-manager"]
+            .filter(id => { const el = d.getElementById(id); return el && !el.closest("setting-control")?.hidden; });
+        """
+        )
+        self.assertEqual(self.m.chrome(doors), [])
+
 
 if __name__ == "__main__":
     unittest.main()

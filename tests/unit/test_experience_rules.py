@@ -5,14 +5,21 @@ from __future__ import annotations
 
 import json
 import re
+import sys
+import tempfile
 import unittest
 from html.parser import HTMLParser
 from pathlib import Path
+from unittest import mock
 
 from test_motion_sheet import declarations
 
 ROOT = Path(__file__).resolve().parents[2]
 SHELL = ROOT / "browser" / "shell"
+sys.path.insert(0, str(ROOT / "scripts" / "build"))
+
+import make_distribution  # noqa: E402
+
 BAND_SHEET = SHELL / "shared" / "window-band.css"
 SOUND_MODULE = "NulavioSound.sys.mjs"
 VOID = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track", "wbr"}
@@ -149,20 +156,57 @@ class ExperienceRulesTest(unittest.TestCase):
         for words in ("profilesDeleteTitle", "vaultLockCurrentTitle", "exceptionRemoveBuiltInTitle"):
             self.assertRegex(panes, r"confirmDanger\(\s*msg\(\"" + words)
 
+    def test_a_group_that_reaches_beyond_this_profile_says_so(self):
+        """The settings page is the profile's own: a setting there is this profile's unless its group says otherwise.
+        (The Shell's old page said how far each section reached with a label; what is left of it still does,
+        test_settings_ui 03.) The groups whose settings are kept for the computer or for every profile say so in
+        their own description, in both languages."""
+        reach = {
+            "nulavio-routing-group": {"pt-BR": "neste computador", "en-US": "on this computer"},
+            "nulavio-integrations-group": {"pt-BR": "neste computador", "en-US": "on this computer"},
+            "nulavio-assistant-group": {"pt-BR": "todos os perfis", "en-US": "every profile"},
+        }
+        for language in ("pt-BR", "en-US"):
+            text = (SHELL / "l10n" / language / "nulavio" / "settings.ftl").read_text(encoding="utf-8")
+            for group, words in reach.items():
+                entry = re.search(rf"^{group} =\n((?:    .*\n)+)", text, re.M)
+                self.assertIsNotNone(entry, f"{language}: {group} is gone")
+                description = re.search(r"^    \.description = (.*)$", entry.group(1), re.M)
+                self.assertIsNotNone(description, f"{language}: {group} has no description")
+                self.assertIn(words[language], description.group(1), f"{language}: {group} does not say how far it reaches")
+
     def test_the_cookie_notice_lists_are_ublock_origins_own(self):
-        """The Shell reads one thing of uBlock Origin's data: whether one of its cookie-notice lists is on."""
+        """The Shell reads one thing of uBlock Origin's data: which lists are on. "Hidden" needs one of the
+        registry's cookie-notice lists; "shown" needs every list that is on to be one the registry names."""
         privacy = (SHELL / "modules/NulavioPrivacy.sys.mjs").read_text(encoding="utf-8")
-        named = re.search(r"export const COOKIE_NOTICE_LISTS = Object\.freeze\(\[([^\]]+)\]\)", privacy)
-        keys = set(re.findall(r'"([a-z-]+)"', named.group(1)))
-        self.assertEqual(len(keys), 4)
         # Read with the storage's own reader and closed; nothing in the module writes to another extension's storage.
         self.assertEqual(privacy.count("ExtensionStorageIDB.open("), 1)
         self.assertNotRegex(privacy, r"store\.(set|remove|clear)\(")
-        registry = ROOT / "browser" / "distribution" / "ublock-origin" / "assets.json"
-        if not registry.is_file():
-            self.skipTest("uBlock Origin's registry is not in this tree (it comes with the default-lists change)")
-        lists = json.loads(registry.read_text(encoding="utf-8"))
-        self.assertEqual(keys, {key for key, entry in lists.items() if entry.get("group2") == "cookies"})
+        # The names come from the registry of the pinned version, written into the Shell: none is typed in the module.
+        self.assertIn('"resource://builtin-addons/nulavio-shell/shared/filter-lists.json"', privacy)
+        self.assertNotRegex(privacy, r"fanboy-cookiemonster|adguard-cookies|ublock-cookies")
+        names = make_distribution.filter_lists()
+        self.assertEqual(
+            make_distribution.FILTER_LISTS.read_text(encoding="utf-8"),
+            make_distribution.filter_lists_text(),
+            "browser/shell/shared/filter-lists.json is not current: run scripts/build/make_distribution.py --filter-lists",
+        )
+        registry = json.loads((ROOT / "browser" / "distribution" / "ublock-origin" / "assets.json").read_text(encoding="utf-8"))
+        lists = {key for key, entry in registry.items() if entry.get("content") == "filters"}
+        self.assertEqual(set(names["cookies"]), {key for key in lists if registry[key].get("group2") == "cookies"})
+        self.assertEqual(len(names["cookies"]), 4)
+        self.assertEqual(set(names["cookies"]) | set(names["others"]), lists)
+        self.assertEqual(set(names["cookies"]) & set(names["others"]), set())
+        # The lists a new profile starts with are all known by name, or Settings would say nothing from the first day.
+        content = json.loads((ROOT / "browser" / "distribution" / "content-filter.json").read_text(encoding="utf-8"))
+        self.assertLessEqual(set(content["default_on"]), lists)
+        self.assertNotIn("user-filters", lists, "uBlock Origin's entry for the person's own filters became a list")
+        # A registry without the group stops the build: every selection would read "shown".
+        with tempfile.TemporaryDirectory() as tmp:
+            bare = {key: {k: v for k, v in entry.items() if k != "group2"} for key, entry in registry.items()}
+            (Path(tmp) / "assets.json").write_text(json.dumps(bare), encoding="utf-8")
+            with mock.patch.object(make_distribution, "REGISTRY_DIR", Path(tmp)), self.assertRaises(SystemExit):
+                make_distribution.filter_lists()
 
 
 if __name__ == "__main__":

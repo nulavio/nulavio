@@ -170,6 +170,48 @@ class FirstRunStageTest(unittest.TestCase):
         self.m.chrome("gBrowser.selectedTab = gBrowser.tabs[0];")
         self.assertTrue(harness.wait_until(lambda: self.window()["stage"], 10), "back on the first run's tab, not staged")
 
+    def test_04c_not_staged_in_a_private_window_a_temporary_profile_or_an_ai_workspace(self):
+        """#142: the stage is for the first window of a person's own new profile. A private window, a temporary
+        profile and an AI Workspace never get it: the same page there keeps the whole window."""
+        self.assertTrue(harness.wait_until(lambda: self.window()["stage"], 10))
+        # A private window of the same profile, on the same page.
+        private = (
+            "const done = arguments[arguments.length - 1];"
+            "const win = OpenBrowserWindow({private: true});"
+            "win.addEventListener('load', () => { win.delayedStartupPromise.then(async () => {"
+            "  win.gBrowser.selectedTab = win.gBrowser.addTrustedTab(arguments[0]);"
+            "  for (let i = 0; i < 100 && win.gBrowser.selectedBrowser.currentURI.spec !== arguments[0]; i++) {"
+            "    await new Promise(r => win.setTimeout(r, 100)); }"
+            "  await new Promise(r => win.setTimeout(r, 1500));"
+            "  const root = win.document.documentElement, bar = win.getComputedStyle(win.document.getElementById('nav-bar'));"
+            "  const out = {page: win.gBrowser.selectedBrowser.currentURI.spec, stage: root.hasAttribute('nulavio-stage'),"
+            "    immersive: root.hasAttribute('nulavio-immersive'),"
+            "    toolbar: bar.opacity === '1' && bar.pointerEvents !== 'none'};"
+            "  win.close(); done(out); }); }, {once: true});"
+        )
+        self.m.set_context("chrome")
+        try:
+            seen = self.m.execute_async(private, [self.newtab])
+        finally:
+            self.m.set_context("content")
+        self.assertEqual(seen, {"page": self.newtab, "stage": False, "immersive": False, "toolbar": True})
+        # A temporary profile, and an AI Workspace: the first run is not theirs to answer.
+        for pref, value in (("nulavio.profile.temporary", True), ("nulavio.ai.workspace", "test-agent")):
+            with self.subTest(pref=pref):
+                setter = "setBoolPref" if value is True else "setStringPref"
+                self.m.chrome(f"Services.prefs.{setter}(arguments[0], arguments[1]);", [pref, value])
+                try:
+                    self.m.navigate(self.newtab)
+                    self.assertTrue(harness.wait_until(lambda: not self.window()["stage"], 15), self.window())
+                    self.assertTrue(self.window()["toolbarShown"])
+                    self.assertNotEqual(self.page()["card"], "firstrun-welcome")
+                finally:
+                    self.m.chrome("Services.prefs.clearUserPref(arguments[0]);", [pref])
+                self.m.navigate(self.newtab)
+                self.assertTrue(
+                    harness.wait_until(lambda: self.window()["stage"], 15), "the person's own profile is staged again"
+                )
+
     def test_04b_a_tab_opened_later_keeps_the_keyboard_in_the_address_field(self):
         """New-user QA (2026-11-11): Ctrl+T and typing at once went nowhere, because the stage took the keyboard."""
         harness.wait_until(lambda: self.window()["stage"], 10)

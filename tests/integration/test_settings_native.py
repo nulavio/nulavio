@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import time
 import unittest
 
@@ -491,12 +492,36 @@ class NativeSettingsTest(unittest.TestCase):
         if before is None:
             self.assertIsNone(answer, "a selection was reported that uBlock Origin does not have")
         else:
-            cookies = {"fanboy-cookiemonster", "ublock-cookies-easylist", "adguard-cookies", "ublock-cookies-adguard"}
-            self.assertEqual(answer, {"cookieNotices": bool(cookies & set(before))})
+            names = json.loads((harness.ROOT / "browser/shell/shared/filter-lists.json").read_text(encoding="utf-8"))
+            on = set(before) - {"user-filters"}
+            hidden = True if on & set(names["cookies"]) else (False if on <= set(names["others"]) else None)
+            self.assertEqual(answer, {"cookieNotices": hidden})
+            self.assertIsNotNone(hidden, f"a new profile's selection has a list this build does not know: {sorted(on)}")
             after = self.m.chrome(selected)
             # The same lists; their order is uBlock Origin's own, and it still reorders them now and then.
             self.assertEqual(sorted(after), sorted(before), "reading uBlock Origin's lists changed them")
 
+        # "Shown" is said only of a selection made of lists the registry names. A list imported by the person, one
+        # renamed upstream or one newer than this build may hide the notices, so then nothing is said.
+        told = self.m.chrome(
+            """
+            const { cookieNotices } = ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioPrivacy.sys.mjs");
+            const names = { cookies: ["cookie-list"], others: ["ads", "privacy"] };
+            return arguments[0].map(selected => cookieNotices(selected, names));
+            """,
+            [
+                [
+                    ["user-filters", "ads", "cookie-list"],
+                    ["user-filters", "ads", "privacy"],
+                    ["user-filters"],
+                    [],
+                    ["ads", "https://example.org/cookie-notices.txt"],
+                    ["ads", "cookie-list-renamed"],
+                    ["cookie-list", "https://example.org/another.txt"],
+                ]
+            ],
+        )
+        self.assertEqual(told, [True, False, False, False, None, None, True])
         # The row says what was read and opens uBlock Origin's own page.
         state = (
             privacy
@@ -515,12 +540,17 @@ class NativeSettingsTest(unittest.TestCase):
         self.m.chrome(DOC + 'd.dispatchEvent(new w.Event("visibilitychange"));')
         shown = self.control("#nulavio-filter-lists", lambda s: "à mostra" in (s.get("description") or ""))
         self.assertIn("Avisos de cookies: à mostra. Nenhuma lista de avisos de cookies está ligada", shown["description"])
-        # Not read (uBlock Origin still starting): the row claims nothing about cookie notices.
-        self.m.chrome(state, [True, None])
-        self.m.chrome(DOC + 'd.dispatchEvent(new w.Event("visibilitychange"));')
-        unknown = self.control("#nulavio-filter-lists", lambda s: "depende das listas" in (s.get("description") or ""))
-        self.assertNotIn("escondidos", unknown["description"])
-        self.assertNotIn("à mostra", unknown["description"])
+        # Not read (uBlock Origin still starting), or read with a list nobody can tell of: the row claims nothing
+        # about cookie notices.
+        for unread in ({"cookieNotices": None}, None):
+            self.m.chrome(state, [True, {"cookieNotices": True}])
+            self.m.chrome(DOC + 'd.dispatchEvent(new w.Event("visibilitychange"));')
+            self.control("#nulavio-filter-lists", lambda s: "escondidos" in (s.get("description") or ""))
+            self.m.chrome(state, [True, unread])
+            self.m.chrome(DOC + 'd.dispatchEvent(new w.Event("visibilitychange"));')
+            unknown = self.control("#nulavio-filter-lists", lambda s: "depende das listas" in (s.get("description") or ""))
+            self.assertNotIn("escondidos", unknown["description"])
+            self.assertNotIn("à mostra", unknown["description"])
         self.m.chrome(DOC + 'd.querySelector("#nulavio-filter-lists").click();')
         self.assertTrue(harness.wait_until(lambda: self.m.chrome("return window.__lists;") == 1, 10))
         # Turned off: the row says so, and leads to where it is turned on.
