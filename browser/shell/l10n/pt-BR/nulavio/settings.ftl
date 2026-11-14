@@ -59,6 +59,8 @@ nulavio-reduce-transparency-contrast =
     .description = “Mais contraste” já deixa os cartões sólidos.
 nulavio-look-locked =
     .message = Algumas destas opções são gerenciadas pelo administrador.
+nulavio-density-locked =
+    .message = A densidade foi definida pelo administrador e não pode ser mudada aqui.
 
 ## Geral (the engine's first pane, while accounts are turned off)
 
