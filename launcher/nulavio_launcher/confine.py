@@ -16,6 +16,11 @@ keys there). The engine's own sandboxes are untouched: no PID namespace (the
 profile lock and the launcher see real PIDs), user namespaces stay available
 so the engine still sandboxes its content processes (seccomp and namespaces;
 checked by tests/integration/test_confined.py).
+
+Where the engine could not build those namespaces inside bubblewrap (Ubuntu's
+`bwrap-userns-restrict` AppArmor profile takes the capabilities away, #282),
+the confined start is refused: hiding the home folder is not bought with the
+engine's own sandbox (SEC-19).
 """
 
 from __future__ import annotations
@@ -24,6 +29,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 SEARCH_PATH = "/usr/bin:/bin"
@@ -45,6 +51,18 @@ READ_ONLY_HOME = (
 EMPTY_DIRS = ("/tmp", "/var/tmp", "/mnt", "/media", "/run/media")  # noqa: S108 - hidden, not used
 
 
+# Run inside bubblewrap: the namespaces the engine gives its content processes (user, PID, network:
+# SandboxInfo's CanCreateUserNamespace() and the content sandbox's own unshare). Exit 3 when refused.
+NAMESPACE_PROBE = (
+    "import ctypes, os, sys\n"
+    "libc = ctypes.CDLL(None, use_errno=True)\n"
+    "if libc.unshare(0x10000000 | 0x20000000 | 0x40000000) != 0:\n"
+    "    sys.stderr.write(os.strerror(ctypes.get_errno()) + '\\n')\n"
+    "    sys.exit(3)\n"
+)
+NAMESPACES_REFUSED = 3
+
+
 class ConfineError(RuntimeError):
     pass
 
@@ -54,20 +72,27 @@ def bwrap() -> str | None:
 
 
 def check() -> str:
-    """The bwrap binary, after proving it can create the namespaces it needs here."""
+    """The bwrap binary, after proving it runs here and the engine could still sandbox its content inside it."""
     binary = bwrap()
     if not binary:
         raise ConfineError("bubblewrap (bwrap) is not installed; install it, or run without --confined")
     probe = subprocess.run(
-        [binary, "--ro-bind", "/", "/", "--dev", "/dev", "--", "/bin/true"],
+        [binary, "--ro-bind", "/", "/", "--dev", "/dev", "--", sys.executable, "-I", "-c", NAMESPACE_PROBE],
         capture_output=True,
         text=True,
         timeout=20,
         check=False,
     )
+    detail = (probe.stderr.strip().splitlines()[-1:] or ["unknown error"])[0]
+    if probe.returncode == NAMESPACES_REFUSED:
+        raise ConfineError(
+            f"not starting: inside bubblewrap the engine could not give its content processes their own "
+            f"user and network namespaces here ({detail}; on Ubuntu, AppArmor's bwrap-userns-restrict does this), "
+            "so --confined would weaken the engine's own sandbox. Without --confined that sandbox is whole, "
+            "but the browser can read your whole home folder"
+        )
     if probe.returncode != 0:
-        detail = probe.stderr.strip().splitlines()[-1:] or ["unknown error"]
-        raise ConfineError(f"bubblewrap cannot run here ({detail[0]}); run without --confined")
+        raise ConfineError(f"bubblewrap cannot run here ({detail}); run without --confined")
     return binary
 
 

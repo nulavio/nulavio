@@ -81,8 +81,53 @@ class WrapTest(unittest.TestCase):
             confine.check()
 
 
+class CheckTest(unittest.TestCase):
+    """Each answer of the check before a confined start (#282)."""
+
+    def check(self, returncode: int, stderr: str = ""):
+        answer = subprocess.CompletedProcess([], returncode, "", stderr)
+        with mock.patch.object(confine, "bwrap", return_value="/usr/bin/bwrap"), \
+             mock.patch.object(confine.subprocess, "run", return_value=answer) as run:  # fmt: skip
+            try:
+                return confine.check(), run.call_args.args[0]
+            except confine.ConfineError as exc:
+                return exc, run.call_args.args[0]
+
+    def test_the_probe_runs_inside_bubblewrap_and_asks_for_the_engines_namespaces(self):
+        binary, args = self.check(0)
+        self.assertEqual(binary, "/usr/bin/bwrap")
+        self.assertEqual(args[0], "/usr/bin/bwrap")
+        self.assertEqual(args[args.index("--") + 1 :], [sys.executable, "-I", "-c", confine.NAMESPACE_PROBE])
+        # CLONE_NEWUSER, CLONE_NEWPID and CLONE_NEWNET, in one call, as the engine's content sandbox needs them.
+        self.assertIn("0x10000000 | 0x20000000 | 0x40000000", confine.NAMESPACE_PROBE)
+
+    def test_namespaces_refused_inside_bubblewrap_refuse_the_start_and_say_the_trade_off(self):
+        error, _ = self.check(confine.NAMESPACES_REFUSED, "Operation not permitted\n")
+        self.assertIsInstance(error, confine.ConfineError)
+        message = str(error)
+        self.assertIn("not starting", message)
+        self.assertIn("Operation not permitted", message)
+        self.assertIn("bwrap-userns-restrict", message)
+        self.assertIn("whole home folder", message)  # what running without --confined costs
+
+    def test_bubblewrap_that_cannot_run_is_an_error(self):
+        error, _ = self.check(1, "bwrap: No permissions to create new namespace\n")
+        self.assertIsInstance(error, confine.ConfineError)
+        self.assertIn("bubblewrap cannot run here (bwrap: No permissions to create new namespace)", str(error))
+        self.assertNotIn("not starting", str(error))
+
+
 @unittest.skipUnless(bwrap_works(), "bubblewrap is not installed or cannot create namespaces here")
 class RealBubblewrapTest(unittest.TestCase):
+    def test_the_probe_fails_where_nested_namespaces_are_denied(self):
+        # Ubuntu's AppArmor denies them by capability; --disable-userns denies them by count: both refuse.
+        args = ["bwrap", "--unshare-user", "--disable-userns", "--ro-bind", "/", "/", "--dev", "/dev", "--",
+                sys.executable, "-I", "-c", confine.NAMESPACE_PROBE]  # fmt: skip
+        probe = subprocess.run(args, capture_output=True, text=True, timeout=30, check=False)
+        if "--disable-userns" in probe.stderr:
+            self.skipTest("this bubblewrap has no --disable-userns")
+        self.assertEqual(probe.returncode, confine.NAMESPACES_REFUSED, probe.stderr)
+
     def test_a_confined_program_sees_only_the_profile_and_downloads(self):
         tmp = Path(tempfile.mkdtemp(prefix="nv-confine-real-"))
         self.addCleanup(shutil.rmtree, tmp, True)
