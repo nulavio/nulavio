@@ -1,0 +1,150 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+/* The unlock step of the engine's profile chooser (chooser.mjs, #43). The chooser is an engine page
+   (in-content/common.css and the design-system tokens), so this uses only those tokens: it reads as
+   part of that window, not as a Shell page placed over it. */
+
+.nulavio-unlock {
+  width: min(420px, calc(100vw - 2 * var(--space-xlarge)));
+  padding: var(--space-xxlarge);
+  border: var(--border-width) solid var(--border-color-card, var(--border-color));
+  border-radius: var(--border-radius-large);
+  background-color: var(--background-color-box);
+  color: var(--text-color);
+  box-shadow: var(--box-shadow-popup, 0 2px 14px rgba(0, 0, 0, 0.2));
+
+  &::backdrop {
+    background-color: rgba(0, 0, 0, 0.35);
+  }
+
+  & h2 {
+    font-size: var(--font-size-xlarge);
+    font-weight: var(--font-weight-bold);
+    margin-block: var(--space-large) var(--space-small);
+  }
+
+  & p {
+    margin-block: 0 var(--space-medium);
+  }
+
+  & form {
+    margin-block: var(--space-large) var(--space-small);
+  }
+}
+
+.nulavio-unlock__who {
+  display: flex;
+  align-items: center;
+  gap: var(--space-medium);
+}
+
+.nulavio-unlock__avatar {
+  width: 32px;
+  height: 32px;
+  flex: none;
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  -moz-context-properties: fill, stroke;
+}
+
+.nulavio-unlock__name {
+  font-weight: var(--font-weight-bold);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nulavio-unlock__field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xsmall);
+
+  & input {
+    margin: 0;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  & input[aria-invalid="true"] {
+    outline: 2px solid var(--text-color-error, var(--outline-color-error));
+    outline-offset: -1px;
+  }
+}
+
+.nulavio-unlock__code {
+  font-family: monospace;
+  letter-spacing: 0.04em;
+}
+
+.nulavio-unlock__alternatives {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-small);
+  margin-block-end: var(--space-medium);
+
+  &:empty {
+    display: none;
+  }
+
+  /* The link-like one starts where the fields do. */
+  & button.text-link {
+    margin: 0;
+    padding-inline: 0;
+  }
+}
+
+.nulavio-unlock__status {
+
+  &[data-level="error"] {
+    color: var(--text-color-error);
+  }
+
+  &:empty {
+    margin: 0;
+  }
+}
+
+.nulavio-unlock__hint {
+  margin-block-start: var(--space-medium);
+  color: var(--text-color-deemphasized);
+  font-size: var(--font-size-small);
+}
+
+.nulavio-unlock__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-small);
+  margin-block-start: var(--space-large);
+
+  & button {
+    margin: 0;
+  }
+}
+
+/* The cards: a locked profile says so in the corner of its picture, with the engine's padlock. */
+.nulavio-lock {
+  position: absolute;
+  inset-block-start: var(--space-small);
+  inset-inline-start: var(--space-small);
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xsmall);
+  padding: var(--space-xxsmall) var(--space-small);
+  border-radius: var(--border-radius-small);
+  background-color: var(--background-color-box);
+  color: var(--text-color);
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-bold, 600);
+
+  & img {
+    width: 12px;
+    height: 12px;
+    -moz-context-properties: fill;
+    fill: currentColor;
+  }
+}
