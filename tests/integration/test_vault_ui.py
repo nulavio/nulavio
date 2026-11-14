@@ -1074,6 +1074,66 @@ class VaultUiTest(unittest.TestCase):
             tool.unlink()
             os.rename(real, tool)
 
+    def test_18b_a_change_that_went_through_is_said_even_when_the_state_cannot_be_read_again(self):
+        """#258: after a change that succeeded (here also one saved but not recorded), the page reads the profile
+        again. When that read fails, the result, its warning and the failed read are said together: the change
+        went through, and the person is told so. The methods page (a password added, a recovery code typed back)
+        and the phone page (a phone removed)."""
+        tool = Path(self.session.engine.path).parent / "nulavio-tools" / "bin" / "nulavio"
+        real = tool.with_name("nulavio.real-by-test")
+        flag = tool.with_name("read-fails-once")
+        os.rename(tool, real)
+        tool.write_text(READ_FAILS_HELPER.format(python=sys.executable, real=real, flag=flag))
+        tool.chmod(0o755)
+        word = lambda key, *subs: self.m.execute("return browser.i18n.getMessage(arguments[0], arguments[1]);", [key, list(subs)])  # noqa: E731
+        warning, unreadable = word("err_not_recorded"), word("err_storage_unavailable")
+
+        def said_together(result_key: str, *subs: str) -> None:
+            result = word(result_key, *subs)
+            together = lambda: all(part in self.status_text() for part in (result, warning, unreadable))  # noqa: E731
+            self.assertTrue(harness.wait_until(together, 60), self.status_text())
+            self.assertEqual(self.status_line()["level"], "error")
+            self.assertFalse(flag.exists(), "the page did not read the state again")
+
+        try:
+            profile_id, _code = self.create_via_api("Releitura", password=PASSWORD, keyring=False)
+            self.open_page(f"vault/methods.html?p={profile_id}")
+            self.wait_state("idle")
+            self.click("#add-password")
+            self.type_into("new-password", "second pass 66")
+            self.type_into("new-password2", "second pass 66")
+            self.type_into("current", PASSWORD)
+            self.click("#password-form button[type=submit]")
+            said_together("methodsPasswordAdded")
+            # A new recovery code, typed back: the confirmation is said with the warning and the failed read.
+            self.open_page(f"vault/methods.html?p={profile_id}")
+            self.wait_state("idle")
+            self.type_into("current", PASSWORD)
+            self.click("#new-code")
+            self.click("dialog[open] button[value=confirm]")
+            self.wait_state("code")
+            flag.unlink(missing_ok=True)  # the read after showing the code is not the one this checks
+            new_code = self.m.execute("return document.getElementById('code').dataset.code;")
+            groups = new_code.split("-")
+            group = "return Number(document.getElementById(arguments[0]).textContent.match(/\\d+/)[0]) - 1;"
+            index = lambda label: self.m.execute(group, [label])  # noqa: E731
+            self.type_into("group-a", groups[index("group-a-label")])
+            self.type_into("group-b", groups[index("group-b-label")])
+            self.click("#code-step button[type=submit]")
+            said_together("methodsCodeReplaced")
+            # The phone page: the phone connected in test 08 removed.
+            if getattr(type(self), "phone_profile", None) is None:
+                self.skipTest("test 08 connected no phone")
+            self.open_page(f"vault/phone.html?p={self.phone_profile}")
+            self.wait_state("idle")
+            self.type_into("current", PASSWORD)
+            self.click("#phones button")
+            said_together("phoneRemoved", "Pixel de teste")
+        finally:
+            tool.unlink()
+            os.rename(real, tool)
+            flag.unlink(missing_ok=True)
+
     def test_19_a_new_key_ends_what_a_removed_method_could_still_open(self):
         """#204 (ADR 0015): the methods page says how old the profile's key is and whether a method went since;
         "Criar nova chave" copies the profile into a new volume under a new key, says what stopped working, and
@@ -1174,6 +1234,27 @@ sys.stderr.write(done.stderr)
 sys.exit(done.returncode)
 """
 
+
+# The real helper, except that a change that went through is answered with "not-recorded" and the next read
+# of a profile's state fails once, as a volume that went away right after the change would make it (#258).
+READ_FAILS_HELPER = """#!{python} -I
+import json, os, subprocess, sys
+request = sys.stdin.read()
+op = json.loads(request or "{{}}").get("op") if sys.argv[1:3] == ["vault", "api"] else None
+if op == "status" and os.path.exists("{flag}"):
+    os.unlink("{flag}")
+    print(json.dumps({{"error": "storage-unavailable"}}))
+    sys.exit(1)
+done = subprocess.run(["{real}", *sys.argv[1:]], input=request, capture_output=True, text=True)
+answer = done.stdout
+changes = ("new-recovery-code", "confirm-recovery-code", "add-password", "add-keyring", "remove-method")
+if op in changes and "error" not in json.loads(answer or "{{}}"):
+    answer = json.dumps({{**json.loads(answer), "warning": "not-recorded"}}) + "\\n"
+    open("{flag}", "w").close()
+sys.stdout.write(answer)
+sys.stderr.write(done.stderr)
+sys.exit(done.returncode)
+"""
 
 if __name__ == "__main__":
     unittest.main()
