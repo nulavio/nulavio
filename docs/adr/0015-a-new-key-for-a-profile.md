@@ -1,6 +1,6 @@
 # ADR 0015 — A new key for a protected profile's volume
 
-- **Status:** Proposed (2026-11-14, by an agent, for [issue #204](https://github.com/nulavio/nulavio/issues/204)). The maintainer's word on it is recorded here when given; the implementation in the same pull request is not merged before that.
+- **Status:** Accepted (2026-11-14). Proposed that day by an agent for [issue #204](https://github.com/nulavio/nulavio/issues/204), with the recommendation to accept it as written; the maintainer, asked in that session's report, answered "aceito" (accepted) to the ADR and to that recommendation the same day, in the conversation with the agent. The implementation is in the same pull request (#275).
 - **Related:** [ADR 0006](0006-nulavio-vault.md) (the Vault; its lifecycle already names "Rotate the DEK: new DEK, new storage, data copied; offered, never automatic"), [threat model for unlock](../security/threat-model-unlock.md) (U-T16, U-T17, U-T21), [residual risks](../security/residual-risks.md) R70, [architecture](../architecture/vault-and-unlock.md).
 
 ## Context
