@@ -13,6 +13,10 @@ address bar the engine draws under automation.
 Writes <page>-<theme>@<scale>.png, manifest.json (each file's sha256, page, theme, scale and size, the
 build's BuildID and SourceStamp, the git commit and whether the tree had changes) and, when ImageMagick's
 `montage` is installed, a contact sheet matrix.png (the command is recorded in the manifest).
+
+Captures stay in the history for good: nothing is rewritten to remove them. Each release measures
+the media in the history against ADR 0013's budget (250 MB, docs/adr/0013-repository-layout.md);
+once it is over, new capture sets go to a repository of their own instead of docs/design/screenshots/.
 """
 
 from __future__ import annotations
