@@ -17,6 +17,7 @@ import signal
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import unittest
 from pathlib import Path
@@ -1546,6 +1547,60 @@ class HelperApiTest(StorageCase):
         prof = profile.Profile(name="r", path=path)
         self.assertEqual(profiles.autolock(prof, grace=0.5, poll=0.1), "unused")
         self.assertFalse(storage.Container(path).mounted())
+
+    def short_lived_engine(self, path: Path, *, killed: bool) -> None:
+        """An engine that takes the lock and is gone again within a tenth of a second: killed (the lock
+        stays behind) or quitting (it removes the lock), between two looks of the watcher (#277)."""
+        script = f'ln -s "127.0.0.1:+$$" "{path}/lock"; sleep 0.1; ' + ("kill -9 $$" if killed else f'rm -f "{path}/lock"')
+        subprocess.run(["/bin/sh", "-c", script], check=False, timeout=10)
+
+    def watch(self, path: Path, name: str, grace: float = 30.0) -> tuple[list, threading.Thread]:
+        prof = profile.Profile(name=name, path=path)
+        result: list = []
+        thread = threading.Thread(target=lambda: result.append(profiles.autolock(prof, grace=grace, poll=0.5)), daemon=True)
+        thread.start()
+        time.sleep(0.6)  # the watcher has looked once and is waiting
+        return result, thread
+
+    def test_autolock_sees_an_engine_that_lived_under_half_a_second(self):
+        for killed in (False, True):
+            with self.subTest(killed=killed):
+                path = self.tmp / f"short-{int(killed)}"
+                path.mkdir()
+                self.api({"op": "encrypt", "path": str(path), "password": PASSWORD})
+                self.api({"op": "unlock", "path": str(path), "method": "password", "secret": PASSWORD, "autolock": False})
+                result, thread = self.watch(path, f"short-{int(killed)}")
+                started = time.monotonic()
+                self.short_lived_engine(path, killed=killed)
+                thread.join(15)
+                self.assertEqual(result, ["closed"], "the watcher waited out its grace")
+                self.assertLess(time.monotonic() - started, 15)
+                self.assertFalse(storage.Container(path).mounted())
+
+    def test_autolock_without_inotify_still_sees_a_lock_a_killed_engine_left(self):
+        path = self.tmp / "no-inotify"
+        path.mkdir()
+        self.api({"op": "encrypt", "path": str(path), "password": PASSWORD})
+        self.api({"op": "unlock", "path": str(path), "method": "password", "secret": PASSWORD, "autolock": False})
+        with mock.patch.object(profiles.ctypes, "CDLL", side_effect=OSError("no libc here")):
+            result, thread = self.watch(path, "no-inotify")
+            self.short_lived_engine(path, killed=True)
+            thread.join(15)
+        self.assertEqual(result, ["closed"])
+        self.assertFalse(storage.Container(path).mounted())
+
+    def test_a_lock_left_from_an_earlier_session_is_not_an_engine_that_came(self):
+        path = self.tmp / "stale"
+        path.mkdir()
+        self.api({"op": "encrypt", "path": str(path), "password": PASSWORD})
+        self.api({"op": "unlock", "path": str(path), "method": "password", "secret": PASSWORD, "autolock": False})
+        os.symlink("127.0.0.1:+999999", path / "lock")
+        an_hour_ago = time.time() - 3600
+        os.utime(path / "lock", (an_hour_ago, an_hour_ago), follow_symlinks=False)
+        prof = profile.Profile(name="stale", path=path)
+        started = time.monotonic()
+        self.assertEqual(profiles.autolock(prof, grace=2.0, poll=0.2), "unused")  # the grace, not the old lock, ended it
+        self.assertGreaterEqual(time.monotonic() - started, 2.0)
 
 
 if __name__ == "__main__":
