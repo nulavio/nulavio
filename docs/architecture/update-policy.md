@@ -51,10 +51,11 @@ Otherwise it is **standard** (72 hours): only moderate or low issues, or still n
 ### Process
 
 1. Watch Mozilla's releases and security advisories (MFSA); see the fast path below.
-2. Verify the source release: `scripts/upstream/verify_firefox_release.py <version>` checks `SHA256SUMS` against the **pinned** Mozilla Software Releases key (`14F2 6682 D091 6CDD 81E3 7B6D 61B7 B526 D98F 0353`) and prints the tarball hash. `scripts/release/bump_engine.py <version>` runs that check and pins the version and the hash in `browser/build/engine.json`.
-3. Apply the patch stack (`browser/patches/series`, applied idempotently by `scripts/build/apply_patches.py`). Each patch has an owner, a reason and an upstreaming plan. The unit tests check that the `Owner:` and `Upstream:` headers are there and that no patch touches the sandbox or signature prefs; the review checks the reason, the plan and, for a new patch, the test of what it changes. There is no cap on the number of patches ([below](#base-branch-choice-decided-2026-11-14)).
-4. Build in a clean container. Run unit and integration tests plus the provider certification smoke tests.
-5. Sign packages (RPM GPG; provenance attestation planned): only the files the rehearsal's `manifest.json` lists, with those SHA-256 digests (`publish_release.sh` refuses anything else, [build](build.md#publishing-a-release)). Publish. Record in the security changelog.
+2. In the pull request that bumps the engine (or before the build of a Nulavio-only release), add what is new for people: `packaging/whats-new/<version>.json`, both languages ([CONTRIBUTING](../../CONTRIBUTING.md#release-automation)). For a security update a short summary is enough; the release refuses a version without one.
+3. Verify the source release: `scripts/upstream/verify_firefox_release.py <version>` checks `SHA256SUMS` against the **pinned** Mozilla Software Releases key (`14F2 6682 D091 6CDD 81E3 7B6D 61B7 B526 D98F 0353`) and prints the tarball hash. `scripts/release/bump_engine.py <version>` runs that check and pins the version and the hash in `browser/build/engine.json`.
+4. Apply the patch stack (`browser/patches/series`, applied idempotently by `scripts/build/apply_patches.py`). Each patch has an owner, a reason and an upstreaming plan. The unit tests check that the `Owner:` and `Upstream:` headers are there and that no patch touches the sandbox or signature prefs; the review checks the reason, the plan and, for a new patch, the test of what it changes. There is no cap on the number of patches ([below](#base-branch-choice-decided-2026-11-14)).
+5. Build in a clean container. Run unit and integration tests plus the provider certification smoke tests.
+6. Sign packages (RPM GPG; provenance attestation planned): only the files the rehearsal's `manifest.json` lists, with those SHA-256 digests (`publish_release.sh` refuses anything else, [build](build.md#publishing-a-release)). Publish. Record in the security changelog.
 
 ### Key rotation
 

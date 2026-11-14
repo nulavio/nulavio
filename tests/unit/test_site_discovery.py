@@ -24,6 +24,11 @@ class DiscoveryTest(unittest.TestCase):
             expected = {BASE + p for p in ("", "en/", "lista/", "en/waitlist/", "engenharia/", "en/engineering/")}
             if (out / "baixar/index.html").exists():
                 expected |= {BASE + "baixar/", BASE + "en/download/"}
+            # What's new: the index and a page per published version, in both languages (#198).
+            for index in (out / "novidades").rglob("index.html"):
+                path = index.parent.relative_to(out / "novidades").as_posix()
+                suffix = "" if path == "." else f"{path}/"
+                expected |= {BASE + "novidades/" + suffix, BASE + "en/whats-new/" + suffix}
             self.assertEqual(set(urls), expected)
             self.assertEqual(len(urls), len(expected))
             alternatives = {}
