@@ -5,6 +5,7 @@
     python3 -I tests/run.py integration   # needs the Gecko engine (headless)
     python3 -I tests/run.py all
     python3 -I tests/run.py integration 'test_assistant*.py'   # only matching modules
+    python3 -I tests/run.py fuzz          # property-based fuzzing; needs requirements/fuzz.txt (#149)
 
 Integration knobs: NULAVIO_NETWORK_TESTS=1, NULAVIO_REQUIRE_NETWORK=1, NULAVIO_TEST_XPI_CACHE=<dir>,
 NULAVIO_TEST_HEADFUL=1, NULAVIO_TEST_ARTIFACTS=<dir>.
@@ -24,7 +25,7 @@ for extra in (ROOT / "launcher", ROOT / "tests" / "lib", ROOT / "scripts" / "bra
 def main(argv: list[str]) -> int:
     which = argv[1] if len(argv) > 1 else "unit"
     pattern = argv[2] if len(argv) > 2 else "test*.py"
-    suites = {"unit": ["unit"], "integration": ["integration"], "all": ["unit", "integration"]}[which]
+    suites = {"unit": ["unit"], "integration": ["integration"], "all": ["unit", "integration"], "fuzz": ["fuzz"]}[which]
     loader = unittest.TestLoader()
     combined = unittest.TestSuite()
     for name in suites:

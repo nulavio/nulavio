@@ -6,6 +6,7 @@ Read the root [AGENTS.md](../AGENTS.md) first; its rules apply here and are not 
 
 - `unit/`: logic and the repository's own rules, no engine. `python3 -I tests/run.py unit`, or one file: `python3 -I tests/run.py unit test_shell.py`.
 - `integration/`: the real engine driven through Marionette, against a Nulavio build (`NULAVIO_ENGINE=…`) or the system Firefox. `python3 -I tests/run.py integration [test_x.py]`.
+- `fuzz/`: property-based fuzzing of the parsers that read untrusted input (Hypothesis, `requirements/fuzz.txt`; `python3 -I tests/run.py fuzz`), run weekly by `.github/workflows/fuzz.yml`, never in the unit suite ([code scanning](../docs/security/code-scanning.md#fuzzing)).
 - `lib/`: the harness (`harness.py`), Marionette client, fakes (keyring, LLM, Avahi, DoH server) and the reference phone. `fixtures/`, `baselines/`, `regression/`: data the tests read.
 
 ## Rules that apply here
