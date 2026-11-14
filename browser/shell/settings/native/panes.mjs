@@ -753,16 +753,28 @@
         case "delete-here": // the engine's own page deletes the profile in use: it closes this instance safely
           await act(() => shell.NulavioProfiles.openCurrentPage("delete"));
           break;
-        case "delete":
-          if (await confirmDanger(msg("profilesDeleteTitle", name), msg("profilesDeleteBody"), msg("profilesDeleteConfirm"))) {
+        case "delete": {
+          // The last profile without a password (#43): with it gone every start asks which profile to open and
+          // for its password. The person is told before, and the answer goes with the request; the module
+          // decides for itself whether it is the last one, and refuses it without that answer.
+          // (By the module's own rule: this one is not known to have a password, no other profile is known to
+          // be without one, and one has one. A profile whose protection could not be read is neither.)
+          const others = profilesNow().filter(each => keyOf(each) !== key);
+          const last = !profile.encrypted && others.some(each => each.encrypted) && !others.some(each => !each.encrypted && !each.protectionUnknown);
+          const body = last ? `${msg("profilesDeleteBody")} ${msg("profilesDeleteLastBody")}` : msg("profilesDeleteBody");
+          if (await confirmDanger(msg("profilesDeleteTitle", name), body, msg("profilesDeleteConfirm"))) {
             // Its row goes away with it: the keyboard moves to the profile before it in the list.
             // (By its key: the list may have been read again while the prompt was open.)
             const before = profilesNow()[Math.max(0, profilesNow().findIndex(each => keyOf(each) === key) - 1)];
-            if ((await act(() => shell.NulavioProfiles.remove(profile.id), msg("profilesDeleted"))) && before) {
+            const remove = () => shell.NulavioProfiles.remove(profile.id, { lastUnprotected: last });
+            // What is said afterwards is what the module did, not what this page expected a moment before.
+            const said = answer => msg(answer?.lastUnprotected ? "profilesDeletedLast" : "profilesDeleted");
+            if ((await act(remove, said)) && before) {
               focusWhenDrawn(rowButton$(keyOf(before), "edit"));
             }
           }
           break;
+        }
       }
     };
     setting({

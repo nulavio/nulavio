@@ -211,6 +211,16 @@ class FixtureServer:
             para = ("Ção é um parágrafo longo de teste. " * 30).strip()
             body = "".join(f"<p>{i} {para}</p>" for i in range(n // len(para) + 1))
             return f"<!doctype html><title>long-page</title>{body}".encode(), html, {}
+        if path == "/highlight":
+            # Text-fragment fixture (tests/integration/test_text_fragments.py): one sentence found nowhere
+            # else on the page, far below the top, so opening a link to it has to scroll there.
+            filler = "".join(f"<p>Parágrafo de enchimento número {i}, sem nada de especial.</p>" for i in range(80))
+            page = (
+                "<!doctype html><meta name=color-scheme content='light dark'><title>highlight</title>"
+                f"{filler}<p id=target style='width: fit-content'>"
+                f"Nulavio destaca esta frase sem igual no fim da página.</p>{filler}"
+            )
+            return page.encode(), html, {}
         if path == "/login":
             # Fixture for password-manager certification. Throwaway credentials only.
             page = (
