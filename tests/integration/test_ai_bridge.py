@@ -758,6 +758,7 @@ class AiBridgeTest(unittest.TestCase):
             f'<!doctype html><title>Public</title><img src="{sub}-img"><iframe src="{sub}-frame"></iframe>'
             f'<script>fetch("{sub}-fetch", {{mode: "no-cors"}}).catch(() => {{}});'
             f'try {{ new WebSocket("{sub.replace("http:", "ws:")}-socket"); }} catch (e) {{}}'
+            f'new Worker(URL.createObjectURL(new Blob([\'fetch("{sub}-worker", {{mode: "no-cors"}}).catch(() => {{}})\'])));'
             "document.title = 'Public ' + typeof navigator.serviceWorker;</script>"
         ).encode()
         asked: list[str] = []
@@ -813,6 +814,10 @@ class AiBridgeTest(unittest.TestCase):
         followed = bridge.call("tab_new", {"url": public})
         self.assertFalse(followed["isError"], followed)
         self.assertIn("/agent-task?from=redirect", self.fx.hits)
+        # And the page's own requests arrive: what was refused above was the Bridge's doing, not the page's.
+        self.assertFalse(bridge.call("tab_new", {"url": public.replace("/moved", "/page")})["isError"])
+        wanted = {"/sub-img", "/sub-frame", "/sub-fetch", "/sub-socket", "/sub-worker"}
+        self.assertTrue(harness.wait_until(lambda: wanted <= set(self.fx.hits), timeout=10), self.fx.hits)
 
 
 if __name__ == "__main__":

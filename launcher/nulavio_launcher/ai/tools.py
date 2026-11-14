@@ -17,8 +17,6 @@ import time
 import urllib.parse
 import weakref
 from collections.abc import Callable
-from concurrent.futures import ThreadPoolExecutor
-from concurrent.futures import TimeoutError as FutureTimeout
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -208,7 +206,8 @@ LOCAL_HOST_TTL = 60.0  # seconds a name's answer (local or not) is kept for the 
 LOCAL_HOSTS_KEPT = 2048  # names whose answer is kept; the older half goes when it is full
 LOCAL_LOOKUP_TIMEOUT = 3.0  # seconds a name may take to resolve before its request fails
 LOCAL_REFUSED_NOTED = 20  # places a session's refused requests are listed for in the activity
-NET_WORKERS, NET_RESOLVERS = 8, 4  # threads that decide held requests, and that resolve names for them
+LOOKUPS_AT_ONCE = 32  # names being looked up at once; while that many are out, a new name counts as local
+NET_WAITING_MAX = 256  # held requests waiting for a name; past that a new one is failed
 
 
 class Denied(Exception):
@@ -331,6 +330,14 @@ def descriptor(tool: Tool) -> dict:
     }  # fmt: skip
 
 
+class _Lookup:
+    """A name being looked up for held requests; those that need it while it runs wait for this one."""
+
+    def __init__(self) -> None:
+        self.done = threading.Event()
+        self.local = True
+
+
 class Bridge:
     """One agent's tools over one AI Workspace, for the lifetime of the MCP server process."""
 
@@ -364,13 +371,13 @@ class Bridge:
         self._net_intercepts: weakref.WeakKeyDictionary[Bidi, str] = weakref.WeakKeyDictionary()  # -> intercept id
         self._net_handled: weakref.WeakSet[Bidi] = weakref.WeakSet()  # connections whose handler is set
         self._net_engines: weakref.WeakSet[Bidi] = weakref.WeakSet()  # connections synced at least once
-        self._local_ok: set[str] = set()  # the hosts local_resources was allowed for in the current call
+        self._local_ok: set[tuple[str, int]] = set()  # (host, port) local_resources was allowed for in this call
         self._local_hosts: dict[str, tuple[float, bool]] = {}  # resolved name -> (when, local)
         self._local_refused: set[str | None] = set()  # origins whose refused request is in the activity already
         self._local_refused_more = False  # more places were refused than the activity lists
         self._net_state = threading.Lock()  # what the request threads share
-        self._net_pool: ThreadPoolExecutor | None = None
-        self._net_resolver: ThreadPoolExecutor | None = None
+        self._lookups: dict[str, _Lookup] = {}  # names being looked up for held requests
+        self._net_waiting = 0  # held requests waiting for a name
 
     # -- policy ----------------------------------------------------------------------
 
@@ -430,8 +437,8 @@ class Bridge:
         self._refuse_if_held(capability)
         if capability == "submit_forms" and url:
             self._forms_ok.add(policy.origin(url))
-        if capability == "local_resources" and (host := policy.host_of(url)):
-            self._local_ok.add(host)  # its requests are sent on during this call
+        if capability == "local_resources" and (place := self._request_place(url)):
+            self._local_ok.add(place)  # its requests are sent on during this call
 
     def require_url(self, url: str, *, checked: list[str]) -> policy.Target:
         try:
@@ -604,11 +611,6 @@ class Bridge:
         self.elements.clear()
         self.owner.clear()
         self._downloads_mode = {}
-        with self._net_state:
-            pools, self._net_pool, self._net_resolver = (self._net_pool, self._net_resolver), None, None
-        for pool in pools:
-            if pool is not None:
-                pool.shutdown(wait=False, cancel_futures=True)
 
     def _sync_downloads(self) -> None:
         """Downloads follow the `files` permission in each engine: allowed into the agent's downloads folder, or refused."""
@@ -733,25 +735,45 @@ class Bridge:
             self._net_engines.add(engine)  # only once its intercept is as the permission says
 
     def _on_request(self, engine: Bidi, params: dict) -> None:
-        """A request the intercept holds, from the connection's handler thread: decided on a small pool,
-        so a name that is slow to resolve holds only its own requests."""
+        """A request the intercept holds, from the connection's handler thread. An address, a local name and a
+        name already looked up are decided here at once; one whose name must be looked up waits on a thread
+        of its own, so a name that is slow to answer holds only the requests that need it."""
         if not params.get("isBlocked"):
             return
-        with self._net_state:
-            if self._net_pool is None:
-                self._net_pool = ThreadPoolExecutor(max_workers=NET_WORKERS, thread_name_prefix="bridge-net")
-            pool = self._net_pool
+        request = params.get("request") or {}
+        url = str(request.get("url") or "")
         try:
-            pool.submit(self._decide, engine, params.get("request") or {})
-        except RuntimeError:  # the session closed: its engines end with it
-            self._decide(engine, params.get("request") or {})
+            allowed = self._request_allowed(url, wait=False)
+        except Exception:  # anything unexpected fails the request: closed, not open
+            allowed = False
+        if allowed is not None:
+            self._answer(engine, request, url, allowed)
+            return
+        with self._net_state:
+            crowded = self._net_waiting >= NET_WAITING_MAX
+            if not crowded:
+                self._net_waiting += 1
+        if crowded:  # a page that holds this many names at once gets its next ones failed
+            self._answer(engine, request, url, False)
+            return
+        threading.Thread(target=self._decide_later, args=(engine, request, url), name="bridge-net", daemon=True).start()
+
+    def _decide_later(self, engine: Bidi, request: dict, url: str) -> None:
+        try:
+            self._decide(engine, request)
+        finally:
+            with self._net_state:
+                self._net_waiting -= 1
 
     def _decide(self, engine: Bidi, request: dict) -> None:
         """Sent on, or failed before it leaves; anything unexpected fails the request."""
         url = str(request.get("url") or "")
         allowed = False
         with contextlib.suppress(Exception):
-            allowed = self._request_allowed(url)
+            allowed = bool(self._request_allowed(url))
+        self._answer(engine, request, url, allowed)
+
+    def _answer(self, engine: Bidi, request: dict, url: str, allowed: bool) -> None:
         method = "network.continueRequest" if allowed else "network.failRequest"
         with contextlib.suppress(BidiError):
             engine.command(method, {"request": request.get("request")}, timeout=10)
@@ -773,42 +795,69 @@ class Bridge:
             audit.record(agent=self.agent_id, session=self.session_id, tool="network", capability="local_resources",
                          decision="deny", reason=reason, target=target, outcome="denied")  # fmt: skip
 
-    def _request_allowed(self, url: str) -> bool:
+    @staticmethod
+    def _request_place(url: str | None) -> tuple[str, int] | None:
+        """(host, port) a request goes to, a WebSocket as the page it upgrades from; None when it has no host."""
+        scheme, _, rest = (url or "").partition(":")
+        scheme = {"ws": "http", "wss": "https"}.get(scheme.lower(), scheme.lower())
+        if scheme not in ("http", "https"):
+            return None
+        parts = urllib.parse.urlsplit(f"{scheme}:{rest}")
+        if not parts.hostname:
+            return None
+        return parts.hostname, parts.port or (443 if scheme == "https" else 80)
+
+    def _request_allowed(self, url: str, wait: bool = True) -> bool | None:
         """A request may leave unless it goes to this computer or the local network, and the current call
-        was not allowed local_resources for that host."""
-        scheme, _, rest = url.partition(":")
-        scheme = scheme.lower()
+        was not allowed local_resources for that host and port. None (only when not `wait`): its name is
+        still to be looked up."""
+        scheme = url.partition(":")[0].lower()
         if scheme not in ("http", "https", "ws", "wss"):
             return scheme != "file"  # data:, blob: and the engine's own pages send nothing to a host
-        web = {"ws": "http", "wss": "https"}.get(scheme, scheme) + ":" + rest
-        host = urllib.parse.urlsplit(web).hostname
-        if not host:
+        place = self._request_place(url)
+        if place is None:
             return False
-        return not self._is_local(host) or host in self._local_ok
+        local = self._is_local(place[0], wait)
+        if local is None:
+            return None
+        host, port = place
+        # What the user allowed is the place the prompt named; the engine's upgrade of it to https is the same.
+        return not local or place in self._local_ok or (port == 443 and (host, 80) in self._local_ok)
 
-    def _is_local(self, host: str) -> bool:
-        """An address is read at once; a name is looked up with a deadline, and its answer kept a while.
-        A name that does not answer in time counts as local, and is asked again next time."""
+    def _is_local(self, host: str, wait: bool = True) -> bool | None:
+        """An address is read at once, and a name already looked up. Otherwise the name is looked up, once
+        however many requests need it, with a deadline: one that does not answer in time counts as local,
+        and so does every new name while LOOKUPS_AT_ONCE of them are still out."""
         if policy.local_host(host, resolve=False):
             return True
-        now = time.monotonic()
+        if policy.is_address(host):
+            return False
         with self._net_state:
             known = self._local_hosts.get(host)
-            if known is not None and now - known[0] <= LOCAL_HOST_TTL:
+            if known is not None and time.monotonic() - known[0] <= LOCAL_HOST_TTL:
                 return known[1]
-            if self._net_resolver is None:
-                self._net_resolver = ThreadPoolExecutor(max_workers=NET_RESOLVERS, thread_name_prefix="bridge-dns")
-            resolver = self._net_resolver
-        try:
-            local = resolver.submit(policy.local_host, host).result(timeout=LOCAL_LOOKUP_TIMEOUT)
-        except (FutureTimeout, RuntimeError):
-            return True
+            if not wait:
+                return None
+            lookup = self._lookups.get(host)
+            if lookup is None:
+                if len(self._lookups) >= LOOKUPS_AT_ONCE:
+                    return True
+                lookup = self._lookups[host] = _Lookup()
+                threading.Thread(target=self._resolve, args=(host, lookup), name="bridge-dns", daemon=True).start()
+        return lookup.local if lookup.done.wait(LOCAL_LOOKUP_TIMEOUT) else True
+
+    def _resolve(self, host: str, lookup: _Lookup) -> None:
+        local = True
+        with contextlib.suppress(Exception):
+            local = policy.local_host(host)
         with self._net_state:
             if len(self._local_hosts) >= LOCAL_HOSTS_KEPT:
                 for old in list(self._local_hosts)[: LOCAL_HOSTS_KEPT // 2]:
                     del self._local_hosts[old]
-            self._local_hosts[host] = (now, local)
-        return local
+            self._local_hosts[host] = (time.monotonic(), local)  # kept even when its requests stopped waiting
+            self._lookups.pop(host, None)
+        lookup.local = local
+        lookup.done.set()
 
     # -- forms a page sends by itself ---------------------------------------------------
 

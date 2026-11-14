@@ -277,6 +277,12 @@ def _whatwg_ipv4(host: str) -> str | None:
     return str(ipaddress.IPv4Address(value))
 
 
+def is_address(host: str) -> bool:
+    """An IP address, in any form the engine reads as one: what it is needs no lookup."""
+    host = host.strip("[]")
+    return ":" in host or _ends_in_number(host.rstrip("."))
+
+
 def local_host(host: str, resolve: bool = True) -> bool:
     """Whether a host, as the engine sends a request to it, is this computer or the local network.
 
