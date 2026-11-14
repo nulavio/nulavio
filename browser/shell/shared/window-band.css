@@ -508,7 +508,7 @@
        never covers the list's top and the list never covers the toolbar. NulavioWindow measures the toolbars. */
     &:has(#navigator-toolbox:is(:hover, :focus-within, :has([open]:not([open="false"])))) #sidebar-container,
     &[nulavio-immersive-hold~="toolbar"] #sidebar-container {
-      inset-block-start: calc(var(--nv-space-6) + var(--nv-immersive-toolbar-size, 0px));
+      inset-block-start: calc(var(--nv-space-6) + var(--nulavio-immersive-toolbar-size, 0px));
     }
     #browser:has(> #nulavio-immersive-edge:hover) > #sidebar-container,
     &[nulavio-immersive-hold~="tabs"] #sidebar-container,

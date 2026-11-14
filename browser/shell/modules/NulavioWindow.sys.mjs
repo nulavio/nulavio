@@ -543,7 +543,7 @@ class WindowUI {
     const toolbarSize = () => {
       const bars = doc.querySelectorAll("#navigator-toolbox > toolbar:not(#nulavio-band)");
       const height = [...bars].reduce((sum, each) => sum + each.getBoundingClientRect().height, 0);
-      doc.documentElement.style.setProperty("--nv-immersive-toolbar-size", `${Math.ceil(height)}px`);
+      doc.documentElement.style.setProperty("--nulavio-immersive-toolbar-size", `${Math.ceil(height)}px`);
     };
     const sizes = new win.ResizeObserver(toolbarSize);
     for (const each of doc.querySelectorAll("#navigator-toolbox > toolbar:not(#nulavio-band)")) {
@@ -1235,7 +1235,7 @@ class WindowUI {
     state.identityObserver.disconnect();
     state.sizes.disconnect();
     win.windowRoot?.removeEventListener("mousedown", state.outside, true);
-    win.document.documentElement.style.removeProperty("--nv-immersive-toolbar-size");
+    win.document.documentElement.style.removeProperty("--nulavio-immersive-toolbar-size");
     state.bar.remove();
     state.fullscreen.remove();
     state.edge.remove();
