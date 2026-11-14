@@ -84,6 +84,16 @@ sudo apt install nulavio</code></pre></div>
 <p class="limit"><strong>Limit:</strong> In that window, the installed Nulavio does not have the fix yet.</p>
 </section>
 
+<!--companion:on-->
+<section id="companion" aria-labelledby="companion-h">
+<h2 id="companion-h">Nulavio Companion (Android)</h2>
+<p class="prose">To unlock a protected profile with your phone, install Nulavio Companion on Android 11 or later. The app comes with this release, among the files of the project's release page (<code translate="no">github.com/nulavio/nulavio/releases</code>): <code translate="no">{{companion_apk}}</code>.</p>
+<p class="prose">Before installing it, check the certificate that signs it. With Android's build tools, <code translate="no">apksigner verify --print-certs {{companion_apk}}</code> must print this SHA-256, which is also at <code translate="no">https://nulavio.net/keys/nulavio-companion.der</code>:</p>
+<p class="prose"><code class="mono" translate="no">{{companion_fpr}}</code></p>
+<p class="prose">Android accepts an update of the app only when the same certificate signs it. The app is not on F-Droid yet.</p>
+</section>
+
+<!--/companion:on-->
 <section id="verify" aria-labelledby="verify-h">
 <h2 id="verify-h">Check a manual download</h2>
 <p class="prose">The same packages, with a <code translate="no">SHA256SUMS</code> list signed by the key above, the SBOM and the build manifest, are on the release page on GitHub: <code translate="no">github.com/nulavio/nulavio/releases</code>. The key that comes with them counts only if its fingerprint is the one shown above: check it before importing.</p>

@@ -87,6 +87,11 @@ def update(repo: Path, release: dict, repository: str, manifest: dict) -> bool:
     assets = {a.get("name") for a in release.get("assets") or [] if isinstance(a, dict)}
     if f"nulavio_{version}_amd64.deb" in assets and release_manifest.debs(manifest, manifest_tag):
         metadata["apt_sources"] = "https://nulavio.net/apt/nulavio.sources"
+    # The download pages offer the Companion from the first release that carries its signed APK
+    # (ADR 0014); publish_release.sh refuses a release that offers pairing without it.
+    companion = sorted(a for a in assets if a and re.fullmatch(r"nulavio-companion-[0-9]+(?:\.[0-9]+)+\.apk", a))
+    if companion:
+        metadata["companion_apk"] = companion[-1]
     serialized = json.dumps(metadata, indent=2, ensure_ascii=False) + "\n"
     changed = serialized != metadata_path.read_text(encoding="utf-8") or changelog != changelog_path.read_text(encoding="utf-8")
     if changed:

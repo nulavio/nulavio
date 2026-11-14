@@ -222,6 +222,7 @@ class ApkSignTest(unittest.TestCase):
         cases |= {
             "a record pointing into an entry": (edited(cd_offset + 42, "<I", 1), "does not point at a local header"),
             "a local header without its signature": (edited(first_local, "<I", 0), "does not point at a local header"),
+            "a local CRC that is not the record's": (edited(first_local + 14, "<I", 0xDEADBEEF), "another method, CRC or size"),
             "a local name that is not the record's": (
                 edited(first_local + 30 + name_size - 1, "<B", ord("Z")), "does not match its record"),
         }  # fmt: skip
