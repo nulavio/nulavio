@@ -31,8 +31,12 @@
 # the site (https://nulavio.net/apt/nulavio.sources) from the reviewed git tree.
 #
 # With NULAVIO_RELEASE_MANIFEST=<rehearsal-out>/manifest.json (publish_release.sh
-# sets it), every package in <packages-dir> must be listed there with the same
-# SHA-256, or nothing is signed.
+# sets it), the rehearsal must pass `release_manifest.py verify` (finished, from a
+# committed tree on NULAVIO_PUBLISH_REF, default origin/main, a newer version, the
+# packages carrying their own notes) and every package in <packages-dir> must be
+# listed there with the same SHA-256, or nothing is signed. The release key (the
+# one in site/keys/nulavio-packages.asc) and a real KMS key sign only that way:
+# without a manifest they are refused (#292).
 #
 # Real releases sign with the maintainer's release key. test_apt_repo.sh runs this
 # with a throwaway key behind a stand-in KMS and installs from the result.
@@ -52,8 +56,18 @@ suite=stable
 key=${key^^}
 compgen -G "$packages/nulavio_*.deb" >/dev/null || { echo "sign_apt_repo: no nulavio_*.deb in $packages" >&2; exit 2; }
 [[ -z $(ls -A "$out") ]] || { echo "sign_apt_repo: $out is not empty" >&2; exit 2; }
-if [[ -n ${NULAVIO_RELEASE_MANIFEST:-} ]]; then
-    python3 -I "$release/release_manifest.py" packages "$NULAVIO_RELEASE_MANIFEST" "$packages" >/dev/null
+manifest=${NULAVIO_RELEASE_MANIFEST:-}
+if [[ -z $manifest ]]; then
+    released=$(python3 -I -c 'import sys; sys.path.insert(0, sys.argv[1]); import openpgp_sign as o; print(o.primary_key(open(sys.argv[2], "rb").read()).hex)' \
+        "$release" "$repo/site/keys/nulavio-packages.asc")
+    if [[ $key == "$released" ]] || { [[ -n ${NULAVIO_KMS_KEY_ID:-} ]] && [[ -z ${NULAVIO_TEST_AWS_DIR:-} ]]; }; then
+        echo "sign_apt_repo: the release key signs only a checked rehearsal: set NULAVIO_RELEASE_MANIFEST=<rehearsal-out>/manifest.json" >&2
+        exit 2
+    fi
+else
+    [[ $(basename "$manifest") == manifest.json ]] || { echo "sign_apt_repo: $manifest is not a rehearsal's manifest.json" >&2; exit 2; }
+    python3 -I "$release/release_manifest.py" verify "$(dirname "$manifest")" --repo "$repo" --on "${NULAVIO_PUBLISH_REF:-origin/main}" >/dev/null
+    python3 -I "$release/release_manifest.py" packages "$manifest" "$packages" >/dev/null
 fi
 
 tmp=$(mktemp -d)

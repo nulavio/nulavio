@@ -25,6 +25,14 @@ publish_release.sh
   7. `[[ -n $(field debs) ]] || { ...; exit 2; }` deleted
 publish_release.sh
   10. the refusal of a build that offers phone pairing without NULAVIO_COMPANION_APK deleted
+sign_repo.sh and sign_apt_repo.sh, each (#292)
+  11. the `release_manifest.py verify` line deleted, or `|| true` added to it
+  12. the refusal to sign with the release key, or with a real KMS key, without a manifest deleted
+  14. the refusal of a manifest not named manifest.json deleted
+sign_repo.sh's gpg-agent mode (#292)
+  13. its `checked "$fpr"` replaced by `:`
+  15. the refusal of anything but a full 40-character fingerprint deleted
+  16. `released=$(fingerprint …)` made `|| true`, or folded back into the `[[ ]]` comparison
 check_published.sh
   8. `if matches "$name" "$got"; then` -> `if [[ -n $got ]]; then` (any output accepted)
   9. in matches(), the dnf case loosened to `[[ $2 == "$expected"* ]]` or `"$expected".*`, or the
@@ -234,8 +242,8 @@ class SignAptRepoTest(unittest.TestCase):
         self.refused(run, 1, "apt refuses the signed repository")
 
 
-class PublishReleaseTest(unittest.TestCase):
-    """publish_release.sh refuses a rehearsal without its .deb before it signs or stages anything."""
+class RehearsalRepo:
+    """A copy of the release scripts in a git repository of their own, with an origin, and rehearsals of it."""
 
     def setUp(self):
         self.tmp = Path(tempfile.mkdtemp(prefix="nulavio-publish-protections-"))
@@ -290,6 +298,16 @@ class PublishReleaseTest(unittest.TestCase):
         subprocess.run([*git, "commit", "-q", "-m", message], check=True)
         subprocess.run([*git, "push", "-q", "origin", "main"], check=True)
         self.base = subprocess.run([*git, "rev-parse", "HEAD"], capture_output=True, text=True, check=True).stdout.strip()
+
+    def release_fpr(self) -> str:
+        public = self.repo / "site" / "keys" / "nulavio-packages.asc"
+        key = subprocess.run(["gpg", "--quiet", "--with-colons", "--show-keys", str(public)],
+                             capture_output=True, text=True, check=True).stdout  # fmt: skip
+        return next(line.split(":")[9] for line in key.splitlines() if line.startswith("fpr:"))
+
+
+class PublishReleaseTest(RehearsalRepo, unittest.TestCase):
+    """publish_release.sh refuses a rehearsal without its .deb before it signs or stages anything."""
 
     def publish(self, out: Path, **env: str) -> subprocess.CompletedProcess:
         public = self.repo / "site" / "keys" / "nulavio-packages.asc"
@@ -403,6 +421,144 @@ class CheckPublishedTest(unittest.TestCase):
                 run = self.check(f"{VERSION}.fc44", VERSION, curl=mode)
                 self.assertEqual(run.returncode, 1, run.stdout + run.stderr)
                 self.assertIn("the published APT", run.stderr)
+
+
+@unittest.skipUnless(shutil.which("gpg"), "needs gpg")
+class SignScriptsNeedACheckedRehearsalTest(RehearsalRepo, unittest.TestCase):
+    """sign_repo.sh and sign_apt_repo.sh, run by hand, sign only what publish_release.sh would (#292)."""
+
+    SCRIPTS = (("sign_repo.sh", "sign_repo"), ("sign_apt_repo.sh", "sign_apt_repo"))
+
+    def setUp(self):
+        super().setUp()
+        home = self.tmp / "gnupg"
+        home.mkdir(mode=0o700)
+        gpg = ["gpg", "--homedir", str(home), "--batch", "--pinentry-mode", "loopback", "--passphrase", ""]
+        subprocess.run([*gpg, "--quick-gen-key", "Throwaway <other@example.invalid>", "rsa2048", "sign", "never"],
+                       capture_output=True, check=True)  # fmt: skip
+        listing = subprocess.run([*gpg, "--with-colons", "--list-keys"], capture_output=True, text=True, check=True).stdout
+        self.other_fpr = next(line.split(":")[9] for line in listing.splitlines() if line.startswith("fpr:"))
+        self.other_key = self.tmp / "other.asc"
+        self.other_key.write_bytes(subprocess.run([*gpg, "--armor", "--export"], capture_output=True, check=True).stdout)
+        subprocess.run(["gpgconf", "--homedir", str(home), "--kill", "gpg-agent"], capture_output=True, check=False)
+
+    def sign(self, script: str, out_name: str, fpr: str, **env: str) -> subprocess.CompletedProcess:
+        given = {"NULAVIO_PUBLIC_KEY": str(self.repo / "site/keys/nulavio-packages.asc"), **env}
+        env = self.stubs.env(NULAVIO_KMS_KEY_ID="alias/test", NULAVIO_APT_IMAGE=IMAGE, NULAVIO_PUBLISH_REF="origin/main", **given)
+        for name in ("NULAVIO_RELEASE_MANIFEST", "NULAVIO_TEST_AWS_DIR"):
+            if name not in given:
+                env.pop(name, None)
+        command = [self.repo / "scripts/release" / script, self.tmp / "rehearsal" / "packages", self.tmp / out_name, fpr]
+        return subprocess.run(["bash", *map(str, command)], env=env, capture_output=True, text=True, check=False)
+
+    def assert_refused_before_signing(self, run: subprocess.CompletedProcess, words: str) -> None:
+        self.assertNotEqual(run.returncode, 0, run.stdout + run.stderr)
+        self.assertIn(words, run.stderr)
+        self.assertEqual(self.stubs.log.read_text(), "", "a container or the signer ran before the refusal")
+
+    def test_the_release_key_and_a_real_kms_key_are_refused_without_a_manifest(self):  # mutation 12
+        self.rehearsal("rehearsal", with_deb=True)
+        for script, name in self.SCRIPTS:
+            with self.subTest(script=script, key="release key"):
+                run = self.sign(script, f"{name}-release", self.release_fpr(), NULAVIO_TEST_AWS_DIR=str(self.tmp))
+                self.assert_refused_before_signing(run, f"{name}: the release key signs only a checked rehearsal")
+            with self.subTest(script=script, key="real KMS"):
+                # Any key, even one that is not the release key: a real KMS (no stand-in) holds only release keys.
+                run = self.sign(script, f"{name}-kms", self.other_fpr, NULAVIO_PUBLIC_KEY=str(self.other_key))
+                self.assert_refused_before_signing(run, f"{name}: the release key signs only a checked rehearsal")
+
+    def test_a_rehearsal_that_does_not_pass_verify_is_refused_before_signing(self):  # mutation 11
+        cases = {
+            "uncommitted": ("untracked", ["browser/left-out.js"], "untracked"),
+            "no notes": ("whats_new", None, "carry no notes"),
+            "not newer": ("tag", None, "already exists"),
+        }
+        for case, (field, value, words) in cases.items():
+            out = self.rehearsal("rehearsal", with_deb=True)
+            manifest = json.loads((out / "manifest.json").read_text())
+            if field == "tag":
+                git = ["git", "-C", str(self.repo), "-c", "user.name=t", "-c", "user.email=t@example.invalid"]
+                subprocess.run([*git, "tag", f"v{VERSION}"], check=True)
+            else:
+                manifest[field] = value
+            (out / "manifest.json").write_text(json.dumps(manifest))
+            for script, name in self.SCRIPTS:
+                with self.subTest(case=case, script=script):
+                    run = self.sign(script, f"{name}-{case}", self.release_fpr(), NULAVIO_TEST_AWS_DIR=str(self.tmp),
+                                    NULAVIO_RELEASE_MANIFEST=str(out / "manifest.json"))  # fmt: skip
+                    self.assert_refused_before_signing(run, words)
+            if field == "tag":
+                subprocess.run(["git", "-C", str(self.repo), "tag", "-d", f"v{VERSION}"], capture_output=True, check=True)
+            shutil.rmtree(out)
+
+    def test_a_checked_rehearsal_gets_past_the_check(self):
+        # The control: the same rehearsal, untouched, reaches the container step (a stand-in here).
+        out = self.rehearsal("rehearsal", with_deb=True)
+        for script, name in self.SCRIPTS:
+            with self.subTest(script=script):
+                run = self.sign(script, f"{name}-ok", self.release_fpr(), NULAVIO_TEST_AWS_DIR=str(self.tmp),
+                                NULAVIO_RELEASE_MANIFEST=str(out / "manifest.json"))  # fmt: skip
+                self.assertNotIn("release_manifest", run.stderr)
+                self.assertNotIn("checked rehearsal", run.stderr)
+                self.assertIn('"podman"', self.stubs.log.read_text(), run.stderr)
+                self.stubs.log.write_text("")
+
+    def gpg_home_with(self, *keys: Path) -> Path:
+        """A GnuPG home holding only these public keys, its agent started (the gpg-agent mode's set-up)."""
+        home = Path(tempfile.mkdtemp(prefix="nulavio-gpgmode-", dir=self.tmp))
+        home.chmod(0o700)
+        for key in keys:
+            subprocess.run(
+                ["gpg", "--homedir", str(home), "--batch", "--quiet", "--import", str(key)], capture_output=True, check=True
+            )
+        self.addCleanup(
+            subprocess.run, ["gpgconf", "--homedir", str(home), "--kill", "gpg-agent"], capture_output=True, check=False
+        )
+        return home
+
+    def sign_gpg_mode(self, out_name: str, key: str, home: Path, **env: str) -> subprocess.CompletedProcess:
+        env = self.stubs.env(GNUPGHOME=str(home), NULAVIO_PUBLISH_REF="origin/main", **env)
+        for name in ("NULAVIO_KMS_KEY_ID", "NULAVIO_RELEASE_MANIFEST", "NULAVIO_TEST_AWS_DIR"):
+            if name not in env or name == "NULAVIO_KMS_KEY_ID":
+                env.pop(name, None)
+        command = [self.repo / "scripts/release/sign_repo.sh", self.tmp / "rehearsal" / "packages", self.tmp / out_name, key]
+        return subprocess.run(["bash", *map(str, command)], env=env, capture_output=True, text=True, check=False)
+
+    def test_the_gpg_agent_mode_refuses_the_release_key_without_a_manifest(self):  # mutation 13
+        self.rehearsal("rehearsal", with_deb=True)
+        home = self.gpg_home_with(self.repo / "site/keys/nulavio-packages.asc")
+        for given in (self.release_fpr(), self.release_fpr().lower()):
+            with self.subTest(key=given):
+                run = self.sign_gpg_mode(f"gpg-{given[:6]}", given, home)
+                self.assert_refused_before_signing(run, "sign_repo: the release key signs only a checked rehearsal")
+
+    def test_the_gpg_agent_mode_takes_only_a_full_fingerprint(self):  # mutation 15
+        # An e-mail or a short id can name more than one key: what is exported need not be what signs.
+        self.rehearsal("rehearsal", with_deb=True)
+        home = self.gpg_home_with(self.other_key, self.repo / "site/keys/nulavio-packages.asc")
+        for given in ("other@example.invalid", self.other_fpr[-16:]):
+            with self.subTest(key=given):
+                run = self.sign_gpg_mode(f"gpg-short-{given[:5]}", given, home)
+                self.assert_refused_before_signing(run, "give the full 40-character fingerprint")
+
+    def test_an_unreadable_release_key_stops_the_check_instead_of_passing_it(self):  # mutation 16
+        self.rehearsal("rehearsal", with_deb=True)
+        home = self.gpg_home_with(self.repo / "site/keys/nulavio-packages.asc")
+        fpr = self.release_fpr()
+        (self.repo / "site/keys/nulavio-packages.asc").unlink()
+        run = self.sign_gpg_mode("gpg-unreadable", fpr, home)
+        self.assertNotEqual(run.returncode, 0, run.stdout + run.stderr)
+        self.assertEqual(self.stubs.log.read_text(), "", "a container ran though the release key could not be read")
+
+    def test_a_manifest_that_is_not_the_rehearsals_is_refused(self):  # mutation 14
+        out = self.rehearsal("rehearsal", with_deb=True)
+        other = out / "other.json"
+        other.write_text((out / "manifest.json").read_text())
+        for script, name in self.SCRIPTS:
+            with self.subTest(script=script):
+                run = self.sign(script, f"{name}-other", self.release_fpr(), NULAVIO_TEST_AWS_DIR=str(self.tmp),
+                                NULAVIO_RELEASE_MANIFEST=str(other))  # fmt: skip
+                self.assert_refused_before_signing(run, "is not a rehearsal's manifest.json")
 
 
 if __name__ == "__main__":
