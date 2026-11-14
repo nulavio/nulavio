@@ -336,12 +336,19 @@ class RoutingTest(unittest.TestCase):
         self.assertTrue(harness.wait_until(lambda: set(bank.window_handles()) - before, timeout=20))
         mine = (set(bank.window_handles()) - before).pop()
         bank.switch_to(mine)
+        # The new window's own first page can replace one navigated to while it still loads: the page is
+        # taken as shown only once the window has started and nothing loads in its tab.
+        settled = (
+            "return window.gBrowserInit?.delayedStartupFinished === true"
+            " && !gBrowser.selectedBrowser.webProgress?.isLoadingDocument;"
+        )
 
         def on_mine() -> bool:
-            # The new window's own first page can still be loading and replace this one: go again until it stays.
+            if not bank.chrome(settled):
+                return False
             if not bank.current_url().endswith("/page/mine"):
                 bank.navigate(self.local("/page/mine"))
-            return bank.current_url().endswith("/page/mine")
+            return bank.chrome(settled) and bank.current_url().endswith("/page/mine")
 
         self.assertTrue(harness.wait_until(on_mine, timeout=20), bank.current_url())
         self.deliver("Trabalho", [self.local("/page/routed-again")])
