@@ -24,6 +24,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts" / "ci"))
 sys.path.insert(0, str(ROOT / "scripts" / "upstream"))
 
+import ai_review_api  # noqa: E402
 import ai_review_failure  # noqa: E402
 import ai_review_input  # noqa: E402
 import verify_claude_code_release as verify_cc  # noqa: E402
@@ -34,7 +35,6 @@ SCHEMA = json.loads((ROOT / ".github" / "ai-review" / "schema.json").read_text()
 LOCAL_SCRIPT = ROOT / "scripts" / "review" / "ai_review_local.sh"
 HOOK = ROOT / "scripts" / "git-hooks" / "pre-push"
 FIXTURES = ROOT / "tests" / "fixtures" / "claude-code"
-ACTION_PIN = "anthropics/claude-code-action@c0949c50a78c1ec8ce2647db36629b870e715d0c # v1.0.268"
 ZERO = "0" * 40
 GIT_ENV = {**os.environ, "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": os.devnull}
 
@@ -81,10 +81,6 @@ def env_value(name: str) -> str:
     return match.group(1).strip()
 
 
-def workflow_settings() -> dict:
-    return json.loads(re.search(r"^\s+settings: '(.*)'$", WORKFLOW, re.M).group(1))
-
-
 def trigger_paths() -> list[str]:
     block = re.search(r"^    paths:\n((?:      - .*\n)+)", WORKFLOW, re.M)
     assert block
@@ -118,7 +114,7 @@ class WorkflowTest(unittest.TestCase):
 
     def test_permissions_are_minimal_and_split_between_the_jobs(self):
         self.assertRegex(WORKFLOW, r"(?m)^permissions: \{\}$")
-        self.assertEqual(permissions(job("review")), {"contents": "read", "pull-requests": "read", "id-token": "write"})
+        self.assertEqual(permissions(job("review")), {"contents": "read", "pull-requests": "read"})
         self.assertEqual(permissions(job("publish")), {"contents": "read", "pull-requests": "write"})
         self.assertNotIn("secrets.", job("publish"))
         self.assertNotIn("anthropics/claude-code-action", job("publish"))
@@ -167,256 +163,35 @@ class WorkflowTest(unittest.TestCase):
         self.assertIn("BINARY_FILES: ${{ needs.review.outputs.binary_files }}", publish)
         self.assertIn("binary_files: ${{ steps.input.outputs.binary_files }}", job("review"))
         self.assertIn("run: python3 -I scripts/ci/post_ai_review.py --post", publish)
-        self.assertIn("result: ${{ steps.claude.outputs.structured_output }}", job("review"))
+        self.assertIn("result: ${{ steps.review.outputs.result }}", job("review"))
         self.assertNotIn("github_token", job("review").split("outputs:", 1)[1].split("steps:", 1)[0])
 
-    def test_action_is_pinned_and_the_reviewer_is_read_only(self):
-        self.assertIn(f"uses: {ACTION_PIN}", WORKFLOW)
-        review = job("review")
-        for flag in (
-            "--tools Read,Grep,Glob",
-            '--disallowedTools "mcp__*"',
-            "--permission-mode dontAsk",
-            "--setting-sources user",
-            "--strict-mcp-config",
-            "--disable-slash-commands",
-            "--max-turns 40",
-            "--max-budget-usd 3",
-            "--append-system-prompt-file .github/ai-review/instructions.md",
-            "--json-schema '${{ steps.input.outputs.schema }}'",
-        ):
-            self.assertIn(flag, review)
-        for risky in (
-            "allowed_non_write_users",
-            "allowed_bots",
-            "use_commit_signing",
-            "ssh_signing_key",
-            "plugins",
-            "additional_permissions",
-            "track_progress",
-            "claude_code_oauth_token",
-            "ACTIONS_STEP_DEBUG: true",
-        ):
-            self.assertNotIn(risky, review)
-        for setting in ('show_full_output: "false"', 'classify_inline_comments: "false"', 'display_report: "false"'):
-            self.assertIn(setting, review)
-        self.assertIn("github_token: ${{ github.token }}", review)
-
-    def test_settings_deny_every_tool_that_writes_runs_or_reaches_the_network(self):
-        settings = workflow_settings()
-        deny = set(settings["permissions"]["deny"])
-        self.assertTrue({"Bash", "Edit", "Write", "NotebookEdit", "WebFetch", "WebSearch", "Read(./.git/**)"} <= deny)
-        self.assertEqual(settings["permissions"]["defaultMode"], "dontAsk")
-        self.assertIs(settings["permissions"]["blockReadsOutsideWorkingDirectories"], True)
-        self.assertIs(settings["disableAllHooks"], True)
-        for name in ("DISABLE_TELEMETRY", "DISABLE_ERROR_REPORTING", "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC"):
-            self.assertEqual(settings["env"][name], "1")
-
-    def test_credential_is_optional_and_only_one_kind_is_passed(self):
+    def test_credential_is_optional_and_reaches_only_the_review_step(self):
         review = job("review")
         self.assertIn("mode=none", review)
         self.assertIn("::notice title=AI review skipped::", review)
-        self.assertIn("anthropic_api_key: ${{ steps.auth.outputs.mode == 'api-key' && secrets.ANTHROPIC_API_KEY || '' }}", review)
-        self.assertIn("vars.ANTHROPIC_FEDERATION_RULE_ID", review)
+        self.assertEqual(review.count("secrets.ANTHROPIC_API_KEY"), 2)  # whether it is set, and the review step
+        (step,) = [s for s in steps(review) if "ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}" in s]
+        self.assertIn("run: python3 -I scripts/ci/ai_review_api.py --input .ai-review", step)
+        self.assertNotIn("vars.ANTHROPIC_", WORKFLOW)
         self.assertIn("needs.review.outputs.mode != 'none'", job("publish"))
         for step in steps(review)[1:]:
             self.assertRegex(step, r"if: steps\.(auth\.outputs\.mode != 'none'|input\.outputs\.status == 'ready')")
 
-    def test_runtime_downloads_are_pinned_to_the_signed_manifest(self):
-        manifest = json.loads((FIXTURES / "manifest.json").read_text())
-        self.assertEqual(env_value("CLAUDE_CODE_VERSION"), manifest["version"])
-        self.assertEqual(env_value("CLAUDE_CODE_SHA256"), manifest["platforms"]["linux-x64"]["checksum"])
-        self.assertRegex(env_value("BUN_ZIP_SHA256"), r"^[0-9a-f]{64}$")
-        self.assertEqual(env_value("BUN_VERSION"), "1.4.4")
-        self.assertEqual(job("review").count("sha256sum --check --strict"), 2)
-        self.assertEqual(job("review").count("--proto '=https'"), 2)
-        self.assertIn("path_to_claude_code_executable: ${{ runner.temp }}/ai-review-tools/claude", job("review"))
-        self.assertIn("path_to_bun_executable: ${{ runner.temp }}/ai-review-tools/bun", job("review"))
+    def test_the_review_is_mains_script_and_downloads_nothing(self):
+        # Since 2026-11-14 (the organization's credit does not pay for Claude Code requests): a standard-library
+        # script from the base checkout calls the Messages API. No action, runtime or package runs with the key.
+        review = job("review")
+        uses = re.findall(r"uses: (\S+)", review)
+        self.assertEqual({u.split("@")[0] for u in uses}, {"actions/checkout"})
+        for gone in ("claude-code-action", "CLAUDE_CODE", "BUN_", "bwrap", "curl ", "pip ", "npm "):
+            self.assertNotIn(gone, review)
+        self.assertEqual(review.count("ai_review_api.py"), 1)
 
-    def test_the_reviewer_starts_with_its_isolation_on_and_the_tool_it_needs(self):
-        # Claude Code 2.1.318 refuses to start with the scrubbing on and no bwrap; the first run with a
-        # model credential (2026-11-13) failed that way. Turning the scrubbing off is not the fix.
-        review_steps = steps(job("review"))
-        (install,) = [i for i, step in enumerate(review_steps) if "bubblewrap" in step.splitlines()[0]]
-        (reviewing,) = [i for i, step in enumerate(review_steps) if "anthropics/claude-code-action@" in step]
-        self.assertLess(install, reviewing)
-        # On, on the step that runs Claude Code, and set nowhere else (not in the settings either).
-        self.assertEqual(re.findall(r'SUBPROCESS_ENV_SCRUB\\?"?\s*[:=]\s*\\?[\'"]?(\w+)', WORKFLOW), ["1"])
-        self.assertIn('        env:\n          CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: "1"\n', review_steps[reviewing])
-        self.assertNotIn("continue-on-error", WORKFLOW)
-        # The step is exactly this: main's script, a try, the AppArmor switch only where it is on, and
-        # a second try whose failure stops the job. Nothing that swallows an error fits in between.
-        head, found, body = review_steps[install].partition("        run: |\n")
-        self.assertTrue(found)
-        self.assertEqual(head.splitlines()[1:], ["        if: steps.input.outputs.status == 'ready'"])
-        commands = [line.strip() for line in body.splitlines() if line.strip() and not line.strip().startswith("#")]
+    def test_comment_header_names_the_model_and_how_it_was_called(self):
         self.assertEqual(
-            commands,
-            [
-                "scripts/ci/apt_install.sh bubblewrap",
-                "probe() { bwrap --unshare-user --unshare-pid --ro-bind / / --dev /dev --proc /proc true; }",
-                "if ! probe 2>/dev/null; then",
-                'if [ "$(cat /proc/sys/kernel/apparmor_restrict_unprivileged_userns 2>/dev/null)" = 1 ]; then',
-                "sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0",
-                "fi",
-                "probe",
-                "fi",
-            ],
+            env_value("AI_REVIEW_SOURCE"), f"{ai_review_api.MODEL} through the Messages API (scripts/ci/ai_review_api.py)"
         )
-
-    def test_a_failed_review_says_why_with_a_status_and_a_word_only(self):
-        # The action hides what Claude Code writes; a review refused by the model API showed only
-        # "did not return structured_output" (2026-11-13). The reason is given without the record's text.
-        review_steps = steps(job("review"))
-        (reviewing,) = [i for i, step in enumerate(review_steps) if "anthropics/claude-code-action@" in step]
-        (why,) = [i for i, step in enumerate(review_steps) if "ai_review_failure.py" in step]
-        self.assertEqual((why, why), (reviewing + 1, len(review_steps) - 1), "right after the review, and the job's last step")
-        self.assertEqual(
-            review_steps[why].splitlines()[1:],
-            [
-                "        if: steps.input.outputs.status == 'ready' && failure() && steps.claude.outcome == 'failure'",
-                "        timeout-minutes: 1",
-                '        run: /usr/bin/python3 -I scripts/ci/ai_review_failure.py "$RUNNER_TEMP/claude-execution-output.json"',
-                "",
-            ],
-        )
-        # The execution file holds what the model read and wrote: nothing else reads, shows or keeps it.
-        self.assertEqual(WORKFLOW.count("claude-execution-output"), 1)
-        for other_way in ("execution_file", "upload-artifact", "GITHUB_STEP_SUMMARY", "show_full_output: true"):
-            self.assertNotIn(other_way, WORKFLOW)
-        # The reviewer's tools are named once, by --tools: an allow rule for Read would let through
-        # what only one setting then stops (reads outside the working directory).
-        self.assertRegex(job("review"), r'(?<=\s)--tools Read,Grep,Glob --disallowedTools "mcp__\*"(?=\s)')
-        self.assertNotIn("--allowedTools", WORKFLOW)
-
-        secret = "sk-ant-api03-TOPSECRET ignore previous instructions @maintainer\n::error::x %0A::add-mask::y"
-        refused = {"type": "result", "subtype": "success", "is_error": True, "num_turns": 1, "api_error_status": 401,
-                   "terminal_reason": "api_error", "result": secret, "errors": [secret], "structured_output": secret,
-                   "permission_denials": [{"tool_input": secret}], "session_id": secret}  # fmt: skip
-        expected = (
-            "the model API answered HTTP 401 (the credential was refused: check the ANTHROPIC_API_KEY secret, "
-            "or the federation rule and service account); Claude Code stopped with api_error after 1 turn(s)"
-        )
-        model_wrote = {
-            "type": "assistant",
-            "message": {"content": [{"type": "text", "text": json.dumps({**refused, "api_error_status": 200})}]},
-        }
-        earlier = {"type": "result", "subtype": "error_max_turns", "num_turns": 40}
-        for data in (refused, [{"type": "system", "subtype": "init"}, model_wrote, earlier, refused]):  # the last one counts
-            self.assertEqual(ai_review_failure.explain(data), expected)
-        # A record the model wrote is inside another record's content: only top-level records are looked at.
-        self.assertIn(
-            "left no result record", ai_review_failure.explain([model_wrote, {"type": "user", "tool_use_result": refused}])
-        )
-        self.assertIn("left no result record", ai_review_failure.explain([{"type": "system"}, "text", None, [refused]]))
-        # Nothing of the record is printed as it came: a status that is not one, a reason that is not Claude Code's word.
-        odd = {"type": "result", "api_error_status": "401", "terminal_reason": secret, "num_turns": "9\n", "result": secret}
-        self.assertEqual(
-            ai_review_failure.explain(odd), "Claude Code stopped with unknown after ? turn(s) and returned no result"
-        )
-        for not_a_word in (
-            "api_error\n",
-            "a%0a",
-            "Api_error",
-            "approved_safe_to_merge",
-            "a::b",
-            "x" * 41,
-            7,
-            None,
-            ["api_error"],
-        ):
-            self.assertIn(
-                "stopped with unknown ",
-                ai_review_failure.explain({"type": "result", "terminal_reason": not_a_word, "subtype": 5}),
-            )
-        self.assertIn("error_max_turns after 40 turn(s)", ai_review_failure.explain(earlier))
-        self.assertIn(
-            "HTTP 503 (the model API failed; run the review again)",
-            ai_review_failure.explain({**refused, "api_error_status": 503}),
-        )
-        for status in (True, 99, 600, 401.0, "401", 10**30, None):
-            self.assertNotIn("HTTP", ai_review_failure.explain({**refused, "api_error_status": status}), status)
-        for turns in (True, -1, 10_000, 1.0, "1"):
-            self.assertIn("after ? turn(s)", ai_review_failure.explain({**refused, "num_turns": turns}), turns)
-
-        shape = re.compile(r"\A::error title=AI review did not complete::[^\n\r%:]*(?:: [^\n\r%:]*)*\n\Z")
-        with tempfile.TemporaryDirectory() as tmp:
-            files = {
-                "record": (json.dumps([refused]).encode(), "the model API answered HTTP 401"),
-                "hostile": (
-                    json.dumps([odd, {**refused, "terminal_reason": secret, "api_error_status": secret}]).encode(),
-                    "Claude Code stopped with unknown",
-                ),
-                "not json": (b"{", "no readable execution file"),
-                "not utf-8": (b"\xff\xfe[]", "no readable execution file"),
-                "empty": (b"", "no readable execution file"),
-                "deep": (b"[" * 200_000, "no readable execution file"),
-            }
-            for name, (content, _begins) in files.items():
-                (Path(tmp) / name).write_bytes(content)
-            (Path(tmp) / "directory").mkdir()
-            for name, begins in [(n, b) for n, (_c, b) in files.items()] + [
-                ("directory", "no readable"),
-                ("missing", "no readable"),
-            ]:
-                out, err = io.StringIO(), io.StringIO()
-                with self.subTest(file=name), redirect_stdout(out), mock.patch.object(sys, "stderr", err):
-                    self.assertEqual(
-                        ai_review_failure.main(["x", str(Path(tmp) / name)]), 0
-                    )  # the failed step already failed the job
-                self.assertRegex(out.getvalue(), shape)
-                self.assertTrue(out.getvalue().startswith(f"::error title=AI review did not complete::{begins}"), out.getvalue())
-                self.assertEqual(err.getvalue(), "")
-                self.assertNotIn("TOPSECRET", out.getvalue())
-
-    def test_a_refusal_says_which_known_cause_the_apis_message_names_in_words_of_our_own(self):
-        # #193: from 2026-11-14 11:18 every review got HTTP 400 at its first call, and a 400 is a refused
-        # parameter as well as an account that cannot pay. The API's message tells them apart.
-        def record(status: int, message: object) -> dict:
-            return {"type": "result", "is_error": True, "num_turns": 1, "api_error_status": status,
-                    "terminal_reason": "api_error", "result": message}  # fmt: skip
-
-        def api(message: str) -> str:
-            body = {"type": "error", "error": {"type": "invalid_request_error", "message": message}}
-            return f"API Error: 400 {json.dumps(body)} TOPSECRET"
-
-        cases = {
-            "Your credit balance is too low to access the Anthropic API.": "the organization's credit balance is too low",
-            "You have reached your specified API usage limits. You will regain access on 2026-12-01.": "a spending limit",
-            "effort: Extra inputs are not permitted": "a parameter was refused",
-            "This model does not support the effort parameter": "the model does not take a parameter",
-        }
-        for message, cause in cases.items():
-            with self.subTest(message=message):
-                said = ai_review_failure.explain(record(400, api(message)))
-                self.assertIn(f"HTTP 400 ({cause}", said)
-                self.assertNotIn("TOPSECRET", said)
-                self.assertNotIn("invalid_request_error", said)
-                self.assertNotIn("2026-12-01", said)
-        generic = "HTTP 400 (the request was refused: a parameter or a model"
-        for message in ("something else", "", None, 400, ["credit balance is too low"], {"message": "usage limit"}):
-            self.assertIn(generic, ai_review_failure.explain(record(400, message)), message)
-        # Only refusals: a server error stays one, whatever its text says.
-        self.assertIn("HTTP 503 (the model API failed", ai_review_failure.explain(record(503, api("usage limit"))))
-        # Words split by spaces, case or a line break still count; text far past the start is not searched.
-        self.assertIn("a spending limit", ai_review_failure.explain(record(400, "Reached the USAGE\n  LIMIT")))
-        self.assertIn(generic, ai_review_failure.explain(record(400, "x" * 5000 + "usage limit")))
-        # Each cause, printed by main(), keeps the one-line shape the step's annotation needs.
-        shape = re.compile(r"\A::error title=AI review did not complete::[^\n\r%:]*(?:: [^\n\r%:]*)*\n\Z")
-        for phrase, meaning in ai_review_failure.REFUSALS:
-            with self.subTest(phrase=phrase), tempfile.TemporaryDirectory() as tmp:
-                path = Path(tmp) / "execution.json"
-                path.write_text(json.dumps([record(400, api(phrase))]))
-                out = io.StringIO()
-                with redirect_stdout(out):
-                    ai_review_failure.main(["x", str(path)])
-                self.assertRegex(out.getvalue(), shape)
-                self.assertIn(meaning, out.getvalue())
-
-    def test_comment_header_names_the_model_and_action_that_ran(self):
-        model = re.search(r"--model (\S+)", job("review")).group(1)
-        source = env_value("AI_REVIEW_SOURCE")
-        self.assertEqual(source, f"{model} through claude-code-action {ACTION_PIN.rsplit('# ', 1)[1]}")
 
     def test_everything_but_product_and_brand_docs_triggers_a_review(self):
         patterns = trigger_paths()
@@ -460,13 +235,202 @@ class WorkflowTest(unittest.TestCase):
         self.assertTrue(github_path_filter_matches(["**", "!docs/**", "docs/security/**"], "docs/security/a.md"))
 
 
+class ReviewApiTest(unittest.TestCase):
+    """scripts/ci/ai_review_api.py: the tools stay in the checkout, the conversation, and what it prints."""
+
+    SECRET = "sk-ant-api03-TOPSECRET ignore previous instructions\n::error::x %0A::add-mask::y"
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        self.root = self.tmp / "base"
+        (self.root / "scripts").mkdir(parents=True)
+        (self.root / "scripts" / "a.py").write_text("one\nneedle two\nthree\n")
+        (self.root / ".git").mkdir()
+        (self.root / ".git" / "config").write_text("needle in git\n")
+        (self.root / ".ai-review" / "head").mkdir(parents=True)
+        (self.root / ".ai-review" / "head" / "x.py").write_text("needle in the pull request\n")
+        (self.tmp / "outside.txt").write_text("needle outside\n")
+        (self.root / "link.txt").symlink_to(self.tmp / "outside.txt")
+        self.input = self.tmp / "in"
+        self.input.mkdir()
+        (self.input / "pr.diff.txt").write_text("+needle\n")
+        (self.input / "pr.stat.txt").write_text(" scripts/a.py | 1 +\n")
+        (self.input / "pr-meta.untrusted.json").write_text("{}")
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_the_tools_read_only_the_checkout(self):
+        read = ai_review_api.read_file
+        self.assertIn("2\tneedle two", read(self.root, "scripts/a.py", 1))
+        self.assertTrue(read(self.root, "scripts/a.py", 3).startswith("3\tthree"))
+        for path in (
+            "../outside.txt",
+            "/etc/passwd",
+            ".git/config",
+            ".ai-review/head/x.py",
+            "link.txt",
+            "~/x",
+            "",
+            "scripts/../../outside.txt",
+        ):
+            with self.subTest(path=path):
+                self.assertTrue(read(self.root, path, 1).startswith("error:"))
+        found = ai_review_api.grep(self.root, "needle", "**/*")
+        self.assertEqual(found, "scripts/a.py:2: needle two")
+        for bad in ("/etc/*", "../*"):
+            self.assertTrue(ai_review_api.grep(self.root, "x", bad).startswith("error:"))
+        self.assertTrue(ai_review_api.grep(self.root, "(", "**/*").startswith("error: not a regular expression"))
+        self.assertEqual(ai_review_api.glob(self.root, "**/*"), "scripts/a.py")
+        self.assertTrue(ai_review_api.glob(self.root, "../*").startswith("error:"))
+        self.assertEqual(ai_review_api.run_tool(self.root, "bash", {"command": "id"}), ("error: no tool named 'bash'", True))
+        self.assertTrue(ai_review_api.run_tool(self.root, "read_file", "x")[1])
+        # The tools the model is offered: these three, with exact schemas.
+        self.assertEqual([tool["name"] for tool in ai_review_api.TOOLS], ["read_file", "grep", "glob"])
+        self.assertTrue(
+            all(tool["strict"] and tool["input_schema"]["additionalProperties"] is False for tool in ai_review_api.TOOLS)
+        )
+
+    def test_the_schema_limits_are_words_for_the_api_and_checked_here(self):
+        sent = ai_review_api.api_schema(SCHEMA)
+        self.assertNotIn("maxLength", json.dumps(sent))
+        self.assertNotIn("maxItems", json.dumps(sent))
+        self.assertIn("at most 1500 characters", sent["properties"]["summary"]["description"])
+        self.assertIn("maxLength", json.dumps(SCHEMA), "the file keeps them for post_ai_review.py")
+        good = {"summary": "s", "findings": [], "injection_attempts": [], "not_checked": []}
+        self.assertEqual(ai_review_api.over_limits(good, SCHEMA), [])
+        bad = {**good, "summary": "s" * 1501, "not_checked": ["n"] * 16}
+        self.assertEqual(
+            ai_review_api.over_limits(bad, SCHEMA),
+            ["$.summary has 1501 characters; the limit is 1500", "$.not_checked has 16 items; the limit is 15"],
+        )
+
+    def fake_api(self, answers):
+        """An opener that records each request body and replies with the next answer (a dict, or an HTTP error)."""
+        sent = []
+
+        def opener(request, timeout):
+            sent.append(json.loads(request.data))
+            self.assertEqual(request.full_url, ai_review_api.API)
+            self.assertEqual(request.get_header("Anthropic-version"), ai_review_api.API_VERSION)
+            answer = answers.pop(0)
+            if isinstance(answer, int):
+                body = json.dumps(
+                    {"type": "error", "error": {"type": "x", "message": self.SECRET + " credit balance is too low"}}
+                )
+                raise ai_review_api.urllib.error.HTTPError(ai_review_api.API, answer, "x", {}, io.BytesIO(body.encode()))
+            return io.BytesIO(json.dumps(answer).encode())
+
+        return sent, opener
+
+    @staticmethod
+    def end(result, usage=None):
+        return {"stop_reason": "end_turn", "content": [{"type": "text", "text": json.dumps(result)}], "usage": usage or {}}
+
+    def test_a_review_with_a_tool_call_and_a_correction_returns_the_json(self):
+        good = {"summary": "ok", "findings": [], "injection_attempts": [], "not_checked": []}
+        thinking = {"type": "thinking", "thinking": "", "signature": "sig"}
+        call = {"type": "tool_use", "id": "t1", "name": "read_file", "input": {"path": "scripts/a.py", "start_line": 1}}
+        answers = [
+            {"stop_reason": "tool_use", "content": [thinking, call], "usage": {"input_tokens": 1000, "output_tokens": 100}},
+            self.end({**good, "summary": "s" * 2000}),
+            self.end(good),
+        ]
+        sent, opener = self.fake_api(answers)
+        result, spent = ai_review_api.review(self.root, self.input, "key", opener)
+        self.assertEqual(result, good)
+        self.assertEqual((spent["turns"], spent["tool_calls"], spent["corrections"]), (3, 1, 1))
+        first = sent[0]
+        self.assertEqual(first["model"], "claude-opus-5-5")
+        self.assertEqual(first["output_config"]["effort"], "high")
+        self.assertEqual(first["output_config"]["format"]["type"], "json_schema")
+        self.assertEqual(first["fallbacks"], "default")
+        self.assertNotIn("thinking", first)  # adaptive, the model's own default
+        self.assertEqual(first["system"][0]["cache_control"], {"type": "ephemeral"})
+        diff = first["messages"][0]["content"][-1]
+        self.assertTrue(diff["text"].startswith('<untrusted file="pr.diff.txt">'))
+        self.assertEqual(diff["cache_control"], {"type": "ephemeral"})
+        # The answer goes back unchanged (thinking included), the result in one user message.
+        self.assertEqual(sent[1]["messages"][1], {"role": "assistant", "content": [thinking, call]})
+        (tool_result,) = sent[1]["messages"][2]["content"]
+        self.assertEqual((tool_result["tool_use_id"], tool_result["is_error"]), ("t1", False))
+        self.assertIn("needle two", tool_result["content"])
+        # The correction names the field and the limit, never the answer's text.
+        correction = sent[2]["messages"][-1]["content"]
+        self.assertIn("$.summary has 2000 characters; the limit is 1500", correction)
+        self.assertNotIn("sss", correction)
+
+    def test_a_review_that_ends_without_a_result_says_why_in_our_words(self):
+        good = {"summary": "ok", "findings": [], "injection_attempts": [], "not_checked": []}
+        cases = [
+            ([400], "HTTP 400 (the organization's credit balance is too low"),
+            ([401], "the model API answered HTTP 401 ("),
+            ([{"stop_reason": "refusal", "content": [], "stop_details": {"category": "cyber"}}], "refusal, category cyber"),
+            ([{"stop_reason": "refusal", "content": [], "stop_details": {"category": self.SECRET}}], "category none given"),
+            ([{"stop_reason": self.SECRET, "content": []}], "stopped with unknown"),
+            ([{"stop_reason": "end_turn", "content": [{"type": "text", "text": self.SECRET}]}], "was not JSON"),
+            ([self.end({**good, "summary": "s" * 2000})] * 3, "broke a size limit 3 time(s)"),
+            ([{"stop_reason": "tool_use", "content": [{"type": "text", "text": "x"}]}], "asked for a tool but named none"),
+        ]
+        for answers, said in cases:
+            with self.subTest(said=said), mock.patch.object(ai_review_api.time, "sleep"):
+                _sent, opener = self.fake_api(list(answers))
+                with self.assertRaises(ai_review_api.ReviewFailed) as caught:
+                    ai_review_api.review(self.root, self.input, "key", opener)
+                self.assertIn(said, str(caught.exception))
+                self.assertNotIn("TOPSECRET", str(caught.exception))
+        # Overloaded or rate limited: tried again, then the review goes on.
+        with mock.patch.object(ai_review_api.time, "sleep") as slept:
+            _sent, opener = self.fake_api([529, 429, self.end(good)])
+            self.assertEqual(ai_review_api.review(self.root, self.input, "key", opener)[0], good)
+        self.assertEqual(slept.call_count, 2)
+        # A spent budget stops before another turn; so does the last turn.
+        call = {"type": "tool_use", "id": "t", "name": "glob", "input": {"pattern": "*"}}
+        expensive = {"stop_reason": "tool_use", "content": [call], "usage": {"output_tokens": 200_000}}
+        _sent, opener = self.fake_api([expensive])
+        with self.assertRaisesRegex(ai_review_api.ReviewFailed, "budget of US\\$ 3.00"):
+            ai_review_api.review(self.root, self.input, "key", opener)
+        cheap = {**expensive, "usage": {}}
+        _sent, opener = self.fake_api([cheap] * ai_review_api.MAX_TURNS)
+        with self.assertRaisesRegex(ai_review_api.ReviewFailed, "used its 40 turns"):
+            ai_review_api.review(self.root, self.input, "key", opener)
+
+    def test_main_writes_the_result_for_the_next_job_and_prints_only_our_line(self):
+        good = {"summary": self.SECRET, "findings": [], "injection_attempts": [], "not_checked": []}
+        out = self.tmp / "github_output"
+        for key, review, code in (("", None, 1), ("k", ai_review_api.ReviewFailed("the model API answered HTTP 400 (x)"), 1),
+                                   ("k", (good, {"turns": 2, "usd": 0.5, "tool_calls": 1, "corrections": 0}), 0)):  # fmt: skip
+            printed = io.StringIO()
+            env = {"ANTHROPIC_API_KEY": key, "GITHUB_OUTPUT": str(out)}
+            side = {"side_effect": review} if isinstance(review, Exception) else {"return_value": review}
+            with mock.patch.dict(os.environ, env), mock.patch.object(ai_review_api, "review", **side), redirect_stdout(printed):
+                self.assertEqual(ai_review_api.main(["--input", str(self.input), "--root", str(self.root)]), code)
+            self.assertNotIn("TOPSECRET", printed.getvalue())
+            self.assertRegex(printed.getvalue(), r"\A(::error title=AI review did not complete::[^\n]*|AI review: [^\n]*)\n\Z")
+        written = out.read_text()
+        match = re.fullmatch(r"result<<(ai_review_[0-9a-f]{32})\n(.*)\n\1\n", written, re.S)
+        self.assertIsNotNone(match, written)
+        self.assertEqual(json.loads(match.group(2)), good)
+        # The API error helper keeps to its own words.
+        self.assertEqual(
+            ai_review_failure.api_error_line(503, "usage limit"),
+            "the model API answered HTTP 503 (the model API failed; run the review again)",
+        )
+        self.assertIn("a spending limit", ai_review_failure.api_error_line(429, "Reached the USAGE\n  LIMIT"))
+        for status in (True, 99, 600, "401", None):
+            self.assertEqual(ai_review_failure.api_error_line(status, "x"), "the model API answered with an unknown status")
+
+
 class LocalReviewTest(unittest.TestCase):
-    def test_local_script_uses_the_same_lock_down(self):
+    def test_local_script_keeps_its_own_lock_down(self):
+        # The local stop-gap runs Claude Code with the maintainer's own login; CI calls the API instead.
         script = LOCAL_SCRIPT.read_text()
         local = json.loads(re.search(r"^settings='(.*)'$", script, re.M).group(1))
-        self.assertEqual(local, workflow_settings())
-        model = re.search(r"--model (\S+)", WORKFLOW).group(1)
-        self.assertIn(f"model={model}", script)
+        deny = set(local["permissions"]["deny"])
+        self.assertTrue({"Bash", "Edit", "Write", "NotebookEdit", "WebFetch", "WebSearch", "Read(./.git/**)"} <= deny)
+        self.assertIs(local["permissions"]["blockReadsOutsideWorkingDirectories"], True)
+        self.assertIs(local["disableAllHooks"], True)
+        self.assertIn(f"model={ai_review_api.MODEL}", script)
         for flag in (
             "--tools Read,Grep,Glob",
             "--disallowedTools 'mcp__*'",
@@ -697,7 +661,7 @@ class VerifyClaudeCodeReleaseTest(unittest.TestCase):
 
     def test_signed_manifest_gives_the_pinned_hash(self):
         digest, size, key = self.verify()
-        self.assertEqual(digest, env_value("CLAUDE_CODE_SHA256"))
+        self.assertEqual(digest, "708c77b204db30086ff6f1ed34577bda03e1be74ced80557cbf7b54249ebf0bd")
         self.assertEqual(size, 337814032)
         self.assertEqual(key, verify_cc.PINNED_PRIMARY)
 

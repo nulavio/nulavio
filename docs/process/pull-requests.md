@@ -95,7 +95,7 @@ What this gives up, said plainly: the person who could tell that an agent had be
 
 ## The automatic AI review in CI
 
-[`.github/workflows/ai-review.yml`](../../.github/workflows/ai-review.yml) asks Claude (model `claude-opus-5-5`, through `anthropics/claude-code-action` pinned by commit) to check a pull request against the project's security invariants in [`.github/ai-review/instructions.md`](../../.github/ai-review/instructions.md). It is a second pair of eyes, not a gate: findings are leads to check, an empty result proves nothing, and whoever merges decides.
+[`.github/workflows/ai-review.yml`](../../.github/workflows/ai-review.yml) asks Claude (model `claude-opus-5-5`, through the Messages API from [`ai_review_api.py`](../../scripts/ci/ai_review_api.py)) to check a pull request against the project's security invariants in [`.github/ai-review/instructions.md`](../../.github/ai-review/instructions.md). It is a second pair of eyes, not a gate: findings are leads to check, an empty result proves nothing, and whoever merges decides.
 
 ### When it runs
 
@@ -111,12 +111,11 @@ What this gives up, said plainly: the person who could tell that an agent had be
 
 - `pull_request_target`: the workflow, the instructions and the output schema always come from `main`, so a pull request cannot change its own reviewer. Changes to them take effect only after they are merged.
 - Nothing from the pull request runs. Its head is checked out into `.ai-review/head` only so git can compute the diff (`--no-ext-diff --no-textconv`), then deleted ([`ai_review_input.py`](../../scripts/ci/ai_review_input.py)). Git attributes come from `main` (`--attr-source`), so a `.gitattributes` in the pull request cannot hide a file from the diff by marking it binary. Files git still shows only as binary (a NUL byte in the content is enough) cannot be read by the model: the comment gives their number, and the model is told to flag any that look like code or configuration.
-- Job "review" holds the model credential with a read-only GitHub token and only the Read, Grep and Glob tools, limited to the working directory (no shell, network, edit or MCP tools, no hooks, `.git/` unreadable). Its only output is JSON that must match [`schema.json`](../../.github/ai-review/schema.json).
+- Job "review" holds the model credential and a read-only GitHub token. [`ai_review_api.py`](../../scripts/ci/ai_review_api.py), from `main` and standard library only (nothing is installed into the job that holds the key), calls the Messages API and gives the model three read-only tools: read a file, search with a regular expression, list paths by glob. They read only the base-branch checkout: absolute paths, `..`, anything a link resolves to outside it, `.git/` and the pull request's checkout are refused. There is no shell, network, edit or MCP tool. Its only output is JSON that must match [`schema.json`](../../.github/ai-review/schema.json) (structured output; the size limits the API does not enforce are checked by the script, which asks the model to shorten an answer at most twice, and again by the publish job).
 - Job "publish" never runs the model. [`post_ai_review.py`](../../scripts/ci/post_ai_review.py) from `main` validates the JSON again, drops findings about files that do not exist, removes invisible and bidirectional characters, redacts secret-like strings, neutralises mentions and HTML comments, shows every model-written text inside a code fence, and creates or updates one comment marked `<!-- nulavio-ai-review -->`. It cannot approve or request changes.
-- Claude Code and Bun are downloaded by version and checked against SHA-256 pins. The Claude Code pin comes from a release manifest whose signature [`verify_claude_code_release.py`](../../scripts/upstream/verify_claude_code_release.py) checks against Anthropic's pinned key; a unit test checks the pin against that signed manifest.
-- Claude Code runs with the environment of the processes it starts scrubbed and isolated (`CLAUDE_CODE_SUBPROCESS_ENV_SCRUB`), although the reviewer has no shell tool. Claude Code then looks for `bwrap` before it starts, so the job installs it from Ubuntu's archive, and tries it: a `bwrap` that cannot run stops the job. On a runner where AppArmor keeps unprivileged user namespaces for programs with a profile, the job turns that switch off on its own machine and says so in the log.
-- When the review step fails, the next step says why in one line: the HTTP status of the model API's error and Claude Code's own word for why it stopped ([`ai_review_failure.py`](../../scripts/ci/ai_review_failure.py)). For a refusal (4xx) it also names which known cause the API's message gives, when it gives one: no credit, a spending limit reached, a refused parameter (#193). The action hides what Claude Code writes, and this line carries none of it: a number, a word and a cause from fixed lists. No other step reads the file it comes from.
-- Telemetry, error reporting and non-essential traffic of Claude Code are turned off.
+- The model's text is never printed in the job log. A review that ends without a result says why in one line of our own: the HTTP status of the API's error and, for a refusal (4xx), which known cause the API's message names (no credit, a spending limit reached, a refused parameter; [`ai_review_failure.py`](../../scripts/ci/ai_review_failure.py), #193), or the model's stop reason, the turn count or the budget.
+- A refusal by the model's safety classifiers (likely on security code) continues on the fallback model the API chooses for that category, inside the same request (`fallbacks: "default"`).
+- Until 2026-11-14 the review ran Claude Code through `anthropics/claude-code-action`. It moved to the API because the organization's credit does not pay for Claude Code requests: with the same key, a direct API call was answered and Claude Code got "credit balance is too low". That also removed the downloads of Claude Code and Bun and the bubblewrap step.
 
 What it sends: the diff, the pull request's title and description, and the files the model chooses to read from `main` go to Anthropic's API. Nothing else leaves GitHub.
 
@@ -124,47 +123,27 @@ What it can still get wrong: text in the change can steer the review (prompt inj
 
 ### Cost
 
-About 8–10 billed Actions minutes per review (both jobs, rounded up) and, as an estimate to measure on the first ten reviews, USD 0.5–2 of API use. Each run stops at 40 turns, at an estimated USD 3 (a client-side estimate that can be passed slightly) and after 15 minutes. Without a credential, a run that passes the filters starts one job that prints a notice and stops (about one billed minute).
+About 2–3 billed Actions minutes per review (both jobs, rounded up) and model use measured at USD 0.09–0.15 per review on 2026-11-14 (#291's diff, 1 to 4 turns). Each run stops at 40 turns, at an estimated USD 3 (a client-side estimate from the response's token counts; it can be passed by one turn) and after 15 minutes. Without a credential, a run that passes the filters starts one job that prints a notice and stops (about one billed minute).
 
 ### Turning it on (maintainer)
 
-Preferred, with no long-lived secret: Workload Identity Federation.
+1. In the Claude Console, create an API key in a dedicated workspace with a monthly spend limit (today `nulavio-ci`, US$ 50).
+2. Store it as the repository secret `ANTHROPIC_API_KEY`, used only by this workflow. Rotate it every 90 days and at once after any unexpected change under `.github/`. On this plan any workflow pushed by someone with write access can read repository secrets.
+3. Create the labels `ai-review` and `no-ai-review`. Do not install the Claude GitHub App.
 
-1. In the Claude Console: Settings → Workload identity → Connect workload → GitHub Actions (issuer `https://token.actions.githubusercontent.com`, audience `https://api.anthropic.com`, which is what the action asks GitHub for). Create a service account `nulavio-ai-review`, a member of one dedicated workspace only (for example `nulavio-ci`) with a monthly spend limit (for example USD 40).
-2. Create the federation rule for that workspace. The wizard's defaults do not fit this workflow in two ways, so fill the match by hand (its advanced options):
-   - The event is `pull_request_target`, not `push`.
-   - This repository was created after 2026-07-15, so GitHub puts the immutable ids in the token's `sub`. For this workflow it is `repo:nulavio@355057103/nulavio@1433296085:pull_request` (seen in the Console's authentication history on 2026-11-13; the prefix can be read with `gh api repos/nulavio/nulavio/actions/oidc/customization/sub`), not `repo:nulavio/nulavio:ref:refs/heads/main`.
+To turn it off, set the repository variable `AI_REVIEW` to `off` (no cost), or remove the secret.
 
-   Match: subject `repo:nulavio@355057103/nulavio@1433296085:pull_request`, and the claims `event_name` = `pull_request_target`, `job_workflow_ref` = `nulavio/nulavio/.github/workflows/ai-review.yml@refs/heads/main`, `ref` = `refs/heads/main`, `repository_owner_id` = `355057103`. The subject alone is not enough: every pull request run of this repository has the same one, whatever workflow and event it comes from. The event and workflow claims are what keep every other workflow, on any branch, from getting a token. Scope `workspace:inference` (the review only calls the model; `workspace:developer` if the first run answers HTTP 403). The default token lifetime of 600 seconds is enough: the action writes a fresh GitHub token every four minutes and Claude Code exchanges it again when it needs to. A refused exchange shows in the job as `api_error` with no HTTP status; the reason (`match_subject_prefix`, …) and the token's claims are in the Console's authentication history.
-3. In GitHub, Settings → Secrets and variables → Actions → Variables, add `ANTHROPIC_FEDERATION_RULE_ID` (`fdrl_…`), `ANTHROPIC_ORGANIZATION_ID`, `ANTHROPIC_SERVICE_ACCOUNT_ID` (`svac_…`) and `ANTHROPIC_WORKSPACE_ID` (`wrkspc_…`; needed only when the rule covers several workspaces). These are identifiers, not secrets. Do not commit the test workflow the Console offers: its tokens would carry another `job_workflow_ref` than the rule allows, and this workflow does the exchange itself.
+Workload Identity Federation (no long-lived secret) was used from 2026-11-13 to 2026-11-14, through the action. The script does not do the token exchange; its four variables were removed on 2026-11-14 and their values are kept by the maintainer. Bringing federation back means implementing that exchange in the script.
 
-Fallback: a Console API key from the same spend-capped workspace, stored as the repository secret `ANTHROPIC_API_KEY` and used only by this workflow. Rotate it every 90 days and at once after any unexpected change under `.github/`. On this plan any workflow pushed by someone with write access can read repository secrets, which is why federation is preferred. If both are configured, the workflow uses federation and warns.
+### Checks on a change to the review
 
-Then create the labels `ai-review` and `no-ai-review`. Do not install the Claude GitHub App: the workflow uses its own job token, and the app asks for far broader permissions. Never set `ACTIONS_STEP_DEBUG` for this repository: debug mode makes the action print its full output.
-
-To turn it off, set the repository variable `AI_REVIEW` to `off` (no cost), or remove the credential.
-
-### Checks on the first run
-
-- The review ends with a result. If it ends without one, `--tools Read,Grep,Glob` may have removed the tool Claude Code uses to return structured output: replace it with `--disallowedTools "Bash,Edit,Write,NotebookEdit,WebFetch,WebSearch,mcp__*"` and keep the deny list in `settings`.
-- The log shows that `--append-system-prompt-file`, `--effort` and `--max-budget-usd` reached Claude Code.
-- With federation, the claim values in the Console's history match the rule.
-- One comment appears and is updated, not duplicated, when the label is added again.
-
-### Updating the pins
-
-At most monthly, or at once for a security advisory (the daily [dependency watch](../security/dependency-updates.md) reports them for both, as npm packages):
-
-1. Choose a release of `anthropics/claude-code-action`, resolve its tag to a commit with `gh api repos/anthropics/claude-code-action/tags`, and read `action.yml` and `src/entrypoints/run.ts` at that commit.
-2. `CLAUDE_CODE_VERSION` must equal `claudeCodeVersion` in `run.ts`. Run `python3 -I scripts/upstream/verify_claude_code_release.py <version>` for `CLAUDE_CODE_SHA256`, and replace the files in `tests/fixtures/claude-code/` with that release's manifest and signature.
-3. `BUN_VERSION` must equal `bun-version` in `action.yml`. Take `BUN_ZIP_SHA256` from Bun's `SHASUMS256.txt` for that release and compare it with the asset digest GitHub shows.
-4. Update the commit in `uses:`, its version comment and `AI_REVIEW_SOURCE`, then run the unit tests.
-
-Known gaps: the action installs its own dependencies with `bun install --production` from its pinned `bun.lock` but without `--frozen-lockfile`; the signature of Bun's checksum file is not verified; the action's release commits are not signed, so trust rests on GitHub and the commit id.
+- `python3 -m unittest tests.unit.test_ai_review` (the tools' confinement, the conversation against a fake API, the size limits, the error lines).
+- With a key at hand, run the review locally on a real diff, without posting: `ai_review_input.py --repo-dir . --out DIR` with `BASE_SHA` and `HEAD_SHA`, then `ANTHROPIC_API_KEY=… GITHUB_OUTPUT=DIR/out python3 -I scripts/ci/ai_review_api.py --input DIR`, and pass the result to `post_ai_review.py --stdin --no-file-check` to see the comment.
+- The model and its price are constants at the top of `ai_review_api.py` (`MODEL`, `PRICE`); a new model changes both, and the comment's header follows `MODEL`.
 
 ### Local review
 
-`scripts/review/ai_review_local.sh <number>` runs the same review on your machine with your own Claude Code login: no Actions minutes, no secret on GitHub. It fetches the pull request's head as git objects, reviews it from a throwaway worktree of `origin/main` with the same tools, settings and instructions, and prints the comment. With `--post` it asks, then posts the comment as you. It needs Git 2.41 or later (for `--attr-source`). Your machine holds real secrets (the Safe Browsing key, later signing keys); the working-directory limit and the read-only tools are what keep them out of reach, so do not loosen them. Claude Code's interactive `/code-review` is another option.
+`scripts/review/ai_review_local.sh <number>` runs a review on your machine with your own Claude Code login (no Actions minutes, no secret on GitHub): the same instructions, input and output schema as CI, through Claude Code with its own lock-down instead of the CI script. It fetches the pull request's head as git objects, reviews it from a throwaway worktree of `origin/main` with Claude Code's Read, Grep and Glob tools, and prints the comment. With `--post` it asks, then posts the comment as you. It needs Git 2.41 or later (for `--attr-source`). Your machine holds real secrets (the Safe Browsing key, later signing keys); the working-directory limit and the read-only tools are what keep them out of reach, so do not loosen them. Claude Code's interactive `/code-review` is another option.
 
 ## CodeRabbit
 
