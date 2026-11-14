@@ -8,6 +8,7 @@ Everything Nulavio pins, except the Firefox engine, and how it stays current. Th
 |---|---|---|---|---|
 | GitHub Actions | `.github/workflows/*.yml` | commit SHA plus `# vX.Y.Z` on the same line | Dependabot, weekly | the daily watch (GitHub raises no alerts for actions pinned by SHA) |
 | ruff (development only) | `requirements/dev.txt` | version and SHA-256 (`--require-hashes`) | Dependabot, monthly | the daily watch; Dependabot alerts once enabled |
+| Hypothesis and sortedcontainers (fuzzing only, #149) | `requirements/fuzz.txt` | version and SHA-256 of each Linux x86_64 wheel (`--require-hashes`) | Dependabot, monthly (same directory) | the daily watch; Dependabot alerts once enabled |
 | Gradle | `android/gradle/wrapper/gradle-wrapper.properties` | version and `distributionSha256Sum` | Dependabot, monthly | the daily watch (OSV lists Gradle's own advisories under "Bitnami") |
 | Companion libraries and the Android Gradle plugin | `android/*/build.gradle.kts` | version, SHA-256 of every artifact in `android/gradle/verification-metadata.xml`, and the APK's classpath in `android/app/gradle.lockfile` (`nv1` in `android/nv1/gradle.lockfile`) | Dependabot, monthly, plus a local step (below) | the daily watch, for every component in the metadata (213 today), build-time ones included |
 | Base images | `ci/containers/*.Containerfile` | `tag@sha256:digest`; the release scripts read it there (`scripts/release/base_image.sh`) | Dependabot, monthly (new digest of the same release) | the daily watch reports a newer build |

@@ -1,0 +1,42 @@
+name: fuzz
+
+# Property-based fuzzing of the parsers that read input Nulavio does not control (#149): the desktop's
+# side of nv1 (tests/fuzz/test_nv1.py) and the AI Bridge's address classifier (test_address.py), with
+# Hypothesis pinned by hash in requirements/fuzz.txt. Weekly and by hand, never on pull requests and
+# never a required check. A failure here is a finding: docs/security/code-scanning.md, "Fuzzing", says
+# what it means and where it goes (the log is public).
+
+on:
+  schedule:
+    - cron: "41 4 * * 1" # Mondays 04:41 UTC
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: fuzz
+  cancel-in-progress: true
+
+jobs:
+  fuzz:
+    name: fuzz the parsers (Hypothesis)
+    if: ${{ github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: libsodium for the nv1 harness
+        run: scripts/ci/apt_install.sh libsodium23
+      - name: Hypothesis, hash-pinned
+        run: |
+          python3 -m venv .venv
+          .venv/bin/pip install --require-hashes -r requirements/fuzz.txt
+      - name: Fuzz (many more examples than a local run)
+        env:
+          NULAVIO_FUZZ_EXAMPLES: "20000"
+          NULAVIO_REQUIRE_SODIUM: "1"
+        run: .venv/bin/python -I tests/run.py fuzz

@@ -93,6 +93,23 @@ The `asan` workflow (`.github/workflows/asan.yml`) builds the pinned Firefox wit
 
 When it fails with a report: download the `asan-reports` artifact, find the first frame in Nulavio's code (patches 0006 and 0010 are the C++ Nulavio adds) or in Gecko. A frame in a Nulavio patch is our bug: fix it, with a test. One only in Gecko goes to Mozilla privately (Bugzilla, security group); record it in [residual risks](residual-risks.md) until a Firefox release fixes it. The variant is never packaged: `rehearse_release.sh` refuses to run with `NULAVIO_MOZCONFIG_EXTRA` set.
 
+## Fuzzing
+
+Decided on 2026-11-14 (#149): [Hypothesis](https://hypothesis.works), property-based testing for Python, as a development-only dependency pinned by version and SHA-256 in `requirements/fuzz.txt`, like ruff. The launcher stays on the standard library. Recent versions of Hypothesis publish native wheels (6.170.13 does); the file pins its Linux x86_64 ones, and they run only in the job below and on a developer's machine.
+
+The harnesses are in `tests/fuzz/` (`python3 -I tests/run.py fuzz`, with Hypothesis installed; `NULAVIO_FUZZ_EXAMPLES` sets how many inputs each property gets, 300 by default):
+
+- `test_nv1.py`: the desktop's side of nv1, which reads what a phone, or anyone who answers for it on the local network, sends. Pairing's hello and confirmation and the unlock answer, starting from real messages of the reference phone with each field changed or removed, then from any JSON object. Also a hello sealed with the right QR secret but holding any body. The property: the answer is a `ProtocolError` (or a `VaultError`), never another exception.
+- `test_address.py`: the AI Bridge's address classifier (`classify_url`). Any text is classified or refused (`UrlRefused`), never another error. An IPv4 host in each form the WHATWG URL parser reads (decimal, hexadecimal, octal, fewer parts) is the address `ipaddress` reads from the dotted form, and a private, loopback, link-local or unspecified one needs `local_resources`.
+
+The `fuzz` workflow (`.github/workflows/fuzz.yml`) runs them weekly and by hand with 20,000 inputs per property, never on pull requests, and is never a required check.
+
+**What a failure means.** Hypothesis prints the smallest input that breaks the property, and that log is public. So the harnesses only check properties whose failure is a robustness defect: a message ends a pairing or an unlock with an error the pages do not know, or an address is refused for the wrong reason. A failure of the address property for a local host (an address that should need `local_resources` and does not) would be a hole in the AI Bridge's network rule. The job is then switched off (`gh workflow disable fuzz`) and the failure goes through a [private advisory](../process/private-work.md) before anyone writes about it. Found locally, any failure that might be a vulnerability goes there first too.
+
+What the first run found (2026-11-14, before the workflow existed): a hello or confirmation without its `box` field, and a hello sealed with the right secret whose body was not the phone's keys, ended the pairing with a `KeyError` or `TypeError` instead of a `ProtocolError`. Only within what U-T29 already accepts: a pairing that is ended, and with the secret only. Fixed in the same pull request, with unit tests in `test_vault.py` (`SubstitutedPairingTest`) that fail without the fix.
+
+Not fuzzed yet: `vault.json` read from disk (`core.py`), the MCP requests of the AI Bridge (`ai/mcp.py`), the model's output read by `post_ai_review.py`, and the waitlist worker (`site/_worker.js`, JavaScript). There is no differential harness for canonical JSON between Python and the Companion's Java either: it needs a JVM in the job and a way to call Java from Hypothesis, and `tests/fixtures/nv1-vectors.json` holds fixed vectors both sides check. Each is an item of #149's follow-up.
+
 ## OpenSSF Scorecard
 
 The `scorecard` workflow (`.github/workflows/scorecard.yml`) runs [OpenSSF Scorecard](https://scorecard.dev) on every push to `main`, weekly and when branch protection changes. It rates how the repository is maintained (branch protection, pinned dependencies, token permissions, signed releases, code review, fuzzing and others), publishes the score to scorecard.dev for the README badge, and uploads its findings to the Security tab under the category `scorecard`. It needs no secret; without an admin token the Branch-Protection check sees only what a public token can read, so that check may score lower than the protection actually configured. A low check is a prompt to look, not a defect by itself: read the finding, then fix it or record why it does not apply.
@@ -119,7 +136,7 @@ How the alerts open on 2026-11-13 were settled (20, on `main` at `bbe8046`):
 | Scorecard Binary-Artifacts | `android/gradle/wrapper/gradle-wrapper.jar` | Won't fix: Gradle's own wrapper. `test_security_tooling` checks it is the file Gradle published, and the distribution it downloads is pinned by SHA-256 |
 | Scorecard Code-Review | no file | Won't fix: one maintainer, whose account the agents also use, so GitHub records no approval. The review is a recorded comment ([R62](residual-risks.md)) |
 | Scorecard Vulnerabilities | no file | Won't fix for now: the nine advisories are tooling of the Android Gradle plugin, none in the APK, each with a reason and an expiry in [`vulnerability-exceptions.json`](vulnerability-exceptions.json) ([R53](residual-risks.md)) |
-| Scorecard Fuzzing | no file | Left open: nothing is fuzzed yet |
+| Scorecard Fuzzing | no file | Left open: the parsers are fuzzed with Hypothesis ([Fuzzing](#fuzzing)), but Scorecard recognises only OSS-Fuzz, ClusterFuzzLite, Go's native fuzzing and property-based libraries for Haskell, JavaScript, Erlang and .NET ([its documentation](https://github.com/ossf/scorecard/blob/main/docs/checks.md#fuzzing), read 2026-11-14), not Hypothesis. It would close with ClusterFuzzLite (Atheris for Python), which was not chosen (#149) |
 | Scorecard Maintained | no file | Left open: it says the repository is younger than 90 days, and stops saying so on 2027-01-23 |
 
 ## Decisions
