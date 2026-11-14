@@ -23,4 +23,4 @@ Skill: [nulavio-engine-verification](../.agents/skills/nulavio-engine-verificati
 
 ## Not here
 
-What the tests exercise lives in `browser/`, `launcher/`, `site/`, `android/` and `scripts/`; each has its own AGENTS.md. CI's workflows are in `.github/workflows/`.
+What the tests exercise lives in `browser/`, `launcher/`, `site/`, `android/` and `scripts/`; all but `scripts/` have an AGENTS.md of their own, and so does `scripts/release/`. CI's workflows are in `.github/workflows/`.

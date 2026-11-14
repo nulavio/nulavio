@@ -23,7 +23,7 @@ Six areas have an `AGENTS.md` of their own: what the area is, the documents and 
 
 Whether a client loads them by itself, tried on 2026-11-14 with a throwaway repository (a root `AGENTS.md`, and a word in a nested one that the agent was then asked to name):
 
-- Claude Code 2.1.311 does not load a nested `AGENTS.md`. It loads a nested `CLAUDE.md` when it reads a file in that directory, so each area also has a `CLAUDE.md` that imports its `AGENTS.md` (`@AGENTS.md`), as the root one does.
+- Claude Code 2.1.311 did not load a nested `AGENTS.md`, and loaded a nested `CLAUDE.md` when it read a file in that directory. That is what its [documentation](https://code.claude.com/docs/en/memory#agents-md) says for this layout: since 2.1.277 it reads `AGENTS.md` files only when there is no `CLAUDE.md` in the working directory or above it, and this repository's root has one. So each area also has a `CLAUDE.md` that imports its `AGENTS.md` (`@AGENTS.md`), as the root one does; with a different "Project instructions" setting it may read both.
 - Codex 0.169.0 loads the `AGENTS.md` files from the repository root down to its working directory: an area's file when it runs inside that area, not when it runs from the root, which is how agents usually start.
 
 So an agent working from the root reads the area's file itself; the list above is where it learns that it exists.
