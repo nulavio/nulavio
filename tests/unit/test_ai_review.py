@@ -282,6 +282,13 @@ class ReviewApiTest(unittest.TestCase):
             self.assertTrue(ai_review_api.grep(self.root, "x", bad).startswith("error:"))
         self.assertTrue(ai_review_api.grep(self.root, "(", "**/*").startswith("error: not a regular expression"))
         self.assertEqual(ai_review_api.glob(self.root, "**/*"), "scripts/a.py")
+        self.assertEqual(ai_review_api.grep(self.root, "needle", "**"), "scripts/a.py:2: needle two")  # files on every Python
+        for odd in (".", "a{4294967296}"):
+            text, is_error = ai_review_api.run_tool(self.root, "grep", {"pattern": odd, "path_glob": odd})
+            self.assertTrue(is_error and text.startswith("error:"), text)  # never a traceback that ends the review
+        (self.root / "scripts" / "slow.txt").write_text("a" * 40 + "!\n")
+        with mock.patch.object(ai_review_api, "GREP_SECONDS", 0.5):
+            self.assertIn("took more than", ai_review_api.grep(self.root, r"^(a+)+$", "**/*"))
         self.assertTrue(ai_review_api.glob(self.root, "../*").startswith("error:"))
         self.assertEqual(ai_review_api.run_tool(self.root, "bash", {"command": "id"}), ("error: no tool named 'bash'", True))
         self.assertTrue(ai_review_api.run_tool(self.root, "read_file", "x")[1])
@@ -395,6 +402,22 @@ class ReviewApiTest(unittest.TestCase):
         with self.assertRaisesRegex(ai_review_api.ReviewFailed, "used its 40 turns"):
             ai_review_api.review(self.root, self.input, "key", opener)
 
+    def test_a_fallback_and_its_cost_are_handled_as_the_api_documents(self):
+        content = [
+            {"type": "thinking", "thinking": "", "signature": "a"},
+            {"type": "text", "text": "partial"},
+            {"type": "tool_use", "id": "x", "name": "glob", "input": {"pattern": "*"}},
+            {"type": "fallback", "from": {"model": "a"}, "to": {"model": "b"}},
+            {"type": "thinking", "thinking": "", "signature": "b"},
+            {"type": "tool_use", "id": "y", "name": "glob", "input": {"pattern": "*"}},
+        ]
+        self.assertEqual([b.get("id") or b["type"] for b in ai_review_api.echoed(content)], ["text", "fallback", "thinking", "y"])
+        self.assertEqual(ai_review_api.echoed(content[:3]), content[:3])
+        usage = {"input_tokens": 1_000_000, "iterations": [
+            {"type": "message", "input_tokens": 1_000_000}, {"type": "fallback_message", "input_tokens": 1_000_000}]}  # fmt: skip
+        self.assertAlmostEqual(ai_review_api.cost(usage), 4.00 + 5.00)
+        self.assertAlmostEqual(ai_review_api.cost({"output_tokens": 1_000_000}), 20.00)
+
     def test_main_writes_the_result_for_the_next_job_and_prints_only_our_line(self):
         good = {"summary": self.SECRET, "findings": [], "injection_attempts": [], "not_checked": []}
         out = self.tmp / "github_output"
@@ -407,6 +430,17 @@ class ReviewApiTest(unittest.TestCase):
                 self.assertEqual(ai_review_api.main(["--input", str(self.input), "--root", str(self.root)]), code)
             self.assertNotIn("TOPSECRET", printed.getvalue())
             self.assertRegex(printed.getvalue(), r"\A(::error title=AI review did not complete::[^\n]*|AI review: [^\n]*)\n\Z")
+        # Without GITHUB_OUTPUT the result is not printed: an error line instead.
+        printed = io.StringIO()
+        result = (good, {"turns": 1, "usd": 0.1, "tool_calls": 0, "corrections": 0})
+        with (
+            mock.patch.dict(os.environ, {"ANTHROPIC_API_KEY": "k"}, clear=True),
+            mock.patch.object(ai_review_api, "review", return_value=result),
+            redirect_stdout(printed),
+        ):
+            self.assertEqual(ai_review_api.main(["--input", str(self.input), "--root", str(self.root)]), 1)
+        self.assertNotIn("TOPSECRET", printed.getvalue())
+        self.assertIn("GITHUB_OUTPUT is not set", printed.getvalue())
         written = out.read_text()
         match = re.fullmatch(r"result<<(ai_review_[0-9a-f]{32})\n(.*)\n\1\n", written, re.S)
         self.assertIsNotNone(match, written)

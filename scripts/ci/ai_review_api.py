@@ -26,6 +26,7 @@ import json
 import os
 import re
 import secrets
+import signal
 import sys
 import time
 import urllib.error
@@ -47,8 +48,10 @@ MAX_TOKENS = 16_000  # per answer; the review itself is at most a few thousand
 MAX_TURNS = 40
 CORRECTIONS = 2  # answers sent back because they broke a size limit
 MAX_USD = 3.0
-# USD per million tokens for MODEL: input, output, cache write (5 minutes), cache read.
+# USD per million tokens for MODEL: input, output, cache write (5 minutes), cache read. A fallback
+# attempt bills at its own model's rates; FALLBACK_PRICE is set above any fallback model's.
 PRICE = {"input": 4.00, "output": 20.00, "cache_write": 5.00, "cache_read": 0.20}
+FALLBACK_PRICE = {"input": 5.00, "output": 25.00, "cache_write": 6.25, "cache_read": 0.50}
 RETRIES = 3  # 429, 5xx and 529, with a pause between
 # A review of security code can trip a safety classifier; the API then continues on the model its
 # "default" fallback names for that category, inside the same request, instead of stopping.
@@ -58,6 +61,7 @@ TIMEOUT = 600
 READ_LINES, READ_LINE_CHARS = 400, 2000
 GREP_FILES, GREP_FILE_BYTES, GREP_MATCHES = 5000, 1_000_000, 200
 GLOB_RESULTS = 500
+GREP_SECONDS = 10  # a pattern that backtracks without end is stopped, not left to the job's timeout
 TOOL_OUTPUT = 60_000  # characters per tool result
 NEVER = (".git", ".ai-review/head")
 
@@ -87,7 +91,7 @@ TOOLS = [
         "name": "grep",
         "description": (
             "Search the base-branch checkout with a Python regular expression. Returns path:line: text for at most "
-            f"{GREP_MATCHES} matching lines. path_glob limits the files (for example scripts/**/*.py); use ** for all."
+            f"{GREP_MATCHES} matching lines. path_glob limits the files (for example scripts/**/*.py); use **/* for all."
         ),
         "strict": True,
         "input_schema": {
@@ -192,6 +196,8 @@ def _allowed(root: Path, relative: str) -> Path | None:
 
 def _files(root: Path, pattern: str):
     resolved = root.resolve()
+    if pattern == "**" or pattern.endswith("/**"):
+        pattern += "/*"  # files, as on every Python: before 3.13 a trailing "**" yields only directories
     for path in sorted(root.glob(pattern)):
         relative = path.relative_to(root).as_posix()
         if path.is_file() and _allowed(root, relative) is not None and path.resolve().is_relative_to(resolved):
@@ -220,6 +226,22 @@ def grep(root: Path, pattern: str, path_glob: str) -> str:
         return f"error: not a regular expression ({error})"
     if not isinstance(path_glob, str) or not path_glob or path_glob.startswith("/") or ".." in Path(path_glob).parts:
         return "error: path_glob must be a relative glob pattern"
+
+    def too_long(_signum, _frame):
+        raise TimeoutError
+
+    previous = signal.signal(signal.SIGALRM, too_long)
+    signal.setitimer(signal.ITIMER_REAL, GREP_SECONDS)
+    try:
+        return _grep(root, regex, path_glob)
+    except TimeoutError:
+        return f"error: the search took more than {GREP_SECONDS} seconds; use a simpler pattern or fewer files"
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        signal.signal(signal.SIGALRM, previous)
+
+
+def _grep(root: Path, regex: re.Pattern, path_glob: str) -> str:
     found, scanned = [], 0
     for path in _files(root, path_glob):
         scanned += 1
@@ -262,7 +284,7 @@ def run_tool(root: Path, name: str, arguments: object) -> tuple[str, bool]:
             out = glob(root, arguments.get("pattern"))
         else:
             return f"error: no tool named {name!r}", True
-    except (TypeError, ValueError, OSError, RecursionError) as error:
+    except Exception as error:  # a tool error goes back to the model, never ends the review
         return f"error: {type(error).__name__}", True
     return out[:TOOL_OUTPUT], out.startswith("error:")
 
@@ -308,16 +330,39 @@ def post(body: dict, key: str, opener=urllib.request.urlopen) -> dict:
 
 
 def cost(usage: dict) -> float:
-    def n(key):
-        value = usage.get(key)
-        return value if isinstance(value, int) and value >= 0 else 0
+    """What one response cost: every attempt in usage.iterations when it is there (a fallback adds one,
+    at the higher FALLBACK_PRICE), otherwise the top-level usage."""
 
-    return (
-        n("input_tokens") * PRICE["input"]
-        + n("output_tokens") * PRICE["output"]
-        + n("cache_creation_input_tokens") * PRICE["cache_write"]
-        + n("cache_read_input_tokens") * PRICE["cache_read"]
-    ) / 1_000_000
+    def priced(entry: dict, price: dict) -> float:
+        def n(key):
+            value = entry.get(key)
+            return value if isinstance(value, int) and not isinstance(value, bool) and value >= 0 else 0
+
+        return (
+            n("input_tokens") * price["input"]
+            + n("output_tokens") * price["output"]
+            + n("cache_creation_input_tokens") * price["cache_write"]
+            + n("cache_read_input_tokens") * price["cache_read"]
+        ) / 1_000_000
+
+    iterations = usage.get("iterations")
+    if isinstance(iterations, list) and iterations:
+        return sum(
+            priced(entry, FALLBACK_PRICE if entry.get("type") == "fallback_message" else PRICE)
+            for entry in iterations
+            if isinstance(entry, dict)
+        )
+    return priced(usage, PRICE)
+
+
+def echoed(content: list) -> list:
+    """The answer as it goes back: after a mid-output fallback, the thinking, tool and unknown blocks
+    before the last fallback block are left out (the declined model's partial work); text stays."""
+    marks = [i for i, block in enumerate(content) if isinstance(block, dict) and block.get("type") == "fallback"]
+    if not marks:
+        return content
+    keep = {"text", "fallback"}
+    return [b for i, b in enumerate(content) if i >= marks[-1] or (isinstance(b, dict) and b.get("type") in keep)]
 
 
 def first_message(review_input: Path) -> list[dict]:
@@ -346,16 +391,19 @@ def review(root: Path, review_input: Path, key: str, opener=urllib.request.urlop
             "system": system,
             "messages": messages,
             "tools": TOOLS,
+            "cache_control": {"type": "ephemeral"},  # the conversation so far, tool results included
             "fallbacks": "default",
             "output_config": {"effort": EFFORT, "format": {"type": "json_schema", "schema": api_schema(schema)}},
         }
         answer = post(body, key, opener)
         spent["turns"] += 1
-        spent["usd"] += cost(answer.get("usage") or {})
+        this_turn = cost(answer.get("usage") or {})
+        spent["usd"] += this_turn
         stop = answer.get("stop_reason")
-        content = answer.get("content") or []
+        content = echoed(answer.get("content") or [])
         if stop == "tool_use":
-            if spent["usd"] >= MAX_USD:
+            # Stopped before a turn that would likely pass the budget (the next costs about the last, or more).
+            if spent["usd"] + this_turn > MAX_USD:
                 raise ReviewFailed(f"the review reached its budget of US$ {MAX_USD:.2f} after {spent['turns']} turn(s)")
             # The whole answer goes back unchanged (thinking blocks included), then every result in one message.
             messages.append({"role": "assistant", "content": content})
@@ -400,8 +448,7 @@ def review(root: Path, review_input: Path, key: str, opener=urllib.request.urlop
 def write_output(name: str, value: str) -> None:
     target = os.environ.get("GITHUB_OUTPUT")
     if not target:
-        print(value)
-        return
+        raise ReviewFailed("GITHUB_OUTPUT is not set: the result is written only there, never to the log")
     delimiter = f"ai_review_{secrets.token_hex(16)}"
     with open(target, "a", encoding="utf-8") as handle:
         handle.write(f"{name}<<{delimiter}\n{value}\n{delimiter}\n")
@@ -422,7 +469,11 @@ def main(argv: list[str] | None = None) -> int:
         print(f"::error title=AI review did not complete::{failed}")
         return 1
     print(f"AI review: {spent['turns']} turn(s), {spent['tool_calls']} tool call(s), about US$ {spent['usd']:.2f}")
-    write_output("result", json.dumps(result, ensure_ascii=False))
+    try:
+        write_output("result", json.dumps(result))  # ASCII: one line, any character escaped
+    except ReviewFailed as failed:
+        print(f"::error title=AI review did not complete::{failed}")
+        return 1
     return 0
 
 
