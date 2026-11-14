@@ -1065,6 +1065,11 @@ class VaultUiTest(unittest.TestCase):
             self.assertNotIn(warning, self.status_text())
             self.assertNotIn("not a word", self.status_text())
             self.assertEqual(self.status_line()["level"], "ok")
+            # The module itself drops it (the page compares with the one word, so it alone proves nothing).
+            answer = self.call(
+                "return V.change(args[0], 'add-password', {current: args[1], password: 'fourth pass 55'});", profile_id, new_code
+            )
+            self.assertEqual((answer["done"], answer["warning"]), (True, None), answer)
         finally:
             tool.unlink()
             os.rename(real, tool)
