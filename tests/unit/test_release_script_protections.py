@@ -17,14 +17,16 @@ sign_apt_repo.sh
   1. `gpgv ... "$dists/InRelease" ... || { ...; exit 1; }` -> `|| true`
   2. the `cmp -s "$tmp/signed" "$dists/Release" || ...` line deleted
   3. the `[[ -z $(ls -A "$out") ]] || ...` line deleted
-  4. the host-side check of pool and index (`python3 -I - ... <<'PY' || ...`) -> `|| true`
+  4. the host-side check of pool and index (`python3 -I - ... <<'PY' || ...`) -> `|| true`,
+     or its `assert pool == given` line deleted
   5. the apt check before upload (`podman run ... :/repo:ro ... || { ...; exit 1; }`) -> `|| true`
   6. `gpgv ... "$dists/Release.gpg" "$dists/Release" ... || ...` -> `|| true`
 publish_release.sh
   7. `[[ -n $(field debs) ]] || { ...; exit 2; }` deleted
 check_published.sh
   8. `if matches "$name" "$got"; then` -> `if [[ -n $got ]]; then` (any output accepted)
-  9. in matches(), the dnf case loosened to `[[ $2 == "$expected"* ]]`
+  9. in matches(), the dnf case loosened to `[[ $2 == "$expected"* ]]` or `"$expected".*`, or the
+     APT case to `"$expected".[0-9]*` (a sub-release such as 160.0-0.4.1 passing for 160.0-0.4)
 """
 
 from __future__ import annotations
@@ -70,10 +72,12 @@ PODMAN = textwrap.dedent(
     repo = next((m.rsplit(":", 1)[0] for m in mounts if m.endswith(":/repo")), None)
     if repo:  # sign_apt_repo.sh: apt-ftparchive
         out = Path(repo)
-        if mode == "extra-package":
+        if mode in ("extra-package", "unlisted-file"):
             (out / "pool/main/n/nulavio/nulavio_160.0-0.3_amd64.deb").write_bytes(b"an older one")
         entries = []
         for deb in sorted((out / "pool").rglob("*.deb")):
+            if mode == "unlisted-file" and "0.3" in deb.name:
+                continue  # in the pool, not in the index
             _, version, arch = deb.name[: -len(".deb")].split("_")
             sha = "0" * 64 if mode == "wrong-hash" else hashlib.sha256(deb.read_bytes()).hexdigest()
             entries.append(f"Package: nulavio\\nVersion: {version}\\nArchitecture: {arch}\\n"
@@ -217,7 +221,7 @@ class SignAptRepoTest(unittest.TestCase):
         self.assertEqual(sorted(p.name for p in out.iterdir()), ["left-from-before"])
 
     def test_an_index_or_pool_that_is_not_exactly_the_packages_given_is_refused_before_signing(self):  # mutation 4
-        for mode in ("wrong-hash", "extra-package"):
+        for mode in ("wrong-hash", "extra-package", "unlisted-file"):
             with self.subTest(mode=mode):
                 run, out = self.run_script(f"index-{mode}", STUB_PODMAN=mode)
                 self.refused(run, 1, "the repository does not hold exactly the packages given")
@@ -324,6 +328,8 @@ class CheckPublishedTest(unittest.TestCase):
                               text=True, check=False)  # fmt: skip
 
     def test_both_repositories_installing_the_release_pass(self):
+        plain = self.check(VERSION, VERSION)  # rpm without a distribution tag
+        self.assertEqual(plain.returncode, 0, plain.stdout + plain.stderr)
         run = self.check(f"{VERSION}.fc44", VERSION)
         self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
         self.assertIn(f"dnf (https://nulavio.net/rpm/nulavio.repo) installed nulavio {VERSION}.fc44", run.stdout)
@@ -334,6 +340,8 @@ class CheckPublishedTest(unittest.TestCase):
             "dnf, an older release": ("160.0-0.3.fc44", VERSION, "dnf"),
             "dnf, a longer release": ("160.0-0.41.fc44", VERSION, "dnf"),
             "dnf, an error message": ("dnf refused or failed", VERSION, "dnf"),
+            "dnf, a sub-release": ("160.0-0.4.1.fc44", VERSION, "dnf"),
+            "APT, a sub-release": (f"{VERSION}.fc44", "160.0-0.4.1", "APT"),
             "dnf, nothing": ("", VERSION, "dnf"),
             "APT, an older release": (f"{VERSION}.fc44", "160.0-0.3", "APT"),
             "APT, the RPM's form": (f"{VERSION}.fc44", f"{VERSION}.fc44", "APT"),
