@@ -1260,6 +1260,8 @@
   "dnsOptionServiceLabel": {"message": "Serviço"},
   "dnsOptionKeep": {"message": "Com criptografia, pelo padrão do navegador"},
   "dnsOptionKeepNote": {"message": "As consultas vão criptografadas para $NAME$, que as vê. Se ele não responder, a sua rede responde, sem criptografia.", "placeholders": {"name": {"content": "$1"}}},
+  "dnsOptionKeepChosen": {"message": "Com criptografia, como está agora"},
+  "dnsOptionKeepNoteStrict": {"message": "As consultas vão criptografadas para $NAME$, que as vê. Se ele não responder, os sites não abrem: nada vai para a sua rede no lugar.", "placeholders": {"name": {"content": "$1"}}},
   "dnsChoiceAdvice": {"message": "Na dúvida, deixe como está: nada deixa de funcionar, e dá para mudar depois em Configurações."},
   "firstrunProviderBuiltin": {"message": "Guarda os logins neste perfil, só neste computador."},
   "firstrunProviderProton": {"message": "Extensão oficial. O cofre fica na sua conta Proton."},

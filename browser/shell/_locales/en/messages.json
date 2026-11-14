@@ -1260,6 +1260,8 @@
   "dnsOptionServiceLabel": {"message": "Service"},
   "dnsOptionKeep": {"message": "Encrypted, by the browser's default"},
   "dnsOptionKeepNote": {"message": "Lookups go encrypted to $NAME$, which sees them. If it does not answer, your network does, unencrypted.", "placeholders": {"name": {"content": "$1"}}},
+  "dnsOptionKeepChosen": {"message": "Encrypted, as it is now"},
+  "dnsOptionKeepNoteStrict": {"message": "Lookups go encrypted to $NAME$, which sees them. If it does not answer, sites do not open: nothing goes to your network instead.", "placeholders": {"name": {"content": "$1"}}},
   "dnsChoiceAdvice": {"message": "If in doubt, leave it as it is: nothing stops working, and you can change it later in Settings."},
   "firstrunProviderBuiltin": {"message": "Keeps logins in this profile, on this computer only."},
   "firstrunProviderProton": {"message": "Official extension. The vault lives in your Proton account."},

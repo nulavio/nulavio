@@ -217,6 +217,22 @@ class FirstRunStageTest(unittest.TestCase):
         self.addCleanup(
             self.m.chrome, "Services.prefs.clearUserPref('network.trr.mode'); Services.prefs.clearUserPref('network.trr.uri');"
         )
+        # #142: back on the question, the option in use says what is in use: not "the browser's default" once a
+        # service was chosen, and not "your network answers" once nothing falls back to it (strict).
+        self.back("dns-choice")
+        keep = (
+            "const o = document.querySelector('#dns-options [data-value=keep]');"
+            "return o && [o.querySelector('.option__title span').textContent, o.querySelector('.hint').textContent];"
+        )
+        msg = lambda key, *subs: self.m.execute("return browser.i18n.getMessage(arguments[0], arguments[1]);", [key, list(subs)])  # noqa: E731
+        name = self.m.execute("return browser.i18n.getMessage('dnsQuad9');") or "Quad9"
+        self.assertTrue(harness.wait_until(lambda: self.m.execute(keep) is not None, 10))
+        title, note = self.m.execute(keep)
+        self.assertEqual(title, msg("dnsOptionKeepChosen"))
+        self.assertEqual(note, msg("dnsOptionKeepNote", name))
+        self.m.chrome("Services.prefs.setIntPref('network.trr.mode', 3);")
+        strict = msg("dnsOptionKeepNoteStrict", name)
+        self.assertTrue(harness.wait_until(lambda: (self.m.execute(keep) or [None, None])[1] == strict, 10), self.m.execute(keep))
 
     def test_07_a_password_manager_is_chosen_in_the_card(self):
         # Start from a profile where nothing saves passwords, so the choice is visible.
