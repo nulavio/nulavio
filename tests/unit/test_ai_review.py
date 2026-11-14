@@ -373,14 +373,14 @@ class ReviewApiTest(unittest.TestCase):
             ([{"stop_reason": "tool_use", "content": [{"type": "text", "text": "x"}]}], "asked for a tool but named none"),
         ]
         for answers, said in cases:
-            with self.subTest(said=said), mock.patch.object(ai_review_api.time, "sleep"):
+            with self.subTest(said=said), mock.patch.object(ai_review_api, "pause"):
                 _sent, opener = self.fake_api(list(answers))
                 with self.assertRaises(ai_review_api.ReviewFailed) as caught:
                     ai_review_api.review(self.root, self.input, "key", opener)
                 self.assertIn(said, str(caught.exception))
                 self.assertNotIn("TOPSECRET", str(caught.exception))
         # Overloaded or rate limited: tried again, then the review goes on.
-        with mock.patch.object(ai_review_api.time, "sleep") as slept:
+        with mock.patch.object(ai_review_api, "pause") as slept:
             _sent, opener = self.fake_api([529, 429, self.end(good)])
             self.assertEqual(ai_review_api.review(self.root, self.input, "key", opener)[0], good)
         self.assertEqual(slept.call_count, 2)

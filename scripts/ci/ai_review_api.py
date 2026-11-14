@@ -270,6 +270,11 @@ def run_tool(root: Path, name: str, arguments: object) -> tuple[str, bool]:
 # -- the conversation ------------------------------------------------------------------------------
 
 
+def pause(seconds: float) -> None:
+    """The wait before a retry (its own name, so a test replaces this one and not every sleep)."""
+    time.sleep(seconds)
+
+
 def post(body: dict, key: str, opener=urllib.request.urlopen) -> dict:
     """One Messages API request; 429, 5xx and 529 are retried. An error ends the review with our words."""
     data = json.dumps(body).encode("utf-8")
@@ -291,12 +296,12 @@ def post(body: dict, key: str, opener=urllib.request.urlopen) -> dict:
             except (ValueError, AttributeError):
                 message = ""
             if (status == 429 or status >= 500) and attempt < RETRIES:
-                time.sleep(min(60, 5 * 2**attempt))
+                pause(min(60, 5 * 2**attempt))
                 continue
             raise ReviewFailed(ai_review_failure.api_error_line(status, message)) from None
         except (urllib.error.URLError, TimeoutError, OSError) as error:
             if attempt < RETRIES:
-                time.sleep(min(60, 5 * 2**attempt))
+                pause(min(60, 5 * 2**attempt))
                 continue
             raise ReviewFailed(f"the model API could not be reached ({type(error).__name__})") from None
     raise ReviewFailed("the model API could not be reached")
