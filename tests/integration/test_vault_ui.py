@@ -1211,12 +1211,10 @@ class VaultUiTest(unittest.TestCase):
         self.assertFalse(storage.Container(path).mounted())
         self.assertEqual(self.call(with_code, profile_id, new_code), "launched")
         self.assertTrue(harness.wait_until(lambda: self.instances(path), timeout=60), "the profile did not start")
-        # Until the engine holds the profile's lock, the watcher that locks it again has not seen it start
-        # (stopped before that, the volume stays open for the watcher's two minutes of grace).
+        # The engine took the profile; stopped at once, the watcher still sees it came and locks again (#277).
         self.assertTrue(
             harness.wait_until(lambda: (path / "lock").is_symlink(), timeout=60), "the engine did not take the profile"
         )
-        time.sleep(2)  # the watcher looks twice a second: stopped sooner, it never sees the engine and waits out its grace
         self.stop_instance(path)
         self.assertTrue(harness.wait_until(lambda: not storage.Container(path).mounted(), timeout=90), "it did not lock again")
 

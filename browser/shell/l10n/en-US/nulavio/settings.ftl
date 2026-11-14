@@ -59,6 +59,8 @@ nulavio-reduce-transparency-contrast =
     .description = “More contrast” already makes the cards solid.
 nulavio-look-locked =
     .message = Some of these options are managed by your administrator.
+nulavio-density-locked =
+    .message = Your administrator set the density, and it cannot be changed here.
 
 ## General (the engine's first pane, while accounts are turned off)
 

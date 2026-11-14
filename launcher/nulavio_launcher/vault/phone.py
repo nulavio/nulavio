@@ -246,14 +246,21 @@ class Pairing:
             raise ProtocolError("bad-message") from None
         k1 = nkdf(self.secret, "pair/k1", shared, self.invite_id, self.de_pk, pe_pk)
         try:
-            body = unseal_json(k1, msg["box"], self.invite_id.encode())
+            body = unseal_json(k1, msg.get("box"), self.invite_id.encode())
         except ProtocolError:
             sodium.memzero(shared)
             self.cancel()  # someone without the QR secret: end this attempt
             raise
         finally:
             sodium.memzero(k1)
-        psig_pk, pkx_pk, name = b64d(body["psig"]), b64d(body["pkx"]), str(body.get("name", ""))[:64]
+        try:
+            psig_pk, pkx_pk, name = b64d(body["psig"]), b64d(body["pkx"]), str(body.get("name", ""))[:64]
+            if len(psig_pk) != sodium.ED25519_PK_BYTES or len(pkx_pk) != sodium.X25519_BYTES:
+                raise ValueError("not the phone's keys")
+        except (KeyError, TypeError, ValueError, AttributeError):
+            sodium.memzero(shared)
+            self.cancel()
+            raise ProtocolError("bad-message") from None
         t = transcript(self.invite_id, self.de_pk, pe_pk, self.identity.sig_pk, psig_pk, pkx_pk, name)
         sig_d = sodium.sign(self.identity.sig_sk, b"nv1/pair/desktop" + t)
         k2 = nkdf(self.secret, "pair/k2", shared, t)
@@ -277,10 +284,14 @@ class Pairing:
             raise ProtocolError("sas-mismatch")
         k3 = nkdf(self.secret, "pair/k3", self._shared, self._t)
         try:
-            body = unseal_json(k3, msg["box"], self.invite_id.encode())
+            body = unseal_json(k3, msg.get("box"), self.invite_id.encode())
         finally:
             sodium.memzero(k3)
-        if not sodium.verify(self._phone.psig_pk, b"nv1/pair/phone" + self._t, b64d(body.get("sig", ""))):
+        try:
+            signature = b64d(body.get("sig", ""))
+        except (TypeError, ValueError, AttributeError):
+            signature = b""
+        if not sodium.verify(self._phone.psig_pk, b"nv1/pair/phone" + self._t, signature):
             self.cancel()
             raise ProtocolError("bad-signature")
         phone = self._phone

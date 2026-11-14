@@ -132,11 +132,16 @@ class GradlePinsTest(unittest.TestCase):
 
 class OtherPinsTest(unittest.TestCase):
     def test_python_tools_are_pinned_with_hashes(self):
-        text = (ROOT / "requirements" / "dev.txt").read_text()
-        requirements = [r for r in re.sub(r"\\\n\s*", " ", text).splitlines() if r.strip() and not r.lstrip().startswith("#")]
-        self.assertTrue(requirements)
-        for requirement in requirements:
-            self.assertRegex(requirement, r"^[A-Za-z0-9_.\-]+==\S+ .*--hash=sha256:[0-9a-f]{64}", requirement)
+        files = sorted((ROOT / "requirements").glob("*.txt"))
+        self.assertIn("fuzz.txt", [f.name for f in files])
+        for path in files:
+            text = path.read_text()
+            requirements = [r for r in re.sub(r"\\\n\s*", " ", text).splitlines() if r.strip() and not r.lstrip().startswith("#")]
+            self.assertTrue(requirements, path.name)
+            for requirement in requirements:
+                self.assertRegex(
+                    requirement, r"^[A-Za-z0-9_.\-]+==\S+ .*--hash=sha256:[0-9a-f]{64}", f"{path.name}: {requirement}"
+                )
 
     def test_actions_carry_their_version_next_to_the_sha(self):
         # Dependabot keeps "# vX.Y.Z" current; the watcher needs it to look up advisories.
@@ -316,6 +321,9 @@ class WatcherTest(unittest.TestCase):
         self.assertIn(("org.bouncycastle:bcprov-jdk18on", "1.86"), shipped)
         self.assertFalse(any(d.ships for d in found if d.name == "com.android.tools.build:gradle"))
         self.assertIn(("Bitnami", "gradle"), {(d.ecosystem, d.name) for d in found})
+        pypi = {d.name: d.sources for d in found if d.ecosystem == "PyPI"}
+        self.assertEqual(list(pypi.get("hypothesis", ())), ["requirements/fuzz.txt"])  # every requirements file is watched (#149)
+        self.assertIn("ruff", pypi)
 
     def test_the_ai_review_downloads_nothing(self):
         # Since 2026-11-14 the review calls the Messages API from a standard-library script: no program

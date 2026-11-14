@@ -1,0 +1,11 @@
+# Fuzzing only (tests/fuzz/, the weekly fuzz workflow; #149). Never a dependency of the launcher,
+# which stays on the standard library. Hypothesis ships native wheels: these are its Linux x86_64 ones.
+# Install with hash checking:  python3 -m pip install --require-hashes -r requirements/fuzz.txt
+hypothesis==6.170.13 \
+    --hash=sha256:6332741657d5c4c5de9a58422b56be08bd66d0af7fa62ee15251490f1beb377e \
+    --hash=sha256:e2122ee551fe2f5bfc04832e1c4fb901bb774ce5b014a2cb0d1e266a56512e80 \
+    --hash=sha256:dbe17a839c4e1c3489b158b3e2b11c6c258adca5d5e5db1b5d609073580476cc \
+    --hash=sha256:944ba99360ab2a2d10e68af9e1091a06aeb217c99d042f61e07da1f1f40c8390 \
+    --hash=sha256:7eb7e1014fd5e98073625816075ea532bb1960f60779c43217fd825845964500
+sortedcontainers==2.4.0 \
+    --hash=sha256:a163dcaede0f1c021485e957a39245190e74249897e2ae4b2aa38595db237ee0

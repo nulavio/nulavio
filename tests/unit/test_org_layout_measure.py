@@ -63,7 +63,7 @@ class OrgLayoutMeasureTest(unittest.TestCase):
             self.assertTrue(any(f == prefix or f.startswith(prefix) for f in files), prefix)
         shared = sorted(f for f in files if measure.component(f) == "shared")
         expected = [".coderabbit.yaml", ".editorconfig", ".gitignore", ".gitleaks.toml", ".gitleaksignore", ".semgrepignore",
-                    "pyproject.toml", "requirements/dev.txt"]  # fmt: skip
+                    "pyproject.toml", "requirements/dev.txt", "requirements/fuzz.txt"]  # fmt: skip
         self.assertEqual(shared, expected, "a new top-level path belongs to a component, or to this list")
 
     def test_paths_come_from_git_as_they_are(self):
