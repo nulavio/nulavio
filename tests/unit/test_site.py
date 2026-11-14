@@ -21,6 +21,7 @@ sys.path.insert(0, str(ROOT / "scripts" / "site"))
 sys.path.insert(0, str(ROOT / "scripts" / "brand"))
 
 import build_site  # noqa: E402
+import flatpak_manifest  # noqa: E402
 import verify_live  # noqa: E402
 from contrast import ratio  # noqa: E402
 
@@ -962,7 +963,8 @@ class DownloadPagesTest(unittest.TestCase):
                     f"curl -fsSLO --proto '=https' {base}/SHA256SUMS.asc",
                     "gpg --show-keys --with-fingerprint nulavio-packages.asc",
                     "gpg --verify SHA256SUMS.asc SHA256SUMS",
-                    "sha256sum --check --ignore-missing SHA256SUMS",
+                    # Only the bundle's line: --ignore-missing would pass with the bundle missing from the list.
+                    'grep -F " nulavio-159.0.1-0.1.x86_64.flatpak" SHA256SUMS | sha256sum --check',
                     "flatpak install --user nulavio-159.0.1-0.1.x86_64.flatpak",
                 ]
                 self.assertEqual(order, sorted(order, key=on_page.index))
@@ -970,8 +972,21 @@ class DownloadPagesTest(unittest.TestCase):
                 self.assertIn("xdg-settings set default-web-browser net.nulavio.Nulavio.desktop", on_page)
                 self.assertIn("flatpak uninstall --user net.nulavio.Nulavio", on_page)
                 self.assertIn("nulavio run --confined", on_page)  # what the Flatpak does not have
-                for permission in ("devices", "pcsc", "xdg-download", "NativeMessagingProxy", "NetworkManager"):
-                    self.assertIn(f'<code translate="no">{permission}</code>', on_page)
+                # The permission list is exactly the manifest's, under the names flatpak prints when it asks.
+                section = on_page[on_page.index('id="install-flatpak-h"') :]
+                permission_list = section[section.index('<ul class="prose">') : section.index("</ul>")]
+                shown = set(re.findall(r'<code translate="no">([^<]+)</code>', permission_list))
+                expected = set()
+                for arg in flatpak_manifest.FINISH_ARGS:
+                    kind, name = arg.removeprefix("--").split("=", 1)
+                    if kind == "persist":
+                        expected.add("~/.var/app/net.nulavio.Nulavio")  # where it keeps the profiles
+                    elif kind == "device":
+                        expected.add("devices")
+                    else:
+                        short = name.removeprefix("org.freedesktop.")
+                        expected.add(short.removeprefix("org.") if short.startswith("org.a11y.") else short)
+                self.assertEqual(shown, expected)
         ids = [re.findall(r'id="([^"]+)"', pages["on"][page]) for page in build_site.DOWNLOAD_PAGES]
         self.assertEqual(ids[0], ids[1], "both languages have the same sections")
 

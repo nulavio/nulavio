@@ -88,14 +88,14 @@ curl -fsSLO --proto '=https' {{key_url}}
 gpg --show-keys --with-fingerprint nulavio-packages.asc
 gpg --import nulavio-packages.asc
 gpg --verify SHA256SUMS.asc SHA256SUMS
-sha256sum --check --ignore-missing SHA256SUMS
+grep -F " {{flatpak_bundle}}" SHA256SUMS | sha256sum --check
 flatpak install --user {{flatpak_bundle}}</code></pre></div>
-<p class="prose">Install only if the fingerprint is the one above, gpg says <code translate="no">Good signature</code>, and sha256sum says <code translate="no">OK</code> for the <code translate="no">.flatpak</code> file.</p>
+<p class="prose">Install only if the fingerprint is the one above, gpg says <code translate="no">Good signature</code>, and sha256sum says <code translate="no">OK</code> for the <code translate="no">.flatpak</code> file (it fails if the file is missing or not in the list).</p>
 <p class="prose">Before installing, Flatpak asks whether it may add the <code translate="no">flathub</code> remote (<code translate="no">https://dl.flathub.org/repo/</code>): Nulavio runs on the <code translate="no">org.freedesktop.Platform</code> 26.08 runtime, which comes from there. The first time that is up to about 1 GB of download and about 2.4 GB on disk; a system that already has the runtime downloads much less.</p>
 <p class="prose">It then shows Nulavio's permissions, which are these:</p>
 <ul class="prose">
 <li><code translate="no">network</code>, <code translate="no">ipc</code>, <code translate="no">wayland</code>, <code translate="no">fallback-x11</code> and <code translate="no">pulseaudio</code>: browsing, showing windows and playing sound.</li>
-<li><code translate="no">devices</code> and <code translate="no">pcsc</code>: cameras, FIDO2 security keys and smart cards, as in Mozilla's Firefox Flatpak.</li>
+<li><code translate="no">devices</code> (all devices) and <code translate="no">pcsc</code>: for cameras, FIDO2 security keys and smart cards, as in Mozilla's Firefox Flatpak.</li>
 <li><code translate="no">xdg-download</code>: the Downloads folder, and nothing else of your home folder. Profiles live in <code translate="no">~/.var/app/net.nulavio.Nulavio</code>.</li>
 <li>D-Bus: <code translate="no">FileManager1</code> to show a download in its folder, <code translate="no">NativeMessagingProxy</code> for password managers such as KeePassXC, <code translate="no">a11y.Bus</code> for accessibility, <code translate="no">org.mozilla.nulavio.*</code> to open a window in the browser that is already running, and <code translate="no">NetworkManager</code> to know whether the computer is online.</li>
 </ul>

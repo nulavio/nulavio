@@ -88,14 +88,14 @@ curl -fsSLO --proto '=https' {{key_url}}
 gpg --show-keys --with-fingerprint nulavio-packages.asc
 gpg --import nulavio-packages.asc
 gpg --verify SHA256SUMS.asc SHA256SUMS
-sha256sum --check --ignore-missing SHA256SUMS
+grep -F " {{flatpak_bundle}}" SHA256SUMS | sha256sum --check
 flatpak install --user {{flatpak_bundle}}</code></pre></div>
-<p class="prose">Só instale se a impressão digital for a de cima, se o gpg disser <code translate="no">Good signature</code> e se o sha256sum disser <code translate="no">OK</code> para o arquivo <code translate="no">.flatpak</code>.</p>
+<p class="prose">Só instale se a impressão digital for a de cima, se o gpg disser <code translate="no">Good signature</code> e se o sha256sum disser <code translate="no">OK</code> para o arquivo <code translate="no">.flatpak</code> (ele falha se o arquivo faltar ou não estiver na lista).</p>
 <p class="prose">Antes de instalar, o Flatpak pergunta se pode adicionar o remoto <code translate="no">flathub</code> (<code translate="no">https://dl.flathub.org/repo/</code>): o Nulavio roda sobre o runtime <code translate="no">org.freedesktop.Platform</code> 26.08, que vem de lá. Na primeira vez são até cerca de 1 GB de download e cerca de 2,4 GB em disco; um sistema que já tem esse runtime baixa bem menos.</p>
 <p class="prose">Depois ele mostra as permissões do Nulavio, que são estas:</p>
 <ul class="prose">
 <li><code translate="no">network</code>, <code translate="no">ipc</code>, <code translate="no">wayland</code>, <code translate="no">fallback-x11</code> e <code translate="no">pulseaudio</code>: navegar, mostrar janelas e tocar som.</li>
-<li><code translate="no">devices</code> e <code translate="no">pcsc</code>: câmeras, chaves de segurança FIDO2 e cartões inteligentes, como no Flatpak do Firefox da Mozilla.</li>
+<li><code translate="no">devices</code> (todos os dispositivos) e <code translate="no">pcsc</code>: para câmeras, chaves de segurança FIDO2 e cartões inteligentes, como no Flatpak do Firefox da Mozilla.</li>
 <li><code translate="no">xdg-download</code>: a pasta Downloads, e nada mais da pasta pessoal. Os perfis ficam em <code translate="no">~/.var/app/net.nulavio.Nulavio</code>.</li>
 <li>D-Bus: <code translate="no">FileManager1</code> para mostrar um download na pasta, <code translate="no">NativeMessagingProxy</code> para gerenciadores de senha como o KeePassXC, <code translate="no">a11y.Bus</code> para a acessibilidade, <code translate="no">org.mozilla.nulavio.*</code> para abrir uma janela no navegador que já está aberto e <code translate="no">NetworkManager</code> para saber se o computador está on-line.</li>
 </ul>
