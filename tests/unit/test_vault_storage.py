@@ -1555,11 +1555,22 @@ class HelperApiTest(StorageCase):
         subprocess.run(["/bin/sh", "-c", script], check=False, timeout=10)
 
     def watch(self, path: Path, name: str, grace: float = 30.0) -> tuple[list, threading.Thread]:
+        """The watcher, started and past its first look before the engine comes. It looks every 5 s, so an
+        engine that lives a tenth of a second is never running when it looks: polling alone cannot see it."""
         prof = profile.Profile(name=name, path=path)
         result: list = []
-        thread = threading.Thread(target=lambda: result.append(profiles.autolock(prof, grace=grace, poll=0.5)), daemon=True)
+        first_look = threading.Event()
+        real_running_pid = prof.running_pid
+
+        def running_pid():
+            pid = real_running_pid()
+            first_look.set()
+            return pid
+
+        prof.running_pid = running_pid
+        thread = threading.Thread(target=lambda: result.append(profiles.autolock(prof, grace=grace, poll=5.0)), daemon=True)
         thread.start()
-        time.sleep(0.6)  # the watcher has looked once and is waiting
+        self.assertTrue(first_look.wait(10), "the watcher never looked")
         return result, thread
 
     def test_autolock_sees_an_engine_that_lived_under_half_a_second(self):
@@ -1572,9 +1583,9 @@ class HelperApiTest(StorageCase):
                 result, thread = self.watch(path, f"short-{int(killed)}")
                 started = time.monotonic()
                 self.short_lived_engine(path, killed=killed)
-                thread.join(15)
+                thread.join(20)
                 self.assertEqual(result, ["closed"], "the watcher waited out its grace")
-                self.assertLess(time.monotonic() - started, 15)
+                self.assertLess(time.monotonic() - started, 20)
                 self.assertFalse(storage.Container(path).mounted())
 
     def test_autolock_without_inotify_still_sees_a_lock_a_killed_engine_left(self):
@@ -1585,9 +1596,19 @@ class HelperApiTest(StorageCase):
         with mock.patch.object(profiles.ctypes, "CDLL", side_effect=OSError("no libc here")):
             result, thread = self.watch(path, "no-inotify")
             self.short_lived_engine(path, killed=True)
-            thread.join(15)
+            thread.join(20)
         self.assertEqual(result, ["closed"])
         self.assertFalse(storage.Container(path).mounted())
+
+    def test_a_lock_left_a_moment_before_the_watcher_started_is_not_an_engine_that_came(self):
+        """A crash just before the profile was unlocked again leaves a lock younger than a second: still old."""
+        path = self.tmp / "recent-stale"
+        path.mkdir()
+        self.api({"op": "encrypt", "path": str(path), "password": PASSWORD})
+        self.api({"op": "unlock", "path": str(path), "method": "password", "secret": PASSWORD, "autolock": False})
+        os.symlink("127.0.0.1:+999999", path / "lock")
+        with mock.patch.object(profiles.ctypes, "CDLL", side_effect=OSError("no libc here")):  # the fallback alone
+            self.assertEqual(profiles.autolock(profile.Profile(name="recent-stale", path=path), grace=2.0, poll=0.2), "unused")
 
     def test_a_lock_left_from_an_earlier_session_is_not_an_engine_that_came(self):
         path = self.tmp / "stale"

@@ -249,14 +249,15 @@ class _LockSeen:
 
     The watcher looks twice a second; an engine that takes the lock and dies, or is stopped, in between
     is never seen running. inotify (through libc, standard library only) keeps the creation of `lock`
-    in the profile folder until it is read. Where inotify is not available, a lock left behind and made
-    after this started (a crash or a kill leaves it) says the same; a clean exit that fast then goes
-    unseen, and the grace ends the wait as before.
+    in the profile folder until it is read. Where inotify is not available, a lock left behind that was
+    not there when this started and was made after it (a crash or a kill leaves it) says the same; a
+    clean exit that fast then goes unseen, and the grace ends the wait as before.
     """
 
     def __init__(self, folder):
         self.folder = folder
         self.started = time.time()
+        self.before = self._lock()  # a lock already there (an earlier session's) is not one that came now
         self.fd = -1
         try:
             libc = ctypes.CDLL(None, use_errno=True)
@@ -281,11 +282,16 @@ class _LockSeen:
                 at += _EVENT.size + size
                 if name == b"lock":
                     return True
+        now = self._lock()
+        return now is not None and now != self.before and now[1] >= self.started
+
+    def _lock(self) -> tuple[int, float] | None:
+        """The engine's lock symlink as (inode, mtime), or None."""
         try:
             made = os.lstat(self.folder / "lock")
         except OSError:
-            return False
-        return stat.S_ISLNK(made.st_mode) and made.st_mtime >= self.started - 1.0
+            return None
+        return (made.st_ino, made.st_mtime) if stat.S_ISLNK(made.st_mode) else None
 
     def close(self) -> None:
         if self.fd >= 0:
