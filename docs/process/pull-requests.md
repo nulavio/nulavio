@@ -32,7 +32,7 @@ git config core.hooksPath scripts/git-hooks
 
 The same steps for agents and people:
 
-1. Start from the current `main` in a separate worktree, for example `git fetch origin && git worktree add -b agent/claude/fix-x ../nulavio-fix-x origin/main`.
+1. Start from the current `main` in a separate worktree, for example `git fetch origin && git worktree add -b agent/claude/fix-x ../nulavio-fix-x origin/main`. An agent that does not work on design leaves the design screenshots out of it: [below](#worktrees-without-the-design-screenshots).
 2. Make small, verifiable conventional commits, signed off (`git commit -s`, see [CONTRIBUTING.md](../../CONTRIBUTING.md)).
 3. Run the local checks: `ruff check .`, `ruff format --check .`, `python3 -I tests/run.py unit`, and the integration tests when the change touches the engine, profiles or the Shell.
 4. Push only your own branch: `git push -u origin HEAD`. Never push to `main`. Never force-push, except `--force-with-lease` on your own branch before review starts.
@@ -41,6 +41,22 @@ The same steps for agents and people:
 7. Review and merge as [Review and merging](#review-and-merging) says. The pull request title becomes the commit on `main`.
 
 Pushes to branches cost no Actions minutes: CI runs on pushes to `main` and on pull requests, not on other branches.
+
+### Worktrees without the design screenshots
+
+Most of a checkout is `docs/design/screenshots/` (73.6 MB of 89 MB on 2026-11-13, [ADR 0013](../adr/0013-repository-layout.md), point 2), and almost no task reads it. Agents make their worktrees without it, unless the work is design:
+
+```sh
+git fetch origin
+git worktree add --no-checkout -b agent/claude/fix-x ../nulavio-fix-x origin/main
+cd ../nulavio-fix-x
+git sparse-checkout set --no-cone '/*' '!/docs/design/screenshots/'
+git checkout
+```
+
+The worktree then takes about 18 MB instead of 90 MB. Everything else works as in a full checkout: the unit tests pass (the documents' link test counts a file git tracks as present even when the sparse checkout left it out), commits and pushes are the same, and git keeps the screenshots in the history and the index, so nothing is deleted by a commit. The first `git sparse-checkout` in a clone turns on `extensions.worktreeConfig` in the clone's shared configuration; the sparse setting itself lives in that worktree's own configuration, so other worktrees keep their full checkout.
+
+The full checkout is needed for design work (captures added or replaced under `docs/design/screenshots/`, by hand or with `scripts/research/` and `scripts/site/capture_site.py`) and for reading the screenshots the documents cite. To get it back in the same worktree: `git sparse-checkout disable`. CI is unchanged: it checks out everything.
 
 ## Review and merging
 
@@ -98,7 +114,7 @@ What this gives up, said plainly: the person who could tell that an agent had be
 - Job "publish" never runs the model. [`post_ai_review.py`](../../scripts/ci/post_ai_review.py) from `main` validates the JSON again, drops findings about files that do not exist, removes invisible and bidirectional characters, redacts secret-like strings, neutralises mentions and HTML comments, shows every model-written text inside a code fence, and creates or updates one comment marked `<!-- nulavio-ai-review -->`. It cannot approve or request changes.
 - Claude Code and Bun are downloaded by version and checked against SHA-256 pins. The Claude Code pin comes from a release manifest whose signature [`verify_claude_code_release.py`](../../scripts/upstream/verify_claude_code_release.py) checks against Anthropic's pinned key; a unit test checks the pin against that signed manifest.
 - Claude Code runs with the environment of the processes it starts scrubbed and isolated (`CLAUDE_CODE_SUBPROCESS_ENV_SCRUB`), although the reviewer has no shell tool. Claude Code then looks for `bwrap` before it starts, so the job installs it from Ubuntu's archive, and tries it: a `bwrap` that cannot run stops the job. On a runner where AppArmor keeps unprivileged user namespaces for programs with a profile, the job turns that switch off on its own machine and says so in the log.
-- When the review step fails, the next step says why in one line: the HTTP status of the model API's error and Claude Code's own word for why it stopped ([`ai_review_failure.py`](../../scripts/ci/ai_review_failure.py)). The action hides what Claude Code writes, and this line carries none of it: a number and a word from a fixed list. No other step reads the file it comes from.
+- When the review step fails, the next step says why in one line: the HTTP status of the model API's error and Claude Code's own word for why it stopped ([`ai_review_failure.py`](../../scripts/ci/ai_review_failure.py)). For a refusal (4xx) it also names which known cause the API's message gives, when it gives one: no credit, a spending limit reached, a refused parameter (#193). The action hides what Claude Code writes, and this line carries none of it: a number, a word and a cause from fixed lists. No other step reads the file it comes from.
 - Telemetry, error reporting and non-essential traffic of Claude Code are turned off.
 
 What it sends: the diff, the pull request's title and description, and the files the model chooses to read from `main` go to Anthropic's API. Nothing else leaves GitHub.

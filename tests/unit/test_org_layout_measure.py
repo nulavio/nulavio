@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import contextlib
+import io
 import importlib.util
 import subprocess
+import sys
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -74,6 +77,52 @@ class OrgLayoutMeasureTest(unittest.TestCase):
     def test_a_renamed_directory_is_noticed(self):
         self.assertEqual(measure.component("site-src/index.html"), "shared")  # not "site": the test above would then fail
         self.assertEqual(measure.component("scripts/rel/x.py"), "shared")
+
+    def test_the_media_budget_says_when_it_is_passed_and_what_adr_0013_asks_then(self):
+        result = measure.media_budget("HEAD")
+        self.assertEqual(result["budget_bytes"], 250_000_000)
+        self.assertGreater(result["media_bytes_packed"], 0)
+        self.assertEqual(result["over_budget"], result["media_bytes_packed"] > 250_000_000)
+        under = measure.budget_summary({**result, "media_bytes_packed": 75_900_000, "over_budget": False})
+        self.assertIn("75.9 MB, budget 250.0 MB (ADR 0013, point 3)", under)
+        self.assertNotIn("Over the budget", under)
+        with mock.patch.object(measure, "history_blobs", return_value={"all:media": [250_000_001, 0]}):
+            over = measure.media_budget("HEAD")
+        self.assertTrue(over["over_budget"])
+        text = measure.budget_summary(over)
+        self.assertIn("**Over the budget.** New capture sets go to a repository of their own", text)
+        self.assertIn("No history is rewritten", text)
+        self.assertTrue((ROOT / "docs" / "adr" / "0013-repository-layout.md").is_file())
+
+    def test_each_release_measures_it_where_the_history_is_complete(self):
+        workflow = (ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
+        publish = workflow[workflow.index("\n  publish:\n") :]
+        self.assertIn("fetch-depth: 0", publish)  # the whole history, not a shallow clone
+        step = publish.index('org_layout_measure.py --budget --ref HEAD --summary "$GITHUB_STEP_SUMMARY"')
+        self.assertLess(publish.index("Draft the GitHub release"), step)
+        self.assertIn("${{ runner.temp }}/media-budget.json", publish[step:])
+        self.assertNotIn("publish/media-budget.json", publish)  # publish_release.sh wants its stage empty
+        step_text = publish[publish.rindex("- name: Media in the history", 0, step) : step]
+        self.assertIn("continue-on-error: true", step_text)  # a measurement never fails a release
+        self.assertIn("timeout-minutes:", step_text)
+
+    def test_a_failure_to_measure_or_to_write_the_summary_is_a_warning_not_a_failure(self):
+        script = ROOT / "scripts" / "research" / "org_layout_measure.py"
+        unwritable = ["--summary", "/nonexistent-directory/summary.md"]
+        cases = {"summary": ["--ref", "HEAD", *unwritable], "ref": ["--ref", "no-such-ref-at-all"]}
+        # A path that is not UTF-8 somewhere in the history, or any other failure to measure.
+        broken = UnicodeDecodeError("utf-8", b"\xff", 0, 1, "invalid start byte")
+        err = io.StringIO()
+        with mock.patch.object(measure, "history_blobs", side_effect=broken), \
+                mock.patch.object(sys, "argv", ["x", "--budget", "--ref", "HEAD"]), contextlib.redirect_stderr(err):  # fmt: skip
+            self.assertEqual(measure.main(), 0)
+        self.assertIn("::warning title=Media budget::not measured: UnicodeDecodeError", err.getvalue())
+        for name, extra in cases.items():
+            with self.subTest(name):
+                run = subprocess.run([sys.executable, "-I", str(script), "--budget", *extra], cwd=ROOT,
+                                     capture_output=True, text=True, check=False)  # fmt: skip
+                self.assertEqual(run.returncode, 0, run.stderr)
+                self.assertIn("::warning title=Media budget::", run.stderr)
 
 
 if __name__ == "__main__":
