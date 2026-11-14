@@ -1036,6 +1036,44 @@ class DownloadPagesTest(unittest.TestCase):
             self.assertIn(f"whats-new/{version}/" if page.startswith("en/") else f"novidades/{version}/",
                           (out / page).read_text(encoding="utf-8"))  # fmt: skip
 
+    def test_the_companion_shows_once_a_published_release_carries_its_apk(self):
+        # ADR 0014: the download pages offer the APK and its certificate's SHA-256 only from the
+        # first release whose assets have it (release_metadata.py sets companion_apk).
+        src = self.source("companion", "160.0-0.5", self.fpr, self.armored)
+        (src / "site" / "keys").mkdir(parents=True, exist_ok=True)
+        shutil.copy(ROOT / "site" / "keys" / "nulavio-companion.der", src / "site" / "keys")
+        self.assertEqual(build_site.release_values(src)["companion"], "off")
+        release = json.loads((src / "packaging" / "release.json").read_text(encoding="utf-8"))
+        release["companion_apk"] = "nulavio-companion-0.1.0.apk"
+        (src / "packaging" / "release.json").write_text(json.dumps(release), encoding="utf-8")
+        on = build_site.release_values(src)
+        fpr = hashlib.sha256((ROOT / "site" / "keys" / "nulavio-companion.der").read_bytes()).hexdigest()
+        self.assertEqual((on["companion"], on["companion_apk"], on["companion_fpr"]), ("on", "nulavio-companion-0.1.0.apk", fpr))
+        release["companion_apk"] = "https://evil.example/x.apk"
+        (src / "packaging" / "release.json").write_text(json.dumps(release), encoding="utf-8")
+        with self.assertRaises(build_site.BuildError):
+            build_site.release_values(src)
+        pages = {}
+        real = build_site.release_values
+        for name, values in (("on", on), ("off", {**on, "companion": "off"})):
+            out = self.tmp / f"companion-site-{name}"
+            build_site.release_values = lambda src, values=values: values
+            try:
+                build_site.build(out)
+            finally:
+                build_site.release_values = real
+            pages[name] = {page: (out / page).read_text(encoding="utf-8") for page in build_site.DOWNLOAD_PAGES}
+        for page in build_site.DOWNLOAD_PAGES:
+            with self.subTest(page=page):
+                self.assertNotIn("<!--companion:", pages["on"][page])
+                self.assertIn('id="companion"', pages["on"][page])
+                self.assertIn(fpr, pages["on"][page])
+                self.assertIn("apksigner verify --print-certs nulavio-companion-0.1.0.apk", pages["on"][page])
+                self.assertNotIn('id="companion"', pages["off"][page])
+                self.assertNotIn("<!--companion:", pages["off"][page])
+        ids = [re.findall(r'id="([^"]+)"', pages["on"][page]) for page in build_site.DOWNLOAD_PAGES]
+        self.assertEqual(ids[0], ids[1], "both languages have the same sections")
+
     def test_release_pages(self):
         values = build_site.release_values(self.source("released", "159.0.1-0.1", self.fpr, self.armored))
         self.assertEqual(values["key_fpr"].replace(" ", ""), self.fpr)

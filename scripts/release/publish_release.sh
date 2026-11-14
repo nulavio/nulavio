@@ -23,6 +23,10 @@
 # NULAVIO_FLATPAK_BUNDLE: nulavio-<version>.x86_64.flatpak, built by the release workflow's
 # flatpak job from this rehearsal's portable archive (optional; SHA256SUMS covers it).
 #
+# NULAVIO_COMPANION_APK: nulavio-companion-<version>.apk, signed and checked by
+# sign_companion.sh, with <apk>.cdx.json beside it. Required when the build offers phone
+# pairing (nulavio.vault.phone.pairing in the branding prefs): ADR 0005's release order.
+#
 # NULAVIO_PUBLISH_REF: the reviewed branch the rehearsed commit must be on
 # (default origin/main). A security release is prepared in a private GitHub
 # advisory fork and merged into main when it is published: name that branch.
@@ -75,6 +79,18 @@ if [[ -n $bundle ]] && { [[ $(basename "$bundle") != "nulavio-${tag#v}.x86_64.fl
     echo "publish_release: $bundle is not the Flatpak bundle of $tag" >&2
     exit 2
 fi
+# ADR 0005's release order, ADR 0014: a build that offers to pair a phone ships the app it pairs
+# with, signed (sign_companion.sh) and next to its SBOM.
+apk=${NULAVIO_COMPANION_APK:-}
+if git -C "$repo" show "$commit:browser/branding/nulavio/pref/firefox-branding.js" 2>/dev/null |
+        grep -qx 'pref("nulavio.vault.phone.pairing", true);' && [[ -z $apk ]]; then
+    echo "publish_release: $tag offers phone pairing but no signed Companion APK was given (NULAVIO_COMPANION_APK)" >&2
+    exit 2
+fi
+if [[ -n $apk ]] && { [[ ! $(basename "$apk") =~ ^nulavio-companion-[0-9]+(\.[0-9]+)+\.apk$ ]] || [[ ! -f $apk ]] || [[ ! -f $apk.cdx.json ]]; }; then
+    echo "publish_release: $apk is not a signed Companion APK with its SBOM (nulavio-companion-<version>.apk)" >&2
+    exit 2
+fi
 
 mkdir -p "$stage/github"
 NULAVIO_RELEASE_MANIFEST="$out/manifest.json" GNUPGHOME=$gnupg NULAVIO_PUBLIC_KEY=$published \
@@ -95,6 +111,7 @@ while IFS= read -r archive; do
     [[ -n $archive ]] && cp "$out/$archive" "$stage/github/"
 done < <(field archives)
 [[ -n $bundle ]] && cp "$bundle" "$stage/github/"
+[[ -n $apk ]] && cp "$apk" "$apk.cdx.json" "$stage/github/"
 cp "$out/manifest.json" "$stage/github/manifest.json"
 cp "$published" "$stage/github/nulavio-packages.asc"
 (cd "$stage/github" && sha256sum -- * >SHA256SUMS)

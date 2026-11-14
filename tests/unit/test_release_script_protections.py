@@ -23,6 +23,8 @@ sign_apt_repo.sh
   6. `gpgv ... "$dists/Release.gpg" "$dists/Release" ... || ...` -> `|| true`
 publish_release.sh
   7. `[[ -n $(field debs) ]] || { ...; exit 2; }` deleted
+publish_release.sh
+  10. the refusal of a build that offers phone pairing without NULAVIO_COMPANION_APK deleted
 check_published.sh
   8. `if matches "$name" "$got"; then` -> `if [[ -n $got ]]; then` (any output accepted)
   9. in matches(), the dnf case loosened to `[[ $2 == "$expected"* ]]` or `"$expected".*`, or the
@@ -276,12 +278,23 @@ class PublishReleaseTest(unittest.TestCase):
         (out / "manifest.json").write_text(json.dumps(manifest))
         return out
 
-    def publish(self, out: Path) -> subprocess.CompletedProcess:
+    def offer_pairing(self) -> None:
+        """A new base commit whose branding prefs offer phone pairing, as the real build's do."""
+        prefs = self.repo / "browser/branding/nulavio/pref/firefox-branding.js"
+        prefs.parent.mkdir(parents=True, exist_ok=True)
+        prefs.write_text('pref("nulavio.vault.phone.pairing", true);\n')
+        git = ["git", "-C", str(self.repo), "-c", "user.name=t", "-c", "user.email=t@example.invalid"]
+        subprocess.run([*git, "add", "-A"], check=True)
+        subprocess.run([*git, "commit", "-q", "-m", "pairing on"], check=True)
+        subprocess.run([*git, "push", "-q", "origin", "main"], check=True)
+        self.base = subprocess.run([*git, "rev-parse", "HEAD"], capture_output=True, text=True, check=True).stdout.strip()
+
+    def publish(self, out: Path, **env: str) -> subprocess.CompletedProcess:
         public = self.repo / "site" / "keys" / "nulavio-packages.asc"
         key = subprocess.run(["gpg", "--quiet", "--with-colons", "--show-keys", str(public)],
                              capture_output=True, text=True, check=True).stdout  # fmt: skip
         fpr = next(line.split(":")[9] for line in key.splitlines() if line.startswith("fpr:"))
-        env = self.stubs.env(NULAVIO_KMS_KEY_ID="alias/test", NULAVIO_PUBLISH_REF="origin/main", GNUPGHOME=str(self.tmp))
+        env = self.stubs.env(NULAVIO_KMS_KEY_ID="alias/test", NULAVIO_PUBLISH_REF="origin/main", GNUPGHOME=str(self.tmp), **env)
         command = [self.repo / "scripts/release/publish_release.sh", out, fpr, self.tmp / f"{out.name}-stage"]
         return subprocess.run(["bash", *map(str, command)], env=env, capture_output=True, text=True, check=False)
 
@@ -298,6 +311,26 @@ class PublishReleaseTest(unittest.TestCase):
         self.assertNotIn("has no .deb", run.stderr)
         self.assertTrue((self.tmp / "with-deb-stage" / "github").is_dir(), run.stderr)
         self.assertNotEqual(run.returncode, 0)
+
+    @unittest.skipUnless(shutil.which("gpg"), "needs gpg")
+    def test_a_build_that_offers_pairing_is_not_published_without_the_signed_companion(self):  # mutation 10
+        # ADR 0005's release order and ADR 0014: the page that offers to pair a phone ships with the app.
+        self.offer_pairing()
+        run = self.publish(self.rehearsal("pairing-no-apk", with_deb=True))
+        self.assertEqual(run.returncode, 2, run.stdout + run.stderr)
+        self.assertIn("offers phone pairing but no signed Companion APK", run.stderr)
+        self.assertFalse((self.tmp / "pairing-no-apk-stage").exists())
+        wrong = self.tmp / "companion.apk"
+        wrong.write_bytes(b"apk")
+        run = self.publish(self.rehearsal("pairing-wrong-name", with_deb=True), NULAVIO_COMPANION_APK=str(wrong))
+        self.assertEqual(run.returncode, 2, run.stderr)
+        self.assertIn("is not a signed Companion APK with its SBOM", run.stderr)
+        apk = self.tmp / "nulavio-companion-0.1.0.apk"
+        apk.write_bytes(b"apk")
+        Path(f"{apk}.cdx.json").write_text("{}")
+        run = self.publish(self.rehearsal("pairing-apk", with_deb=True), NULAVIO_COMPANION_APK=str(apk))
+        self.assertNotIn("Companion", run.stderr)
+        self.assertTrue((self.tmp / "pairing-apk-stage" / "github").is_dir(), run.stderr)  # past the check
 
 
 class CheckPublishedTest(unittest.TestCase):

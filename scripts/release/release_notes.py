@@ -85,7 +85,9 @@ def changes(repo: Path, commit: str, tag: str, repository: str) -> str:
     return "\n\n".join(sections)
 
 
-def notes(info: dict, repo: Path, repository: str, fingerprint: str, run_url: str, flatpak: str | None) -> str:
+def notes(
+    info: dict, repo: Path, repository: str, fingerprint: str, run_url: str, flatpak: str | None, companion: str | None = None
+) -> str:
     if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository):
         raise ValueError("invalid GitHub repository")
     version_key(info["tag"])
@@ -128,6 +130,14 @@ def notes(info: dict, repo: Path, repository: str, fingerprint: str, run_url: st
         if flatpak != f"nulavio-{info['tag'][1:]}.x86_64.flatpak":
             raise ValueError("unexpected Flatpak bundle name")
         install += f"\n\nOther distributions, with Flatpak:\n\n```sh\nflatpak install --user {flatpak}\n```"
+    if companion:
+        if not re.fullmatch(r"nulavio-companion-[0-9]+(?:\.[0-9]+)+\.apk", companion):
+            raise ValueError("unexpected Companion APK name")
+        certificate = hashlib.sha256((ROOT / "site" / "keys" / "nulavio-companion.der").read_bytes()).hexdigest()
+        install += (
+            f"\n\nNulavio Companion, the Android app for phone unlock: `{companion}`. Its signing certificate's "
+            f"SHA-256 is `{certificate}` (`apksigner verify --print-certs {companion}` prints it)."
+        )
     return (
         f"Nulavio {info['tag'][1:]}, built from Firefox {info['firefox']} (commit {info['commit'][:12]}).\n\n"
         "## What's new\n\n" + "\n\n".join(summary) + "\n\n"
@@ -152,6 +162,7 @@ def main() -> int:
     generate.add_argument("--fingerprint", required=True)
     generate.add_argument("--run-url", required=True)
     generate.add_argument("--flatpak")
+    generate.add_argument("--companion", help="the signed Companion APK's file name")
     args = parser.parse_args()
     try:
         if args.command == "check-title":
@@ -162,7 +173,7 @@ def main() -> int:
                 raise ValueError("PR title must be a Conventional Commit, e.g. fix(shell): preserve the selected tab")
         else:
             print(notes(json.loads(args.release.read_text()), args.repo, args.repository,
-                        args.fingerprint, args.run_url, args.flatpak), end="")  # fmt: skip
+                        args.fingerprint, args.run_url, args.flatpak, args.companion), end="")  # fmt: skip
     except (ValueError, OSError, KeyError, subprocess.CalledProcessError) as error:
         print(f"release_notes: {error}", file=sys.stderr)
         return 1
