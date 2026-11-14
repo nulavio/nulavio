@@ -6,7 +6,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
 <title>Nulavio engineering document: what is ready and what is not</title>
+<!--release:on-->
+<meta name="description" content="Nulavio is a browser for Linux built on Mozilla's Gecko engine. It blocks trackers from the first launch, sends no data to Nulavio servers, and states in writing what it does and what it does not do yet. Public alpha {{release_version}} for Fedora and Ubuntu.">
+<!--/release:on-->
+<!--release:off-->
 <meta name="description" content="Nulavio is a browser for Linux built on Mozilla's Gecko engine. It blocks trackers from the first launch, sends no data to Nulavio servers, and states in writing what it does and what it does not do yet. In development, no release to download.">
+<!--/release:off-->
 <link rel="canonical" href="https://nulavio.net/en/engineering/">
 <link rel="alternate" hreflang="pt-BR" href="https://nulavio.net/engenharia/">
 <link rel="alternate" hreflang="en" href="https://nulavio.net/en/engineering/">
@@ -39,18 +44,18 @@
 <section id="summary" aria-labelledby="summary-h">
 <div class="summary-text">
 <p class="revision">nulavio.net · revision of {{date_en}} · commit {{commit}}</p>
-<p class="pill"><strong>In development</strong> · no release to download yet</p>
+<p class="pill"><!--release:on--><strong>Public alpha</strong> · {{release_version}}, for Fedora and Ubuntu<!--/release:on--><!--release:off--><strong>In development</strong> · no release to download yet<!--/release:off--></p>
 <h1 id="summary-h">Private by default. Honest by design.</h1>
 <p class="lead">Nulavio is a browser for Linux built on Mozilla's Gecko engine. It comes with tracking protection set to Strict, installs the uBlock Origin blocker on first launch, and sends no data to Nulavio servers: the project runs no service that receives data from the browser.</p>
 <p>This page is an engineering document: each claim says what it costs or where it stops, and where to check it. What is not ready yet is marked as not ready. Numbers, excerpts and captures come from commit {{origin}}.</p>
-<p>The code is licensed under the MPL-2.0, but the repository is still private. Until it opens, the paths quoted here are references, not links.</p>
+<p>The code is licensed under the MPL-2.0 and is public at <span translate="no">github.com/nulavio/nulavio</span>. The paths quoted here are relative to that repository.</p>
 </div>
 <dl class="facts" aria-label="Fact sheet">
-<div><dt>Status</dt><dd>In development, no release to download</dd></div>
+<div><dt>Status</dt><dd><!--release:on-->Public alpha {{release_version}}: not everything planned is in it yet<!--/release:on--><!--release:off-->In development, no release to download<!--/release:off--></dd></div>
 <div><dt>System</dt><dd>Linux: Fedora KDE first, then Ubuntu</dd></div>
 <div><dt>Engine</dt><dd>Gecko, built from Firefox <span class="mono">{{firefox}}</span> source</dd></div>
 <div><dt>Engine patches</dt><dd><span class="mono">{{patches}}</span></dd></div>
-<div><dt>Licence</dt><dd>MPL-2.0 (repository still private)</dd></div>
+<div><dt>Licence</dt><dd>MPL-2.0, public repository</dd></div>
 <div><dt>Nulavio servers that receive browser data</dt><dd>None</dd></div>
 </dl>
 </section>
@@ -81,7 +86,7 @@
 <nav id="toc" class="toc" aria-labelledby="toc-h">
 <h2 id="toc-h">In this document</h2>
 <ol>
-<li><span class="num">1</span><span><a href="#status">Where the project is</a> <span class="gist">no release to download yet; see what is ready and what is missing.</span></span></li>
+<li><span class="num">1</span><span><a href="#status">Where the project is</a> <span class="gist"><!--release:on-->the public alpha is out; see what is ready and what is missing.<!--/release:on--><!--release:off-->no release to download yet; see what is ready and what is missing.<!--/release:off--></span></span></li>
 <li><span class="num">2</span><span><a href="#defaults">Defaults we change</a> <span class="gist">trackers blocked, HTTPS only, no telemetry; each change with its reason and cost.</span></span></li>
 <li><span class="num">3</span><span><a href="#kept">What we keep on</a> <span class="gist">the engine protections that use the network, and whom they talk to.</span></span></li>
 <li><span class="num">4</span><span><a href="#typing">What you type</a> <span class="gist">nothing goes to a search engine before Enter unless you turn suggestions on; you choose the DNS.</span></span></li>
@@ -96,10 +101,10 @@
 </nav>
 <section id="status" aria-labelledby="status-h">
 <h2 id="status-h"><span class="num">1</span> Where the project is</h2>
-<p class="opening">The public alpha is out for Fedora. Below is what already works, what partly works and what is missing, item by item.</p>
+<p class="opening"><!--release:on-->The public alpha is out for Fedora and Ubuntu.<!--/release:on--><!--release:off-->There is no release to download yet.<!--/release:off--> Below is what already works, what partly works and what is missing, item by item.</p>
 <div class="claim">
 <div class="claim-text">
-<p>This list follows the project's release criteria, last checked on 2026-11-10. The public alpha, v160.0-0.1, was published on 2026-11-10, after the release key and the package host were done.</p>
+<p>This list follows the project's release criteria. <!--release:on-->The alpha published now is {{release_version}}; the first one, v160.0-0.1, came out on 2026-11-10.<!--/release:on--><!--release:off-->Nothing has been published yet.<!--/release:off--> What the alpha does not have yet is marked below as partly done or not done.</p>
 </div>
 <div class="receipt">
 <p class="receipt-title">How to check</p>
@@ -121,14 +126,24 @@
 <p class="item"><strong>Changes to the engine</strong> <span>{{patches}} patches, each named for what it does. The project's rule: anything that fits in prefs, policies or the built-in add-on does not become a patch.</span></p>
 <ul class="refs"><li><code class="ref" translate="no">browser/patches/series</code></li></ul>
 </li>
+<li class="ledger-row is-done">
+<p class="state"><svg class="icon" aria-hidden="true" focusable="false"><use href="#i-done"/></svg><span>Done</span></p>
+<p class="item"><strong>Security contact</strong> <span><span translate="no">security@nulavio.net</span> and <span translate="no">/.well-known/security.txt</span> have been live since 2026-10-25. A test report sent from an outside address on 2026-11-10 arrived and was answered.</span></p>
+<ul class="refs"><li><code class="ref" translate="no">docs/product/release-criteria.md (item 6)</code></li></ul>
+</li>
+<li class="ledger-row is-done">
+<p class="state"><svg class="icon" aria-hidden="true" focusable="false"><use href="#i-done"/></svg><span>Done</span></p>
+<p class="item"><strong>Public source code</strong> <span>The code is under the MPL-2.0 and has been public since 2026-11-10, at <span translate="no">github.com/nulavio/nulavio</span>.</span></p>
+<ul class="refs"><li><code class="ref" translate="no">LICENSE</code></li></ul>
+</li>
 <li class="ledger-row is-partly">
 <p class="state"><svg class="icon" aria-hidden="true" focusable="false"><use href="#i-partly"/></svg><span>Partly</span></p>
-<p class="item"><strong>Packages for Fedora and Ubuntu</strong> <span>The RPM and .deb come from the same build, and they install and start in clean Fedora 44 and Ubuntu 26.10 containers. A repository signed with a test key installs and refuses altered metadata. Still missing: the release key, the repository host and a test on a real Ubuntu machine.</span></p>
+<p class="item"><strong>Packages for Fedora and Ubuntu</strong> <span>The RPM, the .deb and a Flatpak bundle come from the same build. Fedora installs from a dnf repository and Ubuntu from an APT repository, both signed with the release key; after each upload, both are installed in clean Fedora and Ubuntu containers with their signature checks on. Still missing: the APT path walked on a real Ubuntu machine, and Flathub.</span></p>
 <ul class="refs"><li><code class="ref" translate="no">scripts/release/check_rpm.sh</code></li><li><code class="ref" translate="no">scripts/release/check_deb.sh</code></li><li><code class="ref" translate="no">docs/product/release-criteria.md (item 5)</code></li><li><code class="ref" translate="no">docs/security/residual-risks.md › R46</code></li></ul>
 </li>
 <li class="ledger-row is-partly">
 <p class="state"><svg class="icon" aria-hidden="true" focusable="false"><use href="#i-partly"/></svg><span>Partly</span></p>
-<p class="item"><strong>Security updates</strong> <span>The project's commitment (SECURITY.md): a Nulavio release within 72 hours of a critical or high Mozilla security fix; for urgent ones the internal target is 24 hours. For the first urgent release, Firefox 159.0 (2026-10-27), the packages were ready to sign 12.8 hours after Mozilla published it. Signing with the release key and publishing have not been rehearsed; they wait for the key and the host. Today, noticing a new release depends on the maintainer's machine and on GitHub's schedule.</span></p>
+<p class="item"><strong>Security updates</strong> <span>The project's commitment (SECURITY.md): a Nulavio release within 72 hours of a critical or high Mozilla security fix; for urgent ones the internal target is 24 hours. For the first urgent release, Firefox 159.0 (2026-10-27), the packages were ready to sign 12.8 hours after Mozilla published it. Releases are signed in CI with the release key, held in AWS KMS, after the maintainer approves each run: 160.0-0.3 and 160.0-0.4 were published that way. Today, noticing a new release depends on the maintainer's machine and on GitHub's schedule.</span></p>
 <ul class="refs"><li><code class="ref" translate="no">SECURITY.md</code></li><li><code class="ref" translate="no">docs/architecture/update-policy.md</code></li><li><code class="ref" translate="no">docs/research/evidence/release-rehearsal-2026-10-28.md</code></li><li><code class="ref" translate="no">docs/security/residual-risks.md › R51</code></li></ul>
 </li>
 <li class="ledger-row is-partly">
@@ -143,23 +158,13 @@
 </li>
 <li class="ledger-row is-partly">
 <p class="state"><svg class="icon" aria-hidden="true" focusable="false"><use href="#i-partly"/></svg><span>Partly</span></p>
-<p class="item"><strong>Phone unlock</strong> <span>The Android app passed its device test on a real phone (Galaxy S24+, 2026-11-10). The alpha offers it since 160.0-0.3 (2026-11-11); the app is waiting for F-Droid's review.</span></p>
+<p class="item"><strong>Phone unlock</strong> <span>The Android app passed its device test on a real phone (Galaxy S24+, 2026-11-10). The alpha offers it since 160.0-0.3 (2026-11-11), but the app cannot be downloaded yet: F-Droid lists an app after three months of development (it can be asked again from 2027-01-27), and a signed copy of the app on the project's releases is being prepared.</span></p>
 <ul class="refs"><li><code class="ref" translate="no">docs/adr/0005-phone-profile-unlock.md</code></li><li><code class="ref" translate="no">docs/security/residual-risks.md › R48</code></li></ul>
-</li>
-<li class="ledger-row is-partly">
-<p class="state"><svg class="icon" aria-hidden="true" focusable="false"><use href="#i-partly"/></svg><span>Partly</span></p>
-<p class="item"><strong>Security contact</strong> <span><span translate="no">security@nulavio.net</span> and <span translate="no">/.well-known/security.txt</span> have been live since 2026-10-25. A test report still has to be sent and answered.</span></p>
-<ul class="refs"><li><code class="ref" translate="no">docs/product/release-criteria.md (item 6)</code></li></ul>
 </li>
 <li class="ledger-row is-missing">
 <p class="state"><svg class="icon" aria-hidden="true" focusable="false"><use href="#i-missing"/></svg><span>Not done</span></p>
 <p class="item"><strong>FIDO2 security key</strong> <span>Planned as a way to unlock profiles; waiting for a key to test with.</span></p>
 <ul class="refs"><li><code class="ref" translate="no">docs/product/execution-plan.md (S10)</code></li></ul>
-</li>
-<li class="ledger-row is-missing">
-<p class="state"><svg class="icon" aria-hidden="true" focusable="false"><use href="#i-missing"/></svg><span>Not done</span></p>
-<p class="item"><strong>Public source code</strong> <span>The code is under the MPL-2.0, but the repository is still private.</span></p>
-<ul class="refs"><li><code class="ref" translate="no">LICENSE</code></li></ul>
 </li>
 <li class="ledger-row is-missing">
 <p class="state"><svg class="icon" aria-hidden="true" focusable="false"><use href="#i-missing"/></svg><span>Not done</span></p>
@@ -1141,7 +1146,7 @@
 </section>
 <section id="verify" aria-labelledby="verify-h">
 <h2 id="verify-h"><span class="num">11</span> How to check</h2>
-<p class="opening">From what you can do today to what depends on the code being public or on a release.</p>
+<p class="opening"><!--release:on-->From this site to the tests and the browser itself.<!--/release:on--><!--release:off-->From what you can do today to what depends on a release.<!--/release:off--></p>
 <div class="claim" id="s11-1">
 <div class="claim-text">
 <h3><span class="num">11.1</span> Today, with nothing installed: this site</h3>
@@ -1166,7 +1171,7 @@
 <div class="prose"><p>Cloudflare, which serves the site, adds headers of its own, such as server and cf-ray. One of them is NEL (report-to and nel): it asks browsers that implement it to tell Cloudflare when a connection to this site fails.</p></div>
 <div class="claim" id="s11-2">
 <div class="claim-text">
-<h3><span class="num">11.2</span> Once the code is public: the tests</h3>
+<h3><span class="num">11.2</span> The tests</h3>
 <p><code translate="no">python3 -I tests/run.py unit</code> runs the unit tests, with no engine and no network. The integration tests need the Nulavio build: <code translate="no">scripts/build/build_nulavio.sh {{firefox}}</code> builds the browser in a rootless container. The full build of Firefox 159.0 took 47 minutes on the reference laptop on 2026-10-27, and the build tree takes about 23 GB. The tests use throwaway profiles and never touch yours. <code translate="no">bin/nulavio prefs explain</code> lists every default with its reason and cost.</p>
 </div>
 <div class="receipt">
@@ -1182,7 +1187,7 @@
 </div>
 <div class="claim" id="s11-3">
 <div class="claim-text">
-<h3><span class="num">11.3</span> Once there is a release: in the browser itself</h3>
+<h3><span class="num">11.3</span> <!--release:on-->In the browser itself<!--/release:on--><!--release:off-->Once there is a release: in the browser itself<!--/release:off--></h3>
 <p><code translate="no">about:config</code> shows every pref quoted here, <code translate="no">about:policies</code> shows the policy that installs uBlock Origin, and <code translate="no">about:support</code> shows the sandbox and site isolation.</p>
 </div>
 </div>
