@@ -26,9 +26,20 @@ from pathlib import Path
 from unittest import mock
 
 from nulavio_launcher.ai import audit, mcp, policy, registry, tools
+from nulavio_launcher.ai import bidi as bidi_mod
 from nulavio_launcher.ai import cli as ai_cli
 from nulavio_launcher.ai.websocket import GUID, WebSocket, WebSocketError
 from nulavio_launcher.ai.workspace import RAW_MARKER, WORKSPACE_PREFS, ProfileTarget, Workspace
+
+
+def wait_for(predicate, timeout: float = 5.0) -> bool:
+    """True once `predicate` is (work on another thread), False after `timeout` seconds."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if predicate():
+            return True
+        time.sleep(0.01)
+    return bool(predicate())
 
 
 class Home(unittest.TestCase):
@@ -947,6 +958,8 @@ class AuditTest(Home):
 
             def command(method, params=None, **_k):
                 commands.append((method, params))
+                if method == "network.addIntercept":
+                    return {"intercept": f"intercept-{id(connection)}"}
                 return {"script": f"preload-{id(connection)}"} if method == "script.addPreloadScript" else {}
 
             connection.command.side_effect = command
@@ -981,7 +994,7 @@ class AuditTest(Home):
         bridge.workspace = mock.Mock(bidi=second)
         bridge.workspace.start.return_value = second
         self.assertIs(bridge.bidi(), second)
-        self.assertEqual([m for m, _ in commands], ["script.addPreloadScript"])
+        self.assertEqual([m for m, _ in commands if m.startswith("script.")], ["script.addPreloadScript"])
 
     def test_an_answer_for_the_session_sends_the_form_it_was_given_for(self):
         # "Allow until the agent disconnects" turns the permission on in the middle of the call: the
@@ -1510,6 +1523,240 @@ class AuditTest(Home):
         self.assertNotIn("msg=42", text)
 
 
+class LocalRequestsTest(Home):
+    """R29 (LESIS 83a648d8): an agent without local_resources has every request of its engines held, and one
+    to this computer or the local network failed before it is sent, a redirect hop included."""
+
+    def engine(self):
+        connection, commands, handlers = mock.Mock(), [], {}
+
+        def command(method, params=None, **_k):
+            commands.append((method, params))
+            return {"intercept": f"intercept-{len(commands)}"} if method == "network.addIntercept" else {}
+
+        connection.command.side_effect = command
+        connection.on.side_effect = handlers.__setitem__
+        return connection, commands, handlers
+
+    def bridge(self, mode: str = "ask"):
+        agent, _ = registry.add("net", "other", "autonomous")
+        registry.grant(agent["id"], "local_resources", mode)
+        return agent, tools.Bridge(agent["id"], "s-1", approver=registry.Approver())
+
+    def test_policy_reads_the_hosts_the_engine_sends_requests_to(self):
+        for host in ("127.0.0.1", "localhost", "app.localhost", "10.0.0.5", "192.168.1.1", "169.254.169.254", "::1",
+                     "[::1]", "fd00::1", "printer.local", "0.0.0.0", "127.1", "0x7f000001"):  # fmt: skip  # noqa: S104 (a host the test reads, not one it binds)
+            self.assertTrue(policy.local_host(host, resolve=False), host)
+        self.assertFalse(policy.local_host("93.184.215.14", resolve=False))
+        self.assertFalse(policy.local_host("2a00:1450:4001::200e", resolve=False))
+        with mock.patch.object(policy.socket, "getaddrinfo", return_value=[(0, 0, 0, "", ("10.1.2.3", 0))]):
+            self.assertTrue(policy.local_host("intranet.example.com"))
+        with mock.patch.object(policy.socket, "getaddrinfo", side_effect=OSError("no answer")):
+            self.assertTrue(policy.local_host("unknown.example"))  # closed when this process cannot tell
+        with mock.patch.object(policy.socket, "getaddrinfo", return_value=[(0, 0, 0, "", ("93.184.215.14", 0))]):
+            self.assertFalse(policy.local_host("example.org"))
+
+    def test_the_intercept_follows_the_permission(self):
+        agent, bridge = self.bridge("ask")
+        connection, commands, handlers = self.engine()
+        bridge.workspace = mock.Mock(bidi=connection)
+        bridge._sync_network()
+        bridge._sync_network()  # once for the engine, not once a call
+        self.assertEqual(
+            [m for m, _ in commands], ["session.subscribe", "network.addIntercept"]
+        )  # fmt: skip
+        self.assertEqual(commands[1][1], {"phases": ["beforeRequestSent"]})
+        self.assertIn("network.beforeRequestSent", handlers)
+        self.addCleanup(bridge.close)
+        handlers["network.beforeRequestSent"]({"isBlocked": True, "request": {"request": "r9", "url": "http://10.0.0.1/"}})
+        self.assertTrue(wait_for(lambda: ("network.failRequest", {"request": "r9"}) in commands))  # what the engine sends
+        commands.remove(("network.failRequest", {"request": "r9"}))
+        registry.grant(agent["id"], "local_resources", "allow")  # the user allows it: nothing is held
+        bridge._sync_network()
+        self.assertEqual(commands[-1], ("network.removeIntercept", {"intercept": "intercept-2"}))
+        registry.grant(agent["id"], "local_resources", "block")
+        bridge._sync_network()  # held again, with the handler already set
+        self.assertEqual([m for m, _ in commands].count("session.subscribe"), 1)
+        self.assertEqual([m for m, _ in commands].count("network.addIntercept"), 2)
+        # A new connection (the engine ended and another started) gets its own, before its first navigation.
+        second, commands, _ = self.engine()
+        bridge.workspace = mock.Mock(bidi=second)
+        bridge.workspace.start.return_value = second
+        self.assertIs(bridge.bidi(), second)
+        self.assertEqual([m for m, _ in commands if m.startswith(("network.", "session."))],
+                         ["session.subscribe", "network.addIntercept"])  # fmt: skip
+
+    def test_a_local_request_fails_before_it_leaves_and_a_public_one_goes_on(self):
+        _agent, bridge = self.bridge("ask")
+        connection, commands, _ = self.engine()
+        public = [(0, 0, 0, "", ("93.184.215.14", 0))]
+
+        def held(url: str, request: str = "r1") -> tuple:
+            commands.clear()
+            bridge._decide(connection, {"request": request, "url": url})
+            return commands[-1] if commands else None
+
+        with mock.patch.object(policy.socket, "getaddrinfo", return_value=public) as resolve:
+            self.assertEqual(held("https://example.org/a"), ("network.continueRequest", {"request": "r1"}))
+            held("https://example.org/b")
+            self.assertEqual(resolve.call_count, 1)  # a name's answer is kept for the requests that follow
+            for url in ("http://127.0.0.1:8080/hit", "http://192.168.1.1/reboot", "http://[::1]/", "ws://localhost:9/",
+                        "http://printer.local/", "file:///etc/passwd", "http://user@/", "http://[64:ff9b::c0a8:101]/",
+                        "http://[::ffff:192.168.1.1]/"):  # fmt: skip
+                self.assertEqual(held(url, "r2"), ("network.failRequest", {"request": "r2"}), url)
+            for url in ("data:text/plain,a", "blob:https://example.org/1", "about:blank", "http://[64:ff9b::5db8:d70e]/"):
+                self.assertEqual(held(url)[0], "network.continueRequest", url)
+            for url in ("jar:http://192.168.1.1/a.zip!/x", "view-source:http://10.0.0.1/", "gopher://10.0.0.1/", "x-new:1"):
+                self.assertEqual(held(url)[0], "network.failRequest", url)  # a scheme not known to be hostless is closed
+            # The place the current call was allowed (asked, and the user said yes) is sent on, only it: its
+            # WebSocket and the engine's upgrade of it to https are the same place; another port is not.
+            bridge._local_ok = {("127.0.0.1", 8080), ("192.168.1.1", 80)}
+            self.assertEqual(held("http://127.0.0.1:8080/next")[0], "network.continueRequest")
+            self.assertEqual(held("ws://127.0.0.1:8080/socket")[0], "network.continueRequest")
+            self.assertEqual(held("https://192.168.1.1/upgraded")[0], "network.continueRequest")
+            self.assertEqual(held("http://127.0.0.1:2375/containers")[0], "network.failRequest")
+            self.assertEqual(held("http://10.0.0.9/other")[0], "network.failRequest")
+            self.assertIsNone(tools.Bridge._request_place("http://127.0.0.1:99999/"))  # no place: refused, no error
+            # Codex review: an approval is matched as the engine writes the host it sends the request to.
+            same = (("http://127.1/", "http://127.0.0.1/"), ("http://0x7f000001:8080/", "http://127.0.0.1:8080/x"),
+                    ("http://[0:0:0:0:0:0:0:1]/", "http://[::1]/"), ("http://LOCALHOST./", "http://localhost/"))  # fmt: skip
+            for asked, sent in same:
+                bridge._local_ok = {tools.Bridge._request_place(asked)}
+                self.assertEqual(held(sent)[0], "network.continueRequest", (asked, sent))
+            # Anything unexpected fails the request: closed, not open.
+            with mock.patch.object(tools.Bridge, "_request_allowed", side_effect=RuntimeError("bug")):
+                self.assertEqual(held("https://example.org/a")[0], "network.failRequest")
+        refused = [json.loads(line) for line in audit.audit_path().read_text().splitlines()]
+        refused = [e["target"] for e in refused if e.get("reason") == "local-request"]
+        self.assertEqual(refused.count("http://192.168.1.1"), 1)  # once per place, not once per request
+        self.assertNotIn("/reboot", audit.audit_path().read_text())  # the place, never the path
+
+    def test_held_requests_are_decided_off_the_connections_thread(self):
+        # Events reach the handler in order on one thread: a request is decided on a pool, so a name that is
+        # slow to resolve holds only its own requests, and one the intercept does not hold is left alone.
+        _agent, bridge = self.bridge("ask")
+        self.addCleanup(bridge.close)
+        connection, commands, _ = self.engine()
+        slow, released = threading.Event(), threading.Event()
+
+        def resolve(host, *_a, **_k):
+            if host == "slow.example":
+                slow.set()
+                released.wait(10)
+            return [(0, 0, 0, "", ("93.184.215.14", 0))]
+
+        with mock.patch.object(policy.socket, "getaddrinfo", side_effect=resolve):
+            bridge._on_request(connection, {"isBlocked": True, "request": {"request": "r1", "url": "https://slow.example/"}})
+            self.assertTrue(slow.wait(5))
+            bridge._on_request(connection, {"isBlocked": True, "request": {"request": "r2", "url": "http://10.0.0.1/"}})
+            bridge._on_request(connection, {"isBlocked": False, "request": {"request": "r3", "url": "http://10.0.0.2/"}})
+            self.assertTrue(wait_for(lambda: ("network.failRequest", {"request": "r2"}) in commands))
+            released.set()
+            self.assertTrue(wait_for(lambda: ("network.continueRequest", {"request": "r1"}) in commands))
+        self.assertNotIn("r3", json.dumps(commands))
+
+    def test_a_name_that_does_not_answer_in_time_fails_its_request_and_its_late_answer_is_kept(self):
+        _agent, bridge = self.bridge("ask")
+        connection, commands, _ = self.engine()
+        asked = []
+
+        def resolve(host, *_a, **_k):
+            asked.append(host)
+            time.sleep(0.4)
+            return [(0, 0, 0, "", ("93.184.215.14", 0))]
+
+        with (
+            mock.patch.object(tools, "LOCAL_LOOKUP_TIMEOUT", 0.1),
+            mock.patch.object(policy.socket, "getaddrinfo", side_effect=resolve),
+        ):
+            bridge._decide(connection, {"request": "r1", "url": "https://late.example/"})
+            bridge._decide(connection, {"request": "r2", "url": "https://late.example/b"})  # the same lookup, not another
+            self.assertEqual(commands, [("network.failRequest", {"request": "r1"}), ("network.failRequest", {"request": "r2"})])
+            self.assertTrue(wait_for(lambda: "late.example" in bridge._local_hosts))
+            bridge._decide(connection, {"request": "r3", "url": "https://late.example/c"})
+        self.assertEqual(commands[-1], ("network.continueRequest", {"request": "r3"}))
+        self.assertEqual(asked, ["late.example"])
+
+    def test_while_many_names_are_out_a_new_one_counts_as_local(self):
+        # Review: a page that asks for many names that never answer must not make the Bridge wait for each;
+        # past the limit a new name fails at once (closed), and an address or a known name is not held up.
+        _agent, bridge = self.bridge("ask")
+        connection, commands, _ = self.engine()
+        released = threading.Event()
+        self.addCleanup(released.set)
+
+        def resolve(host, *_a, **_k):
+            if host.startswith("hang"):
+                released.wait(10)
+            return [(0, 0, 0, "", ("93.184.215.14", 0))]
+
+        with (
+            mock.patch.object(tools, "LOOKUPS_AT_ONCE", 2),
+            mock.patch.object(tools, "LOCAL_LOOKUP_TIMEOUT", 0.05),
+            mock.patch.object(policy.socket, "getaddrinfo", side_effect=resolve),
+        ):
+            bridge._local_hosts["known.example"] = (time.monotonic(), False)
+            for name in ("hang1", "hang2"):
+                bridge._decide(connection, {"request": name, "url": f"https://{name}.example/"})
+            started = time.monotonic()
+            bridge._decide(connection, {"request": "new", "url": "https://new.example/"})
+            bridge._decide(connection, {"request": "known", "url": "https://known.example/"})
+            bridge._decide(connection, {"request": "ip", "url": "https://93.184.215.14/"})
+            self.assertLess(time.monotonic() - started, 0.5)
+        self.assertEqual(commands[-3:], [("network.failRequest", {"request": "new"}),
+                                         ("network.continueRequest", {"request": "known"}),
+                                         ("network.continueRequest", {"request": "ip"})])  # fmt: skip
+        entries = [json.loads(line) for line in audit.audit_path().read_text().splitlines()]
+        reasons = [e["reason"] for e in entries if e.get("tool") == "network"]
+        self.assertEqual(reasons, ["local-requests-busy"])  # one line, not a public site taken for a local one
+
+    def test_the_activity_lists_a_few_refused_places_then_says_there_were_more(self):
+        # Review: a page that tries a whole network (or a port scan of this computer) wrote a line per
+        # place, and pushed the agent's own actions out of the activity (audit A7 again).
+        _agent, bridge = self.bridge("ask")
+        self.addCleanup(bridge.close)
+        connection, _, _ = self.engine()
+        for port in range(1, 200):
+            bridge._decide(connection, {"request": f"r{port}", "url": f"http://127.0.0.1:{port}/"})
+        entries = [json.loads(line) for line in audit.audit_path().read_text().splitlines()]
+        reasons = [e["reason"] for e in entries if e.get("tool") == "network"]
+        self.assertEqual(reasons, ["local-request"] * tools.LOCAL_REFUSED_NOTED + ["local-requests-more"])
+
+    def test_an_answer_for_the_session_lets_everything_through_at_once(self):
+        # Codex review: "Allow until the agent disconnects" changed the permission but left the intercept
+        # until the next call, which went on failing the page's other local places.
+        agent, _ = registry.add("session-net", "other", "autonomous")
+        registry.grant(agent["id"], "local_resources", "ask")
+        bridge = tools.Bridge(agent["id"], "s-1", approver=Approve("session"))
+        connection, commands, _ = self.engine()
+        bridge.workspace = mock.Mock(bidi=connection)
+        bridge._sync_network()
+        self.assertFalse(bridge._request_allowed("http://127.0.0.1:9090/other"))
+        bridge.require("local_resources", "http://127.0.0.1:8080/app", checked=[])
+        self.assertEqual(commands[-1][0], "network.removeIntercept")
+        self.assertTrue(bridge._request_allowed("http://127.0.0.1:9090/other"))  # one still held follows it too
+
+    def test_what_the_user_allowed_for_a_call_ends_with_it(self):
+        # "Ask": the user is asked for the address the agent opens; its requests go on during that call only.
+        agent, _ = registry.add("ask-net", "other", "autonomous")
+        registry.grant(agent["id"], "local_resources", "ask")
+        bridge = tools.Bridge(agent["id"], "s-1", approver=Approve("once"))
+        self.addCleanup(bridge.close)
+        bridge.require("local_resources", "http://127.0.0.1:8080/app", checked=[])
+        self.assertEqual(bridge._local_ok, {("127.0.0.1", 8080)})
+        during = []
+
+        def tabs_list(_self, args, cancel, checked):
+            _self.require("local_resources", "http://127.0.0.1:8080/app", checked=checked)
+            during.append(set(_self._local_ok))
+            return _self._ok({"tabs": []}), None
+
+        with mock.patch.object(tools.Bridge, "_t_tabs_list", tabs_list):
+            self.assertFalse(bridge.call("tabs_list", {})["isError"])
+        self.assertEqual(during, [{("127.0.0.1", 8080)}])
+        self.assertEqual(bridge._local_ok, set())  # a page left open afterwards reaches it no more
+
+
 class WorkspaceTest(Home):
     def test_engine_ends_with_the_bridge(self):
         from nulavio_launcher.ai import workspace
@@ -1628,6 +1875,46 @@ class WorkspaceTest(Home):
         self.assertTrue(ws.dir.exists())
         ws.stop()
         self.assertFalse(ws.dir.exists())
+
+
+class BidiEventsTest(unittest.TestCase):
+    def test_events_with_a_handler_go_to_it_in_order_and_not_to_the_list(self):
+        # The network intercept's events are many: kept in `events`, they would push out the dialog
+        # events a call waits for. A handler that fails does not stop the ones after it.
+        seen, done = [], threading.Event()
+
+        class Socket:
+            def __init__(self, *_a, **_k):
+                self.queue: list[str] = []
+
+            def send_text(self, text):
+                if json.loads(text)["method"] == "session.new":
+                    self.queue.append(json.dumps({"type": "success", "id": json.loads(text)["id"], "result": {}}))
+
+            def recv_text(self):
+                while not self.queue:
+                    time.sleep(0.01)
+                return self.queue.pop(0)
+
+            def close(self):
+                pass
+
+        def handler(params):
+            seen.append(params["n"])
+            if params["n"] == 0:
+                raise RuntimeError("a handler's own bug")
+            if params["n"] == 2:
+                done.set()
+
+        with mock.patch.object(bidi_mod, "WebSocket", Socket):
+            connection = bidi_mod.Bidi(9)
+        connection.on("network.beforeRequestSent", handler)
+        frames = [{"type": "event", "method": "network.beforeRequestSent", "params": {"n": n}} for n in range(3)]
+        frames.insert(1, {"type": "event", "method": "browsingContext.userPromptOpened", "params": {"context": "t1"}})
+        connection.ws.queue.extend(json.dumps(f) for f in frames)
+        self.assertTrue(done.wait(5))
+        self.assertEqual(seen, [0, 1, 2])
+        self.assertEqual([e["method"] for _, e in connection.events], ["browsingContext.userPromptOpened"])
 
 
 class WebSocketTest(unittest.TestCase):
