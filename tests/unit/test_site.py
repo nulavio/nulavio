@@ -703,8 +703,8 @@ class SiteWorkflowTest(unittest.TestCase):
     """
 
     def setUp(self):
-        text = (ROOT / ".github/workflows/site.yml").read_text(encoding="utf-8")
-        lines = (re.sub(r"\s+#.*$", "", line) for line in text.splitlines())  # a comment after a value
+        self.text = (ROOT / ".github/workflows/site.yml").read_text(encoding="utf-8")
+        lines = (re.sub(r"\s+#.*$", "", line) for line in self.text.splitlines())  # a comment after a value
         self.lines = [line for line in lines if line.strip() and not line.lstrip().startswith("#")]
 
     @staticmethod
@@ -739,12 +739,16 @@ class SiteWorkflowTest(unittest.TestCase):
         self.assertEqual(self.keys(self.block(deploy, "permissions:")), ["contents: read"])
 
     def test_only_the_deploy_step_receives_the_token(self):
-        # Any use of the secrets context: secrets.X, secrets['X'], toJSON(secrets).
-        holders = [line.strip() for line in self.lines if re.search(r"\bsecrets\b", line)]
-        self.assertEqual(holders, ["CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}"])
+        # Counted in the raw file, comments included: a "#" inside a quoted value or a run script is
+        # not a comment, and GitHub evaluates the expressions there. Any use of the secrets context
+        # counts (secrets.X, secrets['X'], toJSON(secrets)), and so does a "secrets:" key (inherit).
+        uses = [m.group(0) for m in re.finditer(r"\$\{\{.*?\}\}", self.text, re.S) if re.search(r"\bsecrets\b", m.group(0))]
+        self.assertEqual(uses, ["${{ secrets.CLOUDFLARE_API_TOKEN }}"])
+        self.assertIsNone(re.search(r"^\s*-?\s*secrets\s*:", self.text, re.M))
         steps = self.block(self.block(self.block(self.lines, "jobs:"), "deploy:"), "steps:")
         deploy_step = self.block(steps, "- name: Deploy to Cloudflare Pages (production)")
-        self.assertIn(holders[0], [line.strip() for line in self.block(deploy_step, "env:")])
+        env = [line.strip() for line in self.block(deploy_step, "env:")]
+        self.assertIn("CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}", env)
 
 
 class VerifyLiveTest(unittest.TestCase):
