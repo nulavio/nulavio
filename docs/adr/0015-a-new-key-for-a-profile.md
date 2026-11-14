@@ -68,7 +68,7 @@ The new volume is built under `P.vault/rekey/`, beside the old one, which is onl
 - **Until the copy is whole, checked and on disk, nothing outside `rekey/` has changed.** An interruption there is undone: `rekey/` is removed, and the profile is as it was, its methods included.
 - **Then a marker is written, durably.** From there it is only ever finished, never undone: the new volume and key file take the old ones' place in steps that can each be repeated, and an interruption is finished from where it stopped. An error after the marker is reported as such ("the new key was made; putting it in place did not finish"), not as "nothing was changed".
 - **Either is done the next time the profile is used** (any command or page that touches it), under the profile's state lock. An unlock, and a change to the unlock methods, do it first under that same lock, so the old volume is never opened while a new one waits to take its place.
-- **The switch never happens under a mounted volume.** It renames and deletes the profile's encrypted directory, so it waits until nothing has that directory mounted.
+- **The switch never happens under a volume that is still served.** It renames and deletes the profile's encrypted directory, so it waits until nothing has that directory mounted and no gocryptfs process still holds it (a volume detached with files open is gone from the mount table and still written to).
 
 So after any interruption the profile opens with a method the person has: the ones from before, or the one that was typed. The typed method is carried or nothing changes: if it cannot be wrapped again, the new key is not made.
 

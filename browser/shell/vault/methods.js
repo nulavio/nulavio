@@ -183,7 +183,7 @@ function renderKey() {
 // What the tools answer when a new key is refused, or fails, with the profile left as it was.
 // Each of these is answered before the copy is marked whole, and what was begun is removed at once.
 const REFUSED_BEFORE = new Set([
-  "unlocked", "in-use", "no-space", "changed", "busy", "bad-secret", "metadata-tampered", "not-encrypted", "not-found",
+  "unlocked", "in-use", "no-space", "busy", "bad-secret", "metadata-tampered", "not-encrypted", "not-found",
   "copy-mismatch", "storage-failed", "storage-unavailable", "tools-missing", "failed", "rollback",
 ]);
 

@@ -169,7 +169,7 @@ class Container:
         self._gocryptfs(["-init", "-q", "-xchacha", "-scryptn", "10", str(self.cipher)], storage_password(vault))
 
     def mount(self, vault: Vault, idle_minutes: int | None = None) -> None:
-        if not self.exists():
+        if not self.vault_path.exists():
             raise StorageError("not-encrypted")
         if self.mounted():
             return
@@ -180,6 +180,8 @@ class Container:
             # A new key that was interrupted is finished or undone first (ADR 0015): never the old volume
             # opened while the new one waits to take its place. If it was finished, the key file changed.
             self._settle_new_key()
+            if not self.exists():  # after the above: while a new volume takes the old one's place, neither is at `cipher`
+                raise StorageError("not-encrypted")
             if not self._same_as_on_disk(vault):
                 # A change to the unlock methods finished while this waited for the lock: what was
                 # read is no longer the key file (checking it would look like a rollback).
@@ -211,7 +213,15 @@ class Container:
         (ADR 0015); None when there was nothing, or when what an undone one left could not be removed yet
         (the profile itself is untouched by it, and it is tried again next time). A switch that was begun
         and cannot be finished now raises: until it is, the volume and the key file may not match."""
-        begun = lambda: (self.root / REKEY / REKEY_COMPLETE).exists() or (self.root / "cipher.old").exists()  # noqa: E731
+        # Begun: the copy is marked whole and the new volume or key file is not in place yet. With both in
+        # place only clean-up is left (the old volume's directory, rekey/ itself): the pair matches.
+        staging = self.root / REKEY
+
+        def begun() -> bool:
+            return (staging / REKEY_COMPLETE).exists() and any(
+                (staging / name).exists() for name in ("cipher", "vault.json", "vault.json.bak")
+            )
+
         try:
             return _rekey_settle(self)
         except StorageError as exc:
@@ -745,21 +755,42 @@ def _rekey_remove_staging(box: Container) -> None:
         staging.rmdir()
 
 
-def _volume_in_use(box: Container) -> bool:
-    """Whether the profile's volume is mounted anywhere: at the profile's own directory, or from its
-    encrypted directory (also under the name it gets while the new one takes its place)."""
-    if box.mounted():
-        return True
-    sources = {str(path.resolve()) for path in (box.cipher, box.root / "cipher.old")}
-    try:
-        lines = Path("/proc/self/mountinfo").read_text().splitlines()
-    except OSError:
-        return False
-    for line in lines:
-        _, _, after = line.partition(" - ")
-        fields = after.split()
-        if len(fields) > 1 and fields[0].startswith("fuse") and _unescape(fields[1]) in sources:
+def _volume_in_use(box: Container, wait: float = 0.0) -> bool:
+    """Whether the profile's volume is mounted anywhere, or still served: at the profile's own directory,
+    from its encrypted directory (also under the name it gets while the new one takes its place), or by a
+    gocryptfs process that still has that directory (a volume detached with files open is gone from the
+    mount table and still written to). `wait`: how long to give a volume that was just unmounted to let go."""
+    paths = (box.cipher, box.root / "cipher.old")
+    sources = {str(path) for path in paths} | {str(path.resolve()) for path in paths}  # gocryptfs keeps the path as given
+
+    def now() -> bool:
+        if box.mounted():
             return True
+        try:
+            lines = Path("/proc/self/mountinfo").read_text().splitlines()
+        except OSError:
+            lines = []
+        for line in lines:
+            _, _, after = line.partition(" - ")
+            fields = after.split()
+            if len(fields) > 1 and fields[0].startswith("fuse") and _unescape(fields[1]) in sources:
+                return True
+        for entry in Path("/proc").iterdir():
+            if not entry.name.isdigit():
+                continue
+            try:
+                args = (entry / "cmdline").read_bytes().decode(errors="replace").split("\0")
+            except OSError:
+                continue  # gone meanwhile, or another user's
+            if args and Path(args[0]).name == "gocryptfs" and sources.intersection(args[1:]):
+                return True
+        return False
+
+    deadline = time.monotonic() + wait
+    while now():
+        if time.monotonic() >= deadline:
+            return True
+        time.sleep(0.1)
     return False
 
 
@@ -767,7 +798,7 @@ def _rekey_finish(box: Container) -> None:
     """The new volume and key file take the old ones' place. Every step can be repeated: started again
     after an interruption, it goes on from what it finds. Never while the profile's volume is mounted:
     its encrypted directory is renamed and deleted here."""
-    if _volume_in_use(box):
+    if _volume_in_use(box, wait=5.0):
         raise StorageError("busy", "the profile's volume is mounted; the new key is put in place once it is not")
     staging, old_cipher = box.root / REKEY, box.root / "cipher.old"
     if (staging / "cipher").exists():
@@ -836,7 +867,7 @@ def rekey(box: Container, old: Vault, carry) -> Vault:
             raise StorageError("changed", "the profile's key file changed since it was read; try again")
         if not box.exists():
             raise StorageError("not-encrypted")
-        if _volume_in_use(box):
+        if _volume_in_use(box, wait=5.0):  # a change made a moment ago may still be letting go of the volume
             raise StorageError("unlocked", "lock the profile first")
         staging = box.root / REKEY
         if not rekey_space(box)["enough"]:

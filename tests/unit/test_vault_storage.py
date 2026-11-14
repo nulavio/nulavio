@@ -696,6 +696,38 @@ class RekeyTest(StorageCase):
         )
         self.assertEqual(self.files(self.prof, password=PASSWORD), self.before)
 
+    def test_a_volume_detached_with_a_file_open_is_still_in_use(self):
+        # Review of #275, round 2: a volume detached while a file in it is open is gone from the mount table and
+        # still written to. The switch waits for the process that serves it, not only for the mount table.
+        box = profiles.container(self.prof)
+        profiles.unlock(self.prof, password=PASSWORD).lock()
+        with open(self.prof.path / "places.sqlite", "rb"):
+            tool = shutil.which("fusermount3") or "fusermount"
+            subprocess.run([tool, "-u", "-z", str(self.prof.path)], check=True, capture_output=True)
+            self.assertFalse(box.mounted())
+            self.assertTrue(storage._volume_in_use(box))
+        wait_for(lambda: not storage._volume_in_use(box))
+
+    def test_with_the_new_key_in_place_what_is_left_to_clean_does_not_stop_the_profile(self):
+        # Round 2: only the old volume's directory is left to delete, and that fails: the volume and the key file
+        # match, so the profile is used; the clean-up is tried again each time.
+        box = profiles.container(self.prof)
+        real = shutil.rmtree
+
+        def rmtree(target, *args, **kwargs):
+            if str(target).endswith("cipher.old"):
+                raise OSError(5, "Input/output error")
+            return real(target, *args, **kwargs)
+
+        with mock.patch.object(storage.shutil, "rmtree", rmtree):
+            with self.assertRaises(VaultError) as ctx:
+                self.api(self.prof, "rekey", current=PASSWORD)
+            self.assertEqual(ctx.exception.code, "rekey-unfinished")
+            self.assertEqual(self.files(self.prof, password=PASSWORD), self.before)  # used, with the clean-up still failing
+            self.assertTrue((box.root / "cipher.old").exists())
+        self.assertEqual([m["method"] for m in profiles.status(self.prof)["methods"]], ["password"])
+        self.assertFalse((box.root / "cipher.old").exists() or (box.root / storage.REKEY).exists())
+
 
 class CoreDumpTest(unittest.TestCase):
     def test_vault_commands_and_gocryptfs_write_no_core_dumps(self):
