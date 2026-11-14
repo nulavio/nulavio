@@ -1,0 +1,120 @@
+Subject: [PATCH] profiles: unlock a protected profile before the chooser starts it
+
+The profile group's chooser (about:profilemanager) is the window a plain
+start shows when it is on, and the one Nulavio's "Gerenciar perfis" opens
+from a running profile. It knows nothing of Nulavio's protected profiles
+(the Vault, ADR 0006): a locked one is listed like any other, and choosing
+it starts the engine on the locked volume's empty, read-only mountpoint,
+which ends in "already running, but not responding" (#43, R18).
+
+This patch asks a Nulavio module before every launch from the chooser
+(open, edit, delete: they all go through launchProfile), and shows the
+module's word for a locked profile in the corner of its card. The module,
+browser/shell/chooser/chooser.mjs, lives in the Shell's directory, which
+resource://builtin-addons/ reaches before any profile has started. It
+reads each profile's lock state from the Vault helper and, for a locked
+one, asks for its password, this computer's login or its recovery code,
+unlocks it, and only then lets the launch go on. When the module cannot
+be loaded, the chooser stays the engine's own.
+
+Owner: Nulavio maintainers
+Upstream: not applicable (Nulavio's protected profiles).
+---
+--- a/browser/components/profiles/content/profile-card.mjs
++++ b/browser/components/profiles/content/profile-card.mjs
+@@ -24,6 +24,8 @@
+ export class ProfileCard extends MozLitElement {
+   static properties = {
+     profile: { type: SelectableProfile, reflect: true },
++    // Nulavio: the word for a locked protected profile, or null (chooser.mjs).
++    nulavioLock: { type: String },
+   };
+ 
+   static queries = {
+@@ -108,6 +110,7 @@
+       <moz-card
+         data-l10n-id="profile-card"
+         data-l10n-args=${JSON.stringify({ profileName: this.profile.name })}
++        aria-describedby=${this.nulavioLock ? "nulavio-lock" : ""}
+         class="profile-card"
+         role="button"
+         tabindex="0"
+@@ -117,6 +120,16 @@
+         <div class="profile-background-container">
+           <div class="profile-background-image"></div>
+           <div class="profile-avatar"></div>
++          ${this.nulavioLock
++            ? html`<link
++                  rel="stylesheet"
++                  href="resource://builtin-addons/nulavio-shell/chooser/chooser.css"
++                />
++                <span class="nulavio-lock" id="nulavio-lock"
++                  ><img src="chrome://global/skin/icons/security.svg" alt="" />${this
++                    .nulavioLock}</span
++                >`
++            : ""}
+         </div>
+         <div class="profile-details">
+           <h3 class="text-truncated-ellipsis">${this.profile.name}</h3>
+--- a/browser/components/profiles/content/profile-selector.mjs
++++ b/browser/components/profiles/content/profile-selector.mjs
+@@ -21,6 +21,7 @@
+   static properties = {
+     profiles: { type: Array },
+     showSelector: { type: Boolean },
++    nulavioLocks: { type: Object },
+   };
+ 
+   static queries = {
+@@ -93,7 +94,19 @@
+ 
+     await this.selectableProfileService.init();
+     await this.selectableProfileService.maybeSetupDataStore();
+-    this.profiles = await this.selectableProfileService.getAllProfiles();
++    let profiles = await this.selectableProfileService.getAllProfiles();
++    // Nulavio: which profiles are locked protected profiles (browser/shell/chooser/chooser.mjs).
++    // Without it the chooser stays the engine's own.
++    try {
++      this.nulavio = await import(
++        "resource://builtin-addons/nulavio-shell/chooser/chooser.mjs"
++      );
++      this.nulavioLocks = await this.nulavio.lockStates(profiles);
++    } catch (e) {
++      console.error("Nulavio chooser", e);
++      this.nulavio = null;
++    }
++    this.profiles = profiles;
+     this.showSelector =
+       this.selectableProfileService.groupToolkitProfile.showProfileSelector;
+ 
+@@ -122,6 +135,17 @@
+   }
+ 
+   async launchProfile(profile, url) {
++    // Nulavio: a locked protected profile is unlocked first; false when the person went back.
++    if (
++      this.nulavio &&
++      !(await this.nulavio.beforeLaunch(
++        document,
++        profile,
++        this.nulavioLocks?.get(profile.id)
++      ))
++    ) {
++      return;
++    }
+     if (this.isStartupUI) {
+       await this.setLaunchArguments(profile, url ? ["-url", url] : []);
+       await this.selectableProfileService.uninit();
+@@ -180,7 +204,11 @@
+       <p class="profiles-body-text" data-l10n-id="profile-window-body"></p>
+       <div class="profile-list">
+         ${this.profiles.map(
+-          p => html`<profile-card .profile=${p}></profile-card>`
++          p =>
++            html`<profile-card
++              .profile=${p}
++              .nulavioLock=${this.nulavioLocks?.get(p.id)?.label ?? null}
++            ></profile-card>`
+         )}
+         <new-profile-card></new-profile-card>
+       </div>
