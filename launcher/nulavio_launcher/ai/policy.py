@@ -277,6 +277,23 @@ def _whatwg_ipv4(host: str) -> str | None:
     return str(ipaddress.IPv4Address(value))
 
 
+def canonical_host(host: str) -> str:
+    """A host as the engine writes it in the requests it sends: lower case, punycode, no final dot, an
+    IPv4 address dotted (127.1 is 127.0.0.1), an IPv6 address compressed. Unchanged when it reads as none."""
+    host = host.lower().rstrip(".")
+    if ":" in host:
+        try:
+            return ipaddress.IPv6Address(host.strip("[]")).compressed
+        except ValueError:
+            return host
+    if _ends_in_number(host):
+        return _whatwg_ipv4(host) or host
+    try:
+        return host.encode("idna").decode("ascii")
+    except UnicodeError:
+        return host
+
+
 def is_address(host: str) -> bool:
     """An IP address, in any form the engine reads as one: what it is needs no lookup."""
     host = host.strip("[]")

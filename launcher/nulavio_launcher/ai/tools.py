@@ -833,7 +833,8 @@ class Bridge:
             return None
         if not parts.hostname:
             return None
-        return parts.hostname, port or (443 if scheme == "https" else 80)
+        # As the engine writes it: an approval of http://127.1/ is a request to 127.0.0.1.
+        return policy.canonical_host(parts.hostname), port or (443 if scheme == "https" else 80)
 
     def _request_allowed(self, url: str, wait: bool = True) -> bool | None:
         """A request may leave unless it goes to this computer or the local network, and the current call

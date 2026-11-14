@@ -1617,6 +1617,12 @@ class LocalRequestsTest(Home):
             self.assertEqual(held("http://127.0.0.1:2375/containers")[0], "network.failRequest")
             self.assertEqual(held("http://10.0.0.9/other")[0], "network.failRequest")
             self.assertIsNone(tools.Bridge._request_place("http://127.0.0.1:99999/"))  # no place: refused, no error
+            # Codex review: an approval is matched as the engine writes the host it sends the request to.
+            same = (("http://127.1/", "http://127.0.0.1/"), ("http://0x7f000001:8080/", "http://127.0.0.1:8080/x"),
+                    ("http://[0:0:0:0:0:0:0:1]/", "http://[::1]/"), ("http://LOCALHOST./", "http://localhost/"))  # fmt: skip
+            for asked, sent in same:
+                bridge._local_ok = {tools.Bridge._request_place(asked)}
+                self.assertEqual(held(sent)[0], "network.continueRequest", (asked, sent))
             # Anything unexpected fails the request: closed, not open.
             with mock.patch.object(tools.Bridge, "_request_allowed", side_effect=RuntimeError("bug")):
                 self.assertEqual(held("https://example.org/a")[0], "network.failRequest")
