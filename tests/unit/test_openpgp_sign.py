@@ -121,6 +121,31 @@ class OpenPgpSignTest(unittest.TestCase):
         doc.write_bytes(data)
         return self.gpg("--status-fd", "1", "--verify", str(sig), str(doc), check=False)
 
+    def test_a_signature_at_or_above_the_modulus_is_refused(self):
+        # RFC 8017, 5.2.2: pow() alone would reduce s + n to s; gpg refuses such a signature.
+        size = (self.n.bit_length() + 7) // 8
+        for attempt in range(256):
+            data = attempt.to_bytes(2, "big")
+            first = ops.signature_packet(data, self.key, self.local_signer, created=1_700_000_000)
+            raised = None
+
+            def plus_n(digest: bytes) -> bytes:
+                nonlocal raised
+                value = int.from_bytes(self.local_signer(digest), "big") + self.n
+                raised = value
+                return value.to_bytes(size, "big") if value < 1 << (8 * size) else b""
+
+            try:
+                ops.signature_packet(data, self.key, plus_n, created=1_700_000_000)
+            except ops.SignError as error:
+                if raised is not None and raised < 1 << (8 * size):
+                    self.assertIn("does not verify", str(error))
+                    return
+                continue
+            self.fail("a signature of s + n was accepted")
+        self.assertTrue(first)
+        self.skipTest("no signature of this key leaves room for s + n in its length")
+
     def test_fingerprint_matches_gpg(self):
         listing = self.gpg("--with-colons", "--list-keys").stdout.decode()
         fpr = next(line.split(":")[9] for line in listing.splitlines() if line.startswith("fpr:"))

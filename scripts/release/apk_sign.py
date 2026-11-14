@@ -7,7 +7,7 @@ KMS only for the RSA operation over SHA-256 digests, the way openpgp_sign.py doe
 the packages. What it writes is what `apksigner sign` writes for a key without
 rotation: a v2 and a v3 signer, RSASSA-PKCS1-v1_5 with SHA-256 over the APK's content
 in 1 MiB chunks, and no v1 (JAR) signature, which the app does not need (minSdk 30).
-`apksigner verify` is the check; scripts/release/test_apk_signing.sh runs it in CI.
+`apksigner verify` is the check; tests/unit/test_apk_sign.py runs it, in CI too.
 
 Once, by the maintainer, after the key exists: the key's self-signed certificate,
 which is what Android compares on every update and what people check by its SHA-256:
@@ -182,8 +182,10 @@ def checked_signer(modulus: int, exponent: int, signer: Signer) -> Signer:
         raw = signer(digest)
         if len(raw) != size:
             raise SignError(f"the signer returned {len(raw)} bytes, the key needs {size}")
-        expected = int.from_bytes(ops.emsa_pkcs1_v15(digest, size), "big")
-        if pow(int.from_bytes(raw, "big"), exponent, modulus) != expected:
+        value, expected = int.from_bytes(raw, "big"), int.from_bytes(ops.emsa_pkcs1_v15(digest, size), "big")
+        # RFC 8017, 5.2.2: a signature representative must be below the modulus. pow() would reduce
+        # s + n to s and accept a value every verifier refuses.
+        if value >= modulus or pow(value, exponent, modulus) != expected:
             raise SignError("the signature does not verify with the certificate's key: wrong KMS key?")
         return raw
 
@@ -202,18 +204,41 @@ def prefixed(data: bytes) -> bytes:
 
 
 def zip_layout(apk: bytes) -> tuple[int, int]:
-    """(offset of the central directory, offset of the end of central directory record)."""
+    """(offset of the central directory, offset of the end of central directory record).
+
+    Only a plain ZIP is signed: exactly one end record that fits the file's end, no ZIP64, and
+    a central directory whose records, walked one by one, are the number the end record gives
+    and fill exactly the space it gives. Anything else could make the digest cover something
+    other than what Android reads."""
     lowest = max(0, len(apk) - EOCD_SIZE - 0xFFFF)
-    for eocd in range(len(apk) - EOCD_SIZE, lowest - 1, -1):
-        if apk[eocd : eocd + 4] == EOCD_SIGNATURE and eocd + EOCD_SIZE + struct.unpack_from("<H", apk, eocd + 20)[0] == len(apk):
-            break
-    else:
+    found = [
+        eocd
+        for eocd in range(len(apk) - EOCD_SIZE, lowest - 1, -1)
+        if apk[eocd : eocd + 4] == EOCD_SIGNATURE and eocd + EOCD_SIZE + struct.unpack_from("<H", apk, eocd + 20)[0] == len(apk)
+    ]
+    if not found:
         raise SignError("not a ZIP file: no end of central directory record")
+    if len(found) > 1:
+        raise SignError("more than one end of central directory record fits the file's end (one inside a comment)")
+    eocd = found[0]
     disk, cd_disk, entries_here, entries, cd_size, cd_offset = struct.unpack_from("<HHHHII", apk, eocd + 4)
-    if (disk, cd_disk) != (0, 0) or entries_here != entries or 0xFFFFFFFF in (cd_size, cd_offset):
-        raise SignError("multi-disk and ZIP64 archives are not APKs this script signs")
+    zip64 = 0xFFFF in (entries_here, entries) or 0xFFFFFFFF in (cd_size, cd_offset)
+    if zip64 or (eocd >= 20 and apk[eocd - 20 : eocd - 16] == b"PK\x06\x07"):
+        raise SignError("ZIP64 archives are not APKs this script signs")
+    if (disk, cd_disk) != (0, 0) or entries_here != entries:
+        raise SignError("multi-disk archives are not APKs this script signs")
     if cd_offset + cd_size != eocd:
         raise SignError("the central directory does not end where the end record starts")
+    position = cd_offset
+    for _ in range(entries):
+        if position + 46 > eocd or apk[position : position + 4] != b"PK\x01\x02":
+            raise SignError("the central directory holds fewer records than the end record says")
+        name, extra, comment = struct.unpack_from("<HHH", apk, position + 28)
+        if struct.unpack_from("<I", apk, position + 42)[0] >= cd_offset:
+            raise SignError("a central directory record points past the entries")
+        position += 46 + name + extra + comment
+    if position != eocd:
+        raise SignError("the central directory's records do not fill exactly the size the end record gives")
     if cd_offset >= 32 and apk[cd_offset - 16 : cd_offset] == MAGIC:
         raise SignError("the APK is already signed (it has an APK Signing Block); give the unsigned build")
     return cd_offset, eocd

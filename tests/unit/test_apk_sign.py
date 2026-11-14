@@ -176,6 +176,70 @@ class ApkSignTest(unittest.TestCase):
         with self.assertRaisesRegex(apk_sign.SignError, "not a ZIP"):
             apk_sign.sign_apk(b"not an apk" * 10, self.cert, self.signer)
 
+    def test_a_signature_at_or_above_the_modulus_is_refused(self):
+        # RFC 8017, 5.2.2: pow() alone would reduce s + n to s and accept what apksigner refuses.
+        size = (self.n.bit_length() + 7) // 8
+        for attempt in range(256):
+            digest = hashlib.sha256(attempt.to_bytes(2, "big")).digest()
+            raised = int.from_bytes(self.signer(digest), "big") + self.n
+            if raised < 1 << (8 * size):
+                break
+        else:
+            self.skipTest("no signature of this key leaves room for s + n in its length")
+        checked = apk_sign.checked_signer(self.n, self.e, lambda _digest: raised.to_bytes(size, "big"))
+        with self.assertRaisesRegex(apk_sign.SignError, "does not verify"):
+            checked(digest)
+
+    def test_a_zip_that_could_be_read_two_ways_is_refused(self):
+        apk = self.unsigned
+        _, eocd = apk_sign.zip_layout(apk)
+
+        def edited(offset: int, fmt: str, *values: int) -> bytes:
+            data = bytearray(apk)
+            struct.pack_into(fmt, data, offset, *values)
+            return bytes(data)
+
+        # The end record's comment holds a second end record that also fits the file's end.
+        fake = struct.pack("<4sHHHHIIH", b"PK\x05\x06", 0, 0, 0, 0, 0, len(apk), 0)
+        cases = {
+            "an end record inside the comment": (apk[:-2] + struct.pack("<H", len(fake)) + fake, "more than one end"),
+            "ZIP64 entry counts": (edited(eocd + 8, "<HH", 0xFFFF, 0xFFFF), "ZIP64"),
+            "a ZIP64 size": (edited(eocd + 12, "<I", 0xFFFFFFFF), "ZIP64"),
+            "a ZIP64 offset": (edited(eocd + 16, "<I", 0xFFFFFFFF), "ZIP64"),
+            "a ZIP64 locator": (apk[:eocd] + struct.pack("<4sIQI", b"PK\x06\x07", 0, 0, 1) + apk[eocd:], "ZIP64|does not end"),
+            "fewer entries than records": (edited(eocd + 8, "<HH", 2, 2), "do not fill exactly"),
+            "more entries than records": (edited(eocd + 8, "<HH", 4, 4), "fewer records"),
+            "a size that leaves a gap": (
+                edited(eocd + 12, "<I", struct.unpack_from("<I", apk, eocd + 12)[0] - 1),
+                "does not end",
+            ),
+        }
+        for name, (data, message) in cases.items():
+            with self.subTest(name), self.assertRaisesRegex(apk_sign.SignError, message):
+                apk_sign.sign_apk(data, self.cert, self.signer)
+
+    def test_the_v2_signer_says_v3_is_there_so_v3_cannot_be_stripped(self):
+        # The stripping-protection attribute: an APK whose v3 block was removed fails verification
+        # even for a device that reads v2 only, instead of passing as v2-signed.
+        signed = apk_sign.sign_apk(self.unsigned, self.cert, self.signer)
+        cd_offset, eocd = apk_sign.zip_layout(self.unsigned)
+        block = signed[cd_offset : cd_offset + len(signed) - len(self.unsigned)]
+        pairs, position = [], 8
+        while position < len(block) - 24:
+            length, block_id = struct.unpack_from("<QI", block, position)
+            pairs.append((block_id, block[position + 12 : position + 8 + length]))
+            position += 8 + length
+        self.assertEqual([block_id for block_id, _ in pairs], [apk_sign.V2_BLOCK_ID, apk_sign.V3_BLOCK_ID])
+        only_v2 = b"".join(struct.pack("<QI", len(v) + 4, i) + v for i, v in pairs if i == apk_sign.V2_BLOCK_ID)
+        size = struct.pack("<Q", len(only_v2) + 24)
+        stripped_block = size + only_v2 + size + apk_sign.MAGIC
+        end = bytearray(self.unsigned[eocd:])
+        struct.pack_into("<I", end, 16, cd_offset + len(stripped_block))
+        stripped = self.unsigned[:cd_offset] + stripped_block + self.unsigned[cd_offset:eocd] + bytes(end)
+        result = self.apksigner(stripped, "stripped.apk")
+        self.assertNotEqual(result.returncode, 0, result.stdout)
+        self.assertIn("v3", (result.stdout + result.stderr).lower())
+
     def test_a_signer_with_another_key_is_refused_before_anything_is_written(self):
         n, _, d = rsa_key()
         with self.assertRaisesRegex(apk_sign.SignError, "does not verify"):

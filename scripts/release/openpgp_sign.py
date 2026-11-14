@@ -241,7 +241,8 @@ def signature_packet(
     if len(raw) != size:
         raise SignError(f"the signer returned {len(raw)} bytes, the key needs {size}")
     value = int.from_bytes(raw, "big")
-    if pow(value, key.exponent, key.modulus) != int.from_bytes(emsa_pkcs1_v15(digest, size), "big"):
+    # Below the modulus (RFC 8017, 5.2.2): pow() would reduce s + n to s and accept what gpg refuses.
+    if value >= key.modulus or pow(value, key.exponent, key.modulus) != int.from_bytes(emsa_pkcs1_v15(digest, size), "big"):
         raise SignError("the signature does not verify with the public key: wrong KMS key?")
     unhashed = subpacket(SUBPACKET_ISSUER_KEY_ID, key.key_id)
     body = hashed_part + len(unhashed).to_bytes(2, "big") + unhashed + digest[:2] + mpi(value)
