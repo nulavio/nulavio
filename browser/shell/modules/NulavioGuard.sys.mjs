@@ -539,7 +539,10 @@ class Guard {
    * the browser's doing, as it is at any later look. The look that follows takes its result into the record.
    */
   static withoutOwnDoings(findings, touched = new Set()) {
-    return findings.filter(f => !(f.kind.startsWith("extension-") && touched.has(f.key)));
+    // An extension another program placed stays reported whatever the browser did to it since (as in
+    // madeOutside): the look that follows would find it already in the record and say nothing.
+    const placed = f => f.kind === "extension-added" && Boolean(f.after?.foreign);
+    return findings.filter(f => !f.kind.startsWith("extension-") || !touched.has(f.key) || placed(f));
   }
 
   static withoutHeldUpdates(findings, expected, installed = {}) {

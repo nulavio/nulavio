@@ -521,15 +521,18 @@ class GuardTest(unittest.TestCase):
         # (review of #264): only that extension's findings go, and the look that follows takes the result.
         own = self.guard(
             """
-            const f = (kind, key) => ({ id: `${kind}:${key}`, kind, key });
+            const f = (kind, key, after) => ({ id: `${kind}:${key}`, kind, key, after });
             const findings = [
               f("extension-changed", "mine@x"), f("extension-changed", "theirs@x"), f("extension-removed", "mine@x"),
               f("pref-changed", "mine@x"), f("root-added", "aa"),
+              f("extension-added", "mine@x", { foreign: false }),   // installed in the browser as it started
+              f("extension-added", "placed@x", { foreign: true }),  // placed by another program, then switched on here
             ];
-            return G.constructor.withoutOwnDoings(findings, new Set(["mine@x"])).map(x => x.id);
+            return G.constructor.withoutOwnDoings(findings, new Set(["mine@x", "placed@x"])).map(x => x.id);
             """
         )
-        self.assertEqual(own, ["extension-changed:theirs@x", "pref-changed:mine@x", "root-added:aa"])
+        kept = ["extension-changed:theirs@x", "pref-changed:mine@x", "root-added:aa", "extension-added:placed@x"]
+        self.assertEqual(own, kept)
         reported = {name for name, kinds in rules.items() if kinds == ["extension-changed"]}
         self.assertEqual(reported, {"other", "unreadable", "version"}, rules)
         self.assertEqual([rules[name] for name in ("same", "oldRecord", "noFile")], [[], [], []], rules)
