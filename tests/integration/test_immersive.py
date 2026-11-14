@@ -89,6 +89,28 @@ EDGE = "window.synthesizeMouseEvent('mousemove', 2, Math.round(innerHeight / 2),
 AWAY = "window.synthesizeMouseEvent('mousemove', Math.round(innerWidth / 2), Math.round(innerHeight / 2), {}, {});"
 
 
+# #239: where a click lands, by what is drawn there; and a click there through the window (as a person's).
+CLICK_AT = """
+const [x, y] = arguments[0];
+window.synthesizeMouseEvent('mousedown', x, y, {button: 0, clickCount: 1}, {});
+window.synthesizeMouseEvent('mouseup', x, y, {button: 0, clickCount: 1}, {});
+"""
+SPOTS = """
+const box = id => document.getElementById(id).getBoundingClientRect();
+const page = box('browser'), band = box('nulavio-band'), tabs = box('sidebar-container');
+// A point of the band that is not one of its controls (they decide where the keyboard goes themselves).
+let free = null;
+for (let x = band.right - 4; x > band.left && !free; x -= 6) {
+  const e = document.elementFromPoint(x, band.top + band.height / 2);
+  const control = e?.closest('button, toolbarbutton, [role=button], a');
+  if (e && document.getElementById('nulavio-band').contains(e) && !control) free = [x, band.top + band.height / 2];
+}
+return { page: [page.left + page.width / 2, page.top + page.height * 0.6], band: free,
+         tabs: [tabs.left + tabs.width / 2, tabs.top + tabs.height * 0.7] };
+"""
+FOCUS = "return { urlbar: gURLBar.focused, active: document.activeElement?.id || document.activeElement?.localName };"
+
+
 @unittest.skipUnless(harness.nulavio_engine(), "Immersive needs the built-in Shell on the engine")
 class ImmersiveTest(unittest.TestCase):
     @classmethod
@@ -542,6 +564,54 @@ class ImmersiveTest(unittest.TestCase):
                     self.assertFalse(overlap(toolbar["toolbar"], toolbar["tabs"]), toolbar)
                     self.m.chrome("gBrowser.selectedBrowser.focus();")
                     parts(False, False)
+
+    def test_14_a_click_outside_the_toolbar_takes_the_keyboard_out_of_the_address_bar(self):
+        """#239: after the keyboard was in the address bar, a click on a page (a site, or one of the browser's own in
+        the same process), on the tab list or on the band gives the focus to the page, and the toolbar goes. The
+        engine leaves it in the address bar after a click on something that takes no focus; with the mode on the
+        toolbar then stayed over the page."""
+        layout = f"const d = arguments[arguments.length - 1]; {LAYOUT}.apply(window, arguments[0]).then(d, e => d(String(e)));"
+
+        def apply(preset):
+            self.m.set_context("chrome")
+            try:
+                return self.m.execute_async(layout, [preset])
+            finally:
+                self.m.set_context("content")
+
+        before = self.m.chrome(f"return {LAYOUT}.state(window).then(state => state.preset);")
+        self.addCleanup(apply, before)
+        self.addCleanup(self.m.chrome, AWAY)
+        apply("lateral")
+        for page in (self.page, "about:preferences#privacy"):
+            self.m.navigate(page)
+            self.assertTrue(harness.wait_until(lambda: self.window()["on"], 10), self.window())
+            for spot in ("page", "tabs", "band"):
+                with self.subTest(page=page.split("/")[-1], spot=spot):
+                    self.m.chrome(AWAY + "gBrowser.selectedBrowser.focus();")
+                    self.assertFalse(self.settled(False)["toolbar"])
+                    if spot == "tabs":
+                        self.m.chrome(EDGE)
+                        self.assertTrue(harness.wait_until(lambda: self.m.chrome(PARTS)["tabs"]["shown"], 6))
+                    self.m.chrome("document.getElementById('Browser:OpenLocation').doCommand();")
+                    self.assertTrue(self.settled(True)["toolbar"])
+                    self.assertTrue(self.m.chrome(FOCUS)["urlbar"])
+                    at = self.m.chrome(SPOTS)[spot]
+                    self.assertIsNotNone(at, "no free point on the band")
+                    self.m.chrome(CLICK_AT, [at])
+                    self.assertTrue(harness.wait_until(lambda: not self.m.chrome(FOCUS)["urlbar"], 5), self.m.chrome(FOCUS))
+                    self.m.chrome(AWAY)
+                    self.assertFalse(self.settled(False)["toolbar"], spot)
+        # Not on the toolbar itself: a click in the address bar keeps the keyboard there.
+        self.m.chrome("document.getElementById('Browser:OpenLocation').doCommand();")
+        self.assertTrue(self.settled(True)["toolbar"])
+        field = self.m.chrome(
+            "const b = gURLBar.inputField.getBoundingClientRect(); return [b.left + b.width / 2, b.top + b.height / 2];"
+        )
+        self.m.chrome(CLICK_AT, [field])
+        time.sleep(0.5)
+        self.assertTrue(self.m.chrome(FOCUS)["urlbar"])
+        self.m.chrome("gBrowser.selectedBrowser.focus();")
 
 
 if __name__ == "__main__":

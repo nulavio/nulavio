@@ -549,6 +549,36 @@ class WindowUI {
     for (const each of doc.querySelectorAll("#navigator-toolbox > toolbar:not(#nulavio-band)")) {
       sizes.observe(each);
     }
+    // ADR 0009, #239: in Immersive the toolbar stays while the keyboard is in it. The engine leaves the focus in the
+    // address bar after a click on something that takes none (the tab list, the band, an in-process page such as
+    // Settings); with the mode off that changes nothing on screen, with it on the toolbar stayed over the page.
+    // A click outside the toolbar, with nothing anchored on it open, gives the focus to the page instead, as a
+    // click on a web page does. The window root also sees the clicks inside in-process pages.
+    const outside = event => {
+      const root = doc.documentElement;
+      if (!event.isTrusted || event.button !== 0 || !root.hasAttribute("nulavio-immersive") || root.hasAttribute("nulavio-immersive-hold")) {
+        return;
+      }
+      const toolbox = doc.getElementById("navigator-toolbox");
+      const target = event.composedTarget ?? event.target;
+      const inChrome = target?.ownerDocument === doc;
+      if (inChrome && ((toolbox?.contains(target) && !bar.contains(target)) || target.closest?.("panel, menupopup"))) {
+        return; // the toolbar itself, or a popup
+      }
+      if (inChrome && bar.contains(target) && target.closest?.("button, toolbarbutton, [role=button], a")) {
+        return; // a control of the band: it decides where the keyboard goes
+      }
+      if (!toolbox?.matches(":focus-within")) {
+        return;
+      }
+      // After the engine has handled the click (a tab it selects, a page it focuses), only if the keyboard is still there.
+      win.setTimeout(() => {
+        if (this.#windows.has(win) && toolbox.matches(":focus-within") && root.hasAttribute("nulavio-immersive")) {
+          win.gBrowser.selectedBrowser.focus();
+        }
+      }, 0);
+    };
+    win.windowRoot.addEventListener("mousedown", outside, true);
     const unload = () => this.#detach(win);
     win.addEventListener("unload", unload, { once: true });
     const reveal = () => this.#showNotice(win);
@@ -569,7 +599,7 @@ class WindowUI {
       identityObserver.observe(identityBox, { attributes: true, attributeFilter: ["class"] });
     }
     this.#windows.set(win, { bar, compact, fullscreen, line, sheet, progress, header, unload, pointer, screenObserver, identityObserver, edge,
-      popup, sharing, dialog, downloads, notices, sizes, holds: new Map(), named: false, noticeTimer: null, safety: null, restoreGroupPalette: this.#groupPalette(win),
+      popup, sharing, dialog, downloads, notices, sizes, outside, holds: new Map(), named: false, noticeTimer: null, safety: null, restoreGroupPalette: this.#groupPalette(win),
       restoreIdentity: this.#ownPagesIdentity(win) });
     this.#downloadHold(win);
     this.#noticeHold(win);
@@ -1204,6 +1234,7 @@ class WindowUI {
     state.screenObserver.disconnect();
     state.identityObserver.disconnect();
     state.sizes.disconnect();
+    win.windowRoot?.removeEventListener("mousedown", state.outside, true);
     win.document.documentElement.style.removeProperty("--nv-immersive-toolbar-size");
     state.bar.remove();
     state.fullscreen.remove();
