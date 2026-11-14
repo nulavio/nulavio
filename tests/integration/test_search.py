@@ -325,6 +325,58 @@ class SearchPrivacyTest(unittest.TestCase):
             self.search("await S.setDefault(args[0]);", previous)
             self.search("await S.remove(args[0]);", added["id"])
 
+    def test_05d_the_engines_own_dialog_takes_a_plain_http_address(self):
+        """Issue #112, the dialog itself: "Adicionar mecanismo de pesquisa", opened as its button opens it, takes
+        a plain-http search address and suggestion address with no word said, and the engine keeps them as given.
+        What then happens to what is typed is 05c."""
+        self.require_nulavio()
+        settings_page.open_pane(self.m, "search")
+        doc = (
+            settings_page.DOC + "const dialog = w.gSubDialog._topDialog; const f = dialog?._frame;"
+            "const dd = f?.contentDocument?.readyState === 'complete' ? f.contentDocument : null;"
+        )
+        self.m.chrome(
+            settings_page.DOC + "w.gSubDialog.open('chrome://browser/content/search/addEngine.xhtml',"
+            " { features: 'resizable=no, modal=yes' }, { mode: 'NEW' });"
+        )
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome(doc + "return Boolean(dd?.getElementById('engineUrl'));"), 15))
+        base = "http://nulavio-plain.test"
+        fill = (
+            doc + "for (const [id, value] of arguments[0]) {"
+            " const input = dd.getElementById(id); input.value = value;"
+            " input.dispatchEvent(new f.contentWindow.Event('input', { bubbles: true })); }"
+        )
+        self.m.chrome(
+            fill, [[["engineName", "Plain dialog"], ["engineUrl", f"{base}/search?q=%s"], ["suggestUrl", f"{base}/suggest?q=%s"]]]
+        )
+        state = (
+            doc + "return { url: dd.getElementById('engineUrl').validationMessage,"
+            " suggest: dd.getElementById('suggestUrl').validationMessage,"
+            " errors: [...dd.querySelectorAll('.error-label')].map(e => e.textContent).filter(Boolean),"
+            " accept: !dd.querySelector('dialog').getButton('accept').disabled };"
+        )
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome(state)["accept"], 10), self.m.chrome(state))
+        self.assertEqual(self.m.chrome(state), {"url": "", "suggest": "", "errors": [], "accept": True})
+        # A scheme other than http(s) is refused by the same check: the field is there and it does validate.
+        self.m.chrome(fill, [[["engineUrl", "ftp://nulavio-plain.test/search?q=%s"]]])
+        self.assertTrue(harness.wait_until(lambda: not self.m.chrome(state)["accept"], 10), self.m.chrome(state))
+        self.m.chrome(fill, [[["engineUrl", f"{base}/search?q=%s"]]])
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome(state)["accept"], 10), self.m.chrome(state))
+        self.m.chrome(doc + "dd.querySelector('dialog').acceptDialog();")
+        engine = (
+            'const { SearchService } = ChromeUtils.importESModule("moz-src:///toolkit/components/search/SearchService.sys.mjs");'
+            "const e = SearchService.getEngineByName('Plain dialog');"
+            "if (!e) return null; const suggest = e.getSubmission('x', 'application/x-suggestions+json');"
+            "return { id: e.id, search: e.getSubmission('nvdialog').uri.spec, suggest: suggest?.uri.spec ?? null };"
+        )
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome(engine), 10))
+        added = self.m.chrome(engine)
+        try:
+            self.assertEqual(added["search"], f"{base}/search?q=nvdialog")
+            self.assertEqual(added["suggest"], f"{base}/suggest?q=x")
+        finally:
+            self.search("await S.remove(args[0]);", added["id"])
+
     def test_06_alias_search_goes_straight_to_its_engine(self):
         self.require_nulavio()
         fixture = self.search(
