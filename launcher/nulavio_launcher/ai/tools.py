@@ -17,6 +17,8 @@ import time
 import urllib.parse
 import weakref
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FutureTimeout
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -203,6 +205,10 @@ FORMS_OPEN_FN = "() => (globalThis.nulavioForms ? globalThis.nulavioForms.open()
 DIALOG = "dialog"  # in place of a count: sending the form opened a dialog (a submit handler that asks), which holds it
 FORMS_FRAMES = 60  # documents of one tab asked directly; the others still carry the guard from their creation
 LOCAL_HOST_TTL = 60.0  # seconds a name's answer (local or not) is kept for the requests that follow
+LOCAL_HOSTS_KEPT = 2048  # names whose answer is kept; the older half goes when it is full
+LOCAL_LOOKUP_TIMEOUT = 3.0  # seconds a name may take to resolve before its request fails
+LOCAL_REFUSED_NOTED = 20  # places a session's refused requests are listed for in the activity
+NET_WORKERS, NET_RESOLVERS = 8, 4  # threads that decide held requests, and that resolve names for them
 
 
 class Denied(Exception):
@@ -358,9 +364,13 @@ class Bridge:
         self._net_intercepts: weakref.WeakKeyDictionary[Bidi, str] = weakref.WeakKeyDictionary()  # -> intercept id
         self._net_handled: weakref.WeakSet[Bidi] = weakref.WeakSet()  # connections whose handler is set
         self._net_engines: weakref.WeakSet[Bidi] = weakref.WeakSet()  # connections synced at least once
-        self._local_ok: set[str] = set()  # the origins local_resources was allowed for in the current call
+        self._local_ok: set[str] = set()  # the hosts local_resources was allowed for in the current call
         self._local_hosts: dict[str, tuple[float, bool]] = {}  # resolved name -> (when, local)
-        self._local_refused: set[str] = set()  # origins whose refused request is in the activity already
+        self._local_refused: set[str | None] = set()  # origins whose refused request is in the activity already
+        self._local_refused_more = False  # more places were refused than the activity lists
+        self._net_state = threading.Lock()  # what the request threads share
+        self._net_pool: ThreadPoolExecutor | None = None
+        self._net_resolver: ThreadPoolExecutor | None = None
 
     # -- policy ----------------------------------------------------------------------
 
@@ -420,8 +430,8 @@ class Bridge:
         self._refuse_if_held(capability)
         if capability == "submit_forms" and url:
             self._forms_ok.add(policy.origin(url))
-        if capability == "local_resources" and url:
-            self._local_ok.add(policy.origin(url))  # its requests are sent on during this call
+        if capability == "local_resources" and (host := policy.host_of(url)):
+            self._local_ok.add(host)  # its requests are sent on during this call
 
     def require_url(self, url: str, *, checked: list[str]) -> policy.Target:
         try:
@@ -489,7 +499,10 @@ class Bridge:
                 self._sync_downloads()
                 self._sync_forms()
                 self._sync_network()
-                result, target_url = getattr(self, "_t_" + name)(arguments, cancel, checked)
+                try:
+                    result, target_url = getattr(self, "_t_" + name)(arguments, cancel, checked)
+                finally:
+                    self._local_ok = set()  # what the user allowed for this call ends with it
             outcome, decision, reason = "ok", "allow", None
         except Denied as denied:
             d = denied.decision
@@ -591,6 +604,11 @@ class Bridge:
         self.elements.clear()
         self.owner.clear()
         self._downloads_mode = {}
+        with self._net_state:
+            pools, self._net_pool, self._net_resolver = (self._net_pool, self._net_resolver), None, None
+        for pool in pools:
+            if pool is not None:
+                pool.shutdown(wait=False, cancel_futures=True)
 
     def _sync_downloads(self) -> None:
         """Downloads follow the `files` permission in each engine: allowed into the agent's downloads folder, or refused."""
@@ -690,17 +708,17 @@ class Bridge:
         return bool(agent) and policy.effective_mode(agent, "local_resources", self.session_id)[0] == "allow"
 
     def _sync_network(self) -> None:
-        """In each engine, every request waits for the Bridge before it is sent unless this agent may reach
-        this computer and the local network without asking. One to a local address is failed there, before
-        it leaves: a redirect hop is a request of its own, so a page an agent opened cannot send the
-        browser to a local service. Like forms, it follows the permission as the user changes it."""
+        """In each engine, every request of a page waits for the Bridge before it is sent unless this agent
+        may reach this computer and the local network without asking. One to a local address is failed
+        there, before it leaves: a redirect hop is a request of its own, so a page an agent opened cannot
+        send the browser to a local service. Like forms, it follows the permission as the user changes it.
+        What the engine does not show the Bridge (a request with no tab, R29) is not held."""
         engines = self._engines()
         if not engines:
             return
         hold = not self._may_reach_local()
         for _label, target in engines:
             engine = target.bidi
-            self._net_engines.add(engine)
             intercept = self._net_intercepts.get(engine)
             if hold and intercept is None:
                 if engine not in self._net_handled:
@@ -712,13 +730,24 @@ class Bridge:
             elif not hold and intercept is not None:
                 engine.command("network.removeIntercept", {"intercept": intercept})
                 del self._net_intercepts[engine]
+            self._net_engines.add(engine)  # only once its intercept is as the permission says
 
     def _on_request(self, engine: Bidi, params: dict) -> None:
-        """A request the intercept holds: sent on, or failed before it leaves. Runs on the connection's
-        handler thread, beside the call that caused it; anything unexpected fails the request."""
+        """A request the intercept holds, from the connection's handler thread: decided on a small pool,
+        so a name that is slow to resolve holds only its own requests."""
         if not params.get("isBlocked"):
             return
-        request = params.get("request") or {}
+        with self._net_state:
+            if self._net_pool is None:
+                self._net_pool = ThreadPoolExecutor(max_workers=NET_WORKERS, thread_name_prefix="bridge-net")
+            pool = self._net_pool
+        try:
+            pool.submit(self._decide, engine, params.get("request") or {})
+        except RuntimeError:  # the session closed: its engines end with it
+            self._decide(engine, params.get("request") or {})
+
+    def _decide(self, engine: Bidi, request: dict) -> None:
+        """Sent on, or failed before it leaves; anything unexpected fails the request."""
         url = str(request.get("url") or "")
         allowed = False
         with contextlib.suppress(Exception):
@@ -726,16 +755,27 @@ class Bridge:
         method = "network.continueRequest" if allowed else "network.failRequest"
         with contextlib.suppress(BidiError):
             engine.command(method, {"request": request.get("request")}, timeout=10)
-        target = policy.origin(url)
-        if not allowed and target not in self._local_refused:
-            self._local_refused.add(target)  # once per place: a page that tries again and again is one line
-            with contextlib.suppress(Exception):
-                audit.record(agent=self.agent_id, session=self.session_id, tool="network", capability="local_resources",
-                             decision="deny", reason="local-request", target=target, outcome="denied")  # fmt: skip
+        if not allowed:
+            self._note_refused(policy.origin(url))
+
+    def _note_refused(self, target: str | None) -> None:
+        """Once per place, and at most LOCAL_REFUSED_NOTED places a session, then one line that says more were
+        refused: a page that tries a whole network must not push the agent's own actions out of the activity."""
+        with self._net_state:
+            if target in self._local_refused or self._local_refused_more:
+                return
+            if len(self._local_refused) >= LOCAL_REFUSED_NOTED:
+                self._local_refused_more, target, reason = True, None, "local-requests-more"
+            else:
+                self._local_refused.add(target)
+                reason = "local-request"
+        with contextlib.suppress(Exception):
+            audit.record(agent=self.agent_id, session=self.session_id, tool="network", capability="local_resources",
+                         decision="deny", reason=reason, target=target, outcome="denied")  # fmt: skip
 
     def _request_allowed(self, url: str) -> bool:
         """A request may leave unless it goes to this computer or the local network, and the current call
-        was not allowed local_resources for that place."""
+        was not allowed local_resources for that host."""
         scheme, _, rest = url.partition(":")
         scheme = scheme.lower()
         if scheme not in ("http", "https", "ws", "wss"):
@@ -744,17 +784,31 @@ class Bridge:
         host = urllib.parse.urlsplit(web).hostname
         if not host:
             return False
-        return not self._is_local(host) or policy.origin(web) in self._local_ok
+        return not self._is_local(host) or host in self._local_ok
 
     def _is_local(self, host: str) -> bool:
+        """An address is read at once; a name is looked up with a deadline, and its answer kept a while.
+        A name that does not answer in time counts as local, and is asked again next time."""
         if policy.local_host(host, resolve=False):
             return True
         now = time.monotonic()
-        known = self._local_hosts.get(host)
-        if known is None or now - known[0] > LOCAL_HOST_TTL:
-            known = (now, policy.local_host(host))
-            self._local_hosts[host] = known
-        return known[1]
+        with self._net_state:
+            known = self._local_hosts.get(host)
+            if known is not None and now - known[0] <= LOCAL_HOST_TTL:
+                return known[1]
+            if self._net_resolver is None:
+                self._net_resolver = ThreadPoolExecutor(max_workers=NET_RESOLVERS, thread_name_prefix="bridge-dns")
+            resolver = self._net_resolver
+        try:
+            local = resolver.submit(policy.local_host, host).result(timeout=LOCAL_LOOKUP_TIMEOUT)
+        except (FutureTimeout, RuntimeError):
+            return True
+        with self._net_state:
+            if len(self._local_hosts) >= LOCAL_HOSTS_KEPT:
+                for old in list(self._local_hosts)[: LOCAL_HOSTS_KEPT // 2]:
+                    del self._local_hosts[old]
+            self._local_hosts[host] = (now, local)
+        return local
 
     # -- forms a page sends by itself ---------------------------------------------------
 

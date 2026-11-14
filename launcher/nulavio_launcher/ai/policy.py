@@ -215,11 +215,19 @@ def host_of(url: str | None) -> str | None:
         return None
 
 
+NAT64 = ipaddress.IPv6Network("64:ff9b::/96")  # carries an IPv4 address a NAT64 gateway reaches
+
+
 def _local_address(text: str) -> bool:
     try:
         address = ipaddress.ip_address(text.strip("[]"))
     except ValueError:
         return False
+    if isinstance(address, ipaddress.IPv6Address):
+        if address.ipv4_mapped is not None:
+            return not address.ipv4_mapped.is_global
+        if address in NAT64:
+            return not ipaddress.IPv4Address(int(address) & 0xFFFFFFFF).is_global
     return not address.is_global
 
 

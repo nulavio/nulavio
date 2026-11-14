@@ -54,6 +54,11 @@ WORKSPACE_PREFS: dict[str, object] = {
     "browser.startup.homepage_override.mstone": "ignore",
     "startup.homepage_welcome_url": "",
     "browser.aboutwelcome.enabled": False,
+    # The Bridge holds a page's requests through WebDriver BiDi (R29), which shows it only the requests of a
+    # tab: a service worker's are not, so the workspace runs none. Nor does it reopen the pages of a session
+    # that ended in a crash, which would load before the Bridge is connected.
+    "dom.serviceWorkers.enabled": False,
+    "browser.sessionstore.resume_from_crash": False,
 }
 
 

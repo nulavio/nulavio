@@ -752,11 +752,26 @@ class AiBridgeTest(unittest.TestCase):
         # the engine opens it over http, as any loopback address) and redirects to a listener on
         # 127.0.0.1, which must never be asked.
         listener = self.fx.url("/agent-task?from=redirect")
+        sub = self.fx.url("/sub")
+        # A page of the public site that reaches for this computer by itself, the way a hostile one would.
+        page = (
+            f'<!doctype html><title>Public</title><img src="{sub}-img"><iframe src="{sub}-frame"></iframe>'
+            f'<script>fetch("{sub}-fetch", {{mode: "no-cors"}}).catch(() => {{}});'
+            f'try {{ new WebSocket("{sub.replace("http:", "ws:")}-socket"); }} catch (e) {{}}'
+            "document.title = 'Public ' + typeof navigator.serviceWorker;</script>"
+        ).encode()
         asked: list[str] = []
 
         class Public(http.server.BaseHTTPRequestHandler):
             def do_GET(self):
                 asked.append(self.path)
+                if self.path == "/page":
+                    self.send_response(200)
+                    self.send_header("Content-Type", "text/html; charset=utf-8")
+                    self.send_header("Content-Length", str(len(page)))
+                    self.end_headers()
+                    self.wfile.write(page)
+                    return
                 self.send_response(302)
                 self.send_header("Location", listener)
                 self.send_header("Content-Length", "0")
@@ -785,6 +800,13 @@ class AiBridgeTest(unittest.TestCase):
         logged = [json.loads(line) for line in audit.audit_path().read_text().splitlines()]
         refusals = [(e.get("tool"), e.get("reason"), e.get("target")) for e in logged]
         self.assertIn(("network", "local-request", self.fx.url("")), refusals)
+        # The page's own image, frame, fetch and WebSocket to this computer are not sent either, and the
+        # workspace runs no service worker (whose requests the Bridge would not see).
+        opened = bridge.call("tab_new", {"url": public.replace("/moved", "/page")})
+        self.assertFalse(opened["isError"], opened)
+        self.assertEqual(opened["structuredContent"]["title"], "Public undefined")
+        time.sleep(3)
+        self.assertEqual(self.fx.hits, [])
 
         # Once local_resources is allowed, the next call lets the same redirect through.
         registry.grant(agent["id"], "local_resources", "allow")
