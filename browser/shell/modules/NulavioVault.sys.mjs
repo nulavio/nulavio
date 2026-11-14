@@ -109,7 +109,8 @@ class Vault {
       locked: state.encrypted ? state.locked : false,
       running: Boolean(state.running),
       openWithoutEngine: Boolean(state.open_without_engine),
-      methods: (state.methods ?? []).map(m => ({ id: m.id, method: m.method, label: m.label })),
+      // `unconfirmed`: a new recovery code not typed back yet (#187); the old one still opens the profile.
+      methods: (state.methods ?? []).map(m => ({ id: m.id, method: m.method, label: m.label, unconfirmed: m.unconfirmed === true })),
       protection: state.protection ?? [],
     };
   }
@@ -125,10 +126,12 @@ class Vault {
       request.secret = checkSecret(secret);
     }
     const answer = await helper(request);
+    // What the unlock did with a recovery code replacement left unfinished, only when it did something.
+    const note = settled(answer) ? { settled: settled(answer) } : {};
     if (url) {
-      return { opened: (await lazy.NulavioRouting.openIn(Number(profileId), url)).action, settled: settled(answer) };
+      return { opened: (await lazy.NulavioRouting.openIn(Number(profileId), url)).action, ...note };
     }
-    return { opened: (await lazy.NulavioProfiles.switchTo(Number(profileId))).action, settled: settled(answer) };
+    return { opened: (await lazy.NulavioProfiles.switchTo(Number(profileId))).action, ...note };
   }
 
   async lock(profileId) {
