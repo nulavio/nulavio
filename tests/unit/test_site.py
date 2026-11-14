@@ -695,6 +695,25 @@ class WaitlistWorkerTest(unittest.TestCase):
         self.assertEqual((self.cases["other_api_path"]["status"], self.cases["other_api_path"]["body"]), (404, "the 404 page"))
 
 
+class SiteWorkflowTest(unittest.TestCase):
+    """.github/workflows/site.yml: only main deploys, and only the deploy step gets the token."""
+
+    def setUp(self):
+        self.text = (ROOT / ".github/workflows/site.yml").read_text(encoding="utf-8")
+        self.deploy = self.text.split("\n  deploy:\n", 1)[1]
+
+    def test_the_token_is_a_secret_of_the_site_environment_on_main(self):
+        triggers = self.text.split("\non:\n", 1)[1].split("\npermissions:", 1)[0]
+        self.assertNotIn("pull_request", triggers)
+        self.assertIn("if: ${{ github.ref == 'refs/heads/main' }}", self.deploy)
+        self.assertIn("\n    environment: site\n", self.deploy)  # accepts only main; holds CLOUDFLARE_API_TOKEN (#182)
+
+    def test_only_the_deploy_step_receives_the_token(self):
+        self.assertEqual(self.text.count("secrets."), 1)
+        step = self.deploy.split("- name: Deploy to Cloudflare Pages (production)\n", 1)[1].split("\n      - ", 1)[0]
+        self.assertIn("CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}", step)
+
+
 class VerifyLiveTest(unittest.TestCase):
     """scripts/site/verify_live.py, the check after a deploy (.github/workflows/site.yml), against a fake site."""
 
