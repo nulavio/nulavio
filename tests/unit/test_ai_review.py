@@ -678,6 +678,14 @@ class PullRequestFlowFilesTest(unittest.TestCase):
                 path = line.split()[0].strip("/")
                 self.assertTrue((ROOT / path).exists(), path)
 
+    def test_what_steers_agents_gets_the_second_review(self):
+        # A change that loosens the agents' own instructions or skills must not merge after only the
+        # author's review (#215): pull-requests.md, step 3, sends every CODEOWNERS path to a second one.
+        patterns = {line.split()[0] for line in (ROOT / ".github" / "CODEOWNERS").read_text().splitlines()
+                    if line.strip() and not line.startswith("#")}  # fmt: skip
+        for pattern in ("AGENTS.md", "CLAUDE.md", "/.agents/", "/.coderabbit.yaml", "/.github/"):
+            self.assertIn(pattern, patterns)  # no leading slash: an AGENTS.md in any directory
+
 
 if __name__ == "__main__":
     unittest.main()

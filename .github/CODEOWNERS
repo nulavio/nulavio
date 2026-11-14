@@ -16,3 +16,11 @@
 /scripts/release/                  @caiolombello
 /scripts/upstream/                 @caiolombello
 /docs/security/                    @caiolombello
+
+# What steers the agents that open, review and merge pull requests with the maintainer's
+# account (#215): their instructions in any directory, the project's skills, and
+# CodeRabbit's configuration, which the pull request under review supplies itself.
+AGENTS.md                          @caiolombello
+CLAUDE.md                          @caiolombello
+/.agents/                          @caiolombello
+/.coderabbit.yaml                  @caiolombello
