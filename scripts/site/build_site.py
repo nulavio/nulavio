@@ -101,6 +101,7 @@ PUBLIC_KEY = Path("site/keys/nulavio-packages.asc")
 REPO_FILE = Path("site/rpm/nulavio.repo")
 SOURCES_FILE = Path("site/apt/nulavio.sources")
 APT_BLOCK = re.compile(r"<!--apt:(on|off)-->(.*?)<!--/apt:\1-->\n?", re.S)
+FLATPAK_BLOCK = re.compile(r"<!--flatpak:(on|off)-->(.*?)<!--/flatpak:\1-->\n?", re.S)
 COMPANION_BLOCK = re.compile(r"<!--companion:(on|off)-->(.*?)<!--/companion:\1-->\n?", re.S)
 # The engineering pages say whether a release is out, and which: what sits between
 # <!--release:on--> and <!--/release:on--> is kept, with {{release_version}}, only when
@@ -222,8 +223,17 @@ def release_values(src: Path) -> dict[str, str] | None:
         "repo_file": release["repo_file"],
         "key_url": release["key_url"],
         "apt": "off",
+        "flatpak": "off",
         "companion": "off",
     }
+    if "flatpak_bundle" in release:
+        # The release's own bundle, on its GitHub page (release_metadata.py records it only when the
+        # release carries it); SHA256SUMS.asc covers it, and the page says how to check it.
+        if release["flatpak_bundle"] != f"nulavio-{version}.x86_64.flatpak":
+            raise BuildError(f"packaging/release.json: flatpak_bundle must be nulavio-{version}.x86_64.flatpak")
+        base = f"https://github.com/nulavio/nulavio/releases/download/v{version}"
+        values.update(flatpak="on", flatpak_url=f"{base}/{release['flatpak_bundle']}", release_files=base)
+        values["flatpak_bundle"] = release["flatpak_bundle"]
     if "companion_apk" in release:
         # The first release that carries the Companion's signed APK on (ADR 0014; release_metadata.py
         # sets the name from the published assets). The certificate is the one in this tree.
@@ -515,6 +525,7 @@ def build(out: Path, *, release: bool = False, commit: str = "HEAD", evidence: s
             text = path.read_text(encoding="utf-8")
             if page in DOWNLOAD_PAGES:
                 text = choose_apt_blocks(text, released["apt"])
+                text = choose_blocks(text, FLATPAK_BLOCK, released["flatpak"])
                 text = choose_blocks(text, COMPANION_BLOCK, released["companion"])
                 text = choose_blocks(text, WHATSNEW_BLOCK, "on" if has_notes else "off")
             elif "<!--whatsnew:" in text:
