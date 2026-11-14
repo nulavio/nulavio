@@ -101,6 +101,15 @@ class LocaleTest(unittest.TestCase):
         referenced |= {m[6:-2] for m in re.findall(r"__MSG_[A-Za-z0-9]+__", json.dumps(make_shell.manifest()))}
         self.assertEqual(referenced - keys, set())
 
+    def test_the_phone_page_names_no_place_the_companion_is_not(self):
+        # ADR 0005's release order: the page never sends people to an app they cannot get. F-Droid
+        # closed the inclusion request on 2026-11-11 (#207), and no release carries the APK yet (#205).
+        for name in ("en", "pt_BR"):
+            with self.subTest(locale=name):
+                hint = locale(name)["phoneScanHint"]["message"]
+                self.assertNotIn("F-Droid", hint)
+                self.assertNotIn("Play", hint)
+
     # design-system.md, Calmaria: no Unicode pseudo-icons in messages or in what the pages draw. They
     # changed with the desktop font and were read aloud; states use SVG icons and words.
     PSEUDO_ICONS = "◇⌑◷◈▤⯃⚠■Ⅱ✓●▸"
