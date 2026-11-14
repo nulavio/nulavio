@@ -52,7 +52,7 @@ Otherwise it is **standard** (72 hours): only moderate or low issues, or still n
 
 1. Watch Mozilla's releases and security advisories (MFSA); see the fast path below.
 2. Verify the source release: `scripts/upstream/verify_firefox_release.py <version>` checks `SHA256SUMS` against the **pinned** Mozilla Software Releases key (`14F2 6682 D091 6CDD 81E3 7B6D 61B7 B526 D98F 0353`) and prints the tarball hash. `scripts/release/bump_engine.py <version>` runs that check and pins the version and the hash in `browser/build/engine.json`.
-3. Apply the patch stack (`browser/patches/series`, applied idempotently by `scripts/build/apply_patches.py`). Each patch has an owner, a reason and an upstreaming plan; the unit tests enforce this and cap the stack at about 10 patches.
+3. Apply the patch stack (`browser/patches/series`, applied idempotently by `scripts/build/apply_patches.py`). Each patch has an owner, a reason and an upstreaming plan; the unit tests enforce this. There is no cap on the number of patches ([below](#base-branch-choice-decided-2026-11-14)).
 4. Build in a clean container. Run unit and integration tests plus the provider certification smoke tests.
 5. Sign packages (RPM GPG; provenance attestation planned): only the files the rehearsal's `manifest.json` lists, with those SHA-256 digests (`publish_release.sh` refuses anything else, [build](build.md#publishing-a-release)). Publish. Record in the security changelog.
 
@@ -113,6 +113,6 @@ Each run takes a lock, so runs never overlap. It builds only a release whose sig
 
 Not adopted: building Firefox on GitHub-hosted runners (2 vCPU and 14 GB of disk against a 22 GB build, near the 6-hour limit, half the monthly minutes), a self-hosted runner on the laptop (it would run jobs defined by any commit), bump pull requests from Actions (the repository does not let Actions create pull requests, and the work goes straight to `main`), and hourly polling in Actions (about a third of the monthly minutes for what the local timer does for free).
 
-## Base branch choice (open)
+## Base branch choice (decided 2026-11-14)
 
-Recommendation: follow **Release**. Re-evaluate in favour of ESR if the non-branding patch stack exceeds about 10 patches or a rebase takes more than one working day.
+Follow **Release**, even when the non-branding patch stack passes about 10 patches: decided by the maintainer on 2026-11-14 ([ADR 0001](../adr/0001-engine-selection.md#open-items), open item 2), because coding agents now do most of the rebasing. The earlier recommendation re-evaluated ESR at that count or when a rebase took more than one working day. What limits the stack now is time: every engine update still meets the targets above, build and tests included, and missing the 72-hour deadline for two security releases in a row reopens ADR 0001.

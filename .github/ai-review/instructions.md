@@ -54,7 +54,7 @@ The documented test-only exceptions (Marionette on throwaway profiles; Docker `s
 
 **I6-patch-policy.**
 - Prefer prefs, policies, branding or built-in add-ons over patches.
-- Every patch has `Owner:` and `Upstream:` headers, is listed in `browser/patches/series`, applies idempotently, and the stack stays at about 10.
+- Every patch has `Owner:` and `Upstream:` headers, is listed in `browser/patches/series` and applies idempotently. A new patch comes with a test of what it changes. The number of patches is not capped (ADR 0001, decided 2026-11-14).
 - No patch weakens a protection; no `MOZILLA_OFFICIAL`; no Mozilla or third-party trademarks.
 
 **I7-ai-bridge.** AI Bridge least privilege:
