@@ -114,6 +114,13 @@ class StorageCase(unittest.TestCase):
     def encrypted_profile(self, name: str = "work", keyring: Keyring | None = None) -> tuple[profile.Profile, str]:
         return profiles.create(name, password=PASSWORD, keyring=keyring, kdf=FAST, recovery_kdf=FAST)
 
+    def secret_tool(self) -> Path:
+        """A stand-in for secret-tool in this test's own directory (its items are in NV_FAKE_KEYRING)."""
+        tool = self.tmp / "secret-tool"
+        tool.write_text(FAKE_SECRET_TOOL.format(python=sys.executable))
+        tool.chmod(0o700)
+        return tool
+
     def fake_engine(self) -> dict:
         engine = self.tmp / "engine.sh"
         engine.write_text(FAKE_ENGINE)
@@ -480,9 +487,7 @@ class RekeyTest(StorageCase):
             profiles.unlock(self.prof, password=PASSWORD)
 
     def test_this_computers_login_is_carried_with_a_new_keyring_key(self):
-        tool = self.tmp / "secret-tool"
-        tool.write_text(FAKE_SECRET_TOOL.format(python=sys.executable))
-        tool.chmod(0o700)
+        tool = self.secret_tool()
         store = self.tmp / "keyring.json"
         with mock.patch.dict(os.environ, {"NV_FAKE_KEYRING": str(store), "NULAVIO_SECRET_TOOL": str(tool)}):
             self.api(self.prof, "add-keyring", current=PASSWORD)
@@ -673,9 +678,7 @@ class RekeyTest(StorageCase):
     def test_the_method_that_was_typed_is_carried_or_nothing_changes(self):
         # With this computer's login also on the profile, a failure to wrap the typed password again used to
         # save a profile that the secret just typed no longer opened.
-        tool = self.tmp / "secret-tool"
-        tool.write_text(FAKE_SECRET_TOOL.format(python=sys.executable))
-        tool.chmod(0o700)
+        tool = self.secret_tool()
         store = self.tmp / "keyring.json"
         with mock.patch.dict(os.environ, {"NV_FAKE_KEYRING": str(store), "NULAVIO_SECRET_TOOL": str(tool)}):
             self.api(self.prof, "add-keyring", current=PASSWORD)
@@ -820,9 +823,7 @@ class EncryptedProfileTest(StorageCase):
             (box.mountpoint / "prefs.js").write_text("plaintext")
 
     def test_keyring_profile(self):
-        tool = self.tmp / "secret-tool"
-        tool.write_text(FAKE_SECRET_TOOL.format(python=sys.executable))
-        tool.chmod(0o700)
+        tool = self.secret_tool()
         with mock.patch.dict(os.environ, {"NV_FAKE_KEYRING": str(self.tmp / "keyring.json")}):
             prof, _ = self.encrypted_profile(keyring=Keyring(str(tool)))
             self.assertIn("os_user_protected", profiles.status(prof)["protection"])
