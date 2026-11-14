@@ -31,8 +31,12 @@
 # (https://nulavio.net/rpm/nulavio.repo) from the reviewed git tree.
 #
 # With NULAVIO_RELEASE_MANIFEST=<rehearsal-out>/manifest.json (publish_release.sh
-# sets it), every package in <packages-dir> must be listed there with the same
-# SHA-256, or nothing is signed.
+# sets it), the rehearsal must pass `release_manifest.py verify` (finished, from a
+# committed tree on NULAVIO_PUBLISH_REF, default origin/main, a newer version, the
+# packages carrying their own notes) and every package in <packages-dir> must be
+# listed there with the same SHA-256, or nothing is signed. The release key (the
+# one in site/keys/nulavio-packages.asc) and a real KMS key sign only that way:
+# without a manifest they are refused (#292).
 #
 # The maintainer's release key is required for real releases. Tests run this
 # with a throwaway key made for the test (test_signed_repo.sh for the gpg-agent,
@@ -46,18 +50,34 @@ out=$(mkdir -p "${2:?repo-out}" && realpath "$2")
 key=${3:?key id or fingerprint}
 image=$("$release/base_image.sh" fedora-build)
 
-if [[ -n ${NULAVIO_RELEASE_MANIFEST:-} ]]; then
-    python3 -I "$release/release_manifest.py" packages "$NULAVIO_RELEASE_MANIFEST" "$packages" >/dev/null
-fi
+fingerprint() {
+    python3 -I -c 'import sys; sys.path.insert(0, sys.argv[1]); import openpgp_sign as o; print(o.primary_key(open(sys.argv[2], "rb").read()).hex)' \
+        "$release" "$1"
+}
+# Before anything is signed: a checked rehearsal, which the release key and a real KMS key never go without.
+checked() {
+    local signer=${1^^} manifest=${NULAVIO_RELEASE_MANIFEST:-}
+    if [[ -z $manifest ]]; then
+        if [[ $signer == "$(fingerprint "$repo/site/keys/nulavio-packages.asc")" ]] ||
+            { [[ -n ${NULAVIO_KMS_KEY_ID:-} ]] && [[ -z ${NULAVIO_TEST_AWS_DIR:-} ]]; }; then
+            echo "sign_repo: the release key signs only a checked rehearsal: set NULAVIO_RELEASE_MANIFEST=<rehearsal-out>/manifest.json" >&2
+            exit 2
+        fi
+        return 0
+    fi
+    [[ $(basename "$manifest") == manifest.json ]] || { echo "sign_repo: $manifest is not a rehearsal's manifest.json" >&2; exit 2; }
+    python3 -I "$release/release_manifest.py" verify "$(dirname "$manifest")" --repo "$repo" --on "${NULAVIO_PUBLISH_REF:-origin/main}" >/dev/null
+    python3 -I "$release/release_manifest.py" packages "$manifest" "$packages" >/dev/null
+}
 
 public=$(mktemp -d)
 trap 'rm -rf "$public"' EXIT
 
 if [[ -n ${NULAVIO_KMS_KEY_ID:-} ]]; then
     cp "${NULAVIO_PUBLIC_KEY:-$repo/site/keys/nulavio-packages.asc}" "$public/key.asc"
-    fpr=$(python3 -I -c 'import sys; sys.path.insert(0, sys.argv[1]); import openpgp_sign as o; print(o.primary_key(open(sys.argv[2], "rb").read()).hex)' \
-        "$release" "$public/key.asc")
+    fpr=$(fingerprint "$public/key.asc")
     [[ ${key^^} == "$fpr" ]] || { echo "sign_repo: the public key is $fpr, not $key (give the full fingerprint)" >&2; exit 1; }
+    checked "$fpr"
     container_env=(-e NULAVIO_KMS_KEY_ID -e NULAVIO_SIGN_FPR="$fpr")
     mounts=(-v "$release:/nulavio-release:ro")
     if [[ -n ${NULAVIO_TEST_AWS_DIR:-} ]]; then
@@ -96,6 +116,7 @@ agent=$(gpgconf --homedir "$gnupg" --list-dirs agent-extra-socket)
 [[ -S $agent ]] || { echo "sign_repo: no gpg-agent extra socket for $gnupg" >&2; exit 1; }
 gpg --homedir "$gnupg" --batch --armor --export "$key" >"$public/key.asc"
 [[ -s $public/key.asc ]] || { echo "sign_repo: no public key $key in $gnupg" >&2; exit 1; }
+checked "$(fingerprint "$public/key.asc")"
 
 podman run --rm --security-opt label=disable \
     -v "$packages:/packages:ro" -v "$public:/public:ro" -v "$agent:/run/host-gpg-agent" -v "$out:/repo" "$image" bash -euc '
