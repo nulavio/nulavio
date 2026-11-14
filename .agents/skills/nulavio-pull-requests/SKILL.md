@@ -40,8 +40,10 @@ disagree, the documents win: fix this file in the same pull request.
    Check it against the non-negotiables and the invariants in
    `.github/ai-review/instructions.md`.
 2. Decide whether a second, independent review is required: a path in
-   `.github/CODEOWNERS`, a workflow, `.github/ai-review/`, release or signing,
-   or any invariant ticked in the description. Independent means another model
+   `.github/CODEOWNERS` (which includes `AGENTS.md` and `CLAUDE.md` anywhere,
+   these skills under `.agents/` and `.coderabbit.yaml`), a workflow,
+   `.github/ai-review/`, release or signing, or any invariant ticked in the
+   description. Independent means another model
    or a new session, given only the diff and the description.
 3. What does not count as that review: the CI AI review unless it finished for
    the head commit and read the whole change; CodeRabbit, ever (the branch under
