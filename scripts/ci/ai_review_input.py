@@ -25,10 +25,17 @@ already holds both commits, which is kept.
     python3 -I scripts/ci/ai_review_input.py --repo-dir DIR --gh-view view.json --out DIR/.ai-review
 
 Environment: BASE_SHA, HEAD_SHA, GITHUB_EVENT_PATH (unless --gh-view) and, in
-Actions, GITHUB_OUTPUT. Outputs: ``status`` (``ready`` or ``too-large``),
+Actions, GITHUB_OUTPUT. Outputs: ``status`` (``ready``, ``too-large`` or, with
+``--only-sensitive``, ``not-sensitive``),
 ``diff_bytes``, ``binary_files`` and ``schema`` (the compact output schema for
 ``--json-schema``). Files: ``pr.diff.txt``, ``pr.stat.txt``, ``pr.binary.txt``
 (the binary paths, one per line) and ``pr-meta.untrusted.json``.
+
+``--only-sensitive`` (CI): the review spends model credit only on what needs a
+second review anyway (docs/process/pull-requests.md, step 3): a change that touches
+no path of the base branch's ``.github/CODEOWNERS``, and has no ``ai-review`` label,
+is ``not-sensitive`` and nothing is sent. A pattern this script does not understand
+counts as matching every path, so a new kind of entry never turns a review off.
 """
 
 from __future__ import annotations
@@ -44,6 +51,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 SCHEMA = ROOT / ".github" / "ai-review" / "schema.json"
+CODEOWNERS = ROOT / ".github" / "CODEOWNERS"  # the base branch's: the pull request cannot narrow it
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 MAX_DIFF_BYTES = 1_500_000  # about 40,000 lines with context; larger changes are reviewed another way
 MAX_TITLE = 500
@@ -124,6 +132,40 @@ def binary_paths(numstat: bytes) -> list[str]:
     return paths
 
 
+def codeowners_patterns(path: Path = CODEOWNERS) -> list[str]:
+    lines = path.read_text(encoding="utf-8").splitlines() if path.is_file() else []
+    return [line.split()[0] for line in lines if line.strip() and not line.lstrip().startswith("#")]
+
+
+def sensitive(paths: list[str], patterns: list[str]) -> list[str]:
+    """The changed paths a CODEOWNERS pattern covers. Understood: "/dir/" (a directory from the root),
+    "/file" (one file at the root, no slash or glob in it) and "NAME" (a file or directory of that name
+    anywhere). Anything else, or no pattern at all, covers every path: the review is never narrowed by
+    a form this does not read."""
+    if not patterns:
+        return list(paths)
+
+    def covers(pattern: str, path: str) -> bool:
+        if any(ch in pattern for ch in "*?[\\"):
+            return True
+        if pattern.startswith("/") and pattern.endswith("/"):
+            return path.startswith(pattern[1:])
+        if pattern.startswith("/") and "/" not in pattern[1:]:
+            return path == pattern[1:] or path.startswith(pattern[1:] + "/")  # "/name": a root file or directory
+        if "/" not in pattern:
+            return pattern in path.split("/")
+        return True
+
+    return [path for path in paths if any(covers(pattern, path) for pattern in patterns)]
+
+
+def asked_for(event: dict) -> bool:
+    """Whether someone asked for this review with the ai-review label."""
+    pr = event.get("pull_request") or {}
+    names = {label.get("name") for label in pr.get("labels") or [] if isinstance(label, dict)}
+    return "ai-review" in names or (event.get("label") or {}).get("name") == "ai-review"
+
+
 def write_outputs(values: dict[str, str]) -> None:
     target = os.environ.get("GITHUB_OUTPUT")
     lines = "".join(f"{key}={value}\n" for key, value in values.items())
@@ -134,7 +176,9 @@ def write_outputs(values: dict[str, str]) -> None:
         sys.stdout.write(lines)
 
 
-def prepare(repo: Path, out: Path, base_sha: str, head_sha: str, event: dict, *, delete_repo: bool) -> dict[str, str]:
+def prepare(
+    repo: Path, out: Path, base_sha: str, head_sha: str, event: dict, *, delete_repo: bool, only_sensitive: bool = False
+) -> dict[str, str]:
     if not SHA_RE.match(base_sha) or not SHA_RE.match(head_sha):
         raise SystemExit("BASE_SHA and HEAD_SHA must be 40-character hexadecimal commit ids")
     out.mkdir(parents=True, exist_ok=True)
@@ -142,6 +186,9 @@ def prepare(repo: Path, out: Path, base_sha: str, head_sha: str, event: dict, *,
         diff = git_diff(repo, base_sha, head_sha)
         stat = git_diff(repo, base_sha, head_sha, "--stat=200")
         binary = binary_paths(git_diff(repo, base_sha, head_sha, "--numstat", "-z"))
+        # Both sides of a rename: moving a file out of a CODEOWNERS path is a change to that path.
+        names = git_diff(repo, base_sha, head_sha, "--name-only", "--no-renames", "-z")
+        changed = [name.decode("utf-8", "replace") for name in names.split(b"\0") if name]
     finally:
         if delete_repo:
             shutil.rmtree(repo, ignore_errors=True)
@@ -149,7 +196,10 @@ def prepare(repo: Path, out: Path, base_sha: str, head_sha: str, event: dict, *,
     (out / "pr.stat.txt").write_bytes(stat)
     (out / "pr.binary.txt").write_text("".join(f"{path}\n" for path in binary), encoding="utf-8")
     status = "ready"
-    if len(diff) > MAX_DIFF_BYTES:
+    if only_sensitive and not asked_for(event) and not sensitive(changed, codeowners_patterns()):
+        status = "not-sensitive"
+        print("::notice title=AI review skipped::no CODEOWNERS path changed (label the pull request ai-review to ask for one)")
+    elif len(diff) > MAX_DIFF_BYTES:
         status = "too-large"
         print(f"::notice title=AI review skipped::the diff is {len(diff)} bytes, over the {MAX_DIFF_BYTES}-byte limit")
     else:
@@ -164,6 +214,7 @@ def main(argv: list[str] | None = None) -> int:
     where.add_argument("--repo-dir", type=Path, help="repository holding both commits (kept)")
     parser.add_argument("--gh-view", type=Path, help="output of gh pr view --json (instead of GITHUB_EVENT_PATH)")
     parser.add_argument("--out", type=Path, required=True, help="directory for the review input")
+    parser.add_argument("--only-sensitive", action="store_true", help="skip changes to no CODEOWNERS path (CI)")
     args = parser.parse_args(argv)
     if args.gh_view:
         event = event_from_gh_view(json.loads(args.gh_view.read_text(encoding="utf-8")))
@@ -177,6 +228,7 @@ def main(argv: list[str] | None = None) -> int:
         os.environ.get("HEAD_SHA", ""),
         event,
         delete_repo=args.head_dir is not None,
+        only_sensitive=args.only_sensitive,
     )
     write_outputs(outputs)
     return 0
