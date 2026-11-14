@@ -28,6 +28,7 @@ import tempfile
 import time
 from pathlib import Path
 
+from .. import log
 from . import sodium
 from .core import Vault, VaultError, kdf
 
@@ -196,6 +197,64 @@ class Container:
                 if isinstance(exc, RECORD_ERRORS):
                     raise StorageError("storage-failed", type(exc).__name__) from None
                 raise
+            self._settle_recovery_code(vault)
+
+    def _settle_recovery_code(self, vault: Vault) -> None:
+        """A recovery code replacement nobody confirmed (#187), settled now that the profile opened:
+        kept if this unlock used the new code, undone otherwise. Under the state lock, recorded like
+        any change. Not settled is no reason to stay locked: both codes still open the profile."""
+        if vault.pending_recovery_code() is None:
+            return
+
+        # A handle on the volume from before the save to the record, as in recording(): the record goes into
+        # this volume or nowhere, also if the volume goes away in between (#187 review).
+        # Whatever stops it is said (`vault.settled`, `vault.settle_warning`), never only logged: until it is
+        # settled, the code it was to replace still opens the profile (#187 review).
+        def unsettled(code: str) -> None:
+            vault.settled = "unsettled"
+            log.event("vault.recovery-code-not-settled", code=code)
+
+        try:
+            volume = os.open(self.mountpoint, os.O_RDONLY | os.O_DIRECTORY)
+        except OSError as exc:
+            unsettled(type(exc).__name__)
+            return
+        try:
+            if os.fstat(volume).st_dev == os.stat(self.mountpoint.parent).st_dev:
+                unsettled("not-mounted")
+                return
+            before = json.loads(json.dumps(vault.meta))
+            outcome = vault.settle_recovery_code()
+            if outcome is None:
+                return
+            try:
+                vault.save()
+            except (VaultError, OSError) as exc:
+                # A save can fail after the key file was already replaced (syncing its directory): what is said is
+                # what is on disk, read again, not what was meant (#187 review, round 3).
+                try:
+                    disk = json.loads(vault.path.read_text(encoding="utf-8"))
+                except (OSError, ValueError):
+                    # Neither the save nor the file says what happened: not known, and said so (round 3).
+                    vault.meta = before
+                    vault.settled = "unknown"
+                    log.event("vault.recovery-code-not-settled", code="unknown")
+                    return
+                if disk.get("pending_recovery") or disk.get("generation") == before.get("generation"):
+                    vault.meta = before  # still waiting: both codes still open it; tried again at the next unlock
+                    unsettled(getattr(exc, "code", type(exc).__name__))
+                    return
+                vault.meta = disk  # it was saved: settled, and said so; its record is tried below
+                log.event("vault.recovery-code-saved-with-error", code=getattr(exc, "code", type(exc).__name__))
+            vault.settled = outcome
+            log.event("vault.recovery-code-settled", outcome=outcome)
+            try:
+                self._check_state(vault, volume)  # saved: a record left behind is written at the next unlock
+            except (VaultError, *RECORD_ERRORS) as exc:
+                vault.settle_warning = "not-recorded"
+                log.event("vault.change-not-recorded", code=getattr(exc, "code", type(exc).__name__))
+        finally:
+            os.close(volume)
 
     @contextlib.contextmanager
     def _state_lock(self, wait: float = 120.0):

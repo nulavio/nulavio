@@ -175,6 +175,13 @@ class Vault:
         self.dek: bytearray | None = None
         self.tampered = False
         self.from_backup = False
+        self.opened_with: str | None = None  # the envelope the last unlock opened
+        # What the last mount did with a recovery code replacement left unfinished: "finished", "undone", or
+        # "unsettled" (it could not save: both codes still open the profile), "unknown" (it cannot tell whether it
+        # saved: the profile's unlock methods say which code opens it); and "not-recorded" when it saved
+        # but could not record that inside the volume (#187).
+        self.settled: str | None = None
+        self.settle_warning: str | None = None
 
     # -- persistence ---------------------------------------------------------------
 
@@ -289,6 +296,7 @@ class Vault:
         """Drop the DEK (wiped). The storage layer unmounts separately (S5)."""
         sodium.memzero(self.dek)
         self.dek = None
+        self.opened_with = None
 
     def _require_unlocked(self) -> None:
         if self.dek is None:
@@ -326,19 +334,27 @@ class Vault:
             raise VaultError("wrong-secret")
         return dek
 
-    def _accept(self, dek: bytearray) -> None:
+    def _accept(self, dek: bytearray, env: Envelope) -> None:
         self.dek = dek
+        self.opened_with = env.id
         mac = self.meta.get("mac")
         self.tampered = mac is None or not sodium.equal(self._mac(), b64d(mac))
 
     def remove(self, envelope_id: str) -> None:
         self._require_unlocked()
+        pending = self.pending_recovery_code()
+        if pending and envelope_id in pending["old"]:
+            # #187 review: removing the code being replaced would leave the new one, which nobody has typed
+            # back and maybe nobody saw, in its place. Replace it again, or let an unlock settle it, first.
+            raise VaultError("replacement-pending")
         remaining = [e for e in self.meta["envelopes"] if e["id"] != envelope_id]
         if len(remaining) == len(self.meta["envelopes"]):
             raise VaultError("not-found")
-        if not remaining:
-            raise VaultError("last-method")
+        if not [e for e in remaining if not pending or e["id"] != pending["new"]]:
+            raise VaultError("last-method")  # a code not typed back is not a way in anyone is known to have
         self.meta["envelopes"] = remaining
+        if pending and envelope_id == pending["new"]:
+            del self.meta["pending_recovery"]  # the new code withdrawn: the old one stays as it was
 
     # Password -----------------------------------------------------------------------
 
@@ -359,20 +375,72 @@ class Vault:
 
     def add_recovery_code(self, params: dict | None = None) -> str:
         """Create a recovery code (returned once, never stored) and its envelope."""
+        return self._new_recovery_code(params)[0]
+
+    def _new_recovery_code(self, params: dict | None) -> tuple[str, Envelope]:
         code = new_recovery_code()
         data = stretch_params(params or RECOVERY_KDF)
         kek = stretch(normalize_recovery_code(code), data)
         try:
-            self._add("recovery-code", kek, data)
+            env = self._add("recovery-code", kek, data)
         finally:
             sodium.memzero(kek)
-        return code
+        return code, env
+
+    # A replacement in two phases (#187). The new code exists only in the answer that shows it, so
+    # the old code's envelope stays until the person has typed the new code back
+    # (`confirm_recovery_code`); until then both open the profile. A replacement that was never
+    # confirmed (the program killed, the page left) is settled at the next unlock from locked:
+    # finished if that unlock used the new code, undone otherwise (`settle_recovery_code`).
+
+    def pending_recovery_code(self) -> dict | None:
+        """{"new": id, "old": [ids]} while a replacement waits for its new code to be confirmed."""
+        pending = self.meta.get("pending_recovery")
+        ids = {e["id"] for e in self.meta["envelopes"]}
+        if isinstance(pending, dict) and pending.get("new") in ids and isinstance(pending.get("old"), list):
+            return pending
+        return None
 
     def replace_recovery_code(self, params: dict | None = None) -> str:
+        """A new recovery code; the old one keeps opening the profile until the new one is confirmed."""
+        pending = self.pending_recovery_code()
+        if pending:  # an earlier replacement nobody confirmed: its code goes, the confirmed one stays
+            self.meta["envelopes"] = [e for e in self.meta["envelopes"] if e["id"] != pending["new"]]
+        self.meta.pop("pending_recovery", None)
         old = [e.id for e in self.envelopes("recovery-code")]
-        code = self.add_recovery_code(params)
-        self.meta["envelopes"] = [e for e in self.meta["envelopes"] if e["id"] not in old]
+        code, env = self._new_recovery_code(params)
+        if old:
+            self.meta["pending_recovery"] = {"new": env.id, "old": old}
         return code
+
+    def confirm_recovery_code(self) -> None:
+        """Finish a replacement: this vault was opened with the new code, so the old one goes."""
+        self._require_unlocked()
+        pending = self.pending_recovery_code()
+        if pending is None:
+            # A first recovery code (the profile had none left to replace) is not held back: typed back, it
+            # is confirmed by opening the profile. Anything else is not a code waiting to be confirmed.
+            if any(e.id == self.opened_with for e in self.envelopes("recovery-code")):
+                return
+            raise VaultError("not-found", "no recovery code waits to be confirmed")
+        if self.opened_with != pending["new"]:
+            raise VaultError("wrong-secret", "confirmed with something other than the new recovery code")
+        self.meta["envelopes"] = [e for e in self.meta["envelopes"] if e["id"] not in pending["old"]]
+        del self.meta["pending_recovery"]
+
+    def settle_recovery_code(self) -> str | None:
+        """At an unlock: "finished" when it used the new code, "undone" (the new code goes) otherwise."""
+        self._require_unlocked()
+        pending = self.pending_recovery_code()
+        if pending is None:
+            self.meta.pop("pending_recovery", None)  # one whose new envelope is gone: nothing to settle
+            return None
+        if self.opened_with == pending["new"]:
+            self.confirm_recovery_code()
+            return "finished"
+        self.meta["envelopes"] = [e for e in self.meta["envelopes"] if e["id"] != pending["new"]]
+        del self.meta["pending_recovery"]
+        return "undone"
 
     def unlock_recovery_code(self, code: str) -> None:
         self._unlock_with_secret("recovery-code", normalize_recovery_code(code))
@@ -384,7 +452,7 @@ class Vault:
         for env in candidates:
             kek = stretch(secret, env.data)
             try:
-                self._accept(self._open(env, kek))
+                self._accept(self._open(env, kek), env)
                 return
             except VaultError:
                 continue
@@ -405,7 +473,7 @@ class Vault:
         env = next((e for e in self.envelopes() if e.id == envelope_id), None)
         if env is None:
             raise VaultError("not-found")
-        self._accept(self._open(env, kek))
+        self._accept(self._open(env, kek), env)
 
 
 def stretch_params(params: dict) -> dict:
