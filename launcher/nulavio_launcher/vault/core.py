@@ -176,7 +176,11 @@ class Vault:
         self.tampered = False
         self.from_backup = False
         self.opened_with: str | None = None  # the envelope the last unlock opened
-        self.settled: str | None = None  # what the last mount did with a pending recovery code (`settle_recovery_code`)
+        # What the last mount did with a recovery code replacement left unfinished: "finished", "undone", or
+        # "unsettled" (it could not save: both codes still open the profile); and "not-recorded" when it saved
+        # but could not record that inside the volume (#187).
+        self.settled: str | None = None
+        self.settle_warning: str | None = None
 
     # -- persistence ---------------------------------------------------------------
 

@@ -787,6 +787,59 @@ class HelperApiTest(StorageCase):
         )
         profiles.lock(prof)
 
+    def test_a_settlement_that_cannot_be_saved_says_so_and_is_tried_again(self):
+        # Review of #187, round 2: a full disk at the settlement left both codes working and said nothing.
+        prof, old_code = self.encrypted_profile()
+        killed = mock.patch.object(vault_cli, "_record", side_effect=SystemExit("killed"))
+        with killed, self.assertRaises(SystemExit):
+            vault_cli.api_request({"op": "new-recovery-code", "path": str(prof.path), "current": PASSWORD})
+        full = mock.patch.object(Vault, "save", side_effect=OSError(28, "No space left on device"))
+        request = {"op": "unlock", "path": str(prof.path), "method": "recovery-code", "secret": old_code, "autolock": False}
+        with full:
+            self.assertEqual(vault_cli.api_request(request), {"unlocked": True, "recovery_code": "unsettled"})
+        self.assertIsNotNone(json.loads(profiles.container(prof).vault_path.read_text()).get("pending_recovery"))
+        profiles.lock(prof)
+        self.assertEqual(vault_cli.api_request(request), {"unlocked": True, "recovery_code": "undone"})  # next time
+        profiles.lock(prof)
+
+    def test_a_settlement_saved_but_not_recorded_says_so(self):
+        prof, old_code = self.encrypted_profile()
+        killed = mock.patch.object(vault_cli, "_record", side_effect=SystemExit("killed"))
+        with killed, self.assertRaises(SystemExit):
+            vault_cli.api_request({"op": "new-recovery-code", "path": str(prof.path), "current": PASSWORD})
+        real = storage.Container._check_state
+
+        def check_state(self, vault, volume_fd=None):
+            if vault.settled is not None:  # the settlement's record, after its save: the volume is gone
+                raise OSError(107, "Transport endpoint is not connected")
+            return real(self, vault, volume_fd)
+
+        request = {"op": "unlock", "path": str(prof.path), "method": "recovery-code", "secret": old_code, "autolock": False}
+        with mock.patch.object(storage.Container, "_check_state", check_state):
+            answer = vault_cli.api_request(request)
+        self.assertEqual(answer, {"unlocked": True, "recovery_code": "undone", "warning": "not-recorded"})
+        profiles.lock(prof)
+
+    def test_the_command_line_confirms_only_the_code_it_showed(self):
+        # Review of #187, round 2: while the command waited, another unlock undid the replacement; typing the
+        # old code then "confirmed" it and said the old code no longer opened the profile.
+        prof, old_code = self.encrypted_profile()
+
+        def typed_back(code):
+            vault = profiles.unlock(prof, password=PASSWORD)  # meanwhile: the replacement is undone
+            self.assertEqual(vault.settled, "undone")
+            vault.lock()
+            profiles.lock(prof)
+            return old_code
+
+        proc, _new_code = self.replace_from_the_command_line(prof, confirm=typed_back)
+        self.assertEqual(proc.returncode, 1)
+        out = proc.stdout.read()
+        self.assertNotIn("no longer opens", out)
+        self.assertIn("was not confirmed", proc.stderr.read())
+        profiles.unlock(prof, recovery_code=old_code).lock()  # the old code still opens it, as it was said
+        profiles.lock(prof)
+
     def test_a_failure_before_the_change_is_not_called_saved(self):
         # "Saved, but not recorded" was also the answer when the check before the change failed
         # (a full disk): nothing had been saved, and the old code still opened the profile.

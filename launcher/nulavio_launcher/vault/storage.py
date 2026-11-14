@@ -205,30 +205,40 @@ class Container:
         any change. Not settled is no reason to stay locked: both codes still open the profile."""
         if vault.pending_recovery_code() is None:
             return
+
         # A handle on the volume from before the save to the record, as in recording(): the record goes into
         # this volume or nowhere, also if the volume goes away in between (#187 review).
+        # Whatever stops it is said (`vault.settled`, `vault.settle_warning`), never only logged: until it is
+        # settled, the code it was to replace still opens the profile (#187 review).
+        def unsettled(code: str) -> None:
+            vault.settled = "unsettled"
+            log.event("vault.recovery-code-not-settled", code=code)
+
         try:
             volume = os.open(self.mountpoint, os.O_RDONLY | os.O_DIRECTORY)
         except OSError as exc:
-            log.event("vault.recovery-code-not-settled", code=type(exc).__name__)
+            unsettled(type(exc).__name__)
             return
         try:
             if os.fstat(volume).st_dev == os.stat(self.mountpoint.parent).st_dev:
-                log.event("vault.recovery-code-not-settled", code="not-mounted")
+                unsettled("not-mounted")
                 return
+            before = json.loads(json.dumps(vault.meta))
             outcome = vault.settle_recovery_code()
             if outcome is None:
                 return
             try:
                 vault.save()
             except (VaultError, OSError) as exc:
-                log.event("vault.recovery-code-not-settled", code=getattr(exc, "code", type(exc).__name__))
+                vault.meta = before  # what is on disk: still waiting, tried again at the next unlock
+                unsettled(getattr(exc, "code", type(exc).__name__))
                 return
             vault.settled = outcome
             log.event("vault.recovery-code-settled", outcome=outcome)
             try:
                 self._check_state(vault, volume)  # saved: a record left behind is written at the next unlock
             except (VaultError, *RECORD_ERRORS) as exc:
+                vault.settle_warning = "not-recorded"
                 log.event("vault.change-not-recorded", code=getattr(exc, "code", type(exc).__name__))
         finally:
             os.close(volume)

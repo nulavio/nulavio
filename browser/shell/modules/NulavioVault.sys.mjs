@@ -34,7 +34,7 @@ const phonePairing = () => Services.prefs.getBoolPref(PREF_PHONE_PAIRING, false)
 // "confirm-recovery-code": the new code, typed back, is the `current` secret; the old code goes (#187).
 const CHANGES = new Set(["new-recovery-code", "confirm-recovery-code", "add-password", "add-keyring", "remove-method"]);
 // What an unlock did with a recovery code replacement left unfinished (the helper's fixed words).
-const SETTLED = new Set(["finished", "undone"]);
+const SETTLED = new Set(["finished", "undone", "unsettled"]);
 const settled = answer => (SETTLED.has(answer?.recovery_code) ? answer.recovery_code : null);
 const MAX_SECRET = 1024;
 
@@ -126,8 +126,12 @@ class Vault {
       request.secret = checkSecret(secret);
     }
     const answer = await helper(request);
-    // What the unlock did with a recovery code replacement left unfinished, only when it did something.
+    // What the unlock did with a recovery code replacement left unfinished, only when it did something, and
+    // whether that could be recorded inside the profile (only the helper's fixed word passes).
     const note = settled(answer) ? { settled: settled(answer) } : {};
+    if (settled(answer) && answer.warning === "not-recorded") {
+      note.warning = "not-recorded";
+    }
     if (url) {
       return { opened: (await lazy.NulavioRouting.openIn(Number(profileId), url)).action, ...note };
     }
@@ -230,6 +234,9 @@ class Vault {
     if ("recovery_code" in answer) {
       answer.settled = settled(answer);
       delete answer.recovery_code;
+    }
+    if ("warning" in answer && answer.warning !== "not-recorded") {
+      delete answer.warning;
     }
     return answer;
   }
