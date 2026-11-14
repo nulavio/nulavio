@@ -17,6 +17,10 @@ disagree, the documents win: fix this file in the same pull request.
 2. Start from the current `main` in a worktree of your own:
    `git fetch origin && git worktree add -b agent/<tool>/<type>-<slug> ../nulavio-<slug> origin/main`.
    A worktree another session uses is not yours: do not commit or build in it.
+   Unless the work is design, leave out the screenshots (about 18 MB instead of
+   90): `git worktree add --no-checkout …`, then in it
+   `git sparse-checkout set --no-cone '/*' '!/docs/design/screenshots/'` and
+   `git checkout` ([pull requests](../../../docs/process/pull-requests.md#worktrees-without-the-design-screenshots)).
 3. Conventional, signed-off commits (`git commit -s`). With
    `git config core.hooksPath scripts/git-hooks`, the hooks refuse a commit that
    adds a secret and a push to `main`.
