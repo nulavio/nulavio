@@ -24,7 +24,7 @@ Measured (Nulavio build and distribution Firefox 158, headless and with a real p
 | A file elsewhere in the home folder (an artificial `~/.ssh/id_fake`, the real `~/.ssh`) | readable | **not there** |
 | Profile and Downloads | writable | writable |
 | Content sandbox level (`about:support`) | 6 | 6 |
-| User namespaces, seccomp-bpf available to the engine | yes | yes |
+| User namespaces, seccomp-bpf available to the engine | yes | yes (on Ubuntu, seccomp-bpf only: [below](#bubblewrap-on-ubuntu)) |
 | Web content processes under seccomp (`/proc/<pid>/status`) | all (mode 2) | all (mode 2) |
 | Profile lock PID | real | real |
 
@@ -47,9 +47,22 @@ What it changes and what it does not (bypass analysis):
 | Files in Downloads | **No** | Writable by design |
 | Uploads | Limited | Only the profile and Downloads exist inside, so a page can be given files from Downloads only |
 
-Not adopted as the default: uploads only from Downloads, Nulavio features that keep data in the Nulavio data folder (protected profiles' unlock, AI Bridge settings) do not reach it from inside, and on Ubuntu bubblewrap's own user namespaces depend on AppArmor's policy for `bwrap` (not tested on a real Ubuntu host). Profiles of the engine's profile group (Track B's menu entry) are started by the engine, not by the launcher, so they are not confined.
+Not adopted as the default: uploads only from Downloads, Nulavio features that keep data in the Nulavio data folder (protected profiles' unlock, AI Bridge settings) do not reach it from inside, and on Ubuntu it costs the engine's per-process namespaces ([below](#bubblewrap-on-ubuntu)). Profiles of the engine's profile group (Track B's menu entry) are started by the engine, not by the launcher, so they are not confined.
 
 Verification: `tests/unit/test_confine.py` (argument list: home hidden, only the profile and Downloads writable, read-only settings only when present, no option that would weaken the engine's sandbox, Downloads never the home folder, missing bubblewrap is an error; a real bubblewrap run where a program cannot see a file in the home folder and its writes elsewhere never reach the disk) and `tests/integration/test_confined.py` (the real engine: started inside bubblewrap, sees only its profile and Downloads, same sandbox level, every web content process under seccomp, an open profile is not reopened confined).
+
+### bubblewrap on Ubuntu
+
+Run on 2026-11-14 for #228 in a full VM: Ubuntu 26.04 LTS cloud image, kernel 7.0.0-38, `kernel.apparmor_restrict_unprivileged_userns=1`, the 160.0-0.4 `.deb` installed by the site's APT instructions, bubblewrap 0.11.1, the launcher from a checkout with `NULAVIO_ENGINE=/usr/lib/nulavio/nulavio`. For each process the engine started on a page, `/proc/<pid>/ns/*` and `Seccomp:`:
+
+| | Own user namespace (content, socket, RDD, utility) | Own network namespace (content, RDD, utility) | seccomp-bpf |
+|---|---|---|---|
+| Ubuntu, without `--confined` | yes | yes | mode 2 |
+| Ubuntu, `--confined` | **no**: the engine's | **no**: the host's | mode 2 |
+| Fedora 44, without bubblewrap | yes | yes | mode 2 |
+| Fedora 44, under the same bubblewrap mounts | yes | yes | mode 2 |
+
+Ubuntu's `bwrap-userns-restrict` profile (in the `apparmor` package) moves every program bubblewrap starts to `&bwrap//&unpriv_bwrap`, which has `audit deny capability`. The transition is named, so the `.deb`'s `nulavio` profile never applies inside. The engine's `CanCreateUserNamespace()` check fails (`unshare(CLONE_NEWPID): EPERM`; the kernel logs `apparmor="DENIED" operation="capable" profile="unpriv_bwrap" capname="sys_admin"`), and the engine runs its content processes with seccomp-bpf alone, without saying so. The home folder is still hidden: the engine saw only `Downloads` and the profile under `/proc/<engine>/root/home/<user>`. A rule in `local/unpriv_bwrap` would change it for every bubblewrap user on the machine, so the package does not ship one. On Ubuntu the confined mode therefore trades one layer for the other; the launcher's check before a confined start, and whether it refuses or warns, is [#282](https://github.com/nulavio/nulavio/issues/282).
 
 ## AppArmor on Ubuntu
 
