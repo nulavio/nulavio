@@ -383,6 +383,7 @@ class Bridge:
         self._local_refused: set[str | None] = set()  # origins whose refused request is in the activity already
         self._local_refused_more = False  # more places were refused than the activity lists
         self._local_busy_noted = False  # requests were failed because too many names were out
+        self._local_all = False  # local_resources is allowed without asking, as of the last sync
         self._net_state = threading.Lock()  # what the request threads share
         self._lookups: dict[str, _Lookup] = {}  # names being looked up for held requests
         self._net_waiting = 0  # held requests waiting for a name
@@ -447,6 +448,8 @@ class Bridge:
             self._forms_ok.add(policy.origin(url))
         if capability == "local_resources" and (place := self._request_place(url)):
             self._local_ok.add(place)  # its requests are sent on during this call
+        if capability == "local_resources" and self._may_reach_local():
+            self._sync_network()  # "until the agent disconnects": nothing is held from now on, in this call too
 
     def require_url(self, url: str, *, checked: list[str]) -> policy.Target:
         try:
@@ -727,6 +730,7 @@ class Bridge:
         if not engines:
             return
         hold = not self._may_reach_local()
+        self._local_all = not hold  # requests already held follow the permission as it is now
         for _label, target in engines:
             engine = target.bidi
             intercept = self._net_intercepts.get(engine)
@@ -851,7 +855,7 @@ class Bridge:
             return None
         host, port = place
         # What the user allowed is the place the prompt named; the engine's upgrade of it to https is the same.
-        return not local or place in self._local_ok or (port == 443 and (host, 80) in self._local_ok)
+        return not local or self._local_all or place in self._local_ok or (port == 443 and (host, 80) in self._local_ok)
 
     def _is_local(self, host: str, wait: bool = True) -> bool | None:
         """An address is read at once, and a name already looked up. Otherwise the name is looked up, once

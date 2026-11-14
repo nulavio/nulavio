@@ -1722,6 +1722,20 @@ class LocalRequestsTest(Home):
         reasons = [e["reason"] for e in entries if e.get("tool") == "network"]
         self.assertEqual(reasons, ["local-request"] * tools.LOCAL_REFUSED_NOTED + ["local-requests-more"])
 
+    def test_an_answer_for_the_session_lets_everything_through_at_once(self):
+        # Codex review: "Allow until the agent disconnects" changed the permission but left the intercept
+        # until the next call, which went on failing the page's other local places.
+        agent, _ = registry.add("session-net", "other", "autonomous")
+        registry.grant(agent["id"], "local_resources", "ask")
+        bridge = tools.Bridge(agent["id"], "s-1", approver=Approve("session"))
+        connection, commands, _ = self.engine()
+        bridge.workspace = mock.Mock(bidi=connection)
+        bridge._sync_network()
+        self.assertFalse(bridge._request_allowed("http://127.0.0.1:9090/other"))
+        bridge.require("local_resources", "http://127.0.0.1:8080/app", checked=[])
+        self.assertEqual(commands[-1][0], "network.removeIntercept")
+        self.assertTrue(bridge._request_allowed("http://127.0.0.1:9090/other"))  # one still held follows it too
+
     def test_what_the_user_allowed_for_a_call_ends_with_it(self):
         # "Ask": the user is asked for the address the agent opens; its requests go on during that call only.
         agent, _ = registry.add("ask-net", "other", "autonomous")
