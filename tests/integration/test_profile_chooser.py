@@ -246,6 +246,7 @@ class ProfileChooserTest(unittest.TestCase):
         self.assertTrue(
             harness.wait_until(lambda: (path / "lock").is_symlink(), timeout=60), "the engine did not take the profile"
         )
+        time.sleep(2)  # the watcher looks twice a second: stopped sooner, it never sees the engine and waits out its grace
         self.stop_instance(path)
         self.assert_locks_again(path)
 
@@ -389,6 +390,7 @@ class ProfileChooserTest(unittest.TestCase):
         self.assertTrue(
             harness.wait_until(lambda: (path / "lock").is_symlink(), timeout=60), "the engine did not take the profile"
         )
+        time.sleep(2)  # the watcher looks twice a second: stopped sooner, it never sees the engine and waits out its grace
         self.stop_instance(path)
         self.assert_locks_again(path)
 
