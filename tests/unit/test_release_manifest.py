@@ -207,9 +207,8 @@ class ReleaseManifestTest(unittest.TestCase):
             self.assertIn(option, script)
         code = script.split("set -euo pipefail", 1)[1]
         self.assertNotIn("Valid-Until", code, "an expiry would stop apt update while a release waits")
-        # Both signatures are checked with the public key alone, before anything is uploaded.
-        self.assertIn('gpgv --keyring "$tmp/keyring.gpg" "$dists/InRelease"', script)
-        self.assertIn('gpgv --keyring "$tmp/keyring.gpg" "$dists/Release.gpg" "$dists/Release"', script)
+        # Both signatures are checked with the public key alone before anything is uploaded: run, not
+        # read, in test_release_script_protections.SignAptRepoTest.
         # The file that turns apt's checks on is never written where the packages are uploaded.
         # (it builds one in its own temporary directory, pointed at the repository, to have apt check it)
         for line in code.splitlines():
@@ -230,7 +229,7 @@ class ReleaseManifestTest(unittest.TestCase):
         self.assertIn("must be registry/name:tag@sha256:digest", run.stderr)
         publish = (ROOT / "scripts" / "release" / "publish_release.sh").read_text(encoding="utf-8")
         self.assertIn('sign_apt_repo.sh" "$out/packages" "$stage/apt" "$key"', publish)
-        self.assertIn("field debs", publish)
+        # A rehearsal without its .deb is refused: test_release_script_protections.PublishReleaseTest.
 
     def test_sign_repo_runs_the_check_before_signing(self):
         script = (ROOT / "scripts" / "release" / "sign_repo.sh").read_text(encoding="utf-8")
