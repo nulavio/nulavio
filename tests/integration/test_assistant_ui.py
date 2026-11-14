@@ -1391,7 +1391,7 @@ class AssistantUiTest(unittest.TestCase):
             "const open = [...Services.wm.getEnumerator('navigator:browser')].map(w => w.document)"
             ".find(d => d.getElementById('contentAreaContextMenu').state === 'open');"
             "const item = open?.querySelector(\"#contentAreaContextMenu [id$='-menuitem-_nulavio-ask-selection']\");"
-            "return item ? !item.hidden && item.ownerGlobal.getComputedStyle(item).display !== 'none' : null;"
+            "return item ? !item.hidden && item.ownerDocument.defaultView.getComputedStyle(item).display !== 'none' : null;"
         )
 
     def focused_in_panel(self) -> str | None:
