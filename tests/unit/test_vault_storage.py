@@ -728,6 +728,42 @@ class RekeyTest(StorageCase):
         self.assertEqual([m["method"] for m in profiles.status(self.prof)["methods"]], ["password"])
         self.assertFalse((box.root / "cipher.old").exists() or (box.root / storage.REKEY).exists())
 
+    def test_the_new_key_is_wiped_from_memory_when_it_fails(self):
+        # Review of #275 (Codex): the new vault was locked only by the caller, which never got it when the new
+        # key failed; the new DEK then stayed in memory, unwiped. Before the marker, after it, and at the switch.
+        made = []
+        real = Vault.create.__func__
+
+        def create(cls, path, profile_id=None):
+            made.append(real(cls, path, profile_id))
+            return made[-1]
+
+        failures = {
+            "copy-mismatch": mock.patch.object(storage, "_listing", return_value={}),
+            "storage-failed": mock.patch.object(storage, "_copy_checked", side_effect=OSError(5, "Input/output error")),
+            "rekey-unfinished": mock.patch.object(storage, "_rekey_finish", side_effect=OSError(5, "Input/output error")),
+        }
+        for code, failing in failures.items():
+            with self.subTest(code=code):
+                made.clear()
+                with mock.patch.object(Vault, "create", classmethod(create)), failing, self.assertRaises(VaultError) as ctx:
+                    self.api(self.prof, "rekey", current=PASSWORD)
+                self.assertEqual(ctx.exception.code, code)
+                self.assertEqual(len(made), 1)
+                self.assertIsNone(made[0].dek, "the new key stayed in memory")
+                profiles.status(self.prof)  # whatever was left is settled before the next round
+
+    def test_an_unfinished_switch_does_not_say_the_recovery_code_that_was_typed_stopped_working(self):
+        # Review of #275 (Codex): authorized with the recovery code, and the switch fails after the marker. The
+        # words said the recovery code no longer worked, when it was the one method carried.
+        failing = mock.patch.object(storage, "_rekey_finish", side_effect=OSError(5, "Input/output error"))
+        with failing, self.assertRaises(VaultError) as ctx:
+            self.api(self.prof, "rekey", current=self.code)
+        self.assertEqual(ctx.exception.code, "rekey-unfinished")
+        self.assertNotIn("recovery code no longer", vault_cli.MESSAGES["rekey-unfinished"])
+        self.assertEqual([m["method"] for m in profiles.status(self.prof)["methods"]], ["recovery-code"])  # finished by this use
+        self.assertEqual(self.files(self.prof, recovery_code=self.code), self.before)
+
 
 class CoreDumpTest(unittest.TestCase):
     def test_vault_commands_and_gocryptfs_write_no_core_dumps(self):

@@ -874,6 +874,7 @@ def rekey(box: Container, old: Vault, carry) -> Vault:
             raise StorageError("no-space", "not enough free space for a second copy of the profile")
         undo = lambda: None  # noqa: E731
         fds: list[int] = []
+        new = None
         with _signals_as_exceptions():
             try:
                 staging.mkdir(mode=0o700)
@@ -915,6 +916,8 @@ def rekey(box: Container, old: Vault, carry) -> Vault:
                     os.rmdir(staging / name)
                 _mark_complete_at(staging / REKEY_COMPLETE)
             except BaseException as exc:
+                if new is not None:
+                    new.lock()  # the new key leaves this process's memory on every way out but the last line
                 for fd in fds:
                     with contextlib.suppress(OSError):
                         os.close(fd)
@@ -933,8 +936,11 @@ def rekey(box: Container, old: Vault, carry) -> Vault:
                 raise
             try:
                 _rekey_finish(box)
-            except (OSError, StorageError, subprocess.SubprocessError) as exc:
-                raise StorageError("rekey-unfinished", getattr(exc, "code", type(exc).__name__)) from None
+            except BaseException as exc:
+                new.lock()
+                if isinstance(exc, (OSError, StorageError, subprocess.SubprocessError)):
+                    raise StorageError("rekey-unfinished", getattr(exc, "code", type(exc).__name__)) from None
+                raise
         new.path = box.vault_path
         return new
 
