@@ -17,8 +17,11 @@ reads each profile's lock state from the profile's files and, for a
 locked one, asks for its password, this computer's login or its recovery
 code, unlocks it through the Vault helper, and only then lets the launch
 go on. A profile without a password is launched as before, with or
-without the Vault's tools installed. When the module cannot be loaded,
-the chooser stays the engine's own.
+without the Vault's tools installed. When every profile has a password
+this window is the only way in, so its "show at start-up" checkbox is
+shown ticked and cannot be changed, with the module's words for why,
+and the setting is switched on there if it was off. When the module
+cannot be loaded, the chooser stays the engine's own.
 
 Owner: Nulavio maintainers
 Upstream: not applicable (Nulavio's protected profiles).
@@ -61,15 +64,16 @@ Upstream: not applicable (Nulavio's protected profiles).
            <h3 class="text-truncated-ellipsis">${this.profile.name}</h3>
 --- a/browser/components/profiles/content/profile-selector.mjs
 +++ b/browser/components/profiles/content/profile-selector.mjs
-@@ -21,6 +21,7 @@
+@@ -21,6 +21,8 @@
    static properties = {
      profiles: { type: Array },
      showSelector: { type: Boolean },
 +    nulavioLocks: { type: Object },
++    nulavioMustChoose: { type: String },
    };
  
    static queries = {
-@@ -93,7 +94,20 @@
+@@ -93,7 +95,31 @@
  
      await this.selectableProfileService.init();
      await this.selectableProfileService.maybeSetupDataStore();
@@ -87,11 +91,32 @@ Upstream: not applicable (Nulavio's protected profiles).
 +    }
 +    // The cards' locks, apart: without them the launches are still asked about.
 +    this.nulavioLocks = await this.nulavio?.lockStates(profiles).catch(() => null);
++    // With every profile behind a password this window is the only way in: not a choice then.
++    this.nulavioMustChoose =
++      this.nulavio?.mustChoose(profiles, this.nulavioLocks) ?? null;
 +    this.profiles = profiles;
++    if (
++      this.nulavioMustChoose &&
++      !this.selectableProfileService.groupToolkitProfile.showProfileSelector
++    ) {
++      // Shown ticked, so made true: it was off (switched off before the last
++      // profile without a password went, or a write that was lost).
++      await this.selectableProfileService.setShowProfileSelectorWindow(true);
++    }
      this.showSelector =
        this.selectableProfileService.groupToolkitProfile.showProfileSelector;
  
-@@ -122,6 +136,10 @@
+@@ -113,6 +139,9 @@
+   }
+ 
+   handleCheckboxToggle() {
++    if (this.nulavioMustChoose) {
++      return;
++    }
+     this.showSelector = this.checkbox.checked;
+     let state = this.showSelector ? "enabled" : "disabled";
+     Glean.profilesSelectorWindow.showAtStartup.record({ value: state });
+@@ -122,6 +151,10 @@
    }
  
    async launchProfile(profile, url) {
@@ -102,7 +127,7 @@ Upstream: not applicable (Nulavio's protected profiles).
      if (this.isStartupUI) {
        await this.setLaunchArguments(profile, url ? ["-url", url] : []);
        await this.selectableProfileService.uninit();
-@@ -180,7 +198,11 @@
+@@ -180,20 +213,27 @@
        <p class="profiles-body-text" data-l10n-id="profile-window-body"></p>
        <div class="profile-list">
          ${this.profiles.map(
@@ -115,3 +140,25 @@ Upstream: not applicable (Nulavio's protected profiles).
          )}
          <new-profile-card></new-profile-card>
        </div>
+       <moz-checkbox
+         @click=${this.handleCheckboxToggle}
+         data-l10n-id="profile-window-checkbox-label-2"
+-        ?checked=${this.showSelector}
++        ?checked=${this.showSelector || !!this.nulavioMustChoose}
++        ?disabled=${!!this.nulavioMustChoose}
+       >
+-        <span
+-          slot="description"
+-          data-l10n-id="profile-window-checkbox-subcopy"
+-          ?hidden=${this.showSelector}
+-        ></span>
++        ${this.nulavioMustChoose
++          ? html`<span slot="description">${this.nulavioMustChoose}</span>`
++          : html`<span
++              slot="description"
++              data-l10n-id="profile-window-checkbox-subcopy"
++              ?hidden=${this.showSelector}
++            ></span>`}
+       </moz-checkbox>`;
+   }
+ }
