@@ -81,10 +81,10 @@ Evidence and per-platform states: [compatibility report](../research/phone-unloc
 
 D10 took phone unlock out of 1.0 while the Companion had not run on a real phone. After the device test passed on the Galaxy S24+ (2026-11-10) and the desktop binding closed audit V3 (2026-11-11), the maintainer put it back: the browser offers to connect a phone, and the Companion ships on F-Droid.
 
-- `nulavio.vault.phone.pairing` is on in the build. The unlock-methods page links to the phones and says only that the security key is not available yet (FIDO2, slice S10, is not built); the phone page tells people without the app to install it from F-Droid.
+- `nulavio.vault.phone.pairing` is on in the build. The unlock-methods page links to the phones and says only that the security key is not available yet (FIDO2, slice S10, is not built); the phone page says the app cannot be downloaded yet (since 2026-11-14; it named F-Droid before, which closed the inclusion request on 2026-11-11, [#207](https://github.com/nulavio/nulavio/issues/207)). It will point to the signed APK on the releases ([#205](https://github.com/nulavio/nulavio/issues/205)).
 - With the pref off, the page offers no code and the Shell refuses to start a pairing (`phone-not-yet`); a phone already connected keeps unlocking its profile and can be removed, so nobody is locked out.
 - The pages' "no master key" line names no method, so it is true for every profile.
-- Release order: the browser release that turns the offer on goes out once the Companion is on F-Droid (or its APK is attached to the release), so the page never sends people to an app they cannot get.
+- Release order: the browser release that turns the offer on goes out once the Companion is on F-Droid (or its APK is attached to the release), so the page never sends people to an app they cannot get. 160.0-0.3 and 160.0-0.4 went out with neither; the page's text was corrected so that it at least names no place the app is not (#205).
 
 `test_vault_ui` 08 and 09 run with the offer on (the default), 13 with it off.
 

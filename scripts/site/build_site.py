@@ -33,7 +33,10 @@ site, so nothing offers a download that does not exist. The same holds for
 Ubuntu: what sits between <!--apt:on--> and <!--/apt:on--> is kept, with
 {{sources_file}}, only once release.json names the APT source file (the first
 release published with the APT repository sets it); until then the
-<!--apt:off--> blocks are kept instead.
+<!--apt:off--> blocks are kept instead. The engineering pages (engenharia/,
+en/engineering/) say whether a release is out the same way: <!--release:on-->
+blocks, with {{release_version}}, once release.json names a version, and
+<!--release:off--> blocks until then.
 
 By default the site is built from the working tree (unit tests run on a
 shared, possibly dirty tree). ``--release`` is how the published site is
@@ -88,6 +91,11 @@ PUBLIC_KEY = Path("site/keys/nulavio-packages.asc")
 REPO_FILE = Path("site/rpm/nulavio.repo")
 SOURCES_FILE = Path("site/apt/nulavio.sources")
 APT_BLOCK = re.compile(r"<!--apt:(on|off)-->(.*?)<!--/apt:\1-->\n?", re.S)
+# The engineering pages say whether a release is out, and which: what sits between
+# <!--release:on--> and <!--/release:on--> is kept, with {{release_version}}, only when
+# packaging/release.json names a published version; the <!--release:off--> blocks otherwise.
+RELEASE_BLOCK = re.compile(r"<!--release:(on|off)-->(.*?)<!--/release:\1-->\n?", re.S)
+ENGINEERING_PAGES = {"engenharia/index.html", "en/engineering/index.html"}
 E1_CATEGORIES = ("tracking", "https")
 SCALE = 2  # captures are taken at devPixelsPerPx=2; width/height attributes are CSS px
 # Notes appended to a commit outside --release, so a development build never passes for a release.
@@ -226,16 +234,21 @@ def sources_key(path: Path) -> list[str]:
     return key
 
 
-def choose_apt_blocks(text: str, apt: str) -> str:
-    """Keep the <!--apt:on--> or the <!--apt:off--> blocks of a download page, as release.json says."""
+def choose_blocks(text: str, blocks: re.Pattern, which: str) -> str:
+    """Keep the <!--name:on--> or the <!--name:off--> blocks of a page, as release.json says."""
 
     def keep(match: re.Match) -> str:
-        if match.group(1) != apt:
+        if match.group(1) != which:
             return ""
         body = match.group(2)
         return body[1:] if body.startswith("\n") else body  # a block on lines of its own leaves no blank line
 
-    return APT_BLOCK.sub(keep, text)
+    return blocks.sub(keep, text)
+
+
+def choose_apt_blocks(text: str, apt: str) -> str:
+    """Keep the <!--apt:on--> or the <!--apt:off--> blocks of a download page, as release.json says."""
+    return choose_blocks(text, APT_BLOCK, apt)
 
 
 def commit_date(src_commit: str) -> dt.date:
@@ -470,6 +483,12 @@ def build(out: Path, *, release: bool = False, commit: str = "HEAD", evidence: s
                 text = choose_apt_blocks(text, released["apt"])
             elif "<!--apt:" in text:
                 raise BuildError(f"{page}: apt blocks belong on the download pages only")
+            if page in ENGINEERING_PAGES:
+                text = choose_blocks(text, RELEASE_BLOCK, "on" if released else "off")
+                if released:
+                    page_values = {**values, "release_version": released["release_version"]}
+            elif "<!--release:" in text:
+                raise BuildError(f"{page}: release blocks belong on the engineering pages only")
             text = stamp_page(text, page_values, manifest, locale, page)
             if "{{" in text:
                 left = sorted(set(re.findall(r"\{\{[^}]*\}\}", text)))

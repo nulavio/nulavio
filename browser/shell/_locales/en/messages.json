@@ -785,7 +785,7 @@
   "phoneExplain": {"message": "Connect a phone running Nulavio Companion. It becomes one more way to unlock this profile: you scan a code and approve on the phone with your fingerprint, face or screen lock. Your password and recovery code keep working."},
   "phoneCurrentLabel": {"message": "This profile's password or recovery code"},
   "phoneShowCode": {"message": "Show QR for the phone"},
-  "phoneScanHint": {"message": "Open Nulavio Companion on your phone and scan this code. The phone and this computer must be on the same network. No app yet? Install Nulavio Companion from F-Droid."},
+  "phoneScanHint": {"message": "Open Nulavio Companion on your phone and scan this code. The phone and this computer must be on the same network. Nulavio Companion is not available to download yet: it will come with a Nulavio release."},
   "phoneCompare": {"message": "Do these 6 digits match the ones on your phone?"},
   "phoneDigitsSpoken": {"message": "The 6 digits: $DIGITS$", "placeholders": {"digits": {"content": "$1"}}},
   "phoneDigitsMatch": {"message": "They match"},

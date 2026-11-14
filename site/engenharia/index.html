@@ -6,7 +6,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
 <title>Documento de engenharia do Nulavio: o que está pronto e o que falta</title>
+<!--release:on-->
+<meta name="description" content="O Nulavio é um navegador para Linux feito sobre o motor Gecko, da Mozilla. Bloqueia rastreadores desde a primeira abertura, não envia dados a servidores do Nulavio e diz por escrito o que faz e o que ainda não faz. Alpha pública {{release_version}} para Fedora e Ubuntu.">
+<!--/release:on-->
+<!--release:off-->
 <meta name="description" content="O Nulavio é um navegador para Linux feito sobre o motor Gecko, da Mozilla. Bloqueia rastreadores desde a primeira abertura, não envia dados a servidores do Nulavio e diz por escrito o que faz e o que ainda não faz. Em desenvolvimento, sem versão para baixar.">
+<!--/release:off-->
 <link rel="canonical" href="https://nulavio.net/engenharia/">
 <link rel="alternate" hreflang="pt-BR" href="https://nulavio.net/engenharia/">
 <link rel="alternate" hreflang="en" href="https://nulavio.net/en/engineering/">
@@ -39,18 +44,18 @@
 <section id="summary" aria-labelledby="summary-h">
 <div class="summary-text">
 <p class="revision">nulavio.net · revisão de {{date_pt}} · commit {{commit}}</p>
-<p class="pill"><strong>Em desenvolvimento</strong> · ainda não há versão para baixar</p>
+<p class="pill"><!--release:on--><strong>Alpha pública</strong> · {{release_version}}, para Fedora e Ubuntu<!--/release:on--><!--release:off--><strong>Em desenvolvimento</strong> · ainda não há versão para baixar<!--/release:off--></p>
 <h1 id="summary-h">Privado por padrão. Honesto por princípio.</h1>
 <p class="lead">O Nulavio é um navegador para Linux feito sobre o motor Gecko, da Mozilla. Ele vem com a proteção contra rastreamento no modo Estrito, instala o bloqueador uBlock Origin na primeira abertura e não envia dados a servidores do Nulavio: o projeto não mantém nenhum serviço que receba dados do navegador.</p>
 <p>Esta página é um documento de engenharia: cada afirmação diz o que custa ou onde para, e onde conferir. O que ainda não está pronto aparece como não pronto. Números, trechos e capturas vêm do commit {{origin}}.</p>
-<p>O código usa a licença MPL-2.0, mas o repositório ainda é privado. Até ele ser aberto, os caminhos citados aqui são referências, não links.</p>
+<p>O código usa a licença MPL-2.0 e está aberto ao público em <span translate="no">github.com/nulavio/nulavio</span>. Os caminhos citados aqui são relativos a esse repositório.</p>
 </div>
 <dl class="facts" aria-label="Ficha técnica">
-<div><dt>Estado</dt><dd>Em desenvolvimento, sem versão para baixar</dd></div>
+<div><dt>Estado</dt><dd><!--release:on-->Alpha pública {{release_version}}: nem tudo o que está planejado já está nela<!--/release:on--><!--release:off-->Em desenvolvimento, sem versão para baixar<!--/release:off--></dd></div>
 <div><dt>Sistema</dt><dd>Linux: Fedora KDE primeiro, depois Ubuntu</dd></div>
 <div><dt>Motor</dt><dd>Gecko, compilado do código-fonte do Firefox <span class="mono">{{firefox}}</span></dd></div>
 <div><dt>Patches no motor</dt><dd><span class="mono">{{patches}}</span></dd></div>
-<div><dt>Licença</dt><dd>MPL-2.0 (repositório ainda privado)</dd></div>
+<div><dt>Licença</dt><dd>MPL-2.0, repositório público</dd></div>
 <div><dt>Servidores do Nulavio que recebem dados do navegador</dt><dd>Nenhum</dd></div>
 </dl>
 </section>
@@ -81,7 +86,7 @@
 <nav id="toc" class="toc" aria-labelledby="toc-h">
 <h2 id="toc-h">Neste documento</h2>
 <ol>
-<li><span class="num">1</span><span><a href="#status">Onde o projeto está</a> <span class="gist">ainda não há versão para baixar; veja o que está pronto e o que falta.</span></span></li>
+<li><span class="num">1</span><span><a href="#status">Onde o projeto está</a> <span class="gist"><!--release:on-->a alpha pública já saiu; veja o que está pronto e o que falta.<!--/release:on--><!--release:off-->ainda não há versão para baixar; veja o que está pronto e o que falta.<!--/release:off--></span></span></li>
 <li><span class="num">2</span><span><a href="#defaults">Os padrões que mudamos</a> <span class="gist">rastreadores bloqueados, só HTTPS, sem telemetria; cada mudança com motivo e custo.</span></span></li>
 <li><span class="num">3</span><span><a href="#kept">O que deixamos ligado</a> <span class="gist">as proteções do motor que usam a rede, e com quem elas falam.</span></span></li>
 <li><span class="num">4</span><span><a href="#typing">O que você digita</a> <span class="gist">nada vai a um buscador antes do Enter, a não ser que você ligue sugestões; você escolhe o DNS.</span></span></li>
@@ -96,10 +101,10 @@
 </nav>
 <section id="status" aria-labelledby="status-h">
 <h2 id="status-h"><span class="num">1</span> Onde o projeto está</h2>
-<p class="opening">A alpha pública já saiu para o Fedora. Abaixo está o que já funciona, o que funciona em parte e o que falta, item por item.</p>
+<p class="opening"><!--release:on-->A alpha pública já saiu para o Fedora e o Ubuntu.<!--/release:on--><!--release:off-->Ainda não há versão para baixar.<!--/release:off--> Abaixo está o que já funciona, o que funciona em parte e o que falta, item por item.</p>
 <div class="claim">
 <div class="claim-text">
-<p>A lista segue os critérios de lançamento do projeto, conferidos pela última vez em 10/11/2026. A versão alfa pública, v160.0-0.1, foi publicada em 10/11/2026, depois que a chave de lançamento e o servidor de pacotes ficaram prontos.</p>
+<p>A lista segue os critérios de lançamento do projeto. <!--release:on-->A alpha publicada agora é a {{release_version}}; a primeira, v160.0-0.1, saiu em 10/11/2026.<!--/release:on--><!--release:off-->Nada foi publicado ainda.<!--/release:off--> O que a alpha ainda não tem está marcado abaixo como feito em parte ou não feito.</p>
 </div>
 <div class="receipt">
 <p class="receipt-title">Como conferir</p>
@@ -121,14 +126,24 @@
 <p class="item"><strong>Mudanças no motor</strong> <span>{{patches}} patches, cada um com um nome que diz o que faz. A regra do projeto: o que cabe em preferências, políticas ou no complemento embutido não vira patch.</span></p>
 <ul class="refs"><li><code class="ref" translate="no">browser/patches/series</code></li></ul>
 </li>
+<li class="ledger-row is-done">
+<p class="state"><svg class="icon" aria-hidden="true" focusable="false"><use href="#i-done"/></svg><span>Feito</span></p>
+<p class="item"><strong>Canal de segurança</strong> <span><span translate="no">security@nulavio.net</span> e <span translate="no">/.well-known/security.txt</span> estão no ar desde 25/10/2026. Um relato de teste mandado de um endereço de fora em 10/11/2026 chegou e foi respondido.</span></p>
+<ul class="refs"><li><code class="ref" translate="no">docs/product/release-criteria.md (item 6)</code></li></ul>
+</li>
+<li class="ledger-row is-done">
+<p class="state"><svg class="icon" aria-hidden="true" focusable="false"><use href="#i-done"/></svg><span>Feito</span></p>
+<p class="item"><strong>Código aberto ao público</strong> <span>O código usa a MPL-2.0 e está aberto ao público desde 10/11/2026, em <span translate="no">github.com/nulavio/nulavio</span>.</span></p>
+<ul class="refs"><li><code class="ref" translate="no">LICENSE</code></li></ul>
+</li>
 <li class="ledger-row is-partly">
 <p class="state"><svg class="icon" aria-hidden="true" focusable="false"><use href="#i-partly"/></svg><span>Em parte</span></p>
-<p class="item"><strong>Pacotes para Fedora e Ubuntu</strong> <span>O RPM e o .deb saem do mesmo build, instalam e iniciam em contêineres limpos do Fedora 44 e do Ubuntu 26.10. Um repositório assinado com uma chave de teste instala e recusa metadados alterados. Faltam a chave de lançamento, o servidor do repositório e um teste num Ubuntu de verdade.</span></p>
+<p class="item"><strong>Pacotes para Fedora e Ubuntu</strong> <span>O RPM, o .deb e um pacote Flatpak saem do mesmo build. O Fedora instala de um repositório dnf e o Ubuntu de um repositório APT, os dois assinados com a chave de lançamento; depois de cada envio, os dois são instalados em contêineres limpos do Fedora e do Ubuntu com as verificações de assinatura ligadas. Faltam o caminho do APT percorrido num Ubuntu de verdade e o Flathub.</span></p>
 <ul class="refs"><li><code class="ref" translate="no">scripts/release/check_rpm.sh</code></li><li><code class="ref" translate="no">scripts/release/check_deb.sh</code></li><li><code class="ref" translate="no">docs/product/release-criteria.md (item 5)</code></li><li><code class="ref" translate="no">docs/security/residual-risks.md › R46</code></li></ul>
 </li>
 <li class="ledger-row is-partly">
 <p class="state"><svg class="icon" aria-hidden="true" focusable="false"><use href="#i-partly"/></svg><span>Em parte</span></p>
-<p class="item"><strong>Atualizações de segurança</strong> <span>Compromisso do projeto (SECURITY.md): uma versão do Nulavio até 72 horas depois de uma correção de segurança crítica ou alta da Mozilla. Para as urgentes, a meta interna é de 24 horas. Na primeira versão urgente, o Firefox 159.0 (27/10/2026), os pacotes ficaram prontos para assinar 12,8 horas depois da publicação da Mozilla. Assinar com a chave de lançamento e publicar ainda não foram ensaiados; esperam a chave e o servidor. O aviso de nova versão depende hoje da máquina do mantenedor e do agendamento do GitHub.</span></p>
+<p class="item"><strong>Atualizações de segurança</strong> <span>Compromisso do projeto (SECURITY.md): uma versão do Nulavio até 72 horas depois de uma correção de segurança crítica ou alta da Mozilla. Para as urgentes, a meta interna é de 24 horas. Na primeira versão urgente, o Firefox 159.0 (27/10/2026), os pacotes ficaram prontos para assinar 12,8 horas depois da publicação da Mozilla. As versões são assinadas no CI com a chave de lançamento, guardada no AWS KMS, depois que o mantenedor aprova cada execução: a 160.0-0.3 e a 160.0-0.4 saíram assim. O aviso de nova versão depende hoje da máquina do mantenedor e do agendamento do GitHub.</span></p>
 <ul class="refs"><li><code class="ref" translate="no">SECURITY.md</code></li><li><code class="ref" translate="no">docs/architecture/update-policy.md</code></li><li><code class="ref" translate="no">docs/research/evidence/release-rehearsal-2026-10-28.md</code></li><li><code class="ref" translate="no">docs/security/residual-risks.md › R51</code></li></ul>
 </li>
 <li class="ledger-row is-partly">
@@ -143,23 +158,13 @@
 </li>
 <li class="ledger-row is-partly">
 <p class="state"><svg class="icon" aria-hidden="true" focusable="false"><use href="#i-partly"/></svg><span>Em parte</span></p>
-<p class="item"><strong>Desbloqueio pelo celular</strong> <span>O app Android passou no teste num celular de verdade (Galaxy S24+, 10/11/2026). A alpha o oferece desde a 160.0-0.3 (11/11/2026); o app aguarda a revisão do F-Droid.</span></p>
+<p class="item"><strong>Desbloqueio pelo celular</strong> <span>O app Android passou no teste num celular de verdade (Galaxy S24+, 10/11/2026). A alpha o oferece desde a 160.0-0.3 (11/11/2026), mas o app ainda não pode ser baixado: o F-Droid só lista um app depois de três meses de desenvolvimento (o pedido pode ser refeito a partir de 27/01/2027), e uma cópia assinada do app nas versões do projeto está sendo preparada.</span></p>
 <ul class="refs"><li><code class="ref" translate="no">docs/adr/0005-phone-profile-unlock.md</code></li><li><code class="ref" translate="no">docs/security/residual-risks.md › R48</code></li></ul>
-</li>
-<li class="ledger-row is-partly">
-<p class="state"><svg class="icon" aria-hidden="true" focusable="false"><use href="#i-partly"/></svg><span>Em parte</span></p>
-<p class="item"><strong>Canal de segurança</strong> <span><span translate="no">security@nulavio.net</span> e <span translate="no">/.well-known/security.txt</span> estão no ar desde 25/10/2026. Falta mandar um relato de teste e confirmar a resposta.</span></p>
-<ul class="refs"><li><code class="ref" translate="no">docs/product/release-criteria.md (item 6)</code></li></ul>
 </li>
 <li class="ledger-row is-missing">
 <p class="state"><svg class="icon" aria-hidden="true" focusable="false"><use href="#i-missing"/></svg><span>Falta</span></p>
 <p class="item"><strong>Chave de segurança FIDO2</strong> <span>Planejada como forma de desbloquear perfis; espera uma chave para testar.</span></p>
 <ul class="refs"><li><code class="ref" translate="no">docs/product/execution-plan.md (S10)</code></li></ul>
-</li>
-<li class="ledger-row is-missing">
-<p class="state"><svg class="icon" aria-hidden="true" focusable="false"><use href="#i-missing"/></svg><span>Falta</span></p>
-<p class="item"><strong>Código aberto ao público</strong> <span>O código usa a MPL-2.0, mas o repositório ainda é privado.</span></p>
-<ul class="refs"><li><code class="ref" translate="no">LICENSE</code></li></ul>
 </li>
 <li class="ledger-row is-missing">
 <p class="state"><svg class="icon" aria-hidden="true" focusable="false"><use href="#i-missing"/></svg><span>Falta</span></p>
@@ -1143,7 +1148,7 @@
 </section>
 <section id="verify" aria-labelledby="verify-h">
 <h2 id="verify-h"><span class="num">11</span> Como conferir</h2>
-<p class="opening">Do que já dá para fazer hoje ao que depende do código aberto ou de uma versão.</p>
+<p class="opening"><!--release:on-->Deste site aos testes e ao próprio navegador.<!--/release:on--><!--release:off-->Do que já dá para fazer hoje ao que depende de uma versão.<!--/release:off--></p>
 <div class="claim" id="s11-1">
 <div class="claim-text">
 <h3><span class="num">11.1</span> Hoje, sem instalar nada: este site</h3>
@@ -1168,7 +1173,7 @@
 <div class="prose"><p>A Cloudflare, que serve o site, acrescenta cabeçalhos próprios, como server e cf-ray. Um deles é o NEL (report-to e nel): ele pede aos navegadores que implementam esse recurso que avisem a Cloudflare quando uma conexão com este site falhar.</p></div>
 <div class="claim" id="s11-2">
 <div class="claim-text">
-<h3><span class="num">11.2</span> Quando o código for aberto: os testes</h3>
+<h3><span class="num">11.2</span> Os testes</h3>
 <p><code translate="no">python3 -I tests/run.py unit</code> roda os testes de unidade, sem motor e sem rede. Os de integração precisam do build do Nulavio: <code translate="no">scripts/build/build_nulavio.sh {{firefox}}</code> compila o navegador num contêiner sem root. A compilação completa do Firefox 159.0 levou 47 minutos no notebook de referência, em 27/10/2026, e a árvore de compilação ocupa cerca de 23 GB. Os testes usam perfis descartáveis e não tocam no seu. <code translate="no">bin/nulavio prefs explain</code> lista cada padrão com motivo e custo.</p>
 </div>
 <div class="receipt">
@@ -1184,7 +1189,7 @@
 </div>
 <div class="claim" id="s11-3">
 <div class="claim-text">
-<h3><span class="num">11.3</span> Quando houver versão: no próprio navegador</h3>
+<h3><span class="num">11.3</span> <!--release:on-->No próprio navegador<!--/release:on--><!--release:off-->Quando houver versão: no próprio navegador<!--/release:off--></h3>
 <p><code translate="no">about:config</code> mostra cada preferência citada aqui, <code translate="no">about:policies</code> mostra a política que instala o uBlock Origin, e <code translate="no">about:support</code> mostra o sandbox e o isolamento de sites.</p>
 </div>
 </div>
