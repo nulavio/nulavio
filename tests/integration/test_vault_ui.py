@@ -987,6 +987,63 @@ class VaultUiTest(unittest.TestCase):
                 )
                 self.assertEqual(answer == "opened", opens, answer)
 
+    def test_18_a_change_saved_but_not_recorded_says_so_next_to_its_result(self):
+        """#177: the helper answers a change with "not-recorded" when the record inside the profile failed.
+        The pages show that as a warning next to the result, and a new recovery code is still shown."""
+        profile_id, _code = self.create_via_api("Registro", password=PASSWORD, keyring=False)
+        tool = Path(self.session.engine.path).parent / "nulavio-tools" / "bin" / "nulavio"
+        real = tool.with_name("nulavio.real-by-test")
+        os.rename(tool, real)
+        # The real helper, whose answer to a change gets the warning it gives when its record failed.
+        tool.write_text(NOT_RECORDED_HELPER.format(python=sys.executable, real=real))
+        tool.chmod(0o755)
+        warning = self.m.execute("return browser.i18n.getMessage('err_not_recorded');")
+        try:
+            self.open_page(f"vault/methods.html?p={profile_id}")
+            self.wait_state("idle")
+            self.click("#add-password")
+            self.type_into("new-password", "second pass 33")
+            self.type_into("new-password2", "second pass 33")
+            self.type_into("current", PASSWORD)
+            self.click("#password-form button[type=submit]")
+            self.assertTrue(
+                harness.wait_until(
+                    lambda: (
+                        self.m.execute("return document.querySelectorAll('#methods > li[data-method=password]').length;") == 2
+                    ),
+                    60,
+                )
+            )
+            self.assertTrue(harness.wait_until(lambda: warning in self.status_text(), 10), self.status_text())
+            self.assertEqual(self.status_line()["level"], "warn")  # not an error: the change itself was saved
+            self.shoot("methods-not-recorded")
+            self.type_into("current", PASSWORD)
+            self.click("#new-code")
+            self.click("dialog[open] button[value=confirm]")
+            self.wait_state("code")
+            self.assertEqual(self.m.execute("return document.querySelectorAll('#code > li').length;"), 7)  # still shown
+            self.assertTrue(harness.wait_until(lambda: warning in self.status_text(), 10), self.status_text())
+            self.assertEqual(self.status_line()["level"], "warn")
+        finally:
+            tool.unlink()
+            os.rename(real, tool)
+
+
+NOT_RECORDED_HELPER = """#!{python} -I
+import json, subprocess, sys
+request = sys.stdin.read()
+done = subprocess.run(["{real}", *sys.argv[1:]], input=request, capture_output=True, text=True)
+answer = done.stdout
+if sys.argv[1:3] == ["vault", "api"]:
+    op, parsed = json.loads(request or "{{}}").get("op"), json.loads(answer or "{{}}")
+    changes = ("new-recovery-code", "confirm-recovery-code", "add-password", "add-keyring", "remove-method")
+    if op in changes and "error" not in parsed:
+        answer = json.dumps({{**parsed, "warning": "not-recorded"}}) + "\\n"
+sys.stdout.write(answer)
+sys.stderr.write(done.stderr)
+sys.exit(done.returncode)
+"""
+
 
 if __name__ == "__main__":
     unittest.main()

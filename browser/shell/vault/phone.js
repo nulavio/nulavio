@@ -19,6 +19,15 @@ function setState(state, message = "", level = "info") {
   announce(message, level);
 }
 
+/** A result, with the warning when the change was saved but not recorded inside the profile (#177). */
+function settle(state, text, answer) {
+  if (answer?.warning === "not-recorded") {
+    setState(state, `${text} ${t("err_not_recorded")}`, "warn");
+  } else {
+    setState(state, text, "ok");
+  }
+}
+
 /** The 6 digits as shown ("123 456") and, for screen readers, as six separate digits. */
 function showDigits(sas) {
   const digits = String(sas).replace(/\D/g, "");
@@ -77,7 +86,7 @@ async function poll() {
   } else if (status.state === "paired") {
     stopPairing();
     await render(); // the list first, then the announcement
-    setState("paired", t("phonePaired", [status.phone ?? ""]), "ok");
+    settle("paired", t("phonePaired", [status.phone ?? ""]), status);
   } else if (status.state === "failed") {
     stopPairing();
     setState("error", failure(status.error), "error");
@@ -123,10 +132,10 @@ function phoneRow(method) {
       return;
     }
     try {
-      await vault.change(profileId, "remove-method", { current, envelope: method.id });
+      const result = await vault.change(profileId, "remove-method", { current, envelope: method.id });
       byId("current").value = "";
-      setState("idle", t("phoneRemoved", [method.label]), "ok");
       await render();
+      settle("idle", t("phoneRemoved", [method.label]), result);
     } catch (e) {
       const code = String(e?.message ?? e);
       setState("error", failure(code), "error");

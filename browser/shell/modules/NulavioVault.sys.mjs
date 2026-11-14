@@ -36,6 +36,10 @@ const CHANGES = new Set(["new-recovery-code", "confirm-recovery-code", "add-pass
 // What an unlock did with a recovery code replacement left unfinished (the helper's fixed words).
 const SETTLED = new Set(["finished", "undone", "unsettled", "unknown"]);
 const settled = answer => (SETTLED.has(answer?.recovery_code) ? answer.recovery_code : null);
+// A change that was saved but could not be recorded inside the profile (#177): the page says so next
+// to the result. Only these words pass; anything else the helper might write is dropped.
+const WARNINGS = new Set(["not-recorded"]);
+const warning = answer => (WARNINGS.has(answer?.warning) ? answer.warning : null);
 const MAX_SECRET = 1024;
 
 export class VaultError extends Error {
@@ -202,7 +206,7 @@ class Vault {
       request.envelope = String(envelope ?? "");
     }
     const answer = await helper(request);
-    return { done: true, recoveryCode: answer.recovery_code ?? null };
+    return { done: true, recoveryCode: answer.recovery_code ?? null, warning: warning(answer) };
   }
 
   // -- phone (Nulavio Companion, ADR 0005, S11) ---------------------------------------------
@@ -235,8 +239,8 @@ class Vault {
       answer.settled = settled(answer);
       delete answer.recovery_code;
     }
-    if ("warning" in answer && answer.warning !== "not-recorded") {
-      delete answer.warning;
+    if ("warning" in answer) {
+      answer.warning = warning(answer);
     }
     return answer;
   }

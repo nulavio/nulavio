@@ -189,6 +189,19 @@ class PhoneSessionTest(unittest.TestCase):
         self.assertTrue(profiles.container(self.prof).mounted())
         profiles.lock(self.prof)
 
+    def test_01b_a_pairing_saved_but_not_recorded_says_so(self):
+        # #177: the phone is paired (the key file is saved); the record inside the profile failed.
+        with mock.patch("nulavio_launcher.vault.cli._record", return_value=True):
+            session, first, thread = self.start("pair", {"current": PASSWORD})
+            phone = self.phone.pair(first["qr"])
+            self.assertEqual(self.wait_state(session, "waiting-for-you", "failed"), "waiting-for-you")
+            session.handle({"action": "confirm", "match": True})
+            thread.join(20)
+            phone.join(20)
+        self.assertEqual(session.status()["state"], "paired")
+        self.assertEqual(session.status()["warning"], "not-recorded")
+        self.assertEqual(self.phone_methods(), ["phone"])
+
     def test_02_digits_that_do_not_match_end_pairing_on_either_side(self):
         session, first, thread = self.start("pair", {"current": PASSWORD})
         phone = self.phone.pair(first["qr"])
