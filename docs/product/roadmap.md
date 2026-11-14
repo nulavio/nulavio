@@ -99,7 +99,7 @@ Unlock encrypted profiles with, in order of convenience: the phone (biometrics/P
 - [x] U8 Integration with Gecko profiles (encrypted profile container; lock = instance ended and container closed) — S5: launcher profiles end to end (`nulavio vault`, supervised `nulavio run`); browser-group profiles recognised as locked by the selector and routing
 - [x] U9 UX: onboarding in three decisions, locked profile, recovery (S6, `browser/shell/vault/`); phone devices come with U6
 - [x] U10 iOS and Windows evaluation ([report](../research/windows-ios-evaluation.md), 2026-10-27): feasible on the current design, outside the Linux 1.0 scope; Windows needs a code-signing identity and a protected-profile storage without FUSE, iOS a Mac and an Apple developer account
-- [ ] U11 Hardening and independent audit: hardening done through S13, S22, S23 and patch 0007; the independent audit needs an outside reviewer (maintainer)
+- [ ] U11 Hardening and independent audit: hardening done through S13, S22, S23 and patch 0007; the independent audit needs an outside reviewer (maintainer); its scope packet is [independent-review.md](../security/independent-review.md) (#224)
 
 **DoD:** a profile does not unlock without a valid method; copying its files does not reveal the key; at least two recovery methods work before phone unlock ships; the protection-state matrix (`encrypted_at_rest`, `os_user_protected`, `password_protected`, `hardware_bound`, `phone_approved`, `phone_key_release_verified`) shows only what is really in place.
 
