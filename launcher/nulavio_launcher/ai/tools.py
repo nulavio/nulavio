@@ -206,6 +206,9 @@ LOCAL_HOST_TTL = 60.0  # seconds a name's answer (local or not) is kept for the 
 LOCAL_HOSTS_KEPT = 2048  # names whose answer is kept; the older half goes when it is full
 LOCAL_LOOKUP_TIMEOUT = 3.0  # seconds a name may take to resolve before its request fails
 LOCAL_REFUSED_NOTED = 20  # places a session's refused requests are listed for in the activity
+# Schemes whose requests reach no host: a page's own data, and the engine's own pages and icons.
+HOSTLESS_SCHEMES = frozenset({"data", "blob", "about", "moz-extension", "resource", "chrome", "moz-icon",
+                              "page-icon", "cached-favicon", "moz-page-thumb", "moz-src"})  # fmt: skip
 LOOKUPS_AT_ONCE = 32  # names being looked up at once; while that many are out, a new name counts as local
 NET_WAITING_MAX = 256  # held requests waiting for a name; past that a new one is failed
 
@@ -838,7 +841,7 @@ class Bridge:
         still to be looked up."""
         scheme = url.partition(":")[0].lower()
         if scheme not in ("http", "https", "ws", "wss"):
-            return scheme != "file"  # data:, blob: and the engine's own pages send nothing to a host
+            return scheme in HOSTLESS_SCHEMES  # any other (file:, jar:, one the engine adds later) is closed
         place = self._request_place(url)
         if place is None:
             return False

@@ -1606,6 +1606,8 @@ class LocalRequestsTest(Home):
                 self.assertEqual(held(url, "r2"), ("network.failRequest", {"request": "r2"}), url)
             for url in ("data:text/plain,a", "blob:https://example.org/1", "about:blank", "http://[64:ff9b::5db8:d70e]/"):
                 self.assertEqual(held(url)[0], "network.continueRequest", url)
+            for url in ("jar:http://192.168.1.1/a.zip!/x", "view-source:http://10.0.0.1/", "gopher://10.0.0.1/", "x-new:1"):
+                self.assertEqual(held(url)[0], "network.failRequest", url)  # a scheme not known to be hostless is closed
             # The place the current call was allowed (asked, and the user said yes) is sent on, only it: its
             # WebSocket and the engine's upgrade of it to https are the same place; another port is not.
             bridge._local_ok = {("127.0.0.1", 8080), ("192.168.1.1", 80)}
