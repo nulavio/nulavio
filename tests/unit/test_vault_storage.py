@@ -802,6 +802,25 @@ class HelperApiTest(StorageCase):
         self.assertEqual(vault_cli.api_request(request), {"unlocked": True, "recovery_code": "undone"})  # next time
         profiles.lock(prof)
 
+    def test_a_settlement_whose_save_failed_after_writing_says_what_is_on_disk(self):
+        # Review of #187, round 3: the save replaced the key file and then failed (syncing its directory); the
+        # unlock said "both codes still work" while the old one no longer did.
+        prof, old_code = self.encrypted_profile()
+        killed = mock.patch.object(vault_cli, "_record", side_effect=SystemExit("killed"))
+        with killed, self.assertRaises(SystemExit):
+            vault_cli.api_request({"op": "new-recovery-code", "path": str(prof.path), "current": PASSWORD})
+        real = Vault.save
+
+        def written_then_failed(vault, *args, **kwargs):
+            real(vault, *args, **kwargs)
+            raise OSError(5, "Input/output error")
+
+        request = {"op": "unlock", "path": str(prof.path), "method": "recovery-code", "secret": old_code, "autolock": False}
+        with mock.patch.object(Vault, "save", written_then_failed):
+            self.assertEqual(vault_cli.api_request(request), {"unlocked": True, "recovery_code": "undone"})
+        self.assertIsNone(json.loads(profiles.container(prof).vault_path.read_text()).get("pending_recovery"))
+        profiles.lock(prof)
+
     def test_a_settlement_saved_but_not_recorded_says_so(self):
         prof, old_code = self.encrypted_profile()
         killed = mock.patch.object(vault_cli, "_record", side_effect=SystemExit("killed"))

@@ -230,9 +230,18 @@ class Container:
             try:
                 vault.save()
             except (VaultError, OSError) as exc:
-                vault.meta = before  # what is on disk: still waiting, tried again at the next unlock
-                unsettled(getattr(exc, "code", type(exc).__name__))
-                return
+                # A save can fail after the key file was already replaced (syncing its directory): what is said is
+                # what is on disk, read again, not what was meant (#187 review, round 3).
+                try:
+                    disk = json.loads(vault.path.read_text(encoding="utf-8"))
+                except (OSError, ValueError):
+                    disk = before
+                if disk.get("pending_recovery") or disk.get("generation") == before.get("generation"):
+                    vault.meta = before  # still waiting: both codes still open it; tried again at the next unlock
+                    unsettled(getattr(exc, "code", type(exc).__name__))
+                    return
+                vault.meta = disk  # it was saved: settled, and said so; its record is tried below
+                log.event("vault.recovery-code-saved-with-error", code=getattr(exc, "code", type(exc).__name__))
             vault.settled = outcome
             log.event("vault.recovery-code-settled", outcome=outcome)
             try:

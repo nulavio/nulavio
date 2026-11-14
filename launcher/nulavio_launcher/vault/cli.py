@@ -42,8 +42,9 @@ MESSAGES = {
     "last-method": "a profile needs at least one way to unlock it",
     "replacement-pending": "a new recovery code is waiting to be typed back; replace the recovery code again "
     "(and type the new one back) before removing this one",
-    "not-confirmed": "the new recovery code was not confirmed, so the previous one still opens this profile. "
-    "Unlocking it with the new code finishes the replacement; unlocking it any other way undoes it",
+    "not-confirmed": "the new recovery code was not confirmed by this command. A replacement that is still waiting is "
+    "finished by unlocking the profile with the new code, and undone by unlocking it any other way; "
+    "`nulavio vault status` shows whether one is waiting",
     "first-not-confirmed": "that is not the recovery code shown above; it was not confirmed",
 }
 
