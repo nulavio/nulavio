@@ -26,7 +26,6 @@ EXECUTABLES = {"bin/nulavio", "android/gradlew"}
 # Workflow write permissions: (workflow file, job id, permission) -> why. Every other permission is read-only
 # or absent; a new write needs an entry here and a reason a reviewer can check.
 WRITE_PERMISSIONS = {
-    ("ai-review.yml", "review", "id-token"): "Workload Identity Federation to the Claude API (no GitHub write)",
     ("ai-review.yml", "publish", "pull-requests"): "one advisory comment, posted by scripts/ci/post_ai_review.py",
     ("upstream.yml", "firefox-release", "issues"): "one issue per newer Firefox release (scripts/release/upstream_issue.py)",
     ("scorecard.yml", "analysis", "security-events"): "uploads Scorecard's SARIF to the Security tab",
