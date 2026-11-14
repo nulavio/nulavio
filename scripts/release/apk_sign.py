@@ -39,6 +39,7 @@ import argparse
 import base64
 import datetime
 import hashlib
+import itertools
 import os
 import struct
 import sys
@@ -222,23 +223,37 @@ def zip_layout(apk: bytes) -> tuple[int, int]:
         raise SignError("more than one end of central directory record fits the file's end (one inside a comment)")
     eocd = found[0]
     disk, cd_disk, entries_here, entries, cd_size, cd_offset = struct.unpack_from("<HHHHII", apk, eocd + 4)
-    zip64 = 0xFFFF in (entries_here, entries) or 0xFFFFFFFF in (cd_size, cd_offset)
-    if zip64 or (eocd >= 20 and apk[eocd - 20 : eocd - 16] == b"PK\x06\x07"):
+    # A ZIP64 archive says so in these fields. Its locator and end record would sit between the
+    # central directory and this end record, where the check below leaves no room for them.
+    if 0xFFFF in (entries_here, entries) or 0xFFFFFFFF in (cd_size, cd_offset):
         raise SignError("ZIP64 archives are not APKs this script signs")
     if (disk, cd_disk) != (0, 0) or entries_here != entries:
         raise SignError("multi-disk archives are not APKs this script signs")
     if cd_offset + cd_size != eocd:
         raise SignError("the central directory does not end where the end record starts")
-    position = cd_offset
+    position, spans = cd_offset, []
     for _ in range(entries):
         if position + 46 > eocd or apk[position : position + 4] != b"PK\x01\x02":
             raise SignError("the central directory holds fewer records than the end record says")
-        name, extra, comment = struct.unpack_from("<HHH", apk, position + 28)
-        if struct.unpack_from("<I", apk, position + 42)[0] >= cd_offset:
-            raise SignError("a central directory record points past the entries")
-        position += 46 + name + extra + comment
+        compressed = struct.unpack_from("<I", apk, position + 20)[0]
+        name_size, extra, comment = struct.unpack_from("<HHH", apk, position + 28)
+        local = struct.unpack_from("<I", apk, position + 42)[0]
+        name = apk[position + 46 : position + 46 + name_size]
+        # Each record must point at a local header for the same name, whose data ends before the
+        # central directory: what the digest covers is then the entries Android reads.
+        if local + 30 > cd_offset or apk[local : local + 4] != b"PK\x03\x04":
+            raise SignError(f"the record of {name!r} does not point at a local header before the central directory")
+        local_name, local_extra = struct.unpack_from("<HH", apk, local + 26)
+        start = local + 30 + local_name + local_extra
+        if apk[local + 30 : local + 30 + local_name] != name or start + compressed > cd_offset:
+            raise SignError(f"the local header of {name!r} does not match its record, or its data runs past the entries")
+        spans.append((local, start + compressed))
+        position += 46 + name_size + extra + comment
     if position != eocd:
         raise SignError("the central directory's records do not fill exactly the size the end record gives")
+    spans.sort()
+    if any(end > following for (_, end), (following, _) in itertools.pairwise(spans)):
+        raise SignError("two entries overlap")
     if cd_offset >= 32 and apk[cd_offset - 16 : cd_offset] == MAGIC:
         raise SignError("the APK is already signed (it has an APK Signing Block); give the unsigned build")
     return cd_offset, eocd

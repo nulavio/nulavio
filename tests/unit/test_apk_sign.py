@@ -213,10 +213,34 @@ class ApkSignTest(unittest.TestCase):
                 edited(eocd + 12, "<I", struct.unpack_from("<I", apk, eocd + 12)[0] - 1),
                 "does not end",
             ),
+            "a second disk": (edited(eocd + 4, "<H", 1), "multi-disk"),
         }
+        # A central directory record that points somewhere other than its own local header.
+        cd_offset, _ = apk_sign.zip_layout(apk)
+        first_local = struct.unpack_from("<I", apk, cd_offset + 42)[0]
+        name_size = struct.unpack_from("<H", apk, cd_offset + 28)[0]
+        cases |= {
+            "a record pointing into an entry": (edited(cd_offset + 42, "<I", 1), "does not point at a local header"),
+            "a local header without its signature": (edited(first_local, "<I", 0), "does not point at a local header"),
+            "a local name that is not the record's": (
+                edited(first_local + 30 + name_size - 1, "<B", ord("Z")), "does not match its record"),
+        }  # fmt: skip
         for name, (data, message) in cases.items():
             with self.subTest(name), self.assertRaisesRegex(apk_sign.SignError, message):
                 apk_sign.sign_apk(data, self.cert, self.signer)
+
+    def test_a_comment_that_looks_like_a_zip64_locator_is_still_a_comment(self):
+        # Legal ZIP: the last entry's comment ends where a ZIP64 locator would start. apksigner signs
+        # and verifies such an APK; so must this signer.
+        path = self.tmp / "comment.apk"
+        with zipfile.ZipFile(path, "w") as archive:
+            archive.writestr("AndroidManifest.xml", minimal_manifest())
+            last = zipfile.ZipInfo("assets/last.txt")
+            last.comment = b"PK\x06\x07" + bytes(16)
+            archive.writestr(last, b"the last entry")
+        signed = apk_sign.sign_apk(path.read_bytes(), self.cert, self.signer)
+        result = self.apksigner(signed, "comment-signed.apk")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     def test_the_v2_signer_says_v3_is_there_so_v3_cannot_be_stripped(self):
         # The stripping-protection attribute: an APK whose v3 block was removed fails verification
