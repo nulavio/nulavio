@@ -322,11 +322,17 @@ def der_rsa_public_key(spki: bytes) -> tuple[int, int]:
 
 def kms_signer(key_id: str, key: PublicKey) -> Signer:
     """A signer backed by KMS Sign; checks first that the KMS key is `key`."""
+    return kms_rsa_signer(key_id, key.modulus, key.exponent, f"the release key {key.hex}")
+
+
+def kms_rsa_signer(key_id: str, modulus: int, exponent: int, name: str) -> Signer:
+    """A signer backed by KMS Sign; checks first that the KMS key has this RSA modulus and
+    exponent (`name` says which key that is, in the error). Also used by apk_sign.py."""
     info = _aws("kms", "get-public-key", "--key-id", key_id)
     if info.get("KeyUsage") != "SIGN_VERIFY" or "RSASSA_PKCS1_V1_5_SHA_256" not in info.get("SigningAlgorithms", []):
         raise SignError("the KMS key is not an RSA signing key with RSASSA_PKCS1_V1_5_SHA_256")
-    if der_rsa_public_key(base64.b64decode(info["PublicKey"])) != (key.modulus, key.exponent):
-        raise SignError(f"the KMS key {key_id} is not the release key {key.hex}")
+    if der_rsa_public_key(base64.b64decode(info["PublicKey"])) != (modulus, exponent):
+        raise SignError(f"the KMS key {key_id} is not {name}")
 
     def sign(digest: bytes) -> bytes:
         with tempfile.TemporaryDirectory(prefix="nulavio-kms-") as tmp:
