@@ -196,6 +196,15 @@ class ProfileTest(TempHome):
         engine = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)", "--profile", str(prof.path)])
         self.addCleanup(engine.wait)
         self.addCleanup(engine.kill)
+        # A real engine makes its lock after it has started, so its command line is there by then. This
+        # stand-in is still in the middle of exec when Popen returns: for a moment /proc shows an empty
+        # command line, which running_pid rightly takes for another process (#280, about 1 run in 100 under
+        # load). Wait for the state the test is about.
+        cmdline = Path(f"/proc/{engine.pid}/cmdline")
+        deadline = time.monotonic() + 10
+        while str(prof.path) not in cmdline.read_bytes().decode(errors="replace").split("\0"):
+            self.assertLess(time.monotonic(), deadline, "the stand-in engine never showed its command line")
+            time.sleep(0.01)
         lock = prof.path / "lock"
         os.symlink(f"127.0.0.1:+{engine.pid}", lock)
         made = time.time() - 3600  # as if the clock had stepped an hour forward since

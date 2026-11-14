@@ -47,7 +47,8 @@ def _reused_pid(pid: int, lock: Path, profile_dir: Path) -> bool:
     It must have started after the lock was made *and* not look like an engine for this
     profile. The start time alone is not enough: a step of the wall clock (time sync, a manual
     correction) moves it, and a live engine must never be taken for gone (autolock would
-    unmount its profile).
+    unmount its profile). A process caught in the middle of exec shows an empty command line and
+    is taken for another one: the engine that made the lock is past that point (#280).
     """
     if not _started_after(pid, lock):
         return False
