@@ -1085,11 +1085,11 @@ class VaultUiTest(unittest.TestCase):
         os.rename(tool, real)
         tool.write_text(READ_FAILS_HELPER.format(python=sys.executable, real=real, flag=flag))
         tool.chmod(0o755)
-        word = lambda key: self.m.execute("return browser.i18n.getMessage(arguments[0]);", [key])  # noqa: E731
+        word = lambda key, *subs: self.m.execute("return browser.i18n.getMessage(arguments[0], arguments[1]);", [key, list(subs)])  # noqa: E731
         warning, unreadable = word("err_not_recorded"), word("err_storage_unavailable")
 
-        def said_together(result_key: str) -> None:
-            result = word(result_key).split("$")[0].strip()  # a message with a placeholder: its fixed words
+        def said_together(result_key: str, *subs: str) -> None:
+            result = word(result_key, *subs)
             together = lambda: all(part in self.status_text() for part in (result, warning, unreadable))  # noqa: E731
             self.assertTrue(harness.wait_until(together, 60), self.status_text())
             self.assertEqual(self.status_line()["level"], "error")
@@ -1128,7 +1128,7 @@ class VaultUiTest(unittest.TestCase):
             self.wait_state("idle")
             self.type_into("current", PASSWORD)
             self.click("#phones button")
-            said_together("phoneRemoved")
+            said_together("phoneRemoved", "Pixel de teste")
         finally:
             tool.unlink()
             os.rename(real, tool)
