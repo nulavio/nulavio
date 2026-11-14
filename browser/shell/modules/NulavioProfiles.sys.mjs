@@ -225,7 +225,10 @@ class NulavioProfilesClass {
       return;
     }
     try {
-      await service.setShowProfileSelectorWindow(false);
+      // (Not for a group whose every profile is protected: there the chooser is the way in, and stays as it is.)
+      if (!(await this.#everyProfileProtected())) {
+        await service.setShowProfileSelectorWindow(false);
+      }
       Services.prefs.setBoolPref(PREF_START_CHOOSER, true);
       await service.trackPref(PREF_START_CHOOSER);
     } catch (e) {
@@ -345,11 +348,18 @@ class NulavioProfilesClass {
     return !states.includes("plain") && states.some(state => state === "locked" || state === "unlocked");
   }
 
-  /** The profile of this very window is not deleted while it is the last one without a password: the engine
-      would start one of the others in its place, straight on its locked folder. It can go from a window of a
-      protected profile instead (remove(), which keeps the start-up chooser on). */
+  /** The profile of this very window is not deleted while no other profile is known to open without a password:
+      the engine would start one of the others in its place, straight on a locked folder. Stricter than
+      #lastUnprotected, on purpose: here a profile whose state could not be read is not taken for one that
+      opens, so others that are all unread refuse it too. It can go from a window of a protected profile
+      instead (remove(), which keeps the start-up chooser on). */
   async #keepOneUnprotected(target) {
-    if (await this.#lastUnprotected(target)) {
+    if (!target || ["locked", "unlocked"].includes(await this.#protection(target))) {
+      return;
+    }
+    const others = (await this.#service.getAllProfiles()).filter(each => each.id !== target.id);
+    const states = await Promise.all(others.map(each => this.#protection(each)));
+    if (others.length && !states.includes("plain")) {
       fail("last-unprotected");
     }
   }
@@ -863,7 +873,16 @@ class NulavioProfilesClass {
     const chooserWas = Boolean(this.#service.groupToolkitProfile?.showProfileSelector);
     if (last) {
       // Before it goes: from the next start on, the chooser is the only way in.
-      await this.#chooserOnAndWritten();
+      try {
+        await this.#chooserOnAndWritten();
+      } catch (e) {
+        if (!chooserWas) {
+          // Not written, so nothing is deleted, and the value in memory goes back too: a later write of the
+          // engine's would otherwise switch the chooser on for a profile that is still there.
+          await this.#service.setShowProfileSelectorWindow(false).catch(console.error);
+        }
+        throw e;
+      }
     }
     try {
       await this.#service.deleteProfile(profile);

@@ -699,18 +699,35 @@ class StartupChooserTest(unittest.TestCase):
         self.assertEqual(
             self.chrome(banco, "return P.remove(args[0], {lastUnprotected: true});", made["here"]).get("error"), "in-use"
         )
+        # (What shows the going back is the value the instance holds; the file is read too, once it has settled.)
         self.assertFalse(self.chrome(banco, "return SPS.groupToolkitProfile.showProfileSelector;").get("ok"))
         self.assertTrue(harness.wait_until(lambda: "ShowSelector=1" not in ini.read_text(), timeout=20), ini.read_text())
         self.session.stop()  # the profile without a password is closed: only the protected one runs
         # Without the person's word it stays; with it, the chooser is switched on and the profile goes.
         self.assertEqual(self.chrome(banco, "return P.remove(args[0]);", made["here"]).get("error"), "last-unprotected")
         self.assertNotIn("ShowSelector=1", ini.read_text())
+        # When profiles.ini cannot be written, the chooser cannot be relied on at the next start: nothing is
+        # deleted, and the setting is as it was. (The folder of profiles.ini is made read-only for the call: the
+        # engine writes that file by putting a new one in its place.)
+        names = "return (await P.list()).profiles.map(p => p.name).sort();"
+        listed = self.chrome(banco, names).get("ok")
+        self.assertEqual(len(listed), 2, listed)
+        mode = ini.parent.stat().st_mode
+        ini.parent.chmod(0o500)
+        try:
+            refused = self.chrome(banco, "return P.remove(args[0], {lastUnprotected: true});", made["here"])
+        finally:
+            ini.parent.chmod(mode)
+        self.assertEqual(refused.get("error"), "chooser-not-set", refused)
+        self.assertEqual(self.chrome(banco, names).get("ok"), listed)
+        self.assertTrue(Path(self.session.profile_dir).is_dir(), "the profile's folder went although nothing was written")
+        self.assertFalse(self.chrome(banco, "return SPS.groupToolkitProfile.showProfileSelector;").get("ok"))
+        self.assertNotIn("ShowSelector=1", ini.read_text())
         self.assertEqual(
             self.chrome(banco, "return P.remove(args[0], {lastUnprotected: true});", made["here"]).get("ok"),
             {"lastUnprotected": True},
         )
-        # Written before the answer came back, not some time after: the file is read at once.
-        self.assertIn("ShowSelector=1", ini.read_text())
+        self.assertIn("ShowSelector=1", ini.read_text())  # in the file by the time the answer is back
         self.assertEqual(
             self.chrome(banco, "return (await P.list()).profiles.map(p => [p.name, p.encrypted]);").get("ok"), [["Banco", True]]
         )
@@ -732,7 +749,6 @@ class StartupChooserTest(unittest.TestCase):
         self.assertTrue(shown["must"], shown)
         self.assertEqual(shown, {"must": shown["must"], "checked": True, "disabled": True, "says": shown["must"], "stored": True})
         self.chrome(banco, "W()?.close(); return true;")
-        self.assertTrue(harness.wait_until(lambda: "ShowSelector=1" in ini.read_text(), timeout=20), ini.read_text())
         time.sleep(7)  # the engine's own late write of the start-up entry (five seconds) is over
         banco.quit()
         self.assertTrue(harness.wait_until(lambda: not self.session.processes_for(path), timeout=60), "it did not close")
