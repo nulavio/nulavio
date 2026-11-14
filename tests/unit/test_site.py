@@ -696,22 +696,53 @@ class WaitlistWorkerTest(unittest.TestCase):
 
 
 class SiteWorkflowTest(unittest.TestCase):
-    """.github/workflows/site.yml: only main deploys, and only the deploy step gets the token."""
+    """.github/workflows/site.yml: only main deploys, in the site environment, and only the deploy step gets the token.
+
+    The workflow is read by indentation with comments dropped, so a guard counts only as a key of
+    the block it belongs to: moved into a comment or into another job, it no longer does.
+    """
 
     def setUp(self):
-        self.text = (ROOT / ".github/workflows/site.yml").read_text(encoding="utf-8")
-        self.deploy = self.text.split("\n  deploy:\n", 1)[1]
+        text = (ROOT / ".github/workflows/site.yml").read_text(encoding="utf-8")
+        self.lines = [line for line in text.splitlines() if line.strip() and not line.lstrip().startswith("#")]
 
-    def test_the_token_is_a_secret_of_the_site_environment_on_main(self):
-        triggers = self.text.split("\non:\n", 1)[1].split("\npermissions:", 1)[0]
-        self.assertNotIn("pull_request", triggers)
-        self.assertIn("if: ${{ github.ref == 'refs/heads/main' }}", self.deploy)
-        self.assertIn("\n    environment: site\n", self.deploy)  # accepts only main; holds CLOUDFLARE_API_TOKEN (#182)
+    @staticmethod
+    def indent(line):
+        return len(line) - len(line.lstrip())
+
+    def block(self, lines, key):
+        """The lines nested under `key` (a line of `lines` at their shallowest indentation)."""
+        level = min(self.indent(line) for line in lines)
+        start = next(i for i, line in enumerate(lines) if self.indent(line) == level and line.strip() == key) + 1
+        rest = lines[start:]
+        stop = next((i for i, line in enumerate(rest) if self.indent(line) <= level), len(rest))
+        return rest[:stop]
+
+    def keys(self, lines):
+        level = min(self.indent(line) for line in lines)
+        return [line.strip() for line in lines if self.indent(line) == level]
+
+    def test_only_a_push_to_main_or_a_manual_run_starts_it(self):
+        triggers = self.block(self.lines, "on:")
+        self.assertEqual(self.keys(triggers), ["push:", "workflow_dispatch:"])
+        self.assertEqual(self.keys(self.block(triggers, "push:"))[0], "branches: [main]")
+
+    def test_the_deploy_job_runs_on_main_in_the_site_environment_with_read_access_only(self):
+        self.assertIn("permissions: {}", self.keys(self.lines))
+        jobs = self.block(self.lines, "jobs:")
+        self.assertEqual(self.keys(jobs), ["deploy:"])
+        deploy = self.block(jobs, "deploy:")
+        keys = self.keys(deploy)
+        self.assertIn("if: ${{ github.ref == 'refs/heads/main' }}", keys)
+        self.assertIn("environment: site", keys)  # limited to main, holds CLOUDFLARE_API_TOKEN (#182)
+        self.assertEqual(self.keys(self.block(deploy, "permissions:")), ["contents: read"])
 
     def test_only_the_deploy_step_receives_the_token(self):
-        self.assertEqual(self.text.count("secrets."), 1)
-        step = self.deploy.split("- name: Deploy to Cloudflare Pages (production)\n", 1)[1].split("\n      - ", 1)[0]
-        self.assertIn("CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}", step)
+        holders = [line.strip() for line in self.lines if "secrets." in line]
+        self.assertEqual(holders, ["CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}"])
+        steps = self.block(self.block(self.block(self.lines, "jobs:"), "deploy:"), "steps:")
+        deploy_step = self.block(steps, "- name: Deploy to Cloudflare Pages (production)")
+        self.assertIn(holders[0], [line.strip() for line in self.block(deploy_step, "env:")])
 
 
 class VerifyLiveTest(unittest.TestCase):

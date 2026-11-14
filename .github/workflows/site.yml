@@ -10,10 +10,11 @@ name: site
 # --release requires the captures to come from the commit being built.
 #
 # Credentials: the secret CLOUDFLARE_API_TOKEN (an API token limited to
-# "Account / Cloudflare Pages / Edit" on the account that owns the project) of the environment
-# "site", which accepts only main, and the repository variable CLOUDFLARE_ACCOUNT_ID. A workflow
-# pushed on another branch cannot read an environment's secret (#182). Only the deploy step
-# receives them. This workflow never runs pull request code: it has no pull_request trigger,
+# "Account / Cloudflare Pages / Edit" on the account that owns the project) and the repository
+# variable CLOUDFLARE_ACCOUNT_ID. The job runs in the environment "site": the token is out of
+# reach of a workflow on another branch only once that environment accepts only main, holds the
+# token, and no repository secret of that name is left (repository settings, #182). Only the
+# deploy step receives them. This workflow never runs pull request code: it has no pull_request trigger,
 # and fork workflows are off.
 # wrangler comes from ci/site/package-lock.json: exact versions, integrity-checked by npm ci,
 # installed without running install scripts.
