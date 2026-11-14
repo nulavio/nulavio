@@ -103,6 +103,19 @@ class ReleaseMetadataTest(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertNotIn("apt_sources", json.loads(self.metadata.read_text()))
 
+    def test_the_flatpak_is_offered_only_while_the_release_carries_its_bundle(self):
+        # #274: a failed flatpak job does not hold a release back, so a later release can lack the bundle.
+        self.release["assets"] = [{"name": "nulavio-160.0-0.2.fc44.x86_64.rpm"}, {"name": "nulavio-160.0-0.2.x86_64.flatpak"}]
+        result = self.run_metadata()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(self.metadata.read_text())["flatpak_bundle"], "nulavio-160.0-0.2.x86_64.flatpak")
+        metadata = {"version": "160.0-0.1", "channel": "alpha", "key_fingerprint": "KEEP"}
+        self.metadata.write_text(json.dumps({**metadata, "flatpak_bundle": "nulavio-160.0-0.1.x86_64.flatpak"}))
+        self.release["assets"] = [{"name": "nulavio-160.0-0.2.fc44.x86_64.rpm"}, {"name": "nulavio-160.0-0.1.x86_64.flatpak"}]
+        result = self.run_metadata()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotIn("flatpak_bundle", json.loads(self.metadata.read_text()), "another release's bundle is not this one's")
+
     def test_drafts_invalid_versions_wrong_urls_and_empty_notes_leave_files_untouched(self):
         for field, value in (
             ("draft", True),

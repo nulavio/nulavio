@@ -834,7 +834,7 @@ class DownloadPagesTest(unittest.TestCase):
     def tearDownClass(cls):
         shutil.rmtree(cls.tmp, ignore_errors=True)
 
-    def source(self, name: str, version: str, fpr: str, key: str | None, apt: bool = False) -> Path:
+    def source(self, name: str, version: str, fpr: str, key: str | None, apt: bool = False, flatpak: bool = False) -> Path:
         src = self.tmp / name
         (src / "packaging").mkdir(parents=True)
         release = json.loads((ROOT / "packaging" / "release.json").read_text(encoding="utf-8"))
@@ -842,6 +842,9 @@ class DownloadPagesTest(unittest.TestCase):
         release.pop("apt_sources", None)
         if apt:
             release["apt_sources"] = "https://nulavio.net/apt/nulavio.sources"
+        release.pop("flatpak_bundle", None)
+        if flatpak:
+            release["flatpak_bundle"] = f"nulavio-{version}.x86_64.flatpak"
         (src / "packaging" / "release.json").write_text(json.dumps(release), encoding="utf-8")
         if key is not None:
             (src / build_site.PUBLIC_KEY).parent.mkdir(parents=True)
@@ -920,6 +923,56 @@ class DownloadPagesTest(unittest.TestCase):
                 self.assertNotIn("APT repository</dd>", on_page)
                 self.assertNotIn("repositório APT</dd>", on_page)
         ids = [[m for m in re.findall(r'id="([^"]+)"', pages["on"][page])] for page in build_site.DOWNLOAD_PAGES]
+        self.assertEqual(ids[0], ids[1], "both languages have the same sections")
+
+    def test_the_flatpak_appears_only_when_the_release_carries_its_bundle(self):
+        # #274: a failed flatpak job does not hold a release back, so the bundle is offered only when
+        # release_metadata.py found it among the release's assets.
+        off = build_site.release_values(self.source("fp-off", "159.0.1-0.1", self.fpr, self.armored, apt=True))
+        on = build_site.release_values(self.source("fp-on", "159.0.1-0.1", self.fpr, self.armored, apt=True, flatpak=True))
+        self.assertEqual((off["flatpak"], on["flatpak"]), ("off", "on"))
+        base = "https://github.com/nulavio/nulavio/releases/download/v159.0.1-0.1"
+        self.assertEqual(on["flatpak_url"], f"{base}/nulavio-159.0.1-0.1.x86_64.flatpak")
+        src = self.source("fp-other", "159.0.1-0.1", self.fpr, self.armored, flatpak=True)
+        release = json.loads((src / "packaging" / "release.json").read_text(encoding="utf-8"))
+        release["flatpak_bundle"] = "nulavio-159.0.1-0.0.x86_64.flatpak"  # another release's bundle
+        (src / "packaging" / "release.json").write_text(json.dumps(release), encoding="utf-8")
+        with self.assertRaises(build_site.BuildError):
+            build_site.release_values(src)
+        pages = {}
+        for name, values in (("off", off), ("on", on)):
+            out = self.tmp / f"fp-site-{name}"
+            real = build_site.release_values
+            build_site.release_values = lambda src, values=values: values
+            try:
+                build_site.build(out)
+            finally:
+                build_site.release_values = real
+            pages[name] = {page: (out / page).read_text(encoding="utf-8") for page in build_site.DOWNLOAD_PAGES}
+        for page in build_site.DOWNLOAD_PAGES:
+            with self.subTest(page=page):
+                self.assertNotIn("flatpak", pages["off"][page].lower())
+                on_page = pages["on"][page]
+                self.assertNotIn("<!--flatpak:", on_page)
+                self.assertNotIn("{{", on_page)
+                self.assertNotIn("\n\n<h3", on_page)
+                # Checked before it is installed: the key's fingerprint, the signature, then the bundle's SHA-256.
+                order = [
+                    f"curl -fsSLO --proto '=https' {base}/nulavio-159.0.1-0.1.x86_64.flatpak",
+                    f"curl -fsSLO --proto '=https' {base}/SHA256SUMS.asc",
+                    "gpg --show-keys --with-fingerprint nulavio-packages.asc",
+                    "gpg --verify SHA256SUMS.asc SHA256SUMS",
+                    "sha256sum --check --ignore-missing SHA256SUMS",
+                    "flatpak install --user nulavio-159.0.1-0.1.x86_64.flatpak",
+                ]
+                self.assertEqual(order, sorted(order, key=on_page.index))
+                self.assertIn("flatpak install --user --reinstall", on_page)  # the update path, said as a limit
+                self.assertIn("xdg-settings set default-web-browser net.nulavio.Nulavio.desktop", on_page)
+                self.assertIn("flatpak uninstall --user net.nulavio.Nulavio", on_page)
+                self.assertIn("nulavio run --confined", on_page)  # what the Flatpak does not have
+                for permission in ("devices", "pcsc", "xdg-download", "NativeMessagingProxy", "NetworkManager"):
+                    self.assertIn(f'<code translate="no">{permission}</code>', on_page)
+        ids = [re.findall(r'id="([^"]+)"', pages["on"][page]) for page in build_site.DOWNLOAD_PAGES]
         self.assertEqual(ids[0], ids[1], "both languages have the same sections")
 
     def test_a_repo_file_without_the_checks_or_off_the_site_is_refused(self):

@@ -87,6 +87,12 @@ def update(repo: Path, release: dict, repository: str, manifest: dict) -> bool:
     assets = {a.get("name") for a in release.get("assets") or [] if isinstance(a, dict)}
     if f"nulavio_{version}_amd64.deb" in assets and release_manifest.debs(manifest, manifest_tag):
         metadata["apt_sources"] = "https://nulavio.net/apt/nulavio.sources"
+    # The Flatpak bundle is offered only when this release carries it: a failed flatpak job does
+    # not hold a release back (build.md), so the next release can lack it and the pages say so.
+    if f"nulavio-{version}.x86_64.flatpak" in assets:
+        metadata["flatpak_bundle"] = f"nulavio-{version}.x86_64.flatpak"
+    else:
+        metadata.pop("flatpak_bundle", None)
     serialized = json.dumps(metadata, indent=2, ensure_ascii=False) + "\n"
     changed = serialized != metadata_path.read_text(encoding="utf-8") or changelog != changelog_path.read_text(encoding="utf-8")
     if changed:
