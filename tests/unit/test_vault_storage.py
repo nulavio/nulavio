@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import signal
 import subprocess
@@ -468,6 +469,9 @@ class HelperApiTest(StorageCase):
         self.assertEqual((path / "prefs.js").read_text(), MARKER)
         self.assertEqual(self.api({"op": "lock", "path": str(path)}), {"locked": True})
         new_code = self.api({"op": "new-recovery-code", "path": str(path), "current": code})["recovery_code"]
+        # Until the new code is typed back, the old one still opens the profile; only the new one confirms (#187).
+        self.assertEqual(self.api({"op": "confirm-recovery-code", "path": str(path), "current": code}), {"error": "wrong-secret"})
+        self.assertEqual(self.api({"op": "confirm-recovery-code", "path": str(path), "current": new_code}), {"done": True})
         self.assertEqual(
             self.api({"op": "unlock", "path": str(path), "method": "recovery-code", "secret": code}), {"error": "wrong-secret"}
         )
@@ -543,7 +547,9 @@ class HelperApiTest(StorageCase):
         stale = box.load_vault()
         stale.unlock_password(PASSWORD)
         self.addCleanup(stale.lock)
-        vault_cli.api_request({"op": "new-recovery-code", "path": str(prof.path), "current": PASSWORD})
+        request = {"op": "new-recovery-code", "path": str(prof.path), "current": PASSWORD}
+        new_code = vault_cli.api_request(request)["recovery_code"]
+        vault_cli.api_request({"op": "confirm-recovery-code", "path": str(prof.path), "current": new_code})
         after = box.vault_path.read_bytes()
         with self.assertRaises(storage.StorageError) as ctx, box.recording(stale) as record:
             stale.add_password("a second password", FAST)
@@ -621,12 +627,104 @@ class HelperApiTest(StorageCase):
             result = vault_cli.api_request({"op": "new-recovery-code", "path": str(prof.path), "current": PASSWORD})
         self.assertEqual(result["warning"], "not-recorded")
         self.assertEqual([p.name for p in box.root.glob("maintenance-*")], [])
-        with self.assertRaises(VaultError):
-            profiles.unlock(prof, recovery_code=old_code)
-        profiles.unlock(prof, recovery_code=result["recovery_code"]).lock()  # unlocking once records it
+        vault = profiles.unlock(prof, recovery_code=result["recovery_code"])  # unlocking once records it
+        self.assertEqual(vault.settled, "finished")  # and, with the new code, finishes the replacement
+        vault.lock()
         self.assertEqual(
             json.loads(box.state_path.read_text())["generation"], json.loads(box.vault_path.read_text())["generation"]
         )
+        profiles.lock(prof)
+        with self.assertRaises(VaultError):
+            profiles.unlock(prof, recovery_code=old_code)
+
+    # #187: a replacement cut short at any point leaves a code the person has seen that opens the profile.
+
+    def replace_from_the_command_line(self, prof: profile.Profile, confirm=None) -> tuple[subprocess.Popen, str]:
+        """`nulavio vault new-recovery-code`, read up to the new code; `confirm` is typed back if given."""
+        proc = subprocess.Popen(
+            [str(ROOT / "bin" / "nulavio"), "vault", "new-recovery-code", prof.name, "--password-stdin"],
+            stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        )  # fmt: skip
+        self.addCleanup(lambda: proc.poll() is None and proc.kill())
+        proc.stdin.write(PASSWORD + "\n")
+        proc.stdin.flush()
+        code = None
+        for line in proc.stdout:
+            if re.fullmatch(r"\s+([0-9A-Z]{4}-){6}[0-9A-Z]{4}\s*", line):
+                code = line.strip()
+                break
+        self.assertIsNotNone(code, proc.stderr.read() if proc.poll() is not None else "no code shown")
+        if confirm is not None:
+            proc.stdin.write(confirm(code) + "\n")
+            proc.stdin.close()
+            proc.wait(120)
+        return proc, code
+
+    def test_the_command_line_drops_the_old_code_once_the_new_one_is_typed_back(self):
+        prof, old_code = self.encrypted_profile()
+        proc, new_code = self.replace_from_the_command_line(prof, confirm=lambda code: code.lower())
+        self.assertEqual(proc.returncode, 0, proc.stderr.read())
+        with self.assertRaises(VaultError):
+            profiles.unlock(prof, recovery_code=old_code)
+        vault = profiles.unlock(prof, recovery_code=new_code)
+        self.assertIsNone(vault.settled)  # nothing was left to settle
+        vault.lock()
+        profiles.lock(prof)
+
+    def test_a_replacement_not_confirmed_on_the_command_line_keeps_the_old_code(self):
+        prof, old_code = self.encrypted_profile()
+        proc, new_code = self.replace_from_the_command_line(prof, confirm=lambda _code: old_code)
+        self.assertEqual(proc.returncode, 1)
+        self.assertIn("was not confirmed", proc.stderr.read())
+        self.assertEqual(sum(m.get("unconfirmed", False) for m in profiles.status(prof)["methods"]), 1)
+        vault = profiles.unlock(prof, recovery_code=old_code)
+        self.assertEqual(vault.settled, "undone")
+        vault.lock()
+        profiles.lock(prof)
+        with self.assertRaises(VaultError):
+            profiles.unlock(prof, recovery_code=new_code)
+
+    def test_a_replacement_killed_after_its_code_was_shown_is_settled_by_the_next_unlock(self):
+        # Killed while it waits for the new code to be typed back (a closed terminal, a power cut):
+        # both codes were shown. The next unlock finishes the replacement if it used the new code,
+        # and undoes it otherwise.
+        for unlock_with, outcome in (("new code", "finished"), ("password", "undone")):
+            with self.subTest(unlock_with=unlock_with):
+                prof, old_code = self.encrypted_profile(f"killed-{outcome}")
+                proc, new_code = self.replace_from_the_command_line(prof)
+                proc.kill()
+                proc.wait(30)
+                box = profiles.container(prof)
+                self.assertFalse(box.mounted())
+                if unlock_with == "password":
+                    vault = profiles.unlock(prof, password=PASSWORD)
+                else:
+                    vault = profiles.unlock(prof, recovery_code=new_code)
+                self.assertEqual(vault.settled, outcome)
+                vault.lock()
+                profiles.lock(prof)
+                works, refused = (new_code, old_code) if outcome == "finished" else (old_code, new_code)
+                with self.assertRaises(VaultError):
+                    profiles.unlock(prof, recovery_code=refused)
+                profiles.unlock(prof, recovery_code=works).lock()
+                profiles.lock(prof)
+                self.assertNotIn("pending_recovery", json.loads(box.vault_path.read_text()))
+
+    def test_a_replacement_killed_before_its_code_was_shown_leaves_the_old_code(self):
+        # Killed once the key file is saved and before the answer leaves (the issue's window of about
+        # a second): the new code was never seen. Nothing after the save runs, as in a kill.
+        prof, old_code = self.encrypted_profile()
+        killed = mock.patch.object(vault_cli, "_record", side_effect=SystemExit("killed"))
+        with killed, self.assertRaises(SystemExit):
+            vault_cli.api_request({"op": "new-recovery-code", "path": str(prof.path), "current": PASSWORD})
+        self.assertIsNotNone(json.loads(profiles.container(prof).vault_path.read_text()).get("pending_recovery"))
+        vault = profiles.unlock(prof, recovery_code=old_code)
+        self.assertEqual(vault.settled, "undone")
+        vault.lock()
+        profiles.lock(prof)
+        status = profiles.status(prof)
+        self.assertEqual([m["method"] for m in status["methods"]], ["password", "recovery-code"])
+        profiles.unlock(prof, recovery_code=old_code).lock()
         profiles.lock(prof)
 
     def test_a_failure_before_the_change_is_not_called_saved(self):

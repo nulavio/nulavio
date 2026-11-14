@@ -28,6 +28,7 @@ import tempfile
 import time
 from pathlib import Path
 
+from .. import log
 from . import sodium
 from .core import Vault, VaultError, kdf
 
@@ -196,6 +197,26 @@ class Container:
                 if isinstance(exc, RECORD_ERRORS):
                     raise StorageError("storage-failed", type(exc).__name__) from None
                 raise
+            self._settle_recovery_code(vault)
+
+    def _settle_recovery_code(self, vault: Vault) -> None:
+        """A recovery code replacement nobody confirmed (#187), settled now that the profile opened:
+        kept if this unlock used the new code, undone otherwise. Under the state lock, recorded like
+        any change. Not settled is no reason to stay locked: both codes still open the profile."""
+        outcome = vault.settle_recovery_code()
+        if outcome is None:
+            return
+        try:
+            vault.save()
+        except (VaultError, OSError) as exc:
+            log.event("vault.recovery-code-not-settled", code=getattr(exc, "code", type(exc).__name__))
+            return
+        vault.settled = outcome
+        log.event("vault.recovery-code-settled", outcome=outcome)
+        try:
+            self._check_state(vault)  # saved: a record left behind is written at the next unlock
+        except (VaultError, *RECORD_ERRORS) as exc:
+            log.event("vault.change-not-recorded", code=getattr(exc, "code", type(exc).__name__))
 
     @contextlib.contextmanager
     def _state_lock(self, wait: float = 120.0):

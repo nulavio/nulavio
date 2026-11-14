@@ -134,6 +134,10 @@ Without a working phone method: password or OS keyring with a recovery code; the
 
 Screens: choose method, set up recovery, profile locked, use another method, change protection (Settings) — **done in S6** (`browser/shell/vault/`); connect phone, QR, confirm pairing (6 digits), phone connected, request sent to phone, approve with biometrics (phone), phone unavailable, authorized devices, remove lost phone — with the Companion (S11). Plain words only ("Unlock with phone", "Recover access", "Lock profile"); no protocol names.
 
+## Replacing the recovery code
+
+A new recovery code exists only on the screen that shows it, so it replaces the old one in two phases (#187). `new-recovery-code` adds the new code's envelope and marks it as waiting (`pending_recovery` in `vault.json`, covered by the metadata MAC); both codes open the profile. Typing the new code back confirms it (`confirm-recovery-code`, with the new code as the current secret; in the browser, the two groups the page asks for, then the page sends the code it showed; on the command line, the whole code), and only then is the old envelope removed. Each phase is saved and recorded inside the volume like any other change. A replacement that was never confirmed is settled when the profile is next unlocked from locked: finished if that unlock used the new code, undone (the new envelope removed) otherwise. The unlock's answer says which (`recovery_code: finished | undone`), and the unlock page and `nulavio vault unlock` show it. `status` marks the waiting envelope `unconfirmed`; the browser's methods page does not list it. A second replacement before the first is confirmed drops the first new code and keeps the confirmed one.
+
 ## Effective protection matrix
 
 | State | Copy of the profile taken offline | Other local users | Same-user malware, profile **locked** | Same-user malware, profile **unlocked** |

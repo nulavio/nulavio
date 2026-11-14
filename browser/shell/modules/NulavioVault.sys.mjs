@@ -31,7 +31,11 @@ const METHODS = new Set(["password", "recovery-code", "os-keyring"]);
 // phone that is already connected, and removing it, never depend on it.
 const PREF_PHONE_PAIRING = "nulavio.vault.phone.pairing";
 const phonePairing = () => Services.prefs.getBoolPref(PREF_PHONE_PAIRING, false);
-const CHANGES = new Set(["new-recovery-code", "add-password", "add-keyring", "remove-method"]);
+// "confirm-recovery-code": the new code, typed back, is the `current` secret; the old code goes (#187).
+const CHANGES = new Set(["new-recovery-code", "confirm-recovery-code", "add-password", "add-keyring", "remove-method"]);
+// What an unlock did with a recovery code replacement left unfinished (the helper's fixed words).
+const SETTLED = new Set(["finished", "undone"]);
+const settled = answer => (SETTLED.has(answer?.recovery_code) ? answer.recovery_code : null);
 const MAX_SECRET = 1024;
 
 export class VaultError extends Error {
@@ -120,11 +124,11 @@ class Vault {
     if (method !== "os-keyring") {
       request.secret = checkSecret(secret);
     }
-    await helper(request);
+    const answer = await helper(request);
     if (url) {
-      return { opened: (await lazy.NulavioRouting.openIn(Number(profileId), url)).action };
+      return { opened: (await lazy.NulavioRouting.openIn(Number(profileId), url)).action, settled: settled(answer) };
     }
-    return { opened: (await lazy.NulavioProfiles.switchTo(Number(profileId))).action };
+    return { opened: (await lazy.NulavioProfiles.switchTo(Number(profileId))).action, settled: settled(answer) };
   }
 
   async lock(profileId) {
@@ -219,7 +223,12 @@ class Vault {
 
   /** A running session: "status", "confirm" (the user's answer about the 6 digits) or "cancel". */
   async phoneSession(session, action, match = false) {
-    return helper({ op: "phone-session", session: String(session), action, match: Boolean(match) });
+    const answer = await helper({ op: "phone-session", session: String(session), action, match: Boolean(match) });
+    if ("recovery_code" in answer) {
+      answer.settled = settled(answer);
+      delete answer.recovery_code;
+    }
+    return answer;
   }
 
   /** After an unlock with the phone: open the profile, with the held-back address if any. */

@@ -123,11 +123,14 @@ def status(prof: profile.Profile) -> dict:
     vault = box.load_vault()
     mounted = box.mounted()
     running = bool(mounted and prof.running_pid())
+    pending = vault.pending_recovery_code()
+    unconfirmed = pending["new"] if pending else None  # a new recovery code not typed back yet (#187)
     return {
         "profile": prof.name, "encrypted": True, "locked": not mounted, "running": running,
         # Unlocked with no engine: left open by `nulavio vault unlock` or by a crash.
         "open_without_engine": mounted and not running,
-        "methods": [{"id": e.id, "method": e.method, "label": e.label, "created": e.created} for e in vault.envelopes()],
+        "methods": [{"id": e.id, "method": e.method, "label": e.label, "created": e.created,
+                     **({"unconfirmed": True} if e.id == unconfirmed else {})} for e in vault.envelopes()],
         "protection": vault.protection_states(),
     }  # fmt: skip
 

@@ -60,6 +60,7 @@ class Session:
         self.error: str | None = None
         self.sas: str | None = None
         self.phone_name: str | None = None
+        self.recovery_code: str | None = None
         self.decision: bool | None = None
         self.decided = threading.Event()
         self.cancelled = threading.Event()
@@ -81,6 +82,8 @@ class Session:
                 out["sas"] = self.sas
             if self.phone_name:
                 out["phone"] = self.phone_name
+            if self.recovery_code:
+                out["recovery_code"] = self.recovery_code  # what the unlock did with a replacement left unfinished
             return out
 
     def handle(self, request: dict) -> dict:
@@ -315,7 +318,7 @@ def unlock(session: Session, request: dict, emit, resolver: link.Resolver = link
             from .cli import spawn_autolock
 
             spawn_autolock(prof)
-        session.set("unlocked")
+        session.set("unlocked", recovery_code=vault.settled)
         log_event("vault.unlock", profile=prof.name, method="phone")
     else:
         code = coordinator.error or "failed"

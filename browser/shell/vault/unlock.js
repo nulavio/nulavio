@@ -66,13 +66,26 @@ async function closeSoon() {
   setTimeout(() => (siblings.length > 1 ? browser.tabs.remove(tab.id) : browser.tabs.update(tab.id, { url: "about:newtab" })), 2500);
 }
 
+// A recovery code replacement left unfinished is settled by the unlock (#187); the page says which
+// way, and stays until it is closed so that can be read.
+const SETTLED = { finished: "vaultRecoveryFinished", undone: "vaultRecoveryUndone" };
+
+async function unlocked(settled) {
+  const note = SETTLED[settled];
+  if (note) {
+    setState("unlocked", `${t("vaultUnlocked", [profile.name])} ${t(note)}`, "warn");
+    return;
+  }
+  setState("unlocked", t("vaultUnlocked", [profile.name]), "ok");
+  await closeSoon();
+}
+
 async function attempt(method, secret = null) {
   setState("unlocking", t("vaultUnlocking"), "progress");
   busy(true);
   try {
-    await vault.unlock(profileId, method, secret ?? undefined, url?.href);
-    setState("unlocked", t("vaultUnlocked", [profile.name]), "ok");
-    await closeSoon();
+    const result = await vault.unlock(profileId, method, secret ?? undefined, url?.href);
+    await unlocked(result.settled);
   } catch (e) {
     busy(false);
     const code = String(e?.message ?? e);
@@ -130,8 +143,7 @@ async function phonePoll() {
   } else if (status.state === "unlocked") {
     showPhone(false);
     await vault.phoneOpen(profileId, url?.href);
-    setState("unlocked", t("vaultUnlocked", [profile.name]), "ok");
-    await closeSoon();
+    await unlocked(status.settled);
   } else if (PHONE_ENDINGS[status.state] || status.state === "failed") {
     showPhone(false);
     const message = status.state === "failed" ? errorText(new Error(status.error)) : t(PHONE_ENDINGS[status.state]);

@@ -40,6 +40,16 @@ MESSAGES = {
     "recovery-code-malformed": "a recovery code has 28 letters and digits (7 groups of 4)",
     "password-too-short": "use at least 8 characters",
     "last-method": "a profile needs at least one way to unlock it",
+    "not-confirmed": "the new recovery code was not confirmed, so the previous one still opens this profile. "
+    "Unlocking it with the new code finishes the replacement; unlocking it any other way undoes it",
+}
+
+# What an unlock did with a recovery code replacement that was never confirmed (#187).
+SETTLED = {
+    "finished": "the recovery code replacement left unfinished earlier is now finished: the new code opens "
+    "this profile, the previous one no longer does",
+    "undone": "the recovery code replacement left unfinished earlier was undone: the previous code still opens "
+    "this profile, the new one does not",
 }
 
 
@@ -223,6 +233,8 @@ def _unlock(args) -> int:
         vault = profiles.unlock(prof, password=password or "")
     vault.lock()  # the volume stays mounted; the DEK is not kept by the CLI
     print(f"Profile '{prof.name}' is unlocked until `nulavio vault lock {prof.name}`.")
+    if vault.settled:
+        print(f"Note: {SETTLED[vault.settled]}.")
     return 0
 
 
@@ -244,7 +256,7 @@ def _status(args) -> int:
             print(f"{item['profile']:16} not encrypted")
             continue
         state = "locked" if item["locked"] else "OPEN (no engine running)" if item["open_without_engine"] else "unlocked"
-        methods = ", ".join(m["method"] for m in item["methods"])
+        methods = ", ".join(m["method"] + (" (new, not confirmed)" if m.get("unconfirmed") else "") for m in item["methods"])
         print(f"{item['profile']:16} {state:26} methods: {methods}   protection: {', '.join(item['protection'])}")
     return 0
 
@@ -290,13 +302,40 @@ def _change(args) -> int:
     finally:
         vault.lock()
     if code:  # shown once the change is saved (it is the only copy), whether or not it was recorded
-        print("New recovery code (the old one no longer opens this profile through Nulavio; a copy of the")
-        print("profile's files made before now can still be opened with it):")
+        print("New recovery code (shown once; write it down and keep it away from this computer):")
         print(f"\n    {code}\n")
+        print("Until you type it back, the previous code still opens this profile.")
     if unrecorded:
         _err(MESSAGES["not-recorded"])
+    if code:
+        sys.stdout.flush()  # the code reaches the person before anything waits for an answer
+        typed = read_secret("Type the new recovery code to confirm it", from_stdin=args.password_stdin)
+        if not typed or _confirm_recovery_code(box, typed) is None:
+            _err(MESSAGES["not-confirmed"])
+            return 1
+        print("The previous recovery code no longer opens this profile through Nulavio; a copy of the")
+        print("profile's files made before now can still be opened with it.")
     print(f"Profile '{prof.name}': {args.vault_cmd.replace('-', ' ')} done.")
     return 0
+
+
+def _confirm_recovery_code(box, typed: str) -> bool | None:
+    """The second phase of a replacement: the new code typed back opens it, and the old code goes.
+    Returns whether that was recorded, or None when what was typed is not the new code."""
+    vault = box.load_vault()
+    try:
+        vault.unlock_recovery_code(typed)
+        if vault.tampered:
+            raise VaultError("metadata-tampered")
+        with box.recording(vault) as record:
+            vault.confirm_recovery_code()
+            vault.save()
+            return not _record(record)
+    except VaultError as exc:
+        log_event("vault.recovery-code-not-confirmed", code=exc.code)
+        return None
+    finally:
+        vault.lock()
 
 
 def _record(record) -> bool:
@@ -415,7 +454,7 @@ def api_request(request: dict) -> dict:
             except OSError:
                 profiles.lock(prof)  # no watcher would lock it again: fail closed (audit V7)
                 raise
-        return {"unlocked": True}
+        return {"unlocked": True, **({"recovery_code": vault.settled} if vault.settled else {})}
     if op == "lock":
         profiles.lock(prof)
         return {"locked": True}
@@ -469,7 +508,7 @@ def api_request(request: dict) -> dict:
         finally:
             vault.lock()
         return {"recovery_code": code}
-    if op in ("new-recovery-code", "add-password", "add-keyring", "remove-method"):
+    if op in ("new-recovery-code", "confirm-recovery-code", "add-password", "add-keyring", "remove-method"):
         box = profiles.container(prof)
         vault = box.load_vault()
         _reauth(vault, str(request.get("current") or ""))
@@ -478,6 +517,8 @@ def api_request(request: dict) -> dict:
             with box.recording(vault) as record:  # as in _change: the volume first, locked or not
                 if op == "new-recovery-code":
                     result["recovery_code"] = vault.replace_recovery_code()
+                elif op == "confirm-recovery-code":
+                    vault.confirm_recovery_code()  # `current` was the new code: the old one goes
                 elif op == "add-password":
                     vault.add_password(str(request.get("password") or ""))
                 elif op == "add-keyring":

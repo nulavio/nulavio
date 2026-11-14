@@ -308,7 +308,10 @@ class CopiedFilesTest(VaultTestCase):
         weak = vault.add_password("weak-old-password", FAST, label="old")
         vault.save()
         vault.save()
-        vault.replace_recovery_code(FAST)
+        new_code = vault.replace_recovery_code(FAST)
+        vault = self.reopen(vault)
+        vault.unlock_recovery_code(new_code)  # typed back: the replacement is confirmed (#187)
+        vault.confirm_recovery_code()
         vault.remove(weak.id)
         vault.save()
         for name in ("vault.json", "vault.json.bak"):
@@ -687,10 +690,93 @@ class RecoveryCodeTest(VaultTestCase):
         vault, _, old = self.new_vault(recovery=True)
         new = vault.replace_recovery_code(FAST)
         vault = self.reopen(vault)
+        vault.unlock_recovery_code(new)  # the new code, typed back, confirms the replacement
+        vault.confirm_recovery_code()
+        vault = self.reopen(vault)
         with self.assertRaises(VaultError):
             vault.unlock_recovery_code(old)
         vault.unlock_recovery_code(new)
         self.assertEqual(len(vault.envelopes("recovery-code")), 1)
+        self.assertIsNone(vault.pending_recovery_code())
+
+    # #187: the new code exists only on the screen that shows it. Until it is typed back, the old
+    # code still opens the profile, so a replacement cut short never leaves only an unseen code.
+
+    def test_the_old_code_works_until_the_new_one_is_confirmed(self):
+        vault, dek, old = self.new_vault(recovery=True)
+        new = vault.replace_recovery_code(FAST)
+        for code in (old, new):
+            vault = self.reopen(vault)
+            with self.subTest(code="old" if code == old else "new"):
+                vault.unlock_recovery_code(code)
+                self.assertEqual(bytes(vault.dek), dek)
+
+    def test_only_the_new_code_confirms_a_replacement(self):
+        vault, _, old = self.new_vault(recovery=True)
+        vault.replace_recovery_code(FAST)
+        for unlock in (lambda v: v.unlock_recovery_code(old), lambda v: v.unlock_password(PASSWORD)):
+            vault = self.reopen(vault)
+            unlock(vault)
+            with self.assertRaises(VaultError) as ctx:
+                vault.confirm_recovery_code()
+            self.assertEqual(ctx.exception.code, "wrong-secret")
+            self.assertEqual(len(vault.envelopes("recovery-code")), 2)
+
+    def test_an_unconfirmed_replacement_is_finished_by_an_unlock_with_the_new_code(self):
+        vault, _, old = self.new_vault(recovery=True)
+        new = vault.replace_recovery_code(FAST)
+        vault = self.reopen(vault)
+        vault.unlock_recovery_code(new)
+        self.assertEqual(vault.settle_recovery_code(), "finished")
+        vault = self.reopen(vault)
+        with self.assertRaises(VaultError):
+            vault.unlock_recovery_code(old)
+        vault.unlock_recovery_code(new)
+
+    def test_an_unconfirmed_replacement_is_undone_by_any_other_unlock(self):
+        for unlock in ("old", "password"):
+            with self.subTest(unlock=unlock):
+                vault, _, old = self.new_vault(name=f"{unlock}.json", recovery=True)
+                new = vault.replace_recovery_code(FAST)
+                vault = self.reopen(vault)
+                vault.unlock_recovery_code(old) if unlock == "old" else vault.unlock_password(PASSWORD)
+                self.assertEqual(vault.settle_recovery_code(), "undone")
+                vault = self.reopen(vault)
+                with self.assertRaises(VaultError):
+                    vault.unlock_recovery_code(new)
+                vault.unlock_recovery_code(old)
+                self.assertIsNone(vault.settle_recovery_code())  # nothing left to settle
+
+    def test_a_second_replacement_drops_the_unconfirmed_code_and_keeps_the_confirmed_one(self):
+        vault, _, old = self.new_vault(recovery=True)
+        first = vault.replace_recovery_code(FAST)
+        second = vault.replace_recovery_code(FAST)
+        self.assertEqual(len(vault.envelopes("recovery-code")), 2)
+        vault = self.reopen(vault)
+        with self.assertRaises(VaultError):
+            vault.unlock_recovery_code(first)
+        vault.unlock_recovery_code(old)
+        vault = self.reopen(vault)
+        vault.unlock_recovery_code(second)
+        vault.confirm_recovery_code()
+        vault = self.reopen(vault)
+        with self.assertRaises(VaultError):
+            vault.unlock_recovery_code(old)
+
+    def test_removing_a_code_of_a_replacement_ends_it(self):
+        vault, _, old = self.new_vault(recovery=True)
+        old_id = vault.envelopes("recovery-code")[0].id
+        vault.replace_recovery_code(FAST)
+        new_id = vault.pending_recovery_code()["new"]
+        vault.remove(new_id)
+        self.assertIsNone(vault.pending_recovery_code())
+        self.assertEqual([e.id for e in vault.envelopes("recovery-code")], [old_id])
+        vault.replace_recovery_code(FAST)
+        vault.remove(old_id)  # the new code is then the only one: nothing is left to replace
+        self.assertNotIn("pending_recovery", vault.meta)
+        vault = self.reopen(vault)
+        with self.assertRaises(VaultError):
+            vault.unlock_recovery_code(old)
 
     def test_codes_are_unique_and_high_entropy(self):
         from nulavio_launcher.vault.core import RECOVERY_GROUP_LEN, RECOVERY_GROUPS, new_recovery_code

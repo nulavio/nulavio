@@ -128,7 +128,8 @@ async function render() {
     return;
   }
   byId("who").replaceChildren(chip(profile, "lg"), h("span", { class: "popup__name", text: profile.name }), ...profileStates(profile).map(stateBadge));
-  const methods = profile.methods;
+  // A new recovery code not typed back yet is not a method to list or count (#187): the old one still is.
+  const methods = profile.methods.filter(m => !m.unconfirmed);
   const confirmers = methods.filter(m => CONFIRMS.has(m.method)).length;
   byId("methods").replaceChildren(...methods.map(method => methodRow(method, methods.length, confirmers)));
   // Below two methods, say what that means; with nothing left that can confirm a change (a profile
@@ -163,13 +164,25 @@ function showNewCode(code) {
   byId("code-heading").focus();
 }
 
-byId("code-step").addEventListener("submit", event => {
+byId("code-step").addEventListener("submit", async event => {
   event.preventDefault();
   const normalise = v => v.trim().toUpperCase().replaceAll("O", "0").replace(/[IL]/g, "1");
   const wrong = ["group-a", "group-b"].find(id => normalise(byId(id).value) !== byId(id).dataset.expected);
   if (wrong) {
     refuseField(byId(wrong), byId("code-error"), t("vaultGroupsDiffer")); // the group that differs
     return;
+  }
+  // Only now does the old code go: until the new one is confirmed, both open the profile (#187).
+  const submit = event.submitter ?? byId("code-step").querySelector("button[type=submit]");
+  submit.disabled = true;
+  announce(t("methodsWorking"), "progress");
+  try {
+    await vault.change(profileId, "confirm-recovery-code", { current: byId("code").dataset.code });
+  } catch (e) {
+    announce(errorText(e), "error"); // the code stays on screen; the old one still opens the profile
+    return;
+  } finally {
+    submit.disabled = false;
   }
   clearCode(byId("code"));
   for (const id of ["group-a", "group-b"]) {
@@ -180,6 +193,7 @@ byId("code-step").addEventListener("submit", event => {
   byId("code-step").hidden = true;
   making = false;
   setState("idle");
+  await render().catch(e => announce(errorText(e), "error"));
   announce(t("methodsCodeReplaced"), "ok");
   byId("new-code").focus();
 });
