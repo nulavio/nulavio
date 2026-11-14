@@ -5,5 +5,6 @@
   "key_fingerprint": "298A 9093 BAAB B26F 79BB  29F4 BF47 E5FA 9EDB 8DB1",
   "repo_file": "https://nulavio.net/rpm/nulavio.repo",
   "key_url": "https://nulavio.net/keys/nulavio-packages.asc",
-  "apt_sources": "https://nulavio.net/apt/nulavio.sources"
+  "apt_sources": "https://nulavio.net/apt/nulavio.sources",
+  "flatpak_bundle": "nulavio-160.0-0.4.x86_64.flatpak"
 }
