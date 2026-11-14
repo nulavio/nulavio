@@ -171,10 +171,14 @@ def _carry(old: Vault, new: Vault, method: str, current: str, keyring: Keyring |
     for env in old.envelopes():
         made = None
         try:
-            if env.id == old.opened_with and method == "password":
-                made = new.add_password(current, {"ops": env.data["ops"], "mem": env.data["mem"]}, env.label)
-            elif env.id == old.opened_with and method == "recovery-code":
-                made = new.add_known_recovery_code(current, {"ops": env.data["ops"], "mem": env.data["mem"]})
+            if env.id == old.opened_with:
+                # The secret that was typed must open the profile afterwards: if it cannot be wrapped again,
+                # nothing is changed (never a profile left to the methods the person did not use just now).
+                params = {"ops": env.data["ops"], "mem": env.data["mem"]}
+                if method == "password":
+                    made = new.add_password(current, params, env.label)
+                else:
+                    made = new.add_known_recovery_code(current, params)
             elif env.method == "os-keyring" and keyring is not None:
                 made = add_os_keyring(new, keyring, label=env.label)
                 was = env.data.get("attributes")
@@ -183,8 +187,14 @@ def _carry(old: Vault, new: Vault, method: str, current: str, keyring: Keyring |
             elif env.method == "phone":
                 made = phones.add_phone(new, phones.PairedPhone.from_fields(env.data), env.label)
         except (VaultError, KeyError, TypeError, ValueError) as exc:
+            if env.id == old.opened_with:
+                for step in undo:
+                    step()
+                raise VaultError("failed", "the method that was typed could not be carried over") from None
             log.event("vault.rekey-not-carried", method=env.method, code=getattr(exc, "code", type(exc).__name__))
         (carried if made else dropped).append({"method": env.method, "label": env.label})
+    if not any(env.id == old.opened_with for env in old.envelopes()):
+        raise VaultError("failed", "the method that was typed is not one of the profile's")
     return carried, dropped, undo, after
 
 

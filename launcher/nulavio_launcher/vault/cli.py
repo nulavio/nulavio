@@ -49,6 +49,9 @@ MESSAGES = {
     "unlocked": "the profile is open; close it and lock it first",
     "no-space": "not enough free space: a new key needs room for a second copy of the profile while it is made",
     "copy-mismatch": "the copy into the new volume did not match the original; nothing was changed",
+    "rekey-unfinished": "the new key was made, but putting it in place did not finish; it is finished the next time "
+    "the profile is used. The method you typed opens it; other passwords and the recovery code no longer do "
+    "(`nulavio vault status` shows what it has)",
 }
 
 # What a removal leaves behind, said where one is made (ADR 0015).

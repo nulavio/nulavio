@@ -142,9 +142,9 @@ A new recovery code exists only on the screen that shows it, so it replaces the 
 
 Removing a method deletes its envelope; the DEK, the volume's password and gocryptfs's own master key stay as they were, so a copy of `vault.json` from before still opens the files with the secret removed ([R70](../security/residual-risks.md)). A new key ends that ([ADR 0015](../adr/0015-a-new-key-for-a-profile.md)): `nulavio vault rekey`, or "Criar nova chave" on the unlock methods page (helper operations `rekey-check` and `rekey`).
 
-- **What it makes:** a new DEK and a new gocryptfs volume with its own master key, built under `P.vault/rekey/`. The old volume is mounted read-only, its files are copied and read back (names, kinds, sizes, SHA-256), and then the new volume and key file take the old ones' place.
+- **What it makes:** a new DEK and a new gocryptfs volume with its own master key, built under `P.vault/rekey/`. The old volume is mounted read-only, its files are copied and read back (names, kinds, sizes, SHA-256) through open handles on the two volumes, and then the new volume and key file take the old ones' place.
 - **What carries over:** the secret typed to authorize it, this computer's login (a new keyring key) and connected phones (from their public keys). Other passwords and a recovery code that was not typed are dropped; the page makes a new recovery code right after.
-- **Interrupted:** before the marker `rekey/complete` exists, the next use of the profile removes `rekey/` and nothing has changed. After it, the next use finishes the switch (`storage.recover_rekey`).
+- **Interrupted:** before the marker `rekey/complete` exists, the next use of the profile removes `rekey/` and nothing has changed. After it, the next use finishes the switch (`storage.recover_rekey`; `mount` and `recording` do the same first, under the state lock), never under a mounted volume. An error after the marker is `rekey-unfinished`.
 - **How the pages know:** `vault.json` records when the key was made and when a method was last removed or replaced since (`key`, in `status` as `key.created`, `key.last_removal` and `key.tracked`). A key file from before this has no record (`tracked: false`), and the page says what is not known.
 - **Needs:** the profile closed, and free space for a second copy while it runs.
 

@@ -586,6 +586,116 @@ class RekeyTest(StorageCase):
         self.assertNotIn(PASSWORD, done.stdout + done.stderr)
         self.assertEqual(self.files(self.prof, password=PASSWORD), self.before)
 
+    # -- review of #275 ------------------------------------------------------------------------------
+
+    def test_a_volume_detached_during_the_copy_is_still_the_one_copied(self):
+        # The copy went by the mount points' paths: with the old volume detached under it, it "copied" the empty
+        # directory beneath, the two empty listings matched, and the old volume was deleted. Every file was lost.
+        box, real = profiles.container(self.prof), storage._copy_checked
+        tool = shutil.which("fusermount3") or "fusermount"
+
+        def detached(source, target):
+            for name in ("old", "new"):
+                subprocess.run([tool, "-u", "-z", str(box.root / storage.REKEY / name)], check=True, capture_output=True)
+            real(source, target)
+
+        with mock.patch.object(storage, "_copy_checked", detached):
+            self.assertEqual(self.api(self.prof, "rekey", current=PASSWORD)["done"], True)
+        self.assertFalse((box.root / storage.REKEY).exists())
+        self.assertEqual(self.files(self.prof, password=PASSWORD), self.before)
+
+    def test_a_volume_without_its_record_is_not_copied(self):
+        # What is mounted where the old volume should be is checked to be the profile's: an empty directory is not.
+        with mock.patch.object(storage, "_listing", return_value={}), self.assertRaises(VaultError) as ctx:
+            self.api(self.prof, "rekey", current=PASSWORD)
+        self.assertEqual(ctx.exception.code, "copy-mismatch")
+        self.assert_as_before()
+
+    def test_an_unlock_that_waited_does_not_open_the_old_volume_under_a_new_key_about_to_take_its_place(self):
+        # An unlock that read the key file, then waited for the state lock while a new key was made and killed
+        # after its copy was whole: it mounted the old volume, and the next use of the profile "finished" the
+        # new key under it, deleting the encrypted files of the profile that was open.
+        box = profiles.container(self.prof)
+        waiting = box.load_vault()
+        waiting.unlock_password(PASSWORD)
+        self.assertEqual(self.interrupt("kill-before-switch").returncode, -signal.SIGKILL)
+        with self.assertRaises(VaultError) as ctx:
+            box.mount(waiting)  # as that unlock, once it has the lock
+        waiting.lock()
+        self.assertEqual(ctx.exception.code, "changed")
+        self.assertFalse(box.mounted())
+        self.assertFalse((box.root / storage.REKEY).exists())  # finished first, under the same lock
+        self.assertEqual(self.files(self.prof, password=PASSWORD), self.before)
+
+    def test_a_new_key_is_not_put_in_place_under_a_mounted_volume(self):
+        box = profiles.container(self.prof)
+        vault = box.load_vault()
+        vault.unlock_password(PASSWORD)
+        password = storage.storage_password(vault)
+        vault.lock()
+        self.assertEqual(self.interrupt("kill-before-switch").returncode, -signal.SIGKILL)
+        # The old volume mounted by something that did not settle the new key first (an older launcher).
+        os.chmod(self.prof.path, 0o700)
+        box._gocryptfs(["-q", "-nosyslog", str(box.cipher), str(self.prof.path)], password)
+        self.assertIsNone(storage.recover_rekey(self.prof.path))
+        self.assertTrue((box.root / storage.REKEY / storage.REKEY_COMPLETE).exists())
+        self.assertEqual((self.prof.path / "storage" / "default" / "site.txt").read_text(), MARKER)  # still there, still readable
+        box.unmount()
+        self.assertEqual(storage.recover_rekey(self.prof.path), "finished")
+        self.assertEqual(self.files(self.prof, password=PASSWORD), self.before)
+
+    def test_a_switch_that_fails_says_the_new_key_was_made_and_is_finished_next_time(self):
+        # After the copy is marked whole nothing is undone: the answer is not "nothing was changed".
+        box = profiles.container(self.prof)
+        failing = mock.patch.object(storage, "_rekey_finish", side_effect=OSError(5, "Input/output error"))
+        with failing, self.assertRaises(VaultError) as ctx:
+            self.api(self.prof, "rekey", current=PASSWORD)
+        self.assertEqual(ctx.exception.code, "rekey-unfinished")
+        self.assertTrue((box.root / storage.REKEY / storage.REKEY_COMPLETE).exists())
+        self.assertEqual([m["method"] for m in profiles.status(self.prof)["methods"]], ["password"])  # finished by this use
+        self.assertFalse((box.root / storage.REKEY).exists())
+        self.assertEqual(self.files(self.prof, password=PASSWORD), self.before)
+
+    def test_what_an_undone_new_key_left_does_not_stop_the_profile(self):
+        # Something in rekey/ that cannot be removed (here: a file where a mount point was) with no marker: the
+        # profile is untouched by it and keeps working; it is removed once it can be.
+        box = profiles.container(self.prof)
+        left = box.root / storage.REKEY / "new"
+        left.mkdir(parents=True)
+        (left / "left-behind").write_text("x")
+        self.assertIsNone(storage.recover_rekey(self.prof.path))
+        self.assertEqual(sorted(m["method"] for m in profiles.status(self.prof)["methods"]), ["password", "recovery-code"])
+        self.assertEqual(self.files(self.prof, password=PASSWORD), self.before)
+        (left / "left-behind").unlink()
+        self.assertEqual(storage.recover_rekey(self.prof.path), "undone")
+        self.assert_as_before()
+
+    def test_the_method_that_was_typed_is_carried_or_nothing_changes(self):
+        # With this computer's login also on the profile, a failure to wrap the typed password again used to
+        # save a profile that the secret just typed no longer opened.
+        tool = self.tmp / "secret-tool"
+        tool.write_text(FAKE_SECRET_TOOL.format(python=sys.executable))
+        tool.chmod(0o700)
+        store = self.tmp / "keyring.json"
+        with mock.patch.dict(os.environ, {"NV_FAKE_KEYRING": str(store), "NULAVIO_SECRET_TOOL": str(tool)}):
+            self.api(self.prof, "add-keyring", current=PASSWORD)
+            before = json.loads(store.read_text())
+            real = Vault.add_password
+
+            def add_password(vault, password, *args, **kwargs):
+                if "rekey" in str(vault.path):
+                    raise VaultError("damaged-envelope")
+                return real(vault, password, *args, **kwargs)
+
+            with mock.patch.object(Vault, "add_password", add_password), self.assertRaises(VaultError) as ctx:
+                self.api(self.prof, "rekey", current=PASSWORD)
+            self.assertEqual(ctx.exception.code, "failed")
+            self.assertEqual(json.loads(store.read_text()), before)  # no new keyring key left behind
+        self.assertEqual(
+            sorted(m["method"] for m in profiles.status(self.prof)["methods"]), ["os-keyring", "password", "recovery-code"]
+        )
+        self.assertEqual(self.files(self.prof, password=PASSWORD), self.before)
+
 
 class CoreDumpTest(unittest.TestCase):
     def test_vault_commands_and_gocryptfs_write_no_core_dumps(self):

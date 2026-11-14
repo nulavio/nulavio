@@ -177,6 +177,9 @@ class Container:
             raise StorageError("mountpoint-not-empty", "plaintext files appeared in a locked profile")
         # The state lock before the volume is mounted: if it cannot be had, nothing is opened.
         with self._state_lock():
+            # A new key that was interrupted is finished or undone first (ADR 0015): never the old volume
+            # opened while the new one waits to take its place. If it was finished, the key file changed.
+            self._settle_new_key()
             if not self._same_as_on_disk(vault):
                 # A change to the unlock methods finished while this waited for the lock: what was
                 # read is no longer the key file (checking it would look like a rollback).
@@ -202,6 +205,24 @@ class Container:
                     raise StorageError("storage-failed", type(exc).__name__) from None
                 raise
             self._settle_recovery_code(vault)
+
+    def _settle_new_key(self) -> str | None:
+        """Under the state lock: finish ("finished") or undo ("undone") what an interrupted new key left
+        (ADR 0015); None when there was nothing, or when what an undone one left could not be removed yet
+        (the profile itself is untouched by it, and it is tried again next time). A switch that was begun
+        and cannot be finished now raises: until it is, the volume and the key file may not match."""
+        begun = lambda: (self.root / REKEY / REKEY_COMPLETE).exists() or (self.root / "cipher.old").exists()  # noqa: E731
+        try:
+            return _rekey_settle(self)
+        except StorageError as exc:
+            if begun():
+                raise
+            log.event("vault.rekey-leftover", code=exc.code)
+        except (OSError, subprocess.SubprocessError) as exc:
+            if begun():
+                raise StorageError("rekey-unfinished", type(exc).__name__) from None
+            log.event("vault.rekey-leftover", code=type(exc).__name__)
+        return None
 
     def _settle_recovery_code(self, vault: Vault) -> None:
         """A recovery code replacement nobody confirmed (#187), settled now that the profile opened:
@@ -367,6 +388,7 @@ class Container:
         its files are readable at the maintenance directory by the user's own processes.
         """
         with self._state_lock():
+            self._settle_new_key()  # as in mount(): an interrupted new key first
             if not self._same_as_on_disk(vault):
                 raise StorageError("changed", "the profile's key file changed since it was read; try again")
             if not self.exists():
@@ -669,14 +691,21 @@ def _listing(root: Path) -> dict[str, tuple]:
 
 
 def _copy_checked(source: Path, target: Path) -> None:
-    """Copy a volume's files into another and read both back: same names, kinds, sizes and contents."""
+    """Copy a volume's files into another and read both back: same names, kinds, sizes and contents.
+    `source` and `target` are reached through open handles on the two volumes (/proc/self/fd/N), not
+    through their mount points: a volume detached under this process is still the one read and written,
+    never the empty directory it was mounted on."""
+    if not (source / STATE_DIR / "state.json").is_file():
+        # Every volume has its record from its first mount: without it this is not the profile's volume.
+        raise StorageError("storage-failed", "the profile's volume is not there to copy")
     for item in source.iterdir():
         dest = target / item.name
         if item.is_dir() and not item.is_symlink():
             shutil.copytree(item, dest, symlinks=True)
         else:
             shutil.copy2(item, dest, follow_symlinks=False)
-    if _listing(source) != _listing(target):
+    original = _listing(source)
+    if os.path.join(STATE_DIR, "state.json") not in original or original != _listing(target):
         raise StorageError("copy-mismatch", "the copy into the new volume is not the same as the original")
 
 
@@ -689,9 +718,15 @@ def _fsync_dir(path: Path) -> None:
 
 
 def _rekey_remove_staging(box: Container) -> None:
-    """Take rekey/ away. The two mount directories are unmounted first and only ever removed empty:
-    nothing here can reach the profile's files through a volume that is still mounted."""
+    """Take rekey/ away. The marker goes first, durably: what is left half removed is never taken for a
+    complete copy. The two mount directories are unmounted first and only ever removed empty: nothing
+    here can reach the profile's files through a volume that is still mounted."""
     staging = box.root / REKEY
+    if not staging.is_dir():
+        return
+    if (staging / REKEY_COMPLETE).exists():
+        (staging / REKEY_COMPLETE).unlink()
+        _fsync_dir(staging)
     for name in ("old", "new"):
         where = staging / name
         if where.is_dir():
@@ -704,15 +739,36 @@ def _rekey_remove_staging(box: Container) -> None:
         for dirpath, _dirs, _files in os.walk(cipher):
             os.chmod(dirpath, 0o700)
         shutil.rmtree(cipher)
-    for leftover in staging.iterdir() if staging.is_dir() else ():
-        leftover.unlink()  # the new key file, its copy, a temporary one, the marker
+    for leftover in staging.iterdir():
+        leftover.unlink()  # the new key file, its copy, a temporary one
     with contextlib.suppress(FileNotFoundError):
         staging.rmdir()
 
 
+def _volume_in_use(box: Container) -> bool:
+    """Whether the profile's volume is mounted anywhere: at the profile's own directory, or from its
+    encrypted directory (also under the name it gets while the new one takes its place)."""
+    if box.mounted():
+        return True
+    sources = {str(path.resolve()) for path in (box.cipher, box.root / "cipher.old")}
+    try:
+        lines = Path("/proc/self/mountinfo").read_text().splitlines()
+    except OSError:
+        return False
+    for line in lines:
+        _, _, after = line.partition(" - ")
+        fields = after.split()
+        if len(fields) > 1 and fields[0].startswith("fuse") and _unescape(fields[1]) in sources:
+            return True
+    return False
+
+
 def _rekey_finish(box: Container) -> None:
     """The new volume and key file take the old ones' place. Every step can be repeated: started again
-    after an interruption, it goes on from what it finds."""
+    after an interruption, it goes on from what it finds. Never while the profile's volume is mounted:
+    its encrypted directory is renamed and deleted here."""
+    if _volume_in_use(box):
+        raise StorageError("busy", "the profile's volume is mounted; the new key is put in place once it is not")
     staging, old_cipher = box.root / REKEY, box.root / "cipher.old"
     if (staging / "cipher").exists():
         if box.cipher.exists():
@@ -729,28 +785,34 @@ def _rekey_finish(box: Container) -> None:
         for dirpath, _dirs, _files in os.walk(old_cipher):
             os.chmod(dirpath, 0o700)
         shutil.rmtree(old_cipher)
-    (staging / REKEY_COMPLETE).unlink(missing_ok=True)
-    _rekey_remove_staging(box)
+    _rekey_remove_staging(box)  # the marker first
     _fsync_dir(box.root)
+
+
+def _rekey_settle(box: Container) -> str | None:
+    """Under the profile's state lock: finish ("finished") or undo ("undone") what an interrupted new key
+    left; None when there is nothing. Once the marker exists it is only ever finished."""
+    staging = box.root / REKEY
+    if not staging.exists():
+        return None
+    if (staging / REKEY_COMPLETE).exists():
+        _rekey_finish(box)
+        return "finished"
+    _rekey_remove_staging(box)
+    return "undone"
 
 
 def recover_rekey(path: Path) -> str | None:
     """Finish or undo a new key that was interrupted (a crash, SIGKILL, power loss). "finished": the copy
     was whole, and the new volume and key file are now in place. "undone": it was not, and the profile is as
-    it was before, its unlock methods included. None: nothing to do, or one is running now."""
+    it was before, its unlock methods included. None: nothing to do, one is running now, the profile's volume
+    is still mounted, or what an undone one left could not be removed yet."""
     box = Container(Path(path))
-    staging = box.root / REKEY
-    if not staging.exists():
+    if not (box.root / REKEY).exists():
         return None
     try:
         with box._state_lock(wait=0):
-            if not staging.exists():
-                return None
-            if (staging / REKEY_COMPLETE).exists():
-                _rekey_finish(box)
-                return "finished"
-            _rekey_remove_staging(box)
-            return "undone"
+            return box._settle_new_key()
     except StorageError as exc:
         if exc.code == "busy":
             return None  # a new key is being made now, or a volume is still mounted: left for the next time
@@ -764,21 +826,19 @@ def rekey(box: Container, old: Vault, carry) -> Vault:
     undone. Returns the new vault, unlocked and saved; the caller locks it.
 
     Nothing of the profile changes before the copy is whole and checked; from then on the switch is
-    finished even if this process dies (recover_rekey). While it runs, the files are readable at
-    P.vault/rekey/old and rekey/new by the user's own processes, as during any change to a locked profile.
+    finished even if this process dies (recover_rekey), and is never undone: an error after that point is
+    "rekey-unfinished". While it runs, the files are readable at P.vault/rekey/old and rekey/new by the
+    user's own processes, as during any change to a locked profile.
     """
     with box._state_lock():
+        box._settle_new_key()  # what an earlier one left; if it was finished, the key file is no longer `old`
         if not box._same_as_on_disk(old):
             raise StorageError("changed", "the profile's key file changed since it was read; try again")
         if not box.exists():
             raise StorageError("not-encrypted")
-        if box.mounted():
+        if _volume_in_use(box):
             raise StorageError("unlocked", "lock the profile first")
         staging = box.root / REKEY
-        if staging.exists():  # left by a process that died; the lock says none is running
-            if (staging / REKEY_COMPLETE).exists():
-                raise StorageError("changed", "a new key was being finished; try again")
-            _rekey_remove_staging(box)
         if not rekey_space(box)["enough"]:
             raise StorageError("no-space", "not enough free space for a second copy of the profile")
         undo = lambda: None  # noqa: E731
@@ -793,29 +853,28 @@ def rekey(box: Container, old: Vault, carry) -> Vault:
                 new.meta["generation"] = int(old.meta.get("generation", 0))  # save() makes it the next one
                 undo = carry(new) or undo
                 new.save()
-                new_box = _Staged(staging)
                 for name in ("cipher", "old", "new"):
                     (staging / name).mkdir(mode=0o700)
-                box._gocryptfs(["-init", "-q", "-xchacha", "-scryptn", "10", str(new_box.cipher)], storage_password(new))
+                box._gocryptfs(["-init", "-q", "-xchacha", "-scryptn", "10", str(staging / "cipher")], storage_password(new))
                 # -idle: should this process die here, gocryptfs unmounts by itself a minute later.
                 box._gocryptfs(
                     ["-q", "-nosyslog", "-ro", "-idle", "1m", str(box.cipher), str(staging / "old")], storage_password(old)
                 )
                 box._gocryptfs(
-                    ["-q", "-nosyslog", "-idle", "1m", str(new_box.cipher), str(staging / "new")], storage_password(new)
+                    ["-q", "-nosyslog", "-idle", "1m", str(staging / "cipher"), str(staging / "new")], storage_password(new)
                 )
                 for name in ("old", "new"):
                     fds.append(os.open(staging / name, os.O_RDONLY | os.O_DIRECTORY))
                     if os.fstat(fds[-1]).st_dev == os.stat(staging).st_dev:
                         raise StorageError("storage-failed", "the volume is not mounted")
                 # A rolled-back key file is refused here as it is at unlock.
-                with contextlib.suppress(FileNotFoundError):
-                    state_dir = os.open(STATE_DIR, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=fds[0])
-                    try:
-                        Container._refuse_older(old, state_dir)
-                    finally:
-                        os.close(state_dir)
-                _copy_checked(staging / "old", staging / "new")
+                state_dir = os.open(STATE_DIR, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=fds[0])
+                try:
+                    Container._refuse_older(old, state_dir)
+                finally:
+                    os.close(state_dir)
+                # Through the handles, not the mount points: what is copied and compared is the two volumes.
+                _copy_checked(Path(f"/proc/self/fd/{fds[0]}"), Path(f"/proc/self/fd/{fds[1]}"))
                 box._check_state(new, fds[1])  # the new key file's generation, recorded in the new volume
                 for fd in fds:
                     os.close(fd)
@@ -828,6 +887,12 @@ def rekey(box: Container, old: Vault, carry) -> Vault:
                 for fd in fds:
                     with contextlib.suppress(OSError):
                         os.close(fd)
+                if (staging / REKEY_COMPLETE).exists():
+                    # The copy is whole and marked: from here it is only finished, by the next use of the
+                    # profile if not by this process. The new keyring key and the new volume stay.
+                    if isinstance(exc, (OSError, StorageError)):
+                        raise StorageError("rekey-unfinished", type(exc).__name__) from None
+                    raise
                 with contextlib.suppress(Exception):
                     undo()
                 with contextlib.suppress(StorageError, subprocess.SubprocessError, OSError):
@@ -835,16 +900,12 @@ def rekey(box: Container, old: Vault, carry) -> Vault:
                 if isinstance(exc, (*RECORD_ERRORS, shutil.Error)):
                     raise StorageError("storage-failed", type(exc).__name__) from None
                 raise
-            _rekey_finish(box)
+            try:
+                _rekey_finish(box)
+            except (OSError, StorageError, subprocess.SubprocessError) as exc:
+                raise StorageError("rekey-unfinished", getattr(exc, "code", type(exc).__name__)) from None
         new.path = box.vault_path
         return new
-
-
-class _Staged:
-    """The new volume while it is still under rekey/."""
-
-    def __init__(self, staging: Path):
-        self.cipher = staging / "cipher"
 
 
 def _mark_complete_at(marker: Path) -> None:

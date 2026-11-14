@@ -66,12 +66,15 @@ Locked, with no engine on it. The files are copied, and a copy of files in use w
 The new volume is built under `P.vault/rekey/`, beside the old one, which is only read (mounted read-only).
 
 - **Until the copy is whole, checked and on disk, nothing outside `rekey/` has changed.** An interruption there is undone: `rekey/` is removed, and the profile is as it was, its methods included.
-- **Then a marker is written, durably.** From there the new volume and key file take the old ones' place in steps that can each be repeated, and an interruption is finished from where it stopped.
-- **Either is done the next time the profile is used** (any command or page that touches it), under the profile's state lock.
+- **Then a marker is written, durably.** From there it is only ever finished, never undone: the new volume and key file take the old ones' place in steps that can each be repeated, and an interruption is finished from where it stopped. An error after the marker is reported as such ("the new key was made; putting it in place did not finish"), not as "nothing was changed".
+- **Either is done the next time the profile is used** (any command or page that touches it), under the profile's state lock. An unlock, and a change to the unlock methods, do it first under that same lock, so the old volume is never opened while a new one waits to take its place.
+- **The switch never happens under a mounted volume.** It renames and deletes the profile's encrypted directory, so it waits until nothing has that directory mounted.
 
-So after any interruption the profile opens with a method the person has: the ones from before, or the one that was typed.
+So after any interruption the profile opens with a method the person has: the ones from before, or the one that was typed. The typed method is carried or nothing changes: if it cannot be wrapped again, the new key is not made.
 
-The copy is checked by reading both sides back: names, kinds, sizes and SHA-256 of every file.
+The copy is made and checked through open handles on the two volumes, not through the directories they are mounted on: a volume detached under the process is still the one read and written. The source must hold the profile's own record (`.nulavio-vault/state.json`). Both sides are read back: names, kinds, sizes and SHA-256 of every file. Not compared: permissions and times (copied, not checked), hard links (copied as separate files) and extended attributes.
+
+What an interruption can leave behind: a new key in the system keyring that wraps nothing (the new key was undone), or the old one (it was finished by a later use, which does not know the keyring). Neither opens anything.
 
 ### 6. Cost
 
@@ -105,4 +108,5 @@ While it runs, the files are readable at `P.vault/rekey/` by the person's own pr
 - Before the new key, the removed password reads the files with the key file from before, using gocryptfs alone. After it, that key file reads nothing with any secret: by itself, with the `gocryptfs.conf` of then, or put back in place under Nulavio.
 - Every file is as it was. The typed method opens the profile; the dropped ones do not.
 - The process is killed before the copy is whole, then at each step of the switch. The next use of the profile undoes or finishes it, and the profile opens.
+- From the review of #275: a volume detached during the copy is still the one copied; an unlock that had read the key file before the interruption does not open the old volume; the switch waits while the volume is mounted; a switch that fails says the new key was made; leftovers of an undone one do not stop the profile; the typed method is carried or nothing changes.
 - A phone's envelope is carried without the phone, and the phone then unlocks the new key file.

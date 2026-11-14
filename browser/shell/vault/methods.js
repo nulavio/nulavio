@@ -180,6 +180,13 @@ function renderKey() {
   byId("rekey-note").hidden = !profile.isCurrent;
 }
 
+// What the tools answer when a new key is refused, or fails, with the profile left as it was.
+// Each of these is answered before the copy is marked whole, and what was begun is removed at once.
+const REFUSED_BEFORE = new Set([
+  "unlocked", "in-use", "no-space", "changed", "busy", "bad-secret", "metadata-tampered", "not-encrypted", "not-found",
+  "copy-mismatch", "storage-failed", "storage-unavailable", "tools-missing", "failed", "rollback",
+]);
+
 byId("rekey").addEventListener("click", async () => {
   const field = byId("current");
   const error = byId("current-error");
@@ -222,13 +229,20 @@ byId("rekey").addEventListener("click", async () => {
   } catch (e) {
     making = false;
     setState("idle");
-    if (String(e?.message) === "wrong-secret") {
+    const code = String(e?.message);
+    if (code === "wrong-secret") {
       announce("");
       error.textContent = t("err_wrong_secret");
       field.setAttribute("aria-invalid", "true");
       field.focus();
+    } else if (REFUSED_BEFORE.has(code)) {
+      announce(errorText(e), "error"); // refused before anything was made
     } else {
-      announce(errorText(e), "error"); // nothing was changed: the copy is undone
+      // Stopped part-way (the tools failed or were stopped, the switch did not finish): the next use of the
+      // profile undoes it or finishes it, and reading it again here is such a use. What the page then shows
+      // is what the profile has; which of the two it was is not claimed.
+      await render().catch(console.error);
+      announce(t(code === "rekey-unfinished" ? "err_rekey_unfinished" : "methodsRekeyInterrupted"), "warn");
     }
     return;
   }

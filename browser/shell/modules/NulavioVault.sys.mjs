@@ -27,7 +27,8 @@ ChromeUtils.defineESModuleGetters(lazy, {
 const SHELL_ID = "shell@nulavio.net";
 const TIMEOUT_MS = 90000; // Argon2id (256 MiB) plus mounting; encryption of a new profile copies files
 // A new key copies every file of the profile into a new volume (ADR 0015): minutes for a large one. If the
-// tools are stopped here, the copy is undone the next time the profile is used.
+// tools are stopped here, the next use of the profile undoes it (the copy was not whole yet) or finishes it
+// (it was): the page reads the profile again and says what it has, never "nothing was changed".
 const REKEY_TIMEOUT_MS = 60 * 60 * 1000;
 const KINDS = new Set(["password", "recovery-code", "os-keyring", "phone", "combined"]);
 const METHODS = new Set(["password", "recovery-code", "os-keyring"]);
