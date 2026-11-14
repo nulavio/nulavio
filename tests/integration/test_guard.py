@@ -5,7 +5,10 @@ generic malware do, starts it again and checks what Guard reports, then
 undoes or keeps each change through the review page. Only artificial data:
 a throwaway certificate authority made for this test (its key is never
 used), a native-messaging manifest pointing to /usr/bin/true, a smart-card
-module with no reader, a pinned extension from the launcher's own cache.
+module with no reader, a pinned extension from the launcher's own cache. Where
+the run requires the network (NULAVIO_REQUIRE_NETWORK=1: the release rehearsal and
+the monthly AddressSanitizer run) and no cache has one, the pinned package is
+downloaded and checked against the lock first, so those parts run there too (#135).
 """
 
 from __future__ import annotations
@@ -17,9 +20,11 @@ import shutil
 import stat
 import subprocess
 import sys
+import tempfile
 import time
 import unittest
 from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
 import harness
@@ -54,18 +59,28 @@ def chrome_async(m, body: str, args=()):
     return result["ok"]
 
 
+PINNED = ("proton-pass", "keepassxc-browser", "bitwarden")  # never uBlock Origin: installed by policy
+FETCHED = Path(tempfile.mkdtemp(prefix="nv-guard-xpi-"))  # this run's download, if it needs one
+
+
 def cached_extension():
-    """A pinned extension already in a local cache (no download in tests); never uBlock Origin (installed by policy)."""
+    """A pinned extension already in a local cache. Where the run requires the network and none is
+    there, the first one is downloaded into this run's own directory and checked against the lock;
+    a download that fails fails the test instead of skipping what it checks (#135)."""
     lock = extensions.load_lock()
     caches = [Path(os.environ["NULAVIO_TEST_XPI_CACHE"])] if os.environ.get("NULAVIO_TEST_XPI_CACHE") else []
-    caches.append(Path.home() / ".cache" / "nulavio" / "xpi")
-    for key in ("proton-pass", "keepassxc-browser", "bitwarden"):
+    caches += [Path.home() / ".cache" / "nulavio" / "xpi", FETCHED / "cache" / "xpi"]
+    for key in PINNED:
         entry = lock[key]
         for cache in caches:
             path = cache / f"{entry.sha256}.xpi"
             if path.is_file() and extensions.sha256_file(path) == entry.sha256:
                 return entry, path
-    return None, None
+    if os.environ.get("NULAVIO_REQUIRE_NETWORK") != "1":
+        return None, None
+    entry = lock[PINNED[0]]
+    with mock.patch.dict(os.environ, {"NULAVIO_HOME": str(FETCHED)}):  # never the person's own cache
+        return entry, extensions.fetch(entry)
 
 
 @unittest.skipUnless(harness.nulavio_engine(), "Guard runs in the Nulavio build's Shell (NULAVIO_ENGINE)")
@@ -401,7 +416,7 @@ class GuardTest(unittest.TestCase):
 
         # The rest needs a real extension in the profile.
         entry, xpi = cached_extension()
-        if not xpi:
+        if not xpi:  # only where the network is not required (NULAVIO_REQUIRE_NETWORK=1 downloads it)
             self.skipTest("no pinned extension in the local cache: the held update over real restarts was not tried")
         placed = self.profile / "extensions" / entry.xpi_name
         self.session.stop()
@@ -479,6 +494,10 @@ class GuardTest(unittest.TestCase):
         self.assertTrue(harness.wait_until(lambda: f"Extensão removida: {name}" in self.bar(), timeout=10), self.bar())
         self.guard("await G.resolve(args[0], 'keep');", removed)
         self.assertTrue(harness.wait_until(lambda: self.bar() == "", timeout=10), "the bar stayed with nothing waiting")
+
+
+def tearDownModule():
+    shutil.rmtree(FETCHED, ignore_errors=True)
 
 
 if __name__ == "__main__":
