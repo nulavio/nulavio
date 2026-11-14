@@ -179,9 +179,15 @@ class SiteTest(unittest.TestCase):
             pt, en = (self.read(page) for page in pages)
             self.assertIn("não é afiliado à Mozilla", pt)
             self.assertIn("not affiliated with Mozilla", en)
+        # The document's status is the one packaging/release.json gives (#189).
         pt, en = (self.read(page) for page in DOCUMENT)
-        self.assertIn("Em desenvolvimento", pt)
-        self.assertIn("In development", en)
+        released = build_site.release_values(ROOT)
+        if released:
+            self.assertIn(f"Alpha pública</strong> · {released['release_version']}", pt)
+            self.assertIn(f"Public alpha</strong> · {released['release_version']}", en)
+        else:
+            self.assertIn("Em desenvolvimento", pt)
+            self.assertIn("In development", en)
         # The landing sells the launch, and still says what a browser cannot do: no anonymity
         # (Tor Browser's job), and one trade-off in plain words under every feature.
         pt, en = (self.read(page) for page in LANDING)
@@ -947,6 +953,39 @@ class DownloadPagesTest(unittest.TestCase):
             build_site.release_values(self.source("other", "159.0.1-0.1", "A" * 40, self.armored))
         with self.assertRaises(build_site.BuildError):
             build_site.release_values(self.source("bad-version", "alpha", self.fpr, self.armored))
+
+    def test_the_engineering_pages_say_which_release_is_out_or_that_none_is(self):
+        # #189: they said "no release to download" while the download pages offered one.
+        values = build_site.release_values(self.source("eng-released", "159.0.1-0.1", self.fpr, self.armored))
+        pages = {}
+        real = build_site.release_values
+        for name, released in (("on", values), ("off", None)):
+            out = self.tmp / f"eng-{name}"
+            build_site.release_values = lambda src, released=released: released
+            try:
+                build_site.build(out)
+            finally:
+                build_site.release_values = real
+            pages[name] = {page: (out / page).read_text(encoding="utf-8") for page in DOCUMENT}
+        none = {"pt-BR": "sem versão para baixar", "en-US": "no release to download"}
+        for page, locale in DOCUMENT.items():
+            on, off = pages["on"][page], pages["off"][page]
+            with self.subTest(page=page):
+                for html in (on, off):
+                    self.assertNotIn("<!--release:", html)
+                    self.assertNotIn("<!--/release:", html)
+                    self.assertEqual(html.count('<meta name="description"'), 1)
+                self.assertIn("159.0.1-0.1", on)
+                self.assertNotIn(none[locale], on)
+                self.assertNotIn("F-Droid's review", on)
+                self.assertNotIn("revisão do F-Droid", on)
+                self.assertIn(none[locale], off)
+                self.assertNotIn("159.0.1-0.1", off)
+                tree = Tree(on)
+                description = next(n.attrs["content"] for n in tree.root.walk() if n.attrs.get("name") == "description")
+                self.assertIn("159.0.1-0.1", description)
+        ids = [re.findall(r'id="([^"]+)"', pages["on"][page]) for page in DOCUMENT]
+        self.assertEqual(ids[0], ids[1], "both languages have the same sections")
 
     def test_release_pages(self):
         values = build_site.release_values(self.source("released", "159.0.1-0.1", self.fpr, self.armored))
