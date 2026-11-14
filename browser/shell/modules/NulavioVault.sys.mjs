@@ -31,7 +31,11 @@ const METHODS = new Set(["password", "recovery-code", "os-keyring"]);
 // phone that is already connected, and removing it, never depend on it.
 const PREF_PHONE_PAIRING = "nulavio.vault.phone.pairing";
 const phonePairing = () => Services.prefs.getBoolPref(PREF_PHONE_PAIRING, false);
-const CHANGES = new Set(["new-recovery-code", "add-password", "add-keyring", "remove-method"]);
+// "confirm-recovery-code": the new code, typed back, is the `current` secret; the old code goes (#187).
+const CHANGES = new Set(["new-recovery-code", "confirm-recovery-code", "add-password", "add-keyring", "remove-method"]);
+// What an unlock did with a recovery code replacement left unfinished (the helper's fixed words).
+const SETTLED = new Set(["finished", "undone", "unsettled", "unknown"]);
+const settled = answer => (SETTLED.has(answer?.recovery_code) ? answer.recovery_code : null);
 const MAX_SECRET = 1024;
 
 export class VaultError extends Error {
@@ -105,7 +109,8 @@ class Vault {
       locked: state.encrypted ? state.locked : false,
       running: Boolean(state.running),
       openWithoutEngine: Boolean(state.open_without_engine),
-      methods: (state.methods ?? []).map(m => ({ id: m.id, method: m.method, label: m.label })),
+      // `unconfirmed`: a new recovery code not typed back yet (#187); the old one still opens the profile.
+      methods: (state.methods ?? []).map(m => ({ id: m.id, method: m.method, label: m.label, unconfirmed: m.unconfirmed === true })),
       protection: state.protection ?? [],
     };
   }
@@ -120,11 +125,17 @@ class Vault {
     if (method !== "os-keyring") {
       request.secret = checkSecret(secret);
     }
-    await helper(request);
-    if (url) {
-      return { opened: (await lazy.NulavioRouting.openIn(Number(profileId), url)).action };
+    const answer = await helper(request);
+    // What the unlock did with a recovery code replacement left unfinished, only when it did something, and
+    // whether that could be recorded inside the profile (only the helper's fixed word passes).
+    const note = settled(answer) ? { settled: settled(answer) } : {};
+    if (settled(answer) && answer.warning === "not-recorded") {
+      note.warning = "not-recorded";
     }
-    return { opened: (await lazy.NulavioProfiles.switchTo(Number(profileId))).action };
+    if (url) {
+      return { opened: (await lazy.NulavioRouting.openIn(Number(profileId), url)).action, ...note };
+    }
+    return { opened: (await lazy.NulavioProfiles.switchTo(Number(profileId))).action, ...note };
   }
 
   async lock(profileId) {
@@ -219,7 +230,15 @@ class Vault {
 
   /** A running session: "status", "confirm" (the user's answer about the 6 digits) or "cancel". */
   async phoneSession(session, action, match = false) {
-    return helper({ op: "phone-session", session: String(session), action, match: Boolean(match) });
+    const answer = await helper({ op: "phone-session", session: String(session), action, match: Boolean(match) });
+    if ("recovery_code" in answer) {
+      answer.settled = settled(answer);
+      delete answer.recovery_code;
+    }
+    if ("warning" in answer && answer.warning !== "not-recorded") {
+      delete answer.warning;
+    }
+    return answer;
   }
 
   /** After an unlock with the phone: open the profile, with the held-back address if any. */

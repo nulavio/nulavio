@@ -110,6 +110,7 @@
             "type": "string",
             "enum": [
               "new-recovery-code",
+              "confirm-recovery-code",
               "add-password",
               "add-keyring",
               "remove-method"
