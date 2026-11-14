@@ -62,6 +62,7 @@ class Session:
         self.phone_name: str | None = None
         self.recovery_code: str | None = None
         self.settle_warning: str | None = None
+        self.warning: str | None = None  # a change saved but not recorded inside the profile (#177)
         self.decision: bool | None = None
         self.decided = threading.Event()
         self.cancelled = threading.Event()
@@ -83,6 +84,8 @@ class Session:
                 out["sas"] = self.sas
             if self.phone_name:
                 out["phone"] = self.phone_name
+            if self.warning and self.state == "paired":
+                out["warning"] = self.warning
             if self.recovery_code:
                 out["recovery_code"] = self.recovery_code
             if self.settle_warning and self.state == "unlocked":
@@ -235,9 +238,9 @@ def pair(session: Session, request: dict, emit, resolver: link.Resolver = link.a
         with box.recording(vault) as record:  # the volume first, locked or not (cli._change)
             add_phone(vault, phone)
             vault.save()
-            _record(record)  # saved: the phone is paired, recorded or not
+            unrecorded = _record(record)  # saved: the phone is paired, recorded or not
         _send_quietly(channel, {"t": "paired"})
-        session.set("paired", phone_name=phone.name)
+        session.set("paired", phone_name=phone.name, warning="not-recorded" if unrecorded else None)
         log_event("vault.phone.paired", profile=prof.name)
     except (VaultError, link.LinkError) as exc:
         code = exc.code

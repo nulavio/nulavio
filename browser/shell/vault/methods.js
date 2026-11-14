@@ -17,6 +17,15 @@ let capabilities = { keyring: false };
 
 const kindName = method => t(KINDS[method.method] ?? "methodOther");
 
+/** A change's result; one saved but not recorded inside the profile says so, as a warning (#177). */
+function announceDone(text, result) {
+  if (result?.warning === "not-recorded") {
+    announce(`${text} ${t("err_not_recorded")}`, "warn");
+  } else {
+    announce(text, "ok");
+  }
+}
+
 function setState(state) {
   document.body.dataset.state = state;
   for (const control of document.querySelectorAll("#add-actions button, #methods button")) {
@@ -83,9 +92,10 @@ function methodRow(method, count, confirmers) {
       confirm: t("methodRemove"),
       danger: true,
     });
-    if (ok && (await change("remove-method", { envelope: method.id }))) {
-      await render();
-      announce(t("methodRemoved", [name]), "ok");
+    const result = ok ? await change("remove-method", { envelope: method.id }) : null;
+    if (result) {
+      await render().catch(console.error); // the change was made: what it did is said even if the list is not redrawn
+      announceDone(t("methodRemoved", [name]), result);
       byId("methods").querySelector("button:not(:disabled)")?.focus() ?? byId("headline").focus();
     }
   });
@@ -176,8 +186,9 @@ byId("code-step").addEventListener("submit", async event => {
   const submit = event.submitter ?? byId("code-step").querySelector("button[type=submit]");
   submit.disabled = true;
   announce(t("methodsWorking"), "progress");
+  let result;
   try {
-    await vault.change(profileId, "confirm-recovery-code", { current: byId("code").dataset.code });
+    result = await vault.change(profileId, "confirm-recovery-code", { current: byId("code").dataset.code });
   } catch (e) {
     announce(errorText(e), "error"); // the code stays on screen; the old one still opens the profile
     return;
@@ -197,7 +208,7 @@ byId("code-step").addEventListener("submit", async event => {
     setState("idle");
     announce(errorText(e), "error");
   });
-  announce(t("methodsCodeReplaced"), "ok");
+  announceDone(t("methodsCodeReplaced"), result);
   byId("new-code").focus();
 });
 byId("print-code").addEventListener("click", printCode);
@@ -214,8 +225,12 @@ byId("new-code").addEventListener("click", async () => {
   making = true;
   const result = await change("new-recovery-code");
   if (result?.recoveryCode) {
-    showNewCode(result.recoveryCode);
-    render().catch(e => announce(errorText(e), "error"));
+    showNewCode(result.recoveryCode); // shown whether or not the change was recorded: it is the only copy
+    render().then(
+      () => result.warning && announce(t("err_not_recorded"), "warn"),
+      // The list could not be read again: said, and the warning with it, never instead of it.
+      e => announce([errorText(e), result.warning ? t("err_not_recorded") : ""].filter(Boolean).join(" "), "error")
+    );
   } else {
     making = false;
   }
@@ -248,19 +263,20 @@ byId("password-form").addEventListener("submit", async event => {
     refuseField(byId("new-password2"), error, t("vaultPasswordsDiffer"));
     return;
   }
-  const done = await change("add-password", { password });
+  const result = await change("add-password", { password });
   byId("password-form").reset();
-  if (done) {
+  if (result) {
     byId("password-form").hidden = true;
-    await render();
-    announce(t("methodsPasswordAdded"), "ok");
+    await render().catch(console.error);
+    announceDone(t("methodsPasswordAdded"), result);
     byId("add-password").focus();
   }
 });
 byId("add-keyring").addEventListener("click", async () => {
-  if (await change("add-keyring")) {
-    await render();
-    announce(t("methodsKeyringAdded"), "ok");
+  const result = await change("add-keyring");
+  if (result) {
+    await render().catch(console.error);
+    announceDone(t("methodsKeyringAdded"), result);
   }
 });
 
