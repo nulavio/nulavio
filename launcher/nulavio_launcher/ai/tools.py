@@ -14,6 +14,7 @@ import re
 import contextlib
 import threading
 import time
+import urllib.parse
 import weakref
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -201,6 +202,15 @@ FORMS_SEND_FN = "() => (globalThis.nulavioForms ? globalThis.nulavioForms.send()
 FORMS_OPEN_FN = "() => (globalThis.nulavioForms ? globalThis.nulavioForms.open() : 0)"
 DIALOG = "dialog"  # in place of a count: sending the form opened a dialog (a submit handler that asks), which holds it
 FORMS_FRAMES = 60  # documents of one tab asked directly; the others still carry the guard from their creation
+LOCAL_HOST_TTL = 60.0  # seconds a name's answer (local or not) is kept for the requests that follow
+LOCAL_HOSTS_KEPT = 2048  # names whose answer is kept; the older half goes when it is full
+LOCAL_LOOKUP_TIMEOUT = 3.0  # seconds a name may take to resolve before its request fails
+LOCAL_REFUSED_NOTED = 20  # places a session's refused requests are listed for in the activity
+# Schemes whose requests reach no host: a page's own data, and the engine's own pages and icons.
+HOSTLESS_SCHEMES = frozenset({"data", "blob", "about", "moz-extension", "resource", "chrome", "moz-icon",
+                              "page-icon", "cached-favicon", "moz-page-thumb", "moz-src"})  # fmt: skip
+LOOKUPS_AT_ONCE = 32  # names being looked up at once; while that many are out, a new name counts as local
+NET_WAITING_MAX = 256  # held requests waiting for a name; past that a new one is failed
 
 
 class Denied(Exception):
@@ -323,6 +333,18 @@ def descriptor(tool: Tool) -> dict:
     }  # fmt: skip
 
 
+class _Busy(Exception):
+    """A name could not be looked up in time, or too many were out: its request fails, as if it were local."""
+
+
+class _Lookup:
+    """A name being looked up for held requests; those that need it while it runs wait for this one."""
+
+    def __init__(self) -> None:
+        self.done = threading.Event()
+        self.local = True
+
+
 class Bridge:
     """One agent's tools over one AI Workspace, for the lifetime of the MCP server process."""
 
@@ -352,6 +374,19 @@ class Bridge:
         self._forms_scripts: weakref.WeakKeyDictionary[Bidi, str] = weakref.WeakKeyDictionary()  # -> preload script id
         self._forms_engines: weakref.WeakSet[Bidi] = weakref.WeakSet()  # connections whose guard was set up once
         self._forms_ever = False  # some document of this session may carry the guard
+        # Requests to this computer and the local network (R29), by connection like the forms guard.
+        self._net_intercepts: weakref.WeakKeyDictionary[Bidi, str] = weakref.WeakKeyDictionary()  # -> intercept id
+        self._net_handled: weakref.WeakSet[Bidi] = weakref.WeakSet()  # connections whose handler is set
+        self._net_engines: weakref.WeakSet[Bidi] = weakref.WeakSet()  # connections synced at least once
+        self._local_ok: set[tuple[str, int]] = set()  # (host, port) local_resources was allowed for in this call
+        self._local_hosts: dict[str, tuple[float, bool]] = {}  # resolved name -> (when, local)
+        self._local_refused: set[str | None] = set()  # origins whose refused request is in the activity already
+        self._local_refused_more = False  # more places were refused than the activity lists
+        self._local_busy_noted = False  # requests were failed because too many names were out
+        self._local_all = False  # local_resources is allowed without asking, as of the last sync
+        self._net_state = threading.Lock()  # what the request threads share
+        self._lookups: dict[str, _Lookup] = {}  # names being looked up for held requests
+        self._net_waiting = 0  # held requests waiting for a name
 
     # -- policy ----------------------------------------------------------------------
 
@@ -411,6 +446,10 @@ class Bridge:
         self._refuse_if_held(capability)
         if capability == "submit_forms" and url:
             self._forms_ok.add(policy.origin(url))
+        if capability == "local_resources" and (place := self._request_place(url)):
+            self._local_ok.add(place)  # its requests are sent on during this call
+        if capability == "local_resources" and self._may_reach_local():
+            self._sync_network()  # "until the agent disconnects": nothing is held from now on, in this call too
 
     def require_url(self, url: str, *, checked: list[str]) -> policy.Target:
         try:
@@ -467,6 +506,7 @@ class Bridge:
         cancel = cancel or threading.Event()
         self._target = None
         self._forms_ok, self._form_at = set(), None
+        self._local_ok = set()
         try:
             validate(tool.schema, arguments)
             with self._lock:
@@ -476,7 +516,11 @@ class Bridge:
                     self._refuse_if_held(tool.capability or name, checked)
                 self._sync_downloads()
                 self._sync_forms()
-                result, target_url = getattr(self, "_t_" + name)(arguments, cancel, checked)
+                self._sync_network()
+                try:
+                    result, target_url = getattr(self, "_t_" + name)(arguments, cancel, checked)
+                finally:
+                    self._local_ok = set()  # what the user allowed for this call ends with it
             outcome, decision, reason = "ok", "allow", None
         except Denied as denied:
             d = denied.decision
@@ -547,6 +591,8 @@ class Bridge:
         engine = self.profiles[owner].bidi if owner else self._workspace().start()
         if engine not in self._forms_engines:  # just started: before its first navigation
             self._sync_forms()
+        if engine not in self._net_engines:
+            self._sync_network()
         return engine
 
     def _owner(self, tab: str) -> str:
@@ -666,6 +712,191 @@ class Bridge:
             return str(self._eval(tab, "document.title", cancel, timeout=5) or "")[:300]
         except BidiError:
             return ""
+
+    # -- requests to this computer and the local network (R29) ---------------------------
+
+    def _may_reach_local(self) -> bool:
+        """local_resources is allowed without asking: no request is held."""
+        agent = self._agent()
+        return bool(agent) and policy.effective_mode(agent, "local_resources", self.session_id)[0] == "allow"
+
+    def _sync_network(self) -> None:
+        """In each engine, every request of a page waits for the Bridge before it is sent unless this agent
+        may reach this computer and the local network without asking. One to a local address is failed
+        there, before it leaves: a redirect hop is a request of its own, so a page an agent opened cannot
+        send the browser to a local service. Like forms, it follows the permission as the user changes it.
+        What the engine does not show the Bridge (a request with no tab, R29) is not held."""
+        engines = self._engines()
+        if not engines:
+            return
+        hold = not self._may_reach_local()
+        self._local_all = not hold  # requests already held follow the permission as it is now
+        for _label, target in engines:
+            engine = target.bidi
+            intercept = self._net_intercepts.get(engine)
+            if hold and intercept is None:
+                if engine not in self._net_handled:
+                    engine.on("network.beforeRequestSent", lambda params, engine=engine: self._on_request(engine, params))
+                    engine.command("session.subscribe", {"events": ["network.beforeRequestSent"]})
+                    self._net_handled.add(engine)
+                held = engine.command("network.addIntercept", {"phases": ["beforeRequestSent"]})
+                self._net_intercepts[engine] = held["intercept"]
+            elif not hold and intercept is not None:
+                engine.command("network.removeIntercept", {"intercept": intercept})
+                del self._net_intercepts[engine]
+            self._net_engines.add(engine)  # only once its intercept is as the permission says
+
+    def _on_request(self, engine: Bidi, params: dict) -> None:
+        """A request the intercept holds, from the connection's handler thread. An address, a local name and a
+        name already looked up are decided here at once; one whose name must be looked up waits on a thread
+        of its own, so a name that is slow to answer holds only the requests that need it."""
+        if not params.get("isBlocked"):
+            return
+        request = params.get("request") or {}
+        url = str(request.get("url") or "")
+        try:
+            allowed = self._request_allowed(url, wait=False)
+        except Exception:  # anything unexpected fails the request: closed, not open
+            allowed = False
+        if allowed is not None:
+            self._answer(engine, request, url, allowed)
+            return
+        with self._net_state:
+            crowded = self._net_waiting >= NET_WAITING_MAX
+            if not crowded:
+                self._net_waiting += 1
+        if not crowded:
+            try:
+                threading.Thread(target=self._decide_later, args=(engine, request, url), name="bridge-net", daemon=True).start()
+                return
+            except RuntimeError:  # no thread to be had: the request is not left held
+                with self._net_state:
+                    self._net_waiting -= 1
+        self._answer(engine, request, url, False, busy=True)  # a page holding this many names gets its next ones failed
+
+    def _decide_later(self, engine: Bidi, request: dict, url: str) -> None:
+        try:
+            self._decide(engine, request)
+        finally:
+            with self._net_state:
+                self._net_waiting -= 1
+
+    def _decide(self, engine: Bidi, request: dict) -> None:
+        """Sent on, or failed before it leaves; anything unexpected fails the request."""
+        url = str(request.get("url") or "")
+        allowed, busy = False, False
+        try:
+            allowed = bool(self._request_allowed(url))
+        except _Busy:
+            busy = True
+        except Exception:  # noqa: S110 - anything unexpected fails the request: closed, not open
+            pass
+        self._answer(engine, request, url, allowed, busy=busy)
+
+    def _answer(self, engine: Bidi, request: dict, url: str, allowed: bool, busy: bool = False) -> None:
+        method = "network.continueRequest" if allowed else "network.failRequest"
+        with contextlib.suppress(BidiError):
+            engine.command(method, {"request": request.get("request")}, timeout=10)
+        if not allowed:
+            self._note_refused(None if busy else policy.origin(url), busy=busy)
+
+    def _note_refused(self, target: str | None, busy: bool = False) -> None:
+        """Once per place, and at most LOCAL_REFUSED_NOTED places a session, then one line that says more were
+        refused: a page that tries a whole network must not push the agent's own actions out of the activity.
+        Requests failed because too many names were out (`busy`, local or not) are one line of their own."""
+        with self._net_state:
+            if busy:
+                if self._local_busy_noted:
+                    return
+                self._local_busy_noted, reason = True, "local-requests-busy"
+            elif target in self._local_refused or self._local_refused_more:
+                return
+            elif len(self._local_refused) >= LOCAL_REFUSED_NOTED:
+                self._local_refused_more, target, reason = True, None, "local-requests-more"
+            else:
+                self._local_refused.add(target)
+                reason = "local-request"
+        self._record_refused(target, reason)
+
+    def _record_refused(self, target: str | None, reason: str) -> None:
+        with contextlib.suppress(Exception):
+            audit.record(agent=self.agent_id, session=self.session_id, tool="network", capability="local_resources",
+                         decision="deny", reason=reason, target=target, outcome="denied")  # fmt: skip
+
+    @staticmethod
+    def _request_place(url: str | None) -> tuple[str, int] | None:
+        """(host, port) a request goes to, a WebSocket as the page it upgrades from; None when it has no host."""
+        scheme, _, rest = (url or "").partition(":")
+        scheme = {"ws": "http", "wss": "https"}.get(scheme.lower(), scheme.lower())
+        if scheme not in ("http", "https"):
+            return None
+        parts = urllib.parse.urlsplit(f"{scheme}:{rest}")
+        try:
+            port = parts.port
+        except ValueError:  # out of range: no place a request can go to
+            return None
+        if not parts.hostname:
+            return None
+        # As the engine writes it: an approval of http://127.1/ is a request to 127.0.0.1.
+        return policy.canonical_host(parts.hostname), port or (443 if scheme == "https" else 80)
+
+    def _request_allowed(self, url: str, wait: bool = True) -> bool | None:
+        """A request may leave unless it goes to this computer or the local network, and the current call
+        was not allowed local_resources for that host and port. None (only when not `wait`): its name is
+        still to be looked up."""
+        scheme = url.partition(":")[0].lower()
+        if scheme not in ("http", "https", "ws", "wss"):
+            return scheme in HOSTLESS_SCHEMES  # any other (file:, jar:, one the engine adds later) is closed
+        place = self._request_place(url)
+        if place is None:
+            return False
+        local = self._is_local(place[0], wait)
+        if local is None:
+            return None
+        host, port = place
+        # What the user allowed is the place the prompt named; the engine's upgrade of it to https is the same.
+        return not local or self._local_all or place in self._local_ok or (port == 443 and (host, 80) in self._local_ok)
+
+    def _is_local(self, host: str, wait: bool = True) -> bool | None:
+        """An address is read at once, and a name already looked up. Otherwise the name is looked up, once
+        however many requests need it, with a deadline: one that does not answer in time counts as local,
+        and so does every new name while LOOKUPS_AT_ONCE of them are still out."""
+        if policy.local_host(host, resolve=False):
+            return True
+        if policy.is_address(host):
+            return False
+        with self._net_state:
+            known = self._local_hosts.get(host)
+            if known is not None and time.monotonic() - known[0] <= LOCAL_HOST_TTL:
+                return known[1]
+            if not wait:
+                return None
+            lookup = self._lookups.get(host)
+            if lookup is None:
+                if len(self._lookups) >= LOOKUPS_AT_ONCE:
+                    raise _Busy()
+                lookup = self._lookups[host] = _Lookup()
+                try:
+                    threading.Thread(target=self._resolve, args=(host, lookup), name="bridge-dns", daemon=True).start()
+                except RuntimeError:  # no thread to be had: the slot is given back
+                    del self._lookups[host]
+                    raise _Busy() from None
+        if not lookup.done.wait(LOCAL_LOOKUP_TIMEOUT):
+            raise _Busy()
+        return lookup.local
+
+    def _resolve(self, host: str, lookup: _Lookup) -> None:
+        local = True
+        with contextlib.suppress(Exception):
+            local = policy.local_host(host)
+        with self._net_state:
+            if len(self._local_hosts) >= LOCAL_HOSTS_KEPT:
+                for old in list(self._local_hosts)[: LOCAL_HOSTS_KEPT // 2]:
+                    del self._local_hosts[old]
+            self._local_hosts[host] = (time.monotonic(), local)  # kept even when its requests stopped waiting
+            self._lookups.pop(host, None)
+        lookup.local = local
+        lookup.done.set()
 
     # -- forms a page sends by itself ---------------------------------------------------
 
@@ -997,6 +1228,7 @@ class Bridge:
             raise ToolError(messages.get(exc.code, f"the profile {label} could not be opened")) from None
         self._sync_downloads()
         self._sync_forms()  # before its first navigation
+        self._sync_network()
         return bidi
 
     def _t_profiles_list(self, args, cancel, checked):
