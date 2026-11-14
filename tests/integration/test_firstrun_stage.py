@@ -231,6 +231,9 @@ class FirstRunStageTest(unittest.TestCase):
         self.assertEqual(title, msg("dnsOptionKeepChosen"))
         self.assertEqual(note, msg("dnsOptionKeepNote", name))
         self.m.chrome("Services.prefs.setIntPref('network.trr.mode', 3);")
+        self.m.navigate(self.newtab)  # the question is drawn from the resolver as it is when the page shows it
+        if self.page()["card"] != "dns-choice":
+            self.back("dns-choice")
         strict = msg("dnsOptionKeepNoteStrict", name)
         self.assertTrue(harness.wait_until(lambda: (self.m.execute(keep) or [None, None])[1] == strict, 10), self.m.execute(keep))
 
