@@ -102,6 +102,7 @@ REPO_FILE = Path("site/rpm/nulavio.repo")
 SOURCES_FILE = Path("site/apt/nulavio.sources")
 APT_BLOCK = re.compile(r"<!--apt:(on|off)-->(.*?)<!--/apt:\1-->\n?", re.S)
 FLATPAK_BLOCK = re.compile(r"<!--flatpak:(on|off)-->(.*?)<!--/flatpak:\1-->\n?", re.S)
+COMPANION_BLOCK = re.compile(r"<!--companion:(on|off)-->(.*?)<!--/companion:\1-->\n?", re.S)
 # The engineering pages say whether a release is out, and which: what sits between
 # <!--release:on--> and <!--/release:on--> is kept, with {{release_version}}, only when
 # packaging/release.json names a published version; the <!--release:off--> blocks otherwise.
@@ -223,6 +224,7 @@ def release_values(src: Path) -> dict[str, str] | None:
         "key_url": release["key_url"],
         "apt": "off",
         "flatpak": "off",
+        "companion": "off",
     }
     if "flatpak_bundle" in release:
         # The release's own bundle, on its GitHub page (release_metadata.py records it only when the
@@ -232,6 +234,17 @@ def release_values(src: Path) -> dict[str, str] | None:
         base = f"https://github.com/nulavio/nulavio/releases/download/v{version}"
         values.update(flatpak="on", flatpak_url=f"{base}/{release['flatpak_bundle']}", release_files=base)
         values["flatpak_bundle"] = release["flatpak_bundle"]
+    if "companion_apk" in release:
+        # The first release that carries the Companion's signed APK on (ADR 0014; release_metadata.py
+        # sets the name from the published assets). The certificate is the one in this tree.
+        if not re.fullmatch(r"nulavio-companion-[0-9]+(\.[0-9]+)+\.apk", release["companion_apk"]):
+            raise BuildError("packaging/release.json: companion_apk must be nulavio-companion-<version>.apk")
+        certificate = src / "site" / "keys" / "nulavio-companion.der"
+        values.update(
+            companion="on",
+            companion_apk=release["companion_apk"],
+            companion_fpr=hashlib.sha256(certificate.read_bytes()).hexdigest(),
+        )
     if "apt_sources" in release:
         # Like the .repo file: the source file decides whether apt checks signatures, so it is
         # the site's own, and the key in it is the one the pages show.
@@ -513,6 +526,7 @@ def build(out: Path, *, release: bool = False, commit: str = "HEAD", evidence: s
             if page in DOWNLOAD_PAGES:
                 text = choose_apt_blocks(text, released["apt"])
                 text = choose_blocks(text, FLATPAK_BLOCK, released["flatpak"])
+                text = choose_blocks(text, COMPANION_BLOCK, released["companion"])
                 text = choose_blocks(text, WHATSNEW_BLOCK, "on" if has_notes else "off")
             elif "<!--whatsnew:" in text:
                 raise BuildError(f"{page}: what's-new blocks belong on the download pages only")

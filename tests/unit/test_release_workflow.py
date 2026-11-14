@@ -138,13 +138,14 @@ class ReleaseWorkflowTest(unittest.TestCase):
         self.text = WORKFLOW.read_text(encoding="utf-8")
         self.build, self.publish = self.text.split("\n  publish:\n", 1)
         self.build, self.flatpak = self.build.split("\n  flatpak:\n", 1)
+        self.flatpak, self.companion = self.flatpak.split("\n  companion:\n", 1)
 
     def test_manual_from_main_with_approval_before_signing(self):
         self.assertIn("on:\n  workflow_dispatch:", self.text)
         self.assertNotIn("pull_request", self.text)
         self.assertIn("if: github.ref == 'refs/heads/main'", self.build)
         self.assertIn("environment: release", self.publish)
-        self.assertIn("needs: [build, flatpak]", self.publish)
+        self.assertIn("needs: [build, flatpak, companion]", self.publish)
         self.assertIn("needs.build.result == 'success'", self.publish)  # a failed Flatpak never holds back a release
 
     def test_the_build_machine_never_holds_signing_or_upload_credentials(self):
@@ -187,6 +188,23 @@ class ReleaseWorkflowTest(unittest.TestCase):
         self.assertIn("--draft", self.publish)
         self.assertIn("NULAVIO_BUILD_PROFILE: runner", self.build)
 
+    def test_the_companion_apk_is_rebuilt_attested_signed_through_kms_and_checked(self):
+        # ADR 0014: built twice without secrets, attested; signed only in the approved publish job,
+        # checked with apksigner against the published certificate, before publish_release.sh.
+        self.assertIn("scripts/release/build_companion.sh", self.companion)
+        for held in ("secrets.", "environment:", "configure-aws-credentials", "KMS"):
+            self.assertNotIn(held, self.companion)
+        self.assertIn("attest-build-provenance", self.companion)
+        self.assertIn('"$RUNNER_TEMP"/companion/nulavio-companion-*', self.publish)  # provenance checked
+        aws = self.publish.index("configure-aws-credentials")
+        sign = self.publish.index("scripts/release/sign_companion.sh")
+        stage = self.publish.index("NULAVIO_COMPANION_APK=$apk")
+        self.assertLess(aws, sign)
+        self.assertLess(sign, stage)
+        self.assertIn("--companion", self.publish)  # the notes name the APK and its certificate
+        publish = (RELEASE / "publish_release.sh").read_text(encoding="utf-8")
+        self.assertLess(publish.index('cp "$apk" "$apk.cdx.json" "$stage/github/"'), publish.index("sha256sum -- * >SHA256SUMS"))
+
     def test_the_flatpak_is_composed_and_linted_as_flathub_does(self):
         self.assertIn("--compose-url-policy=full", self.text)
         self.assertIn("flatpak-builder-lint org.flatpak.Builder repo repo", self.text)
@@ -194,7 +212,7 @@ class ReleaseWorkflowTest(unittest.TestCase):
     def test_the_bundle_is_attested_checked_and_signed_with_the_release(self):
         flatpak_job = self.text[self.text.index("\n  flatpak:\n") :]
         self.assertLess(flatpak_job.index("check_flatpak.sh"), flatpak_job.index("flatpak build-bundle"))
-        sign = self.publish.index("NULAVIO_FLATPAK_BUNDLE=$bundle scripts/release/publish_release.sh")
+        sign = self.publish.index("NULAVIO_FLATPAK_BUNDLE=$bundle NULAVIO_COMPANION_APK=$apk")
         self.assertLess(sign, self.publish.index("subject-path: ${{ runner.temp }}/publish/github/*"))
         publish = (RELEASE / "publish_release.sh").read_text(encoding="utf-8")
         self.assertLess(publish.index('cp "$bundle" "$stage/github/"'), publish.index("sha256sum -- * >SHA256SUMS"))

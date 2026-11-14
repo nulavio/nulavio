@@ -115,6 +115,16 @@ flatpak install --user {{flatpak_bundle}}</code></pre></div>
 <p class="limit"><strong>Limite:</strong> Nesse intervalo, o Nulavio instalado ainda não tem a correção.</p>
 </section>
 
+<!--companion:on-->
+<section id="companion" aria-labelledby="companion-h">
+<h2 id="companion-h">Nulavio Companion (Android)</h2>
+<p class="prose">Para desbloquear um perfil protegido com o celular, instale o Nulavio Companion num Android 11 ou mais novo. O app vem com esta versão, entre os arquivos da página de versões do projeto (<code translate="no">github.com/nulavio/nulavio/releases</code>): <code translate="no">{{companion_apk}}</code>.</p>
+<p class="prose">Antes de instalar, confira o certificado que assina o app. Com as ferramentas de build do Android, <code translate="no">apksigner verify --print-certs {{companion_apk}}</code> precisa mostrar este SHA-256, que também está em <code translate="no">https://nulavio.net/keys/nulavio-companion.der</code>:</p>
+<p class="prose"><code class="mono" translate="no">{{companion_fpr}}</code></p>
+<p class="prose">O Android só aceita uma atualização do app assinada pelo mesmo certificado. O app ainda não está no F-Droid.</p>
+</section>
+
+<!--/companion:on-->
 <section id="verify" aria-labelledby="verify-h">
 <h2 id="verify-h">Conferir um download manual</h2>
 <p class="prose">Os mesmos pacotes, com a lista <code translate="no">SHA256SUMS</code> assinada pela chave acima, o SBOM e o manifesto do build, ficam na página da versão no GitHub: <code translate="no">github.com/nulavio/nulavio/releases</code>. A chave que vem junto só vale se a impressão digital for a mostrada acima: confira antes de importar.</p>
