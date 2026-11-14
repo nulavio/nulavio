@@ -8,7 +8,7 @@
 #   container as environment variables: the ones already set (CI, after
 #   aws-actions/configure-aws-credentials), or exported from AWS_PROFILE (the
 #   maintainer's SSO session). The public key is NULAVIO_PUBLIC_KEY (default
-#   site/keys/nulavio-packages.asc), and it must be <key-id>.
+#   site/keys/nulavio-packages.asc), and its full fingerprint must be the one given.
 #
 #       NULAVIO_KMS_KEY_ID=alias/nulavio-release AWS_PROFILE=lombello-dev AWS_REGION=us-east-1 \
 #           scripts/release/sign_repo.sh <packages-dir> <repo-out> <fingerprint>
@@ -18,7 +18,7 @@
 #   container. A key with a passphrase is asked for there, with the host's
 #   pinentry, or taken from that agent's cache. Only the public key is copied in.
 #
-#       GNUPGHOME=~/.gnupg scripts/release/sign_repo.sh <packages-dir> <repo-out> <key-id>
+#       GNUPGHOME=~/.gnupg scripts/release/sign_repo.sh <packages-dir> <repo-out> <fingerprint>
 #
 # Output: <repo-out>/x86_64/*.rpm (signed), repodata/ (createrepo_c),
 # repodata/repomd.xml.asc (detached signature) and nulavio-packages.asc (public
@@ -45,9 +45,9 @@ set -euo pipefail
 
 release=$(cd "$(dirname "$0")" && pwd)
 repo=$(cd "$release/../.." && pwd)
-packages=$(realpath "${1:?usage: sign_repo.sh <packages-dir> <repo-out> <key-id>}")
+packages=$(realpath "${1:?usage: sign_repo.sh <packages-dir> <repo-out> <fingerprint>}")
 out=$(mkdir -p "${2:?repo-out}" && realpath "$2")
-key=${3:?key id or fingerprint}
+key=${3:?the full 40-character fingerprint}
 image=$("$release/base_image.sh" fedora-build)
 
 fingerprint() {
