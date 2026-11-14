@@ -244,6 +244,7 @@ class PublishReleaseTest(unittest.TestCase):
             shutil.copytree(ROOT / part, self.repo / part, ignore=shutil.ignore_patterns("__pycache__"))
         (self.repo / "site" / "keys").mkdir(parents=True)
         shutil.copy(ROOT / "site" / "keys" / "nulavio-packages.asc", self.repo / "site" / "keys")
+        self.set_pairing("false")
         git = ["git", "-C", str(self.repo), "-c", "user.name=t", "-c", "user.email=t@example.invalid"]
         subprocess.run([*git, "init", "-q", "-b", "main"], check=True)
         subprocess.run([*git, "add", "-A"], check=True)
@@ -278,14 +279,15 @@ class PublishReleaseTest(unittest.TestCase):
         (out / "manifest.json").write_text(json.dumps(manifest))
         return out
 
-    def offer_pairing(self) -> None:
-        """A new base commit whose branding prefs offer phone pairing, as the real build's do."""
+    def set_pairing(self, value: str) -> None:
         prefs = self.repo / "browser/branding/nulavio/pref/firefox-branding.js"
         prefs.parent.mkdir(parents=True, exist_ok=True)
-        prefs.write_text('pref("nulavio.vault.phone.pairing", true);\n')
+        prefs.write_text(f'// other prefs\npref("nulavio.vault.phone.pairing", {value});\n')
+
+    def commit_base(self, message: str) -> None:
         git = ["git", "-C", str(self.repo), "-c", "user.name=t", "-c", "user.email=t@example.invalid"]
         subprocess.run([*git, "add", "-A"], check=True)
-        subprocess.run([*git, "commit", "-q", "-m", "pairing on"], check=True)
+        subprocess.run([*git, "commit", "-q", "-m", message], check=True)
         subprocess.run([*git, "push", "-q", "origin", "main"], check=True)
         self.base = subprocess.run([*git, "rev-parse", "HEAD"], capture_output=True, text=True, check=True).stdout.strip()
 
@@ -315,16 +317,24 @@ class PublishReleaseTest(unittest.TestCase):
     @unittest.skipUnless(shutil.which("gpg"), "needs gpg")
     def test_a_build_that_offers_pairing_is_not_published_without_the_signed_companion(self):  # mutation 10
         # ADR 0005's release order and ADR 0014: the page that offers to pair a phone ships with the app.
-        self.offer_pairing()
+        prefs = self.repo / "browser/branding/nulavio/pref/firefox-branding.js"
+        prefs.write_text('pref("nulavio.vault.phone.pairing_moved", true);\n')  # the pref can no longer be read
+        self.commit_base("pairing unreadable")
+        run = self.publish(self.rehearsal("pairing-unknown", with_deb=True))
+        self.assertEqual(run.returncode, 2, run.stdout + run.stderr)
+        self.assertIn("cannot tell whether", run.stderr)
+        self.set_pairing("true")
+        self.commit_base("pairing on")
         run = self.publish(self.rehearsal("pairing-no-apk", with_deb=True))
         self.assertEqual(run.returncode, 2, run.stdout + run.stderr)
         self.assertIn("offers phone pairing but no signed Companion APK", run.stderr)
         self.assertFalse((self.tmp / "pairing-no-apk-stage").exists())
         wrong = self.tmp / "companion.apk"
         wrong.write_bytes(b"apk")
+        Path(f"{wrong}.cdx.json").write_text("{}")  # so the name alone is what is refused
         run = self.publish(self.rehearsal("pairing-wrong-name", with_deb=True), NULAVIO_COMPANION_APK=str(wrong))
         self.assertEqual(run.returncode, 2, run.stderr)
-        self.assertIn("is not a signed Companion APK with its SBOM", run.stderr)
+        self.assertIn("is not a Companion APK with its SBOM", run.stderr)
         apk = self.tmp / "nulavio-companion-0.1.0.apk"
         apk.write_bytes(b"apk")
         Path(f"{apk}.cdx.json").write_text("{}")

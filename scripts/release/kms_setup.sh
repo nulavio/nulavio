@@ -17,6 +17,7 @@
 # RSASSA_PKCS1_V1_5_SHA_256. GitHub's OIDC provider must already exist in the
 # account. Prints the ARNs for the `release` environment's variables.
 set -euo pipefail
+shopt -s inherit_errexit  # ensure_key runs in $(…): a failed create-alias must stop the script
 
 : "${AWS_PROFILE:?set AWS_PROFILE explicitly}" "${AWS_REGION:?set AWS_REGION explicitly}"
 export AWS_PROFILE AWS_REGION

@@ -35,7 +35,7 @@ How it works: GitHub Actions checks Mozilla's releases and advisories twice a da
 - **Packages** (the dnf and APT repositories, `SHA256SUMS.asc` on every release): OpenPGP key `298A 9093 BAAB B26F 79BB  29F4 BF47 E5FA 9EDB 8DB1`, published at <https://nulavio.net/keys/nulavio-packages.asc>.
 - **Nulavio Companion** (the Android app's APK attached to releases, [ADR 0014](docs/adr/0014-companion-signing-key.md)): signing certificate SHA-256 `d78d255ac7d83cc3e70d946921a5921c76dd92d9b865fcd12893b36d2ae9d3be` (what `apksigner verify --print-certs` prints), published at <https://nulavio.net/keys/nulavio-companion.der>.
 
-Both keys are held in AWS KMS and sign only from the release workflow after the maintainer's approval; the originals are kept offline.
+Both keys are held in AWS KMS. They sign from the release workflow after the maintainer's approval; the key policy also lets the account's administrator SSO sessions sign (the Companion's certificate was made that way). The package key's original is kept offline; the Companion key's offline copy is pending ([#205](https://github.com/nulavio/nulavio/issues/205)).
 
 ## Safe harbour
 

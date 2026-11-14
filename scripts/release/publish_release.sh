@@ -81,14 +81,21 @@ if [[ -n $bundle ]] && { [[ $(basename "$bundle") != "nulavio-${tag#v}.x86_64.fl
 fi
 # ADR 0005's release order, ADR 0014: a build that offers to pair a phone ships the app it pairs
 # with, signed (sign_companion.sh) and next to its SBOM.
+# Fails closed: the prefs must be readable and must name the pref, true or false.
 apk=${NULAVIO_COMPANION_APK:-}
-if git -C "$repo" show "$commit:browser/branding/nulavio/pref/firefox-branding.js" 2>/dev/null |
-        grep -qx 'pref("nulavio.vault.phone.pairing", true);' && [[ -z $apk ]]; then
+pairing='^[[:space:]]*pref\("nulavio\.vault\.phone\.pairing",[[:space:]]*'
+branding=$(git -C "$repo" show "$commit:browser/branding/nulavio/pref/firefox-branding.js") &&
+    [[ $(grep -Ec "${pairing}(true|false)\);" <<<"$branding") == 1 ]] || {
+    echo "publish_release: cannot tell whether $tag offers phone pairing (nulavio.vault.phone.pairing in firefox-branding.js)" >&2
+    exit 2
+}
+if grep -Eq "${pairing}true\);" <<<"$branding" && [[ -z $apk ]]; then
     echo "publish_release: $tag offers phone pairing but no signed Companion APK was given (NULAVIO_COMPANION_APK)" >&2
     exit 2
 fi
+# The name and the SBOM only: sign_companion.sh signed it and checked it with apksigner just before.
 if [[ -n $apk ]] && { [[ ! $(basename "$apk") =~ ^nulavio-companion-[0-9]+(\.[0-9]+)+\.apk$ ]] || [[ ! -f $apk ]] || [[ ! -f $apk.cdx.json ]]; }; then
-    echo "publish_release: $apk is not a signed Companion APK with its SBOM (nulavio-companion-<version>.apk)" >&2
+    echo "publish_release: $apk is not a Companion APK with its SBOM (nulavio-companion-<version>.apk)" >&2
     exit 2
 fi
 
