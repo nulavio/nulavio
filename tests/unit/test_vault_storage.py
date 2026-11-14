@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import signal
 import subprocess
@@ -402,6 +403,20 @@ class SupervisedRunTest(StorageCase):
         self.assertEqual(list(prof.path.iterdir()), [])
         self.assertFalse(contains(box.root, MARKER.encode()))
 
+    def test_a_run_says_what_it_did_with_a_replacement_left_unfinished(self):
+        # Codex review of #252: `nulavio run` settled a replacement left unfinished and said nothing, so a new
+        # code someone had written down stopped working without a word.
+        self.encrypted_profile()
+        prof = profile.get("work")
+        killed = mock.patch.object(vault_cli, "_record", side_effect=SystemExit("killed"))
+        with killed, self.assertRaises(SystemExit):
+            vault_cli.api_request({"op": "new-recovery-code", "path": str(prof.path), "current": PASSWORD})
+        env = self.fake_engine()
+        proc, _prof, _box = self.start(env)
+        self.stop_file.touch()
+        self.assertEqual(proc.wait(30), 0)
+        self.assertIn("was undone", proc.stderr.read())
+
     def test_wrong_password_starts_nothing(self):
         self.encrypted_profile()
         env = self.fake_engine()
@@ -468,6 +483,9 @@ class HelperApiTest(StorageCase):
         self.assertEqual((path / "prefs.js").read_text(), MARKER)
         self.assertEqual(self.api({"op": "lock", "path": str(path)}), {"locked": True})
         new_code = self.api({"op": "new-recovery-code", "path": str(path), "current": code})["recovery_code"]
+        # Until the new code is typed back, the old one still opens the profile; only the new one confirms (#187).
+        self.assertEqual(self.api({"op": "confirm-recovery-code", "path": str(path), "current": code}), {"error": "wrong-secret"})
+        self.assertEqual(self.api({"op": "confirm-recovery-code", "path": str(path), "current": new_code}), {"done": True})
         self.assertEqual(
             self.api({"op": "unlock", "path": str(path), "method": "recovery-code", "secret": code}), {"error": "wrong-secret"}
         )
@@ -543,7 +561,9 @@ class HelperApiTest(StorageCase):
         stale = box.load_vault()
         stale.unlock_password(PASSWORD)
         self.addCleanup(stale.lock)
-        vault_cli.api_request({"op": "new-recovery-code", "path": str(prof.path), "current": PASSWORD})
+        request = {"op": "new-recovery-code", "path": str(prof.path), "current": PASSWORD}
+        new_code = vault_cli.api_request(request)["recovery_code"]
+        vault_cli.api_request({"op": "confirm-recovery-code", "path": str(prof.path), "current": new_code})
         after = box.vault_path.read_bytes()
         with self.assertRaises(storage.StorageError) as ctx, box.recording(stale) as record:
             stale.add_password("a second password", FAST)
@@ -621,12 +641,260 @@ class HelperApiTest(StorageCase):
             result = vault_cli.api_request({"op": "new-recovery-code", "path": str(prof.path), "current": PASSWORD})
         self.assertEqual(result["warning"], "not-recorded")
         self.assertEqual([p.name for p in box.root.glob("maintenance-*")], [])
-        with self.assertRaises(VaultError):
-            profiles.unlock(prof, recovery_code=old_code)
-        profiles.unlock(prof, recovery_code=result["recovery_code"]).lock()  # unlocking once records it
+        vault = profiles.unlock(prof, recovery_code=result["recovery_code"])  # unlocking once records it
+        self.assertEqual(vault.settled, "finished")  # and, with the new code, finishes the replacement
+        vault.lock()
         self.assertEqual(
             json.loads(box.state_path.read_text())["generation"], json.loads(box.vault_path.read_text())["generation"]
         )
+        profiles.lock(prof)
+        with self.assertRaises(VaultError):
+            profiles.unlock(prof, recovery_code=old_code)
+
+    # #187: a replacement cut short at any point leaves a code the person has seen that opens the profile.
+
+    def replace_from_the_command_line(self, prof: profile.Profile, confirm=None) -> tuple[subprocess.Popen, str]:
+        """`nulavio vault new-recovery-code`, read up to the new code; `confirm` is typed back if given."""
+        proc = subprocess.Popen(
+            [str(ROOT / "bin" / "nulavio"), "vault", "new-recovery-code", prof.name, "--password-stdin"],
+            stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        )  # fmt: skip
+        self.addCleanup(lambda: proc.poll() is None and proc.kill())
+        proc.stdin.write(PASSWORD + "\n")
+        proc.stdin.flush()
+        code = None
+        for line in proc.stdout:
+            if re.fullmatch(r"\s+([0-9A-Z]{4}-){6}[0-9A-Z]{4}\s*", line):
+                code = line.strip()
+                break
+        self.assertIsNotNone(code, proc.stderr.read() if proc.poll() is not None else "no code shown")
+        if confirm is not None:
+            proc.stdin.write(confirm(code) + "\n")
+            proc.stdin.close()
+            proc.wait(120)
+        return proc, code
+
+    def test_the_command_line_drops_the_old_code_once_the_new_one_is_typed_back(self):
+        prof, old_code = self.encrypted_profile()
+        proc, new_code = self.replace_from_the_command_line(prof, confirm=lambda code: code.lower())
+        self.assertEqual(proc.returncode, 0, proc.stderr.read())
+        with self.assertRaises(VaultError):
+            profiles.unlock(prof, recovery_code=old_code)
+        vault = profiles.unlock(prof, recovery_code=new_code)
+        self.assertIsNone(vault.settled)  # nothing was left to settle
+        vault.lock()
+        profiles.lock(prof)
+
+    def test_a_replacement_not_confirmed_on_the_command_line_keeps_the_old_code(self):
+        prof, old_code = self.encrypted_profile()
+        proc, new_code = self.replace_from_the_command_line(prof, confirm=lambda _code: old_code)
+        self.assertEqual(proc.returncode, 1)
+        self.assertIn("was not confirmed", proc.stderr.read())
+        self.assertEqual(sum(m.get("unconfirmed", False) for m in profiles.status(prof)["methods"]), 1)
+        vault = profiles.unlock(prof, recovery_code=old_code)
+        self.assertEqual(vault.settled, "undone")
+        vault.lock()
+        profiles.lock(prof)
+        with self.assertRaises(VaultError):
+            profiles.unlock(prof, recovery_code=new_code)
+
+    def test_a_replacement_killed_after_its_code_was_shown_is_settled_by_the_next_unlock(self):
+        # Killed while it waits for the new code to be typed back (a closed terminal, a power cut):
+        # both codes were shown. The next unlock finishes the replacement if it used the new code,
+        # and undoes it otherwise.
+        for unlock_with, outcome in (("new code", "finished"), ("password", "undone")):
+            with self.subTest(unlock_with=unlock_with):
+                prof, old_code = self.encrypted_profile(f"killed-{outcome}")
+                proc, new_code = self.replace_from_the_command_line(prof)
+                proc.kill()
+                proc.wait(30)
+                box = profiles.container(prof)
+                self.assertFalse(box.mounted())
+                if unlock_with == "password":
+                    vault = profiles.unlock(prof, password=PASSWORD)
+                else:
+                    vault = profiles.unlock(prof, recovery_code=new_code)
+                self.assertEqual(vault.settled, outcome)
+                vault.lock()
+                profiles.lock(prof)
+                works, refused = (new_code, old_code) if outcome == "finished" else (old_code, new_code)
+                with self.assertRaises(VaultError):
+                    profiles.unlock(prof, recovery_code=refused)
+                profiles.unlock(prof, recovery_code=works).lock()
+                profiles.lock(prof)
+                self.assertNotIn("pending_recovery", json.loads(box.vault_path.read_text()))
+
+    def test_a_replacement_killed_before_its_code_was_shown_leaves_the_old_code(self):
+        # Killed once the key file is saved and before the answer leaves (the issue's window of about
+        # a second): the new code was never seen. Nothing after the save runs, as in a kill.
+        prof, old_code = self.encrypted_profile()
+        killed = mock.patch.object(vault_cli, "_record", side_effect=SystemExit("killed"))
+        with killed, self.assertRaises(SystemExit):
+            vault_cli.api_request({"op": "new-recovery-code", "path": str(prof.path), "current": PASSWORD})
+        self.assertIsNotNone(json.loads(profiles.container(prof).vault_path.read_text()).get("pending_recovery"))
+        vault = profiles.unlock(prof, recovery_code=old_code)
+        self.assertEqual(vault.settled, "undone")
+        vault.lock()
+        profiles.lock(prof)
+        status = profiles.status(prof)
+        self.assertEqual([m["method"] for m in status["methods"]], ["password", "recovery-code"])
+        profiles.unlock(prof, recovery_code=old_code).lock()
+        profiles.lock(prof)
+
+    def test_the_code_being_replaced_cannot_be_removed_while_the_new_answer_was_lost(self):
+        # Review of #187: a recovery-only profile, its replacement killed before the answer left. Removing
+        # the old code with the old code then left only the new one, which nobody had seen.
+        prof, old_code = self.encrypted_profile()
+        killed = mock.patch.object(vault_cli, "_record", side_effect=SystemExit("killed"))
+        with killed, self.assertRaises(SystemExit):
+            vault_cli.api_request({"op": "new-recovery-code", "path": str(prof.path), "current": PASSWORD})
+        old_id = next(
+            m["id"] for m in profiles.status(prof)["methods"] if m["method"] == "recovery-code" and not m.get("unconfirmed")
+        )
+        password_id = next(m["id"] for m in profiles.status(prof)["methods"] if m["method"] == "password")
+        vault_cli.api_request({"op": "remove-method", "path": str(prof.path), "current": old_code, "envelope": password_id})
+        with self.assertRaises(VaultError) as ctx:
+            vault_cli.api_request({"op": "remove-method", "path": str(prof.path), "current": old_code, "envelope": old_id})
+        self.assertEqual(ctx.exception.code, "replacement-pending")
+        vault = profiles.unlock(prof, recovery_code=old_code)  # the code that was seen still opens it
+        self.assertEqual(vault.settled, "undone")
+        vault.lock()
+        profiles.lock(prof)
+
+    def test_a_first_recovery_code_is_confirmed_through_the_helper(self):
+        # Review of #187: with no recovery code left to replace, confirming the new one answered "not-found".
+        prof, _code = self.encrypted_profile()
+        code_id = next(m["id"] for m in profiles.status(prof)["methods"] if m["method"] == "recovery-code")
+        vault_cli.api_request({"op": "remove-method", "path": str(prof.path), "current": PASSWORD, "envelope": code_id})
+        new = vault_cli.api_request({"op": "new-recovery-code", "path": str(prof.path), "current": PASSWORD})["recovery_code"]
+        self.assertFalse(any(m.get("unconfirmed") for m in profiles.status(prof)["methods"]))
+        self.assertEqual(
+            vault_cli.api_request({"op": "confirm-recovery-code", "path": str(prof.path), "current": new}), {"done": True}
+        )
+        profiles.unlock(prof, recovery_code=new).lock()
+        profiles.lock(prof)
+
+    def test_a_settled_replacement_is_recorded_in_the_volume_or_nowhere(self):
+        # Review of #187: the settlement at unlock recorded by path; a volume gone between its save and its
+        # record got the record in the clear on the bare mount point, and the next unlock was refused.
+        prof, old_code = self.encrypted_profile()
+        killed = mock.patch.object(vault_cli, "_record", side_effect=SystemExit("killed"))
+        with killed, self.assertRaises(SystemExit):
+            vault_cli.api_request({"op": "new-recovery-code", "path": str(prof.path), "current": PASSWORD})
+        box = profiles.container(prof)
+        real_save = Vault.save
+
+        def save_then_detach(vault, *args, **kwargs):
+            real_save(vault, *args, **kwargs)
+            if vault.settled is None and box.mounted():  # the settlement's save: the volume goes away now
+                subprocess.run(["fusermount3", "-u", "-z", str(prof.path)], check=True, capture_output=True)
+
+        with mock.patch.object(Vault, "save", save_then_detach):
+            vault = profiles.unlock(prof, recovery_code=old_code)
+        self.assertEqual(vault.settled, "undone")
+        vault.lock()
+        box.secure_if_locked()
+        self.assertEqual([p.name for p in prof.path.iterdir()], [])  # nothing written in the clear
+        profiles.unlock(prof, recovery_code=old_code).lock()  # and it opens, its record and key file agreeing
+        self.assertEqual(
+            json.loads(box.state_path.read_text())["generation"], json.loads(box.vault_path.read_text())["generation"]
+        )
+        profiles.lock(prof)
+
+    def test_a_settlement_that_cannot_be_saved_says_so_and_is_tried_again(self):
+        # Review of #187, round 2: a full disk at the settlement left both codes working and said nothing.
+        prof, old_code = self.encrypted_profile()
+        killed = mock.patch.object(vault_cli, "_record", side_effect=SystemExit("killed"))
+        with killed, self.assertRaises(SystemExit):
+            vault_cli.api_request({"op": "new-recovery-code", "path": str(prof.path), "current": PASSWORD})
+        full = mock.patch.object(Vault, "save", side_effect=OSError(28, "No space left on device"))
+        request = {"op": "unlock", "path": str(prof.path), "method": "recovery-code", "secret": old_code, "autolock": False}
+        with full:
+            self.assertEqual(vault_cli.api_request(request), {"unlocked": True, "recovery_code": "unsettled"})
+        self.assertIsNotNone(json.loads(profiles.container(prof).vault_path.read_text()).get("pending_recovery"))
+        profiles.lock(prof)
+        self.assertEqual(vault_cli.api_request(request), {"unlocked": True, "recovery_code": "undone"})  # next time
+        profiles.lock(prof)
+
+    def test_a_settlement_whose_save_failed_after_writing_says_what_is_on_disk(self):
+        # Review of #187, round 3: the save replaced the key file and then failed (syncing its directory); the
+        # unlock said "both codes still work" while the old one no longer did.
+        prof, old_code = self.encrypted_profile()
+        killed = mock.patch.object(vault_cli, "_record", side_effect=SystemExit("killed"))
+        with killed, self.assertRaises(SystemExit):
+            vault_cli.api_request({"op": "new-recovery-code", "path": str(prof.path), "current": PASSWORD})
+        real = Vault.save
+
+        def written_then_failed(vault, *args, **kwargs):
+            real(vault, *args, **kwargs)
+            raise OSError(5, "Input/output error")
+
+        request = {"op": "unlock", "path": str(prof.path), "method": "recovery-code", "secret": old_code, "autolock": False}
+        with mock.patch.object(Vault, "save", written_then_failed):
+            self.assertEqual(vault_cli.api_request(request), {"unlocked": True, "recovery_code": "undone"})
+        self.assertIsNone(json.loads(profiles.container(prof).vault_path.read_text()).get("pending_recovery"))
+        profiles.lock(prof)
+
+    def test_a_settlement_that_cannot_be_read_back_says_it_is_not_known(self):
+        # Verification of round 3: the save failed after writing and the key file could not be read back either.
+        prof, old_code = self.encrypted_profile()
+        killed = mock.patch.object(vault_cli, "_record", side_effect=SystemExit("killed"))
+        with killed, self.assertRaises(SystemExit):
+            vault_cli.api_request({"op": "new-recovery-code", "path": str(prof.path), "current": PASSWORD})
+        real_save, real_read = Vault.save, Path.read_text
+        state = {"saved": False}
+
+        def written_then_failed(vault, *args, **kwargs):
+            real_save(vault, *args, **kwargs)
+            state["saved"] = True
+            raise OSError(5, "Input/output error")
+
+        def unreadable_after(path, *args, **kwargs):
+            if state["saved"] and path.name == "vault.json":
+                raise OSError(5, "Input/output error")
+            return real_read(path, *args, **kwargs)
+
+        request = {"op": "unlock", "path": str(prof.path), "method": "recovery-code", "secret": old_code, "autolock": False}
+        with mock.patch.object(Vault, "save", written_then_failed), mock.patch.object(Path, "read_text", unreadable_after):
+            self.assertEqual(vault_cli.api_request(request), {"unlocked": True, "recovery_code": "unknown"})
+        profiles.lock(prof)
+
+    def test_a_settlement_saved_but_not_recorded_says_so(self):
+        prof, old_code = self.encrypted_profile()
+        killed = mock.patch.object(vault_cli, "_record", side_effect=SystemExit("killed"))
+        with killed, self.assertRaises(SystemExit):
+            vault_cli.api_request({"op": "new-recovery-code", "path": str(prof.path), "current": PASSWORD})
+        real = storage.Container._check_state
+
+        def check_state(self, vault, volume_fd=None):
+            if vault.settled is not None:  # the settlement's record, after its save: the volume is gone
+                raise OSError(107, "Transport endpoint is not connected")
+            return real(self, vault, volume_fd)
+
+        request = {"op": "unlock", "path": str(prof.path), "method": "recovery-code", "secret": old_code, "autolock": False}
+        with mock.patch.object(storage.Container, "_check_state", check_state):
+            answer = vault_cli.api_request(request)
+        self.assertEqual(answer, {"unlocked": True, "recovery_code": "undone", "warning": "not-recorded"})
+        profiles.lock(prof)
+
+    def test_the_command_line_confirms_only_the_code_it_showed(self):
+        # Review of #187, round 2: while the command waited, another unlock undid the replacement; typing the
+        # old code then "confirmed" it and said the old code no longer opened the profile.
+        prof, old_code = self.encrypted_profile()
+
+        def typed_back(code):
+            vault = profiles.unlock(prof, password=PASSWORD)  # meanwhile: the replacement is undone
+            self.assertEqual(vault.settled, "undone")
+            vault.lock()
+            profiles.lock(prof)
+            return old_code
+
+        proc, _new_code = self.replace_from_the_command_line(prof, confirm=typed_back)
+        self.assertEqual(proc.returncode, 1)
+        out = proc.stdout.read()
+        self.assertNotIn("no longer opens", out)
+        self.assertIn("was not confirmed", proc.stderr.read())
+        profiles.unlock(prof, recovery_code=old_code).lock()  # the old code still opens it, as it was said
         profiles.lock(prof)
 
     def test_a_failure_before_the_change_is_not_called_saved(self):

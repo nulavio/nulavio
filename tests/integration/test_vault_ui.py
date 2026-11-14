@@ -680,10 +680,15 @@ class VaultUiTest(unittest.TestCase):
         self.shoot("methods-new-code")
         groups = new_code.split("-")
         index = lambda label: int(self.m.execute(f"return document.getElementById('{label}').textContent.match(/\\d+/)[0];")) - 1  # noqa: E731
+        # Until two groups are typed back, the old code still opens the profile and is still listed once (#187).
+        rows = self.m.execute("return [...document.querySelectorAll('#methods > li')].map(li => li.dataset.method);")
+        self.assertEqual(rows.count("recovery-code"), 1, rows)
         self.type_into("group-a", groups[index("group-a-label")])
         self.type_into("group-b", groups[index("group-b-label")])
         self.click("#code-step button[type=submit]")
         self.wait_state("idle")
+        rows = self.m.execute("return [...document.querySelectorAll('#methods > li')].map(li => li.dataset.method);")
+        self.assertEqual(rows.count("recovery-code"), 1, rows)
         self.assertEqual(self.m.execute("return document.getElementById('code').textContent;"), "")
         # Removing a method asks first; the old code no longer confirms anything.
         self.type_into("current", code)
@@ -940,6 +945,47 @@ class VaultUiTest(unittest.TestCase):
         self.assertEqual((methods["fields"], methods["buttons"]), ([], []), methods)
         self.assertEqual(methods["headline"], msg("vaultGoneHeadline"))
         self.assertEqual((methods["status"], methods["level"]), (msg("vaultGone"), "error"))
+
+    def test_17_an_unfinished_recovery_code_replacement_is_undone_and_the_unlock_page_says_so(self):
+        """#187: a new recovery code never typed back (the page left) is undone by the next unlock with
+        the password; the page says so and stays open to be read."""
+        profile_id, old_code = self.create_via_api("Troca", password=PASSWORD, keyring=False)
+        path = self.profile_path(profile_id)
+        new_code = self.call("return V.change(args[0], 'new-recovery-code', {current: args[1]});", profile_id, PASSWORD)[
+            "recoveryCode"
+        ]
+        self.assertNotEqual(new_code, old_code)
+        self.open_page(f"vault/methods.html?p={profile_id}")
+        self.wait_state("idle")
+        rows = self.m.execute("return [...document.querySelectorAll('#methods > li')].map(li => li.dataset.method);")
+        self.assertEqual(sorted(rows), ["password", "recovery-code"])  # the waiting code is not listed
+        self.open_page(f"vault/unlock.html?p={profile_id}")
+        self.wait_state("idle")
+        handle = self.m.send("WebDriver:GetWindowHandle")["value"]
+        self.type_into("password", PASSWORD)
+        self.click("#password-form button[type=submit]")
+        self.wait_state("unlocked", timeout=60)
+        note = self.m.execute("return browser.i18n.getMessage('vaultRecoveryUndone');")
+        status = self.status_line()
+        self.assertIn(note, self.status_text())
+        self.assertEqual(status.get("level"), "warn", status)
+        self.assertTrue(harness.wait_until(lambda: self.instances(path), timeout=60))
+        time.sleep(3)  # longer than the 2.5 s after which a plain success closes its tab
+        self.assertIn(handle, self.m.window_handles(), "the page closed before its note could be read")
+        self.shoot("unlock-recovery-undone")
+        self.stop_instance(path)
+        self.assertTrue(harness.wait_until(lambda: not storage.Container(path).mounted(), timeout=30))
+        status = self.call("return V.status(args[0]);", profile_id)
+        self.assertFalse(any(m.get("unconfirmed") for m in status["methods"]), status)
+        for code, opens in ((new_code, False), (old_code, True)):
+            with self.subTest(code="new" if code == new_code else "old"):
+                answer = self.call(
+                    "try { await V.change(args[0], 'add-password', {current: args[1], password: 'a check of the code 99'});"
+                    " return 'opened'; } catch (e) { return e.code ?? String(e); }",
+                    profile_id,
+                    code,
+                )
+                self.assertEqual(answer == "opened", opens, answer)
 
 
 if __name__ == "__main__":
