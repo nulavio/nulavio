@@ -32,7 +32,7 @@ git config core.hooksPath scripts/git-hooks
 
 The same steps for agents and people:
 
-1. Start from the current `main` in a separate worktree, for example `git fetch origin && git worktree add -b agent/claude/fix-x ../nulavio-fix-x origin/main`.
+1. Start from the current `main` in a separate worktree, for example `git fetch origin && git worktree add -b agent/claude/fix-x ../nulavio-fix-x origin/main`. An agent that does not work on design leaves the design screenshots out of it: [below](#worktrees-without-the-design-screenshots).
 2. Make small, verifiable conventional commits, signed off (`git commit -s`, see [CONTRIBUTING.md](../../CONTRIBUTING.md)).
 3. Run the local checks: `ruff check .`, `ruff format --check .`, `python3 -I tests/run.py unit`, and the integration tests when the change touches the engine, profiles or the Shell.
 4. Push only your own branch: `git push -u origin HEAD`. Never push to `main`. Never force-push, except `--force-with-lease` on your own branch before review starts.
@@ -42,13 +42,29 @@ The same steps for agents and people:
 
 Pushes to branches cost no Actions minutes: CI runs on pushes to `main` and on pull requests, not on other branches.
 
+### Worktrees without the design screenshots
+
+Most of a checkout is `docs/design/screenshots/` (73.6 MB of 89 MB on 2026-11-13, [ADR 0013](../adr/0013-repository-layout.md), point 2), and almost no task reads it. Agents make their worktrees without it, unless the work is design:
+
+```sh
+git fetch origin
+git worktree add --no-checkout -b agent/claude/fix-x ../nulavio-fix-x origin/main
+cd ../nulavio-fix-x
+git sparse-checkout set --no-cone '/*' '!/docs/design/screenshots/'
+git checkout
+```
+
+The worktree then takes about 18 MB instead of 90 MB. Everything else works as in a full checkout: the unit tests pass (the documents' link test counts a file git tracks as present even when the sparse checkout left it out), commits and pushes are the same, and git keeps the screenshots in the history and the index, so nothing is deleted by a commit. The first `git sparse-checkout` in a clone turns on `extensions.worktreeConfig` in the clone's shared configuration; the sparse setting itself lives in that worktree's own configuration, so other worktrees keep their full checkout.
+
+The full checkout is needed for design work (captures added or replaced under `docs/design/screenshots/`, by hand or with `scripts/research/` and `scripts/site/capture_site.py`) and for reading the screenshots the documents cite. To get it back in the same worktree: `git sparse-checkout disable`. CI is unchanged: it checks out everything.
+
 ## Review and merging
 
 Adopted 2026-11-12. Until then every merge waited for the maintainer to read the pull request; with one maintainer and agents doing most of the work, pull requests waited for weeks and were stacked dozens deep on each other. Now the agent that did the work reviews it and merges it. The review has to be a real one, and this is what makes it one:
 
 1. **Read the change, not the memory of writing it.** The diff as GitHub shows it (`gh pr diff`), at the head commit, after the last push. The description's "Verified" and "Not verified" must be true of that commit.
 2. **Check it against the rules that are not up for decision**: the [non-negotiables](../../CONTRIBUTING.md#non-negotiables-reviewers-will-block-on-these) and the security invariants in [`.github/ai-review/instructions.md`](../../.github/ai-review/instructions.md). Tests come with the change; a bug fix has a test that fails without it.
-3. **A second review by an independent reviewer** when the change touches a path in [`.github/CODEOWNERS`](../../.github/CODEOWNERS), a workflow, the review's own files or scripts, release or signing, or anything the description marks as touching a security invariant. Independent means another model, or a new session, given the diff and the description and not the author's reasoning. The automatic AI review in CI counts only when it finished with a result for the head commit and read the whole change: a run that failed, was skipped, had no credential, found the diff too large or could not read some files is not a review, and another independent one is needed. A [CodeRabbit](#coderabbit) review never counts as this second review: the pull request's own branch configures it. Findings of either are leads, not verdicts: each is checked and answered in the pull request, fixed or with the reason it is not a defect.
+3. **A second review by an independent reviewer** when the change touches a path in [`.github/CODEOWNERS`](../../.github/CODEOWNERS), a workflow, the review's own files or scripts, release or signing, or anything the description marks as touching a security invariant. The CODEOWNERS paths include what steers the agents themselves: `AGENTS.md` and `CLAUDE.md` in any directory, the skills in `.agents/`, and `.coderabbit.yaml` (#215; listed there rather than here so that one file says which paths, and `test_ai_review` checks it). Independent means another model, or a new session, given the diff and the description and not the author's reasoning. The automatic AI review in CI counts only when it finished with a result for the head commit and read the whole change: a run that failed, was skipped, had no credential, found the diff too large or could not read some files is not a review, and another independent one is needed. A [CodeRabbit](#coderabbit) review never counts as this second review: the pull request's own branch configures it. Findings of either are leads, not verdicts: each is checked and answered in the pull request, fixed or with the reason it is not a defect.
 4. **Record the review** in one comment on the pull request: the commit reviewed, what was read and run, each finding and what became of it, which tool and model reviewed, and the verdict. That comment is the approval: agents work with the maintainer's account, and GitHub does not let an account approve its own pull request.
 5. **Merge** with a squash merge when every required check has passed on the head commit and every review conversation is resolved. Never with a required check failing or still running, never by changing branch protection or a repository setting, never by pushing to `main`.
 6. **Afterwards** read CI on `main` for that commit. If it fails, fix it or revert it with a pull request at once.
