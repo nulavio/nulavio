@@ -346,6 +346,35 @@ class ProfileChooserTest(unittest.TestCase):
         self.assertEqual(self.dialog()["headline"], self.word("headline"))
         self.call("D().getElementById('nulavio-unlock-cancel').click(); return true;")
         self.assertEqual(self.instances(plain), [])
+        # Review, round 2. The volume's own record, planted in the bare folder of the locked profile (its owner can
+        # do that): the folder is not a mounted volume, so it is not "unlocked", and nothing starts without the
+        # unlock step. A container whose key file is gone is not a profile without a password either.
+        box = storage.Container(path)
+        os.chmod(path, 0o700)
+        (path / storage.STATE_DIR).mkdir()
+        (path / storage.STATE_DIR / "state.json").write_text("{}")
+        try:
+            self.call("card(args[0]).click(); return true;", profile_id)
+            self.assertTrue(
+                harness.wait_until(lambda: (self.dialog() or {}).get("open"), timeout=20), "started on the bare folder"
+            )
+            self.assertEqual(self.dialog()["headline"], self.word("headline"))
+            self.call("D().getElementById('nulavio-unlock-cancel').click(); return true;")
+        finally:
+            shutil.rmtree(path / storage.STATE_DIR)
+            os.chmod(path, storage.LOCKED_MODE)
+        moved = box.vault_path.with_name("vault.json.moved-by-test")
+        os.rename(box.vault_path, moved)
+        try:
+            self.call("card(args[0]).click(); return true;", profile_id)
+            self.assertTrue(
+                harness.wait_until(lambda: (self.dialog() or {}).get("open"), timeout=20), "started without its key file"
+            )
+            self.assertEqual(self.dialog()["headline"], self.word("unread-headline"))
+            self.call("D().getElementById('nulavio-unlock-cancel').click(); return true;")
+        finally:
+            os.rename(moved, box.vault_path)
+        self.assertEqual(self.instances(path), [])
         self.close_chooser()
 
     def test_02c_a_profile_that_locked_again_while_a_note_was_read_is_unlocked_again(self):

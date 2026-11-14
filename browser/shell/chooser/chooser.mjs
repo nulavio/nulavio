@@ -12,9 +12,9 @@
      profile, after it was unlocked here with one of its methods (password, this computer's login,
      recovery code). false when the person went back, and the chooser stays as it was.
 
-   Whether a profile is protected, and locked, is read from its files (NulavioVaultState), not asked of
-   the Vault's tools: they are optional (gocryptfs, FUSE, libsodium), and a profile without a password
-   opens the same with or without them.
+   Whether a profile is protected, and locked, is read from its files and the mount table (lockState
+   below), not asked of the Vault's tools: they are optional (gocryptfs, FUSE, libsodium), and a profile
+   without a password opens the same with or without them.
 
    It talks to the same Vault helper as the unlock page (NulavioVault.helper: `status`, `unlock`), and
    its words are the unlock page's, in Fluent (l10n/<locale>/nulavio/chooser.ftl). The phone is not
@@ -63,6 +63,44 @@ const t = id => words.get(id) ?? id;
 /** A message with the profile's name in it. */
 const named = (id, profile) => l10n.formatValue(`nulavio-chooser-${id}`, { profile: profile.name });
 
+// -- is it protected, and locked? --------------------------------------------------------------------
+
+/** The path as the mount table has it: symbolic links followed. */
+function real(path) {
+  const file = Cc["@mozilla.org/file/local;1"].createInstance(Ci.nsIFile);
+  file.initWithPath(path);
+  try {
+    file.normalize();
+  } catch {
+    // as given
+  }
+  return file.path;
+}
+
+/** Whether a volume is mounted at `path` (/proc/self/mountinfo, whose paths escape spaces and the like). */
+async function mounted(path) {
+  const unescape = field => field.replace(/\\([0-7]{3})/g, (_m, octal) => String.fromCharCode(parseInt(octal, 8)));
+  const wanted = real(path);
+  return (await IOUtils.readUTF8("/proc/self/mountinfo")).split("\n").some(line => unescape(line.split(" ")[4] ?? "") === wanted);
+}
+
+/**
+ * PLAIN, LOCKED or UNLOCKED, from the profile's files (NulavioVaultState) and then checked: "unlocked" only
+ * when a volume is really mounted there (a record lying in the bare folder is not one), and "plain" only
+ * when nothing of a container is beside it (a container without its key file is a protected profile that
+ * cannot be read, and this throws). Whatever cannot be established throws: the caller does not start it.
+ */
+async function lockState(path) {
+  const state = await profileLockState(path);
+  if (state === PLAIN) {
+    if (await IOUtils.exists(PathUtils.join(PathUtils.parent(path), `${PathUtils.filename(path)}.vault`))) {
+      throw new Error("a container without its key file");
+    }
+    return PLAIN;
+  }
+  return state === UNLOCKED && !(await mounted(path)) ? LOCKED : state;
+}
+
 // -- the helper -------------------------------------------------------------------------------------
 
 async function status(profile) {
@@ -76,7 +114,7 @@ export async function lockStates(profiles) {
   await Promise.all(
     profiles.map(async profile => {
       try {
-        const state = await profileLockState(profile.path);
+        const state = await lockState(profile.path);
         states.set(profile.id, { protected: state !== PLAIN, locked: state === LOCKED, label: state === LOCKED ? t("locked") : null });
       } catch (e) {
         console.error("Nulavio chooser: lock state", e);
@@ -233,7 +271,7 @@ function unlockDialog(document, profile, state, texts) {
       // The note can be read for as long as it takes, and the profile locks itself again when nothing opens
       // it for two minutes: it is opened only if it is still unlocked, and unlocked again otherwise.
       const open = async () => {
-        if ((await profileLockState(profile.path).catch(() => LOCKED)) === UNLOCKED) {
+        if ((await lockState(profile.path).catch(() => LOCKED)) === UNLOCKED) {
           finish(true);
           return;
         }
@@ -363,7 +401,7 @@ export async function beforeLaunch(document, profile) {
   try {
     let state;
     try {
-      state = await profileLockState(profile.path); // now, not as it was when the window opened
+      state = await lockState(profile.path); // now, not as it was when the window opened
     } catch (e) {
       // Whether it is protected could not be read: not started, since it may be a locked one.
       console.error("Nulavio chooser: lock state", e);
@@ -389,7 +427,7 @@ export async function beforeLaunch(document, profile) {
     if (!answer.encrypted || !answer.locked) {
       // The tools see it otherwise than its files did a moment ago (it was unlocked meanwhile, or asking
       // them undid an interrupted protection): read again, and start it only if it is not locked now.
-      if ((await profileLockState(profile.path).catch(() => LOCKED)) !== LOCKED) {
+      if ((await lockState(profile.path).catch(() => LOCKED)) !== LOCKED) {
         return true;
       }
       return await noticeDialog(document, t("unread-headline"), t("unexpected"));
