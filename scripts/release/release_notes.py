@@ -22,6 +22,9 @@ GROUPS = {"feat": "Features", "fix": "Fixes", "security": "Security-related chan
           "docs": "Documentation", "test": "Tests", "chore": "Maintenance", "build": "Build and CI", "ci": "Build and CI",
           "refactor": "Maintenance", "style": "Maintenance", "revert": "Reverts"}  # fmt: skip
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import whats_new  # noqa: E402
 
 
 def git(repo: Path, *args: str) -> str:
@@ -93,6 +96,24 @@ def notes(info: dict, repo: Path, repository: str, fingerprint: str, run_url: st
     if not re.fullmatch(rf"https://github\.com/{re.escape(repository)}/actions/runs/[0-9]+", run_url):
         raise ValueError("invalid provenance run URL")
     body = changes(repo, info["commit"], info["tag"], repository)
+    # What is new for people, from the reviewed record committed with the release (#198): the same
+    # text as the site and the browser. A release without one stops here, before anything is signed.
+    record = whats_new.require(info["tag"][1:], repo, at=info["commit"])
+    english = record["en-US"]
+    lists = [
+        ("Changes that need your attention", "breaking"),
+        ("What to do", "action"),
+        ("What is new", "new"),
+        ("Fixes", "fixed"),
+    ]
+    summary = [safe_text(english["summary"])]
+    for heading, key in lists:
+        if english.get(key):
+            summary.append(f"### {heading}\n\n" + "\n".join(f"- {safe_text(item)}" for item in english[key]))
+    version = info["tag"][1:]
+    summary.append(
+        f"In Portuguese and English: https://nulavio.net/novidades/{version}/ and https://nulavio.net/en/whats-new/{version}/"
+    )
     systems = "Fedora or Ubuntu" if info.get("debs") else "Fedora"
     install = f"Install or upgrade on {systems}: https://nulavio.net/en/download/"
     if info.get("debs"):
@@ -109,6 +130,7 @@ def notes(info: dict, repo: Path, repository: str, fingerprint: str, run_url: st
         install += f"\n\nOther distributions, with Flatpak:\n\n```sh\nflatpak install --user {flatpak}\n```"
     return (
         f"Nulavio {info['tag'][1:]}, built from Firefox {info['firefox']} (commit {info['commit'][:12]}).\n\n"
+        "## What's new\n\n" + "\n\n".join(summary) + "\n\n"
         f"{body}\n\n## Install and verify\n\n{install}\n\n"
         f"Every release asset is covered by `SHA256SUMS.asc` (key `{fingerprint}`) and a GitHub build-provenance attestation.\n\n"
         f"```sh\ngh attestation verify <file> --repo {repository}\n```\n\n"
