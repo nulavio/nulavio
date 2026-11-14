@@ -7,10 +7,13 @@ values, with DOM nodes kept as `{"sharedId": ...}` handles.
 
 from __future__ import annotations
 
+import contextlib
 import itertools
 import json
+import queue
 import threading
 import time
+from collections.abc import Callable
 
 from .websocket import ConnectionClosed, WebSocket, WebSocketError
 
@@ -35,8 +38,13 @@ class Bidi:
         self._closed: str | None = None
         self._seq = 0
         self.events: list[tuple[int, dict]] = []
+        # Events with a handler (on()) go to it, in order, on a thread of their own: a handler may send
+        # commands, whose results this reader delivers. They are not kept in `events`.
+        self._handlers: dict[str, Callable[[dict], None]] = {}
+        self._handled: queue.SimpleQueue[tuple[Callable[[dict], None], dict] | None] = queue.SimpleQueue()
         self._reader = threading.Thread(target=self._read_loop, name="bidi-reader", daemon=True)
         self._reader.start()
+        threading.Thread(target=self._handle_loop, name="bidi-handler", daemon=True).start()
         # Page dialogs (alert, confirm, prompt) stay open for the agent to read and answer
         # with the `dialog` tool; leaving a page is never held up by "are you sure?".
         prompts = {"default": "ignore", "beforeUnload": "accept"}
@@ -52,14 +60,30 @@ class Bidi:
                     if "id" in message and message.get("type") in ("success", "error"):
                         self._results[message["id"]] = message
                     elif message.get("type") == "event":
-                        self._seq += 1
-                        self.events.append((self._seq, message))
-                        del self.events[:-500]
+                        handler = self._handlers.get(message.get("method", ""))
+                        if handler is not None:
+                            self._handled.put((handler, message.get("params", {})))
+                        else:
+                            self._seq += 1
+                            self.events.append((self._seq, message))
+                            del self.events[:-500]
                     self._lock.notify_all()
         except (ConnectionClosed, WebSocketError, OSError, ValueError) as exc:
             with self._lock:
                 self._closed = str(exc) or "closed"
                 self._lock.notify_all()
+        self._handled.put(None)
+
+    def _handle_loop(self) -> None:
+        while (item := self._handled.get()) is not None:
+            handler, params = item
+            with contextlib.suppress(Exception):  # a handler's failure must not stop the ones after it
+                handler(params)
+
+    def on(self, method: str, handler: Callable[[dict], None]) -> None:
+        """Call `handler(params)` for each `method` event from now on, instead of keeping it in `events`."""
+        with self._lock:
+            self._handlers[method] = handler
 
     def command(self, method: str, params: dict, timeout: float = 30.0, cancel: threading.Event | None = None,
                 until: tuple[str, str, int] | None = None) -> dict | None:  # fmt: skip

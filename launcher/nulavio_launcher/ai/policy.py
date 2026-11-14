@@ -215,11 +215,19 @@ def host_of(url: str | None) -> str | None:
         return None
 
 
+NAT64 = ipaddress.IPv6Network("64:ff9b::/96")  # carries an IPv4 address a NAT64 gateway reaches
+
+
 def _local_address(text: str) -> bool:
     try:
         address = ipaddress.ip_address(text.strip("[]"))
     except ValueError:
         return False
+    if isinstance(address, ipaddress.IPv6Address):
+        if address.ipv4_mapped is not None:
+            return not address.ipv4_mapped.is_global
+        if address in NAT64:
+            return not ipaddress.IPv4Address(int(address) & 0xFFFFFFFF).is_global
     return not address.is_global
 
 
@@ -267,6 +275,45 @@ def _whatwg_ipv4(host: str) -> str | None:
     for index, number in enumerate(numbers[:-1]):
         value += number << (8 * (3 - index))
     return str(ipaddress.IPv4Address(value))
+
+
+def canonical_host(host: str) -> str:
+    """A host as the engine writes it in the requests it sends: lower case, punycode, no final dot, an
+    IPv4 address dotted (127.1 is 127.0.0.1), an IPv6 address compressed. Unchanged when it reads as none."""
+    host = host.lower().rstrip(".")
+    if ":" in host:
+        try:
+            return ipaddress.IPv6Address(host.strip("[]")).compressed
+        except ValueError:
+            return host
+    if _ends_in_number(host):
+        return _whatwg_ipv4(host) or host
+    try:
+        return host.encode("idna").decode("ascii")
+    except UnicodeError:
+        return host
+
+
+def is_address(host: str) -> bool:
+    """An IP address, in any form the engine reads as one: what it is needs no lookup."""
+    host = host.strip("[]")
+    return ":" in host or _ends_in_number(host.rstrip("."))
+
+
+def local_host(host: str, resolve: bool = True) -> bool:
+    """Whether a host, as the engine sends a request to it, is this computer or the local network.
+
+    The engine's hosts are already canonical (punycode, IPv4 dotted, IPv6 bracketed); one that
+    still ends in a number it could not read is taken as local, like a name that does not resolve."""
+    host = host.lower().rstrip(".")
+    if host.startswith("["):
+        return _local_address(host)
+    if host == "localhost" or host.endswith(LOCAL_SUFFIXES) or _local_address(host):
+        return True
+    if _ends_in_number(host):
+        ipv4 = _whatwg_ipv4(host)
+        return ipv4 is None or _local_address(ipv4)
+    return resolve and _resolves_locally(host)
 
 
 def classify_url(url: str, resolve: bool = True) -> Target:
