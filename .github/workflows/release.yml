@@ -16,6 +16,8 @@ name: release
 #    in a clean Fedora container with both signature checks on, attests the signed
 #    files and drafts the GitHub release. The maintainer reviews and publishes the
 #    draft. Publishing it triggers release-metadata.yml (changelog and download metadata).
+#    It also measures the media in the history against ADR 0013's budget (summary and the
+#    "published" artifact).
 #
 # 3. flatpak (GitHub-hosted, no secrets): builds net.nulavio.Nulavio from the portable
 #    archive with Flathub's builder, lints it, starts it in the sandbox and bundles it
@@ -274,6 +276,8 @@ jobs:
             printf '3. Review docs/security/changelog.md: security impact and SLA claims require evidence.\n'
             printf '4. Flathub: copy the flathub/ folder of the "published" artifact into the net.nulavio.Nulavio repository (pull request).\n'
           } >> "$GITHUB_STEP_SUMMARY"
+      - name: Media in the history against the budget of ADR 0013 (point 3)
+        run: python3 -I scripts/research/org_layout_measure.py --budget --ref HEAD --summary "$GITHUB_STEP_SUMMARY" > "$RUNNER_TEMP/media-budget.json"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
@@ -282,5 +286,6 @@ jobs:
             ${{ runner.temp }}/publish/
             ${{ runner.temp }}/flathub/
             ${{ runner.temp }}/notes.md
+            ${{ runner.temp }}/media-budget.json
           if-no-files-found: ignore
           retention-days: 90
