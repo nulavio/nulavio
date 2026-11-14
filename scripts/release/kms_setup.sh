@@ -84,11 +84,12 @@ render release-signing-role-policy.json
 aws iam put-role-policy --role-name "$role" --policy-name sign-with-release-key \
     --policy-document "file://$work/release-signing-role-policy.json"
 
+# The Companion's key needs no variable: sign_companion.sh signs with alias/nulavio-companion,
+# which the role policy rendered above allows by the ARN found for it.
 cat <<EOF
 
 GitHub environment "release" variables:
   NULAVIO_KMS_KEY_ARN=$key_arn
-  NULAVIO_COMPANION_KMS_KEY_ARN=$companion_arn
   NULAVIO_SIGNING_ROLE_ARN=arn:aws:iam::$account:role/$role
   NULAVIO_AWS_REGION=$AWS_REGION
 EOF
