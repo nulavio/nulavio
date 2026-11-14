@@ -510,19 +510,32 @@ class AppearanceTest(unittest.TestCase):
     def test_12b_a_locked_density_reads_as_the_engine_draws_it(self):
         """Review: a policy lock writes the default branch only. The engine (gUIDensity) then compacts
         short windows on top of that default: a locked Normal is Automático, a locked Toque is Toque
-        (the window draws it). The module says so to whoever asks."""
+        (the window draws it). The module says so to whoever asks, and so does the settings page: the
+        engine's own picker shows the density in effect, cannot be changed, and says why (#284)."""
         read = f"return {PERSONALISE}.state().then(state => [state.density, state.locked.density]);"
         drawn = "return document.documentElement.getAttribute('uidensity') || 'normal';"
         lock = "Services.prefs.getDefaultBranch('').setIntPref('browser.uidensity', arguments[0]);"
-        for locked, shown, window in ((0, "auto", "normal"), (2, "touch", "touch")):
+        for locked, shown, window, picker in ((0, "auto", "normal", "auto"), (2, "touch", "touch", "touch")):
             with self.subTest(locked=locked):
                 self.m.chrome(lock + "Services.prefs.lockPref('browser.uidensity');", [locked])
                 try:
                     reads = lambda want=shown: self.m.chrome(read) == [want, True]  # noqa: E731
                     self.assertTrue(harness.wait_until(reads, 10), self.m.chrome(read))
                     self.assertEqual(self.m.chrome(drawn), window)  # 1366x768: not short, so no auto-compact
+                    settings_page.open_pane(self.m, "appearance")
+                    in_effect = lambda s, want=picker: s["shown"] and s["value"] == want  # noqa: E731
+                    state = settings_page.wait_control(self.m, "uiDensity", in_effect)
+                    self.assertTrue(state["disabled"], f"a locked density can be clicked: {state}")
+                    note = settings_page.wait_control(self.m, "nulavio-density-locked")
+                    self.assertTrue(note["message"], note)
                 finally:
                     self.m.chrome("Services.prefs.unlockPref('browser.uidensity');" + lock, [0])
+        # Unlocked again, the engine's picker is its own: enabled, and the note gone.
+        settings_page.open_pane(self.m, "appearance")
+        state = settings_page.wait_control(self.m, "uiDensity", lambda s: s["shown"] and not s["disabled"])
+        self.assertEqual(state["value"], "auto")
+        hidden = harness.wait_until(lambda: not (settings_page.control(self.m, "nulavio-density-locked") or {}).get("shown"), 10)
+        self.assertTrue(hidden, settings_page.control(self.m, "nulavio-density-locked"))
 
     def shoot(self, name: str) -> None:
         for dark in (0, 1):

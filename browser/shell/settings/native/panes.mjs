@@ -2466,6 +2466,45 @@
           config.l10nId = l10nId;
         });
       },
+      // The engine's density picker reads "Automático" whenever the pref has no user value, which is always so
+      // for a pref an administrator locked, and stays enabled (#284). Locked, it shows the density in effect,
+      // cannot be changed, and says why under it; the engine's own reading is kept for every other case.
+      windowDensity(config) {
+        const density = Preferences.getSetting("uiDensity");
+        const items = config.items;
+        if (!density?.config || !Array.isArray(items) || !items.some(item => item.id === "uiDensity")) {
+          throw new Error("the engine's density group has another shape");
+        }
+        const PREF = "browser.uidensity";
+        const locked = () => Services.prefs.prefIsLocked(PREF);
+        // A lock writes the default branch; with no user value the engine then compacts short windows on top
+        // of it (NulavioPersonalise.read says the same): a locked Normal is Automático.
+        const inEffect = () => ({ 1: "compact", 2: "touch" })[Services.prefs.getIntPref(PREF, 0)] ?? "auto";
+        const engine = { get: density.config.get, set: density.config.set, disabled: density.config.disabled };
+        density.config.get = function (...args) {
+          return locked() ? inEffect() : engine.get.apply(this, args);
+        };
+        density.config.disabled = function (...args) {
+          return locked() || Boolean(engine.disabled?.apply(this, args));
+        };
+        // Read-only below the control too: a change that reached the setting while locked would write a value the lock ignores.
+        density.config.set = function (...args) {
+          return locked() ? undefined : engine.set?.apply(this, args);
+        };
+        setting({ id: "nulavio-density-locked", deps: ["uiDensityPref"], visible: locked });
+        const at = items.findIndex(item => item.id === "uiDensity");
+        config.items = [
+          ...items.slice(0, at),
+          { id: "nulavio-density-locked", control: "moz-message-bar", l10nId: "nulavio-density-locked", controlAttrs: { type: "info" } },
+          ...items.slice(at),
+        ];
+        undoOnly.push(() => {
+          density.config.get = engine.get;
+          density.config.disabled = engine.disabled;
+          density.config.set = engine.set;
+          config.items = items;
+        });
+      },
       relatedSettings(config) {
         for (const item of config.items ?? []) {
           if (Array.isArray(item.items)) {
