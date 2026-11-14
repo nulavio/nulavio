@@ -30,7 +30,7 @@ if not sodium.available():  # pragma: no cover - CI installs libsodium and sets 
     raise unittest.SkipTest("libsodium is not installed")
 
 from nulavio_launcher.vault.coordinator import Coordinator, DeviceUnavailable, State, Transport
-from nulavio_launcher.vault.core import Vault, VaultError, b64e, canonical, combined_kek
+from nulavio_launcher.vault.core import Vault, VaultError, b64d, b64e, canonical, combined_kek
 from nulavio_launcher.vault.phone import (
     DesktopIdentity,
     Pairing,
@@ -38,9 +38,11 @@ from nulavio_launcher.vault.phone import (
     ProtocolError,
     add_password_and_phone,
     add_phone,
+    nkdf,
     remove_phone,
     request_signing_input,
     response_key,
+    seal_json,
     unseal,
 )
 from nulavio_launcher.vault.providers import Keyring, add_os_keyring, remove_os_keyring
@@ -567,6 +569,33 @@ class SubstitutedPairingTest(VaultTestCase):
             pairing.on_hello(hello)
         self.assertEqual(ctx.exception.code, "bad-message")
         self.assertEqual(pairing.state, "cancelled")
+
+    def test_a_hello_or_confirmation_without_its_box_is_a_protocol_error(self):
+        """Found by tests/fuzz/test_nv1.py (#149): a missing field ended the pairing with a KeyError."""
+        pairing = Pairing(self.identity, "Test desktop", clock=self.clock)
+        hello = ReferencePhone("Phone", self.clock).scan(pairing.invite())
+        with self.assertRaises(ProtocolError):
+            pairing.on_hello({k: v for k, v in hello.items() if k != "box"})
+        pairing = Pairing(self.identity, "Test desktop", clock=self.clock)
+        phone = ReferencePhone("Phone", self.clock)
+        phone.on_accept(pairing.on_hello(phone.scan(pairing.invite())))
+        confirm = phone.confirm()
+        with self.assertRaises(ProtocolError):
+            pairing.complete({k: v for k, v in confirm.items() if k != "box"}, True)
+
+    def test_a_hello_whose_sealed_body_is_not_the_phones_keys_is_a_protocol_error(self):
+        """Found by tests/fuzz/test_nv1.py (#149): only a holder of the QR secret can seal it, and still."""
+        for body in ([], {"psig": 7}, {"pkx": "AAAA"}, "text", {"psig": "AAAA", "pkx": "AAAA"}):
+            with self.subTest(body=body):
+                pairing = Pairing(self.identity, "Test desktop", clock=self.clock)
+                invite = pairing.invite()
+                pe_sk, pe_pk = sodium.x25519_keypair()
+                shared = sodium.x25519(pe_sk, b64d(invite["k"]))
+                k1 = nkdf(b64d(invite["s"]), "pair/k1", shared, invite["i"], b64d(invite["k"]), pe_pk)
+                box = seal_json(k1, body, invite["i"].encode())
+                with self.assertRaises(ProtocolError):
+                    pairing.on_hello({"i": invite["i"], "pe": b64e(pe_pk), "box": box})
+                self.assertEqual(pairing.state, "cancelled")
 
     def test_hello_without_the_qr_secret(self):
         pairing = Pairing(self.identity, "Test desktop", clock=self.clock)
