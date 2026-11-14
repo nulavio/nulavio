@@ -41,7 +41,7 @@ Each row is a parameter that common links carry. "Engine" says where the engine'
 ## What is checked
 
 - `tests/unit/test_clean_links.py`: the pref holds exactly the rows marked **added** above, and none of the **kept** ones.
-- `tests/integration/test_clean_links.py`, on the Nulavio build: "Copy Clean Link to Highlight" on a local page whose address carries one of each added parameter and the page's own `id=7` drops all of them and keeps `id=7`; the same address opened directly still shows the same page.
+- `tests/integration/test_clean_links.py`, on the Nulavio build: "Copy Clean Link to Highlight" on a local page whose address carries one of each added parameter and the page's own `id=7` drops all of them and keeps `id=7`; the same address opened directly still shows the same page, and the request the page gets carries `id=7` alone (measured on 160.0-0.4 with this pref: Strict mode strips them from a typed navigation too).
 
 ## Not covered
 

@@ -3,7 +3,8 @@
 "Copy Clean Link to Highlight" on a local page whose address carries every
 parameter of `privacy.query_stripping.strip_list` and the page's own `id=7`:
 the link keeps `id=7` and drops the rest. The same address opened directly
-still shows the page. Runs on the Nulavio build, with its own defaults.
+still shows the page, and the request carries only `id=7`: Strict mode's query
+stripping takes them off a navigation too. Runs on the Nulavio build, with its own defaults.
 """
 
 from __future__ import annotations
@@ -86,11 +87,11 @@ class CleanLinksTest(unittest.TestCase):
         self.m.navigate(self.page)
         self.assertEqual(self.m.title(), "highlight")
         self.assertIn("frase sem igual", self.m.execute("return document.getElementById('target').textContent;"))
-        # What reached the server: the page's own parameter always; the added ones as the engine's query
-        # stripping decides for this navigation (typed, same site), reported, not asserted.
+        # What reached the server: the page's own parameter, and none of the added ones. Strict mode's query
+        # stripping (qps) takes them off the navigation too, as docs/research/clean-links.md says.
         asked = [hit for hit in self.server.hits if hit.startswith("/highlight?")][-1]
         print(f"asked: {asked}", file=sys.stderr)
-        self.assertIn("id=7", asked)
+        self.assertEqual(urllib.parse.parse_qs(urllib.parse.urlsplit(asked).query), {"id": ["7"]}, asked)
 
 
 if __name__ == "__main__":
