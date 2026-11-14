@@ -12,8 +12,8 @@
    store, each removable. uBlock Origin keeps its own list of trusted sites;
    Nulavio opens uBlock Origin's own page for it and never edits its data. Of
    that data it reads one thing, which of its lists are switched on, to say
-   in Settings whether cookie notices are hidden (the maintainer's decision
-   of 2026-11-12: reading, never writing). */
+   in Settings whether a list that hides cookie notices is among them (the
+   maintainer's decision of 2026-11-12: reading, never writing). */
 
 /* Permission types listed, in the order shown. Each relaxes a protection for one site. */
 export const TYPES = Object.freeze([

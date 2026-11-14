@@ -117,16 +117,21 @@ class FirstRunStageTest(unittest.TestCase):
         its warning, not only what is fine."""
         # (One of the two tests that may write a protection's pref: unit/test_integration_hygiene.py, SHOWN_OFF.)
         name = "dom.security.https_only_mode"
-        had = self.m.chrome(
-            "return Services.prefs.prefHasUserValue(arguments[0]) ? Services.prefs.getBoolPref(arguments[0]) : null;", [name]
-        )
+        own = "return Services.prefs.prefHasUserValue(arguments[0]) ? Services.prefs.getBoolPref(arguments[0]) : null;"
+        had = self.m.chrome(own, [name])
         self.m.chrome("Services.prefs.setBoolPref(arguments[0], false);", [name])
-        # Put back as it was: the value the profile had of its own, or none (clearing alone would drop such a value).
-        put_back = (
-            "if (arguments[1] === null) Services.prefs.clearUserPref(arguments[0]);"
-            " else Services.prefs.setBoolPref(arguments[0], arguments[1]);"
-        )
-        self.addCleanup(self.m.chrome, put_back, [name, had])
+
+        def put_back() -> None:
+            """As it was: the value the profile had of its own, or none (clearing alone would drop such a value).
+            Read again afterwards, on the engine: a clean-up that left it otherwise fails this test."""
+            self.m.chrome(
+                "if (arguments[1] === null) Services.prefs.clearUserPref(arguments[0]);"
+                " else Services.prefs.setBoolPref(arguments[0], arguments[1]);",
+                [name, had],
+            )
+            self.assertEqual(self.m.chrome(own, [name]), had, "HTTPS-Only was not put back as the profile had it")
+
+        self.addCleanup(put_back)
         self.m.navigate(self.newtab)
         self.assertTrue(harness.wait_until(lambda: self.page()["card"] == "firstrun-welcome", 15), self.page())
         self.assertTrue(harness.wait_until(lambda: "warn" in self.page()["levels"], 10), self.page()["levels"])

@@ -62,7 +62,8 @@ class IntegrationHygieneTest(unittest.TestCase):
     def test_a_protection_is_switched_off_only_where_that_is_what_the_test_shows(self):
         """I1: no test weakens a protection to get a page loaded or a step done. The one exception is a test whose
         subject is the browser's own answer to a protection that is off; those are named here, each on its
-        throwaway profile, and a new one is a change to this list that a reviewer sees."""
+        throwaway profile, and a new one is a change to this list that a reviewer sees. (Whether such a test puts
+        the pref back is that test's to show on the engine, as test_firstrun_stage 01b does; it is not read here.)"""
         found = set()
         for module in sorted([*(ROOT / "tests" / "integration").glob("*.py"), *(ROOT / "tests" / "lib").glob("*.py")]):
             inside = None
@@ -73,12 +74,6 @@ class IntegrationHygieneTest(unittest.TestCase):
                 if names_a_protection_other_than_to_read_it(line):
                     found.add((module.name, inside))
         self.assertEqual(found, SHOWN_OFF | NAMED_TO_COMPARE)
-        # One that is switched off at run time is put back by the same test.
-        stage = (ROOT / "tests" / "integration" / "test_firstrun_stage.py").read_text(encoding="utf-8")
-        body = stage[stage.index("def test_01b_the_welcome_says_so_when_a_protection_is_off") :].split("\n    def ", 1)[0]
-        self.assertIn("prefHasUserValue(arguments[0]) ? Services.prefs.getBoolPref(arguments[0]) : null", body)
-        self.assertIn("self.addCleanup(self.m.chrome, put_back, [name, had])", body)
-        self.assertEqual(body.count("dom.security.https_only_mode"), 1, "written by another name than the one put back")
         # The ways a test here writes a pref are all seen: a setter, a prefs file, the harness's dictionary of
         # prefs, a name handed to a script as an argument, a pref put on the default branch.
         for line in (

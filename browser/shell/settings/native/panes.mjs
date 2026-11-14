@@ -1566,14 +1566,14 @@
           top().BrowserAddonUI.openAddonsMgr("addons://list/extension"); // where it is turned on, or seen to be missing
         }
       },
-      // Whether cookie notices are hidden is said only when it was read; otherwise the row says what depends on the lists.
+      // Whether a list that hides cookie notices is on is said only when it was read; otherwise the row says what depends on the lists.
       getControlConfig(config) {
         const now = filter.state.value;
         if (now?.active === false) {
           return { ...config, l10nId: "nulavio-filter-lists-off" };
         }
         const cookies = now?.lists?.cookieNotices;
-        return typeof cookies === "boolean" ? { ...config, l10nId: `nulavio-filter-lists-cookies-${cookies ? "hidden" : "shown"}` } : config;
+        return typeof cookies === "boolean" ? { ...config, l10nId: `nulavio-filter-lists-cookies-${cookies ? "on" : "none"}` } : config;
       },
     });
 

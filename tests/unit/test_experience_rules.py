@@ -202,7 +202,7 @@ class ExperienceRulesTest(unittest.TestCase):
         content = json.loads((ROOT / "browser" / "distribution" / "content-filter.json").read_text(encoding="utf-8"))
         self.assertLessEqual(set(content["default_on"]), lists)
         self.assertNotIn("user-filters", lists, "uBlock Origin's entry for the person's own filters became a list")
-        # A registry without the group stops the build: every selection would read "shown".
+        # A registry without the group stops the build: every selection would read as having no such list on.
         with tempfile.TemporaryDirectory() as tmp:
             bare = {key: {k: v for k, v in entry.items() if k != "group2"} for key, entry in registry.items()}
             (Path(tmp) / "assets.json").write_text(json.dumps(bare), encoding="utf-8")
