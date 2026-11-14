@@ -12,7 +12,7 @@ The complaint that started this: "it looks like nobody thought about the journey
 
 ## 1. Install
 
-**Walked on 2026-11-14** (#120) on a clean Fedora 44 KDE Plasma live session (`Fedora-KDE-Desktop-Live-44-1.7`, its signed checksum checked), in a KVM virtual machine at 1280×800, en-US, driven by keyboard and pointer events with a capture at each step: the published 160.0-0.4 from the site's dnf instructions, then the release's Flatpak bundle. A live session is a clean desktop that was never installed, so nothing of an earlier Nulavio or Firefox profile was there; its Firefox was the person's browser before Nulavio. Not walked: Ubuntu through APT (#228, on a real host), GNOME, an installed (not live) system, and an update from one release to the next.
+**Walked on 2026-11-14** (#120) on a clean Fedora 44 KDE Plasma live session (`Fedora-KDE-Desktop-Live-44-1.7`, its signed checksum checked), in a KVM virtual machine at 1280×800, en-US, driven by keyboard and pointer events with a capture at each step: the published 160.0-0.4 from the site's dnf instructions, then the release's Flatpak bundle. A live session is a clean desktop that was never installed, so nothing of an earlier Nulavio or Firefox profile was there; its Firefox was the person's browser before Nulavio. Not walked here: Ubuntu through APT (installed from the site's instructions in an Ubuntu 26.04 VM on 2026-11-14 for #228, without a desktop; the update to the next release waits for it), GNOME, an installed (not live) system, and an update from one release to the next.
 
 | | |
 |---|---|

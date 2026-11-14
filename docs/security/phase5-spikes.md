@@ -7,7 +7,7 @@
 
 | Spike | Decision |
 |---|---|
-| [bubblewrap](#bubblewrap) | **Adopted as an opt-in**: `nulavio run --confined` (profiles the Nulavio tools run). The browser sees only its profile and Downloads in the home folder; the engine's own sandbox is unchanged (`test_confine`, `test_confined`) |
+| [bubblewrap](#bubblewrap) | **Adopted as an opt-in**: `nulavio run --confined` (profiles the Nulavio tools run). The browser sees only its profile and Downloads in the home folder; the engine's own sandbox is unchanged on Fedora, not on Ubuntu ([below](#bubblewrap-on-ubuntu)) (`test_confine`, `test_confined`) |
 | [Flatpak and native messaging](#flatpak-and-native-messaging) | **Not now.** Native messaging is solvable (the host-side proxy ships in Fedora 44 and Ubuntu 26.04+), but a Flatpak adds a second sandbox layout, a second update channel and Flathub publishing for no gain over bubblewrap on the same host. Revisit after the RPM/DEB channel is public |
 | [SELinux](#selinux) | **Not adopted.** Installing a policy module needs root on every machine; the browser runs `unconfined_t` like Fedora's Firefox; bubblewrap gives the filesystem part without root |
 | [AppArmor on Ubuntu](#apparmor-on-ubuntu) | **Adopted** (found during this slice): the `.deb` ships a profile that lets the engine create the user namespaces its content sandbox needs on Ubuntu 24.04 and later, and nothing else (`check_deb.sh`) |
@@ -17,7 +17,7 @@
 
 Question: can the whole browser run inside bubblewrap, hiding the home folder, without weakening the engine's own sandbox?
 
-Measured (Nulavio build and distribution Firefox 158, headless and with a real profile, chrome code reading files, `/proc` for every process):
+Measured on Fedora (Nulavio build and distribution Firefox 158, headless and with a real profile, chrome code reading files, `/proc` for every process; Ubuntu [below](#bubblewrap-on-ubuntu)):
 
 | | Without | With `--confined` |
 |---|---|---|
@@ -32,8 +32,8 @@ Design (`launcher/nulavio_launcher/confine.py`):
 
 - `--ro-bind / /`, then empty in-memory folders over `/home`, the user's home, `/tmp`, `/var/tmp`, `/mnt`, `/media`, `/run/media`.
 - Put back read-write: the profile and the Downloads folder (from the desktop's folder names; never the home folder itself). Read-only: fonts, GTK and KDE appearance settings, the desktop's folder names, `mimeapps.list`, `.Xauthority`, registered native-messaging hosts, the engine's folder. The runtime folder (`$XDG_RUNTIME_DIR`: Wayland, PipeWire, the session bus, portals) and the X11 socket folder.
-- No PID namespace: the profile lock keeps real PIDs, so the launcher still sees a running profile. User namespaces stay available (no `--disable-userns`), so the engine still builds its own content sandboxes. `--new-session`; `--die-with-parent` when the launcher supervises (temporary and protected profiles).
-- Refusals: no `bwrap`, or it cannot create namespaces here, is an error, never an unconfined start; a profile that is already open is not reopened through the running (unconfined) instance.
+- No PID namespace: the profile lock keeps real PIDs, so the launcher still sees a running profile. User namespaces stay available (no `--disable-userns`), so the engine still builds its own content sandboxes: on Fedora; on Ubuntu, AppArmor takes the capabilities they need away ([below](#bubblewrap-on-ubuntu)). `--new-session`; `--die-with-parent` when the launcher supervises (temporary and protected profiles).
+- Refusals: no `bwrap`, or it cannot create namespaces here (bubblewrap's own; whether the engine can build its own inside is not checked yet, [#282](https://github.com/nulavio/nulavio/issues/282)), is an error, never an unconfined start; a profile that is already open is not reopened through the running (unconfined) instance.
 
 What it changes and what it does not (bypass analysis):
 
@@ -57,12 +57,12 @@ Run on 2026-11-14 for #228 in a full VM: Ubuntu 26.04 LTS cloud image, kernel 7.
 
 | | Own user namespace (content, socket, RDD, utility) | Own network namespace (content, RDD, utility) | seccomp-bpf |
 |---|---|---|---|
-| Ubuntu, without `--confined` | yes | yes | mode 2 |
+| Ubuntu, without `--confined` | yes (not the fork server, which runs in the engine's) | yes | mode 2 |
 | Ubuntu, `--confined` | **no**: the engine's | **no**: the host's | mode 2 |
 | Fedora 44, without bubblewrap | yes | yes | mode 2 |
 | Fedora 44, under the same bubblewrap mounts | yes | yes | mode 2 |
 
-Ubuntu's `bwrap-userns-restrict` profile (in the `apparmor` package) moves every program bubblewrap starts to `&bwrap//&unpriv_bwrap`, which has `audit deny capability`. The transition is named, so the `.deb`'s `nulavio` profile never applies inside. The engine's `CanCreateUserNamespace()` check fails (`unshare(CLONE_NEWPID): EPERM`; the kernel logs `apparmor="DENIED" operation="capable" profile="unpriv_bwrap" capname="sys_admin"`), and the engine runs its content processes with seccomp-bpf alone, without saying so. The home folder is still hidden: the engine saw only `Downloads` and the profile under `/proc/<engine>/root/home/<user>`. A rule in `local/unpriv_bwrap` would change it for every bubblewrap user on the machine, so the package does not ship one. On Ubuntu the confined mode therefore trades one layer for the other; the launcher's check before a confined start, and whether it refuses or warns, is [#282](https://github.com/nulavio/nulavio/issues/282).
+Ubuntu's `bwrap-userns-restrict` profile (in the `apparmor` package) moves every program bubblewrap starts to `&bwrap//&unpriv_bwrap`, which has `audit deny capability`. The transition is named, so the `.deb`'s `nulavio` profile never applies inside. The engine's `CanCreateUserNamespace()` check fails (`unshare(CLONE_NEWPID): EPERM`; the kernel logs `apparmor="DENIED" operation="capable" profile="unpriv_bwrap" capname="sys_admin"`), and the engine runs its content processes with seccomp-bpf alone, without saying so. The home folder is still hidden: the engine saw only `Downloads` and the profile under `/proc/<engine>/root/home/<user>`. A rule in `local/unpriv_bwrap` would change it for every bubblewrap user on the machine, so the package does not ship one; a narrower route (for example a bubblewrap of Nulavio's own with its own profile) was not tried. On Ubuntu the confined mode therefore trades one layer for the other; the launcher's check before a confined start, and whether it refuses or warns, is [#282](https://github.com/nulavio/nulavio/issues/282).
 
 ## AppArmor on Ubuntu
 
