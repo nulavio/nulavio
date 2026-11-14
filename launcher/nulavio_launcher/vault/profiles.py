@@ -283,7 +283,10 @@ class _LockSeen:
                 if name == b"lock":
                     return True
         now = self._lock()
-        return now is not None and now != self.before and now[1] >= self.started
+        # A second of slack: the kernel stamps files with a coarse clock that can read a little behind time.time()
+        # (CI saw a lock made after the start stamped before it). A lock that was already there is ruled out by
+        # `before`, not by the time.
+        return now is not None and now != self.before and now[1] >= self.started - 1.0
 
     def _lock(self) -> tuple[int, float] | None:
         """The engine's lock symlink as (inode, mtime), or None."""
