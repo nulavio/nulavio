@@ -92,7 +92,14 @@ class TextFragmentsTest(unittest.TestCase):
     def tearDown(self):
         self.m.chrome("document.getElementById('contentAreaContextMenu').hidePopup();")
 
+    def close_menu(self) -> None:
+        """Hidden and closed: a right click while the menu is still hiding opens nothing."""
+        self.m.chrome("document.getElementById('contentAreaContextMenu').hidePopup();")
+        closed = "return document.getElementById('contentAreaContextMenu').state === 'closed';"
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome(closed), 10), "the page menu did not close")
+
     def open_menu_on_target(self, select: bool) -> dict:
+        self.close_menu()  # a choice made in it a moment ago may still be closing it
         if select:
             self.m.execute(
                 "const r = document.createRange(); r.selectNodeContents(document.getElementById('target'));"
@@ -150,19 +157,19 @@ class TextFragmentsTest(unittest.TestCase):
             10,
         )
         self.assertTrue(shown, "the page did not scroll to the highlighted text")
+        self.assertEqual(self.highlights(), 1, "the page shows no highlight")
         menu = self.open_menu_on_target(select=False)
         self.assertTrue(menu["remove"] and menu["remove"]["shown"], f"no 'Remove highlight' on a page with one: {menu}")
         self.m.chrome(
             "const menu = document.getElementById('contentAreaContextMenu');"
             "menu.activateItem(document.getElementById('context-remove-highlight'));"
         )
+        # Read from the document itself: the menu reopened right after the choice did not always open (#300).
+        self.assertTrue(harness.wait_until(lambda: self.highlights() == 0, 10), "the highlight stayed")
 
-        def gone() -> bool:
-            self.m.chrome("document.getElementById('contentAreaContextMenu').hidePopup();")
-            harness.wait_until(lambda: not self.m.chrome(MENU)["open"], 5)
-            return not self.open_menu_on_target(select=False)["remove"]["shown"]
-
-        self.assertTrue(harness.wait_until(gone, 10, interval=1), f"the highlight stayed: {self.m.chrome(MENU)}")
+    def highlights(self) -> int:
+        """The text directives the page shows, as the engine's own menu reads them (a chrome-only API)."""
+        return self.m.execute("return document.fragmentDirective.getTextDirectiveRanges().length;", sandbox="system")
 
     def test_03_the_highlight_is_readable_in_a_light_and_a_dark_page(self):
         link = getattr(type(self), "link", None)

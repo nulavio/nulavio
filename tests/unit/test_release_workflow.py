@@ -192,6 +192,11 @@ class ReleaseWorkflowTest(unittest.TestCase):
         # ADR 0014: built twice without secrets, attested; signed only in the approved publish job,
         # checked with apksigner against the published certificate, before publish_release.sh.
         self.assertIn("scripts/release/build_companion.sh", self.companion)
+        # #286: the wrapper JAR is checked before it runs with id-token, and the tags are there for the version check.
+        validate = self.companion.index("gradle/actions/wrapper-validation@")
+        self.assertLess(validate, self.companion.index("scripts/release/build_companion.sh"))
+        self.assertIn("fetch-depth: 0", self.companion)
+        self.assertIn("companion_version.py", (RELEASE / "build_companion.sh").read_text(encoding="utf-8"))
         for held in ("secrets.", "environment:", "configure-aws-credentials", "KMS"):
             self.assertNotIn(held, self.companion)
         self.assertIn("attest-build-provenance", self.companion)

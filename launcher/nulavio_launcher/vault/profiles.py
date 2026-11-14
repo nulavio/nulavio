@@ -8,8 +8,11 @@ locks again when the engine exits.
 
 from __future__ import annotations
 
+import ctypes
 import os
 import signal
+import stat
+import struct
 import time
 
 from .. import log, profile
@@ -237,22 +240,88 @@ def rekey(prof: profile.Profile, *, current: str, keyring: Keyring | None = None
     return result
 
 
+_IN_CREATE, _IN_MOVED_TO, _IN_NONBLOCK, _IN_CLOEXEC = 0x100, 0x80, 0o4000, 0o2000000
+_EVENT = struct.Struct("iIII")  # struct inotify_event: wd, mask, cookie, len (then the name)
+
+
+class _LockSeen:
+    """Whether an engine took the profile's lock since this was made, even if it is gone again (#277).
+
+    The watcher looks twice a second; an engine that takes the lock and dies, or is stopped, in between
+    is never seen running. inotify (through libc, standard library only) keeps the creation of `lock`
+    in the profile folder until it is read. Where inotify is not available, a lock left behind that was
+    not there when this started and was made after it (a crash or a kill leaves it) says the same; a
+    clean exit that fast then goes unseen, and the grace ends the wait as before.
+    """
+
+    def __init__(self, folder):
+        self.folder = folder
+        self.started = time.time()
+        self.before = self._lock()  # a lock already there (an earlier session's) is not one that came now
+        self.fd = -1
+        try:
+            libc = ctypes.CDLL(None, use_errno=True)
+            fd = libc.inotify_init1(_IN_NONBLOCK | _IN_CLOEXEC)
+            if fd >= 0 and libc.inotify_add_watch(fd, os.fsencode(folder), _IN_CREATE | _IN_MOVED_TO) < 0:
+                os.close(fd)
+                fd = -1
+            self.fd = fd
+        except (OSError, AttributeError):
+            self.fd = -1
+
+    def __call__(self) -> bool:
+        if self.fd >= 0:
+            try:
+                data = os.read(self.fd, 64 * 1024)
+            except BlockingIOError:
+                data = b""
+            at = 0
+            while at + _EVENT.size <= len(data):
+                _wd, _mask, _cookie, size = _EVENT.unpack_from(data, at)
+                name = data[at + _EVENT.size : at + _EVENT.size + size].split(b"\0", 1)[0]
+                at += _EVENT.size + size
+                if name == b"lock":
+                    return True
+        now = self._lock()
+        return now is not None and now != self.before and now[1] >= self.started
+
+    def _lock(self) -> tuple[int, float] | None:
+        """The engine's lock symlink as (inode, mtime), or None."""
+        try:
+            made = os.lstat(self.folder / "lock")
+        except OSError:
+            return None
+        return (made.st_ino, made.st_mtime) if stat.S_ISLNK(made.st_mode) else None
+
+    def close(self) -> None:
+        if self.fd >= 0:
+            os.close(self.fd)
+            self.fd = -1
+
+
 def autolock(prof: profile.Profile, *, grace: float = 120.0, poll: float = 0.5) -> str:
     """Lock the profile once its engine instance has come and gone (browser-group profiles, S6).
 
     Waits up to `grace` seconds for an engine to take the profile, then until
-    it exits, then unmounts. Returns what happened, for the log.
+    it exits, then unmounts. An engine that took the lock and was gone again
+    between two looks ends the wait too (#277). Returns what happened, for the log.
     """
     box = container(prof)
     deadline = time.monotonic() + grace
-    while not prof.running_pid():
-        if not box.mounted():
-            return "already-locked"
-        if time.monotonic() > deadline:
-            box.unmount(lazy_after=True)  # nobody opened it: do not leave it unlocked, even with a file open
-            log.event("vault.autolock", profile=prof.name, reason="unused")
-            return "unused"
-        time.sleep(poll)
+    seen = _LockSeen(prof.path)
+    try:
+        while not prof.running_pid():
+            if not box.mounted():
+                return "already-locked"
+            if seen():
+                break  # an engine came and went between two looks: it is gone, so lock now
+            if time.monotonic() > deadline:
+                box.unmount(lazy_after=True)  # nobody opened it: do not leave it unlocked, even with a file open
+                log.event("vault.autolock", profile=prof.name, reason="unused")
+                return "unused"
+            time.sleep(poll)
+    finally:
+        seen.close()
     while prof.running_pid():
         if not box.mounted():
             return "already-locked"
