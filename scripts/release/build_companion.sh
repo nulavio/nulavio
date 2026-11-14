@@ -17,6 +17,8 @@ out=$(mkdir -p "${1:?usage: build_companion.sh <out>}" && realpath "$1")
 [[ -n ${JAVA_HOME:-} ]] || { echo "build_companion: set JAVA_HOME to a JDK 21" >&2; exit 2; }
 version=$(sed -n 's/^ *versionName = "\([0-9][0-9.]*\)".*/\1/p' "$repo/android/app/build.gradle.kts")
 [[ $version =~ ^[0-9]+(\.[0-9]+)+$ ]] || { echo "build_companion: no versionName in android/app/build.gradle.kts" >&2; exit 1; }
+# Another APK under the same name and versionCode as the last release's is refused (#286).
+python3 -I "$repo/scripts/release/companion_version.py" --repo "$repo" >&2
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 
