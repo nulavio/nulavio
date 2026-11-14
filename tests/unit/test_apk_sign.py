@@ -141,6 +141,28 @@ class ApkSignTest(unittest.TestCase):
         self.assertIn("Verified using v3 scheme (APK Signature Scheme v3): true", result.stdout)
         self.assertIn(f"certificate SHA-256 digest: {hashlib.sha256(self.cert).hexdigest()}", result.stdout)
 
+    def test_entries_with_a_data_descriptor_in_both_headers_sign_and_verify(self):
+        # Written to a stream that cannot seek: every entry's local header has bit 3 and zero CRC and sizes,
+        # and the record has the real ones. That is a valid ZIP, and the descriptor check must not refuse it.
+        stream = io.BytesIO()
+
+        class Unseekable(io.RawIOBase):
+            def writable(self):
+                return True
+
+            def write(self, data):
+                return stream.write(data)
+
+        with zipfile.ZipFile(Unseekable(), "w") as archive:
+            archive.writestr("AndroidManifest.xml", minimal_manifest(), compress_type=zipfile.ZIP_DEFLATED)
+            archive.writestr("classes.dex", b"dex\n" * 100, compress_type=zipfile.ZIP_DEFLATED)
+        apk = stream.getvalue()
+        cd_offset, _ = apk_sign.zip_layout(apk)
+        first_local = struct.unpack_from("<I", apk, cd_offset + 42)[0]
+        self.assertTrue(struct.unpack_from("<H", apk, first_local + 6)[0] & 0x08, "the fixture has a data descriptor")
+        result = self.apksigner(apk_sign.sign_apk(apk, self.cert, self.signer), "descriptor.apk")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
     def test_only_the_signing_block_is_added(self):
         # F-Droid's apksigcopier copies a developer's signature onto its own build of the same
         # source: that works when the signed APK is the unsigned one plus the block.
@@ -223,6 +245,13 @@ class ApkSignTest(unittest.TestCase):
             "a record pointing into an entry": (edited(cd_offset + 42, "<I", 1), "does not point at a local header"),
             "a local header without its signature": (edited(first_local, "<I", 0), "does not point at a local header"),
             "a local CRC that is not the record's": (edited(first_local + 14, "<I", 0xDEADBEEF), "another method, CRC or size"),
+            # Each passed the signer once and only apksigner refused the result (third review of #260).
+            "a local compressed size": (edited(first_local + 18, "<I", 1), "another method, CRC or size"),
+            "a local uncompressed size": (edited(first_local + 22, "<I", 1), "another method, CRC or size"),
+            "a data descriptor only the local header announces": (
+                edited(first_local + 6, "<H", struct.unpack_from("<H", apk, first_local + 6)[0] | 0x08),
+                "another method, CRC or size",
+            ),
             "a local name that is not the record's": (
                 edited(first_local + 30 + name_size - 1, "<B", ord("Z")), "does not match its record"),
         }  # fmt: skip
