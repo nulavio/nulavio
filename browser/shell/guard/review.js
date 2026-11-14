@@ -37,8 +37,11 @@ function changedVersion(f) {
   if (f.before.version !== f.after.version) {
     return `${f.before.version} → ${f.after.version}`;
   }
-  const replaced = typeof f.before.digest === "string" && f.before.digest !== (f.after.digest ?? null);
-  return replaced ? `${f.after.version} · ${t("guardFileReplaced")}` : f.after.version;
+  if (typeof f.before.digest !== "string" || f.before.digest === f.after.digest) {
+    return f.after.version;
+  }
+  // Another file, or one that can no longer be read: the second is not called a replacement.
+  return `${f.after.version} · ${t(typeof f.after.digest === "string" ? "guardFileReplaced" : "guardFileUnreadable")}`;
 }
 
 function describe(f) {
