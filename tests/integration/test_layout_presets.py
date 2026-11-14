@@ -901,7 +901,7 @@ class LayoutPresetsTest(unittest.TestCase):
         self.assertTrue(moved_settings and moved_newtab)
 
         self.m.switch_to(moved_settings)
-        self.m.chrome(settings_page.FRONT)  # the helper reads the tab in front
+        settings_page.front(self.m)  # the helper reads the tab in front
         self.assertTrue(harness.wait_until(lambda: self.selected() == "custom", 10))
         self.m.switch_to(moved_newtab)
         self.assertTrue(harness.wait_until(lambda: self.newtab_ui_ready("custom"), 10))
@@ -922,14 +922,14 @@ class LayoutPresetsTest(unittest.TestCase):
         # Toggling Window 2's sidebar back open emits onChanged on Window 2 to both moved tabs.
         self.m.chrome("SidebarController.handleToolbarButtonClick();")
         self.m.switch_to(moved_settings)
-        self.m.chrome(settings_page.FRONT)  # the helper reads the tab in front
+        settings_page.front(self.m)  # the helper reads the tab in front
         self.assertTrue(harness.wait_until(lambda: self.selected() == "lateral", 10))
         self.m.switch_to(moved_newtab)
         self.assertTrue(harness.wait_until(lambda: self.newtab_ui_ready("lateral"), 10))
 
         # Applying Foco from the moved Settings tab acts on Window 2 and updates Newtab.
         self.m.switch_to(moved_settings)
-        self.m.chrome(settings_page.FRONT)  # the helper reads the tab in front
+        settings_page.front(self.m)  # the helper reads the tab in front
         self.pick("focus")
         self.assertTrue(harness.wait_until(lambda: self.ui_ready("focus"), 10))
         self.assertEqual(self.state()["preset"], "focus")
