@@ -176,6 +176,21 @@ class PrivilegedApiTest(unittest.TestCase):
         self.assertNotIn("events", apis["nulavioPersonalise"]["parent"])  # lazy: nothing to do at startup
         self.assertEqual(apis["nulavioWhatsNew"]["parent"]["events"], ["startup"])  # the Help entry and the bar (#198)
 
+    def test_an_engine_module_is_imported_from_one_address(self):
+        # 160.0-0.5 shipped NulavioWhatsNew importing SessionStore from an address the engine no longer has
+        # (resource:///modules/sessionstore/): its start-up failed quietly, so neither the Help menu entry
+        # nor the bar after an update appeared (#198). Every module that imports the same engine module
+        # must use the same address, the one the others are known to load.
+        addresses: dict[str, set[str]] = {}
+        for module in (SHELL / "modules").glob("*.mjs"):
+            for name, address in re.findall(
+                r'^\s+(\w+): "((?:resource|moz-src|chrome)://[^"]+)"', module.read_text(encoding="utf-8"), re.M
+            ):
+                addresses.setdefault(name, set()).add(address)
+        mixed = {name: sorted(found) for name, found in addresses.items() if len(found) > 1}
+        self.assertEqual(mixed, {})
+        self.assertEqual(addresses["SessionStore"], {"moz-src:///browser/components/sessionstore/SessionStore.sys.mjs"})
+
     def test_parent_scripts_only_bridge_to_the_modules(self):
         for script in (SHELL / "experiments").rglob("parent.js"):
             text = script.read_text(encoding="utf-8")
