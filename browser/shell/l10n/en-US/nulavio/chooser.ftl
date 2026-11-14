@@ -35,3 +35,4 @@ nulavio-chooser-recovery-undone = A recovery code replacement left unfinished ea
 nulavio-chooser-recovery-unsettled = A recovery code replacement left unfinished earlier could not be settled now: both codes still open this profile. It is tried again the next time the profile is unlocked from locked.
 nulavio-chooser-recovery-unknown = A recovery code replacement left unfinished earlier may or may not have been settled: the key file could not be written or read back. The profile's unlock methods show which recovery code it has.
 nulavio-chooser-not-recorded = The change was saved, but could not be recorded inside the profile. Lock the profile if it is open, then unlock it once to record it.
+nulavio-chooser-locked-again = The profile locked again while this was waiting. Unlock it again.

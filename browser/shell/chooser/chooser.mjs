@@ -12,12 +12,19 @@
      profile, after it was unlocked here with one of its methods (password, this computer's login,
      recovery code). false when the person went back, and the chooser stays as it was.
 
+   Whether a profile is protected, and locked, is read from its files (NulavioVaultState), not asked of
+   the Vault's tools: they are optional (gocryptfs, FUSE, libsodium), and a profile without a password
+   opens the same with or without them.
+
    It talks to the same Vault helper as the unlock page (NulavioVault.helper: `status`, `unlock`), and
    its words are the unlock page's, in Fluent (l10n/<locale>/nulavio/chooser.ftl). The phone is not
    offered here: its session needs the Shell. A secret goes from the field to the helper's stdin and
    the field is emptied; nothing else keeps it. */
 
 const { helper } = ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioVault.sys.mjs");
+const { profileLockState, PLAIN, LOCKED, UNLOCKED } = ChromeUtils.importESModule(
+  "resource://builtin-addons/nulavio-shell/modules/NulavioVaultState.sys.mjs"
+);
 
 const BASE = "resource://builtin-addons/nulavio-shell/";
 const METHODS = ["password", "os-keyring", "recovery-code"];
@@ -34,7 +41,7 @@ const IDS = [
   "locked", "headline", "password", "recovery", "unlock", "unlock-recovery", "use-keyring", "use-recovery", "cancel", "back",
   "unlocking", "no-master-key", "wrong-password", "wrong-recovery", "recovery-malformed", "recovery-required",
   "keyring-unavailable", "unavailable-headline", "storage-missing", "gone-headline", "gone", "unread-headline", "unexpected",
-  "recovery-finished", "recovery-undone", "recovery-unsettled", "recovery-unknown", "not-recorded",
+  "recovery-finished", "recovery-undone", "recovery-unsettled", "recovery-unknown", "not-recorded", "locked-again",
 ];
 let l10n = null;
 const words = new Map();
@@ -62,16 +69,15 @@ async function status(profile) {
   return helper({ op: "status", path: profile.path });
 }
 
-/** id -> { protected, locked, label }; a profile whose state could not be read is left out (and asked again at launch). */
+/** id -> { protected, locked, label }, from each profile's files; one that could not be read is left out. */
 export async function lockStates(profiles) {
   await loadWords();
   const states = new Map();
   await Promise.all(
     profiles.map(async profile => {
       try {
-        const state = await status(profile);
-        const locked = Boolean(state.encrypted && state.locked);
-        states.set(profile.id, { protected: Boolean(state.encrypted), locked, label: locked ? t("locked") : null });
+        const state = await profileLockState(profile.path);
+        states.set(profile.id, { protected: state !== PLAIN, locked: state === LOCKED, label: state === LOCKED ? t("locked") : null });
       } catch (e) {
         console.error("Nulavio chooser: lock state", e);
       }
@@ -211,7 +217,20 @@ function unlockDialog(document, profile, state, texts) {
       submit.removeAttribute("form");
       submit.type = "button";
       submit.textContent = texts.open;
-      submit.addEventListener("click", () => finish(true), { once: true });
+      // The note can be read for as long as it takes, and the profile locks itself again when nothing opens
+      // it for two minutes: it is opened only if it is still unlocked, and unlocked again otherwise.
+      const open = async () => {
+        if ((await profileLockState(profile.path).catch(() => LOCKED)) === UNLOCKED) {
+          finish(true);
+          return;
+        }
+        submit.removeEventListener("click", open);
+        submit.type = "submit";
+        back.hidden = false;
+        showRecovery(!kinds.has("password") && !kinds.has("os-keyring"));
+        say(t("locked-again"), "warn");
+      };
+      submit.addEventListener("click", open);
       say(`${t(note)}${unrecorded}`, "warn");
       submit.focus();
     };
@@ -326,32 +345,43 @@ function noticeDialog(document, headline, text) {
   });
 }
 
+// One launch is asked about at a time in a chooser window: a second activation while the first is still
+// reading the profile's state, or while its unlock step is up, does nothing.
+const asking = new WeakSet();
+
 /** Whether `profile` may be launched now: asks for its secret first when it is a locked protected profile. */
-export async function beforeLaunch(document, profile, known = null) {
-  if (known && !known.protected) {
-    return true; // read as unprotected when the window opened
+export async function beforeLaunch(document, profile) {
+  if (asking.has(document)) {
+    return false;
   }
-  await loadWords();
-  if (document.getElementById("nulavio-unlock")) {
-    return false; // one step at a time: a second click while the dialog is up does nothing
-  }
-  let state;
+  asking.add(document);
   try {
-    state = await status(profile);
-  } catch (e) {
-    const code = e?.code ?? "";
-    if (UNAVAILABLE.has(code)) {
-      return noticeDialog(document, t("unavailable-headline"), t("storage-missing"));
+    let state;
+    try {
+      state = await profileLockState(profile.path); // now, not as it was when the window opened
+    } catch (e) {
+      console.error("Nulavio chooser: lock state", e);
+      return true; // not known to be protected: the engine's own launch, as without Nulavio
     }
-    if (known?.protected) {
-      return noticeDialog(document, t(code === "not-found" ? "gone-headline" : "unread-headline"), code === "not-found" ? t("gone") : t("unexpected"));
+    if (state !== LOCKED) {
+      return true; // no password, or already unlocked: nothing to ask, and nothing needed from the Vault's tools
     }
-    console.error("Nulavio chooser: status", e);
-    return true; // not known as protected: the engine's own launch, as without Nulavio
+    await loadWords();
+    let methods;
+    try {
+      ({ methods } = await status(profile));
+    } catch (e) {
+      // A protected profile cannot be opened without the tools, or without its key file being read: said,
+      // never started on its locked folder.
+      const code = e?.code ?? "";
+      if (UNAVAILABLE.has(code)) {
+        return noticeDialog(document, t("unavailable-headline"), t("storage-missing"));
+      }
+      return noticeDialog(document, t(code === "not-found" ? "gone-headline" : "unread-headline"), t(code === "not-found" ? "gone" : "unexpected"));
+    }
+    const texts = { explain: await named("explain", profile), open: await named("open", profile) };
+    return await unlockDialog(document, profile, { methods }, texts);
+  } finally {
+    asking.delete(document);
   }
-  if (!state.encrypted || !state.locked) {
-    return true;
-  }
-  const texts = { explain: await named("explain", profile), open: await named("open", profile) };
-  return unlockDialog(document, profile, state, texts);
 }

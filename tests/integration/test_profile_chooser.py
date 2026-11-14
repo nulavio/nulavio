@@ -226,6 +226,10 @@ class ProfileChooserTest(unittest.TestCase):
         self.assertTrue(harness.wait_until(lambda: self.instances(path), timeout=90), "the profile did not start")
         self.assertTrue(harness.wait_until(lambda: self.call("return !W();"), timeout=10), "the chooser stayed open")
         self.assertTrue(storage.Container(path).mounted())
+        # Until the engine holds the profile's lock, the watcher that locks it again has not seen it start.
+        self.assertTrue(
+            harness.wait_until(lambda: (path / "lock").is_symlink(), timeout=60), "the engine did not take the profile"
+        )
         self.stop_instance(path)
         self.assertTrue(harness.wait_until(lambda: not storage.Container(path).mounted(), timeout=60), "it did not lock again")
 
@@ -267,6 +271,91 @@ class ProfileChooserTest(unittest.TestCase):
         self.call("D().getElementById('nulavio-unlock-cancel').click(); return true;")
         self.assertEqual(self.instances(path), [])
         self.close_chooser()
+
+    def test_02b_one_step_at_a_time_and_ordinary_profiles_need_no_vault_tools(self):
+        """Review of #267. Two activations at once gave two unlock steps, one under the other. And on a computer
+        without gocryptfs, FUSE or libsodium (they are optional) every profile was refused, the ones without a
+        password too: whether a profile is protected is now read from its files, not asked of the tools."""
+        profile_id = self.create_protected("Cofre")
+        path = self.profile_path(profile_id)
+        here = self.call("return SPS.currentProfile.id;")
+        self.open_chooser()
+        # Two activations before the first has read anything: one step, and going back leaves none.
+        self.call("card(args[0]).click(); card(args[0]).click(); return true;", profile_id)
+        self.assertTrue(harness.wait_until(lambda: (self.dialog() or {}).get("open"), timeout=20))
+        time.sleep(1)
+        self.assertEqual(self.call("return D().querySelectorAll('dialog').length;"), 1)
+        self.call("D().getElementById('nulavio-unlock-cancel').click(); return true;")
+        self.assertTrue(harness.wait_until(lambda: self.dialog() is None, timeout=5))
+        self.assertEqual(self.call("return D().querySelectorAll('dialog').length;"), 0)
+        # Without the Vault's tools: a profile without a password is launched as ever; a locked one says why not.
+        allowed = "return S().nulavio.beforeLaunch(D(), await SPS.getProfile(args[0]));"
+        tools = Path(self.session.engine.path).parent / "nulavio-tools"
+        hidden = tools.with_name("nulavio-tools.hidden-by-test")
+        os.rename(tools, hidden)
+        try:
+            self.assertIs(self.call(allowed, here), True)
+            self.assertIsNone(self.dialog())
+            self.assertEqual(self.cards()[str(profile_id)]["lock"], self.word("locked"))  # the lock needs no tools either
+            self.call("card(args[0]).click(); return true;", profile_id)
+            self.assertTrue(harness.wait_until(lambda: (self.dialog() or {}).get("open"), timeout=20))
+            notice = self.dialog()
+            self.assertEqual(notice["headline"], self.word("unavailable-headline"))
+            self.assertEqual(notice["status"], self.word("storage-missing"))
+            self.assertFalse(notice["password"] or notice["recovery"], "a field for a secret that nothing can check")
+            self.shoot("05-tools-missing")
+            self.call("D().getElementById('nulavio-unlock-cancel').click(); return true;")
+            self.assertTrue(harness.wait_until(lambda: self.dialog() is None, timeout=5))
+        finally:
+            os.rename(hidden, tools)
+        self.assertEqual(self.instances(path), [])
+        self.assertFalse(storage.Container(path).mounted())
+        self.close_chooser()
+
+    def test_02c_a_profile_that_locked_again_while_a_note_was_read_is_unlocked_again(self):
+        """Review of #267. An unlock that settles a recovery code replacement (#187) says so and waits for
+        "Abrir". The profile's watcher locks it again when nothing opens it for two minutes; opened then, the
+        engine got the locked folder, which is the failure this chooser removes."""
+        profile_id = self.create_protected("Aviso")
+        path = self.profile_path(profile_id)
+        self.call("return V.change(args[0], 'new-recovery-code', {current: args[1]}).then(() => true);", profile_id, PASSWORD)
+        self.open_chooser()
+        self.call("card(args[0]).click(); return true;", profile_id)
+        self.assertTrue(harness.wait_until(lambda: (self.dialog() or {}).get("open"), timeout=20))
+        self.type_secret("nulavio-unlock-password", PASSWORD)
+        undone = self.word("recovery-undone")
+        self.assertTrue(
+            harness.wait_until(lambda: (self.dialog() or {}).get("status", "").startswith(undone), timeout=90), self.dialog()
+        )
+        note = self.dialog()
+        self.assertEqual((note["level"], note["submit"], note["password"]), ("warn", self.word("open", "Aviso"), False))
+        self.assertTrue(storage.Container(path).mounted())
+        self.assertEqual(self.instances(path), [], "started before the note was acknowledged")
+        self.shoot("06-settled-note")
+        # As its watcher does after two minutes with no engine: locked again while the note is on screen.
+        self.call(
+            "const { helper } = ChromeUtils.importESModule(args[0] + '/NulavioVault.sys.mjs');"
+            "await helper({op: 'lock', path: args[1]}); return true;",
+            SHELL,
+            str(path),
+        )
+        self.assertFalse(storage.Container(path).mounted())
+        self.call("D().getElementById('nulavio-unlock-submit').click(); return true;")
+        again = self.word("locked-again")
+        self.assertTrue(harness.wait_until(lambda: (self.dialog() or {}).get("status") == again, timeout=20), self.dialog())
+        step = self.dialog()
+        self.assertTrue(step["password"])
+        self.assertEqual(step["submit"], self.word("unlock"))
+        self.assertTrue(self.call("return Boolean(W());"), "the chooser went away with the profile locked")
+        self.assertEqual(self.instances(path), [], "the engine was started on a locked folder")
+        # Unlocked again (nothing left to settle now): it starts.
+        self.type_secret("nulavio-unlock-password", PASSWORD)
+        self.assertTrue(harness.wait_until(lambda: self.instances(path), timeout=90), "the profile did not start")
+        self.assertTrue(
+            harness.wait_until(lambda: (path / "lock").is_symlink(), timeout=60), "the engine did not take the profile"
+        )
+        self.stop_instance(path)
+        self.assertTrue(harness.wait_until(lambda: not storage.Container(path).mounted(), timeout=90), "it did not lock again")
 
     def test_03_at_start_up_the_unlocked_profile_is_the_one_handed_to_the_engine(self):
         """The start-up chooser is the same page with the engine's parameter block (window.arguments): on launch it

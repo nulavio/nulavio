@@ -35,3 +35,4 @@ nulavio-chooser-recovery-undone = A troca do código de recuperação que tinha 
 nulavio-chooser-recovery-unsettled = Não foi possível concluir agora a troca do código de recuperação que tinha ficado pela metade: os dois códigos ainda abrem este perfil. Isso é tentado de novo na próxima vez que o perfil for desbloqueado.
 nulavio-chooser-recovery-unknown = Não dá para saber se a troca do código de recuperação que tinha ficado pela metade foi concluída: o arquivo de chaves não pôde ser gravado nem lido de volta. Os métodos de desbloqueio do perfil mostram qual código ele tem.
 nulavio-chooser-not-recorded = A alteração foi salva, mas não pôde ser registrada dentro do perfil. Bloqueie o perfil, se estiver aberto, e desbloqueie uma vez para registrá-la.
+nulavio-chooser-locked-again = O perfil bloqueou de novo enquanto esta tela esperava. Desbloqueie outra vez.

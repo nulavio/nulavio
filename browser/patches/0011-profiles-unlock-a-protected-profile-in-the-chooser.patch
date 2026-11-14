@@ -12,10 +12,12 @@ This patch asks a Nulavio module before every launch from the chooser
 module's word for a locked profile in the corner of its card. The module,
 browser/shell/chooser/chooser.mjs, lives in the Shell's directory, which
 resource://builtin-addons/ reaches before any profile has started. It
-reads each profile's lock state from the Vault helper and, for a locked
-one, asks for its password, this computer's login or its recovery code,
-unlocks it, and only then lets the launch go on. When the module cannot
-be loaded, the chooser stays the engine's own.
+reads each profile's lock state from the profile's files and, for a
+locked one, asks for its password, this computer's login or its recovery
+code, unlocks it through the Vault helper, and only then lets the launch
+go on. A profile without a password is launched as before, with or
+without the Vault's tools installed. When the module cannot be loaded,
+the chooser stays the engine's own.
 
 Owner: Nulavio maintainers
 Upstream: not applicable (Nulavio's protected profiles).
@@ -87,25 +89,18 @@ Upstream: not applicable (Nulavio's protected profiles).
      this.showSelector =
        this.selectableProfileService.groupToolkitProfile.showProfileSelector;
  
-@@ -122,6 +135,17 @@
+@@ -122,6 +135,10 @@
    }
  
    async launchProfile(profile, url) {
 +    // Nulavio: a locked protected profile is unlocked first; false when the person went back.
-+    if (
-+      this.nulavio &&
-+      !(await this.nulavio.beforeLaunch(
-+        document,
-+        profile,
-+        this.nulavioLocks?.get(profile.id)
-+      ))
-+    ) {
++    if (this.nulavio && !(await this.nulavio.beforeLaunch(document, profile))) {
 +      return;
 +    }
      if (this.isStartupUI) {
        await this.setLaunchArguments(profile, url ? ["-url", url] : []);
        await this.selectableProfileService.uninit();
-@@ -180,7 +204,11 @@
+@@ -180,7 +197,11 @@
        <p class="profiles-body-text" data-l10n-id="profile-window-body"></p>
        <div class="profile-list">
          ${this.profiles.map(
