@@ -114,13 +114,6 @@ class StorageCase(unittest.TestCase):
     def encrypted_profile(self, name: str = "work", keyring: Keyring | None = None) -> tuple[profile.Profile, str]:
         return profiles.create(name, password=PASSWORD, keyring=keyring, kdf=FAST, recovery_kdf=FAST)
 
-    def secret_tool(self) -> Path:
-        """A stand-in for secret-tool in this test's own directory (its items are in NV_FAKE_KEYRING)."""
-        tool = self.tmp / "secret-tool"
-        tool.write_text(FAKE_SECRET_TOOL.format(python=sys.executable))
-        tool.chmod(0o700)
-        return tool
-
     def fake_engine(self) -> dict:
         engine = self.tmp / "engine.sh"
         engine.write_text(FAKE_ENGINE)
@@ -349,6 +342,26 @@ profiles.rekey(profile.Profile(name=path.name, path=path), current=password)
 """
 
 
+class MemoryKeyring:
+    """The system keyring, in memory: what the launcher's Keyring gives, without a program to run."""
+
+    def __init__(self):
+        self.items: dict[tuple, bytes] = {}
+
+    def available(self) -> bool:
+        return True
+
+    def store(self, label: str, attributes: dict[str, str], value) -> None:
+        self.items[tuple(sorted(attributes.items()))] = bytes(value)
+
+    def lookup(self, attributes: dict[str, str]) -> bytearray | None:
+        found = self.items.get(tuple(sorted(attributes.items())))
+        return None if found is None else bytearray(found)
+
+    def clear(self, attributes: dict[str, str]) -> None:
+        self.items.pop(tuple(sorted(attributes.items())), None)
+
+
 class RekeyTest(StorageCase):
     """ADR 0015 (#204): a new key for a profile's volume. After it, a key file kept from before opens
     nothing, with any secret; before it, a removed secret still opens the files with that key file (R70)."""
@@ -487,17 +500,15 @@ class RekeyTest(StorageCase):
             profiles.unlock(self.prof, password=PASSWORD)
 
     def test_this_computers_login_is_carried_with_a_new_keyring_key(self):
-        tool = self.secret_tool()
-        store = self.tmp / "keyring.json"
-        with mock.patch.dict(os.environ, {"NV_FAKE_KEYRING": str(store), "NULAVIO_SECRET_TOOL": str(tool)}):
+        keyring = MemoryKeyring()
+        with mock.patch.object(vault_cli, "keyring", return_value=keyring):
             self.api(self.prof, "add-keyring", current=PASSWORD)
-            before = json.loads(store.read_text())
+            before = dict(keyring.items)
             result = self.api(self.prof, "rekey", current=PASSWORD)
             self.assertEqual(sorted(m["method"] for m in result["carried"]), ["os-keyring", "password"])
-            after = json.loads(store.read_text())
-            self.assertEqual(len(after), 1)  # the key of before is gone from the keyring: it wraps nothing now
-            self.assertNotEqual(after[0], before[0])
-            self.assertEqual(self.files(self.prof, keyring=Keyring(str(tool))), self.before)
+            self.assertEqual(len(keyring.items), 1)  # the key of before is gone from the keyring: it wraps nothing now
+            self.assertFalse(set(keyring.items) & set(before))
+            self.assertEqual(self.files(self.prof, keyring=keyring), self.before)
 
     def test_refused_before_anything_changes(self):
         prof, box = self.prof, profiles.container(self.prof)
@@ -678,25 +689,23 @@ class RekeyTest(StorageCase):
     def test_the_method_that_was_typed_is_carried_or_nothing_changes(self):
         # With this computer's login also on the profile, a failure to wrap the typed password again used to
         # save a profile that the secret just typed no longer opened.
-        tool = self.secret_tool()
-        store = self.tmp / "keyring.json"
-        with mock.patch.dict(os.environ, {"NV_FAKE_KEYRING": str(store), "NULAVIO_SECRET_TOOL": str(tool)}):
+        keyring = MemoryKeyring()
+        real = Vault.add_password
+
+        def add_password(vault, password, *args, **kwargs):
+            if "rekey" in str(vault.path):
+                raise VaultError("damaged-envelope")
+            return real(vault, password, *args, **kwargs)
+
+        with mock.patch.object(vault_cli, "keyring", return_value=keyring):
             self.api(self.prof, "add-keyring", current=PASSWORD)
-            before = json.loads(store.read_text())
-            real = Vault.add_password
-
-            def add_password(vault, password, *args, **kwargs):
-                if "rekey" in str(vault.path):
-                    raise VaultError("damaged-envelope")
-                return real(vault, password, *args, **kwargs)
-
+            before = dict(keyring.items)
             with mock.patch.object(Vault, "add_password", add_password), self.assertRaises(VaultError) as ctx:
                 self.api(self.prof, "rekey", current=PASSWORD)
             self.assertEqual(ctx.exception.code, "failed")
-            self.assertEqual(json.loads(store.read_text()), before)  # no new keyring key left behind
-        self.assertEqual(
-            sorted(m["method"] for m in profiles.status(self.prof)["methods"]), ["os-keyring", "password", "recovery-code"]
-        )
+            self.assertEqual(keyring.items, before)  # no new keyring key left behind
+        methods = sorted(m["method"] for m in profiles.status(self.prof)["methods"])
+        self.assertEqual(methods, ["os-keyring", "password", "recovery-code"])
         self.assertEqual(self.files(self.prof, password=PASSWORD), self.before)
 
     def test_a_volume_detached_with_a_file_open_is_still_in_use(self):
@@ -823,7 +832,9 @@ class EncryptedProfileTest(StorageCase):
             (box.mountpoint / "prefs.js").write_text("plaintext")
 
     def test_keyring_profile(self):
-        tool = self.secret_tool()
+        tool = self.tmp / "secret-tool"
+        tool.write_text(FAKE_SECRET_TOOL.format(python=sys.executable))
+        tool.chmod(0o700)
         with mock.patch.dict(os.environ, {"NV_FAKE_KEYRING": str(self.tmp / "keyring.json")}):
             prof, _ = self.encrypted_profile(keyring=Keyring(str(tool)))
             self.assertIn("os_user_protected", profiles.status(prof)["protection"])
