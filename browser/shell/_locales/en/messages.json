@@ -557,6 +557,7 @@
   "guardReveal": {"message": "Show file"},
   "guardValueDefault": {"message": "default"},
   "guardTurnedOn": {"message": "turned on"},
+  "guardFileReplaced": {"message": "file replaced (the version reported is the same)"},
   "guardExtensionAdded": {"message": "Extension added: $NAME$", "placeholders": {"name": {"content": "$1"}}},
   "guardExtensionWhy": {"message": "Extensions can read and change the pages you visit. This one was added outside the browser and is running."},
   "guardExtensionWhyOff": {"message": "Extensions can read and change the pages you visit. This one was added outside the browser; it stays off until you allow it in Add-ons."},

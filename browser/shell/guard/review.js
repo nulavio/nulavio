@@ -31,6 +31,16 @@ function value(v) {
   return String(v);
 }
 
+/* The version before and after; when the engine says the same version for another file (#136), that is
+   what is said: an arrow between two equal versions would read as nothing changed. */
+function changedVersion(f) {
+  if (f.before.version !== f.after.version) {
+    return `${f.before.version} → ${f.after.version}`;
+  }
+  const replaced = typeof f.before.digest === "string" && f.before.digest !== (f.after.digest ?? null);
+  return replaced ? `${f.after.version} · ${t("guardFileReplaced")}` : f.after.version;
+}
+
 function describe(f) {
   switch (f.kind) {
     case "extension-added":
@@ -42,7 +52,7 @@ function describe(f) {
     case "extension-changed":
       return {
         title: t("guardExtensionChanged", [f.after.name]),
-        detail: `${f.key} · ${f.before.version} → ${f.after.version}${!f.before.active && f.after.active ? ` · ${t("guardTurnedOn")}` : ""}`,
+        detail: `${f.key} · ${changedVersion(f)}${!f.before.active && f.after.active ? ` · ${t("guardTurnedOn")}` : ""}`,
         why: t("guardExtensionChangedWhy"),
       };
     case "extension-removed":
