@@ -243,9 +243,12 @@ if (browser.nulavioConnect && browser.menus) {
 
 // -- Nulavio Assistant: "Perguntar ao assistente" on a selection, and its shortcut (UX5-G) --
 // Both only put something in the panel of that window (the selection as an item, or the focus on
-// the question) and open it; nothing is sent until Send. Never in private windows, and none of it
-// is offered where an agent drives the browser (its AI Workspace). The label never repeats the
-// selection itself. The listeners are added at once, so the event page wakes for them.
+// the question) and open it; nothing is sent until Send. Never in private windows: there the item
+// is hidden by the window's own sheet (window-band.css, #138) before the menu is drawn, and a click
+// that still reached it does nothing; its visibility is never changed here, since that would change
+// it in every window and only after the menu was on screen. None of it is offered where an agent
+// drives the browser (its AI Workspace). The label never repeats the selection itself. The listeners
+// are added at once, so the event page wakes for them.
 
 const ASK_MENU = "nulavio-ask-selection";
 
@@ -258,12 +261,6 @@ if (browser.nulavioAI && browser.menus) {
       }
     })
     .catch(console.error);
-  browser.menus.onShown.addListener(async (info, tab) => {
-    if (info.contexts.includes("selection")) {
-      await browser.menus.update(ASK_MENU, { visible: !tab?.incognito }).catch(() => {});
-      browser.menus.refresh();
-    }
-  });
   browser.menus.onClicked.addListener((info, tab) => {
     if (info.menuItemId === ASK_MENU && tab && !tab.incognito) {
       const offer = { kind: "selection", pageUrl: info.pageUrl ?? "", frameUrl: info.frameUrl ?? "", text: info.selectionText ?? "" };

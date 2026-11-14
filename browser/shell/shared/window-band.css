@@ -430,6 +430,17 @@
   }
 }
 
+/* #138: "Perguntar ao assistente" is never offered in a private window. The menus API sets an item's
+   visibility for every window at once, and the Shell could only change it once the menu was already
+   on screen (menus.onShown), so a private window showed the item until the event page had run. This
+   window's own sheet holds before the menu's first frame and after any rebuild of its items. The id
+   is the engine's for the Shell's item "nulavio-ask-selection" (ext-menus.js, elementId). */
+@-moz-document url("chrome://browser/content/browser.xhtml") {
+  :root[privatebrowsingmode] #contentAreaContextMenu #shell_nulavio_net-menuitem-_nulavio-ask-selection {
+    display: none;
+  }
+}
+
 /* ADR 0009, Immersive: the toolbar and the tab list leave the layout and come back over the page;
    the band's row stays, with the site of the tab in its middle. Nothing here removes or restyles an
    engine indicator: the toolbar is the engine's own, out of view until the pointer, the keyboard or

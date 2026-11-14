@@ -1384,9 +1384,14 @@ class AssistantUiTest(unittest.TestCase):
         )
 
     def ask_menu_item(self) -> bool | None:
-        """The "Perguntar ao assistente" item of the open page menu: True shown, False hidden, None absent."""
+        """The "Perguntar ao assistente" item of the page menu that is open, in whichever window it is
+        (#138: reading this window's document could read another window's menu): True drawn, False
+        hidden (by its attribute or its window's sheet), None absent."""
         return self.m.chrome(
-            "const item = document.querySelector(\"[id$='nulavio-ask-selection']\");return item ? !item.hidden : null;"
+            "const open = [...Services.wm.getEnumerator('navigator:browser')].map(w => w.document)"
+            ".find(d => d.getElementById('contentAreaContextMenu').state === 'open');"
+            "const item = open?.querySelector(\"#contentAreaContextMenu [id$='-menuitem-_nulavio-ask-selection']\");"
+            "return item ? !item.hidden && item.ownerDocument.defaultView.getComputedStyle(item).display !== 'none' : null;"
         )
 
     def focused_in_panel(self) -> str | None:
@@ -1461,8 +1466,11 @@ class AssistantUiTest(unittest.TestCase):
             self.select_first_paragraph()
             self.m.context_click("p")
             self.assertTrue(harness.wait_until(self.m.menu_open))
-            time.sleep(1)
-            self.assertIn(self.ask_menu_item(), (False, None))  # hidden by its context
+            # #138: there and hidden from the moment the menu is open (its visibility is no longer switched for every
+            # window, so "absent" would mean the check found nothing), not once the Shell's event page has woken.
+            self.assertIs(self.ask_menu_item(), False)
+            time.sleep(1)  # and still after the Shell's own listeners have run
+            self.assertIs(self.ask_menu_item(), False)
             self.m.close_menu()
             tab = self.m.chrome(f"return {TABS}.getId(gBrowser.selectedTab);")
             refused = chrome_async(self.m, f"return await {AI}.assistantOffer({{kind: 'composer'}}, args[0]);", [tab])
@@ -1470,6 +1478,17 @@ class AssistantUiTest(unittest.TestCase):
         finally:
             self.m.send("WebDriver:CloseWindow")
             self.m.switch_to(main)
+        # After a private window, an ordinary window's menu offers the item at once (its visibility is
+        # no longer switched for every window from the private one).
+        self.close_other_tabs()
+        self.m.switch_to(self.m.window_handles()[0])
+        self.m.navigate(url)
+        self.wait_loaded(url)
+        self.select_first_paragraph()
+        self.m.context_click("p")
+        self.assertTrue(harness.wait_until(self.m.menu_open))
+        self.assertIs(self.ask_menu_item(), True)
+        self.m.close_menu()
 
     def test_31_the_shortcut_opens_the_panel_on_the_question_and_keeps_it_open(self):
         """Alt+Shift+A (Q8): the extension's key in the window; it opens and never toggles the panel."""
