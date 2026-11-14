@@ -19,7 +19,8 @@ git ls-files launcher/nulavio_launcher/vault/ browser/shell/vault/ browser/shell
   browser/shell/modules/NulavioVault.sys.mjs browser/shell/modules/NulavioVaultState.sys.mjs \
   browser/patches/0011-profiles-unlock-a-protected-profile-in-the-chooser.patch \
   .github/workflows/release.yml .github/workflows/repeatable.yml .github/workflows/release-signing-check.yml \
-  scripts/release/ ci/aws/ packaging/ site/rpm/ site/apt/
+  .github/workflows/release-metadata.yml .github/workflows/upstream.yml \
+  scripts/release/ ci/aws/ packaging/ site/rpm/ site/apt/ browser/build/engine.json scripts/upstream/
 ```
 
 ## Area 1: the Vault
@@ -31,7 +32,7 @@ A protected profile is a [gocryptfs](https://github.com/rfjakob/gocryptfs) volum
 | [ADR 0006](../adr/0006-nulavio-vault.md), [ADR 0005](../adr/0005-phone-profile-unlock.md), [ADR 0015](../adr/0015-a-new-key-for-a-profile.md) | What was decided and what was rejected |
 | [Vault and unlock architecture](../architecture/vault-and-unlock.md) | Components, trust boundaries UB1–UB5, the key flow, `nv1`, the coordinator's states, the effective protection matrix |
 | [Unlock threat model](threat-model-unlock.md) | Scenarios U-T1 to U-T33, each with its controls, limits and the test that holds it |
-| [Residual risks](residual-risks.md) R18, R30, R32, R48, R49, R70 | What the project already accepts or knows is open |
+| [Residual risks](residual-risks.md) R11, R18, R30, R31, R32, R48, R49, R70 | What the project already accepts or knows is open |
 
 | Code | Lines (2026-11-14) | What it does |
 |---|---|---|
@@ -57,15 +58,15 @@ Out of scope for this area: malware running as the same user while the profile i
 
 ## Area 2: the release chain
 
-The packages are built on Blacksmith runners by `release.yml`, checked against a rehearsal manifest, and signed in a separate job that runs only after the maintainer approves the `release` environment. The OpenPGP release key and the Companion's APK key live in AWS KMS; the job gets a short-lived role through GitHub's OIDC token, and the key never leaves KMS.
+The packages are built on Blacksmith runners by `release.yml`, checked against a rehearsal manifest, and signed in a separate job that runs only after the maintainer approves the `release` environment. The OpenPGP release key and the Companion's APK key are used through AWS KMS: the job gets a short-lived role through GitHub's OIDC token, and the key material in KMS is not exportable. Both keys were made outside KMS, on the maintainer's machine, and imported (origin `EXTERNAL`; `make_release_key.sh`, `kms_import_key.py`); an offline backup of each, and the release key's revocation certificate, are kept by the maintainer ([build](../architecture/build.md), [ADR 0014](../adr/0014-companion-signing-key.md), R60). The making and import scripts are in scope; the backups themselves, and how they are kept, are the maintainer's and outside what the reviewer can read.
 
 | Read first | Why |
 |---|---|
-| [Build](../architecture/build.md): "Packages", "Signing in CI through AWS KMS", "Release workflow", "Repeatable builds", "Publishing a release" | How a release is made |
+| [Build](../architecture/build.md): "Packages", "Signing in CI through AWS KMS", "Release workflow", "Flatpak (Flathub)", "Repeatable builds", "Publishing a release" | How a release is made |
 | [Update policy](../architecture/update-policy.md) | The times the chain has to meet |
 | [Trust boundaries](../architecture/trust-boundaries.md) TB18, TB19, TB21 | Who is trusted at each step |
 | [ADR 0014](../adr/0014-companion-signing-key.md) | The Companion's signing key |
-| [Residual risks](residual-risks.md) R12, R51, R57, R58, R60, R61, R62 | What the project already accepts or knows is open |
+| [Residual risks](residual-risks.md) R51, R53, R57, R58, R60, R61, R62, R67 (R12 is the old preview's, before signed releases) | What the project already accepts or knows is open |
 | [`scripts/release/AGENTS.md`](../../scripts/release/AGENTS.md) | The rules the scripts keep (no unsigned publish, pinned downloads, no protection made non-fatal) |
 
 | Code | What it does |
@@ -78,30 +79,32 @@ The packages are built on Blacksmith runners by `release.yml`, checked against a
 | `scripts/release/apk_sign.py`, `sign_companion.sh` | The Companion's APK signature (v2/v3 scheme) through KMS |
 | `scripts/release/publish_release.sh`, `upload_repo.sh`, `check_published.sh` | Staging, upload to the package bucket, the check after upload |
 | `scripts/release/kms_setup.sh`, `kms_import_key.py`, `make_release_key.sh`, `ci/aws/*.json` | Creating and importing the keys; the key and role policies |
+| `scripts/release/flatpak_manifest.py`, `check_flatpak.sh` | The Flatpak bundle: its manifest and the checks before it is bundled |
 | `packaging/`, `site/rpm/nulavio.repo`, `site/apt/nulavio.sources` | The packages, and the repository files people install, which turn signature checks on |
 
 Questions the project would most like answered:
 
-1. Can anything other than an approved run of `release.yml` on `main` get a signature from either key (R60)? Read the trust policy, the role policy and the key policy together with the workflow's triggers and permissions.
+1. Can anything other than an approved job in the `release` environment on `main` (`release.yml`, and `release-signing-check.yml`, which signs a test file there) get a signature from either key (R60)? Read the trust policy, the role policy and the key policy together with the workflow's triggers and permissions.
 2. Can a pull request, a branch, a cache, an artifact or a dependency download put bytes into what gets signed? What does the manifest bind, and what does `publish` check before it signs?
 3. Do the signatures and repository files make `dnf`, `apt` and Flatpak refuse a tampered or older package (R57 says the metadata has no expiry)?
 4. Are the scripts' refusals really fatal, and is there a path that publishes unsigned or partly signed?
 5. The APK signer is the project's own code (`apk_sign.py`): is its output what Android's verifier checks, and could a crafted input make it sign something other than the built APK?
+6. The Flatpak bundle is built in a job without OIDC and gets no attestation; what binds it to the release is its line in the signed `SHA256SUMS`, and `flatpak install` of a bundle does not check the project's signature ([build](../architecture/build.md), "Flatpak (Flathub)"). Is that link enough, and what should a person installing the bundle be told? No residual risk records this yet.
 
-Out of scope for this area: the engine's own source (Mozilla's), Blacksmith's and GitHub's infrastructure (R61, accepted), and the maintainer's own machine.
+Out of scope for this area: the engine's own source (Mozilla's), Blacksmith's and GitHub's infrastructure (R61, accepted), and the maintainer's own machine (where the offline key backups are). Also in scope, as "updates" in D11: how a new Firefox release is noticed and pinned (`upstream.yml`, `scripts/upstream/`, `browser/build/engine.json`) and the release metadata pull request (`release-metadata.yml`, TB21).
 
 ## What the project already did
 
-- An internal audit of 160.0-0.1 on 2026-11-10 by a coding agent: its findings and fixes are in the [security changelog](changelog.md) under 160.0-0.2 (V2 to V8 for the Vault; R1, R2 and R5 for the release chain, whose R3 and R4 became the residual risks R57 and R58). Not independent: the same kind of agent wrote the code.
+- An internal audit of 160.0-0.1 on 2026-11-10 by a coding agent: its findings and fixes are in the [security changelog](changelog.md) under 160.0-0.2 (V2 and V4 to V8 for the Vault; V3 became R59, resolved in #48; R1, R2 and R5 for the release chain, whose R3 and R4 became the residual risks R57 and R58). Not independent: the same kind of agent wrote the code.
 - Scans and manual findings on the [LESIS](code-scanning.md#lesis-external-supporter) platform (2026-11-13), whose retest led to R70.
-- CI on every pull request: gitleaks, Nulavio's Opengrep rules, ShellCheck, zizmor and actionlint for the workflows, CodeQL, OpenSSF Scorecard ([code scanning](code-scanning.md)).
-- The unit suites `tests/unit/test_vault.py`, `test_vault_storage.py` and `test_release_*.py`, and the integration suites `test_vault_ui.py`, `test_vault_profiles.py` and `test_profile_chooser.py`.
+- CI on every pull request: gitleaks, Nulavio's Opengrep rules, ShellCheck, zizmor and actionlint for the workflows, CodeQL; OpenSSF Scorecard on `main`, weekly ([code scanning](code-scanning.md)).
+- The unit suites `tests/unit/test_vault.py`, `test_vault_storage.py`, `test_release_*.py`, `test_apk_sign.py`, `test_openpgp_sign.py`, `test_kms_import_key.py` and `test_signatures.py`, and the integration suites `test_vault_ui.py`, `test_vault_profiles.py` and `test_profile_chooser.py`.
 
 ## Running it
 
-- The unit tests need only Python 3.11 or later, gocryptfs and libsodium: `python3 -I tests/run.py unit`. Nothing in them touches a real profile or a real key.
-- The signing chain runs end to end without AWS, in containers: `scripts/release/test_kms_signing.sh`, `test_signed_repo.sh`, `test_apt_repo.sh` (podman).
-- The integration suites need a Nulavio build or the released package ([CONTRIBUTING](../../CONTRIBUTING.md)).
+- The unit tests: `python3 -I tests/run.py unit`, with Python 3.11 or later, gocryptfs, libsodium, `gpg`, `openssl`, Python's `cryptography`, and Android's `apksigner`. Without one of them, the tests that need it are skipped, not failed: set `NULAVIO_REQUIRE_SODIUM=1`, `NULAVIO_REQUIRE_GOCRYPTFS=1` and `NULAVIO_REQUIRE_APKSIGNER=1` to make those skips failures (question 5 of the release chain rests on `apksigner`). Nothing in them touches a real profile or a real key.
+- The signing chain end to end, in containers (podman): `scripts/release/test_kms_signing.sh` and `test_apt_repo.sh` sign through a stand-in for KMS, as releases do; `test_signed_repo.sh <packages-dir>` signs through a gpg-agent instead.
+- The integration suites need a Nulavio build or the released package, named by `NULAVIO_ENGINE`; without it the tests that need the build are skipped, not failed ([CONTRIBUTING](../../CONTRIBUTING.md)).
 - The reviewer gets no access to the AWS account, the `release` environment or the package bucket. A question that needs them goes to the maintainer.
 
 ## Reporting
