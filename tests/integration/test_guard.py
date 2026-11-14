@@ -496,9 +496,11 @@ class GuardTest(unittest.TestCase):
         self.assertTrue(harness.wait_until(lambda: self.bar() == "", timeout=10), "the bar stayed with nothing waiting")
 
     def test_05_another_file_is_reported_whatever_version_the_engine_says(self):
-        """#136: a replaced package was noticed by the version the engine reports. One renamed into place while the
-        browser runs kept its old version there for good, and another file with the same version was never seen.
-        The record keeps the package's SHA-256, and a difference in it is reported like a difference in version."""
+        """#136: a replaced package was noticed by the version the engine reports, so another file under the same
+        version was never seen, and neither was one renamed into place while the browser runs (the engine kept
+        reporting the old version: measured for #136 with two signed versions, which this test does not have).
+        The record keeps the package's SHA-256, and a difference in it is reported like a difference in version.
+        Here the other file is the same package with one more byte: the same version, another digest."""
         rules = self.guard(
             """
             const ext = (digest, version = "1.0") => ({ name: "X", version, active: true, foreign: false, policy: false,
@@ -515,6 +517,19 @@ class GuardTest(unittest.TestCase):
             };
             """
         )
+        # What the browser itself did to an extension while the start-up check was at work is not reported by it
+        # (review of #264): only that extension's findings go, and the look that follows takes the result.
+        own = self.guard(
+            """
+            const f = (kind, key) => ({ id: `${kind}:${key}`, kind, key });
+            const findings = [
+              f("extension-changed", "mine@x"), f("extension-changed", "theirs@x"), f("extension-removed", "mine@x"),
+              f("pref-changed", "mine@x"), f("root-added", "aa"),
+            ];
+            return G.constructor.withoutOwnDoings(findings, new Set(["mine@x"])).map(x => x.id);
+            """
+        )
+        self.assertEqual(own, ["extension-changed:theirs@x", "pref-changed:mine@x", "root-added:aa"])
         reported = {name for name, kinds in rules.items() if kinds == ["extension-changed"]}
         self.assertEqual(reported, {"other", "unreadable", "version"}, rules)
         self.assertEqual([rules[name] for name in ("same", "oldRecord", "noFile")], [[], [], []], rules)
@@ -532,7 +547,6 @@ class GuardTest(unittest.TestCase):
             file.initWithPath(args[0]);
             await (await AddonManager.getInstallForFile(file)).install();
             """
-        engine_version = lambda: self.guard("return (await AddonManager.getAddonByID(args[0]))?.version ?? null;", entry.id)  # noqa: E731
 
         def look() -> None:
             """A setting changed in the browser brings about the Guard's next look."""
@@ -552,8 +566,8 @@ class GuardTest(unittest.TestCase):
         version, original = in_record()["version"], in_record()["digest"]
         self.assertEqual(waiting(), {})
 
-        # Replaced while the browser runs: the engine goes on saying the same version, and the Guard's next look
-        # reports the file. Before #136: never reported, in this session or after it.
+        # Replaced while the browser runs by a file under the same version: the Guard's next look reports the
+        # file. Before #136 nothing looked at the file itself, in this session or after it.
         replaced = replace_with_one_more_byte()
         self.assertNotEqual(replaced, original)
         look()
@@ -561,7 +575,6 @@ class GuardTest(unittest.TestCase):
         finding = waiting()[changed]
         self.assertEqual((finding["before"]["version"], finding["after"]["version"]), (version, version))
         self.assertEqual((finding["before"]["digest"], finding["after"]["digest"]), (original, replaced))
-        self.assertEqual(engine_version(), version, "the engine noticed the file itself: this no longer tests #136")
         name = finding["after"]["name"]
         self.assertTrue(harness.wait_until(lambda: f"Extensão alterada: {name}" in self.bar(), timeout=10), self.bar())
         self.open_review()

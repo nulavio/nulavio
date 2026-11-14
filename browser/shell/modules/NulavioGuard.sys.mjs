@@ -95,6 +95,8 @@ function sha256(bytes) {
   return hex(Uint8Array.from(hash.finish(false), c => c.charCodeAt(0)));
 }
 
+/* SHA-256 of a file, or of its size and time when it is larger than `maxBytes` (a program a native-messaging
+   manifest starts can be any size). An extension's package is always read whole (packageFileDigest). */
 async function fileDigest(path, maxBytes = 64 * 1024 * 1024) {
   try {
     const info = await IOUtils.stat(path);
@@ -108,6 +110,9 @@ async function fileDigest(path, maxBytes = 64 * 1024 * 1024) {
     return null;
   }
 }
+
+/** The SHA-256 of an extension's package, whatever its size: its size and time would let another file pass. */
+const packageFileDigest = path => fileDigest(path, Infinity);
 
 function prefValue(name) {
   switch (Services.prefs.getPrefType(name)) {
@@ -239,7 +244,7 @@ class Guard {
     try {
       const uri = addon?.getResourceURI();
       const file = uri instanceof Ci.nsIJARURI ? uri.JARFile.QueryInterface(Ci.nsIFileURL).file : null;
-      return file ? await fileDigest(file.path) : null;
+      return file ? await packageFileDigest(file.path) : null;
     } catch {
       return null;
     }
@@ -528,6 +533,15 @@ class Guard {
     return !touched.has(finding.key);
   }
 
+  /**
+   * Findings of the start-up check without what the browser itself did to an extension while the check was at
+   * work (`touched`): an install or an update that began before the snapshot was taken and ended after it is
+   * the browser's doing, as it is at any later look. The look that follows takes its result into the record.
+   */
+  static withoutOwnDoings(findings, touched = new Set()) {
+    return findings.filter(f => !(f.kind.startsWith("extension-") && touched.has(f.key)));
+  }
+
   static withoutHeldUpdates(findings, expected, installed = {}) {
     const held = f => {
       const kept = f.kind === "extension-changed" && Object.hasOwn(expected ?? {}, f.key) ? expected[f.key] : null;
@@ -609,9 +623,12 @@ class Guard {
     for (const id of Object.keys(saved.expected)) {
       installed[id] = await this.#installedDigest(id);
     }
-    const fresh = Guard.withoutHeldUpdates(Guard.compare(saved.snapshot, now), saved.expected, installed).filter(
-      f => f.kind !== "pref-changed" || !own(f.key)
-    );
+    // What the engine announced for an extension since this check began listening is not consumed here: the
+    // look that follows (asked for by the same announcement) still counts it, and follows the result.
+    const fresh = Guard.withoutOwnDoings(
+      Guard.withoutHeldUpdates(Guard.compare(saved.snapshot, now), saved.expected, installed),
+      this.#touched
+    ).filter(f => f.kind !== "pref-changed" || !own(f.key));
     const seen = new Set(fresh.map(f => f.id));
     const at = new Date().toISOString();
     const pending = [...saved.pending.filter(f => !seen.has(f.id)), ...fresh.map(f => ({ ...f, at }))];
@@ -634,7 +651,7 @@ class Guard {
   async #heldUpdates() {
     const out = {};
     for (const [id, version] of Object.entries(Guard.heldUpdates(await lazy.AddonManager.getAllInstalls().catch(() => [])))) {
-      out[id] = { version, digest: await fileDigest(PathUtils.join(this.#profileDir, "extensions", "staged", `${id}.xpi`)) };
+      out[id] = { version, digest: await packageFileDigest(PathUtils.join(this.#profileDir, "extensions", "staged", `${id}.xpi`)) };
     }
     return out;
   }
