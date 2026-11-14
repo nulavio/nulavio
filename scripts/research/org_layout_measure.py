@@ -3,6 +3,11 @@
 
     python3 -I scripts/research/org_layout_measure.py --ref <commit> > evidence.json
 
+At each release (the publish job of .github/workflows/release.yml), only the media in the
+history, against the budget of ADR 0013, point 3:
+
+    python3 -I scripts/research/org_layout_measure.py --budget --ref HEAD [--summary FILE]
+
 Reads only git: the tree and the history of one ref. Sizes, how much of the pack is media,
 what an agent has to read per area, and how often a change to one component also changes
 another. CI numbers and clone times are measured separately (see the evidence document).
@@ -264,10 +269,53 @@ def coupling(ref: str) -> dict:
     }
 
 
+# ADR 0013, point 3: above this much media in the history, as packed (three times 2026-11-13's),
+# new capture sets go to a repository of their own. No history is rewritten either way.
+MEDIA_BUDGET_BYTES = 250_000_000
+
+
+def media_budget(ref: str, budget: int = MEDIA_BUDGET_BYTES) -> dict:
+    """The media every clone downloads, against the budget."""
+    media = history_blobs(ref).get("all:media", [0, 0])[0]
+    return {
+        "commit": git("rev-parse", ref).strip(),
+        "media_bytes_packed": media,
+        "budget_bytes": budget,
+        "over_budget": media > budget,
+    }
+
+
+def budget_summary(result: dict) -> str:
+    """Markdown for the release run's summary; over the budget, what ADR 0013 says to do."""
+    mb = lambda n: f"{n / 1e6:.1f} MB"  # noqa: E731
+    line = (f"Media in the history of {result['commit'][:12]}: {mb(result['media_bytes_packed'])}, "
+            f"budget {mb(result['budget_bytes'])} (ADR 0013, point 3).")  # fmt: skip
+    if not result["over_budget"]:
+        return f"{line}\n"
+    return (
+        f"{line}\n\n**Over the budget.** New capture sets go to a repository of their own (public, no CI, no "
+        "secrets, no Dependabot), linked from the documents by commit, as docs/adr/0013-repository-layout.md "
+        "says. No history is rewritten.\n"
+    )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--ref", default="origin/main")
+    parser.add_argument("--budget", action="store_true", help="only the media in the history, against the budget")
+    parser.add_argument("--summary", help="with --budget: append a Markdown line to this file ($GITHUB_STEP_SUMMARY)")
     args = parser.parse_args()
+    if args.budget:
+        result = media_budget(args.ref)
+        json.dump(result, sys.stdout, indent=2, sort_keys=True)
+        sys.stdout.write("\n")
+        if args.summary:
+            with open(args.summary, "a", encoding="utf-8") as summary:
+                summary.write(budget_summary(result))
+        if result["over_budget"]:
+            print("::warning title=Media budget::the history holds more media than ADR 0013 allows (see the summary)",
+                  file=sys.stderr)  # fmt: skip
+        return 0
 
     files = tree(args.ref)
     text_paths = [p for p, _ in files if PurePosixPath(p).suffix.lower() not in MEDIA]

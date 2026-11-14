@@ -21,6 +21,9 @@ registered engine profiles, headless, never a user profile. The figures:
   protection off in user.js, a native-messaging manifest pointing to
   /usr/bin/true and a throwaway test CA), at 800 and 390 CSS px.
 
+Captures stay in the history for good: nothing is rewritten to remove them. Each release measures
+the media in the history against ADR 0013's budget (250 MB, docs/adr/0013-repository-layout.md).
+
 The only DOM change is removing the window's ``remotecontrol`` attribute
 (the striped address bar and robot icon the engine shows under automation).
 Every transcript in the manifest is read from the DOM at capture time.

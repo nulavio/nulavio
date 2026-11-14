@@ -75,6 +75,31 @@ class OrgLayoutMeasureTest(unittest.TestCase):
         self.assertEqual(measure.component("site-src/index.html"), "shared")  # not "site": the test above would then fail
         self.assertEqual(measure.component("scripts/rel/x.py"), "shared")
 
+    def test_the_media_budget_says_when_it_is_passed_and_what_adr_0013_asks_then(self):
+        result = measure.media_budget("HEAD")
+        self.assertEqual(result["budget_bytes"], 250_000_000)
+        self.assertGreater(result["media_bytes_packed"], 0)
+        self.assertEqual(result["over_budget"], result["media_bytes_packed"] > 250_000_000)
+        under = measure.budget_summary({**result, "media_bytes_packed": 75_900_000, "over_budget": False})
+        self.assertIn("75.9 MB, budget 250.0 MB (ADR 0013, point 3)", under)
+        self.assertNotIn("Over the budget", under)
+        with mock.patch.object(measure, "history_blobs", return_value={"all:media": [250_000_001, 0]}):
+            over = measure.media_budget("HEAD")
+        self.assertTrue(over["over_budget"])
+        text = measure.budget_summary(over)
+        self.assertIn("**Over the budget.** New capture sets go to a repository of their own", text)
+        self.assertIn("No history is rewritten", text)
+        self.assertTrue((ROOT / "docs" / "adr" / "0013-repository-layout.md").is_file())
+
+    def test_each_release_measures_it_where_the_history_is_complete(self):
+        workflow = (ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
+        publish = workflow[workflow.index("\n  publish:\n") :]
+        self.assertIn("fetch-depth: 0", publish)  # the whole history, not a shallow clone
+        step = publish.index('org_layout_measure.py --budget --ref HEAD --summary "$GITHUB_STEP_SUMMARY"')
+        self.assertLess(publish.index("Draft the GitHub release"), step)
+        self.assertIn("${{ runner.temp }}/media-budget.json", publish[step:])
+        self.assertNotIn("publish/media-budget.json", publish)  # publish_release.sh wants its stage empty
+
 
 if __name__ == "__main__":
     unittest.main()

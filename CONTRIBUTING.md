@@ -108,7 +108,7 @@ When a comparison row or a claim of the landing changes, change both languages (
 
 1. Change values in `docs/brand/tokens.json`, never in CSS. Run `python3 -I scripts/brand/build_tokens.py` and `python3 -I scripts/brand/contrast.py`; add a contrast pair for every new foreground/background use.
 2. Map tokens to Firefox variables in `browser/branding/nulavio/content/theme/horizon.css`: geometry in the `tokens-foundation-brand-nova` layer, colours inside the accessibility guard, no literal colours, no `!important`, no security UI selectors (`tests/unit/test_horizon_theme.py` checks these).
-3. Rebuild (about 1 minute), then run `tests/integration/test_horizon.py` against the build and capture before/after with `scripts/research/shell_screenshots.py`.
+3. Rebuild (about 1 minute), then run `tests/integration/test_horizon.py` against the build and capture before/after with `scripts/research/shell_screenshots.py`. Captures stay in the history for good (nothing is rewritten); each release measures the media against the budget of [ADR 0013](docs/adr/0013-repository-layout.md), point 3, and once it is passed new capture sets go to a repository of their own.
 
 ## Common changes
 
