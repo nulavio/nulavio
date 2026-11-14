@@ -459,14 +459,17 @@ class Session:
                 shutil.copy2(xpi, target / xpi.name)
 
     def nulavio(self, *args: str, check: bool = True) -> subprocess.CompletedProcess:
-        return subprocess.run(
+        done = subprocess.run(
             [str(ROOT / "bin" / "nulavio"), *args],
             env=self.env,
             capture_output=True,
             text=True,
             timeout=300,
-            check=check,
+            check=False,
         )
+        if check and done.returncode != 0:
+            raise NulavioCallFailed(args, done)
+        return done
 
     @property
     def profile_dir(self) -> Path:
@@ -542,6 +545,22 @@ class Session:
 
     def engine_pid(self) -> int:
         return int(self.client.chrome("return Services.appinfo.processID;"))
+
+
+class NulavioCallFailed(AssertionError):
+    """A `nulavio` call the harness needed failed. A CalledProcessError hides what the command said;
+    this carries its exit status and the end of its stderr (#257), so an intermittent failure in CI
+    can be read from the log. Tests use artificial data only, so the output holds no secret."""
+
+    TAIL = 40  # lines
+
+    def __init__(self, args: tuple[str, ...], done: subprocess.CompletedProcess):
+        self.args_given, self.returncode = args, done.returncode
+        lines = (done.stderr or "").rstrip("\n").splitlines()
+        tail = lines[-self.TAIL :]
+        cut = f" (last {len(tail)} of {len(lines)} lines)" if len(lines) > len(tail) else ""
+        said = "\n".join(f"  | {line}" for line in tail) if tail else "  (nothing on stderr)"
+        super().__init__(f"nulavio {' '.join(args)} exited with status {done.returncode}; its stderr{cut}:\n{said}")
 
 
 def nulavio_engine():

@@ -1055,6 +1055,9 @@ class DownloadPagesTest(unittest.TestCase):
                 self.assertNotIn("<script", html)
                 self.assertNotIn("style=", html)
                 self.assertIn(values["key_fpr"], html)
+                # Also as dnf prints it, without spaces, and the red "Signing key not found" it shows first (#120).
+                self.assertIn(self.fpr, html)
+                self.assertIn("Signing key not found", html)
                 # The key from the release assets is checked against that fingerprint before import (audit R5).
                 self.assertLess(html.index("gpg --show-keys --with-fingerprint"), html.index("gpg --import"))
                 self.assertIn("dnf config-manager addrepo --from-repofile=https://nulavio.net/rpm/nulavio.repo", html)
