@@ -4,13 +4,13 @@ Each milestone has a definition of done (DoD). "Done" requires the DoD to be ver
 
 ## Road to 1.0
 
-Set by the maintainer on 2026-11-13: the stable release goes out when the [1.0 milestone](https://github.com/nulavio/nulavio/milestone/1) is closed. Its scope is the issues open on 2026-11-13, plus #224–#228 for the parts of the [scope of 1.0](release-criteria.md#scope-of-10-decided-2026-11-04) that had no issue. Four issues wait on someone outside the project (F-Droid, Flathub, uBlock Origin) and are in [After 1.0](https://github.com/nulavio/nulavio/milestone/2): #90, #91, #114, #207. An issue opened later joins 1.0 only if it is a bug, a regression or a security fix; anything else goes to After 1.0.
+Set by the maintainer on 2026-11-13: the stable release goes out when the [1.0 milestone](https://github.com/nulavio/nulavio/milestone/1) is closed. Its scope is the issues open on 2026-11-13, plus #224–#228 for the parts of the [scope of 1.0](release-criteria.md#scope-of-10-decided-2026-11-04) that had no issue. Five issues wait on someone outside the project (F-Droid, Flathub, uBlock Origin, Cloudflare) and are in [After 1.0](https://github.com/nulavio/nulavio/milestone/2): #90, #91, #114, #201, #207. #201 moved there on 2026-11-14: Nulavio's part was done, and the Network Error Logging headers that Cloudflare still sends are Cloudflare's to fix. An issue opened later joins 1.0 only if it is a bug, a regression or a security fix; anything else goes to After 1.0.
 
 The work is ordered in waves, recorded in the board's `Wave` field ([issues](../process/issues.md#the-project-board)). Waves 1 and 2 run side by side; inside a wave, priority labels and dependencies decide.
 
 | Wave | What | Issues |
 |---|---|---|
-| 0 Unblock | Repository settings, credentials and the APT pull request; one session where the maintainer decides the `needs-decision` issues | #182, #195, #201, #211 |
+| 0 Unblock | Repository settings, credentials and the APT pull request; one session where the maintainer decides the `needs-decision` issues (decided 2026-11-14) | #182, #195, #211 |
 | 1 Vault and fixes | Bugs in shipped features and the Vault's key handling, which the independent review (#224) reads once they land | #43, #103, #112, #135, #136, #138, #142, #177, #187, #204 |
 | 2 Release and process | Signed APK and APT, the release scripts' tests, release notes, the install journey, Flathub's build, instructions per area | #88, #89, #97, #120, #179, #180, #181, #189, #193, #198, #205, #215, #223, #227, #228 |
 | 3 Quality evidence | Fingerprinting, performance, fuzzing, compatibility with Google, calls and DRM, the independent review, Proton Pass, the UX DoD | #79, #80, #118, #149, #157, #158, #220, #221, #222, #224, #225, #226 |
