@@ -386,11 +386,14 @@ class ProfileChooserTest(unittest.TestCase):
             "const m = S().nulavio; const two = [{id: 1}, {id: 2}]; const is = v => ({protected: v});"
             "return [m.mustChoose(two, new Map([[1, is(true)], [2, is(true)]])),"
             " m.mustChoose(two, new Map([[1, is(true)], [2, is(false)]])),"
-            " m.mustChoose(two, new Map([[1, is(true)]])),"  # one whose state is not known
+            # One whose state is not known, beside a protected one: it is not a profile a plain start could open,
+            # so the chooser stays the only way in (NulavioProfiles goes by the same rule and keeps it on).
+            " m.mustChoose(two, new Map([[1, is(true)]])),"
+            " m.mustChoose(two, new Map()), m.mustChoose(two, null),"  # nothing known: nothing decided
             " m.mustChoose([], new Map())];"
         )
         note = self.word("must-choose")
-        self.assertEqual(answers, [note, None, None, None])
+        self.assertEqual(answers, [note, None, note, None, None, None])
         box = (
             "await S().updateComplete; const c = S().checkbox;"
             "return {checked: c.checked, disabled: c.disabled, says: c.querySelector('[slot=description]').textContent.trim()};"
@@ -398,9 +401,19 @@ class ProfileChooserTest(unittest.TestCase):
         self.assertFalse(self.call(box)["disabled"])  # this session's profile has no password
         self.call("S().nulavioMustChoose = args[0]; return true;", note)
         self.assertEqual(self.call(box), {"checked": True, "disabled": True, "says": note})
-        before = self.call("return SPS.groupToolkitProfile.showProfileSelector;")
-        self.call("S().handleCheckboxToggle(); return true;")  # as a click that got through
-        self.assertEqual(self.call("return SPS.groupToolkitProfile.showProfileSelector;"), before)
+        # A click that got through changes nothing: the setting is off in this session (Nulavio's default, and this
+        # session's profile has no password), and the box, drawn ticked, would have switched it on.
+        stored = "return SPS.groupToolkitProfile.showProfileSelector;"
+        self.assertFalse(self.call(stored))
+        self.call("S().handleCheckboxToggle(); return true;")
+        self.assertFalse(self.call(stored))
+        # The same click with the box a choice again does switch it on: the guard is what held it.
+        self.call("S().nulavioMustChoose = null; await S().updateComplete; S().checkbox.checked = true; return true;")
+        self.call("S().handleCheckboxToggle(); return true;")
+        self.assertTrue(harness.wait_until(lambda: self.call(stored), timeout=10))
+        self.call("await SPS.setShowProfileSelectorWindow(false); S().nulavioMustChoose = args[0]; return true;", note)
+        self.call("await S().updateComplete; return true;")
+        self.assertFalse(self.call(stored))
         # The engine greys the label of a control that cannot be changed. The words that say why are its description,
         # and keep a description's colour: 69% of the page's text colour, where the greyed label keeps 40%.
         share = lambda: self.call(  # noqa: E731
@@ -587,10 +600,15 @@ class StartupChooserTest(unittest.TestCase):
                 self.xvfb.terminate()
                 self.xvfb.wait(10)
 
-    def plain_start(self, env: dict) -> subprocess.Popen:
-        """As the desktop entry starts it: no flags, no profile named."""
+    def plain_start(self, env: dict, *addresses: str) -> subprocess.Popen:
+        """As the desktop entry starts it: no flags, no profile named; with an address, as a link opened by
+        another program starts it."""
         engine = subprocess.Popen(
-            [str(self.session.engine.path)], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True
+            [str(self.session.engine.path), *addresses],
+            env=env,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
         )
         self.engines.append(engine)
         return engine
@@ -675,18 +693,46 @@ class StartupChooserTest(unittest.TestCase):
             harness.wait_until(lambda: self.session.processes_for(path), timeout=60), "the protected profile did not start"
         )
         banco = harness.GeckoProfileSession.connect(path, timeout=90)
+        # While the profile without a password is still running it cannot be deleted. The chooser, switched on
+        # for the deletion, goes back to what it was: it is not left on for a profile that is still there.
+        self.assertNotIn("ShowSelector=1", ini.read_text())
+        self.assertEqual(
+            self.chrome(banco, "return P.remove(args[0], {lastUnprotected: true});", made["here"]).get("error"), "in-use"
+        )
+        self.assertFalse(self.chrome(banco, "return SPS.groupToolkitProfile.showProfileSelector;").get("ok"))
+        self.assertTrue(harness.wait_until(lambda: "ShowSelector=1" not in ini.read_text(), timeout=20), ini.read_text())
         self.session.stop()  # the profile without a password is closed: only the protected one runs
         # Without the person's word it stays; with it, the chooser is switched on and the profile goes.
         self.assertEqual(self.chrome(banco, "return P.remove(args[0]);", made["here"]).get("error"), "last-unprotected")
         self.assertNotIn("ShowSelector=1", ini.read_text())
         self.assertEqual(
-            self.chrome(banco, "return P.remove(args[0], {lastUnprotected: true}).then(() => true);", made["here"]).get("ok"),
-            True,
+            self.chrome(banco, "return P.remove(args[0], {lastUnprotected: true});", made["here"]).get("ok"),
+            {"lastUnprotected": True},
         )
-        self.assertTrue(harness.wait_until(lambda: "ShowSelector=1" in ini.read_text(), timeout=20), ini.read_text())
+        # Written before the answer came back, not some time after: the file is read at once.
+        self.assertIn("ShowSelector=1", ini.read_text())
         self.assertEqual(
             self.chrome(banco, "return (await P.list()).profiles.map(p => [p.name, p.encrypted]);").get("ok"), [["Banco", True]]
         )
+        # Nothing in this instance switches it off again while every profile is protected.
+        self.chrome(banco, "await SPS.setShowProfileSelectorWindow(false); return true;")
+        self.assertTrue(self.chrome(banco, "return SPS.groupToolkitProfile.showProfileSelector;").get("ok"))
+        # The chooser as this group gets it, read where it can be read (this instance's own): the checkbox is
+        # worked out from the profiles' locks, ticked and fixed, with the reason. And a setting found off (put so
+        # here behind the service's back, as a lost write would leave it) is switched on by the chooser itself.
+        self.chrome(banco, "SPS.groupToolkitProfile.showProfileSelector = false; await P.openManager(); return true;")
+        box = (
+            "const s = S(); if (!s?.initialized) return null; await s.updateComplete; const c = s.checkbox;"
+            "return {must: s.nulavioMustChoose, checked: c.checked, disabled: c.disabled,"
+            " says: c.querySelector('[slot=description]').textContent.trim(),"
+            " stored: SPS.groupToolkitProfile.showProfileSelector};"
+        )
+        self.assertTrue(harness.wait_until(lambda: self.chrome(banco, box).get("ok"), timeout=30), "the chooser did not open")
+        shown = self.chrome(banco, box)["ok"]
+        self.assertTrue(shown["must"], shown)
+        self.assertEqual(shown, {"must": shown["must"], "checked": True, "disabled": True, "says": shown["must"], "stored": True})
+        self.chrome(banco, "W()?.close(); return true;")
+        self.assertTrue(harness.wait_until(lambda: "ShowSelector=1" in ini.read_text(), timeout=20), ini.read_text())
         time.sleep(7)  # the engine's own late write of the start-up entry (five seconds) is over
         banco.quit()
         self.assertTrue(harness.wait_until(lambda: not self.session.processes_for(path), timeout=60), "it did not close")
@@ -701,6 +747,19 @@ class StartupChooserTest(unittest.TestCase):
 
         display, keyboard = self.private_display()
         headful = {k: v for k, v in plain.items() if k != "MOZ_HEADLESS"} | {"DISPLAY": display, "GDK_BACKEND": "x11"}
+        # A link opened by another program while Nulavio is closed is a start too: there as well a window asks
+        # first, nothing is started on the locked folder and no profile is made. (Nothing is chosen: closed again.)
+        linked = self.plain_start(headful, "http://127.0.0.1:9/a-link-from-another-program")
+        self.assertTrue(harness.wait_until(lambda: keyboard.windows() > 0, timeout=60), "no window at a start with a link")
+        time.sleep(6)
+        self.capture(display, "startup-every-profile-protected-link")
+        self.assertIsNone(protected.running_pid(), "a link started the engine straight on the locked profile")
+        self.assertFalse(storage.Container(path).mounted())
+        self.assertEqual(sections(), [f"Path={path.name}", "[Profile0]"], "a link made a profile outside the group")
+        self.assertEqual(sorted(entry.name for entry in path.parent.iterdir()), folders, "a link made a new profile folder")
+        os.killpg(linked.pid, 15)
+        linked.wait(30)
+        self.assertTrue(harness.wait_until(lambda: keyboard.windows() == 0, timeout=30), "the window of that start stayed")
         self.plain_start(headful)
         self.assertTrue(harness.wait_until(lambda: keyboard.windows() > 0, timeout=60), "no window at the plain start")
         time.sleep(6)  # the chooser's cards: there is no engine to ask when they are drawn

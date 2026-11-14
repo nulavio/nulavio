@@ -19,8 +19,9 @@ code, unlocks it through the Vault helper, and only then lets the launch
 go on. A profile without a password is launched as before, with or
 without the Vault's tools installed. When every profile has a password
 this window is the only way in, so its "show at start-up" checkbox is
-shown ticked and cannot be changed, with the module's words for why.
-When the module cannot be loaded, the chooser stays the engine's own.
+shown ticked and cannot be changed, with the module's words for why,
+and the setting is switched on there if it was off. When the module
+cannot be loaded, the chooser stays the engine's own.
 
 Owner: Nulavio maintainers
 Upstream: not applicable (Nulavio's protected profiles).
@@ -72,7 +73,7 @@ Upstream: not applicable (Nulavio's protected profiles).
    };
  
    static queries = {
-@@ -93,7 +95,23 @@
+@@ -93,7 +95,31 @@
  
      await this.selectableProfileService.init();
      await this.selectableProfileService.maybeSetupDataStore();
@@ -94,10 +95,18 @@ Upstream: not applicable (Nulavio's protected profiles).
 +    this.nulavioMustChoose =
 +      this.nulavio?.mustChoose(profiles, this.nulavioLocks) ?? null;
 +    this.profiles = profiles;
++    if (
++      this.nulavioMustChoose &&
++      !this.selectableProfileService.groupToolkitProfile.showProfileSelector
++    ) {
++      // Shown ticked, so made true: it was off (switched off before the last
++      // profile without a password went, or a write that was lost).
++      await this.selectableProfileService.setShowProfileSelectorWindow(true);
++    }
      this.showSelector =
        this.selectableProfileService.groupToolkitProfile.showProfileSelector;
  
-@@ -113,6 +131,9 @@
+@@ -113,6 +139,9 @@
    }
  
    handleCheckboxToggle() {
@@ -107,7 +116,7 @@ Upstream: not applicable (Nulavio's protected profiles).
      this.showSelector = this.checkbox.checked;
      let state = this.showSelector ? "enabled" : "disabled";
      Glean.profilesSelectorWindow.showAtStartup.record({ value: state });
-@@ -122,6 +143,10 @@
+@@ -122,6 +151,10 @@
    }
  
    async launchProfile(profile, url) {
@@ -118,7 +127,7 @@ Upstream: not applicable (Nulavio's protected profiles).
      if (this.isStartupUI) {
        await this.setLaunchArguments(profile, url ? ["-url", url] : []);
        await this.selectableProfileService.uninit();
-@@ -180,20 +205,27 @@
+@@ -180,20 +213,27 @@
        <p class="profiles-body-text" data-l10n-id="profile-window-body"></p>
        <div class="profile-list">
          ${this.profiles.map(

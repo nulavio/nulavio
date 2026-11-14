@@ -299,6 +299,10 @@ class NulavioProfilesClass {
       await this.#keepOneUnprotected(service.currentProfile);
       return remove(...args);
     };
+    // The chooser is not switched off while every profile is protected, whoever asks in this instance (the
+    // chooser's own checkbox says so, and this holds when it could not: its words missing, a state not read there).
+    const show = service.setShowProfileSelectorWindow.bind(service);
+    service.setShowProfileSelectorWindow = async wanted => show(Boolean(wanted) || (await this.#everyProfileProtected().catch(() => false)));
     await this.#chooserWhenAllProtected();
     try {
       const start = await service.setDefaultProfileForGroup(); // the engine already ran its own, before any window
@@ -329,15 +333,16 @@ class NulavioProfilesClass {
     }
   }
 
-  /** Whether `target` is the last profile without a password while others exist. A profile whose state could
-      not be read counts as neither: it is not the spare one, and it may be the last. */
+  /** Whether, with `target` gone, no profile would open without a password: `target` is not known to have one,
+      no other profile is known to be without one, and at least one other is known to have one. (The rule of
+      #everyProfileProtected, for the group as it would be; a profile whose state could not be read is neither.) */
   async #lastUnprotected(target) {
     if (!target || ["locked", "unlocked"].includes(await this.#protection(target))) {
       return false;
     }
     const others = (await this.#service.getAllProfiles()).filter(each => each.id !== target.id);
     const states = await Promise.all(others.map(each => this.#protection(each)));
-    return others.length > 0 && !states.includes("plain");
+    return !states.includes("plain") && states.some(state => state === "locked" || state === "unlocked");
   }
 
   /** The profile of this very window is not deleted while it is the last one without a password: the engine
@@ -350,17 +355,26 @@ class NulavioProfilesClass {
   }
 
   /**
+   * Whether no profile opens without a password: none is known to be without one, and at least one is known
+   * to have one. A profile whose state could not be read is not taken for either: alone it decides nothing,
+   * and beside a protected one it does not count as the profile a plain start could open. The chooser's own
+   * `mustChoose` (browser/shell/chooser/) goes by the same rule.
+   */
+  async #everyProfileProtected() {
+    const states = await Promise.all((await this.#service.getAllProfiles()).map(each => this.#protection(each)));
+    return !states.includes("plain") && states.some(state => state === "locked" || state === "unlocked");
+  }
+
+  /**
    * With no profile left that opens without a password, a plain start has nothing to start in: started on a
    * locked profile's folder, the engine made a new, empty profile outside the group (#68). The start-up
    * chooser asks for the password before it starts a profile (#43), so then it is kept on, whatever was
-   * chosen before. Answers whether every profile is protected.
+   * chosen before. Answers whether every profile is protected (false too when that could not be worked out).
    */
   async #chooserWhenAllProtected() {
     const service = this.#service;
     try {
-      // (A profile whose state could not be read is not taken for a protected one: alone, it decides nothing.)
-      const states = await Promise.all((await service.getAllProfiles()).map(each => this.#protection(each)));
-      if (states.includes("plain") || !states.some(state => state === "locked" || state === "unlocked")) {
+      if (!(await this.#everyProfileProtected())) {
         return false;
       }
       if (!service.groupToolkitProfile?.showProfileSelector) {
@@ -370,6 +384,28 @@ class NulavioProfilesClass {
     } catch (e) {
       console.error("Nulavio Profiles: start-up chooser", e);
       return false;
+    }
+  }
+
+  /**
+   * Switch the start-up chooser on and see it written. The engine's own call sets the value in memory and
+   * only logs a write to profiles.ini that failed, so the value read back says nothing: the file is written
+   * once more here, as the engine does it, and a failure is this call's failure.
+   */
+  async #chooserOnAndWritten() {
+    await this.#service.setShowProfileSelectorWindow(true);
+    if (!this.#service.groupToolkitProfile?.showProfileSelector) {
+      fail("chooser-not-set");
+    }
+    const profiles = Cc["@mozilla.org/toolkit/profile-service;1"].getService(Ci.nsIToolkitProfileService);
+    try {
+      await profiles.asyncFlushCurrentProfile();
+    } catch {
+      try {
+        await profiles.asyncFlush(); // the engine's own second try (another instance changed the file)
+      } catch (e) {
+        fail("chooser-not-set", String(e?.message ?? e));
+      }
     }
   }
 
@@ -803,7 +839,9 @@ class NulavioProfilesClass {
    *
    * `lastUnprotected`: the person was told that this is the last profile without a password and that Nulavio
    * will ask which profile to open, and for its password, at every start; without it that profile is refused.
-   * The start-up chooser is turned on before the profile goes, and the deletion does not happen if it cannot be.
+   * The start-up chooser is turned on and written to profiles.ini before the profile goes, and the deletion
+   * does not happen if that write fails. Answers `{ lastUnprotected }`: whether it was that profile, as the
+   * module saw it when it deleted it (the page may have seen the group differently a moment before).
    */
   async remove(id, { lastUnprotected = false } = {}) {
     const profile = await this.#profile(id);
@@ -822,21 +860,25 @@ class NulavioProfilesClass {
       // Drop its keys first: without them the encrypted files can never be read again.
       await lazy.vaultHelper({ op: "forget", path: profile.path });
     }
+    const chooserWas = Boolean(this.#service.groupToolkitProfile?.showProfileSelector);
     if (last) {
       // Before it goes: from the next start on, the chooser is the only way in.
-      await this.#service.setShowProfileSelectorWindow(true);
-      if (!this.#service.groupToolkitProfile?.showProfileSelector) {
-        fail("chooser-not-set");
-      }
+      await this.#chooserOnAndWritten();
     }
     try {
       await this.#service.deleteProfile(profile);
     } catch (e) {
+      if (last && !chooserWas) {
+        // The profile is still there (it is running): the chooser goes back to what the person had chosen.
+        await this.#service.setShowProfileSelectorWindow(false).catch(console.error);
+      }
       fail("in-use", String(e?.message ?? e));
     }
     await this.#setColor(profile.id, null);
     if (last) {
-      // The start-up entry named the profile that is gone: it is this window's now, and written at once.
+      // The start-up entry named the profile that is gone: it is this window's now, and written at once. (If
+      // this write fails the chooser is still what a plain start shows; the entry is put right when a window
+      // of this profile is next used, as at every start.)
       try {
         if (await this.#service.setDefaultProfileForGroup()) {
           await Cc["@mozilla.org/toolkit/profile-service;1"].getService(Ci.nsIToolkitProfileService).asyncFlushCurrentProfile();
@@ -845,6 +887,7 @@ class NulavioProfilesClass {
         console.error("Nulavio Profiles: start-up profile", e);
       }
     }
+    return { lastUnprotected: last };
   }
 
   // -- engine pages ---------------------------------------------------------

@@ -382,7 +382,9 @@ class SettingsProfilesTest(unittest.TestCase):
         """
         self.m.chrome(P + fake)
         self.addCleanup(self.m.chrome, P + "delete P.list;")
-        self.stub("P", "remove", "return Promise.resolve();")
+        # (The module answers whether the profile it deleted was the last one without a password, and the page
+        # says that. Here it answers as it was asked; a later step has it answer otherwise.)
+        self.stub("P", "remove", "return Promise.resolve({ lastUnprotected: Boolean(args[1]?.lastUnprotected) });")
         now = self.open()
         last, protected = now["rows"][1]["name"], now["rows"][2]["name"]
         what_follows = "último perfil sem senha"
@@ -406,6 +408,42 @@ class SettingsProfilesTest(unittest.TestCase):
         self.assertTrue(harness.wait_until(lambda: len(self.calls()) == 2, 10), self.calls())
         self.assertEqual(self.calls()[1][2], {"lastUnprotected": True})
         self.seen(lambda n: n["said"] == "Perfil excluído. A partir de agora o Nulavio pergunta qual perfil abrir ao iniciar.")
+        # Another profile without a password was made elsewhere while the question was open: the module deletes
+        # this one as any other and says so, and the page does not announce what did not happen.
+        self.m.chrome(
+            P
+            + "P.remove = (...args) => { window.__calls.push(['remove', ...args]);"
+            + " return Promise.resolve({ lastUnprotected: false }); };"
+        )
+        self.m.chrome(CLICK_ROW, [last, "delete"])
+        self.assertIn(what_follows, harness.wait_until(self.alert_text, 10) or "no confirmation was shown")
+        self.m.send("WebDriver:AcceptAlert")
+        self.assertTrue(harness.wait_until(lambda: len(self.calls()) == 3, 10), self.calls())
+        self.seen(lambda n: n["said"] == "Perfil excluído.")
+        # A third profile whose protection could not be read is not one a plain start could open: with it beside
+        # a protected one, the profile without a password is still the last, and the person is told. (The list
+        # is read again each time, and the row's own words show that the page has the new one.)
+        unread = "Não foi possível ler a proteção"
+        again = DOC + 'd.dispatchEvent(new w.Event("visibilitychange"));'
+        self.m.chrome(
+            P + "const before = P.list; P.list = async () => { const l = await before();"
+            " l.profiles[2] = { ...l.profiles[2], encrypted: false, locked: false, protectionUnknown: true }; return l; };"
+        )
+        self.m.chrome(again)
+        self.seen(lambda n: [unread in row["state"] for row in n["rows"]] == [False, False, True])
+        self.m.chrome(CLICK_ROW, [last, "delete"])
+        self.assertIn(what_follows, harness.wait_until(self.alert_text, 10) or "no confirmation was shown")
+        self.m.send("WebDriver:DismissAlert")
+        # And with no profile known to be protected (the two others unread), nothing follows from deleting it.
+        self.m.chrome(
+            P + "const before = P.list; P.list = async () => { const l = await before();"
+            " l.profiles[0] = { ...l.profiles[0], encrypted: false, locked: false, protectionUnknown: true }; return l; };"
+        )
+        self.m.chrome(again)
+        self.seen(lambda n: [unread in row["state"] for row in n["rows"]] == [True, False, True])
+        self.m.chrome(CLICK_ROW, [last, "delete"])
+        self.assertNotIn(what_follows, harness.wait_until(self.alert_text, 10) or "no confirmation was shown")
+        self.m.send("WebDriver:DismissAlert")
 
     def test_05b_what_changes_elsewhere_and_what_is_still_running(self):
         """Review of 2026-11-11: an editor open while the profile changes elsewhere, a second click while an

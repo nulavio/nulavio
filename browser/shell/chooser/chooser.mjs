@@ -106,12 +106,13 @@ async function lockState(path) {
 
 /**
  * With every profile behind a password the chooser is the only way in, so "ask at start-up" is not a choice
- * (NulavioProfiles keeps it on): the words to say instead of the checkbox's own, or null when a profile
- * without a password exists (or a profile's state is not known).
+ * (NulavioProfiles keeps it on): the words to say instead of the checkbox's own, or null. By the same rule
+ * as NulavioProfiles: no profile is known to be without a password, and at least one is known to have one.
+ * A profile whose state could not be read is neither, so it does not make the checkbox a choice again.
  */
 export function mustChoose(profiles, states) {
-  const all = profiles.length && profiles.every(profile => states?.get(profile.id)?.protected === true);
-  return all ? t("must-choose") : null;
+  const known = profiles.map(profile => states?.get(profile.id)?.protected);
+  return !known.includes(false) && known.includes(true) ? t("must-choose") : null;
 }
 
 // -- the helper -------------------------------------------------------------------------------------
