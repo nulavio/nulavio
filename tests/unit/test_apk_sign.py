@@ -141,6 +141,28 @@ class ApkSignTest(unittest.TestCase):
         self.assertIn("Verified using v3 scheme (APK Signature Scheme v3): true", result.stdout)
         self.assertIn(f"certificate SHA-256 digest: {hashlib.sha256(self.cert).hexdigest()}", result.stdout)
 
+    def test_entries_with_a_data_descriptor_in_both_headers_sign_and_verify(self):
+        # Written to a stream that cannot seek: every entry's local header has bit 3 and zero CRC and sizes,
+        # and the record has the real ones. That is a valid ZIP, and the descriptor check must not refuse it.
+        stream = io.BytesIO()
+
+        class Unseekable(io.RawIOBase):
+            def writable(self):
+                return True
+
+            def write(self, data):
+                return stream.write(data)
+
+        with zipfile.ZipFile(Unseekable(), "w") as archive:
+            archive.writestr("AndroidManifest.xml", minimal_manifest(), compress_type=zipfile.ZIP_DEFLATED)
+            archive.writestr("classes.dex", b"dex\n" * 100, compress_type=zipfile.ZIP_DEFLATED)
+        apk = stream.getvalue()
+        cd_offset, _ = apk_sign.zip_layout(apk)
+        first_local = struct.unpack_from("<I", apk, cd_offset + 42)[0]
+        self.assertTrue(struct.unpack_from("<H", apk, first_local + 6)[0] & 0x08, "the fixture has a data descriptor")
+        result = self.apksigner(apk_sign.sign_apk(apk, self.cert, self.signer), "descriptor.apk")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
     def test_only_the_signing_block_is_added(self):
         # F-Droid's apksigcopier copies a developer's signature onto its own build of the same
         # source: that works when the signed APK is the unsigned one plus the block.
