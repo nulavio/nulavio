@@ -6,7 +6,7 @@
     python3 -I tests/run.py all
     python3 -I tests/run.py integration 'test_assistant*.py'   # only matching modules
 
-Integration knobs: NULAVIO_NETWORK_TESTS=1, NULAVIO_TEST_XPI_CACHE=<dir>,
+Integration knobs: NULAVIO_NETWORK_TESTS=1, NULAVIO_REQUIRE_NETWORK=1, NULAVIO_TEST_XPI_CACHE=<dir>,
 NULAVIO_TEST_HEADFUL=1, NULAVIO_TEST_ARTIFACTS=<dir>.
 """
 
