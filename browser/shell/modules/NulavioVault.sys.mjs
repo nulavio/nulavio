@@ -34,7 +34,7 @@ const phonePairing = () => Services.prefs.getBoolPref(PREF_PHONE_PAIRING, false)
 // "confirm-recovery-code": the new code, typed back, is the `current` secret; the old code goes (#187).
 const CHANGES = new Set(["new-recovery-code", "confirm-recovery-code", "add-password", "add-keyring", "remove-method"]);
 // What an unlock did with a recovery code replacement left unfinished (the helper's fixed words).
-const SETTLED = new Set(["finished", "undone", "unsettled"]);
+const SETTLED = new Set(["finished", "undone", "unsettled", "unknown"]);
 const settled = answer => (SETTLED.has(answer?.recovery_code) ? answer.recovery_code : null);
 const MAX_SECRET = 1024;
 

@@ -235,7 +235,11 @@ class Container:
                 try:
                     disk = json.loads(vault.path.read_text(encoding="utf-8"))
                 except (OSError, ValueError):
-                    disk = before
+                    # Neither the save nor the file says what happened: not known, and said so (round 3).
+                    vault.meta = before
+                    vault.settled = "unknown"
+                    log.event("vault.recovery-code-not-settled", code="unknown")
+                    return
                 if disk.get("pending_recovery") or disk.get("generation") == before.get("generation"):
                     vault.meta = before  # still waiting: both codes still open it; tried again at the next unlock
                     unsettled(getattr(exc, "code", type(exc).__name__))

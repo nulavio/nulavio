@@ -177,7 +177,8 @@ class Vault:
         self.from_backup = False
         self.opened_with: str | None = None  # the envelope the last unlock opened
         # What the last mount did with a recovery code replacement left unfinished: "finished", "undone", or
-        # "unsettled" (it could not save: both codes still open the profile); and "not-recorded" when it saved
+        # "unsettled" (it could not save: both codes still open the profile), "unknown" (it cannot tell whether it
+        # saved: the profile's unlock methods say which code opens it); and "not-recorded" when it saved
         # but could not record that inside the volume (#187).
         self.settled: str | None = None
         self.settle_warning: str | None = None

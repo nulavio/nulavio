@@ -821,6 +821,30 @@ class HelperApiTest(StorageCase):
         self.assertIsNone(json.loads(profiles.container(prof).vault_path.read_text()).get("pending_recovery"))
         profiles.lock(prof)
 
+    def test_a_settlement_that_cannot_be_read_back_says_it_is_not_known(self):
+        # Verification of round 3: the save failed after writing and the key file could not be read back either.
+        prof, old_code = self.encrypted_profile()
+        killed = mock.patch.object(vault_cli, "_record", side_effect=SystemExit("killed"))
+        with killed, self.assertRaises(SystemExit):
+            vault_cli.api_request({"op": "new-recovery-code", "path": str(prof.path), "current": PASSWORD})
+        real_save, real_read = Vault.save, Path.read_text
+        state = {"saved": False}
+
+        def written_then_failed(vault, *args, **kwargs):
+            real_save(vault, *args, **kwargs)
+            state["saved"] = True
+            raise OSError(5, "Input/output error")
+
+        def unreadable_after(path, *args, **kwargs):
+            if state["saved"] and path.name == "vault.json":
+                raise OSError(5, "Input/output error")
+            return real_read(path, *args, **kwargs)
+
+        request = {"op": "unlock", "path": str(prof.path), "method": "recovery-code", "secret": old_code, "autolock": False}
+        with mock.patch.object(Vault, "save", written_then_failed), mock.patch.object(Path, "read_text", unreadable_after):
+            self.assertEqual(vault_cli.api_request(request), {"unlocked": True, "recovery_code": "unknown"})
+        profiles.lock(prof)
+
     def test_a_settlement_saved_but_not_recorded_says_so(self):
         prof, old_code = self.encrypted_profile()
         killed = mock.patch.object(vault_cli, "_record", side_effect=SystemExit("killed"))

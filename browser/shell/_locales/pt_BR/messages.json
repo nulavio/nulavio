@@ -292,6 +292,7 @@
   "vaultRecoveryMalformed": {"message": "Um código de recuperação tem 28 letras e números, em 7 grupos de 4."},
   "vaultRecoveryUndone": {"message": "A troca do código de recuperação que tinha ficado pela metade foi desfeita: o código anterior ainda abre este perfil, o novo não. Para ter um novo, troque de novo nos métodos de desbloqueio do perfil."},
   "vaultRecoveryUnsettled": {"message": "Não foi possível concluir agora a troca do código de recuperação que tinha ficado pela metade: os dois códigos ainda abrem este perfil. Isso é tentado de novo na próxima vez que o perfil for desbloqueado."},
+  "vaultRecoveryUnknown": {"message": "Não dá para saber se a troca do código de recuperação que tinha ficado pela metade foi concluída: o arquivo de chaves não pôde ser gravado nem lido de volta. Os métodos de desbloqueio do perfil mostram qual código ele tem."},
   "vaultRecoveryFinished": {"message": "A troca do código de recuperação que tinha ficado pela metade foi concluída: o código novo abre este perfil, o anterior não abre mais."},
   "vaultKeyringUnavailable": {"message": "Seu login do computador não conseguiu desbloquear (o chaveiro do sistema não está disponível ou não tem mais a chave). Use a senha ou o código de recuperação."},
   "vaultRecoveryRequired": {"message": "Este perfil não tem mais outro jeito de desbloquear. Digite o código de recuperação abaixo."},

@@ -292,6 +292,7 @@
   "vaultRecoveryMalformed": {"message": "A recovery code has 28 letters and digits, in 7 groups of 4."},
   "vaultRecoveryUndone": {"message": "A recovery code replacement left unfinished earlier was undone: the previous code still opens this profile, the new one does not. To get a new one, replace it again under the profile's unlock methods."},
   "vaultRecoveryUnsettled": {"message": "A recovery code replacement left unfinished earlier could not be settled now: both codes still open this profile. It is tried again the next time the profile is unlocked from locked."},
+  "vaultRecoveryUnknown": {"message": "A recovery code replacement left unfinished earlier may or may not have been settled: the key file could not be written or read back. The profile's unlock methods show which recovery code it has."},
   "vaultRecoveryFinished": {"message": "A recovery code replacement left unfinished earlier is now finished: the new code opens this profile, the previous one no longer does."},
   "vaultKeyringUnavailable": {"message": "Your computer login could not unlock it (the system keyring is not available or no longer has the key). Use the password or the recovery code."},
   "vaultRecoveryRequired": {"message": "This profile has no other way to unlock it now. Type its recovery code below."},

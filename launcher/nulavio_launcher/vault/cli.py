@@ -56,6 +56,8 @@ SETTLED = {
     "this profile, the new one does not",
     "unsettled": "a recovery code replacement left unfinished earlier could not be settled now: both codes still "
     "open this profile; it is tried again the next time the profile is unlocked from locked",
+    "unknown": "a recovery code replacement left unfinished earlier may or may not have been settled (the key file "
+    "could not be written or read back); `nulavio vault status` shows which recovery codes the profile has",
 }
 
 

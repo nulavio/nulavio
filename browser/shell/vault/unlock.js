@@ -68,7 +68,7 @@ async function closeSoon() {
 
 // A recovery code replacement left unfinished is settled by the unlock (#187); the page says which
 // way, and stays until it is closed so that can be read.
-const SETTLED = { finished: "vaultRecoveryFinished", undone: "vaultRecoveryUndone", unsettled: "vaultRecoveryUnsettled" };
+const SETTLED = { finished: "vaultRecoveryFinished", undone: "vaultRecoveryUndone", unsettled: "vaultRecoveryUnsettled", unknown: "vaultRecoveryUnknown" };
 
 async function unlocked(settled, warning) {
   const note = SETTLED[settled];
