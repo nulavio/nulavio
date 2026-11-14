@@ -200,6 +200,7 @@ class Vault:
             "dek_check": b64e(kdf(dek, "dek-check")),
             "policy": {},
             "envelopes": [],
+            "key": {"created": _now()},
         }
         vault = cls(path, meta)
         vault.dek = dek
@@ -292,6 +293,27 @@ class Vault:
     def protection_states(self) -> list[str]:
         return sorted({state for e in self.envelopes() for state in METHOD_STATES[e.method]})
 
+    def key_info(self) -> dict:
+        """When this profile's key (the DEK, and the volume made for it) was made, and when an unlock method
+        was last removed or replaced since ("last_removal", or None). Until the volume gets a new key (ADR
+        0015), a copy of the key file from before that removal still opens it with the secret removed.
+        "tracked" is False for a key file from before this was kept: its key is as old as the profile, and
+        whether anything was removed since is not known."""
+        key = self.meta.get("key")
+        if isinstance(key, dict) and isinstance(key.get("created"), str):
+            last = key.get("last_removal")
+            return {"created": key["created"], "last_removal": last if isinstance(last, str) else None, "tracked": True}
+        return {"created": self.meta.get("created"), "last_removal": None, "tracked": False}
+
+    def _envelope_dropped(self) -> None:
+        """An envelope goes: its secret keeps opening copies of the key file made before now (R70)."""
+        key = self.meta.get("key")
+        if not (isinstance(key, dict) and isinstance(key.get("created"), str)):
+            # A key file from before this was kept: the key is as old as the profile. Earlier removals are
+            # not known; this one is.
+            key = self.meta["key"] = {"created": self.meta.get("created") or _now()}
+        key["last_removal"] = _now()
+
     def lock(self) -> None:
         """Drop the DEK (wiped). The storage layer unmounts separately (S5)."""
         sodium.memzero(self.dek)
@@ -353,6 +375,7 @@ class Vault:
         if not [e for e in remaining if not pending or e["id"] != pending["new"]]:
             raise VaultError("last-method")  # a code not typed back is not a way in anyone is known to have
         self.meta["envelopes"] = remaining
+        self._envelope_dropped()
         if pending and envelope_id == pending["new"]:
             del self.meta["pending_recovery"]  # the new code withdrawn: the old one stays as it was
 
@@ -379,13 +402,17 @@ class Vault:
 
     def _new_recovery_code(self, params: dict | None) -> tuple[str, Envelope]:
         code = new_recovery_code()
+        return code, self.add_known_recovery_code(code, params)
+
+    def add_known_recovery_code(self, code: str, params: dict | None = None) -> Envelope:
+        """An envelope for a recovery code the person already has (a new key for the volume carries the code
+        that was typed to authorize it, ADR 0015). Everywhere else a recovery code is made here, never chosen."""
         data = stretch_params(params or RECOVERY_KDF)
         kek = stretch(normalize_recovery_code(code), data)
         try:
-            env = self._add("recovery-code", kek, data)
+            return self._add("recovery-code", kek, data)
         finally:
             sodium.memzero(kek)
-        return code, env
 
     # A replacement in two phases (#187). The new code exists only in the answer that shows it, so
     # the old code's envelope stays until the person has typed the new code back
@@ -406,6 +433,7 @@ class Vault:
         pending = self.pending_recovery_code()
         if pending:  # an earlier replacement nobody confirmed: its code goes, the confirmed one stays
             self.meta["envelopes"] = [e for e in self.meta["envelopes"] if e["id"] != pending["new"]]
+            self._envelope_dropped()  # it was shown to someone
         self.meta.pop("pending_recovery", None)
         old = [e.id for e in self.envelopes("recovery-code")]
         code, env = self._new_recovery_code(params)
@@ -426,6 +454,7 @@ class Vault:
         if self.opened_with != pending["new"]:
             raise VaultError("wrong-secret", "confirmed with something other than the new recovery code")
         self.meta["envelopes"] = [e for e in self.meta["envelopes"] if e["id"] not in pending["old"]]
+        self._envelope_dropped()
         del self.meta["pending_recovery"]
 
     def settle_recovery_code(self) -> str | None:
@@ -439,6 +468,7 @@ class Vault:
             self.confirm_recovery_code()
             return "finished"
         self.meta["envelopes"] = [e for e in self.meta["envelopes"] if e["id"] != pending["new"]]
+        self._envelope_dropped()  # the new code was shown to someone
         del self.meta["pending_recovery"]
         return "undone"
 

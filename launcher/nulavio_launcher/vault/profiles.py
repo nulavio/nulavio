@@ -13,9 +13,10 @@ import signal
 import time
 
 from .. import log, profile
+from . import storage
 from .core import RECOVERY_KDF, Vault, VaultError
 from .providers import Keyring, add_os_keyring, unlock_os_keyring
-from .storage import Container, recover_interrupted
+from .storage import Container, recover_interrupted, recover_rekey
 
 
 def container(prof: profile.Profile) -> Container:
@@ -23,6 +24,9 @@ def container(prof: profile.Profile) -> Container:
     outcome = recover_interrupted(prof.path)
     if outcome:
         log.event("vault.migration-recovered", profile=prof.name, outcome=outcome)
+    outcome = recover_rekey(prof.path)
+    if outcome:
+        log.event("vault.rekey-recovered", profile=prof.name, outcome=outcome)
     box = Container(prof.path)
     box.secure_if_locked()
     return box
@@ -132,7 +136,90 @@ def status(prof: profile.Profile) -> dict:
         "methods": [{"id": e.id, "method": e.method, "label": e.label, "created": e.created,
                      **({"unconfirmed": True} if e.id == unconfirmed else {})} for e in vault.envelopes()],
         "protection": vault.protection_states(),
+        # When the profile's key was made, and when a method was last removed or replaced since (ADR 0015).
+        "key": vault.key_info(),
     }  # fmt: skip
+
+
+def reauthenticate(vault: Vault, current: str) -> str:
+    """Unlock `vault` with a password or a recovery code; returns which. Before any change to the methods."""
+    try:
+        vault.unlock_password(current)
+        method = "password"
+    except VaultError:
+        try:
+            vault.unlock_recovery_code(current)
+            method = "recovery-code"
+        except VaultError:
+            raise VaultError("wrong-secret") from None
+    if vault.tampered:
+        # Before any change, and before anything outside the file (the system keyring, a phone):
+        # save() refuses a tampered vault too, but a removed keyring secret cannot be put back.
+        vault.lock()
+        raise VaultError("metadata-tampered", "the profile's key file was changed outside Nulavio")
+    return method
+
+
+def _carry(old: Vault, new: Vault, method: str, current: str, keyring: Keyring | None) -> tuple[list, list, list, list]:
+    """Make again, in `new`, every unlock method of `old` whose key this program has now: the secret that was
+    typed, this computer's login (a new keyring key), connected phones (from their public keys). The others
+    cannot be wrapped again without their secret. Returns (carried, dropped, undo, after): what each list of
+    envelopes became, what to call if the new key is undone, and what to call once it is in place."""
+    from . import phone as phones  # here: phone.py is not needed by profiles that have none
+
+    carried, dropped, undo, after = [], [], [], []
+    for env in old.envelopes():
+        made = None
+        try:
+            if env.id == old.opened_with and method == "password":
+                made = new.add_password(current, {"ops": env.data["ops"], "mem": env.data["mem"]}, env.label)
+            elif env.id == old.opened_with and method == "recovery-code":
+                made = new.add_known_recovery_code(current, {"ops": env.data["ops"], "mem": env.data["mem"]})
+            elif env.method == "os-keyring" and keyring is not None:
+                made = add_os_keyring(new, keyring, label=env.label)
+                was = env.data.get("attributes")
+                undo.append(lambda attributes=made.data["attributes"]: keyring.clear(attributes))
+                after.append(lambda attributes=was: keyring.clear(attributes) if attributes else None)
+            elif env.method == "phone":
+                made = phones.add_phone(new, phones.PairedPhone.from_fields(env.data), env.label)
+        except (VaultError, KeyError, TypeError, ValueError) as exc:
+            log.event("vault.rekey-not-carried", method=env.method, code=getattr(exc, "code", type(exc).__name__))
+        (carried if made else dropped).append({"method": env.method, "label": env.label})
+    return carried, dropped, undo, after
+
+
+def rekey(prof: profile.Profile, *, current: str, keyring: Keyring | None = None) -> dict:
+    """A new key for the profile's volume (ADR 0015): after it, no key file from before opens anything, with
+    any secret. The profile must be closed. Returns what became of each unlock method."""
+    box = container(prof)
+    if not box.vault_path.exists():
+        raise VaultError("not-encrypted")
+    if box.mounted() or prof.running_pid():
+        raise VaultError("unlocked", "lock the profile first")
+    old = box.load_vault()
+    method = reauthenticate(old, current)
+    result: dict = {}
+    new = None
+    try:
+
+        def carry(vault: Vault):
+            carried, dropped, undo, after = _carry(old, vault, method, current, keyring)
+            result.update(carried=carried, dropped=dropped, after=after)
+            return lambda: [step() for step in undo]
+
+        new = storage.rekey(box, old, carry)
+    finally:
+        old.lock()
+        if new is not None:
+            new.lock()
+    for step in result.pop("after"):  # the old keyring keys: they wrap nothing that exists now
+        try:
+            step()
+        except (VaultError, OSError) as exc:
+            log.event("vault.rekey-keyring-left", code=getattr(exc, "code", type(exc).__name__))
+    log.event("vault.rekey", profile=prof.name, carried=[m["method"] for m in result["carried"]],
+              dropped=[m["method"] for m in result["dropped"]])  # fmt: skip
+    return result
 
 
 def autolock(prof: profile.Profile, *, grace: float = 120.0, poll: float = 0.5) -> str:

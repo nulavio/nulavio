@@ -13,12 +13,16 @@ Inside the volume, `.nulavio-vault/state.json` mirrors the vault's generation
 to detect a rolled-back vault.json (threat model U-T21). A change to the unlock
 methods records the new generation there even while the profile is locked
 (`Container.recording`), through a mount of its own that no profile path sees.
+
+A new key for the volume (`rekey`, ADR 0015): a second volume under P.vault/rekey/, made for a new
+DEK, takes a checked copy of the files and then the first one's place.
 """
 
 from __future__ import annotations
 
 import contextlib
 import fcntl
+import hashlib
 import json
 import os
 import signal
@@ -297,18 +301,7 @@ class Container:
             os.mkdir(STATE_DIR, 0o700, dir_fd=volume_fd)
         state_dir = os.open(STATE_DIR, os.O_RDONLY | os.O_DIRECTORY | flags, dir_fd=volume_fd)
         try:
-            try:
-                fd = os.open("state.json", os.O_RDONLY | flags, dir_fd=state_dir)
-            except FileNotFoundError:
-                state = None
-            else:
-                with os.fdopen(fd, encoding="utf-8") as handle:
-                    state = json.load(handle)
-            if state is not None:
-                if state.get("profile_id") != vault.profile_id:
-                    raise StorageError("wrong-container")
-                if int(state.get("generation", 0)) > generation:
-                    raise StorageError("rollback", "vault.json is older than the profile it protects")
+            self._refuse_older(vault, state_dir)
             # Its own name: the profile's mount and a maintenance mount are two views of one directory.
             tmp = f"state.{os.getpid()}.tmp"
             fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | flags, 0o600, dir_fd=state_dir)
@@ -321,6 +314,22 @@ class Container:
             os.fsync(state_dir)
         finally:
             os.close(state_dir)
+
+    @staticmethod
+    def _refuse_older(vault: Vault, state_dir: int) -> None:
+        """Read the record in the volume (`state_dir`: an open handle on its directory) and refuse a
+        vault that is another profile's, or older than the record."""
+        flags = os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0)
+        try:
+            fd = os.open("state.json", os.O_RDONLY | flags, dir_fd=state_dir)
+        except FileNotFoundError:
+            return
+        with os.fdopen(fd, encoding="utf-8") as handle:
+            state = json.load(handle)
+        if state.get("profile_id") != vault.profile_id:
+            raise StorageError("wrong-container")
+        if int(state.get("generation", 0)) > int(vault.meta.get("generation", 0)):
+            raise StorageError("rollback", "vault.json is older than the profile it protects")
 
     def record_generation(self, vault: Vault) -> None:
         """After saving the vault while mounted: keep the mirror in step."""
@@ -597,3 +606,253 @@ def encrypt_existing(path: Path, vault: Vault) -> Container:
     finally:
         _release(path, fd)
     return container
+
+
+# -- a new key for the volume (ADR 0015) ---------------------------------------------------------
+#
+# P.vault/rekey/ while it runs:
+#
+#     vault.json(.bak)   the new key file: a new DEK, the methods that could be carried over
+#     cipher/            the new volume, made for that DEK (its own gocryptfs master key)
+#     old/, new/         where the two volumes are mounted for the copy (old/ read-only)
+#     complete           written once the copy is whole, checked and on disk
+#
+# Before `complete` exists nothing outside rekey/ has changed: an interruption is undone by removing
+# rekey/. Once it exists the new volume and key file take the old ones' place, step by step, and an
+# interruption is finished from where it stopped. recover_rekey() does either the next time the
+# profile is used. The old volume is only ever read, and never deleted before the new one is in place.
+
+REKEY = "rekey"
+REKEY_COMPLETE = "complete"
+REKEY_MARGIN = 64 * 1024 * 1024  # free space asked for beyond the volume's own size
+
+
+def _tree_size(root: Path) -> int:
+    total = 0
+    for dirpath, _dirs, files in os.walk(root):
+        for name in files:
+            with contextlib.suppress(OSError):
+                total += os.lstat(os.path.join(dirpath, name)).st_size
+    return total
+
+
+def rekey_space(box: Container) -> dict:
+    """What a new key needs: the volume's size (a second copy exists while it runs) and the free space."""
+    size = _tree_size(box.cipher)
+    free = shutil.disk_usage(box.root).free
+    return {"size": size, "free": free, "enough": free >= size + REKEY_MARGIN}
+
+
+def _file_digest(path: str) -> str:
+    digest = hashlib.sha256()
+    with open(path, "rb") as handle:
+        while chunk := handle.read(1 << 20):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _listing(root: Path) -> dict[str, tuple]:
+    """Every entry under `root` by its relative path: kind, and what must be equal in a copy."""
+    out: dict[str, tuple] = {}
+    for dirpath, dirs, files in os.walk(root):
+        for name in dirs + files:
+            full = os.path.join(dirpath, name)
+            info = os.lstat(full)
+            rel = os.path.relpath(full, root)
+            if os.path.islink(full):
+                out[rel] = ("link", os.readlink(full))
+            elif os.path.isdir(full):
+                out[rel] = ("dir",)
+            else:
+                out[rel] = ("file", info.st_size, _file_digest(full))
+    return out
+
+
+def _copy_checked(source: Path, target: Path) -> None:
+    """Copy a volume's files into another and read both back: same names, kinds, sizes and contents."""
+    for item in source.iterdir():
+        dest = target / item.name
+        if item.is_dir() and not item.is_symlink():
+            shutil.copytree(item, dest, symlinks=True)
+        else:
+            shutil.copy2(item, dest, follow_symlinks=False)
+    if _listing(source) != _listing(target):
+        raise StorageError("copy-mismatch", "the copy into the new volume is not the same as the original")
+
+
+def _fsync_dir(path: Path) -> None:
+    fd = os.open(path, os.O_RDONLY)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
+def _rekey_remove_staging(box: Container) -> None:
+    """Take rekey/ away. The two mount directories are unmounted first and only ever removed empty:
+    nothing here can reach the profile's files through a volume that is still mounted."""
+    staging = box.root / REKEY
+    for name in ("old", "new"):
+        where = staging / name
+        if where.is_dir():
+            box._unmount_path(where, wait=5.0)
+            if Container._is_mounted(where):
+                raise StorageError("busy", "a volume is still mounted for a new key")
+            os.rmdir(where)  # empty, or this stops here
+    cipher = staging / "cipher"
+    if cipher.exists():
+        for dirpath, _dirs, _files in os.walk(cipher):
+            os.chmod(dirpath, 0o700)
+        shutil.rmtree(cipher)
+    for leftover in staging.iterdir() if staging.is_dir() else ():
+        leftover.unlink()  # the new key file, its copy, a temporary one, the marker
+    with contextlib.suppress(FileNotFoundError):
+        staging.rmdir()
+
+
+def _rekey_finish(box: Container) -> None:
+    """The new volume and key file take the old ones' place. Every step can be repeated: started again
+    after an interruption, it goes on from what it finds."""
+    staging, old_cipher = box.root / REKEY, box.root / "cipher.old"
+    if (staging / "cipher").exists():
+        if box.cipher.exists():
+            os.rename(box.cipher, old_cipher)
+        os.rename(staging / "cipher", box.cipher)
+        _fsync_dir(box.root)
+    # The copy first, as Vault.save() does: at no point does a key file from before lie next to the new volume
+    # as the only one that loads.
+    for name in ("vault.json.bak", "vault.json"):
+        if (staging / name).exists():
+            os.replace(staging / name, box.root / name)
+    _fsync_dir(box.root)
+    if old_cipher.exists():
+        for dirpath, _dirs, _files in os.walk(old_cipher):
+            os.chmod(dirpath, 0o700)
+        shutil.rmtree(old_cipher)
+    (staging / REKEY_COMPLETE).unlink(missing_ok=True)
+    _rekey_remove_staging(box)
+    _fsync_dir(box.root)
+
+
+def recover_rekey(path: Path) -> str | None:
+    """Finish or undo a new key that was interrupted (a crash, SIGKILL, power loss). "finished": the copy
+    was whole, and the new volume and key file are now in place. "undone": it was not, and the profile is as
+    it was before, its unlock methods included. None: nothing to do, or one is running now."""
+    box = Container(Path(path))
+    staging = box.root / REKEY
+    if not staging.exists():
+        return None
+    try:
+        with box._state_lock(wait=0):
+            if not staging.exists():
+                return None
+            if (staging / REKEY_COMPLETE).exists():
+                _rekey_finish(box)
+                return "finished"
+            _rekey_remove_staging(box)
+            return "undone"
+    except StorageError as exc:
+        if exc.code == "busy":
+            return None  # a new key is being made now, or a volume is still mounted: left for the next time
+        raise
+
+
+def rekey(box: Container, old: Vault, carry) -> Vault:
+    """Give a locked profile a new key: a new DEK and a new volume, the files copied and checked, the old
+    volume and key file gone. `old`: the profile's vault, unlocked. `carry(new)`: adds to the new vault
+    (unlocked, empty) every unlock method that can be made again, and returns what to call if this is
+    undone. Returns the new vault, unlocked and saved; the caller locks it.
+
+    Nothing of the profile changes before the copy is whole and checked; from then on the switch is
+    finished even if this process dies (recover_rekey). While it runs, the files are readable at
+    P.vault/rekey/old and rekey/new by the user's own processes, as during any change to a locked profile.
+    """
+    with box._state_lock():
+        if not box._same_as_on_disk(old):
+            raise StorageError("changed", "the profile's key file changed since it was read; try again")
+        if not box.exists():
+            raise StorageError("not-encrypted")
+        if box.mounted():
+            raise StorageError("unlocked", "lock the profile first")
+        staging = box.root / REKEY
+        if staging.exists():  # left by a process that died; the lock says none is running
+            if (staging / REKEY_COMPLETE).exists():
+                raise StorageError("changed", "a new key was being finished; try again")
+            _rekey_remove_staging(box)
+        if not rekey_space(box)["enough"]:
+            raise StorageError("no-space", "not enough free space for a second copy of the profile")
+        undo = lambda: None  # noqa: E731
+        fds: list[int] = []
+        with _signals_as_exceptions():
+            try:
+                staging.mkdir(mode=0o700)
+                new = Vault.create(staging / "vault.json", old.profile_id)
+                for field in ("created", "policy"):
+                    if field in old.meta:
+                        new.meta[field] = json.loads(json.dumps(old.meta[field]))
+                new.meta["generation"] = int(old.meta.get("generation", 0))  # save() makes it the next one
+                undo = carry(new) or undo
+                new.save()
+                new_box = _Staged(staging)
+                for name in ("cipher", "old", "new"):
+                    (staging / name).mkdir(mode=0o700)
+                box._gocryptfs(["-init", "-q", "-xchacha", "-scryptn", "10", str(new_box.cipher)], storage_password(new))
+                # -idle: should this process die here, gocryptfs unmounts by itself a minute later.
+                box._gocryptfs(
+                    ["-q", "-nosyslog", "-ro", "-idle", "1m", str(box.cipher), str(staging / "old")], storage_password(old)
+                )
+                box._gocryptfs(
+                    ["-q", "-nosyslog", "-idle", "1m", str(new_box.cipher), str(staging / "new")], storage_password(new)
+                )
+                for name in ("old", "new"):
+                    fds.append(os.open(staging / name, os.O_RDONLY | os.O_DIRECTORY))
+                    if os.fstat(fds[-1]).st_dev == os.stat(staging).st_dev:
+                        raise StorageError("storage-failed", "the volume is not mounted")
+                # A rolled-back key file is refused here as it is at unlock.
+                with contextlib.suppress(FileNotFoundError):
+                    state_dir = os.open(STATE_DIR, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=fds[0])
+                    try:
+                        Container._refuse_older(old, state_dir)
+                    finally:
+                        os.close(state_dir)
+                _copy_checked(staging / "old", staging / "new")
+                box._check_state(new, fds[1])  # the new key file's generation, recorded in the new volume
+                for fd in fds:
+                    os.close(fd)
+                fds.clear()
+                for name in ("old", "new"):
+                    box._unmount_path(staging / name)
+                    os.rmdir(staging / name)
+                _mark_complete_at(staging / REKEY_COMPLETE)
+            except BaseException as exc:
+                for fd in fds:
+                    with contextlib.suppress(OSError):
+                        os.close(fd)
+                with contextlib.suppress(Exception):
+                    undo()
+                with contextlib.suppress(StorageError, subprocess.SubprocessError, OSError):
+                    _rekey_remove_staging(box)  # what cannot be removed now is removed the next time (recover_rekey)
+                if isinstance(exc, (*RECORD_ERRORS, shutil.Error)):
+                    raise StorageError("storage-failed", type(exc).__name__) from None
+                raise
+            _rekey_finish(box)
+        new.path = box.vault_path
+        return new
+
+
+class _Staged:
+    """The new volume while it is still under rekey/."""
+
+    def __init__(self, staging: Path):
+        self.cipher = staging / "cipher"
+
+
+def _mark_complete_at(marker: Path) -> None:
+    """The copy is whole: on disk first, then the marker, durably. After this the new key is finished, never undone."""
+    os.sync()
+    fd = os.open(marker, os.O_WRONLY | os.O_CREAT | os.O_NOFOLLOW, 0o600)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+    _fsync_dir(marker.parent)

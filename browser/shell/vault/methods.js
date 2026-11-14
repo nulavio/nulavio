@@ -2,7 +2,9 @@
    on its own; the page lists them by kind and lets the person add a password or the computer
    login, replace the recovery code or remove a method. Every change is confirmed with a current
    password or recovery code, asked again each time, and the last method can never go. Below two
-   methods the page says what losing one would mean (ADR 0006: no master key). */
+   methods the page says what losing one would mean (ADR 0006: no master key).
+   A removal takes a method away from this key file only: the page says how old the profile's key is and
+   whether a method went since, and offers a new key, which is what ends an old secret's power (ADR 0015). */
 
 import { localize, t } from "../lib/i18n.js";
 import { clearCode, guardLeaving, printCode, showCode } from "../lib/recovery.js";
@@ -28,7 +30,7 @@ function announceDone(text, result) {
 
 function setState(state) {
   document.body.dataset.state = state;
-  for (const control of document.querySelectorAll("#add-actions button, #methods button")) {
+  for (const control of document.querySelectorAll("#add-actions button, #methods button, #key button")) {
     control.disabled = state === "busy" || control.dataset.keep === "disabled" || control.hasAttribute("data-no-confirmer");
   }
 }
@@ -95,7 +97,7 @@ function methodRow(method, count, confirmers) {
     const result = ok ? await change("remove-method", { envelope: method.id }) : null;
     if (result) {
       await render().catch(console.error); // the change was made: what it did is said even if the list is not redrawn
-      announceDone(t("methodRemoved", [name]), result);
+      announceDone(`${t("methodRemoved", [name])} ${t("methodRemovedKeeps")}`, result);
       byId("methods").querySelector("button:not(:disabled)")?.focus() ?? byId("headline").focus();
     }
   });
@@ -122,7 +124,7 @@ function methodRow(method, count, confirmers) {
 function unavailable(text) {
   byId("explain").textContent = text;
   byId("explain").hidden = !text;
-  for (const id of ["few", "methods", "add-actions", "not-yet", "current-error", "password-form", "code-step"]) {
+  for (const id of ["few", "methods", "add-actions", "not-yet", "current-error", "password-form", "code-step", "key"]) {
     byId(id).hidden = true;
   }
   byId("current").closest(".field").hidden = true;
@@ -146,9 +148,10 @@ async function render() {
   // made that way before this page existed), say that instead of offering what cannot work.
   byId("few").hidden = methods.length >= 2 && confirmers > 0;
   byId("few").querySelector("p").textContent = t(confirmers ? "methodsFew" : "methodsNoConfirmer");
-  for (const control of document.querySelectorAll("#add-actions button, #current")) {
+  for (const control of document.querySelectorAll("#add-actions button, #key button, #current")) {
     control.toggleAttribute("data-no-confirmer", !confirmers);
   }
+  renderKey();
   byId("current").disabled = !confirmers;
   byId("add-keyring").hidden = !capabilities.keyring || methods.some(m => m.method === "os-keyring");
   // Connecting a phone is not offered yet (D10); the link stays while one is connected, to remove it.
@@ -158,9 +161,106 @@ async function render() {
   setState(byId("code-step").hidden ? "idle" : "code");
 }
 
+// -- the profile's key, and a new one (ADR 0015) ---------------------------------------------------
+
+const day = iso => new Date(iso).toLocaleDateString(undefined, { dateStyle: "long" });
+
+function size(bytes) {
+  const [value, unit] = bytes >= 1024 ** 3 ? [bytes / 1024 ** 3, "gigabyte"] : [Math.max(1, bytes / 1024 ** 2), "megabyte"];
+  return new Intl.NumberFormat(undefined, { style: "unit", unit, maximumFractionDigits: value < 10 ? 1 : 0 }).format(value);
+}
+
+/** What the key file says of its key: when it was made, and whether a method went since. */
+function renderKey() {
+  const key = profile.key ?? {};
+  const text = !key.tracked || !key.created ? t("methodsKeyUnknown") : key.lastRemoval ? t("methodsKeyStale", [day(key.lastRemoval)]) : t("methodsKeyFresh", [day(key.created)]);
+  byId("key-state").textContent = text;
+  // The profile shown in this very window is open: its files cannot be copied from under it.
+  byId("rekey").dataset.keep = profile.isCurrent ? "disabled" : "";
+  byId("rekey-note").hidden = !profile.isCurrent;
+}
+
+byId("rekey").addEventListener("click", async () => {
+  const field = byId("current");
+  const error = byId("current-error");
+  let check;
+  try {
+    check = await vault.rekeyCheck(profileId);
+  } catch (e) {
+    announce(errorText(e), "error");
+    return;
+  }
+  if (!check.closed || !check.enough) {
+    announce(t(check.closed ? "err_no_space" : "err_unlocked"), "error"); // before anything is asked
+    return;
+  }
+  const ok = await confirmDialog({
+    title: t("methodsRekeyTitle", [profile.name]),
+    body: t("methodsRekeyBody", [size(check.size)]),
+    confirm: t("methodsRekeyConfirm"),
+    danger: true,
+  });
+  if (!ok) {
+    return;
+  }
+  const secret = field.value;
+  if (!secret) {
+    error.textContent = t("err_bad_secret");
+    field.setAttribute("aria-invalid", "true");
+    field.focus();
+    return;
+  }
+  error.textContent = "";
+  field.removeAttribute("aria-invalid");
+  field.value = "";
+  setState("busy");
+  making = true; // leaving now would stop the copy: the page asks first
+  announce(t("methodsRekeyWorking"), "progress");
+  let result;
+  try {
+    result = await vault.rekey(profileId, { current: secret });
+  } catch (e) {
+    making = false;
+    setState("idle");
+    if (String(e?.message) === "wrong-secret") {
+      announce("");
+      error.textContent = t("err_wrong_secret");
+      field.setAttribute("aria-invalid", "true");
+      field.focus();
+    } else {
+      announce(errorText(e), "error"); // nothing was changed: the copy is undone
+    }
+    return;
+  }
+  await render().catch(console.error);
+  const gone = result.dropped.map(kindName);
+  const done = [t("methodsRekeyDone", [profile.name]), gone.length ? t("methodsRekeyDropped", [gone.join(", ")]) : ""];
+  if (result.carried.some(m => m.method === "recovery-code")) {
+    making = false;
+    announce(done.filter(Boolean).join(" "), "ok");
+    byId("rekey").focus();
+    return;
+  }
+  // The recovery code went with the old key: a new one right away, with the secret that was just typed
+  // (it was carried over), shown and typed back like any new code.
+  try {
+    const made = await vault.change(profileId, "new-recovery-code", { current: secret });
+    await render().catch(console.error);
+    announce([...done, t("methodsRekeyNewCode")].filter(Boolean).join(" "), "ok"); // said before the code takes the focus
+    showNewCode(made.recoveryCode, true);
+  } catch (e) {
+    making = false;
+    setState("idle");
+    announce([...done, errorText(e)].filter(Boolean).join(" "), "error"); // the new key stands; the code is still to make
+  }
+});
+
 // -- a new recovery code: shown once, two groups typed back ------------------------------------
 
-function showNewCode(code) {
+/* `first`: the profile had no recovery code that this one replaces (it never had one, or a new key dropped
+   it): nothing else opens the profile "until it is typed back", so the page does not say so. */
+function showNewCode(code, first = false) {
+  byId("code-intro").textContent = t(first ? "methodsCodeIntroFirst" : "methodsCodeIntro");
   const groups = code.split("-");
   const a = Math.floor(Math.random() * 3);
   const b = 3 + Math.floor(Math.random() * 4);
@@ -223,9 +323,10 @@ byId("new-code").addEventListener("click", async () => {
   // From the moment it is asked for, the old code may already be gone: leaving asks first until the
   // new one has been typed back, and the code is shown before anything else can fail (review F12).
   making = true;
+  const first = !profile.methods.some(m => m.method === "recovery-code" && !m.unconfirmed);
   const result = await change("new-recovery-code");
   if (result?.recoveryCode) {
-    showNewCode(result.recoveryCode); // shown whether or not the change was recorded: it is the only copy
+    showNewCode(result.recoveryCode, first); // shown whether or not the change was recorded: it is the only copy
     render().then(
       () => result.warning && announce(t("err_not_recorded"), "warn"),
       // The list could not be read again: said, and the warning with it, never instead of it.

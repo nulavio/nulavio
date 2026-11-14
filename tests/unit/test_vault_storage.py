@@ -306,6 +306,287 @@ class InterruptedMigrationTest(StorageCase):
         profiles.lock(prof)
 
 
+INTERRUPTED_REKEY = """
+import os, signal, sys
+sys.path.insert(0, sys.argv[1])
+from pathlib import Path
+from nulavio_launcher import profile
+from nulavio_launcher.vault import profiles, storage
+path, how, password = Path(sys.argv[2]), sys.argv[3], sys.argv[4]
+stop = lambda: os.kill(os.getpid(), signal.SIGTERM if how.startswith("term") else signal.SIGKILL)
+real_copy, real_finish, real_rename, real_replace = storage._copy_checked, storage._rekey_finish, os.rename, os.replace
+calls = {"rename": 0, "replace": 0}
+def copy(source, target):
+    real_copy(source, target)
+    if how in ("kill-mid-copy", "term-mid-copy"):
+        stop()
+def finish(box):
+    if how == "kill-before-switch":
+        stop()
+    real_finish(box)
+def rename(a, b, *args, **kwargs):
+    real_rename(a, b, *args, **kwargs)
+    if str(b).endswith(("cipher.old", "cipher")):
+        calls["rename"] += 1
+        if how == f"kill-after-rename-{calls['rename']}":
+            stop()
+def replace(a, b, *args, **kwargs):
+    real_replace(a, b, *args, **kwargs)
+    if "rekey" in str(a) and "rekey" not in str(b):  # into place, not the new key file's own save
+        calls["replace"] += 1
+        if how == f"kill-after-key-file-{calls['replace']}":
+            stop()
+storage._copy_checked, storage._rekey_finish = copy, finish
+storage.os.rename, storage.os.replace = rename, replace
+profiles.rekey(profile.Profile(name=path.name, path=path), current=password)
+"""
+
+
+class RekeyTest(StorageCase):
+    """ADR 0015 (#204): a new key for a profile's volume. After it, a key file kept from before opens
+    nothing, with any secret; before it, a removed secret still opens the files with that key file (R70)."""
+
+    LEAKED = "leaked password 9"
+
+    def profile_with_files(self, keyring: Keyring | None = None) -> tuple[profile.Profile, str]:
+        prof, code = self.encrypted_profile(keyring=keyring)
+        profiles.unlock(prof, password=PASSWORD).lock()
+        (prof.path / "places.sqlite").write_bytes(os.urandom(300_000))
+        (prof.path / "storage" / "default").mkdir(parents=True)
+        (prof.path / "storage" / "default" / "site.txt").write_text(MARKER)
+        os.symlink("places.sqlite", prof.path / "link")
+        profiles.lock(prof)
+        return prof, code
+
+    def files(self, prof: profile.Profile, **how) -> dict:
+        """The profile's files as an unlock with `how` shows them (without the launcher's own record)."""
+        profiles.unlock(prof, **how).lock()
+        try:
+            return {
+                str(p.relative_to(prof.path)): (os.readlink(p) if p.is_symlink() else p.read_bytes())
+                for p in sorted(prof.path.rglob("*"))
+                if (p.is_file() or p.is_symlink()) and storage.STATE_DIR not in p.parts
+            }
+        finally:
+            profiles.lock(prof)
+
+    def api(self, prof: profile.Profile, op: str, **fields) -> dict:
+        return vault_cli.api_request({"op": op, "path": str(prof.path), **fields})
+
+    def kept(self, prof: profile.Profile) -> dict:
+        """What someone who kept "the key file" has: the small files next to the encrypted ones."""
+        box = profiles.container(prof)
+        return {"vault.json": box.vault_path.read_bytes(), "gocryptfs.conf": (box.cipher / "gocryptfs.conf").read_bytes()}
+
+    def reads_the_files(self, prof: profile.Profile, kept: dict, secret: str, *, their_conf: bool) -> bool:
+        """Whether `kept` and `secret` read the profile's files as they are now, outside Nulavio (gocryptfs alone)."""
+        work = Path(tempfile.mkdtemp(prefix="outside-", dir=self.tmp))
+        (work / "vault.json").write_bytes(kept["vault.json"])
+        vault = Vault.load(work / "vault.json")
+        vault.unlock_password(secret)
+        password = storage.storage_password(vault)
+        vault.lock()
+        cipher = work / "cipher"
+        shutil.copytree(profiles.container(prof).cipher, cipher, symlinks=True)  # the encrypted files as they are now
+        if their_conf:
+            (cipher / "gocryptfs.conf").unlink()  # read-only, as gocryptfs makes it
+            (cipher / "gocryptfs.conf").write_bytes(kept["gocryptfs.conf"])
+        (work / "mnt").mkdir()
+        # Not pipes for the output: the mounting daemon inherits them and would keep them open.
+        mounted = subprocess.run(
+            ["gocryptfs", "-q", "-nosyslog", str(cipher), str(work / "mnt")],
+            input=(password + "\n").encode(),
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=60,
+        )
+        if mounted.returncode != 0:
+            return False
+        try:
+            return contains(work / "mnt", MARKER.encode())
+        except OSError:
+            return False
+        finally:
+            subprocess.run(["fusermount3", "-u", "-z", str(work / "mnt")], check=False, capture_output=True)
+
+    def remove_a_leaked_password(self, prof: profile.Profile) -> dict:
+        """A second password added and removed again; returns what was kept from while it was valid."""
+        self.api(prof, "add-password", current=PASSWORD, password=self.LEAKED)
+        kept = self.kept(prof)
+        leaked = next(
+            m["id"] for m in profiles.status(prof)["methods"] if m["method"] == "password" and m["id"] != self.first_password
+        )
+        self.api(prof, "remove-method", current=PASSWORD, envelope=leaked)
+        return kept
+
+    def setUp(self):
+        super().setUp()
+        self.prof, self.code = self.profile_with_files()
+        self.first_password = next(m["id"] for m in profiles.status(self.prof)["methods"] if m["method"] == "password")
+        self.before = self.files(self.prof, password=PASSWORD)
+
+    def test_after_a_new_key_the_old_key_file_and_secret_open_nothing(self):
+        prof = self.prof
+        self.assertEqual(profiles.status(prof)["key"]["last_removal"], None)
+        kept = self.remove_a_leaked_password(prof)
+        key = profiles.status(prof)["key"]
+        self.assertTrue(key["tracked"] and key["last_removal"], key)
+        # The limit this closes (R70): the removed password still reads the files with the key file from before.
+        self.assertTrue(self.reads_the_files(prof, kept, self.LEAKED, their_conf=False))
+        result = self.api(prof, "rekey", current=PASSWORD)
+        self.assertEqual(result["done"], True)
+        self.assertEqual([m["method"] for m in result["carried"]], ["password"])
+        self.assertEqual([m["method"] for m in result["dropped"]], ["recovery-code"])
+        # Now neither that key file nor it together with the volume's own key file of then reads anything.
+        self.assertFalse(self.reads_the_files(prof, kept, self.LEAKED, their_conf=False))
+        self.assertFalse(self.reads_the_files(prof, kept, self.LEAKED, their_conf=True))
+        self.assertFalse(self.reads_the_files(prof, kept, PASSWORD, their_conf=True))  # nor a secret that is still valid
+        # Put back in place, the key file from before opens nothing through Nulavio either.
+        box = profiles.container(prof)
+        current = box.vault_path.read_bytes()
+        for name in ("vault.json", "vault.json.bak"):
+            (box.root / name).write_bytes(kept["vault.json"])
+        for secret in (self.LEAKED, PASSWORD):
+            with self.assertRaises(VaultError) as ctx:
+                profiles.unlock(prof, password=secret)
+            self.assertEqual(ctx.exception.code, "wrong-key")
+            self.assertFalse(box.mounted())
+        for name in ("vault.json", "vault.json.bak"):
+            (box.root / name).write_bytes(current)
+        # The profile itself: every file as it was, opened by the password that was typed; the code is gone.
+        self.assertEqual(self.files(prof, password=PASSWORD), self.before)
+        with self.assertRaises(VaultError) as ctx:
+            profiles.unlock(prof, recovery_code=self.code)
+        self.assertEqual(ctx.exception.code, "no-such-method")
+        after = profiles.status(prof)
+        self.assertEqual([m["method"] for m in after["methods"]], ["password"])
+        self.assertEqual(after["key"]["last_removal"], None)
+        self.assertFalse((box.root / storage.REKEY).exists() or (box.root / "cipher.old").exists())
+        # Its record inside the new volume is the new key file's: the next unlock checks it and passes.
+        profiles.unlock(prof, password=PASSWORD).lock()
+        state = json.loads(box.state_path.read_text())
+        self.assertEqual(state["generation"], json.loads(box.vault_path.read_text())["generation"])
+        profiles.lock(prof)
+        # A first recovery code is made the usual way afterwards.
+        new_code = self.api(prof, "new-recovery-code", current=PASSWORD)["recovery_code"]
+        self.assertEqual(self.api(prof, "confirm-recovery-code", current=new_code), {"done": True})
+
+    def test_the_recovery_code_typed_is_the_one_carried(self):
+        result = self.api(self.prof, "rekey", current=self.code)
+        self.assertEqual([m["method"] for m in result["carried"]], ["recovery-code"])
+        self.assertEqual([m["method"] for m in result["dropped"]], ["password"])
+        self.assertEqual(self.files(self.prof, recovery_code=self.code), self.before)
+        with self.assertRaises(VaultError):
+            profiles.unlock(self.prof, password=PASSWORD)
+
+    def test_this_computers_login_is_carried_with_a_new_keyring_key(self):
+        tool = self.tmp / "secret-tool"
+        tool.write_text(FAKE_SECRET_TOOL.format(python=sys.executable))
+        tool.chmod(0o700)
+        store = self.tmp / "keyring.json"
+        with mock.patch.dict(os.environ, {"NV_FAKE_KEYRING": str(store), "NULAVIO_SECRET_TOOL": str(tool)}):
+            self.api(self.prof, "add-keyring", current=PASSWORD)
+            before = json.loads(store.read_text())
+            result = self.api(self.prof, "rekey", current=PASSWORD)
+            self.assertEqual(sorted(m["method"] for m in result["carried"]), ["os-keyring", "password"])
+            after = json.loads(store.read_text())
+            self.assertEqual(len(after), 1)  # the key of before is gone from the keyring: it wraps nothing now
+            self.assertNotEqual(after[0], before[0])
+            self.assertEqual(self.files(self.prof, keyring=Keyring(str(tool))), self.before)
+
+    def test_refused_before_anything_changes(self):
+        prof, box = self.prof, profiles.container(self.prof)
+        untouched = lambda: (box.vault_path.read_bytes(), sorted(p.name for p in box.root.iterdir()))  # noqa: E731
+        was = untouched()
+        cases = {"wrong-secret": {"current": "not the password"}, "no-space": {"current": PASSWORD}}
+        for code, fields in cases.items():
+            enough = code != "no-space"
+            space = {"size": 1, "free": 0, "enough": enough}
+            with self.subTest(code=code), mock.patch.object(storage, "rekey_space", return_value=space):
+                with self.assertRaises(VaultError) as ctx:
+                    self.api(prof, "rekey", **fields)
+                self.assertEqual(ctx.exception.code, code)
+                self.assertEqual(untouched(), was)
+        profiles.unlock(prof, password=PASSWORD).lock()  # open: its files are in use
+        with self.assertRaises(VaultError) as ctx:
+            self.api(prof, "rekey", current=PASSWORD)
+        self.assertEqual(ctx.exception.code, "unlocked")
+        profiles.lock(prof)
+        self.assertEqual(untouched()[0], was[0])
+        check = self.api(prof, "rekey-check")
+        self.assertTrue(check["enough"] and check["locked"] and not check["running"], check)
+        self.assertGreater(check["size"], 300_000)
+
+    def interrupt(self, how: str) -> subprocess.CompletedProcess:
+        script = self.tmp / "rekey.py"
+        script.write_text(INTERRUPTED_REKEY)
+        args = [sys.executable, str(script), str(ROOT / "launcher"), str(self.prof.path), how, PASSWORD]
+        return subprocess.run(args, capture_output=True, text=True, timeout=120)
+
+    def assert_as_before(self) -> None:
+        box = storage.Container(self.prof.path)
+        self.assertEqual(sorted(m["method"] for m in profiles.status(self.prof)["methods"]), ["password", "recovery-code"])
+        self.assertFalse((box.root / storage.REKEY).exists())
+        self.assertFalse(any(m.startswith(str(box.root)) for m in storage.mounted_paths()), "a volume stayed mounted")
+        self.assertEqual(self.files(self.prof, password=PASSWORD), self.before)
+        self.assertEqual(self.files(self.prof, recovery_code=self.code), self.before)
+
+    def test_an_interruption_before_the_copy_is_whole_is_undone(self):
+        box = storage.Container(self.prof.path)
+        # Stopped (SIGTERM, a closed terminal): cleaned up at once, before anything looks at the profile again.
+        self.assertNotEqual(self.interrupt("term-mid-copy").returncode, 0)
+        self.assertFalse((box.root / storage.REKEY).exists())
+        self.assertFalse(any(m.startswith(str(box.root)) for m in storage.mounted_paths()), "a volume stayed mounted")
+        self.assert_as_before()
+        # Killed: what it left (the staging directory, two mounted volumes) is undone by the next use of the profile.
+        self.assertEqual(self.interrupt("kill-mid-copy").returncode, -signal.SIGKILL)
+        self.assertTrue((box.root / storage.REKEY).exists())
+        self.assert_as_before()
+
+    def test_an_interruption_after_the_copy_is_whole_is_finished(self):
+        box = storage.Container(self.prof.path)
+        for how in (
+            "kill-before-switch",
+            "kill-after-rename-1",
+            "kill-after-rename-2",
+            "kill-after-key-file-1",
+            "kill-after-key-file-2",
+        ):
+            with self.subTest(how=how):
+                self.assertEqual(self.interrupt(how).returncode, -signal.SIGKILL)
+                self.assertTrue((box.root / storage.REKEY / storage.REKEY_COMPLETE).exists())
+                status = profiles.status(self.prof)  # any use of the profile finishes it
+                self.assertEqual([m["method"] for m in status["methods"]], ["password"])
+                self.assertFalse((box.root / storage.REKEY).exists() or (box.root / "cipher.old").exists())
+                self.assertEqual(self.files(self.prof, password=PASSWORD), self.before)
+                with self.assertRaises(VaultError):
+                    profiles.unlock(self.prof, recovery_code=self.code)
+                # For the next round: a recovery code again, as the page makes one right after.
+                self.code = self.api(self.prof, "new-recovery-code", current=PASSWORD)["recovery_code"]
+                self.api(self.prof, "confirm-recovery-code", current=self.code)
+
+    def test_the_command_line_says_what_a_removal_leaves_and_what_the_new_key_did(self):
+        self.api(self.prof, "add-password", current=PASSWORD, password=self.LEAKED)
+        leaked = next(
+            m["id"] for m in profiles.status(self.prof)["methods"] if m["method"] == "password" and m["id"] != self.first_password
+        )
+        removed = self.nulavio(
+            "vault", "remove-method", "--path", str(self.prof.path), leaked, "--password-stdin", stdin=PASSWORD + "\n"
+        )
+        self.assertEqual(removed.returncode, 0, removed.stderr)
+        self.assertIn("nulavio vault rekey", removed.stdout)
+        listed = self.nulavio("vault", "status", "--path", str(self.prof.path))
+        self.assertIn("a method was removed or replaced on", listed.stdout)
+        done = self.nulavio("vault", "rekey", "--path", str(self.prof.path), "--password-stdin", stdin=PASSWORD + "\n")
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertIn("has a new key. Still opens it: password.", done.stdout)
+        self.assertIn("No longer opens it: recovery code.", done.stdout)
+        self.assertIn("vault new-recovery-code", done.stdout)
+        self.assertNotIn("a method was removed", self.nulavio("vault", "status", "--path", str(self.prof.path)).stdout)
+        self.assertNotIn(PASSWORD, done.stdout + done.stderr)
+        self.assertEqual(self.files(self.prof, password=PASSWORD), self.before)
+
+
 class CoreDumpTest(unittest.TestCase):
     def test_vault_commands_and_gocryptfs_write_no_core_dumps(self):
         # Threat model U-T13, audit V8: a crash would write the password, the DEK or the volume key.

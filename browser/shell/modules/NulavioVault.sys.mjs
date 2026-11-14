@@ -26,6 +26,10 @@ ChromeUtils.defineESModuleGetters(lazy, {
 
 const SHELL_ID = "shell@nulavio.net";
 const TIMEOUT_MS = 90000; // Argon2id (256 MiB) plus mounting; encryption of a new profile copies files
+// A new key copies every file of the profile into a new volume (ADR 0015): minutes for a large one. If the
+// tools are stopped here, the copy is undone the next time the profile is used.
+const REKEY_TIMEOUT_MS = 60 * 60 * 1000;
+const KINDS = new Set(["password", "recovery-code", "os-keyring", "phone", "combined"]);
 const METHODS = new Set(["password", "recovery-code", "os-keyring"]);
 // Connecting a phone is not offered yet (D10): off unless this pref says otherwise. Unlocking with a
 // phone that is already connected, and removing it, never depend on it.
@@ -62,9 +66,9 @@ function checkSecret(value) {
 }
 
 /** One request to the Vault helper; resolves to its JSON answer or throws its error code. */
-export async function helper(request) {
+export async function helper(request, timeoutMs = TIMEOUT_MS) {
   try {
-    return await lazy.callTool(["vault", "api"], request, TIMEOUT_MS);
+    return await lazy.callTool(["vault", "api"], request, timeoutMs);
   } catch (e) {
     fail(e.code ?? "helper-failed");
   }
@@ -116,6 +120,13 @@ class Vault {
       // `unconfirmed`: a new recovery code not typed back yet (#187); the old one still opens the profile.
       methods: (state.methods ?? []).map(m => ({ id: m.id, method: m.method, label: m.label, unconfirmed: m.unconfirmed === true })),
       protection: state.protection ?? [],
+      // When the profile's key was made, and when a method was last removed or replaced since (ADR 0015).
+      // `tracked` false: a key file from before this was kept; what was removed since is not known.
+      key: {
+        created: typeof state.key?.created === "string" ? state.key.created : null,
+        lastRemoval: typeof state.key?.last_removal === "string" ? state.key.last_removal : null,
+        tracked: state.key?.tracked === true,
+      },
     };
   }
 
@@ -207,6 +218,33 @@ class Vault {
     }
     const answer = await helper(request);
     return { done: true, recoveryCode: answer.recovery_code ?? null, warning: warning(answer) };
+  }
+
+  /** What a new key for the profile needs (its size, the free space), and whether it is closed (ADR 0015). */
+  async rekeyCheck(profileId) {
+    const { path, isCurrent } = await this.#path(profileId);
+    const found = await helper({ op: "rekey-check", path });
+    return {
+      size: Number(found.size) || 0,
+      free: Number(found.free) || 0,
+      enough: found.enough === true,
+      closed: !isCurrent && found.locked === true && found.running !== true,
+    };
+  }
+
+  /**
+   * A new key for the profile's volume (ADR 0015): after it, a key file from before opens nothing with any
+   * secret. The profile must be closed. Returns what became of each unlock method (kind and label only).
+   */
+  async rekey(profileId, { current } = {}) {
+    const { path, isCurrent } = await this.#path(profileId);
+    if (isCurrent) {
+      fail("unlocked"); // its files are in use by this very browser
+    }
+    const answer = await helper({ op: "rekey", path, current: checkSecret(current) }, REKEY_TIMEOUT_MS);
+    const listed = items =>
+      (Array.isArray(items) ? items : []).filter(m => KINDS.has(m?.method)).map(m => ({ method: m.method, label: String(m.label ?? "") }));
+    return { done: true, carried: listed(answer.carried), dropped: listed(answer.dropped) };
   }
 
   // -- phone (Nulavio Companion, ADR 0005, S11) ---------------------------------------------

@@ -54,7 +54,7 @@ Method data by envelope: `password` and `recovery-code` hold Argon2id parameters
 - **Add method:** requires the profile unlocked (the DEK in memory) and a fresh authentication with an existing method ("re-authenticate for protection changes").
 - **Remove method:** requires an unlocked profile; refuses to remove the last method; warns below two.
 - **Rotate a wrapping key** (new password, re-paired phone): replace that envelope only.
-- **Rotate the DEK** (suspected compromise, lost phone with a stolen profile copy): new DEK, new storage, data copied; offered, never automatic.
+- **Rotate the DEK** (suspected compromise, lost phone with a stolen profile copy): new DEK, new storage, data copied; offered, never automatic. How it is done, what carries over and what an interruption leaves: [ADR 0015](0015-a-new-key-for-a-profile.md).
 - **Lock:** end the profile's engine instance, unmount the storage, drop the DEK. Nothing sensitive stays unlocked by a hidden path.
 - **All factors lost:** the data cannot be recovered. No Nulavio master key, no escrow, no backdoor; onboarding says so.
 
