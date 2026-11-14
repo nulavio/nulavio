@@ -203,20 +203,35 @@ class Container:
         """A recovery code replacement nobody confirmed (#187), settled now that the profile opened:
         kept if this unlock used the new code, undone otherwise. Under the state lock, recorded like
         any change. Not settled is no reason to stay locked: both codes still open the profile."""
-        outcome = vault.settle_recovery_code()
-        if outcome is None:
+        if vault.pending_recovery_code() is None:
+            return
+        # A handle on the volume from before the save to the record, as in recording(): the record goes into
+        # this volume or nowhere, also if the volume goes away in between (#187 review).
+        try:
+            volume = os.open(self.mountpoint, os.O_RDONLY | os.O_DIRECTORY)
+        except OSError as exc:
+            log.event("vault.recovery-code-not-settled", code=type(exc).__name__)
             return
         try:
-            vault.save()
-        except (VaultError, OSError) as exc:
-            log.event("vault.recovery-code-not-settled", code=getattr(exc, "code", type(exc).__name__))
-            return
-        vault.settled = outcome
-        log.event("vault.recovery-code-settled", outcome=outcome)
-        try:
-            self._check_state(vault)  # saved: a record left behind is written at the next unlock
-        except (VaultError, *RECORD_ERRORS) as exc:
-            log.event("vault.change-not-recorded", code=getattr(exc, "code", type(exc).__name__))
+            if os.fstat(volume).st_dev == os.stat(self.mountpoint.parent).st_dev:
+                log.event("vault.recovery-code-not-settled", code="not-mounted")
+                return
+            outcome = vault.settle_recovery_code()
+            if outcome is None:
+                return
+            try:
+                vault.save()
+            except (VaultError, OSError) as exc:
+                log.event("vault.recovery-code-not-settled", code=getattr(exc, "code", type(exc).__name__))
+                return
+            vault.settled = outcome
+            log.event("vault.recovery-code-settled", outcome=outcome)
+            try:
+                self._check_state(vault, volume)  # saved: a record left behind is written at the next unlock
+            except (VaultError, *RECORD_ERRORS) as exc:
+                log.event("vault.change-not-recorded", code=getattr(exc, "code", type(exc).__name__))
+        finally:
+            os.close(volume)
 
     @contextlib.contextmanager
     def _state_lock(self, wait: float = 120.0):

@@ -40,6 +40,8 @@ MESSAGES = {
     "recovery-code-malformed": "a recovery code has 28 letters and digits (7 groups of 4)",
     "password-too-short": "use at least 8 characters",
     "last-method": "a profile needs at least one way to unlock it",
+    "replacement-pending": "a new recovery code is waiting to be typed back; replace the recovery code again "
+    "(and type the new one back) before removing this one",
     "not-confirmed": "the new recovery code was not confirmed, so the previous one still opens this profile. "
     "Unlocking it with the new code finishes the replacement; unlocking it any other way undoes it",
 }
@@ -304,7 +306,8 @@ def _change(args) -> int:
     if code:  # shown once the change is saved (it is the only copy), whether or not it was recorded
         print("New recovery code (shown once; write it down and keep it away from this computer):")
         print(f"\n    {code}\n")
-        print("Until you type it back, the previous code still opens this profile.")
+        if vault.pending_recovery_code():
+            print("Until you type it back, the previous code still opens this profile.")
     if unrecorded:
         _err(MESSAGES["not-recorded"])
     if code:

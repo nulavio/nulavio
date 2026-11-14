@@ -727,6 +727,66 @@ class HelperApiTest(StorageCase):
         profiles.unlock(prof, recovery_code=old_code).lock()
         profiles.lock(prof)
 
+    def test_the_code_being_replaced_cannot_be_removed_while_the_new_answer_was_lost(self):
+        # Review of #187: a recovery-only profile, its replacement killed before the answer left. Removing
+        # the old code with the old code then left only the new one, which nobody had seen.
+        prof, old_code = self.encrypted_profile()
+        killed = mock.patch.object(vault_cli, "_record", side_effect=SystemExit("killed"))
+        with killed, self.assertRaises(SystemExit):
+            vault_cli.api_request({"op": "new-recovery-code", "path": str(prof.path), "current": PASSWORD})
+        old_id = next(
+            m["id"] for m in profiles.status(prof)["methods"] if m["method"] == "recovery-code" and not m.get("unconfirmed")
+        )
+        password_id = next(m["id"] for m in profiles.status(prof)["methods"] if m["method"] == "password")
+        vault_cli.api_request({"op": "remove-method", "path": str(prof.path), "current": old_code, "envelope": password_id})
+        with self.assertRaises(VaultError) as ctx:
+            vault_cli.api_request({"op": "remove-method", "path": str(prof.path), "current": old_code, "envelope": old_id})
+        self.assertEqual(ctx.exception.code, "replacement-pending")
+        vault = profiles.unlock(prof, recovery_code=old_code)  # the code that was seen still opens it
+        self.assertEqual(vault.settled, "undone")
+        vault.lock()
+        profiles.lock(prof)
+
+    def test_a_first_recovery_code_is_confirmed_through_the_helper(self):
+        # Review of #187: with no recovery code left to replace, confirming the new one answered "not-found".
+        prof, _code = self.encrypted_profile()
+        code_id = next(m["id"] for m in profiles.status(prof)["methods"] if m["method"] == "recovery-code")
+        vault_cli.api_request({"op": "remove-method", "path": str(prof.path), "current": PASSWORD, "envelope": code_id})
+        new = vault_cli.api_request({"op": "new-recovery-code", "path": str(prof.path), "current": PASSWORD})["recovery_code"]
+        self.assertFalse(any(m.get("unconfirmed") for m in profiles.status(prof)["methods"]))
+        self.assertEqual(
+            vault_cli.api_request({"op": "confirm-recovery-code", "path": str(prof.path), "current": new}), {"done": True}
+        )
+        profiles.unlock(prof, recovery_code=new).lock()
+        profiles.lock(prof)
+
+    def test_a_settled_replacement_is_recorded_in_the_volume_or_nowhere(self):
+        # Review of #187: the settlement at unlock recorded by path; a volume gone between its save and its
+        # record got the record in the clear on the bare mount point, and the next unlock was refused.
+        prof, old_code = self.encrypted_profile()
+        killed = mock.patch.object(vault_cli, "_record", side_effect=SystemExit("killed"))
+        with killed, self.assertRaises(SystemExit):
+            vault_cli.api_request({"op": "new-recovery-code", "path": str(prof.path), "current": PASSWORD})
+        box = profiles.container(prof)
+        real_save = Vault.save
+
+        def save_then_detach(vault, *args, **kwargs):
+            real_save(vault, *args, **kwargs)
+            if vault.settled is None and box.mounted():  # the settlement's save: the volume goes away now
+                subprocess.run(["fusermount3", "-u", "-z", str(prof.path)], check=True, capture_output=True)
+
+        with mock.patch.object(Vault, "save", save_then_detach):
+            vault = profiles.unlock(prof, recovery_code=old_code)
+        self.assertEqual(vault.settled, "undone")
+        vault.lock()
+        box.secure_if_locked()
+        self.assertEqual([p.name for p in prof.path.iterdir()], [])  # nothing written in the clear
+        profiles.unlock(prof, recovery_code=old_code).lock()  # and it opens, its record and key file agreeing
+        self.assertEqual(
+            json.loads(box.state_path.read_text())["generation"], json.loads(box.vault_path.read_text())["generation"]
+        )
+        profiles.lock(prof)
+
     def test_a_failure_before_the_change_is_not_called_saved(self):
         # "Saved, but not recorded" was also the answer when the check before the change failed
         # (a full disk): nothing had been saved, and the old code still opened the profile.

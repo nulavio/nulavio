@@ -763,20 +763,59 @@ class RecoveryCodeTest(VaultTestCase):
         with self.assertRaises(VaultError):
             vault.unlock_recovery_code(old)
 
-    def test_removing_a_code_of_a_replacement_ends_it(self):
+    def test_removing_the_new_code_withdraws_the_replacement(self):
         vault, _, old = self.new_vault(recovery=True)
         old_id = vault.envelopes("recovery-code")[0].id
-        vault.replace_recovery_code(FAST)
-        new_id = vault.pending_recovery_code()["new"]
-        vault.remove(new_id)
+        new = vault.replace_recovery_code(FAST)
+        vault.remove(vault.pending_recovery_code()["new"])
         self.assertIsNone(vault.pending_recovery_code())
         self.assertEqual([e.id for e in vault.envelopes("recovery-code")], [old_id])
-        vault.replace_recovery_code(FAST)
-        vault.remove(old_id)  # the new code is then the only one: nothing is left to replace
-        self.assertNotIn("pending_recovery", vault.meta)
         vault = self.reopen(vault)
         with self.assertRaises(VaultError):
-            vault.unlock_recovery_code(old)
+            vault.unlock_recovery_code(new)
+        vault.unlock_recovery_code(old)
+
+    def test_the_code_being_replaced_cannot_be_removed(self):
+        # Review of #187: removing it left the new code, never typed back, as the only way in.
+        for others in (True, False):
+            with self.subTest(password=others):
+                vault, _, old = self.new_vault(name=f"{others}.json", password=others, recovery=True)
+                old_id = vault.envelopes("recovery-code")[0].id
+                vault.replace_recovery_code(FAST)
+                with self.assertRaises(VaultError) as ctx:
+                    vault.remove(old_id)
+                self.assertEqual(ctx.exception.code, "replacement-pending")
+                vault = self.reopen(vault)
+                vault.unlock_recovery_code(old)
+
+    def test_a_code_not_typed_back_is_not_counted_as_a_way_in(self):
+        vault, _, old = self.new_vault(recovery=True)
+        password_id = vault.envelopes("password")[0].id
+        vault.replace_recovery_code(FAST)
+        new_id = vault.pending_recovery_code()["new"]
+        vault.remove(password_id)  # the old code is still there: allowed
+        vault.remove(new_id)  # and the new one may be withdrawn, leaving the old one
+        self.assertEqual([e.method for e in vault.envelopes()], ["recovery-code"])
+        with self.assertRaises(VaultError) as ctx:
+            vault.remove(vault.envelopes()[0].id)
+        self.assertEqual(ctx.exception.code, "last-method")
+        vault = self.reopen(vault)
+        vault.unlock_recovery_code(old)
+
+    def test_a_first_recovery_code_is_confirmed_by_typing_it_back(self):
+        # Review of #187: a profile with no recovery code left has nothing to replace; its new code is not held
+        # back, and typing it back confirms it instead of answering "not-found".
+        vault, _, _ = self.new_vault(recovery=False)
+        new = vault.replace_recovery_code(FAST)
+        self.assertIsNone(vault.pending_recovery_code())
+        vault = self.reopen(vault)
+        vault.unlock_recovery_code(new)
+        vault.confirm_recovery_code()
+        vault = self.reopen(vault)
+        vault.unlock_password(PASSWORD)
+        with self.assertRaises(VaultError) as ctx:
+            vault.confirm_recovery_code()  # a password is not a code waiting to be confirmed
+        self.assertEqual(ctx.exception.code, "not-found")
 
     def test_codes_are_unique_and_high_entropy(self):
         from nulavio_launcher.vault.core import RECOVERY_GROUP_LEN, RECOVERY_GROUPS, new_recovery_code
