@@ -41,6 +41,9 @@ const GONE = Symbol("window-gone");
 const TIMED_OUT = Symbol("window-timed-out");
 
 const lazy = {};
+ChromeUtils.defineLazyGetter(lazy, "ClipboardHelper", () =>
+  Cc["@mozilla.org/widget/clipboardhelper;1"].getService(Ci.nsIClipboardHelper)
+);
 ChromeUtils.defineESModuleGetters(lazy, {
   CustomizableUI: "moz-src:///browser/components/customizableui/CustomizableUI.sys.mjs",
   NetUtil: "resource://gre/modules/NetUtil.sys.mjs",
@@ -640,6 +643,31 @@ export const NulavioLayout = {
     Services.prefs.setBoolPref(PREF_IMMERSIVE, Boolean(on));
     say(on ? "layoutImmersiveOn" : "layoutImmersiveOff");
     return this.immersive();
+  },
+
+  /**
+   * Ctrl+Shift+L (#157): the engine's own "Copy Link to Highlight" for the tab's selection, or for the
+   * highlight the page already shows, as the page menu offers it. The link comes from the page's
+   * ContextMenu actor (`#:~:text=`), the same one the menu item copies; nothing else is read or sent.
+   * The engine does not offer it in the source viewer, and neither does this. `say(key)` announces the outcome.
+   */
+  async copyLinkToHighlight(browser, say = () => {}) {
+    const global = browser?.browsingContext?.currentWindowGlobal;
+    let url = null;
+    if (global && !browser.currentURI?.schemeIs("view-source")) {
+      try {
+        url = await global.getActor("ContextMenu").getTextDirective();
+      } catch (e) {
+        url = null; // a page the engine makes no text fragment for (the PDF viewer, an error page)
+      }
+    }
+    if (typeof url !== "string" || !url.includes("#:~:text=")) {
+      say("linkHighlightNothing");
+      return false;
+    }
+    lazy.ClipboardHelper.copyString(url, global);
+    say("linkHighlightCopied");
+    return true;
   },
 
   /**
