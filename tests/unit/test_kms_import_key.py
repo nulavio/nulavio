@@ -248,7 +248,11 @@ class KmsImportKeyTest(unittest.TestCase):
         bad = self.tmp / "bad.p8"
         bad.write_bytes(kik.pkcs8({**numbers, "p": numbers["p"] + 2}))
         bad.chmod(0o600)
-        env = {"PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}", "FAKE_KMS_STATE": str(state), "XDG_RUNTIME_DIR": str(runtime)}
+        env = {
+            "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}",
+            "FAKE_KMS_STATE": str(state),
+            "XDG_RUNTIME_DIR": str(runtime),
+        }
         stderr = io.StringIO()
         with mock.patch.dict(os.environ, env), redirect_stderr(stderr):
             self.assertEqual(kik.main(["--pkcs8", str(bad), "--kms-key-id", "alias/test"]), 1)
