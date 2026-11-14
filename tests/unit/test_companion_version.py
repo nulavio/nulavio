@@ -106,6 +106,15 @@ class CompanionVersionTest(unittest.TestCase):
         self.assertEqual(run.returncode, 0, run.stderr)
         self.assertIn("no earlier release shipped the Companion", run.stdout)
 
+    def test_a_shallow_clone_is_refused_not_passed_blind(self):
+        shallow = Path(tempfile.mkdtemp(prefix="nulavio-companion-shallow-"))
+        self.addCleanup(shutil.rmtree, shallow, True)
+        subprocess.run(["git", "clone", "-q", "--depth", "1", f"file://{self.repo}", str(shallow / "c")], check=True)
+        run = subprocess.run([sys.executable, "-I", str(SCRIPT), "--repo", str(shallow / "c")],
+                             capture_output=True, text=True, check=False)  # fmt: skip
+        self.assertEqual(run.returncode, 1, run.stdout + run.stderr)
+        self.assertIn("shallow clone", run.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()

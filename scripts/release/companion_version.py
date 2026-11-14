@@ -15,8 +15,9 @@ commit being built:
   higher and `versionName` different;
 - `versionCode` never goes down.
 
-With no such tag (a fresh clone without tags, the first release with the APK),
-there is nothing to compare and the check passes. build_companion.sh runs it
+With no such tag (a clone without tags, the first release with the APK),
+there is nothing to compare and the check passes; a shallow clone is refused,
+since it would pass blind. build_companion.sh runs it
 before it builds; the release job fetches the tags for it.
 """
 
@@ -66,6 +67,9 @@ def previous_release(repo: Path, ref: str) -> str | None:
 
 
 def check(repo: Path, ref: str = "HEAD") -> str:
+    if git(repo, "rev-parse", "--is-shallow-repository").stdout.strip() == "true":
+        # A shallow clone has no tags to compare with, and passing then would be passing blind.
+        raise VersionError("this is a shallow clone: fetch the whole history and the tags (fetch-depth: 0) first")
     now = version(git(repo, "show", f"{ref}:{GRADLE}").stdout, ref)
     tag = previous_release(repo, ref)
     if tag is None:
