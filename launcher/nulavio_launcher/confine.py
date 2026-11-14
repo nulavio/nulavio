@@ -51,12 +51,15 @@ READ_ONLY_HOME = (
 EMPTY_DIRS = ("/tmp", "/var/tmp", "/mnt", "/media", "/run/media")  # noqa: S108 - hidden, not used
 
 
-# Run inside bubblewrap: the namespaces the engine gives its content processes (user, PID, network:
-# SandboxInfo's CanCreateUserNamespace() and the content sandbox's own unshare). Exit 3 when refused.
+# Run inside bubblewrap: new user, PID, network, IPC and UTS namespaces in one call, as the engine's content
+# sandbox makes them, then a capability used inside them (sethostname in the new UTS namespace). Creating them is
+# not enough: a policy can let a namespace be made and deny its capabilities afterwards (Ubuntu's
+# unprivileged_userns profile does). Exit 3 when refused.
 NAMESPACE_PROBE = (
     "import ctypes, os, sys\n"
     "libc = ctypes.CDLL(None, use_errno=True)\n"
-    "if libc.unshare(0x10000000 | 0x20000000 | 0x40000000) != 0:\n"
+    "if libc.unshare(0x10000000 | 0x20000000 | 0x40000000 | 0x08000000 | 0x04000000) != 0"
+    " or libc.sethostname(b'nulavio-probe', 13) != 0:\n"
     "    sys.stderr.write(os.strerror(ctypes.get_errno()) + '\\n')\n"
     "    sys.exit(3)\n"
 )
@@ -87,9 +90,9 @@ def check() -> str:
     if probe.returncode == NAMESPACES_REFUSED:
         raise ConfineError(
             f"not starting: inside bubblewrap the engine could not give its content processes their own "
-            f"user and network namespaces here ({detail}; on Ubuntu, AppArmor's bwrap-userns-restrict does this), "
-            "so --confined would weaken the engine's own sandbox. Without --confined that sandbox is whole, "
-            "but the browser can read your whole home folder"
+            f"user, PID and network namespaces here ({detail}; on Ubuntu, AppArmor's bwrap-userns-restrict does this), "
+            "so --confined would weaken the engine's own sandbox. Without --confined, an engine installed from "
+            "Nulavio's package keeps that sandbox, but the browser can read your whole home folder"
         )
     if probe.returncode != 0:
         raise ConfineError(f"bubblewrap cannot run here ({detail}); run without --confined")

@@ -16,12 +16,13 @@ sys.path.insert(0, str(ROOT / "launcher"))
 from nulavio_launcher import confine  # noqa: E402
 
 
-def bwrap_works() -> bool:
-    try:
-        confine.check()
-        return True
-    except confine.ConfineError:
+def bwrap_runs() -> bool:
+    """bubblewrap is installed and can run a program here (the probe's answer is not asked)."""
+    binary = confine.bwrap()
+    if not binary:
         return False
+    return subprocess.run([binary, "--ro-bind", "/", "/", "--dev", "/dev", "--", "/bin/true"],
+                          capture_output=True, timeout=20, check=False).returncode == 0  # fmt: skip
 
 
 class WrapTest(unittest.TestCase):
@@ -98,8 +99,9 @@ class CheckTest(unittest.TestCase):
         self.assertEqual(binary, "/usr/bin/bwrap")
         self.assertEqual(args[0], "/usr/bin/bwrap")
         self.assertEqual(args[args.index("--") + 1 :], [sys.executable, "-I", "-c", confine.NAMESPACE_PROBE])
-        # CLONE_NEWUSER, CLONE_NEWPID and CLONE_NEWNET, in one call, as the engine's content sandbox needs them.
-        self.assertIn("0x10000000 | 0x20000000 | 0x40000000", confine.NAMESPACE_PROBE)
+        # CLONE_NEWUSER, NEWPID, NEWNET, NEWIPC and NEWUTS in one call, then a capability used in them.
+        self.assertIn("0x10000000 | 0x20000000 | 0x40000000 | 0x08000000 | 0x04000000", confine.NAMESPACE_PROBE)
+        self.assertIn("sethostname", confine.NAMESPACE_PROBE)
 
     def test_namespaces_refused_inside_bubblewrap_refuse_the_start_and_say_the_trade_off(self):
         error, _ = self.check(confine.NAMESPACES_REFUSED, "Operation not permitted\n")
@@ -117,10 +119,11 @@ class CheckTest(unittest.TestCase):
         self.assertNotIn("not starting", str(error))
 
 
-@unittest.skipUnless(bwrap_works(), "bubblewrap is not installed or cannot create namespaces here")
+@unittest.skipUnless(bwrap_runs(), "bubblewrap is not installed or cannot run here")
 class RealBubblewrapTest(unittest.TestCase):
     def test_the_probe_fails_where_nested_namespaces_are_denied(self):
-        # Ubuntu's AppArmor denies them by capability; --disable-userns denies them by count: both refuse.
+        # Ubuntu's AppArmor denies them by capability (measured: unpriv_bwrap inside bubblewrap, unprivileged_userns
+        # outside); --disable-userns denies them by count: the probe refuses all of them.
         args = ["bwrap", "--unshare-user", "--disable-userns", "--ro-bind", "/", "/", "--dev", "/dev", "--",
                 sys.executable, "-I", "-c", confine.NAMESPACE_PROBE]  # fmt: skip
         probe = subprocess.run(args, capture_output=True, text=True, timeout=30, check=False)
@@ -142,7 +145,9 @@ class RealBubblewrapTest(unittest.TestCase):
             f"touch {home}/elsewhere 2>/dev/null; test -e {home}/elsewhere && echo home-writable-but-in-memory;"
             f"test -e {Path.home()}/.bashrc -o -e {ROOT}/README.md && echo real-home-visible; true"
         )
-        args = confine.wrap(["/bin/sh", "-c", script], profile_dir=profile, engine_dir=Path("/usr/bin"), home=home)
+        # binary= : what is hidden is checked even where the probe refuses the engine (Ubuntu), so this still runs there.
+        args = confine.wrap(["/bin/sh", "-c", script], profile_dir=profile, engine_dir=Path("/usr/bin"), home=home,
+                            binary=confine.bwrap())  # fmt: skip
         out = subprocess.run(args, capture_output=True, text=True, timeout=30, check=True).stdout.split()
         self.assertNotIn("secret-visible", out)
         self.assertNotIn("real-home-visible", out)
