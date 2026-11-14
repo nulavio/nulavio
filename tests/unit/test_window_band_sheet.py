@@ -43,5 +43,26 @@ class FusedBandTest(unittest.TestCase):
         self.assertIn('bar.removeAttribute("nv-named")', WINDOW)
 
 
+class PrivateWindowMenuTest(unittest.TestCase):
+    """#138: the assistant's page-menu item is hidden in a private window by the window's own sheet."""
+
+    BACKGROUND = (ROOT / "browser" / "shell" / "background.js").read_text(encoding="utf-8")
+    MANIFEST = (ROOT / "browser" / "shell" / "manifest.json").read_text(encoding="utf-8")
+
+    def test_the_rule_names_the_engines_id_for_the_item(self):
+        ask = re.search(r'const ASK_MENU = "([^"]+)";', self.BACKGROUND).group(1)
+        shell_id = re.search(r'"id":\s*"([^"]+)"', self.MANIFEST).group(1)
+        widget = re.sub(r"[^a-z0-9_-]", "_", shell_id.lower())  # ExtensionCommon.makeWidgetId
+        code = re.sub(r"/\*.*?\*/", "", SHEET, flags=re.S)
+        rule = re.search(r":root\[privatebrowsingmode\] #contentAreaContextMenu #(\S+) \{\s*display: none;\s*\}", code)
+        self.assertIsNotNone(rule, "no private-window rule for the item")
+        self.assertEqual(rule.group(1), f"{widget}-menuitem-_{ask}")
+
+    def test_the_background_never_changes_the_items_visibility(self):
+        # menus.update() changes an item in every window, and only after the menu is shown.
+        self.assertNotRegex(self.BACKGROUND, r"menus\.update\(ASK_MENU")
+        self.assertRegex(self.BACKGROUND, r"info\.menuItemId === ASK_MENU && tab && !tab\.incognito")
+
+
 if __name__ == "__main__":
     unittest.main()
