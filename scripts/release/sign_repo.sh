@@ -56,9 +56,12 @@ fingerprint() {
 }
 # Before anything is signed: a checked rehearsal, which the release key and a real KMS key never go without.
 checked() {
-    local signer=${1^^} manifest=${NULAVIO_RELEASE_MANIFEST:-}
+    local signer=${1^^} manifest=${NULAVIO_RELEASE_MANIFEST:-} released
+    [[ $signer =~ ^[0-9A-F]{40}$ ]] || { echo "sign_repo: cannot tell which key signs (${1:-no fingerprint})" >&2; exit 2; }
+    # An assignment of its own, so a key file that cannot be read stops the script (set -e) instead of comparing to "".
+    released=$(fingerprint "$repo/site/keys/nulavio-packages.asc")
     if [[ -z $manifest ]]; then
-        if [[ $signer == "$(fingerprint "$repo/site/keys/nulavio-packages.asc")" ]] ||
+        if [[ $signer == "$released" ]] ||
             { [[ -n ${NULAVIO_KMS_KEY_ID:-} ]] && [[ -z ${NULAVIO_TEST_AWS_DIR:-} ]]; }; then
             echo "sign_repo: the release key signs only a checked rehearsal: set NULAVIO_RELEASE_MANIFEST=<rehearsal-out>/manifest.json" >&2
             exit 2
@@ -116,7 +119,12 @@ agent=$(gpgconf --homedir "$gnupg" --list-dirs agent-extra-socket)
 [[ -S $agent ]] || { echo "sign_repo: no gpg-agent extra socket for $gnupg" >&2; exit 1; }
 gpg --homedir "$gnupg" --batch --armor --export "$key" >"$public/key.asc"
 [[ -s $public/key.asc ]] || { echo "sign_repo: no public key $key in $gnupg" >&2; exit 1; }
-checked "$(fingerprint "$public/key.asc")"
+# The full fingerprint, and exactly that key: an e-mail or a short id can name several keys, and gpg's
+# --export and --local-user need not pick the same one.
+[[ ${key^^} =~ ^[0-9A-F]{40}$ ]] || { echo "sign_repo: give the full 40-character fingerprint, not $key" >&2; exit 2; }
+fpr=$(fingerprint "$public/key.asc")
+[[ $fpr == "${key^^}" ]] || { echo "sign_repo: the public key exported for $key is ${fpr:-unreadable}" >&2; exit 1; }
+checked "$fpr"
 
 podman run --rm --security-opt label=disable \
     -v "$packages:/packages:ro" -v "$public:/public:ro" -v "$agent:/run/host-gpg-agent" -v "$out:/repo" "$image" bash -euc '

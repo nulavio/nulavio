@@ -28,6 +28,11 @@ publish_release.sh
 sign_repo.sh and sign_apt_repo.sh, each (#292)
   11. the `release_manifest.py verify` line deleted, or `|| true` added to it
   12. the refusal to sign with the release key, or with a real KMS key, without a manifest deleted
+  14. the refusal of a manifest not named manifest.json deleted
+sign_repo.sh's gpg-agent mode (#292)
+  13. its `checked "$fpr"` replaced by `:`
+  15. the refusal of anything but a full 40-character fingerprint deleted
+  16. `released=$(fingerprint …)` made `|| true`, or folded back into the `[[ ]]` comparison
 check_published.sh
   8. `if matches "$name" "$got"; then` -> `if [[ -n $got ]]; then` (any output accepted)
   9. in matches(), the dnf case loosened to `[[ $2 == "$expected"* ]]` or `"$expected".*`, or the
@@ -418,10 +423,6 @@ class CheckPublishedTest(unittest.TestCase):
                 self.assertIn("the published APT", run.stderr)
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 @unittest.skipUnless(shutil.which("gpg"), "needs gpg")
 class SignScriptsNeedACheckedRehearsalTest(RehearsalRepo, unittest.TestCase):
     """sign_repo.sh and sign_apt_repo.sh, run by hand, sign only what publish_release.sh would (#292)."""
@@ -501,3 +502,64 @@ class SignScriptsNeedACheckedRehearsalTest(RehearsalRepo, unittest.TestCase):
                 self.assertNotIn("checked rehearsal", run.stderr)
                 self.assertIn('"podman"', self.stubs.log.read_text(), run.stderr)
                 self.stubs.log.write_text("")
+
+    def gpg_home_with(self, *keys: Path) -> Path:
+        """A GnuPG home holding only these public keys, its agent started (the gpg-agent mode's set-up)."""
+        home = Path(tempfile.mkdtemp(prefix="nulavio-gpgmode-", dir=self.tmp))
+        home.chmod(0o700)
+        for key in keys:
+            subprocess.run(
+                ["gpg", "--homedir", str(home), "--batch", "--quiet", "--import", str(key)], capture_output=True, check=True
+            )
+        self.addCleanup(
+            subprocess.run, ["gpgconf", "--homedir", str(home), "--kill", "gpg-agent"], capture_output=True, check=False
+        )
+        return home
+
+    def sign_gpg_mode(self, out_name: str, key: str, home: Path, **env: str) -> subprocess.CompletedProcess:
+        env = self.stubs.env(GNUPGHOME=str(home), NULAVIO_PUBLISH_REF="origin/main", **env)
+        for name in ("NULAVIO_KMS_KEY_ID", "NULAVIO_RELEASE_MANIFEST", "NULAVIO_TEST_AWS_DIR"):
+            if name not in env or name == "NULAVIO_KMS_KEY_ID":
+                env.pop(name, None)
+        command = [self.repo / "scripts/release/sign_repo.sh", self.tmp / "rehearsal" / "packages", self.tmp / out_name, key]
+        return subprocess.run(["bash", *map(str, command)], env=env, capture_output=True, text=True, check=False)
+
+    def test_the_gpg_agent_mode_refuses_the_release_key_without_a_manifest(self):  # mutation 13
+        self.rehearsal("rehearsal", with_deb=True)
+        home = self.gpg_home_with(self.repo / "site/keys/nulavio-packages.asc")
+        for given in (self.release_fpr(), self.release_fpr().lower()):
+            with self.subTest(key=given):
+                run = self.sign_gpg_mode(f"gpg-{given[:6]}", given, home)
+                self.assert_refused_before_signing(run, "sign_repo: the release key signs only a checked rehearsal")
+
+    def test_the_gpg_agent_mode_takes_only_a_full_fingerprint(self):  # mutation 15
+        # An e-mail or a short id can name more than one key: what is exported need not be what signs.
+        self.rehearsal("rehearsal", with_deb=True)
+        home = self.gpg_home_with(self.other_key, self.repo / "site/keys/nulavio-packages.asc")
+        for given in ("other@example.invalid", self.other_fpr[-16:]):
+            with self.subTest(key=given):
+                run = self.sign_gpg_mode(f"gpg-short-{given[:5]}", given, home)
+                self.assert_refused_before_signing(run, "give the full 40-character fingerprint")
+
+    def test_an_unreadable_release_key_stops_the_check_instead_of_passing_it(self):  # mutation 16
+        self.rehearsal("rehearsal", with_deb=True)
+        home = self.gpg_home_with(self.repo / "site/keys/nulavio-packages.asc")
+        fpr = self.release_fpr()
+        (self.repo / "site/keys/nulavio-packages.asc").unlink()
+        run = self.sign_gpg_mode("gpg-unreadable", fpr, home)
+        self.assertNotEqual(run.returncode, 0, run.stdout + run.stderr)
+        self.assertEqual(self.stubs.log.read_text(), "", "a container ran though the release key could not be read")
+
+    def test_a_manifest_that_is_not_the_rehearsals_is_refused(self):  # mutation 14
+        out = self.rehearsal("rehearsal", with_deb=True)
+        other = out / "other.json"
+        other.write_text((out / "manifest.json").read_text())
+        for script, name in self.SCRIPTS:
+            with self.subTest(script=script):
+                run = self.sign(script, f"{name}-other", self.release_fpr(), NULAVIO_TEST_AWS_DIR=str(self.tmp),
+                                NULAVIO_RELEASE_MANIFEST=str(other))  # fmt: skip
+                self.assert_refused_before_signing(run, "is not a rehearsal's manifest.json")
+
+
+if __name__ == "__main__":
+    unittest.main()
