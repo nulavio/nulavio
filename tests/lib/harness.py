@@ -57,6 +57,9 @@ TEST_PREFS = {
     # The new tab's first-run sequence stays out of every test that does not ask for it
     # (tests/integration/test_newtab_ui.py clears it to walk through it).
     "nulavio.firstrun.done": "finished",
+    # The bar after an update (#198) stays out too: a release build packs its notes, and a test profile
+    # that skipped the first run looks like an updated one (tests/integration/test_whats_new_browser.py turns it on).
+    "nulavio.whatsnew.notice": False,
 }
 
 
@@ -579,6 +582,7 @@ PROFILE_TEST_PREFS = {
     "remote.prefs.recommended": False,
     "browser.shell.checkDefaultBrowser": False,
     "nulavio.firstrun.done": "finished",
+    "nulavio.whatsnew.notice": False,
 }
 
 

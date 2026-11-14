@@ -105,7 +105,8 @@ class RehearsalInstallTest(unittest.TestCase):
                     "scripts/build/make_tools.py",
                 ):
                     reached = tmp / ("reached-" + Path(name).name)
-                    body = f"import sys\nopen({str(reached)!r}, 'w').close()\n"
+                    # Each records the version it was given (#198: make_distribution packs that version's notes).
+                    body = f"import os, sys\nopen({str(reached)!r}, 'w').write(os.environ.get('NULAVIO_VERSION', 'unset'))\n"
                     (repo / name).write_text(body + (f"sys.exit({status})\n" if name == failing else ""))
                 packaged = tmp / "packaged"
                 (script.parent / "make_rpm.sh").write_text(f"#!/bin/sh\ntouch {packaged}\nexit 41\n")
@@ -121,6 +122,9 @@ class RehearsalInstallTest(unittest.TestCase):
                 self.assertFalse((tmp / "reached-make_tools.py").exists(), "the step carried on past the failure")
                 if failing.endswith("refresh_extensions_lock.py"):
                     self.assertFalse((tmp / "reached-make_distribution.py").exists(), "policies were written past the gate")
+                else:
+                    # The full version of this rehearsal, <firefox>-<release>: whose notes the packages carry.
+                    self.assertRegex((tmp / "reached-make_distribution.py").read_text(), r"^159\.0\.1-[0-9]+(\.[0-9]+)*$")
                 self.assertFalse(packaged.exists(), "packaged after a failed install")
 
 

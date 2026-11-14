@@ -1,0 +1,17 @@
+[
+  {
+    "namespace": "nulavioWhatsNew",
+    "description": "What's new in the installed version (#198): its packed notes, the setting that turns the after-update bar off, and the reader. Built-in Shell only.",
+    "functions": [
+      {
+        "name": "notes", "type": "function", "async": true,
+        "parameters": [{ "name": "language", "type": "string", "maxLength": 35 }]
+      },
+      { "name": "setting", "type": "function", "async": true, "parameters": [] },
+      {
+        "name": "setNotice", "type": "function", "async": true,
+        "parameters": [{ "name": "on", "type": "boolean" }]
+      }
+    ]
+  }
+]
