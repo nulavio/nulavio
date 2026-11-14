@@ -139,6 +139,38 @@
         ]
       },
       {
+        "name": "rekeyCheck",
+        "type": "function",
+        "async": true,
+        "parameters": [
+          {
+            "name": "profileId",
+            "type": "integer"
+          }
+        ]
+      },
+      {
+        "name": "rekey",
+        "type": "function",
+        "async": true,
+        "parameters": [
+          {
+            "name": "profileId",
+            "type": "integer"
+          },
+          {
+            "name": "details",
+            "type": "object",
+            "properties": {
+              "current": {
+                "type": "string",
+                "maxLength": 1024
+              }
+            }
+          }
+        ]
+      },
+      {
         "name": "openUnlockPage",
         "type": "function",
         "async": true,

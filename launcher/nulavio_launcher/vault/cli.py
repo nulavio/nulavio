@@ -19,7 +19,7 @@ from ..log import event as log_event
 from . import profiles, sodium
 from .core import Vault, VaultError, normalize_recovery_code
 from .providers import Keyring, add_os_keyring, remove_os_keyring
-from .storage import Container, StorageError, encrypt_existing, tools_available
+from .storage import Container, StorageError, encrypt_existing, rekey_space, tools_available
 
 PR_SET_DUMPABLE = 4
 
@@ -46,7 +46,19 @@ MESSAGES = {
     "finished by unlocking the profile with the new code, and undone by unlocking it any other way; "
     "`nulavio vault status` shows whether one is waiting",
     "first-not-confirmed": "that is not the recovery code shown above; it was not confirmed",
+    "unlocked": "the profile is open; close it and lock it first",
+    "no-space": "not enough free space: a new key needs room for a second copy of the profile while it is made",
+    "copy-mismatch": "the copy into the new volume did not match the original; nothing was changed",
+    "rekey-unfinished": "a new key was made for this profile, but putting it in place did not finish; it is finished "
+    "the next time the profile is used, so try again. Unlock methods that were not carried into the new key no "
+    "longer open it (`nulavio vault status` shows what it has)",
 }
+
+# What a removal leaves behind, said where one is made (ADR 0015).
+REMOVAL_NOTE = (
+    "A copy of the profile's key file made before now still opens the profile's files with what was removed, "
+    "outside Nulavio. `nulavio vault rekey` gives the profile a new key, which ends that."
+)
 
 # What an unlock did with a recovery code replacement that was never confirmed (#187).
 SETTLED = {
@@ -268,6 +280,10 @@ def _status(args) -> int:
         state = "locked" if item["locked"] else "OPEN (no engine running)" if item["open_without_engine"] else "unlocked"
         methods = ", ".join(m["method"] + (" (new, not confirmed)" if m.get("unconfirmed") else "") for m in item["methods"])
         print(f"{item['profile']:16} {state:26} methods: {methods}   protection: {', '.join(item['protection'])}")
+        key = item.get("key") or {}
+        if key.get("last_removal"):  # what a removal left behind, and what ends it (ADR 0015)
+            print(f"{'':16} a method was removed or replaced on {key['last_removal'][:10]}; a copy of the key file from before")
+            print(f"{'':16} still opens the files with it until the profile gets a new key: nulavio vault rekey")
     return 0
 
 
@@ -332,6 +348,45 @@ def _change(args) -> int:
             print("The previous recovery code no longer opens this profile through Nulavio; a copy of the")
             print("profile's files made before now can still be opened with it.")
     print(f"Profile '{prof.name}': {args.vault_cmd.replace('-', ' ')} done.")
+    if args.vault_cmd == "remove-method" or replaced:
+        print(REMOVAL_NOTE)
+    return 0
+
+
+METHOD_NAMES = {"password": "password", "recovery-code": "recovery code", "os-keyring": "computer login", "phone": "phone",
+                "combined": "password + phone"}  # fmt: skip
+
+
+def _named(items: list[dict]) -> str:
+    return ", ".join(METHOD_NAMES.get(m["method"], m["method"]) + (f" ({m['label']})" if m.get("label") else "") for m in items)
+
+
+def _rekey(args) -> int:
+    """A new key for the profile's volume (ADR 0015)."""
+    prof = target(args)
+    box = profiles.container(prof)
+    if not box.vault_path.exists():
+        _err(f"profile '{prof.name}' is not encrypted")
+        return 1
+    space = rekey_space(box)
+    print(f"A new key for '{prof.name}': the profile's files ({space['size'] / 2**20:.0f} MiB) are copied into a new")
+    print("encrypted volume, and the old one is deleted. After it, no copy of the key file made before opens")
+    print("anything. What stays: the password or recovery code you type now, your computer login and connected")
+    print("phones. What goes: every other password, and the recovery code unless it is what you type (make a")
+    print("new one right after: `nulavio vault new-recovery-code`).")
+    current = read_secret(f"Current password or recovery code for '{prof.name}'", from_stdin=args.password_stdin)
+    if current is None:
+        _err("no way to ask for the current password; use --password-stdin")
+        return 1
+    result = profiles.rekey(prof, current=current, keyring=keyring())
+    print(f"Profile '{prof.name}' has a new key. Still opens it: {_named(result['carried'])}.")
+    if result["dropped"]:
+        print(f"No longer opens it: {_named(result['dropped'])}.")
+    if not any(m["method"] == "recovery-code" for m in result["carried"]):
+        print(
+            f"It has no recovery code now. Make one: `nulavio vault new-recovery-code {args.name or '--path ' + str(prof.path)}`."
+        )
+    print("Copies of the profile's encrypted files made before now are still opened by the secrets of then.")
     return 0
 
 
@@ -424,18 +479,7 @@ def spawn_phone_session(request: dict, timeout: float = 20.0) -> dict:
 
 
 def _reauth(vault, current: str) -> None:
-    try:
-        vault.unlock_password(current)
-    except VaultError:
-        try:
-            vault.unlock_recovery_code(current)
-        except VaultError:
-            raise VaultError("wrong-secret") from None
-    if vault.tampered:
-        # Before any change, and before anything outside the file (the system keyring, a phone):
-        # save() refuses a tampered vault too, but a removed keyring secret cannot be put back.
-        vault.lock()
-        raise VaultError("metadata-tampered", "the profile's key file was changed outside Nulavio")
+    profiles.reauthenticate(vault, current)
 
 
 def api_request(request: dict) -> dict:
@@ -533,6 +577,15 @@ def api_request(request: dict) -> dict:
         finally:
             vault.lock()
         return {"recovery_code": code}
+    if op == "rekey-check":
+        # What a new key would need, before anything is asked (ADR 0015).
+        box = profiles.container(prof)
+        if not box.vault_path.exists():
+            raise VaultError("not-encrypted")
+        return {**rekey_space(box), "locked": not box.mounted(), "running": bool(prof.running_pid())}
+    if op == "rekey":
+        result = profiles.rekey(prof, current=str(request.get("current") or ""), keyring=keyring())
+        return {"done": True, "carried": result["carried"], "dropped": result["dropped"]}
     if op in ("new-recovery-code", "confirm-recovery-code", "add-password", "add-keyring", "remove-method"):
         box = profiles.container(prof)
         vault = box.load_vault()
@@ -609,6 +662,7 @@ HANDLERS = {
     "new-recovery-code": _change,
     "add-keyring": _change,
     "remove-method": _change,
+    "rekey": _rekey,
 }
 
 
@@ -655,6 +709,10 @@ def add_parser(sub) -> None:
     q.add_argument("name", nargs="?")
     q.add_argument("--path")
     q.add_argument("envelope")
+    q.add_argument("--password-stdin", action="store_true")
+    q = vsub.add_parser("rekey", help="a new key for the profile: what was removed stops opening old copies of the key file")
+    q.add_argument("name", nargs="?")
+    q.add_argument("--path")
     q.add_argument("--password-stdin", action="store_true")
     vsub.add_parser("api", help=argparse.SUPPRESS)  # JSON on stdin/stdout, used by the browser
     vsub.add_parser("phone-session", help=argparse.SUPPRESS)  # one pairing or phone unlock; started by `api`
