@@ -175,25 +175,14 @@ class ReleaseWorkflowTest(unittest.TestCase):
         check = (RELEASE / "check_published.sh").read_text(encoding="utf-8")
         self.assertIn('check "APT ($sources_file)" apt_install', check)
         self.assertIn("APT::Update::Error-Mode=any", check)
-        # The published source file is the reviewed one, whole, and that copy is what apt uses.
-        self.assertIn('cmp -s "$sources" "$repo/site/apt/nulavio.sources"', check)
+        # The published source file is the reviewed one, whole (run in test_release_script_protections),
+        # and that copy is what apt uses.
         self.assertIn('-v "$sources:/nulavio.sources:ro"', check)
         self.assertNotIn('curl -fsSL --retry 3 "$SOURCES_FILE"', check)
 
-    def test_the_published_version_must_be_the_released_one(self):
-        # rpm adds the distribution after the release; a .deb's version has nothing after it.
-        check = (RELEASE / "check_published.sh").read_text(encoding="utf-8")
-        start = check.index("matches() {")
-        matches = check[start : check.index("\n}\n", start) + 3]
-        cases = {
-            ("dnf (x)", "160.0-0.4.fc44"): True, ("dnf (x)", "160.0-0.4"): True, ("dnf (x)", "160.0-0.4.1"): False,
-            ("dnf (x)", "160.0-0.41.fc44"): False, ("APT (x)", "160.0-0.4"): True, ("APT (x)", "160.0-0.4.1"): False,
-            ("APT (x)", "160.0-0.4.fc44"): False, ("APT (x)", "apt install failed"): False,
-        }  # fmt: skip
-        for (name, got), expected in cases.items():
-            script = matches + '\nexpected=160.0-0.4\nmatches "$1" "$2"'
-            run = subprocess.run(["bash", "-c", script, "-", name, got], capture_output=True, text=True)
-            self.assertEqual(run.returncode == 0, expected, (name, got))
+    def test_the_release_is_drafted_from_the_runner_build(self):
+        # That the published repositories install exactly the released version is run, not read, in
+        # test_release_script_protections.CheckPublishedTest.
         self.assertIn("gh release create", self.publish)
         self.assertIn("--draft", self.publish)
         self.assertIn("NULAVIO_BUILD_PROFILE: runner", self.build)
