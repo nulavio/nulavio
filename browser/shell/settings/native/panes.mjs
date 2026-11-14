@@ -78,6 +78,9 @@
     get NulavioPrivacy() {
       return ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioPrivacy.sys.mjs").NulavioPrivacy;
     },
+    get NulavioWhatsNew() {
+      return ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioWhatsNew.sys.mjs").NulavioWhatsNew;
+    },
     get NulavioProfiles() {
       return ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioProfiles.sys.mjs").NulavioProfiles;
     },
@@ -2322,7 +2325,7 @@
       },
       privacy: config => ({ ...config, groupIds: after(config.groupIds, "etpStatus", "nulavioProtections", "nulavioExceptions") }),
       // "Sobre": how many managed policies are in effect and whose they are.
-      about: config => ({ ...config, groupIds: [...config.groupIds, "nulavioPolicies"] }),
+      about: config => ({ ...config, groupIds: [...config.groupIds, "nulavioWhatsNew", "nulavioPolicies"] }),
       passwordsAutofill: config => ({ ...config, groupIds: ["nulavioPasswordManager", ...config.groupIds, "nulavioConfirmedSites"] }),
       // Next to the engine's own groups on the same subject: who receives what is typed after its suggestions
       // group, and the engines Nulavio adds after its list of engines.
@@ -2389,6 +2392,34 @@
           return config;
         }
         return { ...config, l10nId: now.origin === "own" ? "nulavio-policies-own" : "nulavio-policies-other", l10nArgs: { count: now.count } };
+      },
+    });
+    // -- what's new in this version (#198): the notes, and the bar after an update (on unless turned off) --
+    const PREF_WHATSNEW = "nulavio.whatsnew.notice";
+    setting({
+      id: "nulavio-whatsnew-notice",
+      setup(emitChange, stops) {
+        Services.prefs.addObserver(PREF_WHATSNEW, emitChange); // the reader page has the same switch
+        stops.push(() => Services.prefs.removeObserver(PREF_WHATSNEW, emitChange));
+      },
+      get: () => Services.prefs.getBoolPref(PREF_WHATSNEW, true),
+      set: value => shell.NulavioWhatsNew.setNotice(Boolean(value)),
+    });
+    setting({
+      id: "nulavio-whatsnew-open",
+      onUserClick(event) {
+        event.preventDefault();
+        shell.NulavioWhatsNew.openReader(top());
+      },
+    });
+    groups({
+      nulavioWhatsNew: {
+        l10nId: "nulavio-whatsnew-group",
+        headingLevel: 2,
+        items: [
+          { id: "nulavio-whatsnew-open", l10nId: "nulavio-whatsnew-open", control: "moz-box-button" },
+          { id: "nulavio-whatsnew-notice", l10nId: "nulavio-whatsnew-notice", control: "moz-toggle" },
+        ],
       },
     });
     groups({

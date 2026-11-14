@@ -247,6 +247,11 @@ def zip_layout(apk: bytes) -> tuple[int, int]:
         start = local + 30 + local_name + local_extra
         if apk[local + 30 : local + 30 + local_name] != name or start + compressed > cd_offset:
             raise SignError(f"the local header of {name!r} does not match its record, or its data runs past the entries")
+        # The same method, and (unless a data descriptor follows the data) the same CRC and sizes.
+        flags, method, crc, sizes = struct.unpack_from("<HH4xIQ", apk, local + 6)
+        record = struct.unpack_from("<HH4xIQ", apk, position + 8)
+        if method != record[1] or (not flags & 0x08 and (flags, method, crc, sizes) != record):
+            raise SignError(f"the local header of {name!r} says another method, CRC or size than its record")
         spans.append((local, start + compressed))
         position += 46 + name_size + extra + comment
     if position != eocd:

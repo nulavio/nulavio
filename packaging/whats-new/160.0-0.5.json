@@ -1,0 +1,40 @@
+{
+  "version": "160.0-0.5",
+  "date": "2026-11-15",
+  "channel": "alpha",
+  "firefox": "160.0",
+  "pt-BR": {
+    "summary": "Uma atualização da alpha com o mesmo motor (Firefox 160.0): perfis protegidos mais fáceis de abrir e de manter, e correções no Guard, no Assistente e no modo Imersivo.",
+    "new": [
+      "O seletor de perfis do motor desbloqueia um perfil protegido antes de abri-lo, com a senha, o login deste computador ou o código de recuperação.",
+      "Trocar o código de recuperação tem duas etapas: o código antigo continua valendo até você digitar o novo de volta.",
+      "O app Nulavio Companion para Android vem com cada versão, assinado com a chave do projeto: baixe-o na página de download do nulavio.net, que mostra a impressão digital do certificado para conferir."
+    ],
+    "fixed": [
+      "Quando uma mudança nos métodos de desbloqueio é salva mas não fica registrada dentro do perfil, o navegador avisa.",
+      "O Guard percebe quando o pacote de uma extensão é trocado por outro arquivo, mesmo que a versão seja a mesma.",
+      "Um agente sem permissão para recursos locais não envia nenhum pedido a este computador nem à rede local.",
+      "No modo Imersivo, a lista lateral de abas fica abaixo da barra de ferramentas.",
+      "O item do Assistente para o texto selecionado não aparece em janelas privadas.",
+      "Depois de tornar o Nulavio o navegador padrão numa instalação por pacote, o menu mostra um só Nulavio.",
+      "A página de pareamento do celular não manda mais instalar o app pelo F-Droid, onde ele ainda não está, e diz onde baixá-lo."
+    ]
+  },
+  "en-US": {
+    "summary": "An update of the alpha with the same engine (Firefox 160.0): protected profiles that are easier to open and to keep, and fixes in the Guard, the Assistant and the Immersive mode.",
+    "new": [
+      "The engine's profile chooser unlocks a protected profile before it opens it, with the password, this computer's login or the recovery code.",
+      "Replacing the recovery code takes two steps: the old code keeps working until you type the new one back.",
+      "The Nulavio Companion app for Android comes with each release, signed with the project's key: download it from nulavio.net's download page, which shows the certificate's fingerprint to check."
+    ],
+    "fixed": [
+      "When a change to the unlock methods is saved but not recorded inside the profile, the browser says so.",
+      "The Guard notices when an extension's package is replaced by another file, even under the same version.",
+      "An agent without permission for local resources sends no request to this computer or the local network.",
+      "In the Immersive mode, the side tab list stays below the toolbar.",
+      "The Assistant's item for selected text does not show in private windows.",
+      "After making Nulavio the default browser on a package install, the menu shows one Nulavio.",
+      "The phone pairing page no longer sends people to F-Droid, where the app is not yet, and says where to get it."
+    ]
+  }
+}

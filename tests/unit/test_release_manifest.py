@@ -60,7 +60,14 @@ class ReleaseManifestTest(unittest.TestCase):
     def tearDown(self):
         subprocess.run(["rm", "-rf", str(self.tmp)], check=True)
 
-    def write(self):
+    def write(self, notes: bool = True):
+        # The packages carry their own version's notes (#198) unless a test says otherwise.
+        self.manifest.pop("whats_new", None)
+        if notes:
+            try:
+                self.manifest["whats_new"] = release_manifest.tag(self.manifest)[0].removeprefix("v")
+            except release_manifest.ManifestError:
+                pass  # a manifest the test means to be refused for something else
         (self.out / "manifest.json").write_text(json.dumps(self.manifest), encoding="utf-8")
 
     def verify(self):
@@ -76,6 +83,19 @@ class ReleaseManifestTest(unittest.TestCase):
         self.assertEqual(info["tag"], "v159.0.1-0.1")
         self.assertEqual(info["rpms"], [RPM])
         self.assertEqual(info["commit"], self.base)
+
+    def test_packages_without_their_own_versions_notes_are_refused(self):
+        # A security pre-build made before packaging/whats-new/<version>.json existed packs no notes (#198).
+        self.write(notes=False)
+        self.refused("carry no notes")
+        tag = self.verify_tag_with_notes()
+        self.manifest["whats_new"] = "159.0.1-0.0"  # another version's
+        (self.out / "manifest.json").write_text(json.dumps(self.manifest), encoding="utf-8")
+        self.refused(f"no notes for {tag}")
+
+    def verify_tag_with_notes(self) -> str:
+        self.write()
+        return self.verify()["tag"].removeprefix("v")
 
     def test_uncommitted_or_untracked_changes_are_refused(self):
         self.manifest["worktree_diff_sha256"] = "0" * 64

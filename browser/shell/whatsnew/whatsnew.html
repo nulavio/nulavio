@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title data-i18n="whatsNewTitle">What's new in Nulavio</title>
+  <link rel="icon" href="../shared/nulavio-symbol-adaptive.svg">
+  <link rel="stylesheet" href="../shared/tokens.css">
+  <link rel="stylesheet" href="../shared/base.css">
+  <link rel="stylesheet" href="../shared/shell.css">
+  <script type="module" src="../lib/appearance.js"></script>
+  <script type="module" src="whatsnew.js"></script>
+</head>
+<body>
+  <main class="page page--narrow">
+    <!-- The installed version's own notes, packed with it (#198): read from disk, never fetched. -->
+    <article class="card whatsnew" aria-labelledby="whatsnew-heading" aria-busy="true">
+      <h1 class="card__title whatsnew__heading" id="whatsnew-heading" data-i18n="whatsNewTitle"></h1>
+      <p class="hint" id="meta" hidden></p>
+      <p class="whatsnew__summary" id="summary" hidden></p>
+      <div class="callout callout--info" id="missing" role="status" hidden>
+        <p id="missing-text"></p>
+      </div>
+      <section class="whatsnew__part" id="part-breaking" aria-labelledby="h-breaking" hidden>
+        <h2 id="h-breaking" data-i18n="whatsNewBreaking"></h2><ul></ul>
+      </section>
+      <section class="whatsnew__part" id="part-action" aria-labelledby="h-action" hidden>
+        <h2 id="h-action" data-i18n="whatsNewAction"></h2><ul></ul>
+      </section>
+      <section class="whatsnew__part" id="part-new" aria-labelledby="h-new" hidden>
+        <h2 id="h-new" data-i18n="whatsNewNew"></h2><ul></ul>
+      </section>
+      <section class="whatsnew__part" id="part-fixed" aria-labelledby="h-fixed" hidden>
+        <h2 id="h-fixed" data-i18n="whatsNewFixed"></h2><ul></ul>
+      </section>
+      <section class="whatsnew__part" id="part-security" aria-labelledby="h-security" hidden>
+        <h2 id="h-security" data-i18n="whatsNewSecurity"></h2><ul></ul>
+      </section>
+      <footer class="whatsnew__footer">
+        <label class="check check--switch">
+          <input type="checkbox" role="switch" id="notice">
+          <span><span data-i18n="whatsNewNoticeLabel"></span><span class="hint" data-i18n="whatsNewNoticeHint"></span></span>
+        </label>
+        <p class="hint" data-i18n="whatsNewOffline"></p>
+        <!-- Only by the person's click, never on its own (#198). -->
+        <p><a id="history" data-i18n="whatsNewHistory"></a></p>
+      </footer>
+    </article>
+  </main>
+</body>
+</html>

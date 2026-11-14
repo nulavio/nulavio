@@ -21,6 +21,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import shutil
 import sys
 import urllib.parse
@@ -30,6 +31,31 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "launcher"))
 
 from nulavio_launcher import __version__, extensions, prefs, profile  # noqa: E402
+
+sys.path.insert(0, str(ROOT / "scripts" / "release"))
+import whats_new  # noqa: E402
+
+WHATS_NEW_NAME = "whats-new.json"
+
+
+def installed_whats_new() -> dict | None:
+    """What's new in the version being packaged (#198), for the browser's reader; None when there is none.
+
+    A rehearsal names its version (NULAVIO_VERSION, <firefox>-<release>); a development build names
+    none. A version without its reviewed record is packed without notes and says so: the security
+    pre-build (autobuild.py) builds before they are written, and release_manifest.py refuses to
+    publish packages that do not carry their own version's notes (the manifest's "whats_new")."""
+    version = os.environ.get("NULAVIO_VERSION", "")
+    if not version:
+        return None
+    path = ROOT / whats_new.DIRECTORY / f"{version}.json"
+    if not path.is_file():
+        print(f"make_distribution: no packaging/whats-new/{version}.json: packed without notes, not publishable", file=sys.stderr)
+        return None
+    try:
+        return whats_new.validate(json.loads(path.read_text(encoding="utf-8")), path.name)
+    except (OSError, ValueError) as error:
+        raise SystemExit(f"what's new in {version}: {error} (packaging/whats-new/{version}.json)") from None
 
 
 # Prefs the engine honours only as user values: as a default, the tracking-protection category is
@@ -286,7 +312,12 @@ def main() -> int:
     else:
         (args.out / LICENCE_NAME).unlink(missing_ok=True)
         (args.out / NOTICE_NAME).unlink(missing_ok=True)
-    print(f"wrote {args.out}/distribution.ini and policies.json")
+    record = installed_whats_new()
+    if record is None:
+        (args.out / WHATS_NEW_NAME).unlink(missing_ok=True)  # a development build: the reader says it has no notes
+    else:
+        (args.out / WHATS_NEW_NAME).write_text(json.dumps(record, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    print(f"wrote {args.out}/distribution.ini and policies.json" + (f", and what's new in {record['version']}" if record else ""))
     return 0
 
 

@@ -262,6 +262,27 @@ class NativeSettingsTest(unittest.TestCase):
         self.m.chrome('Services.prefs.setBoolPref("nulavio.layout.immersive", false);')
         self.assertFalse(self.control("#nulavio-immersive", lambda s: s.get("pressed") is False)["pressed"])
 
+    def test_02c_whats_new_sits_in_about_with_its_switch_and_the_notes(self):
+        # #198: the switch for the bar after an update, and the notes of this version, in "Sobre".
+        self.open("about:preferences#about")
+        pref = 'return Services.prefs.getBoolPref("nulavio.whatsnew.notice", true);'
+        self.addCleanup(self.m.chrome, 'Services.prefs.setBoolPref("nulavio.whatsnew.notice", false);')
+        switch = self.control("#nulavio-whatsnew-notice")
+        # Off in test profiles (harness.TEST_PREFS); on by default for people.
+        self.assertEqual((switch["label"], switch["pressed"]), ("Mostrar novidades após atualizar", False), switch)
+        group = 'return d.querySelector("#nulavio-whatsnew-notice").closest("setting-group").getAttribute("groupid");'
+        self.assertEqual(self.m.chrome(DOC + group), "nulavioWhatsNew")
+        self.m.chrome(DOC + 'd.querySelector("#nulavio-whatsnew-notice").click();')
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome(pref), 10))
+        self.m.chrome('Services.prefs.setBoolPref("nulavio.whatsnew.notice", false);')  # the reader's switch, say
+        self.assertFalse(self.control("#nulavio-whatsnew-notice", lambda s: s.get("pressed") is False)["pressed"])
+        self.assertEqual(self.control("#nulavio-whatsnew-open")["label"], "Novidades desta versão")
+        tabs = self.m.chrome("return gBrowser.tabs.length;")
+        self.m.chrome(DOC + 'd.querySelector("#nulavio-whatsnew-open").click();')
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome("return gBrowser.tabs.length;") == tabs + 1, 10))
+        selected = "return gBrowser.selectedBrowser.currentURI.spec;"
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome(selected).endswith("/whatsnew/whatsnew.html"), 10))
+
     def test_03_words_come_in_english_too(self):
         self.m.chrome('Services.locale.requestedLocales = ["en-US"];')
         self.m = self.session.restart()

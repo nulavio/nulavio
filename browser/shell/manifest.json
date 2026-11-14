@@ -236,6 +236,23 @@
           "startup"
         ]
       }
+    },
+    "nulavioWhatsNew": {
+      "schema": "experiments/whatsnew/schema.json",
+      "parent": {
+        "scopes": [
+          "addon_parent"
+        ],
+        "script": "experiments/whatsnew/parent.js",
+        "paths": [
+          [
+            "nulavioWhatsNew"
+          ]
+        ],
+        "events": [
+          "startup"
+        ]
+      }
     }
   },
   "permissions": [
