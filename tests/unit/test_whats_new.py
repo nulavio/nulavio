@@ -61,6 +61,11 @@ class WhatsNewTest(unittest.TestCase):
             "too many items": (changed(en_US__new=["x"] * 21, pt_BR__new=["x"] * 21), None),
             "languages that differ": (changed(en_US__fixed=[]), None),
             "an advisory that is not a GHSA id": (changed(security=["CVE-2026-1"]), None),
+            "an address in capitals": (changed(en_US__new=["See HTTPS://evil.example/x."]), None),
+            "another scheme": (changed(en_US__new=["Get ftp://files.example/x."]), None),
+            "www in capitals": (changed(en_US__new=["Visit WWW.example.com."]), None),
+            "a bidirectional override": (changed(en_US__summary="Fixed \u202eevil."), None),
+            "a line separator": (changed(en_US__summary="One\u2028two."), None),
         }
         for name, (data, file_name) in cases.items():
             with self.subTest(name), self.assertRaises(whats_new.RecordError):
@@ -74,8 +79,13 @@ class WhatsNewTest(unittest.TestCase):
             for version in ("160.0-0.4", "160.0-0.5", "161.0-0.1"):
                 data = {**copy.deepcopy(RECORD), "version": version, "firefox": version.split("-")[0]}
                 (directory / f"{version}.json").write_text(json.dumps(data))
+            data = {**copy.deepcopy(RECORD), "version": "160.0-0.3", "firefox": "160.0"}  # a revision never published
+            (directory / "160.0-0.3.json").write_text(json.dumps(data))
             self.assertEqual(whats_new.published(repo), [])  # no packaging/release.json: nothing is published
             (repo / "packaging" / "release.json").write_text(json.dumps({"version": "160.0-0.5"}))
+            # Published: the version release.json names, and those CHANGELOG.md records as published.
+            self.assertEqual([r["version"] for r in whats_new.published(repo)], ["160.0-0.5"])
+            (repo / "CHANGELOG.md").write_text("# Changelog\n\n<!-- release:v160.0-0.4 -->\n## 160.0-0.4\n")
             self.assertEqual([r["version"] for r in whats_new.published(repo)], ["160.0-0.5", "160.0-0.4"])
             self.assertEqual(whats_new.published(repo, "161.0-0.1")[0]["version"], "161.0-0.1")
 
@@ -105,6 +115,24 @@ class WhatsNewTest(unittest.TestCase):
         run = subprocess.run([sys.executable, "-I", str(ROOT / "scripts/release/whats_new.py"), "check"],
                              capture_output=True, text=True, check=False)  # fmt: skip
         self.assertEqual(run.returncode, 0, run.stderr)
+
+    def test_pages_and_notes_escape_what_plain_text_may_hold(self):
+        sys.path.insert(0, str(ROOT / "scripts" / "site"))
+        import whats_new_pages
+
+        text = {"summary": 'Tom\'s "quote" & more *stars* and _under_.', "new": ["A & B's <thing>"[:-8]]}
+        record = {**copy.deepcopy(RECORD), "pt-BR": text, "en-US": text, "security": []}
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            (repo / whats_new.DIRECTORY).mkdir(parents=True)
+            (repo / whats_new.DIRECTORY / "160.0-0.5.json").write_text(json.dumps(record))
+            pages = whats_new_pages.pages(repo, "160.0-0.5", {"pt-BR": "20/11/2026", "en-US": "2026-11-20"})
+        page = pages["en/whats-new/160.0-0.5/index.html"]
+        self.assertIn("Tom&#x27;s &quot;quote&quot; &amp; more", page)
+        self.assertNotIn("Tom's", page)
+        self.assertIn("A &amp; B&#x27;s", page)
+        index = pages["en/whats-new/index.html"]
+        self.assertIn("Tom&#x27;s &quot;quote&quot;", index)
 
 
 if __name__ == "__main__":

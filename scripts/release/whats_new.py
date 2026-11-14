@@ -38,6 +38,7 @@ import json
 import re
 import subprocess
 import sys
+import unicodedata
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -48,8 +49,9 @@ VERSION = re.compile(r"(?P<firefox>[0-9]+(?:\.[0-9]+)+)-(?P<release>[0-9]+(?:\.[
 GHSA = re.compile(r"GHSA(?:-[23456789cfghjmpqrvwx]{4}){3}")
 CHANNELS = ("alpha", "beta", "stable")
 SUMMARY_MAX, ITEM_MAX, ITEMS_MAX = 500, 300, 20
-# Plain text: no markup, no link syntax, no address, no control characters.
-NOT_PLAIN = re.compile(r"[<>`\[\]\x00-\x08\x0b-\x1f\x7f]|https?://|www\.|\]\(|@")
+# Plain text: no markup, no link syntax, no address or scheme (GitHub turns "HTTPS://x" into a link),
+# no control, format or line-separator character (bidirectional overrides among them).
+NOT_PLAIN = re.compile(r"[<>`\[\]\x00-\x1f\x7f\u2028\u2029]|\b[a-z][a-z0-9+.-]*://|\bwww\.|@", re.IGNORECASE)
 
 
 class RecordError(ValueError):
@@ -70,7 +72,7 @@ def _text(value: object, where: str, limit: int) -> str:
         raise RecordError(f"{where}: one line, single spaces, nothing around it")
     if len(value) > limit:
         raise RecordError(f"{where}: longer than {limit} characters")
-    if NOT_PLAIN.search(value):
+    if NOT_PLAIN.search(value) or any(unicodedata.category(ch) in ("Cc", "Cf") for ch in value):
         raise RecordError(f"{where}: plain text only (no markup, link, address or control character)")
     return value
 
@@ -129,9 +131,13 @@ def records(repo: Path = ROOT) -> list[dict]:
     return sorted(found, key=lambda r: version_key(r["version"]), reverse=True)
 
 
+CHANGELOG_RELEASE = re.compile(r"^<!-- release:v(\S+) -->$", re.M)
+
+
 def published(repo: Path = ROOT, through: str | None = None) -> list[dict]:
-    """The records of versions up to the published one (packaging/release.json, or `through`),
-    newest first. A record for a version not released yet is not shown anywhere."""
+    """The records of published versions, newest first: the one packaging/release.json names (or
+    `through`), and those CHANGELOG.md records as published (release-metadata adds them), up to it.
+    A record for a version not released, or never published (a revision skipped), is not shown."""
     if through is None:
         try:
             through = json.loads((repo / "packaging" / "release.json").read_text(encoding="utf-8")).get("version") or None
@@ -139,8 +145,14 @@ def published(repo: Path = ROOT, through: str | None = None) -> list[dict]:
             through = None
     if not through:
         return []
+    try:
+        listed = set(CHANGELOG_RELEASE.findall((repo / "CHANGELOG.md").read_text(encoding="utf-8")))
+    except FileNotFoundError:
+        listed = set()
     limit = version_key(through)
-    return [r for r in records(repo) if version_key(r["version"]) <= limit]
+    return [
+        r for r in records(repo) if r["version"] == through or (r["version"] in listed and version_key(r["version"]) <= limit)
+    ]
 
 
 def require(version: str, repo: Path = ROOT, at: str | None = None) -> dict:

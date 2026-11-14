@@ -70,6 +70,10 @@ jobs:
       - name: Pinned Firefox release
         id: pin
         run: python3 -I -c 'import json; print("firefox=" + json.load(open("browser/build/engine.json"))["firefox"])' >> "$GITHUB_OUTPUT"
+      - name: What is new in this version is written (packaging/whats-new/), before hours of building
+        env:
+          FIREFOX: ${{ steps.pin.outputs.firefox }}
+        run: python3 -I scripts/release/whats_new.py require "$FIREFOX-$(python3 -I scripts/release/release_manifest.py next-release "$FIREFOX")"
       - name: libsodium and gocryptfs for the Vault tests (decisions D1, D2)
         run: scripts/ci/apt_install.sh libsodium23 gocryptfs fuse3
       - name: Google Safe Browsing key (file mode 0600, read by build_nulavio.sh)

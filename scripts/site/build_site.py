@@ -27,7 +27,8 @@ The build fails if a ``{{`` is left.
 
 The "What's new" pages (novidades/, en/whats-new/, an index and one page per version)
 are generated from packaging/whats-new/ for the versions up to the published one
-(scripts/site/whats_new_pages.py); the published version must have its record.
+(scripts/site/whats_new_pages.py); the download pages link to the published version's page
+when it has one (the release refuses a version without its record).
 
 The download pages (baixar/, en/download/) describe a published release:
 {{release_version}}, {{key_fpr}}, {{repo_file}} and {{key_url}} come from

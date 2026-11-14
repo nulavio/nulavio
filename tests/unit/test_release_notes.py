@@ -105,6 +105,13 @@ class ReleaseNotesTest(unittest.TestCase):
         self.assertEqual(missing.returncode, 1)
         self.assertIn("no packaging/whats-new/160.0-0.3.json at", missing.stderr)
         self.assertFalse(missing.stdout)
+        # Markdown in the record's text is shown as text in the notes.
+        self.record("160.0-0.13", summary="Stars *here* and _there_.")
+        self.git("add", "packaging")
+        self.commit("docs: what is new in 0.13")
+        stars = self.notes("v160.0-0.13", self.git("rev-parse", "HEAD").strip())
+        self.assertEqual(stars.returncode, 0, stars.stderr)
+        self.assertIn("Stars \\*here\\* and \\_there\\_.", stars.stdout)
         # And an invalid one is refused, not printed.
         self.record("160.0-0.12", summary="See <script>")
         self.git("add", "packaging")

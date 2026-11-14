@@ -29,6 +29,9 @@ on:
       - "docs/brand/assets/**"
       - "browser/build/engine.json"
       - "packaging/release.json" # published version and download links
+      - "packaging/whats-new/**" # what is new in each version (/novidades/, /en/whats-new/)
+      - "scripts/release/whats_new.py"
+      - "CHANGELOG.md" # which versions were published
       - "browser/patches/series"
       - "browser/distribution/extensions.lock.json"
       - "launcher/**" # the prefs explain excerpt on the page
