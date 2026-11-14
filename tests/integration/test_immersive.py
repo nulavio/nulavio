@@ -85,8 +85,8 @@ const box = id => {
 };
 return { toolbar: box("nav-bar"), tabs: box("sidebar-container"), band: box("nulavio-band") };
 """
-EDGE = "window.windowUtils.sendMouseEvent('mousemove', 2, Math.round(innerHeight / 2), 0, 0, 0);"
-AWAY = "window.windowUtils.sendMouseEvent('mousemove', Math.round(innerWidth / 2), Math.round(innerHeight / 2), 0, 0, 0);"
+EDGE = "window.synthesizeMouseEvent('mousemove', 2, Math.round(innerHeight / 2), {}, {});"
+AWAY = "window.synthesizeMouseEvent('mousemove', Math.round(innerWidth / 2), Math.round(innerHeight / 2), {}, {});"
 
 
 @unittest.skipUnless(harness.nulavio_engine(), "Immersive needs the built-in Shell on the engine")
