@@ -25,6 +25,10 @@ commit(s) the numbers, excerpts and captures come from; outside --release
 they say so when the tree had changes or the build predates the commit.
 The build fails if a ``{{`` is left.
 
+The "What's new" pages (novidades/, en/whats-new/, an index and one page per version)
+are generated from packaging/whats-new/ for the versions up to the published one
+(scripts/site/whats_new_pages.py); the published version must have its record.
+
 The download pages (baixar/, en/download/) describe a published release:
 {{release_version}}, {{key_fpr}}, {{repo_file}} and {{key_url}} come from
 packaging/release.json. Until it names a version and a key fingerprint and
@@ -57,11 +61,16 @@ import json
 import re
 import shutil
 import subprocess
+import sys
 import tarfile
 import tempfile
 import xml.etree.ElementTree as ET
 from html.parser import HTMLParser
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import whats_new_pages
 
 ROOT = Path(__file__).resolve().parents[2]
 ASSETS = {
@@ -96,6 +105,8 @@ APT_BLOCK = re.compile(r"<!--apt:(on|off)-->(.*?)<!--/apt:\1-->\n?", re.S)
 # packaging/release.json names a published version; the <!--release:off--> blocks otherwise.
 RELEASE_BLOCK = re.compile(r"<!--release:(on|off)-->(.*?)<!--/release:\1-->\n?", re.S)
 ENGINEERING_PAGES = {"engenharia/index.html", "en/engineering/index.html"}
+# The download pages link to what is new in the published version when it has its page.
+WHATSNEW_BLOCK = re.compile(r"<!--whatsnew:(on|off)-->(.*?)<!--/whatsnew:\1-->\n?", re.S)
 E1_CATEGORIES = ("tracking", "https")
 SCALE = 2  # captures are taken at devPixelsPerPx=2; width/height attributes are CSS px
 # Notes appended to a commit outside --release, so a development build never passes for a release.
@@ -475,12 +486,23 @@ def build(out: Path, *, release: bool = False, commit: str = "HEAD", evidence: s
                     (out / page).parent.rmdir()
         else:
             pages.update(DOWNLOAD_PAGES)
+        # What's new: an index and a page per published version, from packaging/whats-new/.
+        try:
+            generated = whats_new_pages.pages(
+                src, released["release_version"] if released else None, {"pt-BR": values["date_pt"], "en-US": values["date_en"]}
+            )
+        except whats_new_pages.whats_new.RecordError as error:
+            raise BuildError(f"what's new: {error}") from None
+        has_notes = bool(released) and f"{whats_new_pages.BASE['en-US']}{released['release_version']}/index.html" in generated
         for page, locale in pages.items():
             path = out / page
             page_values = {**values, **released} if page in DOWNLOAD_PAGES else values
             text = path.read_text(encoding="utf-8")
             if page in DOWNLOAD_PAGES:
                 text = choose_apt_blocks(text, released["apt"])
+                text = choose_blocks(text, WHATSNEW_BLOCK, "on" if has_notes else "off")
+            elif "<!--whatsnew:" in text:
+                raise BuildError(f"{page}: what's-new blocks belong on the download pages only")
             elif "<!--apt:" in text:
                 raise BuildError(f"{page}: apt blocks belong on the download pages only")
             if page in ENGINEERING_PAGES:
@@ -494,6 +516,11 @@ def build(out: Path, *, release: bool = False, commit: str = "HEAD", evidence: s
                 left = sorted(set(re.findall(r"\{\{[^}]*\}\}", text)))
                 raise BuildError(f"{page}: placeholders left: {left}")
             path.write_text(text, encoding="utf-8")
+        for page, text in generated.items():
+            locale = "pt-BR" if page.startswith(whats_new_pages.BASE["pt-BR"]) else "en-US"
+            (out / page).parent.mkdir(parents=True, exist_ok=True)
+            (out / page).write_text(stamp_page(text, values, manifest, locale, page), encoding="utf-8")
+            pages[page] = locale
         write_sitemap(out, pages)
     return sorted(str(p.relative_to(out)) for p in out.rglob("*") if p.is_file())
 

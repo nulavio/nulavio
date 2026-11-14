@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import itertools
+import html as html_module
 import json
 import re
 import shutil
@@ -986,6 +987,54 @@ class DownloadPagesTest(unittest.TestCase):
                 self.assertIn("159.0.1-0.1", description)
         ids = [re.findall(r'id="([^"]+)"', pages["on"][page]) for page in DOCUMENT]
         self.assertEqual(ids[0], ids[1], "both languages have the same sections")
+
+    def test_whats_new_pages_follow_the_published_version(self):
+        # #198: an index and a page per published version, in both languages, from packaging/whats-new/.
+        real = build_site.release_values
+        current = real(ROOT)
+        self.assertIsNotNone(current, "the tree names a published release")
+        built = {}
+        for name, values in (("on", current), ("off", None), ("older", {**current, "release_version": "159.0.1-0.1"})):
+            out = self.tmp / f"whats-new-{name}"
+            build_site.release_values = lambda src, values=values: values
+            try:
+                built[name] = (out, set(build_site.build(out)))
+            finally:
+                build_site.release_values = real
+        # A published version older than every record: no pages, and the download pages link to none.
+        older_out, older_files = built["older"]
+        self.assertFalse({f for f in older_files if f.startswith(("novidades/", "en/whats-new/"))})
+        for page in build_site.DOWNLOAD_PAGES:
+            self.assertNotIn("whats-new/", (older_out / page).read_text(encoding="utf-8").replace("novidades/", "whats-new/"))
+        out, files = built["on"]
+        version = current["release_version"]
+        pages = ["novidades/index.html", "en/whats-new/index.html",
+                 f"novidades/{version}/index.html", f"en/whats-new/{version}/index.html"]  # fmt: skip
+        self.assertLessEqual(set(pages), files)
+        self.assertFalse({f for f in built["off"][1] if f.startswith(("novidades/", "en/whats-new/"))})
+        sitemap = (out / "sitemap.xml").read_text(encoding="utf-8")
+        for page in pages:
+            html = (out / page).read_text(encoding="utf-8")
+            with self.subTest(page=page):
+                self.assertNotIn("<script", html)
+                self.assertNotIn("style=", html)
+                self.assertNotIn("{{", html)
+                for url in re.findall(r'(?:src|href|srcset)="(https?://[^"]+)"', html):
+                    self.assertTrue(url.startswith(SAME_SITE), url)
+                for ref in re.findall(r'(?:src|href|srcset)="(/[^"#]*)"', html):
+                    target = out / ref.lstrip("/")
+                    self.assertTrue(target.is_file() or (target / "index.html").is_file(), ref)
+                self.assertIn(f"<body>\n{build_site.EMAIL_OFF[0]}\n", html)
+                self.assertIn(f"<loc>https://nulavio.net/{page.removesuffix('index.html')}</loc>", sitemap)
+        record = json.loads((ROOT / "packaging" / "whats-new" / f"{version}.json").read_text(encoding="utf-8"))
+        en = (out / f"en/whats-new/{version}/index.html").read_text(encoding="utf-8")
+        pt = (out / f"novidades/{version}/index.html").read_text(encoding="utf-8")
+        self.assertIn(html_module.escape(record["en-US"]["summary"], quote=True), en)
+        self.assertIn(html_module.escape(record["pt-BR"]["summary"], quote=True), pt)
+        self.assertEqual(re.findall(r'id="([^"]+)"', en), re.findall(r'id="([^"]+)"', pt), "same sections in both")
+        for page in build_site.DOWNLOAD_PAGES:  # the download pages link to the version's notes
+            self.assertIn(f"whats-new/{version}/" if page.startswith("en/") else f"novidades/{version}/",
+                          (out / page).read_text(encoding="utf-8"))  # fmt: skip
 
     def test_release_pages(self):
         values = build_site.release_values(self.source("released", "159.0.1-0.1", self.fpr, self.armored))

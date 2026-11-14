@@ -1,0 +1,47 @@
+{
+  "version": "160.0-0.4",
+  "date": "2026-11-14",
+  "channel": "alpha",
+  "firefox": "160.0",
+  "pt-BR": {
+    "summary": "Uma atualização de segurança da alpha, com o mesmo motor (Firefox 160.0). Ela traz o Ubuntu por um repositório APT assinado, uma página de configurações só, o modo Imersivo e uma primeira abertura nova.",
+    "new": [
+      "Ubuntu: o Nulavio agora instala e se atualiza pelo apt, de um repositório assinado com a mesma chave do repositório do Fedora.",
+      "Uma página de configurações só, dentro da do próprio motor.",
+      "Modo Imersivo, desligado por padrão: a barra de ferramentas e as abas se escondem, e a faixa do Nulavio continua mostrando o site e o perfil.",
+      "A primeira abertura é uma configuração curta: configurar em um minuto ou usar os padrões.",
+      "Um perfil novo começa com as listas de filtro que o Helium liga por padrão; você pode mudar depois.",
+      "Outras distribuições: cada versão traz um pacote Flatpak entre os arquivos da versão."
+    ],
+    "fixed": [
+      "O seletor de perfis do motor não aparece mais ao abrir o navegador, e um perfil protegido nunca é o que abre sozinho.",
+      "O navegador não pergunta mais ao serviço de atualização do Google sobre um módulo de DRM que está desligado.",
+      "As verificações de plugins e de complementos embutidos não contam mais à Mozilla as versões do kernel, do GTK e da libpulse.",
+      "O Guard não acusa mais a atualização do motor que ele mesmo segura, e diz o que está esperando."
+    ],
+    "action": [
+      "No Ubuntu, siga as instruções da página de download para adicionar o repositório APT."
+    ]
+  },
+  "en-US": {
+    "summary": "A security update of the alpha, with the same engine (Firefox 160.0). It brings Ubuntu through a signed APT repository, one settings page, the Immersive mode and a new first start.",
+    "new": [
+      "Ubuntu: Nulavio now installs and updates through apt, from a repository signed with the same key as the Fedora one.",
+      "One settings page, inside the engine's own.",
+      "Immersive mode, off by default: the toolbar and the tabs hide, and Nulavio's band keeps showing the site and the profile.",
+      "The first start is a short setup: set up in a minute, or use the defaults.",
+      "A new profile starts with the filter lists Helium turns on by default; you can change them later.",
+      "Other distributions: each version carries a Flatpak bundle among its release files."
+    ],
+    "fixed": [
+      "The engine's profile chooser no longer shows when the browser starts, and a protected profile is never the one that opens by itself.",
+      "The browser no longer asks Google's update service about a DRM module that is off.",
+      "The plugin and built-in add-on checks no longer tell Mozilla the kernel, GTK and libpulse versions.",
+      "The Guard no longer reports the engine update it holds back itself, and says what is waiting."
+    ],
+    "action": [
+      "On Ubuntu, follow the download page's instructions to add the APT repository."
+    ]
+  },
+  "security": ["GHSA-j8cq-r5j6-q2x3"]
+}
