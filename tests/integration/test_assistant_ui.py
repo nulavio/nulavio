@@ -1466,10 +1466,11 @@ class AssistantUiTest(unittest.TestCase):
             self.select_first_paragraph()
             self.m.context_click("p")
             self.assertTrue(harness.wait_until(self.m.menu_open))
-            # #138: hidden from the moment the menu is open, not once the Shell's event page has woken.
-            self.assertIn(self.ask_menu_item(), (False, None))
+            # #138: there and hidden from the moment the menu is open (its visibility is no longer switched for every
+            # window, so "absent" would mean the check found nothing), not once the Shell's event page has woken.
+            self.assertIs(self.ask_menu_item(), False)
             time.sleep(1)  # and still after the Shell's own listeners have run
-            self.assertIn(self.ask_menu_item(), (False, None))
+            self.assertIs(self.ask_menu_item(), False)
             self.m.close_menu()
             tab = self.m.chrome(f"return {TABS}.getId(gBrowser.selectedTab);")
             refused = chrome_async(self.m, f"return await {AI}.assistantOffer({{kind: 'composer'}}, args[0]);", [tab])
