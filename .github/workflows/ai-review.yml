@@ -13,6 +13,9 @@ name: ai-review
 #   only output is JSON constrained by .github/ai-review/schema.json.
 # - Job "publish" never runs the model. A fixed script from main validates and
 #   sanitises that JSON and posts one comment with pull-requests: write.
+# - Sends a change to the model only when it touches a path of .github/CODEOWNERS (the
+#   changes that need a second review) or carries the ai-review label; anything else
+#   ends with a notice and no comment (scripts/ci/ai_review_input.py --only-sensitive).
 # - Off until the maintainer configures a credential (vars or secret below); a
 #   run without one only prints a notice. Set the variable AI_REVIEW=off to skip
 #   it without cost.
@@ -112,7 +115,8 @@ jobs:
         env:
           BASE_SHA: ${{ github.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        run: python3 -I scripts/ci/ai_review_input.py --head-dir .ai-review/head --out .ai-review
+        # Only changes that need a second review anyway (a CODEOWNERS path) or carry the ai-review label (#193 follow-up).
+        run: python3 -I scripts/ci/ai_review_input.py --head-dir .ai-review/head --out .ai-review --only-sensitive
 
       - name: Download Claude Code and Bun (pinned by version and SHA-256)
         if: steps.input.outputs.status == 'ready'
@@ -201,7 +205,7 @@ jobs:
   publish:
     name: AI review comment
     needs: review
-    if: ${{ !cancelled() && needs.review.result != 'skipped' && needs.review.outputs.mode != 'none' }}
+    if: ${{ !cancelled() && needs.review.result != 'skipped' && needs.review.outputs.mode != 'none' && needs.review.outputs.status != 'not-sensitive' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
