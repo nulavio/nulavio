@@ -103,12 +103,15 @@ class LocaleTest(unittest.TestCase):
 
     def test_the_phone_page_names_no_place_the_companion_is_not(self):
         # ADR 0005's release order: the page never sends people to an app they cannot get. F-Droid
-        # closed the inclusion request on 2026-11-11 (#207), and no release carries the APK yet (#205).
+        # closed the inclusion request on 2026-11-11 (#207); the signed APK comes with every release
+        # that offers pairing (ADR 0014, publish_release.sh refuses one without it) and the download
+        # page offers it.
         for name in ("en", "pt_BR"):
             with self.subTest(locale=name):
                 hint = locale(name)["phoneScanHint"]["message"]
                 self.assertNotIn("F-Droid", hint)
                 self.assertNotIn("Play", hint)
+                self.assertIn("nulavio.net", hint)
 
     # design-system.md, Calmaria: no Unicode pseudo-icons in messages or in what the pages draw. They
     # changed with the desktop font and were read aloud; states use SVG icons and words.
@@ -135,7 +138,7 @@ def module_text(name: str) -> str:
 
 API_NAMES = ("nulavioSearch", "nulavioProfiles", "nulavioRouting", "nulavioConnect", "nulavioVault", "nulavioAI")
 API_NAMES += ("nulavioGuard", "nulavioPrivacy", "nulavioPasswords")
-API_NAMES += ("nulavioLayout", "nulavioPersonalise")
+API_NAMES += ("nulavioLayout", "nulavioPersonalise", "nulavioWhatsNew")
 
 
 class PrivilegedApiTest(unittest.TestCase):
@@ -171,6 +174,7 @@ class PrivilegedApiTest(unittest.TestCase):
         self.assertEqual(apis["nulavioRouting"]["parent"]["events"], ["startup"])  # links clicked in pages (M5)
         self.assertNotIn("events", apis["nulavioConnect"]["parent"])
         self.assertNotIn("events", apis["nulavioPersonalise"]["parent"])  # lazy: nothing to do at startup
+        self.assertEqual(apis["nulavioWhatsNew"]["parent"]["events"], ["startup"])  # the Help entry and the bar (#198)
 
     def test_parent_scripts_only_bridge_to_the_modules(self):
         for script in (SHELL / "experiments").rglob("parent.js"):

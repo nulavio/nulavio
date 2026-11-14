@@ -137,6 +137,27 @@ class ImmersiveTest(unittest.TestCase):
     def window(self):
         return self.m.chrome(WINDOW)
 
+    def plain_http(self, *hosts: str) -> None:
+        """Names that are not this computer answered by the fixture over plain http: resolved here, with the
+        per-site HTTPS-Only exception a person gives on the engine's warning. HTTPS-Only itself stays on."""
+        self.m.chrome(
+            "Services.prefs.setStringPref('network.dns.localDomains', arguments[0].join(','));"
+            "for (const host of arguments[0]) {"
+            "  const p = Services.scriptSecurityManager.createContentPrincipalFromOrigin(`http://${host}:${arguments[1]}`);"
+            "  Services.perms.addFromPrincipal(p, 'https-only-load-insecure', Ci.nsIPermissionManager.ALLOW_ACTION);"
+            "}",
+            [list(hosts), self.server.port],
+        )
+        self.addCleanup(
+            self.m.chrome,
+            "Services.prefs.clearUserPref('network.dns.localDomains');"
+            "for (const host of arguments[0]) {"
+            "  const p = Services.scriptSecurityManager.createContentPrincipalFromOrigin(`http://${host}:${arguments[1]}`);"
+            "  Services.perms.removeFromPrincipal(p, 'https-only-load-insecure');"
+            "}",
+            [list(hosts), self.server.port],
+        )
+
     def settled(self, want: bool) -> dict:
         """The toolbar in (or out of) view, after its transition and its hold time."""
         harness.wait_until(lambda: self.window()["toolbar"] is want, 6)
@@ -364,15 +385,7 @@ class ImmersiveTest(unittest.TestCase):
         # A connection the engine calls not secure (plain http to a name that is not this computer): with the
         # toolbar away, the band says so in words, before the site's name.
         host = "nulavio-plain.test"
-        self.m.chrome(
-            "Services.prefs.setStringPref('network.dns.localDomains', arguments[0]);"
-            "Services.prefs.setBoolPref('dom.security.https_only_mode', false);",
-            [host],
-        )
-        self.addCleanup(
-            self.m.chrome,
-            "for (const n of ['network.dns.localDomains', 'dom.security.https_only_mode']) Services.prefs.clearUserPref(n);",
-        )
+        self.plain_http(host)
         self.m.navigate(f"http://{host}:{self.server.port}/page/Imersivo")
         self.assertTrue(harness.wait_until(lambda: self.m.chrome(BAND)["host"] == f"{host}:{self.server.port}", 10))
         self.assertTrue(harness.wait_until(lambda: self.window()["on"], 10), self.window())
@@ -392,11 +405,26 @@ class ImmersiveTest(unittest.TestCase):
         self.assertFalse(self.m.chrome(BAND)["state"], "a verified site carries no warning in words")
         self.m.chrome(verdict, ["verifiedDomain mixedActiveBlocked"])
         self.assertEqual(self.m.chrome(BAND)["secure"], "true")
-        self.m.chrome(verdict, ["verifiedDomain certUserOverridden"])
-        self.assertTrue(harness.wait_until(lambda: self.m.chrome(BAND)["secure"] == "false", 6), self.m.chrome(BAND))
-        self.assertEqual(self.m.chrome(BAND)["state"], plain["state"])
+        self.assertTrue(self.window()["on"])
+        # A connection the engine found broken is neither: an exception the person added to a certificate, mixed
+        # content that was loaded, a weak cipher, or a verdict nobody here knows. The band still says it is not
+        # secure, and the toolbar stays, with the engine's own indicators (ADR 0009, decision 6; #142).
+        for broken in (
+            "verifiedDomain certUserOverridden",
+            "unknownIdentity mixedActiveContent",
+            "unknownIdentity weakCipher",
+            "somethingNew",
+        ):
+            with self.subTest(verdict=broken):
+                self.m.chrome(verdict, [broken])
+                self.assertTrue(harness.wait_until(lambda: self.window()["off"] == "connection", 6), self.window())
+                self.assertEqual(self.m.chrome(BAND)["secure"], "false")
+                self.assertTrue(self.settled(True)["toolbar"])
+                self.m.chrome(verdict, ["verifiedDomain"])
+                self.assertTrue(harness.wait_until(lambda: self.window()["on"], 6), self.window())
         self.m.chrome(verdict, [" ".join(plain["engine"])])
         self.assertTrue(harness.wait_until(lambda: self.m.chrome(BAND)["state"] == plain["state"], 6))
+        self.assertFalse(self.settled(False)["toolbar"])
         away = cues()
         # And its warning in the address bar is the engine's, untouched, once the toolbar is back.
         self.m.chrome("document.getElementById('Browser:OpenLocation').doCommand();")
@@ -612,6 +640,64 @@ class ImmersiveTest(unittest.TestCase):
         time.sleep(0.5)
         self.assertTrue(self.m.chrome(FOCUS)["urlbar"])
         self.m.chrome("gBrowser.selectedBrowser.focus();")
+
+    def test_15_a_name_in_another_script_keeps_its_registrable_part_apart(self):
+        """#142: the registrable part was found by comparing the displayed host with the service's answer, which
+        is in punycode: a name in another script never matched, and the whole host was emphasised alike."""
+        ace = "xn--80a1acny.xn--e1afmkfd.test"  # почта.пример.test
+        self.plain_http(ace)
+        self.m.navigate(f"http://{ace}:{self.server.port}/page/Imersivo")
+        parts = (
+            "const o = document.querySelector('#nulavio-band .nv-band-origin');"
+            "const part = name => o.querySelector(`.nv-band-origin-${name}`).textContent;"
+            "return {sub: part('sub'), host: part('host'), shown: gBrowser.selectedBrowser.currentURI.displayHost};"
+        )
+        self.assertTrue(
+            harness.wait_until(lambda: self.m.chrome(parts)["host"].endswith(f".test:{self.server.port}"), 10),
+            self.m.chrome(parts),
+        )
+        now = self.m.chrome(parts)
+        # As the engine displays it (in its own script when its rules allow, in punycode otherwise): the last two
+        # labels are the site, the rest gives way.
+        labels = now["shown"].split(".")
+        self.assertEqual(now["sub"], labels[0] + ".", now)
+        self.assertEqual(now["host"], f"{labels[1]}.{labels[2]}:{self.server.port}", now)
+
+    def test_16_a_site_that_does_not_fit_the_row_keeps_the_toolbar(self):
+        """ADR 0009, decision 6 (#142, R64): the registrable part is never cut. In a window too narrow for it the
+        name ran over its neighbours in the band; now the toolbar stays, and the mode comes back when it fits."""
+        long_name = "a" * 63 + ".test"
+        self.plain_http(long_name)
+        size = self.m.chrome("return [outerWidth, outerHeight];")
+        self.addCleanup(self.m.chrome, "window.resizeTo(arguments[0], arguments[1]);", size)
+        self.m.chrome("window.resizeTo(1500, 800);")
+        self.m.navigate(f"http://{long_name}:{self.server.port}/page/Imersivo")
+        self.assertTrue(harness.wait_until(lambda: self.window()["on"], 10), self.window())
+        self.assertFalse(self.settled(False)["toolbar"])
+        inside = (
+            "const o = document.querySelector('#nulavio-band .nv-band-origin').getBoundingClientRect();"
+            "const h = document.querySelector('#nulavio-band .nv-band-origin-host').getBoundingClientRect();"
+            "return h.left >= o.left - 0.5 && h.right <= o.right + 0.5;"
+        )
+        self.assertTrue(self.m.chrome(inside), "the name is over its neighbours with the mode on")
+        self.m.chrome("window.resizeTo(520, 800);")
+        self.assertTrue(harness.wait_until(lambda: self.window()["off"] == "fit", 10), self.window())
+        self.assertTrue(self.settled(True)["toolbar"])
+        self.m.chrome("window.resizeTo(1500, 800);")
+        self.assertTrue(harness.wait_until(lambda: self.window()["on"], 10), self.window())
+        self.assertFalse(self.settled(False)["toolbar"])
+
+    def test_17_an_ai_workspace_keeps_the_whole_window(self):
+        """ADR 0009, decision 6 (#142): a window an agent drives shows everything, whatever the switch says."""
+        self.assertTrue(harness.wait_until(lambda: self.window()["on"], 10), self.window())
+        self.assertFalse(self.settled(False)["toolbar"])
+        self.m.chrome("Services.prefs.setStringPref('nulavio.ai.workspace', 'test-agent');")
+        self.addCleanup(self.m.chrome, "Services.prefs.clearUserPref('nulavio.ai.workspace');")
+        self.assertTrue(harness.wait_until(lambda: self.window()["off"] == "agent", 45), self.window())
+        self.assertTrue(self.settled(True)["toolbar"])
+        self.m.chrome("Services.prefs.clearUserPref('nulavio.ai.workspace');")
+        self.assertTrue(harness.wait_until(lambda: self.window()["on"], 45), self.window())
+        self.assertFalse(self.settled(False)["toolbar"])
 
 
 if __name__ == "__main__":

@@ -81,6 +81,19 @@ class ReleaseMetadataTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual((self.metadata.read_bytes(), (self.repo / "CHANGELOG.md").read_text()), before)
 
+    def test_the_first_release_with_the_companion_apk_names_it_for_the_download_pages(self):
+        # ADR 0014: the pages offer the Companion once a published release carries its APK.
+        self.release["assets"] = [{"name": "nulavio-160.0-0.2.fc44.x86_64.rpm"}, {"name": "SHA256SUMS"}]
+        result = self.run_metadata()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotIn("companion_apk", json.loads(self.metadata.read_text()))
+        self.metadata.write_text(json.dumps({"version": "160.0-0.1", "channel": "alpha", "key_fingerprint": "KEEP"}))
+        self.release["assets"] += [{"name": "nulavio-companion-0.1.0.apk"}, {"name": "nulavio-companion-0.1.0.apk.cdx.json"},
+                                   {"name": "nulavio-companion-evil.apk"}]  # fmt: skip
+        result = self.run_metadata()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(self.metadata.read_text())["companion_apk"], "nulavio-companion-0.1.0.apk")
+
     def test_the_first_release_with_its_deb_shows_ubuntu_on_the_download_pages(self):
         self.manifest["packages"].append({"file": "packages/nulavio_160.0-0.2_amd64.deb"})
         # Every rehearsal lists its .deb, also those of releases published before the APT repository
@@ -102,6 +115,19 @@ class ReleaseMetadataTest(unittest.TestCase):
         result = self.run_metadata()
         self.assertNotEqual(result.returncode, 0)
         self.assertNotIn("apt_sources", json.loads(self.metadata.read_text()))
+
+    def test_the_flatpak_is_offered_only_while_the_release_carries_its_bundle(self):
+        # #274: a failed flatpak job does not hold a release back, so a later release can lack the bundle.
+        self.release["assets"] = [{"name": "nulavio-160.0-0.2.fc44.x86_64.rpm"}, {"name": "nulavio-160.0-0.2.x86_64.flatpak"}]
+        result = self.run_metadata()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(self.metadata.read_text())["flatpak_bundle"], "nulavio-160.0-0.2.x86_64.flatpak")
+        metadata = {"version": "160.0-0.1", "channel": "alpha", "key_fingerprint": "KEEP"}
+        self.metadata.write_text(json.dumps({**metadata, "flatpak_bundle": "nulavio-160.0-0.1.x86_64.flatpak"}))
+        self.release["assets"] = [{"name": "nulavio-160.0-0.2.fc44.x86_64.rpm"}, {"name": "nulavio-160.0-0.1.x86_64.flatpak"}]
+        result = self.run_metadata()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotIn("flatpak_bundle", json.loads(self.metadata.read_text()), "another release's bundle is not this one's")
 
     def test_drafts_invalid_versions_wrong_urls_and_empty_notes_leave_files_untouched(self):
         for field, value in (

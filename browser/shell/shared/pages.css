@@ -699,4 +699,13 @@ html[data-page="newtab"][data-stage] #layout-choice-settings { display: none; }
   html[data-page="newtab"][data-stage] .firstrun__do .actions { flex-direction: column; align-items: stretch; }
   html[data-page="newtab"][data-stage] .firstrun__do .actions .button { justify-content: center; margin-inline-start: 0; }
 }
+
+/* What's new in this version (whatsnew/whatsnew.html, #198): a document, read top to bottom. */
+.whatsnew { display: grid; gap: var(--nv-space-4); }
+.whatsnew__heading { font-size: clamp(1.375rem, 1.1rem + 1vw, 1.75rem); }
+.whatsnew__summary { margin: 0; line-height: 1.55; }
+.whatsnew__part h2 { margin: 0 0 var(--nv-space-2); font-size: var(--nv-type-body-size, 1rem); font-weight: var(--nv-font-weight-semibold); }
+.whatsnew__part ul { margin: 0; padding-inline-start: 1.25rem; display: grid; gap: var(--nv-space-2); line-height: 1.5; }
+.whatsnew__footer { display: grid; gap: var(--nv-space-3); padding-top: var(--nv-space-4); border-top: 1px solid var(--nv-color-border-subtle); }
+.whatsnew__footer p { margin: 0; }
 }

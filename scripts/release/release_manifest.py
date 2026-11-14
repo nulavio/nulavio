@@ -190,6 +190,12 @@ def verify(out: Path, repo: Path, ref: str) -> dict:
     release_tag, rpms = tag(manifest)
     deb_files = debs(manifest, release_tag)
     check_newer(release_tag, repo)
+    if manifest.get("whats_new") != release_tag.removeprefix("v"):
+        # #198: the browser shows the notes packed with it; a pre-build made before they were written has none.
+        raise ManifestError(
+            f"the packages carry no notes for {release_tag.removeprefix('v')} (whats_new: {manifest.get('whats_new')!r}):"
+            f" add packaging/whats-new/{release_tag.removeprefix('v')}.json and rehearse again"
+        )
     return {
         "tag": release_tag,
         "firefox": manifest["firefox"],
