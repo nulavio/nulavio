@@ -28,6 +28,33 @@ Legend: ✅ verified by automated test or recorded evidence · 🟡 partially ve
 | HTTPS-Only + revocable exception | ✅ | `test_06` |
 | Downloads 0600, no auto-open | ✅ | `test_07` |
 
+## Protected music and video (DRM, #222)
+
+DRM is off in a new profile (ADR 0002); the person turns it on from the engine's prompt or with the DRM switch in Settings. Automated, on the 160.0-0.4 package (`tests/integration/test_drm.py`, 2026-11-14):
+
+| Check | Result |
+|---|---|
+| DRM off: Widevine for a page | ✅ refused (`NotSupportedError`), and not installed |
+| DRM off: ClearKey for a page | the engine's own open key system: granted, with nothing downloaded |
+| DRM on: a ClearKey stream through EME and MSE, VP9 video and Opus audio | ✅ plays (video decoded, 23 frames in 1.5 s); a wrong key plays nothing |
+| A persistent licence, then "Clear cookies and site data" for the site | ✅ its files under `gmp/…/gmp-clearkey/storage/` are written, then gone |
+
+By hand, on each engine release, with throwaway or family accounts and never in CI. Not run yet: it needs the maintainer's accounts.
+
+| Service | Plays | Video reached | Audio | Release, package | Notes |
+|---|---|---|---|---|---|
+| Apple Music | ⬜ | | | | |
+| Disney+ | ⬜ | | | | |
+| Globoplay | ⬜ | | | | |
+| Max | ⬜ | | | | |
+| Netflix | ⬜ | | | | |
+| Prime Video | ⬜ | | | | |
+| Spotify | ⬜ | | | | |
+| YouTube (paid films) | ⬜ | | | | |
+| The same in the Flatpak (`net.nulavio.Nulavio`) | ⬜ | | | | the plugin folder must be writable and the plugin process start inside the sandbox |
+
+Widevine on Linux is the software level (L3); services usually limit it to 720p or lower. Not run either: the Widevine network test (`NULAVIO_NETWORK_TESTS=1`) that installs Widevine from Mozilla's list and plays a public test stream.
+
 ## Environments
 
 | Environment | Status | Notes |

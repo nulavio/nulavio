@@ -82,6 +82,12 @@ user_pref("privacy.globalprivacycontrol.enabled", true);
 
 // @mode seed
 // @category privacy
+// @why Tracking parameters people meet that the engine's lists miss (#158; table and sources in docs/research/clean-links.md). The engine adds this list to its query stripping, so "Copy Clean Link" drops them, and so does a navigation in Strict mode.
+// @tradeoff A link from an ad, a share button or a newsletter no longer tells its sender who clicked; nothing a site needs to show the page is on it.
+user_pref("privacy.query_stripping.strip_list", "dclid igsh igshid rdt_cid fb_action_ids fb_action_types __twitter_impression oly_anon_id oly_enc_id vero_id wickedid");
+
+// @mode seed
+// @category privacy
 // @why No sponsored shortcuts or stories if the user re-enables the Firefox new tab.
 // @tradeoff None.
 user_pref("browser.newtabpage.activity-stream.showSponsoredTopSites", false);
