@@ -525,7 +525,9 @@ class NulavioProfilesClass {
   }
 
   async #describe(profile, map, currentId) {
-    const lock = await lazy.profileLockState(profile.path).catch(() => "plain");
+    // A protection that could not be read is said as such (#142), never "no password"; everything that
+    // needs to know whether the profile is encrypted still reads it as not known to be.
+    const lock = await lazy.profileLockState(profile.path).catch(() => "unknown");
     const color = this.#colorFor(profile, map);
     const isCurrent = profile.id === currentId;
     return {
@@ -537,8 +539,9 @@ class NulavioProfilesClass {
       color,
       colorMigration: color === "lima" && this.#colorMigration().mint.includes(profile.id) ? "mint-to-lima" : null,
       isCurrent,
-      encrypted: lock !== "plain",
+      encrypted: lock === "locked" || lock === "unlocked",
       locked: lock === "locked",
+      protectionUnknown: lock === "unknown",
       path: profile.path,
     };
   }
