@@ -5,6 +5,14 @@
         python3 -I scripts/release/kms_import_key.py --gnupghome ~/.local/share/nulavio-release-key \\
             --fingerprint 298A9093BAABB26F79BB29F4BF47E5FA9EDB8DB1 --kms-key-id alias/nulavio-release
 
+The Companion's APK signing key (ADR 0014) is a plain RSA key, not an OpenPGP one: give
+its PKCS#8 file instead of a GnuPG home, mode 0600, kept offline afterwards. `openssl genpkey
+-outform DER` writes PKCS#1, which this refuses; convert in the same pipe:
+`openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:4096 | openssl pkcs8 -topk8 -nocrypt -outform DER`.
+
+    AWS_PROFILE=lombello-dev AWS_REGION=us-east-1 \\
+        python3 -I scripts/release/kms_import_key.py --pkcs8 <key.p8> --kms-key-id alias/nulavio-companion
+
 The KMS key must already exist, empty: RSA_4096, SIGN_VERIFY, origin EXTERNAL
 (docs/architecture/build.md, "Signing in CI through AWS KMS").
 
@@ -159,6 +167,49 @@ def pkcs8(numbers: dict[str, int]) -> bytes:
     return _der(0x30, _der_int(0) + rsa_encryption + _der(0x04, rsa_private_key))
 
 
+def _der_read(data: bytes, offset: int) -> tuple[int, bytes, int]:
+    if offset + 2 > len(data):
+        raise KeyImportError("truncated DER")
+    tag, length = data[offset], data[offset + 1]
+    offset += 2
+    if length & 0x80:
+        count = length & 0x7F
+        if not 0 < count <= 4:
+            raise KeyImportError("bad DER length")
+        length = int.from_bytes(data[offset : offset + count], "big")
+        offset += count
+    if offset + length > len(data):
+        raise KeyImportError("truncated DER")
+    return tag, data[offset : offset + length], offset + length
+
+
+def pkcs8_numbers(data: bytes) -> dict[str, int]:
+    """n, e, d, p, q of an unencrypted PKCS#8 RSA private key (DER), checked against each other."""
+    tag, info, end = _der_read(data, 0)
+    if tag != 0x30 or end != len(data):
+        raise KeyImportError("not one DER PrivateKeyInfo (give the DER file, unencrypted)")
+    _, _, offset = _der_read(info, 0)  # version
+    tag, algorithm, offset = _der_read(info, offset)
+    if tag != 0x30 or not algorithm.startswith(bytes.fromhex("06092a864886f70d010101")):
+        raise KeyImportError("not an RSA key (rsaEncryption)")
+    tag, octets, _ = _der_read(info, offset)
+    _, rsa, _ = _der_read(octets, 0)
+    values, offset = [], 0
+    while offset < len(rsa) and len(values) < 6:
+        tag, body, offset = _der_read(rsa, offset)
+        if tag != 0x02:
+            raise KeyImportError("malformed RSAPrivateKey")
+        values.append(int.from_bytes(body, "big"))
+    if len(values) < 6:
+        raise KeyImportError("malformed RSAPrivateKey")
+    numbers = dict(zip(FIELDS, values[1:6], strict=True))
+    if numbers["p"] * numbers["q"] != numbers["n"] or pow(pow(2, numbers["e"], numbers["n"]), numbers["d"], numbers["n"]) != 2:
+        raise KeyImportError("the RSA numbers do not belong together")
+    if numbers["n"].bit_length() != 4096:
+        raise KeyImportError("the key must be RSA 4096, like the KMS key")
+    return numbers
+
+
 def wrap_for_kms(material: bytes, wrapping_public_key_der: bytes) -> bytes:
     """RSA_AES_KEY_WRAP_SHA_256: OAEP-SHA256(aes_key) || AES-KWP(aes_key, material)."""
     try:
@@ -179,22 +230,32 @@ def _run(*args: str, **kwargs) -> subprocess.CompletedProcess:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--gnupghome", required=True, type=Path, help="GNUPGHOME that holds the release key")
-    parser.add_argument("--fingerprint", required=True)
+    source = parser.add_mutually_exclusive_group(required=True)
+    source.add_argument("--gnupghome", type=Path, help="GNUPGHOME that holds the release key (OpenPGP)")
+    source.add_argument("--pkcs8", type=Path, help="a plain RSA key's PKCS#8 file, DER (the Companion's key)")
+    parser.add_argument("--fingerprint", help="with --gnupghome: the release key's fingerprint")
     parser.add_argument("--kms-key-id", required=True, help="the empty KMS key (ID, ARN or alias)")
     args = parser.parse_args(argv)
+    if args.gnupghome and not args.fingerprint:
+        parser.error("--gnupghome needs --fingerprint")
 
     runtime = os.environ.get("XDG_RUNTIME_DIR")
     if not runtime or not Path(runtime).is_dir():
         print("kms_import_key: XDG_RUNTIME_DIR (an in-memory directory) is needed", file=sys.stderr)
         return 1
     work = Path(tempfile.mkdtemp(prefix="nulavio-kms-import-", dir=runtime))
-    home = str(args.gnupghome)
+    home = str(args.gnupghome) if args.gnupghome else ""
     try:
-        cert = _run("gpg", "--homedir", home, "--batch", "--armor", "--export", args.fingerprint, capture_output=True).stdout
-        key = ops.primary_key(cert)
-        if key.hex != args.fingerprint.replace(" ", "").upper():
-            raise KeyImportError(f"{args.fingerprint} is not the primary key of the exported certificate")
+        if args.pkcs8:
+            if args.pkcs8.stat().st_mode & 0o077:
+                raise KeyImportError(f"{args.pkcs8} is readable by others: chmod 600 it first")
+            numbers = pkcs8_numbers(args.pkcs8.read_bytes())
+            key = None
+        else:
+            cert = _run("gpg", "--homedir", home, "--batch", "--armor", "--export", args.fingerprint, capture_output=True).stdout
+            key = ops.primary_key(cert)
+            if key.hex != args.fingerprint.replace(" ", "").upper():
+                raise KeyImportError(f"{args.fingerprint} is not the primary key of the exported certificate")
         meta = json.loads(
             _run(
                 "aws", "kms", "describe-key", "--key-id", args.kms_key_id, "--output", "json", capture_output=True, text=True
@@ -206,14 +267,15 @@ def main(argv: list[str] | None = None) -> int:
             raise KeyImportError("the KMS key already has key material (KeyState is not PendingImport)")
         key_arn = meta["Arn"]  # GetParametersForImport and ImportKeyMaterial take no alias
 
-        passphrase = getpass.getpass(f"Passphrase of the release key {key.hex[-16:]}: ").encode()
-        export = _run(
-            "gpg", "--homedir", home, "--batch", "--pinentry-mode", "loopback", "--passphrase-fd", "0",
-            "--export-secret-keys", key.hex, input=passphrase, capture_output=True,
-        ).stdout  # fmt: skip
-        numbers = secret_numbers(export, passphrase)
-        if (numbers["n"], numbers["e"]) != (key.modulus, key.exponent):
-            raise KeyImportError("the private key does not match the public key")
+        if key is not None:
+            passphrase = getpass.getpass(f"Passphrase of the release key {key.hex[-16:]}: ").encode()
+            export = _run(
+                "gpg", "--homedir", home, "--batch", "--pinentry-mode", "loopback", "--passphrase-fd", "0",
+                "--export-secret-keys", key.hex, input=passphrase, capture_output=True,
+            ).stdout  # fmt: skip
+            numbers = secret_numbers(export, passphrase)
+            if (numbers["n"], numbers["e"]) != (key.modulus, key.exponent):
+                raise KeyImportError("the private key does not match the public key")
         material = pkcs8(numbers)
 
         params = _run(
@@ -231,8 +293,19 @@ def main(argv: list[str] | None = None) -> int:
             "--expiration-model", "KEY_MATERIAL_DOES_NOT_EXPIRE", capture_output=True,
         )  # fmt: skip
 
-        ops.signature_packet(b"nulavio kms import check\n", key, ops.kms_signer(args.kms_key_id, key))
-        print(f"KMS key {args.kms_key_id} now signs as {key.hex}.")
+        if key is not None:
+            ops.signature_packet(b"nulavio kms import check\n", key, ops.kms_signer(args.kms_key_id, key))
+            print(f"KMS key {args.kms_key_id} now signs as {key.hex}.")
+        else:
+            # The same check for a plain key: KMS holds this modulus, and its signature verifies.
+            n, e = numbers["n"], numbers["e"]
+            signer = ops.kms_rsa_signer(args.kms_key_id, n, e, "the key just imported")
+            size = (n.bit_length() + 7) // 8
+            value = int.from_bytes(signer(hashlib.sha256(b"nulavio kms import check").digest()), "big")
+            expected = int.from_bytes(ops.emsa_pkcs1_v15(hashlib.sha256(b"nulavio kms import check").digest(), size), "big")
+            if value >= n or pow(value, e, n) != expected:
+                raise KeyImportError("KMS signed, but not with the key just imported")
+            print(f"KMS key {args.kms_key_id} now signs with the RSA key of {args.pkcs8.name}.")
     except (KeyImportError, ops.SignError, subprocess.CalledProcessError, OSError, StopIteration) as error:
         detail = getattr(error, "stderr", None)
         if isinstance(detail, bytes):
