@@ -27,6 +27,33 @@ Urgency: <urgent | standard> (<reasons>). Source SHA-256 <digest> (Mozilla's sig
 **Nulavio fixes**: <none, or the table above>.
 ```
 
+## Nulavio 160.0-0.4 (Firefox 160.0), published 2026-11-14
+
+A security update of the alpha, with the same engine ([release](https://github.com/nulavio/nulavio/releases/tag/v160.0-0.4), [advisory GHSA-j8cq-r5j6-q2x3](https://github.com/nulavio/nulavio/security/advisories/GHSA-j8cq-r5j6-q2x3), [run 43534834214](https://github.com/nulavio/nulavio/actions/runs/43534834214)). The findings came from the LESIS automated code scan; the fixes were prepared in the advisory's private fork and landed in #150 and #178. The release was approved by the maintainer and signed through KMS; the job then installed it in clean Fedora and Ubuntu containers from the site's repository files, with the signature checks on. Drafting the GitHub release failed in the job (#236); the maintainer's token drafted it from the job's own files, after their signed checksums were checked.
+
+**Upstream**: unchanged, Firefox 160.0.
+
+**Nulavio fixes** (what a user does: on Fedora, `sudo dnf upgrade nulavio`; nothing else to change):
+
+| # | Severity | Area | Fix |
+|---|---|---|---|
+| L1 | Medium | AI Bridge | A `view-source:` address took an agent outside its site list; the address inside is now checked as if it were opened itself (#150) |
+| L3 | Medium | Vault | Putting back an older `vault.json` re-enabled a recovery code replaced while the profile was locked; the volume now records which key file is current (#150). What that record does not stop is R70 |
+| L4 | Medium | AI Bridge | A page's own click handler could send a form for an agent without `submit_forms`; the forms a page sends by itself are held until the permission allows them (#150). What the hold does not reach is R68 |
+| L5, L6 | Medium | AI Bridge | After a redirect to this computer or the local network, `tabs_list` and the result of a click still described the local page; they no longer do without `local_resources` (#150). The read itself was closed in 160.0-0.2 (A1) |
+| L7 | Medium | AI Bridge | A new agent key left three ways for the old session to keep acting; each now ends it (#150) |
+| L8 | Low | AI Bridge | A revoked connection could still read the agent's profile routes (#150) |
+| L9 | Low | Site | Anyone who knew a sign-up email could remove it from the waitlist; leaving now takes the private link given at sign-up (#178, live on the site since 2026-11-13). What it leaves is R69 |
+
+L2 (method changes signing a tampered key file) was already fixed in 160.0-0.2 (V4).
+
+**Not fixed, residual risks**: the redirect request of L5 and L6 still reaches the local address before the Bridge refuses to act on the page (R29: an agent without `local_resources` cannot read what comes back); stopping it before it is sent, for the tabs an agent drives, is the next change. An interrupted unlock-method change (R70) and a click that sends data that is not a form (R68) are as their entries say.
+
+**New protections and their limits**:
+
+- Ubuntu: the first release in the signed APT repository (`https://nulavio.net/apt/nulavio.sources`, key inline, checked by SHA-256 on the download page and in the release notes). Like the dnf metadata, it carries no expiry (R57), and one key signs both (R58).
+- The Flatpak bundle is a release asset, signed in `SHA256SUMS.asc` and attested, until Nulavio is on Flathub (#87).
+
 ## Nulavio 160.0-0.3 (Firefox 160.0), published 2026-11-11
 
 The first release built, tested and signed by the release workflow ([release](https://github.com/nulavio/nulavio/releases/tag/v160.0-0.3), [run 43102367281](https://github.com/nulavio/nulavio/actions/runs/43102367281)): built on a Blacksmith runner, signed through the release key held in AWS KMS after the maintainer approved, installed from `https://nulavio.net/rpm/nulavio.repo` in a clean Fedora with both signature checks on. Every file has a GitHub build-provenance attestation.

@@ -173,9 +173,10 @@ class LocalizationTest(unittest.TestCase):
 
 
 class PatchStackTest(unittest.TestCase):
-    def test_series_is_small_and_documented(self):
+    def test_series_is_documented(self):
+        # No cap on the count: ADR 0001 follows Release past ten patches (decided 2026-11-14).
         patches = apply_patches.series()
-        self.assertLessEqual(len(patches), 10, "ADR 0001: reconsider ESR if the patch stack exceeds ~10 patches")
+        self.assertTrue(patches)
         for patch_file in patches:
             with self.subTest(patch=patch_file.name):
                 self.assertTrue(patch_file.is_file())

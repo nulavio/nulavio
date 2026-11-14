@@ -22,7 +22,7 @@ The principles of Saltzer and Schroeder, and where each shows up:
 
 | Principle | How Nulavio applies it |
 |---|---|
-| Economy of mechanism | The launcher uses only the Python standard library at run time; the engine patch stack stays at about ten small patches, and a pref, policy or built-in add-on is preferred over a patch (I6) |
+| Economy of mechanism | The launcher uses only the Python standard library at run time; each engine patch is small, with an owner and a reason in its header, and a pref, policy or built-in add-on is preferred over a patch (I6) |
 | Fail-safe defaults | Blocking, HTTPS-Only, Safe Browsing and the other protections are on from the first launch ([hardening](hardening.md)); an extension that does not match its pinned hash and Mozilla's signature is refused; AI Bridge tools that run code or read cookies stay blocked unless the user grants them (I7) |
 | Complete mediation | The AI Bridge re-reads the user's grants on every call and classifies each address before navigating (I7); Shell modules validate every message from content (I10) |
 | Open design | Everything is public: code, threat model, residual risks, the review rules. Nothing depends on an attacker not knowing how it works |

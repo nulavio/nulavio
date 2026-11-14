@@ -453,7 +453,10 @@ class NativeSettingsTest(unittest.TestCase):
             privacy
             + """
           const active = N.filter().active;
-          try { N.openFilterLists(); return { active, opened: true }; } catch (e) { return { active, code: e.code }; }
+          try { N.openFilterLists(); return { active, code: "opened without a window" }; } catch (e) {
+            if (active && e.code !== "no-window") return { active, code: e.code };
+          }
+          try { N.openFilterLists(window); return { active, opened: true }; } catch (e) { return { active, code: e.code }; }
         """
         )
         if real["active"]:

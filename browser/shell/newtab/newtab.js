@@ -443,11 +443,19 @@ async function showDns() {
   const other = option("fallback", t(state.encryptedNow ? "dnsOptionOther" : "dnsOptionService"), t("dnsOptionServiceNote"), {
     extra: h("label", { class: "field option__extra" }, h("span", { class: "field__label", text: t("dnsOptionServiceLabel") }), service),
   });
+  // What is in use now, in its own words (#142): the browser's default only while it is the default, and
+  // "your network answers if it does not" only where that is so (not in strict mode).
+  const keep = option(
+    "keep",
+    t(state.choice === "default" ? "dnsOptionKeep" : "dnsOptionKeepChosen"),
+    t(state.choice === "strict" ? "dnsOptionKeepNoteStrict" : "dnsOptionKeepNote", [resolverNow()]),
+    { current: true }
+  );
   const options = document.getElementById("dns-options");
   options.replaceChildren(
     options.querySelector("legend"),
     ...(state.encryptedNow
-      ? [option("keep", t("dnsOptionKeep"), t("dnsOptionKeepNote", [resolverNow()]), { current: true }), other, network(false)]
+      ? [keep, other, network(false)]
       : [network(true), other])
   );
   const error = document.getElementById("dns-choice-error");

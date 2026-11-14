@@ -325,13 +325,13 @@ class Privacy {
   }
 
   /** Open uBlock Origin's own "Filter lists" (what it blocks: ads, trackers, cookie notices), in a tab. */
-  openFilterLists() {
+  openFilterLists(win) {
     const policy = WebExtensionPolicy.getByID(UBLOCK);
     if (!policy?.active) {
       throw new PrivacyError("filter-missing");
     }
-    const win = Services.wm.getMostRecentBrowserWindow();
-    if (!win) {
+    // The window that asked, as everywhere else (#142): the one used last may be another profile's.
+    if (!win || win.closed || win.document?.documentElement?.getAttribute("windowtype") !== "navigator:browser") {
       throw new PrivacyError("no-window");
     }
     win.openTrustedLinkIn(policy.getURL("dashboard.html#3p-filters.html"), "tab");
