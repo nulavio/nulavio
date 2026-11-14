@@ -128,11 +128,16 @@ class WhatsNewBrowserTest(unittest.TestCase):
         self.assertEqual(set(self.bars()), {""})
 
     def test_03_a_nulavio_only_update_shows_one_bar_once(self):
+        before = set(self.m.window_handles())
+        self.m.chrome("OpenBrowserWindow();")  # two ordinary windows: the bar goes to one
+        self.assertTrue(harness.wait_until(lambda: set(self.m.window_handles()) - before, 15))
+        second = next(iter(set(self.m.window_handles()) - before))
         self.prefs(seen="160.0-0.4")
         outcome = self.start_with(record("160.0-0.5"))
         self.assertEqual((outcome["decision"], outcome["from"]), ("show", "160.0-0.4"))
         bars = [b for b in self.bars() if b]
-        self.assertEqual(len(bars), 1, "one bar, in one window")
+        self.assertEqual(len(self.bars()), 2)
+        self.assertEqual(len(bars), 1, "one bar, in one of the two windows")
         self.assertIn("160.0-0.4", bars[0])
         self.assertIn("160.0-0.5", bars[0])
         self.assertEqual(self.seen(), "160.0-0.5", "recorded when shown: it never comes back for this version")
@@ -146,6 +151,9 @@ class WhatsNewBrowserTest(unittest.TestCase):
         # The same version again (a new window, the next start): nothing.
         self.assertEqual(self.start_with(record("160.0-0.5"))["decision"], "seen")
         self.assertEqual(set(self.bars()), {""})
+        self.m.switch_to(second)
+        self.m.chrome("window.close();")
+        self.m.switch_to(next(iter(before)))
 
     def test_04_a_restart_does_not_bring_it_back(self):
         self.prefs(seen="160.0-0.4")
@@ -205,6 +213,16 @@ class WhatsNewBrowserTest(unittest.TestCase):
             self.assertEqual(self.start_with(record("160.0-0.5"))["decision"], "not-here")
         finally:
             self.m.chrome("Services.prefs.clearUserPref('nulavio.ai.workspace');")
+        self.assertEqual(self.seen(), "160.0-0.4")
+        self.assertEqual(set(self.bars()), {""})
+
+    def test_09b_a_temporary_profile_never_shows_or_records(self):
+        self.prefs(seen="160.0-0.4")
+        self.m.chrome("Services.prefs.setBoolPref('nulavio.profile.temporary', true);")
+        try:
+            self.assertEqual(self.start_with(record("160.0-0.5"))["decision"], "not-here")
+        finally:
+            self.m.chrome("Services.prefs.clearUserPref('nulavio.profile.temporary');")
         self.assertEqual(self.seen(), "160.0-0.4")
         self.assertEqual(set(self.bars()), {""})
 

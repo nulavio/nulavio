@@ -166,7 +166,9 @@ class WhatsNew {
       return { decision: read.state };
     }
     const version = read.record.version;
-    if ((await lazy.NulavioProfiles.temporaryState()).temporary || (await lazy.NulavioAI.workspaceAgent())) {
+    const temporary = Services.prefs.getBoolPref("nulavio.profile.temporary", false)
+      || (await lazy.NulavioProfiles.temporaryState()).temporary;
+    if (temporary || (await lazy.NulavioAI.workspaceAgent())) {
       return { decision: "not-here", version }; // nothing is shown and nothing is recorded
     }
     const seen = Services.prefs.getStringPref(PREF_SEEN, "");
@@ -225,7 +227,9 @@ class WhatsNew {
   // -- the bar and the menu ---------------------------------------------------------
 
   #eligible(win) {
-    return win && !win.closed && win.gNotificationBox && !lazy.PrivateBrowsingUtils.isWindowPrivate(win);
+    // An ordinary window: not private, and not a pop-up that hides its toolbars.
+    const hidden = win?.document?.documentElement.getAttribute("chromehidden") ?? "";
+    return win && !win.closed && win.gNotificationBox && !lazy.PrivateBrowsingUtils.isWindowPrivate(win) && !hidden.includes("toolbar");
   }
 
   /** One bar, in the first ordinary window; with only private windows open, the next ordinary one. */

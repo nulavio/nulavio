@@ -39,17 +39,19 @@ WHATS_NEW_NAME = "whats-new.json"
 
 
 def installed_whats_new() -> dict | None:
-    """What's new in the version being packaged (#198), for the browser's reader; None in a development build.
+    """What's new in the version being packaged (#198), for the browser's reader; None when there is none.
 
-    A release build knows its version: rehearse_release.sh exports NULAVIO_RELEASE, and the Firefox
-    release is the pinned one. The record is the reviewed file in the commit being built (the release
-    workflow requires it before building), so a release without it stops here rather than ship none."""
-    release = os.environ.get("NULAVIO_RELEASE", "")
-    if not release:
+    A rehearsal names its version (NULAVIO_VERSION, <firefox>-<release>); a development build names
+    none. A version without its reviewed record is packed without notes and says so: the security
+    pre-build (autobuild.py) builds before they are written, and release_manifest.py refuses to
+    publish packages that do not carry their own version's notes (the manifest's "whats_new")."""
+    version = os.environ.get("NULAVIO_VERSION", "")
+    if not version:
         return None
-    firefox = json.loads((ROOT / "browser" / "build" / "engine.json").read_text(encoding="utf-8"))["firefox"]
-    version = f"{firefox}-{release}"
     path = ROOT / whats_new.DIRECTORY / f"{version}.json"
+    if not path.is_file():
+        print(f"make_distribution: no packaging/whats-new/{version}.json: packed without notes, not publishable", file=sys.stderr)
+        return None
     try:
         return whats_new.validate(json.loads(path.read_text(encoding="utf-8")), path.name)
     except (OSError, ValueError) as error:

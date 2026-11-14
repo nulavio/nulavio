@@ -139,32 +139,40 @@ class WhatsNewTest(unittest.TestCase):
 class PackedNotesTest(unittest.TestCase):
     """The browser's copy (phase 2): make_distribution.py packs the record of the version it packages."""
 
-    def run_make(self, out: Path, release: str | None) -> subprocess.CompletedProcess:
-        env = {k: v for k, v in os.environ.items() if k != "NULAVIO_RELEASE"}
-        if release is not None:
-            env["NULAVIO_RELEASE"] = release
+    def run_make(self, out: Path, version: str | None) -> subprocess.CompletedProcess:
+        env = {k: v for k, v in os.environ.items() if k not in ("NULAVIO_VERSION", "NULAVIO_RELEASE")}
+        if version is not None:
+            env["NULAVIO_VERSION"] = version
         return subprocess.run([sys.executable, "-I", str(ROOT / "scripts/build/make_distribution.py"), "--out", str(out)],
                               capture_output=True, text=True, env=env)  # fmt: skip
 
-    def test_a_release_packs_its_record_and_a_development_build_none(self):
-        firefox = json.loads((ROOT / "browser/build/engine.json").read_text(encoding="utf-8"))["firefox"]
-        published = next(r for r in whats_new.records() if r["firefox"] == firefox)
-        release = published["version"].split("-", 1)[1]
+    def test_a_release_packs_its_record_and_anything_else_packs_none(self):
+        published = whats_new.records()[0]
         with tempfile.TemporaryDirectory() as tmp:
             out = Path(tmp)
-            run = self.run_make(out, release)
+            packed = out / "whats-new.json"
+            run = self.run_make(out, published["version"])
             self.assertEqual(run.returncode, 0, run.stderr)
-            packed = json.loads((out / "whats-new.json").read_text(encoding="utf-8"))
-            self.assertEqual(packed, published, "the reviewed record, unchanged")
-            # A development build (no NULAVIO_RELEASE) has none, and a stale copy goes.
+            self.assertEqual(json.loads(packed.read_text(encoding="utf-8")), published, "the reviewed record, unchanged")
+            # A development build (no version) has none, and a stale copy goes.
             run = self.run_make(out, None)
             self.assertEqual(run.returncode, 0, run.stderr)
-            self.assertFalse((out / "whats-new.json").exists())
-            # A release whose record is missing stops: it would otherwise ship without notes.
-            run = self.run_make(out, "999")
+            self.assertFalse(packed.exists())
+            # A version whose record is not written yet (the security pre-build) is packed without notes
+            # and says so; release_manifest.py then refuses to publish it. A stale copy goes here too.
+            packed.write_text(json.dumps(published), encoding="utf-8")
+            run = self.run_make(out, "999.0-0.1")
+            self.assertEqual(run.returncode, 0, run.stderr)
+            self.assertIn("packed without notes, not publishable", run.stderr)
+            self.assertFalse(packed.exists())
+            # A record that is there but invalid stops the build: it was written for this version.
+            broken = ROOT / whats_new.DIRECTORY / "999.0-0.2.json"
+            broken.write_text("{}", encoding="utf-8")
+            try:
+                run = self.run_make(out, "999.0-0.2")
+            finally:
+                broken.unlink()
             self.assertNotEqual(run.returncode, 0)
-            self.assertIn(f"{firefox}-999", run.stderr)
-            self.assertFalse((out / "whats-new.json").exists())
 
 
 if __name__ == "__main__":
