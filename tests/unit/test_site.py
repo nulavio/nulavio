@@ -704,7 +704,8 @@ class SiteWorkflowTest(unittest.TestCase):
 
     def setUp(self):
         text = (ROOT / ".github/workflows/site.yml").read_text(encoding="utf-8")
-        self.lines = [line for line in text.splitlines() if line.strip() and not line.lstrip().startswith("#")]
+        lines = (re.sub(r"\s+#.*$", "", line) for line in text.splitlines())  # a comment after a value
+        self.lines = [line for line in lines if line.strip() and not line.lstrip().startswith("#")]
 
     @staticmethod
     def indent(line):
@@ -738,7 +739,8 @@ class SiteWorkflowTest(unittest.TestCase):
         self.assertEqual(self.keys(self.block(deploy, "permissions:")), ["contents: read"])
 
     def test_only_the_deploy_step_receives_the_token(self):
-        holders = [line.strip() for line in self.lines if "secrets." in line]
+        # Any use of the secrets context: secrets.X, secrets['X'], toJSON(secrets).
+        holders = [line.strip() for line in self.lines if re.search(r"\bsecrets\b", line)]
         self.assertEqual(holders, ["CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}"])
         steps = self.block(self.block(self.block(self.lines, "jobs:"), "deploy:"), "steps:")
         deploy_step = self.block(steps, "- name: Deploy to Cloudflare Pages (production)")
