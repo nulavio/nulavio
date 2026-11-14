@@ -273,8 +273,15 @@ byId("rekey").addEventListener("click", async () => {
   // (it was carried over), shown and typed back like any new code.
   try {
     const made = await vault.change(profileId, "new-recovery-code", { current: secret });
-    await render().catch(console.error);
-    announce([...done, t("methodsRekeyNewCode")].filter(Boolean).join(" "), "ok"); // said before the code takes the focus
+    let readFailed = null;
+    await render().catch(e => {
+      console.error(e);
+      readFailed = e;
+    });
+    // Said before the code takes the focus, with the code's warning and a failed read when there is one (#258).
+    const unrecorded = made.warning === "not-recorded" ? t("err_not_recorded") : "";
+    const said = [...done, t("methodsRekeyNewCode"), unrecorded, readFailed ? errorText(readFailed) : ""];
+    announce(said.filter(Boolean).join(" "), readFailed ? "error" : unrecorded ? "warn" : "ok");
     showNewCode(made.recoveryCode, true);
   } catch (e) {
     making = false;

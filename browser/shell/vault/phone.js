@@ -77,11 +77,26 @@ function stopPairing() {
   byId("start-form").hidden = false;
 }
 
+let polling = false;
+
 async function poll() {
-  if (!session) {
-    return;
+  if (!session || polling) {
+    return; // one look at a time: two ticks that both saw "paired" would settle it twice
   }
-  const status = await vault.phoneSession(session, "status");
+  polling = true;
+  try {
+    await look();
+  } finally {
+    polling = false;
+  }
+}
+
+async function look() {
+  const asked = session;
+  const status = await vault.phoneSession(asked, "status");
+  if (session !== asked) {
+    return; // stopped or cancelled while the answer was on its way
+  }
   if (status.state === "compare" || status.state === "waiting-for-you") {
     if (byId("compare").hidden) {
       showDigits(status.sas);
