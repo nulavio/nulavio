@@ -99,7 +99,13 @@ async function act(action, finding) {
     // next, or the previous after the last), not back to the top of the page (audit 2026-11 S-05). To its
     // title, never to one of its buttons: a second Enter would undo or keep a change nobody had read yet.
     const place = [...document.querySelectorAll("#findings > li")].findIndex(li => li.dataset.findingId === finding.id);
-    const left = await guard.resolve(finding.id, action);
+    acting = true;
+    let left;
+    try {
+      left = await guard.resolve(finding.id, action);
+    } finally {
+      acting = false;
+    }
     render(left);
     const cards = document.querySelectorAll("#findings > li");
     const title = cards[Math.min(Math.max(place, 0), cards.length - 1)]?.querySelector("h2");
@@ -145,8 +151,11 @@ function item(f) {
 }
 
 let reviewing = false; // findings were shown: an empty list now means the last one was just resolved
+let acting = false; // a keep or an undo is redrawing the list itself, and placing the keyboard
+let shown = ""; // what the list shows, to redraw only when it changed
 
 function render(findings) {
+  shown = JSON.stringify(findings);
   const list = document.getElementById("findings");
   list.replaceChildren(...[...findings].sort((a, b) => rank(a) - rank(b) || a.id.localeCompare(b.id)).map(item));
   list.removeAttribute("aria-busy");
@@ -179,6 +188,33 @@ document.getElementById("close").addEventListener("click", async () => {
   const tab = await browser.tabs.getCurrent();
   const siblings = await browser.tabs.query({ windowId: tab.windowId });
   return siblings.length > 1 ? browser.tabs.remove(tab.id) : browser.tabs.update(tab.id, { url: "about:newtab" });
+});
+
+// #351: a finding added or updated while the page is open (the engine takes a replaced extension in a moment after
+// the start-up check, and the finding then says its version) is shown without reopening the page. The keyboard
+// stays where it was: on the same control of the same finding when it is still there.
+guard.onChanged.addListener(async () => {
+  if (acting) {
+    return;
+  }
+  const findings = await guard.findings().catch(() => null);
+  if (!findings || acting || JSON.stringify(findings) === shown) {
+    return;
+  }
+  const focused = document.activeElement;
+  const card = focused?.closest?.("#findings > li");
+  const where = card ? { id: card.dataset.findingId, action: focused.dataset?.action ?? null } : null;
+  render(findings);
+  if (where) {
+    const again = [...document.querySelectorAll("#findings > li")].find(li => li.dataset.findingId === where.id);
+    const target = where.action ? again?.querySelector(`button[data-action="${where.action}"]`) : again?.querySelector("h2");
+    if (target) {
+      if (!where.action) {
+        target.tabIndex = -1;
+      }
+      target.focus();
+    }
+  }
 });
 
 localize();
