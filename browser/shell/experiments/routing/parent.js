@@ -29,17 +29,27 @@ this.nulavioRouting = class extends ExtensionAPI {
     } catch (e) {
       console.error("Nulavio account rules", e);
     }
+    try {
+      this.meetings().watch(); // meeting links stay in the browser when the profile asks (#221)
+    } catch (e) {
+      console.error("Nulavio meetings", e);
+    }
   }
 
   onShutdown(isAppShutdown) {
     if (!isAppShutdown) {
       this.module().unwatchPages();
       this.accountRules().unwatch();
+      this.meetings().unwatch();
     }
   }
 
   accountRules() {
     return ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioAccountRules.sys.mjs").NulavioAccountRules;
+  }
+
+  meetings() {
+    return ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioMeetings.sys.mjs").NulavioMeetings;
   }
 
   getAPI(context) {

@@ -1252,6 +1252,7 @@
   "guardSkippedWorkspace": {"message": "Guard does not watch an AI Workspace: it is a profile of the agent's own."},
   "profilesIconCurrent": {"message": "Current icon"},
   "densityLabel": {"message": "Window density"},
+  "meetingLinksLabel": {"message": "Meeting links"},
   "accentLabel": {"message": "Accent colour"},
   "moreContrastLabel": {"message": "More contrast"},
   "ambienceLabel": {"message": "Soft background on the new tab"},
