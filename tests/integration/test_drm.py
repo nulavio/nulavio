@@ -222,6 +222,13 @@ class ProtectedMediaTest(unittest.TestCase):
         self.assertTrue(
             harness.wait_until(lambda: self.m.chrome(DRM_BAR), 10), "no notification bar for a page that asks for DRM"
         )
+
+        # The bar's words arrive after the bar (the engine translates them in a second step), the button's last.
+        def worded():
+            bar = self.m.chrome(DRM_BAR) or {"text": "", "buttons": []}
+            return bar["text"].strip() and any(label.strip() for label in bar["buttons"])
+
+        harness.wait_until(worded, 10)
         shown = self.m.chrome(DRM_BAR)
         print(f"bar: {shown}", file=sys.stderr)
         self.assertTrue(shown["text"].strip() and any(label.strip() for label in shown["buttons"]), shown)
