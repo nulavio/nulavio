@@ -17,12 +17,17 @@
 const lazy = {};
 ChromeUtils.defineESModuleGetters(lazy, {
   NetUtil: "resource://gre/modules/NetUtil.sys.mjs",
+  clearTimeout: "resource://gre/modules/Timer.sys.mjs",
+  setTimeout: "resource://gre/modules/Timer.sys.mjs",
 });
 
 const OPTIONS_URL = "resource://builtin-addons/nulavio-shell/shared/options.json";
 /** The options this module writes (the others in the list have their own writers). */
 export const APPEARANCE = Object.freeze(["density", "accent", "moreContrast", "newtabAmbience", "reduceTransparency"]);
 const SYSTEM_QUERIES = Object.freeze({
+  // The browser window's own scheme: what the toolbar is drawn in (the background page's matchMedia, in a windowless
+  // document, does not follow a desktop's scheme change: #368).
+  dark: "(prefers-color-scheme: dark)",
   moreContrast: "(prefers-contrast: more)",
   forcedColors: "(forced-colors: active)",
   reducedTransparency: "(prefers-reduced-transparency: reduce)",
@@ -156,7 +161,22 @@ export const NulavioPersonalise = {
     const changed = () => listener();
     let prefs = null;
     let gone = false;
-    Services.obs.addObserver(changed, "look-and-feel-changed");
+    // look-and-feel-changed can come before the browser windows have their new scheme, and state() reads a window's: read
+    // again once they have had time to restyle, so a desktop's scheme change is seen in both directions (#368).
+    const timers = new Set();
+    const appearance = () => {
+      changed();
+      for (const ms of [300, 1500]) {
+        const timer = lazy.setTimeout(() => {
+          timers.delete(timer);
+          if (!gone) {
+            changed();
+          }
+        }, ms);
+        timers.add(timer);
+      }
+    };
+    Services.obs.addObserver(appearance, "look-and-feel-changed");
     load().then(list => {
       if (gone) {
         return;
@@ -172,7 +192,10 @@ export const NulavioPersonalise = {
       for (const pref of prefs ?? []) {
         Services.prefs.removeObserver(pref, changed);
       }
-      Services.obs.removeObserver(changed, "look-and-feel-changed");
+      Services.obs.removeObserver(appearance, "look-and-feel-changed");
+      for (const timer of timers) {
+        lazy.clearTimeout(timer);
+      }
     };
   },
 };
