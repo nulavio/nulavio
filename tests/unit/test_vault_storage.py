@@ -219,6 +219,9 @@ class ContainerTest(StorageCase):
             storage.Container(box.mountpoint).mount(restored)
         self.assertEqual(ctx.exception.code, "record-missing")
         self.assertIn("record-missing", vault_cli.MESSAGES)
+        for lang in ("en", "pt_BR"):  # the pages look the code up with "-" as "_" (browser/shell/lib/ui.js errorText)
+            messages = json.loads((ROOT / "browser" / "shell" / "_locales" / lang / "messages.json").read_text(encoding="utf-8"))
+            self.assertIn("err_record_missing", messages, lang)
         self.assertFalse(box.mounted())
 
     def test_a_key_file_saved_before_the_record_was_required_still_opens(self):
@@ -241,19 +244,31 @@ class ContainerTest(StorageCase):
         again.unmount()
         self.assertIs(json.loads(box.vault_path.read_text())["recorded"], True)
 
-    def test_only_an_empty_volume_may_have_no_record(self):
-        # A volume just made has nothing in it until its first mount writes the record: a profile whose making
-        # was cut short between the two opens later (another Container, as a new process has). One that holds
-        # files and lost its record does not.
+    def test_only_the_first_mount_of_a_new_volume_has_no_record_to_read(self):
         box, vault = self.new_container()
-        storage.Container(box.mountpoint).mount(vault)
-        self.assertTrue((box.mountpoint / storage.STATE_DIR / "state.json").is_file())
-        (box.mountpoint / "prefs.js").write_text("user_pref('x', 1);")
+        box.mount(vault)
         (box.mountpoint / storage.STATE_DIR / "state.json").unlink()
         box.unmount()
         with self.assertRaises(storage.StorageError) as ctx:
+            box.mount(vault)  # the same object, a second time
+        self.assertEqual(ctx.exception.code, "record-missing")
+
+    def test_hiding_the_encrypted_files_does_not_make_the_volume_new(self):
+        # Delta review: gocryptfs leaves out of a listing the names it cannot decrypt, so whoever can write the
+        # encrypted files can make a used volume look empty. That is not a volume just made: still refused.
+        box, vault = self.new_container()
+        box.mount(vault)
+        (box.mountpoint / "prefs.js").write_text("user_pref('x', 1);")
+        box.unmount()
+        aside = self.tmp / "aside"
+        aside.mkdir()
+        for entry in box.cipher.iterdir():
+            if entry.name not in ("gocryptfs.conf", "gocryptfs.diriv"):
+                entry.rename(aside / entry.name)
+        with self.assertRaises(storage.StorageError) as ctx:
             storage.Container(box.mountpoint).mount(vault)
         self.assertEqual(ctx.exception.code, "record-missing")
+        self.assertFalse(box.mounted())
 
     def test_encrypt_existing_profile(self):
         plain = self.tmp / "old"

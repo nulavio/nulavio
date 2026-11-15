@@ -346,7 +346,7 @@
   "err_no_method": {"message": "Escolha pelo menos um jeito de desbloquear o perfil."},
   "err_busy": {"message": "Arquivos desse perfil ainda estão em uso. Tente de novo em instantes."},
   "err_rollback": {"message": "O arquivo de chaves do perfil é mais antigo que o perfil (restaurado de um backup?). Nada foi aberto."},
-  "err_record-missing": {"message": "Falta o registro, dentro do perfil, a que o arquivo de chaves pertence (a pasta do perfil foi restaurada ou copiada sem a pasta .nulavio-vault?). Nada foi aberto. Recoloque essa pasta a partir de um backup."},
+  "err_record_missing": {"message": "Falta o registro, dentro do perfil, a que o arquivo de chaves pertence. Nada foi aberto. Restaure de um backup os arquivos cifrados do perfil (a pasta .vault: cipher/ junto com vault.json)."},
   "err_changed": {"message": "O arquivo de chaves do perfil mudou enquanto isso era feito. Nada foi alterado. Tente de novo."},
   "err_not_recorded": {"message": "A alteração foi salva, mas não pôde ser registrada dentro do perfil. Bloqueie o perfil, se estiver aberto, e desbloqueie uma vez para registrá-la."},
   "err_replacement_pending": {"message": "Um código de recuperação novo está esperando ser digitado de volta. Troque o código de novo, digite o novo de volta e então remova este."},
