@@ -119,12 +119,12 @@ UPDATE_CHECKS = {
 }
 FINGERPRINTING = "privacy.fingerprintingProtection.overrides"  # docs/research/fingerprinting.md
 # Changing these breaks sites or accessibility; they belong to an opt-in mode, never to the default. The time
-# zone left this list on 2026-11-14 by the maintainer's decision, with a per-site switch (ADR 0017).
+# zone left this list on 2026-11-14 by the maintainer's decision, with a per-site switch (ADR 0017), and reduced
+# motion with a setting and a bar that offers it (ADR 0018).
 NEVER_BY_DEFAULT = {
     "AllTargets",
     "JSLocale",
     "CSSPrefersColorScheme",
-    "CSSPrefersReducedMotion",
     "KeyboardEvents",
     "RoundWindowSize",
 }

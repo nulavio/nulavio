@@ -2,7 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-/* What Nulavio adds to the engine's fingerprinting protection from the Shell (#79; ADR 0016, ADR 0017).
+/* What Nulavio adds to the engine's fingerprinting protection from the Shell (#79; ADR 0016, ADR 0017, ADR 0018).
 
    The screen: pages read one size, the same on every computer, instead of the display's. The engine has a
    per-tab screen size for automation (browsingContext.setScreenAreaOverride); with it set, screen.width and
@@ -18,6 +18,13 @@
    site". The choice is a permission of that site, so Settings lists it with the other site exceptions, where
    it can be removed. From those permissions this module writes the engine's own per-site list
    (privacy.fingerprintingProtection.granularOverrides), which is what the engine reads (ADR 0017).
+
+   Motion and contrast: pages are not told that the system asks for less motion or more contrast (the engine's
+   CSSPrefersReducedMotion, CSSPrefersContrast and CSSPrefersReducedTransparency, in the default set; ADR 0018).
+   One setting, "let sites see my motion and contrast preferences", takes those three out again. It rewrites the
+   set itself, not the per-site list: with the motion one in the set the engine also scrolls smoothly whatever
+   the system asks, so that pages cannot tell, and only the set itself undoes that. When the system has either
+   preference on, a bar offers the setting once. Nulavio's own pages and window follow the system either way.
 
    The screen is decided by each page as its window is created, in the page's own process
    (NulavioFingerprintingChild): the one moment that is after the page before it and before the new page's
@@ -44,6 +51,15 @@ const FALLBACK_TOPIC = "browsing-context-attached"; // only if the actor cannot 
 const GRANULAR = "privacy.fingerprintingProtection.granularOverrides"; // the engine's per-site list (JSON)
 const SHOW_TIME_ZONE = "-JSDateTimeUTC";
 const ROW = "nulavio-trustpanel-timezone";
+
+/** The setting: sites see the system's motion and contrast preferences. It relaxes a protection, so it is not
+    one of the personalisation options (shared/options.json): this module reads and writes it for Settings. */
+export const SHARE = "nulavio.fingerprinting.shareAccessibility";
+/** Set once the bar that offers the setting was answered or closed. */
+export const OFFERED = "nulavio.fingerprinting.accessibilityOffered";
+const OVERRIDES = "privacy.fingerprintingProtection.overrides"; // the engine's set, a default of the build
+const ACCESSIBILITY = Object.freeze(["CSSPrefersReducedMotion", "CSSPrefersContrast", "CSSPrefersReducedTransparency"]);
+const BAR = "nulavio-accessibility-offer";
 
 function t(key) {
   return WebExtensionPolicy.getByID(SHELL)?.extension?.localizeMessage(key) || key;
@@ -189,6 +205,75 @@ function decideOpenPages() {
   }
 }
 
+/** The build's set without the three accessibility entries. Pure. */
+export function withoutAccessibility(overrides) {
+  return String(overrides ?? "")
+    .split(",")
+    .map(item => item.trim())
+    .filter(item => item && !ACCESSIBILITY.includes(item.replace(/^[+-]/, "")))
+    .join(",");
+}
+
+/** Make the engine's set follow the setting. On: the build's default without the three entries, written again
+    at each start so a new build's default is taken in. Off: the value this wrote is cleared, at the moment the
+    setting is turned off and never at a start, so a set the person wrote themselves is left alone. */
+function applyAccessibility(changed) {
+  if (Services.prefs.prefIsLocked(OVERRIDES)) {
+    return; // a policy decides
+  }
+  if (Services.prefs.getBoolPref(SHARE, false)) {
+    const shared = withoutAccessibility(Services.prefs.getDefaultBranch("").getStringPref(OVERRIDES, ""));
+    if (Services.prefs.getStringPref(OVERRIDES, "") !== shared) {
+      Services.prefs.setStringPref(OVERRIDES, shared);
+    }
+  } else if (changed) {
+    Services.prefs.clearUserPref(OVERRIDES);
+  }
+}
+
+/** What the system asks for, read in the browser's own window, which pages' protection does not reach. */
+function systemAsks(win) {
+  return {
+    reducedMotion: Boolean(win?.matchMedia("(prefers-reduced-motion: reduce)").matches),
+    moreContrast: Boolean(win?.matchMedia("(prefers-contrast: more)").matches || win?.matchMedia("(forced-colors: active)").matches),
+  };
+}
+
+/** The bar, once: only when the system has one of the two preferences on, the setting is off and it can change. */
+async function offerAccessibility(win) {
+  if (Services.prefs.getBoolPref(OFFERED, false) || Services.prefs.getBoolPref(SHARE, false)) {
+    return false;
+  }
+  if (Services.prefs.prefIsLocked(SHARE) || Services.prefs.prefIsLocked(OVERRIDES) || !protectionOn(false)) {
+    return false;
+  }
+  const asks = systemAsks(win);
+  const box = win?.gNotificationBox;
+  if (!(asks.reducedMotion || asks.moreContrast) || !box || box.getNotificationWithValue(BAR)) {
+    return false;
+  }
+  const answered = share => () => {
+    Services.prefs.setBoolPref(OFFERED, true);
+    if (share) {
+      Services.prefs.setBoolPref(SHARE, true);
+    }
+    return false; // the bar closes
+  };
+  await box.appendNotification(
+    BAR,
+    {
+      label: t("accessibilityOffer"),
+      priority: box.PRIORITY_INFO_MEDIUM,
+      eventCallback: event => event === "dismissed" && Services.prefs.setBoolPref(OFFERED, true),
+    },
+    [
+      { label: t("accessibilityOfferShare"), callback: answered(true) },
+      { label: t("accessibilityOfferKeep"), callback: answered(false) },
+    ]
+  );
+  return true;
+}
+
 let watching = null;
 
 export const NulavioFingerprinting = {
@@ -212,19 +297,26 @@ export const NulavioFingerprinting = {
         windows.add(win);
         win.addEventListener("popupshowing", panelShowing, true);
         win.addEventListener("unload", () => windows.delete(win), { once: true });
+        if (!win.gBrowser.selectedBrowser.browsingContext?.usePrivateBrowsing) {
+          offerAccessibility(win).catch(e => console.error("Nulavio fingerprinting", e));
+        }
       }
     };
     watching = {
       windows,
       panelShowing,
       observe(subject, topic, data) {
-        if (topic === "perm-changed") {
+        if (topic === "nsPref:changed") {
+          if (data === SHARE) {
+            applyAccessibility(true); // the person's setting, turned on or off
+          } else {
+            decideOpenPages(); // the engine's protection, switched on or off
+          }
+        } else if (topic === "perm-changed") {
           // A site's choice added or removed, here or in Settings' list, or every permission cleared.
           if (data === "cleared" || subject?.QueryInterface?.(Ci.nsIPermission).type === TIME_ZONE) {
             sync();
           }
-        } else if (topic === "nsPref:changed") {
-          decideOpenPages();
         } else if (topic === "browser-delayed-startup-finished") {
           attach(subject);
         }
@@ -236,6 +328,8 @@ export const NulavioFingerprinting = {
     for (const pref of SWITCHES) {
       Services.prefs.addObserver(pref, watching);
     }
+    Services.prefs.addObserver(SHARE, watching);
+    applyAccessibility(false);
     try {
       ChromeUtils.registerWindowActor(ACTOR, {
         child: {
@@ -279,6 +373,27 @@ export const NulavioFingerprinting = {
     setTimeZone(uri, Boolean(on));
   },
 
+  /** For Settings: whether sites are told, whether a policy fixed that, and what the system asks for. */
+  accessibility() {
+    return {
+      shared: Services.prefs.getBoolPref(SHARE, false),
+      locked: Services.prefs.prefIsLocked(SHARE) || Services.prefs.prefIsLocked(OVERRIDES),
+      system: systemAsks(Services.wm.getMostRecentWindow("navigator:browser")),
+    };
+  },
+
+  /** Tell sites the system's motion and contrast preferences, or stop telling them. */
+  setShareAccessibility(on) {
+    if (Services.prefs.prefIsLocked(SHARE) || Services.prefs.prefIsLocked(OVERRIDES)) {
+      return;
+    }
+    if (on) {
+      Services.prefs.setBoolPref(SHARE, true);
+    } else {
+      Services.prefs.clearUserPref(SHARE);
+    }
+  },
+
   unwatch() {
     if (!watching) {
       return;
@@ -292,9 +407,11 @@ export const NulavioFingerprinting = {
     if (watching.fallback) {
       Services.obs.removeObserver(watching.fallback, FALLBACK_TOPIC);
     }
+    Services.prefs.removeObserver(SHARE, watching);
     for (const win of watching.windows) {
       win.removeEventListener("popupshowing", watching.panelShowing, true);
       win.document.getElementById(ROW)?.remove();
+      win.gNotificationBox?.getNotificationWithValue(BAR)?.close();
     }
     try {
       ChromeUtils.unregisterWindowActor(ACTOR);
