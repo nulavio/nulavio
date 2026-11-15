@@ -20,7 +20,8 @@ alternate the build and the baseline, so a machine that slows down slows both. M
   again every 5 s until two readings in a row agree within 3 % (readings_* in the JSON; not settled in 8 is an
   error).
   A process whose memory could not be read is counted in the JSON (unreadable_*), never silently left out
-  of the sum.
+  of the sum. With the tabs open, "sandbox" says whether the web content processes are in the engine's full
+  content sandbox (test_04's check); --require-sandbox fails a run where they are not (perf.yml, in a container).
 
 With --speedometer, also Speedometer 3.1 (BrowserBench), pinned to a commit of WebKit/Speedometer's release/3.1
 branch, downloaded once into the cache and checked against its SHA-256, served from this machine (no network
@@ -48,6 +49,10 @@ downloaded once into the cache and started from a fresh profile with Marionette 
 only what the measure needs: Marionette, no default-browser question and no first-run or welcome page (a remote
 page would load into the first tab). Everything else is Firefox's own default. It runs the same startup, memory
 and benchmark measures; the frame-time scenes are Nulavio's own and run on the two Nulavio builds only.
+
+.github/workflows/perf.yml runs it on each published release, against the release before it and Firefox
+(scripts/perf/fetch_releases.py fetches both and checks them against their signed SHA256SUMS): report only, the
+table in the job summary and the JSON in a 90-day artifact.
 
 The JSON keeps every run and is written after each one; the table gives each side's median, the build's change
 against the baseline with its 95 % bootstrap interval (from 5 runs a side; "intervals" in the JSON: a change whose interval
@@ -471,6 +476,38 @@ def frame_scene_on(build: str, baseline: str, runs: int, display: str, auth: Pat
         return frames
 
 
+SANDBOX_LEVEL = (
+    "return Cc['@mozilla.org/sandbox/sandbox-settings;1'].getService(Ci.mozISandboxSettings).effectiveContentSandboxLevel;"
+)
+
+
+def sandbox(m, root: int) -> str:
+    """Whether the web content processes run in the engine's full content sandbox, as test_04 checks it: effective level
+    at least 4, a seccomp filter on every thread, a user namespace of their own. "on", or what is missing."""
+    import harness
+
+    level = m.chrome(SANDBOX_LEVEL)
+    if level < 4:
+        return f"level {level}"
+    parent = os.readlink(f"/proc/{root}/ns/user")
+    content = []
+    for pid in harness.descendants(root):
+        try:
+            info = harness.proc_info(pid)
+        except OSError:
+            continue  # it ended
+        if " -isForBrowser" in f" {info['cmd']} ":
+            content.append(info)
+    if not content:
+        return "no web content process"
+    for info in content:
+        if not all(v == 2 for v in info["seccomp"]):
+            return f"no seccomp filter on a thread of {info['pid']}"
+        if info["userns"] == parent:
+            return f"{info['pid']} shares the parent's user namespace"
+    return "on"
+
+
 def settled(read, wait, within: float = SETTLED_WITHIN, most: int = SETTLE_READINGS) -> list:
     """Readings of `read()` (its first item is the number), `wait()` between them, until two in a row differ by at
     most `within` of the last, or `most` were taken: then the measure has not settled, which is an error rather than
@@ -562,7 +599,9 @@ class FirefoxSession:
         shutil.rmtree(self.tmp, ignore_errors=True)
 
 
-def one_run(engine: str, tabs: list[int], server, benchmarks: tuple = (), firefox: bool = False) -> dict:
+def one_run(
+    engine: str, tabs: list[int], server, benchmarks: tuple = (), firefox: bool = False, require_sandbox: bool = False
+) -> dict:
     """One fresh profile: its two starts, the tabs' memory, then each of `benchmarks` ((name, score of a Marionette
     session)) in a start of its own. `engine` is a Nulavio build, or with `firefox` the Firefox binary."""
     import harness
@@ -608,6 +647,9 @@ def one_run(engine: str, tabs: list[int], server, benchmarks: tuple = (), firefo
             out[f"processes_{count}_tabs"] = len(pids)
             out[f"unreadable_{count}_tabs"] = unreadable
             out[f"readings_{count}_tabs"] = len(readings)
+        out["sandbox"] = sandbox(m, session.process.pid)
+        if require_sandbox and out["sandbox"] != "on":
+            raise MeasureError(f"the content sandbox is not fully on: {out['sandbox']}")
         for name, score in benchmarks:  # in a start of its own: no measure carries another's processes
             session.stop()
             m = session.restart()
@@ -629,6 +671,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--motionmark", action="store_true", help="also MotionMark 1.3.2, pinned and served locally")
     parser.add_argument("--frames", action="store_true", help="also frame time (scripts/research/frame_scene.py, on Xvfb)")
     parser.add_argument("--firefox", action="store_true", help="also stock Firefox 160.0 as a third side, pinned")
+    parser.add_argument(
+        "--require-sandbox", action="store_true", help="fail a run whose content processes are not in the full sandbox"
+    )
     args = parser.parse_args(argv)
     build = os.environ.get("NULAVIO_ENGINE")
     if not build:
@@ -667,7 +712,14 @@ def main(argv: list[str] | None = None) -> int:
                 sides.append(("firefox", str(pinned("firefox") / "firefox")))
             for run in range(args.runs):
                 for side, engine in sides:
-                    measured = one_run(engine, args.tabs, server, tuple(benchmarks), firefox=side == "firefox")
+                    measured = one_run(
+                        engine,
+                        args.tabs,
+                        server,
+                        tuple(benchmarks),
+                        firefox=side == "firefox",
+                        require_sandbox=args.require_sandbox,
+                    )
                     results["runs"].append({"run": run, "side": side, **measured})
                     print(f"run {run} {side}: {measured}", file=sys.stderr)
                     write()
