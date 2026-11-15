@@ -236,7 +236,9 @@ class ReleaseWorkflowTest(unittest.TestCase):
     def test_the_bundle_is_attested_checked_and_signed_with_the_release(self):
         flatpak_job = self.text[self.text.index("\n  flatpak:\n") :]
         self.assertLess(flatpak_job.index("check_flatpak.sh"), flatpak_job.index("flatpak build-bundle"))
-        sign = self.publish.index("NULAVIO_FLATPAK_BUNDLE=$bundle NULAVIO_FLATPAK_BUNDLE_SHA256=$ACCEPTED NULAVIO_COMPANION_APK=$apk")
+        sign = self.publish.index(
+            "NULAVIO_FLATPAK_BUNDLE=$bundle NULAVIO_FLATPAK_BUNDLE_SHA256=$ACCEPTED NULAVIO_COMPANION_APK=$apk"
+        )
         self.assertLess(sign, self.publish.index("subject-path: ${{ runner.temp }}/publish/github/*"))
         publish = (RELEASE / "publish_release.sh").read_text(encoding="utf-8")
         self.assertLess(publish.index('cp "$bundle" "$stage/github/"'), publish.index("sha256sum -- * >SHA256SUMS"))
