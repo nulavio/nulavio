@@ -49,6 +49,10 @@ only what the measure needs: Marionette, no default-browser question and no firs
 page would load into the first tab). Everything else is Firefox's own default. It runs the same startup, memory
 and benchmark measures; the frame-time scenes are Nulavio's own and run on the two Nulavio builds only.
 
+.github/workflows/perf.yml runs it on each published release, against the release before it and Firefox
+(scripts/perf/fetch_releases.py fetches both and checks them against their signed SHA256SUMS): report only, the
+table in the job summary and the JSON in a 90-day artifact.
+
 The JSON keeps every run and is written after each one; the table gives each side's median, the build's change
 against the baseline with its 95 % bootstrap interval (from 5 runs a side; "intervals" in the JSON: a change whose interval
 holds 0 is not told apart from noise) (and Firefox's median, with --firefox). What it does not measure yet (#80): the

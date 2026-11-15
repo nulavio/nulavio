@@ -1,0 +1,74 @@
+name: perf
+
+# #80: Nulavio's own performance measures (scripts/perf/run.py) on a published release, against the published
+# release before it and stock Firefox, each time a release is published (and by hand). Report only: the table goes
+# into the job summary and the JSON into a 90-day artifact named after the release; thresholds are written once
+# there is history enough to tell a change from noise. It holds no secret and cannot sign, publish or attest:
+# both releases' archives are checked against their SHA256SUMS signed with the release key before they run.
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release to measure (empty: the latest published one)"
+        required: false
+        default: ""
+
+permissions: {}
+
+concurrency:
+  group: perf
+  cancel-in-progress: false
+
+jobs:
+  measure:
+    name: a release against the one before it and Firefox (report only)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    permissions:
+      contents: read # the releases' assets
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: The two releases' archives, checked against their SHA256SUMS signed with the release key
+        id: releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
+        run: |
+          read -r new previous < <(python3 -I scripts/perf/fetch_releases.py "$TAG" "$RUNNER_TEMP/releases")
+          echo "new=$new" >> "$GITHUB_OUTPUT"
+          echo "previous=$previous" >> "$GITHUB_OUTPUT"
+      - name: Build the measuring image (Mozilla's Firefox and its libraries, as the integration job's)
+        run: docker build -t nulavio-perf -f ci/containers/ubuntu-itest.Containerfile ci/containers
+      - name: Measure startup, memory and Speedometer (5 runs; the release, the one before it, Firefox)
+        # Docker's default seccomp profile blocks the user namespaces the engine's content sandbox needs (ci.yml).
+        run: |
+          mkdir -p perf && chmod 777 perf
+          docker run --rm --security-opt seccomp=unconfined \
+            -v "$GITHUB_WORKSPACE":/src:ro -v "$RUNNER_TEMP/releases":/releases:ro -v "$GITHUB_WORKSPACE/perf":/perf \
+            nulavio-perf sh -c 'cp -r /src "$HOME/nulavio" && cd "$HOME/nulavio" &&
+              NULAVIO_ENGINE=/releases/new/nulavio/nulavio python3 -I scripts/perf/run.py \
+                --baseline-engine /releases/previous/nulavio/nulavio --runs 5 --tabs 1 10 --firefox --speedometer \
+                --out /perf/perf.json' > perf/table.txt
+      - name: The table in the job summary
+        if: always()
+        env:
+          NEW: ${{ steps.releases.outputs.new }}
+          PREVIOUS: ${{ steps.releases.outputs.previous }}
+        run: |
+          {
+            printf '## Performance: %s against %s and Firefox (report only)\n\n' "$NEW" "$PREVIOUS"
+            printf 'GitHub-hosted runner, headless, 5 runs a side; a change whose interval holds 0 is noise.\n\n```\n'
+            cat perf/table.txt 2>/dev/null || echo "no table: see the log"
+            printf '```\n'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: perf-${{ steps.releases.outputs.new }}
+          path: perf/
+          if-no-files-found: ignore
+          retention-days: 90
