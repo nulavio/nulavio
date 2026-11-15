@@ -544,6 +544,11 @@
       }
     }
 
+    /* #344: as the mode comes on, the toolbar and the tab list leave at once (NulavioWindow). */
+    &[nulavio-immersive-entering] :is(#navigator-toolbox > toolbar:not(#nulavio-band), #sidebar-container, #sidebar-box) {
+      transition: none;
+    }
+
     /* The tab list: out of the flow at the side, back when the pointer reaches the edge or the keyboard enters it. */
     #sidebar-launcher-splitter {
       display: none;
@@ -564,9 +569,13 @@
       background-color: var(--toolbox-background-color, var(--nv-color-chrome-toolbox));
       translate: calc(-100% - var(--nv-space-5)) 0;
       pointer-events: none;
+      /* #344: the list's top goes back up under the band only once the toolbar is out of view (its hold, then its
+         exit), so the leaving toolbar is never drawn over it; it goes down under a toolbar that comes at once. */
+      --nulavio-list-slide: translate var(--nv-motion-duration-base) var(--nv-motion-easing-exit) var(--nv-motion-duration-hold);
+      --nulavio-list-top: inset-block-start var(--nv-motion-duration-fast) var(--nv-motion-easing-enter)
+        calc(var(--nv-motion-duration-hold) + var(--nv-motion-duration-base));
       @media (prefers-reduced-motion: no-preference) {
-        transition: translate var(--nv-motion-duration-base) var(--nv-motion-easing-exit) var(--nv-motion-duration-hold),
-          inset-block-start var(--nv-motion-duration-fast) var(--nv-motion-easing-enter);
+        transition: var(--nulavio-list-slide), var(--nulavio-list-top);
       }
     }
     #sidebar-container:-moz-locale-dir(rtl) {
@@ -577,6 +586,38 @@
     &:has(#navigator-toolbox:is(:hover, :focus-within, :has([open]:not([open="false"])))) #sidebar-container,
     &[nulavio-immersive-hold~="toolbar"] #sidebar-container {
       inset-block-start: calc(var(--nulavio-band-size) + var(--nulavio-immersive-toolbar-size, 0px));
+      --nulavio-list-top: inset-block-start 0s;
+    }
+    /* #344: the assistant's panel (Nulavio's, a site's, any sidebar) stays in the flow, beside the page; the toolbar
+       does not cover its top (its title, its close button) either. Its height changes in one step, not in an
+       animation that would lay out a page in it at every frame. */
+    #sidebar-box {
+      @media (prefers-reduced-motion: no-preference) {
+        transition: margin-block-start 0s linear calc(var(--nv-motion-duration-hold) + var(--nv-motion-duration-base));
+      }
+    }
+    &:has(#navigator-toolbox:is(:hover, :focus-within, :has([open]:not([open="false"])))) #sidebar-box,
+    &[nulavio-immersive-hold~="toolbar"] #sidebar-box {
+      margin-block-start: var(--nulavio-immersive-toolbar-size, 0px);
+      transition: none;
+    }
+    /* #344: the list is out of the flow, so the engine's room for it beside the panel and the page goes: with
+       "expand on hover" (Foco) it kept the collapsed list's width there while the list was expanded, and the page
+       and the panel moved by it. The panel keeps the page's margin on the window's side (horizon.css). */
+    #browser > #tabbrowser-tabbox {
+      margin-inline: var(--nulavio-frame-margin, 0px);
+    }
+    #browser > #tabbrowser-tabbox[sidebar-panel-open]:not([sidebar-positionend]) {
+      margin-inline-start: 0;
+    }
+    #browser > #tabbrowser-tabbox[sidebar-panel-open][sidebar-positionend] {
+      margin-inline-end: 0;
+    }
+    #browser > #sidebar-box {
+      margin-inline: var(--nulavio-frame-margin, 0px) 0;
+    }
+    #browser > #sidebar-box[sidebar-positionend] {
+      margin-inline: 0 var(--nulavio-frame-margin, 0px);
     }
     #browser:has(> #nulavio-immersive-edge:hover) > #sidebar-container,
     &[nulavio-immersive-hold~="tabs"] #sidebar-container,
@@ -584,10 +625,7 @@
       translate: 0;
       pointer-events: auto;
       box-shadow: var(--nv-elevation-3); /* only while it is over the page: out of view it casts nothing on it */
-      @media (prefers-reduced-motion: no-preference) {
-        transition: translate var(--nv-motion-duration-fast) var(--nv-motion-easing-enter),
-          inset-block-start var(--nv-motion-duration-fast) var(--nv-motion-easing-enter);
-      }
+      --nulavio-list-slide: translate var(--nv-motion-duration-fast) var(--nv-motion-easing-enter);
     }
 
     /* The site, in the middle of the band: the registrable part in the band's text colour, the rest quieter. */
