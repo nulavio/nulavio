@@ -57,13 +57,32 @@ class FingerprintingCostTest(unittest.TestCase):
         self.assertIn("2.0", row)
         self.assertNotIn("%", row)
 
-    def test_the_variant_turns_the_protections_off_before_it_scores(self):
+    def session(self, profile: str, calls: list):
+        def chrome(_, script):
+            calls.append(script)
+            return profile if script == perf_run.PROFILE_DIR else None
+
+        return type("M", (), {"chrome": chrome})()
+
+    def test_the_variant_turns_the_protections_off_before_it_scores_in_a_throwaway_profile_only(self):
+        import tempfile
+
         calls = []
-        m = type("M", (), {"chrome": lambda self, script: calls.append(script)})()
         score = perf_run.without_fingerprinting(lambda session: calls.append("score") or 1.0)
-        self.assertEqual(score(m), 1.0)
-        self.assertEqual(calls, [perf_run.FINGERPRINTING_OFF, "score"])
+        self.assertEqual(score(self.session(str(Path(tempfile.gettempdir()) / "nulavio-gps-x" / "p"), calls)), 1.0)
+        self.assertEqual(calls, [perf_run.PROFILE_DIR, perf_run.FINGERPRINTING_OFF, "score"])
         self.assertIn("privacy.fingerprintingProtection.overrides', ''", perf_run.FINGERPRINTING_OFF)
+        calls.clear()
+        with self.assertRaises(perf_run.MeasureError):  # a person's profile: nothing is turned off
+            score(self.session(str(Path.home() / ".local" / "share" / "nulavio" / "profiles" / "default"), calls))
+        self.assertEqual(calls, [perf_run.PROFILE_DIR])
+
+    def test_the_protections_are_turned_off_nowhere_else(self):
+        source = (ROOT / "scripts" / "perf" / "run.py").read_text(encoding="utf-8")
+        uses = [
+            line.strip() for line in source.splitlines() if "FINGERPRINTING_OFF" in line and "FINGERPRINTING_OFF = (" not in line
+        ]
+        self.assertEqual(uses, ["m.chrome(FINGERPRINTING_OFF)"])
 
 
 class CliTest(unittest.TestCase):

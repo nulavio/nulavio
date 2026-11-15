@@ -384,10 +384,18 @@ FINGERPRINTING_OFF = (
 WITHOUT_FINGERPRINTING = "_without_fingerprinting"
 
 
+PROFILE_DIR = "return Services.dirsvc.get('ProfD', Ci.nsIFile).path;"
+
+
 def without_fingerprinting(score):
-    """A benchmark run with the fingerprinting protections off for this start."""
+    """A benchmark run with the fingerprinting protections off for this start: only in a throwaway profile (under the
+    temporary directory, as GeckoProfileSession makes them), which then loads only the benchmark's loopback pages. A named
+    exception to "never turn a protection off" (docs/architecture/performance.md, tests/AGENTS.md)."""
 
     def run(m) -> float:
+        profile = Path(m.chrome(PROFILE_DIR)).resolve()
+        if not profile.is_relative_to(Path(tempfile.gettempdir()).resolve()):
+            raise MeasureError(f"the fingerprinting protections are turned off only in a throwaway profile, not {profile}")
         m.chrome(FINGERPRINTING_OFF)
         return score(m)
 
