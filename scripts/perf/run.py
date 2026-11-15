@@ -26,8 +26,14 @@ default is 10, so this is not an official score). Without a window (headless) an
 a regression signal, not a real-hardware number. GitHub does not promise the same bytes for an archive it makes
 from a commit: if they change, the run stops at the digest check and the pin needs updating.
 
+With --jetstream, JetStream 3.0 (JavaScript and WebAssembly), and with --motionmark, MotionMark 1.3.2 (graphics),
+pinned and served the same way, each in a start of its own after the ones before it, with the benchmark's own
+defaults: JetStream's overall score (the geometric mean of its benchmarks' scores, as its page computes it) and
+MotionMark's score. MotionMark measures how much the engine draws at the frame rate it detects; without a window and
+a GPU here, its number says more about software rendering than about a person's screen.
+
 The JSON keeps every run and is written after each one; the table gives each side's median and the build's
-change against the baseline. What it does not measure yet (#80): JetStream and MotionMark, frame time
+change against the baseline. What it does not measure yet (#80): frame time
 (scripts/research/frame_scene.py), the fingerprinting cost, the tools CLI, a cold start, and stock Firefox
 as a second baseline (GeckoProfileSession needs a Nulavio build).
 """
@@ -83,6 +89,18 @@ PINNED = {
         "sha256": "cfefa818d7789ed2f2b9f3f1bf608cc35e4e8241489eef47049296ce92791313",
         "size": 12358793,
     },
+    "jetstream": {
+        "commit": "06785cf861ac44855f168cbbe829278c2802e6de",  # WebKit/JetStream, branch JetStream3.0
+        "url": "https://codeload.github.com/WebKit/JetStream/tar.gz/06785cf861ac44855f168cbbe829278c2802e6de",
+        "sha256": "0361851eb2ddeb003e06be74239c3f7ce437c64e774a29ba446faaed9ab16fa9",
+        "size": 194407750,
+    },
+    "motionmark": {
+        "commit": "0e740d50f2321d255f6176e2f57493574c735996",  # WebKit/MotionMark, tag release/MotionMark1.3.2
+        "url": "https://codeload.github.com/WebKit/MotionMark/tar.gz/0e740d50f2321d255f6176e2f57493574c735996",
+        "sha256": "14b746f05b388a382d315186efd6e19017f7f67b3846d20759ab30fe83c2f985",
+        "size": 576485,
+    },
 }
 # The benchmark's state: how many iterations it measured, whether it ended (its last iteration, or an error), and the
 # mean of the iterations' scores, the number its own page shows (resources/main.mjs, _computeResults).
@@ -92,6 +110,25 @@ SPEEDOMETER = (
     " score: runs.length ? runs.reduce((sum, r) => sum + r.score, 0) / runs.length : null };"
 )
 SPEEDOMETER_ITERATION_S = 600  # the longest one iteration may take here (headless, software rendering)
+# JetStream: whether it ended (all its benchmarks, or an error). Its benchmarks' `isSuccess` getter assigns the
+# state it should compare in this version, so it is never read here.
+JETSTREAM = (
+    "const j = globalThis.JetStream;"
+    " return j ? { ended: j.isDone || j.errors.length > 0, errors: j.errors.map(e => String(e.error ?? e)) } : { ended: false };"
+)
+JETSTREAM_SCORE = (
+    "const scores = globalThis.JetStream.benchmarks.map(b => b.score);"
+    " return Math.exp(scores.reduce((sum, x) => sum + Math.log(x), 0) / scores.length);"
+)
+JETSTREAM_S = 3600
+# MotionMark: ready once it has detected the frame rate; ended when its results are shown. Its score is read only
+# then: the dashboard's getter throws while no iteration is done.
+MOTIONMARK = (
+    "const start = document.getElementById('start-button'), ended = document.body.classList.contains('showing-results');"
+    " return { ready: !!start && !start.disabled, ended,"
+    " score: ended ? globalThis.benchmarkRunnerClient?.results?.score ?? null : null };"
+)
+MOTIONMARK_S = 1800
 
 
 class MeasureError(RuntimeError):
@@ -229,6 +266,36 @@ def speedometer_score(m, server: StaticServer, iterations: int) -> float:
     return float(score)
 
 
+def finite(name: str, value) -> float:
+    if not isinstance(value, (int, float)) or not math.isfinite(value) or value <= 0:
+        raise MeasureError(f"{name} ended without a score: {value}")
+    return float(value)
+
+
+def jetstream_score(m, server: StaticServer) -> float:
+    import harness
+
+    m.navigate(server.url("/index.html?startAutomatically"))
+    if not harness.wait_until(lambda: m.execute(JETSTREAM)["ended"], JETSTREAM_S, interval=5.0):
+        raise MeasureError(f"JetStream did not end in {JETSTREAM_S} s")
+    errors = m.execute(JETSTREAM)["errors"]
+    if errors:
+        raise MeasureError(f"JetStream stopped on errors: {errors[:3]}")
+    return finite("JetStream", m.execute(JETSTREAM_SCORE))
+
+
+def motionmark_score(m, server: StaticServer) -> float:
+    import harness
+
+    m.navigate(server.url("/MotionMark/index.html"))
+    if not harness.wait_until(lambda: m.execute(MOTIONMARK)["ready"], 120):
+        raise MeasureError("MotionMark did not detect the frame rate in 120 s")
+    m.execute("benchmarkController.startBenchmark();")
+    if not harness.wait_until(lambda: m.execute(MOTIONMARK)["ended"], MOTIONMARK_S, interval=5.0):
+        raise MeasureError(f"MotionMark did not end in {MOTIONMARK_S} s")
+    return finite("MotionMark", m.execute(MOTIONMARK)["score"])
+
+
 def startup_ms(m) -> float:
     import harness
 
@@ -238,7 +305,9 @@ def startup_ms(m) -> float:
     return float(info["restored"] - info["process"])
 
 
-def one_run(engine: str, tabs: list[int], server, speedometer: tuple | None = None) -> dict:
+def one_run(engine: str, tabs: list[int], server, benchmarks: tuple = ()) -> dict:
+    """One fresh profile: its two starts, the tabs' memory, then each of `benchmarks` ((name, score of a Marionette
+    session)) in a start of its own."""
     import harness
 
     os.environ["NULAVIO_ENGINE"] = engine
@@ -269,10 +338,10 @@ def one_run(engine: str, tabs: list[int], server, speedometer: tuple | None = No
             out[f"pss_mib_{count}_tabs"] = pss / 1024
             out[f"processes_{count}_tabs"] = len(pids)
             out[f"unreadable_{count}_tabs"] = unreadable
-        if speedometer:  # in a start of its own: the tabs' memory above is not read after it, nor it beside them
+        for name, score in benchmarks:  # in a start of its own: no measure carries another's processes
             session.stop()
             m = session.restart()
-            out["speedometer3_score"] = speedometer_score(m, *speedometer)
+            out[name] = score(m)
         return out
     finally:
         session.cleanup()
@@ -286,6 +355,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--out", type=Path)
     parser.add_argument("--speedometer", action="store_true", help="also Speedometer 3.1, pinned and served locally")
     parser.add_argument("--speedometer-iterations", type=int, default=3)
+    parser.add_argument("--jetstream", action="store_true", help="also JetStream 3.0, pinned and served locally")
+    parser.add_argument("--motionmark", action="store_true", help="also MotionMark 1.3.2, pinned and served locally")
     args = parser.parse_args(argv)
     build = os.environ.get("NULAVIO_ENGINE")
     if not build:
@@ -305,12 +376,23 @@ def main(argv: list[str] | None = None) -> int:
     try:
         with contextlib.ExitStack() as stack:
             server = stack.enter_context(harness.FixtureServer())
-            speedometer = None
-            if args.speedometer:  # a server only for the benchmark's own files, and only when it runs
-                speedometer = (stack.enter_context(StaticServer(pinned("speedometer"))), args.speedometer_iterations)
+            benchmarks = []  # a server for each benchmark's own files, only for the ones that run
+
+            def serve(name: str):
+                return stack.enter_context(StaticServer(pinned(name)))
+
+            if args.speedometer:
+                speedometer = functools.partial(
+                    speedometer_score, server=serve("speedometer"), iterations=args.speedometer_iterations
+                )
+                benchmarks.append(("speedometer3_score", speedometer))
+            if args.jetstream:
+                benchmarks.append(("jetstream3_score", functools.partial(jetstream_score, server=serve("jetstream"))))
+            if args.motionmark:
+                benchmarks.append(("motionmark_score", functools.partial(motionmark_score, server=serve("motionmark"))))
             for run in range(args.runs):
                 for side, engine in (("build", build), ("baseline", args.baseline_engine)):
-                    measured = one_run(engine, args.tabs, server, speedometer)
+                    measured = one_run(engine, args.tabs, server, tuple(benchmarks))
                     results["runs"].append({"run": run, "side": side, **measured})
                     print(f"run {run} {side}: {measured}", file=sys.stderr)
                     write()

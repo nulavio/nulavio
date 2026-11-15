@@ -84,12 +84,22 @@ class PinnedBenchmarkTest(unittest.TestCase):
             self.assertFalse((tree / "Speedometer-abc").exists())
             self.assertEqual(perf_run.pinned("speedometer", cache), tree)  # verified once, then reused
 
-    def test_the_pin_is_a_commit_of_the_release_branch_with_its_digest(self):
-        pin = perf_run.PINNED["speedometer"]
-        self.assertRegex(pin["commit"], r"^[0-9a-f]{40}$")
-        self.assertIn(pin["commit"], pin["url"])
-        self.assertTrue(pin["url"].startswith("https://"))
-        self.assertRegex(pin["sha256"], r"^[0-9a-f]{64}$")
+    def test_each_pin_is_a_commit_with_its_archive_and_digest(self):
+        self.assertEqual(set(perf_run.PINNED), {"speedometer", "jetstream", "motionmark"})
+        for name, pin in perf_run.PINNED.items():
+            with self.subTest(name=name):
+                self.assertRegex(pin["commit"], r"^[0-9a-f]{40}$")
+                self.assertEqual(
+                    pin["url"], f"https://codeload.github.com/WebKit/{pin['url'].split('/')[4]}/tar.gz/{pin['commit']}"
+                )
+                self.assertRegex(pin["sha256"], r"^[0-9a-f]{64}$")
+                self.assertGreater(pin["size"], 0)
+
+    def test_a_benchmark_that_ends_without_a_number_is_an_error(self):
+        for value in (None, float("nan"), float("inf"), 0, -1, "12"):
+            with self.subTest(value=value), self.assertRaises(perf_run.MeasureError):
+                perf_run.finite("JetStream", value)
+        self.assertEqual(perf_run.finite("MotionMark", 412.5), 412.5)
 
 
 @unittest.skipUnless(Path("/proc/self/smaps_rollup").exists(), "needs Linux /proc")
