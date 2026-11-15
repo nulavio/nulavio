@@ -289,6 +289,46 @@
   .nv-band-row :is(.nv-band-agent, .nv-band-activity) { --band-glyph: url("resource://builtin-addons/nulavio-shell/shared/icons/agent.svg"); }
   .nv-band-row .nv-band-guard { --band-glyph: url("resource://builtin-addons/nulavio-shell/shared/icons/warning.svg"); }
   .nv-band-row .nv-band-connected { --band-glyph: url("resource://builtin-addons/nulavio-shell/shared/icons/connected.svg"); }
+  /* ADR 0009, decision 7: the pin, at the row's end, only in Immersive. An icon with its name for assistive
+     technology and as a tooltip; pressed, it is filled, so the state is not the icon alone. */
+  .nv-band-row .nv-band-pin {
+    display: none;
+    flex: none;
+    place-items: center;
+    inline-size: var(--nv-space-6);
+    block-size: var(--nv-space-6);
+    padding: 0;
+    border: 1px solid transparent;
+  }
+  .nv-band-row .nv-band-pin::before {
+    content: "";
+    inline-size: var(--nv-icon-size-sm);
+    block-size: var(--nv-icon-size-sm);
+    background-color: currentColor;
+    mask: url("resource://builtin-addons/nulavio-shell/shared/icons/pin.svg") center / contain no-repeat;
+  }
+  .nv-band-row .nv-band-pin:hover {
+    text-decoration: none;
+    background: color-mix(in srgb, currentColor 8%, transparent);
+  }
+  .nv-band-row .nv-band-pin[aria-pressed="true"] {
+    background: color-mix(in srgb, currentColor 14%, transparent);
+    border-color: var(--nv-color-band-rule);
+  }
+  /* Not on the first run's stage, which shows the band and the page alone (ADR 0010, decision 5). */
+  :root[nulavio-immersive]:not([inFullscreen], [inDOMFullscreen], [customizing], [nulavio-stage]) #nulavio-band .nv-band-pin {
+    display: inline-grid;
+  }
+  @media (prefers-contrast) or (forced-colors: active) {
+    /* The fill is taken away there (the row's buttons are Canvas): a pressed pin has the heavier edge. */
+    .nv-band-row .nv-band-pin[aria-pressed="true"] { border-width: var(--nv-state-focusRingWidth); }
+  }
+  @media (forced-colors: active) {
+    .nv-band-row .nv-band-pin::before { forced-color-adjust: none; background-color: CanvasText; }
+    /* Pressed: the system's mark of a selected item (docs/design/accessibility.md), not only a thicker edge. */
+    .nv-band-row .nv-band-pin[aria-pressed="true"] { background: SelectedItem !important; color: SelectedItemText !important; }
+    .nv-band-row .nv-band-pin[aria-pressed="true"]::before { background-color: SelectedItemText; }
+  }
   .nv-band-row :is(.nv-band-pause, .nv-band-assistant-pause) { --band-glyph: url("resource://builtin-addons/nulavio-shell/shared/icons/pause.svg"); }
   .nv-band-row :is(.nv-band-stop, .nv-band-task-stop) { --band-glyph: url("resource://builtin-addons/nulavio-shell/shared/icons/stop.svg"); }
   .nv-band-row .nv-band-status { --band-glyph: url("resource://builtin-addons/nulavio-shell/shared/icons/pause.svg"); }
@@ -453,16 +493,33 @@
     display: none;
   }
   :root[nulavio-immersive]:not([inFullscreen], [inDOMFullscreen], [customizing]) {
+    /* The band's height in the mode: one row, or two when the site needs a line of its own (#118). */
+    --nulavio-band-size: var(--nv-space-6);
+    &[nulavio-immersive-two-lines] {
+      --nulavio-band-size: calc(2 * var(--nv-space-6));
+      .nv-band-row {
+        flex-wrap: wrap;
+        row-gap: 0;
+      }
+      /* The row as it is, the seals and the pin at its end; under it, the site alone, centred, on the whole width. */
+      .nv-band-row .nv-band-seals {
+        margin-inline-start: auto;
+      }
+      .nv-band-row .nv-band-origin:not([hidden]) {
+        order: 1;
+        flex-basis: 100%;
+      }
+    }
     /* The toolbox keeps the band's height in the layout; the other toolbars hang below it, over the page. */
     #navigator-toolbox {
       position: relative;
       z-index: var(--nv-zIndex-band);
       display: block;
-      block-size: var(--nv-space-6);
+      block-size: var(--nulavio-band-size);
       overflow: visible;
     }
     #nulavio-band {
-      block-size: var(--nv-space-6);
+      block-size: var(--nulavio-band-size);
       border-block-end: 1px solid var(--nv-color-border-subtle);
     }
     #navigator-toolbox > toolbar:not(#nulavio-band) {
@@ -487,6 +544,11 @@
       }
     }
 
+    /* #344: as the mode comes on, the toolbar and the tab list leave at once (NulavioWindow). */
+    &[nulavio-immersive-entering] :is(#navigator-toolbox > toolbar:not(#nulavio-band), #sidebar-container, #sidebar-box) {
+      transition: none;
+    }
+
     /* The tab list: out of the flow at the side, back when the pointer reaches the edge or the keyboard enters it. */
     #sidebar-launcher-splitter {
       display: none;
@@ -494,22 +556,26 @@
     #nulavio-immersive-edge {
       display: block;
       position: fixed;
-      inset-block: var(--nv-space-6) 0;
+      inset-block: var(--nulavio-band-size) 0;
       inset-inline-start: 0;
       inline-size: var(--nv-space-2);
       z-index: calc(var(--nv-zIndex-band) - 2);
     }
     #sidebar-container {
       position: fixed;
-      inset-block: calc(var(--nv-space-6) + 1px) 0;
+      inset-block: calc(var(--nulavio-band-size) + 1px) 0;
       inset-inline-start: 0;
       z-index: calc(var(--nv-zIndex-band) - 1);
       background-color: var(--toolbox-background-color, var(--nv-color-chrome-toolbox));
       translate: calc(-100% - var(--nv-space-5)) 0;
       pointer-events: none;
+      /* #344: the list's top goes back up under the band only once the toolbar is out of view (its hold, then its
+         exit), so the leaving toolbar is never drawn over it; it goes down under a toolbar that comes at once. */
+      --nulavio-list-slide: translate var(--nv-motion-duration-base) var(--nv-motion-easing-exit) var(--nv-motion-duration-hold);
+      --nulavio-list-top: inset-block-start var(--nv-motion-duration-fast) var(--nv-motion-easing-enter)
+        calc(var(--nv-motion-duration-hold) + var(--nv-motion-duration-base));
       @media (prefers-reduced-motion: no-preference) {
-        transition: translate var(--nv-motion-duration-base) var(--nv-motion-easing-exit) var(--nv-motion-duration-hold),
-          inset-block-start var(--nv-motion-duration-fast) var(--nv-motion-easing-enter);
+        transition: var(--nulavio-list-slide), var(--nulavio-list-top);
       }
     }
     #sidebar-container:-moz-locale-dir(rtl) {
@@ -519,7 +585,39 @@
        never covers the list's top and the list never covers the toolbar. NulavioWindow measures the toolbars. */
     &:has(#navigator-toolbox:is(:hover, :focus-within, :has([open]:not([open="false"])))) #sidebar-container,
     &[nulavio-immersive-hold~="toolbar"] #sidebar-container {
-      inset-block-start: calc(var(--nv-space-6) + var(--nulavio-immersive-toolbar-size, 0px));
+      inset-block-start: calc(var(--nulavio-band-size) + var(--nulavio-immersive-toolbar-size, 0px));
+      --nulavio-list-top: inset-block-start 0s;
+    }
+    /* #344: the assistant's panel (Nulavio's, a site's, any sidebar) stays in the flow, beside the page; the toolbar
+       does not cover its top (its title, its close button) either. Its height changes in one step, not in an
+       animation that would lay out a page in it at every frame. */
+    #sidebar-box {
+      @media (prefers-reduced-motion: no-preference) {
+        transition: margin-block-start 0s linear calc(var(--nv-motion-duration-hold) + var(--nv-motion-duration-base));
+      }
+    }
+    &:has(#navigator-toolbox:is(:hover, :focus-within, :has([open]:not([open="false"])))) #sidebar-box,
+    &[nulavio-immersive-hold~="toolbar"] #sidebar-box {
+      margin-block-start: var(--nulavio-immersive-toolbar-size, 0px);
+      transition: none;
+    }
+    /* #344: the list is out of the flow, so the engine's room for it beside the panel and the page goes: with
+       "expand on hover" (Foco) it kept the collapsed list's width there while the list was expanded, and the page
+       and the panel moved by it. The panel keeps the page's margin on the window's side (horizon.css). */
+    #browser > #tabbrowser-tabbox {
+      margin-inline: var(--nulavio-frame-margin, 0px);
+    }
+    #browser > #tabbrowser-tabbox[sidebar-panel-open]:not([sidebar-positionend]) {
+      margin-inline-start: 0;
+    }
+    #browser > #tabbrowser-tabbox[sidebar-panel-open][sidebar-positionend] {
+      margin-inline-end: 0;
+    }
+    #browser > #sidebar-box {
+      margin-inline: var(--nulavio-frame-margin, 0px) 0;
+    }
+    #browser > #sidebar-box[sidebar-positionend] {
+      margin-inline: 0 var(--nulavio-frame-margin, 0px);
     }
     #browser:has(> #nulavio-immersive-edge:hover) > #sidebar-container,
     &[nulavio-immersive-hold~="tabs"] #sidebar-container,
@@ -527,10 +625,7 @@
       translate: 0;
       pointer-events: auto;
       box-shadow: var(--nv-elevation-3); /* only while it is over the page: out of view it casts nothing on it */
-      @media (prefers-reduced-motion: no-preference) {
-        transition: translate var(--nv-motion-duration-fast) var(--nv-motion-easing-enter),
-          inset-block-start var(--nv-motion-duration-fast) var(--nv-motion-easing-enter);
-      }
+      --nulavio-list-slide: translate var(--nv-motion-duration-fast) var(--nv-motion-easing-enter);
     }
 
     /* The site, in the middle of the band: the registrable part in the band's text colour, the rest quieter. */

@@ -67,6 +67,8 @@ const SURFACES = Object.freeze({
 const PLAIN_SURFACES = Object.freeze(new Set(["newtabTitle", "settingsTitle", "profilesButton"]));
 // ADR 0009: the toolbar and the tab list hide; the band stays and carries the origin.
 const PREF_IMMERSIVE = "nulavio.layout.immersive";
+// ADR 0009, decision 4: how long a tab opened in the background keeps its part of the chrome in view.
+const BACKGROUND_TAB_MS = 1500;
 // The first run owns the window (ADR 0010): the same pref the new tab's sequence writes.
 const PREF_FIRSTRUN = "nulavio.firstrun.done";
 
@@ -306,6 +308,15 @@ class WindowUI {
     }
     seals.append(guard, connected, pause, stop, taskStop, assistantPause);
     row.append(seals);
+    if (!compact) {
+      // ADR 0009, decision 7: the pin, for touch and for anyone who cannot hover. Shown only in Immersive
+      // (window-band.css); pressed, the toolbar and the tab list stay in view until it is pressed again.
+      const pin = button(doc, "nv-band-pin", event => this.#togglePin(win, event.currentTarget));
+      pin.setAttribute("aria-pressed", "false");
+      pin.setAttribute("aria-label", t("bandPin"));
+      pin.title = t("bandPin");
+      row.append(pin);
+    }
     return row;
   }
 
@@ -515,6 +526,15 @@ class WindowUI {
     // ...and a device that starts or stops being shared in any tab is decided at once.
     const sharing = event => event.detail?.changed?.includes("sharing") && this.#applyImmersive(win);
     win.gBrowser.tabContainer.addEventListener("TabAttrModified", sharing);
+    // ...and a tab opened in the background is shown for a moment where it went (ADR 0009, decision 4).
+    const opened = event => this.#backgroundTab(win, event.target);
+    win.gBrowser.tabContainer.addEventListener("TabOpen", opened);
+    // ...and a tab being dragged in it: the engine's drag session takes the hover away from the list, which left
+    // under the pointer before the drop (#344).
+    const drag = event => this.#dragHold(win, event);
+    for (const type of ["dragstart", "dragend"]) {
+      win.gBrowser.tabContainer.addEventListener(type, drag);
+    }
     // ...as is a prompt that opens or closes on a tab (the engine's tab dialogs), once more after the event
     // because the dialog is still listed while "dialogclose" is dispatched.
     const dialog = () => {
@@ -605,7 +625,7 @@ class WindowUI {
       identityObserver.observe(identityBox, { attributes: true, attributeFilter: ["class"] });
     }
     this.#windows.set(win, { bar, compact, fullscreen, line, sheet, progress, header, unload, pointer, screenObserver, identityObserver, edge,
-      popup, sharing, dialog, downloads, notices, sizes, outside, holds: new Map(), named: false, noticeTimer: null, safety: null, restoreGroupPalette: this.#groupPalette(win),
+      popup, sharing, opened, drag, dialog, downloads, notices, sizes, outside, holds: new Map(), on: false, named: false, noticeTimer: null, safety: null, restoreGroupPalette: this.#groupPalette(win),
       restoreIdentity: this.#ownPagesIdentity(win) });
     this.#downloadHold(win);
     this.#noticeHold(win);
@@ -808,6 +828,20 @@ class WindowUI {
         return false;
       }
     }
+    if (win.document.documentElement.hasAttribute("nulavio-immersive-two-lines")) {
+      // Two lines: the rest of the row on the first, the site alone on the second, both inside the band. Were
+      // the row itself to need two lines (a long profile name, seals, a narrow window), the site would go to a
+      // third, under the band and over the page (review of #342).
+      const band = origin.closest("#nulavio-band")?.getBoundingClientRect();
+      if (!band || room.bottom > band.bottom + 0.5) {
+        return false;
+      }
+      for (const item of origin.parentElement.children) {
+        if (item !== origin && item.checkVisibility() && item.getBoundingClientRect().bottom > room.top + 0.5) {
+          return false;
+        }
+      }
+    }
     return true;
   }
 
@@ -847,15 +881,36 @@ class WindowUI {
     const root = win.document.documentElement;
     const wanted = this.#immersiveWanted(win);
     state.unfit = false;
+    root.removeAttribute("nulavio-immersive-two-lines");
     if (wanted && !this.#immersiveBlock(win)) {
+      if (!state.on) {
+        // #344: the mode coming on (the key, the switch, a page it was held back for gone) takes the toolbar and the
+        // tab list out of view at once, without the hold the pointer gets: the list leaves the flow for the band's
+        // edge in that same frame, and the toolbar held over it for 0.6 s covered its top (window-band.css). Set
+        // before the row is measured below, which already lays the window out with the mode on.
+        root.toggleAttribute("nulavio-immersive-entering", true);
+        win.requestAnimationFrame(() => win.requestAnimationFrame(() => root.removeAttribute("nulavio-immersive-entering")));
+      }
       // Nothing else holds the mode back: does the site fit the row? The row is laid out as with the mode on
-      // and measured before anything is painted; when it does not fit, the toolbar stays (ADR 0009, decision 6).
+      // and measured before anything is painted. When it does not fit, the site gets a line of its own under
+      // the row; when that is not enough either, the toolbar stays (ADR 0009, decision 6; #118).
       root.toggleAttribute("nulavio-immersive", true);
       state.bar.toggleAttribute("nv-neutral", false);
-      state.unfit = !this.#siteFits(win);
+      if (!this.#siteFits(win)) {
+        root.toggleAttribute("nulavio-immersive-two-lines", true);
+        state.unfit = !this.#siteFits(win);
+        if (state.unfit) {
+          root.removeAttribute("nulavio-immersive-two-lines");
+        }
+      }
     }
     const block = wanted ? this.#immersiveBlock(win) : "";
-    root.toggleAttribute("nulavio-immersive", wanted && !block);
+    state.on = wanted && !block;
+    root.toggleAttribute("nulavio-immersive", state.on);
+    const pin = win.document.querySelector(".nv-band-pin"); // also where customizing put the band's widget
+    if (!wanted && pin && state.holds.delete(pin)) {
+      pin.setAttribute("aria-pressed", "false"); // the mode turned off: a pin does not wait for the next time
+    }
     const mark = (name, value) => (value ? setAttr(root, name, value) : root.removeAttribute(name));
     mark("nulavio-immersive-off", block);
     for (const [node] of state.holds) {
@@ -863,11 +918,68 @@ class WindowUI {
         state.holds.delete(node); // a popup that never opened, or went away without its event
       }
     }
-    mark("nulavio-immersive-hold", [...new Set(state.holds.values())].sort().join(" "));
+    const parts = [...state.holds.values()].flatMap(part => part.split(" "));
+    mark("nulavio-immersive-hold", [...new Set(parts)].sort().join(" "));
     const neutral = this.#neutral(win);
     if (state.bar.hasAttribute("nv-neutral") !== neutral) {
       state.bar.toggleAttribute("nv-neutral", neutral);
     }
+  }
+
+  /** The band's pin, pressed: the toolbar and the tab list are held in view until it is pressed again. */
+  #togglePin(win, pin) {
+    const state = this.#windows.get(win);
+    if (!state) {
+      return;
+    }
+    const pinned = !state.holds.has(pin);
+    if (pinned) {
+      state.holds.set(pin, "tabs toolbar");
+    } else {
+      state.holds.delete(pin);
+    }
+    pin.setAttribute("aria-pressed", String(pinned));
+    this.#applyImmersive(win);
+    if (!pinned && win.document.getElementById("navigator-toolbox")?.matches(":focus-within")) {
+      // A click or a tap left the keyboard on the pin, which would keep the toolbar shown: the page takes it back,
+      // as a click outside the toolbar gives it (#239).
+      win.gBrowser.selectedBrowser.focus();
+    }
+  }
+
+  /** A tab opened in the background, with the mode on: the tab list at the side (or the toolbar, with the tabs on
+      top) comes into view for a moment, so the tab is seen arriving. One the engine selects at once is not this. */
+  #backgroundTab(win, tab) {
+    win.setTimeout(() => {
+      const state = this.#windows.get(win);
+      if (!state || !tab.isConnected || tab.selected || !win.document.documentElement.hasAttribute("nulavio-immersive")) {
+        return;
+      }
+      const part = win.gBrowser.tabContainer.getAttribute("orient") === "vertical" ? "tabs" : "toolbar";
+      state.holds.set(tab, part);
+      this.#applyImmersive(win);
+      win.setTimeout(() => {
+        if (this.#windows.get(win) === state && state.holds.delete(tab)) {
+          this.#applyImmersive(win);
+        }
+      }, BACKGROUND_TAB_MS);
+    }, 0);
+  }
+
+  /** A tab dragged in the tab list (or the tab strip, with the tabs on top): that part stays shown from the start of
+      the drag to its end, wherever it ends. */
+  #dragHold(win, event) {
+    const state = this.#windows.get(win);
+    const container = win.gBrowser.tabContainer;
+    if (!state || !event.target?.closest?.("tab")) {
+      return;
+    }
+    if (event.type === "dragstart" && !event.defaultPrevented) {
+      state.holds.set(container, container.getAttribute("orient") === "vertical" ? "tabs" : "toolbar");
+    } else if (event.type !== "dragend" || !state.holds.delete(container)) {
+      return;
+    }
+    this.#applyImmersive(win);
   }
 
   /** A panel or menu anchored on the toolbar or on the tab list: that part stays shown from before the
@@ -1279,6 +1391,10 @@ class WindowUI {
       win.removeEventListener(type, state.popup, true);
     }
     win.gBrowser.tabContainer.removeEventListener("TabAttrModified", state.sharing);
+    win.gBrowser.tabContainer.removeEventListener("TabOpen", state.opened);
+    for (const type of ["dragstart", "dragend"]) {
+      win.gBrowser.tabContainer.removeEventListener(type, state.drag);
+    }
     for (const type of ["dialogopen", "dialogclose"]) {
       win.removeEventListener(type, state.dialog, true);
     }
@@ -1293,7 +1409,8 @@ class WindowUI {
     state.bar.remove();
     state.fullscreen.remove();
     state.edge.remove();
-    for (const name of ["nulavio-immersive", "nulavio-immersive-off", "nulavio-immersive-hold", "nulavio-stage"]) {
+    for (const name of ["nulavio-immersive", "nulavio-immersive-off", "nulavio-immersive-hold", "nulavio-immersive-two-lines",
+      "nulavio-immersive-entering", "nulavio-stage"]) {
       win.document.documentElement.removeAttribute(name);
     }
     if (state.sheet) {

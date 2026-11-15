@@ -143,6 +143,27 @@ FP_SURFACE_PAGE = """<!doctype html><meta charset="utf-8"><title>fp-surface</tit
 </script>"""
 
 
+def minimal_pdf(text: str) -> bytes:
+    """A valid one-page PDF showing `text` (ASCII) in Helvetica, with its cross-reference table."""
+    stream = f"BT /F1 24 Tf 72 720 Td ({text}) Tj ET".encode()
+    objects = [
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>",
+        b"<< /Length %d >>\nstream\n" % len(stream) + stream + b"\nendstream",
+        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+    ]
+    out, offsets = bytearray(b"%PDF-1.4\n"), []
+    for number, body in enumerate(objects, 1):
+        offsets.append(len(out))
+        out += b"%d 0 obj\n" % number + body + b"\nendobj\n"
+    xref = len(out)
+    out += b"xref\n0 %d\n0000000000 65535 f \n" % (len(objects) + 1)
+    out += b"".join(b"%010d 00000 n \n" % offset for offset in offsets)
+    out += b"trailer\n<< /Size %d /Root 1 0 R >>\nstartxref\n%d\n%%%%EOF\n" % (len(objects) + 1, xref)
+    return bytes(out)
+
+
 class FixtureServer:
     """Local HTTP fixtures on 127.0.0.1 that record which paths were requested."""
 
@@ -240,6 +261,26 @@ class FixtureServer:
                 f'<img id="ad" src="/adbanners/nulavio-test.png?n={n}">'
             )
             return page.encode(), html, {}
+        if path == "/google-third-party":
+            # Google on another site (tests/integration/test_content_filter.py, #220): Analytics, Tag Manager and the
+            # two ad tags, each from Google's own name (resolved to this machine by the test), beside a script of
+            # the site's own CDN that no list knows. Each path says whose it is: the server keeps paths, not hosts.
+            # Not *.google-analytics.com: the engine's HSTS preload list has it, so plain http never reaches here.
+            n, port = query.get("n", "0"), self.port
+            scripts = [
+                f"http://www.googletagmanager.com:{port}/gtag/js?id=G-NULAVIO&n={n}",  # Analytics (GA4) loads from here
+                f"http://www.googletagmanager.com:{port}/gtm.js?id=GTM-NULAVIO&n={n}",
+                f"http://securepubads.g.doubleclick.net:{port}/tag/js/gpt.js?n={n}",
+                f"http://pagead2.googlesyndication.com:{port}/pagead/js/adsbygoogle.js?n={n}",
+                f"http://cdn.nulavio-site.test:{port}/assets/site.js?n={n}",
+            ]
+            page = "<!doctype html><title>google-third-party</title><p>a site</p>" + "".join(
+                f'<script async src="{src}"></script>' for src in scripts
+            )
+            return page.encode(), html, {}
+        if path == "/text.pdf":
+            # A one-page PDF with one line of text, for the PDF viewer (tests/integration/test_text_fragments.py).
+            return minimal_pdf("frase sem igual no PDF"), "application/pdf", {}
         if path == "/cookie-notice":
             # Cookie-notice fixture (tests/integration/test_content_filter.py): elements named like two of the
             # most common consent banners, which the cookie-notice lists hide, beside one no list knows.
@@ -644,8 +685,9 @@ class GeckoProfileSession:
             self.env["MOZ_HEADLESS"] = "1"
         else:
             # Headful: the display the caller chose, a private Xvfb (`env -u WAYLAND_DISPLAY DISPLAY=:n
-            # GDK_BACKEND=x11`) or Wayland. Nothing else of the caller's session is passed.
-            for variable in ("WAYLAND_DISPLAY", "DISPLAY", "GDK_BACKEND", "MOZ_ENABLE_WAYLAND"):
+            # GDK_BACKEND=x11`, with its cookie file when it has one) or Wayland. Nothing else of the caller's
+            # session is passed.
+            for variable in ("WAYLAND_DISPLAY", "DISPLAY", "XAUTHORITY", "GDK_BACKEND", "MOZ_ENABLE_WAYLAND"):
                 if os.environ.get(variable):
                     self.env[variable] = os.environ[variable]
         # The AddressSanitizer build's options (asan.yml: where reports go), when set.

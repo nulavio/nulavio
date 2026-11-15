@@ -99,7 +99,13 @@ async function act(action, finding) {
     // next, or the previous after the last), not back to the top of the page (audit 2026-11 S-05). To its
     // title, never to one of its buttons: a second Enter would undo or keep a change nobody had read yet.
     const place = [...document.querySelectorAll("#findings > li")].findIndex(li => li.dataset.findingId === finding.id);
-    const left = await guard.resolve(finding.id, action);
+    acting++;
+    let left;
+    try {
+      left = await guard.resolve(finding.id, action);
+    } finally {
+      acting--;
+    }
     render(left);
     const cards = document.querySelectorAll("#findings > li");
     const title = cards[Math.min(Math.max(place, 0), cards.length - 1)]?.querySelector("h2");
@@ -145,8 +151,11 @@ function item(f) {
 }
 
 let reviewing = false; // findings were shown: an empty list now means the last one was just resolved
+let acting = 0; // keeps and undos under way, which redraw the list themselves and place the keyboard
+let shown = ""; // what the list shows, to redraw only when it changed
 
 function render(findings) {
+  shown = JSON.stringify(findings);
   const list = document.getElementById("findings");
   list.replaceChildren(...[...findings].sort((a, b) => rank(a) - rank(b) || a.id.localeCompare(b.id)).map(item));
   list.removeAttribute("aria-busy");
@@ -179,6 +188,43 @@ document.getElementById("close").addEventListener("click", async () => {
   const tab = await browser.tabs.getCurrent();
   const siblings = await browser.tabs.query({ windowId: tab.windowId });
   return siblings.length > 1 ? browser.tabs.remove(tab.id) : browser.tabs.update(tab.id, { url: "about:newtab" });
+});
+
+// #351: a finding added or updated while the page is open (the engine takes a replaced extension in a moment after
+// the start-up check, and the finding then says its version) is shown without reopening the page. The keyboard
+// stays where it was: on the same control of the same finding when it is still there.
+guard.onChanged.addListener(async () => {
+  if (acting) {
+    return;
+  }
+  const findings = await guard.findings().catch(() => null);
+  if (!findings || acting || JSON.stringify(findings) === shown) {
+    return;
+  }
+  const focused = document.activeElement;
+  const card = focused?.closest?.("#findings > li");
+  const cards = () => [...document.querySelectorAll("#findings > li")];
+  const where = card ? { id: card.dataset.findingId, action: focused.dataset?.action ?? null, place: cards().indexOf(card) } : null;
+  const before = reviewing;
+  render(findings);
+  if (before && !findings.length) {
+    announce(t("guardAllReviewed")); // resolved elsewhere (another review tab): the page says why it changed
+  }
+  if (where) {
+    const again = cards().find(li => li.dataset.findingId === where.id);
+    // The same control of the same finding; when that finding went away, the title of the one now in its place.
+    let target = again && where.action ? again.querySelector(`button[data-action="${where.action}"]`) : again?.querySelector("h2");
+    if (!again) {
+      const now = cards();
+      target = now[Math.min(where.place, now.length - 1)]?.querySelector("h2");
+    }
+    if (target) {
+      if (target.localName === "h2") {
+        target.tabIndex = -1;
+      }
+      target.focus();
+    }
+  }
 });
 
 localize();

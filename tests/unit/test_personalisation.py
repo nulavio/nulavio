@@ -79,6 +79,7 @@ ALLOWED_BY_KIND = {"routing": {"nulavio.routing.fallbackProfile", "nulavio.routi
 # it appears. A new call anywhere, even one that reuses a pinned name, changes a count and fails here
 # until it is reviewed: an option could otherwise reach a protection through another module.
 PREF_WRITERS = {
+    "NulavioAccountRules.sys.mjs": {"setStringPref(OFFERED_PREF)": 1},  # which services were offered here (#220)
     "NulavioConnect.sys.mjs": {"clearUserPref(PREF_PREVIOUS)": 1, "setStringPref(PREF_PREVIOUS)": 1},
     "NulavioGuard.sys.mjs": {"clearUserPref(name)": 1, "setBoolPref(name)": 1, "setIntPref(name)": 1, "setStringPref(name)": 1},
     "NulavioLayout.sys.mjs": {
@@ -373,6 +374,7 @@ class CommandsTest(unittest.TestCase):
                 "toggle-focus": "Ctrl+Alt+F",
                 "toggle-immersive": "Ctrl+Alt+I",
                 "lock-profile": "Ctrl+Alt+B",
+                "copy-link-to-highlight": "Ctrl+Shift+L",  # #157
             },
         )
         self.assertEqual(len(set(keys.values())), len(keys))

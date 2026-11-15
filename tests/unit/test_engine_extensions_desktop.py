@@ -14,7 +14,7 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "launcher"))
 
-from nulavio_launcher import desktop, engine, extensions  # noqa: E402
+from nulavio_launcher import desktop, doctor, engine, extensions  # noqa: E402
 
 FAKE_ENGINE = engine.Engine(path=Path("/usr/lib64/firefox/firefox"), version="158.0.1", vendor="Mozilla Firefox")
 
@@ -52,6 +52,9 @@ class EngineCommandTest(unittest.TestCase):
             "MOZ_DISABLE_CONTENT_SANDBOX": "1",
             "MOZ_DISABLE_RDD_SANDBOX": "1",
             "MOZ_SANDBOX_LOGGING": "1",
+            "MOZ_ASSUME_USER_NS": "0",  # #312: content processes without their own namespaces
+            "MOZ_FORCE_DISABLE_E10S": "160.0",  # pages in the parent process, no content sandbox
+            "MOZ_FORCE_DISABLE_FISSION": "1",  # one process for several sites
             "MOZ_MARIONETTE": "1",
             "MOZ_REMOTE_SETTINGS_DEVTOOLS": "1",
             "MOZ_HEADLESS": "1",
@@ -65,6 +68,20 @@ class EngineCommandTest(unittest.TestCase):
                 self.assertNotIn(key, env)
         self.assertEqual(env["WAYLAND_DISPLAY"], "wayland-0")
         self.assertEqual(env["MOZ_APP_REMOTINGNAME"], engine.APP_ID)
+
+    def test_doctor_reports_a_variable_that_weakens_the_sandbox(self):
+        # #312: removed before the engine starts, and said, since other programs started from here keep it.
+        def environment():
+            return next(c for c in doctor.check_platform() if c.area == "sandbox" and c.name == "environment")
+
+        hostile = {"MOZ_ASSUME_USER_NS": "0"}  # nosemgrep: nulavio-py-engine-sandbox-env -- the input doctor reports
+        with mock.patch.dict(os.environ, hostile):
+            check = environment()
+        self.assertEqual(check.status, "warn")
+        self.assertIn("MOZ_ASSUME_USER_NS", check.detail)
+        clean = {k: v for k, v in os.environ.items() if k not in engine.sandbox_overrides()}
+        with mock.patch.dict(os.environ, clean, clear=True):
+            self.assertEqual(environment().status, "ok")
 
     def test_only_the_nulavio_build_ships_the_window_theme(self):
         self.assertFalse(FAKE_ENGINE.builtin_theme)

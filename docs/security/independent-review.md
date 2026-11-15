@@ -71,10 +71,10 @@ The packages are built on Blacksmith runners by `release.yml`, checked against a
 
 | Code | What it does |
 |---|---|
-| `.github/workflows/release.yml` | Jobs `build`, `flatpak`, `companion`, `publish`; the `release` environment, OIDC, attestations |
+| `.github/workflows/release.yml` | Jobs `build`, `flatpak`, `flatpak-check`, `companion`, `sign`, `publish`; the `release` and `release-upload` environments, OIDC, attestations |
 | `.github/workflows/repeatable.yml`, `scripts/release/compare_builds.py` | A second build to compare with the release |
 | `.github/workflows/release-signing-check.yml`, `scripts/release/test_kms_signing.sh` | A manual check that KMS signs and the result verifies |
-| `scripts/release/rehearse_release.sh`, `release_manifest.py` | The rehearsal and the manifest `publish` checks before it signs |
+| `scripts/release/rehearse_release.sh`, `release_manifest.py` | The rehearsal and the manifest `sign` checks before it signs |
 | `scripts/release/openpgp_sign.py`, `sign_repo.sh`, `sign_apt_repo.sh` | OpenPGP signatures made through KMS: RPMs, the dnf and APT repository metadata |
 | `scripts/release/apk_sign.py`, `sign_companion.sh` | The Companion's APK signature (v2/v3 scheme) through KMS |
 | `scripts/release/publish_release.sh`, `upload_repo.sh`, `check_published.sh` | Staging, upload to the package bucket, the check after upload |
@@ -85,7 +85,7 @@ The packages are built on Blacksmith runners by `release.yml`, checked against a
 Questions the project would most like answered:
 
 1. Can anything other than an approved job in the `release` environment on `main` (`release.yml`, and `release-signing-check.yml`, which signs a test file there) get a signature from either key (R60)? Read the trust policy, the role policy and the key policy together with the workflow's triggers and permissions.
-2. Can a pull request, a branch, a cache, an artifact or a dependency download put bytes into what gets signed? What does the manifest bind, and what does `publish` check before it signs?
+2. Can a pull request, a branch, a cache, an artifact or a dependency download put bytes into what gets signed? What does the manifest bind, and what does `sign` check before it signs?
 3. Do the signatures and repository files make `dnf`, `apt` and Flatpak refuse a tampered or older package (R57 says the metadata has no expiry)?
 4. Are the scripts' refusals really fatal, and is there a path that publishes unsigned or partly signed?
 5. The APK signer is the project's own code (`apk_sign.py`): is its output what Android's verifier checks, and could a crafted input make it sign something other than the built APK?

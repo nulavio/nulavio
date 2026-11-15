@@ -2,7 +2,8 @@
 # After an upload, install nulavio from what was published, the way a user does,
 # and require <version>-<release>:
 # - dnf, in a clean Fedora container, from the site's repository file
-#   (https://nulavio.net/rpm/nulavio.repo), which must keep both signature checks on;
+#   (https://nulavio.net/rpm/nulavio.repo), which must be byte for byte the
+#   reviewed site/rpm/nulavio.repo (both signature checks on, the key and the base URL);
 # - APT, in a clean Ubuntu container, from the site's source file
 #   (https://nulavio.net/apt/nulavio.sources), which must be byte for byte the
 #   reviewed site/apt/nulavio.sources (one stanza, the release key in Signed-By).
@@ -19,28 +20,38 @@ ubuntu=$("$here/base_image.sh" ubuntu-itest)
 repo_file=${NULAVIO_REPO_FILE:-https://nulavio.net/rpm/nulavio.repo}
 sources_file=${NULAVIO_SOURCES_FILE:-https://nulavio.net/apt/nulavio.sources}
 
+# The file that decides what a package manager trusts is fetched here and compared, whole, with the
+# reviewed one; that exact copy is what the container uses. Prints why when it is not the same.
+reviewed_copy() {
+    local url=$1 reviewed=$2 copy
+    copy=$(mktemp)
+    if ! curl -fsSL --proto '=https' --retry 3 "$url" -o "$copy"; then
+        echo "the file could not be fetched"
+    elif ! cmp -s "$copy" "$reviewed"; then
+        echo "the published file is not ${reviewed#"$repo/"}"
+    else
+        chmod 0644 "$copy"
+        echo "$copy"
+        return 0
+    fi
+    rm -f "$copy"
+    return 1
+}
+
 dnf_install() {
-    podman run --rm --security-opt label=disable -e REPO_FILE="$repo_file" "$fedora" bash -euc '
-        curl -fsSL --retry 3 "$REPO_FILE" -o /etc/yum.repos.d/nulavio.repo
-        grep -qx "gpgcheck=1" /etc/yum.repos.d/nulavio.repo && grep -qx "repo_gpgcheck=1" /etc/yum.repos.d/nulavio.repo ||
-            { echo "the repository file turns a signature check off"; exit 3; }
+    local repo_copy
+    repo_copy=$(reviewed_copy "$repo_file" "$repo/site/rpm/nulavio.repo") || { echo "$repo_copy"; return 0; }
+    podman run --rm --security-opt label=disable -v "$repo_copy:/nulavio.repo:ro" "$fedora" bash -euc '
+        cp /nulavio.repo /etc/yum.repos.d/nulavio.repo
         dnf -y -q --refresh install nulavio >/dev/null 2>&1 || { echo "dnf refused or failed"; exit 4; }
         rpm -q --qf "%{VERSION}-%{RELEASE}\n" nulavio
     ' 2>&1 || true
+    rm -f "$repo_copy"
 }
 
 apt_install() {
-    # The file that decides what apt trusts is checked here, whole, against the reviewed one, and
-    # that exact copy is what the container uses.
     local sources
-    sources=$(mktemp)
-    curl -fsSL --proto '=https' --retry 3 "$sources_file" -o "$sources" || { echo "the source file could not be fetched"; rm -f "$sources"; return 0; }
-    if ! cmp -s "$sources" "$repo/site/apt/nulavio.sources"; then
-        echo "the published source file is not site/apt/nulavio.sources"
-        rm -f "$sources"
-        return 0
-    fi
-    chmod 0644 "$sources"
+    sources=$(reviewed_copy "$sources_file" "$repo/site/apt/nulavio.sources") || { echo "$sources"; return 0; }
     podman run --rm --security-opt label=disable -v "$sources:/nulavio.sources:ro" "$ubuntu" bash -euc '
         export DEBIAN_FRONTEND=noninteractive
         { apt-get -qq update && apt-get -qq install -y ca-certificates; } >/dev/null 2>&1 || { echo "apt failed (Ubuntu archive)"; exit 5; }
