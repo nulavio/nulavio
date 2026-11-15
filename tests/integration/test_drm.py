@@ -114,8 +114,13 @@ return { text: n.messageText?.textContent ?? "", buttons: [...n.buttonContainer.
 """
 DRM_SETTING = """
 const box = document.getElementById("playDRMContent");
-const nav = document.querySelector('[view="paneTabsBrowsing"], #category-tabs-browsing, [data-category="paneTabsBrowsing"]');
-return box ? { shown: box.checkVisibility(), label: box.label, checked: box.checked, nav: !!nav && nav.checkVisibility() } : null;
+// The page's navigation entry for that pane, never the pane itself (which carries the same category).
+const named = '[view="paneTabsBrowsing"], [value="paneTabsBrowsing"], [data-category="paneTabsBrowsing"]';
+const nav = [...document.querySelectorAll(named)]
+  .find(e => e.localName !== "setting-pane" && !e.closest("setting-pane, .pane-container"));
+if (!box) return null;
+const entry = nav ? `${nav.localName}:${nav.checkVisibility()}` : null;
+return { shown: box.checkVisibility(), label: box.label, checked: box.checked, nav: entry };
 """
 
 
@@ -227,7 +232,7 @@ class ProtectedMediaTest(unittest.TestCase):
         state = self.m.execute(DRM_SETTING)
         print(f"settings: {state}", file=sys.stderr)
         self.assertTrue(state["label"].strip(), state)
-        self.assertTrue(state["nav"], f"the settings page lists no way to that pane: {state}")
+        self.assertTrue(str(state["nav"]).endswith(":true"), f"the settings page lists no way to that pane: {state}")
         self.assertFalse(state["checked"])
         self.addCleanup(self.m.chrome, "Services.prefs.clearUserPref('media.eme.enabled');")
         self.m.execute("document.getElementById('playDRMContent').click();")
