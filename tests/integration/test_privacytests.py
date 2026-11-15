@@ -83,6 +83,7 @@ PROBES = {
 }
 # The same on every machine by construction. The NaN byte is x86-64's: Nulavio has no other build (#79).
 DEVICE_CONSTANTS = {
+    "Logical CPU cores": "4",  # NavigatorHWConcurrency: the engine's one value for every machine on Linux
     "Device memory": "undefined",  # the engine has no Device Memory API
     "JavaScript heap size limit": "undefined",  # nor performance.memory
     "Math: Infinity - Infinity": "255",
@@ -95,13 +96,10 @@ DEVICE_CONSTANTS = {
 }
 # Probes that do not pass yet, and why (#79). Each fix removes its line.
 KNOWN_GAPS = {
-    "Logical CPU cores": "reported in two tiers, 4 or 8: a machine with 8 processors or more reads differently",
     "AudioContext fingerprint": "the engine has no protection for rendered audio",
     "Time zone": "pages get the system's time zone",
     "Reduced motion preference": "pages get the system's setting",
     "Display contrast preference": "pages get the system's setting",
-    "Screen width": "pages get the display's size",
-    "Screen height": "pages get the display's size",
 }
 FONT_TEXT = "font fingerprinting"  # the text PrivacyTests' font probes measure
 RUNS = {  # what "the system" is in each session

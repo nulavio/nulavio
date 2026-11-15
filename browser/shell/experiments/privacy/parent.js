@@ -22,6 +22,21 @@ this.nulavioPrivacy = class extends ExtensionAPI {
     } catch (e) {
       console.error("Nulavio privacy defaults", e);
     }
+    try {
+      this.fingerprinting().watch(); // the screen size pages read (#79)
+    } catch (e) {
+      console.error("Nulavio fingerprinting", e);
+    }
+  }
+
+  onShutdown(isAppShutdown) {
+    if (!isAppShutdown) {
+      this.fingerprinting().unwatch();
+    }
+  }
+
+  fingerprinting() {
+    return ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioFingerprinting.sys.mjs").NulavioFingerprinting;
   }
 
   getAPI(context) {
