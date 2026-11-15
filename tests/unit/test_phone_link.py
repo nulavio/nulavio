@@ -189,6 +189,22 @@ class PhoneSessionTest(unittest.TestCase):
         self.assertTrue(profiles.container(self.prof).mounted())
         profiles.lock(self.prof)
 
+    def test_01a_an_unlock_whose_lock_watcher_cannot_start_is_locked_again(self):
+        # #325: the watcher that locks the profile when its browser closes could not be started (EMFILE, an
+        # interpreter gone during an upgrade). The profile does not stay open while the session says it failed.
+        self.pair()
+        errors = []
+        spawn = mock.patch("nulavio_launcher.vault.cli.spawn_autolock", side_effect=OSError(24, "Too many open files"))
+        hook = mock.patch.object(threading, "excepthook", lambda args: errors.append(args.exc_type))
+        with spawn, hook:
+            session, first, thread = self.start("unlock", {})
+            phone = self.phone.unlock(first["qr"])
+            thread.join(20)
+            phone.join(20)
+        self.assertEqual(errors, [OSError])  # main() reports it as "failed"
+        self.assertNotEqual(session.state, "unlocked")
+        self.assertFalse(profiles.container(self.prof).mounted())
+
     def test_01b_a_pairing_saved_but_not_recorded_says_so(self):
         # #177: the phone is paired (the key file is saved); the record inside the profile failed.
         with mock.patch("nulavio_launcher.vault.cli._record", return_value=True):
