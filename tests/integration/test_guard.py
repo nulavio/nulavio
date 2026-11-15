@@ -683,10 +683,14 @@ class GuardTest(unittest.TestCase):
         # #337: once the engine has taken the file in, the waiting finding says its version too, and so does the card.
         # #351: the review page, opened at once, before that, shows it without being reopened.
         self.open_review()
+        arrow = f"{older.version} → {newer.version}"
+        first, engine_then = self.cards()[changed]["detail"], engine()
+        print(f"the page opened with {first!r}, the engine reporting {engine_then}", file=sys.stderr)
+        if after["version"] == older.version and engine_then == older.version:
+            self.assertNotIn(arrow, first)  # the case #351 is about: the card can only change while the page is open
         waiting = lambda: {f["id"]: f for f in self.guard("return G.findings();")}.get(changed, {})  # noqa: E731
         self.assertTrue(harness.wait_until(lambda: engine() == newer.version, timeout=20), engine())
         self.assertTrue(harness.wait_until(lambda: waiting().get("after", {}).get("version") == newer.version, 20), waiting())
-        arrow = f"{older.version} → {newer.version}"
         self.assertTrue(harness.wait_until(lambda: arrow in self.cards()[changed]["detail"], 10), self.cards()[changed])
         detail = self.cards()[changed]["detail"]
         self.assertNotIn("arquivo substituído", detail)

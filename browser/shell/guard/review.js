@@ -99,12 +99,12 @@ async function act(action, finding) {
     // next, or the previous after the last), not back to the top of the page (audit 2026-11 S-05). To its
     // title, never to one of its buttons: a second Enter would undo or keep a change nobody had read yet.
     const place = [...document.querySelectorAll("#findings > li")].findIndex(li => li.dataset.findingId === finding.id);
-    acting = true;
+    acting++;
     let left;
     try {
       left = await guard.resolve(finding.id, action);
     } finally {
-      acting = false;
+      acting--;
     }
     render(left);
     const cards = document.querySelectorAll("#findings > li");
@@ -151,7 +151,7 @@ function item(f) {
 }
 
 let reviewing = false; // findings were shown: an empty list now means the last one was just resolved
-let acting = false; // a keep or an undo is redrawing the list itself, and placing the keyboard
+let acting = 0; // keeps and undos under way, which redraw the list themselves and place the keyboard
 let shown = ""; // what the list shows, to redraw only when it changed
 
 function render(findings) {
@@ -203,13 +203,23 @@ guard.onChanged.addListener(async () => {
   }
   const focused = document.activeElement;
   const card = focused?.closest?.("#findings > li");
-  const where = card ? { id: card.dataset.findingId, action: focused.dataset?.action ?? null } : null;
+  const cards = () => [...document.querySelectorAll("#findings > li")];
+  const where = card ? { id: card.dataset.findingId, action: focused.dataset?.action ?? null, place: cards().indexOf(card) } : null;
+  const before = reviewing;
   render(findings);
+  if (before && !findings.length) {
+    announce(t("guardAllReviewed")); // resolved elsewhere (another review tab): the page says why it changed
+  }
   if (where) {
-    const again = [...document.querySelectorAll("#findings > li")].find(li => li.dataset.findingId === where.id);
-    const target = where.action ? again?.querySelector(`button[data-action="${where.action}"]`) : again?.querySelector("h2");
+    const again = cards().find(li => li.dataset.findingId === where.id);
+    // The same control of the same finding; when that finding went away, the title of the one now in its place.
+    let target = again && where.action ? again.querySelector(`button[data-action="${where.action}"]`) : again?.querySelector("h2");
+    if (!again) {
+      const now = cards();
+      target = now[Math.min(where.place, now.length - 1)]?.querySelector("h2");
+    }
     if (target) {
-      if (!where.action) {
+      if (target.localName === "h2") {
         target.tabIndex = -1;
       }
       target.focus();
