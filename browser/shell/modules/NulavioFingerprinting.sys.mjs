@@ -11,153 +11,58 @@
 
    It follows the engine's protection: on while fingerprinting protection is on (the Strict category), and off
    for a site the person exempts with the shield in the address bar, which gets the display's size like the
-   other plain values. */
+   other plain values.
 
-export const SCREEN = Object.freeze({ width: 1920, height: 1080 });
+   Two places set it. Here, every new tab gets the constant when its browsing context is made, before it has
+   any page. And in the page's own process, NulavioFingerprintingChild decides for each page as its window is
+   created: that is the one moment that is after the page before it and before the new page's first script. */
 
-const FPP = "privacy.fingerprintingProtection";
-const FPP_PRIVATE = "privacy.fingerprintingProtection.pbmode";
+import { SCREEN, protectionOn, setScreen } from "resource://builtin-addons/nulavio-shell/modules/NulavioFingerprintingChild.sys.mjs";
 
-/** Whether the engine's fingerprinting protection is on for this kind of window (nsRFPService::IsFPPEnabled). */
-function protectionOn(isPrivate) {
-  return Services.prefs.getBoolPref(FPP, false) || (isPrivate && Services.prefs.getBoolPref(FPP_PRIVATE, false));
-}
+export { SCREEN };
 
-/** Whether the person exempted this address's site with the shield. The engine keeps that by host and port,
-    whatever the scheme (ContentBlockingAllowList::ComputePrincipal), and apart for private windows: under
-    another permission, on a principal that carries the private window's mark. */
-function exempted(uri, isPrivate) {
-  if (!uri?.schemeIs("http") && !uri?.schemeIs("https")) {
-    return false;
-  }
-  try {
-    const site = Services.io.newURI(`https://${uri.hostPort}`);
-    const principal = Services.scriptSecurityManager.createContentPrincipal(site, { privateBrowsingId: isPrivate ? 1 : 0 });
-    const type = isPrivate ? "trackingprotection-pb" : "trackingprotection";
-    return Services.perms.testExactPermissionFromPrincipal(principal, type) === Services.perms.ALLOW_ACTION;
-  } catch {
-    return false;
-  }
-}
-
-/* Whether each tab's last page was an exempted site, by the tab's id, which stays when a page changes process
-   and the tab gets a new browsing context. A new context starts with no page of its own, and must not lose the
-   exemption of the site it is about to show. Only that yes or no is kept, never an address, so nothing of a
-   closed tab or a private window stays here. Bounded: the oldest entries go first. */
-const lastExempted = new Map();
-const REMEMBERED = 512;
-
-function remember(id, wasExempted) {
-  lastExempted.delete(id);
-  lastExempted.set(id, wasExempted);
-  if (lastExempted.size > REMEMBERED) {
-    lastExempted.delete(lastExempted.keys().next().value);
-  }
-}
-
-/** Give the tab of this browsing context the constant screen, or the display's for an exempted site. `uri` is
-    the address its top document shows; without one, what the tab's last page was stands. */
-function apply(context, uri = null) {
-  const top = context?.top;
-  if (!top?.isContent || top.isDiscarded) {
-    return;
-  }
-  let plain;
-  if (uri) {
-    plain = exempted(uri, top.usePrivateBrowsing);
-    remember(top.browserId, plain);
-  } else {
-    plain = lastExempted.get(top.browserId) ?? false;
-  }
-  try {
-    if (protectionOn(top.usePrivateBrowsing) && !plain) {
-      top.setScreenAreaOverride(SCREEN.width, SCREEN.height);
-    } else {
-      top.resetScreenAreaOverride();
-    }
-  } catch (e) {
-    console.error("Nulavio fingerprinting", e); // the tab keeps what it had
-  }
-}
-
-/** A page is about to be asked for in this tab. The page still shown stays until the answer comes, so nothing
-    is taken away from it here: for an exempted destination the tab only remembers it (a tab that changes
-    process starts its new context without the constant; one that does not loses it when the page arrives).
-    For any other destination the constant is set now, before the page's first script. */
-function expect(context, uri) {
-  const top = context?.top;
-  if (!top?.isContent || top.isDiscarded) {
-    return;
-  }
-  const plain = exempted(uri, top.usePrivateBrowsing);
-  remember(top.browserId, plain);
-  if (!plain && protectionOn(top.usePrivateBrowsing)) {
-    try {
-      top.setScreenAreaOverride(SCREEN.width, SCREEN.height);
-    } catch (e) {
-      console.error("Nulavio fingerprinting", e);
-    }
-  }
-}
+const ACTOR = "NulavioFingerprinting";
+const TOPICS = ["browsing-context-attached"];
 
 let watching = null;
 
 export const NulavioFingerprinting = {
-  /** From the Shell's start: every tab gets the screen size before its first page, and again at each page. */
+  /** From the Shell's start: every tab has the constant before its first page, and each page gets what it is due. */
   watch() {
     if (watching) {
       return;
     }
-    const tabs = {
-      // The page has arrived: the tab gets what that page is due. An exempted site loses the constant here and
-      // not before, so the page it replaces never reads the display's size. Pages that ask for nothing (back
-      // and forward from the engine's cache, about: pages) pass here only.
-      onLocationChange(browser, progress, request, location, flags) {
-        if (progress.isTopLevel && !(flags & Ci.nsIWebProgressListener.LOCATION_CHANGE_SAME_DOCUMENT)) {
-          apply(browser.browsingContext, location);
-        }
-      },
-    };
-    const windows = new Set();
-    const attach = win => {
-      if (win?.gBrowser && !windows.has(win)) {
-        windows.add(win);
-        win.gBrowser.addTabsProgressListener(tabs);
-        win.addEventListener("unload", () => windows.delete(win), { once: true });
-      }
-    };
     watching = {
-      windows,
-      tabs,
-      observe(subject, topic) {
-        if (topic === "browsing-context-attached") {
-          if (subject.top === subject) {
-            apply(subject); // a new tab, or the tab's new context when a page changes process
-          }
-        } else if (topic === "browser-delayed-startup-finished") {
-          attach(subject);
-        } else {
-          // A page about to be asked for: a protected one gets the constant here, before any request leaves,
-          // so its first script already reads it.
-          let channel;
-          try {
-            channel = subject.QueryInterface(Ci.nsIHttpChannel);
-          } catch {
-            return;
-          }
-          if (channel.loadInfo?.externalContentPolicyType === Ci.nsIContentPolicy.TYPE_DOCUMENT) {
-            expect(channel.loadInfo.browsingContext, channel.URI);
-          }
+      observe(subject) {
+        // A new tab, or the tab's new context when a page changes process. Its first page decides for itself.
+        if (subject.top === subject && subject.isContent && !subject.isDiscarded) {
+          setScreen(subject, protectionOn(subject.usePrivateBrowsing));
         }
       },
     };
-    for (const topic of ["browsing-context-attached", "browser-delayed-startup-finished", "http-on-modify-request"]) {
+    for (const topic of TOPICS) {
       Services.obs.addObserver(watching, topic);
     }
+    try {
+      ChromeUtils.registerWindowActor(ACTOR, {
+        child: {
+          esModuleURI: "resource://builtin-addons/nulavio-shell/modules/NulavioFingerprintingChild.sys.mjs",
+          events: { DOMWindowCreated: {}, pageshow: {} },
+        },
+        allFrames: false,
+        messageManagerGroups: ["browsers"],
+        // Runs in web content processes, with nothing to trust: it sends no message and takes none.
+        safeForUntrustedWebProcess: true,
+      });
+    } catch (e) {
+      console.error("Nulavio fingerprinting", e); // tabs keep the constant; an exempted site does not get the display's
+    }
     for (const win of Services.wm.getEnumerator("navigator:browser")) {
-      attach(win);
-      for (const browser of win.gBrowser.browsers) {
-        apply(browser.browsingContext, browser.currentURI);
+      for (const browser of win.gBrowser?.browsers ?? []) {
+        const context = browser.browsingContext;
+        if (context && !context.isDiscarded) {
+          setScreen(context, protectionOn(context.usePrivateBrowsing));
+        }
       }
     }
   },
@@ -166,11 +71,13 @@ export const NulavioFingerprinting = {
     if (!watching) {
       return;
     }
-    for (const topic of ["browsing-context-attached", "browser-delayed-startup-finished", "http-on-modify-request"]) {
+    for (const topic of TOPICS) {
       Services.obs.removeObserver(watching, topic);
     }
-    for (const win of watching.windows) {
-      win.gBrowser?.removeTabsProgressListener(watching.tabs);
+    try {
+      ChromeUtils.unregisterWindowActor(ACTOR);
+    } catch {
+      // It was never registered.
     }
     watching = null;
   },
