@@ -41,6 +41,38 @@ class PerfStatisticsTest(unittest.TestCase):
         self.assertIn("+10.0 %", text)
 
 
+class FingerprintingCostTest(unittest.TestCase):
+    def test_the_cost_is_what_the_protections_take_off_each_score(self):
+        out = {"speedometer3_score": 9.0, "speedometer3_score_without_fingerprinting": 10.0, "startup_first_ms": 900.0}
+        self.assertEqual(perf_run.fingerprinting_costs(out), {"speedometer3_score_fingerprinting_cost_pct": 10.0})
+        self.assertEqual(perf_run.fingerprinting_costs({"speedometer3_score": 9.0}), {})  # measured one way only
+
+    def test_the_variant_turns_the_protections_off_before_it_scores(self):
+        calls = []
+        m = type("M", (), {"chrome": lambda self, script: calls.append(script)})()
+        score = perf_run.without_fingerprinting(lambda session: calls.append("score") or 1.0)
+        self.assertEqual(score(m), 1.0)
+        self.assertEqual(calls, [perf_run.FINGERPRINTING_OFF, "score"])
+        self.assertIn("privacy.fingerprintingProtection.overrides', ''", perf_run.FINGERPRINTING_OFF)
+
+
+class CliTest(unittest.TestCase):
+    def test_the_tools_next_to_the_engine_are_timed_as_the_shell_starts_them(self):
+        import tempfile
+
+        root = Path(tempfile.mkdtemp())
+        self.addCleanup(__import__("shutil").rmtree, root)
+        tool = root / "nulavio-tools" / "bin" / "nulavio"
+        tool.parent.mkdir(parents=True)
+        tool.write_text("#!/bin/sh\ncat > /dev/null\necho ok\n")
+        tool.chmod(0o755)
+        out = perf_run.cli_ms(str(root / "nulavio"), samples=3)
+        self.assertEqual(set(out), {"cli_version_ms", "cli_vault_capabilities_ms"})
+        self.assertTrue(all(0 < value < 5000 for value in out.values()), out)
+        with self.assertRaises(perf_run.MeasureError):
+            perf_run.cli_ms(str(root / "elsewhere" / "nulavio"))
+
+
 class SettledMemoryTest(unittest.TestCase):
     def test_readings_go_on_until_two_in_a_row_agree(self):
         values = iter([900, 640, 505, 500, 499])
