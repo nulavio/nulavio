@@ -142,6 +142,7 @@ const tick = () => {
 requestAnimationFrame(tick);
 """
 TRACE_END = "window.nvTrace.on = false; return window.nvTrace.frames;"
+STILL = "return !document.getAnimations().some(a => a.playState === 'running');"  # no transition running in the window
 # #344: the assistant's panel the journeys run with: none, Nulavio's (the Shell's sidebar action) or a site's (the
 # engine's AI chatbot panel, on a page of the fixture).
 PANELS = {
@@ -825,7 +826,6 @@ class ImmersiveTest(unittest.TestCase):
         folder = harness.artifacts_dir() / "immersive"
         folder.mkdir(parents=True, exist_ok=True)
         shown = self.window()["toolbar"]  # as it is now: the theme change must not leave it moving in the shot
-        still = "return !document.getAnimations().some(a => a.playState === 'running');"
         try:
             for dark in (0, 1):
                 self.m.chrome("Services.prefs.setIntPref('ui.systemUsesDarkTheme', arguments[0]);", [dark])
@@ -835,7 +835,7 @@ class ImmersiveTest(unittest.TestCase):
                 )
                 if not shown:
                     self.m.chrome(AWAY)
-                harness.wait_until(lambda: self.window()["toolbar"] is shown and self.m.chrome(still), 10)
+                harness.wait_until(lambda: self.window()["toolbar"] is shown and self.m.chrome(STILL), 10)
                 self.m.set_context("chrome")
                 try:
                     png = self.m.screenshot_png()
@@ -994,8 +994,7 @@ class ImmersiveTest(unittest.TestCase):
                             )
                         )
                     self.m.chrome(AWAY + "gBrowser.selectedBrowser.focus();")
-                    self.settled(False)
-                    time.sleep(1)
+                    self.assertTrue(harness.wait_until(lambda: not self.window()["toolbar"] and self.m.chrome(STILL), 10))
                     w, h = self.m.chrome("return [innerWidth, innerHeight];")
                     where = f"{preset}, panel {panel}, {w}x{h}, {'dark' if dark else 'light'}"
                     page = (w * 3 // 4, h // 2)
@@ -1044,7 +1043,6 @@ class ImmersiveTest(unittest.TestCase):
         before = self.m.chrome(f"return {LAYOUT}.state(window).then(state => state.preset);")
         self.addCleanup(self.apply_preset, before)
         self.apply_preset("lateral")
-        still = "return !document.getAnimations().some(a => a.playState === 'running');"
         w, h = self.m.chrome("return [innerWidth, innerHeight];")
         page = (w * 3 // 4, h // 2)
 
@@ -1079,11 +1077,10 @@ class ImmersiveTest(unittest.TestCase):
         self.m.chrome(TRACE)
         for on in (False, True):
             self.m.chrome("Services.prefs.setBoolPref('nulavio.layout.immersive', arguments[0]);", [on])
-            self.assertTrue(harness.wait_until(lambda want=on: self.window()["on"] is want, 10))
-            time.sleep(1)
+            self.assertTrue(harness.wait_until(lambda want=on: self.window()["on"] is want and self.m.chrome(STILL), 10))
         apart(self.m.chrome(TRACE_END), "the mode turned on", page_moves=True)
         self.m.chrome(AWAY + "gBrowser.selectedBrowser.focus();")
-        self.assertTrue(harness.wait_until(lambda: not self.window()["toolbar"] and self.m.chrome(still), 10))
+        self.assertTrue(harness.wait_until(lambda: not self.window()["toolbar"] and self.m.chrome(STILL), 10))
 
         # The list by the pointer, which stays in it; the address field by the keyboard, typed in.
         self.m.chrome(TRACE)
@@ -1092,9 +1089,8 @@ class ImmersiveTest(unittest.TestCase):
         self.m.chrome("document.getElementById('Browser:OpenLocation').doCommand();")
         act(keys("imersivo"))
         self.assertTrue(harness.wait_until(lambda: self.m.chrome("return gURLBar.view.isOpen;"), 5), "no results")
-        time.sleep(0.5)
-        parts = self.m.chrome(PARTS)
-        self.assertTrue(parts["toolbar"]["shown"] and parts["tabs"]["shown"], parts)
+        both = lambda: (p := self.m.chrome(PARTS))["toolbar"]["shown"] and p["tabs"]["shown"] and self.m.chrome(STILL)  # noqa: E731
+        self.assertTrue(harness.wait_until(both, 5), self.m.chrome(PARTS))
         self.shoot_window("21-typing-with-the-list")
         self.m.chrome("gURLBar.view.close(); gURLBar.handleRevert(); gBrowser.selectedBrowser.focus();")
         act(pointer([*pointer_path([(100, h // 2), page], 0), {"type": "pause", "duration": 1600}]))
@@ -1127,8 +1123,10 @@ class ImmersiveTest(unittest.TestCase):
         self.m.chrome(drag, ["dragstart"])
         self.addCleanup(self.m.chrome, drag, ["dragend"])
         self.assertTrue(harness.wait_until(lambda: "tabs" in (self.window()["hold"] or ""), 5), self.window())
-        time.sleep(1.2)  # past the hold and the exit a hover gets
-        self.assertTrue(self.m.chrome(PARTS)["tabs"]["shown"], "the list left during a tab's drag")
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome(PARTS)["tabs"]["shown"], 5), self.m.chrome(PARTS))
+        # Then not gone within the hold and the exit a hover gets (0.6 s + 0.18 s), and more.
+        gone = harness.wait_until(lambda: not self.m.chrome(PARTS)["tabs"]["shown"], 1.2)
+        self.assertFalse(gone, "the list left during a tab's drag")
         self.m.chrome(drag, ["dragend"])
         self.assertTrue(harness.wait_until(lambda: self.window()["hold"] is None, 5), self.window())
         self.assertTrue(harness.wait_until(lambda: not self.m.chrome(PARTS)["tabs"]["shown"], 5), self.m.chrome(PARTS))
