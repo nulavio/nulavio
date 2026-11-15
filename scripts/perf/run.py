@@ -32,6 +32,7 @@ as a second baseline (GeckoProfileSession needs a Nulavio build).
 from __future__ import annotations
 
 import argparse
+import contextlib
 import functools
 import hashlib
 import http.server
@@ -270,6 +271,8 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("NULAVIO_ENGINE names the build to measure")
     if args.runs < 1 or any(count < 1 for count in args.tabs) or len(set(args.tabs)) != len(args.tabs):
         parser.error("--runs and each of --tabs must be at least 1, and --tabs without repeats")
+    if args.speedometer and args.speedometer_iterations < 1:
+        parser.error("--speedometer-iterations must be at least 1")
     import harness
 
     results = {"build": build, "baseline": args.baseline_engine, "runs": [], "metrics": {}}
@@ -279,9 +282,11 @@ def main(argv: list[str] | None = None) -> int:
             args.out.write_text(json.dumps(results, indent=1) + "\n", encoding="utf-8")
 
     try:
-        bench_root = pinned("speedometer") if args.speedometer else ROOT
-        with harness.FixtureServer() as server, StaticServer(bench_root) as bench:
-            speedometer = (bench, args.speedometer_iterations) if args.speedometer else None
+        with contextlib.ExitStack() as stack:
+            server = stack.enter_context(harness.FixtureServer())
+            speedometer = None
+            if args.speedometer:  # a server only for the benchmark's own files, and only when it runs
+                speedometer = (stack.enter_context(StaticServer(pinned("speedometer"))), args.speedometer_iterations)
             for run in range(args.runs):
                 for side, engine in (("build", build), ("baseline", args.baseline_engine)):
                     measured = one_run(engine, args.tabs, server, speedometer)

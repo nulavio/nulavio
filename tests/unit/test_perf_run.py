@@ -43,6 +43,19 @@ class PinnedBenchmarkTest(unittest.TestCase):
         self.assertFalse(archive.exists())
         self.assertFalse((cache / f"speedometer-{pin['commit']}").exists())
 
+    def test_an_archive_of_the_pinned_size_with_another_digest_is_refused(self):
+        import tempfile
+
+        cache = Path(tempfile.mkdtemp())
+        self.addCleanup(__import__("shutil").rmtree, cache)
+        pin = perf_run.PINNED["speedometer"]
+        archive = cache / f"speedometer-{pin['commit']}.tar.gz"
+        archive.write_bytes(b"\0" * pin["size"])  # the size alone does not make it the archive
+        with self.assertRaises(perf_run.MeasureError):
+            perf_run.pinned("speedometer", cache)
+        self.assertFalse(archive.exists())
+        self.assertFalse((cache / f"speedometer-{pin['commit']}").exists())
+
     def test_the_pin_is_a_commit_of_the_release_branch_with_its_digest(self):
         pin = perf_run.PINNED["speedometer"]
         self.assertRegex(pin["commit"], r"^[0-9a-f]{40}$")
