@@ -145,7 +145,7 @@ class ReleaseWorkflowTest(unittest.TestCase):
         self.assertNotIn("pull_request", self.text)
         self.assertIn("if: github.ref == 'refs/heads/main'", self.build)
         self.assertIn("environment: release", self.publish)
-        self.assertIn("needs: [build, flatpak, companion]", self.publish)
+        self.assertIn("needs: [build, flatpak, flatpak-check, companion]", self.publish)
         self.assertIn("needs.build.result == 'success'", self.publish)  # a failed Flatpak never holds back a release
 
     def test_the_build_machine_never_holds_signing_or_upload_credentials(self):
@@ -210,14 +210,23 @@ class ReleaseWorkflowTest(unittest.TestCase):
         publish = (RELEASE / "publish_release.sh").read_text(encoding="utf-8")
         self.assertLess(publish.index('cp "$apk" "$apk.cdx.json" "$stage/github/"'), publish.index("sha256sum -- * >SHA256SUMS"))
 
-    def test_the_bundle_is_checked_against_the_attested_archive_before_anything_is_signed(self):
-        # #324: built by Flathub's builder in a job with no attestation; left out when it differs.
-        check = self.publish.index("scripts/release/check_flatpak_bundle.py --bundle")
-        self.assertLess(check, self.publish.index("release_notes.py notes"))  # the notes name only a checked bundle
-        self.assertLess(check, self.publish.index("configure-aws-credentials"))
-        self.assertIn('rm -f "$bundle"', self.publish[check : self.publish.index("release_notes.py notes")])
+    def test_the_bundle_is_checked_against_the_attested_archive_in_a_job_that_cannot_sign(self):
+        # #324: built by Flathub's builder in a job with no attestation, parsed in a job with no token, and only its
+        # hash compared next to the signing role. Left out when it differs.
+        job = self.text[self.text.index("\n  flatpak-check:\n") : self.text.index("\n  companion:\n")]
+        self.assertIn("scripts/release/check_flatpak_bundle.py --bundle", job)
+        self.assertIn("contents: read", job)
+        for held in ("id-token", "attestations", "environment:", "secrets."):
+            self.assertNotIn(held, job)
+        self.assertNotIn("check_flatpak_bundle.py", self.publish)
+        self.assertNotIn("apt_install.sh flatpak", self.publish)
+        compare = self.publish.index("needs.flatpak-check.outputs.bundle-sha256")
+        self.assertLess(compare, self.publish.index("release_notes.py notes"))  # the notes name only an accepted bundle
+        self.assertLess(compare, self.publish.index("configure-aws-credentials"))
+        self.assertIn('rm -f "$bundle"', self.publish[compare : self.publish.index("release_notes.py notes")])
+        self.assertIn("NULAVIO_FLATPAK_BUNDLE_SHA256=$ACCEPTED", self.publish)
         script = (RELEASE / "publish_release.sh").read_text(encoding="utf-8")
-        self.assertIn("check_flatpak_bundle.py", script)
+        self.assertLess(script.index("NULAVIO_FLATPAK_BUNDLE_SHA256"), script.index('"$repo/scripts/release/sign_repo.sh"'))
         self.assertLess(script.index("check_flatpak_bundle.py"), script.index('"$repo/scripts/release/sign_repo.sh"'))
 
     def test_the_flatpak_is_composed_and_linted_as_flathub_does(self):
@@ -227,7 +236,7 @@ class ReleaseWorkflowTest(unittest.TestCase):
     def test_the_bundle_is_attested_checked_and_signed_with_the_release(self):
         flatpak_job = self.text[self.text.index("\n  flatpak:\n") :]
         self.assertLess(flatpak_job.index("check_flatpak.sh"), flatpak_job.index("flatpak build-bundle"))
-        sign = self.publish.index("NULAVIO_FLATPAK_BUNDLE=$bundle NULAVIO_COMPANION_APK=$apk")
+        sign = self.publish.index("NULAVIO_FLATPAK_BUNDLE=$bundle NULAVIO_FLATPAK_BUNDLE_SHA256=$ACCEPTED NULAVIO_COMPANION_APK=$apk")
         self.assertLess(sign, self.publish.index("subject-path: ${{ runner.temp }}/publish/github/*"))
         publish = (RELEASE / "publish_release.sh").read_text(encoding="utf-8")
         self.assertLess(publish.index('cp "$bundle" "$stage/github/"'), publish.index("sha256sum -- * >SHA256SUMS"))

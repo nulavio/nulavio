@@ -17,7 +17,10 @@ repository (`flatpak build-import-bundle`, `ostree checkout`) and requires:
 - under files/share/app-info only what Flathub's metadata step adds (its catalogue, icons and
   screenshots), and files/manifest.json (the builder's record): data, none of it executable;
 - metadata: the runtime and SDK flatpak_manifest.py names, the command, and exactly its permissions;
-- the bundle's header names Flathub's repository for the runtime.
+- the bundle's header (read as the GVariant it is): exactly the keys `flatpak build-bundle` writes with
+  `--runtime-repo` alone (no `origin` or `gpg-keys`, which would give the app an update channel and keys of
+  their own, and an empty `collection-id`), its ref, Flathub as the runtime's source, and the same metadata
+  as the app's.
 
 What it cannot check: the runtime, which `flatpak install` takes from Flathub, signed by Flathub.
 Needs flatpak and ostree. Exit 0 when the bundle passes, 1 with each difference, 2 for bad input.
@@ -173,9 +176,74 @@ def compare_metadata(text: str) -> list[str]:
     return problems
 
 
-def runtime_repos(header: bytes) -> list[str]:
-    """The runtime-repo entries of the bundle's header (a GVariant dictionary): each value is the string after its key."""
-    return [match.decode() for match in re.findall(rb"runtime-repo\x00+([\x21-\x7e]+)\x00", header)]
+def _offset_size(size: int) -> int:
+    """How wide a GVariant container's framing offsets are, from the container's size."""
+    return 0 if size == 0 else 1 if size <= 0xFF else 2 if size <= 0xFFFF else 4 if size <= 0xFFFFFFFF else 8
+
+
+def _offset(data: bytes, at: int, width: int) -> int:
+    return int.from_bytes(data[at : at + width], "little")
+
+
+def header(data: bytes) -> dict[str, tuple[str, bytes]]:
+    """The bundle's header: the a{sv} that opens the static-delta superblock a bundle is, as {key: (type, value)}.
+
+    GVariant keeps a container's framing offsets at its end: the superblock's last one is where its first member
+    (the dictionary) ends; the dictionary's are where each of its entries ends; an entry's is where its key ends.
+    A value is its bytes, a zero byte and its type string."""
+    width = _offset_size(len(data))
+    if width == 0 or len(data) < width:
+        raise ValueError("not a Flatpak bundle (empty)")
+    table = data[: _offset(data, len(data) - width, width)]
+    width = _offset_size(len(table))
+    if not table:
+        return {}
+    first = _offset(table, len(table) - width, width)
+    if not 0 <= first <= len(table) - width or (len(table) - first) % width:
+        raise ValueError("not a Flatpak bundle (its header does not parse)")
+    entries: dict[str, tuple[str, bytes]] = {}
+    start = 0
+    for k in range((len(table) - first) // width):
+        end = _offset(table, first + k * width, width)
+        start = (start + 7) & ~7  # a {sv} entry is aligned to 8
+        entry = table[start:end]
+        start = end
+        size = _offset_size(len(entry))
+        if size == 0 or len(entry) < size:
+            raise ValueError("not a Flatpak bundle (an empty header entry)")
+        key_end = _offset(entry, len(entry) - size, size)
+        value = entry[(key_end + 7) & ~7 : len(entry) - size]
+        if not 0 < key_end <= len(entry) or b"\x00" not in value:
+            raise ValueError("not a Flatpak bundle (a header entry does not parse)")
+        cut = value.rindex(b"\x00")
+        key = entry[:key_end].rstrip(b"\x00").decode("utf-8", "replace")
+        if key in entries:
+            raise ValueError(f"the bundle's header has {key} twice")
+        entries[key] = (value[cut + 1 :].decode("ascii", "replace"), value[:cut])
+    return entries
+
+
+# What `flatpak build-bundle --runtime-repo=…` writes into the header, beside the delta parts (deltas/…).
+HEADER_KEYS = {"flatpak", "ref", "metadata", "appdata", "icon-64", "icon-128", "runtime-repo", "collection-id",
+               "ostree.endianness"}  # fmt: skip
+
+
+def compare_header(entries: dict[str, tuple[str, bytes]], metadata: str) -> list[str]:
+    """The header's keys and the strings that decide what installing the bundle does."""
+    problems = []
+    unknown = sorted(key for key in entries if key not in HEADER_KEYS and not key.startswith("deltas/"))
+    if unknown:
+        problems.append(f"the bundle's header has keys build-bundle --runtime-repo does not write: {unknown}")
+
+    def text(key: str) -> str | None:
+        kind, raw = entries.get(key, ("", b""))
+        return raw.removesuffix(b"\x00").decode("utf-8", "replace") if kind == "s" else None
+
+    for key, want in (("ref", REF), ("runtime-repo", RUNTIME_REPO), ("collection-id", ""), ("metadata", metadata)):
+        if text(key) != want:
+            shown = "the app's metadata" if key == "metadata" else repr(want)
+            problems.append(f"the bundle's header says {key} = {text(key)!r}, not {shown}")
+    return problems
 
 
 def run(*command: str) -> str:
@@ -187,11 +255,7 @@ def check(bundle: Path, archive: Path) -> list[str]:
     if not version or bundle.name != f"nulavio-{version['version']}.x86_64.flatpak":
         raise ValueError(f"{bundle.name} is not the bundle of {archive.name}")
     problems = []
-    with bundle.open("rb") as handle:
-        header = handle.read(1 << 20)  # the header comes first; the delta parts after it are compressed
-    repos = runtime_repos(header)
-    if repos != [RUNTIME_REPO]:
-        problems.append(f"the bundle takes its runtime from {repos or 'nowhere'}, not {RUNTIME_REPO}")
+    entries = header(bundle.read_bytes())
     work = Path(tempfile.mkdtemp(prefix="nulavio-flatpak-check-"))
     try:
         with tarfile.open(archive) as tar:
@@ -204,8 +268,10 @@ def check(bundle: Path, archive: Path) -> list[str]:
             problems.append(f"the bundle's refs are {refs}, not [{REF}]")
             return problems
         run("ostree", "checkout", f"--repo={repo}", "-U", REF, str(work / "checkout"))
+        metadata = (work / "checkout" / "metadata").read_text(encoding="utf-8")
         problems += compare_checkout(work / "checkout", work / "archive", version["version"])
-        problems += compare_metadata((work / "checkout" / "metadata").read_text(encoding="utf-8"))
+        problems += compare_metadata(metadata)
+        problems += compare_header(entries, metadata)
     finally:
         shutil.rmtree(work, ignore_errors=True)
     return problems

@@ -147,12 +147,23 @@ class CompareTest(unittest.TestCase):
                 found = check.compare_metadata(text)
                 self.assertTrue(any(named in p for p in found), found)
 
-    def test_the_runtime_comes_from_flathub(self):
-        header = (
-            b"\x00app/net.nulavio.Nulavio/x86_64/master\x00runtime-repo\x00\x00\x00\x00" + check.RUNTIME_REPO.encode() + b"\x00s"
-        )
-        self.assertEqual(check.runtime_repos(header), [check.RUNTIME_REPO])
-        self.assertEqual(check.runtime_repos(b"no header"), [])
+    def test_the_header_holds_what_build_bundle_writes_and_nothing_that_changes_the_install(self):
+        good = {"flatpak": ("u", b"\x01\x00\x00\x00"), "ref": ("s", check.REF.encode() + b"\x00"),
+                "metadata": ("s", METADATA.encode() + b"\x00"), "runtime-repo": ("s", check.RUNTIME_REPO.encode() + b"\x00"),
+                "collection-id": ("s", b"\x00"), "appdata": ("ay", b"x"), "deltas/aa/bb/0": ("(yay)", b"x")}  # fmt: skip
+        self.assertEqual(check.compare_header(good, METADATA), [])
+        cases = {
+            "an update channel of its own": ({**good, "origin": ("s", b"https://example.invalid/repo\x00")}, "origin"),
+            "keys of its own": ({**good, "gpg-keys": ("ay", b"key")}, "gpg-keys"),
+            "a collection": ({**good, "collection-id": ("s", b"org.example.Repo\x00")}, "collection-id"),
+            "another runtime source": ({**good, "runtime-repo": ("s", b"https://x.invalid/x.flatpakrepo\x00")}, "runtime-repo"),
+            "other permissions in the header": ({**good, "metadata": ("s", b"[Context]\nfilesystems=home;\x00")}, "metadata"),
+            "no runtime source": ({k: v for k, v in good.items() if k != "runtime-repo"}, "runtime-repo"),
+        }  # fmt: skip
+        for case, (entries, named) in cases.items():
+            with self.subTest(case):
+                found = check.compare_header(entries, METADATA)
+                self.assertTrue(any(named in p for p in found), found)
 
 
 @unittest.skipUnless(shutil.which("flatpak") and shutil.which("ostree"), "needs flatpak and ostree")
@@ -170,14 +181,14 @@ class BundleTest(unittest.TestCase):
         (self.tmp / "home").mkdir()
         self.env = {**os.environ, "HOME": str(self.tmp / "home")}  # never the person's own Flatpak setup
 
-    def bundle(self, runtime_repo: str = check.RUNTIME_REPO) -> Path:
+    def bundle(self, runtime_repo: str = check.RUNTIME_REPO, *extra: str) -> Path:
         repo, bundle = self.tmp / "repo", self.tmp / f"nulavio-{VERSION}.x86_64.flatpak"
         shutil.rmtree(repo, ignore_errors=True)
         bundle.unlink(missing_ok=True)
         run = lambda *c: subprocess.run(c, check=True, capture_output=True, env=self.env)  # noqa: E731
         run("ostree", "init", "--mode=archive-z2", f"--repo={repo}")
         run("ostree", "commit", f"--repo={repo}", "-b", check.REF, f"--tree=dir={self.tree}", "-s", "test")
-        run("flatpak", "build-bundle", f"--runtime-repo={runtime_repo}", str(repo), str(bundle), APP, "master")
+        run("flatpak", "build-bundle", f"--runtime-repo={runtime_repo}", *extra, str(repo), str(bundle), APP, "master")
         return bundle
 
     def test_a_bundle_of_the_archive_passes_and_a_changed_one_does_not(self):
@@ -189,7 +200,15 @@ class BundleTest(unittest.TestCase):
     def test_a_bundle_that_takes_its_runtime_from_elsewhere_is_refused(self):
         found = check.check(self.bundle("https://example.invalid/other.flatpakrepo"), self.archive)
         self.assertEqual(len(found), 1, found)
-        self.assertIn("takes its runtime from ['https://example.invalid/other.flatpakrepo']", found[0])
+        self.assertIn("runtime-repo = 'https://example.invalid/other.flatpakrepo'", found[0])
+
+    def test_a_bundle_with_an_update_channel_or_keys_of_its_own_is_refused(self):
+        key = self.tmp / "key.gpg"
+        key.write_bytes(b"\x99\x00\x01x")  # never used: build-bundle only copies it into the header
+        for extra, named in ((("--repo-url=https://example.invalid/repo",), "origin"), ((f"--gpg-keys={key}",), "gpg-keys")):
+            with self.subTest(named):
+                found = check.check(self.bundle(check.RUNTIME_REPO, *extra), self.archive)
+                self.assertTrue(any(named in p for p in found), found)
 
     def test_the_command_line_says_which_and_fails(self):
         bundle = self.bundle("https://example.invalid/other.flatpakrepo")
