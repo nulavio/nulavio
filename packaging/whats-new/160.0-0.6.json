@@ -1,0 +1,56 @@
+{
+  "version": "160.0-0.6",
+  "date": "2026-11-15",
+  "channel": "alpha",
+  "firefox": "160.0",
+  "pt-BR": {
+    "summary": "Uma atualização da alpha com o mesmo motor (Firefox 160.0): o navegador inteiro pode ficar atrás de uma senha, o modo Imersivo funciona melhor no uso real, e os perfis protegidos e as conferências de cada versão ficaram mais rígidos.",
+    "new": [
+      "Todos os perfis podem ser protegidos por senha: o último perfil sem proteção pode ser removido, e o seletor de perfis passa a ser a única entrada.",
+      "Depois de uma atualização, uma barra oferece as novidades da versão, e o menu Ajuda tem uma entrada para elas.",
+      "Ctrl+Shift+L copia um link para o texto selecionado.",
+      "Links de reunião, por perfil: com Entrar pelo navegador, os links do Zoom e do Microsoft Teams ficam na página do serviço e nenhum app é aberto. Fica em Configurações, Integrações.",
+      "Ao entrar no Google em um perfil de um grupo, uma barra oferece, uma vez, abrir sempre os sites do Google naquele perfil.",
+      "O modo Imersivo tem um alfinete que mantém a barra e as abas à vista, mostra a lista de abas por um instante quando uma aba abre em segundo plano, e dá uma linha própria a um nome de site muito longo.",
+      "Os links limpos perdem mais onze parâmetros de rastreamento, de anúncios do Google, do Instagram, do Reddit, do Facebook, do X e de outros."
+    ],
+    "fixed": [
+      "Um perfil protegido se recusa a abrir quando falta o registro das mudanças nos métodos de desbloqueio, e diz o que restaurar de um backup.",
+      "As notas de cada versão trazem um comando mais rígido para conferir onde um download foi construído: ele nomeia o fluxo de release e o ramo principal.",
+      "O pacote Flatpak é conferido arquivo por arquivo com o pacote atestado antes de ser assinado.",
+      "No modo Imersivo, a barra de ferramentas não cobre mais a lista de abas nem o painel do Assistente, a página não se desloca no Foco, e uma aba arrastada mantém a lista de abas aberta.",
+      "No KDE, o botão do perfil mantém o contraste depois que o sistema troca entre claro e escuro com o navegador aberto.",
+      "A página de revisão do Guard se atualiza sozinha quando um achado muda, e uma extensão substituída mostra a versão que o navegador carregou.",
+      "Um perfil desbloqueado pelo celular é bloqueado de novo quando o vigia de bloqueio não consegue iniciar, e o vigia não perde mais um navegador que fechou em menos de meio segundo.",
+      "Depois de uma mudança nos métodos de desbloqueio, as páginas do perfil protegido mostram o resultado mesmo quando o estado não pode ser lido de novo.",
+      "Iniciado com a opção de confinamento num sistema em que o navegador não conseguiria isolar o conteúdo das páginas dentro dele, como o Ubuntu por padrão, o Nulavio se recusa a iniciar e diz por quê, em vez de rodar com menos proteção.",
+      "O Nulavio remove mais uma variável de ambiente que enfraquece o isolamento do motor antes de o navegador iniciar, e o comando doctor avisa quando ela está definida.",
+      "Uma densidade de janela fixada por um administrador aparece como fixada nas Configurações."
+    ]
+  },
+  "en-US": {
+    "summary": "An update of the alpha with the same engine (Firefox 160.0): the whole browser can sit behind a password, the Immersive mode works better in real use, and protected profiles and each version's checks are stricter.",
+    "new": [
+      "Every profile can be protected by a password: the last unprotected profile can be removed, and the profile chooser is then the only way in.",
+      "After an update, a bar offers what is new in the version, and the Help menu has an entry for it.",
+      "Ctrl+Shift+L copies a link to the selected text.",
+      "Meeting links, per profile: with Join in the browser, Zoom and Microsoft Teams links stay on the service's page and no app is opened. It is in Settings, Integrations.",
+      "When you sign in to Google in a profile of a group, a bar offers, once, to always open Google's sites in that profile.",
+      "The Immersive mode has a pin that keeps the toolbar and the tabs in view, shows the tab list for a moment when a tab opens in the background, and gives a very long site name a line of its own.",
+      "Clean links drop eleven more tracking parameters, from Google's ads, Instagram, Reddit, Facebook, X and others."
+    ],
+    "fixed": [
+      "A protected profile refuses to open when its record of unlock-method changes is missing, and says what to restore from a backup.",
+      "Each version's notes give a stricter command to check where a download was built: it names the release workflow and the main branch.",
+      "The Flatpak bundle is checked file by file against the attested archive before it is signed.",
+      "In the Immersive mode, the toolbar no longer covers the tab list or the Assistant's panel, the page does not shift in Focus, and a dragged tab keeps the tab list open.",
+      "On KDE, the profile button keeps its contrast after the system changes between light and dark with the browser open.",
+      "The Guard's review page updates by itself when a finding changes, and a replaced extension shows the version the browser took in.",
+      "A profile unlocked from the phone is locked again when its lock watcher cannot start, and the watcher no longer misses a browser that closed within half a second.",
+      "After a change to the unlock methods, the protected profile's pages show the result even when the state cannot be read again.",
+      "Started with the confined option on a system where the browser could not sandbox page content inside it, such as Ubuntu by default, Nulavio refuses to start and says why, instead of running with less protection.",
+      "Nulavio removes one more environment variable that weakens the engine's sandbox before the browser starts, and the doctor command says when it is set.",
+      "A window density fixed by an administrator shows as fixed in Settings."
+    ]
+  }
+}
