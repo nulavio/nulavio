@@ -201,7 +201,7 @@ class PhoneSessionTest(unittest.TestCase):
             phone = self.phone.unlock(first["qr"])
             thread.join(20)
             phone.join(20)
-        self.assertEqual(errors, [OSError])  # main() reports it as "failed"
+        self.assertEqual(errors, [OSError])  # out of unlock(), to main(), which reports a session that failed
         self.assertNotEqual(session.state, "unlocked")
         self.assertFalse(profiles.container(self.prof).mounted())
 
