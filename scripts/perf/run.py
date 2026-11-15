@@ -11,10 +11,14 @@ alternate the build and the baseline, so a machine that slows down slows both. M
   getStartupInfo; the suite runs without a window, so there is no first paint to time), on the profile's
   first start and on its second. Neither is a cold start: the session ran the binary to make the
   profile, so its files are in the page cache both times;
-- memory: the proportional memory of every process of the instance (PSS, /proc/<pid>/smaps_rollup,
+- memory, in the profile's third start (the second runs 60 s first: a new profile's first work, the content
+  filter compiling its lists, held the extension process at up to 1.2 GiB for about 30 s after each of the
+  first two starts): the proportional memory of every process of the instance (PSS, /proc/<pid>/smaps_rollup,
   summed over the process tree of its main process) and how many processes there are, with 1 and 10 tabs
   of a local page open (--tabs; the first tab is navigated to a local page too), once every tab shows its
-  page, after a 5 s settle and the engine's own "Minimize memory usage" (about:memory) in every process.
+  page, after a 5 s settle and the engine's own "Minimize memory usage" (about:memory) in every process, read
+  again every 5 s until two readings in a row agree within 3 % (readings_* in the JSON; not settled in 8 is an
+  error).
   A process whose memory could not be read is counted in the JSON (unreadable_*), never silently left out
   of the sum.
 
@@ -93,6 +97,11 @@ SHOWN = (
     " return [gBrowser.browsers.length, done.length];"
 )
 SETTLE_S = 5.0  # memory is read after the tabs have settled, not while they load
+# Memory is read until two readings in a row agree: work the engine still does after its start (the content
+# filter's lists, the Shell's first tasks) made one reading of 1 tab swing by tens of percent between runs.
+FIRST_RUN_S = 60.0  # the second start runs this long before memory is read in a third
+SETTLED_WITHIN = 0.03
+SETTLE_READINGS = 8
 # The engine's own "Minimize memory usage" (about:memory), in every process: garbage and caches the engine would
 # drop by itself in a while are not what one run happened to hold at that second.
 MINIMIZE = (
@@ -462,6 +471,20 @@ def frame_scene_on(build: str, baseline: str, runs: int, display: str, auth: Pat
         return frames
 
 
+def settled(read, wait, within: float = SETTLED_WITHIN, most: int = SETTLE_READINGS) -> list:
+    """Readings of `read()` (its first item is the number), `wait()` between them, until two in a row differ by at
+    most `within` of the last, or `most` were taken: then the measure has not settled, which is an error rather than
+    a number in the table."""
+    readings = [read()]
+    while len(readings) < most:
+        wait()
+        readings.append(read())
+        last, before = readings[-1][0], readings[-2][0]
+        if last and abs(last - before) <= within * last:
+            return readings
+    raise MeasureError(f"memory did not settle in {most} readings: {[r[0] for r in readings]} KiB")
+
+
 def startup_ms(m) -> float:
     import harness
 
@@ -553,6 +576,12 @@ def one_run(engine: str, tabs: list[int], server, benchmarks: tuple = (), firefo
         session.stop()
         m = session.restart()
         out["startup_second_ms"] = startup_ms(m)
+        # A new profile's first work (the content filter compiles its lists until it has a copy to load): the
+        # extension process held up to 1.2 GiB for about 30 s after the first two starts, 130 to 330 MiB after
+        # later ones. Memory is a later start's, as a person's profile is every day.
+        time.sleep(FIRST_RUN_S)
+        session.stop()
+        m = session.restart()
         local = server.url("/page/perf-")
         m.navigate(server.url("/page/perf-0"))  # the first tab too: a local page, not the start page
         opened = 1
@@ -563,16 +592,22 @@ def one_run(engine: str, tabs: list[int], server, benchmarks: tuple = (), firefo
             if not harness.wait_until(lambda want=count: m.chrome(SHOWN, [local]) == [want, want], 60):
                 raise MeasureError(f"not every tab showed its page in 60 s: {m.chrome(SHOWN, [local])} (tabs, shown)")
             time.sleep(SETTLE_S)
-            m.set_context("chrome")
-            try:
-                m.execute_async(MINIMIZE)
-            finally:
-                m.set_context("content")
-            pids = instance_pids(session.process.pid)
-            pss, unreadable = pss_kib(pids)
+
+            def reading() -> tuple[int, list[int], int]:
+                m.set_context("chrome")
+                try:
+                    m.execute_async(MINIMIZE)
+                finally:
+                    m.set_context("content")
+                pids = instance_pids(session.process.pid)
+                return (*pss_kib(pids), pids)
+
+            readings = settled(reading, wait=lambda: time.sleep(SETTLE_S))
+            pss, unreadable, pids = readings[-1]
             out[f"pss_mib_{count}_tabs"] = pss / 1024
             out[f"processes_{count}_tabs"] = len(pids)
             out[f"unreadable_{count}_tabs"] = unreadable
+            out[f"readings_{count}_tabs"] = len(readings)
         for name, score in benchmarks:  # in a start of its own: no measure carries another's processes
             session.stop()
             m = session.restart()
