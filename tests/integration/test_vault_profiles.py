@@ -188,8 +188,9 @@ class LockedGroupProfileTest(unittest.TestCase):
         time.sleep(2)
         self.assertEqual(self.session.processes_for(self.path), [])
         self.assertEqual(list(self.path.iterdir()), [])
-        # Deleting a locked protected profile drops its keys first, then the profile.
-        self.assertEqual(self.call("return P.remove(args[0]);", self.vault_id), {"ok": None})
+        # Deleting a locked protected profile drops its keys first, then the profile. It was not the last profile
+        # without a password, which is what remove() answers since #289.
+        self.assertEqual(self.call("return P.remove(args[0]);", self.vault_id), {"ok": {"lastUnprotected": False}})
         self.assertFalse(self.box.root.exists())
         self.assertFalse(any(p["id"] == self.vault_id for p in self.call("return (await P.list()).profiles;")["ok"]))
 

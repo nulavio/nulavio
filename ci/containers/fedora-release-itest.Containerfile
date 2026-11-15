@@ -5,6 +5,10 @@
 # Liberation families the reference laptop (Fedora 44 KDE) renders the Shell with.
 # The engine's libraries come with Fedora's firefox package; the rest are the tools
 # the tests look for (Vault: gocryptfs, FUSE, libsodium; Connect: D-Bus; certificates).
+# libavcodec-free is the system's codec library. Fedora's firefox only recommends it
+# (through ffmpeg-free), and weak dependencies are left out below, so it is named here:
+# without it the engine reports MP4 audio and H.264 as unsupported, and the ClearKey
+# audio stream of test_drm is refused (the first 160.0-0.6 release run failed on it).
 #   podman build -t localhost/nulavio-fedora-release-itest -f ci/containers/fedora-release-itest.Containerfile ci/containers
 # The base image is pinned by tag and digest and kept current by Dependabot
 # (docs/security/dependency-updates.md).
@@ -15,7 +19,7 @@ RUN dnf -y --setopt=install_weak_deps=False install \
         google-noto-color-emoji-fonts google-noto-sans-cjk-vf-fonts \
         liberation-sans-fonts liberation-serif-fonts liberation-mono-fonts fontconfig \
         gocryptfs fuse3 libsodium dbus-daemon systemd libsecret xdg-utils \
-        nss-tools openssl avahi-tools bubblewrap \
+        nss-tools openssl avahi-tools bubblewrap libavcodec-free \
     && dnf clean all \
     && useradd --create-home tester
 USER tester
