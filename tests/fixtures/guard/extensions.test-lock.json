@@ -1,0 +1,20 @@
+{
+ "schema": 1,
+ "comment": "For tests only, never installed or offered by Nulavio: a second signed version of an extension the product lock pins (browser/distribution/extensions.lock.json), so test_guard can put one version in place of the other while the browser is closed (#245). Same fields and checks as the product lock; the browser checks its Mozilla (AMO) signature. When the product lock moves Proton Pass to this version or past it, move this one to a later signed version too.",
+ "verified_on": "2026-11-14",
+ "extensions": [
+  {
+   "key": "proton-pass-next",
+   "id": "78272b6fa58f4a1abaac99321d503a20@proton.me",
+   "name": "Proton Pass",
+   "role": "credential-provider",
+   "default_install": false,
+   "version": "1.43.1",
+   "url": "https://addons.mozilla.org/firefox/downloads/file/5203430/proton_pass-1.43.1.xpi",
+   "sha256": "a973bb13e22816b73bc8be9c6a4df9d2b478b4e3d57d11f50033ff4e15f9b7b4",
+   "size": 13332730,
+   "license": "GPL-3.0-only",
+   "homepage": "https://proton.me/pass"
+  }
+ ]
+}

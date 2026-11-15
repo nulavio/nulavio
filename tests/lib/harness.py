@@ -143,6 +143,27 @@ FP_SURFACE_PAGE = """<!doctype html><meta charset="utf-8"><title>fp-surface</tit
 </script>"""
 
 
+def minimal_pdf(text: str) -> bytes:
+    """A valid one-page PDF showing `text` (ASCII) in Helvetica, with its cross-reference table."""
+    stream = f"BT /F1 24 Tf 72 720 Td ({text}) Tj ET".encode()
+    objects = [
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>",
+        b"<< /Length %d >>\nstream\n" % len(stream) + stream + b"\nendstream",
+        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+    ]
+    out, offsets = bytearray(b"%PDF-1.4\n"), []
+    for number, body in enumerate(objects, 1):
+        offsets.append(len(out))
+        out += b"%d 0 obj\n" % number + body + b"\nendobj\n"
+    xref = len(out)
+    out += b"xref\n0 %d\n0000000000 65535 f \n" % (len(objects) + 1)
+    out += b"".join(b"%010d 00000 n \n" % offset for offset in offsets)
+    out += b"trailer\n<< /Size %d /Root 1 0 R >>\nstartxref\n%d\n%%%%EOF\n" % (len(objects) + 1, xref)
+    return bytes(out)
+
+
 class FixtureServer:
     """Local HTTP fixtures on 127.0.0.1 that record which paths were requested."""
 
@@ -240,6 +261,9 @@ class FixtureServer:
                 f'<img id="ad" src="/adbanners/nulavio-test.png?n={n}">'
             )
             return page.encode(), html, {}
+        if path == "/text.pdf":
+            # A one-page PDF with one line of text, for the PDF viewer (tests/integration/test_text_fragments.py).
+            return minimal_pdf("frase sem igual no PDF"), "application/pdf", {}
         if path == "/cookie-notice":
             # Cookie-notice fixture (tests/integration/test_content_filter.py): elements named like two of the
             # most common consent banners, which the cookie-notice lists hide, beside one no list knows.

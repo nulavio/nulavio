@@ -61,6 +61,7 @@ def chrome_async(m, body: str, args=()):
 
 PINNED = ("proton-pass", "keepassxc-browser", "bitwarden")  # never uBlock Origin: installed by policy
 FETCHED = Path(tempfile.mkdtemp(prefix="nv-guard-xpi-"))  # this run's download, if it needs one
+TEST_LOCK = Path(__file__).resolve().parents[1] / "fixtures" / "guard" / "extensions.test-lock.json"
 
 
 def cached_extension():
@@ -68,19 +69,42 @@ def cached_extension():
     there, the first one is downloaded into this run's own directory and checked against the lock;
     a download that fails fails the test instead of skipping what it checks (#135)."""
     lock = extensions.load_lock()
-    caches = [Path(os.environ["NULAVIO_TEST_XPI_CACHE"])] if os.environ.get("NULAVIO_TEST_XPI_CACHE") else []
-    caches += [Path.home() / ".cache" / "nulavio" / "xpi", FETCHED / "cache" / "xpi"]
     for key in PINNED:
-        entry = lock[key]
-        for cache in caches:
-            path = cache / f"{entry.sha256}.xpi"
-            if path.is_file() and extensions.sha256_file(path) == entry.sha256:
-                return entry, path
+        path = in_cache(lock[key])
+        if path:
+            return lock[key], path
     if os.environ.get("NULAVIO_REQUIRE_NETWORK") != "1":
         return None, None
     entry = lock[PINNED[0]]
+    return entry, fetch(entry)
+
+
+def in_cache(entry):
+    """The package in a local cache, if one has it with the lock's SHA-256."""
+    caches = [Path(os.environ["NULAVIO_TEST_XPI_CACHE"])] if os.environ.get("NULAVIO_TEST_XPI_CACHE") else []
+    for cache in (*caches, Path.home() / ".cache" / "nulavio" / "xpi", FETCHED / "cache" / "xpi"):
+        path = cache / f"{entry.sha256}.xpi"
+        if path.is_file() and extensions.sha256_file(path) == entry.sha256:
+            return path
+    return None
+
+
+def fetch(entry):
     with mock.patch.dict(os.environ, {"NULAVIO_HOME": str(FETCHED)}):  # never the person's own cache
-        return entry, extensions.fetch(entry)
+        return extensions.fetch(entry)
+
+
+def signed_versions():
+    """Proton Pass as the product lock pins it and the later signed version that only the tests' lock pins
+    (#245), each with its package: from a local cache, or downloaded and checked against the locks where
+    the run requires the network. None where neither is the case."""
+    pair = (extensions.load_lock()["proton-pass"], extensions.load_lock(TEST_LOCK)["proton-pass-next"])
+    found = [in_cache(entry) for entry in pair]
+    if not all(found):
+        if os.environ.get("NULAVIO_REQUIRE_NETWORK") != "1":
+            return None
+        found = [fetch(entry) for entry in pair]
+    return list(zip(pair, found, strict=True))
 
 
 @unittest.skipUnless(harness.nulavio_engine(), "Guard runs in the Nulavio build's Shell (NULAVIO_ENGINE)")
@@ -610,6 +634,65 @@ class GuardTest(unittest.TestCase):
         self.guard("await (await AddonManager.getAddonByID(args[0])).uninstall();", entry.id)
         self.assertTrue(harness.wait_until(lambda: not in_record(), timeout=20), in_record())
         self.assertEqual(waiting(), {})
+
+    def test_06_another_signed_version_put_in_place_while_closed_is_reported(self):
+        """#245: the case #76 measured by hand. A signed package of the extension is replaced, while the browser is
+        closed, by another signed version of it (Proton Pass 1.41.1 by 1.43.1, both from AMO). The Guard reports it at the
+        next start by the file. Measured on 160.0-0.4: at that moment the engine still reports 1.41.1; it takes 1.43.1
+        a moment later, and the record follows it."""
+        versions = signed_versions()
+        if not versions:  # only where the network is not required (NULAVIO_REQUIRE_NETWORK=1 downloads them)
+            self.skipTest(
+                "no two signed versions of Proton Pass in a local cache (NULAVIO_TEST_XPI_CACHE, or NULAVIO_REQUIRE_NETWORK=1 "
+                "to download them): a version replaced while closed was not tried"
+            )
+        (older, older_xpi), (newer, newer_xpi) = versions
+        # Whatever the two locks pin, as long as it is one extension in two versions (the test lock moves with the product's).
+        self.assertEqual(older.id, newer.id)
+        self.assertNotEqual(older.version, newer.version)
+        record = self.profile / "nulavio-guard.json"
+        placed = self.profile / "extensions" / older.xpi_name
+        changed = f"extension-changed:{older.id}"
+        in_record = lambda: json.loads(record.read_text())["snapshot"]["extensions"].get(older.id) or {}  # noqa: E731
+        self.guard(
+            """
+            const file = Cc["@mozilla.org/file/local;1"].createInstance(Ci.nsIFile);
+            file.initWithPath(args[0]);
+            await (await AddonManager.getInstallForFile(file)).install();
+            """,
+            str(older_xpi),
+        )
+        self.assertTrue(harness.wait_until(lambda: in_record().get("digest") == older.sha256, timeout=20), in_record())
+        self.assertEqual(in_record()["version"], older.version)
+
+        # As a program does it: the other version written next to the package, then renamed into its place.
+        self.session.stop()
+        other = placed.with_name(placed.name + ".new")
+        shutil.copyfile(newer_xpi, other)
+        os.replace(other, placed)
+        self.m = type(self).m = self.session.restart()
+        findings = {f["id"]: f for f in self.guard("return (await G.check()).findings;")}
+        self.assertIn(changed, findings, findings)
+        before, after = findings[changed]["before"], findings[changed]["after"]
+        # The file is what the Guard goes by (#136): another digest, whatever version the engine reports yet.
+        self.assertEqual((before["digest"], after["digest"]), (older.sha256, newer.sha256))
+        self.assertEqual(before["version"], older.version)
+        engine = lambda: self.guard("return (await AddonManager.getAddonByID(args[0]))?.version ?? null;", older.id)  # noqa: E731
+        print(f"at the start: the engine reports {engine()}, the Guard's finding says {after['version']}", file=sys.stderr)
+        self.assertIn(after["version"], (older.version, newer.version))
+        self.open_review()
+        detail = self.cards()[changed]["detail"]
+        if after["version"] == newer.version:
+            self.assertIn(f"{older.version} → {newer.version}", detail)
+        else:
+            self.assertIn("arquivo substituído", detail)
+        self.shoot("06-version-replaced")
+        self.click(changed, "keep")
+        self.assertEqual(in_record()["digest"], newer.sha256)
+        self.assertTrue(harness.wait_until(lambda: engine() == newer.version, timeout=20), engine())
+        self.assertTrue(harness.wait_until(lambda: in_record().get("version") == newer.version, timeout=20), in_record())
+        self.guard("await (await AddonManager.getAddonByID(args[0])).uninstall();", older.id)
+        self.assertTrue(harness.wait_until(lambda: not in_record(), timeout=20), in_record())
 
 
 def tearDownModule():
