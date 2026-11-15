@@ -202,7 +202,7 @@ class ContentFilterDefaultsTest(unittest.TestCase):
         self.assertTrue(harness.wait_until(upstream, timeout=120, interval=2.0), "upstream's registry did not arrive")
         self.assertTrue(set(self.state()["selected"]) >= DEFAULT_ON, "the registry update switched the lists off")
 
-    def test_05_googles_analytics_tag_manager_and_ad_tags_on_another_site_are_blocked(self):
+    def test_02b_googles_analytics_tag_manager_and_ad_tags_on_another_site_are_blocked(self):
         """#220 item 3: on a site that is not Google's, Analytics, Tag Manager, DoubleClick and AdSense load nothing
         with a new profile's defaults (uBlock Origin's default lists and the engine's tracking protection), while the
         site's own script does. Google's names reach this machine for the test, over plain http with the HTTPS-Only
@@ -210,6 +210,8 @@ class ContentFilterDefaultsTest(unittest.TestCase):
         them does reach the server, so what stops them is the blocking and nothing else. Measured on 160.0-0.4 with
         one protection at a time: uBlock Origin's lists stop Analytics and Tag Manager, the engine's tracking
         protection stops DoubleClick and AdSense."""
+        # A new profile's defaults: before 04 switches lists off (tests run in name order, on one profile).
+        self.assertTrue(set(self.state()["selected"]) >= DEFAULT_ON, self.state()["selected"])
         hosts = sorted({HOST, SITE_CDN, *(host for host, _ in GOOGLE.values())})
         origins = [f"http://{host}:{self.server.port}" for host in hosts if host != HOST]
         grant = (
