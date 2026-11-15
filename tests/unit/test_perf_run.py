@@ -21,6 +21,18 @@ class PerfStatisticsTest(unittest.TestCase):
         self.assertIsNone(perf_run.change([], [1]))
         self.assertIsNone(perf_run.change([1], [0]))
 
+    def test_the_interval_holds_the_change_and_is_the_same_every_time(self):
+        build, baseline = [110.0, 108.0, 112.0, 109.0, 111.0], [100.0, 99.0, 101.0, 100.0, 102.0]
+        low, high = perf_run.interval(build, baseline)
+        self.assertLess(low, perf_run.change(build, baseline))
+        self.assertLess(perf_run.change(build, baseline), high)
+        self.assertGreater(low, 0)  # clearly more: 0 is outside
+        self.assertEqual(perf_run.interval(build, baseline), (low, high))
+        noise = perf_run.interval([100.0, 90.0, 110.0, 95.0, 105.0], [102.0, 92.0, 108.0, 97.0, 103.0])
+        self.assertLess(noise[0], 0)
+        self.assertGreater(noise[1], 0)  # the same spread on both sides: 0 is inside
+        self.assertIsNone(perf_run.interval([1.0, 2.0], [1.0, 2.0, 3.0]))  # too few runs to resample
+
     def test_the_table_names_each_measure_with_both_medians_and_the_change(self):
         results = {"metrics": {"startup_first_ms": {"build": [110.0, 100.0, 120.0], "baseline": [100.0, 90.0, 110.0]}}}
         text = perf_run.table(results)
