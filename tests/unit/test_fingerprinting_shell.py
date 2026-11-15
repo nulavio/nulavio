@@ -29,7 +29,11 @@ class ScreenTest(unittest.TestCase):
         start = parent[parent.index("  onStartup() {") : parent.index("  onShutdown(")]
         self.assertIn("this.fingerprinting().watch();", start)
         # On only while the engine's protection is on, and never for a site the person exempted.
-        self.assertIn("if (protectionOn(top.usePrivateBrowsing) && !exempted(uri, top.usePrivateBrowsing)) {", MODULE)
+        self.assertIn("plain = exempted(uri, top.usePrivateBrowsing);", MODULE)
+        self.assertIn("if (protectionOn(top.usePrivateBrowsing) && !plain) {", MODULE)
+        # What it remembers of a tab is a yes or no, never an address (a private window's included).
+        self.assertIn("remember(top.browserId, plain);", MODULE)
+        self.assertNotIn("remember(top.browserId, uri", MODULE)
         self.assertIn('const type = isPrivate ? "trackingprotection-pb" : "trackingprotection";', MODULE)
         # Before a page is asked for, when a tab gets a new context, and for pages that ask for nothing.
         for hook in ('"http-on-modify-request"', '"browsing-context-attached"', "onLocationChange("):

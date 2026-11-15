@@ -27,6 +27,12 @@ Urgency: <urgent | standard> (<reasons>). Source SHA-256 <digest> (Mozilla's sig
 **Nulavio fixes**: <none, or the table above>.
 ```
 
+## Unreleased (on `main`, after 160.0-0.6 was built)
+
+**New protections and their limits**:
+
+- Fingerprinting: pages read a 1920×1080 screen and 4 processors on every computer ([ADR 0016](../adr/0016-one-screen-size-and-processor-count-for-pages.md), #79). The window's own size still differs between people, and a window wider than that screen is a visible sign of the protection ([R56](residual-risks.md)). A site exempted with the shield reads the display's size.
+
 ## Nulavio 160.0-0.4 (Firefox 160.0), published 2026-11-14
 
 A security update of the alpha, with the same engine ([release](https://github.com/nulavio/nulavio/releases/tag/v160.0-0.4), [advisory GHSA-j8cq-r5j6-q2x3](https://github.com/nulavio/nulavio/security/advisories/GHSA-j8cq-r5j6-q2x3), [run 43534834214](https://github.com/nulavio/nulavio/actions/runs/43534834214)). The findings came from the LESIS automated code scan; the fixes were prepared in the advisory's private fork and landed in #150 and #178. The release was approved by the maintainer and signed through KMS; the job then installed it in clean Fedora and Ubuntu containers from the site's repository files, with the signature checks on. Drafting the GitHub release failed in the job (#236); the maintainer's token drafted it from the job's own files, after their signed checksums were checked.

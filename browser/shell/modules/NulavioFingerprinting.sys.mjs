@@ -39,34 +39,37 @@ function exempted(uri, isPrivate) {
   }
 }
 
-/* The address each tab last asked for or showed, by the tab's id, which stays when a page changes process and
-   the tab gets a new browsing context. A new context starts with no page of its own, and must not lose the
-   exemption of the site it is about to show. Bounded: the oldest entries go first. */
-const lastAddress = new Map();
+/* Whether each tab's last page was an exempted site, by the tab's id, which stays when a page changes process
+   and the tab gets a new browsing context. A new context starts with no page of its own, and must not lose the
+   exemption of the site it is about to show. Only that yes or no is kept, never an address, so nothing of a
+   closed tab or a private window stays here. Bounded: the oldest entries go first. */
+const lastExempted = new Map();
 const REMEMBERED = 512;
 
-function remember(id, uri) {
-  lastAddress.delete(id);
-  lastAddress.set(id, uri);
-  if (lastAddress.size > REMEMBERED) {
-    lastAddress.delete(lastAddress.keys().next().value);
+function remember(id, wasExempted) {
+  lastExempted.delete(id);
+  lastExempted.set(id, wasExempted);
+  if (lastExempted.size > REMEMBERED) {
+    lastExempted.delete(lastExempted.keys().next().value);
   }
 }
 
 /** Give the tab of this browsing context the constant screen, or the display's for an exempted site. `uri` is
-    the address its top document has or is about to load; without one, the tab's last address stands. */
+    the address its top document has or is about to load; without one, what the tab's last page was stands. */
 function apply(context, uri = null) {
   const top = context?.top;
   if (!top?.isContent || top.isDiscarded) {
     return;
   }
+  let plain;
   if (uri) {
-    remember(top.browserId, uri);
+    plain = exempted(uri, top.usePrivateBrowsing);
+    remember(top.browserId, plain);
   } else {
-    uri = lastAddress.get(top.browserId) ?? null;
+    plain = lastExempted.get(top.browserId) ?? false;
   }
   try {
-    if (protectionOn(top.usePrivateBrowsing) && !exempted(uri, top.usePrivateBrowsing)) {
+    if (protectionOn(top.usePrivateBrowsing) && !plain) {
       top.setScreenAreaOverride(SCREEN.width, SCREEN.height);
     } else {
       top.resetScreenAreaOverride();
