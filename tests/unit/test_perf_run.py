@@ -47,6 +47,16 @@ class FingerprintingCostTest(unittest.TestCase):
         self.assertEqual(perf_run.fingerprinting_costs(out), {"speedometer3_score_fingerprinting_cost_pct": 10.0})
         self.assertEqual(perf_run.fingerprinting_costs({"speedometer3_score": 9.0}), {})  # measured one way only
 
+    def test_a_cost_in_percent_gets_no_change_of_its_own_in_the_table(self):
+        row = [
+            line
+            for line in perf_run.table(
+                {"metrics": {"x_fingerprinting_cost_pct": {"build": [2.0], "baseline": [1.0]}}}
+            ).splitlines()
+        ][1]
+        self.assertIn("2.0", row)
+        self.assertNotIn("%", row)
+
     def test_the_variant_turns_the_protections_off_before_it_scores(self):
         calls = []
         m = type("M", (), {"chrome": lambda self, script: calls.append(script)})()

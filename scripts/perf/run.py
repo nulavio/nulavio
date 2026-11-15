@@ -247,7 +247,8 @@ def table(results: dict) -> str:
     fmt = lambda v: "-" if v is None else f"{v:.1f}"  # noqa: E731
     for name, sides in results["metrics"].items():
         build, baseline = sides["build"], sides["baseline"]
-        delta, spread = change(build, baseline), interval(build, baseline)
+        # A measure that is already a percentage (a cost) is compared by its two medians, not as a change of a change.
+        delta, spread = (None, None) if name.endswith("_pct") else (change(build, baseline), interval(build, baseline))
         rows.append(
             (
                 name,
@@ -812,7 +813,10 @@ def main(argv: list[str] | None = None) -> int:
     if args.frames:
         results["frames"] = frame_times(build, args.baseline_engine, args.runs)
         results["metrics"].update(frame_metrics(results["frames"]))
-    results["intervals"] = {name: interval(sides["build"], sides["baseline"]) for name, sides in results["metrics"].items()}
+    results["intervals"] = {
+        name: None if name.endswith("_pct") else interval(sides["build"], sides["baseline"])
+        for name, sides in results["metrics"].items()
+    }
     write()
     if "error" in results.get("frames", {}):  # what it measured is in the JSON; the command still fails
         print(table(results))
