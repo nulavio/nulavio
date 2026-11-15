@@ -890,6 +890,7 @@
   "galleryAllowFullControl": { "message": "Allow full control" },
   "gallerySafeChoiceFirst": { "message": "Safe choice stays first and primary. Security cues are opaque, fixed and never animated." },
 
+  "bandPin": {"message": "Keep the toolbar and tabs in view"},
   "bandLabel": {"message": "Profile and window safety"},
   "bandOriginNotSecure": {"message": "Not secure"},
   "bandOriginFile": {"message": "File on this computer"},
