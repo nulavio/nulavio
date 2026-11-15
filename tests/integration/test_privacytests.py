@@ -97,7 +97,6 @@ DEVICE_CONSTANTS = {
 # Probes that do not pass yet, and why (#79). Each fix removes its line.
 KNOWN_GAPS = {
     "AudioContext fingerprint": "the engine has no protection for rendered audio",
-    "Time zone": "pages get the system's time zone",
     "Reduced motion preference": "pages get the system's setting",
     "Display contrast preference": "pages get the system's setting",
 }

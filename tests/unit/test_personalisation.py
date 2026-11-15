@@ -81,6 +81,8 @@ ALLOWED_BY_KIND = {"routing": {"nulavio.routing.fallbackProfile", "nulavio.routi
 PREF_WRITERS = {
     "NulavioAccountRules.sys.mjs": {"setStringPref(OFFERED_PREF)": 1},  # which services were offered here (#220)
     "NulavioConnect.sys.mjs": {"clearUserPref(PREF_PREVIOUS)": 1, "setStringPref(PREF_PREVIOUS)": 1},
+    # the engine's per-site fingerprinting list, written from the sites' time zone permissions (#79, ADR 0017)
+    "NulavioFingerprinting.sys.mjs": {"clearUserPref(GRANULAR)": 1, "setStringPref(GRANULAR)": 1},
     "NulavioGuard.sys.mjs": {"clearUserPref(name)": 1, "setBoolPref(name)": 1, "setIntPref(name)": 1, "setStringPref(name)": 1},
     "NulavioLayout.sys.mjs": {
         'setBoolPref("sidebar.verticalTabs")': 2,

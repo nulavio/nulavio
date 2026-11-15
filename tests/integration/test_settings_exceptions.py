@@ -57,6 +57,12 @@ return true;
 """
 )
 ALLOW_ACTION, DENY_ACTION = 1, 2
+FINGERPRINTING = (
+    "const F = ChromeUtils.importESModule("
+    '"resource://builtin-addons/nulavio-shell/modules/NulavioFingerprinting.sys.mjs").NulavioFingerprinting;'
+)
+PER_SITE = "return Services.prefs.getStringPref('privacy.fingerprintingProtection.granularOverrides', '');"
+DARK_NOW = "return matchMedia('(prefers-color-scheme: dark)').matches;"
 
 
 @unittest.skipUnless(harness.nulavio_engine(), "the settings page needs the built-in Shell on the engine")
@@ -140,6 +146,34 @@ class SettingsExceptionsTest(unittest.TestCase):
         empty = self.seen(lambda n: n["none"])
         self.assertEqual(empty["none"], "Nenhuma exceção: todas as proteções valem para todos os sites.")
         self.assertEqual(empty["rows"], [])
+
+    def test_03_a_sites_time_zone_choice_is_listed_and_removing_it_gives_the_site_utc_again(self):
+        # ADR 0017: "use my time zone on this site", turned on in the shield's panel, is a permission of the site.
+        self.open()
+        self.m.chrome(FINGERPRINTING + "F.setTimeZone(Services.io.newURI('https://agenda.exemplo.example/semana'), true);")
+        zone = lambda now: [row for row in now["rows"] if row["type"] == "nulavio-timezone"]  # noqa: E731
+        (row,) = zone(self.seen(lambda now: zone(now)))
+        # Kept for the site's registrable domain, and said in words.
+        self.assertEqual((row["site"], row["origin"]), ("exemplo.example", "https://exemplo.example"))
+        self.assertEqual(row["what"], "Vê o fuso horário deste computador")
+        self.assertEqual(row["remove"], "Remover: exemplo.example — Vê o fuso horário deste computador")
+        self.assertIn('"firstPartyDomain":"exemplo.example"', self.m.chrome(PER_SITE))
+        # For the review: the row in the light and the dark theme (NULAVIO_TEST_ARTIFACTS).
+        folder = harness.artifacts_dir() / "timezone"
+        folder.mkdir(parents=True, exist_ok=True)
+        self.m.execute("document.getElementById('nulavio-exceptions').scrollIntoView({block: 'center'});")
+        try:
+            for dark in (0, 1):
+                self.m.chrome("Services.prefs.setIntPref('ui.systemUsesDarkTheme', arguments[0]);", [dark])
+                harness.wait_until(lambda want=bool(dark): self.m.execute(DARK_NOW) == want, 10)
+                (folder / f"settings-exception-{'dark' if dark else 'light'}.png").write_bytes(self.m.screenshot_png())
+        finally:
+            self.m.chrome("Services.prefs.clearUserPref('ui.systemUsesDarkTheme');")
+        # Removed here: the permission is gone and so is the engine's entry, so the site reads UTC again.
+        self.assertTrue(self.m.chrome(REMOVE, ["nulavio-timezone", "https://exemplo.example"]))
+        self.seen(lambda now: now["said"] == "Removido." and not zone(now))
+        self.assertEqual(self.m.chrome(HAS, ["https://exemplo.example", "nulavio-timezone"]), 0)
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome(PER_SITE) == "", 10), self.m.chrome(PER_SITE))
 
 
 if __name__ == "__main__":

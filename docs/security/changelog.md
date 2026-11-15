@@ -32,6 +32,7 @@ Urgency: <urgent | standard> (<reasons>). Source SHA-256 <digest> (Mozilla's sig
 **New protections and their limits**:
 
 - Fingerprinting: pages read a 1920×1080 screen and 4 processors on every computer ([ADR 0016](../adr/0016-one-screen-size-and-processor-count-for-pages.md), #79). The window's own size still differs between people, and a window wider than that screen is a visible sign of the protection ([R56](residual-risks.md)). A site exempted with the shield reads the display's size.
+- Fingerprinting: pages read UTC as the time zone ([ADR 0017](../adr/0017-pages-read-utc-with-a-switch-per-site.md), #79). Hours a page formats itself are in UTC until the person turns on "Usar meu fuso horário neste site" in the shield's panel; that site then reads the real time zone again (R56). Distribution Firefox (Track A) has no such switch, only the shield's own.
 
 ## Nulavio 160.0-0.4 (Firefox 160.0), published 2026-11-14
 

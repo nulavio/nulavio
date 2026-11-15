@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 import unittest
 from pathlib import Path
@@ -31,7 +32,7 @@ class ScreenTest(unittest.TestCase):
         self.assertIn("this.fingerprinting().watch();", start)
         # A new tab has the constant before any page; then the page's own process decides, at the two moments a
         # page comes to be shown: its window created, or the page taken back from the engine's cache.
-        self.assertIn('const TOPICS = ["browsing-context-attached"];', MODULE)
+        self.assertIn('const TOPICS = ["browsing-context-attached", ', MODULE)
         self.assertIn("events: { DOMWindowCreated: {}, pageshow: {} },", MODULE)
         self.assertIn("allFrames: false,", MODULE)
         self.assertIn('if (event.type === "pageshow" && !event.persisted) {', CHILD)
@@ -42,8 +43,49 @@ class ScreenTest(unittest.TestCase):
         # Nothing is taken from a page still shown: no hook on a request that is only on its way.
         for text in (MODULE, CHILD):
             self.assertNotIn("http-on-modify-request", text)
-            self.assertNotIn("Services.prefs.set", text)  # it reads the engine's switches and writes none
             self.assertNotIn("sendAsyncMessage", text)  # the two halves exchange nothing
+        self.assertNotIn("Services.prefs.set", CHILD)  # the page's half reads the engine's switches and writes none
+
+
+class TimeZoneTest(unittest.TestCase):
+    def test_the_only_pref_written_is_the_engines_per_site_list_and_only_its_own_entries(self):
+        self.assertIn('const GRANULAR = "privacy.fingerprintingProtection.granularOverrides";', MODULE)
+        # Every write, whatever its argument looks like: one set and one clear, both of the per-site list.
+        self.assertEqual(len(re.findall(r"Services\.prefs\.set\w+Pref\(", MODULE)), 1)
+        self.assertEqual(MODULE.count("Services.prefs.clearUserPref("), 1)
+        self.assertIn("Services.prefs.setStringPref(GRANULAR, text);", MODULE)
+        self.assertIn("Services.prefs.clearUserPref(GRANULAR);", MODULE)
+        # An entry is this module's by its shape; a person's own entries in the list stay.
+        self.assertIn('const ours = entry => entry?.thirdPartyDomain === "*" && entry?.overrides === SHOW_TIME_ZONE;', MODULE)
+        self.assertIn("if (text === current || Services.prefs.prefIsLocked(GRANULAR)) {", MODULE)
+
+    def test_the_choice_is_a_site_permission_that_settings_lists_and_a_private_window_cannot_make(self):
+        self.assertIn('export const TIME_ZONE = "nulavio-timezone";', MODULE)
+        privacy = (SHELL / "modules" / "NulavioPrivacy.sys.mjs").read_text(encoding="utf-8")
+        types = privacy[privacy.index("export const TYPES = Object.freeze([") : privacy.index("]);")]
+        self.assertIn('"nulavio-timezone",', types)
+        panes = (SHELL / "settings" / "native" / "panes.mjs").read_text(encoding="utf-8")
+        self.assertIn('"nulavio-timezone": { allow: "exceptionTimeZone" },', panes)
+        self.assertIn("offered: Boolean(site) && !context?.usePrivateBrowsing && protectionOn(false) && !exempted", MODULE)
+        # Pressed, it acts only on the site the panel was opened on.
+        self.assertIn("if (now.offered && now.site === row.dataset.site) {", MODULE)
+
+    def test_the_words_are_in_both_languages(self):
+        for locale in ("en", "pt_BR"):
+            words = json.loads((SHELL / "_locales" / locale / "messages.json").read_text(encoding="utf-8"))
+            for key in ("timeZoneSwitch", "timeZoneSwitchOff", "timeZoneSwitchOn", "exceptionTimeZone"):
+                with self.subTest(locale=locale, key=key):
+                    self.assertTrue(words[key]["message"].strip())
+            self.assertIn("UTC", words["timeZoneSwitchOff"]["message"])
+
+    def test_utc_is_in_the_default_set_of_both_tracks(self):
+        for path in ("browser/branding/nulavio/pref/firefox-branding.js", "browser/config/prefs/baseline.js"):
+            line = next(
+                ln
+                for ln in (ROOT / path).read_text(encoding="utf-8").splitlines()
+                if '"privacy.fingerprintingProtection.overrides"' in ln
+            )
+            self.assertIn("+JSDateTimeUTC", line, path)
 
 
 if __name__ == "__main__":
