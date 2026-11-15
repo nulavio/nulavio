@@ -2,7 +2,9 @@
 
 ``build("Family Name")`` returns the bytes of a valid .ttf with one drawn glyph, mapped to the
 letter "m" and two units wide per em, so text measured in this family differs from any fallback.
-Standard library only (the repository has no font files and no font tools).
+``build("Family Name", "other letters")`` maps each of those characters to that glyph instead,
+for a page that measures a text of its own. Standard library only (the repository has no font
+files and no font tools).
 """
 
 from __future__ import annotations
@@ -26,7 +28,21 @@ def _name_table(family: str) -> bytes:
     return struct.pack(">3H", 0, len(records), 6 + 12 * len(records)) + entries + strings
 
 
-def build(family: str) -> bytes:
+def _cmap(codes: list[int]) -> bytes:
+    """A format 4 character map: each code is a segment of its own that leads to glyph 1."""
+    segments = [(code, (1 - code) & 0xFFFF) for code in codes] + [(0xFFFF, 1)]
+    count = len(segments)
+    selector = count.bit_length() - 1
+    search = 2 << selector
+    table = struct.pack(">7H", 4, 16 + 8 * count, 0, 2 * count, search, selector, 2 * count - search)
+    table += b"".join(struct.pack(">H", code) for code, _ in segments) + struct.pack(">H", 0)
+    table += b"".join(struct.pack(">H", code) for code, _ in segments)
+    table += b"".join(struct.pack(">H", delta) for _, delta in segments) + struct.pack(f">{count}H", *([0] * count))
+    return struct.pack(">2H", 0, 1) + struct.pack(">2HI", 3, 1, 12) + table
+
+
+def build(family: str, letters: str = "m") -> bytes:
+    codes = sorted({ord(letter) for letter in letters})
     glyph = struct.pack(">h4h", 1, 50, 0, 900, 700)  # one contour and its bounding box
     glyph += struct.pack(">HH", 3, 0)  # last point of the contour; no instructions
     glyph += bytes([1, 1, 1, 1])  # four on-curve points, coordinates as 16-bit deltas
@@ -35,13 +51,10 @@ def build(family: str) -> bytes:
         b"OS/2": struct.pack(
             ">H3h" + "10h" + "h" + "10s" + "4I" + "4s" + "3H" + "3h" + "2H" + "2I" + "2h" + "3H",
             3, 1250, 400, 5,
-            *([0] * 10), 0, b"\0" * 10, 1, 0, 0, 0, b"NULA", 0x40, 0x6D, 0x6D,
+            *([0] * 10), 0, b"\0" * 10, 1, 0, 0, 0, b"NULA", 0x40, codes[0], codes[-1],
             800, -200, 0, 800, 200, 1, 0, 500, 700, 0, 32, 0,
         ),
-        b"cmap": struct.pack(">2H", 0, 1) + struct.pack(">2HI", 3, 1, 12)
-        + struct.pack(">7H", 4, 32, 0, 4, 4, 1, 0)
-        + struct.pack(">2H", 0x6D, 0xFFFF) + struct.pack(">H", 0)
-        + struct.pack(">2H", 0x6D, 0xFFFF) + struct.pack(">2H", (1 - 0x6D) & 0xFFFF, 1) + struct.pack(">2H", 0, 0),
+        b"cmap": _cmap(codes),
         b"glyf": glyph,
         b"head": struct.pack(
             ">2I2IHH2q4hHHhhh", 0x00010000, 0x00010000, 0, 0x5F0F3CF5, 0x0003, 1000, 0, 0, 0, 0, 900, 700, 0, 8, 2, 0, 0
