@@ -98,7 +98,7 @@ PODMAN = textwrap.dedent(
         (out / "dists/stable/Release").write_text("Origin: Nulavio\\nLabel: Nulavio\\nSuite: stable\\n"
                                                   "Codename: stable\\nArchitectures: amd64\\nComponents: main\\n")
         sys.exit(0)
-    if any(arg.startswith("REPO_FILE=") for arg in args):  # check_published.sh: dnf install
+    if any(m.endswith(":/nulavio.repo:ro") for m in mounts):  # check_published.sh: dnf install
         print(os.environ.get("STUB_DNF", ""))
         sys.exit(0)
     if any(m.endswith(":/nulavio.sources:ro") for m in mounts):  # check_published.sh: apt install
@@ -371,12 +371,14 @@ class CheckPublishedTest(unittest.TestCase):
             #!{PYTHON} -I
             import os, shutil, sys
             target = sys.argv[sys.argv.index("-o") + 1]
+            dnf = any(arg.endswith("/rpm/nulavio.repo") for arg in sys.argv)
             mode = os.environ.get("STUB_CURL", "")
-            if mode == "fails":
+            if mode == ("repo-fails" if dnf else "fails"):
                 sys.exit(22)
-            shutil.copy({str(ROOT / "site" / "apt" / "nulavio.sources")!r}, target)
-            if mode == "changed":
-                open(target, "a").write("Trusted: yes\\n")
+            shutil.copy({str(ROOT / "site" / "rpm" / "nulavio.repo")!r} if dnf else
+                        {str(ROOT / "site" / "apt" / "nulavio.sources")!r}, target)
+            if mode == ("repo-changed" if dnf else "changed"):
+                open(target, "a").write("gpgkey=https://example.invalid/other.asc\\n" if dnf else "Trusted: yes\\n")
             """))  # fmt: skip
 
     @classmethod
@@ -421,6 +423,16 @@ class CheckPublishedTest(unittest.TestCase):
                 run = self.check(f"{VERSION}.fc44", VERSION, curl=mode)
                 self.assertEqual(run.returncode, 1, run.stdout + run.stderr)
                 self.assertIn("the published APT", run.stderr)
+
+    def test_a_published_repository_file_that_is_not_the_reviewed_one_fails(self):
+        # #327: a gpgkey= or baseurl= that is not the reviewed one fails as the APT source file does.
+        for mode, why in (("repo-changed", "the published file is not site/rpm/nulavio.repo"),
+                          ("repo-fails", "the file could not be fetched")):  # fmt: skip
+            with self.subTest(mode=mode):
+                run = self.check(f"{VERSION}.fc44", VERSION, curl=mode)
+                self.assertEqual(run.returncode, 1, run.stdout + run.stderr)
+                self.assertIn(f"dnf (https://nulavio.net/rpm/nulavio.repo), attempt 1: {why}", run.stderr)
+                self.assertIn("the published dnf", run.stderr)
 
 
 @unittest.skipUnless(shutil.which("gpg"), "needs gpg")
