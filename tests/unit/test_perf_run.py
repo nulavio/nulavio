@@ -29,6 +29,17 @@ class PerfStatisticsTest(unittest.TestCase):
         self.assertIn("+10.0 %", text)
 
 
+class FrameMetricsTest(unittest.TestCase):
+    def test_each_scene_gets_its_median_interval_per_run_and_side(self):
+        run = {"raw": {"tab_switch": [[16.0, 17.0], [18.0]], "sidebar_collapse": []}, "new_tab_poll_ms": [120.0, 140.0]}
+        frames = {"runs": {"build": [run, run], "baseline": [{"raw": {"tab_switch": [[20.0]]}, "new_tab_poll_ms": [150.0]}]}}
+        metrics = perf_run.frame_metrics(frames)
+        self.assertEqual(metrics["frame_tab_switch_ms"], {"build": [17.0, 17.0], "baseline": [20.0]})
+        self.assertEqual(metrics["frame_new_tab_ms"], {"build": [130.0, 130.0], "baseline": [150.0]})
+        self.assertEqual(metrics["frame_sidebar_collapse_ms"], {"build": [], "baseline": []})  # no samples, no value
+        self.assertIn("frame_dialog_open_ms", metrics)
+
+
 class PinnedBenchmarkTest(unittest.TestCase):
     def test_an_archive_that_is_not_the_pinned_one_is_refused_and_removed(self):
         import tempfile
