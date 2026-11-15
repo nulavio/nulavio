@@ -233,7 +233,7 @@ nulavio-open-integrations =
 
 nulavio-meetings-group =
     .label = Meeting links
-    .description = For this profile. Only where the service says how to join from a browser (Zoom); Microsoft Teams offers that on its own page.
+    .description = For this profile. To join in the browser, Zoom and Microsoft Teams links stay on the service's page, which offers to join from there, and their apps are not opened.
 nulavio-meeting-links =
     .label = When a meeting link opens
 nulavio-meeting-links-app =

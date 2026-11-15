@@ -25,7 +25,7 @@ this.nulavioRouting = class extends ExtensionAPI {
       console.error("Nulavio routing", e);
     }
     try {
-      this.meetings().watch(); // meeting links, joined in the browser when the profile asks (#221)
+      this.meetings().watch(); // meeting links stay in the browser when the profile asks (#221)
     } catch (e) {
       console.error("Nulavio meetings", e);
     }

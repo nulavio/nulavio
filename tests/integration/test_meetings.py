@@ -1,13 +1,15 @@
 """Meeting links, per profile (#221): open in the service's app (the default) or join in the browser.
 
-With "join in the browser", a Zoom meeting link goes to the address where Zoom documents joining from a
-browser, before any request leaves; with the default, the link is left as it is. Zoom's names are resolved
-to this machine, where nothing answers on 443: the test reads which address the tab tried, never Zoom.
+An app is registered for zoommtg: (it would run /bin/true; the engine only asks). By default, a meeting page that
+asks for its app (a link, a script, a hidden frame) gets the engine's prompt. With "join in the browser" the
+engine asks nothing and the page stays, so the service's own "join from your browser" is what the person sees.
 """
 
 from __future__ import annotations
 
+import http.server
 import sys
+import threading
 import unittest
 from pathlib import Path
 
@@ -17,21 +19,67 @@ import harness
 PERSONALISE = (
     'ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioPersonalise.sys.mjs").NulavioPersonalise'
 )
-TRIED = "return gBrowser.selectedBrowser.currentURI.spec;"
 DARK_NOW = "return matchMedia('(prefers-color-scheme: dark)').matches;"
+SCHEMES = ("zoommtg", "zoomus", "msteams")
+APP_LINK = "zoommtg://zoom.us/join?confno=1234567890"
+# A meeting page, as the services' launch pages are: it asks for the app by itself, or on a click.
+PAGE = f"""<!doctype html><meta charset=utf-8><title>meeting</title>
+<a id=launch href="{APP_LINK}">Launch meeting</a><p id=join>Join from your browser</p>
+<script>
+const how = location.hash.slice(1);
+if (how === "script") setTimeout(() => {{ location.href = "{APP_LINK}"; }}, 200);
+if (how === "frame") setTimeout(() => {{ const f = document.createElement("iframe"); f.hidden = true;
+  f.src = "{APP_LINK}"; document.body.append(f); }}, 200);
+</script>""".encode()
+REGISTER_APP = """
+const handlers = Cc["@mozilla.org/uriloader/handler-service;1"].getService(Ci.nsIHandlerService);
+const protocols = Cc["@mozilla.org/uriloader/external-protocol-service;1"].getService(Ci.nsIExternalProtocolService);
+const info = protocols.getProtocolHandlerInfo("zoommtg");
+const app = Cc["@mozilla.org/uriloader/local-handler-app;1"].createInstance(Ci.nsILocalHandlerApp);
+const file = Cc["@mozilla.org/file/local;1"].createInstance(Ci.nsIFile);
+file.initWithPath("/bin/true");
+app.executable = file;
+app.name = "Meeting app";
+info.possibleApplicationHandlers.appendElement(app);
+info.preferredApplicationHandler = app;
+info.preferredAction = Ci.nsIHandlerInfo.useHelperApp;
+info.alwaysAskBeforeHandling = true;
+handlers.store(info);
+return protocols.externalProtocolHandlerExists("zoommtg");
+"""
+DIALOGS = """
+const box = gBrowser.getTabDialogBox(gBrowser.selectedBrowser);
+return box.getTabDialogManager()._dialogs.length + box.getContentDialogManager()._dialogs.length;
+"""
+CLOSE_DIALOGS = "gBrowser.getTabDialogBox(gBrowser.selectedBrowser).abortAllDialogs();"
+
+
+class Page(http.server.BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.end_headers()
+        self.wfile.write(PAGE)
+
+    def log_message(self, *args):
+        pass
 
 
 @unittest.skipUnless(harness.nulavio_engine(), "the meeting-link choice is the Nulavio build's Shell (NULAVIO_ENGINE)")
 class MeetingLinksTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        cls.server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Page)
+        threading.Thread(target=cls.server.serve_forever, daemon=True).start()
+        cls.page = f"http://127.0.0.1:{cls.server.server_address[1]}/j/1234567890"
         cls.session = harness.GeckoProfileSession(name="Pessoal")
         cls.m = cls.session.start()
-        cls.m.chrome("Services.prefs.setStringPref('network.dns.localDomains', 'zoom.us,acme.zoom.us,example.org');")
+        assert cls.m.chrome(REGISTER_APP), "the stand-in app is registered for zoommtg:"
 
     @classmethod
     def tearDownClass(cls):
         cls.session.cleanup()
+        cls.server.shutdown()
 
     def choose(self, value: str) -> None:
         self.m.set_context("chrome")
@@ -44,34 +92,46 @@ class MeetingLinksTest(unittest.TestCase):
         finally:
             self.m.set_context("content")
 
-    def tried(self, link: str) -> str:
-        self.m.navigate("about:blank")  # never the error page of the link before
-        self.m.chrome("gBrowser.selectedBrowser.loadURI(Services.io.newURI(arguments[0]), "
-                      "{ triggeringPrincipal: Services.scriptSecurityManager.getSystemPrincipal() });", [link])  # fmt: skip
-        # Nothing answers there: the tab ends on the engine's error page, with the address it tried.
-        failed = "return gBrowser.selectedBrowser.documentURI?.spec.startsWith('about:neterror') ?? false;"
-        self.assertTrue(
-            harness.wait_until(lambda: self.m.chrome(failed) and "zoom" in self.m.chrome(TRIED), 15), self.m.chrome(TRIED)
+    def switches(self) -> dict:
+        return self.m.chrome(
+            "return Object.fromEntries(arguments[0].map(s => [s, 'network.protocol-handler.external.' + s])"
+            ".map(([s, p]) => [s, Services.prefs.prefHasUserValue(p) ? Services.prefs.getBoolPref(p) : null]));",
+            [list(SCHEMES)],
         )
-        return self.m.chrome(TRIED)
 
-    def test_01_by_default_the_link_is_left_as_it_is(self):
+    def open_meeting(self, how: str) -> int:
+        """Open the meeting page, let it ask for the app, and return how many dialogs the tab shows."""
+        self.m.chrome(CLOSE_DIALOGS)
+        self.m.navigate("about:blank")
+        self.m.navigate(f"{self.page}?{how}#{how}")
+        if how == "click":
+            self.m.execute("document.getElementById('launch').click();")
+        harness.wait_until(lambda: self.m.chrome(DIALOGS) > 0, 3)  # the prompt, when there is one
+        shown = self.m.chrome(DIALOGS)
+        self.m.chrome(CLOSE_DIALOGS)
+        # Whatever the engine did, the page is still the service's, with its own way to join.
+        self.assertEqual(self.m.chrome("return gBrowser.selectedBrowser.currentURI.spec;"), f"{self.page}?{how}#{how}")
+        self.assertEqual(self.m.execute("return document.getElementById('join')?.textContent;"), "Join from your browser")
+        return shown
+
+    def test_01_by_default_the_engine_asks_before_opening_the_app(self):
         self.assertEqual(self.m.chrome("return Services.prefs.getStringPref('nulavio.meetings.join', '');"), "")
-        self.assertEqual(self.tried("https://zoom.us/j/1234567890?pwd=abc123"), "https://zoom.us/j/1234567890?pwd=abc123")
+        self.assertEqual(self.switches(), dict.fromkeys(SCHEMES))
+        for how in ("click", "script", "frame"):
+            with self.subTest(how=how):
+                self.assertEqual(self.open_meeting(how), 1)
 
-    def test_02_join_in_the_browser_goes_to_zooms_browser_join_address(self):
+    def test_02_join_in_the_browser_asks_nothing_and_leaves_the_page(self):
         self.choose("browser")
         self.addCleanup(self.choose, "app")
         self.assertEqual(self.m.chrome("return Services.prefs.getStringPref('nulavio.meetings.join', '');"), "browser")
-        cases = {
-            "https://zoom.us/j/1234567890?pwd=abc123": "https://zoom.us/wc/join/1234567890?pwd=abc123",
-            "https://acme.zoom.us/j/98765432101?pwd=x.y-z&uname=Ana": "https://acme.zoom.us/wc/join/98765432101?pwd=x.y-z",
-            "https://zoom.us/j/123456789": "https://zoom.us/wc/join/123456789",
-            "https://zoom.us/s/1234567890": "https://zoom.us/s/1234567890",  # a host's start link: not a join link
-        }
-        for link, want in cases.items():
-            with self.subTest(link=link):
-                self.assertEqual(self.tried(link), want)
+        self.assertTrue(harness.wait_until(lambda: self.switches() == dict.fromkeys(SCHEMES, False), 5), self.switches())
+        for how in ("click", "script", "frame"):
+            with self.subTest(how=how):
+                self.assertEqual(self.open_meeting(how), 0)
+        self.choose("app")
+        self.assertTrue(harness.wait_until(lambda: self.switches() == dict.fromkeys(SCHEMES), 5), self.switches())
+        self.assertEqual(self.open_meeting("click"), 1)
 
     def test_03_settings_offers_the_choice_in_integrations(self):
         self.m.navigate("about:preferences#nulavioIntegrations")
