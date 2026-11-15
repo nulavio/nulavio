@@ -264,7 +264,7 @@ nulavio-policies-other =
 
 nulavio-meetings-group =
     .label = Links de reunião
-    .description = Para este perfil. Para entrar pelo navegador, os links do Zoom e do Microsoft Teams ficam na página do serviço, que oferece entrar por ali, e os apps deles não são abertos.
+    .description = Para este perfil. Com “Entrar pelo navegador”, os links do Zoom e do Microsoft Teams ficam na página do serviço, que oferece entrar por ali, e nenhum app é aberto.
 nulavio-meeting-links =
     .label = Quando um link de reunião abrir
 nulavio-meeting-links-app =
