@@ -13,6 +13,7 @@ import re
 import shutil
 import subprocess
 import urllib.parse
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -178,19 +179,29 @@ def build_command(engine: Engine, profile_dir: Path, url: str | None = None, pri
     return command
 
 
+def sandbox_overrides(environ: Mapping[str, str] | None = None) -> list[str]:
+    """The variables in `environ` that switch off or weaken the engine's sandboxes: MOZ_DISABLE_*SANDBOX*,
+    MOZ_SANDBOX_*, and MOZ_ASSUME_USER_NS, which makes the engine skip its own check for user namespaces
+    and start content processes without them (#312)."""
+    environ = os.environ if environ is None else environ
+    return sorted(
+        k for k in environ if (k.upper().startswith("MOZ_") and "SANDBOX" in k.upper()) or k.upper() == "MOZ_ASSUME_USER_NS"
+    )
+
+
 def launch_env() -> dict[str, str]:
     """Environment for the engine: inherit the session, drop risky knobs.
 
-    Removes variables that disable engine sandboxes (MOZ_DISABLE_*SANDBOX*),
-    relax sandbox behaviour (MOZ_SANDBOX_*), enable remote control, or skip
-    the profile-downgrade check. Sets the remoting name (Wayland app_id) so
-    the desktop associates windows with nulavio-preview.desktop.
+    Removes variables that disable engine sandboxes or weaken them (`sandbox_overrides`),
+    enable remote control, or skip the profile-downgrade check. Sets the remoting name
+    (Wayland app_id) so the desktop associates windows with nulavio-preview.desktop.
     """
     env = dict(os.environ)
+    overrides = set(sandbox_overrides(env))
     for key in list(env):
         upper = key.upper()
         if (
-            (upper.startswith("MOZ_") and "SANDBOX" in upper)
+            key in overrides
             or upper.startswith(("MOZ_MARIONETTE", "MOZ_REMOTE"))
             or upper in {"MOZ_HEADLESS", "MOZ_ALLOW_DOWNGRADE"}
         ):

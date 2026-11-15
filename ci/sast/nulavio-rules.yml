@@ -142,7 +142,7 @@ rules:
           - pattern: dict(..., $KEY=$VALUE, ...)
       - metavariable-regex:
           metavariable: $KEY
-          regex: ^MOZ_(\w*SANDBOX\w*|ALLOW_DOWNGRADE|MARIONETTE\w*|REMOTE\w*)$
+          regex: ^MOZ_(\w*SANDBOX\w*|ASSUME_USER_NS|ALLOW_DOWNGRADE|MARIONETTE\w*|REMOTE\w*)$
 
   # --- JavaScript (Shell, start page, branding modules, pref files) --------------------------
 

@@ -106,6 +106,8 @@ env["MOZ_DISABLE_CONTENT_SANDBOX"] = "1"
 # ruleid: nulavio-py-engine-sandbox-env
 env.setdefault("MOZ_ALLOW_DOWNGRADE", "1")
 # ruleid: nulavio-py-engine-sandbox-env
+env["MOZ_ASSUME_USER_NS"] = "0"
+# ruleid: nulavio-py-engine-sandbox-env
 os.putenv("MOZ_MARIONETTE", "1")
 # ruleid: nulavio-py-engine-sandbox-env
 launch = {"HOME": home, "MOZ_REMOTE_SETTINGS_DEVTOOLS": "1"}
