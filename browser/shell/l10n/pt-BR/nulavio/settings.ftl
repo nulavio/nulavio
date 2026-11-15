@@ -128,7 +128,7 @@ nulavio-profiles-group =
     .description = Cada perfil guarda seus próprios logins, histórico e extensões. Um perfil protegido fica criptografado no disco enquanto está bloqueado.
 nulavio-routing-group =
     .label = Qual site abre em qual perfil
-    .description = Links de outros aplicativos e endereços digitados seguem estas regras e abrem direto no perfil certo, antes de qualquer carregamento. As regras ficam neste computador e só você as cria.
+    .description = Links de outros aplicativos e endereços digitados seguem estas regras e abrem direto no perfil certo, antes de qualquer carregamento. As regras ficam neste computador e só você as cria. Uma janela de login fica com o site que a abriu: com uma conta guardada num perfil (o Google, por exemplo), "Entrar com" essa conta num site de outro perfil pede um login lá também.
 
 ## Privacidade e segurança
 
