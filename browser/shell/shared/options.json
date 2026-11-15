@@ -161,7 +161,8 @@
         "open-assistant",
         "toggle-focus",
         "toggle-immersive",
-        "lock-profile"
+        "lock-profile",
+        "copy-link-to-highlight"
       ],
       "default": "_execute_action",
       "writer": "engine",
