@@ -18,20 +18,37 @@ alternate the build and the baseline, so a machine that slows down slows both. M
   A process whose memory could not be read is counted in the JSON (unreadable_*), never silently left out
   of the sum.
 
+With --speedometer, also Speedometer 3.1 (BrowserBench), pinned to a commit of WebKit/Speedometer's release/3.1
+branch, downloaded once into the cache and checked against its SHA-256, served from this machine (no network
+round-trip is part of the score), run in a third start of the profile after the memory is read, so neither
+measure carries the other's processes: its mean score over --speedometer-iterations (3; the benchmark's own
+default is 10, so this is not an official score). Without a window (headless) and with software rendering it is
+a regression signal, not a real-hardware number. GitHub does not promise the same bytes for an archive it makes
+from a commit: if they change, the run stops at the digest check and the pin needs updating.
+
 The JSON keeps every run and is written after each one; the table gives each side's median and the build's
-change against the baseline. What it does not measure yet (#80): BrowserBench (Speedometer, JetStream,
-MotionMark), frame time (scripts/research/frame_scene.py), the fingerprinting cost, the tools CLI, a cold
-start, and stock Firefox as a second baseline (GeckoProfileSession needs a Nulavio build).
+change against the baseline. What it does not measure yet (#80): JetStream and MotionMark, frame time
+(scripts/research/frame_scene.py), the fingerprinting cost, the tools CLI, a cold start, and stock Firefox
+as a second baseline (GeckoProfileSession needs a Nulavio build).
 """
 
 from __future__ import annotations
 
 import argparse
+import contextlib
+import functools
+import hashlib
+import http.server
 import json
+import math
 import os
+import shutil
 import statistics
 import sys
+import tarfile
+import threading
 import time
+import urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -56,6 +73,25 @@ MINIMIZE = (
     " Cc['@mozilla.org/memory-reporter-manager;1'].getService(Ci.nsIMemoryReporterManager)"
     ".minimizeMemoryUsage(() => done(true));"
 )
+
+
+# Benchmarks, pinned: a commit of the upstream repository, the archive GitHub serves for it, and its digest.
+PINNED = {
+    "speedometer": {
+        "commit": "1386415be8fef2f6b6bbdbe1828872471c5d802a",  # WebKit/Speedometer, branch release/3.1
+        "url": "https://codeload.github.com/WebKit/Speedometer/tar.gz/1386415be8fef2f6b6bbdbe1828872471c5d802a",
+        "sha256": "cfefa818d7789ed2f2b9f3f1bf608cc35e4e8241489eef47049296ce92791313",
+        "size": 12358793,
+    },
+}
+# The benchmark's state: how many iterations it measured, whether it ended (its last iteration, or an error), and the
+# mean of the iterations' scores, the number its own page shows (resources/main.mjs, _computeResults).
+SPEEDOMETER = (
+    "const client = globalThis.benchmarkClient, runs = client?._measuredValuesList ?? [];"
+    " return { done: runs.length, ended: !!client?._hasResults && !client._isRunning,"
+    " score: runs.length ? runs.reduce((sum, r) => sum + r.score, 0) / runs.length : null };"
+)
+SPEEDOMETER_ITERATION_S = 600  # the longest one iteration may take here (headless, software rendering)
 
 
 class MeasureError(RuntimeError):
@@ -117,6 +153,82 @@ def pss_kib(pids: list[int]) -> tuple[int, int]:
     return total, unreadable
 
 
+def cache_dir() -> Path:
+    return Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "nulavio" / "perf"
+
+
+def pinned(name: str, cache: Path | None = None) -> Path:
+    """The pinned benchmark's files: downloaded once, checked against the pin's size and SHA-256, unpacked."""
+    pin = PINNED[name]
+    cache = cache or cache_dir()
+    tree = cache / f"{name}-{pin['commit']}-{pin['sha256'][:16]}"  # a new digest for the same commit is a new tree
+    if (tree / ".verified").exists():
+        return tree
+    cache.mkdir(parents=True, exist_ok=True)
+    archive = cache / f"{name}-{pin['commit']}-{pin['sha256'][:16]}.tar.gz"
+    if not archive.exists():
+        partial = archive.with_suffix(".part")
+        with urllib.request.urlopen(pin["url"], timeout=120) as response, partial.open("wb") as out:  # noqa: S310
+            shutil.copyfileobj(response, out)
+        partial.replace(archive)
+    data = archive.read_bytes()
+    if len(data) != pin["size"] or hashlib.sha256(data).hexdigest() != pin["sha256"]:
+        archive.unlink()
+        raise MeasureError(f"{name}: the download is not the pinned archive (size or SHA-256)")
+    shutil.rmtree(tree, ignore_errors=True)
+    tree.mkdir()
+    with tarfile.open(archive) as tar:
+        members = []
+        for member in tar.getmembers():
+            inner = member.name.split("/", 1)[1] if "/" in member.name else ""
+            if inner:
+                member.name = inner
+                members.append(member)
+        tar.extractall(tree, members=members, filter="data")
+    (tree / ".verified").touch()
+    return tree
+
+
+class QuietHandler(http.server.SimpleHTTPRequestHandler):
+    def log_message(self, *args) -> None:  # hundreds of requests an iteration would bury the run lines on stderr
+        pass
+
+
+class StaticServer:
+    """A benchmark's files served from this machine, on a free port."""
+
+    def __init__(self, root: Path):
+        handler = functools.partial(QuietHandler, directory=str(root))
+        self.httpd = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
+        self.thread = threading.Thread(target=self.httpd.serve_forever, daemon=True)
+
+    def __enter__(self):
+        self.thread.start()
+        return self
+
+    def __exit__(self, *exc):
+        self.httpd.shutdown()
+        self.httpd.server_close()
+
+    def url(self, path: str) -> str:
+        return f"http://127.0.0.1:{self.httpd.server_address[1]}{path}"
+
+
+def speedometer_score(m, server: StaticServer, iterations: int) -> float:
+    import harness
+
+    m.navigate(server.url(f"/index.html?startAutomatically&iterationCount={iterations}"))
+    limit = SPEEDOMETER_ITERATION_S * iterations
+    if not harness.wait_until(lambda: m.execute(SPEEDOMETER)["ended"], limit, interval=5.0):
+        raise MeasureError(f"Speedometer did not end {iterations} iterations in {limit} s: {m.execute(SPEEDOMETER)}")
+    state = m.execute(SPEEDOMETER)
+    score = state["score"]
+    # An error ends it early; a score that is not a number comes back as null.
+    if state["done"] < iterations or not isinstance(score, (int, float)) or not math.isfinite(score):
+        raise MeasureError(f"Speedometer ended without a score for {iterations} iterations: {state}")
+    return float(score)
+
+
 def startup_ms(m) -> float:
     import harness
 
@@ -126,7 +238,7 @@ def startup_ms(m) -> float:
     return float(info["restored"] - info["process"])
 
 
-def one_run(engine: str, tabs: list[int], server) -> dict:
+def one_run(engine: str, tabs: list[int], server, speedometer: tuple | None = None) -> dict:
     import harness
 
     os.environ["NULAVIO_ENGINE"] = engine
@@ -157,6 +269,10 @@ def one_run(engine: str, tabs: list[int], server) -> dict:
             out[f"pss_mib_{count}_tabs"] = pss / 1024
             out[f"processes_{count}_tabs"] = len(pids)
             out[f"unreadable_{count}_tabs"] = unreadable
+        if speedometer:  # in a start of its own: the tabs' memory above is not read after it, nor it beside them
+            session.stop()
+            m = session.restart()
+            out["speedometer3_score"] = speedometer_score(m, *speedometer)
         return out
     finally:
         session.cleanup()
@@ -168,12 +284,16 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--runs", type=int, default=5)
     parser.add_argument("--tabs", type=int, nargs="+", default=[1, 10])
     parser.add_argument("--out", type=Path)
+    parser.add_argument("--speedometer", action="store_true", help="also Speedometer 3.1, pinned and served locally")
+    parser.add_argument("--speedometer-iterations", type=int, default=3)
     args = parser.parse_args(argv)
     build = os.environ.get("NULAVIO_ENGINE")
     if not build:
         parser.error("NULAVIO_ENGINE names the build to measure")
     if args.runs < 1 or any(count < 1 for count in args.tabs) or len(set(args.tabs)) != len(args.tabs):
         parser.error("--runs and each of --tabs must be at least 1, and --tabs without repeats")
+    if args.speedometer and args.speedometer_iterations < 1:
+        parser.error("--speedometer-iterations must be at least 1")
     import harness
 
     results = {"build": build, "baseline": args.baseline_engine, "runs": [], "metrics": {}}
@@ -183,10 +303,14 @@ def main(argv: list[str] | None = None) -> int:
             args.out.write_text(json.dumps(results, indent=1) + "\n", encoding="utf-8")
 
     try:
-        with harness.FixtureServer() as server:
+        with contextlib.ExitStack() as stack:
+            server = stack.enter_context(harness.FixtureServer())
+            speedometer = None
+            if args.speedometer:  # a server only for the benchmark's own files, and only when it runs
+                speedometer = (stack.enter_context(StaticServer(pinned("speedometer"))), args.speedometer_iterations)
             for run in range(args.runs):
                 for side, engine in (("build", build), ("baseline", args.baseline_engine)):
-                    measured = one_run(engine, args.tabs, server)
+                    measured = one_run(engine, args.tabs, server, speedometer)
                     results["runs"].append({"run": run, "side": side, **measured})
                     print(f"run {run} {side}: {measured}", file=sys.stderr)
                     write()
