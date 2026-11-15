@@ -870,7 +870,7 @@ class WindowUI {
     }
     const block = wanted ? this.#immersiveBlock(win) : "";
     root.toggleAttribute("nulavio-immersive", wanted && !block);
-    const pin = state.bar.querySelector(".nv-band-pin");
+    const pin = win.document.querySelector(".nv-band-pin"); // also where customizing put the band's widget
     if (!wanted && pin && state.holds.delete(pin)) {
       pin.setAttribute("aria-pressed", "false"); // the mode turned off: a pin does not wait for the next time
     }
@@ -903,6 +903,11 @@ class WindowUI {
     }
     pin.setAttribute("aria-pressed", String(pinned));
     this.#applyImmersive(win);
+    if (!pinned && win.document.getElementById("navigator-toolbox")?.matches(":focus-within")) {
+      // A click or a tap left the keyboard on the pin, which would keep the toolbar shown: the page takes it back,
+      // as a click outside the toolbar gives it (#239).
+      win.gBrowser.selectedBrowser.focus();
+    }
   }
 
   /** A tab opened in the background, with the mode on: the tab list at the side (or the toolbar, with the tabs on

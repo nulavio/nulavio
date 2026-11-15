@@ -315,7 +315,8 @@
     background: color-mix(in srgb, currentColor 14%, transparent);
     border-color: var(--nv-color-band-rule);
   }
-  :root[nulavio-immersive]:not([inFullscreen], [inDOMFullscreen], [customizing]) #nulavio-band .nv-band-pin {
+  /* Not on the first run's stage, which shows the band and the page alone (ADR 0010, decision 5). */
+  :root[nulavio-immersive]:not([inFullscreen], [inDOMFullscreen], [customizing], [nulavio-stage]) #nulavio-band .nv-band-pin {
     display: inline-grid;
   }
   @media (prefers-contrast) or (forced-colors: active) {
@@ -324,6 +325,9 @@
   }
   @media (forced-colors: active) {
     .nv-band-row .nv-band-pin::before { forced-color-adjust: none; background-color: CanvasText; }
+    /* Pressed: the system's mark of a selected item (docs/design/accessibility.md), not only a thicker edge. */
+    .nv-band-row .nv-band-pin[aria-pressed="true"] { background: SelectedItem !important; color: SelectedItemText !important; }
+    .nv-band-row .nv-band-pin[aria-pressed="true"]::before { background-color: SelectedItemText; }
   }
   .nv-band-row :is(.nv-band-pause, .nv-band-assistant-pause) { --band-glyph: url("resource://builtin-addons/nulavio-shell/shared/icons/pause.svg"); }
   .nv-band-row :is(.nv-band-stop, .nv-band-task-stop) { --band-glyph: url("resource://builtin-addons/nulavio-shell/shared/icons/stop.svg"); }

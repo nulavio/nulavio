@@ -738,14 +738,25 @@ class ImmersiveTest(unittest.TestCase):
         self.assertEqual((pin["shown"], pin["pressed"]), (True, "false"), pin)
         self.assertTrue(pin["label"], pin)
         self.assertGreaterEqual(min(pin["size"]), 24, pin)
+        # Not on the first run's stage, which shows the band and the page alone (ADR 0010, decision 5).
+        self.m.chrome("document.documentElement.setAttribute('nulavio-stage', 'layout');")
+        try:
+            self.assertFalse(self.m.chrome(PIN)["shown"], "the pin is on the first run's stage")
+        finally:
+            self.m.chrome("document.documentElement.removeAttribute('nulavio-stage');")
         self.m.chrome(PRESS_PIN)
         self.assertTrue(harness.wait_until(lambda: self.window()["hold"] == "tabs toolbar", 10), self.window())
         self.assertTrue(self.settled(True)["toolbar"])
         self.assertTrue(harness.wait_until(lambda: self.m.chrome(PARTS)["tabs"]["shown"], 6), self.m.chrome(PARTS))
         self.assertEqual(self.m.chrome(PIN)["pressed"], "true")
         self.shoot_window("18-pinned")
-        # Pressed again: both leave, as they do when the pointer goes.
-        self.m.chrome(PRESS_PIN)
+        # Pressed again with a real click (the button takes the keyboard): both leave once the pointer goes.
+        spot = self.m.chrome(
+            "const b = document.querySelector('#nulavio-band .nv-band-pin').getBoundingClientRect();"
+            "return [b.left + b.width / 2, b.top + b.height / 2];"
+        )
+        self.m.chrome(CLICK_AT, [spot])
+        self.m.chrome(AWAY)
         self.assertTrue(harness.wait_until(lambda: self.window()["hold"] is None, 10), self.window())
         self.assertFalse(self.settled(False)["toolbar"])
         self.assertTrue(harness.wait_until(lambda: not self.m.chrome(PARTS)["tabs"]["shown"], 6), self.m.chrome(PARTS))
