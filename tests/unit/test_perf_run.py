@@ -41,6 +41,18 @@ class PerfStatisticsTest(unittest.TestCase):
         self.assertIn("+10.0 %", text)
 
 
+class SettledMemoryTest(unittest.TestCase):
+    def test_readings_go_on_until_two_in_a_row_agree(self):
+        values = iter([900, 640, 505, 500, 499])
+        readings = perf_run.settled(lambda: (next(values), "x"), wait=lambda: None)
+        self.assertEqual([r[0] for r in readings], [900, 640, 505, 500])
+
+    def test_a_measure_that_never_settles_is_an_error(self):
+        values = iter([100, 200, 100, 200, 100, 200, 100, 200])
+        with self.assertRaises(perf_run.MeasureError):
+            perf_run.settled(lambda: (next(values),), wait=lambda: None)
+
+
 class FrameMetricsTest(unittest.TestCase):
     def test_each_scene_gets_its_median_interval_per_run_and_side(self):
         run = {"raw": {"tab_switch": [[16.0, 17.0], [18.0]], "sidebar_collapse": []}, "new_tab_poll_ms": [120.0, 140.0]}
