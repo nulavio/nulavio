@@ -50,14 +50,22 @@ only what the measure needs: Marionette, no default-browser question and no firs
 page would load into the first tab). Everything else is Firefox's own default. It runs the same startup, memory
 and benchmark measures; the frame-time scenes are Nulavio's own and run on the two Nulavio builds only.
 
+With --cli, the tools the browser runs for its pages (nulavio-tools/bin/nulavio next to each Nulavio engine, started
+by the Shell for the Vault, the AI Bridge, temporary profiles and the KDE integrations): the median wall time of 20
+calls each of `nulavio --version` and `nulavio vault api` asking for its capabilities, from a throwaway HOME
+(cli_version_ms, cli_vault_capabilities_ms). With --fingerprinting-cost, every benchmark also runs on the Nulavio sides in
+a start of its own with the fingerprinting protections off (privacy.fingerprintingProtection and Nulavio's overrides, set
+from user.js again at the next start): <benchmark>_without_fingerprinting, and <benchmark>_fingerprinting_cost_pct, what
+the protections take off the score (#79 adds protections to that list).
+
 .github/workflows/perf.yml runs it on each published release, against the release before it and Firefox
 (scripts/perf/fetch_releases.py fetches both and checks them against their signed SHA256SUMS): report only, the
 table in the job summary and the JSON in a 90-day artifact.
 
 The JSON keeps every run and is written after each one; the table gives each side's median, the build's change
 against the baseline with its 95 % bootstrap interval (from 5 runs a side; "intervals" in the JSON: a change whose interval
-holds 0 is not told apart from noise) (and Firefox's median, with --firefox). What it does not measure yet (#80): the
-fingerprinting cost, the tools CLI, and a cold start.
+holds 0 is not told apart from noise) (and Firefox's median, with --firefox). What it does not measure yet (#80): a
+cold start.
 """
 
 from __future__ import annotations
@@ -239,7 +247,8 @@ def table(results: dict) -> str:
     fmt = lambda v: "-" if v is None else f"{v:.1f}"  # noqa: E731
     for name, sides in results["metrics"].items():
         build, baseline = sides["build"], sides["baseline"]
-        delta, spread = change(build, baseline), interval(build, baseline)
+        # A measure that is already a percentage (a cost) is compared by its two medians, not as a change of a change.
+        delta, spread = (None, None) if name.endswith("_pct") else (change(build, baseline), interval(build, baseline))
         rows.append(
             (
                 name,
@@ -362,6 +371,64 @@ def speedometer_score(m, server: StaticServer, iterations: int) -> float:
     if state["done"] < iterations or not isinstance(score, (int, float)) or not math.isfinite(score):
         raise MeasureError(f"Speedometer ended without a score for {iterations} iterations: {state}")
     return float(score)
+
+
+CLI_SAMPLES = 20
+# The engine's fingerprinting protections as Nulavio's profile sets them (baseline.js: ETP Strict turns the first on, the
+# overrides are Nulavio's own), switched off for one start; user.js sets them again at the next.
+FINGERPRINTING_OFF = (
+    "Services.prefs.setBoolPref('privacy.fingerprintingProtection', false);"
+    " Services.prefs.setBoolPref('privacy.fingerprintingProtection.pbmode', false);"
+    " Services.prefs.setStringPref('privacy.fingerprintingProtection.overrides', '');"
+)
+WITHOUT_FINGERPRINTING = "_without_fingerprinting"
+
+
+PROFILE_DIR = "return Services.dirsvc.get('ProfD', Ci.nsIFile).path;"
+
+
+def without_fingerprinting(score):
+    """A benchmark run with the fingerprinting protections off for this start: only in a throwaway profile (under the
+    temporary directory, as GeckoProfileSession makes them), which then loads only the benchmark's loopback pages. A named
+    exception to "never turn a protection off" (docs/architecture/performance.md, tests/AGENTS.md)."""
+
+    def run(m) -> float:
+        profile = Path(m.chrome(PROFILE_DIR)).resolve()
+        if not profile.is_relative_to(Path(tempfile.gettempdir()).resolve()):
+            raise MeasureError(f"the fingerprinting protections are turned off only in a throwaway profile, not {profile}")
+        m.chrome(FINGERPRINTING_OFF)
+        return score(m)
+
+    return run
+
+
+def fingerprinting_costs(out: dict) -> dict:
+    """For each benchmark measured both ways: how much of its score the protections take, in % (+5: 5 % lower with them)."""
+    costs = {}
+    for name, value in out.items():
+        without = out.get(name + WITHOUT_FINGERPRINTING)
+        if isinstance(value, (int, float)) and isinstance(without, (int, float)) and without:
+            costs[f"{name}_fingerprinting_cost_pct"] = (without - value) / without * 100
+    return costs
+
+
+def cli_ms(engine: str, samples: int = CLI_SAMPLES) -> dict:
+    """Median wall time of the tools next to `engine`, as the Shell starts them (a JSON request on stdin)."""
+    tool = Path(engine).parent / "nulavio-tools" / "bin" / "nulavio"
+    if not tool.exists():
+        raise MeasureError(f"no tools next to the engine: {tool}")
+    calls = {"cli_version_ms": (["--version"], b""), "cli_vault_capabilities_ms": (["vault", "api"], b'{"op": "capabilities"}')}
+    out = {}
+    with tempfile.TemporaryDirectory(prefix="nulavio-perf-cli-") as home:
+        env = {"HOME": home, "NULAVIO_HOME": str(Path(home) / "nulavio"), "PATH": "/usr/bin:/bin", "LANG": "C.UTF-8"}
+        for name, (args, stdin) in calls.items():
+            times = []
+            for _ in range(samples):
+                started = time.perf_counter()
+                subprocess.run([str(tool), *args], input=stdin, env=env, capture_output=True, check=True, timeout=60)
+                times.append((time.perf_counter() - started) * 1000)
+            out[name] = statistics.median(times)
+    return out
 
 
 def finite(name: str, value) -> float:
@@ -600,7 +667,13 @@ class FirefoxSession:
 
 
 def one_run(
-    engine: str, tabs: list[int], server, benchmarks: tuple = (), firefox: bool = False, require_sandbox: bool = False
+    engine: str,
+    tabs: list[int],
+    server,
+    benchmarks: tuple = (),
+    firefox: bool = False,
+    require_sandbox: bool = False,
+    cli: bool = False,
 ) -> dict:
     """One fresh profile: its two starts, the tabs' memory, then each of `benchmarks` ((name, score of a Marionette
     session)) in a start of its own. `engine` is a Nulavio build, or with `firefox` the Firefox binary."""
@@ -651,9 +724,14 @@ def one_run(
         if require_sandbox and out["sandbox"] != "on":
             raise MeasureError(f"the content sandbox is not fully on: {out['sandbox']}")
         for name, score in benchmarks:  # in a start of its own: no measure carries another's processes
+            if firefox and name.endswith(WITHOUT_FINGERPRINTING):
+                continue  # stock Firefox has none of these protections on
             session.stop()
             m = session.restart()
             out[name] = score(m)
+        out.update(fingerprinting_costs(out))
+        if cli and not firefox:
+            out.update(cli_ms(engine))
         return out
     finally:
         session.cleanup()
@@ -671,6 +749,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--motionmark", action="store_true", help="also MotionMark 1.3.2, pinned and served locally")
     parser.add_argument("--frames", action="store_true", help="also frame time (scripts/research/frame_scene.py, on Xvfb)")
     parser.add_argument("--firefox", action="store_true", help="also stock Firefox 160.0 as a third side, pinned")
+    parser.add_argument("--cli", action="store_true", help="also the tools the browser runs (nulavio-tools), wall time")
+    parser.add_argument(
+        "--fingerprinting-cost", action="store_true", help="also each benchmark with the fingerprinting protections off"
+    )
     parser.add_argument(
         "--require-sandbox", action="store_true", help="fail a run whose content processes are not in the full sandbox"
     )
@@ -682,6 +764,8 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--runs and each of --tabs must be at least 1, and --tabs without repeats")
     if args.speedometer and args.speedometer_iterations < 1:
         parser.error("--speedometer-iterations must be at least 1")
+    if args.fingerprinting_cost and not (args.speedometer or args.jetstream or args.motionmark):
+        parser.error("--fingerprinting-cost measures the benchmarks: give --speedometer, --jetstream or --motionmark")
     import harness
 
     results = {"build": build, "baseline": args.baseline_engine, "runs": [], "metrics": {}}
@@ -707,6 +791,8 @@ def main(argv: list[str] | None = None) -> int:
                 benchmarks.append(("jetstream3_score", functools.partial(jetstream_score, server=serve("jetstream"))))
             if args.motionmark:
                 benchmarks.append(("motionmark_score", functools.partial(motionmark_score, server=serve("motionmark"))))
+            if args.fingerprinting_cost:
+                benchmarks += [(name + WITHOUT_FINGERPRINTING, without_fingerprinting(score)) for name, score in benchmarks]
             sides = [("build", build), ("baseline", args.baseline_engine)]
             if args.firefox:
                 sides.append(("firefox", str(pinned("firefox") / "firefox")))
@@ -719,6 +805,7 @@ def main(argv: list[str] | None = None) -> int:
                         tuple(benchmarks),
                         firefox=side == "firefox",
                         require_sandbox=args.require_sandbox,
+                        cli=args.cli,
                     )
                     results["runs"].append({"run": run, "side": side, **measured})
                     print(f"run {run} {side}: {measured}", file=sys.stderr)
@@ -734,7 +821,10 @@ def main(argv: list[str] | None = None) -> int:
     if args.frames:
         results["frames"] = frame_times(build, args.baseline_engine, args.runs)
         results["metrics"].update(frame_metrics(results["frames"]))
-    results["intervals"] = {name: interval(sides["build"], sides["baseline"]) for name, sides in results["metrics"].items()}
+    results["intervals"] = {
+        name: None if name.endswith("_pct") else interval(sides["build"], sides["baseline"])
+        for name, sides in results["metrics"].items()
+    }
     write()
     if "error" in results.get("frames", {}):  # what it measured is in the JSON; the command still fails
         print(table(results))

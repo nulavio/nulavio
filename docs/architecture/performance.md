@@ -18,6 +18,8 @@ The table gives each side's median and the build's change against the baseline, 
 
 **A change whose interval holds 0 is not told apart from noise.** With the same engine on both sides, 5 runs give intervals of about ±3 to ±11 % for startup and ±9 % for memory (#361). Smaller changes need more runs.
 
+`--fingerprinting-cost` turns the engine's fingerprinting protections off for one start. That is a named exception to "never turn a protection off", for this measure only. It applies only in a throwaway profile under the temporary directory, checked before anything is turned off. That profile then loads only the benchmark's own pages from loopback, and its `user.js` sets the protections again at its next start. A test keeps the switch from being used anywhere else.
+
 All of it runs headless with software rendering. It is a regression signal for this project, not a measure of a person's hardware.
 
 ## When it runs
