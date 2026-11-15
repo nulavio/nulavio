@@ -49,10 +49,13 @@ this.nulavioLayout = class extends ExtensionAPI {
         }),
         // #157: Ctrl+Shift+L, from the background page, in the tab the key was pressed in.
         copyLinkToHighlight: call(tabId => {
+          // A tab being moved to another window has no wrapper for that moment: nothing to copy from.
           const tab = context.extension.tabManager.get(tabId);
-          const win = tab.window;
-          const say = key => win.A11yUtils?.announce({ raw: context.extension.localizeMessage(key) }).catch(() => {});
-          return layout.copyLinkToHighlight(tab.nativeTab.linkedBrowser, say);
+          if (!tab) {
+            return false;
+          }
+          const say = key => tab.window?.A11yUtils?.announce({ raw: context.extension.localizeMessage(key) }).catch(() => {});
+          return layout.copyLinkToHighlight(tab.nativeTab?.linkedBrowser ?? null, say);
         }),
         // From Settings (a page) or from the key (the background page, with the tab it was pressed in).
         setImmersive: call((on, tabId) => {

@@ -649,24 +649,27 @@ export const NulavioLayout = {
    * Ctrl+Shift+L (#157): the engine's own "Copy Link to Highlight" for the tab's selection, or for the
    * highlight the page already shows, as the page menu offers it. The link comes from the page's
    * ContextMenu actor (a `:~:text=` directive in its fragment, after the page's own anchor if it has one), the same one the menu item copies; nothing else is read or sent.
-   * The engine does not offer it in the source viewer, and neither does this. `say(key)` announces the outcome.
+   * The engine does not offer it in the source viewer or in the PDF viewer (its text layer would give a link
+   * the viewer does not follow), and neither does this. `say(key)` announces the outcome.
    */
   async copyLinkToHighlight(browser, say = () => {}) {
+    const announce = typeof say === "function" ? say : () => {};
     const global = browser?.browsingContext?.currentWindowGlobal;
     let url = null;
-    if (global && !browser.currentURI?.schemeIs("view-source")) {
+    const pdf = global?.documentPrincipal?.originNoSuffix === "resource://pdf.js";
+    if (global && !pdf && !browser.currentURI?.schemeIs("view-source")) {
       try {
         url = await global.getActor("ContextMenu").getTextDirective();
       } catch (e) {
-        url = null; // a page the engine makes no text fragment for (the PDF viewer, an error page)
+        url = null; // a page the engine makes no text fragment for (an error page, a document going away)
       }
     }
     if (typeof url !== "string" || !URL.parse(url)?.hash.includes(":~:text=")) {
-      say("linkHighlightNothing");
+      announce("linkHighlightNothing");
       return false;
     }
     lazy.ClipboardHelper.copyString(url, global);
-    say("linkHighlightCopied");
+    announce("linkHighlightCopied");
     return true;
   },
 

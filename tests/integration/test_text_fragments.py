@@ -227,6 +227,23 @@ class TextFragmentsTest(unittest.TestCase):
         self.assertTrue(copied, f"Ctrl+Shift+L copied nothing; it said {said!r}")
         self.assertIn("#intro:~:text=", copied)
 
+    def test_02d_in_the_pdf_viewer_nothing_is_copied(self):
+        """The engine offers no link to a highlight in its PDF viewer (its text layer would give a link the viewer does
+        not follow); Ctrl+Shift+L does not copy one either (independent review of #329)."""
+        self.m.navigate(self.server.url("/text.pdf"))
+        layer = "return [...document.querySelectorAll('.textLayer span')].some(s => s.textContent.includes('frase'));"
+        self.assertTrue(harness.wait_until(lambda: self.m.execute(layer), 20), "the PDF viewer drew no text layer")
+        self.m.chrome("Services.clipboard.emptyClipboard(Ci.nsIClipboard.kGlobalClipboard);")
+        self.m.execute(
+            "const span = [...document.querySelectorAll('.textLayer span')].find(s => s.textContent.includes('frase'));"
+            "const r = document.createRange(); r.selectNodeContents(span);"
+            "getSelection().removeAllRanges(); getSelection().addRange(r);"
+        )
+        self.assertIn("frase", self.m.execute("return getSelection().toString();"))
+        said = self.press_ctrl_shift_l()
+        self.assertIn(said, NOTHING, "the shortcut did not say there was nothing to copy")
+        self.assertIsNone(self.m.chrome(CLIPBOARD), "a link was copied from the PDF viewer")
+
     def test_03_the_highlight_is_readable_in_a_light_and_a_dark_page(self):
         link = getattr(type(self), "link", None)
         if link is None:
