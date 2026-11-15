@@ -640,6 +640,14 @@ class PackagingTest(unittest.TestCase):
         test = (ROOT / "scripts" / "release" / "test_signed_repo.sh").read_text(encoding="utf-8")
         self.assertIn("tampered", test)
 
+    def test_kms_setup_refuses_a_role_whose_trust_is_not_the_reviewed_file(self):
+        # #326: the role is never rewritten by the script, so a wider trust left in the account must stop it.
+        setup = (ROOT / "scripts" / "release" / "kms_setup.sh").read_text(encoding="utf-8")
+        exists = setup[setup.index('if aws iam get-role --role-name "$role"') : setup.index("    aws iam create-role")]
+        self.assertIn("--query Role.AssumeRolePolicyDocument", exists)
+        self.assertIn('"$work/trust-live.json" "$work/release-signing-trust.json" ||', exists)
+        self.assertIn("exit 1", exists)
+
     def test_kms_signing_passes_credentials_by_name_only(self):
         sign = (ROOT / "scripts" / "release" / "sign_repo.sh").read_text(encoding="utf-8")
         # AWS credentials reach the signing container as inherited variables (podman -e NAME), never as
