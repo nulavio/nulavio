@@ -1056,6 +1056,19 @@ class TamperTest(VaultTestCase):
         tampered.lock()
         self.assertEqual(Coordinator(Vault.load(vault.path)).unlock_password(PASSWORD), State.UNLOCKED)
 
+    def test_the_record_flag_is_set_on_save_and_cannot_be_taken_off(self):
+        # U-T21 (storage.py): a key file that says its volume holds the record is refused without it.
+        vault, _, _ = self.new_vault()
+        vault.save()
+        meta = json.loads(vault.path.read_text())
+        self.assertIs(meta["recorded"], True)
+        del meta["recorded"]
+        vault.path.write_text(json.dumps(meta))
+        vault.lock()
+        stripped = Vault.load(vault.path)
+        self.assertEqual(Coordinator(stripped).unlock_password(PASSWORD), State.ERROR)
+        self.assert_locked(stripped)
+
     def test_a_method_change_does_not_sign_a_tampered_file_again(self):
         # Audit V4: re-inserting a revoked envelope, then any method change, made it valid again.
         vault, _, _ = self.new_vault(recovery=True)
