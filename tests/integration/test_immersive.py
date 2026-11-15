@@ -708,10 +708,31 @@ class ImmersiveTest(unittest.TestCase):
         self.assertFalse(self.settled(False)["toolbar"])
         self.assertTrue(state["below"], state)
         self.assertGreater(state["band"], 40, state)  # two rows of the band
-        self.assertGreaterEqual(state["tabs"], state["band"], state)  # the tab list starts under the taller band
+        # The tab list starts under the taller band, once its top has moved there (it moves with a transition).
+        under = harness.wait_until(lambda: self.m.chrome(lines)["tabs"] >= self.m.chrome(lines)["band"], 5)
+        self.assertTrue(under, self.m.chrome(lines))
         self.assertTrue(self.m.chrome(inside), "the name is over its neighbours on its own line")
         self.shoot_window("16-two-lines")
+        # The row itself too long for one line (as a long profile name and a few seals make it): the site would go to a
+        # third line, under the band and over the page, so the toolbar stays instead (review of #342). A test sheet
+        # gives the profile's chip that width; a small resize has the window measure again, as a new name does.
+        wide = (
+            "const sheet = document.createElementNS('http://www.w3.org/1999/xhtml', 'style'); sheet.id = 'nv-test-wide';"
+            "sheet.textContent = '#nulavio-band .nv-band-identity { min-inline-size: 720px !important; }';"
+            "document.documentElement.append(sheet);"
+        )
+        self.m.chrome(wide)
+        self.m.chrome("window.resizeTo(770, 800);")
+        try:
+            self.assertTrue(harness.wait_until(lambda: self.window()["off"] == "fit", 10), (self.window(), self.m.chrome(lines)))
+            self.assertFalse(self.m.chrome(lines)["two"], "two lines drawn while the row needs two by itself")
+            self.assertTrue(self.settled(True)["toolbar"])
+        finally:
+            self.m.chrome("document.getElementById('nv-test-wide')?.remove(); window.resizeTo(760, 800);")
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome(lines)["two"], 10), (self.window(), self.m.chrome(lines)))
         self.m.chrome("window.resizeTo(520, 800);")  # as narrow as the window goes
+        narrowest = self.m.chrome("return innerWidth;")
+        self.assertLess(narrowest, 840, f"this desktop's narrowest window ({narrowest} px) fits the longest name on two lines")
         self.m.navigate(f"http://{longest}:{self.server.port}/page/Imersivo")
         self.assertTrue(harness.wait_until(lambda: self.window()["off"] == "fit", 10), self.window())
         self.assertTrue(self.settled(True)["toolbar"])
@@ -719,6 +740,7 @@ class ImmersiveTest(unittest.TestCase):
         self.m.chrome("window.resizeTo(1500, 800);")
         self.assertTrue(harness.wait_until(lambda: self.window()["on"], 10), self.window())
         self.assertFalse(self.settled(False)["toolbar"])
+        self.assertFalse(self.m.chrome(lines)["two"], "two lines left on a window wide enough for one")
 
     def test_17_an_ai_workspace_keeps_the_whole_window(self):
         """ADR 0009, decision 6 (#142): a window an agent drives shows everything, whatever the switch says."""

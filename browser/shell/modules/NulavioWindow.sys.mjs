@@ -822,6 +822,20 @@ class WindowUI {
         return false;
       }
     }
+    if (win.document.documentElement.hasAttribute("nulavio-immersive-two-lines")) {
+      // Two lines: the rest of the row on the first, the site alone on the second, both inside the band. Were
+      // the row itself to need two lines (a long profile name, seals, a narrow window), the site would go to a
+      // third, under the band and over the page (review of #342).
+      const band = origin.closest("#nulavio-band")?.getBoundingClientRect();
+      if (!band || room.bottom > band.bottom + 0.5) {
+        return false;
+      }
+      for (const item of origin.parentElement.children) {
+        if (item !== origin && item.checkVisibility() && item.getBoundingClientRect().bottom > room.top + 0.5) {
+          return false;
+        }
+      }
+    }
     return true;
   }
 
