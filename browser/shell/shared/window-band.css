@@ -668,3 +668,16 @@
     }
   }
 }
+
+/* #79: "use my time zone on this site", a row the Shell adds to the engine's trust panel under its own
+   tracking-protection switch (NulavioFingerprinting.sys.mjs). It takes that section's spacing, so the two read
+   as one list of switches for the site. */
+#nulavio-trustpanel-timezone {
+  margin-block: var(--space-large);
+  margin-inline: var(--panel-menuitem-margin-inline);
+  padding-inline: var(--panel-menuitem-padding-inline);
+
+  > hbox {
+    justify-content: space-between;
+  }
+}

@@ -118,10 +118,10 @@ UPDATE_CHECKS = {
     "extensions.systemAddon.update.url": "SystemAddons",
 }
 FINGERPRINTING = "privacy.fingerprintingProtection.overrides"  # docs/research/fingerprinting.md
-# Changing these breaks sites or accessibility; they belong to an opt-in mode, never to the default.
+# Changing these breaks sites or accessibility; they belong to an opt-in mode, never to the default. The time
+# zone left this list on 2026-11-14 by the maintainer's decision, with a per-site switch (ADR 0017).
 NEVER_BY_DEFAULT = {
     "AllTargets",
-    "JSDateTimeUTC",
     "JSLocale",
     "CSSPrefersColorScheme",
     "CSSPrefersReducedMotion",

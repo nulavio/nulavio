@@ -15,6 +15,9 @@ engine, in a patch or in a default that weakens it fails a run:
 * a font the person installed is not visible to pages (patch 0010; Fedora and
   Ubuntu, the distributions the engine has font lists for);
 * with WebGL available, the graphics card's model is not given out;
+* a page reads UTC as its time zone; a site with "use my time zone on this
+  site" on, in the shield's panel, reads the system's, with its subdomains
+  and nothing else;
 * a site the person exempts from tracking protection gets the plain values,
   and only that site.
 
@@ -45,6 +48,33 @@ ROOT = Path(__file__).resolve().parents[2]
 PROBE_FONT = "Nulavio Probe Font"  # made for the test, installed only in the throwaway home
 ALLOW_LIST = 'ChromeUtils.importESModule("resource://gre/modules/ContentBlockingAllowList.sys.mjs").ContentBlockingAllowList'
 OVERRIDES_PREF = "privacy.fingerprintingProtection.overrides"
+GRANULAR_PREF = "privacy.fingerprintingProtection.granularOverrides"
+SYSTEM_ZONE = ("America/Sao_Paulo", 180)  # the session's TZ: the name, and minutes behind UTC in January
+# Sites with a registrable domain, which the per-site switch needs (127.0.0.1 and localhost have none).
+ZONE_SITES = ("zone-one.example", "www.zone-one.example", "zone-two.example")
+PANEL = """
+const done = arguments[arguments.length - 1];
+(async () => {
+  const panel = () => document.getElementById("trustpanel-popup");
+  if (panel()?.state !== "open") {
+    await gTrustPanelHandler.showPopup();
+    await new Promise(r => (panel().state === "open" ? r() : panel().addEventListener("popupshown", r, { once: true })));
+  }
+  const row = document.getElementById("nulavio-trustpanel-timezone");
+  const toggle = row?.querySelector("moz-toggle");
+  const state = row && { shown: !row.hidden && row.checkVisibility(), on: toggle.pressed,
+    label: row.querySelector("label.trustpanel-header").textContent,
+    name: toggle.buttonEl.getAttribute("aria-label"),  // the widget moves the switch's name to its button
+    description: document.getElementById("nulavio-trustpanel-timezone-description").textContent,
+    after: row.previousElementSibling?.id };
+  if (arguments[0] === "press" && toggle) {
+    toggle.click();  // the switch itself: it closes the panel and reloads the page
+  } else if (arguments[0] !== "keep") {
+    panel().hidePopup();
+  }
+  return state;
+})().then(done, e => done({ error: String(e) }));
+"""
 # What Nulavio relies on from the engine's own set: if Mozilla drops one, the claim that names it goes too.
 RELIED_ON = {"CanvasRandomization", "FontVisibilityLangPack", "NavigatorHWConcurrencyTiered", "ScreenAvailToResolution"}
 TARGETS = """
@@ -103,6 +133,7 @@ class FingerprintingTest(unittest.TestCase):
     def setUpClass(cls):
         cls.server = harness.FixtureServer().__enter__()
         cls.session = harness.GeckoProfileSession(name="Pessoal")
+        cls.session.env["TZ"] = SYSTEM_ZONE[0]
         # A font "the person installed": in the home's font directory, in no distribution's list.
         fonts = Path(cls.session.env["XDG_DATA_HOME"]) / "fonts"
         fonts.mkdir(parents=True)
@@ -152,6 +183,27 @@ class FingerprintingTest(unittest.TestCase):
             )
             on = "return Services.prefs.getBoolPref('privacy.fingerprintingProtection');"
             self.assertTrue(harness.wait_until(lambda: self.m.chrome(on), 10), "the protection did not come back")
+
+    def panel(self, then: str = "close") -> dict:
+        """The time zone row of the shield's panel for the page shown. Then the panel is closed, kept open
+        ("keep"), or the row's switch is pressed ("press")."""
+        self.m.set_context("chrome")
+        try:
+            state = self.m.execute_async(PANEL, [then])
+        finally:
+            self.m.set_context("content")
+        self.assertNotIn("error", state or {}, state)
+        return state
+
+    def key(self, value: str) -> None:
+        """One real key press in the browser's own window."""
+        actions = [{"type": "keyDown", "value": value}, {"type": "keyUp", "value": value}]
+        self.m.set_context("chrome")
+        try:
+            self.m.send("WebDriver:PerformActions", {"actions": [{"type": "key", "id": "keyboard", "actions": actions}]})
+            self.m.send("WebDriver:ReleaseActions")
+        finally:
+            self.m.set_context("content")
 
     def arrives(self, script: str, want: str) -> bool:
         return bool(harness.wait_until(lambda: self.m.execute(script) == want, 10))
@@ -260,6 +312,77 @@ class FingerprintingTest(unittest.TestCase):
             self.measure("127.0.0.1")
             self.m.chrome(f"{ALLOW_LIST}.remove(gBrowser.selectedBrowser);")
         self.assertNotEqual(self.measure("127.0.0.1")["canvas"]["pixels"], plain["canvas"]["pixels"])
+
+    def test_09_pages_read_utc_and_a_site_with_the_switch_on_reads_the_systems_time_zone(self):
+        utc, system = {"zone": "Atlantic/Reykjavik", "offset": 0}, dict(zip(("zone", "offset"), SYSTEM_ZONE, strict=True))
+        one, sub, two = ZONE_SITES
+        origins = [f"http://{site}:{self.server.port}" for site in ZONE_SITES]
+        self.m.chrome(
+            "Services.prefs.setStringPref('network.dns.localDomains', arguments[0].join(','));"
+            "Services.prefs.setStringPref('dom.securecontext.allowlist', arguments[0].join(','));"  # the page hashes
+            "for (const origin of arguments[1]) {"
+            "  const principal = Services.scriptSecurityManager.createContentPrincipalFromOrigin(origin);"
+            "  Services.perms.addFromPrincipal(principal, 'https-only-load-insecure', Ci.nsIPermissionManager.ALLOW_ACTION); }",
+            [list(ZONE_SITES), origins],
+        )
+        granular = f"return Services.prefs.getStringPref('{GRANULAR_PREF}', '');"
+        # The page's own Intl and Date: a script run from here has a realm of its own, which keeps the system's.
+        zone = (
+            "return JSON.stringify({ zone: window.Intl.DateTimeFormat().resolvedOptions().timeZone,"
+            " offset: new window.Date(2026, 0, 15, 12).getTimezoneOffset() });"
+        )
+        with self.unprotected():
+            self.assertEqual(self.measure(one)["tz"], system, "the session's time zone did not take: nothing was tested")
+        # By default every page reads UTC, under the engine's name for it.
+        self.assertEqual((self.measure(one)["tz"], self.measure(two)["tz"], self.measure("127.0.0.1")["tz"]), (utc, utc, utc))
+        self.assertEqual(self.m.chrome(granular), "")
+        # A site without a registrable domain cannot have the switch: the engine's per-site list goes by domain.
+        self.assertFalse(self.panel()["shown"])
+        # The switch is in the shield's panel, under the engine's own, off, with a name and an explanation.
+        self.measure(one)
+        row = self.panel()
+        self.record("timezone-row", row)
+        self.assertEqual((row["shown"], row["on"], row["after"]), (True, False, "trustpanel-toggle-section"))
+        self.assertEqual(row["label"], row["name"])
+        self.assertIn("UTC", row["description"])
+        # The keyboard reaches it as it reaches the engine's own switch, and Space presses it. The page then
+        # reloads and reads the system's time zone; so does its subdomain; no other site does.
+        self.panel("keep")
+        focused = "return document.activeElement?.id ?? '';"
+        for _ in range(12):
+            if self.m.chrome(focused) == "nulavio-trustpanel-timezone-toggle":
+                break
+            self.key("\ue015")  # ArrowDown
+        self.assertEqual(self.m.chrome(focused), "nulavio-trustpanel-timezone-toggle", "the arrow keys never reached the switch")
+        self.key(" ")
+        self.assertTrue(self.arrives(zone, json.dumps(system, separators=(",", ":"))), self.m.execute(zone))
+        self.assertEqual(
+            json.loads(self.m.chrome(granular)),
+            [{"firstPartyDomain": one, "thirdPartyDomain": "*", "overrides": "-JSDateTimeUTC"}],
+        )
+        self.assertEqual((self.measure(sub)["tz"], self.measure(two)["tz"]), (system, utc))
+        self.measure(one)
+        row = self.panel()
+        self.assertEqual((row["shown"], row["on"]), (True, True))
+        self.assertNotIn("UTC", row["description"])
+        # Pressed again, with the pointer: UTC again, and the engine's list is empty. Then on again for the rest.
+        self.panel("press")
+        self.assertTrue(self.arrives(zone, json.dumps(utc, separators=(",", ":"))), self.m.execute(zone))
+        self.assertEqual(self.m.chrome(granular), "")
+        self.panel("press")
+        self.assertTrue(self.arrives(zone, json.dumps(system, separators=(",", ":"))), self.m.execute(zone))
+        # Settings lists it with the other site exceptions, and removing it there puts UTC back.
+        listed = "return Services.perms.getAllByTypes(['nulavio-timezone']).map(p => p.principal.origin);"
+        self.assertEqual(self.m.chrome(listed), [f"https://{one}"])
+        self.m.chrome(
+            "const [p] = Services.perms.getAllByTypes(['nulavio-timezone']);"
+            "Services.perms.removeFromPrincipal(p.principal, p.type);"
+        )
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome(granular) == "", 10), self.m.chrome(granular))
+        self.assertEqual(self.measure(one)["tz"], utc)
+        # Nulavio's own pages keep the system's time zone.
+        self.m.navigate(self.m.chrome("return WebExtensionPolicy.getByID('shell@nulavio.net').getURL('newtab/newtab.html');"))
+        self.assertEqual(json.loads(self.m.execute(zone)), system)
 
     def test_08_pages_read_one_screen_size_and_an_exempted_site_reads_the_displays(self):
         constant = {"size": "1920x1080", "avail": "1920x1080", "availAt": "0,0", "device1920": True}
