@@ -244,9 +244,10 @@ class FixtureServer:
             # Google on another site (tests/integration/test_content_filter.py, #220): Analytics, Tag Manager and the
             # two ad tags, each from Google's own name (resolved to this machine by the test), beside a script of
             # the site's own CDN that no list knows. Each path says whose it is: the server keeps paths, not hosts.
+            # Not *.google-analytics.com: the engine's HSTS preload list has it, so plain http never reaches here.
             n, port = query.get("n", "0"), self.port
             scripts = [
-                f"http://www.google-analytics.com:{port}/analytics.js?n={n}",
+                f"http://www.googletagmanager.com:{port}/gtag/js?id=G-NULAVIO&n={n}",  # Analytics (GA4) loads from here
                 f"http://www.googletagmanager.com:{port}/gtm.js?id=GTM-NULAVIO&n={n}",
                 f"http://securepubads.g.doubleclick.net:{port}/tag/js/gpt.js?n={n}",
                 f"http://pagead2.googlesyndication.com:{port}/pagead/js/adsbygoogle.js?n={n}",

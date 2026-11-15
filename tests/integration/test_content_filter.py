@@ -30,12 +30,13 @@ DEFAULT_ON = set(CONFIG["default_on"])
 # EasyList switches hiding by id and class off on 127.0.0.1 and localhost (`@@://127.0.0.1$generichide`), so the
 # fixture is reached by a name the engine resolves to this machine.
 HOST = "nulavio-notice.test"
-# #220 item 3: Google's names on another site, each with the path the fixture page asks it for.
+# #220 item 3: Google on another site, each as (host, path) the fixture page asks for. Analytics (GA4) loads its
+# tag from Tag Manager's name; *.google-analytics.com cannot be reached over plain http (HSTS preload).
 GOOGLE = {
-    "www.google-analytics.com": "/analytics.js",
-    "www.googletagmanager.com": "/gtm.js",
-    "securepubads.g.doubleclick.net": "/tag/js/gpt.js",
-    "pagead2.googlesyndication.com": "/pagead/js/adsbygoogle.js",
+    "Analytics": ("www.googletagmanager.com", "/gtag/js"),
+    "Tag Manager": ("www.googletagmanager.com", "/gtm.js"),
+    "DoubleClick": ("securepubads.g.doubleclick.net", "/tag/js/gpt.js"),
+    "AdSense": ("pagead2.googlesyndication.com", "/pagead/js/adsbygoogle.js"),
 }
 SITE_CDN = "cdn.nulavio-site.test"
 
@@ -205,9 +206,12 @@ class ContentFilterDefaultsTest(unittest.TestCase):
         """#220 item 3: on a site that is not Google's, Analytics, Tag Manager, DoubleClick and AdSense load nothing
         with a new profile's defaults (uBlock Origin's default lists and the engine's tracking protection), while the
         site's own script does. Google's names reach this machine for the test, over plain http with the HTTPS-Only
-        exception a person gives, so nothing leaves it."""
-        hosts = [HOST, SITE_CDN, *GOOGLE]
-        origins = [f"http://{host}:{self.server.port}" for host in hosts[1:]]
+        exception a person gives, so nothing leaves it. The control: with both protections off for the site, each of
+        them does reach the server, so what stops them is the blocking and nothing else. Measured on 160.0-0.4 with
+        one protection at a time: uBlock Origin's lists stop Analytics and Tag Manager, the engine's tracking
+        protection stops DoubleClick and AdSense."""
+        hosts = sorted({HOST, SITE_CDN, *(host for host, _ in GOOGLE.values())})
+        origins = [f"http://{host}:{self.server.port}" for host in hosts if host != HOST]
         grant = (
             "Services.prefs.setStringPref('network.dns.localDomains', args[0].join(','));"
             "for (const o of args[1]) {"
@@ -217,20 +221,55 @@ class ContentFilterDefaultsTest(unittest.TestCase):
         )
         chrome_async(self.m, grant, [hosts, origins])
         self.addCleanup(chrome_async, self.m, "Services.prefs.setStringPref('network.dns.localDomains', args[0]);", [HOST])
+        site = f"http://{HOST}:{self.server.port}"
 
         def load() -> dict[str, bool]:
             type(self).counter += 1
             n = self.counter
-            self.m.navigate(f"http://{HOST}:{self.server.port}/google-third-party?n={n}")
+            self.m.navigate(f"{site}/google-third-party?n={n}")
             asked = lambda path: any(hit.startswith(path) and hit.endswith(f"n={n}") for hit in self.server.hits)  # noqa: E731
             harness.wait_until(lambda: asked("/assets/site.js"), timeout=10)
-            return {"site": asked("/assets/site.js"), **{host: asked(path) for host, path in GOOGLE.items()}}
+            return {"site": asked("/assets/site.js"), **{name: asked(path) for name, (_, path) in GOOGLE.items()}}
 
         # uBlock Origin compiles its lists after the first start: the first loads may come before them.
         blocked = harness.wait_until(lambda: not any(v for k, v in load().items() if k != "site"), timeout=180, interval=2.0)
         seen = load()
-        self.assertTrue(blocked, f"reached the server: {[host for host in GOOGLE if seen[host]]}")
+        self.assertTrue(blocked, f"reached the server: {[name for name in GOOGLE if seen[name]]}")
         self.assertEqual(seen, {"site": True, **dict.fromkeys(GOOGLE, False)})
+
+        # The control: the site trusted in uBlock Origin and given the engine's tracking-protection exception.
+        self.lists_page()
+        trusted = self.m.execute_async(
+            "const done = arguments[arguments.length - 1];"
+            "vAPI.messaging.send('dashboard', {what: 'getWhitelist'}).then(r => {"
+            "  const before = Array.isArray(r.whitelist) ? r.whitelist.join('\\n') : String(r.whitelist ?? '');"
+            "  return vAPI.messaging.send('dashboard', {what: 'setWhitelist', whitelist: before + '\\n' + arguments[0]})"
+            "    .then(() => done({before}));"
+            "}).catch(e => done({error: String(e)}));",
+            [HOST],
+        )
+        self.assertNotIn("error", trusted, trusted)
+        # The engine's own exception, as the shield in the address bar gives it (kept by site, whatever the scheme).
+        allow = (
+            "const { ContentBlockingAllowList } = ChromeUtils.importESModule("
+            "'resource://gre/modules/ContentBlockingAllowList.sys.mjs');"
+            "ContentBlockingAllowList[arguments[0]](gBrowser.selectedBrowser);"
+        )
+        self.m.navigate(f"{site}/page/control")
+        self.m.chrome(allow, ["add"])
+        try:
+            opened = load()
+            self.assertEqual(opened, {"site": True, **dict.fromkeys(GOOGLE, True)}, "with the protections off for the site")
+        finally:
+            self.m.navigate(f"{site}/page/control")
+            self.m.chrome(allow, ["remove"])
+            self.lists_page()
+            self.m.execute_async(
+                "const done = arguments[arguments.length - 1];"
+                "vAPI.messaging.send('dashboard', {what: 'setWhitelist', whitelist: arguments[0]})"
+                ".then(() => done(true), e => done(String(e)));",
+                [trusted["before"]],
+            )
 
     def test_04_a_list_the_person_switches_off_stays_off(self):
         self.lists_page()
