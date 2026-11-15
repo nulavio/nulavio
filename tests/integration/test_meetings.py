@@ -18,6 +18,7 @@ PERSONALISE = (
     'ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioPersonalise.sys.mjs").NulavioPersonalise'
 )
 TRIED = "return gBrowser.selectedBrowser.currentURI.spec;"
+DARK_NOW = "return matchMedia('(prefers-color-scheme: dark)').matches;"
 
 
 @unittest.skipUnless(harness.nulavio_engine(), "the meeting-link choice is the Nulavio build's Shell (NULAVIO_ENGINE)")
@@ -85,6 +86,17 @@ class MeetingLinksTest(unittest.TestCase):
         self.assertEqual([value for value, _ in state["options"]], ["app", "browser"])
         self.assertTrue(all(label.strip() for _, label in state["options"]), state)
         self.assertEqual(state["value"], "app")
+        # For the review: the group in the light and the dark theme (NULAVIO_TEST_ARTIFACTS).
+        folder = harness.artifacts_dir() / "meetings"
+        folder.mkdir(parents=True, exist_ok=True)
+        self.m.execute("document.querySelector('[data-option=\"meetingLinks\"]').scrollIntoView({block: 'center'});")
+        try:
+            for dark in (0, 1):
+                self.m.chrome("Services.prefs.setIntPref('ui.systemUsesDarkTheme', arguments[0]);", [dark])
+                harness.wait_until(lambda want=bool(dark): self.m.execute(DARK_NOW) == want, 10)
+                (folder / f"settings-{'dark' if dark else 'light'}.png").write_bytes(self.m.screenshot_png())
+        finally:
+            self.m.chrome("Services.prefs.clearUserPref('ui.systemUsesDarkTheme');")
 
 
 if __name__ == "__main__":
