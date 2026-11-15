@@ -261,6 +261,17 @@ jobs:
               --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release.yml" --source-ref refs/heads/main >/dev/null
             echo "provenance ok: ${file#"$RUNNER_TEMP"/}"
           done
+      - name: The Flatpak bundle is the attested archive with what the manifest adds, or it is left out (#324)
+        if: needs.flatpak.result == 'success'
+        run: |
+          # Built by Flathub's builder in a job with no attestation: compared, file for file, before it is signed.
+          scripts/ci/apt_install.sh flatpak ostree
+          bundle=$(find "$RUNNER_TEMP/flatpak-bundle" -maxdepth 1 -name '*.flatpak')
+          archive=$(find "$RUNNER_TEMP/rehearsal/packages" -maxdepth 1 -name 'nulavio-*.linux-x86_64.tar.xz')
+          if ! python3 -I scripts/release/check_flatpak_bundle.py --bundle "$bundle" --archive "$archive"; then
+            echo "::error::the Flatpak bundle is not the attested archive with what the manifest adds: this release goes out without it"
+            rm -f "$bundle"
+          fi
       - name: Prepare notes and validate the release before signing or uploading
         env:
           GH_REPOSITORY: ${{ github.repository }}

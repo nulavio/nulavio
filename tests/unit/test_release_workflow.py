@@ -210,6 +210,16 @@ class ReleaseWorkflowTest(unittest.TestCase):
         publish = (RELEASE / "publish_release.sh").read_text(encoding="utf-8")
         self.assertLess(publish.index('cp "$apk" "$apk.cdx.json" "$stage/github/"'), publish.index("sha256sum -- * >SHA256SUMS"))
 
+    def test_the_bundle_is_checked_against_the_attested_archive_before_anything_is_signed(self):
+        # #324: built by Flathub's builder in a job with no attestation; left out when it differs.
+        check = self.publish.index("scripts/release/check_flatpak_bundle.py --bundle")
+        self.assertLess(check, self.publish.index("release_notes.py notes"))  # the notes name only a checked bundle
+        self.assertLess(check, self.publish.index("configure-aws-credentials"))
+        self.assertIn('rm -f "$bundle"', self.publish[check : self.publish.index("release_notes.py notes")])
+        script = (RELEASE / "publish_release.sh").read_text(encoding="utf-8")
+        self.assertIn("check_flatpak_bundle.py", script)
+        self.assertLess(script.index("check_flatpak_bundle.py"), script.index('"$repo/scripts/release/sign_repo.sh"'))
+
     def test_the_flatpak_is_composed_and_linted_as_flathub_does(self):
         self.assertIn("--compose-url-policy=full", self.text)
         self.assertIn("flatpak-builder-lint org.flatpak.Builder repo repo", self.text)
