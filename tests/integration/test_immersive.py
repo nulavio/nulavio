@@ -142,6 +142,11 @@ const tick = () => {
 requestAnimationFrame(tick);
 """
 TRACE_END = "window.nvTrace.on = false; return window.nvTrace.frames;"
+# Two more frames drawn, so the trace's last frame is of the window as it is now. Without it, a trace ended right
+# after a change could end on a frame from before the change (the 160.0-0.6 release run did, on a fast machine).
+TRACE_DRAWN = (
+    "const done = arguments[arguments.length - 1]; requestAnimationFrame(() => requestAnimationFrame(() => done(true)));"
+)
 STILL = "return !document.getAnimations().some(a => a.playState === 'running');"  # no transition running in the window
 # #344: the assistant's panel the journeys run with: none, Nulavio's (the Shell's sidebar action) or a site's (the
 # engine's AI chatbot panel, on a page of the fixture).
@@ -211,6 +216,15 @@ class ImmersiveTest(unittest.TestCase):
 
     def window(self):
         return self.m.chrome(WINDOW)
+
+    def trace_end(self) -> list:
+        """The frames of the trace begun with TRACE, the last of them drawn after whatever the test did last."""
+        self.m.set_context("chrome")
+        try:
+            self.m.execute_async(TRACE_DRAWN)
+        finally:
+            self.m.set_context("content")
+        return self.m.chrome(TRACE_END)
 
     def plain_http(self, *hosts: str) -> None:
         """Names that are not this computer answered by the fixture over plain http: resolved here, with the
@@ -954,7 +968,7 @@ class ImmersiveTest(unittest.TestCase):
                 )
             finally:
                 self.m.set_context("content")
-            frames = self.m.chrome(TRACE_END)
+            frames = self.trace_end()
             self.assertGreater(len(frames), 30, name)
             return frames
 
@@ -1078,7 +1092,7 @@ class ImmersiveTest(unittest.TestCase):
         for on in (False, True):
             self.m.chrome("Services.prefs.setBoolPref('nulavio.layout.immersive', arguments[0]);", [on])
             self.assertTrue(harness.wait_until(lambda want=on: self.window()["on"] is want and self.m.chrome(STILL), 10))
-        apart(self.m.chrome(TRACE_END), "the mode turned on", page_moves=True)
+        apart(self.trace_end(), "the mode turned on", page_moves=True)
         self.m.chrome(AWAY + "gBrowser.selectedBrowser.focus();")
         self.assertTrue(harness.wait_until(lambda: not self.window()["toolbar"] and self.m.chrome(STILL), 10))
 
@@ -1094,7 +1108,7 @@ class ImmersiveTest(unittest.TestCase):
         self.shoot_window("21-typing-with-the-list")
         self.m.chrome("gURLBar.view.close(); gURLBar.handleRevert(); gBrowser.selectedBrowser.focus();")
         act(pointer([*pointer_path([(100, h // 2), page], 0), {"type": "pause", "duration": 1600}]))
-        apart(self.m.chrome(TRACE_END), "typing")
+        apart(self.trace_end(), "typing")
 
         # A tab's menu, by a right click on the tab in the list: the list stays while it is open.
         self.m.chrome(TRACE)
@@ -1112,7 +1126,7 @@ class ImmersiveTest(unittest.TestCase):
         self.assertIn("tabs", self.window()["hold"] or "")
         self.m.chrome("document.getElementById('tabContextMenu').hidePopup();")
         act(pointer([{"type": "pause", "duration": 1600}]))
-        apart(self.m.chrome(TRACE_END), "a tab's menu")
+        apart(self.trace_end(), "a tab's menu")
 
         # A tab dragged in the list: the engine's drag session takes the hover away from the list, which left under the
         # pointer before the drop. The list stays from the drag's start to its end. (Marionette starts no drag
