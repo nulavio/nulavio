@@ -529,6 +529,12 @@ class WindowUI {
     // ...and a tab opened in the background is shown for a moment where it went (ADR 0009, decision 4).
     const opened = event => this.#backgroundTab(win, event.target);
     win.gBrowser.tabContainer.addEventListener("TabOpen", opened);
+    // ...and a tab being dragged in it: the engine's drag session takes the hover away from the list, which left
+    // under the pointer before the drop (#344).
+    const drag = event => this.#dragHold(win, event);
+    for (const type of ["dragstart", "dragend"]) {
+      win.gBrowser.tabContainer.addEventListener(type, drag);
+    }
     // ...as is a prompt that opens or closes on a tab (the engine's tab dialogs), once more after the event
     // because the dialog is still listed while "dialogclose" is dispatched.
     const dialog = () => {
@@ -619,7 +625,7 @@ class WindowUI {
       identityObserver.observe(identityBox, { attributes: true, attributeFilter: ["class"] });
     }
     this.#windows.set(win, { bar, compact, fullscreen, line, sheet, progress, header, unload, pointer, screenObserver, identityObserver, edge,
-      popup, sharing, opened, dialog, downloads, notices, sizes, outside, holds: new Map(), named: false, noticeTimer: null, safety: null, restoreGroupPalette: this.#groupPalette(win),
+      popup, sharing, opened, drag, dialog, downloads, notices, sizes, outside, holds: new Map(), on: false, named: false, noticeTimer: null, safety: null, restoreGroupPalette: this.#groupPalette(win),
       restoreIdentity: this.#ownPagesIdentity(win) });
     this.#downloadHold(win);
     this.#noticeHold(win);
@@ -877,6 +883,14 @@ class WindowUI {
     state.unfit = false;
     root.removeAttribute("nulavio-immersive-two-lines");
     if (wanted && !this.#immersiveBlock(win)) {
+      if (!state.on) {
+        // #344: the mode coming on (the key, the switch, a page it was held back for gone) takes the toolbar and the
+        // tab list out of view at once, without the hold the pointer gets: the list leaves the flow for the band's
+        // edge in that same frame, and the toolbar held over it for 0.6 s covered its top (window-band.css). Set
+        // before the row is measured below, which already lays the window out with the mode on.
+        root.toggleAttribute("nulavio-immersive-entering", true);
+        win.requestAnimationFrame(() => win.requestAnimationFrame(() => root.removeAttribute("nulavio-immersive-entering")));
+      }
       // Nothing else holds the mode back: does the site fit the row? The row is laid out as with the mode on
       // and measured before anything is painted. When it does not fit, the site gets a line of its own under
       // the row; when that is not enough either, the toolbar stays (ADR 0009, decision 6; #118).
@@ -891,7 +905,8 @@ class WindowUI {
       }
     }
     const block = wanted ? this.#immersiveBlock(win) : "";
-    root.toggleAttribute("nulavio-immersive", wanted && !block);
+    state.on = wanted && !block;
+    root.toggleAttribute("nulavio-immersive", state.on);
     const pin = win.document.querySelector(".nv-band-pin"); // also where customizing put the band's widget
     if (!wanted && pin && state.holds.delete(pin)) {
       pin.setAttribute("aria-pressed", "false"); // the mode turned off: a pin does not wait for the next time
@@ -949,6 +964,22 @@ class WindowUI {
         }
       }, BACKGROUND_TAB_MS);
     }, 0);
+  }
+
+  /** A tab dragged in the tab list (or the tab strip, with the tabs on top): that part stays shown from the start of
+      the drag to its end, wherever it ends. */
+  #dragHold(win, event) {
+    const state = this.#windows.get(win);
+    const container = win.gBrowser.tabContainer;
+    if (!state || !event.target?.closest?.("tab")) {
+      return;
+    }
+    if (event.type === "dragstart" && !event.defaultPrevented) {
+      state.holds.set(container, container.getAttribute("orient") === "vertical" ? "tabs" : "toolbar");
+    } else if (event.type !== "dragend" || !state.holds.delete(container)) {
+      return;
+    }
+    this.#applyImmersive(win);
   }
 
   /** A panel or menu anchored on the toolbar or on the tab list: that part stays shown from before the
@@ -1361,6 +1392,9 @@ class WindowUI {
     }
     win.gBrowser.tabContainer.removeEventListener("TabAttrModified", state.sharing);
     win.gBrowser.tabContainer.removeEventListener("TabOpen", state.opened);
+    for (const type of ["dragstart", "dragend"]) {
+      win.gBrowser.tabContainer.removeEventListener(type, state.drag);
+    }
     for (const type of ["dialogopen", "dialogclose"]) {
       win.removeEventListener(type, state.dialog, true);
     }
@@ -1376,7 +1410,7 @@ class WindowUI {
     state.fullscreen.remove();
     state.edge.remove();
     for (const name of ["nulavio-immersive", "nulavio-immersive-off", "nulavio-immersive-hold", "nulavio-immersive-two-lines",
-      "nulavio-stage"]) {
+      "nulavio-immersive-entering", "nulavio-stage"]) {
       win.document.documentElement.removeAttribute(name);
     }
     if (state.sheet) {

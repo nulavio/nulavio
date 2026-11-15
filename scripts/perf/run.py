@@ -11,12 +11,17 @@ alternate the build and the baseline, so a machine that slows down slows both. M
   getStartupInfo; the suite runs without a window, so there is no first paint to time), on the profile's
   first start and on its second. Neither is a cold start: the session ran the binary to make the
   profile, so its files are in the page cache both times;
-- memory: the proportional memory of every process of the instance (PSS, /proc/<pid>/smaps_rollup,
+- memory, in the profile's third start (the second runs 60 s first: a new profile's first work, the content
+  filter compiling its lists, held the extension process at up to 1.2 GiB for about 30 s after each of the
+  first two starts): the proportional memory of every process of the instance (PSS, /proc/<pid>/smaps_rollup,
   summed over the process tree of its main process) and how many processes there are, with 1 and 10 tabs
   of a local page open (--tabs; the first tab is navigated to a local page too), once every tab shows its
-  page, after a 5 s settle and the engine's own "Minimize memory usage" (about:memory) in every process.
+  page, after a 5 s settle and the engine's own "Minimize memory usage" (about:memory) in every process, read
+  again every 5 s until two readings in a row agree within 3 % (readings_* in the JSON; not settled in 8 is an
+  error).
   A process whose memory could not be read is counted in the JSON (unreadable_*), never silently left out
-  of the sum.
+  of the sum. With the tabs open, "sandbox" says whether the web content processes are in the engine's full
+  content sandbox (test_04's check); --require-sandbox fails a run where they are not (perf.yml, in a container).
 
 With --speedometer, also Speedometer 3.1 (BrowserBench), pinned to a commit of WebKit/Speedometer's release/3.1
 branch, downloaded once into the cache and checked against its SHA-256, served from this machine (no network
@@ -26,15 +31,47 @@ default is 10, so this is not an official score). Without a window (headless) an
 a regression signal, not a real-hardware number. GitHub does not promise the same bytes for an archive it makes
 from a commit: if they change, the run stops at the digest check and the pin needs updating.
 
-The JSON keeps every run and is written after each one; the table gives each side's median and the build's
-change against the baseline. What it does not measure yet (#80): JetStream and MotionMark, frame time
-(scripts/research/frame_scene.py), the fingerprinting cost, the tools CLI, a cold start, and stock Firefox
-as a second baseline (GeckoProfileSession needs a Nulavio build).
+With --jetstream, JetStream 3.0 (JavaScript and WebAssembly), and with --motionmark, MotionMark 1.3.2 (graphics),
+pinned and served the same way, each in a start of its own after the ones before it, with the benchmark's own
+defaults: JetStream's overall score (the geometric mean of its benchmarks' scores, as its page computes it) and
+MotionMark's score. MotionMark measures how much the engine draws at the frame rate it detects; without a window and
+a GPU here, its number says more about software rendering than about a person's screen.
+
+With --frames, also the frame-time scenes of scripts/research/frame_scene.py (the sidebar collapsing and expanding,
+a tab switch, a Settings dialog, Ctrl+T to the new tab's first paint, 60 s idle), run by that script, headful on a
+private Xvfb this command starts, with the same --runs, after the other measures. Its whole JSON goes under
+"frames"; the table gets each scene's median frame interval per run (frame_<scene>_ms) and, for the new tab, its time
+to paint. Xvfb with software rendering: a regression gate, not a measure of real hardware.
+
+With --firefox, stock Firefox 160.0 is a third side of every run: Mozilla's linux-x86_64 en-US archive, pinned by
+its SHA-256 (its SHA-512 is the one in Mozilla's SHA512SUMS for the release, signed with Mozilla's release key),
+downloaded once into the cache and started from a fresh profile with Marionette (FirefoxSession). Its profile gets
+only what the measure needs: Marionette, no default-browser question and no first-run or welcome page (a remote
+page would load into the first tab). Everything else is Firefox's own default. It runs the same startup, memory
+and benchmark measures; the frame-time scenes are Nulavio's own and run on the two Nulavio builds only.
+
+With --cli, the tools the browser runs for its pages (nulavio-tools/bin/nulavio next to each Nulavio engine, started
+by the Shell for the Vault, the AI Bridge, temporary profiles and the KDE integrations): the median wall time of 20
+calls each of `nulavio --version` and `nulavio vault api` asking for its capabilities, from a throwaway HOME
+(cli_version_ms, cli_vault_capabilities_ms). With --fingerprinting-cost, every benchmark also runs on the Nulavio sides in
+a start of its own with the fingerprinting protections off (privacy.fingerprintingProtection and Nulavio's overrides, set
+from user.js again at the next start): <benchmark>_without_fingerprinting, and <benchmark>_fingerprinting_cost_pct, what
+the protections take off the score (#79 adds protections to that list).
+
+.github/workflows/perf.yml runs it on each published release, against the release before it and Firefox
+(scripts/perf/fetch_releases.py fetches both and checks them against their signed SHA256SUMS): report only, the
+table in the job summary and the JSON in a 90-day artifact.
+
+The JSON keeps every run and is written after each one; the table gives each side's median, the build's change
+against the baseline with its 95 % bootstrap interval (from 5 runs a side; "intervals" in the JSON: a change whose interval
+holds 0 is not told apart from noise) (and Firefox's median, with --firefox). What it does not measure yet (#80): a
+cold start.
 """
 
 from __future__ import annotations
 
 import argparse
+import configparser
 import contextlib
 import functools
 import hashlib
@@ -42,12 +79,19 @@ import http.server
 import json
 import math
 import os
+import random
+import secrets
 import shutil
+import signal
+import subprocess
 import statistics
+import struct
 import sys
 import tarfile
+import tempfile
 import threading
 import time
+import types
 import urllib.request
 from pathlib import Path
 
@@ -66,6 +110,11 @@ SHOWN = (
     " return [gBrowser.browsers.length, done.length];"
 )
 SETTLE_S = 5.0  # memory is read after the tabs have settled, not while they load
+# Memory is read until two readings in a row agree: work the engine still does after its start (the content
+# filter's lists, the Shell's first tasks) made one reading of 1 tab swing by tens of percent between runs.
+FIRST_RUN_S = 60.0  # the second start runs this long before memory is read in a third
+SETTLED_WITHIN = 0.03
+SETTLE_READINGS = 8
 # The engine's own "Minimize memory usage" (about:memory), in every process: garbage and caches the engine would
 # drop by itself in a while are not what one run happened to hold at that second.
 MINIMIZE = (
@@ -83,6 +132,40 @@ PINNED = {
         "sha256": "cfefa818d7789ed2f2b9f3f1bf608cc35e4e8241489eef47049296ce92791313",
         "size": 12358793,
     },
+    "jetstream": {
+        "commit": "06785cf861ac44855f168cbbe829278c2802e6de",  # WebKit/JetStream, branch JetStream3.0
+        "url": "https://codeload.github.com/WebKit/JetStream/tar.gz/06785cf861ac44855f168cbbe829278c2802e6de",
+        "sha256": "0361851eb2ddeb003e06be74239c3f7ce437c64e774a29ba446faaed9ab16fa9",
+        "size": 194407750,
+    },
+    "motionmark": {
+        "commit": "0e740d50f2321d255f6176e2f57493574c735996",  # WebKit/MotionMark, tag release/MotionMark1.3.2
+        "url": "https://codeload.github.com/WebKit/MotionMark/tar.gz/0e740d50f2321d255f6176e2f57493574c735996",
+        "sha256": "14b746f05b388a382d315186efd6e19017f7f67b3846d20759ab30fe83c2f985",
+        "size": 576485,
+    },
+    "firefox": {
+        # Mozilla's build. Its SHA-512 is its line in Mozilla's SHA512SUMS for 160.0, whose SHA512SUMS.asc verifies with the
+        # release key scripts/upstream/verify_firefox_release.py pins (14F2 6682 … 0353); both digests are checked.
+        "release": "160.0",
+        "url": "https://archive.mozilla.org/pub/firefox/releases/160.0/linux-x86_64/en-US/firefox-160.0.tar.xz",
+        "sha256": "fde774e9757c8878534c05ec210db592bf6a1b244c57941ffb2e364c04f35fcd",
+        "sha512": (
+            "e9c7ed0d4abc6eb3648c2c5652bd325e690423ef49414ef201eac59c0932ea8ec52260cf652510b2c98971c7e7eb36e6be8101d87cae17c6dd28ed763bac32a6"
+        ),
+        "size": 90967588,
+    },
+}
+# Stock Firefox's profile: Marionette, and nothing that would put a remote page into the first tab or ask a question.
+FIREFOX_PREFS = {
+    "marionette.port": 0,
+    "remote.prefs.recommended": False,
+    "browser.shell.checkDefaultBrowser": False,
+    "browser.aboutwelcome.enabled": False,
+    "browser.startup.homepage_override.mstone": "ignore",
+    "startup.homepage_welcome_url": "",
+    "startup.homepage_welcome_url.additional": "",
+    "datareporting.policy.firstRunURL": "",
 }
 # The benchmark's state: how many iterations it measured, whether it ended (its last iteration, or an error), and the
 # mean of the iterations' scores, the number its own page shows (resources/main.mjs, _computeResults).
@@ -92,6 +175,25 @@ SPEEDOMETER = (
     " score: runs.length ? runs.reduce((sum, r) => sum + r.score, 0) / runs.length : null };"
 )
 SPEEDOMETER_ITERATION_S = 600  # the longest one iteration may take here (headless, software rendering)
+# JetStream: whether it ended (all its benchmarks, or an error). Its benchmarks' `isSuccess` getter assigns the
+# state it should compare in this version, so it is never read here.
+JETSTREAM = (
+    "const j = globalThis.JetStream;"
+    " return j ? { ended: j.isDone || j.errors.length > 0, errors: j.errors.map(e => String(e.error ?? e)) } : { ended: false };"
+)
+JETSTREAM_SCORE = (
+    "const scores = globalThis.JetStream.benchmarks.map(b => b.score);"
+    " return Math.exp(scores.reduce((sum, x) => sum + Math.log(x), 0) / scores.length);"
+)
+JETSTREAM_S = 3600
+# MotionMark: ready once it has detected the frame rate; ended when its results are shown. Its score is read only
+# then: the dashboard's getter throws while no iteration is done.
+MOTIONMARK = (
+    "const start = document.getElementById('start-button'), ended = document.body.classList.contains('showing-results');"
+    " return { ready: !!start && !start.disabled, ended,"
+    " score: ended ? globalThis.benchmarkRunnerClient?.results?.score ?? null : null };"
+)
+MOTIONMARK_S = 1800
 
 
 class MeasureError(RuntimeError):
@@ -113,14 +215,51 @@ def change(build: list[float], baseline: list[float]) -> float | None:
     return b / a - 1
 
 
+INTERVAL_DRAWS = 2000
+INTERVAL_RUNS = 5  # the fewest runs a side needs for an interval (the default --runs)
+
+
+def interval(build: list[float], baseline: list[float], seed: int = 0) -> tuple[float, float] | None:
+    """A 95 % bootstrap interval of the change: both sides resampled with replacement, the change of the medians
+    each time, its 2.5th and 97.5th percentiles. Fixed seed: the same runs always give the same interval. None
+    with fewer than INTERVAL_RUNS runs on a side: the median of 3 resampled values takes so few values that the
+    interval came out narrow enough to exclude 0 for the same engine on both sides (measured on this machine)."""
+    if len(build) < INTERVAL_RUNS or len(baseline) < INTERVAL_RUNS:
+        return None
+    draw = random.Random(seed)  # noqa: S311 -- resampling for a statistic, seeded on purpose; nothing secret
+    changes = []
+    for _ in range(INTERVAL_DRAWS):
+        b = statistics.median(draw.choices(build, k=len(build)))
+        a = statistics.median(draw.choices(baseline, k=len(baseline)))
+        if a:
+            changes.append(b / a - 1)
+    if len(changes) < INTERVAL_DRAWS // 2:
+        return None
+    changes.sort()
+    return changes[int(0.025 * (len(changes) - 1))], changes[int(0.975 * (len(changes) - 1))]
+
+
 def table(results: dict) -> str:
-    rows = [("measure", "build (median)", "baseline (median)", "change")]
+    firefox = any("firefox" in sides for sides in results["metrics"].values())
+    rows = [
+        ("measure", "build (median)", "baseline (median)", "change", "95 % interval", *(["Firefox (median)"] if firefox else []))
+    ]
+    fmt = lambda v: "-" if v is None else f"{v:.1f}"  # noqa: E731
     for name, sides in results["metrics"].items():
         build, baseline = sides["build"], sides["baseline"]
-        delta = change(build, baseline)
-        fmt = lambda v: "-" if v is None else f"{v:.1f}"  # noqa: E731
-        rows.append((name, fmt(median(build)), fmt(median(baseline)), "-" if delta is None else f"{delta * 100:+.1f} %"))
-    widths = [max(len(row[i]) for row in rows) for i in range(4)]
+        # A measure that is already a percentage (a cost) is compared by its two medians, not as a change of a change.
+        delta, spread = (None, None) if name.endswith("_pct") else (change(build, baseline), interval(build, baseline))
+        rows.append(
+            (
+                name,
+                fmt(median(build)),
+                fmt(median(baseline)),
+                "-" if delta is None else f"{delta * 100:+.1f} %",
+                "-" if spread is None else f"{spread[0] * 100:+.1f} … {spread[1] * 100:+.1f} %",
+                *([fmt(median(sides.get("firefox", [])))] if firefox else []),
+            )
+        )
+    widths = [max(len(row[i]) for row in rows) for i in range(len(rows[0]))]
     return "\n".join("  ".join(cell.ljust(widths[i]) for i, cell in enumerate(row)) for row in rows)
 
 
@@ -161,18 +300,23 @@ def pinned(name: str, cache: Path | None = None) -> Path:
     """The pinned benchmark's files: downloaded once, checked against the pin's size and SHA-256, unpacked."""
     pin = PINNED[name]
     cache = cache or cache_dir()
-    tree = cache / f"{name}-{pin['commit']}-{pin['sha256'][:16]}"  # a new digest for the same commit is a new tree
+    ident = pin.get("commit") or pin["release"]
+    tree = cache / f"{name}-{ident}-{pin['sha256'][:16]}"  # a new digest for the same commit is a new tree
     if (tree / ".verified").exists():
         return tree
     cache.mkdir(parents=True, exist_ok=True)
-    archive = cache / f"{name}-{pin['commit']}-{pin['sha256'][:16]}.tar.gz"
+    archive = cache / f"{name}-{ident}-{pin['sha256'][:16]}{'.tar.xz' if pin['url'].endswith('.tar.xz') else '.tar.gz'}"
     if not archive.exists():
         partial = archive.with_suffix(".part")
         with urllib.request.urlopen(pin["url"], timeout=120) as response, partial.open("wb") as out:  # noqa: S310
             shutil.copyfileobj(response, out)
         partial.replace(archive)
     data = archive.read_bytes()
-    if len(data) != pin["size"] or hashlib.sha256(data).hexdigest() != pin["sha256"]:
+    if (
+        len(data) != pin["size"]
+        or hashlib.sha256(data).hexdigest() != pin["sha256"]
+        or ("sha512" in pin and hashlib.sha512(data).hexdigest() != pin["sha512"])  # Firefox: its line in Mozilla's SHA512SUMS
+    ):
         archive.unlink()
         raise MeasureError(f"{name}: the download is not the pinned archive (size or SHA-256)")
     shutil.rmtree(tree, ignore_errors=True)
@@ -229,6 +373,222 @@ def speedometer_score(m, server: StaticServer, iterations: int) -> float:
     return float(score)
 
 
+CLI_SAMPLES = 20
+# The engine's fingerprinting protections as Nulavio's profile sets them (baseline.js: ETP Strict turns the first on, the
+# overrides are Nulavio's own), switched off for one start; user.js sets them again at the next.
+FINGERPRINTING_OFF = (
+    "Services.prefs.setBoolPref('privacy.fingerprintingProtection', false);"
+    " Services.prefs.setBoolPref('privacy.fingerprintingProtection.pbmode', false);"
+    " Services.prefs.setStringPref('privacy.fingerprintingProtection.overrides', '');"
+)
+WITHOUT_FINGERPRINTING = "_without_fingerprinting"
+
+
+PROFILE_DIR = "return Services.dirsvc.get('ProfD', Ci.nsIFile).path;"
+
+
+def without_fingerprinting(score):
+    """A benchmark run with the fingerprinting protections off for this start: only in a throwaway profile (under the
+    temporary directory, as GeckoProfileSession makes them), which then loads only the benchmark's loopback pages. A named
+    exception to "never turn a protection off" (docs/architecture/performance.md, tests/AGENTS.md)."""
+
+    def run(m) -> float:
+        profile = Path(m.chrome(PROFILE_DIR)).resolve()
+        if not profile.is_relative_to(Path(tempfile.gettempdir()).resolve()):
+            raise MeasureError(f"the fingerprinting protections are turned off only in a throwaway profile, not {profile}")
+        m.chrome(FINGERPRINTING_OFF)
+        return score(m)
+
+    return run
+
+
+def fingerprinting_costs(out: dict) -> dict:
+    """For each benchmark measured both ways: how much of its score the protections take, in % (+5: 5 % lower with them)."""
+    costs = {}
+    for name, value in out.items():
+        without = out.get(name + WITHOUT_FINGERPRINTING)
+        if isinstance(value, (int, float)) and isinstance(without, (int, float)) and without:
+            costs[f"{name}_fingerprinting_cost_pct"] = (without - value) / without * 100
+    return costs
+
+
+def cli_ms(engine: str, samples: int = CLI_SAMPLES) -> dict:
+    """Median wall time of the tools next to `engine`, as the Shell starts them (a JSON request on stdin)."""
+    tool = Path(engine).parent / "nulavio-tools" / "bin" / "nulavio"
+    if not tool.exists():
+        raise MeasureError(f"no tools next to the engine: {tool}")
+    calls = {"cli_version_ms": (["--version"], b""), "cli_vault_capabilities_ms": (["vault", "api"], b'{"op": "capabilities"}')}
+    out = {}
+    with tempfile.TemporaryDirectory(prefix="nulavio-perf-cli-") as home:
+        env = {"HOME": home, "NULAVIO_HOME": str(Path(home) / "nulavio"), "PATH": "/usr/bin:/bin", "LANG": "C.UTF-8"}
+        for name, (args, stdin) in calls.items():
+            times = []
+            for _ in range(samples):
+                started = time.perf_counter()
+                subprocess.run([str(tool), *args], input=stdin, env=env, capture_output=True, check=True, timeout=60)
+                times.append((time.perf_counter() - started) * 1000)
+            out[name] = statistics.median(times)
+    return out
+
+
+def finite(name: str, value) -> float:
+    if not isinstance(value, (int, float)) or not math.isfinite(value) or value <= 0:
+        raise MeasureError(f"{name} ended without a score: {value}")
+    return float(value)
+
+
+def jetstream_score(m, server: StaticServer) -> float:
+    import harness
+
+    m.navigate(server.url("/index.html?startAutomatically"))
+    if not harness.wait_until(lambda: m.execute(JETSTREAM)["ended"], JETSTREAM_S, interval=5.0):
+        raise MeasureError(f"JetStream did not end in {JETSTREAM_S} s")
+    errors = m.execute(JETSTREAM)["errors"]
+    if errors:
+        raise MeasureError(f"JetStream stopped on errors: {errors[:3]}")
+    return finite("JetStream", m.execute(JETSTREAM_SCORE))
+
+
+def motionmark_score(m, server: StaticServer) -> float:
+    import harness
+
+    m.navigate(server.url("/MotionMark/index.html"))
+    if not harness.wait_until(lambda: m.execute(MOTIONMARK)["ready"], 120):
+        raise MeasureError("MotionMark did not detect the frame rate in 120 s")
+    m.execute("benchmarkController.startBenchmark();")
+    if not harness.wait_until(lambda: m.execute(MOTIONMARK)["ended"], MOTIONMARK_S, interval=5.0):
+        raise MeasureError(f"MotionMark did not end in {MOTIONMARK_S} s")
+    return finite("MotionMark", m.execute(MOTIONMARK)["score"])
+
+
+def frame_scene():
+    """scripts/research/frame_scene.py as a module: its scene names and per-run medians."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("frame_scene", ROOT / "scripts" / "research" / "frame_scene.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def frame_metrics(frames: dict) -> dict:
+    """From frame_scene.py's JSON: each scene's median frame interval per run, per side (frame_<scene>_ms), and the
+    new tab's time to paint (frame_new_tab_ms). A scene with no samples in a run has no value for it."""
+    scene = frame_scene()
+    out = {}
+    for name in (*scene.TRANSITIONS, "new_tab"):
+        out[f"frame_{name}_ms"] = {side: scene.run_medians(frames["runs"].get(side, []), name) for side in ("build", "baseline")}
+    return out
+
+
+def xauthority(display: str, cookie: bytes) -> bytes:
+    """One Xauthority entry: an MIT-MAGIC-COOKIE-1 for `display` on any host (FamilyWild), as `xauth add` writes."""
+
+    def counted(data: bytes) -> bytes:
+        return struct.pack(">H", len(data)) + data
+
+    return struct.pack(">H", 0xFFFF) + counted(b"") + counted(display.encode()) + counted(b"MIT-MAGIC-COOKIE-1") + counted(cookie)
+
+
+def frame_times(build: str, baseline: str, runs: int) -> dict:
+    """frame_scene.py on a private Xvfb (it must run headful), for both engines; its JSON. The display takes only
+    clients that hold its cookie, as with xvfb-run: a random one, in 0600 files of a 0700 directory, never in argv."""
+    if not shutil.which("Xvfb"):
+        raise MeasureError("--frames needs Xvfb (xorg-x11-server-Xvfb)")
+    with tempfile.TemporaryDirectory(prefix="nulavio-frames-") as private:
+        cookie = secrets.token_bytes(16)
+        server_auth, client_auth = Path(private) / "server.auth", Path(private) / "client.auth"
+        for path in (server_auth, client_auth):
+            path.touch(mode=0o600)
+        server_auth.write_bytes(xauthority("0", cookie))  # the server takes every cookie in its file, whatever display
+        read, written = os.pipe()
+        xvfb = subprocess.Popen(
+            ["Xvfb", "-displayfd", str(written), "-auth", str(server_auth), "-screen", "0", "1920x1080x24", "-nolisten", "tcp"],
+            pass_fds=(written,),
+            stderr=subprocess.DEVNULL,
+        )
+        os.close(written)
+        try:
+            with os.fdopen(read) as fd:
+                display = fd.readline().strip()
+            if not display:
+                raise MeasureError("Xvfb did not start")
+            client_auth.write_bytes(xauthority(display, cookie))
+            return frame_scene_on(build, baseline, runs, display, client_auth)
+        finally:
+            xvfb.terminate()
+            xvfb.wait(10)
+
+
+def frame_scene_on(build: str, baseline: str, runs: int, display: str, auth: Path) -> dict:
+    """frame_scene.py headful on `display`, with its cookie file and without the caller's Wayland. When it fails, the
+    runs it completed (it writes its JSON after each one) are kept, with the failure under "error"."""
+    env = {key: value for key, value in os.environ.items() if key not in ("WAYLAND_DISPLAY", "MOZ_ENABLE_WAYLAND")}
+    env.update(
+        DISPLAY=f":{display}",
+        XAUTHORITY=str(auth),
+        GDK_BACKEND="x11",
+        MOZ_ENABLE_WAYLAND="0",
+        NULAVIO_TEST_HEADFUL="1",
+        NULAVIO_ENGINE=build,
+    )
+    with tempfile.TemporaryDirectory(prefix="nulavio-frames-") as out:
+        command = [sys.executable, "-I", str(ROOT / "scripts" / "research" / "frame_scene.py")]
+        command += ["--baseline-engine", baseline, "--runs", str(runs), "--out", out]
+        done = subprocess.run(command, env=env, check=False, stdout=subprocess.DEVNULL)
+        written = Path(out) / "perf.json"
+        frames = json.loads(written.read_text(encoding="utf-8")) if written.exists() else {"runs": {}}
+        if done.returncode != 0:
+            frames["error"] = f"frame_scene.py exited with {done.returncode}"
+        return frames
+
+
+SANDBOX_LEVEL = (
+    "return Cc['@mozilla.org/sandbox/sandbox-settings;1'].getService(Ci.mozISandboxSettings).effectiveContentSandboxLevel;"
+)
+
+
+def sandbox(m, root: int) -> str:
+    """Whether the web content processes run in the engine's full content sandbox, as test_04 checks it: effective level
+    at least 4, a seccomp filter on every thread, a user namespace of their own. "on", or what is missing."""
+    import harness
+
+    level = m.chrome(SANDBOX_LEVEL)
+    if level < 4:
+        return f"level {level}"
+    parent = os.readlink(f"/proc/{root}/ns/user")
+    content = []
+    for pid in harness.descendants(root):
+        try:
+            info = harness.proc_info(pid)
+        except OSError:
+            continue  # it ended
+        if " -isForBrowser" in f" {info['cmd']} ":
+            content.append(info)
+    if not content:
+        return "no web content process"
+    for info in content:
+        if not all(v == 2 for v in info["seccomp"]):
+            return f"no seccomp filter on a thread of {info['pid']}"
+        if info["userns"] == parent:
+            return f"{info['pid']} shares the parent's user namespace"
+    return "on"
+
+
+def settled(read, wait, within: float = SETTLED_WITHIN, most: int = SETTLE_READINGS) -> list:
+    """Readings of `read()` (its first item is the number), `wait()` between them, until two in a row differ by at
+    most `within` of the last, or `most` were taken: then the measure has not settled, which is an error rather than
+    a number in the table."""
+    readings = [read()]
+    while len(readings) < most:
+        wait()
+        readings.append(read())
+        last, before = readings[-1][0], readings[-2][0]
+        if last and abs(last - before) <= within * last:
+            return readings
+    raise MeasureError(f"memory did not settle in {most} readings: {[r[0] for r in readings]} KiB")
+
+
 def startup_ms(m) -> float:
     import harness
 
@@ -238,17 +598,102 @@ def startup_ms(m) -> float:
     return float(info["restored"] - info["process"])
 
 
-def one_run(engine: str, tabs: list[int], server, speedometer: tuple | None = None) -> dict:
+class FirefoxSession:
+    """Stock Firefox from a fresh profile, driven as harness.GeckoProfileSession drives Nulavio: start, stop,
+    restart, the process and the engine's path and version."""
+
+    def __init__(self, binary: Path):
+        import harness
+
+        self.tmp = Path(tempfile.mkdtemp(prefix="nulavio-perf-firefox-"))
+        self.profile = self.tmp / "profile"
+        self.profile.mkdir()
+        lines = [f'user_pref("{key}", {json.dumps(value)});' for key, value in FIREFOX_PREFS.items()]
+        (self.profile / "user.js").write_text("\n".join(lines) + "\n", encoding="utf-8")
+        info = configparser.ConfigParser()
+        info.read(binary.parent / "application.ini", encoding="utf-8")
+        self.engine = types.SimpleNamespace(path=binary, version=info.get("App", "Version", fallback="?"))
+        home = self.tmp / "home"
+        self.env = {
+            "HOME": str(home),
+            "XDG_CONFIG_HOME": str(home / ".config"),
+            "XDG_CACHE_HOME": str(home / ".cache"),
+            "XDG_DATA_HOME": str(home / ".local" / "share"),
+            "PATH": "/usr/bin:/bin",
+            "LANG": os.environ.get("NULAVIO_TEST_LANG", "pt_BR.UTF-8"),
+            "MOZ_HEADLESS": "1",
+            harness.SYSTEM_ACCESS_ENV: "1",  # nosemgrep: nulavio-py-engine-sandbox-env -- a throwaway measuring profile
+        }
+        self.process: subprocess.Popen | None = None
+        self.client = None
+
+    def start(self):
+        from marionette import Marionette
+
+        port = self.profile / "MarionetteActivePort"
+        port.unlink(missing_ok=True)
+        command = [str(self.engine.path), "--profile", str(self.profile), "--no-remote", "--marionette", "--headless"]
+        self.process = subprocess.Popen(  # an engine of its own: its process tree is what memory reads
+            command, env=self.env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True
+        )
+        deadline = time.monotonic() + 90
+        while not (port.exists() and port.read_text().strip()):
+            if self.process.poll() is not None or time.monotonic() > deadline:
+                raise MeasureError(f"Firefox did not open Marionette (exit {self.process.poll()})")
+            time.sleep(0.3)
+        self.client = Marionette(int(port.read_text().strip())).connect()
+        self.client.new_session()
+        return self.client
+
+    def stop(self) -> None:
+        if self.client is not None:
+            self.client.quit()
+            self.client = None
+        if self.process is not None:
+            try:
+                self.process.wait(timeout=30)
+            except subprocess.TimeoutExpired:
+                os.killpg(self.process.pid, signal.SIGKILL)
+                self.process.wait(timeout=10)
+            self.process = None
+
+    def restart(self):
+        self.stop()
+        return self.start()
+
+    def cleanup(self) -> None:
+        self.stop()
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+
+def one_run(
+    engine: str,
+    tabs: list[int],
+    server,
+    benchmarks: tuple = (),
+    firefox: bool = False,
+    require_sandbox: bool = False,
+    cli: bool = False,
+) -> dict:
+    """One fresh profile: its two starts, the tabs' memory, then each of `benchmarks` ((name, score of a Marionette
+    session)) in a start of its own. `engine` is a Nulavio build, or with `firefox` the Firefox binary."""
     import harness
 
-    os.environ["NULAVIO_ENGINE"] = engine
-    session = harness.GeckoProfileSession(name="Perf")
+    if not firefox:
+        os.environ["NULAVIO_ENGINE"] = engine  # GeckoProfileSession reads it
+    session = FirefoxSession(Path(engine)) if firefox else harness.GeckoProfileSession(name="Perf")
     try:
         m = session.start()
         out = {"engine": str(session.engine.path), "version": session.engine.version, "startup_first_ms": startup_ms(m)}
         session.stop()
         m = session.restart()
         out["startup_second_ms"] = startup_ms(m)
+        # A new profile's first work (the content filter compiles its lists until it has a copy to load): the
+        # extension process held up to 1.2 GiB for about 30 s after the first two starts, 130 to 330 MiB after
+        # later ones. Memory is a later start's, as a person's profile is every day.
+        time.sleep(FIRST_RUN_S)
+        session.stop()
+        m = session.restart()
         local = server.url("/page/perf-")
         m.navigate(server.url("/page/perf-0"))  # the first tab too: a local page, not the start page
         opened = 1
@@ -259,20 +704,34 @@ def one_run(engine: str, tabs: list[int], server, speedometer: tuple | None = No
             if not harness.wait_until(lambda want=count: m.chrome(SHOWN, [local]) == [want, want], 60):
                 raise MeasureError(f"not every tab showed its page in 60 s: {m.chrome(SHOWN, [local])} (tabs, shown)")
             time.sleep(SETTLE_S)
-            m.set_context("chrome")
-            try:
-                m.execute_async(MINIMIZE)
-            finally:
-                m.set_context("content")
-            pids = instance_pids(session.process.pid)
-            pss, unreadable = pss_kib(pids)
+
+            def reading() -> tuple[int, list[int], int]:
+                m.set_context("chrome")
+                try:
+                    m.execute_async(MINIMIZE)
+                finally:
+                    m.set_context("content")
+                pids = instance_pids(session.process.pid)
+                return (*pss_kib(pids), pids)
+
+            readings = settled(reading, wait=lambda: time.sleep(SETTLE_S))
+            pss, unreadable, pids = readings[-1]
             out[f"pss_mib_{count}_tabs"] = pss / 1024
             out[f"processes_{count}_tabs"] = len(pids)
             out[f"unreadable_{count}_tabs"] = unreadable
-        if speedometer:  # in a start of its own: the tabs' memory above is not read after it, nor it beside them
+            out[f"readings_{count}_tabs"] = len(readings)
+        out["sandbox"] = sandbox(m, session.process.pid)
+        if require_sandbox and out["sandbox"] != "on":
+            raise MeasureError(f"the content sandbox is not fully on: {out['sandbox']}")
+        for name, score in benchmarks:  # in a start of its own: no measure carries another's processes
+            if firefox and name.endswith(WITHOUT_FINGERPRINTING):
+                continue  # stock Firefox has none of these protections on
             session.stop()
             m = session.restart()
-            out["speedometer3_score"] = speedometer_score(m, *speedometer)
+            out[name] = score(m)
+        out.update(fingerprinting_costs(out))
+        if cli and not firefox:
+            out.update(cli_ms(engine))
         return out
     finally:
         session.cleanup()
@@ -286,6 +745,17 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--out", type=Path)
     parser.add_argument("--speedometer", action="store_true", help="also Speedometer 3.1, pinned and served locally")
     parser.add_argument("--speedometer-iterations", type=int, default=3)
+    parser.add_argument("--jetstream", action="store_true", help="also JetStream 3.0, pinned and served locally")
+    parser.add_argument("--motionmark", action="store_true", help="also MotionMark 1.3.2, pinned and served locally")
+    parser.add_argument("--frames", action="store_true", help="also frame time (scripts/research/frame_scene.py, on Xvfb)")
+    parser.add_argument("--firefox", action="store_true", help="also stock Firefox 160.0 as a third side, pinned")
+    parser.add_argument("--cli", action="store_true", help="also the tools the browser runs (nulavio-tools), wall time")
+    parser.add_argument(
+        "--fingerprinting-cost", action="store_true", help="also each benchmark with the fingerprinting protections off"
+    )
+    parser.add_argument(
+        "--require-sandbox", action="store_true", help="fail a run whose content processes are not in the full sandbox"
+    )
     args = parser.parse_args(argv)
     build = os.environ.get("NULAVIO_ENGINE")
     if not build:
@@ -294,6 +764,8 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--runs and each of --tabs must be at least 1, and --tabs without repeats")
     if args.speedometer and args.speedometer_iterations < 1:
         parser.error("--speedometer-iterations must be at least 1")
+    if args.fingerprinting_cost and not (args.speedometer or args.jetstream or args.motionmark):
+        parser.error("--fingerprinting-cost measures the benchmarks: give --speedometer, --jetstream or --motionmark")
     import harness
 
     results = {"build": build, "baseline": args.baseline_engine, "runs": [], "metrics": {}}
@@ -305,12 +777,36 @@ def main(argv: list[str] | None = None) -> int:
     try:
         with contextlib.ExitStack() as stack:
             server = stack.enter_context(harness.FixtureServer())
-            speedometer = None
-            if args.speedometer:  # a server only for the benchmark's own files, and only when it runs
-                speedometer = (stack.enter_context(StaticServer(pinned("speedometer"))), args.speedometer_iterations)
+            benchmarks = []  # a server for each benchmark's own files, only for the ones that run
+
+            def serve(name: str):
+                return stack.enter_context(StaticServer(pinned(name)))
+
+            if args.speedometer:
+                speedometer = functools.partial(
+                    speedometer_score, server=serve("speedometer"), iterations=args.speedometer_iterations
+                )
+                benchmarks.append(("speedometer3_score", speedometer))
+            if args.jetstream:
+                benchmarks.append(("jetstream3_score", functools.partial(jetstream_score, server=serve("jetstream"))))
+            if args.motionmark:
+                benchmarks.append(("motionmark_score", functools.partial(motionmark_score, server=serve("motionmark"))))
+            if args.fingerprinting_cost:
+                benchmarks += [(name + WITHOUT_FINGERPRINTING, without_fingerprinting(score)) for name, score in benchmarks]
+            sides = [("build", build), ("baseline", args.baseline_engine)]
+            if args.firefox:
+                sides.append(("firefox", str(pinned("firefox") / "firefox")))
             for run in range(args.runs):
-                for side, engine in (("build", build), ("baseline", args.baseline_engine)):
-                    measured = one_run(engine, args.tabs, server, speedometer)
+                for side, engine in sides:
+                    measured = one_run(
+                        engine,
+                        args.tabs,
+                        server,
+                        tuple(benchmarks),
+                        firefox=side == "firefox",
+                        require_sandbox=args.require_sandbox,
+                        cli=args.cli,
+                    )
                     results["runs"].append({"run": run, "side": side, **measured})
                     print(f"run {run} {side}: {measured}", file=sys.stderr)
                     write()
@@ -319,9 +815,20 @@ def main(argv: list[str] | None = None) -> int:
     numbers = [key for key, value in results["runs"][0].items() if key not in ("run", "side") and isinstance(value, (int, float))]
     for name in numbers:
         results["metrics"][name] = {
-            side: [r[name] for r in results["runs"] if r["side"] == side] for side in ("build", "baseline")
+            side: [r[name] for r in results["runs"] if r["side"] == side and name in r]
+            for side in ("build", "baseline", *(["firefox"] if args.firefox else []))
         }
+    if args.frames:
+        results["frames"] = frame_times(build, args.baseline_engine, args.runs)
+        results["metrics"].update(frame_metrics(results["frames"]))
+    results["intervals"] = {
+        name: None if name.endswith("_pct") else interval(sides["build"], sides["baseline"])
+        for name, sides in results["metrics"].items()
+    }
     write()
+    if "error" in results.get("frames", {}):  # what it measured is in the JSON; the command still fails
+        print(table(results))
+        raise MeasureError(results["frames"]["error"])
     print(table(results))
     return 0
 

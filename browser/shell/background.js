@@ -44,13 +44,21 @@ browser.downloads.onChanged.addListener(async delta => {
 // -- Profile selector (Track B: the engine's profiles; absent in Track A) --
 
 // The button is drawn in the toolbar's icon colour: the theme's, and the private chrome's (dark in
-// both themes) in each private window. Redrawn when the theme changes.
+// both themes) in each private window. Redrawn when the theme changes. The scheme is the browser window's, read in the
+// parent process and announced from there (nulavioPersonalise, on look-and-feel-changed): this page is windowless, and a
+// desktop's own scheme change never reached its matchMedia, so the button kept the other scheme's ink (#368).
 const darkTheme = matchMedia("(prefers-color-scheme: dark)");
 let shownProfile = null;
 
+async function toolbarDark() {
+  const state = await browser.nulavioPersonalise?.state().catch(() => null);
+  return state?.system?.dark ?? darkTheme.matches; // Track A has no experiments
+}
+
 async function setProfileIcon(profile) {
   shownProfile = profile;
-  await browser.action.setIcon({ imageData: drawProfileIcon(profile, { ink: darkTheme.matches ? TOOLBAR_INK.dark : TOOLBAR_INK.light }) });
+  const ink = (await toolbarDark()) ? TOOLBAR_INK.dark : TOOLBAR_INK.light;
+  await browser.action.setIcon({ imageData: drawProfileIcon(profile, { ink }) });
   const windows = await browser.windows.getAll({ windowTypes: ["normal"] }).catch(() => []);
   for (const win of windows.filter(w => w.incognito)) {
     await browser.action.setIcon({ windowId: win.id, imageData: drawProfileIcon(profile, { ink: TOOLBAR_INK.private }) }).catch(() => {});
@@ -88,7 +96,9 @@ if (browser.nulavioProfiles && browser.action) {
       showCurrentProfile().catch(console.error);
     }
   });
-  darkTheme.addEventListener("change", () => shownProfile && setProfileIcon(shownProfile).catch(console.error));
+  const redraw = () => shownProfile && setProfileIcon(shownProfile).catch(console.error);
+  darkTheme.addEventListener("change", redraw);
+  browser.nulavioPersonalise?.onChanged.addListener(redraw);
   browser.windows.onCreated.addListener(win => {
     if (win.incognito && shownProfile) {
       browser.action.setIcon({ windowId: win.id, imageData: drawProfileIcon(shownProfile, { ink: TOOLBAR_INK.private }) }).catch(() => {});
