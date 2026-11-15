@@ -684,7 +684,6 @@ class GuardTest(unittest.TestCase):
         waiting = lambda: {f["id"]: f for f in self.guard("return G.findings();")}.get(changed, {})  # noqa: E731
         self.assertTrue(harness.wait_until(lambda: engine() == newer.version, timeout=20), engine())
         self.assertTrue(harness.wait_until(lambda: waiting().get("after", {}).get("version") == newer.version, 20), waiting())
-        after = waiting()["after"]
         self.open_review()
         detail = self.cards()[changed]["detail"]
         self.assertIn(f"{older.version} → {newer.version}", detail)
