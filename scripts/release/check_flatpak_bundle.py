@@ -197,7 +197,7 @@ def header(data: bytes) -> dict[str, tuple[str, bytes]]:
     table = data[: _offset(data, len(data) - width, width)]
     width = _offset_size(len(table))
     if not table:
-        return {}
+        raise ValueError("not a Flatpak bundle (its header is empty)")
     first = _offset(table, len(table) - width, width)
     if not 0 <= first <= len(table) - width or (len(table) - first) % width:
         raise ValueError("not a Flatpak bundle (its header does not parse)")
@@ -220,6 +220,8 @@ def header(data: bytes) -> dict[str, tuple[str, bytes]]:
         if key in entries:
             raise ValueError(f"the bundle's header has {key} twice")
         entries[key] = (value[cut + 1 :].decode("ascii", "replace"), value[:cut])
+    if not entries:
+        raise ValueError("not a Flatpak bundle (its header is empty)")
     return entries
 
 
@@ -237,7 +239,10 @@ def compare_header(entries: dict[str, tuple[str, bytes]], metadata: str) -> list
 
     def text(key: str) -> str | None:
         kind, raw = entries.get(key, ("", b""))
-        return raw.removesuffix(b"\x00").decode("utf-8", "replace") if kind == "s" else None
+        # A string ends with one zero byte; without it GLib reads it as empty, so it is not taken as anything.
+        if kind != "s" or not raw.endswith(b"\x00") or b"\x00" in raw[:-1]:
+            return None
+        return raw[:-1].decode("utf-8", "replace")
 
     for key, want in (("ref", REF), ("runtime-repo", RUNTIME_REPO), ("collection-id", ""), ("metadata", metadata)):
         if text(key) != want:

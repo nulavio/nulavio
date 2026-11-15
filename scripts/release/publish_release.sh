@@ -88,6 +88,10 @@ if [[ -n $bundle ]]; then
             echo "publish_release: $bundle is not the bundle the check accepted" >&2
             exit 2
         }
+    elif [[ ${GITHUB_ACTIONS:-} == true ]]; then
+        # In CI the bundle is never parsed next to the signing role: without the check's hash, it is refused.
+        echo "publish_release: $bundle comes with no hash from the flatpak-check job" >&2
+        exit 2
     elif ! python3 -I "$repo/scripts/release/check_flatpak_bundle.py" --bundle "$bundle" \
         --archive "$out/packages/nulavio-${tag#v}.linux-x86_64.tar.xz"; then
         echo "publish_release: $bundle is not the release's portable archive with what flatpak_manifest.py adds" >&2

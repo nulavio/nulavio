@@ -215,7 +215,10 @@ jobs:
         id: check
         run: |
           scripts/ci/apt_install.sh flatpak ostree
-          bundle=$(find "$RUNNER_TEMP/flatpak-bundle" -maxdepth 1 -name '*.flatpak')
+          # Exactly one regular file: whatever else the builder left there is not accepted.
+          [ "$(find "$RUNNER_TEMP/flatpak-bundle" -mindepth 1 | wc -l)" = 1 ] || { echo "not one bundle" >&2; exit 1; }
+          bundle=$(find "$RUNNER_TEMP/flatpak-bundle" -maxdepth 1 -type f -name '*.flatpak')
+          [ -n "$bundle" ] || { echo "no bundle file" >&2; exit 1; }
           archive=$(find "$RUNNER_TEMP/rehearsal/packages" -maxdepth 1 -name 'nulavio-*.linux-x86_64.tar.xz')
           python3 -I scripts/release/check_flatpak_bundle.py --bundle "$bundle" --archive "$archive"
           echo "sha256=$(sha256sum "$bundle" | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
@@ -297,10 +300,11 @@ jobs:
           ACCEPTED: ${{ needs.flatpak-check.outputs.bundle-sha256 }}
         run: |
           # Compared by its hash only: the bundle is parsed in the flatpak-check job, never here, next to the signing role.
-          bundle=$(find "$RUNNER_TEMP/flatpak-bundle" -maxdepth 1 -name '*.flatpak' 2>/dev/null || true)
-          if [ -n "$bundle" ] && { [ -z "$ACCEPTED" ] || [ "$(sha256sum "$bundle" | cut -d' ' -f1)" != "$ACCEPTED" ]; }; then
+          bundle=$(find "$RUNNER_TEMP/flatpak-bundle" -maxdepth 1 -type f -name '*.flatpak' 2>/dev/null || true)
+          if [ -e "$RUNNER_TEMP/flatpak-bundle" ] && { [ -z "$ACCEPTED" ] || [ "$(printf '%s\n' "$bundle" | grep -c .)" != 1 ] ||
+              [ "$(sha256sum "$bundle" | cut -d' ' -f1)" != "$ACCEPTED" ]; }; then
             echo "::error::the Flatpak bundle is not the one the check accepted against the attested archive: this release goes out without it"
-            rm -f "$bundle"
+            rm -rf "$RUNNER_TEMP/flatpak-bundle"
           fi
       - name: Prepare notes and validate the release before signing or uploading
         env:

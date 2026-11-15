@@ -223,7 +223,11 @@ class ReleaseWorkflowTest(unittest.TestCase):
         compare = self.publish.index("needs.flatpak-check.outputs.bundle-sha256")
         self.assertLess(compare, self.publish.index("release_notes.py notes"))  # the notes name only an accepted bundle
         self.assertLess(compare, self.publish.index("configure-aws-credentials"))
-        self.assertIn('rm -f "$bundle"', self.publish[compare : self.publish.index("release_notes.py notes")])
+        self.assertIn(
+            'rm -rf "$RUNNER_TEMP/flatpak-bundle"', self.publish[compare : self.publish.index("release_notes.py notes")]
+        )
+        self.assertIn("-type f -name '*.flatpak'", job)  # one regular file, nothing else accepted
+        self.assertIn("GITHUB_ACTIONS", (RELEASE / "publish_release.sh").read_text(encoding="utf-8"))
         self.assertIn("NULAVIO_FLATPAK_BUNDLE_SHA256=$ACCEPTED", self.publish)
         script = (RELEASE / "publish_release.sh").read_text(encoding="utf-8")
         self.assertLess(script.index("NULAVIO_FLATPAK_BUNDLE_SHA256"), script.index('"$repo/scripts/release/sign_repo.sh"'))

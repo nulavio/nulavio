@@ -166,6 +166,32 @@ class CompareTest(unittest.TestCase):
                 self.assertTrue(any(named in p for p in found), found)
 
 
+class HeaderParserTest(unittest.TestCase):
+    """The header is read from what the untrusted job made: anything else than a bundle is refused, never a crash."""
+
+    def test_what_is_not_a_bundle_is_refused(self):
+        for data in (b"", b"\x00", b"\xff" * 3, b"\x00" * 64, b"x" * 300):
+            with self.subTest(data=data[:8]), self.assertRaises(ValueError):
+                check.header(data)
+
+    def test_random_and_cut_input_gives_a_refusal_or_a_header_and_nothing_else(self):
+        import random
+
+        rng = random.Random(324)  # noqa: S311 -- reproducible fuzz input, not a secret
+        for _ in range(3000):
+            data = bytes(rng.randrange(256) for _ in range(rng.randrange(1, 300)))
+            try:
+                found = check.header(data)
+            except ValueError:
+                continue
+            self.assertIsInstance(found, dict)
+
+    def test_a_string_without_its_zero_byte_is_not_taken(self):
+        entries = {"ref": ("s", check.REF.encode()), "runtime-repo": ("s", check.RUNTIME_REPO.encode() + b"\x00"),
+                   "collection-id": ("s", b"\x00"), "metadata": ("s", METADATA.encode() + b"\x00")}  # fmt: skip
+        self.assertTrue(any("ref" in p for p in check.compare_header(entries, METADATA)))
+
+
 @unittest.skipUnless(shutil.which("flatpak") and shutil.which("ostree"), "needs flatpak and ostree")
 class BundleTest(unittest.TestCase):
     """A real bundle (flatpak build-bundle), small: imported and checked as publish does."""
