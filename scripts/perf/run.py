@@ -46,7 +46,7 @@ page would load into the first tab). Everything else is Firefox's own default. I
 and benchmark measures; the frame-time scenes are Nulavio's own and run on the two Nulavio builds only.
 
 The JSON keeps every run and is written after each one; the table gives each side's median, the build's change
-against the baseline with its 95 % bootstrap interval (from 3 runs on; "intervals" in the JSON: a change whose interval
+against the baseline with its 95 % bootstrap interval (from 5 runs a side; "intervals" in the JSON: a change whose interval
 holds 0 is not told apart from noise) (and Firefox's median, with --firefox). What it does not measure yet (#80): the
 fingerprinting cost, the tools CLI, and a cold start.
 """
@@ -194,13 +194,15 @@ def change(build: list[float], baseline: list[float]) -> float | None:
 
 
 INTERVAL_DRAWS = 2000
+INTERVAL_RUNS = 5  # the fewest runs a side needs for an interval (the default --runs)
 
 
 def interval(build: list[float], baseline: list[float], seed: int = 0) -> tuple[float, float] | None:
     """A 95 % bootstrap interval of the change: both sides resampled with replacement, the change of the medians
     each time, its 2.5th and 97.5th percentiles. Fixed seed: the same runs always give the same interval. None
-    with fewer than 3 runs on a side, where resampling says nothing."""
-    if len(build) < 3 or len(baseline) < 3:
+    with fewer than INTERVAL_RUNS runs on a side: the median of 3 resampled values takes so few values that the
+    interval came out narrow enough to exclude 0 for the same engine on both sides (measured on this machine)."""
+    if len(build) < INTERVAL_RUNS or len(baseline) < INTERVAL_RUNS:
         return None
     draw = random.Random(seed)  # noqa: S311 -- resampling for a statistic, seeded on purpose; nothing secret
     changes = []
