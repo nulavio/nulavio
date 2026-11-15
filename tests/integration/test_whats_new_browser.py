@@ -162,11 +162,14 @@ class WhatsNewBrowserTest(unittest.TestCase):
         self.m.switch_to(next(iter(before)))
 
     def test_04_a_restart_does_not_bring_it_back(self):
-        self.prefs(seen="160.0-0.4")
-        self.assertEqual(self.start_with(record("160.0-0.5"))["decision"], "show")
+        # The restart runs the real start-up check, with the record the build itself carries. These versions are
+        # above any build's, so that check finds nothing newer than what was seen, whatever version is under test
+        # (with "160.0-0.5" here, the release build of 160.0-0.6 showed its own notes and failed this test).
+        self.prefs(seen="900.0-0.4")
+        self.assertEqual(self.start_with(record("900.0-0.5"))["decision"], "show")
         self.m = type(self).m = self.session.restart()
-        self.assertEqual(self.seen(), "160.0-0.5")
-        self.assertEqual(self.start_with(record("160.0-0.5"))["decision"], "seen")
+        self.assertEqual(self.seen(), "900.0-0.5")
+        self.assertEqual(self.start_with(record("900.0-0.5"))["decision"], "seen")
         self.assertEqual(set(self.bars()), {""})
 
     def test_05_an_engine_update_and_skipped_versions(self):
