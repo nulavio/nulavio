@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import re
 import unittest
 from pathlib import Path
 
@@ -34,12 +35,22 @@ class PrivacyTestsFixtureTest(unittest.TestCase):
         self.assertIn("MIT", readme)
         self.assertIn("MIT license", (FIXTURES / "LICENSE").read_text(encoding="utf-8"))
 
-    def test_the_pages_post_only_with_a_session_id(self):
-        # The integration test never gives one; this is the line that keeps the results on this machine.
+    def test_nothing_the_pages_post_can_leave_this_machine(self):
+        # The pages post only with a sessionId, and the integration test never gives one.
         post = (FIXTURES / "post_data.js").read_text(encoding="utf-8")
         self.assertIn("if (!urlParams.has('sessionId')) {\n      return;\n    }", post)
         test = (ROOT / "tests" / "integration" / "test_privacytests.py").read_text(encoding="utf-8")
         self.assertNotIn("sessionId=", test)
+        # The Device page's watchdog does not ask for one. Every address a page can post to is in these files,
+        # and the test resolves each of them to this machine.
+        hosts = set()
+        for path in FIXTURES.glob("*.js"):
+            hosts |= set(re.findall(r"https://([a-z0-9.-]+)/post", path.read_text(encoding="utf-8")))
+        self.assertEqual(hosts, {"results.privacytests.org", "results.pto2.example"})
+        local = re.search(r"^LOCAL_ONLY = \(\*SITES, (.*)\)$", test, re.M).group(1)
+        self.assertEqual({name.strip(' "') for name in local.split(",")}, hosts)
+        self.assertIn('Services.prefs.setStringPref("network.dns.localDomains", arguments[0].join(","));', test)
+        self.assertIn("m.chrome(PREPARE, [list(LOCAL_ONLY),", test)
 
 
 if __name__ == "__main__":

@@ -25,7 +25,8 @@ run has none), the keyboard layout (the engine has no Keyboard Map API) and redu
 keeps that media query off).
 
 KNOWN_GAPS lists the probes that do not pass yet, each with its reason. A probe listed there is skipped with
-that reason when it fails, and every other probe must pass. Nulavio build only.
+that reason while it fails, and fails the run once it passes, until its line is removed: the list only gets
+shorter. Every other probe must pass. Nulavio build only.
 """
 
 from __future__ import annotations
@@ -45,9 +46,10 @@ import tiny_font
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "privacytests"
 SITES = ("pt-one.example", "pt-two.example", "pt-three.example")  # three first parties; they resolve to this machine
-# PrivacyTests' pages post their results only with a sessionId in the address, which is never given here. Its
-# address for local runs is named anyway, so that nothing could leave this machine.
-LOCAL_ONLY = (*SITES, "results.pto2.example")
+# PrivacyTests' pages post their results only with a sessionId in the address, which is never given here. One
+# path does not ask for it: the Device page's watchdog posts when `new AudioContext()` takes over two seconds.
+# So both of its results addresses resolve to this machine too, where nothing listens for them.
+LOCAL_ONLY = (*SITES, "results.privacytests.org", "results.pto2.example")
 PAGES = {"Device": "deviceFingerprinting", "Settings": "settingsFingerprinting", "Screen": "screenFingerprinting"}
 PROBES = {
     "Device": (
@@ -220,9 +222,10 @@ class PrivacyTestsProbes(unittest.TestCase):
         return values[0] == values[1]
 
     def check(self, group: str, probe: str) -> None:
-        if self.passes(group, probe):
-            return
         read = f"{probe}: {self.values(group, probe)}"
+        if self.passes(group, probe):
+            self.assertNotIn(probe, KNOWN_GAPS, f"it passes now: remove its line from KNOWN_GAPS. {read}")
+            return
         if probe in KNOWN_GAPS:
             self.skipTest(f"known gap (#79): {KNOWN_GAPS[probe]}. {read}")
         self.fail(f"neither different on the three sites in both runs nor stable between them. {read}")

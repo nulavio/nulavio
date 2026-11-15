@@ -9,6 +9,6 @@ These files are copied, unchanged, from [privacytests/privacytests](https://gith
 | `screenFingerprinting.html`, `screenFingerprinting.js` | the Screen probes (2) |
 | `post_data.js` | their helper that shows the results and, with a `sessionId` in the address, posts them |
 
-`tests/integration/test_privacytests.py` serves them from this machine on three local names and reads each page's `data-test-results`. It never gives a `sessionId`, so nothing is posted. The pages ask for a `test.css` that is not copied; it only styles them.
+`tests/integration/test_privacytests.py` serves them from this machine on three local names and reads each page's `data-test-results`. It never gives a `sessionId`, so `post_data.js` posts nothing. The Device page's watchdog posts without one when `new AudioContext()` takes over two seconds, so the test also resolves both results addresses (`results.privacytests.org`, `results.pto2.example`) to this machine, where nothing listens. The pages ask for a `test.css` that is not copied; it only styles them.
 
 `tests/unit/test_privacytests_fixture.py` pins each file's SHA-256. To move to a newer commit: copy the files again, update the digests and the commit there and here, and read what changed in their scoring (`scripts/test.js`, `scripts/settings-fingerprint-test.js`, `scripts/render.js`), which the integration test mirrors.
