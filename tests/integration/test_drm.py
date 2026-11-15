@@ -235,6 +235,8 @@ class ProtectedMediaTest(unittest.TestCase):
 
     def long_async(self, script: str, args: list, seconds: int):
         """An async script that may take minutes (a download): the script and socket timeouts raised for it alone."""
+        timeouts = self.m.send("WebDriver:GetTimeouts")
+        before = timeouts.get("value", timeouts)["script"]
         self.m.send("WebDriver:SetTimeouts", {"script": seconds * 1000})
         socket_timeout = self.m.timeout
         self.m._sock.settimeout(seconds + 30)
@@ -242,14 +244,14 @@ class ProtectedMediaTest(unittest.TestCase):
             return self.m.execute_async(script, args)
         finally:
             self.m._sock.settimeout(socket_timeout)
-            self.m.send("WebDriver:SetTimeouts", {"script": 30000})
+            self.m.send("WebDriver:SetTimeouts", {"script": before})
 
     @unittest.skipUnless(
         os.environ.get("NULAVIO_NETWORK_TESTS") == "1", "downloads Widevine and plays from Google (NULAVIO_NETWORK_TESTS=1)"
     )
     def test_04_with_drm_on_widevine_installs_and_a_public_test_stream_plays(self):
         """#222, item 2: DRM turned on as Settings does, the engine installs Widevine from Mozilla's list, and the
-        Shaka Player demo's Widevine stream (Sintel, VP9 in WebM, Google's test licence server) plays."""
+        Shaka Player demo's Widevine stream ("Angel One", H.264 in fragmented MP4, Google's test licence server) plays."""
         self.m.chrome("Services.prefs.setBoolPref('media.eme.enabled', true);")
         self.addCleanup(self.m.chrome, "Services.prefs.clearUserPref('media.eme.enabled');")
         self.m.set_context("chrome")
