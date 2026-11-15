@@ -45,8 +45,9 @@ only what the measure needs: Marionette, no default-browser question and no firs
 page would load into the first tab). Everything else is Firefox's own default. It runs the same startup, memory
 and benchmark measures; the frame-time scenes are Nulavio's own and run on the two Nulavio builds only.
 
-The JSON keeps every run and is written after each one; the table gives each side's median and the build's
-change against the baseline (and Firefox's median, with --firefox). What it does not measure yet (#80): the
+The JSON keeps every run and is written after each one; the table gives each side's median, the build's change
+against the baseline with its 95 % bootstrap interval (from 5 runs a side; "intervals" in the JSON: a change whose interval
+holds 0 is not told apart from noise) (and Firefox's median, with --firefox). What it does not measure yet (#80): the
 fingerprinting cost, the tools CLI, and a cold start.
 """
 
@@ -61,6 +62,7 @@ import http.server
 import json
 import math
 import os
+import random
 import secrets
 import shutil
 import signal
@@ -191,19 +193,46 @@ def change(build: list[float], baseline: list[float]) -> float | None:
     return b / a - 1
 
 
+INTERVAL_DRAWS = 2000
+INTERVAL_RUNS = 5  # the fewest runs a side needs for an interval (the default --runs)
+
+
+def interval(build: list[float], baseline: list[float], seed: int = 0) -> tuple[float, float] | None:
+    """A 95 % bootstrap interval of the change: both sides resampled with replacement, the change of the medians
+    each time, its 2.5th and 97.5th percentiles. Fixed seed: the same runs always give the same interval. None
+    with fewer than INTERVAL_RUNS runs on a side: the median of 3 resampled values takes so few values that the
+    interval came out narrow enough to exclude 0 for the same engine on both sides (measured on this machine)."""
+    if len(build) < INTERVAL_RUNS or len(baseline) < INTERVAL_RUNS:
+        return None
+    draw = random.Random(seed)  # noqa: S311 -- resampling for a statistic, seeded on purpose; nothing secret
+    changes = []
+    for _ in range(INTERVAL_DRAWS):
+        b = statistics.median(draw.choices(build, k=len(build)))
+        a = statistics.median(draw.choices(baseline, k=len(baseline)))
+        if a:
+            changes.append(b / a - 1)
+    if len(changes) < INTERVAL_DRAWS // 2:
+        return None
+    changes.sort()
+    return changes[int(0.025 * (len(changes) - 1))], changes[int(0.975 * (len(changes) - 1))]
+
+
 def table(results: dict) -> str:
     firefox = any("firefox" in sides for sides in results["metrics"].values())
-    rows = [("measure", "build (median)", "baseline (median)", "change", *(["Firefox (median)"] if firefox else []))]
+    rows = [
+        ("measure", "build (median)", "baseline (median)", "change", "95 % interval", *(["Firefox (median)"] if firefox else []))
+    ]
     fmt = lambda v: "-" if v is None else f"{v:.1f}"  # noqa: E731
     for name, sides in results["metrics"].items():
         build, baseline = sides["build"], sides["baseline"]
-        delta = change(build, baseline)
+        delta, spread = change(build, baseline), interval(build, baseline)
         rows.append(
             (
                 name,
                 fmt(median(build)),
                 fmt(median(baseline)),
                 "-" if delta is None else f"{delta * 100:+.1f} %",
+                "-" if spread is None else f"{spread[0] * 100:+.1f} … {spread[1] * 100:+.1f} %",
                 *([fmt(median(sides.get("firefox", [])))] if firefox else []),
             )
         )
@@ -618,6 +647,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.frames:
         results["frames"] = frame_times(build, args.baseline_engine, args.runs)
         results["metrics"].update(frame_metrics(results["frames"]))
+    results["intervals"] = {name: interval(sides["build"], sides["baseline"]) for name, sides in results["metrics"].items()}
     write()
     if "error" in results.get("frames", {}):  # what it measured is in the JSON; the command still fails
         print(table(results))
