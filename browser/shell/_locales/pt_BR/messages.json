@@ -1246,6 +1246,7 @@
   "guardSkippedWorkspace": {"message": "O Guard não vigia uma Área de IA: ela é um perfil só do agente."},
   "profilesIconCurrent": {"message": "Ícone atual"},
   "densityLabel": {"message": "Densidade da janela"},
+  "meetingLinksLabel": {"message": "Links de reunião"},
   "accentLabel": {"message": "Cor de destaque"},
   "moreContrastLabel": {"message": "Mais contraste"},
   "ambienceLabel": {"message": "Fundo suave na nova aba"},

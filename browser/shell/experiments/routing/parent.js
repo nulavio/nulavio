@@ -24,12 +24,22 @@ this.nulavioRouting = class extends ExtensionAPI {
     } catch (e) {
       console.error("Nulavio routing", e);
     }
+    try {
+      this.meetings().watch(); // meeting links, joined in the browser when the profile asks (#221)
+    } catch (e) {
+      console.error("Nulavio meetings", e);
+    }
   }
 
   onShutdown(isAppShutdown) {
     if (!isAppShutdown) {
       this.module().unwatchPages();
+      this.meetings().unwatch();
     }
+  }
+
+  meetings() {
+    return ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioMeetings.sys.mjs").NulavioMeetings;
   }
 
   getAPI(context) {

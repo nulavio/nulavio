@@ -202,6 +202,28 @@
       "ui": [
         "settings/native/panes.mjs#nulavio-routing-fallback"
       ]
+    },
+    {
+      "id": "meetingLinks",
+      "kind": "routing",
+      "prefs": [
+        "nulavio.meetings.join"
+      ],
+      "prefType": "string",
+      "values": [
+        "app",
+        "browser"
+      ],
+      "prefValues": [
+        null,
+        "browser"
+      ],
+      "default": "app",
+      "writer": "NulavioPersonalise",
+      "labelKey": "meetingLinksLabel",
+      "ui": [
+        "settings/native/panes.mjs#nulavio-meeting-links"
+      ]
     }
   ]
 }

@@ -22,6 +22,8 @@ ChromeUtils.defineESModuleGetters(lazy, {
 const OPTIONS_URL = "resource://builtin-addons/nulavio-shell/shared/options.json";
 /** The options this module writes (the others in the list have their own writers). */
 export const APPEARANCE = Object.freeze(["density", "accent", "moreContrast", "newtabAmbience", "reduceTransparency"]);
+// What else this module writes for the settings page: one pref each, nothing about how things look (#221).
+const OTHER = Object.freeze(["meetingLinks"]);
 const SYSTEM_QUERIES = Object.freeze({
   moreContrast: "(prefers-contrast: more)",
   forcedColors: "(forced-colors: active)",
@@ -49,7 +51,7 @@ async function load() {
         resolve(lazy.NetUtil.readInputStreamToString(stream, stream.available(), { charset: "UTF-8" }));
       });
     });
-    const list = JSON.parse(text).options.filter(o => APPEARANCE.includes(o.id));
+    const list = JSON.parse(text).options.filter(o => APPEARANCE.includes(o.id) || OTHER.includes(o.id));
     options = new Map(list.map(o => [o.id, Object.freeze(o)]));
   }
   return options;
