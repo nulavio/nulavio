@@ -94,7 +94,7 @@ COMPONENTS = (
     ("design-media", ("docs/design/", "docs/brand/")),
     ("docs", ("docs/", "README", "CHANGELOG.md", "LICENSE", "LICENSES.md")),
     ("launcher", ("launcher/", "bin/")),
-    ("browser", ("browser/", "scripts/build/", "scripts/upstream/", "scripts/brand/", "scripts/research/")),
+    ("browser", ("browser/", "scripts/build/", "scripts/upstream/", "scripts/brand/", "scripts/research/", "scripts/perf/")),
     ("tests", ("tests/",)),
 )
 # The product: components that ship in one package and are tested by the same suites.
