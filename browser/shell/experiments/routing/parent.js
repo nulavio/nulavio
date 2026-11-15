@@ -24,12 +24,22 @@ this.nulavioRouting = class extends ExtensionAPI {
     } catch (e) {
       console.error("Nulavio routing", e);
     }
+    try {
+      this.accountRules().watch(); // rules offered when the person signs in to an account here (#220)
+    } catch (e) {
+      console.error("Nulavio account rules", e);
+    }
   }
 
   onShutdown(isAppShutdown) {
     if (!isAppShutdown) {
       this.module().unwatchPages();
+      this.accountRules().unwatch();
     }
+  }
+
+  accountRules() {
+    return ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioAccountRules.sys.mjs").NulavioAccountRules;
   }
 
   getAPI(context) {
