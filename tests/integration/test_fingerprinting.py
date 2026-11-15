@@ -25,12 +25,15 @@ tests compare like with like on any machine. Nulavio build only.
 from __future__ import annotations
 
 import contextlib
+import http.server
 import json
 import os
 import re
 import shutil
 import subprocess
 import sys
+import threading
+import time
 import unittest
 from pathlib import Path
 
@@ -56,6 +59,24 @@ return { on, engine: String(RFPHelper.getTargetDefaults()).split(","),
   enabled: Services.prefs.getBoolPref("privacy.fingerprintingProtection"),
   resist: Services.prefs.getBoolPref("privacy.resistFingerprinting") };
 """
+
+
+class SlowPage(http.server.BaseHTTPRequestHandler):
+    """A site whose /slow page takes two and a half seconds to answer. Each page keeps what its first script read."""
+
+    def do_GET(self):
+        if self.path.startswith("/slow"):
+            time.sleep(2.5)
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.end_headers()
+        self.wfile.write(
+            b"<!doctype html><meta charset=utf-8><title>slow</title>"
+            b"<script>document.documentElement.dataset.screen = screen.width + 'x' + screen.height;</script>"
+        )
+
+    def log_message(self, *_args):
+        pass
 
 
 def shipped_overrides() -> tuple[set[str], set[str]]:
@@ -268,6 +289,68 @@ class FingerprintingTest(unittest.TestCase):
             self.measure("127.0.0.1")
             self.m.chrome(f"{ALLOW_LIST}.remove(gBrowser.selectedBrowser);")
         self.assertEqual(self.measure("127.0.0.1")["screen"], constant)
+
+    def test_08b_the_page_shown_keeps_the_constant_while_an_exempted_site_is_on_its_way(self):
+        # Review of #375: a protected page that sends the tab to a site the person exempted is still there until
+        # the answer comes. It must not read the display's size in that time.
+        server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), SlowPage)
+        self.addCleanup(server.shutdown)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        site = f"http://127.0.0.1:{server.server_address[1]}"
+        live = "return location.hostname + ' ' + screen.width + 'x' + screen.height;"
+        first = "return document.documentElement.dataset.screen ?? '';"
+        with self.unprotected():
+            plain = self.measure()["screen"]["size"]
+        self.m.navigate(site + "/fast")
+        self.m.chrome(f"{ALLOW_LIST}.add(gBrowser.selectedBrowser);")
+        forget = (
+            "const site = Services.scriptSecurityManager.createContentPrincipalFromOrigin(arguments[0]);"
+            "Services.perms.removeFromPrincipal(site, 'trackingprotection');"
+        )
+        self.addCleanup(self.m.chrome, forget, [f"https://127.0.0.1:{server.server_address[1]}"])
+        self.m.navigate(site + "/fast")
+        self.assertEqual(self.m.execute(first), plain, "the site is not exempted: nothing was tested")
+        self.measure("localhost")
+        self.m.chrome(
+            "gBrowser.selectedBrowser.loadURI(Services.io.newURI(arguments[0]),"
+            " { triggeringPrincipal: Services.scriptSecurityManager.getSystemPrincipal() });",
+            [site + "/slow"],
+        )
+        seen = []
+        while (now := self.m.execute(live)).startswith("localhost ") and len(seen) < 200:
+            seen.append(now)
+            time.sleep(0.1)
+        self.assertGreaterEqual(len(seen), 5, "the slow page came at once: the page before it was never read while waiting")
+        self.assertEqual(set(seen), {"localhost 1920x1080"})
+        # Arrived: the exempted site reads the display's size, from its first script.
+        self.assertTrue(self.arrives(first, plain), self.m.execute(first))
+        self.assertEqual(self.m.execute(live), f"127.0.0.1 {plain}")
+
+    def test_08c_a_private_window_has_the_constant_and_its_own_exemptions(self):
+        with self.unprotected():
+            plain = self.measure()["screen"]["size"]
+        before = set(self.m.window_handles())
+        self.m.chrome("OpenBrowserWindow({ private: true });")
+        self.assertTrue(harness.wait_until(lambda: len(set(self.m.window_handles()) - before) == 1, 20))
+        private = next(iter(set(self.m.window_handles()) - before))
+        self.m.switch_to(private)
+        try:
+            self.assertTrue(self.m.chrome("return PrivateBrowsingUtils.isWindowPrivate(window);"))
+            self.assertEqual(self.measure("127.0.0.1")["screen"]["size"], "1920x1080")
+            # The shield's switch in a private window is kept apart from the ordinary windows' (review of #375).
+            self.m.chrome(f"{ALLOW_LIST}.add(gBrowser.selectedBrowser);")
+            try:
+                self.assertEqual(self.measure("127.0.0.1")["screen"]["size"], plain)
+                self.assertEqual(self.measure("localhost")["screen"]["size"], "1920x1080")
+            finally:
+                self.measure("127.0.0.1")
+                self.m.chrome(f"{ALLOW_LIST}.remove(gBrowser.selectedBrowser);")
+            self.assertEqual(self.measure("127.0.0.1")["screen"]["size"], "1920x1080")
+        finally:
+            self.m.chrome("window.close();")
+            self.m.switch_to(next(iter(before)))
+        # The ordinary window was never exempted by it.
+        self.assertEqual(self.measure("127.0.0.1")["screen"]["size"], "1920x1080")
 
 
 if __name__ == "__main__":

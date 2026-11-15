@@ -24,14 +24,15 @@ function protectionOn(isPrivate) {
 }
 
 /** Whether the person exempted this address's site with the shield. The engine keeps that by host and port,
-    whatever the scheme (ContentBlockingAllowList::ComputePrincipal). */
+    whatever the scheme (ContentBlockingAllowList::ComputePrincipal), and apart for private windows: under
+    another permission, on a principal that carries the private window's mark. */
 function exempted(uri, isPrivate) {
   if (!uri?.schemeIs("http") && !uri?.schemeIs("https")) {
     return false;
   }
   try {
     const site = Services.io.newURI(`https://${uri.hostPort}`);
-    const principal = Services.scriptSecurityManager.createContentPrincipal(site, {});
+    const principal = Services.scriptSecurityManager.createContentPrincipal(site, { privateBrowsingId: isPrivate ? 1 : 0 });
     const type = isPrivate ? "trackingprotection-pb" : "trackingprotection";
     return Services.perms.testExactPermissionFromPrincipal(principal, type) === Services.perms.ALLOW_ACTION;
   } catch {
@@ -55,7 +56,7 @@ function remember(id, wasExempted) {
 }
 
 /** Give the tab of this browsing context the constant screen, or the display's for an exempted site. `uri` is
-    the address its top document has or is about to load; without one, what the tab's last page was stands. */
+    the address its top document shows; without one, what the tab's last page was stands. */
 function apply(context, uri = null) {
   const top = context?.top;
   if (!top?.isContent || top.isDiscarded) {
@@ -79,6 +80,26 @@ function apply(context, uri = null) {
   }
 }
 
+/** A page is about to be asked for in this tab. The page still shown stays until the answer comes, so nothing
+    is taken away from it here: for an exempted destination the tab only remembers it (a tab that changes
+    process starts its new context without the constant; one that does not loses it when the page arrives).
+    For any other destination the constant is set now, before the page's first script. */
+function expect(context, uri) {
+  const top = context?.top;
+  if (!top?.isContent || top.isDiscarded) {
+    return;
+  }
+  const plain = exempted(uri, top.usePrivateBrowsing);
+  remember(top.browserId, plain);
+  if (!plain && protectionOn(top.usePrivateBrowsing)) {
+    try {
+      top.setScreenAreaOverride(SCREEN.width, SCREEN.height);
+    } catch (e) {
+      console.error("Nulavio fingerprinting", e);
+    }
+  }
+}
+
 let watching = null;
 
 export const NulavioFingerprinting = {
@@ -88,7 +109,9 @@ export const NulavioFingerprinting = {
       return;
     }
     const tabs = {
-      // Pages that load nothing (back and forward from the engine's cache, about: pages) pass here only.
+      // The page has arrived: the tab gets what that page is due. An exempted site loses the constant here and
+      // not before, so the page it replaces never reads the display's size. Pages that ask for nothing (back
+      // and forward from the engine's cache, about: pages) pass here only.
       onLocationChange(browser, progress, request, location, flags) {
         if (progress.isTopLevel && !(flags & Ci.nsIWebProgressListener.LOCATION_CHANGE_SAME_DOCUMENT)) {
           apply(browser.browsingContext, location);
@@ -114,8 +137,8 @@ export const NulavioFingerprinting = {
         } else if (topic === "browser-delayed-startup-finished") {
           attach(subject);
         } else {
-          // A page about to be asked for: decided here, before any request leaves, so the page's first script
-          // already reads the right size.
+          // A page about to be asked for: a protected one gets the constant here, before any request leaves,
+          // so its first script already reads it.
           let channel;
           try {
             channel = subject.QueryInterface(Ci.nsIHttpChannel);
@@ -123,7 +146,7 @@ export const NulavioFingerprinting = {
             return;
           }
           if (channel.loadInfo?.externalContentPolicyType === Ci.nsIContentPolicy.TYPE_DOCUMENT) {
-            apply(channel.loadInfo.browsingContext, channel.URI);
+            expect(channel.loadInfo.browsingContext, channel.URI);
           }
         }
       },
