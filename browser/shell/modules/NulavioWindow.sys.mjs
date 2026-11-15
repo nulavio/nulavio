@@ -822,6 +822,20 @@ class WindowUI {
         return false;
       }
     }
+    if (win.document.documentElement.hasAttribute("nulavio-immersive-two-lines")) {
+      // Two lines: the rest of the row on the first, the site alone on the second, both inside the band. Were
+      // the row itself to need two lines (a long profile name, seals, a narrow window), the site would go to a
+      // third, under the band and over the page (review of #342).
+      const band = origin.closest("#nulavio-band")?.getBoundingClientRect();
+      if (!band || room.bottom > band.bottom + 0.5) {
+        return false;
+      }
+      for (const item of origin.parentElement.children) {
+        if (item !== origin && item.checkVisibility() && item.getBoundingClientRect().bottom > room.top + 0.5) {
+          return false;
+        }
+      }
+    }
     return true;
   }
 
@@ -861,12 +875,20 @@ class WindowUI {
     const root = win.document.documentElement;
     const wanted = this.#immersiveWanted(win);
     state.unfit = false;
+    root.removeAttribute("nulavio-immersive-two-lines");
     if (wanted && !this.#immersiveBlock(win)) {
       // Nothing else holds the mode back: does the site fit the row? The row is laid out as with the mode on
-      // and measured before anything is painted; when it does not fit, the toolbar stays (ADR 0009, decision 6).
+      // and measured before anything is painted. When it does not fit, the site gets a line of its own under
+      // the row; when that is not enough either, the toolbar stays (ADR 0009, decision 6; #118).
       root.toggleAttribute("nulavio-immersive", true);
       state.bar.toggleAttribute("nv-neutral", false);
-      state.unfit = !this.#siteFits(win);
+      if (!this.#siteFits(win)) {
+        root.toggleAttribute("nulavio-immersive-two-lines", true);
+        state.unfit = !this.#siteFits(win);
+        if (state.unfit) {
+          root.removeAttribute("nulavio-immersive-two-lines");
+        }
+      }
     }
     const block = wanted ? this.#immersiveBlock(win) : "";
     root.toggleAttribute("nulavio-immersive", wanted && !block);
@@ -1353,7 +1375,8 @@ class WindowUI {
     state.bar.remove();
     state.fullscreen.remove();
     state.edge.remove();
-    for (const name of ["nulavio-immersive", "nulavio-immersive-off", "nulavio-immersive-hold", "nulavio-stage"]) {
+    for (const name of ["nulavio-immersive", "nulavio-immersive-off", "nulavio-immersive-hold", "nulavio-immersive-two-lines",
+      "nulavio-stage"]) {
       win.document.documentElement.removeAttribute(name);
     }
     if (state.sheet) {
