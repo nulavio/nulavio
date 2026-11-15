@@ -133,6 +133,14 @@ class MeetingLinksTest(unittest.TestCase):
         self.assertTrue(harness.wait_until(lambda: self.switches() == dict.fromkeys(SCHEMES), 5), self.switches())
         self.assertEqual(self.open_meeting("click"), 1)
 
+    def test_04_a_switch_the_person_set_survives_a_start_with_the_default(self):
+        # Review of #343: a start with "app" leaves the person's own false alone; only a change of choice clears.
+        meetings = 'ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioMeetings.sys.mjs").NulavioMeetings'
+        pref = "network.protocol-handler.external.zoommtg"
+        self.addCleanup(self.m.chrome, f"Services.prefs.clearUserPref('{pref}');")
+        self.m.chrome(f"Services.prefs.setBoolPref('{pref}', false); {meetings}.unwatch(); {meetings}.watch();")
+        self.assertEqual(self.switches()["zoommtg"], False)
+
     def test_03_settings_offers_the_choice_in_integrations(self):
         self.m.navigate("about:preferences#nulavioIntegrations")
         group = (

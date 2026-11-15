@@ -17,8 +17,9 @@ export const SCHEMES = Object.freeze(["zoommtg", "zoomus", "msteams"]);
 
 const external = scheme => `network.protocol-handler.external.${scheme}`;
 
-/** Make the engine's switches match the profile's choice. Only a switch this set is cleared. */
-function apply() {
+/** Make the engine's switches match the profile's choice. A switch is cleared only when the choice has just
+    changed to "app", never at a start: a false set by the person (about:config, user.js) stays. */
+function apply(changed) {
   const browser = Services.prefs.getStringPref(PREF, "") === "browser";
   for (const scheme of SCHEMES) {
     const pref = external(scheme);
@@ -27,7 +28,7 @@ function apply() {
     }
     if (browser) {
       Services.prefs.setBoolPref(pref, false);
-    } else if (Services.prefs.prefHasUserValue(pref) && !Services.prefs.getBoolPref(pref, true)) {
+    } else if (changed && Services.prefs.prefHasUserValue(pref) && !Services.prefs.getBoolPref(pref, true)) {
       Services.prefs.clearUserPref(pref);
     }
   }
@@ -41,9 +42,9 @@ export const NulavioMeetings = {
     if (observer) {
       return;
     }
-    observer = { observe: () => apply() };
+    observer = { observe: () => apply(true) };
     Services.prefs.addObserver(PREF, observer);
-    apply();
+    apply(false);
   },
 
   unwatch() {

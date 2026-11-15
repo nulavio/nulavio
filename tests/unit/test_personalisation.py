@@ -446,9 +446,11 @@ class PrefWriterInventoryTest(unittest.TestCase):
         source = (SHELL / "modules" / "NulavioMeetings.sys.mjs").read_text(encoding="utf-8")
         self.assertIn('export const SCHEMES = Object.freeze(["zoommtg", "zoomus", "msteams"]);', source)
         self.assertIn("const external = scheme => `network.protocol-handler.external.${scheme}`;", source)
-        body = source[source.index("function apply() {") : source.index("let observer")]
+        body = source[source.index("function apply(changed) {") : source.index("let observer")]
         self.assertIn("const pref = external(scheme);", body)
         self.assertIn("Services.prefs.setBoolPref(pref, false);", body)  # never true: an app is never forced
+        self.assertIn("} else if (changed && Services.prefs.prefHasUserValue(pref)", body)  # never cleared at a start
+        self.assertIn("apply(false);", source)
         self.assertNotIn("Services.prefs.set", source.replace("Services.prefs.setBoolPref(pref, false);", ""))
 
     def test_the_appearance_module_writes_only_inside_set(self):
