@@ -240,6 +240,22 @@ class FixtureServer:
                 f'<img id="ad" src="/adbanners/nulavio-test.png?n={n}">'
             )
             return page.encode(), html, {}
+        if path == "/google-third-party":
+            # Google on another site (tests/integration/test_content_filter.py, #220): Analytics, Tag Manager and the
+            # two ad tags, each from Google's own name (resolved to this machine by the test), beside a script of
+            # the site's own CDN that no list knows. Each path says whose it is: the server keeps paths, not hosts.
+            n, port = query.get("n", "0"), self.port
+            scripts = [
+                f"http://www.google-analytics.com:{port}/analytics.js?n={n}",
+                f"http://www.googletagmanager.com:{port}/gtm.js?id=GTM-NULAVIO&n={n}",
+                f"http://securepubads.g.doubleclick.net:{port}/tag/js/gpt.js?n={n}",
+                f"http://pagead2.googlesyndication.com:{port}/pagead/js/adsbygoogle.js?n={n}",
+                f"http://cdn.nulavio-site.test:{port}/assets/site.js?n={n}",
+            ]
+            page = "<!doctype html><title>google-third-party</title><p>a site</p>" + "".join(
+                f'<script async src="{src}"></script>' for src in scripts
+            )
+            return page.encode(), html, {}
         if path == "/cookie-notice":
             # Cookie-notice fixture (tests/integration/test_content_filter.py): elements named like two of the
             # most common consent banners, which the cookie-notice lists hide, beside one no list knows.

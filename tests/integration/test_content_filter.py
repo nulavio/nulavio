@@ -30,6 +30,14 @@ DEFAULT_ON = set(CONFIG["default_on"])
 # EasyList switches hiding by id and class off on 127.0.0.1 and localhost (`@@://127.0.0.1$generichide`), so the
 # fixture is reached by a name the engine resolves to this machine.
 HOST = "nulavio-notice.test"
+# #220 item 3: Google's names on another site, each with the path the fixture page asks it for.
+GOOGLE = {
+    "www.google-analytics.com": "/analytics.js",
+    "www.googletagmanager.com": "/gtm.js",
+    "securepubads.g.doubleclick.net": "/tag/js/gpt.js",
+    "pagead2.googlesyndication.com": "/pagead/js/adsbygoogle.js",
+}
+SITE_CDN = "cdn.nulavio-site.test"
 
 # uBlock Origin's own state, read (never written) from its extension storage by the test.
 STATE = """
@@ -192,6 +200,37 @@ class ContentFilterDefaultsTest(unittest.TestCase):
         # The registry in the package says `false` for these lists; upstream's says `true` (off by default).
         self.assertTrue(harness.wait_until(upstream, timeout=120, interval=2.0), "upstream's registry did not arrive")
         self.assertTrue(set(self.state()["selected"]) >= DEFAULT_ON, "the registry update switched the lists off")
+
+    def test_05_googles_analytics_tag_manager_and_ad_tags_on_another_site_are_blocked(self):
+        """#220 item 3: on a site that is not Google's, Analytics, Tag Manager, DoubleClick and AdSense load nothing
+        with a new profile's defaults (uBlock Origin's default lists and the engine's tracking protection), while the
+        site's own script does. Google's names reach this machine for the test, over plain http with the HTTPS-Only
+        exception a person gives, so nothing leaves it."""
+        hosts = [HOST, SITE_CDN, *GOOGLE]
+        origins = [f"http://{host}:{self.server.port}" for host in hosts[1:]]
+        grant = (
+            "Services.prefs.setStringPref('network.dns.localDomains', args[0].join(','));"
+            "for (const o of args[1]) {"
+            "  const p = Services.scriptSecurityManager.createContentPrincipalFromOrigin(o);"
+            "  Services.perms.addFromPrincipal(p, 'https-only-load-insecure', Ci.nsIPermissionManager.ALLOW_ACTION);"
+            "}"
+        )
+        chrome_async(self.m, grant, [hosts, origins])
+        self.addCleanup(chrome_async, self.m, "Services.prefs.setStringPref('network.dns.localDomains', args[0]);", [HOST])
+
+        def load() -> dict[str, bool]:
+            type(self).counter += 1
+            n = self.counter
+            self.m.navigate(f"http://{HOST}:{self.server.port}/google-third-party?n={n}")
+            asked = lambda path: any(hit.startswith(path) and hit.endswith(f"n={n}") for hit in self.server.hits)  # noqa: E731
+            harness.wait_until(lambda: asked("/assets/site.js"), timeout=10)
+            return {"site": asked("/assets/site.js"), **{host: asked(path) for host, path in GOOGLE.items()}}
+
+        # uBlock Origin compiles its lists after the first start: the first loads may come before them.
+        blocked = harness.wait_until(lambda: not any(v for k, v in load().items() if k != "site"), timeout=180, interval=2.0)
+        seen = load()
+        self.assertTrue(blocked, f"reached the server: {[host for host in GOOGLE if seen[host]]}")
+        self.assertEqual(seen, {"site": True, **dict.fromkeys(GOOGLE, False)})
 
     def test_04_a_list_the_person_switches_off_stays_off(self):
         self.lists_page()
