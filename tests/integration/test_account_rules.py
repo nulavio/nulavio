@@ -36,6 +36,7 @@ PRESS = """
 const bar = gNotificationBox.getNotificationWithValue("nulavio-account-rules");
 bar.buttonContainer.querySelectorAll("button")[arguments[0]].click();
 """
+DARK_NOW = "return matchMedia('(prefers-color-scheme: dark)').matches;"
 GOOGLE = {"google.com", "gmail.com", "youtube.com", "googleusercontent.com"}
 
 
@@ -93,6 +94,20 @@ class AccountRulesTest(unittest.TestCase):
         print(f"bar: {shown}", file=sys.stderr)
         self.assertIn("Google", shown["text"])
         self.assertEqual(len(shown["buttons"]), 2)
+        # For the review: the window with the bar, in the light and the dark theme (NULAVIO_TEST_ARTIFACTS).
+        folder = harness.artifacts_dir() / "account-rules"
+        folder.mkdir(parents=True, exist_ok=True)
+        try:
+            for dark in (0, 1):
+                self.m.chrome("Services.prefs.setIntPref('ui.systemUsesDarkTheme', arguments[0]);", [dark])
+                harness.wait_until(lambda want=bool(dark): self.m.chrome(DARK_NOW) == want, 10)
+                self.m.set_context("chrome")
+                try:
+                    (folder / f"bar-{'dark' if dark else 'light'}.png").write_bytes(self.m.screenshot_png())
+                finally:
+                    self.m.set_context("content")
+        finally:
+            self.m.chrome("Services.prefs.clearUserPref('ui.systemUsesDarkTheme');")
         # Nothing is applied before the click.
         self.assertEqual(chrome_async(self.m, "return R.rules();"), [])
         self.assertTrue(harness.wait_until(lambda: self.m.chrome(READY), 10))
