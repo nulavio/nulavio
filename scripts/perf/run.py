@@ -20,8 +20,11 @@ alternate the build and the baseline, so a machine that slows down slows both. M
 
 With --speedometer, also Speedometer 3.1 (BrowserBench), pinned to a commit of WebKit/Speedometer's release/3.1
 branch, downloaded once into the cache and checked against its SHA-256, served from this machine (no network
-round-trip is part of the score), run after the second start: its mean score over --speedometer-iterations.
-Without a window (headless) and with software rendering it is a regression signal, not a real-hardware number.
+round-trip is part of the score), run in a third start of the profile after the memory is read, so neither
+measure carries the other's processes: its mean score over --speedometer-iterations (3; the benchmark's own
+default is 10, so this is not an official score). Without a window (headless) and with software rendering it is
+a regression signal, not a real-hardware number. GitHub does not promise the same bytes for an archive it makes
+from a commit: if they change, the run stops at the digest check and the pin needs updating.
 
 The JSON keeps every run and is written after each one; the table gives each side's median and the build's
 change against the baseline. What it does not measure yet (#80): JetStream and MotionMark, frame time
@@ -37,6 +40,7 @@ import functools
 import hashlib
 import http.server
 import json
+import math
 import os
 import shutil
 import statistics
@@ -80,10 +84,14 @@ PINNED = {
         "size": 12358793,
     },
 }
+# The benchmark's state: how many iterations it measured, whether it ended (its last iteration, or an error), and the
+# mean of the iterations' scores, the number its own page shows (resources/main.mjs, _computeResults).
 SPEEDOMETER = (
-    "const runs = globalThis.benchmarkClient?._measuredValuesList ?? [];"
-    " return { done: runs.length, score: runs.length ? runs.reduce((sum, r) => sum + r.score, 0) / runs.length : null };"
+    "const client = globalThis.benchmarkClient, runs = client?._measuredValuesList ?? [];"
+    " return { done: runs.length, ended: !!client?._hasResults && !client._isRunning,"
+    " score: runs.length ? runs.reduce((sum, r) => sum + r.score, 0) / runs.length : null };"
 )
+SPEEDOMETER_ITERATION_S = 600  # the longest one iteration may take here (headless, software rendering)
 
 
 class MeasureError(RuntimeError):
@@ -153,11 +161,11 @@ def pinned(name: str, cache: Path | None = None) -> Path:
     """The pinned benchmark's files: downloaded once, checked against the pin's size and SHA-256, unpacked."""
     pin = PINNED[name]
     cache = cache or cache_dir()
-    tree = cache / f"{name}-{pin['commit']}"
+    tree = cache / f"{name}-{pin['commit']}-{pin['sha256'][:16]}"  # a new digest for the same commit is a new tree
     if (tree / ".verified").exists():
         return tree
     cache.mkdir(parents=True, exist_ok=True)
-    archive = cache / f"{name}-{pin['commit']}.tar.gz"
+    archive = cache / f"{name}-{pin['commit']}-{pin['sha256'][:16]}.tar.gz"
     if not archive.exists():
         partial = archive.with_suffix(".part")
         with urllib.request.urlopen(pin["url"], timeout=120) as response, partial.open("wb") as out:  # noqa: S310
@@ -181,11 +189,16 @@ def pinned(name: str, cache: Path | None = None) -> Path:
     return tree
 
 
+class QuietHandler(http.server.SimpleHTTPRequestHandler):
+    def log_message(self, *args) -> None:  # hundreds of requests an iteration would bury the run lines on stderr
+        pass
+
+
 class StaticServer:
     """A benchmark's files served from this machine, on a free port."""
 
     def __init__(self, root: Path):
-        handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=str(root))
+        handler = functools.partial(QuietHandler, directory=str(root))
         self.httpd = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
         self.thread = threading.Thread(target=self.httpd.serve_forever, daemon=True)
 
@@ -205,9 +218,15 @@ def speedometer_score(m, server: StaticServer, iterations: int) -> float:
     import harness
 
     m.navigate(server.url(f"/index.html?startAutomatically&iterationCount={iterations}"))
-    if not harness.wait_until(lambda: m.execute(SPEEDOMETER)["done"] >= iterations, 60 * 30, interval=5.0):
-        raise MeasureError(f"Speedometer did not finish {iterations} iterations in 30 minutes: {m.execute(SPEEDOMETER)}")
-    return float(m.execute(SPEEDOMETER)["score"])
+    limit = SPEEDOMETER_ITERATION_S * iterations
+    if not harness.wait_until(lambda: m.execute(SPEEDOMETER)["ended"], limit, interval=5.0):
+        raise MeasureError(f"Speedometer did not end {iterations} iterations in {limit} s: {m.execute(SPEEDOMETER)}")
+    state = m.execute(SPEEDOMETER)
+    score = state["score"]
+    # An error ends it early; a score that is not a number comes back as null.
+    if state["done"] < iterations or not isinstance(score, (int, float)) or not math.isfinite(score):
+        raise MeasureError(f"Speedometer ended without a score for {iterations} iterations: {state}")
+    return float(score)
 
 
 def startup_ms(m) -> float:
@@ -230,8 +249,6 @@ def one_run(engine: str, tabs: list[int], server, speedometer: tuple | None = No
         session.stop()
         m = session.restart()
         out["startup_second_ms"] = startup_ms(m)
-        if speedometer:
-            out["speedometer3_score"] = speedometer_score(m, *speedometer)
         local = server.url("/page/perf-")
         m.navigate(server.url("/page/perf-0"))  # the first tab too: a local page, not the start page
         opened = 1
@@ -252,6 +269,10 @@ def one_run(engine: str, tabs: list[int], server, speedometer: tuple | None = No
             out[f"pss_mib_{count}_tabs"] = pss / 1024
             out[f"processes_{count}_tabs"] = len(pids)
             out[f"unreadable_{count}_tabs"] = unreadable
+        if speedometer:  # in a start of its own: the tabs' memory above is not read after it, nor it beside them
+            session.stop()
+            m = session.restart()
+            out["speedometer3_score"] = speedometer_score(m, *speedometer)
         return out
     finally:
         session.cleanup()

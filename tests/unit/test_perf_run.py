@@ -36,12 +36,12 @@ class PinnedBenchmarkTest(unittest.TestCase):
         cache = Path(tempfile.mkdtemp())
         self.addCleanup(__import__("shutil").rmtree, cache)
         pin = perf_run.PINNED["speedometer"]
-        archive = cache / f"speedometer-{pin['commit']}.tar.gz"
+        archive = cache / f"speedometer-{pin['commit']}-{pin['sha256'][:16]}.tar.gz"
         archive.write_bytes(b"not the archive")  # as a download that was replaced or cut
         with self.assertRaises(perf_run.MeasureError):
             perf_run.pinned("speedometer", cache)
         self.assertFalse(archive.exists())
-        self.assertFalse((cache / f"speedometer-{pin['commit']}").exists())
+        self.assertFalse((cache / f"speedometer-{pin['commit']}-{pin['sha256'][:16]}").exists())
 
     def test_an_archive_of_the_pinned_size_with_another_digest_is_refused(self):
         import tempfile
@@ -49,12 +49,40 @@ class PinnedBenchmarkTest(unittest.TestCase):
         cache = Path(tempfile.mkdtemp())
         self.addCleanup(__import__("shutil").rmtree, cache)
         pin = perf_run.PINNED["speedometer"]
-        archive = cache / f"speedometer-{pin['commit']}.tar.gz"
+        archive = cache / f"speedometer-{pin['commit']}-{pin['sha256'][:16]}.tar.gz"
         archive.write_bytes(b"\0" * pin["size"])  # the size alone does not make it the archive
         with self.assertRaises(perf_run.MeasureError):
             perf_run.pinned("speedometer", cache)
         self.assertFalse(archive.exists())
-        self.assertFalse((cache / f"speedometer-{pin['commit']}").exists())
+        self.assertFalse((cache / f"speedometer-{pin['commit']}-{pin['sha256'][:16]}").exists())
+
+    def test_the_pinned_archive_is_unpacked_without_its_top_folder(self):
+        import hashlib
+        import io
+        import tarfile
+        import tempfile
+        from unittest import mock
+
+        cache = Path(tempfile.mkdtemp())
+        self.addCleanup(__import__("shutil").rmtree, cache)
+        packed = io.BytesIO()
+        with tarfile.open(fileobj=packed, mode="w:gz") as tar:
+            for name, data in (
+                ("Speedometer-abc/index.html", b"<title>s</title>"),
+                ("Speedometer-abc/resources/main.mjs", b"//"),
+            ):
+                info = tarfile.TarInfo(name)
+                info.size = len(data)
+                tar.addfile(info, io.BytesIO(data))
+        data = packed.getvalue()
+        pin = {"commit": "abc", "url": "unused", "sha256": hashlib.sha256(data).hexdigest(), "size": len(data)}
+        (cache / f"speedometer-abc-{pin['sha256'][:16]}.tar.gz").write_bytes(data)  # there already: nothing is downloaded
+        with mock.patch.dict(perf_run.PINNED, {"speedometer": pin}):
+            tree = perf_run.pinned("speedometer", cache)
+            self.assertEqual((tree / "index.html").read_bytes(), b"<title>s</title>")
+            self.assertTrue((tree / "resources" / "main.mjs").is_file())
+            self.assertFalse((tree / "Speedometer-abc").exists())
+            self.assertEqual(perf_run.pinned("speedometer", cache), tree)  # verified once, then reused
 
     def test_the_pin_is_a_commit_of_the_release_branch_with_its_digest(self):
         pin = perf_run.PINNED["speedometer"]
