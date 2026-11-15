@@ -671,11 +671,15 @@ class ImmersiveTest(unittest.TestCase):
         self.assertEqual(now["sub"], labels[0] + ".", now)
         self.assertEqual(now["host"], f"{labels[1]}.{labels[2]}:{self.server.port}", now)
 
-    def test_16_a_site_that_does_not_fit_the_row_keeps_the_toolbar(self):
+    def test_16_a_site_that_does_not_fit_gets_a_second_line_then_keeps_the_toolbar(self):
         """ADR 0009, decision 6 (#142, R64): the registrable part is never cut. In a window too narrow for it the
-        name ran over its neighbours in the band; now the toolbar stays, and the mode comes back when it fits."""
+        name ran over its neighbours in the band. Where one line is not enough the site gets a second (#118); where
+        two are not enough either, the toolbar stays, and the mode comes back when it fits."""
         long_name = "a" * 63 + ".test"
-        self.plain_http(long_name)
+        # Longer than two lines of a window at its narrowest (638 px here): a registrable part that cannot be cut, as
+        # long as a public suffix makes it (63 letters under a suffix of the Public Suffix List's private part).
+        longest = "b" * 63 + ".s3-website.ap-northeast-1.amazonaws.com"
+        self.plain_http(long_name, longest)
         size = self.m.chrome("return [outerWidth, outerHeight];")
         self.addCleanup(self.m.chrome, "window.resizeTo(arguments[0], arguments[1]);", size)
         self.m.chrome("window.resizeTo(1500, 800);")
@@ -688,12 +692,55 @@ class ImmersiveTest(unittest.TestCase):
             "return h.left >= o.left - 0.5 && h.right <= o.right + 0.5;"
         )
         self.assertTrue(self.m.chrome(inside), "the name is over its neighbours with the mode on")
-        self.m.chrome("window.resizeTo(520, 800);")
+        # #118: one line is not enough, two are: the site gets a line of its own under the row, and the mode stays.
+        lines = (
+            "const band = document.getElementById('nulavio-band').getBoundingClientRect();"
+            "const row = document.querySelector('#nulavio-band .nv-band-identity').getBoundingClientRect();"
+            "const o = document.querySelector('#nulavio-band .nv-band-origin').getBoundingClientRect();"
+            "const tabs = document.getElementById('sidebar-container').getBoundingClientRect();"
+            "return { two: document.documentElement.hasAttribute('nulavio-immersive-two-lines'), band: band.height,"
+            "         below: o.top >= row.bottom - 0.5, tabs: tabs.top };"
+        )
+        self.m.chrome("window.resizeTo(760, 800);")
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome(lines)["two"], 10), (self.window(), self.m.chrome(lines)))
+        state = self.m.chrome(lines)
+        self.assertTrue(self.window()["on"], self.window())
+        self.assertFalse(self.settled(False)["toolbar"])
+        self.assertTrue(state["below"], state)
+        self.assertGreater(state["band"], 40, state)  # two rows of the band
+        # The tab list starts under the taller band, once its top has moved there (it moves with a transition).
+        under = harness.wait_until(lambda: self.m.chrome(lines)["tabs"] >= self.m.chrome(lines)["band"], 5)
+        self.assertTrue(under, self.m.chrome(lines))
+        self.assertTrue(self.m.chrome(inside), "the name is over its neighbours on its own line")
+        self.shoot_window("16-two-lines")
+        # The row itself too long for one line (as a long profile name and a few seals make it): the site would go to a
+        # third line, under the band and over the page, so the toolbar stays instead (review of #342). A test sheet
+        # gives the profile's chip that width; a small resize has the window measure again, as a new name does.
+        wide = (
+            "const sheet = document.createElementNS('http://www.w3.org/1999/xhtml', 'style'); sheet.id = 'nv-test-wide';"
+            "sheet.textContent = '#nulavio-band .nv-band-identity { min-inline-size: 720px !important; }';"
+            "document.documentElement.append(sheet);"
+        )
+        self.m.chrome(wide)
+        self.m.chrome("window.resizeTo(770, 800);")
+        try:
+            self.assertTrue(harness.wait_until(lambda: self.window()["off"] == "fit", 10), (self.window(), self.m.chrome(lines)))
+            self.assertFalse(self.m.chrome(lines)["two"], "two lines drawn while the row needs two by itself")
+            self.assertTrue(self.settled(True)["toolbar"])
+        finally:
+            self.m.chrome("document.getElementById('nv-test-wide')?.remove(); window.resizeTo(760, 800);")
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome(lines)["two"], 10), (self.window(), self.m.chrome(lines)))
+        self.m.chrome("window.resizeTo(520, 800);")  # as narrow as the window goes
+        narrowest = self.m.chrome("return innerWidth;")
+        self.assertLess(narrowest, 840, f"this desktop's narrowest window ({narrowest} px) fits the longest name on two lines")
+        self.m.navigate(f"http://{longest}:{self.server.port}/page/Imersivo")
         self.assertTrue(harness.wait_until(lambda: self.window()["off"] == "fit", 10), self.window())
         self.assertTrue(self.settled(True)["toolbar"])
+        self.assertFalse(self.m.chrome(lines)["two"], "two lines drawn while the toolbar stays")
         self.m.chrome("window.resizeTo(1500, 800);")
         self.assertTrue(harness.wait_until(lambda: self.window()["on"], 10), self.window())
         self.assertFalse(self.settled(False)["toolbar"])
+        self.assertFalse(self.m.chrome(lines)["two"], "two lines left on a window wide enough for one")
 
     def test_17_an_ai_workspace_keeps_the_whole_window(self):
         """ADR 0009, decision 6 (#142): a window an agent drives shows everything, whatever the switch says."""
@@ -711,6 +758,8 @@ class ImmersiveTest(unittest.TestCase):
         """The whole window in the light and the dark theme, for the review of #118 (NULAVIO_TEST_ARTIFACTS)."""
         folder = harness.artifacts_dir() / "immersive"
         folder.mkdir(parents=True, exist_ok=True)
+        shown = self.window()["toolbar"]  # as it is now: the theme change must not leave it moving in the shot
+        still = "return !document.getAnimations().some(a => a.playState === 'running');"
         try:
             for dark in (0, 1):
                 self.m.chrome("Services.prefs.setIntPref('ui.systemUsesDarkTheme', arguments[0]);", [dark])
@@ -718,7 +767,9 @@ class ImmersiveTest(unittest.TestCase):
                     lambda want=bool(dark): self.m.chrome("return matchMedia('(prefers-color-scheme: dark)').matches;") == want,
                     10,
                 )
-                self.m.chrome("return new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));")
+                if not shown:
+                    self.m.chrome(AWAY)
+                harness.wait_until(lambda: self.window()["toolbar"] is shown and self.m.chrome(still), 10)
                 self.m.set_context("chrome")
                 try:
                     png = self.m.screenshot_png()

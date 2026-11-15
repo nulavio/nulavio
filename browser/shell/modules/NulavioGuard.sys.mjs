@@ -783,6 +783,13 @@ class Guard {
       if (Guard.madeOutside(finding, touched) && !pendingIds.has(finding.id)) {
         this.#state.pending.push({ ...finding, at });
         grew = true;
+      } else if (finding.kind === "extension-changed" && pendingIds.has(finding.id)) {
+        // #337: the engine takes in a file replaced while it was closed a little after the start-up check that
+        // reported it. For that same file, the waiting finding says what the engine says now (its version).
+        const waiting = this.#state.pending.find(f => f.id === finding.id);
+        if (waiting.after?.digest && waiting.after.digest === finding.after?.digest) {
+          waiting.after = finding.after;
+        }
       }
     }
     this.#state.snapshot = { ...this.#state.snapshot, extensions, prefs: this.#prefs(), search };

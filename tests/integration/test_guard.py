@@ -680,16 +680,17 @@ class GuardTest(unittest.TestCase):
         engine = lambda: self.guard("return (await AddonManager.getAddonByID(args[0]))?.version ?? null;", older.id)  # noqa: E731
         print(f"at the start: the engine reports {engine()}, the Guard's finding says {after['version']}", file=sys.stderr)
         self.assertIn(after["version"], (older.version, newer.version))
+        # #337: once the engine has taken the file in, the waiting finding says its version too, and so does the card.
+        waiting = lambda: {f["id"]: f for f in self.guard("return G.findings();")}.get(changed, {})  # noqa: E731
+        self.assertTrue(harness.wait_until(lambda: engine() == newer.version, timeout=20), engine())
+        self.assertTrue(harness.wait_until(lambda: waiting().get("after", {}).get("version") == newer.version, 20), waiting())
         self.open_review()
         detail = self.cards()[changed]["detail"]
-        if after["version"] == newer.version:
-            self.assertIn(f"{older.version} → {newer.version}", detail)
-        else:
-            self.assertIn("arquivo substituído", detail)
+        self.assertIn(f"{older.version} → {newer.version}", detail)
+        self.assertNotIn("arquivo substituído", detail)
         self.shoot("06-version-replaced")
         self.click(changed, "keep")
         self.assertEqual(in_record()["digest"], newer.sha256)
-        self.assertTrue(harness.wait_until(lambda: engine() == newer.version, timeout=20), engine())
         self.assertTrue(harness.wait_until(lambda: in_record().get("version") == newer.version, timeout=20), in_record())
         self.guard("await (await AddonManager.getAddonByID(args[0])).uninstall();", older.id)
         self.assertTrue(harness.wait_until(lambda: not in_record(), timeout=20), in_record())

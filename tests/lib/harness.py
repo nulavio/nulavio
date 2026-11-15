@@ -261,6 +261,23 @@ class FixtureServer:
                 f'<img id="ad" src="/adbanners/nulavio-test.png?n={n}">'
             )
             return page.encode(), html, {}
+        if path == "/google-third-party":
+            # Google on another site (tests/integration/test_content_filter.py, #220): Analytics, Tag Manager and the
+            # two ad tags, each from Google's own name (resolved to this machine by the test), beside a script of
+            # the site's own CDN that no list knows. Each path says whose it is: the server keeps paths, not hosts.
+            # Not *.google-analytics.com: the engine's HSTS preload list has it, so plain http never reaches here.
+            n, port = query.get("n", "0"), self.port
+            scripts = [
+                f"http://www.googletagmanager.com:{port}/gtag/js?id=G-NULAVIO&n={n}",  # Analytics (GA4) loads from here
+                f"http://www.googletagmanager.com:{port}/gtm.js?id=GTM-NULAVIO&n={n}",
+                f"http://securepubads.g.doubleclick.net:{port}/tag/js/gpt.js?n={n}",
+                f"http://pagead2.googlesyndication.com:{port}/pagead/js/adsbygoogle.js?n={n}",
+                f"http://cdn.nulavio-site.test:{port}/assets/site.js?n={n}",
+            ]
+            page = "<!doctype html><title>google-third-party</title><p>a site</p>" + "".join(
+                f'<script async src="{src}"></script>' for src in scripts
+            )
+            return page.encode(), html, {}
         if path == "/text.pdf":
             # A one-page PDF with one line of text, for the PDF viewer (tests/integration/test_text_fragments.py).
             return minimal_pdf("frase sem igual no PDF"), "application/pdf", {}
