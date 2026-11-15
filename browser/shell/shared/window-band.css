@@ -493,16 +493,33 @@
     display: none;
   }
   :root[nulavio-immersive]:not([inFullscreen], [inDOMFullscreen], [customizing]) {
+    /* The band's height in the mode: one row, or two when the site needs a line of its own (#118). */
+    --nulavio-band-size: var(--nv-space-6);
+    &[nulavio-immersive-two-lines] {
+      --nulavio-band-size: calc(2 * var(--nv-space-6));
+      .nv-band-row {
+        flex-wrap: wrap;
+        row-gap: 0;
+      }
+      /* The row as it is, the seals and the pin at its end; under it, the site alone, centred, on the whole width. */
+      .nv-band-row .nv-band-seals {
+        margin-inline-start: auto;
+      }
+      .nv-band-row .nv-band-origin:not([hidden]) {
+        order: 1;
+        flex-basis: 100%;
+      }
+    }
     /* The toolbox keeps the band's height in the layout; the other toolbars hang below it, over the page. */
     #navigator-toolbox {
       position: relative;
       z-index: var(--nv-zIndex-band);
       display: block;
-      block-size: var(--nv-space-6);
+      block-size: var(--nulavio-band-size);
       overflow: visible;
     }
     #nulavio-band {
-      block-size: var(--nv-space-6);
+      block-size: var(--nulavio-band-size);
       border-block-end: 1px solid var(--nv-color-border-subtle);
     }
     #navigator-toolbox > toolbar:not(#nulavio-band) {
@@ -534,14 +551,14 @@
     #nulavio-immersive-edge {
       display: block;
       position: fixed;
-      inset-block: var(--nv-space-6) 0;
+      inset-block: var(--nulavio-band-size) 0;
       inset-inline-start: 0;
       inline-size: var(--nv-space-2);
       z-index: calc(var(--nv-zIndex-band) - 2);
     }
     #sidebar-container {
       position: fixed;
-      inset-block: calc(var(--nv-space-6) + 1px) 0;
+      inset-block: calc(var(--nulavio-band-size) + 1px) 0;
       inset-inline-start: 0;
       z-index: calc(var(--nv-zIndex-band) - 1);
       background-color: var(--toolbox-background-color, var(--nv-color-chrome-toolbox));
@@ -559,7 +576,7 @@
        never covers the list's top and the list never covers the toolbar. NulavioWindow measures the toolbars. */
     &:has(#navigator-toolbox:is(:hover, :focus-within, :has([open]:not([open="false"])))) #sidebar-container,
     &[nulavio-immersive-hold~="toolbar"] #sidebar-container {
-      inset-block-start: calc(var(--nv-space-6) + var(--nulavio-immersive-toolbar-size, 0px));
+      inset-block-start: calc(var(--nulavio-band-size) + var(--nulavio-immersive-toolbar-size, 0px));
     }
     #browser:has(> #nulavio-immersive-edge:hover) > #sidebar-container,
     &[nulavio-immersive-hold~="tabs"] #sidebar-container,
