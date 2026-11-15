@@ -890,6 +890,7 @@
   "galleryAllowFullControl": { "message": "Permitir controle total" },
   "gallerySafeChoiceFirst": { "message": "A opção segura permanece primeiro e como ação principal. Os sinais de segurança são opacos, fixos e nunca animados." },
 
+  "bandPin": {"message": "Manter a barra e as abas à vista"},
   "bandLabel": {"message": "Perfil e segurança da janela"},
   "bandOriginNotSecure": {"message": "Não seguro"},
   "bandOriginFile": {"message": "Arquivo deste computador"},

@@ -109,6 +109,14 @@ return { page: [page.left + page.width / 2, page.top + page.height * 0.6], band:
          tabs: [tabs.left + tabs.width / 2, tabs.top + tabs.height * 0.7] };
 """
 FOCUS = "return { urlbar: gURLBar.focused, active: document.activeElement?.id || document.activeElement?.localName };"
+# #118: the band's pin, as drawn.
+PIN = """
+const pin = document.querySelector('#nulavio-band .nv-band-pin');
+const box = pin?.getBoundingClientRect();
+return { shown: !!pin && pin.checkVisibility(), pressed: pin?.getAttribute('aria-pressed') ?? null,
+         label: pin?.getAttribute('aria-label') ?? null, size: box ? [Math.round(box.width), Math.round(box.height)] : null };
+"""
+PRESS_PIN = "document.querySelector('#nulavio-band .nv-band-pin').click();"
 
 
 @unittest.skipUnless(harness.nulavio_engine(), "Immersive needs the built-in Shell on the engine")
@@ -698,6 +706,91 @@ class ImmersiveTest(unittest.TestCase):
         self.m.chrome("Services.prefs.clearUserPref('nulavio.ai.workspace');")
         self.assertTrue(harness.wait_until(lambda: self.window()["on"], 45), self.window())
         self.assertFalse(self.settled(False)["toolbar"])
+
+    def shoot_window(self, name: str) -> None:
+        """The whole window in the light and the dark theme, for the review of #118 (NULAVIO_TEST_ARTIFACTS)."""
+        folder = harness.artifacts_dir() / "immersive"
+        folder.mkdir(parents=True, exist_ok=True)
+        try:
+            for dark in (0, 1):
+                self.m.chrome("Services.prefs.setIntPref('ui.systemUsesDarkTheme', arguments[0]);", [dark])
+                harness.wait_until(
+                    lambda want=bool(dark): self.m.chrome("return matchMedia('(prefers-color-scheme: dark)').matches;") == want,
+                    10,
+                )
+                self.m.chrome("return new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));")
+                self.m.set_context("chrome")
+                try:
+                    png = self.m.screenshot_png()
+                finally:
+                    self.m.set_context("content")
+                (folder / f"{name}-{'dark' if dark else 'light'}.png").write_bytes(png)
+        finally:
+            self.m.chrome("Services.prefs.clearUserPref('ui.systemUsesDarkTheme');")
+
+    def test_18_the_pin_keeps_the_toolbar_and_the_tab_list_in_view_for_touch(self):
+        """#118, ADR 0009 decision 7: with no pointer to bring the chrome back (touch), the pin in the band holds the
+        toolbar and the tab list until it is pressed again. It is there only in the mode; turning the mode off
+        lets it go."""
+        self.m.chrome(AWAY)
+        self.assertFalse(self.settled(False)["toolbar"])
+        pin = self.m.chrome(PIN)
+        self.assertEqual((pin["shown"], pin["pressed"]), (True, "false"), pin)
+        self.assertTrue(pin["label"], pin)
+        self.assertGreaterEqual(min(pin["size"]), 24, pin)
+        # Not on the first run's stage, which shows the band and the page alone (ADR 0010, decision 5).
+        self.m.chrome("document.documentElement.setAttribute('nulavio-stage', 'layout');")
+        try:
+            self.assertFalse(self.m.chrome(PIN)["shown"], "the pin is on the first run's stage")
+        finally:
+            self.m.chrome("document.documentElement.removeAttribute('nulavio-stage');")
+        self.m.chrome(PRESS_PIN)
+        self.assertTrue(harness.wait_until(lambda: self.window()["hold"] == "tabs toolbar", 10), self.window())
+        self.assertTrue(self.settled(True)["toolbar"])
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome(PARTS)["tabs"]["shown"], 6), self.m.chrome(PARTS))
+        self.assertEqual(self.m.chrome(PIN)["pressed"], "true")
+        self.shoot_window("18-pinned")
+        # Pressed again with a real click (the button takes the keyboard): both leave once the pointer goes.
+        spot = self.m.chrome(
+            "const b = document.querySelector('#nulavio-band .nv-band-pin').getBoundingClientRect();"
+            "return [b.left + b.width / 2, b.top + b.height / 2];"
+        )
+        self.m.chrome(CLICK_AT, [spot])
+        self.m.chrome(AWAY)
+        self.assertTrue(harness.wait_until(lambda: self.window()["hold"] is None, 10), self.window())
+        self.assertFalse(self.settled(False)["toolbar"])
+        self.assertTrue(harness.wait_until(lambda: not self.m.chrome(PARTS)["tabs"]["shown"], 6), self.m.chrome(PARTS))
+        self.assertEqual(self.m.chrome(PIN)["pressed"], "false")
+        # Pinned, then the mode turned off: no pin left for the next time, and none on the full window.
+        self.m.chrome(PRESS_PIN)
+        self.assertTrue(harness.wait_until(lambda: self.window()["hold"] == "tabs toolbar", 10), self.window())
+        self.m.chrome("Services.prefs.setBoolPref('nulavio.layout.immersive', false);")
+        self.assertTrue(harness.wait_until(lambda: not self.window()["on"], 10), self.window())
+        self.assertEqual(self.m.chrome(PIN)["shown"], False)
+        self.assertEqual((self.window()["hold"], self.m.chrome(PIN)["pressed"]), (None, "false"))
+
+    def test_19_a_tab_opened_in_the_background_shows_the_tab_list_for_a_moment(self):
+        """#118, ADR 0009 decision 4: a tab opened behind the one in view comes into view in the tab list, which
+        leaves again by itself. A tab opened in front of the page is seen anyway and holds nothing."""
+        self.m.chrome(AWAY)
+        self.assertFalse(self.settled(False)["toolbar"])
+        self.assertTrue(harness.wait_until(lambda: not self.m.chrome(PARTS)["tabs"]["shown"], 6), self.m.chrome(PARTS))
+        self.addCleanup(
+            self.m.chrome, "for (const tab of window.nvOpened ?? []) gBrowser.removeTab(tab); delete window.nvOpened;"
+        )
+        system = "{triggeringPrincipal: Services.scriptSecurityManager.getSystemPrincipal()}"
+        add = f"(window.nvOpened ??= []).push(gBrowser.addTab(arguments[0], {system}));"
+        self.m.chrome(add, [self.page])
+        self.assertTrue(harness.wait_until(lambda: self.window()["hold"] == "tabs", 5), self.window())
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome(PARTS)["tabs"]["shown"], 5), self.m.chrome(PARTS))
+        self.shoot_window("19-background-tab")
+        self.assertTrue(harness.wait_until(lambda: self.window()["hold"] is None, 6), self.window())
+        self.assertTrue(harness.wait_until(lambda: not self.m.chrome(PARTS)["tabs"]["shown"], 6), self.m.chrome(PARTS))
+        self.assertFalse(self.window()["toolbar"])
+        # In front: selected at once, so nothing is held for it.
+        self.m.chrome(add.replace("push(gBrowser.addTab", "push(gBrowser.selectedTab = gBrowser.addTab"), [self.page])
+        self.assertFalse(harness.wait_until(lambda: self.window()["hold"] is not None, 2), self.window())
+        self.m.chrome("gBrowser.selectedTab = gBrowser.tabs[0];")
 
 
 if __name__ == "__main__":
