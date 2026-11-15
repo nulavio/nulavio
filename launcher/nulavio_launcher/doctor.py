@@ -129,7 +129,7 @@ def check_platform() -> list[Check]:
         f"set here: {', '.join(overrides)}; Nulavio removes them before it starts the engine, "
         "other programs started from this environment keep them"
         if overrides
-        else "nothing here switches off or weakens the engine sandbox"
+        else "none of the variables known to switch off or weaken the engine sandbox is set here"
     )
     checks.append(Check("sandbox", "environment", "warn" if overrides else "ok", detail))
     return checks

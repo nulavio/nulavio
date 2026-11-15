@@ -53,6 +53,8 @@ class EngineCommandTest(unittest.TestCase):
             "MOZ_DISABLE_RDD_SANDBOX": "1",
             "MOZ_SANDBOX_LOGGING": "1",
             "MOZ_ASSUME_USER_NS": "0",  # #312: content processes without their own namespaces
+            "MOZ_FORCE_DISABLE_E10S": "160.0",  # pages in the parent process, no content sandbox
+            "MOZ_FORCE_DISABLE_FISSION": "1",  # one process for several sites
             "MOZ_MARIONETTE": "1",
             "MOZ_REMOTE_SETTINGS_DEVTOOLS": "1",
             "MOZ_HEADLESS": "1",

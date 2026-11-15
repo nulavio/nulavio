@@ -179,14 +179,17 @@ def build_command(engine: Engine, profile_dir: Path, url: str | None = None, pri
     return command
 
 
+# Besides MOZ_*SANDBOX*: the engine's own check for user namespaces skipped (#312); pages in the parent process,
+# with no content sandbox at all; one process for several sites (review of #333).
+WEAKENING = {"MOZ_ASSUME_USER_NS", "MOZ_FORCE_DISABLE_E10S", "MOZ_FORCE_DISABLE_FISSION"}
+
+
 def sandbox_overrides(environ: Mapping[str, str] | None = None) -> list[str]:
-    """The variables in `environ` that switch off or weaken the engine's sandboxes: MOZ_DISABLE_*SANDBOX*,
-    MOZ_SANDBOX_*, and MOZ_ASSUME_USER_NS, which makes the engine skip its own check for user namespaces
-    and start content processes without them (#312)."""
+    """The variables in `environ` that switch off or weaken the engine's sandboxes or its site isolation:
+    MOZ_DISABLE_*SANDBOX*, MOZ_SANDBOX_* and the others of WEAKENING. Read from the 160 engine's strings;
+    a knob the engine adds later is not here until it is added."""
     environ = os.environ if environ is None else environ
-    return sorted(
-        k for k in environ if (k.upper().startswith("MOZ_") and "SANDBOX" in k.upper()) or k.upper() == "MOZ_ASSUME_USER_NS"
-    )
+    return sorted(k for k in environ if (k.upper().startswith("MOZ_") and "SANDBOX" in k.upper()) or k.upper() in WEAKENING)
 
 
 def launch_env() -> dict[str, str]:
