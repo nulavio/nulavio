@@ -695,7 +695,12 @@ class GuardTest(unittest.TestCase):
         detail = self.cards()[changed]["detail"]
         self.assertNotIn("arquivo substituído", detail)
         self.shoot("06-version-replaced")
-        self.click(changed, "keep")
+        # #351, deterministic: the finding kept elsewhere (as from another review tab), with this page open. The page
+        # takes it off without being reloaded: only the onChanged listener can do that.
+        self.m.execute("window.nvNotReloaded = true;")
+        self.guard("await G.resolve(args[0], 'keep');", changed)
+        self.assertTrue(harness.wait_until(lambda: changed not in self.cards(), 10), "the open page kept a resolved finding")
+        self.assertTrue(self.m.execute("return window.nvNotReloaded === true;"), "the page was reloaded")
         self.assertEqual(in_record()["digest"], newer.sha256)
         self.assertTrue(harness.wait_until(lambda: in_record().get("version") == newer.version, timeout=20), in_record())
         self.guard("await (await AddonManager.getAddonByID(args[0])).uninstall();", older.id)
