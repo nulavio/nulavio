@@ -124,6 +124,14 @@ def check_platform() -> list[Check]:
     checks.append(
         Check("sandbox", "seccomp-bpf", "ok" if seccomp.exists() else "warn", "available" if seccomp.exists() else "not detected")
     )
+    overrides = engine_mod.sandbox_overrides()
+    detail = (
+        f"set here: {', '.join(overrides)}; Nulavio removes them before it starts the engine, "
+        "other programs started from this environment keep them"
+        if overrides
+        else "none of the variables known to switch off or weaken the engine sandbox is set here"
+    )
+    checks.append(Check("sandbox", "environment", "warn" if overrides else "ok", detail))
     return checks
 
 

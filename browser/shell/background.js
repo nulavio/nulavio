@@ -301,6 +301,12 @@ if (browser.commands) {
       // always back for a prompt, and stays wherever the band cannot name the page.
       const target = tab ?? (await browser.tabs.query({ active: true, currentWindow: true }))[0];
       browser.nulavioLayout.setImmersive(null, target?.id ?? null).catch(() => {}); // announced in the window
+    } else if (command === "copy-link-to-highlight" && browser.nulavioLayout?.copyLinkToHighlight) {
+      // #157: the engine's "Copy Link to Highlight", for the selection of the tab the key was pressed in.
+      const target = tab ?? (await browser.tabs.query({ active: true, currentWindow: true }))[0];
+      if (target) {
+        browser.nulavioLayout.copyLinkToHighlight(target.id).catch(() => {}); // announced in the window
+      }
     } else if (command === "lock-profile") {
       lockAsked = Date.now();
       browser.action.openPopup(tab ? { windowId: tab.windowId } : {}).catch(console.error);

@@ -181,6 +181,14 @@ class ReleaseWorkflowTest(unittest.TestCase):
         self.assertIn('-v "$sources:/nulavio.sources:ro"', check)
         self.assertNotIn('curl -fsSL --retry 3 "$SOURCES_FILE"', check)
 
+    def test_the_signing_session_leaves_the_environment_once_everything_is_signed(self):
+        # #328 (F7): the upload, the install checks and the release draft run without the KMS role's session.
+        drop = self.publish.index("printf '%s=\\n' AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN >> \"$GITHUB_ENV\"")
+        self.assertLess(self.publish.index("scripts/release/publish_release.sh"), drop)
+        self.assertLess(self.publish.index("scripts/release/sign_companion.sh"), drop)
+        self.assertLess(drop, self.publish.index("upload_repo.sh"))
+        self.assertEqual(self.publish.count("configure-aws-credentials"), 1)
+
     def test_the_release_is_drafted_from_the_runner_build(self):
         # That the published repositories install exactly the released version is run, not read, in
         # test_release_script_protections.CheckPublishedTest.
