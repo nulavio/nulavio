@@ -4,7 +4,8 @@
     python3 -I scripts/perf/fetch_releases.py [<tag>] <dir>
 
 For each of the two (the given tag, or the latest published release, and the published release before it): the
-portable archive, SHA256SUMS and SHA256SUMS.asc from the GitHub release (gh), the signature checked with
+portable archive, SHA256SUMS and SHA256SUMS.asc from the GitHub release (gh; the release before is the newest older one
+that has a portable archive: the first releases had RPMs only), the signature checked with
 site/keys/nulavio-packages.asc and its primary key's fingerprint required to be the release key's, the archive's
 SHA-256 required to be its line in SHA256SUMS, then unpacked into <dir>/new or <dir>/previous (the engine is
 <dir>/<side>/nulavio/nulavio). Draft releases are never measured. Prints the two tags.
@@ -24,6 +25,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 KEY = ROOT / "site" / "keys" / "nulavio-packages.asc"
 FINGERPRINT = "298A9093BAABB26F79BB29F4BF47E5FA9EDB8DB1"  # the release key (release.yml, publish_release.sh)
+HISTORY = 1000  # releases listed at most; the script refuses to guess past it
 
 
 class FetchError(RuntimeError):
@@ -33,8 +35,9 @@ class FetchError(RuntimeError):
 # -- pure (tests/unit/test_perf_fetch_releases.py) ---------------------------------------------------
 
 
-def pair(releases: list[dict], tag: str | None) -> tuple[str, str]:
-    """(the release to measure, the published release before it) from `gh release list --json` rows, newest first."""
+def pair(releases: list[dict], tag: str | None, portable=lambda tag: True) -> tuple[str, str]:
+    """(the release to measure, the newest published release before it that has a portable archive) from `gh release
+    list --json` rows, newest first. `portable(tag)` says whether a release has one (the first releases had RPMs only)."""
     published = [r["tagName"] for r in releases if not r.get("isDraft")]
     if tag is None:
         if not published:
@@ -42,10 +45,16 @@ def pair(releases: list[dict], tag: str | None) -> tuple[str, str]:
         tag = published[0]
     if tag not in published:
         raise FetchError(f"{tag} is not a published release")
-    index = published.index(tag)
-    if index + 1 >= len(published):
-        raise FetchError(f"{tag} has no published release before it")
-    return tag, published[index + 1]
+    if not portable(tag):
+        raise FetchError(f"{tag} has no portable archive to measure")
+    for older in published[published.index(tag) + 1 :]:
+        if portable(older):
+            return tag, older
+    raise FetchError(f"{tag} has no published release with a portable archive before it")
+
+
+def archive_name(tag: str) -> str:
+    return f"nulavio-{tag.removeprefix('v')}.linux-x86_64.tar.xz"
 
 
 def signer(status: str) -> str | None:
@@ -77,8 +86,7 @@ def fetch(tag: str, target: Path) -> None:
     with tempfile.TemporaryDirectory(prefix="nulavio-release-") as work:
         files = Path(work)
         repo = os.environ.get("GITHUB_REPOSITORY", "nulavio/nulavio")
-        version = tag.removeprefix("v")
-        archive = f"nulavio-{version}.linux-x86_64.tar.xz"
+        archive = archive_name(tag)
         for name in (archive, "SHA256SUMS", "SHA256SUMS.asc"):
             gh("release", "download", tag, "--repo", repo, "--pattern", name, "--dir", str(files))
         home = files / "gnupg"
@@ -107,9 +115,16 @@ def main(argv: list[str]) -> int:
         print(__doc__, file=sys.stderr)
         return 2
     tag, out = (argv[1] or None, Path(argv[2])) if len(argv) == 3 else (None, Path(argv[1]))
-    releases = json.loads(gh("release", "list", "--repo", os.environ.get("GITHUB_REPOSITORY", "nulavio/nulavio"),
-                             "--limit", "50", "--json", "tagName,isDraft"))  # fmt: skip
-    new, previous = pair(releases, tag)
+    repo = os.environ.get("GITHUB_REPOSITORY", "nulavio/nulavio")
+    releases = json.loads(gh("release", "list", "--repo", repo, "--limit", str(HISTORY), "--json", "tagName,isDraft"))
+    if len(releases) >= HISTORY:
+        raise FetchError(f"{HISTORY} releases or more: the list may not reach the one before the release to measure")
+
+    def portable(each: str) -> bool:
+        assets = json.loads(gh("release", "view", each, "--repo", repo, "--json", "assets"))["assets"]
+        return any(asset["name"] == archive_name(each) for asset in assets)
+
+    new, previous = pair(releases, tag, portable)
     for side, each in (("new", new), ("previous", previous)):
         fetch(each, out / side)
     print(new, previous)
