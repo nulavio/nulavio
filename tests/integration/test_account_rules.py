@@ -61,9 +61,7 @@ class AccountRulesTest(unittest.TestCase):
     def setUpClass(cls):
         cls.session = harness.GeckoProfileSession(name="Pessoal")
         cls.m = cls.session.start()
-        # A group of profiles, as when the person made a second one.
-        chrome_async(cls.m, "return P.create({templateId: 'work', name: 'Trabalho'});")
-        cls.here = chrome_async(cls.m, "return (await P.current()).id;")
+        cls.here = None
 
     @classmethod
     def tearDownClass(cls):
@@ -78,21 +76,42 @@ class AccountRulesTest(unittest.TestCase):
             "gNotificationBox.getNotificationWithValue('nulavio-account-rules')?.close();",
         )
 
-    def sign_in(self, name: str = "SID") -> None:
-        chrome_async(self.m, SIGN_IN, [name])
+    def sign_in(self, *names: str) -> None:
+        for name in names or ("SID",):
+            chrome_async(self.m, SIGN_IN, [name])
+
+    def grouped(self) -> None:
+        """A group of profiles, as when the person made a second one."""
+        if type(self).here is None:
+            chrome_async(self.m, "return P.create({templateId: 'work', name: 'Trabalho'});")
+            type(self).here = chrome_async(self.m, "return (await P.current()).id;")
+        self.assertTrue(self.m.chrome("return Services.prefs.getBoolPref('browser.profiles.created', false);"))
+
+    def test_00_one_profile_alone_gets_no_offer(self):
+        """Review of #350: routing needs a group; with one profile there is nowhere else a link comes from."""
+        self.assertFalse(self.m.chrome("return Services.prefs.getBoolPref('browser.profiles.created', false);"))
+        self.reset()
+        self.addCleanup(self.reset)
+        self.sign_in()
+        self.assertFalse(harness.wait_until(self.bar, 3), "offered with one profile")
+        self.assertEqual(self.m.chrome("return Services.prefs.getStringPref('nulavio.accountRules.offered', '');"), "")
 
     def bar(self):
         return self.m.chrome(BAR)
 
     def test_01_a_google_sign_in_is_offered_once_and_the_rules_open_its_sites_here(self):
+        self.grouped()
         self.reset()
         self.addCleanup(self.reset)
         self.assertEqual(chrome_async(self.m, "return R.rules();"), [])
-        self.sign_in()
+        self.sign_in("SID", "__Secure-1PSID")  # a sign-in sets both at once: one bar (review of #350)
         self.assertTrue(harness.wait_until(self.bar, 10), "no offer after a Google sign-in")
+        bars = 'return gNotificationBox.allNotifications.filter(n => n.getAttribute("value") === "nulavio-account-rules").length;'
+        self.assertFalse(harness.wait_until(lambda: self.m.chrome(bars) > 1, 2), "two bars for one sign-in")
         shown = self.bar()
         print(f"bar: {shown}", file=sys.stderr)
         self.assertIn("Google", shown["text"])
+        self.assertIn("Pesquisas com o Google", shown["text"])  # what the click also does
         self.assertEqual(len(shown["buttons"]), 2)
         # For the review: the window with the bar, in the light and the dark theme (NULAVIO_TEST_ARTIFACTS).
         folder = harness.artifacts_dir() / "account-rules"
@@ -123,6 +142,7 @@ class AccountRulesTest(unittest.TestCase):
         self.assertFalse(harness.wait_until(self.bar, 3), "offered twice")
 
     def test_02_not_now_adds_nothing_and_ends_the_offer(self):
+        self.grouped()
         self.reset()
         self.addCleanup(self.reset)
         self.sign_in()
@@ -136,6 +156,7 @@ class AccountRulesTest(unittest.TestCase):
         self.assertFalse(harness.wait_until(self.bar, 3), "offered again after Not now")
 
     def test_03_another_sites_cookie_or_a_private_one_offers_nothing(self):
+        self.grouped()
         self.reset()
         self.addCleanup(self.reset)
         chrome_async(

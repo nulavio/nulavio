@@ -17,6 +17,8 @@ ChromeUtils.defineESModuleGetters(lazy, {
 const SHELL = "shell@nulavio.net";
 export const OFFERED_PREF = "nulavio.accountRules.offered"; // the services already offered here, comma-separated
 const BAR = "nulavio-account-rules";
+const GROUPED_PREF = "browser.profiles.created"; // a group of profiles: what routing needs to send a link elsewhere
+const pending = new Set(); // offers being prepared, so the cookies of one sign-in bring one bar
 
 /* The services with an offer, each with the sign-in cookies that mean "signed in here" and its own sites, by
    registrable domain. The person's country domain of the service is added when the search region names one. */
@@ -60,6 +62,39 @@ function markOffered(id) {
   Services.prefs.setStringPref(OFFERED_PREF, [...new Set([...offered(), id])].join(","));
 }
 
+/** The bar, in the front window, unless something makes the offer moot. */
+async function show(id) {
+  const here = (await lazy.NulavioProfiles.current())?.id;
+  const sites = sitesOf(id);
+  if (!here || lazy.NulavioRouting.rules().some(rule => sites.includes(rule.value))) {
+    return false;
+  }
+  const win = Services.wm.getMostRecentWindow("navigator:browser");
+  const box = win?.gNotificationBox;
+  if (!box || box.getNotificationWithValue(BAR)) {
+    return false;
+  }
+  // What the click also does: searches with this service from the other profiles open here too, and, if the
+  // person had turned routing off, their other rules apply again.
+  const label = t(`accountRulesOffer_${id}`) + " " + t(lazy.NulavioRouting.enabled() ? "accountRulesSearches" : "accountRulesTurnsOn");
+  const answer = add => () => {
+    markOffered(id);
+    if (add) {
+      NulavioAccountRules.addRules(id, here).catch(e => console.error("Nulavio account rules", e));
+    }
+    return false; // the bar closes
+  };
+  await box.appendNotification(
+    BAR,
+    { label, priority: box.PRIORITY_INFO_MEDIUM, eventCallback: event => event === "dismissed" && markOffered(id) },
+    [
+      { label: t("accountRulesAdd"), callback: answer(true) },
+      { label: t("accountRulesNotNow"), callback: answer(false) },
+    ]
+  );
+  return true;
+}
+
 let observer = null;
 
 export const NulavioAccountRules = {
@@ -76,7 +111,10 @@ export const NulavioAccountRules = {
         } catch {
           return;
         }
-        if (note.action !== Ci.nsICookieNotification.COOKIE_ADDED || note.cookie?.originAttributes?.privateBrowsingId) {
+        const attrs = note.cookie?.originAttributes;
+        // A private window's cookie, or one partitioned under another site (a sign-in inside a frame), is not a
+        // sign-in to this profile.
+        if (note.action !== Ci.nsICookieNotification.COOKIE_ADDED || attrs?.privateBrowsingId || attrs?.partitionKey) {
           return;
         }
         const id = serviceOfCookie(note.cookie);
@@ -98,35 +136,17 @@ export const NulavioAccountRules = {
   /** Offer the service's rules in the front window, once: only in a group of profiles, and only while no rule
       of this profile's already covers the service. Resolves whether a bar was shown. */
   async offer(id) {
-    if (!SERVICES[id] || offered().includes(id) || !lazy.NulavioProfiles.availability().available) {
+    // One profile alone has nowhere else for a link to come from: routing needs a group (review of #350).
+    const grouped = Services.prefs.getBoolPref(GROUPED_PREF, false);
+    if (!SERVICES[id] || pending.has(id) || offered().includes(id) || !grouped || !lazy.NulavioProfiles.availability().available) {
       return false;
     }
-    const here = (await lazy.NulavioProfiles.current())?.id;
-    const sites = sitesOf(id);
-    if (!here || lazy.NulavioRouting.rules().some(rule => sites.includes(rule.value))) {
-      return false;
+    pending.add(id); // before anything is awaited: a sign-in sets several of these cookies at once
+    try {
+      return await show(id);
+    } finally {
+      pending.delete(id);
     }
-    const win = Services.wm.getMostRecentWindow("navigator:browser");
-    const box = win?.gNotificationBox;
-    if (!box || box.getNotificationWithValue(BAR)) {
-      return false;
-    }
-    const answer = add => () => {
-      markOffered(id);
-      if (add) {
-        this.addRules(id, here).catch(e => console.error("Nulavio account rules", e));
-      }
-      return false; // the bar closes
-    };
-    await box.appendNotification(
-      BAR,
-      { label: t(`accountRulesOffer_${id}`), priority: box.PRIORITY_INFO_MEDIUM, eventCallback: event => event === "dismissed" && markOffered(id) },
-      [
-        { label: t("accountRulesAdd"), callback: answer(true) },
-        { label: t("accountRulesNotNow"), callback: answer(false) },
-      ]
-    );
-    return true;
   },
 
   /** The service's sites, by domain, opened in `profileId`; routing turned on, as the person asked. */
