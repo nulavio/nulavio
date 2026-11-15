@@ -5,6 +5,7 @@ pop-up, never while a device is shared; and a panel anchored on the toolbar keep
 
 from __future__ import annotations
 
+import itertools
 import time
 import unittest
 
@@ -117,6 +118,71 @@ return { shown: !!pin && pin.checkVisibility(), pressed: pin?.getAttribute('aria
          label: pin?.getAttribute('aria-label') ?? null, size: box ? [Math.round(box.width), Math.round(box.height)] : null };
 """
 PRESS_PIN = "document.querySelector('#nulavio-band .nv-band-pin').click();"
+
+# #344: every frame while the pointer moves, the boxes of the band, the toolbar, the tab list, the assistant's panel
+# and the page ([left, top, right, bottom, opacity, in view]), what holds the chrome and where the pointer is.
+TRACE = """
+const t = window.nvTrace = { frames: [], x: -1, y: -1, on: true };
+if (!window.nvTraceMove) {
+  window.nvTraceMove = e => { if (window.nvTrace) { window.nvTrace.x = e.clientX; window.nvTrace.y = e.clientY; } };
+  addEventListener('mousemove', window.nvTraceMove, true);
+}
+const box = id => {
+  const e = document.getElementById(id), b = e.getBoundingClientRect(), s = getComputedStyle(e);
+  return [Math.round(b.left), Math.round(b.top), Math.round(b.right), Math.round(b.bottom), +s.opacity,
+          e.checkVisibility() ? 1 : 0];
+};
+const tick = () => {
+  if (!t.on) return;
+  t.frames.push({ x: t.x, y: t.y, hold: document.documentElement.getAttribute('nulavio-immersive-hold'),
+    band: box('nulavio-band'), toolbar: box('nav-bar'), tabs: box('sidebar-container'), panel: box('sidebar-box'),
+    page: box('tabbrowser-tabbox') });
+  if (t.frames.length < 5000) requestAnimationFrame(tick);
+};
+requestAnimationFrame(tick);
+"""
+TRACE_END = "window.nvTrace.on = false; return window.nvTrace.frames;"
+# #344: the assistant's panel the journeys run with: none, Nulavio's (the Shell's sidebar action) or a site's (the
+# engine's AI chatbot panel, on a page of the fixture).
+PANELS = {
+    "none": "SidebarController.hide();",
+    "nulavio": "SidebarController.show('shell_nulavio_net-sidebar-action');",
+    "site": "Services.prefs.setBoolPref('browser.ml.chat.enabled', true);"
+    " Services.prefs.setStringPref('browser.ml.chat.provider', arguments[0]);"
+    " SidebarController.show('viewGenaiChatSidebar');",
+}
+
+
+def pointer_path(points: list[tuple[int, ...]], pause_ms: int = 0) -> list[dict]:
+    """A pointer moving through `points` in 8 px steps at 60 Hz, as a hand moves it, resting `pause_ms` at each
+    point, or as long as the point's third number says."""
+    actions = []
+    for start, end in itertools.pairwise(points):
+        (x0, y0), (x1, y1) = start[:2], end[:2]
+        steps = max(1, round(max(abs(x1 - x0), abs(y1 - y0)) / 8))
+        for i in range(1, steps + 1):
+            actions.append(
+                {
+                    "type": "pointerMove",
+                    "duration": 16,
+                    "origin": "viewport",
+                    "x": round(x0 + (x1 - x0) * i / steps),
+                    "y": round(y0 + (y1 - y0) * i / steps),
+                }
+            )
+        rest = end[2] if len(end) > 2 else pause_ms
+        if rest:
+            actions.append({"type": "pause", "duration": rest})
+    return actions
+
+
+def visible(part: list) -> bool:
+    return part[5] == 1 and part[4] > 0.05 and part[2] > part[0] + 2 and part[2] > 2 and part[3] > part[1]
+
+
+def covers(a: list, b: list) -> bool:
+    """Two parts in view with more than a pixel in common."""
+    return visible(a) and visible(b) and min(a[2], b[2]) - max(a[0], b[0]) > 1 and min(a[3], b[3]) - max(a[1], b[1]) > 1
 
 
 @unittest.skipUnless(harness.nulavio_engine(), "Immersive needs the built-in Shell on the engine")
@@ -842,6 +908,238 @@ class ImmersiveTest(unittest.TestCase):
         self.m.chrome(add.replace("push(gBrowser.addTab", "push(gBrowser.selectedTab = gBrowser.addTab"), [self.page])
         self.assertFalse(harness.wait_until(lambda: self.window()["hold"] is not None, 2), self.window())
         self.m.chrome("gBrowser.selectedTab = gBrowser.tabs[0];")
+
+    def test_20_pointer_journeys_keep_every_part_in_place(self):
+        """#344: the window driven by pointer paths, not jumps (WebDriver actions in the chrome, through the engine's
+        own event path), measured at every frame. Along band -> toolbar -> tab list and back, side edge -> tab list ->
+        toolbar, across the page, and out and back in during the hold and during a transition: the toolbar never
+        covers the tab list or the assistant's panel, the page and the panel never move sideways, the band never
+        moves, and once the pointer rests on the page nothing stays shown. With no panel, Nulavio's assistant and a
+        site's; in Lateral, Foco and Abas no topo (where the side column is the launcher's, as with the mode off);
+        light at 1440 x 900 and dark at the narrowest window.
+        The tab list is drawn over the panel as it is over the page: it comes and goes without moving either."""
+        self.addCleanup(self.m.chrome, "Services.prefs.clearUserPref('ui.systemUsesDarkTheme');")
+        self.addCleanup(
+            self.m.chrome,
+            "Services.prefs.clearUserPref('browser.ml.chat.enabled'); Services.prefs.clearUserPref('browser.ml.chat.provider');",
+        )
+        self.addCleanup(self.m.chrome, "SidebarController.hide();")
+        self.addCleanup(
+            self.m.chrome,
+            "window.resizeTo(arguments[0], arguments[1]);",
+            self.m.chrome("return [window.outerWidth, window.outerHeight];"),
+        )
+        self.addCleanup(self.m.chrome, "if (window.nvTrace) window.nvTrace.on = false;")
+        before = self.m.chrome(f"return {LAYOUT}.state(window).then(state => state.preset);")
+        self.addCleanup(self.apply_preset, before)
+        chatbot = self.server.url("/page/chatbot")
+
+        def journey(name: str, points: list[tuple[int, int]], pause_ms: int = 0) -> list[dict]:
+            self.m.chrome(TRACE)
+            self.m.set_context("chrome")
+            try:
+                rest = [{"type": "pause", "duration": 1600}]  # the hold and the exit, then the window at rest
+                self.m.send(
+                    "WebDriver:PerformActions",
+                    {
+                        "actions": [
+                            {
+                                "type": "pointer",
+                                "id": "mouse",
+                                "parameters": {"pointerType": "mouse"},
+                                "actions": pointer_path(points, pause_ms) + rest,
+                            }
+                        ]
+                    },
+                )
+            finally:
+                self.m.set_context("content")
+            frames = self.m.chrome(TRACE_END)
+            self.assertGreater(len(frames), 30, name)
+            return frames
+
+        def check(where: str, frames: list[dict], panel: bool, want_tabs: bool, want_toolbar: bool):
+            first = frames[0]
+            for n, f in enumerate(frames):
+                at = f"{where}, frame {n} of {len(frames)}: {f}"
+                self.assertFalse(covers(f["toolbar"], f["tabs"]), "the toolbar over the tab list: " + at)
+                self.assertFalse(covers(f["toolbar"], f["panel"]), "the toolbar over the panel: " + at)
+                self.assertEqual(f["band"][:4], first["band"][:4], "the band moved: " + at)
+                self.assertEqual([f["page"][0], f["page"][2]], [first["page"][0], first["page"][2]], "the page moved: " + at)
+                self.assertEqual(f["page"][1], first["page"][1], "the page moved: " + at)
+                if panel:
+                    self.assertEqual(
+                        [f["panel"][0], f["panel"][2]], [first["panel"][0], first["panel"][2]], "the panel moved: " + at
+                    )
+                if visible(f["tabs"]):
+                    self.assertGreaterEqual(f["tabs"][1] + 1, f["band"][3], "the tab list over the band: " + at)
+            # It went where the pointer took it, so the checks above saw it (no journey passes by seeing nothing)...
+            self.assertEqual(any(visible(f["tabs"]) for f in frames), want_tabs, f"{where}: the tab list")
+            self.assertEqual(any(visible(f["toolbar"]) for f in frames), want_toolbar, f"{where}: the toolbar")
+            # ...and left once the pointer rests on the page.
+            last = frames[-1]
+            self.assertFalse(visible(last["toolbar"]) or visible(last["tabs"]), f"{where}: still shown at rest: {last}")
+
+        for size, dark in (((1440, 900), 0), ((320, 480), 1)):
+            self.m.chrome("window.resizeTo(arguments[0], arguments[1]);", list(size))
+            self.m.chrome("Services.prefs.setIntPref('ui.systemUsesDarkTheme', arguments[0]);", [dark])
+            for preset in ("lateral", "focus", "top"):
+                self.apply_preset(preset)
+                for panel, show in PANELS.items():
+                    self.m.chrome(show, [chatbot])
+                    if panel != "none":
+                        self.assertTrue(
+                            harness.wait_until(
+                                lambda: self.m.chrome("return document.getElementById('sidebar-box').checkVisibility();"), 10
+                            )
+                        )
+                    self.m.chrome(AWAY + "gBrowser.selectedBrowser.focus();")
+                    self.settled(False)
+                    time.sleep(1)
+                    w, h = self.m.chrome("return [innerWidth, innerHeight];")
+                    where = f"{preset}, panel {panel}, {w}x{h}, {'dark' if dark else 'light'}"
+                    page = (w * 3 // 4, h // 2)
+                    with self.subTest(where=where):
+                        # Band -> toolbar -> tab list and back up, then out over the page.
+                        frames = journey(
+                            "band-toolbar-tabs",
+                            [page, (1, h // 2), (100, h // 3), (100, 10), (100, 50), (100, h // 3), (100, 10), page],
+                            120,
+                        )
+                        check(where + ", band -> toolbar -> tab list", frames, panel != "none", True, True)
+                        # Side edge -> tab list -> toolbar, along the toolbar and down onto the page.
+                        frames = journey(
+                            "edge-tabs-toolbar",
+                            [page, (1, h * 2 // 3), (100, h // 2), (100, 10), (100, 50), (w // 2, 50), page],
+                            120,
+                        )
+                        check(where + ", edge -> tab list -> toolbar", frames, panel != "none", True, True)
+                        # Across the page, under the toolbar and away from the edge: nothing comes.
+                        frames = journey("across", [page, (w // 4, h - 40), (w - 40, 80), page])
+                        check(where + ", across the page", frames, panel != "none", False, False)
+                        # Out of the toolbar and back while it is held (back after about 0.2 s), then out and back
+                        # while it leaves (about 0.7 s: past the 0.6 s hold, inside the 0.18 s exit), then away.
+                        frames = journey(
+                            "back-in",
+                            [
+                                page,
+                                (w // 2, 10, 400),
+                                (w // 2, 120),
+                                (w // 2, 10, 400),
+                                (w // 2, 200, 150),
+                                (w // 2, 10, 400),
+                                page,
+                            ],
+                        )
+                        check(where + ", out and back in", frames, panel != "none", False, True)
+                        self.m.chrome(PANELS["none"])
+
+    def test_21_typing_and_a_tab_menu_with_the_tab_list_shown_keep_the_parts_apart(self):
+        """#344: the mode turned on with the toolbar and the tab list leaving at once; then the tab list brought by the
+        pointer, the address field typed in with its results open, and the menu of a tab opened with a right click in
+        the list: at every frame the toolbar and the list stay apart, the page does not move, and both leave once the
+        pointer rests on the page."""
+        self.addCleanup(self.m.chrome, "if (window.nvTrace) window.nvTrace.on = false;")
+        self.addCleanup(self.m.chrome, "document.getElementById('tabContextMenu').hidePopup(); gURLBar.view.close();")
+        before = self.m.chrome(f"return {LAYOUT}.state(window).then(state => state.preset);")
+        self.addCleanup(self.apply_preset, before)
+        self.apply_preset("lateral")
+        still = "return !document.getAnimations().some(a => a.playState === 'running');"
+        w, h = self.m.chrome("return [innerWidth, innerHeight];")
+        page = (w * 3 // 4, h // 2)
+
+        def act(*sources):
+            self.m.set_context("chrome")
+            try:
+                self.m.send("WebDriver:PerformActions", {"actions": list(sources)})
+            finally:
+                self.m.set_context("content")
+
+        def pointer(actions):
+            return {"type": "pointer", "id": "mouse", "parameters": {"pointerType": "mouse"}, "actions": actions}
+
+        def keys(text):
+            return {
+                "type": "key",
+                "id": "keyboard",
+                "actions": [a for c in text for a in ({"type": "keyDown", "value": c}, {"type": "keyUp", "value": c})],
+            }
+
+        def apart(frames, where, page_moves=False):
+            first = frames[0]
+            for n, f in enumerate(frames):
+                at = f"{where}, frame {n} of {len(frames)}: {f}"
+                self.assertFalse(covers(f["toolbar"], f["tabs"]), "the toolbar over the tab list: " + at)
+                if not page_moves:
+                    self.assertEqual(f["page"][:4], first["page"][:4], "the page moved: " + at)
+            self.assertFalse(visible(frames[-1]["toolbar"]) or visible(frames[-1]["tabs"]), f"{where}: {frames[-1]}")
+
+        # The mode turned off and on again (the key, the switch): the toolbar and the list leave at once; the toolbar
+        # was held 0.6 s over the list's top as the list left the flow.
+        self.m.chrome(TRACE)
+        for on in (False, True):
+            self.m.chrome("Services.prefs.setBoolPref('nulavio.layout.immersive', arguments[0]);", [on])
+            self.assertTrue(harness.wait_until(lambda want=on: self.window()["on"] is want, 10))
+            time.sleep(1)
+        apart(self.m.chrome(TRACE_END), "the mode turned on", page_moves=True)
+        self.m.chrome(AWAY + "gBrowser.selectedBrowser.focus();")
+        self.assertTrue(harness.wait_until(lambda: not self.window()["toolbar"] and self.m.chrome(still), 10))
+
+        # The list by the pointer, which stays in it; the address field by the keyboard, typed in.
+        self.m.chrome(TRACE)
+        act(pointer(pointer_path([page, (1, h // 2), (100, h // 2)], 300)))
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome(PARTS)["tabs"]["shown"], 5), self.m.chrome(PARTS))
+        self.m.chrome("document.getElementById('Browser:OpenLocation').doCommand();")
+        act(keys("imersivo"))
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome("return gURLBar.view.isOpen;"), 5), "no results")
+        time.sleep(0.5)
+        parts = self.m.chrome(PARTS)
+        self.assertTrue(parts["toolbar"]["shown"] and parts["tabs"]["shown"], parts)
+        self.shoot_window("21-typing-with-the-list")
+        self.m.chrome("gURLBar.view.close(); gURLBar.handleRevert(); gBrowser.selectedBrowser.focus();")
+        act(pointer([*pointer_path([(100, h // 2), page], 0), {"type": "pause", "duration": 1600}]))
+        apart(self.m.chrome(TRACE_END), "typing")
+
+        # A tab's menu, by a right click on the tab in the list: the list stays while it is open.
+        self.m.chrome(TRACE)
+        act(pointer(pointer_path([page, (1, h // 2), (100, h // 2)], 300)))
+        tab = self.m.chrome(
+            "const b = gBrowser.selectedTab.getBoundingClientRect(); return [b.left + b.width / 2, b.top + b.height / 2];"
+        )
+        spot = (round(tab[0]), round(tab[1]))
+        right = [{"type": "pointerDown", "button": 2}, {"type": "pointerUp", "button": 2}]
+        act(pointer([*pointer_path([(100, h // 2), spot], 100), *right]))
+        menu = "return document.getElementById('tabContextMenu').state;"
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome(menu) == "open", 5))
+        act(pointer([*pointer_path([spot, page], 0), {"type": "pause", "duration": 1200}]))
+        self.assertTrue(self.m.chrome(PARTS)["tabs"]["shown"], "the list left with its tab's menu open")
+        self.assertIn("tabs", self.window()["hold"] or "")
+        self.m.chrome("document.getElementById('tabContextMenu').hidePopup();")
+        act(pointer([{"type": "pause", "duration": 1600}]))
+        apart(self.m.chrome(TRACE_END), "a tab's menu")
+
+        # A tab dragged in the list: the engine's drag session takes the hover away from the list, which left under the
+        # pointer before the drop. The list stays from the drag's start to its end. (Marionette starts no drag
+        # session; the drag through the X server is in the pull request's real-input pass.)
+        drag = (
+            "gBrowser.selectedTab.dispatchEvent(new DragEvent(arguments[0], {bubbles: true, dataTransfer: new DataTransfer()}));"
+        )
+        self.m.chrome(drag, ["dragstart"])
+        self.addCleanup(self.m.chrome, drag, ["dragend"])
+        self.assertTrue(harness.wait_until(lambda: "tabs" in (self.window()["hold"] or ""), 5), self.window())
+        time.sleep(1.2)  # past the hold and the exit a hover gets
+        self.assertTrue(self.m.chrome(PARTS)["tabs"]["shown"], "the list left during a tab's drag")
+        self.m.chrome(drag, ["dragend"])
+        self.assertTrue(harness.wait_until(lambda: self.window()["hold"] is None, 5), self.window())
+        self.assertTrue(harness.wait_until(lambda: not self.m.chrome(PARTS)["tabs"]["shown"], 5), self.m.chrome(PARTS))
+
+    def apply_preset(self, preset: str):
+        layout = f"const d = arguments[arguments.length - 1]; {LAYOUT}.apply(window, arguments[0]).then(d, e => d(String(e)));"
+        self.m.set_context("chrome")
+        try:
+            return self.m.execute_async(layout, [preset])
+        finally:
+            self.m.set_context("content")
 
 
 if __name__ == "__main__":

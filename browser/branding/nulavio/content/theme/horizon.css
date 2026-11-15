@@ -139,6 +139,7 @@
      draw, and that has to stay in view. */
   @media (min-height: 601px) {
     :root:not([inFullscreen], [inDOMFullscreen]) {
+      --nulavio-frame-margin: var(--nv-space-3); /* the same margin, where window-band.css sets it (Immersive, #344) */
       #tabbrowser-tabbox {
         margin-block: 0 var(--nv-space-3);
         margin-inline: 0 var(--nv-space-3);
