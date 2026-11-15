@@ -54,6 +54,12 @@
       },
       "description": "__MSG_commandToggleImmersive__"
     },
+    "copy-link-to-highlight": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+L"
+      },
+      "description": "__MSG_commandCopyLinkToHighlight__"
+    },
     "lock-profile": {
       "suggested_key": {
         "default": "Ctrl+Alt+B"
