@@ -685,8 +685,9 @@ class GeckoProfileSession:
             self.env["MOZ_HEADLESS"] = "1"
         else:
             # Headful: the display the caller chose, a private Xvfb (`env -u WAYLAND_DISPLAY DISPLAY=:n
-            # GDK_BACKEND=x11`) or Wayland. Nothing else of the caller's session is passed.
-            for variable in ("WAYLAND_DISPLAY", "DISPLAY", "GDK_BACKEND", "MOZ_ENABLE_WAYLAND"):
+            # GDK_BACKEND=x11`, with its cookie file when it has one) or Wayland. Nothing else of the caller's
+            # session is passed.
+            for variable in ("WAYLAND_DISPLAY", "DISPLAY", "XAUTHORITY", "GDK_BACKEND", "MOZ_ENABLE_WAYLAND"):
                 if os.environ.get(variable):
                     self.env[variable] = os.environ[variable]
         # The AddressSanitizer build's options (asan.yml: where reports go), when set.

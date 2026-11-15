@@ -39,8 +39,8 @@ private Xvfb this command starts, with the same --runs, after the other measures
 to paint. Xvfb with software rendering: a regression gate, not a measure of real hardware.
 
 The JSON keeps every run and is written after each one; the table gives each side's median and the build's
-change against the baseline. What it does not measure yet (#80):
-(scripts/research/frame_scene.py), the fingerprinting cost, the tools CLI, a cold start, and stock Firefox
+change against the baseline. What it does not measure yet (#80): the
+fingerprinting cost, the tools CLI, a cold start, and stock Firefox
 as a second baseline (GeckoProfileSession needs a Nulavio build).
 """
 
@@ -54,9 +54,11 @@ import http.server
 import json
 import math
 import os
+import secrets
 import shutil
 import subprocess
 import statistics
+import struct
 import sys
 import tarfile
 import tempfile
@@ -324,34 +326,61 @@ def frame_metrics(frames: dict) -> dict:
     return out
 
 
+def xauthority(display: str, cookie: bytes) -> bytes:
+    """One Xauthority entry: an MIT-MAGIC-COOKIE-1 for `display` on any host (FamilyWild), as `xauth add` writes."""
+
+    def counted(data: bytes) -> bytes:
+        return struct.pack(">H", len(data)) + data
+
+    return struct.pack(">H", 0xFFFF) + counted(b"") + counted(display.encode()) + counted(b"MIT-MAGIC-COOKIE-1") + counted(cookie)
+
+
 def frame_times(build: str, baseline: str, runs: int) -> dict:
-    """frame_scene.py on a private Xvfb (it must run headful), for both engines; its JSON."""
+    """frame_scene.py on a private Xvfb (it must run headful), for both engines; its JSON. The display takes only
+    clients that hold its cookie, as with xvfb-run: a random one, in 0600 files of a 0700 directory, never in argv."""
     if not shutil.which("Xvfb"):
         raise MeasureError("--frames needs Xvfb (xorg-x11-server-Xvfb)")
-    read, written = os.pipe()
-    xvfb = subprocess.Popen(
-        ["Xvfb", "-displayfd", str(written), "-screen", "0", "1920x1080x24", "-nolisten", "tcp"],
-        pass_fds=(written,),
-        stderr=subprocess.DEVNULL,
-    )
-    os.close(written)
-    try:
-        with os.fdopen(read) as fd:
-            display = fd.readline().strip()
-        if not display:
-            raise MeasureError("Xvfb did not start")
-        env = {key: value for key, value in os.environ.items() if key not in ("WAYLAND_DISPLAY", "MOZ_ENABLE_WAYLAND")}
-        env.update(
-            DISPLAY=f":{display}", GDK_BACKEND="x11", MOZ_ENABLE_WAYLAND="0", NULAVIO_TEST_HEADFUL="1", NULAVIO_ENGINE=build
+    with tempfile.TemporaryDirectory(prefix="nulavio-frames-") as private:
+        cookie = secrets.token_bytes(16)
+        server_auth, client_auth = Path(private) / "server.auth", Path(private) / "client.auth"
+        for path in (server_auth, client_auth):
+            path.touch(mode=0o600)
+        server_auth.write_bytes(xauthority("0", cookie))  # the server takes every cookie in its file, whatever display
+        read, written = os.pipe()
+        xvfb = subprocess.Popen(
+            ["Xvfb", "-displayfd", str(written), "-auth", str(server_auth), "-screen", "0", "1920x1080x24", "-nolisten", "tcp"],
+            pass_fds=(written,),
+            stderr=subprocess.DEVNULL,
         )
-        with tempfile.TemporaryDirectory(prefix="nulavio-frames-") as out:
-            command = [sys.executable, "-I", str(ROOT / "scripts" / "research" / "frame_scene.py")]
-            command += ["--baseline-engine", baseline, "--runs", str(runs), "--out", out]
-            subprocess.run(command, env=env, check=True, stdout=subprocess.DEVNULL)
-            return json.loads((Path(out) / "perf.json").read_text(encoding="utf-8"))
-    finally:
-        xvfb.terminate()
-        xvfb.wait(10)
+        os.close(written)
+        try:
+            with os.fdopen(read) as fd:
+                display = fd.readline().strip()
+            if not display:
+                raise MeasureError("Xvfb did not start")
+            client_auth.write_bytes(xauthority(display, cookie))
+            return frame_scene_on(build, baseline, runs, display, client_auth)
+        finally:
+            xvfb.terminate()
+            xvfb.wait(10)
+
+
+def frame_scene_on(build: str, baseline: str, runs: int, display: str, auth: Path) -> dict:
+    """frame_scene.py headful on `display`, with its cookie file and without the caller's Wayland."""
+    env = {key: value for key, value in os.environ.items() if key not in ("WAYLAND_DISPLAY", "MOZ_ENABLE_WAYLAND")}
+    env.update(
+        DISPLAY=f":{display}",
+        XAUTHORITY=str(auth),
+        GDK_BACKEND="x11",
+        MOZ_ENABLE_WAYLAND="0",
+        NULAVIO_TEST_HEADFUL="1",
+        NULAVIO_ENGINE=build,
+    )
+    with tempfile.TemporaryDirectory(prefix="nulavio-frames-") as out:
+        command = [sys.executable, "-I", str(ROOT / "scripts" / "research" / "frame_scene.py")]
+        command += ["--baseline-engine", baseline, "--runs", str(runs), "--out", out]
+        subprocess.run(command, env=env, check=True, stdout=subprocess.DEVNULL)
+        return json.loads((Path(out) / "perf.json").read_text(encoding="utf-8"))
 
 
 def startup_ms(m) -> float:

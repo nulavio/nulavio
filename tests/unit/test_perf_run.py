@@ -40,6 +40,21 @@ class FrameMetricsTest(unittest.TestCase):
         self.assertIn("frame_dialog_open_ms", metrics)
 
 
+class PrivateDisplayTest(unittest.TestCase):
+    def test_the_cookie_entry_is_xauths_format_for_any_host(self):
+        import struct
+
+        entry = perf_run.xauthority("12", b"\x01" * 16)
+        family, rest = struct.unpack(">H", entry[:2])[0], entry[2:]
+        fields = []
+        while rest:
+            size = struct.unpack(">H", rest[:2])[0]
+            fields.append(rest[2 : 2 + size])
+            rest = rest[2 + size :]
+        self.assertEqual(family, 0xFFFF)  # FamilyWild
+        self.assertEqual(fields, [b"", b"12", b"MIT-MAGIC-COOKIE-1", b"\x01" * 16])
+
+
 class PinnedBenchmarkTest(unittest.TestCase):
     def test_an_archive_that_is_not_the_pinned_one_is_refused_and_removed(self):
         import tempfile
