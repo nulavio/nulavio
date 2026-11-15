@@ -4,7 +4,7 @@
 
 "use strict";
 
-/* global ExtensionAPI, ExtensionUtils, ChromeUtils */
+/* global ExtensionAPI, ExtensionCommon, ExtensionUtils, ChromeUtils, Services */
 
 /* Thin bridge: the logic lives in modules/NulavioGuard.sys.mjs. Errors cross
    to the page as their stable code only. */
@@ -49,7 +49,7 @@ this.nulavioGuard = class extends ExtensionAPI {
     }
   }
 
-  getAPI() {
+  getAPI(context) {
     const NulavioGuard = this.module();
     const call = fn => async (...args) => {
       try {
@@ -69,6 +69,16 @@ this.nulavioGuard = class extends ExtensionAPI {
         resolve: call((id, action) => NulavioGuard.resolve(id, action)),
         reveal: call(async id => (await NulavioGuard.check(), NulavioGuard.reveal(id))),
         hideBar: call(() => NulavioGuard.hideBar()),
+        // The record changed (a finding added, updated or resolved): pages that show it read it again (#351).
+        onChanged: new ExtensionCommon.EventManager({
+          context,
+          name: "nulavioGuard.onChanged",
+          register: fire => {
+            const observer = () => fire.async();
+            Services.obs.addObserver(observer, "nulavio-guard-changed");
+            return () => Services.obs.removeObserver(observer, "nulavio-guard-changed");
+          },
+        }).api(),
       },
     };
   }
