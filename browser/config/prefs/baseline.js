@@ -124,9 +124,9 @@ user_pref("dom.security.https_only_mode", true);
 
 // @mode seed
 // @category privacy
-// @why Adds to the engine's fingerprinting protection: noise on every canvas and WebGL read, no graphics card model, no toolbar or window position, standard system colours, no motion sensors.
-// @tradeoff A page that reads canvas pixels back gets them changed by one step in a few places; sites that pick settings by graphics card use their defaults; exempt a site with the shield in the address bar.
-user_pref("privacy.fingerprintingProtection.overrides", "-EfficientCanvasRandomization,+WebGLRendererConstant,+WebGLVendorSanitize,+WindowOuterSize,+WindowScreenXY,+WindowInnerScreenXY,+MouseEventScreenPoint,+UseStandinsForNativeColors,+DeviceSensors");
+// @why Adds to the engine's fingerprinting protection: noise on every canvas and WebGL read, no graphics card model, no toolbar or window position, standard system colours, no motion sensors, and the same processor count (4) on every computer.
+// @tradeoff A page that reads canvas pixels back gets them changed by one step in a few places; sites that pick settings by graphics card use their defaults; a page that starts one worker per processor starts 4, also on a larger machine; exempt a site with the shield in the address bar.
+user_pref("privacy.fingerprintingProtection.overrides", "-EfficientCanvasRandomization,+WebGLRendererConstant,+WebGLVendorSanitize,+WindowOuterSize,+WindowScreenXY,+WindowInnerScreenXY,+MouseEventScreenPoint,+UseStandinsForNativeColors,+DeviceSensors,+NavigatorHWConcurrency");
 
 // --- Network leaks ---
 

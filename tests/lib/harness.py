@@ -103,6 +103,9 @@ FP_SURFACE_PAGE = """<!doctype html><meta charset="utf-8"><title>fp-surface</tit
     vendor: navigator.vendor, hw: navigator.hardwareConcurrency, touch: navigator.maxTouchPoints };
   out.win = { inner: innerWidth + 'x' + innerHeight, outer: outerWidth + 'x' + outerHeight, xy: screenX + ',' + screenY,
     innerScreen: window.mozInnerScreenX + ',' + window.mozInnerScreenY };
+  out.screen = { size: screen.width + 'x' + screen.height, avail: screen.availWidth + 'x' + screen.availHeight,
+    availAt: screen.availLeft + ',' + screen.availTop,
+    device1920: matchMedia('(device-width: 1920px) and (device-height: 1080px)').matches };
   const c = document.getElementById('c'), x = c.getContext('2d');
   const grad = x.createLinearGradient(0, 0, 240, 0); grad.addColorStop(0, '#12a37f'); grad.addColorStop(1, '#3b6fd8');
   x.fillStyle = grad; x.fillRect(0, 0, 240, 64); x.fillStyle = '#fff'; x.font = '20px sans-serif';

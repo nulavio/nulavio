@@ -9,7 +9,9 @@ engine, in a patch or in a default that weakens it fails a run:
 * canvas reads of every kind (raw pixels, exported image, blob, offscreen) differ
   between two sites, stay stable within one, and are not the plain values;
 * a page does not learn the size of the toolbars and the sidebar, where the
-  window is, or the real number of processors;
+  window is, or the real number of processors (every computer says 4);
+* a page reads one screen size, 1920 by 1080, whatever the display is
+  (NulavioFingerprinting.sys.mjs), from its first script on;
 * a font the person installed is not visible to pages (patch 0010; Fedora and
   Ubuntu, the distributions the engine has font lists for);
 * with WebGL available, the graphics card's model is not given out;
@@ -130,6 +132,9 @@ class FingerprintingTest(unittest.TestCase):
             on = "return Services.prefs.getBoolPref('privacy.fingerprintingProtection');"
             self.assertTrue(harness.wait_until(lambda: self.m.chrome(on), 10), "the protection did not come back")
 
+    def arrives(self, script: str, want: str) -> bool:
+        return bool(harness.wait_until(lambda: self.m.execute(script) == want, 10))
+
     def record(self, name: str, data: dict) -> None:
         (self.shots / f"{name}.json").write_text(json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
@@ -190,11 +195,9 @@ class FingerprintingTest(unittest.TestCase):
         self.assertNotEqual(plain["win"]["outer"], plain["win"]["inner"], "this window has no chrome to hide: nothing was tested")
         self.assertEqual(page["win"]["outer"], page["win"]["inner"])
         self.assertEqual((page["win"]["xy"], page["win"]["innerScreen"]), ("0,0", "0,0"))
-        cores = os.cpu_count()
-        self.assertEqual(plain["hw"], cores)
-        self.assertLessEqual(page["hw"], cores)
-        if cores > 8:
-            self.assertLess(page["hw"], cores)  # reported in tiers
+        # Every computer reports 4, the engine's one value for Linux, not its tiers (4, or 8 from 8 processors up).
+        self.assertEqual(plain["hw"], os.cpu_count())
+        self.assertEqual(page["hw"], 4)
 
     def test_05_a_font_the_person_installed_is_not_visible_to_pages(self):
         with self.unprotected():
@@ -236,6 +239,35 @@ class FingerprintingTest(unittest.TestCase):
             self.measure("127.0.0.1")
             self.m.chrome(f"{ALLOW_LIST}.remove(gBrowser.selectedBrowser);")
         self.assertNotEqual(self.measure("127.0.0.1")["canvas"]["pixels"], plain["canvas"]["pixels"])
+
+    def test_08_pages_read_one_screen_size_and_an_exempted_site_reads_the_displays(self):
+        constant = {"size": "1920x1080", "avail": "1920x1080", "availAt": "0,0", "device1920": True}
+        live = "return screen.width + 'x' + screen.height;"
+        first, other = self.measure("127.0.0.1"), self.measure("localhost")
+        with self.unprotected():
+            plain = self.measure("127.0.0.1")["screen"]
+        self.record("screen", {"protected": first["screen"], "plain": plain})
+        self.assertNotEqual(plain["size"], constant["size"], "this display has the constant's size: nothing was tested")
+        self.assertFalse(plain["device1920"])
+        # What the page's first script reads, on two sites: the size, the available area and the media queries agree.
+        self.assertEqual((first["screen"], other["screen"]), (constant, constant))
+        self.measure("127.0.0.1")
+        self.m.chrome(f"{ALLOW_LIST}.add(gBrowser.selectedBrowser);")  # the shield's switch in the address bar
+        try:
+            # The exempted site reads the display's, also when it comes after a protected page and changes process;
+            # the page after it reads the constant again.
+            self.assertEqual(self.measure("127.0.0.1")["screen"], plain)
+            self.assertEqual(self.measure("localhost")["screen"], constant)
+            self.assertEqual(self.measure("127.0.0.1")["screen"], plain)
+            self.assertEqual(self.measure("localhost")["screen"], constant)
+            # Back and forward come from the engine's cache and ask for nothing: each page still reads its own.
+            for step, host, want in (("back", "127.0.0.1", plain["size"]), ("forward", "localhost", constant["size"])):
+                self.m.execute(f"history.{step}();")
+                self.assertTrue(self.arrives(f"return [location.hostname, {live[7:-1]}].join(' ');", f"{host} {want}"), step)
+        finally:
+            self.measure("127.0.0.1")
+            self.m.chrome(f"{ALLOW_LIST}.remove(gBrowser.selectedBrowser);")
+        self.assertEqual(self.measure("127.0.0.1")["screen"], constant)
 
 
 if __name__ == "__main__":

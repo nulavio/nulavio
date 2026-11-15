@@ -60,10 +60,14 @@ pref("browser.safebrowsing.downloads.remote.enabled", false);
 //   +UseStandinsForNativeColors: pages get standard system colours instead of
 //     the desktop theme's.
 //   +DeviceSensors: no motion or orientation readings.
+//   +NavigatorHWConcurrency: every computer reports 4 processors, instead of
+//     the engine's two tiers (4, or 8 from 8 processors up), which still told
+//     a large machine from a small one (#79, ADR 0016).
 // A site the person exempts from tracking protection is exempt from these too.
-// Time zone, language, screen size and window size are left as they are:
-// changing them breaks sites (docs/security/hardening.md).
-pref("privacy.fingerprintingProtection.overrides", "-EfficientCanvasRandomization,+WebGLRendererConstant,+WebGLVendorSanitize,+WindowOuterSize,+WindowScreenXY,+WindowInnerScreenXY,+MouseEventScreenPoint,+UseStandinsForNativeColors,+DeviceSensors");
+// The screen's size is not in this list: the Shell gives pages a constant one
+// (NulavioFingerprinting.sys.mjs). Time zone, language and window size are
+// left as they are: changing them breaks sites (docs/security/hardening.md).
+pref("privacy.fingerprintingProtection.overrides", "-EfficientCanvasRandomization,+WebGLRendererConstant,+WebGLVendorSanitize,+WindowOuterSize,+WindowScreenXY,+WindowInnerScreenXY,+MouseEventScreenPoint,+UseStandinsForNativeColors,+DeviceSensors,+NavigatorHWConcurrency");
 
 // Follow the desktop's language among the locales packaged in the build
 // (en-US and pt-BR), as distribution Firefox does. An empty value means "use
