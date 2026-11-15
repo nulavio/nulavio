@@ -250,6 +250,9 @@ class Vault:
         # A counter the encrypted storage will mirror (S5), so a rolled-back
         # vault.json (e.g. a revoked phone restored) can be detected.
         self.meta["generation"] = int(self.meta.get("generation", 0)) + 1
+        # The volume keeps that record from its first mount: a key file that says so is refused when the
+        # record is missing (storage.py, U-T21). Under the MAC, so it cannot be taken off without the DEK.
+        self.meta["recorded"] = True
         self.meta["mac"] = b64e(self._mac())
         data = json.dumps(self.meta, indent=1, sort_keys=True).encode()
         self.path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)

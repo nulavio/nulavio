@@ -428,6 +428,48 @@ class ProfilesTest(unittest.TestCase):
             for profile_id in made:
                 self.profiles("await P.remove(args[0]);", profile_id)
 
+    def test_14_the_buttons_ink_follows_the_toolbars_scheme_not_the_pages(self):
+        """#368: the profile button is drawn in the toolbar's ink. The Shell's background page is windowless: a desktop's
+        scheme change reached the browser window but not the page's own matchMedia, so the button kept the other scheme's
+        ink (1.78:1 on KDE). Here the toolbar is dark and the pages light (a setting people choose too), and the
+        appearance change is announced as the desktop announces it; the ink must be the toolbar's. Then both turn light."""
+        ink = """
+const done = arguments[arguments.length - 1];
+const button = document.getElementById(arguments[0]);
+const url = getComputedStyle(button).getPropertyValue('--webextension-toolbar-image').match(/url\\("?([^")]+)"?\\)/)?.[1];
+if (!url) { done(null); return; }
+const image = new Image();
+image.onload = () => {
+  const canvas = new OffscreenCanvas(image.width, image.height), ctx = canvas.getContext('2d');
+  ctx.drawImage(image, 0, 0);
+  const px = ctx.getImageData(0, 0, image.width, image.height).data;
+  let best = null;  // the most opaque pixel: the glyph, not its 14 % tile
+  for (let i = 0; i < px.length; i += 4) if (!best || px[i + 3] > best[3]) best = [px[i], px[i + 1], px[i + 2], px[i + 3]];
+  done({ ink: best.slice(0, 3), dark: matchMedia('(prefers-color-scheme: dark)').matches });
+};
+image.onerror = () => done(null);
+image.src = url;
+"""
+
+        def drawn():
+            self.m.set_context("chrome")
+            try:
+                return self.m.execute_async(ink, [ACTION_BUTTON])
+            finally:
+                self.m.set_context("content")
+
+        light, dark = [0x23, 0x49, 0x5A], [0xBF, 0xD0, 0xD6]  # lib/profile-icon.js TOOLBAR_INK
+        announce = "Services.obs.notifyObservers(null, 'look-and-feel-changed');"
+        for pref in ("browser.theme.toolbar-theme", "browser.theme.content-theme"):
+            self.addCleanup(self.m.chrome, f"Services.prefs.clearUserPref('{pref}');" + announce)
+        self.m.chrome(
+            "Services.prefs.setIntPref('browser.theme.content-theme', 1);"  # pages light
+            "Services.prefs.setIntPref('browser.theme.toolbar-theme', 0);" + announce  # toolbar dark
+        )
+        self.assertTrue(harness.wait_until(lambda: (d := drawn()) and d["dark"] and d["ink"] == dark, 10), drawn())
+        self.m.chrome("Services.prefs.setIntPref('browser.theme.toolbar-theme', 1);" + announce)
+        self.assertTrue(harness.wait_until(lambda: (d := drawn()) and not d["dark"] and d["ink"] == light, 10), drawn())
+
 
 if __name__ == "__main__":
     unittest.main()

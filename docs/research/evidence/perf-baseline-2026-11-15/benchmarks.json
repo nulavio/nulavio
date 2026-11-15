@@ -1,0 +1,163 @@
+{
+ "build": "<nulavio-160.0-0.5>/nulavio/nulavio",
+ "baseline": "<nulavio-160.0-0.4>/nulavio/nulavio",
+ "runs": [
+  {
+   "run": 0,
+   "side": "build",
+   "engine": "<nulavio-160.0-0.5>/nulavio/nulavio",
+   "version": "160.0",
+   "startup_first_ms": 966.0,
+   "startup_second_ms": 522.0,
+   "pss_mib_1_tabs": 538.693359375,
+   "processes_1_tabs": 8,
+   "unreadable_1_tabs": 0,
+   "readings_1_tabs": 2,
+   "speedometer3_score": 12.994579715204287,
+   "jetstream3_score": 121.43109363854421,
+   "motionmark_score": 779.1793246305265
+  },
+  {
+   "run": 0,
+   "side": "baseline",
+   "engine": "<nulavio-160.0-0.4>/nulavio/nulavio",
+   "version": "160.0",
+   "startup_first_ms": 1033.0,
+   "startup_second_ms": 513.0,
+   "pss_mib_1_tabs": 538.4072265625,
+   "processes_1_tabs": 8,
+   "unreadable_1_tabs": 0,
+   "readings_1_tabs": 2,
+   "speedometer3_score": 12.404359864401385,
+   "jetstream3_score": 119.62278214526046,
+   "motionmark_score": 778.637192829509
+  },
+  {
+   "run": 0,
+   "side": "firefox",
+   "engine": "<cache>/firefox-160.0-fde774e9757c8878/firefox",
+   "version": "160.0",
+   "startup_first_ms": 759.0,
+   "startup_second_ms": 370.0,
+   "pss_mib_1_tabs": 414.2724609375,
+   "processes_1_tabs": 8,
+   "unreadable_1_tabs": 0,
+   "readings_1_tabs": 2,
+   "speedometer3_score": 19.071529006922276,
+   "jetstream3_score": 136.52730099524672,
+   "motionmark_score": 917.0531862790824
+  }
+ ],
+ "metrics": {
+  "startup_first_ms": {
+   "build": [
+    966.0
+   ],
+   "baseline": [
+    1033.0
+   ],
+   "firefox": [
+    759.0
+   ]
+  },
+  "startup_second_ms": {
+   "build": [
+    522.0
+   ],
+   "baseline": [
+    513.0
+   ],
+   "firefox": [
+    370.0
+   ]
+  },
+  "pss_mib_1_tabs": {
+   "build": [
+    538.693359375
+   ],
+   "baseline": [
+    538.4072265625
+   ],
+   "firefox": [
+    414.2724609375
+   ]
+  },
+  "processes_1_tabs": {
+   "build": [
+    8
+   ],
+   "baseline": [
+    8
+   ],
+   "firefox": [
+    8
+   ]
+  },
+  "unreadable_1_tabs": {
+   "build": [
+    0
+   ],
+   "baseline": [
+    0
+   ],
+   "firefox": [
+    0
+   ]
+  },
+  "readings_1_tabs": {
+   "build": [
+    2
+   ],
+   "baseline": [
+    2
+   ],
+   "firefox": [
+    2
+   ]
+  },
+  "speedometer3_score": {
+   "build": [
+    12.994579715204287
+   ],
+   "baseline": [
+    12.404359864401385
+   ],
+   "firefox": [
+    19.071529006922276
+   ]
+  },
+  "jetstream3_score": {
+   "build": [
+    121.43109363854421
+   ],
+   "baseline": [
+    119.62278214526046
+   ],
+   "firefox": [
+    136.52730099524672
+   ]
+  },
+  "motionmark_score": {
+   "build": [
+    779.1793246305265
+   ],
+   "baseline": [
+    778.637192829509
+   ],
+   "firefox": [
+    917.0531862790824
+   ]
+  }
+ },
+ "intervals": {
+  "startup_first_ms": null,
+  "startup_second_ms": null,
+  "pss_mib_1_tabs": null,
+  "processes_1_tabs": null,
+  "unreadable_1_tabs": null,
+  "readings_1_tabs": null,
+  "speedometer3_score": null,
+  "jetstream3_score": null,
+  "motionmark_score": null
+ }
+}

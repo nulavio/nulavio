@@ -128,7 +128,7 @@ nulavio-profiles-group =
     .description = Each profile keeps its own logins, history and extensions. A protected profile stays encrypted on disk while it is locked.
 nulavio-routing-group =
     .label = Which site opens in which profile
-    .description = Links from other apps and typed addresses follow these rules and open straight in the right profile, before anything loads. Rules stay on this computer and only you create them.
+    .description = Links from other apps and typed addresses follow these rules and open straight in the right profile, before anything loads. Rules stay on this computer and only you create them. A sign-in pop-up stays with the site that opened it: with an account kept in one profile (Google, say), "Sign in with" that account on a site in another profile needs a sign-in there too, and a rule for a search engine's site also sends there the searches made with it in another profile.
 
 ## Privacy and security
 

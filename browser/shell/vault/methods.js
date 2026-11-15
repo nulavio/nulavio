@@ -199,6 +199,7 @@ function renderKey() {
 const REFUSED_BEFORE = new Set([
   "unlocked", "in-use", "no-space", "busy", "bad-secret", "metadata-tampered", "not-encrypted", "not-found",
   "copy-mismatch", "storage-failed", "storage-unavailable", "tools-missing", "failed", "rollback",
+  "record-missing",
 ]);
 
 byId("rekey").addEventListener("click", async () => {
