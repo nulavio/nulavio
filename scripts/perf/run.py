@@ -14,8 +14,9 @@ alternate the build and the baseline, so a machine that slows down slows both. M
 - memory: the proportional memory of every process of the instance (PSS, /proc/<pid>/smaps_rollup,
   summed over the process tree of its main process) and how many processes there are, with 1 and 10 tabs
   of a local page open (--tabs; the first tab is navigated to a local page too), once every tab shows its
-  page, after a 5 s settle and the engine's own "Minimize memory usage" (about:memory) in every process. A process whose memory could not be read is counted in the JSON
-  (unreadable_*), never silently left out of the sum.
+  page, after a 5 s settle and the engine's own "Minimize memory usage" (about:memory) in every process.
+  A process whose memory could not be read is counted in the JSON (unreadable_*), never silently left out
+  of the sum.
 
 The JSON keeps every run and is written after each one; the table gives each side's median and the build's
 change against the baseline. What it does not measure yet (#80): BrowserBench (Speedometer, JetStream,
