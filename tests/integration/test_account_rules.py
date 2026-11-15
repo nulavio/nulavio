@@ -20,14 +20,22 @@ PRELUDE = (
     f'const P = ChromeUtils.importESModule("{SHELL}/NulavioProfiles.sys.mjs").NulavioProfiles;'
 )
 SIGN_IN = """
-Services.cookies.add(".google.com", "/", args[0], "nulavio-test", true, true, true, Math.floor(Date.now() / 1000) + 3600,
+Services.cookies.add(".google.com", "/", args[0], "nulavio-test", true, true, true, Date.now() + 3600 * 1000,
                      {}, Ci.nsICookie.SAMESITE_NONE, Ci.nsICookie.SCHEME_HTTPS, false);
 """
 BAR = """
 const bar = gNotificationBox.getNotificationWithValue("nulavio-account-rules");
-return bar ? { text: bar.messageText.textContent, buttons: [...bar.buttonContainer.querySelectorAll("button")].map(b => b.label) } : null;
+if (!bar) return null;
+const buttons = [...bar.buttonContainer.querySelectorAll("button")].map(b => b.label);
+return { text: bar.messageText.textContent.trim(), buttons };
 """
-PRESS = 'gNotificationBox.getNotificationWithValue("nulavio-account-rules").buttonContainer.querySelectorAll("button")[arguments[0]].click();'
+# A click on one of the bar's buttons (index 0: the offer, 1: not now), once the bar's own guard against clicks
+# that come too soon has passed (a click before it restarts the wait, as for a person).
+READY = 'return !gNotificationBox.getNotificationWithValue("nulavio-account-rules")?._clickjackingDelayActive;'
+PRESS = """
+const bar = gNotificationBox.getNotificationWithValue("nulavio-account-rules");
+bar.buttonContainer.querySelectorAll("button")[arguments[0]].click();
+"""
 GOOGLE = {"google.com", "gmail.com", "youtube.com", "googleusercontent.com"}
 
 
@@ -87,9 +95,10 @@ class AccountRulesTest(unittest.TestCase):
         self.assertEqual(len(shown["buttons"]), 2)
         # Nothing is applied before the click.
         self.assertEqual(chrome_async(self.m, "return R.rules();"), [])
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome(READY), 10))
         self.m.chrome(PRESS, [0])
         added = lambda: chrome_async(self.m, "return R.rules();")  # noqa: E731
-        self.assertTrue(harness.wait_until(lambda: GOOGLE <= {r["value"] for r in added()}, 10), added())
+        self.assertTrue(harness.wait_until(lambda: {r["value"] for r in added()} >= GOOGLE, 10), added())
         for rule in added():
             self.assertEqual((rule["match"], rule["action"], rule["profileId"]), ("domain", "open-in", self.here), rule)
         self.assertTrue(chrome_async(self.m, "return R.enabled();"))
@@ -103,6 +112,7 @@ class AccountRulesTest(unittest.TestCase):
         self.addCleanup(self.reset)
         self.sign_in()
         self.assertTrue(harness.wait_until(self.bar, 10), "no offer after a Google sign-in")
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome(READY), 10))
         self.m.chrome(PRESS, [1])
         self.assertTrue(harness.wait_until(lambda: self.bar() is None, 5))
         self.assertEqual(chrome_async(self.m, "return R.rules();"), [])
@@ -115,9 +125,9 @@ class AccountRulesTest(unittest.TestCase):
         self.addCleanup(self.reset)
         chrome_async(
             self.m,
-            "Services.cookies.add('.example.org', '/', 'SID', 'x', true, true, true, Math.floor(Date.now() / 1000) + 3600,"
+            "Services.cookies.add('.example.org', '/', 'SID', 'x', true, true, true, Date.now() + 3600 * 1000,"
             " {}, Ci.nsICookie.SAMESITE_NONE, Ci.nsICookie.SCHEME_HTTPS, false);"
-            "Services.cookies.add('.google.com', '/', 'SID', 'x', true, true, true, Math.floor(Date.now() / 1000) + 3600,"
+            "Services.cookies.add('.google.com', '/', 'SID', 'x', true, true, true, Date.now() + 3600 * 1000,"
             " {privateBrowsingId: 1}, Ci.nsICookie.SAMESITE_NONE, Ci.nsICookie.SCHEME_HTTPS, false);",
         )
         self.assertFalse(harness.wait_until(self.bar, 3), "offered for another site or a private window")
