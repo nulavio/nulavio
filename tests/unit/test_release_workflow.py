@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import io
 import os
+import re
 import shutil
 import stat
 import subprocess
@@ -216,6 +217,22 @@ class ReleaseWorkflowTest(unittest.TestCase):
         self.assertLess(check, self.publish.index('tar -C "$RUNNER_TEMP" -xf'))
         self.assertLess(self.publish.index('tar -C "$RUNNER_TEMP" -xf'), self.publish.index("upload_repo.sh"))
         self.assertIn('[ -z "$SIGNED" ]', self.publish)  # no hash, no upload
+
+    def test_only_the_release_jobs_name_the_signing_and_upload_environments(self):
+        # `release-upload` has no required reviewer (#334): any job on main that named it would get the R2 token
+        # without the maintainer's approval (R60). So the workflows that may name either environment are listed.
+        allowed = {"release": {"release.yml", "release-signing-check.yml"}, "release-upload": {"release.yml"}}
+        found = {name: set() for name in allowed}
+        # `environment: <name>` or `environment:` with `name: <name>` on the next line; a name built from an
+        # expression could be either, so none is allowed.
+        named = re.compile(r"^\s*environment:[ \t]*(?:\n\s*name:[ \t]*)?['\"]?([^\s'\"#]*)", re.M)
+        for path in sorted((ROOT / ".github" / "workflows").glob("*.y*ml")):
+            for name in named.findall(path.read_text(encoding="utf-8")):
+                self.assertNotIn("${{", name, path.name)
+                if name in found:
+                    found[name].add(path.name)
+        self.assertEqual(found, allowed)
+        self.assertEqual(self.text.count("environment: release-upload"), 1)
 
     def test_the_release_is_drafted_from_the_runner_build(self):
         # That the published repositories install exactly the released version is run, not read, in
