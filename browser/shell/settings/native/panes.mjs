@@ -405,6 +405,7 @@
       return now.system.reducedTransparency ? "system" : now.moreContrast || contrastBySystem() ? "contrast" : now.newtabAmbience ? null : "idle";
     };
     lookSetting("nulavio-accent", "accent", value => value ?? "");
+    lookSetting("nulavio-meeting-links", "meetingLinks", value => value ?? ""); // #221, NulavioMeetings
     lookSetting("nulavio-more-contrast", "moreContrast", Boolean, {
       get: () => Boolean(lookNow()?.moreContrast) || contrastBySystem(),
       disabled: () => contrastBySystem() || lookLocked("moreContrast"),
@@ -2135,6 +2136,23 @@
           { id: "nulavio-immersive", l10nId: "nulavio-immersive", control: "moz-toggle", controlAttrs: { "data-option": "immersive" } },
         ],
       },
+      // #221: meeting links in this profile, in the service's app (its page and the engine's prompt) or the browser.
+      nulavioMeetings: {
+        l10nId: "nulavio-meetings-group",
+        headingLevel: 2,
+        items: [
+          {
+            id: "nulavio-meeting-links",
+            control: "moz-radio-group",
+            l10nId: "nulavio-meeting-links",
+            controlAttrs: { "data-option": "meetingLinks" }, // shared/options.json
+            options: [
+              { value: "app", l10nId: "nulavio-meeting-links-app" },
+              { value: "browser", l10nId: "nulavio-meeting-links-browser" },
+            ],
+          },
+        ],
+      },
       nulavioLook: {
         l10nId: "nulavio-look-group",
         headingLevel: 2,
@@ -2568,6 +2586,7 @@
         ]);
     const integrationsButton = pane("nulavioIntegrations", "paneNulavioIntegrations", "integrations", "chrome://global/skin/icons/plugin.svg", [
       "nulavioIntegrationsEntry",
+      "nulavioMeetings",
     ]);
 
     // The navigation, in the order of the journey: settle in (default browser, import), how it

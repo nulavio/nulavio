@@ -259,3 +259,15 @@ nulavio-policies-other =
            *[other] { $count } políticas em vigor
         }
     .description = Elas não são exatamente as que vêm com o Nulavio: um arquivo do sistema ou um administrador acrescentou, tirou ou mudou alguma. Veja quais são.
+
+## Meeting links (#221)
+
+nulavio-meetings-group =
+    .label = Links de reunião
+    .description = Para este perfil. Com “Entrar pelo navegador”, os links do Zoom e do Microsoft Teams ficam na página do serviço, que oferece entrar por ali, e nenhum app é aberto.
+nulavio-meeting-links =
+    .label = Quando um link de reunião abrir
+nulavio-meeting-links-app =
+    .label = Abrir a reunião no app (padrão)
+nulavio-meeting-links-browser =
+    .label = Entrar pelo navegador

@@ -229,6 +229,18 @@ nulavio-integrations-group =
 nulavio-open-integrations =
     .label = See the integrations
 
+## Meeting links (#221)
+
+nulavio-meetings-group =
+    .label = Meeting links
+    .description = For this profile. With “Join in the browser”, Zoom and Microsoft Teams links stay on the service's page, which offers to join from there, and no app is opened.
+nulavio-meeting-links =
+    .label = When a meeting link opens
+nulavio-meeting-links-app =
+    .label = Open the meeting in its app (default)
+nulavio-meeting-links-browser =
+    .label = Join in the browser
+
 ## About: what's new in this version (#198)
 
 nulavio-whatsnew-group =
