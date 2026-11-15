@@ -11,7 +11,9 @@ alternate the build and the baseline, so a machine that slows down slows both. M
   getStartupInfo; the suite runs without a window, so there is no first paint to time), on the profile's
   first start and on its second. Neither is a cold start: the session ran the binary to make the
   profile, so its files are in the page cache both times;
-- memory: the proportional memory of every process of the instance (PSS, /proc/<pid>/smaps_rollup,
+- memory, in the profile's third start (the second runs 60 s first: a new profile's first work, the content
+  filter compiling its lists, held the extension process at up to 1.2 GiB for about 30 s after each of the
+  first two starts): the proportional memory of every process of the instance (PSS, /proc/<pid>/smaps_rollup,
   summed over the process tree of its main process) and how many processes there are, with 1 and 10 tabs
   of a local page open (--tabs; the first tab is navigated to a local page too), once every tab shows its
   page, after a 5 s settle and the engine's own "Minimize memory usage" (about:memory) in every process, read
@@ -97,6 +99,7 @@ SHOWN = (
 SETTLE_S = 5.0  # memory is read after the tabs have settled, not while they load
 # Memory is read until two readings in a row agree: work the engine still does after its start (the content
 # filter's lists, the Shell's first tasks) made one reading of 1 tab swing by tens of percent between runs.
+FIRST_RUN_S = 60.0  # the second start runs this long before memory is read in a third
 SETTLED_WITHIN = 0.03
 SETTLE_READINGS = 8
 # The engine's own "Minimize memory usage" (about:memory), in every process: garbage and caches the engine would
@@ -573,6 +576,12 @@ def one_run(engine: str, tabs: list[int], server, benchmarks: tuple = (), firefo
         session.stop()
         m = session.restart()
         out["startup_second_ms"] = startup_ms(m)
+        # A new profile's first work (the content filter compiles its lists until it has a copy to load): the
+        # extension process held up to 1.2 GiB for about 30 s after the first two starts, 130 to 330 MiB after
+        # later ones. Memory is a later start's, as a person's profile is every day.
+        time.sleep(FIRST_RUN_S)
+        session.stop()
+        m = session.restart()
         local = server.url("/page/perf-")
         m.navigate(server.url("/page/perf-0"))  # the first tab too: a local page, not the start page
         opened = 1
