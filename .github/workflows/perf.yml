@@ -44,14 +44,15 @@ jobs:
       - name: Build the measuring image (Mozilla's Firefox and its libraries, as the integration job's)
         run: docker build -t nulavio-perf -f ci/containers/ubuntu-itest.Containerfile ci/containers
       - name: Measure startup, memory and Speedometer (5 runs; the release, the one before it, Firefox)
-        # Docker's default seccomp profile blocks the user namespaces the engine's content sandbox needs (ci.yml).
+        # Docker's default seccomp profile blocks the user namespaces the engine's content sandbox needs (ci.yml). As in the
+        # integration job (test_04), the run checks the sandbox is fully on in every run and fails otherwise.
         run: |
           mkdir -p perf && chmod 777 perf
           docker run --rm --security-opt seccomp=unconfined \
             -v "$GITHUB_WORKSPACE":/src:ro -v "$RUNNER_TEMP/releases":/releases:ro -v "$GITHUB_WORKSPACE/perf":/perf \
             nulavio-perf sh -c 'cp -r /src "$HOME/nulavio" && cd "$HOME/nulavio" &&
               NULAVIO_ENGINE=/releases/new/nulavio/nulavio python3 -I scripts/perf/run.py \
-                --baseline-engine /releases/previous/nulavio/nulavio --runs 5 --tabs 1 10 --firefox --speedometer \
+                --baseline-engine /releases/previous/nulavio/nulavio --runs 5 --tabs 1 10 --firefox --speedometer --require-sandbox \
                 --out /perf/perf.json' > perf/table.txt
       - name: The table in the job summary
         if: always()
