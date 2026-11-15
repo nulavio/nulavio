@@ -31,6 +31,8 @@ MESSAGES = {
     "keyring-missing": "the system keyring has no key for this profile",
     "metadata-tampered": "the profile's key file was changed outside Nulavio; nothing was opened",
     "rollback": "the profile's key file is older than the profile (restored from a backup?); nothing was opened",
+    "record-missing": "the record inside the profile that its key file belongs with is missing (the profile folder was "
+    "restored or copied without its .nulavio-vault folder?); nothing was opened. Put that folder back from a backup",
     "busy": "files in the profile are still in use",
     "changed": "the profile's key file changed while this was being done (another change?); nothing was done, try again",
     "storage-failed": "the profile's encrypted storage could not be opened or checked; nothing was changed",

@@ -346,6 +346,7 @@
   "err_no_method": {"message": "Choose at least one way to unlock the profile."},
   "err_busy": {"message": "Files of that profile are still in use. Try again in a moment."},
   "err_rollback": {"message": "The profile's key file is older than the profile (restored from a backup?). Nothing was opened."},
+  "err_record-missing": {"message": "The record inside the profile that its key file belongs with is missing (was the profile folder restored or copied without its .nulavio-vault folder?). Nothing was opened. Put that folder back from a backup."},
   "err_changed": {"message": "The profile's key file changed while this was being done. Nothing was changed. Try again."},
   "err_not_recorded": {"message": "The change was saved, but could not be recorded inside the profile. Lock the profile if it is open, then unlock it once to record it."},
   "err_replacement_pending": {"message": "A new recovery code is waiting to be typed back. Replace the recovery code again, type the new one back, then remove this one."},
