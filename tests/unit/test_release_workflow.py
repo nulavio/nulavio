@@ -136,7 +136,8 @@ class UploadAptRepoTest(unittest.TestCase):
 class ReleaseWorkflowTest(unittest.TestCase):
     def setUp(self):
         self.text = WORKFLOW.read_text(encoding="utf-8")
-        self.build, self.publish = self.text.split("\n  publish:\n", 1)
+        self.build, self.sign = self.text.split("\n  sign:\n", 1)
+        self.sign, self.publish = self.sign.split("\n  publish:\n", 1)
         self.build, self.flatpak = self.build.split("\n  flatpak:\n", 1)
         self.flatpak, self.companion = self.flatpak.split("\n  companion:\n", 1)
 
@@ -144,17 +145,18 @@ class ReleaseWorkflowTest(unittest.TestCase):
         self.assertIn("on:\n  workflow_dispatch:", self.text)
         self.assertNotIn("pull_request", self.text)
         self.assertIn("if: github.ref == 'refs/heads/main'", self.build)
-        self.assertIn("environment: release", self.publish)
-        self.assertIn("needs: [build, flatpak, flatpak-check, companion]", self.publish)
-        self.assertIn("needs.build.result == 'success'", self.publish)  # a failed Flatpak never holds back a release
+        self.assertIn("environment: release\n", self.sign)
+        self.assertIn("needs: [build, flatpak, flatpak-check, companion]", self.sign)
+        self.assertIn("needs.build.result == 'success'", self.sign)  # a failed Flatpak never holds back a release
 
     def test_the_build_machine_never_holds_signing_or_upload_credentials(self):
         self.assertIn("runs-on: blacksmith-", self.build)
         self.assertIn("environment: build", self.build)
         for secret in ("R2_", "NULAVIO_SIGNING_ROLE_ARN", "NULAVIO_KMS_KEY_ARN", "configure-aws-credentials"):
             self.assertNotIn(secret, self.build)
-        self.assertIn("runs-on: ubuntu-24.04", self.publish)
-        self.assertNotIn("GOOGLE_SAFEBROWSING", self.publish)
+        for job in (self.sign, self.publish):
+            self.assertIn("runs-on: ubuntu-24.04", job)
+            self.assertNotIn("GOOGLE_SAFEBROWSING", job)
 
     def test_the_flatpak_is_built_and_started_from_this_run_without_secrets(self):
         self.assertIn("needs: build", self.flatpak)
@@ -168,9 +170,9 @@ class ReleaseWorkflowTest(unittest.TestCase):
         self.assertIn("--url", self.publish)
 
     def test_provenance_is_checked_before_signing_and_the_release_is_a_draft(self):
-        verify = self.publish.index("gh attestation verify")
-        self.assertLess(verify, self.publish.index('scripts/release/publish_release.sh "'))
-        self.assertIn("--source-ref refs/heads/main", self.publish)
+        verify = self.sign.index("gh attestation verify")
+        self.assertLess(verify, self.sign.index('scripts/release/publish_release.sh "'))
+        self.assertIn("--source-ref refs/heads/main", self.sign)
         self.assertLess(self.publish.index("upload_repo.sh"), self.publish.index("check_published.sh"))
         self.assertIn('scripts/release/upload_repo.sh "$RUNNER_TEMP/publish/apt"', self.publish)
         check = (RELEASE / "check_published.sh").read_text(encoding="utf-8")
@@ -183,11 +185,37 @@ class ReleaseWorkflowTest(unittest.TestCase):
 
     def test_the_signing_session_leaves_the_environment_once_everything_is_signed(self):
         # #328 (F7): the upload, the install checks and the release draft run without the KMS role's session.
-        drop = self.publish.index("printf '%s=\\n' AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN >> \"$GITHUB_ENV\"")
-        self.assertLess(self.publish.index("scripts/release/publish_release.sh"), drop)
-        self.assertLess(self.publish.index("scripts/release/sign_companion.sh"), drop)
-        self.assertLess(drop, self.publish.index("upload_repo.sh"))
-        self.assertEqual(self.publish.count("configure-aws-credentials"), 1)
+        drop = self.sign.index("printf '%s=\\n' AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN >> \"$GITHUB_ENV\"")
+        self.assertLess(self.sign.index("scripts/release/publish_release.sh"), drop)
+        self.assertLess(self.sign.index("scripts/release/sign_companion.sh"), drop)
+        self.assertLess(drop, self.sign.index("attest-build-provenance"))
+        self.assertEqual(self.sign.count("configure-aws-credentials"), 1)
+
+    def test_the_upload_runs_in_a_job_that_cannot_take_the_signing_role(self):
+        # #334: the role trusts tokens of the `release` environment (ci/aws/); the job that holds the R2 token is in
+        # another environment, asks for no token and has no AWS step. It takes only the archive whose hash the sign
+        # job gave as its output, and the job that can sign never holds the R2 token.
+        self.assertIn("environment: release-upload\n", self.publish)
+        self.assertIn("needs: sign\n", self.publish)
+        for held in (
+            "id-token:",
+            "attestations:",
+            "configure-aws-credentials",
+            "NULAVIO_KMS",
+            "NULAVIO_SIGNING",
+            "publish_release.sh",
+        ):
+            self.assertNotIn(held, self.publish)
+        self.assertIn("contents: write # the draft GitHub release", self.publish)
+        self.assertNotIn("R2_", self.sign)
+        self.assertIn("contents: read\n", self.sign)
+        trust = (ROOT / "ci" / "aws" / "release-signing-trust.json").read_text(encoding="utf-8")
+        self.assertIn(':environment:release"', trust)
+        self.assertIn("signed-sha256: ${{ steps.hand-over.outputs.sha256 }}", self.sign)
+        check = self.publish.index("needs.sign.outputs.signed-sha256")
+        self.assertLess(check, self.publish.index('tar -C "$RUNNER_TEMP" -xf'))
+        self.assertLess(self.publish.index('tar -C "$RUNNER_TEMP" -xf'), self.publish.index("upload_repo.sh"))
+        self.assertIn('[ -z "$SIGNED" ]', self.publish)  # no hash, no upload
 
     def test_the_release_is_drafted_from_the_runner_build(self):
         # That the published repositories install exactly the released version is run, not read, in
@@ -208,13 +236,13 @@ class ReleaseWorkflowTest(unittest.TestCase):
         for held in ("secrets.", "environment:", "configure-aws-credentials", "KMS"):
             self.assertNotIn(held, self.companion)
         self.assertIn("attest-build-provenance", self.companion)
-        self.assertIn('"$RUNNER_TEMP"/companion/nulavio-companion-*', self.publish)  # provenance checked
-        aws = self.publish.index("configure-aws-credentials")
-        sign = self.publish.index("scripts/release/sign_companion.sh")
-        stage = self.publish.index("NULAVIO_COMPANION_APK=$apk")
+        self.assertIn('"$RUNNER_TEMP"/companion/nulavio-companion-*', self.sign)  # provenance checked
+        aws = self.sign.index("configure-aws-credentials")
+        sign = self.sign.index("scripts/release/sign_companion.sh")
+        stage = self.sign.index("NULAVIO_COMPANION_APK=$apk")
         self.assertLess(aws, sign)
         self.assertLess(sign, stage)
-        self.assertIn("--companion", self.publish)  # the notes name the APK and its certificate
+        self.assertIn("--companion", self.sign)  # the notes name the APK and its certificate
         publish = (RELEASE / "publish_release.sh").read_text(encoding="utf-8")
         self.assertLess(publish.index('cp "$apk" "$apk.cdx.json" "$stage/github/"'), publish.index("sha256sum -- * >SHA256SUMS"))
 
@@ -226,17 +254,16 @@ class ReleaseWorkflowTest(unittest.TestCase):
         self.assertIn("contents: read", job)
         for held in ("id-token", "attestations", "environment:", "secrets."):
             self.assertNotIn(held, job)
-        self.assertNotIn("check_flatpak_bundle.py", self.publish)
-        self.assertNotIn("apt_install.sh flatpak", self.publish)
-        compare = self.publish.index("needs.flatpak-check.outputs.bundle-sha256")
-        self.assertLess(compare, self.publish.index("release_notes.py notes"))  # the notes name only an accepted bundle
-        self.assertLess(compare, self.publish.index("configure-aws-credentials"))
-        self.assertIn(
-            'rm -rf "$RUNNER_TEMP/flatpak-bundle"', self.publish[compare : self.publish.index("release_notes.py notes")]
-        )
+        for later in (self.sign, self.publish):
+            self.assertNotIn("check_flatpak_bundle.py", later)
+            self.assertNotIn("apt_install.sh flatpak", later)
+        compare = self.sign.index("needs.flatpak-check.outputs.bundle-sha256")
+        self.assertLess(compare, self.sign.index("release_notes.py notes"))  # the notes name only an accepted bundle
+        self.assertLess(compare, self.sign.index("configure-aws-credentials"))
+        self.assertIn('rm -rf "$RUNNER_TEMP/flatpak-bundle"', self.sign[compare : self.sign.index("release_notes.py notes")])
         self.assertIn("-type f -name '*.flatpak'", job)  # one regular file, nothing else accepted
         self.assertIn("GITHUB_ACTIONS", (RELEASE / "publish_release.sh").read_text(encoding="utf-8"))
-        self.assertIn("NULAVIO_FLATPAK_BUNDLE_SHA256=$ACCEPTED", self.publish)
+        self.assertIn("NULAVIO_FLATPAK_BUNDLE_SHA256=$ACCEPTED", self.sign)
         script = (RELEASE / "publish_release.sh").read_text(encoding="utf-8")
         self.assertLess(script.index("NULAVIO_FLATPAK_BUNDLE_SHA256"), script.index('"$repo/scripts/release/sign_repo.sh"'))
         self.assertLess(script.index("check_flatpak_bundle.py"), script.index('"$repo/scripts/release/sign_repo.sh"'))
@@ -248,10 +275,10 @@ class ReleaseWorkflowTest(unittest.TestCase):
     def test_the_bundle_is_attested_checked_and_signed_with_the_release(self):
         flatpak_job = self.text[self.text.index("\n  flatpak:\n") :]
         self.assertLess(flatpak_job.index("check_flatpak.sh"), flatpak_job.index("flatpak build-bundle"))
-        sign = self.publish.index(
+        sign = self.sign.index(
             "NULAVIO_FLATPAK_BUNDLE=$bundle NULAVIO_FLATPAK_BUNDLE_SHA256=$ACCEPTED NULAVIO_COMPANION_APK=$apk"
         )
-        self.assertLess(sign, self.publish.index("subject-path: ${{ runner.temp }}/publish/github/*"))
+        self.assertLess(sign, self.sign.index("subject-path: ${{ runner.temp }}/publish/github/*"))
         publish = (RELEASE / "publish_release.sh").read_text(encoding="utf-8")
         self.assertLess(publish.index('cp "$bundle" "$stage/github/"'), publish.index("sha256sum -- * >SHA256SUMS"))
         self.assertIn('"nulavio-${tag#v}.x86_64.flatpak"', publish)

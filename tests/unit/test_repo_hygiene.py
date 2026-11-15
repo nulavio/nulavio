@@ -35,8 +35,8 @@ WRITE_PERMISSIONS = {
     ("release.yml", "build", "attestations"): "stores that attestation with the repository",
     ("release.yml", "companion", "id-token"): "signs the build-provenance attestation of the unsigned Companion APK (Sigstore)",
     ("release.yml", "companion", "attestations"): "stores that attestation; publish checks it before signing (ADR 0014)",
-    ("release.yml", "publish", "id-token"): "OIDC to AWS (KMS signing role, ci/aws/) and the attestation of the signed files",
-    ("release.yml", "publish", "attestations"): "stores the attestation of the signed files",
+    ("release.yml", "sign", "id-token"): "OIDC to AWS (KMS signing role, ci/aws/) and the attestation of the signed files",
+    ("release.yml", "sign", "attestations"): "stores the attestation of the signed files",
     ("release.yml", "publish", "contents"): "drafts the GitHub release; the maintainer publishes it",
 }
 # Expressions that carry text an attacker or a model can choose; they never go inside a run: script.
