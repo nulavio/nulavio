@@ -36,6 +36,14 @@ ac_add_options --enable-bootstrap
 # "export" lines reach the makefiles that run Cargo (.mozconfig.mk).
 mk_add_options "export CARGO_RUSTCFLAGS=-Clto=thin"
 
+# C++ link-time optimisation (#364, the maintainer's choice of 2026-11-15): thin and
+# cross-language, so C++ and Rust are optimised across each other at the link, as in
+# Mozilla's Linux release builds. Without it the build scored a third lower than
+# Firefox 160.0 on Speedometer (docs/architecture/performance.md). Profile-guided
+# optimisation (PGO), the other half of Mozilla's setting, comes after this is
+# measured against the release build's time and memory budget.
+ac_add_options --enable-lto=cross
+
 # Extensions must be signed by Mozilla's AMO root (explicit even though the
 # release milestone already implies it; ESR would not).
 ac_add_options MOZ_REQUIRE_SIGNING=1
