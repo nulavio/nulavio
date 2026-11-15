@@ -147,9 +147,14 @@ function showTimeZoneRow(panel) {
     toggle.setAttribute("aria-label", t("timeZoneSwitch"));
     toggle.addEventListener("toggle", () => {
       const tab = win.gBrowser.selectedBrowser;
-      setTimeZone(tab.currentURI, toggle.pressed);
+      // Only for the site the panel was opened on: a page that sent the tab elsewhere while the panel was open
+      // does not get the choice put on another site.
+      const now = timeZoneState(tab);
       panel.hidePopup();
-      tab.reload(); // a page reads its time zone when it loads
+      if (now.offered && now.site === row.dataset.site) {
+        setTimeZone(tab.currentURI, toggle.pressed);
+        tab.reload(); // a page reads its time zone when it loads
+      }
     });
     const description = doc.createXULElement("label");
     description.id = `${ROW}-description`;
@@ -158,6 +163,7 @@ function showTimeZoneRow(panel) {
     anchor.after(row);
   }
   row.hidden = !state.offered;
+  row.dataset.site = state.offered ? state.site : "";
   row.querySelector("moz-toggle").pressed = state.on;
   row.querySelector(`#${ROW}-description`).textContent = t(state.on ? "timeZoneSwitchOn" : "timeZoneSwitchOff");
 }

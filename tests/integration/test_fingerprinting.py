@@ -380,6 +380,14 @@ class FingerprintingTest(unittest.TestCase):
         )
         self.assertTrue(harness.wait_until(lambda: self.m.chrome(granular) == "", 10), self.m.chrome(granular))
         self.assertEqual(self.measure(one)["tz"], utc)
+        # The switch acts only on the site its panel was opened on (review of #379): opened on one site and
+        # pressed after the tab went to another, it changes nothing for either.
+        self.measure(one)
+        self.panel("keep")
+        self.measure(two)
+        self.m.chrome("document.getElementById('nulavio-trustpanel-timezone-toggle').click();")
+        self.assertEqual((self.m.chrome(listed), self.m.chrome(granular)), ([], ""))
+        self.assertEqual(self.measure(two)["tz"], utc)
         # Nulavio's own pages keep the system's time zone.
         self.m.navigate(self.m.chrome("return WebExtensionPolicy.getByID('shell@nulavio.net').getURL('newtab/newtab.html');"))
         self.assertEqual(json.loads(self.m.execute(zone)), system)

@@ -50,8 +50,11 @@ class ScreenTest(unittest.TestCase):
 class TimeZoneTest(unittest.TestCase):
     def test_the_only_pref_written_is_the_engines_per_site_list_and_only_its_own_entries(self):
         self.assertIn('const GRANULAR = "privacy.fingerprintingProtection.granularOverrides";', MODULE)
-        writes = re.findall(r"Services\.prefs\.(?:set\w+Pref|clearUserPref)\((\w+)", MODULE)
-        self.assertEqual(sorted(writes), ["GRANULAR", "GRANULAR"])
+        # Every write, whatever its argument looks like: one set and one clear, both of the per-site list.
+        self.assertEqual(len(re.findall(r"Services\.prefs\.set\w+Pref\(", MODULE)), 1)
+        self.assertEqual(MODULE.count("Services.prefs.clearUserPref("), 1)
+        self.assertIn("Services.prefs.setStringPref(GRANULAR, text);", MODULE)
+        self.assertIn("Services.prefs.clearUserPref(GRANULAR);", MODULE)
         # An entry is this module's by its shape; a person's own entries in the list stay.
         self.assertIn('const ours = entry => entry?.thirdPartyDomain === "*" && entry?.overrides === SHOW_TIME_ZONE;', MODULE)
         self.assertIn("if (text === current || Services.prefs.prefIsLocked(GRANULAR)) {", MODULE)
@@ -64,6 +67,8 @@ class TimeZoneTest(unittest.TestCase):
         panes = (SHELL / "settings" / "native" / "panes.mjs").read_text(encoding="utf-8")
         self.assertIn('"nulavio-timezone": { allow: "exceptionTimeZone" },', panes)
         self.assertIn("offered: Boolean(site) && !context?.usePrivateBrowsing && protectionOn(false) && !exempted", MODULE)
+        # Pressed, it acts only on the site the panel was opened on.
+        self.assertIn("if (now.offered && now.site === row.dataset.site) {", MODULE)
 
     def test_the_words_are_in_both_languages(self):
         for locale in ("en", "pt_BR"):
