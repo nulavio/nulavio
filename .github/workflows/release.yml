@@ -189,6 +189,40 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+  flatpak-check:
+    name: Flatpak bundle against the attested archive (no token, no secret)
+    needs: [build, flatpak]
+    if: needs.flatpak.result == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read # it parses what Flathub's builder made: nothing here can sign or attest (#324)
+    outputs:
+      bundle-sha256: ${{ steps.check.outputs.sha256 }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: rehearsal
+          path: ${{ runner.temp }}/rehearsal
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: flatpak-bundle
+          path: ${{ runner.temp }}/flatpak-bundle
+      - name: The bundle is the attested archive with what the manifest adds (check_flatpak_bundle.py)
+        id: check
+        run: |
+          scripts/ci/apt_install.sh flatpak ostree
+          # Exactly one regular file: whatever else the builder left there is not accepted.
+          [ "$(find "$RUNNER_TEMP/flatpak-bundle" -mindepth 1 | wc -l)" = 1 ] || { echo "not one bundle" >&2; exit 1; }
+          bundle=$(find "$RUNNER_TEMP/flatpak-bundle" -maxdepth 1 -type f -name '*.flatpak')
+          [ -n "$bundle" ] || { echo "no bundle file" >&2; exit 1; }
+          archive=$(find "$RUNNER_TEMP/rehearsal/packages" -maxdepth 1 -name 'nulavio-*.linux-x86_64.tar.xz')
+          python3 -I scripts/release/check_flatpak_bundle.py --bundle "$bundle" --archive "$archive"
+          echo "sha256=$(sha256sum "$bundle" | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+
   companion:
     name: Companion APK (built twice and compared, unsigned)
     runs-on: ubuntu-24.04
@@ -218,7 +252,7 @@ jobs:
 
   publish:
     name: sign through KMS and publish (maintainer approval)
-    needs: [build, flatpak, companion]
+    needs: [build, flatpak, flatpak-check, companion]
     # A failed Flatpak never holds back a release (a security update has a deadline): it goes out without the bundle.
     if: ${{ !cancelled() && inputs.publish && needs.build.result == 'success' }}
     runs-on: ubuntu-24.04
@@ -261,6 +295,17 @@ jobs:
               --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release.yml" --source-ref refs/heads/main >/dev/null
             echo "provenance ok: ${file#"$RUNNER_TEMP"/}"
           done
+      - name: Only the Flatpak bundle the check accepted goes into the release (#324)
+        env:
+          ACCEPTED: ${{ needs.flatpak-check.outputs.bundle-sha256 }}
+        run: |
+          # Compared by its hash only: the bundle is parsed in the flatpak-check job, never here, next to the signing role.
+          bundle=$(find "$RUNNER_TEMP/flatpak-bundle" -maxdepth 1 -type f -name '*.flatpak' 2>/dev/null || true)
+          if [ -e "$RUNNER_TEMP/flatpak-bundle" ] && { [ -z "$ACCEPTED" ] || [ "$(printf '%s\n' "$bundle" | grep -c .)" != 1 ] ||
+              [ "$(sha256sum "$bundle" | cut -d' ' -f1)" != "$ACCEPTED" ]; }; then
+            echo "::error::the Flatpak bundle is not the one the check accepted against the attested archive: this release goes out without it"
+            rm -rf "$RUNNER_TEMP/flatpak-bundle"
+          fi
       - name: Prepare notes and validate the release before signing or uploading
         env:
           GH_REPOSITORY: ${{ github.repository }}
@@ -286,12 +331,13 @@ jobs:
       - name: Sign through KMS and stage (publish_release.sh)
         env:
           NULAVIO_KMS_KEY_ID: ${{ vars.NULAVIO_KMS_KEY_ARN }}
+          ACCEPTED: ${{ needs.flatpak-check.outputs.bundle-sha256 }}
         run: |
           python3 -I scripts/release/release_manifest.py verify "$RUNNER_TEMP/rehearsal" --repo . > "$RUNNER_TEMP/release.json"
           bundle=$(find "$RUNNER_TEMP/flatpak-bundle" -maxdepth 1 -name '*.flatpak' 2>/dev/null || true)
           [ -n "$bundle" ] || echo "::warning::the Flatpak job failed: this release has no Flatpak bundle"
           apk=$(find "$RUNNER_TEMP/companion-signed" -maxdepth 1 -name 'nulavio-companion-*.apk' 2>/dev/null || true)
-          NULAVIO_FLATPAK_BUNDLE=$bundle NULAVIO_COMPANION_APK=$apk \
+          NULAVIO_FLATPAK_BUNDLE=$bundle NULAVIO_FLATPAK_BUNDLE_SHA256=$ACCEPTED NULAVIO_COMPANION_APK=$apk \
             scripts/release/publish_release.sh "$RUNNER_TEMP/rehearsal" "$FINGERPRINT" "$RUNNER_TEMP/publish"
       - name: Nothing signs after this point, so the signing role's session leaves the job's environment
         run: printf '%s=\n' AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN >> "$GITHUB_ENV"
