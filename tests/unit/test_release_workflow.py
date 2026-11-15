@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+import json
 import os
 import re
 import shutil
@@ -233,8 +234,7 @@ class ReleaseWorkflowTest(unittest.TestCase):
         self.assertIn("contents: write # the draft GitHub release", self.publish)
         self.assertNotIn("R2_", self.sign)
         self.assertIn("contents: read\n", self.sign)
-        trust = (ROOT / "ci" / "aws" / "release-signing-trust.json").read_text(encoding="utf-8")
-        self.assertIn(':environment:release"', trust)
+        self.assertNotIn("release-upload", (ROOT / "ci" / "aws" / "release-signing-trust.json").read_text(encoding="utf-8"))
         self.assertIn("signed-sha256: ${{ steps.hand-over.outputs.sha256 }}", self.sign)
         check = self.publish.index("needs.sign.outputs.signed-sha256")
         self.assertLess(check, self.publish.index('tar -C "$RUNNER_TEMP" -xf'))
@@ -266,6 +266,21 @@ class ReleaseWorkflowTest(unittest.TestCase):
             "  c:\n    environment: ${{ inputs.where }}\n  d:\n    steps: []\n"
         )
         self.assertEqual(job_environments(text), [("a", "release-upload"), ("b", "release-upload"), ("c", "${{")])
+
+    def test_the_signing_role_trusts_the_two_signing_workflows_on_main_only(self):
+        # #326: the subject carries job_workflow_ref (the repository's OIDC template), so a new workflow that names the
+        # release environment cannot take the role; nor can a job of another environment or another branch.
+        trust = json.loads((ROOT / "ci" / "aws" / "release-signing-trust.json").read_text(encoding="utf-8"))
+        (statement,) = trust["Statement"]
+        self.assertEqual(statement["Action"], "sts:AssumeRoleWithWebIdentity")
+        self.assertEqual(set(statement["Condition"]), {"StringEquals"})  # no wildcard match
+        condition = statement["Condition"]["StringEquals"]
+        self.assertEqual(condition["token.actions.githubusercontent.com:aud"], "sts.amazonaws.com")
+        prefix = "repo:nulavio@355057103/nulavio@1433296085:environment:release:job_workflow_ref:nulavio/nulavio/"
+        self.assertEqual(
+            condition["token.actions.githubusercontent.com:sub"],
+            [f"{prefix}.github/workflows/{name}@refs/heads/main" for name in ("release.yml", "release-signing-check.yml")],
+        )
 
     def test_the_release_is_drafted_from_the_runner_build(self):
         # That the published repositories install exactly the released version is run, not read, in

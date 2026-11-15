@@ -9,7 +9,10 @@
       "Condition": {
         "StringEquals": {
           "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
-          "token.actions.githubusercontent.com:sub": "repo:nulavio@355057103/nulavio@1433296085:environment:release"
+          "token.actions.githubusercontent.com:sub": [
+            "repo:nulavio@355057103/nulavio@1433296085:environment:release:job_workflow_ref:nulavio/nulavio/.github/workflows/release.yml@refs/heads/main",
+            "repo:nulavio@355057103/nulavio@1433296085:environment:release:job_workflow_ref:nulavio/nulavio/.github/workflows/release-signing-check.yml@refs/heads/main"
+          ]
         }
       }
     }
