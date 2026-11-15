@@ -113,7 +113,8 @@ Nulavio Companion, the Android app for phone unlock: `nulavio-companion-0.1.0.ap
 Every release asset is covered by `SHA256SUMS.asc` (key `298A9093BAABB26F79BB29F4BF47E5FA9EDB8DB1`) and a GitHub build-provenance attestation.
 
 ```sh
-gh attestation verify <file> --repo nulavio/nulavio
+gh attestation verify <file> --repo nulavio/nulavio \
+  --signer-workflow nulavio/nulavio/.github/workflows/release.yml --source-ref refs/heads/main
 ```
 
 [Build and test run](https://github.com/nulavio/nulavio/actions/runs/43633960941).
@@ -207,7 +208,8 @@ flatpak install --user nulavio-160.0-0.4.x86_64.flatpak
 Every release asset is covered by `SHA256SUMS.asc` (key `298A9093BAABB26F79BB29F4BF47E5FA9EDB8DB1`) and a GitHub build-provenance attestation.
 
 ```sh
-gh attestation verify <file> --repo nulavio/nulavio
+gh attestation verify <file> --repo nulavio/nulavio \
+  --signer-workflow nulavio/nulavio/.github/workflows/release.yml --source-ref refs/heads/main
 ```
 
 [Build and test run](https://github.com/nulavio/nulavio/actions/runs/43534834214).
@@ -224,7 +226,8 @@ Install or upgrade on Fedora: https://nulavio.net/en/download/
 
 Every file here is signed (SHA256SUMS.asc, key 298A9093BAABB26F79BB29F4BF47E5FA9EDB8DB1) and has a GitHub build-provenance attestation:
 
-    gh attestation verify <file> --repo nulavio/nulavio
+    gh attestation verify <file> --repo nulavio/nulavio \
+      --signer-workflow nulavio/nulavio/.github/workflows/release.yml --source-ref refs/heads/main
 
 Built and tested by run https://github.com/nulavio/nulavio/actions/runs/43102367281.
 

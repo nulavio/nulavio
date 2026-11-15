@@ -33,7 +33,7 @@ if not (sodium.available() and storage.tools_available()):  # pragma: no cover -
 
 from nulavio_launcher import profile  # noqa: E402
 from nulavio_launcher.vault import cli as vault_cli  # noqa: E402
-from nulavio_launcher.vault import profiles  # noqa: E402
+from nulavio_launcher.vault import core, profiles  # noqa: E402
 from nulavio_launcher.vault.core import Vault, VaultError  # noqa: E402
 from nulavio_launcher.vault.providers import Keyring  # noqa: E402
 
@@ -194,6 +194,59 @@ class ContainerTest(StorageCase):
             box.mount(restored)
         self.assertEqual(ctx.exception.code, "rollback")
         self.assertFalse(box.mounted())
+
+    def test_a_key_file_is_refused_when_its_record_is_missing(self):
+        # U-T21: a password removed, then the key file from before put back and the record in the volume
+        # removed (writing the volume's files needs no key). Refused, as a rollback is.
+        box, vault = self.new_container()
+        box.mount(vault)
+        bob = vault.add_password("bob's password", FAST)
+        vault.save()
+        box.record_generation(vault)
+        before = box.vault_path.read_bytes()  # Bob's password still in it
+        self.assertIs(json.loads(before)["recorded"], True)
+        vault.remove(bob.id)
+        vault.save()
+        box.record_generation(vault)
+        (box.mountpoint / storage.STATE_DIR / "state.json").unlink()
+        box.unmount()
+        for path in (box.vault_path, box.vault_path.with_suffix(".json.bak")):
+            path.write_bytes(before)
+        restored = Vault.load(box.vault_path)
+        restored.unlock_password("bob's password")
+        with self.assertRaises(storage.StorageError) as ctx:
+            storage.Container(box.mountpoint).mount(restored)
+        self.assertEqual(ctx.exception.code, "rollback")
+        self.assertFalse(box.mounted())
+
+    def test_a_key_file_saved_before_the_record_was_required_still_opens(self):
+        # Key files saved by 160.0-0.5 and earlier have no `recorded`: their volumes stay usable, and
+        # their next save adds it.
+        box, vault = self.new_container()
+        box.mount(vault)
+        (box.mountpoint / storage.STATE_DIR / "state.json").unlink()
+        box.unmount()
+        del vault.meta["recorded"]
+        vault.meta["mac"] = core.b64e(vault._mac())
+        box.vault_path.write_text(json.dumps(vault.meta))
+        old = Vault.load(box.vault_path)
+        old.unlock_password(PASSWORD)
+        self.assertFalse(old.tampered)
+        again = storage.Container(box.mountpoint)
+        again.mount(old)
+        old.save()
+        again.record_generation(old)
+        again.unmount()
+        self.assertIs(json.loads(box.vault_path.read_text())["recorded"], True)
+
+    def test_only_the_first_mount_of_a_new_volume_has_no_record_to_read(self):
+        box, vault = self.new_container()
+        box.mount(vault)
+        (box.mountpoint / storage.STATE_DIR / "state.json").unlink()
+        box.unmount()
+        with self.assertRaises(storage.StorageError) as ctx:
+            box.mount(vault)  # the same object, a second time
+        self.assertEqual(ctx.exception.code, "rollback")
 
     def test_encrypt_existing_profile(self):
         plain = self.tmp / "old"
@@ -1103,11 +1156,11 @@ class HelperApiTest(StorageCase):
         box = profiles.container(prof)
         real, calls = storage.Container._check_state, []
 
-        def check_state(self, vault, volume_fd=None):
+        def check_state(self, vault, volume_fd=None, **kw):
             calls.append(volume_fd)
             if len(calls) == 2:  # the record after the save: the volume has gone
                 raise OSError(107, "Transport endpoint is not connected")
-            return real(self, vault, volume_fd)
+            return real(self, vault, volume_fd, **kw)
 
         with mock.patch.object(storage.Container, "_check_state", check_state):
             result = vault_cli.api_request({"op": "new-recovery-code", "path": str(prof.path), "current": PASSWORD})
@@ -1338,10 +1391,10 @@ class HelperApiTest(StorageCase):
             vault_cli.api_request({"op": "new-recovery-code", "path": str(prof.path), "current": PASSWORD})
         real = storage.Container._check_state
 
-        def check_state(self, vault, volume_fd=None):
+        def check_state(self, vault, volume_fd=None, **kw):
             if vault.settled is not None:  # the settlement's record, after its save: the volume is gone
                 raise OSError(107, "Transport endpoint is not connected")
-            return real(self, vault, volume_fd)
+            return real(self, vault, volume_fd, **kw)
 
         request = {"op": "unlock", "path": str(prof.path), "method": "recovery-code", "secret": old_code, "autolock": False}
         with mock.patch.object(storage.Container, "_check_state", check_state):

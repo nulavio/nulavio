@@ -84,7 +84,8 @@ class ReleaseNotesTest(unittest.TestCase):
             self.target[:12],
             "compare/v160.0-0.1...",
             "SHA256SUMS.asc",
-            "gh attestation verify",
+            "gh attestation verify <file> --repo nulavio/nulavio \\\n"
+            "  --signer-workflow nulavio/nulavio/.github/workflows/release.yml --source-ref refs/heads/main\n",
         ):
             self.assertIn(text, result.stdout)
         for text in ("old feature", "future change", "PRIVATE BODY"):

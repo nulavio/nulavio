@@ -148,6 +148,16 @@ class ReleaseWorkflowTest(unittest.TestCase):
         self.assertIn("needs: [build, flatpak, companion]", self.publish)
         self.assertIn("needs.build.result == 'success'", self.publish)  # a failed Flatpak never holds back a release
 
+    def test_every_job_that_can_attest_runs_main_only(self):
+        # An attestation from release.yml on main is what the notes tell people to check (release_notes.py):
+        # a job with that token runs only on main, by its own guard or by needing the build's success.
+        for job in (self.build, self.flatpak, self.companion, self.publish):
+            if "id-token: write" in job or "attestations: write" in job:
+                self.assertTrue("if: github.ref == 'refs/heads/main'" in job or "needs.build.result == 'success'" in job,
+                                job.splitlines()[0])  # fmt: skip
+        self.assertIn("if: github.ref == 'refs/heads/main'", self.companion)
+        self.assertNotIn("id-token", self.flatpak)
+
     def test_the_build_machine_never_holds_signing_or_upload_credentials(self):
         self.assertIn("runs-on: blacksmith-", self.build)
         self.assertIn("environment: build", self.build)

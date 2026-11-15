@@ -191,6 +191,7 @@ jobs:
 
   companion:
     name: Companion APK (built twice and compared, unsigned)
+    if: github.ref == 'refs/heads/main' # it attests, so only main's code runs with that token
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     permissions:

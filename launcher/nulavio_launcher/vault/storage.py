@@ -82,6 +82,7 @@ def mounted_paths() -> set[str]:
 class Container:
     def __init__(self, mountpoint: Path):
         self.mountpoint = Path(mountpoint)
+        self.new_volume = False  # made by this object's init() and not mounted yet: it has no record
 
     @property
     def root(self) -> Path:
@@ -167,6 +168,7 @@ class Container:
         os.chmod(self.mountpoint, LOCKED_MODE)
         # The password is 256 bits of key material, so gocryptfs's own scrypt can be cheap.
         self._gocryptfs(["-init", "-q", "-xchacha", "-scryptn", "10", str(self.cipher)], storage_password(vault))
+        self.new_volume = True
 
     def mount(self, vault: Vault, idle_minutes: int | None = None) -> None:
         if not self.vault_path.exists():
@@ -196,7 +198,8 @@ class Container:
                 os.chmod(self.mountpoint, LOCKED_MODE)
                 raise
             try:
-                self._check_state(vault)
+                self._check_state(vault, new_volume=self.new_volume)
+                self.new_volume = False
             except BaseException as exc:
                 # Whatever went wrong with the check (a rollback, a damaged record, an I/O error):
                 # a volume whose generation was not checked does not stay open, also when a file
@@ -316,14 +319,14 @@ class Container:
         finally:
             os.close(fd)  # releases the lock, also when the process dies
 
-    def _check_state(self, vault: Vault, volume_fd: int | None = None) -> None:
+    def _check_state(self, vault: Vault, volume_fd: int | None = None, *, new_volume: bool = False) -> None:
         """Compare the generation recorded inside the volume with the vault's, then record the
         vault's. `volume_fd`: an open handle on the volume's root; everything is done relative to
         it, so the record goes into that volume or nowhere, whatever happened to its mount point."""
         if volume_fd is None:
             volume_fd = os.open(self.mountpoint, os.O_RDONLY | os.O_DIRECTORY)
             try:
-                return self._check_state(vault, volume_fd)
+                return self._check_state(vault, volume_fd, new_volume=new_volume)
             finally:
                 os.close(volume_fd)
         generation = int(vault.meta.get("generation", 0))
@@ -332,7 +335,7 @@ class Container:
             os.mkdir(STATE_DIR, 0o700, dir_fd=volume_fd)
         state_dir = os.open(STATE_DIR, os.O_RDONLY | os.O_DIRECTORY | flags, dir_fd=volume_fd)
         try:
-            self._refuse_older(vault, state_dir)
+            self._refuse_older(vault, state_dir, new_volume=new_volume)
             # Its own name: the profile's mount and a maintenance mount are two views of one directory.
             tmp = f"state.{os.getpid()}.tmp"
             fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | flags, 0o600, dir_fd=state_dir)
@@ -347,13 +350,19 @@ class Container:
             os.close(state_dir)
 
     @staticmethod
-    def _refuse_older(vault: Vault, state_dir: int) -> None:
+    def _refuse_older(vault: Vault, state_dir: int, *, new_volume: bool = False) -> None:
         """Read the record in the volume (`state_dir`: an open handle on its directory) and refuse a
-        vault that is another profile's, or older than the record."""
+        vault that is another profile's, or older than the record, or one whose record is missing.
+
+        Missing: every volume has its record from its first mount, and every key file saved since this
+        check exists says `recorded` (core.py), so a missing record is refused like an older one
+        (threat model U-T21). A key file saved before has no `recorded` and is still let in."""
         flags = os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0)
         try:
             fd = os.open("state.json", os.O_RDONLY | flags, dir_fd=state_dir)
         except FileNotFoundError:
+            if vault.meta.get("recorded") is True and not new_volume:
+                raise StorageError("rollback", "the volume's record of its key file is missing") from None
             return
         with os.fdopen(fd, encoding="utf-8") as handle:
             state = json.load(handle)

@@ -142,12 +142,22 @@ def notes(
         f"Nulavio {info['tag'][1:]}, built from Firefox {info['firefox']} (commit {info['commit'][:12]}).\n\n"
         "## What's new\n\n" + "\n\n".join(summary) + "\n\n"
         f"{body}\n\n## Install and verify\n\n{install}\n\n"
-        f"Every release asset is covered by `SHA256SUMS.asc` (key `{fingerprint}`) and a GitHub build-provenance attestation.\n\n"
-        f"```sh\ngh attestation verify <file> --repo {repository}\n```\n\n"
+        f"Every release asset is listed in `SHA256SUMS`, signed in `SHA256SUMS.asc` (key `{fingerprint}`): "
+        "check that first, as the download page shows. Each also has a GitHub build-provenance attestation "
+        "from the release workflow on `main`; check it with both of these options:\n\n"
+        f"```sh\n{attestation_check(repository)}\n```\n\n"
         f"[Build and test run]({run_url}).\n\n"
         f"[Security changelog](https://github.com/{repository}/blob/main/docs/security/changelog.md) "
         "and [published advisories](https://github.com/" + repository + "/security/advisories). "
         "Commit categories are not a vulnerability assessment.\n"
+    )
+
+
+def attestation_check(repository: str) -> str:
+    """The command the notes print: it names the workflow and branch an attestation must come from, not only the repository."""
+    return (
+        f"gh attestation verify <file> --repo {repository} \\\n"
+        f"  --signer-workflow {repository}/.github/workflows/release.yml --source-ref refs/heads/main"
     )
 
 
