@@ -79,6 +79,25 @@ if [[ -n $bundle ]] && { [[ $(basename "$bundle") != "nulavio-${tag#v}.x86_64.fl
     echo "publish_release: $bundle is not the Flatpak bundle of $tag" >&2
     exit 2
 fi
+# Built by Flathub's builder in a job with no attestation: signed only if it is the archive this release
+# attested, with what flatpak_manifest.py adds (#324). In CI the flatpak-check job checked it, in a job that cannot
+# sign, and this compares its hash (NULAVIO_FLATPAK_BUNDLE_SHA256); by hand, it is checked here.
+if [[ -n $bundle ]]; then
+    if [[ -n ${NULAVIO_FLATPAK_BUNDLE_SHA256:-} ]]; then
+        [[ $(sha256sum "$bundle" | cut -d' ' -f1) == "$NULAVIO_FLATPAK_BUNDLE_SHA256" ]] || {
+            echo "publish_release: $bundle is not the bundle the check accepted" >&2
+            exit 2
+        }
+    elif [[ ${GITHUB_ACTIONS:-} == true ]]; then
+        # In CI the bundle is never parsed next to the signing role: without the check's hash, it is refused.
+        echo "publish_release: $bundle comes with no hash from the flatpak-check job" >&2
+        exit 2
+    elif ! python3 -I "$repo/scripts/release/check_flatpak_bundle.py" --bundle "$bundle" \
+        --archive "$out/packages/nulavio-${tag#v}.linux-x86_64.tar.xz"; then
+        echo "publish_release: $bundle is not the release's portable archive with what flatpak_manifest.py adds" >&2
+        exit 2
+    fi
+fi
 # ADR 0005's release order, ADR 0014: a build that offers to pair a phone ships the app it pairs
 # with, signed (sign_companion.sh) and next to its SBOM.
 # Fails closed: the prefs must be readable and must name the pref, true or false.
