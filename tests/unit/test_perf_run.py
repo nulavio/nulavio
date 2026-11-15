@@ -40,6 +40,26 @@ class FrameMetricsTest(unittest.TestCase):
         self.assertIn("frame_dialog_open_ms", metrics)
 
 
+class FrameScenePartialTest(unittest.TestCase):
+    def test_runs_done_before_a_failure_are_kept_with_the_error(self):
+        import json
+        import tempfile
+        from unittest import mock
+
+        def child(command, **kwargs):  # one run written, then the scene script fails
+            out = Path(command[command.index("--out") + 1])
+            (out / "perf.json").write_text(json.dumps({"runs": {"build": [{"raw": {"tab_switch": [[16.0]]}}]}}))
+            return mock.Mock(returncode=1)
+
+        with mock.patch.object(perf_run.subprocess, "run", side_effect=child):
+            frames = perf_run.frame_scene_on("b", "a", 2, "9", Path(tempfile.gettempdir()) / "unused")
+        self.assertEqual(frames["error"], "frame_scene.py exited with 1")
+        self.assertEqual(perf_run.frame_metrics(frames)["frame_tab_switch_ms"], {"build": [16.0], "baseline": []})
+
+        with mock.patch.object(perf_run.subprocess, "run", return_value=mock.Mock(returncode=1)):
+            self.assertEqual(perf_run.frame_scene_on("b", "a", 2, "9", Path("unused"))["runs"], {})  # nothing written
+
+
 class PrivateDisplayTest(unittest.TestCase):
     def test_the_cookie_entry_is_xauths_format_for_any_host(self):
         import struct

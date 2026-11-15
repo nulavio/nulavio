@@ -366,7 +366,8 @@ def frame_times(build: str, baseline: str, runs: int) -> dict:
 
 
 def frame_scene_on(build: str, baseline: str, runs: int, display: str, auth: Path) -> dict:
-    """frame_scene.py headful on `display`, with its cookie file and without the caller's Wayland."""
+    """frame_scene.py headful on `display`, with its cookie file and without the caller's Wayland. When it fails, the
+    runs it completed (it writes its JSON after each one) are kept, with the failure under "error"."""
     env = {key: value for key, value in os.environ.items() if key not in ("WAYLAND_DISPLAY", "MOZ_ENABLE_WAYLAND")}
     env.update(
         DISPLAY=f":{display}",
@@ -379,8 +380,12 @@ def frame_scene_on(build: str, baseline: str, runs: int, display: str, auth: Pat
     with tempfile.TemporaryDirectory(prefix="nulavio-frames-") as out:
         command = [sys.executable, "-I", str(ROOT / "scripts" / "research" / "frame_scene.py")]
         command += ["--baseline-engine", baseline, "--runs", str(runs), "--out", out]
-        subprocess.run(command, env=env, check=True, stdout=subprocess.DEVNULL)
-        return json.loads((Path(out) / "perf.json").read_text(encoding="utf-8"))
+        done = subprocess.run(command, env=env, check=False, stdout=subprocess.DEVNULL)
+        written = Path(out) / "perf.json"
+        frames = json.loads(written.read_text(encoding="utf-8")) if written.exists() else {"runs": {}}
+        if done.returncode != 0:
+            frames["error"] = f"frame_scene.py exited with {done.returncode}"
+        return frames
 
 
 def startup_ms(m) -> float:
@@ -495,6 +500,9 @@ def main(argv: list[str] | None = None) -> int:
         results["frames"] = frame_times(build, args.baseline_engine, args.runs)
         results["metrics"].update(frame_metrics(results["frames"]))
     write()
+    if "error" in results.get("frames", {}):  # what it measured is in the JSON; the command still fails
+        print(table(results))
+        raise MeasureError(results["frames"]["error"])
     print(table(results))
     return 0
 
