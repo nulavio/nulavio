@@ -18,20 +18,32 @@ alternate the build and the baseline, so a machine that slows down slows both. M
   A process whose memory could not be read is counted in the JSON (unreadable_*), never silently left out
   of the sum.
 
+With --speedometer, also Speedometer 3.1 (BrowserBench), pinned to a commit of WebKit/Speedometer's release/3.1
+branch, downloaded once into the cache and checked against its SHA-256, served from this machine (no network
+round-trip is part of the score), run after the second start: its mean score over --speedometer-iterations.
+Without a window (headless) and with software rendering it is a regression signal, not a real-hardware number.
+
 The JSON keeps every run and is written after each one; the table gives each side's median and the build's
-change against the baseline. What it does not measure yet (#80): BrowserBench (Speedometer, JetStream,
-MotionMark), frame time (scripts/research/frame_scene.py), the fingerprinting cost, the tools CLI, a cold
-start, and stock Firefox as a second baseline (GeckoProfileSession needs a Nulavio build).
+change against the baseline. What it does not measure yet (#80): JetStream and MotionMark, frame time
+(scripts/research/frame_scene.py), the fingerprinting cost, the tools CLI, a cold start, and stock Firefox
+as a second baseline (GeckoProfileSession needs a Nulavio build).
 """
 
 from __future__ import annotations
 
 import argparse
+import functools
+import hashlib
+import http.server
 import json
 import os
+import shutil
 import statistics
 import sys
+import tarfile
+import threading
 import time
+import urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -55,6 +67,21 @@ MINIMIZE = (
     "const done = arguments[arguments.length - 1];"
     " Cc['@mozilla.org/memory-reporter-manager;1'].getService(Ci.nsIMemoryReporterManager)"
     ".minimizeMemoryUsage(() => done(true));"
+)
+
+
+# Benchmarks, pinned: a commit of the upstream repository, the archive GitHub serves for it, and its digest.
+PINNED = {
+    "speedometer": {
+        "commit": "1386415be8fef2f6b6bbdbe1828872471c5d802a",  # WebKit/Speedometer, branch release/3.1
+        "url": "https://codeload.github.com/WebKit/Speedometer/tar.gz/1386415be8fef2f6b6bbdbe1828872471c5d802a",
+        "sha256": "cfefa818d7789ed2f2b9f3f1bf608cc35e4e8241489eef47049296ce92791313",
+        "size": 12358793,
+    },
+}
+SPEEDOMETER = (
+    "const runs = globalThis.benchmarkClient?._measuredValuesList ?? [];"
+    " return { done: runs.length, score: runs.length ? runs.reduce((sum, r) => sum + r.score, 0) / runs.length : null };"
 )
 
 
@@ -117,6 +144,71 @@ def pss_kib(pids: list[int]) -> tuple[int, int]:
     return total, unreadable
 
 
+def cache_dir() -> Path:
+    return Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "nulavio" / "perf"
+
+
+def pinned(name: str, cache: Path | None = None) -> Path:
+    """The pinned benchmark's files: downloaded once, checked against the pin's size and SHA-256, unpacked."""
+    pin = PINNED[name]
+    cache = cache or cache_dir()
+    tree = cache / f"{name}-{pin['commit']}"
+    if (tree / ".verified").exists():
+        return tree
+    cache.mkdir(parents=True, exist_ok=True)
+    archive = cache / f"{name}-{pin['commit']}.tar.gz"
+    if not archive.exists():
+        partial = archive.with_suffix(".part")
+        with urllib.request.urlopen(pin["url"], timeout=120) as response, partial.open("wb") as out:  # noqa: S310
+            shutil.copyfileobj(response, out)
+        partial.replace(archive)
+    data = archive.read_bytes()
+    if len(data) != pin["size"] or hashlib.sha256(data).hexdigest() != pin["sha256"]:
+        archive.unlink()
+        raise MeasureError(f"{name}: the download is not the pinned archive (size or SHA-256)")
+    shutil.rmtree(tree, ignore_errors=True)
+    tree.mkdir()
+    with tarfile.open(archive) as tar:
+        members = []
+        for member in tar.getmembers():
+            inner = member.name.split("/", 1)[1] if "/" in member.name else ""
+            if inner:
+                member.name = inner
+                members.append(member)
+        tar.extractall(tree, members=members, filter="data")
+    (tree / ".verified").touch()
+    return tree
+
+
+class StaticServer:
+    """A benchmark's files served from this machine, on a free port."""
+
+    def __init__(self, root: Path):
+        handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=str(root))
+        self.httpd = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
+        self.thread = threading.Thread(target=self.httpd.serve_forever, daemon=True)
+
+    def __enter__(self):
+        self.thread.start()
+        return self
+
+    def __exit__(self, *exc):
+        self.httpd.shutdown()
+        self.httpd.server_close()
+
+    def url(self, path: str) -> str:
+        return f"http://127.0.0.1:{self.httpd.server_address[1]}{path}"
+
+
+def speedometer_score(m, server: StaticServer, iterations: int) -> float:
+    import harness
+
+    m.navigate(server.url(f"/index.html?startAutomatically&iterationCount={iterations}"))
+    if not harness.wait_until(lambda: m.execute(SPEEDOMETER)["done"] >= iterations, 60 * 30, interval=5.0):
+        raise MeasureError(f"Speedometer did not finish {iterations} iterations in 30 minutes: {m.execute(SPEEDOMETER)}")
+    return float(m.execute(SPEEDOMETER)["score"])
+
+
 def startup_ms(m) -> float:
     import harness
 
@@ -126,7 +218,7 @@ def startup_ms(m) -> float:
     return float(info["restored"] - info["process"])
 
 
-def one_run(engine: str, tabs: list[int], server) -> dict:
+def one_run(engine: str, tabs: list[int], server, speedometer: tuple | None = None) -> dict:
     import harness
 
     os.environ["NULAVIO_ENGINE"] = engine
@@ -137,6 +229,8 @@ def one_run(engine: str, tabs: list[int], server) -> dict:
         session.stop()
         m = session.restart()
         out["startup_second_ms"] = startup_ms(m)
+        if speedometer:
+            out["speedometer3_score"] = speedometer_score(m, *speedometer)
         local = server.url("/page/perf-")
         m.navigate(server.url("/page/perf-0"))  # the first tab too: a local page, not the start page
         opened = 1
@@ -168,6 +262,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--runs", type=int, default=5)
     parser.add_argument("--tabs", type=int, nargs="+", default=[1, 10])
     parser.add_argument("--out", type=Path)
+    parser.add_argument("--speedometer", action="store_true", help="also Speedometer 3.1, pinned and served locally")
+    parser.add_argument("--speedometer-iterations", type=int, default=3)
     args = parser.parse_args(argv)
     build = os.environ.get("NULAVIO_ENGINE")
     if not build:
@@ -183,10 +279,12 @@ def main(argv: list[str] | None = None) -> int:
             args.out.write_text(json.dumps(results, indent=1) + "\n", encoding="utf-8")
 
     try:
-        with harness.FixtureServer() as server:
+        bench_root = pinned("speedometer") if args.speedometer else ROOT
+        with harness.FixtureServer() as server, StaticServer(bench_root) as bench:
+            speedometer = (bench, args.speedometer_iterations) if args.speedometer else None
             for run in range(args.runs):
                 for side, engine in (("build", build), ("baseline", args.baseline_engine)):
-                    measured = one_run(engine, args.tabs, server)
+                    measured = one_run(engine, args.tabs, server, speedometer)
                     results["runs"].append({"run": run, "side": side, **measured})
                     print(f"run {run} {side}: {measured}", file=sys.stderr)
                     write()

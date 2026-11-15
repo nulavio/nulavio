@@ -29,6 +29,28 @@ class PerfStatisticsTest(unittest.TestCase):
         self.assertIn("+10.0 %", text)
 
 
+class PinnedBenchmarkTest(unittest.TestCase):
+    def test_an_archive_that_is_not_the_pinned_one_is_refused_and_removed(self):
+        import tempfile
+
+        cache = Path(tempfile.mkdtemp())
+        self.addCleanup(__import__("shutil").rmtree, cache)
+        pin = perf_run.PINNED["speedometer"]
+        archive = cache / f"speedometer-{pin['commit']}.tar.gz"
+        archive.write_bytes(b"not the archive")  # as a download that was replaced or cut
+        with self.assertRaises(perf_run.MeasureError):
+            perf_run.pinned("speedometer", cache)
+        self.assertFalse(archive.exists())
+        self.assertFalse((cache / f"speedometer-{pin['commit']}").exists())
+
+    def test_the_pin_is_a_commit_of_the_release_branch_with_its_digest(self):
+        pin = perf_run.PINNED["speedometer"]
+        self.assertRegex(pin["commit"], r"^[0-9a-f]{40}$")
+        self.assertIn(pin["commit"], pin["url"])
+        self.assertTrue(pin["url"].startswith("https://"))
+        self.assertRegex(pin["sha256"], r"^[0-9a-f]{64}$")
+
+
 @unittest.skipUnless(Path("/proc/self/smaps_rollup").exists(), "needs Linux /proc")
 class PerfProcessTreeTest(unittest.TestCase):
     def test_the_tree_holds_children_and_grandchildren_and_their_memory_is_read(self):
