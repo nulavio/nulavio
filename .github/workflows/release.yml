@@ -293,6 +293,8 @@ jobs:
           apk=$(find "$RUNNER_TEMP/companion-signed" -maxdepth 1 -name 'nulavio-companion-*.apk' 2>/dev/null || true)
           NULAVIO_FLATPAK_BUNDLE=$bundle NULAVIO_COMPANION_APK=$apk \
             scripts/release/publish_release.sh "$RUNNER_TEMP/rehearsal" "$FINGERPRINT" "$RUNNER_TEMP/publish"
+      - name: Nothing signs after this point, so the signing role's session leaves the job's environment
+        run: printf '%s=\n' AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN >> "$GITHUB_ENV"
       - name: Upload the dnf and APT repositories to R2 (packages first, signed metadata last)
         env:
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
