@@ -32,9 +32,15 @@ defaults: JetStream's overall score (the geometric mean of its benchmarks' score
 MotionMark's score. MotionMark measures how much the engine draws at the frame rate it detects; without a window and
 a GPU here, its number says more about software rendering than about a person's screen.
 
+With --frames, also the frame-time scenes of scripts/research/frame_scene.py (the sidebar collapsing and expanding,
+a tab switch, a Settings dialog, Ctrl+T to the new tab's first paint, 60 s idle), run by that script, headful on a
+private Xvfb this command starts, with the same --runs, after the other measures. Its whole JSON goes under
+"frames"; the table gets each scene's median frame interval per run (frame_<scene>_ms) and, for the new tab, its time
+to paint. Xvfb with software rendering: a regression gate, not a measure of real hardware.
+
 The JSON keeps every run and is written after each one; the table gives each side's median and the build's
-change against the baseline. What it does not measure yet (#80): frame time
-(scripts/research/frame_scene.py), the fingerprinting cost, the tools CLI, a cold start, and stock Firefox
+change against the baseline. What it does not measure yet (#80): the
+fingerprinting cost, the tools CLI, a cold start, and stock Firefox
 as a second baseline (GeckoProfileSession needs a Nulavio build).
 """
 
@@ -48,10 +54,14 @@ import http.server
 import json
 import math
 import os
+import secrets
 import shutil
+import subprocess
 import statistics
+import struct
 import sys
 import tarfile
+import tempfile
 import threading
 import time
 import urllib.request
@@ -296,6 +306,88 @@ def motionmark_score(m, server: StaticServer) -> float:
     return finite("MotionMark", m.execute(MOTIONMARK)["score"])
 
 
+def frame_scene():
+    """scripts/research/frame_scene.py as a module: its scene names and per-run medians."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("frame_scene", ROOT / "scripts" / "research" / "frame_scene.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def frame_metrics(frames: dict) -> dict:
+    """From frame_scene.py's JSON: each scene's median frame interval per run, per side (frame_<scene>_ms), and the
+    new tab's time to paint (frame_new_tab_ms). A scene with no samples in a run has no value for it."""
+    scene = frame_scene()
+    out = {}
+    for name in (*scene.TRANSITIONS, "new_tab"):
+        out[f"frame_{name}_ms"] = {side: scene.run_medians(frames["runs"].get(side, []), name) for side in ("build", "baseline")}
+    return out
+
+
+def xauthority(display: str, cookie: bytes) -> bytes:
+    """One Xauthority entry: an MIT-MAGIC-COOKIE-1 for `display` on any host (FamilyWild), as `xauth add` writes."""
+
+    def counted(data: bytes) -> bytes:
+        return struct.pack(">H", len(data)) + data
+
+    return struct.pack(">H", 0xFFFF) + counted(b"") + counted(display.encode()) + counted(b"MIT-MAGIC-COOKIE-1") + counted(cookie)
+
+
+def frame_times(build: str, baseline: str, runs: int) -> dict:
+    """frame_scene.py on a private Xvfb (it must run headful), for both engines; its JSON. The display takes only
+    clients that hold its cookie, as with xvfb-run: a random one, in 0600 files of a 0700 directory, never in argv."""
+    if not shutil.which("Xvfb"):
+        raise MeasureError("--frames needs Xvfb (xorg-x11-server-Xvfb)")
+    with tempfile.TemporaryDirectory(prefix="nulavio-frames-") as private:
+        cookie = secrets.token_bytes(16)
+        server_auth, client_auth = Path(private) / "server.auth", Path(private) / "client.auth"
+        for path in (server_auth, client_auth):
+            path.touch(mode=0o600)
+        server_auth.write_bytes(xauthority("0", cookie))  # the server takes every cookie in its file, whatever display
+        read, written = os.pipe()
+        xvfb = subprocess.Popen(
+            ["Xvfb", "-displayfd", str(written), "-auth", str(server_auth), "-screen", "0", "1920x1080x24", "-nolisten", "tcp"],
+            pass_fds=(written,),
+            stderr=subprocess.DEVNULL,
+        )
+        os.close(written)
+        try:
+            with os.fdopen(read) as fd:
+                display = fd.readline().strip()
+            if not display:
+                raise MeasureError("Xvfb did not start")
+            client_auth.write_bytes(xauthority(display, cookie))
+            return frame_scene_on(build, baseline, runs, display, client_auth)
+        finally:
+            xvfb.terminate()
+            xvfb.wait(10)
+
+
+def frame_scene_on(build: str, baseline: str, runs: int, display: str, auth: Path) -> dict:
+    """frame_scene.py headful on `display`, with its cookie file and without the caller's Wayland. When it fails, the
+    runs it completed (it writes its JSON after each one) are kept, with the failure under "error"."""
+    env = {key: value for key, value in os.environ.items() if key not in ("WAYLAND_DISPLAY", "MOZ_ENABLE_WAYLAND")}
+    env.update(
+        DISPLAY=f":{display}",
+        XAUTHORITY=str(auth),
+        GDK_BACKEND="x11",
+        MOZ_ENABLE_WAYLAND="0",
+        NULAVIO_TEST_HEADFUL="1",
+        NULAVIO_ENGINE=build,
+    )
+    with tempfile.TemporaryDirectory(prefix="nulavio-frames-") as out:
+        command = [sys.executable, "-I", str(ROOT / "scripts" / "research" / "frame_scene.py")]
+        command += ["--baseline-engine", baseline, "--runs", str(runs), "--out", out]
+        done = subprocess.run(command, env=env, check=False, stdout=subprocess.DEVNULL)
+        written = Path(out) / "perf.json"
+        frames = json.loads(written.read_text(encoding="utf-8")) if written.exists() else {"runs": {}}
+        if done.returncode != 0:
+            frames["error"] = f"frame_scene.py exited with {done.returncode}"
+        return frames
+
+
 def startup_ms(m) -> float:
     import harness
 
@@ -357,6 +449,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--speedometer-iterations", type=int, default=3)
     parser.add_argument("--jetstream", action="store_true", help="also JetStream 3.0, pinned and served locally")
     parser.add_argument("--motionmark", action="store_true", help="also MotionMark 1.3.2, pinned and served locally")
+    parser.add_argument("--frames", action="store_true", help="also frame time (scripts/research/frame_scene.py, on Xvfb)")
     args = parser.parse_args(argv)
     build = os.environ.get("NULAVIO_ENGINE")
     if not build:
@@ -403,7 +496,13 @@ def main(argv: list[str] | None = None) -> int:
         results["metrics"][name] = {
             side: [r[name] for r in results["runs"] if r["side"] == side] for side in ("build", "baseline")
         }
+    if args.frames:
+        results["frames"] = frame_times(build, args.baseline_engine, args.runs)
+        results["metrics"].update(frame_metrics(results["frames"]))
     write()
+    if "error" in results.get("frames", {}):  # what it measured is in the JSON; the command still fails
+        print(table(results))
+        raise MeasureError(results["frames"]["error"])
     print(table(results))
     return 0
 

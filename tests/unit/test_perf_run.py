@@ -29,6 +29,52 @@ class PerfStatisticsTest(unittest.TestCase):
         self.assertIn("+10.0 %", text)
 
 
+class FrameMetricsTest(unittest.TestCase):
+    def test_each_scene_gets_its_median_interval_per_run_and_side(self):
+        run = {"raw": {"tab_switch": [[16.0, 17.0], [18.0]], "sidebar_collapse": []}, "new_tab_poll_ms": [120.0, 140.0]}
+        frames = {"runs": {"build": [run, run], "baseline": [{"raw": {"tab_switch": [[20.0]]}, "new_tab_poll_ms": [150.0]}]}}
+        metrics = perf_run.frame_metrics(frames)
+        self.assertEqual(metrics["frame_tab_switch_ms"], {"build": [17.0, 17.0], "baseline": [20.0]})
+        self.assertEqual(metrics["frame_new_tab_ms"], {"build": [130.0, 130.0], "baseline": [150.0]})
+        self.assertEqual(metrics["frame_sidebar_collapse_ms"], {"build": [], "baseline": []})  # no samples, no value
+        self.assertIn("frame_dialog_open_ms", metrics)
+
+
+class FrameScenePartialTest(unittest.TestCase):
+    def test_runs_done_before_a_failure_are_kept_with_the_error(self):
+        import json
+        import tempfile
+        from unittest import mock
+
+        def child(command, **kwargs):  # one run written, then the scene script fails
+            out = Path(command[command.index("--out") + 1])
+            (out / "perf.json").write_text(json.dumps({"runs": {"build": [{"raw": {"tab_switch": [[16.0]]}}]}}))
+            return mock.Mock(returncode=1)
+
+        with mock.patch.object(perf_run.subprocess, "run", side_effect=child):
+            frames = perf_run.frame_scene_on("b", "a", 2, "9", Path(tempfile.gettempdir()) / "unused")
+        self.assertEqual(frames["error"], "frame_scene.py exited with 1")
+        self.assertEqual(perf_run.frame_metrics(frames)["frame_tab_switch_ms"], {"build": [16.0], "baseline": []})
+
+        with mock.patch.object(perf_run.subprocess, "run", return_value=mock.Mock(returncode=1)):
+            self.assertEqual(perf_run.frame_scene_on("b", "a", 2, "9", Path("unused"))["runs"], {})  # nothing written
+
+
+class PrivateDisplayTest(unittest.TestCase):
+    def test_the_cookie_entry_is_xauths_format_for_any_host(self):
+        import struct
+
+        entry = perf_run.xauthority("12", b"\x01" * 16)
+        family, rest = struct.unpack(">H", entry[:2])[0], entry[2:]
+        fields = []
+        while rest:
+            size = struct.unpack(">H", rest[:2])[0]
+            fields.append(rest[2 : 2 + size])
+            rest = rest[2 + size :]
+        self.assertEqual(family, 0xFFFF)  # FamilyWild
+        self.assertEqual(fields, [b"", b"12", b"MIT-MAGIC-COOKIE-1", b"\x01" * 16])
+
+
 class PinnedBenchmarkTest(unittest.TestCase):
     def test_an_archive_that_is_not_the_pinned_one_is_refused_and_removed(self):
         import tempfile
