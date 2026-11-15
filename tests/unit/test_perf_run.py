@@ -130,6 +130,22 @@ class PinnedBenchmarkTest(unittest.TestCase):
             self.assertFalse((tree / "Speedometer-abc").exists())
             self.assertEqual(perf_run.pinned("speedometer", cache), tree)  # verified once, then reused
 
+    def test_an_archive_whose_sha512_differs_is_refused_even_when_its_sha256_matches(self):
+        import hashlib
+        import tempfile
+        from unittest import mock
+
+        cache = Path(tempfile.mkdtemp())
+        self.addCleanup(__import__("shutil").rmtree, cache)
+        data = b"firefox"
+        pin = {"release": "1", "url": "https://x/firefox-1.tar.xz", "size": len(data), "sha256": hashlib.sha256(data).hexdigest()}
+        pin["sha512"] = "0" * 128
+        archive = cache / f"firefox-1-{pin['sha256'][:16]}.tar.xz"
+        archive.write_bytes(data)
+        with mock.patch.dict(perf_run.PINNED, {"firefox": pin}), self.assertRaises(perf_run.MeasureError):
+            perf_run.pinned("firefox", cache)
+        self.assertFalse(archive.exists())
+
     def test_firefox_is_mozillas_release_archive_with_both_digests(self):
         pin = perf_run.PINNED["firefox"]
         self.assertEqual(

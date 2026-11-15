@@ -121,7 +121,9 @@ PINNED = {
         "size": 576485,
     },
     "firefox": {
-        "release": "160.0",  # Mozilla's build; SHA-512 in its signed SHA512SUMS for 160.0
+        # Mozilla's build. Its SHA-512 is its line in Mozilla's SHA512SUMS for 160.0, whose SHA512SUMS.asc verifies with the
+        # release key scripts/upstream/verify_firefox_release.py pins (14F2 6682 … 0353); both digests are checked.
+        "release": "160.0",
         "url": "https://archive.mozilla.org/pub/firefox/releases/160.0/linux-x86_64/en-US/firefox-160.0.tar.xz",
         "sha256": "fde774e9757c8878534c05ec210db592bf6a1b244c57941ffb2e364c04f35fcd",
         "sha512": (
@@ -258,7 +260,11 @@ def pinned(name: str, cache: Path | None = None) -> Path:
             shutil.copyfileobj(response, out)
         partial.replace(archive)
     data = archive.read_bytes()
-    if len(data) != pin["size"] or hashlib.sha256(data).hexdigest() != pin["sha256"]:
+    if (
+        len(data) != pin["size"]
+        or hashlib.sha256(data).hexdigest() != pin["sha256"]
+        or ("sha512" in pin and hashlib.sha512(data).hexdigest() != pin["sha512"])  # Firefox: its line in Mozilla's SHA512SUMS
+    ):
         archive.unlink()
         raise MeasureError(f"{name}: the download is not the pinned archive (size or SHA-256)")
     shutil.rmtree(tree, ignore_errors=True)
