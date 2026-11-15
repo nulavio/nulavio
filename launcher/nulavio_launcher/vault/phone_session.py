@@ -323,7 +323,11 @@ def unlock(session: Session, request: dict, emit, resolver: link.Resolver = link
         if request.get("autolock", True):
             from .cli import spawn_autolock
 
-            spawn_autolock(prof)
+            try:
+                spawn_autolock(prof)
+            except OSError:
+                profiles.lock(prof)  # no watcher would lock it again: fail closed, as the helper's unlock does (audit V7)
+                raise
         session.set("unlocked", recovery_code=vault.settled, settle_warning=vault.settle_warning)
         log_event("vault.unlock", profile=prof.name, method="phone")
     else:
