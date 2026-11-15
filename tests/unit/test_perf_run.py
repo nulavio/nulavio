@@ -130,9 +130,44 @@ class PinnedBenchmarkTest(unittest.TestCase):
             self.assertFalse((tree / "Speedometer-abc").exists())
             self.assertEqual(perf_run.pinned("speedometer", cache), tree)  # verified once, then reused
 
+    def test_an_archive_whose_sha512_differs_is_refused_even_when_its_sha256_matches(self):
+        import hashlib
+        import tempfile
+        from unittest import mock
+
+        cache = Path(tempfile.mkdtemp())
+        self.addCleanup(__import__("shutil").rmtree, cache)
+        data = b"firefox"
+        pin = {"release": "1", "url": "https://x/firefox-1.tar.xz", "size": len(data), "sha256": hashlib.sha256(data).hexdigest()}
+        pin["sha512"] = "0" * 128
+        archive = cache / f"firefox-1-{pin['sha256'][:16]}.tar.xz"
+        archive.write_bytes(data)
+        with mock.patch.dict(perf_run.PINNED, {"firefox": pin}), self.assertRaises(perf_run.MeasureError):
+            perf_run.pinned("firefox", cache)
+        self.assertFalse(archive.exists())
+
+    def test_firefox_is_mozillas_release_archive_with_both_digests(self):
+        pin = perf_run.PINNED["firefox"]
+        self.assertEqual(
+            pin["url"],
+            f"https://archive.mozilla.org/pub/firefox/releases/{pin['release']}/linux-x86_64/en-US/firefox-{pin['release']}.tar.xz",
+        )
+        self.assertRegex(pin["sha256"], r"^[0-9a-f]{64}$")
+        self.assertRegex(pin["sha512"], r"^[0-9a-f]{128}$")  # the line of Mozilla's signed SHA512SUMS, for a reader to compare
+        self.assertGreater(pin["size"], 0)
+
+    def test_the_table_gets_a_firefox_column_when_firefox_ran(self):
+        results = {"metrics": {"startup_first_ms": {"build": [100.0], "baseline": [100.0], "firefox": [150.0]}}}
+        text = perf_run.table(results)
+        self.assertIn("Firefox (median)", text)
+        self.assertIn("150.0", text)
+        self.assertNotIn("Firefox", perf_run.table({"metrics": {"x": {"build": [1.0], "baseline": [1.0]}}}))
+
     def test_each_pin_is_a_commit_with_its_archive_and_digest(self):
-        self.assertEqual(set(perf_run.PINNED), {"speedometer", "jetstream", "motionmark"})
+        self.assertEqual(set(perf_run.PINNED), {"speedometer", "jetstream", "motionmark", "firefox"})
         for name, pin in perf_run.PINNED.items():
+            if name == "firefox":
+                continue
             with self.subTest(name=name):
                 self.assertRegex(pin["commit"], r"^[0-9a-f]{40}$")
                 self.assertEqual(
