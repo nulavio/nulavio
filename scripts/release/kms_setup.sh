@@ -38,7 +38,12 @@ aws iam get-open-id-connect-provider \
 
 render release-signing-trust.json
 if aws iam get-role --role-name "$role" >/dev/null 2>&1; then
-    echo "role $role exists: trust policy left as it is"
+    # Never rewritten here, but compared: a wider subject left in the account would go unnoticed otherwise (#326).
+    aws iam get-role --role-name "$role" --query Role.AssumeRolePolicyDocument --output json >"$work/trust-live.json"
+    python3 -I -c 'import json, sys; sys.exit(json.load(open(sys.argv[1])) != json.load(open(sys.argv[2])))' \
+        "$work/trust-live.json" "$work/release-signing-trust.json" ||
+        { echo "kms_setup: role $role's trust policy is not ci/aws/release-signing-trust.json; update one of them" >&2; exit 1; }
+    echo "role $role exists: trust policy is ci/aws/release-signing-trust.json"
 else
     aws iam create-role --role-name "$role" --max-session-duration 3600 \
         --description "Nulavio: GitHub Actions release environment signs with the release key in KMS" \
