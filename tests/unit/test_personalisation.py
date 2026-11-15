@@ -91,6 +91,8 @@ PREF_WRITERS = {
         'setStringPref("sidebar.visibility")': 2,
         "setStringPref(PREF_BEFORE_FOCUS)": 1,
     },
+    # the engine's switch for the meeting apps' link schemes only, from the profile's choice (#221)
+    "NulavioMeetings.sys.mjs": {"clearUserPref(pref)": 1, "setBoolPref(pref)": 1},
     "NulavioPasswords.sys.mjs": {"clearUserPref(PREF_DISMISSED)": 1, "setBoolPref(name)": 1, "setStringPref(PREF_DISMISSED)": 2},
     "NulavioPersonalise.sys.mjs": {
         "clearUserPref(pref)": 1,
@@ -439,6 +441,15 @@ class PrefWriterInventoryTest(unittest.TestCase):
                 if calls:
                     found[path.name] = dict(calls)
         self.assertEqual(found, PREF_WRITERS)
+
+    def test_the_meetings_module_writes_only_the_meeting_apps_switches(self):
+        source = (SHELL / "modules" / "NulavioMeetings.sys.mjs").read_text(encoding="utf-8")
+        self.assertIn('export const SCHEMES = Object.freeze(["zoommtg", "zoomus", "msteams"]);', source)
+        self.assertIn("const external = scheme => `network.protocol-handler.external.${scheme}`;", source)
+        body = source[source.index("function apply() {") : source.index("let observer")]
+        self.assertIn("const pref = external(scheme);", body)
+        self.assertIn("Services.prefs.setBoolPref(pref, false);", body)  # never true: an app is never forced
+        self.assertNotIn("Services.prefs.set", source.replace("Services.prefs.setBoolPref(pref, false);", ""))
 
     def test_the_appearance_module_writes_only_inside_set(self):
         source = (SHELL / "modules" / "NulavioPersonalise.sys.mjs").read_text(encoding="utf-8")
