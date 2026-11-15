@@ -648,7 +648,7 @@ export const NulavioLayout = {
   /**
    * Ctrl+Shift+L (#157): the engine's own "Copy Link to Highlight" for the tab's selection, or for the
    * highlight the page already shows, as the page menu offers it. The link comes from the page's
-   * ContextMenu actor (`#:~:text=`), the same one the menu item copies; nothing else is read or sent.
+   * ContextMenu actor (a `:~:text=` directive in its fragment, after the page's own anchor if it has one), the same one the menu item copies; nothing else is read or sent.
    * The engine does not offer it in the source viewer, and neither does this. `say(key)` announces the outcome.
    */
   async copyLinkToHighlight(browser, say = () => {}) {
@@ -661,7 +661,7 @@ export const NulavioLayout = {
         url = null; // a page the engine makes no text fragment for (the PDF viewer, an error page)
       }
     }
-    if (typeof url !== "string" || !url.includes("#:~:text=")) {
+    if (typeof url !== "string" || !URL.parse(url)?.hash.includes(":~:text=")) {
       say("linkHighlightNothing");
       return false;
     }

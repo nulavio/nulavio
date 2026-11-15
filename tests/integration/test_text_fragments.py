@@ -11,8 +11,8 @@ screenshots: getComputedStyle does not resolve that pseudo-element in Gecko.
 
 from __future__ import annotations
 
+import json
 import sys
-import time
 import unittest
 import urllib.parse
 from collections import Counter
@@ -21,6 +21,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
 import harness
 import pngdiff
+
+LOCALES = Path(__file__).resolve().parents[2] / "browser" / "shell" / "_locales"
+# What the window announces when there is nothing to copy, in either language the profile may use.
+NOTHING = [json.loads((LOCALES / lang / "messages.json").read_text(encoding="utf-8"))["linkHighlightNothing"]["message"]
+           for lang in ("en", "pt_BR")]  # fmt: skip
 
 MENU = """
 const menu = document.getElementById("contentAreaContextMenu");
@@ -172,8 +177,11 @@ class TextFragmentsTest(unittest.TestCase):
         """The text directives the page shows, as the engine's own menu reads them (a chrome-only API)."""
         return self.m.execute("return document.fragmentDirective.getTextDirectiveRanges().length;", sandbox="system")
 
-    def press_ctrl_shift_l(self) -> None:
-        """Ctrl+Shift+L through the widget (nsITextInputProcessor), as typing does (test_shortcuts' way)."""
+    def press_ctrl_shift_l(self) -> str | None:
+        """Ctrl+Shift+L through the widget (nsITextInputProcessor), as typing does (test_shortcuts' way).
+        Returns what the window announced when the command finished (its outcome), or None."""
+        # A11yUtils.announce puts the message in the aria-label of a <label> it adds to this alert.
+        self.m.chrome("document.getElementById('a11y-announcement')?.replaceChildren();")
         self.m.chrome(
             "const tip = Cc['@mozilla.org/text-input-processor;1'].createInstance(Ci.nsITextInputProcessor);"
             "if (!tip.beginInputTransactionForTests(window)) throw new Error('no input transaction');"
@@ -182,14 +190,16 @@ class TextFragmentsTest(unittest.TestCase):
             "const letter = new KeyboardEvent('', {key: 'L', code: 'KeyL', keyCode: 76});"
             "tip.keydown(ctrl); tip.keydown(shift); tip.keydown(letter); tip.keyup(letter); tip.keyup(shift); tip.keyup(ctrl);"
         )
+        said = "return document.getElementById('a11y-announcement')?.firstChild?.getAttribute('aria-label') || null;"
+        return harness.wait_until(lambda: self.m.chrome(said), 10)
 
     def test_02b_ctrl_shift_l_copies_the_link_to_the_selected_text(self):
         """#157: the shortcut the maintainer accepted gives the link the page menu gives; nothing selected, nothing copied."""
         self.m.navigate(self.page)
         self.m.chrome("Services.clipboard.emptyClipboard(Ci.nsIClipboard.kGlobalClipboard);")
         self.m.execute("getSelection().removeAllRanges(); document.body.focus();")
-        self.press_ctrl_shift_l()
-        time.sleep(1)  # nothing is expected to arrive: give a copy the time it would take
+        said = self.press_ctrl_shift_l()
+        self.assertIn(said, NOTHING, "the shortcut did not say there was nothing to copy")
         self.assertIsNone(self.m.chrome(CLIPBOARD), "a link was copied with nothing selected")
         self.m.execute(
             "const r = document.createRange(); r.selectNodeContents(document.getElementById('target'));"
@@ -203,6 +213,19 @@ class TextFragmentsTest(unittest.TestCase):
         self.assertTrue(base.startswith(self.server.url("/highlight?id=7")), copied)
         self.assertTrue(fragment.startswith(":~:text="), copied)
         self.assertIn("frase", urllib.parse.unquote(fragment))
+
+    def test_02c_on_a_page_with_an_anchor_the_link_keeps_it(self):
+        """The engine adds the directive after the page's own anchor (`#intro:~:text=`): that link is copied too."""
+        self.m.navigate(self.page + "#intro")
+        self.m.chrome("Services.clipboard.emptyClipboard(Ci.nsIClipboard.kGlobalClipboard);")
+        self.m.execute(
+            "const r = document.createRange(); r.selectNodeContents(document.getElementById('target'));"
+            "getSelection().removeAllRanges(); getSelection().addRange(r);"
+        )
+        said = self.press_ctrl_shift_l()
+        copied = harness.wait_until(lambda: self.m.chrome(CLIPBOARD) or None, 10)
+        self.assertTrue(copied, f"Ctrl+Shift+L copied nothing; it said {said!r}")
+        self.assertIn("#intro:~:text=", copied)
 
     def test_03_the_highlight_is_readable_in_a_light_and_a_dark_page(self):
         link = getattr(type(self), "link", None)
