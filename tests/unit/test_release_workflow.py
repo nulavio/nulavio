@@ -18,6 +18,17 @@ ROOT = Path(__file__).resolve().parents[2]
 RELEASE = ROOT / "scripts" / "release"
 WORKFLOW = ROOT / ".github" / "workflows" / "release.yml"
 
+
+ENVIRONMENT = re.compile(r"^\s*environment:[ \t]*(?:#.*)?(?:\n\s*name:[ \t]*)?['\"]?([^\s'\"#]*)", re.M)
+
+
+def job_environments(workflow: str) -> list[tuple[str, str]]:
+    """(job, environment) for each job of a workflow that names one, as `environment: <name>` or as
+    `environment:` with `name: <name>` on the next line. Jobs are the two-space keys under `jobs:`."""
+    jobs = re.split(r"^  ([A-Za-z0-9_-]+):[ \t]*$", workflow.split("\njobs:\n", 1)[-1], flags=re.M)
+    return [(job, name) for job, body in zip(jobs[1::2], jobs[2::2], strict=True) for name in ENVIRONMENT.findall(body)]
+
+
 FAKE_AWS = """#!/bin/sh
 {
   printf 'key=%s secret=%s token=%s region=%s checksums=%s ' \\
@@ -220,19 +231,29 @@ class ReleaseWorkflowTest(unittest.TestCase):
 
     def test_only_the_release_jobs_name_the_signing_and_upload_environments(self):
         # `release-upload` has no required reviewer (#334): any job on main that named it would get the R2 token
-        # without the maintainer's approval (R60). So the workflows that may name either environment are listed.
-        allowed = {"release": {"release.yml", "release-signing-check.yml"}, "release-upload": {"release.yml"}}
-        found = {name: set() for name in allowed}
-        # `environment: <name>` or `environment:` with `name: <name>` on the next line; a name built from an
-        # expression could be either, so none is allowed.
-        named = re.compile(r"^\s*environment:[ \t]*(?:\n\s*name:[ \t]*)?['\"]?([^\s'\"#]*)", re.M)
+        # without the maintainer's approval (R60). So the jobs that may name either environment are listed.
+        named = set()
         for path in sorted((ROOT / ".github" / "workflows").glob("*.y*ml")):
-            for name in named.findall(path.read_text(encoding="utf-8")):
-                self.assertNotIn("${{", name, path.name)
-                if name in found:
-                    found[name].add(path.name)
-        self.assertEqual(found, allowed)
-        self.assertEqual(self.text.count("environment: release-upload"), 1)
+            for job, name in job_environments(path.read_text(encoding="utf-8")):
+                self.assertNotIn("${{", name, f"{path.name} {job}")  # a name from an expression could be either
+                if name in ("release", "release-upload"):
+                    named.add((path.name, job, name))
+        self.assertEqual(
+            named,
+            {
+                ("release.yml", "sign", "release"),
+                ("release-signing-check.yml", "sign", "release"),
+                ("release.yml", "publish", "release-upload"),
+            },
+        )
+
+    def test_the_environment_reader_sees_both_forms_in_each_job(self):
+        text = (
+            "on: push\njobs:\n  a:\n    environment: release-upload # x\n    steps: []\n"
+            "  b:\n    environment:\n      name: 'release-upload'\n      url: x\n"
+            "  c:\n    environment: ${{ inputs.where }}\n  d:\n    steps: []\n"
+        )
+        self.assertEqual(job_environments(text), [("a", "release-upload"), ("b", "release-upload"), ("c", "${{")])
 
     def test_the_release_is_drafted_from_the_runner_build(self):
         # That the published repositories install exactly the released version is run, not read, in
