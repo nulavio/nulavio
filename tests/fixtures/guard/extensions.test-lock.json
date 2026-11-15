@@ -1,6 +1,6 @@
 {
  "schema": 1,
- "comment": "For tests only, never installed or offered by Nulavio: a second signed version of an extension the product lock pins (browser/distribution/extensions.lock.json), so test_guard can put one version in place of the other while the browser is closed (#245). Same fields and checks as the product lock; the browser checks its Mozilla (AMO) signature.",
+ "comment": "For tests only, never installed or offered by Nulavio: a second signed version of an extension the product lock pins (browser/distribution/extensions.lock.json), so test_guard can put one version in place of the other while the browser is closed (#245). Same fields and checks as the product lock; the browser checks its Mozilla (AMO) signature. When the product lock moves Proton Pass to this version or past it, move this one to a later signed version too.",
  "verified_on": "2026-11-14",
  "extensions": [
   {

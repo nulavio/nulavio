@@ -643,10 +643,13 @@ class GuardTest(unittest.TestCase):
         versions = signed_versions()
         if not versions:  # only where the network is not required (NULAVIO_REQUIRE_NETWORK=1 downloads them)
             self.skipTest(
-                "no two signed versions of Proton Pass in the local cache: a version replaced while closed was not tried"
+                "no two signed versions of Proton Pass in a local cache (NULAVIO_TEST_XPI_CACHE, or NULAVIO_REQUIRE_NETWORK=1 "
+                "to download them): a version replaced while closed was not tried"
             )
         (older, older_xpi), (newer, newer_xpi) = versions
-        self.assertEqual((older.id, older.version, newer.version), (newer.id, "1.41.1", "1.43.1"))
+        # Whatever the two locks pin, as long as it is one extension in two versions (the test lock moves with the product's).
+        self.assertEqual(older.id, newer.id)
+        self.assertNotEqual(older.version, newer.version)
         record = self.profile / "nulavio-guard.json"
         placed = self.profile / "extensions" / older.xpi_name
         changed = f"extension-changed:{older.id}"
