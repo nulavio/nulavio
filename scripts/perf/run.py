@@ -38,15 +38,22 @@ private Xvfb this command starts, with the same --runs, after the other measures
 "frames"; the table gets each scene's median frame interval per run (frame_<scene>_ms) and, for the new tab, its time
 to paint. Xvfb with software rendering: a regression gate, not a measure of real hardware.
 
+With --firefox, stock Firefox 160.0 is a third side of every run: Mozilla's linux-x86_64 en-US archive, pinned by
+its SHA-256 (its SHA-512 is the one in Mozilla's SHA512SUMS for the release, signed with Mozilla's release key),
+downloaded once into the cache and started from a fresh profile with Marionette (FirefoxSession). Its profile gets
+only what the measure needs: Marionette, no default-browser question and no first-run or welcome page (a remote
+page would load into the first tab). Everything else is Firefox's own default. It runs the same startup, memory
+and benchmark measures; the frame-time scenes are Nulavio's own and run on the two Nulavio builds only.
+
 The JSON keeps every run and is written after each one; the table gives each side's median and the build's
-change against the baseline. What it does not measure yet (#80): the
-fingerprinting cost, the tools CLI, a cold start, and stock Firefox
-as a second baseline (GeckoProfileSession needs a Nulavio build).
+change against the baseline (and Firefox's median, with --firefox). What it does not measure yet (#80): the
+fingerprinting cost, the tools CLI, and a cold start.
 """
 
 from __future__ import annotations
 
 import argparse
+import configparser
 import contextlib
 import functools
 import hashlib
@@ -56,6 +63,7 @@ import math
 import os
 import secrets
 import shutil
+import signal
 import subprocess
 import statistics
 import struct
@@ -64,6 +72,7 @@ import tarfile
 import tempfile
 import threading
 import time
+import types
 import urllib.request
 from pathlib import Path
 
@@ -111,6 +120,26 @@ PINNED = {
         "sha256": "14b746f05b388a382d315186efd6e19017f7f67b3846d20759ab30fe83c2f985",
         "size": 576485,
     },
+    "firefox": {
+        "release": "160.0",  # Mozilla's build; SHA-512 in its signed SHA512SUMS for 160.0
+        "url": "https://archive.mozilla.org/pub/firefox/releases/160.0/linux-x86_64/en-US/firefox-160.0.tar.xz",
+        "sha256": "fde774e9757c8878534c05ec210db592bf6a1b244c57941ffb2e364c04f35fcd",
+        "sha512": (
+            "e9c7ed0d4abc6eb3648c2c5652bd325e690423ef49414ef201eac59c0932ea8ec52260cf652510b2c98971c7e7eb36e6be8101d87cae17c6dd28ed763bac32a6"
+        ),
+        "size": 90967588,
+    },
+}
+# Stock Firefox's profile: Marionette, and nothing that would put a remote page into the first tab or ask a question.
+FIREFOX_PREFS = {
+    "marionette.port": 0,
+    "remote.prefs.recommended": False,
+    "browser.shell.checkDefaultBrowser": False,
+    "browser.aboutwelcome.enabled": False,
+    "browser.startup.homepage_override.mstone": "ignore",
+    "startup.homepage_welcome_url": "",
+    "startup.homepage_welcome_url.additional": "",
+    "datareporting.policy.firstRunURL": "",
 }
 # The benchmark's state: how many iterations it measured, whether it ended (its last iteration, or an error), and the
 # mean of the iterations' scores, the number its own page shows (resources/main.mjs, _computeResults).
@@ -161,13 +190,22 @@ def change(build: list[float], baseline: list[float]) -> float | None:
 
 
 def table(results: dict) -> str:
-    rows = [("measure", "build (median)", "baseline (median)", "change")]
+    firefox = any("firefox" in sides for sides in results["metrics"].values())
+    rows = [("measure", "build (median)", "baseline (median)", "change", *(["Firefox (median)"] if firefox else []))]
+    fmt = lambda v: "-" if v is None else f"{v:.1f}"  # noqa: E731
     for name, sides in results["metrics"].items():
         build, baseline = sides["build"], sides["baseline"]
         delta = change(build, baseline)
-        fmt = lambda v: "-" if v is None else f"{v:.1f}"  # noqa: E731
-        rows.append((name, fmt(median(build)), fmt(median(baseline)), "-" if delta is None else f"{delta * 100:+.1f} %"))
-    widths = [max(len(row[i]) for row in rows) for i in range(4)]
+        rows.append(
+            (
+                name,
+                fmt(median(build)),
+                fmt(median(baseline)),
+                "-" if delta is None else f"{delta * 100:+.1f} %",
+                *([fmt(median(sides.get("firefox", [])))] if firefox else []),
+            )
+        )
+    widths = [max(len(row[i]) for row in rows) for i in range(len(rows[0]))]
     return "\n".join("  ".join(cell.ljust(widths[i]) for i, cell in enumerate(row)) for row in rows)
 
 
@@ -208,11 +246,12 @@ def pinned(name: str, cache: Path | None = None) -> Path:
     """The pinned benchmark's files: downloaded once, checked against the pin's size and SHA-256, unpacked."""
     pin = PINNED[name]
     cache = cache or cache_dir()
-    tree = cache / f"{name}-{pin['commit']}-{pin['sha256'][:16]}"  # a new digest for the same commit is a new tree
+    ident = pin.get("commit") or pin["release"]
+    tree = cache / f"{name}-{ident}-{pin['sha256'][:16]}"  # a new digest for the same commit is a new tree
     if (tree / ".verified").exists():
         return tree
     cache.mkdir(parents=True, exist_ok=True)
-    archive = cache / f"{name}-{pin['commit']}-{pin['sha256'][:16]}.tar.gz"
+    archive = cache / f"{name}-{ident}-{pin['sha256'][:16]}{'.tar.xz' if pin['url'].endswith('.tar.xz') else '.tar.gz'}"
     if not archive.exists():
         partial = archive.with_suffix(".part")
         with urllib.request.urlopen(pin["url"], timeout=120) as response, partial.open("wb") as out:  # noqa: S310
@@ -397,13 +436,82 @@ def startup_ms(m) -> float:
     return float(info["restored"] - info["process"])
 
 
-def one_run(engine: str, tabs: list[int], server, benchmarks: tuple = ()) -> dict:
+class FirefoxSession:
+    """Stock Firefox from a fresh profile, driven as harness.GeckoProfileSession drives Nulavio: start, stop,
+    restart, the process and the engine's path and version."""
+
+    def __init__(self, binary: Path):
+        import harness
+
+        self.tmp = Path(tempfile.mkdtemp(prefix="nulavio-perf-firefox-"))
+        self.profile = self.tmp / "profile"
+        self.profile.mkdir()
+        lines = [f'user_pref("{key}", {json.dumps(value)});' for key, value in FIREFOX_PREFS.items()]
+        (self.profile / "user.js").write_text("\n".join(lines) + "\n", encoding="utf-8")
+        info = configparser.ConfigParser()
+        info.read(binary.parent / "application.ini", encoding="utf-8")
+        self.engine = types.SimpleNamespace(path=binary, version=info.get("App", "Version", fallback="?"))
+        home = self.tmp / "home"
+        self.env = {
+            "HOME": str(home),
+            "XDG_CONFIG_HOME": str(home / ".config"),
+            "XDG_CACHE_HOME": str(home / ".cache"),
+            "XDG_DATA_HOME": str(home / ".local" / "share"),
+            "PATH": "/usr/bin:/bin",
+            "LANG": os.environ.get("NULAVIO_TEST_LANG", "pt_BR.UTF-8"),
+            "MOZ_HEADLESS": "1",
+            harness.SYSTEM_ACCESS_ENV: "1",  # nosemgrep: nulavio-py-engine-sandbox-env -- a throwaway measuring profile
+        }
+        self.process: subprocess.Popen | None = None
+        self.client = None
+
+    def start(self):
+        from marionette import Marionette
+
+        port = self.profile / "MarionetteActivePort"
+        port.unlink(missing_ok=True)
+        command = [str(self.engine.path), "--profile", str(self.profile), "--no-remote", "--marionette", "--headless"]
+        self.process = subprocess.Popen(  # an engine of its own: its process tree is what memory reads
+            command, env=self.env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True
+        )
+        deadline = time.monotonic() + 90
+        while not (port.exists() and port.read_text().strip()):
+            if self.process.poll() is not None or time.monotonic() > deadline:
+                raise MeasureError(f"Firefox did not open Marionette (exit {self.process.poll()})")
+            time.sleep(0.3)
+        self.client = Marionette(int(port.read_text().strip())).connect()
+        self.client.new_session()
+        return self.client
+
+    def stop(self) -> None:
+        if self.client is not None:
+            self.client.quit()
+            self.client = None
+        if self.process is not None:
+            try:
+                self.process.wait(timeout=30)
+            except subprocess.TimeoutExpired:
+                os.killpg(self.process.pid, signal.SIGKILL)
+                self.process.wait(timeout=10)
+            self.process = None
+
+    def restart(self):
+        self.stop()
+        return self.start()
+
+    def cleanup(self) -> None:
+        self.stop()
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+
+def one_run(engine: str, tabs: list[int], server, benchmarks: tuple = (), firefox: bool = False) -> dict:
     """One fresh profile: its two starts, the tabs' memory, then each of `benchmarks` ((name, score of a Marionette
-    session)) in a start of its own."""
+    session)) in a start of its own. `engine` is a Nulavio build, or with `firefox` the Firefox binary."""
     import harness
 
-    os.environ["NULAVIO_ENGINE"] = engine
-    session = harness.GeckoProfileSession(name="Perf")
+    if not firefox:
+        os.environ["NULAVIO_ENGINE"] = engine  # GeckoProfileSession reads it
+    session = FirefoxSession(Path(engine)) if firefox else harness.GeckoProfileSession(name="Perf")
     try:
         m = session.start()
         out = {"engine": str(session.engine.path), "version": session.engine.version, "startup_first_ms": startup_ms(m)}
@@ -450,6 +558,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--jetstream", action="store_true", help="also JetStream 3.0, pinned and served locally")
     parser.add_argument("--motionmark", action="store_true", help="also MotionMark 1.3.2, pinned and served locally")
     parser.add_argument("--frames", action="store_true", help="also frame time (scripts/research/frame_scene.py, on Xvfb)")
+    parser.add_argument("--firefox", action="store_true", help="also stock Firefox 160.0 as a third side, pinned")
     args = parser.parse_args(argv)
     build = os.environ.get("NULAVIO_ENGINE")
     if not build:
@@ -483,9 +592,12 @@ def main(argv: list[str] | None = None) -> int:
                 benchmarks.append(("jetstream3_score", functools.partial(jetstream_score, server=serve("jetstream"))))
             if args.motionmark:
                 benchmarks.append(("motionmark_score", functools.partial(motionmark_score, server=serve("motionmark"))))
+            sides = [("build", build), ("baseline", args.baseline_engine)]
+            if args.firefox:
+                sides.append(("firefox", str(pinned("firefox") / "firefox")))
             for run in range(args.runs):
-                for side, engine in (("build", build), ("baseline", args.baseline_engine)):
-                    measured = one_run(engine, args.tabs, server, tuple(benchmarks))
+                for side, engine in sides:
+                    measured = one_run(engine, args.tabs, server, tuple(benchmarks), firefox=side == "firefox")
                     results["runs"].append({"run": run, "side": side, **measured})
                     print(f"run {run} {side}: {measured}", file=sys.stderr)
                     write()
@@ -494,7 +606,8 @@ def main(argv: list[str] | None = None) -> int:
     numbers = [key for key, value in results["runs"][0].items() if key not in ("run", "side") and isinstance(value, (int, float))]
     for name in numbers:
         results["metrics"][name] = {
-            side: [r[name] for r in results["runs"] if r["side"] == side] for side in ("build", "baseline")
+            side: [r[name] for r in results["runs"] if r["side"] == side and name in r]
+            for side in ("build", "baseline", *(["firefox"] if args.firefox else []))
         }
     if args.frames:
         results["frames"] = frame_times(build, args.baseline_engine, args.runs)
