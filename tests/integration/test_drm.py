@@ -21,6 +21,7 @@ with KEY and KID below (artificial, test-only).
 from __future__ import annotations
 
 import base64
+import os
 import sys
 import unittest
 from pathlib import Path
@@ -102,6 +103,19 @@ const ask = system => navigator.requestMediaKeySystemAccess(system,
   [{ initDataTypes: ["cenc"], videoCapabilities: [{ contentType: 'video/mp4; codecs="vp09.00.10.08"' }] }])
   .then(() => "granted", e => e.name);
 Promise.all([ask("org.w3.clearkey"), ask("com.widevine.alpha")]).then(done, e => done(String(e)));
+"""
+
+# The engine's notification bar on a tab whose page asked for DRM while it is off, and the checkbox in Settings.
+DRM_BAR = """
+const n = gBrowser.getNotificationBox(gBrowser.selectedBrowser).getNotificationWithValue("drmContentDisabled");
+if (!n) return null;
+const label = b => b.label || b.textContent.trim() || b.getAttribute("aria-label") || "";
+return { text: n.messageText?.textContent ?? "", buttons: [...n.buttonContainer.querySelectorAll("button")].map(label) };
+"""
+DRM_SETTING = """
+const box = document.getElementById("playDRMContent");
+const nav = document.querySelector('[view="paneTabsBrowsing"], #category-tabs-browsing, [data-category="paneTabsBrowsing"]');
+return box ? { shown: box.checkVisibility(), label: box.label, checked: box.checked, nav: !!nav && nav.checkVisibility() } : null;
 """
 
 
@@ -193,6 +207,135 @@ class ProtectedMediaTest(unittest.TestCase):
             self.m.chrome("Services.prefs.clearUserPref('media.clearkey.persistent-license.enabled');")
             self.m.chrome("Services.prefs.clearUserPref('media.eme.enabled');")
 
+    def test_05_with_drm_off_a_page_that_asks_gets_the_engines_bar_and_settings_has_the_switch(self):
+        """#222, item 5: the two ways a person turns DRM on are reachable in Nulavio. A page that asks for Widevine with
+        DRM off gets the engine's notification bar with its button; Settings has the engine's own checkbox, which is
+        the pref. In the profile's language (pt-BR in this suite)."""
+        self.assertFalse(self.m.chrome("return Services.prefs.getBoolPref('media.eme.enabled');"))
+        self.m.navigate(self.server.url("/page/eme-asks"))
+        self.m.execute_async(ACCESS)
+        self.assertTrue(
+            harness.wait_until(lambda: self.m.chrome(DRM_BAR), 10), "no notification bar for a page that asks for DRM"
+        )
+        shown = self.m.chrome(DRM_BAR)
+        print(f"bar: {shown}", file=sys.stderr)
+        self.assertTrue(shown["text"].strip() and any(label.strip() for label in shown["buttons"]), shown)
+        self.m.navigate("about:preferences#tabsBrowsing")  # Firefox 160 keeps it under "Tabs and browsing"
+        self.assertTrue(
+            harness.wait_until(lambda: (self.m.execute(DRM_SETTING) or {}).get("shown"), 10), self.m.execute(DRM_SETTING)
+        )
+        state = self.m.execute(DRM_SETTING)
+        print(f"settings: {state}", file=sys.stderr)
+        self.assertTrue(state["label"].strip(), state)
+        self.assertTrue(state["nav"], f"the settings page lists no way to that pane: {state}")
+        self.assertFalse(state["checked"])
+        self.addCleanup(self.m.chrome, "Services.prefs.clearUserPref('media.eme.enabled');")
+        self.m.execute("document.getElementById('playDRMContent').click();")
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome("return Services.prefs.getBoolPref('media.eme.enabled');"), 5))
+
+    def long_async(self, script: str, args: list, seconds: int):
+        """An async script that may take minutes (a download): the script and socket timeouts raised for it alone."""
+        self.m.send("WebDriver:SetTimeouts", {"script": seconds * 1000})
+        socket_timeout = self.m.timeout
+        self.m._sock.settimeout(seconds + 30)
+        try:
+            return self.m.execute_async(script, args)
+        finally:
+            self.m._sock.settimeout(socket_timeout)
+            self.m.send("WebDriver:SetTimeouts", {"script": 30000})
+
+    @unittest.skipUnless(
+        os.environ.get("NULAVIO_NETWORK_TESTS") == "1", "downloads Widevine and plays from Google (NULAVIO_NETWORK_TESTS=1)"
+    )
+    def test_04_with_drm_on_widevine_installs_and_a_public_test_stream_plays(self):
+        """#222, item 2: DRM turned on as Settings does, the engine installs Widevine from Mozilla's list, and the
+        Shaka Player demo's Widevine stream (Sintel, VP9 in WebM, Google's test licence server) plays."""
+        self.m.chrome("Services.prefs.setBoolPref('media.eme.enabled', true);")
+        self.addCleanup(self.m.chrome, "Services.prefs.clearUserPref('media.eme.enabled');")
+        self.m.set_context("chrome")
+        try:
+            installed = self.long_async(INSTALL_WIDEVINE, [], 300)
+        finally:
+            self.m.set_context("content")
+        print(f"Widevine: {installed}", file=sys.stderr)
+        self.assertNotIn("error", installed, installed)
+        version = lambda: self.m.chrome("return Services.prefs.getStringPref('media.gmp-widevinecdm.version', '');")  # noqa: E731
+        self.assertTrue(harness.wait_until(lambda: version(), 120), "Widevine was not installed")
+        self.m.navigate(self.server.url("/page/eme-widevine"))
+        result = self.long_async(WIDEVINE_PLAY, [WIDEVINE_STREAM, 'video/mp4; codecs="avc1.42c01e"', WIDEVINE_LICENCE], 120)
+        print(f"Widevine {version()}: {result}", file=sys.stderr)
+        self.assertNotIn("error", result, result)
+        self.assertEqual(result["keySystem"], "com.widevine.alpha")
+        self.assertEqual(result["errors"], [], result)
+        self.assertTrue(result["licensed"], f"no licence reached the CDM: {result}")
+        self.assertGreaterEqual(result["currentTime"], 1.5, f"the stream did not play: {result}")
+        self.assertGreater(result["frames"], 0, result)
+
+
+# #222, item 2: Widevine from the engine's own list (what turning DRM on starts), installed now instead of at the
+# next periodic check. Resolves with what was installed.
+INSTALL_WIDEVINE = """
+const done = arguments[arguments.length - 1];
+(async () => {
+  const { GMPInstallManager } = ChromeUtils.importESModule("resource://gre/modules/GMPInstallManager.sys.mjs");
+  const manager = new GMPInstallManager();
+  const found = await manager.checkForAddons();
+  const widevine = (found.addons ?? []).find(addon => addon.id === "gmp-widevinecdm");
+  if (!widevine) return { error: `not in the list: ${(found.addons ?? []).map(a => a.id)}` };
+  await manager.installAddon(widevine);
+  return { version: widevine.version };
+})().then(done, e => done({ error: String(e) }));
+"""
+# The Shaka Player demo's public Widevine assets and licence server (no account): "Angel One", 144p H.264 in
+# fragmented MP4 (the CDM decodes it itself), its first part.
+WIDEVINE_STREAM = "https://storage.googleapis.com/shaka-demo-assets/angel-one-widevine/v-0144p-0100k-libx264.mp4"
+WIDEVINE_LICENCE = "https://cwip-shaka-proxy.appspot.com/no_auth"
+WIDEVINE_PLAY = """
+const [url, type, licence] = arguments;
+const done = arguments[arguments.length - 1];
+(async () => {
+  const media = document.createElement("video");
+  media.muted = true;
+  document.body.append(media);
+  const errors = [];
+  media.addEventListener("error", () => errors.push(`media ${media.error?.code}: ${media.error?.message}`));
+  const access = await navigator.requestMediaKeySystemAccess("com.widevine.alpha",
+    [{ initDataTypes: ["cenc"], videoCapabilities: [{ contentType: type }] }]);
+  const keys = await access.createMediaKeys();
+  await media.setMediaKeys(keys);
+  let licensed = false;
+  // The stream carries its key id: the engine says "encrypted", and the licence comes from the server.
+  media.addEventListener("encrypted", event => {
+    const session = keys.createSession();
+    session.addEventListener("message", async message => {
+      let status = "no answer";
+      try {
+        const answer = await fetch(licence, { method: "POST", body: message.message });
+        status = `${answer.status} ${answer.headers.get("content-type")}`;
+        await session.update(await answer.arrayBuffer());
+        licensed = true;
+      } catch (e) {
+        errors.push(`licence (${message.messageType}, ${status}): ${e.name}: ${e.message}`);
+      }
+    });
+    session.generateRequest(event.initDataType, event.initData).catch(e => errors.push(`request: ${e}`));
+  }, { once: true });
+  const source = new MediaSource();
+  media.src = URL.createObjectURL(source);
+  await new Promise(r => source.addEventListener("sourceopen", r, { once: true }));
+  const buffer = source.addSourceBuffer(type);
+  // The first 400 kB (about half a minute at 144p): enough to play, not the whole film.
+  buffer.appendBuffer(await (await fetch(url, { headers: { Range: "bytes=0-399999" } })).arrayBuffer());
+  await new Promise(r => buffer.addEventListener("updateend", r, { once: true }));
+  media.play().catch(e => errors.push(`play: ${e}`));
+  const started = Date.now();
+  while (Date.now() - started < 60000 && media.currentTime < 1.5 && !errors.length) {
+    await new Promise(r => setTimeout(r, 200));
+  }
+  return { licensed, currentTime: media.currentTime, readyState: media.readyState,
+           frames: media.getVideoPlaybackQuality().totalVideoFrames, errors, keySystem: access.keySystem };
+})().then(done, e => done({ error: String(e) }));
+"""
 
 # A persistent-license session: created, given its key, closed (what stays is on disk).
 STORE = """
