@@ -20,10 +20,12 @@ Until now Nulavio left the screen's size alone on purpose: the engine's own way 
 
 Pages read `screen.width` 1920 and `screen.height` 1080 on every computer. The available area is the same size at 0,0, and the `device-width` and `device-height` media queries agree with it.
 
-- **How:** the engine has a per-tab screen size made for automation (`browsingContext.setScreenAreaOverride`). The Shell sets it on every tab (`NulavioFingerprinting.sys.mjs`). No engine patch.
-- **When:** before the tab's first page, and again before each page is asked for, so a page's first script already reads it. Measured through navigations that change process and through back and forward.
+- **How:** the engine has a per-tab screen size made for automation (`browsingContext.setScreenAreaOverride`). The Shell sets it. No engine patch.
+- **When:** every new tab gets it before it has a page (`NulavioFingerprinting.sys.mjs`). Then each page decides for itself as its window is created, in its own process (`NulavioFingerprintingChild.sys.mjs`). That is the one moment after the page before it is gone and before the new page's first script, so:
+  - a page's first script already reads the right size;
+  - a protected page keeps the constant until it is replaced, also while a site the person exempted is on its way. An earlier version of this change decided when the request was made, and the page still shown could then read the display's size until the answer came (found in review).
 - **The window is left alone.** `innerWidth`, `innerHeight` and CSS layout are the window's real size. No margins, no fixed window sizes.
-- **It follows the engine's protection.** It is on while fingerprinting protection is on (the Strict category, Nulavio's default) and off otherwise. A site the person exempts with the shield in the address bar reads the display's size, like the other plain values.
+- **It follows the engine's protection.** It is on while fingerprinting protection is on (the Strict category, Nulavio's default) and off otherwise. A site the person exempts with the shield in the address bar reads the display's size, like the other plain values: the page asks the engine's own record of that exemption, in ordinary and in private windows. Mozilla's remote list of per-site exceptions for single protections does not reach the screen's size, which is not one of the engine's protections.
 - **Why 1920×1080:** it is a size many real desktop displays have, so the value does not stand out the way an odd one would.
 
 ### 2. Every computer reports 4 processors
@@ -48,9 +50,11 @@ Pages read `screen.width` 1920 and `screen.height` 1080 on every computer. The a
 
 - `test_privacytests`: PrivacyTests' own Screen probes on two display sizes, and its processor probe.
 - `test_fingerprinting` 08: the size, the available area and the media query on two sites, from the page's first script; an exempted site reads the display's, also after a protected page in another process; back and forward.
+- `test_fingerprinting` 08b: a protected page that sends the tab to an exempted site that takes 2.5 s to answer reads 1920×1080 the whole time; the exempted site then reads the display's from its first script.
+- `test_fingerprinting` 08c: a private window has the constant, and its own exemption.
 - `tests/regression/run_sites.py` on 50 real sites, before and after: see the pull request.
 
-Not checked: a private window (the same code path, with the private window's own switch and exemption list), and a display larger than 1920×1080 (headless runs have a smaller one).
+Not checked: a display larger than 1920×1080 (headless runs have a smaller one).
 
 ## Alternatives
 

@@ -33,7 +33,7 @@ Neither makes two people identical. The time zone, the language, the window's si
 
 "Differs per site" means: two sites read different values, the same site reads the same value again during the day (so sites that read twice keep working), and the value changes with the next session or day. The engine does it by changing the lowest bit of a few colour values, chosen from a random key per site.
 
-The whole set in effect is the engine's own for Strict (`CanvasRandomization`, `FontVisibilityLangPack`, `JSMathFdlibm`, `ScreenAvailToResolution`, `NavigatorHWConcurrencyTiered`, `MaxTouchPointsCollapse`, `IMEStyle`) plus Nulavio's (`privacy.fingerprintingProtection.overrides` in `firefox-branding.js`): `WebGLRendererConstant`, `WebGLVendorSanitize`, `WindowOuterSize`, `WindowScreenXY`, `WindowInnerScreenXY`, `MouseEventScreenPoint`, `UseStandinsForNativeColors`, `DeviceSensors`, `NavigatorHWConcurrency`, and without `EfficientCanvasRandomization`. Test 02 reads the set from the engine and compares. The screen's size is not in that set: the Shell gives every tab the engine's own screen-size override (`NulavioFingerprinting.sys.mjs`).
+The whole set in effect is the engine's own for Strict (`CanvasRandomization`, `FontVisibilityLangPack`, `JSMathFdlibm`, `ScreenAvailToResolution`, `NavigatorHWConcurrencyTiered`, `MaxTouchPointsCollapse`, `IMEStyle`) plus Nulavio's (`privacy.fingerprintingProtection.overrides` in `firefox-branding.js`): `WebGLRendererConstant`, `WebGLVendorSanitize`, `WindowOuterSize`, `WindowScreenXY`, `WindowInnerScreenXY`, `MouseEventScreenPoint`, `UseStandinsForNativeColors`, `DeviceSensors`, `NavigatorHWConcurrency`, and without `EfficientCanvasRandomization`. Test 02 reads the set from the engine and compares. The screen's size is not in that set: the Shell gives every tab the engine's own screen-size override (`NulavioFingerprinting.sys.mjs`, and `NulavioFingerprintingChild.sys.mjs` for each page).
 
 ## Three things that were wrong before 2026-11-10
 
@@ -59,7 +59,7 @@ The whole set in effect is the engine's own for Strict (`CanvasRandomization`, `
 ## Limits
 
 - **A site can still tell this is not a stock Firefox.** A release that reports "Mozilla" as its graphics card, an outer window as large as the inner one, or a window wider than its screen (a maximised window on a display larger than 1920×1080) is unusual. What the build aims at is that Nulavio users look alike and that one person does not carry the same values from site to site, not that they vanish among all Firefox users.
-- **A site the person exempts gets the plain values.** Turning the shield off for a site in the address bar turns these protections off there too (tested, 07), and only there. Mozilla's own per-site exceptions for broken sites (Remote Settings) apply as in Firefox.
+- **A site the person exempts gets the plain values.** Turning the shield off for a site in the address bar turns these protections off there too (tested, 07), and only there. Mozilla's own per-site exceptions for broken sites (Remote Settings) apply as in Firefox to the engine's protections; they do not reach the screen's size, which the Shell sets and only the shield's switch exempts.
 - **Other distributions.** The engine has font lists for Fedora and Ubuntu only. Elsewhere every installed font stays visible.
 - **Cost.** A page that reads canvas pixels back gets a few of them changed by one step. Image editors and games that draw and read many times pay for the extra work on each read.
 - **Extensions.** uBlock Origin, which Nulavio installs, can be noticed by what it blocks, as in any browser that has it.
@@ -67,7 +67,7 @@ The whole set in effect is the engine's own for Strict (`CanvasRandomization`, `
 
 ## Kept true by
 
-- `tests/integration/test_fingerprinting.py`, eight tests on the real engine. The plain values are read in the same session with the protections off, so the comparison holds on any machine. The font test installs a font made for the test in the throwaway home.
+- `tests/integration/test_fingerprinting.py`, ten tests on the real engine. The plain values are read in the same session with the protections off, so the comparison holds on any machine. The font test installs a font made for the test in the throwaway home.
 - `tests/unit/test_prefs_and_guard.py`: the additions are the same in both tracks, and nothing that breaks sites or accessibility (time zone, language, colour scheme, reduced motion, keyboard, window rounding) can enter the default.
 - Guard at run time: a change to `privacy.fingerprintingProtection` or its branch made while the browser was closed is reported at the next start.
 - `tests/integration/test_privacy.py` (`test_04`) still compares Strict with Standard.
