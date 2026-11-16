@@ -1,0 +1,32 @@
+[
+  {
+    "namespace": "nulavioServices",
+    "description": "Web services used on a click, translation (#156) and summaries (#154): the menu items they offer and the address one opens. Built-in Shell only. Logic in browser/shell/modules/NulavioServices.sys.mjs.",
+    "functions": [
+      { "name": "menu", "type": "function", "async": true, "parameters": [] },
+      {
+        "name": "check", "type": "function", "async": true,
+        "parameters": [
+          { "name": "itemId", "type": "string", "maxLength": 300 },
+          { "name": "target", "type": "string", "maxLength": 8192 },
+          { "name": "tabId", "type": "integer", "minimum": 0 }
+        ]
+      },
+      {
+        "name": "open", "type": "function", "async": true,
+        "parameters": [
+          { "name": "itemId", "type": "string", "maxLength": 300 },
+          {
+            "name": "clicked", "type": "object",
+            "properties": {
+              "text": { "type": "string", "optional": true, "maxLength": 100000 },
+              "target": { "type": "string", "optional": true, "maxLength": 8192 }
+            }
+          },
+          { "name": "tabId", "type": "integer", "minimum": 0 }
+        ]
+      }
+    ],
+    "events": [{ "name": "onChanged", "type": "function", "parameters": [] }]
+  }
+]

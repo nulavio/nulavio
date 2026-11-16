@@ -1,0 +1,401 @@
+"""#156 and #154: web services used on a click, for translation and summaries.
+
+Translation stays on the device by default; a web service is used only after the person adds it, from a menu item
+that names it, and only on that click. Summaries are off until a service is chosen. The tests check the addresses
+each known service gets, what is refused, that the menu offers nothing before a service is added and sends nothing
+before the click, private windows, and the settings page. Every request that is not to the local fixture server is
+recorded and cancelled, so nothing reaches a real service. On-device translation needs the engine's models from
+Mozilla's servers: that test runs only with NULAVIO_NETWORK_TESTS=1.
+"""
+
+from __future__ import annotations
+
+import os
+import unittest
+from urllib.parse import quote
+
+import harness
+
+SV = 'const SV = ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioServices.sys.mjs");'
+GUARD_START = """
+const seen = [];
+const observer = { observe(subject) {
+  try {
+    const channel = subject.QueryInterface(Ci.nsIHttpChannel);
+    const host = channel.URI.host;
+    if (host !== '127.0.0.1' && host !== 'localhost') {
+      seen.push(channel.URI.spec);
+      channel.cancel(Cr.NS_BINDING_ABORTED);
+    }
+  } catch (e) {}
+} };
+Services.obs.addObserver(observer, "http-on-modify-request");
+window.nulavioServicesNet = { seen, observer };
+"""
+GUARD_SEEN = "return window.nulavioServicesNet.seen.slice();"
+GUARD_STOP = (
+    "const net = window.nulavioServicesNet; Services.obs.removeObserver(net.observer, 'http-on-modify-request');"
+    "delete window.nulavioServicesNet; return net.seen;"
+)
+MENU = """
+const open = [...Services.wm.getEnumerator('navigator:browser')].map(w => w.document)
+  .find(d => d.getElementById('contentAreaContextMenu').state === 'open');
+if (!open) return null;
+return [...open.querySelectorAll("#contentAreaContextMenu [id*='-menuitem-_nulavio-svc-']")].map(item => ({
+  label: item.getAttribute('label'), disabled: item.disabled,
+  shown: !item.hidden && item.ownerDocument.defaultView.getComputedStyle(item).display !== 'none' }));
+"""
+ACTIVATE = """
+const d = [...Services.wm.getEnumerator('navigator:browser')].map(w => w.document)
+  .find(d => d.getElementById('contentAreaContextMenu').state === 'open');
+const item = [...d.querySelectorAll("#contentAreaContextMenu [id*='-menuitem-_nulavio-svc-']")]
+  .find(i => i.getAttribute('label') === arguments[0]);
+if (!item) return false;
+d.getElementById('contentAreaContextMenu').activateItem(item);
+return true;
+"""
+CLOSE_MENU = (
+    "for (const w of Services.wm.getEnumerator('navigator:browser')) {"
+    " const m = w.document.getElementById('contentAreaContextMenu'); if (m.state === 'open') m.hidePopup(); }"
+)
+
+
+def enc(value: str) -> str:
+    """As encodeURIComponent."""
+    return quote(value, safe="-_.!~*'()")
+
+
+@unittest.skipUnless(harness.nulavio_engine(), "the Nulavio build's Shell (NULAVIO_ENGINE)")
+class WebServicesTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.session = harness.GeckoProfileSession(name="Pessoal")
+        cls.m = cls.session.start()
+        cls.server = harness.FixtureServer()
+        cls.server.__enter__()
+
+    @classmethod
+    def tearDownClass(cls):
+        try:
+            cls.server.__exit__(None, None, None)
+        finally:
+            cls.session.cleanup()
+
+    def setUp(self):
+        self.addCleanup(
+            self.m.chrome,
+            "for (const p of ['nulavio.services.translate', 'nulavio.services.translate.language',"
+            " 'nulavio.services.summary', 'nulavio.services.private']) Services.prefs.clearUserPref(p);",
+        )
+
+    def sv(self, body: str, *args):
+        self.m.set_context("chrome")
+        try:
+            script = "const done = arguments[arguments.length - 1]; const args = Array.from(arguments).slice(0, -1);" + SV
+            return self.m.execute_async(
+                script
+                + "(async () => {"
+                + body
+                + "})().then(v => done({ok: v ?? null}), e => done({error: e?.code ?? String(e)}));",
+                list(args),
+            )
+        finally:
+            self.m.set_context("content")
+
+    def ok(self, body: str, *args):
+        result = self.sv(body, *args)
+        self.assertNotIn("error", result, result)
+        return result["ok"]
+
+    def error(self, body: str, *args):
+        return self.sv(body, *args).get("error")
+
+    def open_menu_on_text(self, path: str = "/service-links") -> list[dict]:
+        self.m.navigate(self.server.url(path))
+        self.m.execute(
+            "const p = document.getElementById('text'); const r = document.createRange(); r.selectNodeContents(p);"
+            "getSelection().removeAllRanges(); getSelection().addRange(r);"
+        )
+        self.m.context_click("#text")
+        self.assertTrue(harness.wait_until(self.m.menu_open, 10))
+        self.addCleanup(self.m.chrome, CLOSE_MENU)
+        harness.wait_until(lambda: self.m.chrome(MENU) is not None, 5)
+        return self.m.chrome(MENU)
+
+    def test_01_nothing_is_offered_before_a_service_is_chosen(self):
+        state = self.ok("return SV.NulavioServices.state();")
+        self.assertEqual((state["translators"], state["summarizer"], state["privateToo"]), ([], None, False))
+        names = [service["name"] for service in state["known"]]
+        self.assertEqual(names, sorted(names))
+        self.assertEqual(self.open_menu_on_text(), [])
+
+    def test_02_addresses_and_templates_are_checked(self):
+        refused = {
+            "https://example.org/": None,
+            "http://example.org/x": None,
+            "https://93.184.216.34/": None,
+            "https://[2001:db8::1]/": None,
+            "http://localhost:8080/": "private-address",
+            "http://app.localhost/": "private-address",
+            "http://127.0.0.1/": "private-address",
+            "http://10.1.2.3/": "private-address",
+            "http://172.20.0.1/": "private-address",
+            "http://192.168.1.1/": "private-address",
+            "http://169.254.1.1/": "private-address",
+            "http://100.64.0.1/": "private-address",
+            "http://[::1]/": "private-address",
+            "http://[fd00::1]/": "private-address",
+            "http://[fe80::1]/": "private-address",
+            "http://printer.local/": "private-address",
+            "http://intranet/": "private-address",
+            "http://nas.home.arpa/": "private-address",
+            "https://user:pass@example.org/": "private-address",
+            "file:///etc/passwd": "not-web",
+            "about:preferences": "not-web",
+            "not an address": "not-web",
+        }
+        self.assertEqual(self.ok("return args[0].map(u => SV.refusedAddress(u));", list(refused)), list(refused.values()))
+        cases = [
+            ("https://t.example.org/?q={text}&to={lang}", "selection", None),
+            ("https://t.example.org/?q=%s", "selection", None),
+            ("https://t.example.org/page?u={url}", "page", None),
+            ("https://s.example.org/?url={url}", "summary", None),
+            ("http://t.example.org/?q={text}", "selection", "service-needs-https"),
+            ("https://u:p@t.example.org/?q={text}", "selection", "credentials-in-url"),
+            ("https://t.example.org/?q=", "selection", "missing-text"),
+            ("https://t.example.org/?u=", "page", "missing-url"),
+            ("https://t.example.org/?q={text}&u={url}", "selection", "bad-placeholder"),
+            ("https://t.example.org/?q={text}&x={other}", "selection", "bad-placeholder"),
+            ("https://s.example.org/?url={url}&l={lang}", "summary", "bad-placeholder"),
+            ("https://{url}", "page", "invalid-url"),
+            ("https://t.example.org/ {text}", "selection", "invalid-url"),
+            ("not a url {text}", "selection", "invalid-url"),
+        ]
+        for template, kind, code in cases:
+            with self.subTest(template=template):
+                got = self.error("return SV.validateServiceTemplate(args[0], args[1]);", template, kind)
+                self.assertEqual(got, code)
+        for bad, code in (("http://lt.example.org/", "service-needs-https"), ("https://lt.example.org/?x=1", "invalid-url")):
+            self.assertEqual(self.error("return SV.validateInstance(args[0]);", bad), code)
+        self.assertEqual(self.ok("return SV.validateInstance('https://lt.example.org');"), "https://lt.example.org/")
+
+    def test_03_each_service_gets_its_own_address(self):
+        text = "Olá & mundo/?#"
+        page = "https://example.org/a%20b?x=1#y"
+        S = "const S = SV.NulavioServices;"
+        for key in ("deepl", "google", "kagi-translate"):
+            self.ok(S + "return S.addTranslator({key: args[0]});", key)
+        self.ok(S + "return S.addTranslator({key: 'libretranslate', base: 'https://lt.example.org'});")
+        self.ok(
+            S
+            + "return S.addTranslator({key: 'custom', name: 'Meu tradutor', selection: 'https://tr.example.net/?q={text}&to={lang}'});"
+        )
+        build = S + "return S.build(args[0], {text: args[1], target: args[2]});"
+        lang = self.ok("return Services.locale.appLocaleAsBCP47;")
+        self.assertEqual(lang, "pt-BR")
+        expected = {
+            "translate-selection|deepl": f"https://www.deepl.com/translator#xx/pt-BR/{enc(text)}",
+            "translate-selection|google": f"https://translate.google.com/?sl=auto&tl=pt&text={enc(text)}&op=translate",
+            "translate-page|google": f"https://translate.google.com/translate?sl=auto&tl=pt&u={enc(page)}",
+            "translate-selection|kagi-translate": f"https://translate.kagi.com/?from=auto&to=pt&text={enc(text)}",
+            "translate-page|kagi-translate": "https://translate.kagi.com/example.org/a%20b%3Fx=1%23y?to=pt",
+            "translate-selection|libretranslate:https://lt.example.org/": f"https://lt.example.org/?source=auto&target=pt#q={enc(text)}",
+            "translate-selection|custom:Meu tradutor": f"https://tr.example.net/?q={enc(text)}&to=pt-BR",
+        }
+        menu = self.ok(S + "return S.menu();")
+        self.assertEqual(sorted(item["id"] for item in menu), sorted(expected))
+        self.assertEqual(
+            {item["id"]: item["name"] for item in menu}["translate-selection|libretranslate:https://lt.example.org/"],
+            "LibreTranslate (lt.example.org)",
+        )
+        for item, address in expected.items():
+            with self.subTest(item=item):
+                self.assertEqual(self.ok(build, item, text, page), {"open": address})
+        # Another target language, chosen in the setting: each service in its own form of it.
+        self.ok(S + "return S.setLanguage('en-US');")
+        self.assertEqual(
+            self.ok(build, "translate-selection|deepl", text, page)["open"],
+            f"https://www.deepl.com/translator#xx/en-US/{enc(text)}",
+        )
+        self.assertEqual(
+            self.ok(build, "translate-page|google", text, page)["open"],
+            f"https://translate.google.com/translate?sl=auto&tl=en&u={enc(page)}",
+        )
+        self.assertEqual(self.error(S + "return S.setLanguage('xx');"), "unknown-language")
+        # A page this computer or a local network serves is never handed to a service that fetches it.
+        self.assertEqual(self.error(build, "translate-page|google", "", "http://192.168.0.10/doc"), "private-address")
+        self.assertEqual(self.error(build, "translate-selection|deepl", "   ", page), "nothing-selected")
+        # Summaries: one service; a web one gets the address only.
+        self.ok(S + "return S.setSummarizer({kind: 'web', key: 'kagi-summarizer'});")
+        summary = self.ok(build, "summary-page|kagi-summarizer", "", page)
+        self.assertEqual(summary, {"open": f"https://kagi.com/summarizer?url={enc(page)}"})
+        self.assertEqual(self.error(S + "return S.setSummarizer({kind: 'web', key: 'deepl'});"), "unknown-service")
+        self.ok(
+            S + "return S.setSummarizer({kind: 'web', key: 'custom', name: 'Resumo', summary: 'https://r.example.net/?u={url}'});"
+        )
+        self.assertEqual(self.ok(build, "summary-page|custom", "", page), {"open": f"https://r.example.net/?u={enc(page)}"})
+        self.ok(S + "return S.setSummarizer(null);")
+        self.assertEqual([item for item in self.ok(S + "return S.menu();") if item["use"].startswith("summary")], [])
+        # A hand-edited entry that the module would not have written is dropped, never used.
+        self.m.chrome(
+            "Services.prefs.setStringPref('nulavio.services.translate', JSON.stringify("
+            "[{key: 'custom', name: 'X', selection: 'http://evil.example/?q={text}'}, {key: 'deepl'}]));"
+        )
+        self.assertEqual([t["id"] for t in self.ok(S + "return S.translators();")], ["deepl"])
+
+    def test_04_a_menu_item_opens_its_address_and_nothing_goes_before_the_click(self):
+        self.ok("return SV.NulavioServices.addTranslator({key: 'deepl'});")
+        self.ok("return SV.NulavioServices.setSummarizer({kind: 'web', key: 'kagi-summarizer'});")
+        self.m.chrome(GUARD_START)
+        self.addCleanup(self.m.chrome, GUARD_STOP)
+        tabs = self.m.chrome("return gBrowser.tabs.length;")
+        items = self.open_menu_on_text()
+        by_label = {item["label"]: item for item in items}
+        self.assertIn("Traduzir seleção com DeepL", by_label, items)
+        self.assertTrue(
+            by_label["Traduzir seleção com DeepL"]["shown"] and not by_label["Traduzir seleção com DeepL"]["disabled"]
+        )
+        # The page is on this computer: its summary is offered and refused, with the reason in its words.
+        refused = "Resumir página com Kagi Universal Summarizer — não para endereços deste computador ou da rede local"
+        self.assertTrue(
+            harness.wait_until(lambda: any(i["label"] == refused for i in self.m.chrome(MENU) or []), 5), self.m.chrome(MENU)
+        )
+        self.assertTrue(next(i for i in self.m.chrome(MENU) if i["label"] == refused)["disabled"])
+        self.assertEqual(self.m.chrome(GUARD_SEEN), [], "something left before the click")
+        self.assertTrue(self.m.chrome(ACTIVATE, ["Traduzir seleção com DeepL"]))
+        want = f"https://www.deepl.com/translator#xx/pt-BR/{enc('Olá & mundo/?#')}"
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome("return gBrowser.tabs.length;") == tabs + 1, 10))
+        opened = self.m.chrome("return [gBrowser.selectedBrowser.currentURI.spec, gBrowser.selectedTab._tPos];")
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome(GUARD_SEEN), 10))
+        seen = self.m.chrome(GUARD_SEEN)
+        # The request carries what the address does (the text is in the fragment, which a request never carries).
+        self.assertEqual([url.split("#")[0] for url in seen], [want.split("#")[0]], seen)
+        self.assertIn(opened[0], (want, "about:blank"), opened)
+        self.assertEqual(opened[1], 1, "the service's tab opens next to the page's")
+        self.m.chrome("gBrowser.removeTab(gBrowser.selectedTab);")
+        # A link to a public page: its summary goes to the service with the link's address.
+        self.m.chrome(CLOSE_MENU)
+        self.m.context_click("#out")
+        self.assertTrue(harness.wait_until(self.m.menu_open, 10))
+        label = "Resumir o link com Kagi Universal Summarizer"
+        self.assertTrue(
+            harness.wait_until(lambda: any(i["label"] == label and not i["disabled"] for i in self.m.chrome(MENU) or []), 5)
+        )
+        self.assertTrue(self.m.chrome(ACTIVATE, [label]))
+        summary = f"https://kagi.com/summarizer?url={enc('https://example.org/artigo?x=1')}"
+        self.assertTrue(harness.wait_until(lambda: summary in self.m.chrome(GUARD_SEEN), 10), self.m.chrome(GUARD_SEEN))
+        self.assertNotIn(
+            "https://example.org/artigo?x=1", self.m.chrome(GUARD_SEEN), "the browser fetched the linked page itself"
+        )
+        self.m.chrome("gBrowser.removeTab(gBrowser.selectedTab);")
+
+    def test_05_the_assistant_gets_the_page_in_its_panel_and_nothing_is_sent(self):
+        self.ok("return SV.NulavioServices.setSummarizer({kind: 'assistant'});")
+        self.m.chrome(GUARD_START)
+        self.addCleanup(self.m.chrome, GUARD_STOP)
+        self.addCleanup(self.m.chrome, "SidebarController.hide();")
+        items = self.open_menu_on_text()
+        label = "Resumir página com o assistente"
+        self.assertIn(label, [item["label"] for item in items], items)
+        self.assertTrue(self.m.chrome(ACTIVATE, [label]))
+        sidebar = "return SidebarController.isOpen ? SidebarController.currentID : null;"
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome(sidebar), 10))
+        self.assertIn("nulavio", self.m.chrome(sidebar))
+        self.assertEqual(self.m.chrome(GUARD_SEEN), [])
+
+    def test_06_private_windows_offer_them_only_when_allowed(self):
+        self.ok("return SV.NulavioServices.addTranslator({key: 'deepl'});")
+        handles = self.m.window_handles()
+        self.m.chrome("OpenBrowserWindow({private: true});")
+        self.assertTrue(harness.wait_until(lambda: len(self.m.window_handles()) > len(handles), 10))
+        private = next(h for h in self.m.window_handles() if h not in handles)
+        self.m.switch_to(private)
+        self.addCleanup(self.m.switch_to, handles[0])
+        self.addCleanup(self.m.chrome, "window.close();")
+        items = self.open_menu_on_text()
+        self.assertTrue(
+            harness.wait_until(lambda: not any(i["shown"] for i in self.m.chrome(MENU) or []), 5), self.m.chrome(MENU)
+        )
+        self.assertEqual(items and [i["label"] for i in items], ["Traduzir seleção com DeepL"])
+        self.m.chrome(CLOSE_MENU)
+        self.ok("return SV.NulavioServices.setPrivateToo(true);")
+        self.m.context_click("#text")
+        self.assertTrue(harness.wait_until(self.m.menu_open, 10))
+        self.assertTrue(harness.wait_until(lambda: any(i["shown"] and not i["disabled"] for i in self.m.chrome(MENU) or []), 5))
+
+    def test_07_the_settings_page_adds_removes_and_chooses(self):
+        DOC = "const d = gBrowser.selectedBrowser.contentDocument;"
+        self.m.navigate("about:preferences#languages")
+        rows = DOC + (
+            "const g = d.getElementById(arguments[0]); if (!g || !g.getBoundingClientRect().height) return null;"
+            "return [...g.querySelectorAll('moz-box-item')].map(r => [r.dataset.service ?? null, r.label]);"
+        )
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome(rows, ["nulavio-translate-known"]), 20))
+        known = self.m.chrome(rows, ["nulavio-translate-known"])
+        self.assertEqual([name for _, name in known], sorted(name for _, name in known))
+        self.assertEqual(
+            self.m.chrome(rows, ["nulavio-translate-added"]),
+            [[None, "Nenhum serviço na web: a tradução fica no seu computador."]],
+        )
+        click = DOC + "const el = d.querySelector(arguments[0]); if (!el) return false; el.click(); return true;"
+        self.assertTrue(self.m.chrome(click, ['#nulavio-translate-known moz-button[data-service="google"]']))
+        self.assertTrue(
+            harness.wait_until(
+                lambda: ["google", "Google Translate"] in (self.m.chrome(rows, ["nulavio-translate-added"]) or []), 10
+            )
+        )
+        self.assertEqual([t["id"] for t in self.ok("return SV.NulavioServices.translators();")], ["google"])
+        self.assertTrue(self.m.chrome(click, ['#nulavio-translate-added moz-button[data-service="google"]']))
+        self.assertTrue(harness.wait_until(lambda: self.ok("return SV.NulavioServices.translators();") == [], 10))
+        # The summary choice, in the assistant's pane.
+        self.m.navigate("about:preferences#ai")
+        summary = DOC + "const s = d.getElementById('nulavio-summary-service');"
+        select = summary + "return s && s.getBoundingClientRect().height ? s.value : null;"
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome(select) == "", 20), self.m.chrome(select))
+        self.m.chrome(summary + "s.value = 'assistant'; s.dispatchEvent(new Event('change', {bubbles: true}));")
+        self.assertTrue(
+            harness.wait_until(lambda: (self.ok("return SV.NulavioServices.summarizer();") or {}).get("kind") == "assistant", 10)
+        )
+
+
+@unittest.skipUnless(
+    harness.nulavio_engine() and os.environ.get("NULAVIO_NETWORK_TESTS") == "1",
+    "on-device translation downloads its models from Mozilla's servers (NULAVIO_NETWORK_TESTS=1)",
+)
+class OnDeviceTranslationTest(unittest.TestCase):
+    """#156: the engine's own translation, on the device, works on the Nulavio build, English to Portuguese and back,
+    and what it downloads comes from the hosts docs/security/new-profile-connections.md lists."""
+
+    def test_01_english_to_portuguese_and_back(self):
+        session = harness.GeckoProfileSession(name="Pessoal")
+        self.addCleanup(session.cleanup)
+        m = session.start()
+        server = harness.FixtureServer()
+        server.__enter__()
+        self.addCleanup(server.__exit__, None, None, None)
+        m.chrome(
+            "window.nulavioHosts = new Set(); Services.obs.addObserver({ observe(s) {"
+            " try { window.nulavioHosts.add(s.QueryInterface(Ci.nsIChannel).URI.host); } catch (e) {} } },"
+            " 'http-on-modify-request');"
+        )
+        m.navigate(server.url("/english-page"))
+        before = m.execute("return document.getElementById('text').textContent;")
+        translate = (
+            "gBrowser.selectedBrowser.browsingContext.currentWindowGlobal.getActor('Translations')"
+            ".translate({sourceLanguage: arguments[0], targetLanguage: arguments[1]}, false); return true;"
+        )
+        m.chrome(translate, ["en", "pt"])
+        changed = harness.wait_until(lambda: m.execute("return document.getElementById('text').textContent;") != before, 240)
+        self.assertTrue(changed, "the page was not translated")
+        print("pt:", m.execute("return document.getElementById('text').textContent;"))
+        hosts = set(m.chrome("return [...window.nulavioHosts];")) - {"127.0.0.1", "localhost"}
+        listed = {
+            "firefox.settings.services.mozilla.com",
+            "firefox-settings-attachments.cdn.mozilla.net",
+            "content-signature-2.cdn.mozilla.net",
+        }
+        self.assertLessEqual(hosts, listed, hosts)
+
+
+if __name__ == "__main__":
+    unittest.main()

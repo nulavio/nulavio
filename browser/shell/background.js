@@ -358,3 +358,66 @@ if (browser.nulavioAI && browser.omnibox) {
     browser.nulavioAI.assistantOffer({ kind: "draft", text: String(text).slice(0, 8000) }, tab.id).catch(console.error);
   });
 }
+
+// -- Web services on a click: translation (#156) and summaries (#154) ---------
+// One item per service and use, named after the service ("Traduzir seleção com DeepL"), only for services the
+// person added in Settings. Each time a menu opens, the module says whether an item may be used there: hidden in a
+// private window unless the person allowed it, and shown but unusable, with the reason in its words, for an address
+// a service should not fetch (this computer, a local network, not a web page). The click opens the service's
+// address in a new tab; nothing is sent before it. The listeners are added at once, so the event page wakes for them.
+
+const SERVICE_MENU = "nulavio-svc-";
+const serviceItems = new Map(); // menu id -> the module's item
+
+function serviceTitle(item, reason = null) {
+  const key = {
+    "translate-selection": "menuTranslateSelection",
+    "translate-page": "menuTranslatePage",
+    "summary-page": "menuSummarizePage",
+    "summary-link": "menuSummarizeLink",
+  }[item.use];
+  const title = item.name ? t(key, item.name) : t(`${key}Assistant`);
+  return reason ? t("menuServiceRefused", [title, t(`menuServiceReason_${reason.replaceAll("-", "_")}`)]) : title;
+}
+
+async function drawServiceMenus() {
+  for (const id of serviceItems.keys()) {
+    await browser.menus.remove(id).catch(() => {});
+  }
+  serviceItems.clear();
+  for (const [index, item] of (await browser.nulavioServices.menu()).entries()) {
+    const id = `${SERVICE_MENU}${index}`; // the item's own id stays in the map: menu ids become element ids
+    serviceItems.set(id, item);
+    browser.menus.create({ id, title: serviceTitle(item), contexts: item.contexts }, () => void browser.runtime.lastError);
+  }
+}
+
+if (browser.nulavioServices && browser.menus) {
+  drawServiceMenus().catch(console.error);
+  browser.nulavioServices.onChanged.addListener(() => drawServiceMenus().catch(console.error));
+  browser.menus.onShown.addListener(async (info, tab) => {
+    const shown = info.menuIds.map(String).filter(id => serviceItems.has(id));
+    if (!shown.length || !tab) {
+      return;
+    }
+    for (const id of shown) {
+      const item = serviceItems.get(id);
+      const target = item.use === "summary-link" ? (info.linkUrl ?? "") : (info.pageUrl ?? "");
+      const verdict = await browser.nulavioServices.check(item.id, target, tab.id).catch(() => ({ usable: false, reason: "not-found", hidden: true }));
+      await browser.menus.update(id, {
+        visible: !verdict.hidden,
+        enabled: verdict.usable,
+        title: serviceTitle(item, verdict.usable ? null : verdict.reason),
+      });
+    }
+    browser.menus.refresh();
+  });
+  browser.menus.onClicked.addListener((info, tab) => {
+    const item = serviceItems.get(String(info.menuItemId));
+    if (!item || !tab) {
+      return;
+    }
+    const target = item.use === "summary-link" ? (info.linkUrl ?? "") : (info.pageUrl ?? "");
+    browser.nulavioServices.open(item.id, { text: info.selectionText ?? "", target }, tab.id).catch(console.error);
+  });
+}

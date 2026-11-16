@@ -191,6 +191,15 @@ nulavio-confirmed-group =
 
 ## Search
 
+nulavio-translate-group =
+    .label = Translation web services
+    .description = The browser's own translation, above, happens on your computer and stays the default. A web service is used only after you add it, and only on a click on the menu item that names it. The services' own extensions do not come with Nulavio; if you prefer one, install it from addons.mozilla.org.
+nulavio-translate-add-group =
+    .label = Add a translation service
+    .description = In alphabetical order, none marked; Nulavio has no partnership with any. Or a LibreTranslate instance of your own, or another service's address.
+nulavio-summaries-group =
+    .label = Page summaries
+    .description = Off until you choose a service. The item “Summarize page” then shows in the page and link menus and names the service.
 nulavio-search-group =
     .label = Suggestions: who receives what you type
     .description = With suggestions on, what you type in the address bar goes to the engine before you search. In Nulavio, only the engines switched on here receive it.
