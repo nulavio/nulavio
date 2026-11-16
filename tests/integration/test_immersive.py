@@ -1186,6 +1186,16 @@ class ImmersiveTest(unittest.TestCase):
         self.assertTrue(harness.wait_until(lambda: self.window()["hold"] is None, 5), self.window())
         self.assertTrue(harness.wait_until(lambda: not self.m.chrome(PARTS)["tabs"]["shown"], 5), self.m.chrome(PARTS))
 
+    def test_22_after_the_tab_drags_the_toolbar_takes_the_pointer_again(self):
+        """#398: the journeys above (21) drag a tab with events of their own and no drag session. When they are done,
+        the engine's moving-tab state is gone from the toolbox, and the toolbar takes the pointer again: a test after
+        them sees the window a person has after a real drag ends."""
+        state = (
+            "return { moving: gNavToolbox.hasAttribute('movingtab') || gBrowser.tabContainer.hasAttribute('movingtab'),"
+            " pointer: getComputedStyle(document.getElementById('nav-bar')).pointerEvents };"
+        )
+        self.assertEqual(self.m.chrome(state), {"moving": False, "pointer": "auto"})
+
     def apply_preset(self, preset: str):
         layout = f"const d = arguments[arguments.length - 1]; {LAYOUT}.apply(window, arguments[0]).then(d, e => d(String(e)));"
         self.m.set_context("chrome")
