@@ -15,6 +15,8 @@ engine, in a patch or in a default that weakens it fails a run:
 * a font the person installed is not visible to pages (patch 0010; Fedora and
   Ubuntu, the distributions the engine has font lists for);
 * with WebGL available, the graphics card's model is not given out;
+* with the Nulavio engine's own patch (0012), what an offline audio context
+  renders differs between two sites and stays the same within one;
 * a page reads UTC as its time zone; a site with "use my time zone on this
   site" on, in the shield's panel, reads the system's, with its subdomains
   and nothing else;
@@ -41,6 +43,7 @@ import sys
 import threading
 import time
 import unittest
+import urllib.parse
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
@@ -125,12 +128,15 @@ const done = arguments[arguments.length - 1];
 """
 # What Nulavio relies on from the engine's own set: if Mozilla drops one, the claim that names it goes too.
 RELIED_ON = {"CanvasRandomization", "FontVisibilityLangPack", "NavigatorHWConcurrencyTiered", "ScreenAvailToResolution"}
+# The targets engine patch 0012 adds. An engine without it (a release before the patch, which CI tests the Shell
+# on) skips the names in the overrides, and the tests that need them say so.
+PATCHED_IN = {"AudioRandomization", "ScreenSizeConstant"}
 TARGETS = """
 const { RFPHelper } = ChromeUtils.importESModule("resource://gre/modules/RFPHelper.sys.mjs");
 const set = Services.rfp.enabledFingerprintingProtections;
 const on = Object.entries(RFPHelper.getTargets())
   .filter(([, bit]) => (set.getNth32BitSet(Math.floor(bit / 32)) >>> (bit % 32)) & 1).map(([name]) => name);
-return { on, engine: String(RFPHelper.getTargetDefaults()).split(","),
+return { on, known: Object.keys(RFPHelper.getTargets()), engine: String(RFPHelper.getTargetDefaults()).split(","),
   overrides: Services.prefs.getStringPref("privacy.fingerprintingProtection.overrides", ""),
   userSet: Services.prefs.prefHasUserValue("privacy.fingerprintingProtection.overrides"),
   category: Services.prefs.getStringPref("browser.contentblocking.category"),
@@ -152,6 +158,60 @@ class SlowPage(http.server.BaseHTTPRequestHandler):
             b"<!doctype html><meta charset=utf-8><title>slow</title>"
             b"<script>document.documentElement.dataset.screen = screen.width + 'x' + screen.height;</script>"
         )
+
+    def log_message(self, *_args):
+        pass
+
+
+SIZE = "screen.width + 'x' + screen.height"
+SVG = (
+    b'<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"><style>rect { fill: #f00; }'
+    b" @media (device-width: 1920px) and (device-height: 1080px) { rect { fill: #0f0; } }</style>"
+    b'<rect width="40" height="40"/></svg>'
+)
+HOST = f"""<!doctype html><meta charset=utf-8><title>documents</title><canvas id=c width=40 height=40></canvas>
+<script>
+const seen = document.documentElement.dataset;
+seen.self = {SIZE};
+addEventListener("message", event => {{ seen.frame = event.data; }});
+// A pop-up's first, empty document, read at once; then a pop-up with a page of this site, which reports back.
+const blank = open("about:blank");
+seen.blank = blank ? blank.screen.width + "x" + blank.screen.height : "blocked";
+blank?.close();
+open("/popup") || (seen.popup = "blocked");
+// A media query inside an SVG image, read back from a canvas (the middle pixel: red or green).
+const image = new Image();
+image.onload = () => {{
+  const context = document.getElementById("c").getContext("2d");
+  context.drawImage(image, 0, 0);
+  const [red, green] = context.getImageData(20, 20, 1, 1).data;
+  seen.image = green > red ? "constant" : "display";
+}};
+image.onerror = () => {{ seen.image = "error"; }};
+image.src = "/image.svg";
+</script><iframe src="FRAME/frame"></iframe>"""
+
+
+class Documents(http.server.BaseHTTPRequestHandler):
+    """A page that asks for the screen's size in every kind of document it can make: itself, a frame from
+    another site (?frame=<origin>), a pop-up's empty document, a pop-up of its own site and an SVG image."""
+
+    def do_GET(self):
+        path, _, query = self.path.partition("?")
+        kind, body = "text/html; charset=utf-8", b"<!doctype html><meta charset=utf-8><title>empty</title>"
+        if path == "/host":
+            body = HOST.replace("FRAME", urllib.parse.unquote(query.partition("frame=")[2])).encode()
+        elif path == "/frame":
+            body = f"<!doctype html><script>parent.postMessage({SIZE}, '*');</script>".encode()
+        elif path == "/popup":
+            body = f"<!doctype html><script>opener.document.documentElement.dataset.popup = {SIZE}; close();</script>".encode()
+        elif path == "/image.svg":
+            kind, body = "image/svg+xml", SVG
+        self.send_response(200)
+        self.send_header("Content-Type", kind)
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(body)
 
     def log_message(self, *_args):
         pass
@@ -289,7 +349,11 @@ class FingerprintingTest(unittest.TestCase):
         engine = set(state["engine"])
         self.assertLessEqual(RELIED_ON, engine, "the engine's own set lost a protection Nulavio's docs name")
         self.assertLessEqual(removed, engine, "an override removes something the engine no longer turns on")
-        self.assertEqual(set(state["on"]), (engine - removed) | added)
+        # A name the engine does not know is skipped. Only the two that Nulavio's own patch adds may be unknown,
+        # and only both together (an engine from before the patch).
+        unknown = added - set(state["known"])
+        self.assertIn(unknown, (set(), PATCHED_IN), "an override names a target this engine does not have")
+        self.assertEqual(set(state["on"]), (engine - removed) | (added - unknown))
 
     def test_03_canvas_reads_differ_per_site_and_stay_stable_within_one(self):
         first, other, again = self.measure("127.0.0.1"), self.measure("localhost"), self.measure("127.0.0.1")
@@ -539,6 +603,35 @@ class FingerprintingTest(unittest.TestCase):
             harness.wait_until(lambda: self.m.chrome("return Services.prefs.getBoolPref(arguments[0], false);", [SHARE_PREF]), 5)
         )
 
+    def patched(self) -> bool:
+        """Whether this engine has Nulavio's patch 0012 (its two targets)."""
+        return set(self.m.chrome(TARGETS)["known"]).issuperset(PATCHED_IN)
+
+    def test_11_rendered_audio_differs_per_site_and_stays_the_same_within_one(self):
+        first, other, again = self.measure("127.0.0.1"), self.measure("localhost"), self.measure("127.0.0.1")
+        with self.unprotected():
+            plain, plain_other = self.measure("127.0.0.1"), self.measure("localhost")
+        self.record("audio", {"site": first["audio"], "other-site": other["audio"], "plain": plain["audio"]})
+        for page in (first, other, plain):
+            self.assertIsInstance(page["audio"], dict, page["audio"])
+        # Without the protection both sites, and two renderings, read the same: every difference comes from it.
+        self.assertEqual(plain["audio"]["first"], plain_other["audio"]["first"])
+        self.assertEqual(plain["audio"]["first"], plain["audio"]["again"])
+        if not self.patched():
+            self.assertEqual(first["audio"]["first"], plain["audio"]["first"])  # what the docs say of such an engine
+            self.skipTest("this engine is from before patch 0012: rendered audio is the same on every site")
+        for read in ("sum", "digest"):
+            with self.subTest(read=read):
+                self.assertNotEqual(first["audio"]["first"][read], plain["audio"]["first"][read], "the plain value was given out")
+                self.assertNotEqual(first["audio"]["first"][read], other["audio"]["first"][read], "two sites read the same value")
+        # The same sound on the same site reads the same, in one page and in the next (sites keep working).
+        self.assertEqual(first["audio"]["first"], first["audio"]["again"])
+        self.assertEqual(first["audio"]["first"], again["audio"]["first"])
+        # The noise cannot be heard: the loudest sample moves by less than one part in a thousand.
+        self.assertAlmostEqual(
+            first["audio"]["first"]["peak"], plain["audio"]["first"]["peak"], delta=plain["audio"]["first"]["peak"] / 1000
+        )
+
     def test_08_pages_read_one_screen_size_and_an_exempted_site_reads_the_displays(self):
         constant = {"size": "1920x1080", "avail": "1920x1080", "availAt": "0,0", "device1920": True}
         live = "return screen.width + 'x' + screen.height;"
@@ -603,6 +696,75 @@ class FingerprintingTest(unittest.TestCase):
         # Arrived: the exempted site reads the display's size, from its first script.
         self.assertTrue(self.arrives(first, plain), self.m.execute(first))
         self.assertEqual(self.m.execute(live), f"127.0.0.1 {plain}")
+
+    def test_08e_the_engine_asks_every_document_a_frame_a_pop_up_and_an_image_too(self):
+        # How the Shell reads the engine's set, on any engine: the last entry that names the target decides.
+        turns = (
+            "const { turnsOn } = ChromeUtils.importESModule("
+            '"resource://builtin-addons/nulavio-shell/modules/NulavioFingerprintingChild.sys.mjs");'
+            "return Array.from(arguments).map(set => turnsOn(set, 'ScreenSizeConstant'));"
+        )
+        sets = {
+            "": False,
+            "+ScreenSizeConstant": True,
+            "-EfficientCanvasRandomization, +ScreenSizeConstant ,+DeviceSensors": True,
+            "+ScreenSizeConstant,-ScreenSizeConstant": False,
+            "-AllTargets,+ScreenSizeConstant": True,
+            "+ScreenSizeConstant,-AllTargets": False,
+            "+AllTargets": True,
+            "+ScreenSizeConstantToo,+ScreenSize": False,
+        }
+        self.assertEqual(self.m.chrome(turns, list(sets)), list(sets.values()))
+        if not self.patched():
+            self.skipTest("this engine is from before patch 0012: the size is kept per tab (ADR 0016, known limits)")
+        server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Documents)
+        self.addCleanup(server.shutdown)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        port = server.server_address[1]
+        one, other = f"http://127.0.0.1:{port}", f"http://localhost:{port}"  # two sites to the engine
+        every = ("self", "frame", "blank", "popup", "image")
+        seen = "return JSON.stringify(Object.assign({}, document.documentElement.dataset));"
+
+        def documents(site: str, frame: str) -> dict:
+            self.m.navigate(f"{site}/host?frame={frame}")
+            self.assertTrue(
+                harness.wait_until(lambda: set(json.loads(self.m.execute(seen))) >= set(every), 20), self.m.execute(seen)
+            )
+            return json.loads(self.m.execute(seen))
+
+        with self.unprotected():
+            plain = self.measure()["screen"]["size"]
+        constant = "1920x1080"
+        self.assertNotEqual(plain, constant, "this display has the constant's size: nothing was tested")
+        self.m.chrome("Services.prefs.setBoolPref('dom.disable_open_during_load', false);")  # the pages open pop-ups unasked
+        self.addCleanup(self.m.chrome, "Services.prefs.clearUserPref('dom.disable_open_during_load');")
+        # A protected page: every document it makes reads the constant.
+        protected = documents(one, other)
+        self.record("screen-documents", {"protected": protected, "plain": plain})
+        self.assertEqual(protected, dict.fromkeys(every[:-1], constant) | {"image": "constant"})
+        # The site exempted with the shield: its page, its pop-ups (also the empty one) and its image read the
+        # display's, and so does a frame from another site inside it, which the engine exempts with its top page.
+        self.m.navigate(one + "/empty")
+        self.m.chrome(f"{ALLOW_LIST}.add(gBrowser.selectedBrowser);")
+        forget = (
+            "const site = Services.scriptSecurityManager.createContentPrincipalFromOrigin(arguments[0]);"
+            "Services.perms.removeFromPrincipal(site, 'trackingprotection');"
+        )
+        self.addCleanup(self.m.chrome, forget, [f"https://127.0.0.1:{port}"])
+        exempted = documents(one, other)
+        self.assertEqual(exempted, dict.fromkeys(every[:-1], plain) | {"image": "display"})
+        # A frame of the exempted site inside a protected page is not exempted: it reads the constant.
+        self.assertEqual(documents(other, one), dict.fromkeys(every[:-1], constant) | {"image": "constant"})
+        # A set the person wrote without the target: the engine no longer answers, and the tab's size does, for
+        # the pages of the web and not for the exempted site.
+        own = ",".join(i for i in self.m.chrome(TARGETS)["overrides"].split(",") if i.strip() != "+ScreenSizeConstant")
+        self.m.chrome(f"Services.prefs.setStringPref('{OVERRIDES_PREF}', arguments[0]);", [own])
+        self.addCleanup(self.m.chrome, f"Services.prefs.clearUserPref('{OVERRIDES_PREF}');")
+        self.assertNotIn("ScreenSizeConstant", self.m.chrome(TARGETS)["on"])
+        self.assertEqual(self.measure("localhost")["screen"]["size"], constant)
+        self.assertEqual(documents(one, other)["self"], plain)
+        self.m.chrome(f"Services.prefs.clearUserPref('{OVERRIDES_PREF}');")
+        self.assertEqual(self.measure("localhost")["screen"]["size"], constant)
 
     def test_08d_only_pages_of_the_web_get_the_constant_and_an_open_page_follows_the_switch(self):
         # From the independent review of #375.

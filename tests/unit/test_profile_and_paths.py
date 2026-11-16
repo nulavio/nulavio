@@ -172,8 +172,9 @@ class ProfileTest(TempHome):
                 self.assertIn(name, now)
                 self.assertNotIn(now[name], earlier, "the current value is not an earlier one")
                 self.assertEqual(len(earlier), len(set(earlier)))
-        # The preference this was made for, with every set that was shipped before the current one.
-        self.assertEqual(len(data["earlier"][self.OVERRIDES]), 3)
+        # The preference this was made for, with every set that was shipped before the current one: before #375,
+        # after #375, after #379, and after #380 (the set until engine patch 0012 added its two targets).
+        self.assertEqual(len(data["earlier"][self.OVERRIDES]), 4)
 
     def test_a_profile_seeded_with_each_earlier_value_gets_the_current_one_at_its_next_launch(self):
         current = next(p.value for p in profile.baseline_prefs() if p.name == self.OVERRIDES)
@@ -246,10 +247,12 @@ class ProfileTest(TempHome):
         marker = profile.SHELL_WRITTEN[self.OVERRIDES]
         self.assertIn(f'const WRITTEN = "{marker}";', shell)
         self.assertIn(f'const OVERRIDES = "{self.OVERRIDES}";', shell)
-        current = next(p.value for p in profile.baseline_prefs() if p.name == self.OVERRIDES)
+        # The case that was found: with the set as it was after #380, the Shell's value (that set without the three
+        # accessibility entries) is the set as it was after #379, an earlier seed.
+        after_379, after_380 = profile.seed_history()[self.OVERRIDES][2:4]
         accessibility = ("+CSSPrefersReducedMotion", "+CSSPrefersContrast", "+CSSPrefersReducedTransparency")
-        written = ",".join(item for item in current.split(",") if item not in accessibility)
-        self.assertIn(written, profile.seed_history()[self.OVERRIDES], "the collision this test is about is gone")
+        written = ",".join(item for item in after_380.split(",") if item not in accessibility)
+        self.assertEqual(written, after_379)
         new = self.make("new")
         profile.prepare_for_launch(new, {})
         self.set_pref(new, self.OVERRIDES, written)

@@ -24,6 +24,37 @@ export function protectionOn(isPrivate) {
   return Services.prefs.getBoolPref(FPP, false) || (isPrivate && Services.prefs.getBoolPref(FPP_PRIVATE, false));
 }
 
+const OVERRIDES = "privacy.fingerprintingProtection.overrides";
+const TARGET = "ScreenSizeConstant"; // Nulavio's engine patch 0012
+let known = null;
+
+/** Whether the set of protections in `overrides` turns `target` on: the last entry that names it, or every
+    target at once, decides, as the engine reads the list. Pure. */
+export function turnsOn(overrides, target) {
+  let on = false;
+  for (const item of String(overrides ?? "").split(",").map(entry => entry.trim())) {
+    if (item.slice(1) === target || item.slice(1) === "AllTargets") {
+      on = item[0] === "+";
+    }
+  }
+  return on;
+}
+
+/** Whether the engine gives each document the constant screen itself (ADR 0016): it has the target, which
+    Nulavio's patch 0012 adds, and the set of protections turns it on. The engine then asks every document, a
+    frame and a pop-up too, and the per-tab size below is left unset. On an engine from before the patch, or
+    with a set that leaves the target out, the tab's size is what gives pages the constant. */
+export function engineDecides() {
+  if (known === null) {
+    try {
+      known = TARGET in ChromeUtils.importESModule("resource://gre/modules/RFPTargetConstants.sys.mjs").Targets;
+    } catch {
+      known = false;
+    }
+  }
+  return known && turnsOn(Services.prefs.getStringPref(OVERRIDES, ""), TARGET);
+}
+
 /** Give a tab the constant screen, or the display's. `context` is the tab's top browsing context. */
 export function setScreen(context, constant) {
   try {
@@ -42,8 +73,8 @@ export function setScreen(context, constant) {
     the web. The browser's own pages and an extension's are not: the engine keeps its fingerprinting protection
     away from them too, and an extension may place its windows by the screen's size. */
 export function wantsConstant(principal, cookieJarSettings, isPrivate) {
-  if (!protectionOn(isPrivate)) {
-    return false;
+  if (!protectionOn(isPrivate) || engineDecides()) {
+    return false; // nothing to protect, or the engine answers each document itself
   }
   if (principal?.isSystemPrincipal || principal?.addonPolicy || principal?.schemeIs?.("moz-extension")) {
     return false;

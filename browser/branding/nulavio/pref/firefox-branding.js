@@ -73,11 +73,15 @@ pref("browser.safebrowsing.downloads.remote.enabled", false);
 //     setting gives sites these again, and a bar offers it once when the
 //     system has one of them on (#79, ADR 0018). Nulavio's own pages and
 //     window follow the system either way.
+//   +AudioRandomization, +ScreenSizeConstant: two targets Nulavio's own
+//     engine patch 0012 adds. What an offline audio context renders differs
+//     per site, and every document reads a 1920 by 1080 screen. An engine
+//     without the patch does not know the names and skips them.
 // A site the person exempts from tracking protection is exempt from these too.
 // The screen's size is not in this list: the Shell gives pages a constant one
 // (NulavioFingerprinting.sys.mjs). Language and window size are left as they
 // are: changing them breaks sites (docs/security/hardening.md).
-pref("privacy.fingerprintingProtection.overrides", "-EfficientCanvasRandomization,+WebGLRendererConstant,+WebGLVendorSanitize,+WindowOuterSize,+WindowScreenXY,+WindowInnerScreenXY,+MouseEventScreenPoint,+UseStandinsForNativeColors,+DeviceSensors,+NavigatorHWConcurrency,+JSDateTimeUTC,+CSSPrefersReducedMotion,+CSSPrefersContrast,+CSSPrefersReducedTransparency");
+pref("privacy.fingerprintingProtection.overrides", "-EfficientCanvasRandomization,+WebGLRendererConstant,+WebGLVendorSanitize,+WindowOuterSize,+WindowScreenXY,+WindowInnerScreenXY,+MouseEventScreenPoint,+UseStandinsForNativeColors,+DeviceSensors,+NavigatorHWConcurrency,+JSDateTimeUTC,+CSSPrefersReducedMotion,+CSSPrefersContrast,+CSSPrefersReducedTransparency,+AudioRandomization,+ScreenSizeConstant");
 
 // Follow the desktop's language among the locales packaged in the build
 // (en-US and pt-BR), as distribution Firefox does. An empty value means "use

@@ -132,6 +132,21 @@ FP_SURFACE_PAGE = """<!doctype html><meta charset="utf-8"><title>fp-surface</tit
       unmaskedVendor: info ? gl.getParameter(info.UNMASKED_VENDOR_WEBGL) : null,
       unmaskedRenderer: info ? gl.getParameter(info.UNMASKED_RENDERER_WEBGL) : null, readPixels: await hex(px) };
   });
+  // What an offline audio context renders, as FingerprintJS and PrivacyTests.org read it: an oscillator through a
+  // compressor, then the samples (their sum, and a digest of all of them). Twice, for the same sound.
+  const render = async () => {
+    const context = new OfflineAudioContext(1, 5000, 44100), oscillator = context.createOscillator();
+    oscillator.type = 'triangle'; oscillator.frequency.value = 10000;
+    const compressor = context.createDynamicsCompressor();
+    compressor.threshold.value = -50; compressor.knee.value = 40; compressor.ratio.value = 12;
+    compressor.attack.value = 0; compressor.release.value = 0.25;
+    oscillator.connect(compressor); compressor.connect(context.destination); oscillator.start(0);
+    const data = (await context.startRendering()).getChannelData(0);
+    let sum = 0, peak = 0;
+    for (let i = 4500; i < data.length; i++) { sum += Math.abs(data[i]); peak = Math.max(peak, Math.abs(data[i])); }
+    return { sum: String(sum), peak, digest: await hex(new Uint8Array(data.buffer.slice(0))) };
+  };
+  out.audio = await guarded(async () => ({ first: await render(), again: await render() }));
   const family = new URLSearchParams(location.search).get('font');
   if (family) {
     const probe = document.createElement('canvas').getContext('2d');

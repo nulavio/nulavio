@@ -13,6 +13,10 @@
    for a site the person exempts with the shield in the address bar, which gets the display's size like the
    other plain values.
 
+   An engine with Nulavio's patch 0012 gives each document that size itself (the ScreenSizeConstant target, in
+   the default set), a frame and a pop-up too. This module then leaves the per-tab size unset. The per-tab
+   path stays for an engine from before the patch, and for a set a person wrote without the target.
+
    The time zone: pages read UTC (the engine's JSDateTimeUTC, in the default set). A site that needs the real
    one, a calendar or a bank, gets it from a switch in the engine's trust panel, "use my time zone on this
    site". The choice is a permission of that site, so Settings lists it with the other site exceptions, where
@@ -34,6 +38,7 @@
 
 import {
   SCREEN,
+  engineDecides,
   protectionOn,
   setScreen,
   wantsConstant,
@@ -47,7 +52,13 @@ export const TIME_ZONE = "nulavio-timezone";
 const SHELL = "shell@nulavio.net";
 const ACTOR = "NulavioFingerprinting";
 const TOPICS = ["browser-delayed-startup-finished", "perm-changed"];
-const SWITCHES = ["privacy.fingerprintingProtection", "privacy.fingerprintingProtection.pbmode"];
+// What decides a tab's screen size: the engine's protection on or off, and its set, which says whether the
+// engine gives documents the constant itself (NulavioFingerprintingChild.engineDecides).
+const SWITCHES = [
+  "privacy.fingerprintingProtection",
+  "privacy.fingerprintingProtection.pbmode",
+  "privacy.fingerprintingProtection.overrides",
+];
 const FALLBACK_TOPIC = "browsing-context-attached"; // only if the actor cannot be registered
 const GRANULAR = "privacy.fingerprintingProtection.granularOverrides"; // the engine's per-site list (JSON)
 const SHOW_TIME_ZONE = "-JSDateTimeUTC";
@@ -377,7 +388,7 @@ export const NulavioFingerprinting = {
       watching.fallback = {
         observe(subject) {
           if (subject.top === subject && subject.isContent && !subject.isDiscarded) {
-            setScreen(subject, protectionOn(subject.usePrivateBrowsing));
+            setScreen(subject, protectionOn(subject.usePrivateBrowsing) && !engineDecides());
           }
         },
       };
