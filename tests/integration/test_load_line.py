@@ -86,18 +86,14 @@ class LoadLineTest(unittest.TestCase):
         self.m.chrome("gBrowser.removeTab(gBrowser.tabs[gBrowser.tabs.length - 1]);")
 
     def test_04_still_under_reduced_motion(self):
+        # A real load under reduced motion: the line is there and does not move (test_01: it moves otherwise).
         self.m.chrome("Services.prefs.setIntPref('ui.prefersReducedMotion', 1);")
         self.addCleanup(self.m.chrome, "Services.prefs.clearUserPref('ui.prefersReducedMotion');")
-        self.m.chrome(
-            "const line = document.getElementById('nulavio-load-line');line.hidden = false; line.dataset.state = 'indeterminate';"
-        )
-        try:
-            now = self.line()
-            self.assertEqual(now["animation"], "none", now)
-        finally:
-            self.m.chrome(
-                "const line = document.getElementById('nulavio-load-line'); line.hidden = true; delete line.dataset.state;"
-            )
+        self.load(4000)
+        now = harness.wait_until(lambda: (lambda line: line if line["shown"] else None)(self.line()), 5)
+        self.assertTrue(now, self.line())
+        self.assertEqual((now["state"], now["animation"]), ("loading", "none"), now)
+        self.m.chrome("gBrowser.selectedBrowser.stop();")
 
     def test_05_captures_in_both_themes(self):
         folder = harness.artifacts_dir() / "load-line"
