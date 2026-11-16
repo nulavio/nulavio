@@ -201,7 +201,9 @@ async function showLayoutChoice() {
     current.textContent = t("layoutUnavailable");
     error.textContent = errorText(err);
     for (const radio of radios) radio.disabled = true;
+    // Out of sight and out of reach: nothing in the card can be changed while the layout cannot be read.
     immersiveRow.hidden = true;
+    immersive.disabled = true;
     done.hidden = true;
     retry.hidden = false;
   };
@@ -240,7 +242,7 @@ async function showLayoutChoice() {
     // top it is not built, #118). It follows the arrangement chosen, and shows what is set in this profile.
     immersiveRow.hidden = !state.available || !["lateral", "focus"].includes(state.preset);
     immersive.checked = Boolean(state.immersive?.on);
-    immersive.disabled = busy || Boolean(state.immersive?.locked);
+    immersive.disabled = busy || !state.available || Boolean(state.immersive?.locked);
   };
   const refreshLayout = async () => {
     if (closed || busy || keyboard?.pending()) return;

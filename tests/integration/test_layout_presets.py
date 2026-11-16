@@ -26,6 +26,8 @@ LAYOUT = f'ChromeUtils.importESModule("{LAYOUT_MODULE}").NulavioLayout'
 # The new tab's card; the settings page's picker (ADR 0011) is read through tests/lib/settings_page.py.
 SURFACE_STATUS = {"layout-choice-options": "#layout-choice-current"}
 PICKER = "nulavio-layout"
+# What NulavioLayout.state() says of Imersivo in a profile that never turned it on (#240 added it to the state).
+IMMERSIVE_OFF = {"on": False, "locked": False}
 # A build of the previous release (5a98bd7) for the real upgrade check, from NULAVIO_REFERENCE_ENGINE.
 
 
@@ -505,7 +507,7 @@ class LayoutPresetsTest(unittest.TestCase):
         other_state = chrome_async(m, f"return {LAYOUT}.state(window);")["ok"]
         self.assertEqual(
             other_state,
-            {"preset": "lateral", "available": True, "locked": False, "choicePending": True},
+            {"preset": "lateral", "available": True, "locked": False, "choicePending": True, "immersive": IMMERSIVE_OFF},
         )
         self.assertEqual(m.chrome("return Services.prefs.getIntPref('nulavio.layout.adoptionVersion', 0);"), 1)
         self.assertTrue(m.chrome("return Services.prefs.getBoolPref('sidebar.verticalTabs');"))
@@ -727,7 +729,7 @@ class LayoutPresetsTest(unittest.TestCase):
         self.assertNotIn("error", result, result)
         self.assertEqual(
             result["ok"],
-            {"preset": "lateral", "available": True, "locked": False, "choicePending": True},
+            {"preset": "lateral", "available": True, "locked": False, "choicePending": True, "immersive": IMMERSIVE_OFF},
         )
         self.settings()
         after = self.m.chrome(
@@ -937,7 +939,9 @@ class LayoutPresetsTest(unittest.TestCase):
     def test_first_run_newtab_choice_keyboard_sync_persistence_and_reflow(self):
         # D-UX2: brand-new profile begins in Lateral with honest, non-blocking first-run choice.
         st = self.state()
-        self.assertEqual(st, {"preset": "lateral", "available": True, "locked": False, "choicePending": True})
+        self.assertEqual(
+            st, {"preset": "lateral", "available": True, "locked": False, "choicePending": True, "immersive": IMMERSIVE_OFF}
+        )
         self.assertEqual(self.m.chrome("return gBrowser.tabContainer.getAttribute('orient');"), "vertical")
         self.assertTrue(self.m.chrome("return SidebarController.getUIState().launcherExpanded;"))
 
@@ -1039,7 +1043,10 @@ class LayoutPresetsTest(unittest.TestCase):
 
         # Restart browser: Foco persists and first-run choice stays dismissed.
         self.m = self.session.restart()
-        self.assertEqual(self.state(), {"preset": "focus", "available": True, "locked": False, "choicePending": False})
+        self.assertEqual(
+            self.state(),
+            {"preset": "focus", "available": True, "locked": False, "choicePending": False, "immersive": IMMERSIVE_OFF},
+        )
         self.newtab()
         self.assertTrue(self.m.execute("return document.getElementById('layout-choice').hidden;"))
 
@@ -1056,7 +1063,7 @@ class LayoutPresetsTest(unittest.TestCase):
         self.assertTrue(harness.wait_until(lambda: m2.execute("return document.getElementById('layout-choice').hidden;"), 10))
         self.assertEqual(
             chrome_async(m2, f"return {LAYOUT}.state(window);")["ok"],
-            {"preset": "lateral", "available": True, "locked": False, "choicePending": False},
+            {"preset": "lateral", "available": True, "locked": False, "choicePending": False, "immersive": IMMERSIVE_OFF},
         )
 
     def test_first_window_offers_the_choice_without_the_new_tab_notice_and_settings_keeps_it(self):
@@ -1104,7 +1111,10 @@ class LayoutPresetsTest(unittest.TestCase):
         self.assertEqual(keep["label"], "Keep Lateral" if locale.startswith("en") else "Manter Lateral")
         settings_page.click(self.m, "#nulavio-layout-keep")
         settings_page.wait_control(self.m, "nulavio-layout-keep", lambda now: not now["shown"])
-        self.assertEqual(self.state(), {"preset": "lateral", "available": True, "locked": False, "choicePending": False})
+        self.assertEqual(
+            self.state(),
+            {"preset": "lateral", "available": True, "locked": False, "choicePending": False, "immersive": IMMERSIVE_OFF},
+        )
         self.newtab()
         self.assertTrue(self.m.execute("return document.getElementById('layout-choice').hidden;"))
 
@@ -1123,14 +1133,19 @@ class LayoutPresetsTest(unittest.TestCase):
           const options = [...document.querySelectorAll('#layout-choice .layout-option')];
           const checked = options.find(o => o.querySelector('input:checked'));
           const live = document.getElementById('layout-choice-current');
-          return {doneBottom: done.bottom, viewport: innerHeight, options: options.length,
+          return {doneBottom: done.bottom, cardBottom: document.getElementById('layout-choice').getBoundingClientRect().bottom,
+            viewport: innerHeight, options: options.length,
             previews: document.querySelectorAll('#layout-choice svg.layout-option__preview').length,
             checkedEdge: getComputedStyle(checked).borderTopColor,
             accent: getComputedStyle(document.documentElement).getPropertyValue('--nv-color-accent-default').trim(),
             liveRole: live.getAttribute('aria-live'), liveVisible: live.getBoundingClientRect().width > 1,
             title: document.title};
         """)
-        self.assertLessEqual(card["doneBottom"], 600, card)
+        # The criterion itself (UX3F A4): the whole card, its main action included, on the first screen. The
+        # earlier bound of 600 px was slack over a button that ended at 499; with the Imersivo switch under the
+        # arrangements (#240) the button ends at 600 and the card at 625, of 748.
+        self.assertLessEqual(card["doneBottom"], card["cardBottom"], card)
+        self.assertLessEqual(card["cardBottom"], card["viewport"], card)
         shape = (card["options"], card["previews"], card["liveRole"], card["liveVisible"])
         self.assertEqual(shape, (3, 3, "polite", False), card)
         self.assertNotEqual(card["checkedEdge"], "rgba(0, 0, 0, 0)", card)
@@ -1158,7 +1173,10 @@ class LayoutPresetsTest(unittest.TestCase):
         self.assertTrue(self.state()["choicePending"])
         self.m.chrome("Services.prefs.lockPref('nulavio.layout.choicePending');")
         try:
-            self.assertEqual(self.state(), {"preset": "lateral", "available": True, "locked": False, "choicePending": False})
+            self.assertEqual(
+                self.state(),
+                {"preset": "lateral", "available": True, "locked": False, "choicePending": False, "immersive": IMMERSIVE_OFF},
+            )
             self.newtab()
             self.assertTrue(self.m.execute("return document.getElementById('layout-choice').hidden;"))
             self.settings()
@@ -1189,15 +1207,18 @@ class LayoutPresetsTest(unittest.TestCase):
             self.assertTrue(harness.wait_until(lambda: self.newtab_ui_ready("focus"), 10))
             self.assertEqual(self.m.chrome("return window.nvApplied;"), ["focus"])
             self.assertTrue(self.m.execute("return document.activeElement.matches('#layout-choice input[value=focus]');"))
-            # B-7: Tab right after a keyboard choice, while it applies, reaches "Manter …" first,
-            # in visual order, never the Settings link after it.
+            # B-7: Tab right after a keyboard choice, while it applies, goes on in visual order: the Imersivo
+            # switch under the arrangements (#240; shown with Lateral and Foco), then "Manter …", never the
+            # Settings link after it.
             self.m.chrome(KEY, ["ArrowDown", "ArrowDown", 40])
             self.m.chrome(KEY, ["Tab", "Tab", 9])
             # The key reaches the page through the content process: wait for the focus to land
             # (reading at once could still see the radio). Any other target still fails.
             focused = lambda: self.m.execute("return document.activeElement.id;")  # noqa: E731
             harness.wait_until(lambda: focused() not in ("", None), timeout=3)
-            self.assertEqual(focused(), "layout-choice-done")
+            self.assertEqual(focused(), "layout-choice-immersive")
+            self.m.chrome(KEY, ["Tab", "Tab", 9])
+            self.assertTrue(harness.wait_until(lambda: focused() == "layout-choice-done", timeout=3), focused())
             self.assertTrue(harness.wait_until(lambda: self.state()["preset"] == "lateral", 10))
             self.assertTrue(harness.wait_until(lambda: self.newtab_ui_ready("lateral"), 10))
             self.assertEqual(self.m.chrome("return window.nvApplied;"), ["focus", "lateral"])
@@ -1372,7 +1393,7 @@ class LayoutPresetsTest(unittest.TestCase):
             after_state = chrome_async(m_new, f"return {LAYOUT}.state(window);")["ok"]
             self.assertEqual(
                 after_state,
-                {"preset": "top", "available": True, "locked": False, "choicePending": False},
+                {"preset": "top", "available": True, "locked": False, "choicePending": False, "immersive": IMMERSIVE_OFF},
             )
             after_prefs = m_new.chrome("""
               return {
@@ -1439,7 +1460,7 @@ class LayoutPresetsTest(unittest.TestCase):
             custom_state = chrome_async(m_custom, f"return {LAYOUT}.state(window);")["ok"]
             self.assertEqual(
                 custom_state,
-                {"preset": "custom", "available": True, "locked": False, "choicePending": False},
+                {"preset": "custom", "available": True, "locked": False, "choicePending": False, "immersive": IMMERSIVE_OFF},
             )
             self.assertEqual(m_custom.chrome("return Services.prefs.getStringPref('sidebar.visibility');"), "hide-sidebar")
             base_c = m_custom.chrome("return WebExtensionPolicy.getByID('shell@nulavio.net').getURL('');")
@@ -1482,7 +1503,7 @@ class LayoutPresetsTest(unittest.TestCase):
             ai_state = chrome_async(m_ai, f"return {LAYOUT}.state(window);")["ok"]
             self.assertEqual(
                 ai_state,
-                {"preset": "lateral", "available": True, "locked": False, "choicePending": False},
+                {"preset": "lateral", "available": True, "locked": False, "choicePending": False, "immersive": IMMERSIVE_OFF},
             )
             base_ai = m_ai.chrome("return WebExtensionPolicy.getByID('shell@nulavio.net').getURL('');")
             m_ai.navigate(base_ai + "newtab/newtab.html")
