@@ -88,6 +88,7 @@ COMPONENTS = (
             "GOVERNANCE.md",
             "SECURITY.md",
             "CODE_OF_CONDUCT.md",
+            "REVIEW.md",
             "docs/process/",
         ),
     ),
@@ -101,7 +102,16 @@ COMPONENTS = (
 PRODUCT = {"browser", "launcher", "tests"}
 # Policy text that "process" holds besides CI and review tooling. Counting an edit to CONTRIBUTING.md
 # as a change to a code component is a choice; the coupling is also reported without it.
-POLICY_TEXT = ("AGENTS.md", "CLAUDE.md", "CONTRIBUTING.md", "GOVERNANCE.md", "SECURITY.md", "CODE_OF_CONDUCT.md", "docs/process/")
+POLICY_TEXT = (
+    "AGENTS.md",
+    "CLAUDE.md",
+    "CONTRIBUTING.md",
+    "GOVERNANCE.md",
+    "SECURITY.md",
+    "CODE_OF_CONDUCT.md",
+    "REVIEW.md",
+    "docs/process/",
+)
 SCREENSHOTS = "docs/design/screenshots/"
 
 
