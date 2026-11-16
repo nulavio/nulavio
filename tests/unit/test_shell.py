@@ -211,7 +211,22 @@ class PrivilegedApiTest(unittest.TestCase):
         self.assertEqual(api["parent"]["events"], ["startup"])
         schema = json.loads((SHELL / api["schema"]).read_text())[0]
         names = {f["name"] for f in schema["functions"]}
-        self.assertEqual(names, {"state", "apply", "dismissChoice", "toggleFocus", "setImmersive", "copyLinkToHighlight"})
+        self.assertEqual(
+            names,
+            {
+                "state",
+                "apply",
+                "dismissChoice",
+                "toggleFocus",
+                "setImmersive",
+                "copyLinkToHighlight",
+                "setPageEditing",
+            },
+        )
+        # #161: editing the page's text is one boolean for one tab, the one the menu or the key was used in.
+        edit = next(f for f in schema["functions"] if f["name"] == "setPageEditing")
+        self.assertEqual([(a["name"], a["type"]) for a in edit["parameters"]], [("on", "boolean"), ("tabId", "integer")])
+        self.assertEqual(self.manifest["commands"]["toggle-page-editing"]["suggested_key"]["default"], "Ctrl+Alt+E")
         # ADR 0009: Immersive is one boolean; the tab only says in which window the outcome is announced.
         switch = next(f for f in schema["functions"] if f["name"] == "setImmersive")
         self.assertEqual([(a["name"], a["type"]) for a in switch["parameters"]], [("on", "boolean"), ("tabId", "integer")])
