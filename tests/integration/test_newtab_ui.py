@@ -296,8 +296,65 @@ return {
         self.assertEqual(self.m.chrome("return Services.prefs.getStringPref('sidebar.visibility');"), layout)
         self.assertFalse(self.m.chrome("return Services.prefs.getBoolPref('nulavio.layout.choicePending');"))
         self.assertTrue(self.m.chrome("return Services.prefs.getBoolPref('nulavio.dns.chosen');"))
+        self.assertFalse(self.m.chrome("return Services.prefs.getBoolPref('nulavio.layout.immersive', false);"))  # #240
         self.open()
         self.assertEqual(self.cards()["cards"], [])
+
+    IMMERSIVE = """
+const row = document.getElementById('layout-choice-immersive-row');
+const input = document.getElementById('layout-choice-immersive');
+return { shown: !row.hidden && row.checkVisibility(), checked: input.checked, disabled: input.disabled,
+         role: input.getAttribute('role'), text: row.textContent,
+         hint: document.getElementById(input.getAttribute('aria-describedby'))?.textContent };
+"""
+
+    def test_08_the_layout_step_offers_immersive_with_the_side_tab_list(self):
+        """#240: Imersivo next to the arrangements, off, with how to bring the toolbar back; the same pref as Settings;
+        not offered with the tabs on top; in the "Tudo pronto" summary when on."""
+        pref = "return Services.prefs.getBoolPref('nulavio.layout.immersive', false);"
+        self.addCleanup(self.m.chrome, "Services.prefs.clearUserPref('nulavio.layout.immersive');")
+        self.first_run()
+        self.open()
+        self.wait_card("firstrun-welcome")
+        self.click("firstrun-start")
+        self.wait_card("layout-choice")
+        now = harness.wait_until(lambda: (lambda r: r if r["shown"] else None)(self.m.execute(self.IMMERSIVE)), 10)
+        self.assertTrue(now, self.m.execute(self.IMMERSIVE))
+        self.assertEqual((now["checked"], now["disabled"], now["role"]), (False, False, "switch"))
+        self.assertIn(self.message("keyImmersive"), now["text"])
+        self.assertIn("Ctrl+L", now["hint"])
+        self.assertFalse(self.m.chrome(pref))
+        self.click("layout-choice-immersive")
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome(pref), 10))
+        self.assertTrue(harness.wait_until(lambda: self.m.execute(self.IMMERSIVE)["checked"], 10))
+        self.shoot("firstrun-layout-immersive")
+        # With the tabs on top the mode is not built (#118): the switch goes, and comes back with the side tab list.
+        self.m.execute("const r = document.querySelector('input[name=newtab-layout][value=top]'); r.click();")
+        self.assertTrue(
+            harness.wait_until(lambda: not self.m.execute(self.IMMERSIVE)["shown"], 15), self.m.execute(self.IMMERSIVE)
+        )
+        self.m.execute("const r = document.querySelector('input[name=newtab-layout][value=lateral]'); r.click();")
+        self.assertTrue(harness.wait_until(lambda: self.m.execute(self.IMMERSIVE)["shown"], 15), self.m.execute(self.IMMERSIVE))
+        self.click("layout-choice-done")
+        self.wait_card("dns-choice")
+        self.click("dns-later")
+        self.wait_card("firstrun-passwords")
+        self.click("firstrun-passwords-next")
+        for _ in range(4):
+            if harness.wait_until(lambda: "firstrun-done" in self.cards()["cards"], 3):
+                break
+            card = next((c for c in self.cards()["cards"] if c in ("firstrun-default", "firstrun-profile")), None)
+            if card:
+                self.click(f"{card}-later")
+        self.wait_card("firstrun-done")
+        rows = self.m.execute(
+            "return [...document.querySelectorAll('#firstrun-summary div')].map(d => [d.querySelector('dt').textContent,"
+            " d.querySelector('dd').textContent]);"
+        )
+        tabs = dict(rows)[self.message("firstrunSummaryTabs")]
+        self.assertEqual(tabs, f"{self.message('layoutLateral')} · {self.message('keyImmersive')}")
+        self.click("firstrun-finish")
+        self.assertTrue(self.m.chrome(pref))
 
     def test_07_no_first_run_in_an_ai_workspace_or_a_temporary_profile(self):
         for pref, value in (("nulavio.profile.temporary", True), ("nulavio.ai.workspace", "ag-0123456789ab")):
