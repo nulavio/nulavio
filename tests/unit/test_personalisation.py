@@ -460,10 +460,8 @@ class PrefWriterInventoryTest(unittest.TestCase):
     def test_the_window_writes_only_false_to_the_engines_title_switches(self):
         """#322 (review): the window title switch only ever hides; the engine's two switches and nothing else."""
         source = (SHELL / "modules" / "NulavioWindow.sys.mjs").read_text(encoding="utf-8")
-        self.assertIn(
-            'const TITLE_PREFS = Object.freeze(["privacy.exposeContentTitleInWindow", "privacy.exposeContentTitleInWindow.pbm"]);',
-            source,
-        )
+        prefs = '"privacy.exposeContentTitleInWindow", "privacy.exposeContentTitleInWindow.pbm"'
+        self.assertIn(f"const TITLE_PREFS = Object.freeze([{prefs}]);", source)
         body = source[source.index("  #pageTitle(changed) {") : source.index("  #open(win, path) {")]
         self.assertIn("for (const titlePref of TITLE_PREFS) {", body)
         self.assertIn("Services.prefs.setBoolPref(titlePref, false);", body)  # never true
