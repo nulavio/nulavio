@@ -27,13 +27,13 @@ Urgency: <urgent | standard> (<reasons>). Source SHA-256 <digest> (Mozilla's sig
 **Nulavio fixes**: <none, or the table above>.
 ```
 
-## Unreleased (on `main`, after 160.0-0.6 was built)
+## Unreleased (on `main`, after 160.0-0.6)
 
 **New protections and their limits**:
 
-- Fingerprinting: pages read a 1920×1080 screen and 4 processors on every computer ([ADR 0016](../adr/0016-one-screen-size-and-processor-count-for-pages.md), #79). The window's own size still differs between people, and a window wider than that screen is a visible sign of the protection ([R56](residual-risks.md)). A site exempted with the shield reads the display's size, and so do extensions' pages. In 160.0-0.6 the size was kept per tab, which left the display's size readable in a few corners (a media query inside an SVG image, a frame of a page that is leaving); since engine patch 0012 the engine answers for each document, a frame, a pop-up and an image too (ADR 0016, "Known limits").
 - Fingerprinting: what a page renders as audio offline differs per site (engine patch 0012, [ADR 0019](../adr/0019-rendered-audio-differs-per-site.md), #79). The usual audio probe then reads a different value on every site and the same value again on one site. It covers the buffer an offline rendering returns: a probe that reads through a node inside the rendering (an analyser, a script processor, a worklet) or from sound that plays is not changed, and a script written against the noise can average it out (R56). Distribution Firefox (Track A) does not have the patch.
-- Fingerprinting: pages read UTC as the time zone ([ADR 0017](../adr/0017-pages-read-utc-with-a-switch-per-site.md), #79). Hours a page formats itself are in UTC until the person turns on "Usar meu fuso horário neste site" in the shield's panel; that site then reads the real time zone again (R56). Distribution Firefox (Track A) has no such switch, only the shield's own.
+
+- Fingerprinting: the 1920×1080 screen is answered by the engine for each document, a frame, a pop-up and an image too (engine patch 0012, ADR 0016, #79). In 160.0-0.6 the size is kept per tab, which leaves the display's size readable in a few corners (below, under 160.0-0.6).
 - Fingerprinting: sites are not told that the system asks for less motion or more contrast ([ADR 0018](../adr/0018-sites-are-not-told-motion-and-contrast-preferences.md), #79). Sites then animate, and pages scroll smoothly, also for a person who asked the system for less motion, until they answer the bar that offers the setting once with "Deixar os sites verem", or turn on "Deixar os sites verem minhas preferências de movimento e contraste" in Settings; with it on, those answers (motion, contrast and reduced transparency) tell them apart again (R56).
 
 **Fixes**:
@@ -49,6 +49,54 @@ Urgency: <urgent | standard> (<reasons>). Source SHA-256 <digest> (Mozilla's sig
 **New ways the browser talks to the desktop**:
 
 - "Manter acima das outras janelas" on KDE Plasma (#170): on the person's action, Nulavio asks KWin over the session bus to run a one-line script that keeps that one window above the others. Whatever answers as KWin learns the profile's path and the window's id (R77).
+
+## Nulavio 160.0-0.6 (Firefox 160.0), published 2026-11-16
+
+A security update of the alpha, with the same engine ([release](https://github.com/nulavio/nulavio/releases/tag/v160.0-0.6), [advisory GHSA-9hc4-cxv9-5wf2](https://github.com/nulavio/nulavio/security/advisories/GHSA-9hc4-cxv9-5wf2), [run 43811410472](https://github.com/nulavio/nulavio/actions/runs/43811410472)). The two findings came from the independent review of the Vault and the release chain (#224); the fix was prepared in the advisory's private fork and landed in #370. The release was approved by the maintainer and signed through KMS; the job then installed it in clean Fedora and Ubuntu containers from the site's repository files, with the signature checks on. The packages were in the repositories at 14:27 UTC and the GitHub release was published at 16:32 UTC. Three release runs before this one stopped on tests and on a failed download, none on the product (#376, #381; what that costs is #378).
+
+**Upstream**: unchanged, Firefox 160.0.
+
+**Nulavio fixes** (what a user does: on Fedora, `sudo dnf upgrade nulavio`; on Ubuntu, `sudo apt upgrade nulavio`; to check a download, the command in the release's notes):
+
+| # | Severity | Area | Fix |
+|---|---|---|---|
+| F1 | Medium | Release chain | The notes told people to check a download with `gh attestation verify <file> --repo nulavio/nulavio`, which accepts an attestation from any workflow or branch of the repository. The notes and `CHANGELOG.md` now print the command with the release workflow and the `main` branch, and name `SHA256SUMS.asc` as the first check (#370). The notes of 160.0-0.3 to 160.0-0.5 were edited to the same command on 2026-11-16 |
+| F2 | Low | Vault | A protected profile's record of which key file is current could be deleted without any key, after which an older `vault.json` with a removed secret opened the profile through Nulavio. A key file now says, in its authenticated part, that the volume has a record, and a missing record is refused (#370). What the record does not stop is R70 |
+
+No release's files are known to have been replaced: on 2026-11-16 every asset of 160.0-0.3, 160.0-0.4 and 160.0-0.5 matched its release's signed `SHA256SUMS`.
+
+Also fixed, found by the project's own reviews:
+
+- Release chain: the upload runs in a job that cannot take the signing role, and signing in one that holds no upload token (#356); the signing role in AWS trusts the two signing workflows on `main`, not any job of the environment (#372, R60); the role's session leaves the job once it has signed (#332); `sign_repo.sh` and `sign_apt_repo.sh` verify the rehearsal before they sign (#298); the check after upload compares the served dnf repository file whole (#331); the Flatpak bundle is checked file by file against the attested archive before it is signed (#338, R75).
+- Vault: a profile unlocked from the phone is locked again when its lock watcher cannot start (#330), and the watcher sees a browser that lived under half a second (#303, #314).
+- Sandbox: started with `--confined` where the engine could not sandbox its content inside it (Ubuntu by default), Nulavio refuses to start and says why, where it ran with less protection before (#295, R46); one more environment variable that weakens the engine's sandbox is removed before the browser starts, and `nulavio doctor` names it (#333).
+
+**New protections and their limits**:
+
+- Every profile can be behind a password: the last unprotected profile can be removed, and the profile chooser is then the only way in (#289).
+- Fingerprinting: pages read a 1920×1080 screen and 4 processors on every computer ([ADR 0016](../adr/0016-one-screen-size-and-processor-count-for-pages.md), #79). The window's own size still differs between people, and a window wider than that screen is a visible sign of the protection ([R56](residual-risks.md)). A site exempted with the shield reads the display's size, and so do extensions' pages. In this version the size is kept per tab, which leaves the display's size readable in a few corners (a media query inside an SVG image, a frame of a page that is leaving, and a pop-up of an exempted site reads the constant); the engine's own answer per document comes with the next version (ADR 0016, "Known limits").
+- Fingerprinting: pages read UTC as the time zone ([ADR 0017](../adr/0017-pages-read-utc-with-a-switch-per-site.md), #79). Hours a page formats itself are in UTC until the person turns on "Usar meu fuso horário neste site" in the shield's panel; that site then reads the real time zone again (R56). Distribution Firefox (Track A) has no such switch, only the shield's own.
+- Clean links drop eleven more tracking parameters that the engine's lists miss (#309).
+
+## Nulavio 160.0-0.5 (Firefox 160.0), published 2026-11-14
+
+An update of the alpha with the same engine ([release](https://github.com/nulavio/nulavio/releases/tag/v160.0-0.5), [run 43633960941](https://github.com/nulavio/nulavio/actions/runs/43633960941)), approved by the maintainer, signed through KMS and installed by the job from the site's repository files in clean Fedora and Ubuntu containers. No advisory: what it fixes for security was already public, as residual risks of 160.0-0.4.
+
+**Upstream**: unchanged, Firefox 160.0.
+
+**Nulavio fixes** (what a user does: `sudo dnf upgrade nulavio` or `sudo apt upgrade nulavio`):
+
+- AI Bridge: an agent without `local_resources` sends no request to this computer or the local network. In 160.0-0.4 a redirect still sent the request before the Bridge refused to act on the page (L5 and L6 there); it is now stopped before it is sent, for the tabs an agent drives (#248). What the engine does not show the Bridge stays in R29.
+- Vault: a protected profile can get a new key, so that a removed unlock method stops opening old copies of the key file (#275, [ADR 0015](../adr/0015-a-new-key-for-a-profile.md)): that is what ends the power of an old secret, which R70 describes. Replacing the recovery code keeps the old code until the new one is typed back (#252), and the browser says when a change to the unlock methods was saved but not recorded inside the profile (#253).
+- Guard: a replaced extension package is reported by its digest, whatever version the engine says (#264).
+- Assistant: the item for selected text does not show in a private window (#254).
+
+**New protections and their limits**:
+
+- The engine's profile chooser unlocks a protected profile before it starts it, with the password, this computer's login or the recovery code (#267, engine patch 0011).
+- The Nulavio Companion for Android comes with each release, signed with its own key held in AWS KMS (#260, #281, ADR 0014); the download page shows the certificate's fingerprint to check. It is not on F-Droid.
+- Each version's notes come with the browser, and reading them sends nothing anywhere (#290).
+- Accepted and written down: a search engine added by hand may use a plain-`http` address (R72); what the confined mode costs on Ubuntu (R46).
 
 ## Nulavio 160.0-0.4 (Firefox 160.0), published 2026-11-14
 
