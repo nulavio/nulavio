@@ -65,8 +65,17 @@ class ShortcutsTest(unittest.TestCase):
 
     def test_01_the_keys_are_in_the_shell_keyset_without_clashing_with_the_browser(self):
         ours = self.m.chrome(f"{NORM} return {KEYSET}.map(combo);")
-        expected = ["alt,control+B", "alt,control+F", "alt,control+I", "alt,shift+A", "alt,shift+P", "control,shift+L"]
-        self.assertEqual(sorted(ours), expected)  # Ctrl+Shift+L: Copy Link to Highlight (#157)
+        expected = [
+            "alt,control+B",
+            "alt,control+E",
+            "alt,control+F",
+            "alt,control+I",
+            "alt,control+K",
+            "alt,shift+A",
+            "alt,shift+P",
+            "control,shift+L",
+        ]
+        self.assertEqual(sorted(ours), expected)  # Ctrl+Shift+L: Copy Link to Highlight (#157); Ctrl+Alt+E: edit the page (#161)
         clashes = self.m.chrome(
             f"{NORM} const ours = {KEYSET}.map(combo);"
             "return [...document.querySelectorAll('key')].filter(k => !k.closest('#ext-keyset-id-shell_nulavio_net'))"

@@ -184,6 +184,27 @@ class FixtureServer:
                 with outer._lock:
                     outer.hits.append(self.path)
                     outer.agents[self.path.partition("?")[0]] = self.headers.get("User-Agent", "")
+                if self.path.startswith("/slow-page"):
+                    # Load-line fixture (tests/integration/test_load_line.py): a page whose body comes in ten pieces
+                    # over `ms` milliseconds, with its length announced, so the engine reports real progress.
+                    query = dict(p.split("=", 1) for p in self.path.partition("?")[2].split("&") if "=" in p)
+                    total = min(int(query.get("ms", "3000")), 20000)
+                    piece = b"<p>" + b"x" * 4000 + b"</p>\n"
+                    head = b"<!doctype html><title>slow-page</title>"
+                    self.send_response(200)
+                    self.send_header("Content-Type", "text/html; charset=utf-8")
+                    self.send_header("Content-Length", str(len(head) + 10 * len(piece)))
+                    self.send_header("Cache-Control", "no-store")
+                    self.end_headers()
+                    try:
+                        self.wfile.write(head)
+                        for _ in range(10):
+                            self.wfile.flush()
+                            time.sleep(total / 10000)
+                            self.wfile.write(piece)
+                    except (BrokenPipeError, ConnectionResetError):
+                        pass  # the browser stopped the load
+                    return
                 if self.path.startswith("/redirect?to=http://"):
                     # Routing fixture (test_routing.py): a redirect onto another site.
                     self.send_response(302)
@@ -229,6 +250,37 @@ class FixtureServer:
         if path.startswith("/page/"):
             name = path.rsplit("/", 1)[-1]
             return f"<!doctype html><title>{name}</title><p id=name>{name}</p>".encode(), html, {}
+        if path == "/edit-page":
+            # Page-editing fixture (tests/integration/test_page_edit.py): a paragraph and a frame from another site
+            # (localhost is not 127.0.0.1's site), which editing the page must leave as it is.
+            frame = f"http://localhost:{self.port}/page/frame"
+            page = f"<!doctype html><title>edit-page</title><p id=text>Texto original.</p><iframe id=frame src='{frame}'>"
+            return page.encode(), html, {}
+        if path == "/copy-blocked":
+            # Allow-copy fixture (tests/integration/test_allow_copy.py): a page that cancels copy, cut, paste, the
+            # page menu and selection, and turns selection off, as some banks do; it counts what its handlers saw.
+            # With frame=1 it holds a frame from another site (localhost) that blocks the same way.
+            frame = f"<iframe id=frame src='http://localhost:{self.port}/copy-blocked'></iframe>" if query.get("frame") else ""
+            page = (
+                "<!doctype html><title>copy-blocked</title><style>body { user-select: none; }</style>"
+                "<p id=text>Numero 1234-5678</p><input id=field>"
+                f"{frame}<script>window.seen = [];"
+                "for (const type of ['copy', 'cut', 'paste', 'contextmenu', 'selectstart']) {"
+                "  window.addEventListener(type, e => { seen.push(type); e.preventDefault(); }, true);"
+                "  document.addEventListener(type, e => { seen.push(type); e.preventDefault(); });"
+                "}"
+                "document.oncopy = document.onpaste = document.oncontextmenu = () => false;</script>"
+            )
+            return page.encode(), html, {}
+        if path == "/web-editor":
+            # The other side of the allow-copy fixture: an editor that handles paste itself, as web editors do.
+            page = (
+                "<!doctype html><title>web-editor</title><div id=editor contenteditable>x</div>"
+                "<script>window.seen = []; document.getElementById('editor').addEventListener('paste', e => {"
+                "  seen.push('paste'); e.preventDefault();"
+                "  e.target.textContent = 'editor:' + e.clipboardData.getData('text/plain'); });</script>"
+            )
+            return page.encode(), html, {}
         if path == "/long-page":
             # Assistant fixture (tests/integration/test_assistant_ui.py): about `n` characters of visible
             # text in paragraphs, accents included, to check where an included page is cut.
@@ -667,7 +719,8 @@ class GeckoProfileSession:
     Nothing touches the real home or the real profiles.ini.
     """
 
-    def __init__(self, name: str = "Pessoal"):
+    def __init__(self, name: str = "Pessoal", desktop_bus: bool = False):
+        self.desktop_bus = desktop_bus  # the caller's own session bus instead of a private one (test_keep_above on Plasma)
         self.engine = nulavio_engine()
         if self.engine is None:
             raise RuntimeError("GeckoProfileSession needs the Nulavio build (NULAVIO_ENGINE)")
@@ -739,7 +792,12 @@ class GeckoProfileSession:
             handle.write("// test harness overlay (disposable profile only)\n" + "\n".join(lines) + "\n")
 
     def start(self) -> Marionette:
-        self._start_private_bus()
+        if self.desktop_bus and os.environ.get("NULAVIO_TEST_PLASMA") == "1" and os.environ.get("DBUS_SESSION_BUS_ADDRESS"):
+            # Only for a test that asks the real desktop for something (KWin's "keep above", #170), run by hand
+            # on a Plasma session with NULAVIO_TEST_HEADFUL=1: the engine's window and the window manager meet there.
+            self.env["DBUS_SESSION_BUS_ADDRESS"] = os.environ["DBUS_SESSION_BUS_ADDRESS"]
+        else:
+            self._start_private_bus()
         self.profile_dir.parent.mkdir(parents=True)
         created = self._run("-CreateProfile", f"{self.name} {self.profile_dir}")
         if not self.profile_dir.is_dir():

@@ -681,3 +681,48 @@
     justify-content: space-between;
   }
 }
+
+/* #318: the page-loading line, one per window, on top of the selected tab's page (NulavioLoadLine.sys.mjs). Inside the
+   tab's browser stack, so it is under the tab's notification bars, the toolbar, the band and the identity: it never
+   covers any of them. A neutral colour, never a status colour or the band's, so it cannot read as a security state.
+   Decorative: the engine's busy state for assistive technology is what says a page is loading. The engine's progress
+   amounts for web pages are not reliable, so it never shows one: a short segment crosses slowly while the page loads, and
+   under reduced motion the line stands still. */
+@-moz-document url("chrome://browser/content/browser.xhtml") {
+  #nulavio-load-line {
+    grid-area: 1 / 1;
+    align-self: start;
+    position: relative;
+    z-index: 1;
+    block-size: 2px;
+    inline-size: 100%;
+    overflow: hidden;
+    pointer-events: none;
+    contain: strict;
+  }
+  #nulavio-load-line::before {
+    content: "";
+    position: absolute;
+    inset-block: 0;
+    left: 0; /* physical: the segment crosses the same way in either writing direction */
+    inline-size: 30%;
+    background: var(--nv-color-text-secondary);
+    opacity: 0.5;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    #nulavio-load-line[data-state="loading"]::before {
+      animation: nulavio-load-cross calc(var(--nv-motion-duration-spin) * 2) var(--nv-motion-easing-standard) infinite;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    #nulavio-load-line::before { inline-size: 100%; opacity: 0.35; }
+  }
+  @media (forced-colors: active) {
+    #nulavio-load-line::before { background: GrayText; opacity: 1; }
+  }
+}
+
+@keyframes nulavio-load-cross {
+  from { translate: -100% 0; }
+  to { translate: 340% 0; }
+}
