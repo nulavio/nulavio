@@ -20,6 +20,11 @@ this.nulavioLayout = class extends ExtensionAPI {
       console.error("Nulavio layout startup", e);
     }
     try {
+      ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioPageEdit.sys.mjs").NulavioPageEdit.watch();
+    } catch (e) {
+      console.error("Nulavio page edit", e); // the key still works
+    }
+    try {
       this.keepAbove().watch(); // "Manter acima das outras janelas" in the View menu, on KDE Plasma (#170)
     } catch (e) {
       console.error("Nulavio keep above", e);
@@ -32,6 +37,8 @@ this.nulavioLayout = class extends ExtensionAPI {
 
   getAPI(context) {
     const layout = this.module();
+    const pageEdit = () =>
+      ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioPageEdit.sys.mjs").NulavioPageEdit;
     // Resolve the caller tab's live <browser> dynamically across docShell swaps;
     // never "most recent window", which can select a different/private window.
     const browserOf = () => context.xulBrowser;
@@ -65,6 +72,12 @@ this.nulavioLayout = class extends ExtensionAPI {
           }
           const say = key => tab.window?.A11yUtils?.announce({ raw: context.extension.localizeMessage(key) }).catch(() => {});
           return layout.copyLinkToHighlight(tab.nativeTab?.linkedBrowser ?? null, say);
+        }),
+        // #161: "Editar o texto da página", from the key, in the tab it was pressed in (the page menu's item is the module's).
+        setPageEditing: call((on, tabId) => {
+          const tab = context.extension.tabManager.get(tabId);
+          const say = key => tab?.window?.A11yUtils?.announce({ raw: context.extension.localizeMessage(key) }).catch(() => {});
+          return pageEdit().set(tab?.nativeTab?.linkedBrowser ?? null, on ?? null, say);
         }),
         // #170: the key, from the background page, for the window of the tab it was pressed in.
         setKeepAbove: call(tabId => {
