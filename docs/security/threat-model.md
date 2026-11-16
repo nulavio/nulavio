@@ -350,10 +350,10 @@ Each scenario lists: assets · adversary · preconditions · trust boundary · i
 |---|---|
 | Assets | Which pages are open (a window's id and its stacking); the profile's path |
 | Adversary | T-LOCAL: any program of the same user, which can own the name `org.kde.KWin` on the session bus where KWin does not run, or replace KWin |
-| Preconditions | The person uses "Manter acima das outras janelas" or Ctrl+Alt+K |
+| Preconditions | The person opens the View menu (the item reads its state: the first time in a window, that sends the random caption and gets the window's id), or uses the item or Ctrl+Alt+K (which also sends the script, with the profile's path) |
 | Boundary | TB10 |
 | Impact | The program receives what Nulavio asks KWin: the absolute path of the profile (in `loadScript`'s argument), the random caption used to find the window, and the window's id; it decides whether the menu item is enabled and what state it shows; it can answer falsely about that one window's stacking. It does not receive page content or addresses (the caption is a random mark, not the page's title) |
-| Preventive | Only on the person's action. The script holds only an id checked as a UUID and a boolean, from a new 0600 file in the profile's 0700 directory that is created by that write (refused if anything is at the path) and removed after the run; one change at a time. The window counts only when the answer names this process's id and the random caption |
+| Preventive | Only on the person's action (opening the View menu, the item, the key). The script holds only an id checked as a UUID and a boolean, from a new 0600 file in the profile's 0700 directory that is created by that write (refused if anything is at the path) and removed after the run; one change at a time. The window counts only when the answer names this process's id and the random caption |
 | Detective | The state shown is read back from what answers; a false answer is not detected |
 | Limitations | A same-user program can already do much more (S11); this adds no way in, only one more thing it can watch |
 | Tests | `test_keep_above` (elsewhere: refused and said; the script refuses an injected id; on Plasma by hand: KWin's own state read back) |
