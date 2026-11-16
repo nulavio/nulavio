@@ -23,13 +23,30 @@ AI "smart" grouping off (`browser.tabs.groups.smart.enabled=false` in `baseline.
 | Foco (side list, opens on hover) | Works | Works |
 | Abas no topo | Works | Works |
 
+## Restore
+
+| How | Result | Checked by |
+|---|---|---|
+| A group closed from its menu ("Excluir grupo"), then reopened from the closed groups | Comes back with its name, colour and tabs, and leaves the closed list | `test_05` |
+| A restart with "Abrir janelas e abas anteriores" on (`browser.startup.page` = 3) | The group comes back with its name, colour, tabs and collapsed state; the band names the profile | `test_07` |
+
+The earlier attempt asked the session store for the closed group before the close had finished:
+`gBrowser.removeTabGroup` returns a promise, and the group is in the closed list once it resolves. Nulavio keeps the
+engine's `browser.sessionstore.max_tabs_undo` (25); with 0 the engine would keep no closed group.
+
+## Imersivo
+
+With Imersivo on, a collapsed group stays collapsed, with its name, colour and tabs, and the band keeps the profile's
+name; turned off again, the group is as it was and expands. Checked by `test_06`.
+
 ## Not checked
 
-- **Restore.** Neither a restart nor reopening a closed group was checked: driving the session store's
-  `undoCloseTabGroup` from a test was not reliable here (the group was not yet in its list when asked). It is the
-  engine's own feature, which Nulavio does not touch; a follow-up issue tracks the check.
-- **Imersivo.** With the mode on, the tab list (and its groups) leaves the view and comes back as for ungrouped tabs;
-  no group-specific behaviour was looked for.
 - **Routing (ADR 0003).** A link that a rule sends to another profile opens in that profile's window; whether it was
-  opened from a grouped tab makes no difference to the decision, which is made per link. Not run.
-- **User docs**: not changed here.
+  opened from a grouped tab makes no difference to the decision, which is made per link (the same holds in a split,
+  `test_routing` test 16b). Not run with a group.
+- Saved groups ("Salvar e fechar") and groups across windows.
+- An engine build: the checks ran on the 0.5 package with `main`'s Shell.
+
+## Where people read about it
+
+`README.md` and `README.pt-BR.md` ("Also built in").

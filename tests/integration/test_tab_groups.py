@@ -1,7 +1,8 @@
 """#323: the engine's tab groups in the Nulavio build. Created, renamed, coloured and collapsed, in the side tab list
 (Lateral, Foco) and with the tabs on top; a group's colour is never one of the colours that mean something in Nulavio
 (orange, purple and red are left out of the palette it offers), and it is never read as the profile: the band keeps
-the profile's colour whatever the groups are. AI grouping stays off."""
+the profile's colour whatever the groups are. A closed group comes back from the closed groups, a group stays as it was
+through Imersivo, and a restart that restores the session brings it back. AI grouping stays off."""
 
 from __future__ import annotations
 
@@ -134,6 +135,70 @@ class TabGroupsTest(unittest.TestCase):
         # AI grouping stays off (baseline.js).
         self.assertFalse(self.m.chrome("return Services.prefs.getBoolPref('browser.tabs.groups.smart.enabled');"))
         print(json.dumps(offered))
+
+    def make_group(self) -> str:
+        self.m.chrome("gBrowser.addTabGroup([gBrowser.tabs[1], gBrowser.tabs[2]], { label: 'Trabalho', color: 'cyan' });")
+        return self.m.chrome("return gBrowser.getAllTabGroups()[0].id;")
+
+    def groups(self) -> list:
+        return self.m.chrome(
+            "return gBrowser.getAllTabGroups().map(g => [g.id, g.label, g.color, g.collapsed,"
+            " g.tabs.map(t => new URL(t.linkedBrowser.currentURI.spec).pathname)]);"
+        )
+
+    def test_05_a_closed_group_comes_back_from_the_closed_groups(self):
+        group = self.make_group()
+        self.m.set_context("chrome")
+        try:
+            self.m.execute_async(
+                "const done = arguments[arguments.length - 1];"
+                "gBrowser.removeTabGroup(gBrowser.getAllTabGroups()[0]).then(() => done(true), e => done(String(e)));"
+            )
+        finally:
+            self.m.set_context("content")
+        self.assertEqual(self.groups(), [])
+        closed = "return SessionStore.getClosedTabGroups({ sourceWindow: window }).map(g => [g.id, g.name, g.tabs.length]);"
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome(closed), 10))
+        self.assertEqual(self.m.chrome(closed)[0], [group, "Trabalho", 2])
+        self.m.chrome("SessionStore.undoCloseTabGroup(window, arguments[0], window);", [group])
+        self.assertTrue(harness.wait_until(lambda: self.groups(), 10))
+        self.assertEqual(self.groups(), [[group, "Trabalho", "cyan", False, ["/page/dois", "/page/tres"]]])
+        self.assertEqual(self.m.chrome(closed), [])
+
+    def test_06_with_imersivo_a_group_stays_as_it_was(self):
+        group = self.make_group()
+        self.m.chrome("gBrowser.selectedTab = gBrowser.tabs[0]; gBrowser.getAllTabGroups()[0].collapsed = true;")
+        name = "return document.querySelector('#nulavio-band .nv-band-name')?.textContent.trim() ?? null;"
+        before = self.m.chrome(name)
+        self.m.chrome("Services.prefs.setBoolPref('nulavio.layout.immersive', true);")
+        self.addCleanup(self.m.chrome, "Services.prefs.clearUserPref('nulavio.layout.immersive');")
+        on = "return document.documentElement.hasAttribute('nulavio-immersive');"
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome(on), 10))
+        self.assertEqual(self.groups(), [[group, "Trabalho", "cyan", True, ["/page/dois", "/page/tres"]]])
+        self.assertEqual(self.m.chrome(name), before)
+        self.m.chrome("Services.prefs.setBoolPref('nulavio.layout.immersive', false);")
+        self.assertTrue(harness.wait_until(lambda: not self.m.chrome(on), 10))
+        self.assertEqual(self.groups(), [[group, "Trabalho", "cyan", True, ["/page/dois", "/page/tres"]]])
+        self.m.chrome("gBrowser.getAllTabGroups()[0].collapsed = false;")
+        self.assertTrue(harness.wait_until(lambda: self.group()["shownTabs"] == 2, 5), self.group())
+
+    def test_07_a_restart_brings_the_group_back_when_the_session_is_restored(self):
+        # "Open previous windows and tabs" (Settings > Home: browser.startup.page = 3), as a person turns it on.
+        group = self.make_group()
+        self.m.chrome("gBrowser.selectedTab = gBrowser.tabs[0]; gBrowser.getAllTabGroups()[0].collapsed = true;")
+        self.m.chrome("Services.prefs.setIntPref('browser.startup.page', 3);")
+        try:
+            type(self).m = self.m = self.session.restart()
+            self.assertTrue(harness.wait_until(lambda: self.groups(), 30))
+            self.assertEqual(self.groups(), [[group, "Trabalho", "cyan", True, ["/page/dois", "/page/tres"]]])
+            self.assertTrue(harness.wait_until(lambda: self.group()["shownTabs"] == 0, 5), self.group())
+            # The band still says the profile after the restore.
+            self.assertEqual(
+                self.m.chrome("return document.querySelector('#nulavio-band .nv-band-name')?.textContent.trim();"),
+                "Pessoal",
+            )
+        finally:
+            self.m.chrome("Services.prefs.clearUserPref('browser.startup.page');")
 
 
 if __name__ == "__main__":
