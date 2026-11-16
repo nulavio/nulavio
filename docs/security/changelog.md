@@ -35,6 +35,10 @@ Urgency: <urgent | standard> (<reasons>). Source SHA-256 <digest> (Mozilla's sig
 - Fingerprinting: pages read UTC as the time zone ([ADR 0017](../adr/0017-pages-read-utc-with-a-switch-per-site.md), #79). Hours a page formats itself are in UTC until the person turns on "Usar meu fuso horário neste site" in the shield's panel; that site then reads the real time zone again (R56). Distribution Firefox (Track A) has no such switch, only the shield's own.
 - Fingerprinting: sites are not told that the system asks for less motion or more contrast ([ADR 0018](../adr/0018-sites-are-not-told-motion-and-contrast-preferences.md), #79). Sites then animate, and pages scroll smoothly, also for a person who asked the system for less motion, until they answer the bar that offers the setting once with "Deixar os sites verem", or turn on "Deixar os sites verem minhas preferências de movimento e contraste" in Settings; with it on, those answers (motion, contrast and reduced transparency) tell them apart again (R56).
 
+**Fixes**:
+
+- Distribution Firefox with the launcher (Track A): a profile the launcher made before a fingerprinting protection was added did not get it, with no message (#384). The launcher wrote the set of protections into a profile once. It now follows the baseline in a profile where nobody changed it, at the profile's next launch; a set the person wrote themselves is kept, and `nulavio doctor` names it with the value to set. The Nulavio build was not affected: there the set is the build's default.
+
 **Per-site choices that loosen a site's own rules (not a protection)**:
 
 - "Permitir copiar e colar neste site" in the shield's panel (#160): off by default, kept per origin in the profile and listed in Settings' site exceptions. On, that origin's pages cannot cancel copy, cut, paste, the page menu or selection, so their own handlers for those events no longer run there (R76).

@@ -14,7 +14,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 
 from . import engine as engine_mod
-from . import extensions, guard, paths, profile
+from . import extensions, guard, paths, prefs, profile
 
 NATIVE_MANIFEST_DIRS = [
     Path.home() / ".mozilla" / "native-messaging-hosts",
@@ -195,6 +195,28 @@ def check_native_messaging() -> list[Check]:
     return checks
 
 
+def check_seeds(prof: profile.Profile) -> list[Check]:
+    """A default of Nulavio whose value changed since this profile got it (#384): on its way, or kept as the
+    person's. A choice is only named when the default moved after it was made; any other choice is just a choice."""
+    try:
+        settings = prof.load_settings()
+        states = profile.seed_states(prof, settings)
+    except (profile.ProfileError, OSError, ValueError):
+        return []  # no settings to read (a locked protected profile, or one not set up): nothing to say
+    checks = []
+    for name, (state, want) in sorted(states.items()):
+        if state == "follows":
+            detail = "has an earlier default of Nulavio; the next start of this profile brings the current one"
+            checks.append(Check("defaults", f"{prof.name}: {name}", "info", detail))
+        elif state == "kept" and profile.default_moved(settings, name, want):
+            detail = (
+                "this profile has its own value, and Nulavio keeps it. Nulavio's default changed since and is not in"
+                f" effect here. To use it, set this value in about:config: {prefs.format_value(want)}"
+            )
+            checks.append(Check("defaults", f"{prof.name}: {name}", "warn", detail))
+    return checks
+
+
 def check_profiles() -> list[Check]:
     checks = []
     for prof in profile.list_profiles():
@@ -208,6 +230,7 @@ def check_profiles() -> list[Check]:
                 "profile", f"{prof.name} permissions", "fail" if problems else "ok", "; ".join(problems) or "0700, owned by you"
             )
         )
+        checks += check_seeds(prof)
         for finding in guard.audit(prof.path):
             status = {"critical": "fail", "warning": "warn", "info": "info"}[finding.severity]
             checks.append(Check("guard", f"{prof.name}: {finding.pref}", status, f"{finding.message} (value: {finding.actual})"))

@@ -9,13 +9,16 @@ Layout of ``$XDG_DATA_HOME/nulavio/profiles/<name>/`` (all 0700/0600):
 
 Preference strategy (see browser/config/prefs/baseline.js):
 * ``seed`` prefs are appended to prefs.js only while the profile is *not*
-  running, once per pref; afterwards they are ordinary user choices.
+  running; afterwards they are ordinary user choices. A seeded value that
+  nobody changed follows the baseline when the baseline's value changes
+  (``seed_states``); a value the person changed is kept.
 * ``enforce`` prefs are rendered into user.js on every launch.
 """
 
 from __future__ import annotations
 
 import datetime as _dt
+import hashlib
 import html
 import json
 import os
@@ -260,6 +263,79 @@ def _variables(profile: Profile) -> dict[str, str]:
     return {"STARTPAGE_URL": profile.startpage_url}
 
 
+def seed_history() -> dict[str, list[prefs.PrefValue]]:
+    """Earlier values the baseline shipped for a seed pref whose value changed (seed-history.json)."""
+    try:
+        data = json.loads((paths.config_dir() / "prefs" / "seed-history.json").read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return {}
+    return data.get("earlier", {})
+
+
+def _digest(value: prefs.PrefValue) -> str:
+    """Of a value as prefs.js writes it, so that true and 1 are two values."""
+    return hashlib.sha256(prefs.format_value(value).encode()).hexdigest()
+
+
+# In settings["seeded_values"], for a value that is the person's: this, then the digest of the baseline's value
+# when the launcher last had the profile's value as its own (empty for a profile seeded before #384, where that
+# is not known). It says whether the baseline has moved since the person chose (default_moved).
+KEPT = "kept:"
+
+
+def seed_states(profile: Profile, settings: dict[str, Any]) -> dict[str, tuple[str, prefs.PrefValue]]:
+    """Each seed pref of the baseline: (where the profile stands, the baseline's value for this profile).
+
+    - "new": never seeded here; the next launch writes it.
+    - "current": the profile has the baseline's value.
+    - "follows": the profile has a value the launcher wrote and nobody changed, and the baseline's value has
+      changed since; the next launch writes the baseline's.
+    - "kept": the profile has a value the person chose; it stays.
+    - "default": prefs.js has no value, so the engine's default applies. It stays that way, with one
+      exception: a true/false pref whose baseline value changed since the launcher last looked is "follows".
+      The engine does not save a value equal to its default, so for a true/false pref a missing value is
+      either what the launcher seeded or the one other value, which the baseline now asks for.
+
+    How a value is known to be the launcher's: its digest is the one recorded when the launcher wrote it
+    (settings["seeded_values"]). A profile seeded before digests were recorded (#384) is recognised by
+    seed_history(), the earlier values the baseline shipped, the first time it is looked at.
+    """
+    variables = _variables(profile)
+    seeded = settings.get("seeded", {})
+    written = settings.get("seeded_values", {})
+    history = seed_history()
+    have = prefs.read_user_prefs(profile.path / "prefs.js")
+    states: dict[str, tuple[str, prefs.PrefValue]] = {}
+    for pref in baseline_prefs():
+        if pref.mode != "seed":
+            continue
+        want = prefs.substitute(pref.value, variables)
+        if pref.name not in seeded:
+            state = "new"
+        elif pref.name not in have:
+            recorded = written.get(pref.name, KEPT)
+            changed = not recorded.startswith(KEPT) and recorded != _digest(want)
+            state = "follows" if changed and isinstance(want, bool) else "default"
+        elif _digest(have[pref.name]) == _digest(want):
+            state = "current"
+        elif pref.name in written:
+            state = "follows" if written[pref.name] == _digest(have[pref.name]) else "kept"
+        else:
+            earlier = {_digest(prefs.substitute(value, variables)) for value in history.get(pref.name, [])}
+            state = "follows" if _digest(have[pref.name]) in earlier else "kept"
+        states[pref.name] = (state, want)
+    return states
+
+
+def default_moved(settings: dict[str, Any], name: str, want: prefs.PrefValue) -> bool:
+    """For a seed pref whose value in the profile is the person's ("kept"): whether the baseline's value changed
+    after they chose, so that what the baseline now asks for is not in effect there."""
+    recorded = settings.get("seeded_values", {}).get(name)
+    if recorded is None:  # not looked at since #384: only the list of earlier values can say
+        return name in seed_history()
+    return recorded.startswith(KEPT) and recorded[len(KEPT) :] != _digest(want)
+
+
 def prepare_for_launch(profile: Profile, context: dict[str, str], builtin_theme: bool = False) -> list[str]:
     """Apply pending seed prefs, render user.js, theme and start page.
 
@@ -274,11 +350,31 @@ def prepare_for_launch(profile: Profile, context: dict[str, str], builtin_theme:
     settings = profile.load_settings()
     variables = _variables(profile)
     seeded: dict[str, str] = settings.setdefault("seeded", {})
+    states = seed_states(profile, settings)
+    # For each seed pref: the digest of what the launcher last wrote or found, or KEPT for the person's value.
+    first_look = "seeded_values" not in settings
+    changed_before = seed_history()
+    written: dict[str, str] = settings.setdefault("seeded_values", {})
     to_write: list[tuple[str, prefs.PrefValue]] = []
-    for pref in baseline_prefs():
-        if pref.mode == "seed" and pref.name not in seeded:
-            to_write.append((pref.name, prefs.substitute(pref.value, variables)))
-            seeded[pref.name] = settings.get("baseline_version", BASELINE_VERSION)
+    followed = []
+    for name, (state, want) in states.items():
+        if state in ("new", "follows"):
+            to_write.append((name, want))
+            if state == "new":
+                seeded[name] = settings.get("baseline_version", BASELINE_VERSION)
+            else:
+                followed.append(name)
+        if state != "kept":
+            # Also for a missing value: it is looked at again when the baseline changes.
+            written[name] = _digest(want)
+        elif not written.get(name, "").startswith(KEPT):
+            # Found to be the person's now. The baseline as it was when the value was last the launcher's stays
+            # on record. For a profile from before #384 that is not known when the baseline's value has ever
+            # changed; when it never has, it is today's.
+            unknown = first_look and name in changed_before
+            written[name] = KEPT + ("" if unknown else written.get(name, _digest(want)))
+    if followed:
+        log.event("prefs.followed_baseline", profile=profile.name, prefs=sorted(followed))
     for name, value in settings.get("pending_prefs", {}).items():
         to_write.append((name, value))
     if to_write:

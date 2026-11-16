@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import stat
@@ -16,7 +17,7 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "launcher"))
 
-from nulavio_launcher import log, paths, prefs, profile  # noqa: E402
+from nulavio_launcher import doctor, log, paths, prefs, profile  # noqa: E402
 
 
 def mode(path: Path) -> int:
@@ -132,6 +133,167 @@ class ProfileTest(TempHome):
         enforced = {p.name for p in profile.baseline_prefs() + profile.theme_prefs() if p.mode == "enforce"}
         self.assertEqual(set(user_js), enforced)
         self.assertEqual(mode(prof.path / "chrome" / "userChrome.css"), 0o600)
+
+    # -- a seeded value follows the baseline; a value the person chose stays (#384) --------------------
+
+    OVERRIDES = "privacy.fingerprintingProtection.overrides"
+
+    def set_pref(self, prof: profile.Profile, name: str, value) -> None:
+        """As the engine saves a change made in Settings or about:config: one more line, the last one wins."""
+        with open(prof.path / "prefs.js", "a") as handle:
+            handle.write(prefs.format_pref(name, value) + "\n")
+
+    def value(self, prof: profile.Profile, name: str):
+        return prefs.read_user_prefs(prof.path / "prefs.js").get(name)
+
+    def seeded_before_384(self, value, name: str = "work") -> profile.Profile:
+        """A profile the launcher seeded before it recorded what it wrote, with `value` as the set of protections."""
+        prof = self.make(name)
+        profile.prepare_for_launch(prof, {})
+        settings = prof.load_settings()
+        del settings["seeded_values"]
+        prof.save_settings(settings)
+        self.set_pref(prof, self.OVERRIDES, value)
+        return prof
+
+    def test_the_history_is_the_baselines(self):
+        data = json.loads((paths.config_dir() / "prefs" / "seed-history.json").read_text(encoding="utf-8"))
+        now = {p.name: p.value for p in profile.baseline_prefs() if p.mode == "seed"}
+        lines = "\n".join(f"{name}={prefs.format_value(value)}" for name, value in sorted(now.items()))
+        self.assertEqual(
+            data["baseline"],
+            hashlib.sha256(lines.encode()).hexdigest(),
+            "a seed pref was added, removed or changed. If a value changed, add its old value to `earlier` in"
+            " browser/config/prefs/seed-history.json, so that profiles seeded with it follow; then update `baseline`.",
+        )
+        for name, earlier in data["earlier"].items():
+            with self.subTest(pref=name):
+                self.assertIn(name, now)
+                self.assertNotIn(now[name], earlier, "the current value is not an earlier one")
+                self.assertEqual(len(earlier), len(set(earlier)))
+        # The preference this was made for, with every set that was shipped before the current one.
+        self.assertEqual(len(data["earlier"][self.OVERRIDES]), 3)
+
+    def test_a_profile_seeded_with_each_earlier_value_gets_the_current_one_at_its_next_launch(self):
+        current = next(p.value for p in profile.baseline_prefs() if p.name == self.OVERRIDES)
+        for number, earlier in enumerate(profile.seed_history()[self.OVERRIDES]):
+            with self.subTest(earlier=earlier):
+                prof = self.seeded_before_384(earlier, f"shipped-{number}")
+                self.assertEqual(profile.seed_states(prof, prof.load_settings())[self.OVERRIDES][0], "follows")
+                self.assertEqual(profile.prepare_for_launch(prof, {}), [self.OVERRIDES])
+                self.assertEqual(self.value(prof, self.OVERRIDES), current)
+                self.assertEqual(profile.prepare_for_launch(prof, {}), [])  # written once
+
+    def test_a_value_the_person_changed_is_kept_and_doctor_says_so(self):
+        own = "+WebGLRendererConstant,+ScreenOrientation"
+        current = next(p.value for p in profile.baseline_prefs() if p.name == self.OVERRIDES)
+        new = self.make("new")
+        profile.prepare_for_launch(new, {})
+        self.set_pref(new, self.OVERRIDES, own)
+        old = self.seeded_before_384(own, "old")
+        self.set_pref(old, "dom.security.https_only_mode", False)  # a choice whose default never changed
+        for prof in (old, new):
+            with self.subTest(profile=prof.name):
+                for _launch in range(2):  # at the next launch, and at every later one
+                    self.assertEqual(profile.prepare_for_launch(prof, {}), [])
+                    self.assertEqual(self.value(prof, self.OVERRIDES), own)
+        # The profile from before #384: when its set was written is not known, and the baseline's set has changed
+        # three times. Doctor says so before its next launch and after it, with the value to set.
+        for _launch in range(2):
+            (check,) = doctor.check_seeds(old)
+            self.assertEqual((check.name, check.status), (f"old: {self.OVERRIDES}", "warn"))
+            self.assertIn("keeps it", check.detail)
+            self.assertIn(prefs.format_value(current), check.detail)
+            profile.prepare_for_launch(old, {})
+        # A choice about a preference whose default did not move after it is only a choice: nothing to say.
+        self.set_pref(new, "dom.security.https_only_mode", False)
+        profile.prepare_for_launch(new, {})
+        self.assertEqual(doctor.check_seeds(new), [])
+
+    def test_doctor_names_a_choice_only_when_the_default_moved_after_it(self):
+        # The profile is seeded with today's set; the person then writes their own (as the Shell does for them
+        # when they let sites see their motion and contrast preferences). Nothing moved since: nothing to say.
+        prof = self.make()
+        profile.prepare_for_launch(prof, {})
+        self.set_pref(prof, self.OVERRIDES, "+WebGLRendererConstant")
+        self.assertEqual(doctor.check_seeds(prof), [])
+        profile.prepare_for_launch(prof, {})
+        self.assertEqual(doctor.check_seeds(prof), [])
+        # The baseline's set gains an entry: now the person's set is behind it, and doctor says so, at every
+        # launch from then on, with the value to set.
+        real = profile.baseline_prefs
+        newer = next(p.value for p in real() if p.name == self.OVERRIDES) + ",+SomethingNew"
+
+        def gained():
+            return [prefs.Pref(p.name, newer, p.mode) if p.name == self.OVERRIDES else p for p in real()]
+
+        with mock.patch.object(profile, "baseline_prefs", gained):
+            for _launch in range(2):
+                self.assertEqual(profile.prepare_for_launch(prof, {}), [])
+                (check,) = doctor.check_seeds(prof)
+                self.assertEqual((check.name, check.status), (f"work: {self.OVERRIDES}", "warn"))
+                self.assertIn(prefs.format_value(newer), check.detail)
+            # They take it: nothing to say again.
+            self.set_pref(prof, self.OVERRIDES, newer)
+            self.assertEqual(doctor.check_seeds(prof), [])
+
+    def test_doctor_says_when_the_next_start_brings_the_current_default(self):
+        prof = self.seeded_before_384(profile.seed_history()[self.OVERRIDES][0])
+        check = next(c for c in doctor.check_seeds(prof))
+        self.assertEqual((check.name, check.status), (f"work: {self.OVERRIDES}", "info"))
+        profile.prepare_for_launch(prof, {})
+        self.assertEqual(doctor.check_seeds(prof), [])
+
+    def test_a_later_change_of_the_baseline_is_followed_by_the_recorded_value_alone(self):
+        # From now on the launcher records what it wrote: no list of earlier values is needed.
+        prof = self.make()
+        profile.prepare_for_launch(prof, {})
+        seeded = self.value(prof, "dom.security.https_only_mode")
+        self.assertIs(seeded, True)
+        real = profile.baseline_prefs
+
+        def flipped():
+            return [prefs.Pref(p.name, False, p.mode) if p.name == "dom.security.https_only_mode" else p for p in real()]
+
+        with mock.patch.object(profile, "baseline_prefs", flipped):
+            self.assertEqual(profile.prepare_for_launch(prof, {}), ["dom.security.https_only_mode"])
+            self.assertIs(self.value(prof, "dom.security.https_only_mode"), False)
+            # The person turns it on again: theirs now, and the launcher does not turn it back off.
+            self.set_pref(prof, "dom.security.https_only_mode", True)
+            self.assertEqual(profile.prepare_for_launch(prof, {}), [])
+            self.assertIs(self.value(prof, "dom.security.https_only_mode"), True)
+        # Back to the real baseline (true): the value is the baseline's again, by the person's hand.
+        self.assertEqual(profile.prepare_for_launch(prof, {}), [])
+        self.assertEqual(profile.seed_states(prof, prof.load_settings())["dom.security.https_only_mode"][0], "current")
+
+    def test_a_missing_value_is_the_engines_default_and_stays_unless_a_true_false_default_changed(self):
+        prof = self.make()
+        profile.prepare_for_launch(prof, {})
+        # The engine does not save a value equal to its own default: the lines are gone after a session.
+        kept = [
+            line
+            for line in (prof.path / "prefs.js").read_text(encoding="utf-8").splitlines()
+            if self.OVERRIDES not in line and "dom.security.https_only_mode" not in line
+        ]
+        (prof.path / "prefs.js").write_text("\n".join(kept) + "\n", encoding="utf-8")
+        self.assertEqual(profile.prepare_for_launch(prof, {}), [])
+        real = profile.baseline_prefs
+
+        def changed():
+            new = {self.OVERRIDES: "+WebGLRendererConstant", "dom.security.https_only_mode": False}
+            return [prefs.Pref(p.name, new[p.name], p.mode) if p.name in new else p for p in real()]
+
+        with mock.patch.object(profile, "baseline_prefs", changed):
+            # The true/false one is written: missing, it was what the launcher seeded or the value now asked for.
+            # The text one is not: missing, it may be the person's reset.
+            self.assertEqual(profile.prepare_for_launch(prof, {}), ["dom.security.https_only_mode"])
+            self.assertIsNone(self.value(prof, self.OVERRIDES))
+
+    def test_true_and_one_are_two_values(self):
+        prof = self.make()
+        profile.prepare_for_launch(prof, {})
+        self.set_pref(prof, "dom.security.https_only_mode", 1)
+        self.assertEqual(profile.seed_states(prof, prof.load_settings())["dom.security.https_only_mode"][0], "kept")
 
     def test_provider_switch_is_reversible(self):
         prof = self.make()

@@ -1,0 +1,11 @@
+{
+  "comment": "Earlier values the baseline shipped for a seed preference whose value changed (browser/config/prefs/baseline.js). The launcher takes a profile that still has one of them for a profile it seeded and nobody changed, and gives it the baseline's value at its next launch (launcher/nulavio_launcher/profile.py, #384). When a seed preference's value changes, its old value goes into this list; tests/unit/test_profile_and_paths.py fails until the digest below is the baseline's again.",
+  "baseline": "1a124566b9cc4dc4c2ab1500deb0aecbd8f10425011558100efe075918e869db",
+  "earlier": {
+    "privacy.fingerprintingProtection.overrides": [
+      "-EfficientCanvasRandomization,+WebGLRendererConstant,+WebGLVendorSanitize,+WindowOuterSize,+WindowScreenXY,+WindowInnerScreenXY,+MouseEventScreenPoint,+UseStandinsForNativeColors,+DeviceSensors",
+      "-EfficientCanvasRandomization,+WebGLRendererConstant,+WebGLVendorSanitize,+WindowOuterSize,+WindowScreenXY,+WindowInnerScreenXY,+MouseEventScreenPoint,+UseStandinsForNativeColors,+DeviceSensors,+NavigatorHWConcurrency",
+      "-EfficientCanvasRandomization,+WebGLRendererConstant,+WebGLVendorSanitize,+WindowOuterSize,+WindowScreenXY,+WindowInnerScreenXY,+MouseEventScreenPoint,+UseStandinsForNativeColors,+DeviceSensors,+NavigatorHWConcurrency,+JSDateTimeUTC"
+    ]
+  }
+}

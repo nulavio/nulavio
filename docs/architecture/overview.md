@@ -36,7 +36,7 @@ Nulavio is a Gecko-based browser ([ADR 0001](../adr/0001-engine-selection.md)) b
 ## Configuration flow (single source of truth)
 
 ```
-browser/config/prefs/baseline.js ──┬─▶ Track A: seed → prefs.js (once), enforce → user.js (each launch)
+browser/config/prefs/baseline.js ──┬─▶ Track A: seed → prefs.js (once; an unchanged value follows the baseline), enforce → user.js (each launch)
 browser/config/providers.json    ──┤
 browser/config/guard-rules.json  ──┤─▶ Track B: generated distribution/policies.json + defaults/pref/nulavio.js
 browser/distribution/extensions.lock.json ─┘
