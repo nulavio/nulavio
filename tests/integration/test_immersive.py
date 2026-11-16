@@ -415,6 +415,47 @@ class ImmersiveTest(unittest.TestCase):
         self.assertEqual(refused, ["layout-locked", ["layoutLocked"]])
         self.assertTrue(self.m.chrome(pref))
 
+    def test_07b_the_view_menu_turns_it_on_and_off_and_shows_a_lock(self):
+        # #167: a menu item next to Full Screen, reading the switch each time the menu opens. Before the pointer
+        # journeys (20, 21): their unfinished tab drags leave the engine's movingtab on the toolbox, which takes the
+        # pointer off the toolbar until a real drag ends.
+        item = (
+            "const popup = document.getElementById('menu_viewPopup');"
+            "const item = document.getElementById('nulavio-menu-immersive');"
+            "popup.dispatchEvent(new Event('popupshowing'));"
+            "const seen = item && { next: item.nextElementSibling?.id, parent: item.parentNode.id,"
+            "  label: item.getAttribute('label'),"
+            "  type: item.getAttribute('type'), checked: item.getAttribute('checked'), disabled: item.hasAttribute('disabled') };"
+            "popup.dispatchEvent(new Event('popuphidden'));"  # the menu closed again: no hold is left behind
+            "return seen;"
+        )
+        shown = self.m.chrome(item)
+        self.assertEqual(
+            (shown["parent"], shown["next"], shown["type"], shown["checked"], shown["disabled"]),
+            ("menu_viewPopup", "fullScreenItem", "checkbox", "true", False),
+            shown,
+        )
+        self.assertIn(shown["label"], ("Imersivo", "Immersive"))
+        pref = "return Services.prefs.getBoolPref('nulavio.layout.immersive', false);"
+        self.m.chrome("document.getElementById('nulavio-menu-immersive').doCommand();")
+        self.assertTrue(harness.wait_until(lambda: not self.m.chrome(pref), 5))
+        state = self.settled(True)
+        self.assertTrue(state["toolbar"], state)
+        self.assertEqual(self.m.chrome(item)["checked"], "false")
+        self.m.chrome("document.getElementById('nulavio-menu-immersive').doCommand();")
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome(pref), 5))
+        self.assertTrue(harness.wait_until(lambda: self.window()["on"], 10), self.window())
+        # Locked by an administrator: shown with the state in effect (a lock gives the pref its default value, off),
+        # disabled, and a command changes nothing.
+        self.m.chrome("Services.prefs.lockPref('nulavio.layout.immersive');")
+        self.addCleanup(self.m.chrome, "Services.prefs.unlockPref('nulavio.layout.immersive');")
+        self.assertFalse(self.m.chrome(pref))
+        locked = self.m.chrome(item)
+        self.assertEqual((locked["checked"], locked["disabled"]), ("false", True), locked)
+        self.m.chrome("document.getElementById('nulavio-menu-immersive').doCommand();")
+        self.assertFalse(self.m.chrome(pref))
+        self.assertEqual(self.m.chrome(item)["checked"], "false")
+
     def test_08_the_switch_in_settings_turns_it_on_and_off(self):
         self.m.chrome("Services.prefs.clearUserPref('nulavio.layout.immersive');")
         # The switch is in the settings page's Aparência pane, under the arrangement (ADR 0009, ADR 0011).
