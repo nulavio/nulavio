@@ -396,7 +396,9 @@ if (browser.nulavioServices && browser.menus) {
   drawServiceMenus().catch(console.error);
   browser.nulavioServices.onChanged.addListener(() => drawServiceMenus().catch(console.error));
   browser.menus.onShown.addListener(async (info, tab) => {
-    const shown = info.menuIds.map(String).filter(id => serviceItems.has(id));
+    // Every item this menu's contexts call for, not only the ones the engine drew: an item hidden in a private
+    // window is not drawn anywhere until it is made visible again here.
+    const shown = [...serviceItems.keys()].filter(id => serviceItems.get(id).contexts.some(context => info.contexts.includes(context)));
     if (!shown.length || !tab) {
       return;
     }

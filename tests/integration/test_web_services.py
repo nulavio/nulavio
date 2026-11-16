@@ -122,6 +122,17 @@ class WebServicesTest(unittest.TestCase):
         harness.wait_until(lambda: self.m.chrome(MENU) is not None, 5)
         return self.m.chrome(MENU)
 
+    def open_menu_on_page(self, path: str = "/service-links") -> list[dict]:
+        """The page's own menu: nothing selected, the pointer on the page's text (the engine's "page" context
+        excludes a selection)."""
+        self.m.navigate(self.server.url(path))
+        self.m.execute("getSelection().removeAllRanges();")
+        self.m.context_click("#text")
+        self.assertTrue(harness.wait_until(self.m.menu_open, 10))
+        self.addCleanup(self.m.chrome, CLOSE_MENU)
+        harness.wait_until(lambda: self.m.chrome(MENU) is not None, 5)
+        return self.m.chrome(MENU)
+
     def test_01_nothing_is_offered_before_a_service_is_chosen(self):
         state = self.ok("return SV.NulavioServices.state();")
         self.assertEqual((state["translators"], state["summarizer"], state["privateToo"]), ([], None, False))
@@ -255,12 +266,6 @@ class WebServicesTest(unittest.TestCase):
         self.assertTrue(
             by_label["Traduzir seleção com DeepL"]["shown"] and not by_label["Traduzir seleção com DeepL"]["disabled"]
         )
-        # The page is on this computer: its summary is offered and refused, with the reason in its words.
-        refused = "Resumir página com Kagi Universal Summarizer — não para endereços deste computador ou da rede local"
-        self.assertTrue(
-            harness.wait_until(lambda: any(i["label"] == refused for i in self.m.chrome(MENU) or []), 5), self.m.chrome(MENU)
-        )
-        self.assertTrue(next(i for i in self.m.chrome(MENU) if i["label"] == refused)["disabled"])
         self.assertEqual(self.m.chrome(GUARD_SEEN), [], "something left before the click")
         self.assertTrue(self.m.chrome(ACTIVATE, ["Traduzir seleção com DeepL"]))
         want = f"https://www.deepl.com/translator#xx/pt-BR/{enc('Olá & mundo/?#')}"
@@ -273,6 +278,15 @@ class WebServicesTest(unittest.TestCase):
         self.assertIn(opened[0], (want, "about:blank"), opened)
         self.assertEqual(opened[1], 1, "the service's tab opens next to the page's")
         self.m.chrome("gBrowser.removeTab(gBrowser.selectedTab);")
+        # The page is on this computer: its summary is offered and refused, with the reason in its words.
+        self.m.chrome(CLOSE_MENU)
+        self.open_menu_on_page()
+        refused = "Resumir página com Kagi Universal Summarizer — não para endereços deste computador ou da rede local"
+        self.assertTrue(
+            harness.wait_until(lambda: any(i["label"] == refused for i in self.m.chrome(MENU) or []), 5), self.m.chrome(MENU)
+        )
+        self.assertTrue(next(i for i in self.m.chrome(MENU) if i["label"] == refused)["disabled"])
+        self.assertFalse(any("kagi.com" in url for url in self.m.chrome(GUARD_SEEN)), "the summary left without a click")
         # A link to a public page: its summary goes to the service with the link's address.
         self.m.chrome(CLOSE_MENU)
         self.m.context_click("#out")
@@ -294,9 +308,10 @@ class WebServicesTest(unittest.TestCase):
         self.m.chrome(GUARD_START)
         self.addCleanup(self.m.chrome, GUARD_STOP)
         self.addCleanup(self.m.chrome, "SidebarController.hide();")
-        items = self.open_menu_on_text()
+        self.open_menu_on_page()
         label = "Resumir página com o assistente"
-        self.assertIn(label, [item["label"] for item in items], items)
+        offered = lambda: any(i["label"] == label and i["shown"] and not i["disabled"] for i in self.m.chrome(MENU) or [])  # noqa: E731
+        self.assertTrue(harness.wait_until(offered, 5), self.m.chrome(MENU))
         self.assertTrue(self.m.chrome(ACTIVATE, [label]))
         sidebar = "return SidebarController.isOpen ? SidebarController.currentID : null;"
         self.assertTrue(harness.wait_until(lambda: self.m.chrome(sidebar), 10))
@@ -312,16 +327,33 @@ class WebServicesTest(unittest.TestCase):
         self.m.switch_to(private)
         self.addCleanup(self.m.switch_to, handles[0])
         self.addCleanup(self.m.chrome, "window.close();")
-        items = self.open_menu_on_text()
+        self.open_menu_on_text()
+        # Hidden: the engine does not draw an item that is not visible, so none is shown.
         self.assertTrue(
             harness.wait_until(lambda: not any(i["shown"] for i in self.m.chrome(MENU) or []), 5), self.m.chrome(MENU)
         )
-        self.assertEqual(items and [i["label"] for i in items], ["Traduzir seleção com DeepL"])
         self.m.chrome(CLOSE_MENU)
         self.ok("return SV.NulavioServices.setPrivateToo(true);")
         self.m.context_click("#text")
         self.assertTrue(harness.wait_until(self.m.menu_open, 10))
         self.assertTrue(harness.wait_until(lambda: any(i["shown"] and not i["disabled"] for i in self.m.chrome(MENU) or []), 5))
+
+    def test_06b_an_item_hidden_in_a_private_window_is_back_in_a_normal_one(self):
+        """The engine draws no item that is not visible: one hidden in a private window (test 06) is drawn again in a
+        normal window's menu."""
+        self.ok("return SV.NulavioServices.addTranslator({key: 'deepl'});")
+        handles = self.m.window_handles()
+        self.m.chrome("OpenBrowserWindow({private: true});")
+        self.assertTrue(harness.wait_until(lambda: len(self.m.window_handles()) > len(handles), 10))
+        self.m.switch_to(next(h for h in self.m.window_handles() if h not in handles))
+        self.open_menu_on_text()
+        self.assertTrue(harness.wait_until(lambda: not any(i["shown"] for i in self.m.chrome(MENU) or []), 5))
+        self.m.chrome(CLOSE_MENU)
+        self.m.chrome("window.close();")
+        self.m.switch_to(handles[0])
+        self.open_menu_on_text()
+        shown = lambda: any(i["label"] == "Traduzir seleção com DeepL" and i["shown"] for i in self.m.chrome(MENU) or [])  # noqa: E731
+        self.assertTrue(harness.wait_until(shown, 5), self.m.chrome(MENU))
 
     def test_07_the_settings_page_adds_removes_and_chooses(self):
         DOC = "const d = gBrowser.selectedBrowser.contentDocument;"
