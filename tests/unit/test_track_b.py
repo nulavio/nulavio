@@ -129,7 +129,10 @@ class NetworkingCheckRecordTest(unittest.TestCase):
         if self.record["result"] == "accepted":  # not run: only on the maintainer's recorded word
             self.assertRegex(self.record.get("accepted_in", ""), r"^#\d+$")
         else:
-            self.assertIn("networking_check.py", self.record["how"])  # a reading, not a sentence someone typed
+            # The script's own wording and what it read. Still a statement by whoever ran it (R79): what CI
+            # checks is that it names the pinned release, and the review of its pull request is the control.
+            self.assertIn("networking_check.py", self.record["how"])
+            self.assertRegex(self.record.get("library_sha256", ""), r"^[0-9a-f]{64}$")
 
     def test_the_variant_that_can_be_read_stays_readable(self):
         variant = active_lines((MOZCONFIG.parent / "mozconfig.no-lto").read_text())

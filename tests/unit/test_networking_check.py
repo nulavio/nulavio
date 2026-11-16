@@ -112,6 +112,13 @@ class CheckTest(TreeCase):
         self.assertIn("networking_check.py", record["how"])
         self.assertIn("none of the engine's 10 networking functions", record["how"])
         self.assertEqual(self.calls, [["/usr/bin/readelf", "--wide", "--syms", str(self.library)]])  # an argument list
+        # What was read and what built it, for a reviewer with a build of their own.
+        self.assertEqual(record["library_sha256"], nc.sha256(self.library))
+        self.assertEqual(record["built_with"]["mozconfig_sha256"], None)  # this tree has no mozconfig
+        (self.tree / "mozconfig").write_text("ac_add_options --disable-lto\n")
+        again = self.check()
+        self.assertEqual(again["built_with"]["mozconfig_sha256"], nc.sha256(self.tree / "mozconfig"))
+        self.assertRegex(again["built_with"]["patch_stack_sha256"], r"^[0-9a-f]{64}$")  # this repository's stack
 
     def test_a_library_that_imports_recv_fails(self):
         self.output = readelf_text("recv", "gethostbyname")

@@ -27,6 +27,7 @@ from __future__ import annotations
 import argparse
 import ast
 import datetime as _dt
+import hashlib
 import json
 import os
 import shutil
@@ -48,9 +49,39 @@ COMMENT = (
     "imports no recv, send, gethostby*, getserv* or getproto* function). Written by scripts/build/networking_check.py "
     "from a reading of libgkrust.a in a build with the mozconfig.no-lto variant; scripts/release/rehearse_release.sh "
     "--precheck runs it. A unit test requires this record to name the release engine.json pins, and "
-    "release_manifest.py refuses to publish any other. Only the maintainer may pin a release without the check: "
-    '"result": "accepted" with "accepted_in" naming the issue or pull request where he said so.'
+    "release_manifest.py refuses to publish any other. It is a statement by whoever ran the script, reviewed in the "
+    "pull request that lands it: CI checks that it names the pinned release, not that the build happened. Only the "
+    'maintainer may pin a release without the check: "result": "accepted" with "accepted_in" naming the issue or '
+    "pull request where he said so."
 )
+
+
+def sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with open(path, "rb") as handle:
+        for chunk in iter(lambda: handle.read(1 << 20), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def built_with(tree: Path, repo: Path = ROOT) -> dict:
+    """What decided the build that was read, for whoever reviews the record: the mozconfig the build used
+    (the release one plus the variant) and the patch stack. Written down, not enforced: a change to either
+    does not ask for a new reading by itself (the Rust guard is what keeps patches away from Rust code)."""
+    stack = hashlib.sha256()
+    patches = repo / "browser" / "patches"
+    try:
+        names = [line.strip() for line in (patches / "series").read_text(encoding="utf-8").splitlines()]
+        for name in [n for n in names if n and not n.startswith("#")]:
+            stack.update(name.encode() + b"\0" + (patches / name).read_bytes())
+        patch_stack = stack.hexdigest()
+    except OSError:
+        patch_stack = None
+    try:
+        mozconfig = sha256(tree / "mozconfig")
+    except OSError:
+        mozconfig = None
+    return {"mozconfig_sha256": mozconfig, "patch_stack_sha256": patch_stack}
 
 
 class CannotCheck(RuntimeError):
@@ -192,6 +223,9 @@ def check(version: str, work: Path, *, engine: dict, run=subprocess.run, which=s
         "result": "failed" if imported else "passed",
         "checked": today or _dt.datetime.now(_dt.UTC).date().isoformat(),
         "how": how,
+        # What was read and what built it, so that a reviewer can compare a record with a build of their own.
+        "library_sha256": sha256(library),
+        "built_with": built_with(tree),
         "imported": imported,
     }
 
