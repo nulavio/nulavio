@@ -1,0 +1,133 @@
+name: rehearsal
+
+# The nightly rehearsal of main (#378): build main as a release is built and run what pull
+# requests do not run. Pull request CI tests with distribution Firefox, so the tests that
+# need Nulavio's own engine skip there: the engine patches, the Vault on FUSE, the release
+# container's baselines, the packages and their checks. A merge can break them unseen, and
+# the next release run then stops an hour in (two runs of 160.0-0.6 did). This runs
+# scripts/release/rehearse_release.sh, the same script and container as release.yml's build
+# job, every night that main has something new, and keeps one issue open while it fails
+# (scripts/ci/rehearsal_issue.py).
+#
+# Never a release: no signing or attestation token, no upload token, no package kept (only
+# the report and the logs), and none of release.yml's release-only guards (an open draft,
+# the next version's notes). It holds the `build` environment for the Google Safe Browsing
+# key, as the release build does, and runs from main only.
+#
+# Cost: about an hour of a 16-processor Blacksmith runner, about US$3 a night that builds.
+# A night builds nothing when main is at the last green rehearsal's commit or only Markdown
+# changed since (scripts/ci/rehearsal_needed.py). By hand it always builds, and then only
+# says what it would do to the issue.
+# docs/architecture/build.md says which tests run where.
+
+on:
+  schedule:
+    - cron: "17 2 * * *" # after the day's merges; before upstream.yml (04:47) and asan.yml (the 1st, 03:23)
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: rehearsal # its own group: a release run is never queued behind a rehearsal
+  cancel-in-progress: false
+
+jobs:
+  changes:
+    name: does main have something new to rehearse
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read # the last successful rehearsal on main (scripts/ci/rehearsal_needed.py)
+    outputs:
+      build: ${{ steps.diff.outputs.build }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Files changed since the last green rehearsal
+        id: diff
+        env:
+          EVENT: ${{ github.event_name }}
+          GH_TOKEN: ${{ github.token }}
+        run: python3 -I scripts/ci/rehearsal_needed.py >> "$GITHUB_OUTPUT"
+
+  build:
+    name: build main and run the release rehearsal (Blacksmith)
+    needs: changes
+    if: ${{ github.ref == 'refs/heads/main' && needs.changes.outputs.build == 'true' }}
+    runs-on: blacksmith-16vcpu-ubuntu-2404
+    environment: build
+    timeout-minutes: 300
+    permissions:
+      contents: read # nothing more: it attests nothing and publishes nothing
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0 # the next package release is counted from the tags
+      - name: libsodium and gocryptfs for the Vault tests (decisions D1, D2)
+        run: scripts/ci/apt_install.sh libsodium23 gocryptfs fuse3
+      - name: Google Safe Browsing key (file mode 0600, read by build_nulavio.sh)
+        env:
+          KEY: ${{ secrets.GOOGLE_SAFEBROWSING_API_KEY }}
+        run: |
+          [ -n "$KEY" ] || { echo "::error::the build environment has no GOOGLE_SAFEBROWSING_API_KEY"; exit 1; }
+          umask 077
+          mkdir -p "$HOME/.config/nulavio-build"
+          printf '%s' "$KEY" > "$HOME/.config/nulavio-build/google-safebrowsing.key"
+      - name: Rehearse the release (build, tests, packages, checks, manifest)
+        env:
+          NULAVIO_BUILD_PROFILE: runner
+          NULAVIO_INTEGRATION_IMAGE: fedora-release-itest # the gallery baselines' fonts (run_integration.sh)
+        run: |
+          firefox=$(python3 -I -c 'import json; print(json.load(open("browser/build/engine.json"))["firefox"])')
+          scripts/release/rehearse_release.sh "$firefox" "$RUNNER_TEMP/rehearsal"
+      - name: Remove the Safe Browsing key
+        if: always()
+        run: rm -f "$HOME/.config/nulavio-build/google-safebrowsing.key"
+      - name: Report and logs
+        if: always()
+        run: |
+          [ -f "$RUNNER_TEMP/rehearsal/rehearsal.md" ] && cat "$RUNNER_TEMP/rehearsal/rehearsal.md" >> "$GITHUB_STEP_SUMMARY"
+          mkdir -p "$RUNNER_TEMP/rehearsal/logs"
+          cp -r "$HOME/.cache/nulavio-build/logs/." "$RUNNER_TEMP/rehearsal/logs/build-guard/" 2>/dev/null || true
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: rehearsal-logs
+          path: |
+            ${{ runner.temp }}/rehearsal/rehearsal.md
+            ${{ runner.temp }}/rehearsal/logs/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  report:
+    name: the issue that says the rehearsal fails
+    needs: build
+    # A build that was skipped (nothing new) or cancelled says nothing about main.
+    if: ${{ always() && github.ref == 'refs/heads/main' && (needs.build.result == 'success' || needs.build.result == 'failure') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write # one issue while the nightly rehearsal fails (scripts/ci/rehearsal_issue.py)
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Open, comment on or close the issue (started by hand, only say what would be done)
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          RESULT: ${{ needs.build.result }}
+          EVENT: ${{ github.event_name }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          dry=()
+          [ "$EVENT" = schedule ] || dry=(--dry-run)
+          # To a file first: a pipe would hide the script's exit status (no pipefail here).
+          python3 -I scripts/ci/rehearsal_issue.py --result "$RESULT" --sha "$GITHUB_SHA" --run-url "$RUN_URL" \
+            --repo "$GITHUB_REPOSITORY" "${dry[@]}" > "$RUNNER_TEMP/issue.json"
+          cat "$RUNNER_TEMP/issue.json" >> "$GITHUB_STEP_SUMMARY"
