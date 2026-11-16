@@ -230,8 +230,7 @@ def _encrypt(args) -> int:
         if not vault.envelopes():
             raise VaultError("no-method", "choose a password, the OS keyring, or both")
         code = vault.add_recovery_code()
-        vault.save()
-        encrypt_existing(prof.path, vault)
+        encrypt_existing(prof.path, vault)  # saves the key file itself, once a stop can be undone (#411)
     finally:
         vault.lock()
     print(f"Profile '{prof.name}' is now encrypted and locked.")
@@ -574,8 +573,7 @@ def api_request(request: dict) -> dict:
             if not vault.envelopes():
                 raise VaultError("no-method")
             code = vault.add_recovery_code()
-            vault.save()
-            encrypt_existing(prof.path, vault)
+            encrypt_existing(prof.path, vault)  # saves the key file itself, once a stop can be undone (#411)
         finally:
             vault.lock()
         return {"recovery_code": code}

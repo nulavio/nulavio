@@ -9,6 +9,8 @@ encrypted profile is in tests/integration/test_vault_profiles.py.
 
 from __future__ import annotations
 
+import contextlib
+import io
 import json
 import os
 import re
@@ -309,8 +311,7 @@ class ContainerTest(StorageCase):
         box.root.mkdir(mode=0o700)
         vault = Vault.create(box.vault_path)
         vault.add_password(PASSWORD, FAST)
-        vault.save()
-        storage.encrypt_existing(plain, vault)
+        storage.encrypt_existing(plain, vault)  # saves the key file itself (#411)
         self.assertEqual(list(plain.iterdir()), [])
         self.assertFalse((self.tmp / "old.plaintext-migrating").exists())
         self.assertFalse(contains(box.root, MARKER.encode()))
@@ -327,7 +328,6 @@ class ContainerTest(StorageCase):
         box.root.mkdir(mode=0o700)
         vault = Vault.create(box.vault_path)
         vault.add_password(PASSWORD, FAST)
-        vault.save()
         with mock.patch.object(storage.shutil, "copy2", side_effect=OSError("disk full")), self.assertRaises(OSError):
             storage.encrypt_existing(plain, vault)
         self.assertEqual((plain / "places.sqlite").read_text(), "data")
@@ -344,9 +344,17 @@ from nulavio_launcher.vault.core import Vault
 path, how, password = Path(sys.argv[2]), sys.argv[3], sys.argv[4]
 vault = Vault.create(storage.Container(path).vault_path)
 vault.add_password(password, {"ops": 1, "mem": 8 * 1024 * 1024})
-vault.save()
 copied = []
-real_copy, real_rmtree = shutil.copy2, shutil.rmtree
+real_copy, real_rmtree, real_rename, real_init = shutil.copy2, shutil.rmtree, os.rename, storage.Container.init
+def rename(source, target, *args, **kwargs):
+    if how == "kill-before-rename" and str(target).endswith(".plaintext-migrating"):
+        os.kill(os.getpid(), signal.SIGKILL)
+    return real_rename(source, target, *args, **kwargs)
+def init(self, vault):
+    if how == "kill-before-volume":  # the key file is saved, the volume is not made yet (#411)
+        os.kill(os.getpid(), signal.SIGKILL)
+    return real_init(self, vault)
+os.rename, storage.Container.init = rename, init
 def copy(*args, **kwargs):
     copied.append(args[0])
     if len(copied) == 3 and how in ("kill-mid-copy", "term-mid-copy"):
@@ -396,6 +404,54 @@ class InterruptedMigrationTest(StorageCase):
         self.assertFalse(self.staging(path).exists())
         self.assertFalse(storage.Container(path).mounted())
         self.assertEqual(sorted(p.name for p in path.iterdir()), [f"file{i}.txt" for i in range(10)])
+
+    def test_a_stop_between_the_key_file_and_the_volume_is_undone_the_next_time(self):
+        # #411: the key file was saved before the migration began, so a stop here left a key file with no
+        # volume: a profile that said it was protected, could not be opened, and had its files in the clear.
+        path = self.plain_profile()
+        self.assertEqual(self.interrupt(path, "kill-before-volume").returncode, -signal.SIGKILL)
+        box = storage.Container(path)
+        self.assertTrue(box.vault_path.exists())  # the state the stop leaves: a key file,
+        self.assertFalse(box.cipher.exists())  # no volume,
+        self.assertTrue(self.staging(path).exists())  # and the files in staging, which is what makes it recoverable
+        prof = profile.Profile(name="work", path=path)
+        said = io.StringIO()
+        with contextlib.redirect_stderr(said):
+            self.assertFalse(profiles.is_encrypted(prof))
+        self.assertIn("back as it was, not protected", said.getvalue())
+        self.assertFalse(box.root.exists())  # the key file is gone with it
+        self.assertFalse(self.staging(path).exists())
+        self.assertEqual(sorted(p.name for p in path.iterdir()), [f"file{i}.txt" for i in range(10)])
+        self.assertTrue(os.access(path, os.W_OK))
+        again = self.interrupt(path, "none")  # and it can be protected again
+        self.assertEqual(again.returncode, 0, again.stderr)
+        with contextlib.redirect_stderr(io.StringIO()):
+            self.assertTrue(profiles.is_encrypted(prof))
+
+    def test_a_stop_before_the_files_are_moved_leaves_no_key_file(self):
+        path = self.plain_profile()
+        self.assertEqual(self.interrupt(path, "kill-before-rename").returncode, -signal.SIGKILL)
+        box = storage.Container(path)
+        self.assertFalse(box.vault_path.exists())
+        self.assertFalse(self.staging(path).exists())
+        prof = profile.Profile(name="work", path=path)
+        self.assertFalse(profiles.is_encrypted(prof))
+        self.assertEqual(sorted(p.name for p in path.iterdir()), [f"file{i}.txt" for i in range(10)])
+
+    def test_a_key_file_already_there_is_not_replaced(self):
+        path = self.plain_profile()
+        box = storage.Container(path)
+        other = Vault.create(box.vault_path)
+        other.add_password(PASSWORD, FAST)
+        other.save()
+        before = box.vault_path.read_bytes()
+        vault = Vault.create(self.tmp / "elsewhere" / "vault.json")
+        vault.add_password(PASSWORD, FAST)
+        with self.assertRaises(storage.StorageError) as ctx:
+            storage.encrypt_existing(path, vault)
+        self.assertEqual(ctx.exception.code, "exists")
+        self.assertEqual(box.vault_path.read_bytes(), before)
+        self.assertEqual(len(list(path.iterdir())), 10)  # nothing was moved
 
     def test_a_complete_copy_is_finished_the_next_time(self):
         path = self.plain_profile()
