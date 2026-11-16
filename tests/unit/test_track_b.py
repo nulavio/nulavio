@@ -189,6 +189,18 @@ class LocalizationTest(unittest.TestCase):
         self.assertIn("package-multi-locale --locales en-US", script)
 
 
+RUST_PATH = re.compile(r"(\.rs|(^|/)Cargo\.(toml|lock)|(^|/)\.cargo/.*)$|^third_party/rust/")
+
+
+def patch_paths(text: str) -> set[str]:
+    """Every path a patch names: the ---/+++ lines, git's "diff --git" line and its rename and copy headers."""
+    paths = set(re.findall(r"(?m)^(?:---|\+\+\+) [ab]/(\S+)", text))
+    for old, new in re.findall(r"(?m)^diff --git a/(\S+) b/(\S+)$", text):
+        paths |= {old, new}
+    paths |= set(re.findall(r"(?m)^(?:rename|copy) (?:from|to) (\S+)$", text))
+    return paths
+
+
 class PatchStackTest(unittest.TestCase):
     def test_series_is_documented(self):
         # No cap on the count: ADR 0001 follows Release past ten patches (decided 2026-11-14).
@@ -208,11 +220,26 @@ class PatchStackTest(unittest.TestCase):
         # must import no networking function): what goes unchecked must be Mozilla's code only (R79).
         # A patch that needs Rust: build it with NULAVIO_MOZCONFIG_EXTRA=mozconfig.no-lto, which runs
         # the check, and say so in residual-risks.md before changing this test.
-        rust = re.compile(r"(\.rs|(^|/)Cargo\.(toml|lock)|(^|/)\.cargo/.*)$|^third_party/rust/")
         for patch_file in apply_patches.series():
-            touched = re.findall(r"(?m)^(?:---|\+\+\+) [ab]/(\S+)", patch_file.read_text())
-            self.assertTrue(touched, patch_file.name)
-            self.assertEqual([path for path in touched if rust.search(path)], [], patch_file.name)
+            with self.subTest(patch=patch_file.name):
+                text = patch_file.read_text()
+                touched = patch_paths(text)
+                self.assertTrue(touched, "no path read from the patch")
+                self.assertEqual(sorted(path for path in touched if RUST_PATH.search(path)), [])
+                # A rename, a copy or a binary hunk can carry a file past a reading of the ---/+++ lines.
+                self.assertNotRegex(text, r"(?m)^(rename|copy) (from|to) |^GIT binary patch$|^Binary files .* differ$")
+
+    def test_the_rust_guard_reads_every_kind_of_patch_header(self):
+        self.assertEqual(patch_paths("--- a/dom/x.cpp\n+++ b/dom/x.cpp\n"), {"dom/x.cpp"})
+        self.assertEqual(patch_paths("--- /dev/null\n+++ b/servo/new.rs\n"), {"servo/new.rs"})
+        git = "diff --git a/old/lib.rs b/new/lib.txt\nsimilarity index 100%\nrename from old/lib.rs\nrename to new/lib.txt\n"
+        self.assertEqual(patch_paths(git), {"old/lib.rs", "new/lib.txt"})
+        self.assertEqual(patch_paths("diff --git a/Cargo.lock b/Cargo.lock\nGIT binary patch\n"), {"Cargo.lock"})
+        for path in ("servo/components/style/lib.rs", "Cargo.lock", "toolkit/library/rust/Cargo.toml",
+                     "third_party/rust/x/y.c", ".cargo/config.toml.in", "build/rust/x/build.rs"):  # fmt: skip
+            self.assertRegex(path, RUST_PATH)
+        for path in ("dom/base/nsFoo.cpp", "browser/Cargo.tomlx", "docs/a.rst", "third_party/rustx/a.c"):
+            self.assertNotRegex(path, RUST_PATH)
 
 
 CONF = 'line1\nvendor = "Mozilla"\nappid = "x"\ndevtools = "all"\n'
