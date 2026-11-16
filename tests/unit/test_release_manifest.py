@@ -159,7 +159,7 @@ class ReleaseManifestTest(unittest.TestCase):
         self.assertEqual(self.verify()["firefox"], "159.0.1")
 
     def test_a_patch_or_a_mozconfig_changed_since_the_reading_asks_for_a_new_one(self):
-        said = "read with another mozconfig or patch stack"
+        said = "is for another mozconfig or patch stack"
         good = networking_fixture.record(self.repo, "159.0.1", SOURCE)
         for change in (
             lambda: (self.repo / "browser/patches/0001-example.patch").write_text("--- a/dom/y.cpp\n+++ b/dom/y.cpp\n"),
@@ -176,8 +176,14 @@ class ReleaseManifestTest(unittest.TestCase):
         without = {key: value for key, value in good.items() if key != "built_with"}
         self.commit_record(without)  # a record from before the binding says nothing about what it was read with
         self.refused(said)
-        self.commit_record({**without, "result": "accepted", "accepted_in": "#430"})  # the maintainer's word needs none
+        accepted = {**good, "result": "accepted", "accepted_in": "#430"}
+        self.commit_record({**without, "result": "accepted", "accepted_in": "#430"})  # accepted for no inputs in particular
+        self.refused(said)
+        self.commit_record(accepted)  # accepted for this mozconfig, variant and patch stack
         self.assertEqual(self.verify()["firefox"], "159.0.1")
+        (self.repo / "browser/patches/0001-example.patch").write_text("--- a/dom/z.cpp\n+++ b/dom/z.cpp\n")
+        self.commit_record(accepted)  # a patch changed since it was accepted
+        self.refused(said)
 
     def test_the_record_is_read_at_the_base_commit_not_in_the_working_tree(self):
         self.commit_record(networking_fixture.record(self.repo, "159.0", SOURCE))

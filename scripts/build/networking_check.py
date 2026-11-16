@@ -54,7 +54,7 @@ COMMENT = (
     "release_manifest.py refuses to publish any other. It is a statement by whoever ran the script, reviewed in the "
     "pull request that lands it: CI checks that it names the pinned release, not that the build happened. Only the "
     'maintainer may pin a release without the check: "result": "accepted" with "accepted_in" naming the issue or '
-    "pull request where he said so."
+    'pull request where he said so, and "built_with" as `networking_check.py <version> --inputs` prints it.'
 )
 
 
@@ -273,7 +273,17 @@ def main(argv: list[str] | None = None, *, run=subprocess.run, which=shutil.whic
     parser.add_argument("version", help="the Firefox release that was built (engine.json's)")
     parser.add_argument("--work", type=Path, help="the build directory (default: NULAVIO_BUILD_DIR, else the build cache)")
     parser.add_argument("--write", action="store_true", help="write a passing result to browser/build/networking-check.json")
+    parser.add_argument(
+        "--inputs", action="store_true", help='print this checkout\'s "built_with" (for a record the maintainer accepts) and stop'
+    )
     args = parser.parse_args(argv)
+    if args.inputs:
+        try:
+            print(json.dumps(repository_inputs(ROOT), indent=2))
+        except OSError as error:
+            print(f"networking-check: the mozconfig, its variant or the patch stack cannot be read ({error})", file=sys.stderr)
+            return 2
+        return 0
     env = os.environ
     work = args.work or Path(
         env.get("NULAVIO_BUILD_DIR") or Path(env.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "nulavio-build"

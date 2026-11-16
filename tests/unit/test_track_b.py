@@ -125,9 +125,8 @@ class NetworkingCheckRecordTest(unittest.TestCase):
     def test_the_record_was_read_with_this_trees_mozconfig_and_patch_stack(self):
         # A patch added or changed, or a configure option, can change which Rust code is compiled: the record
         # is good only for the inputs it was read with. Changing one of them needs a new reading, by
-        # `rehearse_release.sh --precheck`, or by networking_check.py --write after a build of the variant.
-        if self.record.get("result") == "accepted":
-            self.skipTest("accepted on the maintainer's word: there was no reading")
+        # `rehearse_release.sh --precheck`, or by networking_check.py --write after a build of the variant. A
+        # record the maintainer accepted without a reading is bound the same way: it was accepted for these inputs.
         sys.path.insert(0, str(ROOT / "scripts" / "build"))
         import networking_check
 

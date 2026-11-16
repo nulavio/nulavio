@@ -283,6 +283,13 @@ class MainTest(TreeCase):
         self.assertIn("FAILED: the Rust library imports recv", err)
         self.assertFalse((self.tmp / "networking-check.json").exists())
 
+    def test_inputs_prints_what_an_accepted_record_must_carry_without_a_build(self):
+        out = io.StringIO()
+        with mock.patch.object(nc, "ROOT", self.repo), contextlib.redirect_stdout(out):
+            self.assertEqual(nc.main([VERSION, "--inputs"], run=self.run_tool, which=lambda name: name), 0)
+        self.assertEqual(json.loads(out.getvalue()), nc.repository_inputs(self.repo))
+        self.assertEqual(self.calls, [])  # nothing was read
+
     def test_what_cannot_be_checked_exits_2_and_writes_nothing(self):
         self.library.unlink()
         code, out, err = self.main("--write")
