@@ -137,6 +137,7 @@ class ProfileTest(TempHome):
     # -- a seeded value follows the baseline; a value the person chose stays (#384) --------------------
 
     OVERRIDES = "privacy.fingerprintingProtection.overrides"
+    CHOICE = "browser.newtabpage.enabled"  # a true/false seed pref that is no protection; the baseline seeds false
 
     def set_pref(self, prof: profile.Profile, name: str, value) -> None:
         """As the engine saves a change made in Settings or about:config: one more line, the last one wins."""
@@ -191,7 +192,7 @@ class ProfileTest(TempHome):
         profile.prepare_for_launch(new, {})
         self.set_pref(new, self.OVERRIDES, own)
         old = self.seeded_before_384(own, "old")
-        self.set_pref(old, "dom.security.https_only_mode", False)  # a choice whose default never changed
+        self.set_pref(old, self.CHOICE, True)  # a choice whose default never changed
         for prof in (old, new):
             with self.subTest(profile=prof.name):
                 for _launch in range(2):  # at the next launch, and at every later one
@@ -206,7 +207,7 @@ class ProfileTest(TempHome):
             self.assertIn(prefs.format_value(current), check.detail)
             profile.prepare_for_launch(old, {})
         # A choice about a preference whose default did not move after it is only a choice: nothing to say.
-        self.set_pref(new, "dom.security.https_only_mode", False)
+        self.set_pref(new, self.CHOICE, True)
         profile.prepare_for_launch(new, {})
         self.assertEqual(doctor.check_seeds(new), [])
 
@@ -267,6 +268,23 @@ class ProfileTest(TempHome):
         self.set_pref(new, self.OVERRIDES, "+WebGLRendererConstant")
         self.assertEqual(profile.seed_states(new, new.load_settings())[self.OVERRIDES][0], "kept")
 
+    def test_doctor_names_a_moved_default_before_the_next_launch_too(self):
+        # Review of #400 (CodeRabbit): a launch records the seed; the person saves their own value; the baseline
+        # moves with no launch in between. Doctor says so at once, not only after the next launch.
+        prof = self.make()
+        profile.prepare_for_launch(prof, {})
+        self.set_pref(prof, self.OVERRIDES, "+WebGLRendererConstant")
+        real = profile.baseline_prefs
+        newer = next(p.value for p in real() if p.name == self.OVERRIDES) + ",+SomethingNew"
+
+        def gained():
+            return [prefs.Pref(p.name, newer, p.mode) if p.name == self.OVERRIDES else p for p in real()]
+
+        self.assertEqual(doctor.check_seeds(prof), [])  # nothing moved yet
+        with mock.patch.object(profile, "baseline_prefs", gained):
+            (check,) = doctor.check_seeds(prof)
+            self.assertEqual((check.name, check.status), (f"work: {self.OVERRIDES}", "warn"))
+
     def test_doctor_says_when_the_next_start_brings_the_current_default(self):
         prof = self.seeded_before_384(profile.seed_history()[self.OVERRIDES][0])
         check = next(c for c in doctor.check_seeds(prof))
@@ -278,23 +296,23 @@ class ProfileTest(TempHome):
         # From now on the launcher records what it wrote: no list of earlier values is needed.
         prof = self.make()
         profile.prepare_for_launch(prof, {})
-        seeded = self.value(prof, "dom.security.https_only_mode")
-        self.assertIs(seeded, True)
+        seeded = self.value(prof, self.CHOICE)
+        self.assertIs(seeded, False)
         real = profile.baseline_prefs
 
         def flipped():
-            return [prefs.Pref(p.name, False, p.mode) if p.name == "dom.security.https_only_mode" else p for p in real()]
+            return [prefs.Pref(p.name, True, p.mode) if p.name == self.CHOICE else p for p in real()]
 
         with mock.patch.object(profile, "baseline_prefs", flipped):
-            self.assertEqual(profile.prepare_for_launch(prof, {}), ["dom.security.https_only_mode"])
-            self.assertIs(self.value(prof, "dom.security.https_only_mode"), False)
-            # The person turns it on again: theirs now, and the launcher does not turn it back off.
-            self.set_pref(prof, "dom.security.https_only_mode", True)
+            self.assertEqual(profile.prepare_for_launch(prof, {}), [self.CHOICE])
+            self.assertIs(self.value(prof, self.CHOICE), True)
+            # The person turns it off again: theirs now, and the launcher does not turn it back on.
+            self.set_pref(prof, self.CHOICE, False)
             self.assertEqual(profile.prepare_for_launch(prof, {}), [])
-            self.assertIs(self.value(prof, "dom.security.https_only_mode"), True)
-        # Back to the real baseline (true): the value is the baseline's again, by the person's hand.
+            self.assertIs(self.value(prof, self.CHOICE), False)
+        # Back to the real baseline (false): the value is the baseline's again, by the person's hand.
         self.assertEqual(profile.prepare_for_launch(prof, {}), [])
-        self.assertEqual(profile.seed_states(prof, prof.load_settings())["dom.security.https_only_mode"][0], "current")
+        self.assertEqual(profile.seed_states(prof, prof.load_settings())[self.CHOICE][0], "current")
 
     def test_a_missing_value_is_the_engines_default_and_stays_unless_a_true_false_default_changed(self):
         prof = self.make()
@@ -303,27 +321,27 @@ class ProfileTest(TempHome):
         kept = [
             line
             for line in (prof.path / "prefs.js").read_text(encoding="utf-8").splitlines()
-            if self.OVERRIDES not in line and "dom.security.https_only_mode" not in line
+            if self.OVERRIDES not in line and self.CHOICE not in line
         ]
         (prof.path / "prefs.js").write_text("\n".join(kept) + "\n", encoding="utf-8")
         self.assertEqual(profile.prepare_for_launch(prof, {}), [])
         real = profile.baseline_prefs
 
         def changed():
-            new = {self.OVERRIDES: "+WebGLRendererConstant", "dom.security.https_only_mode": False}
+            new = {self.OVERRIDES: "+WebGLRendererConstant", self.CHOICE: True}
             return [prefs.Pref(p.name, new[p.name], p.mode) if p.name in new else p for p in real()]
 
         with mock.patch.object(profile, "baseline_prefs", changed):
             # The true/false one is written: missing, it was what the launcher seeded or the value now asked for.
             # The text one is not: missing, it may be the person's reset.
-            self.assertEqual(profile.prepare_for_launch(prof, {}), ["dom.security.https_only_mode"])
+            self.assertEqual(profile.prepare_for_launch(prof, {}), [self.CHOICE])
             self.assertIsNone(self.value(prof, self.OVERRIDES))
 
     def test_true_and_one_are_two_values(self):
         prof = self.make()
         profile.prepare_for_launch(prof, {})
-        self.set_pref(prof, "dom.security.https_only_mode", 1)
-        self.assertEqual(profile.seed_states(prof, prof.load_settings())["dom.security.https_only_mode"][0], "kept")
+        self.set_pref(prof, self.CHOICE, 0)
+        self.assertEqual(profile.seed_states(prof, prof.load_settings())[self.CHOICE][0], "kept")
 
     def test_provider_switch_is_reversible(self):
         prof = self.make()

@@ -345,7 +345,8 @@ def default_moved(settings: dict[str, Any], name: str, want: prefs.PrefValue) ->
     recorded = settings.get("seeded_values", {}).get(name)
     if recorded is None:  # not looked at since #384: only the list of earlier values can say
         return name in seed_history()
-    return recorded.startswith(KEPT) and recorded[len(KEPT) :] != _digest(want)
+    # With the prefix or not yet: the person may have changed the value since the last launch (review of #400).
+    return recorded.removeprefix(KEPT) != _digest(want)
 
 
 def prepare_for_launch(profile: Profile, context: dict[str, str], builtin_theme: bool = False) -> list[str]:
