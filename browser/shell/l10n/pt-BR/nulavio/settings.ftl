@@ -26,6 +26,10 @@ nulavio-immersive =
     .label = Imersivo
     .description = Tira de vista a barra de endereço e as abas; a faixa do topo continua mostrando o perfil e o site. Elas voltam com o ponteiro na borda da janela, com o teclado, e sozinhas sempre que o navegador precisa mostrar algo.
 
+nulavio-hide-page-title =
+    .label = Esconder o título da página na barra da janela
+    .description = A barra da janela, a barra de tarefas, o Alt+Tab e quem escolhe uma janela para compartilhar a tela veem só "Nulavio" e o nome do perfil, nunca a página. Isso não esconde os títulos nas abas, dentro da janela, nem a página em si.
+
 nulavio-look-group =
     .label = Cores do Nulavio
     .description = Só a aparência das janelas e páginas do Nulavio. Nada aqui muda uma proteção.

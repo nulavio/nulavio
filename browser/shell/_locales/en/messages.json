@@ -1326,6 +1326,7 @@
   "commandToggleImmersive": {"message": "Turn Immersive on or off"},
   "layoutImmersiveOn": {"message": "Immersive on. The address bar comes back with Ctrl+L."},
   "layoutImmersiveOff": {"message": "Immersive off."},
+  "hidePageTitleLabel": {"message": "Hide the page title in the window title"},
   "keyImmersive": {"message": "Immersive"},
   "keyNone": {"message": "No key"},
   "keysResetTitle": {"message": "Restore the default shortcuts?"},

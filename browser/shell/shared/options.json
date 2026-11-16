@@ -153,6 +153,28 @@
       ]
     },
     {
+      "id": "hidePageTitle",
+      "kind": "cosmetic",
+      "prefs": [
+        "nulavio.window.hidePageTitle"
+      ],
+      "prefType": "bool",
+      "values": [
+        false,
+        true
+      ],
+      "prefValues": [
+        null,
+        true
+      ],
+      "default": false,
+      "writer": "NulavioPersonalise",
+      "labelKey": "hidePageTitleLabel",
+      "ui": [
+        "settings/native/panes.mjs#nulavio-hide-page-title"
+      ]
+    },
+    {
       "id": "shortcuts",
       "kind": "command",
       "prefs": [],

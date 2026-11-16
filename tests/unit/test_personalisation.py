@@ -128,6 +128,8 @@ PREF_WRITERS = {
     },
     "NulavioSearch.sys.mjs": {"setBoolPref(pref)": 1, "setIntPref(PREF_MIGRATION)": 1, "setStringPref(PREF_OPTIN)": 1},
     # What's new (#198): the newest version this profile was told about, and the bar's own switch; no protection.
+    # #322: the engine's switches that keep the page's title out of the window's; only false is written (test_window_title)
+    "NulavioWindow.sys.mjs": {"clearUserPref(titlePref)": 1, "setBoolPref(titlePref)": 1},
     "NulavioWhatsNew.sys.mjs": {"setBoolPref(PREF_NOTICE)": 1, "setStringPref(PREF_SEEN)": 3},
 }
 # Every nsIPrefBranch mutator, and Preferences.sys.mjs.

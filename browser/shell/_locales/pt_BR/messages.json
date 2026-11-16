@@ -1326,6 +1326,7 @@
   "commandToggleImmersive": {"message": "Ligar ou desligar o modo Imersivo"},
   "layoutImmersiveOn": {"message": "Imersivo ligado. A barra de endereço volta com Ctrl+L."},
   "layoutImmersiveOff": {"message": "Imersivo desligado."},
+  "hidePageTitleLabel": {"message": "Esconder o título da página na barra da janela"},
   "keyImmersive": {"message": "Imersivo"},
   "keyNone": {"message": "Sem tecla"},
   "keysResetTitle": {"message": "Restaurar os atalhos padrão?"},

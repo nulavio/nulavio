@@ -412,13 +412,14 @@
       getControlConfig: config => (contrastBySystem() ? { ...config, l10nId: "nulavio-more-contrast-system" } : config),
     });
     lookSetting("nulavio-newtab-ambience", "newtabAmbience", Boolean);
+    lookSetting("nulavio-hide-page-title", "hidePageTitle", Boolean); // #322, D-UX17: NulavioWindow applies it
     lookSetting("nulavio-reduce-transparency", "reduceTransparency", Boolean, {
       get: () => Boolean(lookNow()?.reduceTransparency) || ["system", "contrast"].includes(solidBy()),
       disabled: () => Boolean(solidBy()) || lookLocked("reduceTransparency"),
       getControlConfig: config => (solidBy() ? { ...config, l10nId: `nulavio-reduce-transparency-${solidBy()}` } : config),
     });
     // An option an administrator set cannot be changed here: said once, for the group.
-    const LOOK = ["accent", "moreContrast", "newtabAmbience", "reduceTransparency"];
+    const LOOK = ["accent", "moreContrast", "newtabAmbience", "reduceTransparency", "hidePageTitle"];
     setting({ id: "nulavio-look-locked", setup: look.watch, visible: () => LOOK.some(lookLocked) });
     look.refresh();
     added.cleanups.push(shell.NulavioPersonalise.subscribe(look.refresh));
@@ -2135,6 +2136,7 @@
           },
           { id: "nulavio-layout-keep", control: "moz-button" },
           { id: "nulavio-immersive", l10nId: "nulavio-immersive", control: "moz-toggle", controlAttrs: { "data-option": "immersive" } },
+          { id: "nulavio-hide-page-title", l10nId: "nulavio-hide-page-title", control: "moz-toggle", controlAttrs: { "data-option": "hidePageTitle" } },
         ],
       },
       // #221: meeting links in this profile, in the service's app (its page and the engine's prompt) or the browser.
