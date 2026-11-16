@@ -167,10 +167,18 @@ class CheckTest(TreeCase):
         self.assertIn("'Darwin'", self.refused())
         self.assertEqual(self.calls, [])  # nothing was read
 
-    def test_a_library_older_than_the_configuration_is_refused(self):
-        os.utime(self.config, None)
+    def test_a_library_older_than_its_source_tree_is_refused(self):
         os.utime(self.library, (time.time() - 3600,) * 2)
-        self.assertIn("older than the build's configuration", self.refused())
+        self.assertIn("older than the source tree", self.refused())
+
+    def test_an_incremental_build_that_left_the_library_alone_is_read(self):
+        # A build of a tree that is already there writes config.status again and links no new Rust library when
+        # nothing asks for one: the first real pre-check was refused for exactly that.
+        marker = self.tree / ".nulavio-source-sha256"
+        os.utime(marker, (time.time() - 7200,) * 2)
+        os.utime(self.library, (time.time() - 3600,) * 2)
+        os.utime(self.config, None)  # now
+        self.assertEqual(self.check()["result"], "passed")
 
     def test_a_reading_that_looks_empty_is_refused_not_passed(self):
         for output in (

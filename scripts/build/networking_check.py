@@ -13,8 +13,8 @@ sanitised one skip it.
 This does the same reading on a build that can be read, the mozconfig.no-lto variant: the undefined
 symbols of libgkrust.a, against the list in the very source tree that was built. It takes nobody's
 word: it refuses a tree that is not the pinned release, a build whose library cannot say anything (no
-Rust LTO, cross-language LTO, a sanitiser), a library older than the build's configuration, and a
-reading that looks empty. With --write a passing result becomes browser/build/networking-check.json,
+Rust LTO, cross-language LTO, a sanitiser), a library older than its source tree, and a reading that
+looks empty. Run it after a build (the pre-check does): the build is what makes the library current. With --write a passing result becomes browser/build/networking-check.json,
 which a unit test compares with engine.json (test_track_b) and release_manifest.py with a manifest:
 the engine pin cannot move to, and nothing can be published from, a release nobody checked.
 
@@ -199,8 +199,12 @@ def check(version: str, work: Path, *, engine: dict, run=subprocess.run, which=s
     if len(libraries) != 1:
         raise CannotCheck(f"{objdir}: expected one release/libgkrust.a, found {len(libraries)}")
     library = libraries[0]
-    if library.stat().st_mtime < config_status.stat().st_mtime:
-        raise CannotCheck("the Rust library is older than the build's configuration: build again")
+    # Not older than the tree it was built from. Its age against config.status says nothing: an incremental
+    # build writes the configuration again and leaves a library alone that needs no new link (the first real
+    # pre-check was refused for that). Run this after a build, as the pre-check does: the build is what makes
+    # the library current, and a library left by a build of another kind fails the reading or the list.
+    if library.stat().st_mtime < (tree / ".nulavio-source-sha256").stat().st_mtime:
+        raise CannotCheck("the Rust library is older than the source tree it sits in: build again")
     functions = listed_functions(tree)
     rows, at_zero, undefined = symbols(read_library(library, run=run, which=which))
     if len(undefined) < MIN_UNDEFINED or not set(CANARIES) & undefined:
