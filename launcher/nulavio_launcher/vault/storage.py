@@ -652,6 +652,9 @@ def encrypt_existing(path: Path, vault: Vault) -> Container:
             os.rename(path, staging)
             container = Container(path)
             try:
+                # On disk before the key file is: a power cut must not keep the key file and lose the
+                # rename, which would be the very state this order exists to rule out.
+                _fsync_dir(path.parent)
                 vault.save()
                 container.init(vault)
                 container.mount(vault)

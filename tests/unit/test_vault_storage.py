@@ -458,6 +458,29 @@ class InterruptedMigrationTest(StorageCase):
         with contextlib.redirect_stderr(io.StringIO()):
             self.assertTrue(profiles.is_encrypted(prof))
 
+    def test_the_move_into_staging_is_on_disk_before_the_key_file_is_written(self):
+        # A power cut must not keep the key file and lose the rename (the state #411 rules out).
+        path = self.plain_profile()
+        box = storage.Container(path)
+        vault = Vault.create(box.vault_path)
+        vault.add_password(PASSWORD, FAST)
+        order: list[str] = []
+        real_fsync_dir, real_save = storage._fsync_dir, Vault.save
+
+        def fsync_dir(target):
+            order.append(f"fsync {Path(target).name}")
+            return real_fsync_dir(target)
+
+        def save(self, **kwargs):
+            order.append("save" if self.path == box.vault_path else "other save")
+            return real_save(self, **kwargs)
+
+        with mock.patch.object(storage, "_fsync_dir", fsync_dir), mock.patch.object(Vault, "save", save):
+            storage.encrypt_existing(path, vault)
+        self.assertIn("save", order)
+        self.assertEqual(order[: order.index("save")], [f"fsync {path.parent.name}"])
+        vault.lock()
+
     def test_a_stop_before_the_files_are_moved_leaves_no_key_file(self):
         path = self.plain_profile()
         self.assertEqual(self.interrupt(path, "kill-before-rename").returncode, -signal.SIGKILL)
