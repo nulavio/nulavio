@@ -789,8 +789,15 @@ class FingerprintingTest(unittest.TestCase):
         try:
             self.assertEqual(self.measure("localhost")["screen"]["size"], "800x600")
             self.assertEqual(self.measure("localhost")["screen"]["size"], "800x600")
+            # Nor does a change of the set clear it, while the engine goes on answering (CodeRabbit on #402).
+            live = "return screen.width + 'x' + screen.height;"
+            more = self.m.chrome(TARGETS)["overrides"] + ",+KeyboardEvents"
+            self.m.chrome(f"Services.prefs.setStringPref('{OVERRIDES_PREF}', arguments[0]);", [more])
+            self.assertIn("KeyboardEvents", self.m.chrome(TARGETS)["on"])
+            self.assertEqual(self.m.execute(live), "800x600")
+            self.assertEqual(self.measure("localhost")["screen"]["size"], "800x600")
         finally:
-            self.m.chrome(f"{tab_size}.resetScreenAreaOverride();")
+            self.m.chrome(f"Services.prefs.clearUserPref('{OVERRIDES_PREF}'); {tab_size}.resetScreenAreaOverride();")
         self.assertEqual(self.measure("localhost")["screen"]["size"], constant)
         # A set the person wrote without the target: the engine no longer answers, and the tab's size does, for
         # the pages of the web and not for the exempted site.

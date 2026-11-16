@@ -348,7 +348,14 @@ export const NulavioFingerprinting = {
           if (data === SHARE) {
             applyAccessibility(true); // the person's setting, turned on or off
           } else {
-            decideOpenPages(); // the engine's protection, switched on or off
+            // The engine's protection switched on or off, or its set changed. On the engine's way the tab's
+            // size is not this module's: it is left as it is (it may be automation's, WebDriver BiDi's screen
+            // emulation), except once, on the change from the per-tab way, to clear what this module had set.
+            const engine = engineDecides();
+            if (!(engine && watching.engine)) {
+              decideOpenPages();
+            }
+            watching.engine = engine;
           }
         } else if (topic === "perm-changed") {
           // A site's choice added or removed, here or in Settings' list, or every permission cleared.
@@ -398,7 +405,10 @@ export const NulavioFingerprinting = {
     for (const win of Services.wm.getEnumerator("navigator:browser")) {
       attach(win);
     }
-    decideOpenPages();
+    watching.engine = engineDecides();
+    if (!watching.engine) {
+      decideOpenPages();
+    }
   },
 
   /** The switch for the page a tab shows: { site, offered, on }. */

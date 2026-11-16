@@ -55,7 +55,7 @@ class ScreenTest(unittest.TestCase):
         )
         # (One observer hears two kinds of preference: the person's setting, and the engine's switches.)
         self.assertIn("          if (data === SHARE) {\n            applyAccessibility(true);", MODULE)
-        self.assertIn("          } else {\n            decideOpenPages();", MODULE)
+        self.assertIn("            if (!(engine && watching.engine)) {\n              decideOpenPages();", MODULE)
 
     def test_it_follows_the_engines_switch_and_the_engines_own_word_for_an_exempted_site(self):
         wants = CHILD[CHILD.index("export function wantsConstant(") : CHILD.index("export class NulavioFingerprintingChild")]
