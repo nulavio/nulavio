@@ -148,6 +148,19 @@ Removing a method deletes its envelope; the DEK, the volume's password and gocry
 - **How the pages know:** `vault.json` records when the key was made and when a method was last removed or replaced since (`key`, in `status` as `key.created`, `key.last_removal` and `key.tracked`). A key file from before this has no record (`tracked: false`), and the page says what is not known.
 - **Needs:** the profile closed, and free space for a second copy while it runs.
 
+## Backing up a protected profile
+
+A protected profile `P` is one folder, `P.vault/`: the encrypted volume (`cipher/`) and the key file (`vault.json`). The two belong together. The volume holds a small record of which key file is current, and the key file says that the volume has that record ([U-T21](../security/threat-model-unlock.md)).
+
+- **A backup is the whole folder, copied with the profile locked.** Copied while the profile is open, the files may be from different moments.
+- **Restore the whole folder too.** Putting back only one part is what Nulavio refuses:
+  - an older `vault.json` over a newer volume: "the profile's key file is older than the profile" (`rollback`);
+  - a volume whose record is missing, with a key file that says there was one: "the record inside the profile … is missing" (`record-missing`). Nothing is opened in either case.
+- **A backup does not replace the secrets.** The restored profile opens with the password, the recovery code or the other methods it had when it was copied. Nulavio has no master key.
+- **There is no way to make a new record without the old one** (decided for 1.0, #413): that would be the same act someone holding an older key file wants. A profile whose record is lost and that has no backup does not open in Nulavio.
+
+The profile's unlock-methods page says the first point in its "why" text.
+
 ## Effective protection matrix
 
 | State | Copy of the profile taken offline | Other local users | Same-user malware, profile **locked** | Same-user malware, profile **unlocked** |
