@@ -33,11 +33,12 @@ The new tab, Settings and the window's own motion are not pages of sites, and th
 
 ## Consequences
 
-- **Sites animate for a person who asked the system for less motion, until they answer the bar or turn the setting on.** This is the cost the decision accepts, and the bar is what it rests on.
+- **Sites animate for a person who asked the system for less motion, until they answer the bar with "Deixar os sites verem" or turn the setting on.** "Manter assim", or closing the bar, ends the offer and changes nothing: sites go on animating. This is the cost the decision accepts, and the bar is what it rests on.
 - **Pages also scroll smoothly.** With the reduced-motion entry in the set, the engine scrolls smoothly whatever the system asks (`nsLayoutUtils::IsSmoothScrollingEnabled`), because a page can tell smooth scrolling from the number of scroll events it gets. This was not in the decision of 2026-11-14 and is a second cost for the same people. It is why the setting rewrites the set itself: the engine's per-site list would give sites the media query back and leave the scrolling smooth.
 - **Contrast:** what sites lose is the chance to choose their own high-contrast styles. The colours the engine itself forces on pages under a high-contrast theme are a setting of the engine, not this answer (not measured here).
-- **With the setting on, the person can be told apart by these two answers again**, on every site.
-- **Distribution Firefox (Track A)** gets the three entries and has no setting and no bar. There the way out is to remove the entries from the preference by hand.
+- **With the setting on, the person can be told apart by these answers again**, on every site: reduced motion, contrast and, once the engine answers it, reduced transparency. The three are given back together.
+- **Distribution Firefox (Track A)** gets the three entries, in profiles made from now on, and has no setting and no bar. There the way out is to remove the entries from the preference by hand.
+- **A profile the launcher seeded before this change keeps the set it was seeded with**, without the three entries: sites there are still told the system's preferences (#384). The profiles the Nulavio build makes itself take the new default.
 
 ## Checked
 
