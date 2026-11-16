@@ -37,7 +37,7 @@ Urgency: <urgent | standard> (<reasons>). Source SHA-256 <digest> (Mozilla's sig
 
 **Fixes**:
 
-- Distribution Firefox with the launcher (Track A): a profile the launcher made before a fingerprinting protection was added did not get it, with no message (#384). The launcher wrote the set of protections into a profile once. It now follows the baseline in a profile where nobody changed it, at the profile's next launch; a set the person wrote themselves is kept, and `nulavio doctor` names it with the value to set. The Nulavio build was not affected: there the set is the build's default.
+- Distribution Firefox with the launcher (Track A): a profile the launcher made before a fingerprinting protection was added did not get it, with no message (#384). The launcher wrote the set of protections into a profile once. It now follows the baseline in a profile where nobody changed it, at the profile's next launch; a set the person wrote themselves is kept, and `nulavio doctor` names it with the value to set ([R78](residual-risks.md)). The Nulavio build was not affected: there the set is the build's default.
 
 **Per-site choices that loosen a site's own rules (not a protection)**:
 
