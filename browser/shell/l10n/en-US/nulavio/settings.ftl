@@ -48,6 +48,10 @@ nulavio-newtab-ambience =
 nulavio-reduce-transparency =
     .label = Reduce transparency
     .description = Makes the new tab's cards solid.
+# #79, ADR 0018: what sites are told of the system's accessibility settings.
+nulavio-share-accessibility =
+    .label = Let sites see my motion and contrast preferences
+    .description = When off, sites are not told that your system asks for less motion or more contrast, because that helps recognise you from one site to the next; pages also scroll smoothly. Turn it on if animations bother you. Nulavio's own pages follow your system either way.
 # The same two switches when they cannot change anything, with the reason in place of the description.
 nulavio-more-contrast-system =
     .label = More contrast

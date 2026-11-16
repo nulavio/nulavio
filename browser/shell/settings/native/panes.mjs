@@ -63,6 +63,9 @@
     get NulavioAI() {
       return ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioAI.sys.mjs").NulavioAI;
     },
+    get NulavioFingerprinting() {
+      return ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioFingerprinting.sys.mjs").NulavioFingerprinting;
+    },
     get NulavioGuard() {
       return ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioGuard.sys.mjs").NulavioGuard;
     },
@@ -1609,6 +1612,31 @@
       },
     });
 
+    // -- #79, ADR 0018: whether sites are told that the system asks for less motion or more contrast. It relaxes a
+    // protection, so it is here with the protections and NulavioFingerprinting writes it, not the look options.
+    const sharing = source(() => shell.NulavioFingerprinting.accessibility());
+    setting({
+      id: "nulavio-share-accessibility",
+      setup(emitChange, stops) {
+        stops.push(sharing.listen(emitChange));
+        sharing.refresh();
+        // Turned on from the bar that offers it, in a window: the switch here follows.
+        const changed = () => sharing.refresh();
+        Services.prefs.addObserver("nulavio.fingerprinting.shareAccessibility", changed);
+        stops.push(() => Services.prefs.removeObserver("nulavio.fingerprinting.shareAccessibility", changed));
+      },
+      get: () => Boolean(sharing.state.value?.shared),
+      set(value) {
+        try {
+          shell.NulavioFingerprinting.setShareAccessibility(Boolean(value));
+        } finally {
+          sharing.refresh();
+        }
+      },
+      visible: () => sharing.state.ready,
+      disabled: () => Boolean(sharing.state.value?.locked),
+    });
+
     // -- site exceptions: where a protection is off or relaxed for one site. NulavioPrivacy reads them from
     // the engine's own permission store; removing one puts the protection back for that site. ------------
     const exceptions = source(() => shell.NulavioPrivacy.exceptions());
@@ -2272,6 +2300,7 @@
               { id: "nulavio-guard-review", l10nId: "nulavio-guard-review", control: "moz-box-button" },
             ],
           },
+          { id: "nulavio-share-accessibility", l10nId: "nulavio-share-accessibility", control: "moz-toggle" },
         ],
       },
       nulavioExceptions: {

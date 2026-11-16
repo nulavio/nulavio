@@ -66,11 +66,18 @@ pref("browser.safebrowsing.downloads.remote.enabled", false);
 //   +JSDateTimeUTC: pages read UTC as the time zone, on every computer. A
 //     site that needs the real one gets it from the switch in the address
 //     bar's shield panel, "use my time zone on this site" (#79, ADR 0017).
+//   +CSSPrefersReducedMotion, +CSSPrefersContrast,
+//   +CSSPrefersReducedTransparency: pages are not told that the system asks
+//     for less motion, more contrast or less transparency. With the first,
+//     the engine also scrolls pages smoothly whatever the system asks. One
+//     setting gives sites these again, and a bar offers it once when the
+//     system has one of them on (#79, ADR 0018). Nulavio's own pages and
+//     window follow the system either way.
 // A site the person exempts from tracking protection is exempt from these too.
 // The screen's size is not in this list: the Shell gives pages a constant one
 // (NulavioFingerprinting.sys.mjs). Language and window size are left as they
 // are: changing them breaks sites (docs/security/hardening.md).
-pref("privacy.fingerprintingProtection.overrides", "-EfficientCanvasRandomization,+WebGLRendererConstant,+WebGLVendorSanitize,+WindowOuterSize,+WindowScreenXY,+WindowInnerScreenXY,+MouseEventScreenPoint,+UseStandinsForNativeColors,+DeviceSensors,+NavigatorHWConcurrency,+JSDateTimeUTC");
+pref("privacy.fingerprintingProtection.overrides", "-EfficientCanvasRandomization,+WebGLRendererConstant,+WebGLVendorSanitize,+WindowOuterSize,+WindowScreenXY,+WindowInnerScreenXY,+MouseEventScreenPoint,+UseStandinsForNativeColors,+DeviceSensors,+NavigatorHWConcurrency,+JSDateTimeUTC,+CSSPrefersReducedMotion,+CSSPrefersContrast,+CSSPrefersReducedTransparency");
 
 // Follow the desktop's language among the locales packaged in the build
 // (en-US and pt-BR), as distribution Firefox does. An empty value means "use

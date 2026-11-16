@@ -124,9 +124,9 @@ user_pref("dom.security.https_only_mode", true);
 
 // @mode seed
 // @category privacy
-// @why Adds to the engine's fingerprinting protection: noise on every canvas and WebGL read, no graphics card model, no toolbar or window position, standard system colours, no motion sensors, the same processor count (4) on every computer, and UTC as the time zone.
-// @tradeoff A page that reads canvas pixels back gets them changed by one step in a few places; sites that pick settings by graphics card use their defaults; a page that starts one worker per processor starts 4, also on a larger machine; pages show hours in UTC until the site is exempted; exempt a site with the shield in the address bar (the Nulavio build also has a switch there for the time zone alone).
-user_pref("privacy.fingerprintingProtection.overrides", "-EfficientCanvasRandomization,+WebGLRendererConstant,+WebGLVendorSanitize,+WindowOuterSize,+WindowScreenXY,+WindowInnerScreenXY,+MouseEventScreenPoint,+UseStandinsForNativeColors,+DeviceSensors,+NavigatorHWConcurrency,+JSDateTimeUTC");
+// @why Adds to the engine's fingerprinting protection: noise on every canvas and WebGL read, no graphics card model, no toolbar or window position, standard system colours, no motion sensors, the same processor count (4) on every computer, UTC as the time zone, and no word to pages of the system's motion and contrast preferences.
+// @tradeoff A page that reads canvas pixels back gets them changed by one step in a few places; sites that pick settings by graphics card use their defaults; a page that starts one worker per processor starts 4, also on a larger machine; pages show hours in UTC until the site is exempted; sites animate and pages scroll smoothly even when the system asks for less motion (the Nulavio build has a setting that gives sites these preferences again); exempt a site with the shield in the address bar (the Nulavio build also has a switch there for the time zone alone).
+user_pref("privacy.fingerprintingProtection.overrides", "-EfficientCanvasRandomization,+WebGLRendererConstant,+WebGLVendorSanitize,+WindowOuterSize,+WindowScreenXY,+WindowInnerScreenXY,+MouseEventScreenPoint,+UseStandinsForNativeColors,+DeviceSensors,+NavigatorHWConcurrency,+JSDateTimeUTC,+CSSPrefersReducedMotion,+CSSPrefersContrast,+CSSPrefersReducedTransparency");
 
 // --- Network leaks ---
 
