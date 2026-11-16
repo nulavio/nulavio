@@ -89,6 +89,11 @@ class LoadLineTest(unittest.TestCase):
         # A real load under reduced motion: the line is there and does not move (test_01: it moves otherwise).
         self.m.chrome("Services.prefs.setIntPref('ui.prefersReducedMotion', 1);")
         self.addCleanup(self.m.chrome, "Services.prefs.clearUserPref('ui.prefersReducedMotion');")
+        # The engine applies a changed system preference to the window's style at its next refresh, not when the
+        # preference is set (nsPresContext::ThemeChanged): wait until the window's sheet has taken it in (the line's
+        # reduced-motion rule is the only one that sets this opacity), so the load below starts under it (#436).
+        reduced = "return getComputedStyle(document.getElementById('nulavio-load-line'), '::before').opacity;"
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome(reduced) == "0.35", 10), self.m.chrome(reduced))
         self.load(4000)
         now = harness.wait_until(lambda: (lambda line: line if line["shown"] else None)(self.line()), 5)
         self.assertTrue(now, self.line())
