@@ -42,7 +42,7 @@ Urgency: <urgent | standard> (<reasons>). Source SHA-256 <digest> (Mozilla's sig
 
 - A site with "Usar meu fuso horário neste site" on kept the earlier set of fingerprinting protections until the browser restarted, when the set changed while it was open: turning "Deixar os sites verem minhas preferências de movimento e contraste" on or off did not reach that site (#405). The engine works out each site's own set when the per-site list is set, and not again; the Shell now hands it the list again after the general set changes.
 
-- Release chain: re-running only the upload job of an older release run could put that release's signed dnf and APT metadata back in the bucket, with no approval, since the upload token moved to an environment without a reviewer (#417). The job now refuses a release older than any tagged, published or drafted one before it uploads. No release run has been re-run since that change, so the bucket never held anything but the latest release.
+- Release chain: re-running only the upload job of an older release run could put that release's signed dnf and APT metadata back in the bucket, with no approval, since the upload token moved to an environment without a reviewer (#417). The job now refuses, before it uploads, a release older than any tagged or drafted one or than what the bucket already serves; runs made before this change are covered only once their artifacts expire (7 days). No release run has been re-run since that change, so the bucket never held anything but the latest release.
 
 **Per-site choices that loosen a site's own rules (not a protection)**:
 

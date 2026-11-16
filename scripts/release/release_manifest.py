@@ -19,9 +19,10 @@ run it when NULAVIO_RELEASE_MANIFEST is set, so only what the rehearsal checked 
 signed.
 
 ``not-older`` refuses a release when a newer one is tagged, recorded in
-packaging/release.json or named with ``--also`` (the GitHub releases, drafts
-included). The publish job runs it before the upload: a re-run of an older run's
-publish job would otherwise put that run's signed metadata back in the bucket.
+packaging/release.json or named with ``--also``. The publish job runs it before
+the upload with every GitHub release (drafts included) and the version the
+bucket's APT index serves: a re-run of an older run's publish job would otherwise
+put that run's signed metadata back in the bucket.
 """
 
 from __future__ import annotations
