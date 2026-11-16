@@ -203,6 +203,17 @@ class PatchStackTest(unittest.TestCase):
                 self.assertRegex(patch_file.name, r"^\d{4}-[a-z0-9-]+\.patch$")
                 self.assertNotRegex(text, r"(?m)^[-+].*(security\.sandbox|MOZ_DISABLE_.*SANDBOX|xpinstall\.signatures)")
 
+    def test_no_patch_touches_rust_code(self):
+        # The release build is cross-language LTO, where the engine skips check_networking (Rust code
+        # must import no networking function): what goes unchecked must be Mozilla's code only (R79).
+        # A patch that needs Rust: build it with NULAVIO_MOZCONFIG_EXTRA=mozconfig.no-lto, which runs
+        # the check, and say so in residual-risks.md before changing this test.
+        rust = re.compile(r"(\.rs|(^|/)Cargo\.(toml|lock)|(^|/)\.cargo/.*)$|^third_party/rust/")
+        for patch_file in apply_patches.series():
+            touched = re.findall(r"(?m)^(?:---|\+\+\+) [ab]/(\S+)", patch_file.read_text())
+            self.assertTrue(touched, patch_file.name)
+            self.assertEqual([path for path in touched if rust.search(path)], [], patch_file.name)
+
 
 CONF = 'line1\nvendor = "Mozilla"\nappid = "x"\ndevtools = "all"\n'
 # Two patches on neighbouring lines of one file, like 0001 (vendor) and 0009 (User-Agent name)

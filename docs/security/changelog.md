@@ -43,6 +43,10 @@ Urgency: <urgent | standard> (<reasons>). Source SHA-256 <digest> (Mozilla's sig
 
 - Release chain: re-running only the upload job of an older release run could put that release's signed dnf and APT metadata back in the bucket, with no approval, since the upload token moved to an environment without a reviewer (#417). The job now refuses, before it uploads, a release older than any tagged or drafted one or than what the bucket already serves; runs made before this change are covered only once their artifacts expire (7 days). No release run has been re-run since that change, so the bucket never held anything but the latest release.
 
+**A check the release build no longer runs**:
+
+- The release build is linked with link-time optimisation across C++ and Rust, as Mozilla's own Linux builds are (#364). In such a build the engine skips its check that Rust code imports no networking function, which ran in every release build up to 160.0-0.6. Nulavio's patches touch no Rust code, a unit test keeps that, and a build with the `mozconfig.no-lto` variant still runs the check; no workflow builds that variant yet ([R79](residual-risks.md)).
+
 **Per-site choices that loosen a site's own rules (not a protection)**:
 
 - "Permitir copiar e colar neste site" in the shield's panel (#160): off by default, kept per origin in the profile and listed in Settings' site exceptions. On, that origin's pages cannot cancel copy, cut, paste, the page menu or selection, so their own handlers for those events no longer run there (R76).
