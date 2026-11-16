@@ -1,0 +1,229 @@
+Subject: [PATCH] rfp: per-site noise on rendered audio, and one screen size for every computer
+
+Two things a page reads to recognise a computer, which the engine's
+fingerprinting protection does not cover without full resistFingerprinting:
+
+1. What an OfflineAudioContext renders. The samples depend on the engine
+   build and the processor, and FingerprintJS and PrivacyTests.org read them
+   back (an oscillator through a compressor, then a sum of the samples). A new
+   target, AudioRandomization, moves each rendered sample by at most one part
+   in ten thousand, by an amount that comes from the per-site, per-session key
+   the canvas noise already uses and from the samples themselves. Two sites
+   read different values; one site reads the same values again for the same
+   sound. Every sample gets its own step, so the noise cannot be divided out
+   as one factor. Only the buffer an offline rendering returns is covered.
+   What a page reads from a context that plays is not changed, and neither
+   is what a node inside the offline graph itself hands to script while it
+   renders (an AnalyserNode, a ScriptProcessorNode, an AudioWorklet): a
+   probe built on those still reads the same on every site. The per-site
+   key is made for this target alone too, without the canvas noise.
+
+2. The screen's size. A new target, ScreenSizeConstant, makes screen.width and
+   height, the available area (at 0,0) and the device-width and device-height
+   media queries say 1920 by 1080 for every document the protection applies
+   to. It is decided per document by the engine's own check, so a site the
+   person exempts, the browser's own pages and extensions read the real size,
+   and a frame or a pop-up is asked for itself. Responsive design mode and
+   WebDriver BiDi's screen emulation come first, as they do today, and a
+   page being printed keeps the paper's size. The
+   existing ScreenRect target (the window's inner size as the screen) only
+   helps with fixed window sizes, which Nulavio does not use.
+
+Neither target is in the engine's default set: Nulavio turns them on in
+privacy.fingerprintingProtection.overrides (ADR 0016, ADR 0019, issue #79).
+
+Owner: Nulavio maintainers
+Upstream: not proposed. Mozilla's own audio protection is tracked in its
+bug 1358149; a constant screen is a different trade-off from ScreenRect.
+---
+--- a/dom/base/nsScreen.cpp
++++ b/dom/base/nsScreen.cpp
+@@ -92,6 +92,13 @@
+     }
+   }
+ 
++  // Nulavio: one screen size for every computer. After the overrides above,
++  // which a person's own tools set (responsive design mode, WebDriver BiDi).
++  if (ShouldResistFingerprinting(RFPTarget::ScreenSizeConstant)) {
++    return {0, 0, nsRFPService::kConstantScreenWidth,
++            nsRFPService::kConstantScreenHeight};
++  }
++
+   nsDeviceContext* context = GetDeviceContext();
+   if (NS_WARN_IF(!context)) {
+     return {};
+@@ -125,6 +132,13 @@
+     }
+   }
+ 
++  // Nulavio: one screen size for every computer. After the overrides above,
++  // which a person's own tools set (responsive design mode, WebDriver BiDi).
++  if (ShouldResistFingerprinting(RFPTarget::ScreenSizeConstant)) {
++    return {0, 0, nsRFPService::kConstantScreenWidth,
++            nsRFPService::kConstantScreenHeight};
++  }
++
+   if (ShouldResistFingerprinting(RFPTarget::ScreenAvailToResolution)) {
+     nsDeviceContext* context = GetDeviceContext();
+     if (NS_WARN_IF(!context)) {
+--- a/dom/media/webaudio/AudioDestinationNode.cpp
++++ b/dom/media/webaudio/AudioDestinationNode.cpp
+@@ -18,6 +18,7 @@
+ #include "mozilla/dom/BaseAudioContextBinding.h"
+ #include "mozilla/dom/BrowsingContext.h"
+ #include "mozilla/dom/ContentMediaController.h"
++#include "mozilla/dom/Document.h"
+ #include "mozilla/dom/MediaControlUtils.h"
+ #include "mozilla/dom/OfflineAudioCompletionEvent.h"
+ #include "mozilla/dom/Promise.h"
+@@ -27,7 +28,9 @@
+ #include "mozilla/glean/DomMediaMetrics.h"
+ #include "nsContentUtils.h"
+ #include "nsGlobalWindowInner.h"
++#include "nsICookieJarSettings.h"
+ #include "nsPIDOMWindowInlines.h"
++#include "nsRFPService.h"
+ 
+ extern mozilla::LazyLogModule gAudioChannelLog;
+ 
+@@ -151,6 +154,21 @@
+ 
+   already_AddRefed<AudioBuffer> CreateAudioBuffer(AudioContext* aContext) {
+     MOZ_ASSERT(NS_IsMainThread());
++    // Nulavio: what an offline context rendered depends on the engine build
++    // and the processor, and a page reads it back to recognise the computer.
++    // Under RFPTarget::AudioRandomization each site reads its own values.
++    if (mBuffer) {
++      nsPIDOMWindowInner* window = aContext->GetOwnerWindow();
++      Document* doc = window ? window->GetExtantDoc() : nullptr;
++      if (doc &&
++          doc->ShouldResistFingerprinting(RFPTarget::AudioRandomization)) {
++        nsICookieJarSettings* settings = doc->CookieJarSettings();
++        for (uint32_t i = 0; i < mNumberOfChannels; ++i) {
++          nsRFPService::RandomizeAudioSamples(
++              settings, mBuffer->GetDataForWrite(i), mLength);
++        }
++      }
++    }
+     // Create the input buffer
+     ErrorResult rv;
+     RefPtr<AudioBuffer> renderedBuffer =
+--- a/layout/style/nsMediaFeatures.cpp
++++ b/layout/style/nsMediaFeatures.cpp
+@@ -94,6 +94,13 @@
+     return pc->GetPageSize();
+   }
+ 
++  // Nulavio: one screen size for every computer, as nsScreen says. After the
++  // branch above: a page being printed keeps the paper's size.
++  if (aDocument.ShouldResistFingerprinting(RFPTarget::ScreenSizeConstant)) {
++    return CSSPixel::ToAppUnits(CSSIntSize(nsRFPService::kConstantScreenWidth,
++                                           nsRFPService::kConstantScreenHeight));
++  }
++
+   return pc->DeviceContext()->GetDeviceSurfaceDimensions();
+ }
+ 
+--- a/toolkit/components/resistfingerprinting/nsRFPService.cpp
++++ b/toolkit/components/resistfingerprinting/nsRFPService.cpp
+@@ -1343,7 +1343,11 @@
+           RFPTarget::WebGLRandomization) &&
+       !nsContentUtils::ShouldResistFingerprinting(
+           "Checking the target activation globally without local context",
+-          RFPTarget::EfficientCanvasRandomization)) {
++          RFPTarget::EfficientCanvasRandomization) &&
++      // Nulavio: the audio noise uses the same key, also without the canvas's.
++      !nsContentUtils::ShouldResistFingerprinting(
++          "Checking the target activation globally without local context",
++          RFPTarget::AudioRandomization)) {
+     return NS_ERROR_NOT_AVAILABLE;
+   }
+ 
+@@ -1447,7 +1451,10 @@
+       !nsContentUtils::ShouldResistFingerprinting(
+           aChannel, RFPTarget::WebGLRandomization) &&
+       !nsContentUtils::ShouldResistFingerprinting(
+-          aChannel, RFPTarget::EfficientCanvasRandomization)) {
++          aChannel, RFPTarget::EfficientCanvasRandomization) &&
++      // Nulavio: the audio noise uses the same key, also without the canvas's.
++      !nsContentUtils::ShouldResistFingerprinting(
++          aChannel, RFPTarget::AudioRandomization)) {
+     return Nothing();
+   }
+   auto sessionKeyStr = sessionKey.ToString();
+@@ -1865,6 +1872,39 @@
+ }
+ 
+ // static
++void nsRFPService::RandomizeAudioSamples(
++    nsICookieJarSettings* aCookieJarSettings, float* aData, uint32_t aLength) {
++  if (!aCookieJarSettings || !aData || aLength < 2) {
++    return;
++  }
++
++  // The key the canvas noise uses for an image, made here from the samples.
++  // It fails when the site has no randomization key, and then nothing is
++  // changed.
++  nsTArray<uint8_t> key;
++  // (The size is a uint32_t there: a rendering of 2^30 samples or more gives
++  // the key its first 4 GiB less one byte, never a wrapped size.)
++  const uint64_t bytes = uint64_t(aLength) * sizeof(float);
++  nsresult rv = GenerateCanvasKeyFromImageData(
++      aCookieJarSettings, reinterpret_cast<uint8_t*>(aData),
++      static_cast<uint32_t>(std::min<uint64_t>(bytes, UINT32_MAX)), key);
++  if (NS_FAILED(rv) || key.Length() < 16) {
++    return;
++  }
++
++  non_crypto::XorShift128PlusRNG rng(
++      *reinterpret_cast<uint64_t*>(key.Elements()),
++      *reinterpret_cast<uint64_t*>(key.Elements() + 8));
++
++  // A different step for every sample, so that the ratio of two samples
++  // moves too: one factor for the whole buffer could be divided out.
++  for (uint32_t i = 0; i < aLength; ++i) {
++    const int32_t step = static_cast<int32_t>(rng.next() & 0xFFFF) - 0x8000;
++    aData[i] *= 1.0f + static_cast<float>(step) * (1.0e-4f / 32768.0f);
++  }
++}
++
++// static
+ nsresult nsRFPService::RandomizeElements(
+     nsICookieJarSettings* aCookieJarSettings, nsIPrincipal* aPrincipal,
+     uint8_t* aData, uint32_t aSizeInBytes, uint8_t aElementsPerGroup,
+--- a/toolkit/components/resistfingerprinting/nsRFPService.h
++++ b/toolkit/components/resistfingerprinting/nsRFPService.h
+@@ -525,6 +525,19 @@
+                                    uint32_t aWidth, uint32_t aHeight,
+                                    uint32_t aSize);
+ 
++  // Nulavio: the screen every page reads under RFPTarget::ScreenSizeConstant,
++  // in CSS pixels.
++  static constexpr int32_t kConstantScreenWidth = 1920;
++  static constexpr int32_t kConstantScreenHeight = 1080;
++
++  // Nulavio: per-site noise on rendered audio (RFPTarget::AudioRandomization).
++  // Each sample moves by at most one part in ten thousand, by an amount that
++  // comes from the same per-site, per-session key as the canvas noise and
++  // from the samples themselves: two sites read different values, and one
++  // site reads the same values again for the same sound.
++  static void RandomizeAudioSamples(nsICookieJarSettings* aCookieJarSettings,
++                                    float* aData, uint32_t aLength);
++
+   // This function is plumbed to RandomizeElements function.
+   static nsresult RandomizePixels(nsICookieJarSettings* aCookieJarSettings,
+                                   nsIPrincipal* aPrincipal, uint8_t* aData,
+--- a/toolkit/components/resistfingerprinting/RFPTargets.inc
++++ b/toolkit/components/resistfingerprinting/RFPTargets.inc
+@@ -114,6 +114,11 @@
+ ITEM_VALUE(WebGLRendererConstant,       80)
+ // How IME software in use chooses to style composition (exposed via EditContext)
+ ITEM_VALUE(IMEStyle,                    81)
++// Nulavio: per-site noise on the audio an OfflineAudioContext renders.
++ITEM_VALUE(AudioRandomization,          82)
++// Nulavio: one screen size for every computer (screen.width and height, the
++// available area, the device-width and device-height media queries).
++ITEM_VALUE(ScreenSizeConstant,          83)
+ 
+ /*
+  * In certain cases, we precompute the value of ShouldRFP for e.g. a Document.

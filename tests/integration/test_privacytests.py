@@ -27,6 +27,9 @@ Not changed by anything here, so their tests show stability only: the panels aro
 run has none), the keyboard layout (the engine has no Keyboard Map API) and reduced transparency (the engine
 keeps that media query off). Their pages record those two as "Unsupported", which test_00b holds.
 
+The audio probe passes only on an engine with Nulavio's patch 0012; on an older one (the last release, which
+pull-request CI runs the Shell on) it is skipped with that reason.
+
 KNOWN_GAPS lists the probes that do not pass yet, each with its reason. A probe listed there is skipped with
 that reason while it fails, and fails the run once it passes, until its line is removed: the list only gets
 shorter. Every other probe must pass. Nulavio build only.
@@ -98,9 +101,16 @@ DEVICE_CONSTANTS = {
     "AudioContext base latency": "0",  # the engine reports no buffering, whatever the audio device
 }
 # Probes that do not pass yet, and why (#79). Each fix removes its line.
-KNOWN_GAPS = {
-    "AudioContext fingerprint": "the engine has no protection for rendered audio",
+KNOWN_GAPS: dict[str, str] = {}
+# A probe that passes only with Nulavio's engine patch 0012. Pull-request CI runs the Shell on the last release's
+# engine, which may be from before the patch; a build of this tree has it, and the probe must then pass.
+BEFORE_THE_PATCH = {
+    "AudioContext fingerprint": "this engine is from before patch 0012, which adds per-site noise to rendered audio",
 }
+HAS_PATCH = """
+const { RFPHelper } = ChromeUtils.importESModule("resource://gre/modules/RFPHelper.sys.mjs");
+return "AudioRandomization" in RFPHelper.getTargets();
+"""
 FONT_TEXT = "font fingerprinting"  # the text PrivacyTests' font probes measure
 RUNS = {  # what "the system" is in each session
     "A": {"tz": "Europe/Paris", "screen": (1366, 768), "fonts": False, "motion": 1, "contrast": 1},
@@ -169,6 +179,9 @@ class PrivacyTestsProbes(unittest.TestCase):
             assert harness.wait_until(lambda: m.chrome(strict), 30), "the profile never reached the Strict category"
             origins = [f"http://{site}:{cls.port}" for site in SITES]
             m.chrome(PREPARE, [list(LOCAL_ONLY), list(SITES), origins, config["motion"], config["contrast"]])
+            cls.patched = bool(m.chrome(HAS_PATCH))
+            # A build of this tree has the patch: without it the audio probe would be skipped, not failed.
+            assert cls.patched or not harness.built_from_this_tree(), "a build of this tree without patch 0012's targets"
             out = {"protected": cls.load_pages(m)}
             with cls.unprotected(m):
                 out["plain"] = cls.load_pages(m)
@@ -229,11 +242,12 @@ class PrivacyTestsProbes(unittest.TestCase):
 
     def check(self, group: str, probe: str) -> None:
         read = f"{probe}: {self.values(group, probe)}"
+        gaps = {**KNOWN_GAPS, **({} if self.patched else BEFORE_THE_PATCH)}
         if self.passes(group, probe):
-            self.assertNotIn(probe, KNOWN_GAPS, f"it passes now: remove its line from KNOWN_GAPS. {read}")
+            self.assertNotIn(probe, gaps, f"it passes now: remove its line from the gaps. {read}")
             return
-        if probe in KNOWN_GAPS:
-            self.skipTest(f"known gap (#79): {KNOWN_GAPS[probe]}. {read}")
+        if probe in gaps:
+            self.skipTest(f"known gap (#79): {gaps[probe]}. {read}")
         self.fail(f"neither different on the three sites in both runs nor stable between them. {read}")
 
     # -- tests ---------------------------------------------------------------------
@@ -261,7 +275,8 @@ class PrivacyTestsProbes(unittest.TestCase):
 
     def test_01_every_known_gap_names_a_probe(self):
         every = {probe for probes in PROBES.values() for probe in probes}
-        self.assertLessEqual(set(KNOWN_GAPS), every)
+        self.assertLessEqual(set(KNOWN_GAPS) | set(BEFORE_THE_PATCH), every)
+        self.assertFalse(set(KNOWN_GAPS) & set(BEFORE_THE_PATCH))
         self.assertLessEqual(set(DEVICE_CONSTANTS), set(PROBES["Device"]))
 
 
