@@ -1,0 +1,48 @@
+{
+  "version": "160.0-0.7",
+  "date": "2026-11-17",
+  "channel": "alpha",
+  "firefox": "160.0",
+  "pt-BR": {
+    "summary": "Uma atualização da alpha com o mesmo motor (Firefox 160.0): os sites recebem ainda menos dados para reconhecer o seu computador, um site pode ser impedido de bloquear copiar e colar, e a janela ganha ferramentas: editar o texto de uma página, manter a janela acima das outras e uma linha de carregamento.",
+    "breaking": [
+      "Os sites não ficam mais sabendo que o seu sistema pede menos movimento ou mais contraste, porque isso ajuda a reconhecer você de um site para outro. Os sites então mostram as animações deles, e as páginas rolam suavemente.",
+      "Se você depende dessas configurações, ligue Deixar os sites verem minhas preferências de movimento e contraste em Configurações, Privacidade e Segurança. Quando o sistema tem uma delas ligada, uma barra oferece isso uma vez."
+    ],
+    "new": [
+      "O som que uma página gera para reconhecer o seu computador passa a ser diferente em cada site, e a tela de 1920 por 1080 vale para todas as partes de uma página: quadros, pop-ups e imagens também. O que você ouve não muda.",
+      "Permitir copiar e colar neste site, no painel do escudo: para um site que bloqueia copiar, colar ou o menu da página. Desligado por padrão, guardado por site e listado em Configurações com as outras exceções de sites.",
+      "Editar o texto da página, no menu da página ou com Ctrl+Alt+E: mude o texto da página no lugar. Nada é salvo, e recarregar a página desfaz as mudanças.",
+      "Esconder o título da página na barra da janela, em Configurações, Aparência: a barra de título, a barra de tarefas e os seletores de compartilhamento de tela mostram Nulavio, e não o título da página.",
+      "O Imersivo está no menu Exibir, ao lado de Tela inteira, e a primeira execução o oferece quando as abas ficam na lateral.",
+      "No KDE Plasma, Manter acima das outras janelas no menu Exibir, ou Ctrl+Alt+K.",
+      "Uma linha fina no topo da página mostra que ela está carregando."
+    ],
+    "fixed": [
+      "Num sistema sem a biblioteca de codecs, o som em MP4, como a maioria dos sites de vídeo envia, não tocava. Os pacotes agora recomendam a biblioteca, e o comando doctor avisa quando ela falta e o que instalar.",
+      "Com o Firefox da distribuição, um perfil criado antes de uma proteção contra reconhecimento existir passa a recebê-la no próximo início, a menos que você tenha mudado o conjunto; o comando doctor avisa quando manteve o seu.",
+      "A escolha da organização das abas na primeira execução cabe na tela em 150 % num monitor pequeno, onde os nomes das opções apareciam uma letra por linha."
+    ]
+  },
+  "en-US": {
+    "summary": "An update of the alpha with the same engine (Firefox 160.0): sites get even less to recognise your computer by, a site can be stopped from blocking copy and paste, and the window gains tools: editing a page's text, keeping the window above the others and a loading line.",
+    "breaking": [
+      "Sites are no longer told that your system asks for less motion or more contrast, because that helps recognise you from one site to the next. Sites then show their animations, and pages scroll smoothly.",
+      "If you rely on those settings, turn on Let sites see my motion and contrast preferences in Settings, Privacy and security. When your system has one of them on, a bar offers it once."
+    ],
+    "new": [
+      "The sound a page renders to recognise your computer is now different on every site, and the 1920 by 1080 screen holds for every part of a page: frames, pop-ups and images too. What you hear does not change.",
+      "Allow copy and paste on this site, in the shield's panel: for a site that blocks copying, pasting or the page menu. Off by default, kept per site, and listed in Settings with the other site exceptions.",
+      "Edit Text on Page, in the page menu or with Ctrl+Alt+E: change the page's text in place. Nothing is saved, and reloading the page discards the changes.",
+      "Hide the page title in the window title, in Settings, Appearance: the title bar, the taskbar and screen-sharing pickers show Nulavio, not the page's title.",
+      "Immersive is in the View menu, next to Full Screen, and the first run offers it when the tabs are in the side list.",
+      "On KDE Plasma, Keep Above Other Windows in the View menu, or Ctrl+Alt+K.",
+      "A thin line along the top of the page shows that it is loading."
+    ],
+    "fixed": [
+      "On a system without the codec library, sound in MP4, as most video sites send it, did not play. The packages now recommend the library, and the doctor command says when it is missing and what to install.",
+      "With distribution Firefox, a profile made before a fingerprinting protection existed now gets it at its next start, unless you changed the set yourself; the doctor command says when it kept yours.",
+      "The first run's choice of tab arrangement fits the screen at 150 % on a small display, where the options' names were set one letter per line."
+    ]
+  }
+}
