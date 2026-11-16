@@ -14,9 +14,11 @@ This does the same reading on a build that can be read, the mozconfig.no-lto var
 symbols of libgkrust.a, against the list in the very source tree that was built. It takes nobody's
 word: it refuses a tree that is not the pinned release, a build whose library cannot say anything (no
 Rust LTO, cross-language LTO, a sanitiser), a library older than its source tree, and a reading that
-looks empty. Run it after a build (the pre-check does): the build is what makes the library current. With --write a passing result becomes browser/build/networking-check.json,
-which a unit test compares with engine.json (test_track_b) and release_manifest.py with a manifest:
-the engine pin cannot move to, and nothing can be published from, a release nobody checked.
+looks empty. Run it after a build (the pre-check does): the build is what makes the library current.
+With --write a passing result becomes browser/build/networking-check.json, which a unit test compares
+with engine.json (test_track_b) and release_manifest.py with a manifest: the engine pin cannot move to,
+and nothing can be published from, a release the record does not name. The record is a statement by
+whoever ran this, not a proof CI makes (residual risk R79).
 
 Exit status: 0 passed; 1 the library imports a listed function (named on stderr); 2 it could not be
 checked (why, on stderr). It starts one process, readelf, with an argument list.
