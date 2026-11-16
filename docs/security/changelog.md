@@ -82,7 +82,7 @@ Also fixed, found by the project's own reviews:
 
 ## Nulavio 160.0-0.5 (Firefox 160.0), published 2026-11-14
 
-An update of the alpha with the same engine ([release](https://github.com/nulavio/nulavio/releases/tag/v160.0-0.5), [run 43633960941](https://github.com/nulavio/nulavio/actions/runs/43633960941)), approved by the maintainer, signed through KMS and installed by the job from the site's repository files in clean Fedora and Ubuntu containers. No advisory: the AI Bridge and Vault fixes close what 160.0-0.4 had already published as residual risks (R29, R70), and the Guard and Assistant fixes came from public issues (#136, #138).
+An update of the alpha with the same engine ([release](https://github.com/nulavio/nulavio/releases/tag/v160.0-0.5), [run 43633960941](https://github.com/nulavio/nulavio/actions/runs/43633960941)), approved by the maintainer, signed through KMS and installed by the job from the site's repository files in clean Fedora and Ubuntu containers. No advisory: the AI Bridge and Vault fixes close what 160.0-0.4 had already published as residual risks (R29, R70), the Guard and Assistant fixes came from public issues (#136, #138), and the two release-chain fixes were found by the project's own reviews of code that was already public (#291, #233).
 
 **Upstream**: unchanged, Firefox 160.0.
 
