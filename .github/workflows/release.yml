@@ -394,6 +394,32 @@ jobs:
             exit 1
           fi
           tar -C "$RUNNER_TEMP" -xf "$archive"
+      # A re-run of this job alone, in an older run, gets that run's signed files and their hash, and the
+      # release-upload environment asks for no approval: without this step it would put the older signed metadata
+      # back in the bucket, and R57 means nothing on the users' side would notice. A re-run uses the workflow of
+      # its own commit, so this protects the runs made from here on.
+      - name: Nothing newer is tagged, drafted or served (an older run's re-run would roll the repositories back)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag=$(python3 -I -c 'import json, sys; print(json.load(open(sys.argv[1]))["tag"])' "$RUNNER_TEMP/release.json")
+          # Every GitHub release, drafts included (as the build job reads them), and the version the bucket's APT
+          # index serves now: a newer upload whose run stopped before its draft has neither a tag nor a draft.
+          releases=$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases" --jq '.[].tag_name')
+          apt=$(sed -n 's/^URIs: //p' site/apt/nulavio.sources)
+          served=$(curl -fsSL --proto '=https' --retry 3 "$apt/dists/stable/main/binary-amd64/Packages" |
+            awk '$0 == "Package: nulavio" { found = 1 } found && /^Version: / { print $2; exit }')
+          # Empty when curl failed (this shell has no pipefail) or nulavio is not listed; anything but
+          # <version>-<release> would be dropped as not a release tag, so both stop the job.
+          if ! [[ "$served" =~ ^[0-9]+(\.[0-9]+)+-[0-9]+(\.[0-9]+)*$ ]]; then
+            echo "::error::the bucket's APT index lists no nulavio version in the <version>-<release> form"
+            exit 1
+          fi
+          also=(--also "v$served")
+          while IFS= read -r other; do
+            if [ -n "$other" ]; then also+=(--also "$other"); fi
+          done <<< "$releases"
+          python3 -I scripts/release/release_manifest.py not-older "$tag" --repo . "${also[@]}"
       - name: Upload the dnf and APT repositories to R2 (packages first, signed metadata last)
         env:
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}

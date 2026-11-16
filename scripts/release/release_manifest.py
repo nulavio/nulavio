@@ -4,6 +4,7 @@
     python3 -I scripts/release/release_manifest.py verify <rehearsal-out> [--repo DIR] [--on REF]
     python3 -I scripts/release/release_manifest.py packages <manifest.json> <packages-dir>
     python3 -I scripts/release/release_manifest.py next-release <firefox-version> [--repo DIR]
+    python3 -I scripts/release/release_manifest.py not-older <tag> [--repo DIR] [--also TAG ...]
 
 ``verify`` refuses a rehearsal that is not fit to publish: not finished, built
 from a tree with uncommitted or untracked changes, an engine pin that differs
@@ -16,6 +17,12 @@ the RPM), the RPMs, the .debs, the portable archives, the SBOMs.
 the manifest does not list with the same SHA-256. sign_repo.sh and sign_apt_repo.sh
 run it when NULAVIO_RELEASE_MANIFEST is set, so only what the rehearsal checked is
 signed.
+
+``not-older`` refuses a release when a newer one is tagged, recorded in
+packaging/release.json or named with ``--also``. The publish job runs it before
+the upload with every GitHub release (drafts included) and the version the
+bucket's APT index serves: a re-run of an older run's publish job would otherwise
+put that run's signed metadata back in the bucket.
 """
 
 from __future__ import annotations
@@ -148,6 +155,26 @@ def check_newer(release_tag: str, repo: Path) -> None:
         )
 
 
+def check_not_older(release_tag: str, repo: Path, others: list[str] | tuple[str, ...] = ()) -> None:
+    """Nothing newer than `release_tag` is tagged, recorded as published, or among `others` (the GitHub releases,
+    drafts included), so uploading its signed repositories cannot roll them back. The release itself may be
+    uploaded again: a re-run after a later step failed."""
+    match = RELEASE_TAG.fullmatch(release_tag)
+    if not match:
+        raise ManifestError(f"{release_tag!r} is not a release tag")
+
+    def key(version: tuple[str, str]) -> tuple[tuple[int, ...], tuple[int, ...]]:
+        return _numbers(version[0]), _numbers(version[1])
+
+    known = release_versions(repo) + [(m[1], m[2]) for tag in others if (m := RELEASE_TAG.fullmatch(tag))]
+    newer = [version for version in known if key(version) > key((match[1], match[2]))]
+    if newer:
+        top = max(newer, key=key)
+        raise ManifestError(
+            f"{release_tag} is older than {top[0]}-{top[1]}: uploading it would roll the dnf and APT repositories back"
+        )
+
+
 def release_versions(repo: Path) -> list[tuple[str, str]]:
     """Reserve existing tags as well as the published site version (which can lag)."""
     tags = subprocess.run(["git", "-C", str(repo), "tag", "--list", "v*"],
@@ -234,10 +261,16 @@ def main(argv: list[str] | None = None) -> int:
     n = sub.add_parser("next-release", help="the package release to build for a Firefox version")
     n.add_argument("firefox")
     n.add_argument("--repo", type=Path, default=ROOT)
+    o = sub.add_parser("not-older", help="uploading a release's repositories would not roll them back")
+    o.add_argument("tag")
+    o.add_argument("--repo", type=Path, default=ROOT)
+    o.add_argument("--also", action="append", default=[], help="another release's tag, such as a draft's")
     args = parser.parse_args(argv)
     try:
         if args.command == "verify":
             print(json.dumps(verify(args.out, args.repo, args.on), indent=2))
+        elif args.command == "not-older":
+            check_not_older(args.tag, args.repo, args.also)
         elif args.command == "next-release":
             print(next_release(args.firefox, args.repo))
         else:
