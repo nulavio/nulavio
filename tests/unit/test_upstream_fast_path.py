@@ -1171,6 +1171,7 @@ class AutobuildRunTest(TempDirTest):
             [f"{tree}/scripts/release/rehearse_release.sh", "159.0", str(self.tmp / "work" / "rehearsal" / "159.0")],
         )
         self.assertNotIn("NULAVIO_ALLOW_NO_SAFEBROWSING_KEY", kwargs["env"])  # release builds need the key
+        self.assertEqual(kwargs["env"].get("NULAVIO_PREBUILD"), "1")  # the pin-and-record test is the pull request's (R79)
         self.assertEqual(kwargs["cwd"], tree)
         self.assertFalse(any(word in command for command in commands for word in ("commit", "push", "fetch", "pull")))
         titles = [notice.title for notice in self.sent]

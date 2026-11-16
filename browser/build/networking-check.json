@@ -1,0 +1,8 @@
+{
+  "comment": "The Firefox release whose Rust code passed the engine's networking check (check_networking in run_cargo.py: the Rust library imports no recv, send, gethostby*, getserv* or getproto* function). The release build is cross-language LTO and skips that check (residual risk R79), so a unit test requires this record to name the release engine.json pins: the pin cannot move to a version nobody checked. To check a new version: NULAVIO_MOZCONFIG_EXTRA=mozconfig.no-lto scripts/build/build_nulavio.sh <version>. That build runs the check (its objdir's config.status has RUST_LTO_ELIGIBLE and no MOZ_LTO_RUST_CROSS) and fails on a finding; when it has finished, write the version, engine.json's digest, the date and how it was run here, with \"result\": \"passed\". Only the maintainer may pin a version without the check: \"result\": \"accepted\" with \"accepted_in\" naming the issue or pull request where he said so.",
+  "firefox": "160.0",
+  "source_sha256": "2b23d2bf6716ea16b45c10aa5c275c78a1d7ff50ad53150809ab27424c58fd81",
+  "result": "passed",
+  "checked": "2026-11-16",
+  "how": "Builds of the configuration before #371 run the check and fail on a finding: the release build of 160.0-0.6 (run 43811410472, patches 0001 to 0011) and a local build with patches 0001 to 0012 on 2026-11-16, whose config.status has RUST_LTO_ELIGIBLE and no MOZ_LTO_RUST_CROSS. No patch touches Rust code or its build files (test_track_b)."
+}

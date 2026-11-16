@@ -459,6 +459,9 @@ class Autobuild:
         if out.exists():
             shutil.rmtree(out)
         env = {k: v for k, v in self.env.items() if k != "NULAVIO_ALLOW_NO_SAFEBROWSING_KEY"}  # release builds only
+        # This worktree pins a release that main does not pin yet. The unit test that ties the pin to the
+        # networking check's record (R79, networking-check.json) is for the pull request that moves the pin.
+        env["NULAVIO_PREBUILD"] = "1"
         command = [str(tree / "scripts" / "release" / "rehearse_release.sh"), version, str(out)]
         if self.which("systemd-inhibit"):
             command = [

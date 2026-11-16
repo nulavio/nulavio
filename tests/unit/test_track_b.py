@@ -6,6 +6,7 @@ import contextlib
 import hashlib
 import io
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -64,6 +65,36 @@ class MozconfigTest(unittest.TestCase):
         Rust LTO must not be in the release mozconfig."""
         self.assertIn("ac_add_options --enable-lto=cross", self.lines)
         self.assertFalse([line for line in self.lines if "CARGO_RUSTCFLAGS" in line or "-Clto" in line], self.lines)
+
+    def test_the_pinned_engine_passed_the_networking_check_the_release_build_skips(self):
+        """R79: with cross-language LTO the engine's build skips check_networking (Rust code imports no
+        networking function). The pin may therefore only name a release whose Rust code passed that check
+        in a build that runs it (the mozconfig.no-lto variant), or one the maintainer accepted without it."""
+        self.assertIn("ac_add_options --enable-lto=cross", self.lines)  # without it the release build runs the check
+        if os.environ.get("NULAVIO_PREBUILD") == "1":
+            # autobuild.py's worktree pins a release main does not pin yet; the pull request that moves the
+            # pin on main runs this test without the variable.
+            self.skipTest("a pre-build of a release not pinned on main yet")
+        build = MOZCONFIG.parent
+        engine = json.loads((build / "engine.json").read_text())
+        record = json.loads((build / "networking-check.json").read_text())
+        how_to = (
+            f"Firefox {engine['firefox']} is pinned, but browser/build/networking-check.json is about "
+            f"{record.get('firefox')}: build the pinned release with NULAVIO_MOZCONFIG_EXTRA=mozconfig.no-lto "
+            "(it runs the check and fails on a finding), then update the record (its comment says how)"
+        )
+        self.assertEqual(
+            (record.get("firefox"), record.get("source_sha256")), (engine["firefox"], engine["source_sha256"]), how_to
+        )
+        self.assertIn(record.get("result"), ("passed", "accepted"))
+        self.assertRegex(record.get("checked", ""), r"^\d{4}-\d{2}-\d{2}$")
+        self.assertGreater(len(record.get("how", "")), 20)
+        if record["result"] == "accepted":  # not run: only on the maintainer's recorded word
+            self.assertRegex(record.get("accepted_in", ""), r"^#\d+$")
+        # The variant that runs it must go on running it: no cross-language LTO, Rust's own LTO on.
+        variant = active_lines((build / "mozconfig.no-lto").read_text())
+        self.assertIn("ac_add_options --disable-lto", variant)
+        self.assertFalse([line for line in variant if "sanitizer" in line or "--enable-debug" in line], variant)
 
     def test_the_variants_without_cross_lto_keep_rust_lto_thin(self):
         """Without cross-language LTO the release default is a fat pass over gkrust, which does not fit the build
@@ -189,7 +220,13 @@ class LocalizationTest(unittest.TestCase):
         self.assertIn("package-multi-locale --locales en-US", script)
 
 
-RUST_PATH = re.compile(r"(\.rs|(^|/)Cargo\.(toml|lock)|(^|/)\.cargo/.*)$|^third_party/rust/")
+# Rust code, and the build files that decide which Rust code is compiled, how it is linked and
+# whether the engine's networking check runs.
+RUST_PATH = re.compile(
+    r"(\.rs|(^|/)Cargo\.(toml|lock)|(^|/)\.cargo/.*)$|^third_party/rust/|^toolkit/library/rust/|^build/rust/"
+    r"|^build/moz\.configure/(rust|lto-pgo)\.configure$|^config/makefiles/rust\.mk$|^build/mozconfig\.rust$"
+    r"|^python/mozbuild/mozbuild/(rust_commands\.py|action/(run_cargo|check_binary)\.py)$"
+)
 
 
 def patch_paths(text: str) -> set[str]:
@@ -236,9 +273,13 @@ class PatchStackTest(unittest.TestCase):
         self.assertEqual(patch_paths(git), {"old/lib.rs", "new/lib.txt"})
         self.assertEqual(patch_paths("diff --git a/Cargo.lock b/Cargo.lock\nGIT binary patch\n"), {"Cargo.lock"})
         for path in ("servo/components/style/lib.rs", "Cargo.lock", "toolkit/library/rust/Cargo.toml",
-                     "third_party/rust/x/y.c", ".cargo/config.toml.in", "build/rust/x/build.rs"):  # fmt: skip
+                     "third_party/rust/x/y.c", ".cargo/config.toml.in", "build/rust/x/build.rs",
+                     "toolkit/library/rust/gkrust-features.mozbuild", "build/moz.configure/rust.configure",
+                     "build/moz.configure/lto-pgo.configure", "config/makefiles/rust.mk",
+                     "python/mozbuild/mozbuild/action/run_cargo.py", "python/mozbuild/mozbuild/action/check_binary.py",
+                     "python/mozbuild/mozbuild/rust_commands.py"):  # fmt: skip
             self.assertRegex(path, RUST_PATH)
-        for path in ("dom/base/nsFoo.cpp", "browser/Cargo.tomlx", "docs/a.rst", "third_party/rustx/a.c"):
+        for path in ("dom/base/nsFoo.cpp", "browser/Cargo.tomlx", "docs/a.rst", "third_party/rustx/a.c", "browser/moz.configure"):
             self.assertNotRegex(path, RUST_PATH)
 
 

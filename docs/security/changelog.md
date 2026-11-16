@@ -45,7 +45,7 @@ Urgency: <urgent | standard> (<reasons>). Source SHA-256 <digest> (Mozilla's sig
 
 **A check the release build no longer runs**:
 
-- The release build is linked with link-time optimisation across C++ and Rust, as Mozilla's own Linux builds are (#364). In such a build the engine skips its check that Rust code imports no networking function, which ran in every release build up to 160.0-0.6. Nulavio's patches touch no Rust code, a unit test keeps that, and a build with the `mozconfig.no-lto` variant still runs the check; no workflow builds that variant yet ([R79](residual-risks.md)).
+- The release build is linked with link-time optimisation across C++ and Rust, as Mozilla's own Linux builds are (#364). In such a build the engine skips its check that Rust code imports no networking function, which ran in every release build up to 160.0-0.6. In its place, the engine pin may only name a Firefox release whose Rust code passed the check in a build that runs it (the `mozconfig.no-lto` variant; `browser/build/networking-check.json`, which a unit test compares with the pin), and no Nulavio patch may touch Rust code. That build is run by hand for now ([R79](residual-risks.md), #430).
 
 **Per-site choices that loosen a site's own rules (not a protection)**:
 
