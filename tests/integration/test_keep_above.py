@@ -128,6 +128,13 @@ class KeepAbovePlasmaTest(unittest.TestCase):
         # The menu item, back off.
         self.m.chrome("document.getElementById('nulavio-menu-keep-above').doCommand();")
         self.assertTrue(harness.wait_until(lambda: not kwin_keep_above(uuid), 10), "KWin kept the window above")
+        # Two presses at once toggle twice: the window ends as it started (review of #392).
+        chrome_async(
+            self.m,
+            "const done = arguments[arguments.length - 1];"
+            f"Promise.all([{KEEP}.set(window), {KEEP}.set(window)]).then(() => done(true), e => done(String(e)));",
+        )
+        self.assertFalse(kwin_keep_above(uuid))
         # The title the window had is back once the window was found.
         self.assertNotIn("nulavio-keep-above-", self.m.chrome("return document.title;"))
 
