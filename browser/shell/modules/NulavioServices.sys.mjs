@@ -183,15 +183,14 @@ export function refusedAddress(spec) {
   const v4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(host);
   if (v4) {
     const [a, b] = [Number(v4[1]), Number(v4[2])];
-    if (a === 10 || a === 127 || a === 0 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) ||
-        (a === 192 && b === 168) || (a === 100 && b >= 64 && b <= 127) || a >= 224) {
-      return "private-address";
-    }
-    return null;
+    return privateV4(a, b, Number(v4[3])) ? "private-address" : null;
   }
   if (host.includes(":")) {
-    // IPv6: loopback, unspecified, unique local (fc00::/7), link-local (fe80::/10), and IPv4-mapped.
-    if (host === "::1" || host === "::" || /^f[cd]/.test(host) || /^fe[89ab]/.test(host) || host.startsWith("::ffff:")) {
+    // IPv6: loopback, unspecified, unique local (fc00::/7), link-local (fe80::/10), and every form that carries an
+    // IPv4 address (mapped ::ffff:0:0/96, compatible ::/96, NAT64 64:ff9b::/96, 6to4 2002::/16): refused whole,
+    // since a service that fetches it may reach the IPv4 address inside.
+    if (host === "::1" || host === "::" || /^f[cd]/.test(host) || /^fe[89ab]/.test(host) || host.startsWith("::") ||
+        host.startsWith("64:ff9b:") || host.startsWith("2002:")) {
       return "private-address";
     }
     return null;
@@ -200,6 +199,17 @@ export function refusedAddress(spec) {
     return "private-address";
   }
   return null;
+}
+
+/** IPv4 addresses that are not on the public Internet: this-network, private, shared (CGNAT), loopback,
+    link-local, IETF protocol assignments, documentation, benchmarking, multicast and reserved. */
+function privateV4(a, b, c) {
+  return (
+    a === 0 || a === 10 || a === 127 || a >= 224 ||
+    (a === 100 && b >= 64 && b <= 127) || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) ||
+    (a === 192 && b === 168) || (a === 192 && b === 0 && (c === 0 || c === 2)) || (a === 198 && (b === 18 || b === 19)) ||
+    (a === 198 && b === 51 && c === 100) || (a === 203 && b === 0 && c === 113)
+  );
 }
 
 /** The target language for a service, from a BCP 47 tag: "region" keeps pt-BR and en-US, "base" takes "pt". */
@@ -212,6 +222,14 @@ function languageFor(tag, style) {
     return `zh-${region.toUpperCase()}`;
   }
   return base.toLowerCase();
+}
+
+/** A page's or link's address as a service may get it: without its fragment, which never goes to the page's own
+    server and may hold what the site keeps on this side (a decryption key, an access token). */
+function withoutFragment(spec) {
+  const url = new URL(spec);
+  url.hash = "";
+  return url.href;
 }
 
 function fill(template, values) {
@@ -438,7 +456,8 @@ class NulavioServicesClass {
     if (!item) {
       return { usable: false, reason: "not-found" };
     }
-    if (isPrivate && !Services.prefs.getBoolPref(PREF_PRIVATE, false)) {
+    // The assistant is never offered in a private window (ADR 0007: it refuses one); web services only when allowed.
+    if (isPrivate && (item.sends === "text" && item.use.startsWith("summary") || !Services.prefs.getBoolPref(PREF_PRIVATE, false))) {
       return { usable: false, reason: "private-window", hidden: true };
     }
     if (item.sends === "url") {
@@ -459,6 +478,9 @@ class NulavioServicesClass {
     if (!verdict.usable) {
       fail(verdict.reason);
     }
+    if (target) {
+      target = withoutFragment(target); // checked public above, so a URL
+    }
     const [use, id] = itemId.split("|");
     const lang = this.language();
     if (use === "translate-selection" || use === "translate-page") {
@@ -472,7 +494,7 @@ class NulavioServicesClass {
       const template = use === "translate-selection" ? t.selection : t.page;
       const address = t.key === "kagi-translate" && use === "translate-page"
         ? template
-            .replace("{url}", target.replace(/^https?:\/\//, "").replace(/[?#]/g, c => encodeURIComponent(c)))
+            .replace("{url}", target.replace(/^https?:\/\//, "").replace(/[?]/g, c => encodeURIComponent(c)))
             .replace("{lang}", encodeURIComponent(languageFor(lang, t.lang)))
         : fill(template, { ...value, lang: languageFor(lang, t.lang), base: t.base });
       return { open: address };

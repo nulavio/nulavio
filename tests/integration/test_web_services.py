@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import os
 import unittest
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit
 
 import harness
 
@@ -160,6 +160,13 @@ class WebServicesTest(unittest.TestCase):
             "http://printer.local/": "private-address",
             "http://intranet/": "private-address",
             "http://nas.home.arpa/": "private-address",
+            "http://[::127.0.0.1]/": "private-address",
+            "http://[::ffff:10.0.0.1]/": "private-address",
+            "http://[64:ff9b::a00:1]/": "private-address",
+            "http://[2002:a00:1::]/": "private-address",
+            "http://192.0.0.8/": "private-address",
+            "http://198.18.0.1/": "private-address",
+            "http://203.0.113.5/": "private-address",
             "https://user:pass@example.org/": "private-address",
             "file:///etc/passwd": "not-web",
             "about:preferences": "not-web",
@@ -193,6 +200,7 @@ class WebServicesTest(unittest.TestCase):
     def test_03_each_service_gets_its_own_address(self):
         text = "Olá & mundo/?#"
         page = "https://example.org/a%20b?x=1#y"
+        sent = "https://example.org/a%20b?x=1"  # the fragment never goes to a service
         S = "const S = SV.NulavioServices;"
         for key in ("deepl", "google", "kagi-translate"):
             self.ok(S + "return S.addTranslator({key: args[0]});", key)
@@ -207,9 +215,9 @@ class WebServicesTest(unittest.TestCase):
         expected = {
             "translate-selection|deepl": f"https://www.deepl.com/translator#xx/pt-BR/{enc(text)}",
             "translate-selection|google": f"https://translate.google.com/?sl=auto&tl=pt&text={enc(text)}&op=translate",
-            "translate-page|google": f"https://translate.google.com/translate?sl=auto&tl=pt&u={enc(page)}",
+            "translate-page|google": f"https://translate.google.com/translate?sl=auto&tl=pt&u={enc(sent)}",
             "translate-selection|kagi-translate": f"https://translate.kagi.com/?from=auto&to=pt&text={enc(text)}",
-            "translate-page|kagi-translate": "https://translate.kagi.com/example.org/a%20b%3Fx=1%23y?to=pt",
+            "translate-page|kagi-translate": "https://translate.kagi.com/example.org/a%20b%3Fx=1?to=pt",
             "translate-selection|libretranslate:https://lt.example.org/": f"https://lt.example.org/?source=auto&target=pt#q={enc(text)}",
             "translate-selection|custom:Meu tradutor": f"https://tr.example.net/?q={enc(text)}&to=pt-BR",
         }
@@ -230,7 +238,7 @@ class WebServicesTest(unittest.TestCase):
         )
         self.assertEqual(
             self.ok(build, "translate-page|google", text, page)["open"],
-            f"https://translate.google.com/translate?sl=auto&tl=en&u={enc(page)}",
+            f"https://translate.google.com/translate?sl=auto&tl=en&u={enc(sent)}",
         )
         self.assertEqual(self.error(S + "return S.setLanguage('xx');"), "unknown-language")
         # A page this computer or a local network serves is never handed to a service that fetches it.
@@ -239,12 +247,12 @@ class WebServicesTest(unittest.TestCase):
         # Summaries: one service; a web one gets the address only.
         self.ok(S + "return S.setSummarizer({kind: 'web', key: 'kagi-summarizer'});")
         summary = self.ok(build, "summary-page|kagi-summarizer", "", page)
-        self.assertEqual(summary, {"open": f"https://kagi.com/summarizer?url={enc(page)}"})
+        self.assertEqual(summary, {"open": f"https://kagi.com/summarizer?url={enc(sent)}"})
         self.assertEqual(self.error(S + "return S.setSummarizer({kind: 'web', key: 'deepl'});"), "unknown-service")
         self.ok(
             S + "return S.setSummarizer({kind: 'web', key: 'custom', name: 'Resumo', summary: 'https://r.example.net/?u={url}'});"
         )
-        self.assertEqual(self.ok(build, "summary-page|custom", "", page), {"open": f"https://r.example.net/?u={enc(page)}"})
+        self.assertEqual(self.ok(build, "summary-page|custom", "", page), {"open": f"https://r.example.net/?u={enc(sent)}"})
         self.ok(S + "return S.setSummarizer(null);")
         self.assertEqual([item for item in self.ok(S + "return S.menu();") if item["use"].startswith("summary")], [])
         # A hand-edited entry that the module would not have written is dropped, never used.
@@ -286,7 +294,9 @@ class WebServicesTest(unittest.TestCase):
             harness.wait_until(lambda: any(i["label"] == refused for i in self.m.chrome(MENU) or []), 5), self.m.chrome(MENU)
         )
         self.assertTrue(next(i for i in self.m.chrome(MENU) if i["label"] == refused)["disabled"])
-        self.assertFalse(any("kagi.com" in url for url in self.m.chrome(GUARD_SEEN)), "the summary left without a click")
+        self.assertFalse(
+            any(urlsplit(url).hostname == "kagi.com" for url in self.m.chrome(GUARD_SEEN)), "the summary left without a click"
+        )
         # A link to a public page: its summary goes to the service with the link's address.
         self.m.chrome(CLOSE_MENU)
         self.m.context_click("#out")
@@ -337,6 +347,17 @@ class WebServicesTest(unittest.TestCase):
         self.m.context_click("#text")
         self.assertTrue(harness.wait_until(self.m.menu_open, 10))
         self.assertTrue(harness.wait_until(lambda: any(i["shown"] and not i["disabled"] for i in self.m.chrome(MENU) or []), 5))
+
+    def test_06a_the_assistant_is_never_offered_in_a_private_window(self):
+        """ADR 0007: the assistant refuses a private window, so its summary item is hidden there even when web
+        services are allowed in private windows."""
+        self.ok("return SV.NulavioServices.setSummarizer({kind: 'assistant'});")
+        self.ok("return SV.NulavioServices.setPrivateToo(true);")
+        check = "return SV.NulavioServices.check('summary-page|assistant', {target: args[0], isPrivate: args[1]});"
+        self.assertEqual(
+            self.ok(check, "https://example.org/", True), {"usable": False, "reason": "private-window", "hidden": True}
+        )
+        self.assertEqual(self.ok(check, "https://example.org/", False), {"usable": True, "reason": None})
 
     def test_06b_an_item_hidden_in_a_private_window_is_back_in_a_normal_one(self):
         """The engine draws no item that is not visible: one hidden in a private window (test 06) is drawn again in a

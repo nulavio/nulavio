@@ -25,15 +25,20 @@ Nothing until the click on an item that names the service. Then:
 | Service | Receives | How |
 |---|---|---|
 | A translation service, on a selection | The selected text (cut at 5,000 characters) and the target language | In the address of a new tab. DeepL and LibreTranslate put the text in the fragment (after `#`), which the browser does not send in the request; their page reads it there |
-| A translation service, on a page | The page's address and the target language | In the address of a new tab; the service then fetches the page itself |
-| A summary service on the web | The page's or the link's address | In the address of a new tab; the service fetches the page. The page's text is not sent |
+| A translation service, on a page | The page's address without its fragment (the part after `#`, which never goes to the page's own server and may hold a key or a token), and the target language | In the address of a new tab; the service then fetches the page itself |
+| A summary service on the web | The page's or the link's address, without its fragment | In the address of a new tab; the service fetches the page. The page's text is not sent |
 | Nulavio's assistant | The page's text, as an item in the assistant's panel, with the question "Resuma esta página." written | Nothing is sent until the person presses Send, and then only to the agent they connected, under its permissions |
 
 A service that fetches an address is never offered one it should not fetch: not an address on this computer
-(`localhost`, loopback), a private, shared or link-local network address, a `.local`, `.internal`, `.lan` or
+(`localhost`, loopback), a private, shared, link-local, documentation, benchmarking or reserved address, an IPv6 address
+that carries an IPv4 one (mapped, compatible, NAT64, 6to4), a `.local`, `.internal`, `.lan` or
 `.home.arpa` name, a host without a dot (an intranet name), an address with a user name, or anything that is not an
 `http(s)` page. The menu item stays, unusable, and says why. Private windows show none of these items unless the person
 ticks "Oferecer estes serviços e os resumos também nas janelas privadas"; then the service opens in a private tab.
+The assistant is never offered in a private window, whatever that box says (ADR 0007).
+
+What is left, written as residual risk R80: a page's address can still carry a secret in its query (a token a site
+put there), and a web service then receives it on the click; the person chose that service and that click.
 
 ## The addresses, and where they come from
 
