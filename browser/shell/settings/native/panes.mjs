@@ -415,13 +415,29 @@
       getControlConfig: config => (contrastBySystem() ? { ...config, l10nId: "nulavio-more-contrast-system" } : config),
     });
     lookSetting("nulavio-newtab-ambience", "newtabAmbience", Boolean);
+    // #322, D-UX17: NulavioWindow applies it through the engine's two switches. One an administrator locked is what is
+    // in effect: the switch shows that state, disabled, never a state the window does not have (review of #390).
+    const TITLE_PREFS = ["privacy.exposeContentTitleInWindow", "privacy.exposeContentTitleInWindow.pbm"];
+    const titleLock = () => {
+      const locked = TITLE_PREFS.filter(pref => Services.prefs.prefIsLocked(pref));
+      if (!locked.length) {
+        return null;
+      }
+      // Hidden only when every switch hides it; one locked to show titles shows them somewhere.
+      const hidden = TITLE_PREFS.every(pref => !Services.prefs.getBoolPref(pref, true));
+      return { hidden };
+    };
+    lookSetting("nulavio-hide-page-title", "hidePageTitle", Boolean, {
+      get: () => (titleLock() ? titleLock().hidden : Boolean(lookNow()?.hidePageTitle)),
+      disabled: () => Boolean(titleLock()) || lookLocked("hidePageTitle"),
+    });
     lookSetting("nulavio-reduce-transparency", "reduceTransparency", Boolean, {
       get: () => Boolean(lookNow()?.reduceTransparency) || ["system", "contrast"].includes(solidBy()),
       disabled: () => Boolean(solidBy()) || lookLocked("reduceTransparency"),
       getControlConfig: config => (solidBy() ? { ...config, l10nId: `nulavio-reduce-transparency-${solidBy()}` } : config),
     });
     // An option an administrator set cannot be changed here: said once, for the group.
-    const LOOK = ["accent", "moreContrast", "newtabAmbience", "reduceTransparency"];
+    const LOOK = ["accent", "moreContrast", "newtabAmbience", "reduceTransparency", "hidePageTitle"];
     setting({ id: "nulavio-look-locked", setup: look.watch, visible: () => LOOK.some(lookLocked) });
     look.refresh();
     added.cleanups.push(shell.NulavioPersonalise.subscribe(look.refresh));
@@ -1631,6 +1647,7 @@
       "trackingprotection-pb": { allow: "exceptionTrackingPrivate" },
       "https-only-load-insecure": { allow: "exceptionHttpsOnly", session: "exceptionHttpsOnlySession" },
       "nulavio-timezone": { allow: "exceptionTimeZone" },
+      "nulavio-allow-copy": { allow: "exceptionAllowCopy" },
       cookie: { allow: "exceptionCookieAllow", deny: "exceptionCookieDeny", session: "exceptionCookieSession" },
       install: { allow: "exceptionInstall" },
       popup: { allow: "exceptionPopup" },
@@ -2163,6 +2180,7 @@
           },
           { id: "nulavio-layout-keep", control: "moz-button" },
           { id: "nulavio-immersive", l10nId: "nulavio-immersive", control: "moz-toggle", controlAttrs: { "data-option": "immersive" } },
+          { id: "nulavio-hide-page-title", l10nId: "nulavio-hide-page-title", control: "moz-toggle", controlAttrs: { "data-option": "hidePageTitle" } },
         ],
       },
       // #221: meeting links in this profile, in the service's app (its page and the engine's prompt) or the browser.

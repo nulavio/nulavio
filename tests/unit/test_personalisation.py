@@ -138,6 +138,8 @@ PREF_WRITERS = {
     },
     "NulavioSearch.sys.mjs": {"setBoolPref(pref)": 1, "setIntPref(PREF_MIGRATION)": 1, "setStringPref(PREF_OPTIN)": 1},
     # What's new (#198): the newest version this profile was told about, and the bar's own switch; no protection.
+    # #322: the engine's switches that keep the page's title out of the window's; only false is written (test_window_title)
+    "NulavioWindow.sys.mjs": {"clearUserPref(titlePref)": 1, "setBoolPref(titlePref)": 1},
     "NulavioWhatsNew.sys.mjs": {"setBoolPref(PREF_NOTICE)": 1, "setStringPref(PREF_SEEN)": 3},
 }
 # Every nsIPrefBranch mutator, and Preferences.sys.mjs.
@@ -389,6 +391,8 @@ class CommandsTest(unittest.TestCase):
                 "toggle-immersive": "Ctrl+Alt+I",
                 "lock-profile": "Ctrl+Alt+B",
                 "copy-link-to-highlight": "Ctrl+Shift+L",  # #157
+                "toggle-page-editing": "Ctrl+Alt+E",  # #161
+                "toggle-keep-above": "Ctrl+Alt+K",  # #170
             },
         )
         self.assertEqual(len(set(keys.values())), len(keys))
@@ -464,6 +468,21 @@ class PrefWriterInventoryTest(unittest.TestCase):
         self.assertIn("} else if (changed && Services.prefs.prefHasUserValue(pref)", body)  # never cleared at a start
         self.assertIn("apply(false);", source)
         self.assertNotIn("Services.prefs.set", source.replace("Services.prefs.setBoolPref(pref, false);", ""))
+
+    def test_the_window_writes_only_false_to_the_engines_title_switches(self):
+        """#322 (review): the window title switch only ever hides; the engine's two switches and nothing else."""
+        source = (SHELL / "modules" / "NulavioWindow.sys.mjs").read_text(encoding="utf-8")
+        prefs = '"privacy.exposeContentTitleInWindow", "privacy.exposeContentTitleInWindow.pbm"'
+        self.assertIn(f"const TITLE_PREFS = Object.freeze([{prefs}]);", source)
+        body = source[source.index("  #pageTitle(changed) {") : source.index("  #open(win, path) {")]
+        self.assertIn("for (const titlePref of TITLE_PREFS) {", body)
+        self.assertIn("Services.prefs.setBoolPref(titlePref, false);", body)  # never true
+        self.assertIn("} else if (changed && Services.prefs.prefHasUserValue(titlePref)", body)  # never cleared at a start
+        self.assertIn("if (Services.prefs.prefIsLocked(titlePref)) {", body)
+        rest = source.replace("Services.prefs.setBoolPref(titlePref, false);", "").replace(
+            "Services.prefs.clearUserPref(titlePref);", ""
+        )
+        self.assertEqual(WRITER.findall(rest), [])
 
     def test_the_appearance_module_writes_only_inside_set(self):
         source = (SHELL / "modules" / "NulavioPersonalise.sys.mjs").read_text(encoding="utf-8")

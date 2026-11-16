@@ -177,6 +177,6 @@ S1–S25 and UX0–UX7 are done except where marked above, and the public alpha 
 - [x] UX4 Shell pages (Settings, new tab, profile menu, routing, security moments, vault methods) — merged 2026-11-04 (pull request #3)
 - [x] UX5 Assistant (tab-bound context, streaming, runs, entry points) — merged 2026-11-04 (pull request #3)
 - [x] UX6 Safe personalisation — merged 2026-11-04 (pull request #3)
-- [x] UX7 Motion and finish — merged 2026-11-04 (pull request #3). Still open: D-UX17's title option, the command palette, split view, and the checks on a real KDE/GNOME desktop.
+- [x] UX7 Motion and finish — merged 2026-11-04 (pull request #3). D-UX17's title option came with #322 (2026-11). Still open: the command palette, split view, and the checks on a real KDE/GNOME desktop.
 
 **DoD:** every state of the security-visibility matrix verified on the Nulavio build in both themes and every preset; WCAG 2.2 AA checks green (contrast, focus, targets, reduced motion/transparency, high contrast); before/after captures and design docs current; no protection weakened (Guard and prefs tests unchanged or stricter).

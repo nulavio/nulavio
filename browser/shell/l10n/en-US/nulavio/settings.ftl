@@ -26,6 +26,10 @@ nulavio-immersive =
     .label = Immersive
     .description = Takes the address bar and the tabs out of view; the band at the top keeps showing the profile and the site. They come back with the pointer at the edge of the window, with the keyboard, and by themselves whenever the browser has something to show.
 
+nulavio-hide-page-title =
+    .label = Hide the page title in the window title
+    .description = The window's title bar, the taskbar, Alt+Tab and screen-sharing pickers see only "Nulavio" and the profile's name, never the page. It does not hide the titles on the tabs, inside the window, or the page itself.
+
 nulavio-look-group =
     .label = Nulavio colours
     .description = Only how Nulavio's windows and pages look. Nothing here changes a protection.
