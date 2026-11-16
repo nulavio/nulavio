@@ -229,6 +229,12 @@ class FixtureServer:
         if path.startswith("/page/"):
             name = path.rsplit("/", 1)[-1]
             return f"<!doctype html><title>{name}</title><p id=name>{name}</p>".encode(), html, {}
+        if path == "/edit-page":
+            # Page-editing fixture (tests/integration/test_page_edit.py): a paragraph and a frame from another site
+            # (localhost is not 127.0.0.1's site), which editing the page must leave as it is.
+            frame = f"http://localhost:{self.port}/page/frame"
+            page = f"<!doctype html><title>edit-page</title><p id=text>Texto original.</p><iframe id=frame src='{frame}'>"
+            return page.encode(), html, {}
         if path == "/copy-blocked":
             # Allow-copy fixture (tests/integration/test_allow_copy.py): a page that cancels copy, cut, paste, the
             # page menu and selection, and turns selection off, as some banks do; it counts what its handlers saw.
