@@ -57,10 +57,27 @@ class MozconfigTest(unittest.TestCase):
         ):
             self.assertIn(required, self.lines)
 
-    def test_rust_lto_is_thin_and_reaches_cargo(self):
-        """Fat Rust LTO does not fit the build laptop. Only "export" lines reach the makefiles that run Cargo:
-        without the word, the release build silently goes back to the fat pass (seen on 2026-11-09)."""
-        self.assertIn('mk_add_options "export CARGO_RUSTCFLAGS=-Clto=thin"', self.lines)
+    def test_link_time_optimisation_is_cross_language_and_rust_is_not_asked_for_its_own(self):
+        """#364: the release build optimises C++ and Rust across each other at the link. rustc refuses its own
+        -Clto together with the -Cembed-bitcode=no Cargo passes for such a build ("options `-C embed-bitcode=no`
+        and `-C lto` are incompatible", tried with the build image's rustc), so the line that asked for thin
+        Rust LTO must not be in the release mozconfig."""
+        self.assertIn("ac_add_options --enable-lto=cross", self.lines)
+        self.assertFalse([line for line in self.lines if "CARGO_RUSTCFLAGS" in line or "-Clto" in line], self.lines)
+
+    def test_the_variants_without_cross_lto_keep_rust_lto_thin(self):
+        """Without cross-language LTO the release default is a fat pass over gkrust, which does not fit the build
+        laptop. Only "export" lines reach the makefiles that run Cargo: without the word the build silently goes
+        back to the fat pass (seen on 2026-11-09). A later option wins over an earlier one, as in autoconf."""
+        build = ROOT / "browser" / "build"
+        for name in ("mozconfig.no-lto", "mozconfig.asan"):
+            with self.subTest(variant=name):
+                lines = [line for line in (build / name).read_text(encoding="utf-8").splitlines() if not line.startswith("#")]
+                self.assertIn("ac_add_options --disable-lto", lines)
+                self.assertIn('mk_add_options "export CARGO_RUSTCFLAGS=-Clto=thin"', lines)
+        # A variant is never a release.
+        rehearsal = (ROOT / "scripts" / "release" / "rehearse_release.sh").read_text(encoding="utf-8")
+        self.assertIn("[[ -z ${NULAVIO_MOZCONFIG_EXTRA:-} ]]", rehearsal)
 
     def test_no_weakening_or_mozilla_branding(self):
         joined = "\n".join(self.lines)

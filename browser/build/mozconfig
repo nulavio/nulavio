@@ -28,20 +28,16 @@ ac_add_options --disable-debug
 ac_add_options --disable-tests
 ac_add_options --enable-bootstrap
 
-# Rust link-time optimisation: thin, not the release default (fat). The fat
-# pass over gkrust needed more than 17 GiB and stopped four guarded builds on
-# the 32 GiB build laptop (docs/research/evidence/release-rehearsal-2026-11-04.md).
-# The build system appends CARGO_RUSTCFLAGS after its own -Clto, and rustc
-# keeps the last value. Everything else of --enable-release stays. Only
-# "export" lines reach the makefiles that run Cargo (.mozconfig.mk).
-mk_add_options "export CARGO_RUSTCFLAGS=-Clto=thin"
-
-# C++ link-time optimisation (#364, the maintainer's choice of 2026-11-15): thin and
+# Link-time optimisation (#364, the maintainer's choice of 2026-11-15): thin and
 # cross-language, so C++ and Rust are optimised across each other at the link, as in
 # Mozilla's Linux release builds. Without it the build scored a third lower than
 # Firefox 160.0 on Speedometer (docs/architecture/performance.md). Profile-guided
 # optimisation (PGO), the other half of Mozilla's setting, comes after this is
 # measured against the release build's time and memory budget.
+# Rust is part of that link (thin), so nothing asks rustc for its own LTO any more:
+# rustc refuses -Clto together with the -Cembed-bitcode=no that Cargo passes for a
+# cross-language build. A machine that cannot fit this link builds the variant
+# mozconfig.no-lto (the build as it was before: no C++ LTO, thin Rust LTO).
 ac_add_options --enable-lto=cross
 
 # Extensions must be signed by Mozilla's AMO root (explicit even though the
