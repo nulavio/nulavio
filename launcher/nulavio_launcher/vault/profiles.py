@@ -13,6 +13,7 @@ import os
 import signal
 import stat
 import struct
+import sys
 import time
 
 from .. import log, profile
@@ -22,11 +23,26 @@ from .providers import Keyring, add_os_keyring, unlock_os_keyring
 from .storage import Container, recover_interrupted, recover_rekey
 
 
+# What a person reads when protecting a profile was cut short (a kill, a power cut) and the next use
+# of the profile settled it (storage.recover_interrupted).
+RECOVERED = {
+    "finished": (
+        "protecting profile '{name}' was interrupted after its files were encrypted: "
+        "it is finished now, and the profile is protected"
+    ),
+    "undone": (
+        "protecting profile '{name}' was interrupted before its files were encrypted: "
+        "it is back as it was, not protected; protect it again"
+    ),
+}
+
+
 def container(prof: profile.Profile) -> Container:
     # Every launcher path that touches a protected profile comes here first.
     outcome = recover_interrupted(prof.path)
     if outcome:
         log.event("vault.migration-recovered", profile=prof.name, outcome=outcome)
+        print("nulavio: " + RECOVERED[outcome].format(name=prof.name), file=sys.stderr)  # never stdout: a helper's protocol
     outcome = recover_rekey(prof.path)
     if outcome:
         log.event("vault.rekey-recovered", profile=prof.name, outcome=outcome)

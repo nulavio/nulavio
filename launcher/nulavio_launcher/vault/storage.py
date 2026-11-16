@@ -631,19 +631,34 @@ def encrypt_existing(path: Path, vault: Vault) -> Container:
     The plaintext originals are deleted afterwards; on SSDs and in backups, fragments may remain.
     An interruption the clean-up below cannot catch (SIGKILL, power loss) is finished or
     undone by recover_interrupted() the next time the profile is used.
+
+    `vault` is new and not saved yet: its key file is written here, once the profile's files are in
+    staging (#411). Saved by the caller beforehand, a stop between the two left a key file with no
+    volume: the profile then said it was protected and could not be opened, with its files in the
+    clear. From the rename on, every stop is one recover_interrupted() undoes or finishes; before
+    it, nothing is on disk.
     """
     path = Path(path)
-    if not path.is_dir():
-        raise StorageError("missing", str(path))  # the caller checks that no engine is using it
     staging = path.with_name(path.name + ".plaintext-migrating")
-    if staging.exists():
-        raise StorageError("exists", str(staging))
     fd = _migration_lock(path, wait=True)
     try:
+        # Under the lock: a second run that waited for it must see what the first one made. Checked
+        # before, both passed; the second then wrote its key file over the first's and, when making
+        # the volume failed, removed the folder that held the only copy of the profile's files.
+        if staging.exists():
+            raise StorageError("exists", str(staging))
+        if Container(path).vault_path.exists():
+            raise StorageError("exists", str(Container(path).vault_path))  # a key file here is not this vault's to replace
+        if not path.is_dir():
+            raise StorageError("missing", str(path))  # the caller checks that no engine is using it
         with _signals_as_exceptions():
             os.rename(path, staging)
             container = Container(path)
             try:
+                # On disk before the key file is: a power cut must not keep the key file and lose the
+                # rename, which would be the very state this order exists to rule out.
+                _fsync_dir(path.parent)
+                vault.save()
                 container.init(vault)
                 container.mount(vault)
                 for item in staging.iterdir():
