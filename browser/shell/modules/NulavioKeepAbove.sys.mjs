@@ -135,10 +135,12 @@ export function script(uuid, on) {
     `for (const w of workspace.windowList()) { if (w.internalId.toString() === "${uuid}") { w.keepAbove = ${on}; } }\n`;
 }
 
-let queue = Promise.resolve(); // one change at a time: two windows never share a script or a plugin name
+// One change at a time, from reading the state to reading it back: two presses never both read "off" and both
+// write "on", and two windows never share a script.
+let queue = Promise.resolve();
 
-async function runScript(text) {
-  const run = queue.then(() => runScriptNow(text));
+function serial(task) {
+  const run = queue.then(task);
   queue = run.catch(() => {});
   return run;
 }
@@ -165,8 +167,11 @@ async function runScriptNow(text) {
       fail("keep-above-failed");
     }
   } finally {
-    await bus(KWIN, "/Scripting", "org.kde.kwin.Scripting", "unloadScript", "s", name);
-    await IOUtils.remove(dir, { recursive: true, ignoreAbsent: true });
+    try {
+      await bus(KWIN, "/Scripting", "org.kde.kwin.Scripting", "unloadScript", "s", name);
+    } finally {
+      await IOUtils.remove(dir, { recursive: true, ignoreAbsent: true });
+    }
   }
 }
 
@@ -199,13 +204,18 @@ function addMenuItem(win) {
       return;
     }
     item.setAttribute("disabled", "true"); // until KWin has answered
+    item.setAttribute("nv-read", "pending");
     NulavioKeepAbove.state(win).then(
       now => {
+        item.setAttribute("nv-read", "done");
         item.setAttribute("checked", String(now.on));
         item.toggleAttribute("disabled", !now.available);
         item.setAttribute("label", now.available ? t("menuKeepAbove") : `${t("menuKeepAbove")} (${t(now.reason)})`);
       },
-      e => console.error(e)
+      e => {
+        item.setAttribute("nv-read", "done");
+        console.error(e);
+      }
     );
   });
   const fullScreen = [doc.getElementById("fullScreenItem"), doc.getElementById("enterFullScreenItem")].find(node => node?.parentNode === popup);
@@ -244,26 +254,33 @@ export const NulavioKeepAbove = {
   },
 
   /** Keep the window above the others or not (`on` null: the other way). `say(key)` announces what KWin did. */
-  async set(win, on = null, say = () => {}) {
-    const desktop = await kwin();
-    if (!desktop.available) {
-      say(desktop.reason);
-      fail("keep-above-unavailable");
-    }
-    const uuid = await windowId(win);
-    const before = uuid ? await info(uuid) : null;
-    if (!before) {
-      say("keepAboveNoWindow");
-      fail("keep-above-unavailable");
-    }
-    const want = on === null ? !before.keepAbove : Boolean(on);
-    await runScript(script(uuid, want));
-    const after = await info(uuid);
-    if (after?.keepAbove !== want) {
-      say("keepAboveFailed");
-      fail("keep-above-failed");
-    }
-    say(want ? "keepAboveOn" : "keepAboveOff");
-    return { available: true, reason: null, on: after.keepAbove };
+  set(win, on = null, say = () => {}) {
+    return serial(async () => {
+      const desktop = await kwin();
+      if (!desktop.available) {
+        say(desktop.reason);
+        fail("keep-above-unavailable");
+      }
+      const uuid = await windowId(win);
+      const before = uuid ? await info(uuid) : null;
+      if (!before) {
+        say("keepAboveNoWindow");
+        fail("keep-above-unavailable");
+      }
+      const want = on === null ? !before.keepAbove : Boolean(on);
+      try {
+        await runScriptNow(script(uuid, want));
+      } catch (e) {
+        say("keepAboveFailed");
+        throw e;
+      }
+      const after = await info(uuid);
+      if (after?.keepAbove !== want) {
+        say("keepAboveFailed");
+        fail("keep-above-failed");
+      }
+      say(want ? "keepAboveOn" : "keepAboveOff");
+      return { available: true, reason: null, on: after.keepAbove };
+    });
   },
 };

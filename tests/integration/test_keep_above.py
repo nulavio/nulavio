@@ -26,8 +26,10 @@ popup.dispatchEvent(new Event("popupshowing"));
 popup.dispatchEvent(new Event("popuphidden"));
 const read = () => ({ parent: item.parentNode.id, label: item.getAttribute("label"), type: item.getAttribute("type"),
                       checked: item.getAttribute("checked"), disabled: item.hasAttribute("disabled") });
-// The state is KWin's answer, which comes a moment later.
-setTimeout(() => done(read()), 3000);
+// The state is KWin's answer, which comes a moment later (each bus call may take up to 5 s).
+const until = Date.now() + 20000;
+const wait = () => (item.getAttribute("nv-read") === "done" || Date.now() > until ? done(read()) : setTimeout(wait, 100));
+wait();
 """
 PLASMA = os.environ.get("NULAVIO_TEST_PLASMA") == "1" and os.environ.get("NULAVIO_TEST_HEADFUL") == "1"
 
