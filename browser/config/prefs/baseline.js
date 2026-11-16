@@ -6,6 +6,9 @@
 //   @mode      seed    -> written once into a *new* profile's prefs.js. The
 //                         user can change it later in Settings and the change
 //                         sticks (privacy by default, reversible by design).
+//                         A value nobody changed follows this file: when a
+//                         seed pref's value changes here, put the old value
+//                         in seed-history.json (a unit test asks for it).
 //              enforce -> re-written to user.js on every launch. Reserved for
 //                         settings the preview needs to function.
 //   @category  privacy | tracking | https | network | ui | theme
