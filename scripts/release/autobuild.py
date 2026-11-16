@@ -177,7 +177,10 @@ def blockers(facts: Facts, options: Options) -> list[tuple[str, str]]:
 
 
 def _built(record: dict | None, digest: str) -> bool:
-    return bool(record) and record.get("source_sha256") == digest and record.get("phase") in ("built", *READY)
+    # Only a pre-check counts: a record from before #430 (a release rehearsal, with a manifest and no reading
+    # of the Rust library) is checked again, whatever its phase says.
+    checked = bool(record) and bool(record.get("precheck"))
+    return checked and record.get("source_sha256") == digest and record.get("phase") in ("built", *READY)
 
 
 def decide(state: dict, report: dict, facts: Facts, options: Options, now: _dt.datetime) -> Decision:

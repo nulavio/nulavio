@@ -18,8 +18,10 @@ from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts" / "build"))
+sys.path.insert(0, str(ROOT / "tests" / "lib"))
 
 import networking_check as nc  # noqa: E402
+import networking_fixture  # noqa: E402
 
 VERSION = "199.0"
 DIGEST = "ab" * 32
@@ -75,6 +77,17 @@ class TreeCase(unittest.TestCase):
         self.tmp = Path(tempfile.mkdtemp(prefix="nv-netcheck-"))
         self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
         self.tree = self.tmp / f"firefox-{VERSION}"
+        # The checkout the build was made from, and the mozconfig build_nulavio.sh writes into the tree from it:
+        # the release mozconfig, the variant, then the machine's own lines.
+        self.repo = self.tmp / "repo"
+        networking_fixture.write_inputs(self.repo)
+        build = self.repo / "browser" / "build"
+        self.tree.mkdir()
+        (self.tree / "mozconfig").write_bytes(
+            (build / "mozconfig").read_bytes()
+            + (build / "mozconfig.no-lto").read_bytes()
+            + b"\nmk_add_options MOZ_PARALLEL_BUILD=2\n"
+        )
         check = self.tree / nc.CHECK_SOURCE
         check.parent.mkdir(parents=True)
         check.write_text(CHECK_BINARY)
@@ -96,7 +109,7 @@ class TreeCase(unittest.TestCase):
 
     def check(self, **more) -> dict:
         return nc.check(VERSION, self.tmp, engine=ENGINE, run=self.run_tool, which=lambda name: f"/usr/bin/{name}",
-                        today="2026-11-16", **more)  # fmt: skip
+                        today="2026-11-16", repo=self.repo, **more)  # fmt: skip
 
     def refused(self) -> str:
         with self.assertRaises(nc.CannotCheck) as ctx:
@@ -112,13 +125,39 @@ class CheckTest(TreeCase):
         self.assertIn("networking_check.py", record["how"])
         self.assertIn("none of the engine's 10 networking functions", record["how"])
         self.assertEqual(self.calls, [["/usr/bin/readelf", "--wide", "--syms", str(self.library)]])  # an argument list
-        # What was read and what built it, for a reviewer with a build of their own.
+        # What was read, and what decided the build: the checkout's mozconfig, variant and patch stack.
         self.assertEqual(record["library_sha256"], nc.sha256(self.library))
-        self.assertEqual(record["built_with"]["mozconfig_sha256"], None)  # this tree has no mozconfig
-        (self.tree / "mozconfig").write_text("ac_add_options --disable-lto\n")
-        again = self.check()
-        self.assertEqual(again["built_with"]["mozconfig_sha256"], nc.sha256(self.tree / "mozconfig"))
-        self.assertRegex(again["built_with"]["patch_stack_sha256"], r"^[0-9a-f]{64}$")  # this repository's stack
+        self.assertEqual(record["built_with"], nc.repository_inputs(self.repo))
+        self.assertEqual(sorted(record["built_with"]), ["mozconfig_sha256", "patch_stack_sha256", "variant_sha256"])
+
+    def test_a_build_made_from_another_mozconfig_is_refused(self):
+        build = self.repo / "browser" / "build"
+        for used in (
+            b"ac_add_options --enable-release\n",  # the release mozconfig alone: no variant
+            (build / "mozconfig.no-lto").read_bytes() + (build / "mozconfig").read_bytes(),  # the other way round
+            b"ac_add_options --enable-debug\n" + (build / "mozconfig.no-lto").read_bytes(),  # another mozconfig
+        ):
+            (self.tree / "mozconfig").write_bytes(used)
+            self.assertIn("is not this checkout's release mozconfig followed by mozconfig.no-lto", self.refused())
+        (self.tree / "mozconfig").unlink()
+        self.assertIn("cannot be compared", self.refused())
+        self.assertEqual(self.calls, [])
+
+    def test_the_inputs_change_with_a_patch_the_series_or_a_mozconfig(self):
+        first = nc.repository_inputs(self.repo)
+        patches = self.repo / "browser" / "patches"
+        (patches / "0001-example.patch").write_text("--- a/dom/y.cpp\n+++ b/dom/y.cpp\n")
+        second = nc.repository_inputs(self.repo)
+        self.assertNotEqual(first["patch_stack_sha256"], second["patch_stack_sha256"])
+        (patches / "0002-more.patch").write_text("--- a/z\n+++ b/z\n")
+        self.assertEqual(nc.repository_inputs(self.repo), second)  # not in the series: not in the stack
+        (patches / "series").write_text("0001-example.patch\n0002-more.patch\n")
+        self.assertNotEqual(nc.repository_inputs(self.repo)["patch_stack_sha256"], second["patch_stack_sha256"])
+        (self.repo / "browser" / "build" / "mozconfig").write_text("ac_add_options --enable-lto=cross\n")
+        self.assertNotEqual(nc.repository_inputs(self.repo)["mozconfig_sha256"], first["mozconfig_sha256"])
+        (patches / "0002-more.patch").unlink()
+        with self.assertRaises(OSError):
+            nc.repository_inputs(self.repo)
 
     def test_a_library_that_imports_recv_fails(self):
         self.output = readelf_text("recv", "gethostbyname")
@@ -143,7 +182,7 @@ class CheckTest(TreeCase):
         (self.tree / ".nulavio-source-sha256").write_text("cd" * 32)
         self.assertIn("not the release engine.json pins", self.refused())
         with self.assertRaises(nc.CannotCheck) as ctx:
-            nc.check("198.0", self.tmp, engine=ENGINE, run=self.run_tool, which=lambda name: name)
+            nc.check("198.0", self.tmp, engine=ENGINE, run=self.run_tool, which=lambda name: name, repo=self.repo)
         self.assertIn("engine.json pins Firefox 199.0, not 198.0", str(ctx.exception))
         (self.tree / ".nulavio-source-sha256").unlink()
         self.assertIn("not a source tree this project extracted", self.refused())
@@ -196,7 +235,7 @@ class CheckTest(TreeCase):
         self.assertIn("found 2", self.refused())
         shutil.rmtree(other.parent)
         with self.assertRaises(nc.CannotCheck) as ctx:
-            nc.check(VERSION, self.tmp, engine=ENGINE, run=self.run_tool, which=lambda _name: None)
+            nc.check(VERSION, self.tmp, engine=ENGINE, run=self.run_tool, which=lambda _name: None, repo=self.repo)
         self.assertIn("no readelf", str(ctx.exception))
         self.library.unlink()
         self.assertIn("found 0", self.refused())
@@ -214,10 +253,12 @@ class MainTest(TreeCase):
         record = self.tmp / "networking-check.json"
         engine = self.tmp / "engine.json"
         engine.write_text(json.dumps(ENGINE))
+        real_check = nc.check
         with (
             mock.patch.object(nc, "RECORD", record),
             mock.patch.object(nc, "ENGINE", engine),
             mock.patch.object(nc, "ROOT", self.tmp),
+            mock.patch.object(nc, "check", lambda *a, **k: real_check(*a, repo=self.repo, **k)),
             contextlib.redirect_stdout(out),
             contextlib.redirect_stderr(err),
         ):
@@ -250,9 +291,15 @@ class MainTest(TreeCase):
         self.assertFalse((self.tmp / "networking-check.json").exists())
 
 
-@unittest.skipUnless(shutil.which("readelf") and shutil.which("cc") and shutil.which("ar"), "readelf, cc and ar are needed")
 class RealArchiveTest(unittest.TestCase):
-    """The reading against real object files: one archive that calls recv, one that does not."""
+    """The reading against real object files: one archive that calls recv, one that does not.
+
+    Not skipped where a tool is missing: it is the one test that reads what readelf really prints, and a skip
+    would let the suite pass without it. It needs readelf and ar (binutils) and a C compiler."""
+
+    def setUp(self):
+        missing = [tool for tool in ("readelf", "ar", "cc") if not shutil.which(tool)]
+        self.assertEqual(missing, [], "install binutils and a C compiler: this test is not optional")
 
     def archive(self, tmp: Path, name: str, body: str) -> Path:
         source = tmp / f"{name}.c"

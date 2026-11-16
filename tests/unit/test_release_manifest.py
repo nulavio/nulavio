@@ -14,8 +14,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts" / "release"))
 sys.path.insert(0, str(ROOT / "scripts" / "upstream"))
+sys.path.insert(0, str(ROOT / "tests" / "lib"))
 
 import release_manifest  # noqa: E402
+import networking_fixture  # noqa: E402
 from verify_firefox_release import SIGNING_SUBKEYS  # noqa: E402
 
 RPM = "packages/x86_64/nulavio-159.0.1-0.1.fc44.x86_64.rpm"
@@ -34,10 +36,11 @@ class ReleaseManifestTest(unittest.TestCase):
         self.repo.mkdir()
         git = ["git", "-C", str(self.repo), "-c", "user.name=t", "-c", "user.email=t@example.invalid"]
         subprocess.run([*git, "init", "-q", "-b", "main"], check=True)
-        # The base commit says the pinned release passed the networking check (#430).
+        # The base commit says the pinned release passed the networking check, read with its own mozconfig,
+        # variant and patch stack (#430).
         self.record = self.repo / release_manifest.NETWORKING_RECORD
-        self.record.parent.mkdir(parents=True)
-        self.record.write_text(json.dumps({"firefox": "159.0.1", "source_sha256": SOURCE, "result": "passed"}))
+        networking_fixture.write_inputs(self.repo)
+        networking_fixture.write_record(self.repo, "159.0.1", SOURCE)
         subprocess.run([*git, "add", "."], check=True)
         subprocess.run([*git, "commit", "-q", "-m", "base"], check=True)
         self.base = subprocess.run([*git, "rev-parse", "HEAD"], capture_output=True, text=True, check=True).stdout.strip()
@@ -137,7 +140,7 @@ class ReleaseManifestTest(unittest.TestCase):
         return head
 
     def test_a_release_nobody_checked_for_networking_in_rust_is_refused(self):
-        good = {"firefox": "159.0.1", "source_sha256": SOURCE, "result": "passed"}
+        good = networking_fixture.record(self.repo, "159.0.1", SOURCE)
         for record, said in (
             ({**good, "firefox": "159.0"}, "is about Firefox 159.0, not the 159.0.1"),  # the pin moved, the record did not
             ({**good, "source_sha256": "1" * 64}, "nobody checked its Rust code"),
@@ -155,9 +158,30 @@ class ReleaseManifestTest(unittest.TestCase):
         self.commit_record(good)
         self.assertEqual(self.verify()["firefox"], "159.0.1")
 
+    def test_a_patch_or_a_mozconfig_changed_since_the_reading_asks_for_a_new_one(self):
+        said = "read with another mozconfig or patch stack"
+        good = networking_fixture.record(self.repo, "159.0.1", SOURCE)
+        for change in (
+            lambda: (self.repo / "browser/patches/0001-example.patch").write_text("--- a/dom/y.cpp\n+++ b/dom/y.cpp\n"),
+            lambda: (self.repo / "browser/build/mozconfig").write_text("ac_add_options --enable-lto=cross\n"),
+            lambda: (self.repo / "browser/build/mozconfig.no-lto").write_text("ac_add_options --enable-debug\n"),
+        ):
+            with self.subTest(change=change):
+                change()
+                self.commit_record(good)  # the files changed, the record is the one read before
+                self.refused(said)
+                self.commit_record(networking_fixture.record(self.repo, "159.0.1", SOURCE))  # read again
+                self.assertEqual(self.verify()["firefox"], "159.0.1")
+                good = networking_fixture.record(self.repo, "159.0.1", SOURCE)
+        without = {key: value for key, value in good.items() if key != "built_with"}
+        self.commit_record(without)  # a record from before the binding says nothing about what it was read with
+        self.refused(said)
+        self.commit_record({**without, "result": "accepted", "accepted_in": "#430"})  # the maintainer's word needs none
+        self.assertEqual(self.verify()["firefox"], "159.0.1")
+
     def test_the_record_is_read_at_the_base_commit_not_in_the_working_tree(self):
-        self.commit_record({"firefox": "159.0", "source_sha256": SOURCE, "result": "passed"})
-        self.record.write_text(json.dumps({"firefox": "159.0.1", "source_sha256": SOURCE, "result": "passed"}))  # not committed
+        self.commit_record(networking_fixture.record(self.repo, "159.0", SOURCE))
+        self.record.write_text(json.dumps(networking_fixture.record(self.repo, "159.0.1", SOURCE)))  # not committed
         self.refused("is about Firefox 159.0")
 
     def test_a_package_changed_after_the_rehearsal_is_refused(self):

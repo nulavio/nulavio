@@ -413,7 +413,6 @@ class PrecheckTest(unittest.TestCase):
         self.assertLess(refusal, chosen)  # a caller's variant (a sanitised build) is refused first
         self.assertEqual(self.script.count("export NULAVIO_MOZCONFIG_EXTRA="), 1)
 
-    @unittest.skipUnless(shutil.which("bash"), "bash not available")
     def test_a_callers_variant_is_refused_in_a_precheck_too(self):
         for variant in ("mozconfig.asan", "mozconfig.no-lto"):
             out = subprocess.run(

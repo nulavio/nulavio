@@ -122,6 +122,21 @@ class NetworkingCheckRecordTest(unittest.TestCase):
             how_to,
         )
 
+    def test_the_record_was_read_with_this_trees_mozconfig_and_patch_stack(self):
+        # A patch added or changed, or a configure option, can change which Rust code is compiled: the record
+        # is good only for the inputs it was read with. Changing one of them needs a new reading, by
+        # `rehearse_release.sh --precheck`, or by networking_check.py --write after a build of the variant.
+        if self.record.get("result") == "accepted":
+            self.skipTest("accepted on the maintainer's word: there was no reading")
+        sys.path.insert(0, str(ROOT / "scripts" / "build"))
+        import networking_check
+
+        self.assertEqual(
+            self.record.get("built_with"),
+            networking_check.repository_inputs(ROOT),
+            "browser/build/mozconfig, mozconfig.no-lto or the patch stack changed since networking-check.json was written",
+        )
+
     def test_the_record_is_a_result_or_the_maintainers_word(self):
         self.assertIn(self.record.get("result"), ("passed", "accepted"))
         self.assertRegex(self.record.get("checked", ""), r"^\d{4}-\d{2}-\d{2}$")
@@ -221,17 +236,17 @@ class LocalizationTest(unittest.TestCase):
 RUST_PATH = re.compile(
     r"(\.rs|(^|/)Cargo\.(toml|lock)|(^|/)\.cargo/.*)$|^third_party/rust/|^toolkit/library/rust/|^build/rust/"
     r"|^build/moz\.configure/(rust|lto-pgo)\.configure$|^config/makefiles/rust\.mk$|^build/mozconfig\.rust$"
-    r"|^python/mozbuild/mozbuild/(rust_commands\.py|action/(run_cargo|check_binary)\.py)$"
+    r"|^python/mozbuild/mozbuild/(rust_commands\.py|frontend/emitter\.py|action/(run_cargo|check_binary)\.py)$"
 )
 
 
 def patch_paths(text: str) -> set[str]:
     """Every path a patch names, whatever its first component is called (git apply -p1 strips any):
     the ---/+++ lines, git's "diff --git" line, and its rename and copy headers."""
-    paths = set(re.findall(r"(?m)^(?:---|\+\+\+) (?!/dev/null)[^/\s]+/(\S+)", text))
-    for old, new in re.findall(r"(?m)^diff --git [^/\s]+/(\S+) [^/\s]+/(\S+)$", text):
+    paths = set(re.findall(r'(?m)^(?:---|\+\+\+) "?(?!/dev/null)[^/\s"]+/([^\s"]+)', text))
+    for old, new in re.findall(r'(?m)^diff --git "?[^/\s"]+/([^\s"]+)"? "?[^/\s"]+/([^\s"]+)"?$', text):
         paths |= {old, new}
-    paths |= set(re.findall(r"(?m)^(?:rename|copy) (?:from|to) (\S+)$", text))
+    paths |= set(re.findall(r'(?m)^(?:rename|copy) (?:from|to) "?([^\s"]+)"?$', text))
     return paths
 
 
@@ -267,6 +282,10 @@ class PatchStackTest(unittest.TestCase):
         self.assertEqual(patch_paths("--- a/dom/x.cpp\n+++ b/dom/x.cpp\n"), {"dom/x.cpp"})
         self.assertEqual(patch_paths("--- /dev/null\n+++ b/servo/new.rs\n"), {"servo/new.rs"})
         self.assertEqual(patch_paths("--- old/servo/lib.rs\n+++ new/servo/lib.rs\n"), {"servo/lib.rs"})  # not a/ and b/
+        quoted = '--- "a/servo/components/style/lib.rs"\n+++ "b/servo/components/style/lib.rs"\n'  # as git quotes a path
+        self.assertEqual(patch_paths(quoted), {"servo/components/style/lib.rs"})
+        self.assertEqual(patch_paths('diff --git "a/Cargo.lock" "b/Cargo.lock"\n'), {"Cargo.lock"})
+        self.assertRegex("python/mozbuild/mozbuild/frontend/emitter.py", RUST_PATH)  # it picks the Rust features
         git = "diff --git a/old/lib.rs b/new/lib.txt\nsimilarity index 100%\nrename from old/lib.rs\nrename to new/lib.txt\n"
         self.assertEqual(patch_paths(git), {"old/lib.rs", "new/lib.txt"})
         self.assertEqual(patch_paths("diff --git x/Cargo.lock y/Cargo.lock\nGIT binary patch\n"), {"Cargo.lock"})

@@ -7,7 +7,8 @@
   "how": "scripts/build/networking_check.py read libgkrust.a of a build with Rust's own link-time optimisation and no cross-language LTO or sanitiser: 267052 symbols, 6874 undefined names; by the engine's rule it imports none of the engine's 21 networking functions.",
   "library_sha256": "136b43b246ebb30e9dd4b1447f6fb541e4c18282e5762071258adb50ea850216",
   "built_with": {
-    "mozconfig_sha256": "f47987b6b902c95dfbc1f2d4e3fdcadb89cd4df3d5da6ae6d566d71c4ecd9ffc",
+    "mozconfig_sha256": "baa3f8b35d00137da703761dd06f72ed3e2fa56ee6b9001a8db1d203cf1415e1",
+    "variant_sha256": "913ccfc5fe248ffbaa52157c6c41f4d4aa56e32b22a4d2a4390c76d225762390",
     "patch_stack_sha256": "27e2ae5fa5cafb184a9501d6540179a96452cc943f720b83ffae9863ae2d64e1"
   }
 }

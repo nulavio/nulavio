@@ -107,9 +107,12 @@ def check_base(commit: str, repo: Path, ref: str) -> None:
 def check_networking(manifest: dict, repo: Path) -> None:
     """Publish only a Firefox release whose Rust code passed the engine's networking check (#430).
 
-    The release build is cross-language and cannot be read for that check, so it is made on another build of
+    A cross-language release build (#371) cannot be read for that check, so it is made on another build of
     the same source and recorded in the repository. The record is read at the manifest's base commit, which
-    check_base() has shown to be reviewed history: never from a working tree, where anyone could write it."""
+    check_base() has shown to be reviewed history: never from a working tree, where anyone could write it.
+    It must also have been read with that commit's mozconfig, variant and patch stack: a patch or a configure
+    option changed since asks for a new reading. The record is a statement all the same (residual risk R79),
+    and "accepted" is the maintainer's word only by the review of the pull request that wrote it."""
     commit = manifest["nulavio_base_commit"]
     shown = subprocess.run(["git", "-C", str(repo), "show", f"{commit}:{NETWORKING_RECORD}"], capture_output=True)
     try:
@@ -128,6 +131,29 @@ def check_networking(manifest: dict, repo: Path) -> None:
     accepted = result == "accepted" and re.fullmatch(r"#\d+", str(record.get("accepted_in", "")))
     if result != "passed" and not accepted:
         raise ManifestError(f"the networking check's record says {result!r}: only a pass, or the maintainer's word, publishes")
+    if accepted:
+        return
+
+    def at_commit(path: str) -> bytes:
+        return subprocess.run(["git", "-C", str(repo), "show", f"{commit}:{path}"], capture_output=True, check=True).stdout
+
+    # Imported here, not at the top: next-release and the other commands of this file run in places that
+    # have only scripts/release/ (the metadata workflow's checkout of one directory, tests). Signing does
+    # not: without the module nothing can be compared, and nothing is published.
+    sys.path.insert(0, str(ROOT / "scripts" / "build"))
+    try:
+        import networking_check
+    except ImportError:
+        raise ManifestError("scripts/build/networking_check.py is missing: the networking record cannot be compared") from None
+    try:
+        current = networking_check.inputs(at_commit)
+    except (subprocess.CalledProcessError, UnicodeDecodeError):
+        raise ManifestError(f"the mozconfig, its variant or the patch stack cannot be read at {commit[:12]}") from None
+    if record.get("built_with") != current:
+        raise ManifestError(
+            "the networking check was read with another mozconfig or patch stack than the base commit's: "
+            f"a patch or a configure option changed since; {how_to}"
+        )
 
 
 def tag(manifest: dict) -> tuple[str, list[str]]:

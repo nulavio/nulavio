@@ -1017,9 +1017,12 @@ class AutobuildDecideTest(TempDirTest):
         return autobuild.decide(state or {"builds": {}}, report, facts, autobuild.Options(**options), NOW)
 
     def test_decide_table(self):
-        built = {"builds": {"159.0": {"phase": "built", "source_sha256": D159}}}
-        ready = {"builds": {"159.0": {"phase": "ready-to-sign", "source_sha256": D159}}}
-        other = {"builds": {"159.0": {"phase": "built", "source_sha256": "e" * 64}}}
+        built = {"builds": {"159.0": {"phase": "built", "source_sha256": D159, "precheck": "/x/precheck.json"}}}
+        ready = {"builds": {"159.0": {"phase": "ready-to-release", "source_sha256": D159, "precheck": "/x/precheck.json"}}}
+        other = {"builds": {"159.0": {"phase": "built", "source_sha256": "e" * 64, "precheck": "/x/precheck.json"}}}
+        # Records from before #430: a release rehearsal with a manifest, and no reading of the Rust library.
+        legacy_built = {"builds": {"159.0": {"phase": "built", "source_sha256": D159, "manifest": "/x/manifest.json"}}}
+        legacy_ready = {"builds": {"159.0": {"phase": "ready-to-sign", "source_sha256": D159, "manifest": "/x/manifest.json"}}}
         failed = {"builds": {"159.0": {"phase": "failed", "source_sha256": D159, "failed_step": "build"}}}
         rows = [
             ("staged, nothing built", self.staged, {}, GOOD, {}, ("build", 0)),
@@ -1027,6 +1030,8 @@ class AutobuildDecideTest(TempDirTest):
             ("staged and built: wait", self.staged, built, GOOD, {}, ("wait", 0)),
             ("published, same digest built", self.shipped, built, GOOD, {}, ("ready", 10)),
             ("already ready", self.shipped, ready, GOOD, {}, ("idle", 0)),
+            ("staged, built before the pre-check existed: checked again", self.staged, legacy_built, GOOD, {}, ("build", 0)),
+            ("published, ready-to-sign from before: checked again", self.shipped, legacy_ready, GOOD, {}, ("build", 0)),
             ("published, other digest built", self.shipped, other, GOOD, {}, ("build", 0)),
             ("failed before", self.shipped, failed, GOOD, {}, ("failed-before", 1)),
             ("failed before, --retry", self.shipped, failed, GOOD, {"retry": True}, ("build", 0)),

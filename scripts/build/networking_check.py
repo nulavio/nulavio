@@ -7,8 +7,8 @@ The engine has a build-time check, check_networking (python/mozbuild/mozbuild/ac
 its Rust library must import none of a list of networking functions (recv, send, the gethostby…,
 getserv… and getproto… families), so that Rust code does not talk to the network around the engine's
 own network stack, and so around a proxy the person set. The build system runs it only when Rust gets
-its own link-time optimisation. A cross-language build (the release build from #364 on) and a
-sanitised one skip it.
+its own link-time optimisation. A cross-language build (what #371 proposes for the release build;
+today's release build is not one, and still runs the engine's check) and a sanitised one skip it.
 
 This does the same reading on a build that can be read, the mozconfig.no-lto variant: the undefined
 symbols of libgkrust.a, against the list in the very source tree that was built. It takes nobody's
@@ -66,24 +66,52 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def built_with(tree: Path, repo: Path = ROOT) -> dict:
-    """What decided the build that was read, for whoever reviews the record: the mozconfig the build used
-    (the release one plus the variant) and the patch stack. Written down, not enforced: a change to either
-    does not ask for a new reading by itself (the Rust guard is what keeps patches away from Rust code)."""
+MOZCONFIG = "browser/build/mozconfig"
+VARIANT = "browser/build/mozconfig.no-lto"
+SERIES = "browser/patches/series"
+
+
+def inputs(read) -> dict:
+    """What decides a build's Rust code besides the Firefox source: the release mozconfig, the variant the
+    pre-check appends to it, and the patch stack. `read(path)` gives a repository file's bytes (from a
+    checkout, or from a commit: release_manifest.py). A record carries these digests, and is only good for
+    a tree whose three inputs still have them: a change to a patch or to the mozconfig asks for a new
+    reading. Raises OSError (or what `read` raises) when a file is missing."""
     stack = hashlib.sha256()
-    patches = repo / "browser" / "patches"
+    for line in read(SERIES).decode("utf-8").splitlines():
+        name = line.strip()
+        if name and not name.startswith("#"):
+            stack.update(name.encode() + b"\0" + read(f"browser/patches/{name}"))
+    return {
+        "mozconfig_sha256": hashlib.sha256(read(MOZCONFIG)).hexdigest(),
+        "variant_sha256": hashlib.sha256(read(VARIANT)).hexdigest(),
+        "patch_stack_sha256": stack.hexdigest(),
+    }
+
+
+def repository_inputs(repo: Path = ROOT) -> dict:
+    return inputs(lambda path: (repo / path).read_bytes())
+
+
+def built_with(tree: Path, repo: Path = ROOT) -> dict:
+    """The repository's inputs, once the build is seen to have used them: build_nulavio.sh writes the tree's
+    mozconfig as the release mozconfig, then the variant, then lines of the machine's own (how many jobs).
+    The patches are applied by that same script before every build; this cannot see them in the tree, which
+    is why it is run after a build and not instead of one."""
     try:
-        names = [line.strip() for line in (patches / "series").read_text(encoding="utf-8").splitlines()]
-        for name in [n for n in names if n and not n.startswith("#")]:
-            stack.update(name.encode() + b"\0" + (patches / name).read_bytes())
-        patch_stack = stack.hexdigest()
-    except OSError:
-        patch_stack = None
+        used = (tree / "mozconfig").read_bytes()
+        expected = (repo / MOZCONFIG).read_bytes() + (repo / VARIANT).read_bytes()
+    except OSError as error:
+        raise CannotCheck(f"the build's mozconfig cannot be compared with the repository's ({error})") from None
+    if not used.startswith(expected):
+        raise CannotCheck(
+            "the build's mozconfig is not this checkout's release mozconfig followed by mozconfig.no-lto: "
+            "build again from this checkout (rehearse_release.sh --precheck does)"
+        )
     try:
-        mozconfig = sha256(tree / "mozconfig")
-    except OSError:
-        mozconfig = None
-    return {"mozconfig_sha256": mozconfig, "patch_stack_sha256": patch_stack}
+        return repository_inputs(repo)
+    except OSError as error:
+        raise CannotCheck(f"the patch stack cannot be read ({error})") from None
 
 
 class CannotCheck(RuntimeError):
@@ -183,7 +211,9 @@ def read_library(library: Path, *, run=subprocess.run, which=shutil.which) -> st
     return result.stdout
 
 
-def check(version: str, work: Path, *, engine: dict, run=subprocess.run, which=shutil.which, today: str | None = None) -> dict:
+def check(
+    version: str, work: Path, *, engine: dict, run=subprocess.run, which=shutil.which, today: str | None = None, repo: Path = ROOT
+) -> dict:
     """The record for a build of `version` under `work`, or CannotCheck, or a record with "result": "failed"."""
     if engine.get("firefox") != version:
         raise CannotCheck(f"engine.json pins Firefox {engine.get('firefox')}, not {version}")
@@ -197,6 +227,7 @@ def check(version: str, work: Path, *, engine: dict, run=subprocess.run, which=s
     objdir = tree / "obj-nulavio"
     config_status = objdir / "config.status"
     readable_build(substs(config_status))
+    inputs_used = built_with(tree, repo)
     libraries = sorted(objdir.glob("*/release/libgkrust.a"))
     if len(libraries) != 1:
         raise CannotCheck(f"{objdir}: expected one release/libgkrust.a, found {len(libraries)}")
@@ -229,9 +260,10 @@ def check(version: str, work: Path, *, engine: dict, run=subprocess.run, which=s
         "result": "failed" if imported else "passed",
         "checked": today or _dt.datetime.now(_dt.UTC).date().isoformat(),
         "how": how,
-        # What was read and what built it, so that a reviewer can compare a record with a build of their own.
+        # What was read, so that a reviewer can compare a record with a build of their own, and what decided
+        # the build: the pin test and release_manifest.py require these to be the tree's current ones.
         "library_sha256": sha256(library),
-        "built_with": built_with(tree),
+        "built_with": inputs_used,
         "imported": imported,
     }
 
