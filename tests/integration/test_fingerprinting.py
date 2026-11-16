@@ -457,6 +457,21 @@ class FingerprintingTest(unittest.TestCase):
         self.assertTrue(self.arrives(first, plain), self.m.execute(first))
         self.assertEqual(self.m.execute(live), f"127.0.0.1 {plain}")
 
+    def test_08d_only_pages_of_the_web_get_the_constant_and_an_open_page_follows_the_switch(self):
+        # From the independent review of #375.
+        live = "return screen.width + 'x' + screen.height;"
+        with self.unprotected():
+            plain = self.measure()["screen"]["size"]
+        # An extension's page in a tab reads the display's size: the engine keeps its fingerprinting protection
+        # away from extensions, and one may place its windows by the screen. (The Shell's new tab is such a page.)
+        self.m.navigate(self.m.chrome("return WebExtensionPolicy.getByID('shell@nulavio.net').getURL('newtab/newtab.html');"))
+        self.assertEqual(self.m.execute(live), plain)
+        # A page that stays open follows the engine's switch, without a new load: off, then on again.
+        self.assertEqual(self.measure()["screen"]["size"], "1920x1080")
+        with self.unprotected():
+            self.assertTrue(self.arrives(live, plain), self.m.execute(live))
+        self.assertTrue(self.arrives(live, "1920x1080"), self.m.execute(live))
+
     def test_08c_a_private_window_has_the_constant_and_its_own_exemptions(self):
         with self.unprotected():
             plain = self.measure()["screen"]["size"]
