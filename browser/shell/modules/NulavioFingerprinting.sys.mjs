@@ -135,6 +135,25 @@ function sync() {
   }
 }
 
+/** Hand the per-site list to the engine again after the general set changed. The engine works out each site's own
+    set from the general one at the moment the list is set, and not again when the general set changes
+    (nsRFPService::SetFingerprintingOverrides): a site with "use my time zone" on, or one on Mozilla's own list,
+    would keep the earlier set until the browser restarts (#405). The same value is no change to a preference, so
+    the list is taken away and put back; with no list of ours, an empty one is set and cleared. */
+function handListAgain() {
+  if (Services.prefs.prefIsLocked(GRANULAR)) {
+    return;
+  }
+  const current = Services.prefs.getStringPref(GRANULAR, "");
+  if (current) {
+    Services.prefs.clearUserPref(GRANULAR);
+    Services.prefs.setStringPref(GRANULAR, current);
+  } else {
+    Services.prefs.setStringPref(GRANULAR, "[]");
+    Services.prefs.clearUserPref(GRANULAR);
+  }
+}
+
 /** For the page a tab shows: its site, whether the switch is offered there, and whether it is on. It is offered
     where pages read UTC: a site with a registrable domain, with the protection on and the site not exempted
     with the shield (the engine's own record for the page; such a site reads the real time zone already). Not
@@ -356,6 +375,18 @@ export const NulavioFingerprinting = {
               decideOpenPages();
             }
             watching.engine = engine;
+            if (data === OVERRIDES && !watching.handing) {
+              // After the engine's own observer of the same preference has the new general set. Once per
+              // change: a preference observer is told of everything under its name, so this one hears the
+              // set twice (as itself, and under "privacy.fingerprintingProtection").
+              watching.handing = true;
+              Services.tm.dispatchToMainThread(() => {
+                if (watching) {
+                  watching.handing = false;
+                  handListAgain();
+                }
+              });
+            }
           }
         } else if (topic === "perm-changed") {
           // A site's choice added or removed, here or in Settings' list, or every permission cleared.

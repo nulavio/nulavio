@@ -426,9 +426,8 @@ class FingerprintingTest(unittest.TestCase):
             self.m.chrome(f"{ALLOW_LIST}.remove(gBrowser.selectedBrowser);")
         self.assertNotEqual(self.measure("127.0.0.1")["canvas"]["pixels"], plain["canvas"]["pixels"])
 
-    def test_09_pages_read_utc_and_a_site_with_the_switch_on_reads_the_systems_time_zone(self):
-        utc, system = {"zone": "Atlantic/Reykjavik", "offset": 0}, dict(zip(("zone", "offset"), SYSTEM_ZONE, strict=True))
-        one, sub, two = ZONE_SITES
+    def zone_sites(self) -> tuple[str, str, str]:
+        """Sites with a registrable domain (the per-site switch needs one), served by the fixture server."""
         origins = [f"http://{site}:{self.server.port}" for site in ZONE_SITES]
         self.m.chrome(
             "Services.prefs.setStringPref('network.dns.localDomains', arguments[0].join(','));"
@@ -438,6 +437,74 @@ class FingerprintingTest(unittest.TestCase):
             "  Services.perms.addFromPrincipal(principal, 'https-only-load-insecure', Ci.nsIPermissionManager.ALLOW_ACTION); }",
             [list(ZONE_SITES), origins],
         )
+        return ZONE_SITES
+
+    def test_12_a_site_with_its_own_set_follows_a_change_of_the_general_set_at_once(self):
+        # #405. The engine works out a site's own set (here: "use my time zone" on) when the per-site list is set,
+        # and not again when the general set changes. Turning "let sites see my motion and contrast preferences"
+        # on must reach that site at its next load, not after a restart.
+        one, _sub, two = self.zone_sites()
+        clear = "for (const pref of arguments) Services.prefs.clearUserPref(pref);"
+        self.m.chrome("Services.prefs.setIntPref('ui.prefersReducedMotion', 1);")
+        self.addCleanup(self.m.chrome, clear, ["ui.prefersReducedMotion", SHARE_PREF, OFFERED_PREF])
+        # With no list of Nulavio's own the engine is still handed the (empty) list again, which makes it work out
+        # the sites on Mozilla's own list anew. The engine says when it took a list, in its testing mode: each
+        # hand-over is two (the list taken away or made empty, then put back), and one change of the set is one
+        # hand-over, though the Shell's observer hears the preference twice (independent review of #410).
+        testing = "privacy.fingerprintingProtection.remoteOverrides.testing"
+        count = (
+            "window.nvSets = { n: 0, observe() { this.n++; } };"
+            "Services.prefs.setBoolPref(arguments[0], true);"
+            "Services.obs.addObserver(window.nvSets, 'fpp-test:set-overrides-finishes');"
+        )
+        stop = (
+            "Services.obs.removeObserver(window.nvSets, 'fpp-test:set-overrides-finishes');"
+            "Services.prefs.clearUserPref(arguments[0]); delete window.nvSets;"
+        )
+        granular = f"return Services.prefs.getStringPref('{GRANULAR_PREF}', '');"
+        self.assertEqual(self.m.chrome(granular), "")
+        self.m.chrome(count, [testing])
+        try:
+            self.share(True)
+            self.assertTrue(harness.wait_until(lambda: self.m.chrome("return window.nvSets.n;") >= 2, 10))
+            time.sleep(1.0)  # nothing more follows
+            self.assertEqual(self.m.chrome("return window.nvSets.n;"), 2)
+            self.assertEqual(self.m.chrome(granular), "")
+            self.share(False)
+            self.assertTrue(harness.wait_until(lambda: self.m.chrome("return window.nvSets.n;") >= 4, 10))
+        finally:
+            self.m.chrome(stop, [testing])
+        uri = f"Services.io.newURI('http://{one}:{self.server.port}/')"
+        self.m.chrome(f"{FINGERPRINTING}.setTimeZone({uri}, true);")
+        self.addCleanup(self.m.chrome, f"{FINGERPRINTING}.setTimeZone({uri}, false);")
+        system = dict(zip(("zone", "offset"), SYSTEM_ZONE, strict=True))
+        motion = "return matchMedia('(prefers-reduced-motion: reduce)').matches;"
+
+        def told(site: str) -> bool:
+            self.measure(site)
+            return self.m.execute(motion)
+
+        self.assertEqual(self.measure(one)["tz"], system, "the site's own set is not in effect: nothing was tested")
+        self.assertEqual((told(one), told(two)), (False, False))
+        self.share(True)
+        user_set = f"return Services.prefs.prefHasUserValue('{OVERRIDES_PREF}');"
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome(user_set), 5))
+        # The site without its own set is told at once; so is the site with one, which still has its time zone.
+        self.assertTrue(harness.wait_until(lambda: told(two), 10))
+        self.assertTrue(harness.wait_until(lambda: told(one), 10), "the site with its own set kept the earlier general set")
+        self.assertEqual(self.measure(one)["tz"], system)
+        # And back: neither is told, and the per-site list is what it was.
+        self.share(False)
+        self.assertTrue(harness.wait_until(lambda: not self.m.chrome(user_set), 5))
+        self.assertTrue(harness.wait_until(lambda: not told(one) and not told(two), 10))
+        self.assertEqual(
+            json.loads(self.m.chrome(f"return Services.prefs.getStringPref('{GRANULAR_PREF}', '');")),
+            [{"firstPartyDomain": one, "thirdPartyDomain": "*", "overrides": "-JSDateTimeUTC"}],
+        )
+
+    def test_09_pages_read_utc_and_a_site_with_the_switch_on_reads_the_systems_time_zone(self):
+        utc, system = {"zone": "Atlantic/Reykjavik", "offset": 0}, dict(zip(("zone", "offset"), SYSTEM_ZONE, strict=True))
+        one, sub, two = self.zone_sites()
         granular = f"return Services.prefs.getStringPref('{GRANULAR_PREF}', '');"
         # The page's own Intl and Date: a script run from here has a realm of its own, which keeps the system's.
         zone = (
