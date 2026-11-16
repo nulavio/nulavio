@@ -1,12 +1,17 @@
 {
   "version": "160.0-0.6",
-  "date": "2026-11-15",
+  "date": "2026-11-16",
   "channel": "alpha",
   "firefox": "160.0",
   "pt-BR": {
-    "summary": "Uma atualização da alpha com o mesmo motor (Firefox 160.0): o navegador inteiro pode ficar atrás de uma senha, o modo Imersivo funciona melhor no uso real, e os perfis protegidos e as conferências de cada versão ficaram mais rígidos.",
+    "summary": "Uma atualização da alpha com o mesmo motor (Firefox 160.0): o navegador inteiro pode ficar atrás de uma senha, os sites recebem menos dados para reconhecer o seu computador, o modo Imersivo funciona melhor no uso real, e os perfis protegidos e as conferências de cada versão ficaram mais rígidos.",
+    "breaking": [
+      "Os sites passam a ver o horário universal (UTC) no lugar do seu fuso horário, que ajuda a reconhecer você de um site para outro. Horas que a própria página calcula, como em agendas, chats e extratos, aparecem em UTC.",
+      "Para um site que precisa da hora certa, abra o escudo na barra de endereço e ligue Usar meu fuso horário neste site. A escolha fica em Configurações, com as outras exceções de sites."
+    ],
     "new": [
       "Todos os perfis podem ser protegidos por senha: o último perfil sem proteção pode ser removido, e o seletor de perfis passa a ser a única entrada.",
+      "Os sites leem a mesma tela, de 1920 por 1080, e 4 processadores em qualquer computador. O tamanho da janela não muda, e um site liberado pelo escudo lê os valores reais.",
       "Depois de uma atualização, uma barra oferece as novidades da versão, e o menu Ajuda tem uma entrada para elas.",
       "Ctrl+Shift+L copia um link para o texto selecionado.",
       "Links de reunião, por perfil: com Entrar pelo navegador, os links do Zoom e do Microsoft Teams ficam na página do serviço e nenhum app é aberto. Fica em Configurações, Integrações.",
@@ -29,9 +34,14 @@
     ]
   },
   "en-US": {
-    "summary": "An update of the alpha with the same engine (Firefox 160.0): the whole browser can sit behind a password, the Immersive mode works better in real use, and protected profiles and each version's checks are stricter.",
+    "summary": "An update of the alpha with the same engine (Firefox 160.0): the whole browser can sit behind a password, sites get less to recognise your computer by, the Immersive mode works better in real use, and protected profiles and each version's checks are stricter.",
+    "breaking": [
+      "Sites now see universal time (UTC) in place of your time zone, which helps recognise you from one site to the next. Hours a page works out by itself, as in calendars, chats and statements, show in UTC.",
+      "For a site that needs the right hour, open the shield in the address bar and turn on Use my time zone on this site. The choice is kept in Settings, with the other site exceptions."
+    ],
     "new": [
       "Every profile can be protected by a password: the last unprotected profile can be removed, and the profile chooser is then the only way in.",
+      "Sites read the same screen, 1920 by 1080, and 4 processors on every computer. The window's size does not change, and a site exempted with the shield reads the real values.",
       "After an update, a bar offers what is new in the version, and the Help menu has an entry for it.",
       "Ctrl+Shift+L copies a link to the selected text.",
       "Meeting links, per profile: with Join in the browser, Zoom and Microsoft Teams links stay on the service's page and no app is opened. It is in Settings, Integrations.",
