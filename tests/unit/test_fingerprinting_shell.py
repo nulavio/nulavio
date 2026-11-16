@@ -43,14 +43,23 @@ class ScreenTest(unittest.TestCase):
         self.assertIn("Services.obs.addObserver(watching.fallback, FALLBACK_TOPIC);", failed[: failed.index("    sync();")])
         self.assertEqual(MODULE.count("FALLBACK_TOPIC"), 3)  # declared, added in the failure path, removed
         # Pages already open are decided again when the engine's protection is switched on or off.
-        self.assertIn('const SWITCHES = ["privacy.fingerprintingProtection", "privacy.fingerprintingProtection.pbmode"];', MODULE)
+        # So is a change of the engine's set, which says who gives pages the constant (the engine or the tab).
+        switches = MODULE[MODULE.index("const SWITCHES = [") : MODULE.index("];", MODULE.index("const SWITCHES = ["))]
+        self.assertEqual(
+            re.findall(r'"([^"]+)"', switches),
+            [
+                "privacy.fingerprintingProtection",
+                "privacy.fingerprintingProtection.pbmode",
+                "privacy.fingerprintingProtection.overrides",
+            ],
+        )
         # (One observer hears two kinds of preference: the person's setting, and the engine's switches.)
         self.assertIn("          if (data === SHARE) {\n            applyAccessibility(true);", MODULE)
-        self.assertIn("          } else {\n            decideOpenPages();", MODULE)
+        self.assertIn("            if (!(engine && watching.engine)) {\n              decideOpenPages();", MODULE)
 
     def test_it_follows_the_engines_switch_and_the_engines_own_word_for_an_exempted_site(self):
         wants = CHILD[CHILD.index("export function wantsConstant(") : CHILD.index("export class NulavioFingerprintingChild")]
-        self.assertIn("if (!protectionOn(isPrivate)) {", wants)
+        self.assertIn("if (!protectionOn(isPrivate) || engineDecides()) {", wants)
         self.assertIn("return !cookieJarSettings?.isOnContentBlockingAllowList;", wants)
         # Not for the browser's own pages or an extension's.
         self.assertIn('principal?.isSystemPrincipal || principal?.addonPolicy || principal?.schemeIs?.("moz-extension")', wants)
@@ -62,6 +71,40 @@ class ScreenTest(unittest.TestCase):
             self.assertNotIn("http-on-modify-request", text)
             self.assertNotIn("sendAsyncMessage", text)  # the two halves exchange nothing
         self.assertNotIn("Services.prefs.set", CHILD)  # the page's half reads the engine's switches and writes none
+
+    def test_an_engine_with_the_patch_decides_per_document_and_the_tabs_size_is_left_unset(self):
+        # The engine's target, by the name patch 0012 gives it, and the build's set turns it on.
+        self.assertIn('const TARGET = "ScreenSizeConstant"; // Nulavio\'s engine patch 0012', CHILD)
+        patch = (ROOT / "browser" / "patches" / "0012-rfp-per-site-audio-noise-and-one-screen-size.patch").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("+ITEM_VALUE(ScreenSizeConstant,", patch)
+        width, height = re.search(r"kConstantScreenWidth = (\d+);.*?kConstantScreenHeight = (\d+);", patch, re.S).groups()
+        self.assertEqual((width, height), ("1920", "1080"))  # the engine's size is the Shell's
+        branding = (ROOT / "browser" / "branding" / "nulavio" / "pref" / "firefox-branding.js").read_text(encoding="utf-8")
+        overrides = re.search(r'pref\("privacy\.fingerprintingProtection\.overrides", "([^"]+)"\);', branding).group(1)
+        self.assertIn("+ScreenSizeConstant", overrides.split(","))
+        # Known to the engine (asked once, of the engine's own list of targets) and turned on by the set.
+        decides = CHILD[CHILD.index("export function engineDecides(") : CHILD.index("/** Give a tab the constant screen")]
+        self.assertIn(
+            'TARGET in ChromeUtils.importESModule("resource://gre/modules/RFPTargetConstants.sys.mjs").Targets', decides
+        )
+        self.assertIn('return known && turnsOn(Services.prefs.getStringPref(OVERRIDES, ""), TARGET);', decides)
+        # Then no path gives a tab the constant: not a page's own decision, not the fallback.
+        self.assertIn("subject.isContent && !subject.isDiscarded && !engineDecides()) {", MODULE)
+        # Nor does a page clear the tab's size at each load: that would undo WebDriver BiDi's screen emulation,
+        # which is the same value (independent review of #402).
+        handle = CHILD[CHILD.index("  handleEvent(event) {") :]
+        self.assertLess(handle.index("if (engineDecides()) {\n      return;"), handle.index("setScreen(context,"))
+        # The set is read as the engine reads it: no space skipped, a sign first.
+        turns = CHILD[CHILD.index("export function turnsOn(") : CHILD.index("/** Whether the engine gives each document")]
+        self.assertNotIn(".trim()", turns)
+        self.assertIn('(item[0] === "+" || item[0] === "-")', turns)
+        self.assertEqual(len(re.findall(r"\bsetScreen\(", MODULE)), 2)  # the fallback, and the pages already open
+        self.assertIn(
+            "setScreen(context, wantsConstant(page.documentPrincipal, page.cookieJarSettings, context.usePrivateBrowsing));",
+            MODULE,
+        )
 
 
 class TimeZoneTest(unittest.TestCase):

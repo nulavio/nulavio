@@ -561,7 +561,7 @@
 <div class="claim" id="s5-2">
 <div class="claim-text">
 <h3><span class="num">5.2</span> A faixa: em que perfil você está</h3>
-<p>No alto de cada janela, acima da barra de endereço, uma faixa desenhada pelo navegador mostra o perfil, com cor, ícone (ou a inicial do nome) e nome, e o estado dele em palavras e com um símbolo, nunca só com cor. Páginas da web não escrevem nessa faixa; só as páginas do próprio Nulavio aparecem nomeadas nela. Quando o Nulavio não consegue ler o estado, a faixa diz «Proteção desconhecida» em vez de adivinhar. Em tela cheia, ela vira uma linha fina no topo.</p>
+<p>No alto de cada janela, acima da barra de endereço, uma faixa desenhada pelo navegador mostra o perfil, com cor, ícone (ou a inicial do nome) e nome, e o estado dele em palavras e com um símbolo, nunca só com cor. Páginas da web não escrevem nessa faixa; só as páginas do próprio Nulavio aparecem nomeadas nela. Quando o Nulavio não consegue ler o estado, a faixa diz «Proteção desconhecida» em vez de adivinhar. Em tela cheia, ela vira uma linha fina no topo. Numa tela dividida (duas abas lado a lado, pelo menu da aba), a barra de endereço e, no modo Imersivo, a faixa dizem o site do lado em foco; o outro lado mostra o seu próprio site num rodapé desenhado pelo navegador.</p>
 <p class="note">«Sem senha» quer dizer que os arquivos desse perfil não são cifrados no disco. As proteções da seção 2 valem em todos os perfis.</p>
 </div>
 <div class="receipt">
@@ -572,6 +572,7 @@
 <dd><code class="ref" translate="no">tests/integration/test_window_band.py › test_02_only_a_selected_top_level_shell_principal_names_the_header</code></dd>
 <dd><code class="ref" translate="no">tests/integration/test_window_band.py › test_07_page_fullscreen_keeps_a_flow_safety_line_and_native_exit_warning</code></dd>
 <dd><code class="ref" translate="no">tests/integration/test_window_band.py › test_real_unlocked_profile_is_named_protected_and_current_lock_is_not_invented</code></dd>
+<dd><code class="ref" translate="no">tests/integration/test_split_view.py › test_02_with_imersivo_the_band_names_the_focused_side</code></dd>
 <dt>Arquivo</dt>
 <dd><code class="ref" translate="no">docs/design/ux-principles.md</code></dd>
 </dl>
@@ -738,7 +739,7 @@
 <div class="claim" id="s5-4">
 <div class="claim-text">
 <h3><span class="num">5.4</span> Links clicados dentro de páginas</h3>
-<p>Vêm desligados, porque nesse caso quem escolhe o endereço é a página. Se você ligar «Também para links clicados em páginas», um clique simples num link para outro site segue as regras, e a página em que você estava continua aberta. Mesmo ligada, a opção nunca move pop-ups, formulários, redirecionamentos, links dentro de quadros incorporados, links no mesmo site ou janelas privadas: esses carregam no perfil em que você está. Para um link, você sempre pode escolher «Abrir link no perfil» no menu do botão direito.</p>
+<p>Vêm desligados, porque nesse caso quem escolhe o endereço é a página. Se você ligar «Também para links clicados em páginas», um clique simples num link para outro site segue as regras, e a página em que você estava continua aberta. Mesmo ligada, a opção nunca move pop-ups, formulários, redirecionamentos, links dentro de quadros incorporados, links no mesmo site ou janelas privadas: esses carregam no perfil em que você está. Para um link, você sempre pode escolher «Abrir link no perfil» no menu do botão direito. Numa tela dividida, um link clicado em um dos lados segue as mesmas regras, e os dois lados continuam abertos.</p>
 <p class="limit"><strong>Limite:</strong> Com a opção ligada, uma página pode pôr um identificador seu no link que o outro perfil abre e ligar as duas identidades naquele site.</p>
 </div>
 <div class="receipt">
@@ -747,6 +748,7 @@
 <dt>Testes</dt>
 <dd><code class="ref" translate="no">tests/integration/test_routing.py › test_15_in_page_routing_is_off_by_default</code></dd>
 <dd><code class="ref" translate="no">tests/integration/test_routing.py › test_16_a_clicked_link_opens_in_the_rule_profile_and_the_page_stays</code></dd>
+<dd><code class="ref" translate="no">tests/integration/test_routing.py › test_16b_a_link_clicked_in_a_split_view_side_is_routed_and_the_split_stays</code></dd>
 <dd><code class="ref" translate="no">tests/integration/test_routing.py › test_18_navigations_that_are_never_routed_load_here</code></dd>
 <dd><code class="ref" translate="no">tests/integration/test_routing.py › test_14_link_menu_opens_the_link_in_the_chosen_profile</code></dd>
 <dt>Arquivo</dt>
