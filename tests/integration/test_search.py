@@ -618,8 +618,7 @@ class SearchPrivacyTest(unittest.TestCase):
         self.search(add, "kagi_session")
         self.assertTrue(self.search(signed)["signedIn"])
         self.assertTrue(self.search("return (await S.state()).accounts.kagi.signedIn;"))
-        type(self).session.stop()
-        type(self).m = self.m = type(self).session.start()
+        type(self).m = self.m = type(self).session.restart()
         self.assertTrue(harness.wait_until(lambda: self.search(signed)["signedIn"], 15), self.search(signed))
 
     def test_16_a_choice_left_by_another_profile_is_applied_once_at_start(self):
