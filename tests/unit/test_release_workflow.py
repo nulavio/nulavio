@@ -241,6 +241,17 @@ class ReleaseWorkflowTest(unittest.TestCase):
         self.assertLess(self.publish.index('tar -C "$RUNNER_TEMP" -xf'), self.publish.index("upload_repo.sh"))
         self.assertIn('[ -z "$SIGNED" ]', self.publish)  # no hash, no upload
 
+    def test_an_older_run_cannot_upload_again(self):
+        # A re-run of `publish` alone gets its old run's signed files and hash, and release-upload asks for no
+        # approval: the job refuses a release older than any tagged, published or drafted one before the upload.
+        check = self.publish.index("release_manifest.py not-older")
+        self.assertLess(self.publish.index('tar -C "$RUNNER_TEMP" -xf'), check)
+        self.assertLess(check, self.publish.index("upload_repo.sh"))
+        step = self.publish[self.publish.rindex("- name:", 0, check) : check]
+        self.assertIn("gh release list --limit 1000 --json tagName", step)  # drafts too: the job may write releases
+        self.assertIn('releases=$(gh release list', step)  # an assignment, so a failing gh fails the step
+        self.assertNotIn("${{", step.split("run: |", 1)[1])
+
     def test_only_the_release_jobs_name_the_signing_and_upload_environments(self):
         # `release-upload` has no required reviewer (#334): any job on main that named it would get the R2 token
         # without the maintainer's approval (R60). So the jobs that may name either environment are listed.
